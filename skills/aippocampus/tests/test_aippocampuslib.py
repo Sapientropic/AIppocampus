@@ -43,6 +43,20 @@ def write_rollout(path: Path, cwd: Path, session_id: str = "archived-session") -
 
 
 class AippocampusLibTests(unittest.TestCase):
+    def test_deepseek_cache_metrics_from_usage(self) -> None:
+        metrics = aippocampuslib.deepseek_cache_metrics_from_usage(
+            {
+                "prompt_tokens": 125,
+                "prompt_cache_hit_tokens": 80,
+                "prompt_cache_miss_tokens": 20,
+            }
+        )
+
+        self.assertTrue(metrics["available"])
+        self.assertEqual(metrics["hit_tokens"], 80)
+        self.assertEqual(metrics["miss_tokens"], 20)
+        self.assertEqual(metrics["hit_rate"], 0.8)
+
     def test_locate_rollout_searches_archived_sessions(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

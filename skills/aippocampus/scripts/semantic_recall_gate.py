@@ -26,10 +26,15 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-from aippocampuslib import compact_text, now_utc, sanitize_external_model_text
+from aippocampuslib import (
+    compact_text,
+    deepseek_cache_metrics_from_usage,
+    now_utc,
+    sanitize_external_model_text,
+)
 from registry import load_registry, registry_paths, unique_preserve
 from retrieval import split_query_terms
-from subconscious_agent import call_chat_json
+from subconscious_agent import add_usage, call_chat_json, compact_usage
 from subconscious_worker import DEFAULT_BASE_URL, DEFAULT_MODEL, clamp_confidence, parse_model_json
 
 
@@ -316,9 +321,11 @@ def catalog_payload(
     working_memory: list[dict[str, Any]] | None = None,
     semantic_triggers_path: Path | None = None,
 ) -> dict[str, Any]:
+    # DeepSeek KV cache matches complete prompt-prefix units. Keep stable,
+    # potentially large catalogs before the per-prompt text so unrelated prompts
+    # can still share the same cached catalog prefix.
     return {
         "prompt_version": PROMPT_VERSION,
-        "prompt": compact_text(prompt, 1200),
         "current_project_hint": current_project_hint(registry, cwd),
         "memory_catalog": registry_catalog(registry, cwd=cwd),
         "trigger_catalog": trigger_catalog(
@@ -326,6 +333,7 @@ def catalog_payload(
             working_memory=working_memory,
             semantic_triggers_path=semantic_triggers_path,
         ),
+        "prompt": compact_text(prompt, 1200),
     }
 
 
@@ -346,11 +354,14 @@ def worker_prompt(worker: str, payload: dict[str, Any]) -> str:
         "alias": "Generate multilingual/paraphrase query aliases for local retrieval. Do not decide facts.",
         "scope": "Choose memory scope and detect over-personalization risk.",
     }.get(worker, "Analyze semantic recall relevance.")
+    # Put the shared payload first. The worker-specific task/schema are smaller
+    # and intentionally trail the common prefix so parallel workers can reuse
+    # DeepSeek's server-side prefix cache whenever it has landed.
     return json.dumps(
         {
+            "input": payload,
             "task": task,
             "output_schema": schema,
-            "input": payload,
         },
         ensure_ascii=False,
         indent=2,
@@ -623,6 +634,9 @@ def run_semantic_gate(
                 errors.append(f"{worker}: {exc}")
 
     merged = merge_workers(parsed_workers, errors)
+    usage_total: dict[str, Any] = {}
+    for worker_result in parsed_workers:
+        add_usage(usage_total, compact_usage(worker_result.get("usage") or {}))
     elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
     result = {
         "kind": "aippocampus_semantic_recall_gate",
@@ -632,6 +646,8 @@ def run_semantic_gate(
         **merged,
         "workers": parsed_workers,
         "errors": errors,
+        "usage": usage_total,
+        "cache": deepseek_cache_metrics_from_usage(usage_total),
         "secret_policy": secret_policy,
         "cached": False,
         "elapsed_ms": elapsed_ms,

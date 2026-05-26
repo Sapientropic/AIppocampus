@@ -18,6 +18,21 @@ import subconscious_jobs as jobs  # noqa: E402
 
 
 class SubconsciousJobsTests(unittest.TestCase):
+    def test_jobs_initial_payload_keeps_turns_before_variable_job_directives(self) -> None:
+        payload = json.loads(
+            jobs.jobs_initial_payload(
+                "concept_edges",
+                "Use a distinct sample angle.",
+                [{"turn_ref": "t0", "user": "A", "assistant": "B"}],
+                max_steps=4,
+                min_tool_steps=1,
+            )
+        )
+        keys = list(payload.keys())
+
+        self.assertLess(keys.index("initial_turns"), keys.index("objective"))
+        self.assertLess(keys.index("initial_turns"), keys.index("job_spec"))
+
     def test_initial_payload_redacts_external_model_sensitive_text(self) -> None:
         payload = jobs.jobs_initial_payload(
             "project_drift",
@@ -273,7 +288,13 @@ class SubconsciousJobsTests(unittest.TestCase):
                     }
                 return {
                     "choices": [{"message": {"content": json.dumps(content, ensure_ascii=False)}}],
-                    "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+                    "usage": {
+                        "prompt_tokens": 1,
+                        "completion_tokens": 1,
+                        "total_tokens": 2,
+                        "prompt_cache_hit_tokens": 8,
+                        "prompt_cache_miss_tokens": 2,
+                    },
                 }
 
             result = jobs.run_one_job(
@@ -301,6 +322,7 @@ class SubconsciousJobsTests(unittest.TestCase):
             self.assertEqual(result["edge_count"], 1)
             self.assertTrue(jobs_output.exists())
             self.assertTrue(edges_output.exists())
+            self.assertEqual(result["cache"]["hit_rate"], 0.8)
             self.assertIn("aippocampus_subconscious_job_finding", jobs_output.read_text(encoding="utf-8"))
             self.assertIn("aippocampus_subconscious_edge", edges_output.read_text(encoding="utf-8"))
 

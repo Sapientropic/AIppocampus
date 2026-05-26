@@ -500,6 +500,19 @@ def sanitize_external_model_payload(value: Any) -> Any:
     return value
 
 
+def deepseek_cache_metrics_from_usage(usage: dict[str, Any] | None) -> dict[str, Any]:
+    usage = usage if isinstance(usage, dict) else {}
+    hit = int(usage.get("prompt_cache_hit_tokens") or 0)
+    miss = int(usage.get("prompt_cache_miss_tokens") or 0)
+    total = hit + miss
+    return {
+        "available": "prompt_cache_hit_tokens" in usage or "prompt_cache_miss_tokens" in usage,
+        "hit_tokens": hit,
+        "miss_tokens": miss,
+        "hit_rate": round(hit / total, 4) if total else 0.0,
+    }
+
+
 def cli_error_code_from_message(message: str) -> str:
     low = str(message or "").casefold()
     if "missing deepseek api key" in low or "missing api key" in low:

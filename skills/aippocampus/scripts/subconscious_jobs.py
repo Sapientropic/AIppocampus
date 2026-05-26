@@ -23,6 +23,7 @@ from aippocampuslib import (
     cli_error_payload_from_message,
     cli_exit_code_for_error_code,
     compact_text,
+    deepseek_cache_metrics_from_usage,
     now_utc,
     sanitize_external_model_payload,
 )
@@ -225,13 +226,11 @@ def job_names(value: str) -> list[str]:
 
 def jobs_initial_payload(job: str, objective: str, turns: list[dict[str, Any]], max_steps: int, min_tool_steps: int) -> str:
     spec = JOB_SPECS[job]
+    # The same timeline turns are reused across jobs and diversity samples.
+    # Keep them before job/objective-specific directives so DeepSeek can cache
+    # the expensive source prefix instead of only the small instruction header.
     payload = {
         "prompt_version": PROMPT_VERSION,
-        "job": job,
-        "job_spec": spec,
-        "objective": objective or spec["purpose"],
-        "tool_budget": max_steps,
-        "minimum_tool_steps_before_final": min_tool_steps,
         "initial_turns": turns,
         "available_tools": {
             "search_clean_source": {"args": {"terms": ["..."], "limit": 8}},
@@ -239,6 +238,11 @@ def jobs_initial_payload(job: str, objective: str, turns: list[dict[str, Any]], 
             "expand_concepts": {"args": {"terms": ["..."], "depth": 2, "limit": 16}},
             "recent_edges": {"args": {"terms": ["..."], "limit": 10}},
         },
+        "job": job,
+        "job_spec": spec,
+        "objective": objective or spec["purpose"],
+        "tool_budget": max_steps,
+        "minimum_tool_steps_before_final": min_tool_steps,
         "final_schema": {
             "action": "final",
             "findings": [
@@ -730,6 +734,7 @@ def run_one_job(
         "tool_steps": [item for item in transcript if (item.get("action") or {}).get("action") == "tool"],
         "final_attempts": final_attempts,
         "usage": usage_total,
+        "cache": deepseek_cache_metrics_from_usage(usage_total),
         "jobs_output": str(jobs_output_path),
         "edges_output": str(edges_output_path),
         "wrote": False if no_write or defer_writes else True,
@@ -891,6 +896,7 @@ def run_jobs(
         "finding_count": sum(int(result.get("finding_count") or 0) for result in results),
         "edge_count": sum(int(result.get("edge_count") or 0) for result in results),
         "usage": usage_total,
+        "cache": deepseek_cache_metrics_from_usage(usage_total),
         "jobs_output": str(jobs_output_path),
         "edges_output": str(edges_output_path),
         "wrote": False if no_write or dry_run else successful_count > 0,

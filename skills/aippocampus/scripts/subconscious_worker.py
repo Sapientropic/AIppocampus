@@ -24,6 +24,7 @@ from aippocampuslib import (
     cli_error_payload,
     cli_exit_code_for_error_code,
     compact_text,
+    deepseek_cache_metrics_from_usage,
     now_utc,
     sanitize_external_model_payload,
 )
@@ -140,10 +141,13 @@ def select_timeline_turns(
 
 
 def user_prompt_for_turns(turns: list[dict[str, Any]]) -> str:
+    # Keep source turns immediately after the prompt version; future worker
+    # variants can add task-specific directives after this shared prefix without
+    # sacrificing DeepSeek KV-cache reuse.
     payload = {
         "prompt_version": PROMPT_VERSION,
-        "task": "propose_source_backed_concept_edges",
         "turns": turns,
+        "task": "propose_source_backed_concept_edges",
     }
     payload = sanitize_external_model_payload(payload)
     return json.dumps(payload, ensure_ascii=False, indent=2)
@@ -348,6 +352,7 @@ def run_worker(
         "edge_count": len(edges),
         "edges": edges,
         "usage": usage,
+        "cache": deepseek_cache_metrics_from_usage(usage),
         "wrote": False if no_write else True,
         "batch_id": batch_id,
     }

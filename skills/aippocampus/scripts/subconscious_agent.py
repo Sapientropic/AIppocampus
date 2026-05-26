@@ -22,6 +22,7 @@ from aippocampuslib import (
     cli_error_payload,
     cli_exit_code_for_error_code,
     compact_text,
+    deepseek_cache_metrics_from_usage,
     now_utc,
     sanitize_external_model_payload,
 )
@@ -461,11 +462,11 @@ def validate_agent_edges(parsed: dict[str, Any], source_bank: dict[str, dict[str
 
 
 def agent_initial_payload(objective: str, turns: list[dict[str, Any]], max_steps: int, min_tool_steps: int) -> str:
+    # Keep the bulk, source-backed turns before run-specific objectives. DeepSeek
+    # cache hits require exact complete-prefix reuse, so moving variable
+    # directives earlier can erase most of the useful shared prefix.
     payload = {
         "prompt_version": PROMPT_VERSION,
-        "objective": objective or "Propose source-backed concept edges for AIppocampus ambient recall.",
-        "tool_budget": max_steps,
-        "minimum_tool_steps_before_final": min_tool_steps,
         "initial_turns": turns,
         "available_tools": {
             "search_clean_source": {"args": {"terms": ["..."], "limit": 6}},
@@ -473,6 +474,9 @@ def agent_initial_payload(objective: str, turns: list[dict[str, Any]], max_steps
             "expand_concepts": {"args": {"terms": ["..."], "depth": 2, "limit": 12}},
             "recent_edges": {"args": {"terms": ["..."], "limit": 8}},
         },
+        "objective": objective or "Propose source-backed concept edges for AIppocampus ambient recall.",
+        "tool_budget": max_steps,
+        "minimum_tool_steps_before_final": min_tool_steps,
     }
     payload = sanitize_external_model_payload(payload)
     return json.dumps(payload, ensure_ascii=False, indent=2)
@@ -654,6 +658,7 @@ def run_agent(
         "effective_step_budget": step_budget,
         "temperature": temperature,
         "usage": usage_total,
+        "cache": deepseek_cache_metrics_from_usage(usage_total),
         "wrote": False if no_write else True,
         "batch_id": batch_id,
     }

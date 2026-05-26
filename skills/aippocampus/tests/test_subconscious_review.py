@@ -15,6 +15,26 @@ import subconscious_review as review  # noqa: E402
 
 
 class SubconsciousReviewTests(unittest.TestCase):
+    def test_review_payload_keeps_findings_before_variable_focus(self) -> None:
+        payload = review.compact_review_payload(
+            [
+                {
+                    "fingerprint": "sf_runtime",
+                    "job": "project_drift",
+                    "kind": "project_drift",
+                    "title": "Runtime drift",
+                    "summary": "T-Sense moved toward Go runtime work.",
+                    "confidence": 0.9,
+                    "source_refs": [],
+                }
+            ],
+            [],
+            focus="T-Sense runtime architecture",
+        )
+        keys = list(payload.keys())
+
+        self.assertLess(keys.index("findings"), keys.index("focus"))
+
     def test_review_payload_redacts_external_model_sensitive_text(self) -> None:
         payload = review.compact_review_payload(
             [

@@ -15,6 +15,7 @@ from aippocampuslib import (
     cli_error_payload,
     cli_exit_code_for_error_code,
     compact_text,
+    deepseek_cache_metrics_from_usage,
     now_utc,
     sanitize_external_model_payload,
 )
@@ -133,12 +134,13 @@ def deterministic_duplicate_groups(findings: list[dict[str, Any]]) -> list[dict[
 
 
 def compact_review_payload(findings: list[dict[str, Any]], duplicate_groups: list[dict[str, Any]], focus: str = "") -> dict[str, Any]:
+    # Findings are the large stable input. Focus is a run-specific lens, so keep
+    # it after findings to preserve DeepSeek prefix-cache reuse across review
+    # passes over the same staging set.
     payload = {
         "prompt_version": PROMPT_VERSION,
         "source_prompt_version": JOBS_PROMPT_VERSION,
         "task": "review_subconscious_findings_for_promotion",
-        "focus": focus,
-        "focus_rule": "Prefer candidates inside the focus. Put off-focus findings into weak_findings unless they are clearly reusable global memory.",
         "findings": [
             {
                 "finding_id": finding.get("fingerprint"),
@@ -167,6 +169,11 @@ def compact_review_payload(findings: list[dict[str, Any]], duplicate_groups: lis
             for finding in findings
         ],
         "deterministic_duplicate_groups": duplicate_groups[:20],
+        "focus": focus,
+        "focus_rule": (
+            "Prefer candidates inside the focus. Put off-focus findings into weak_findings "
+            "unless they are clearly reusable global memory."
+        ),
     }
     return sanitize_external_model_payload(payload)
 
@@ -370,6 +377,7 @@ def run_review(
         "focus": focus,
         "review": review,
         "usage": usage,
+        "cache": deepseek_cache_metrics_from_usage(usage),
         "wrote": False if no_write else True,
         "batch_id": batch_id,
     }

@@ -14,7 +14,7 @@ sys.path.insert(0, str(SCRIPTS))
 import semantic_recall_gate as gate  # noqa: E402
 
 
-def fake_response(payload: dict) -> dict:
+def fake_response(payload: dict, usage: dict | None = None) -> dict:
     return {
         "choices": [
             {
@@ -23,7 +23,7 @@ def fake_response(payload: dict) -> dict:
                 }
             }
         ],
-        "usage": {"total_tokens": 12},
+        "usage": usage or {"total_tokens": 12},
     }
 
 
@@ -105,6 +105,58 @@ class SemanticRecallGateTests(unittest.TestCase):
         self.assertIn("海马体记忆", result["query_aliases"])
         self.assertIn("registered_threads", result["memory_scope"])
         self.assertEqual(result["anti_personalization_risk"], "low")
+
+    def test_semantic_gate_payload_keeps_stable_catalog_before_variable_prompt(self) -> None:
+        payload = gate.catalog_payload(
+            prompt="这次继续之前的海马体记忆工作。",
+            cwd=self.workspace,
+            registry=self.registry,
+            associations={"terms": {}},
+            working_memory=[],
+            semantic_triggers_path=None,
+        )
+        payload_keys = list(payload.keys())
+
+        self.assertLess(payload_keys.index("memory_catalog"), payload_keys.index("prompt"))
+        self.assertLess(payload_keys.index("trigger_catalog"), payload_keys.index("prompt"))
+
+        worker_payload = json.loads(gate.worker_prompt("gate", payload))
+        worker_keys = list(worker_payload.keys())
+        self.assertLess(worker_keys.index("input"), worker_keys.index("task"))
+        self.assertLess(worker_keys.index("input"), worker_keys.index("output_schema"))
+
+    def test_semantic_gate_reports_aggregate_deepseek_cache_metrics(self) -> None:
+        def chat_fn(messages, api_key, model, base_url, max_tokens, timeout, temperature):
+            del messages, api_key, model, base_url, max_tokens, timeout, temperature
+            return fake_response(
+                {
+                    "decision": "background_only",
+                    "confidence": 0.7,
+                    "anti_personalization_risk": "low",
+                    "reason": "cache telemetry",
+                },
+                usage={
+                    "prompt_tokens": 10,
+                    "completion_tokens": 1,
+                    "total_tokens": 11,
+                    "prompt_cache_hit_tokens": 8,
+                    "prompt_cache_miss_tokens": 2,
+                },
+            )
+
+        result = gate.run_semantic_gate(
+            "那个海马体继续一下",
+            cwd=self.workspace,
+            registry=self.registry,
+            registry_path=self.registry_path,
+            api_key="test-key",
+            use_cache=False,
+            chat_fn=chat_fn,
+        )
+
+        self.assertEqual(result["usage"]["prompt_cache_hit_tokens"], 24)
+        self.assertEqual(result["usage"]["prompt_cache_miss_tokens"], 6)
+        self.assertEqual(result["cache"]["hit_rate"], 0.8)
 
     def test_secret_like_prompt_skips_without_calling_model(self) -> None:
         def chat_fn(*args, **kwargs):

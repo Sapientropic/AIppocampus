@@ -16,6 +16,19 @@ import subconscious_agent as agent  # noqa: E402
 
 
 class SubconsciousAgentTests(unittest.TestCase):
+    def test_agent_initial_payload_keeps_turns_before_variable_objective(self) -> None:
+        payload = json.loads(
+            agent.agent_initial_payload(
+                "Find durable edges from this run.",
+                [{"turn_ref": "t0", "user": "A", "assistant": "B"}],
+                max_steps=4,
+                min_tool_steps=1,
+            )
+        )
+        keys = list(payload.keys())
+
+        self.assertLess(keys.index("initial_turns"), keys.index("objective"))
+
     def test_initial_payload_redacts_external_model_sensitive_text(self) -> None:
         payload = agent.agent_initial_payload(
             "review memory routing",
@@ -187,7 +200,13 @@ class SubconsciousAgentTests(unittest.TestCase):
                     }
                 return {
                     "choices": [{"message": {"content": json.dumps(content, ensure_ascii=False)}}],
-                    "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+                    "usage": {
+                        "prompt_tokens": 1,
+                        "completion_tokens": 1,
+                        "total_tokens": 2,
+                        "prompt_cache_hit_tokens": 9,
+                        "prompt_cache_miss_tokens": 1,
+                    },
                 }
 
             result = agent.run_agent(
@@ -214,6 +233,7 @@ class SubconsciousAgentTests(unittest.TestCase):
         self.assertEqual(len(calls), 3)
         self.assertEqual(len(result["tool_steps"]), 1)
         self.assertEqual(result["edges"][0]["source_refs"][0]["ref"], "o0")
+        self.assertEqual(result["cache"]["hit_rate"], 0.9)
 
     def test_tool_observations_are_redacted_before_second_model_call(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

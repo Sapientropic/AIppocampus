@@ -109,6 +109,30 @@ This makes high concurrency safe across multiple Codex threads: duplicate hook
 starts should collapse into one leased project run, and foreground hooks should
 only read stable sidecars.
 
+## DeepSeek KV Cache Contract
+
+DeepSeek's server-side KV cache is automatic; AIppocampus does not implement a
+local prompt cache for model calls. The optimization here is prompt shape:
+requests should put stable, bulky inputs before run-specific fields so
+DeepSeek can land and later match complete prefix units. See the official
+DeepSeek KV cache guide:
+`https://api-docs.deepseek.com/zh-cn/guides/kv_cache`.
+
+Keep this ordering rule when changing DeepSeek-compatible payload builders:
+
+- stable source/catalog payloads first, such as timeline turns, registry
+  catalog, trigger catalog, findings, and tool lists
+- variable run directives later, such as current prompt, objective, focus,
+  worker name, job spec, diversity sample instruction, and repair text
+- model responses should preserve `usage.prompt_cache_hit_tokens` and
+  `usage.prompt_cache_miss_tokens`; command JSON returns also expose a compact
+  `cache` object with `hit_tokens`, `miss_tokens`, and `hit_rate`
+
+This mirrors the T-Sense monitor extraction lesson: stable
+profile/schema/instructions and repeated scan context belong before incremental
+or per-run questions. Do not "clean up" the JSON key order alphabetically; for
+DeepSeek cache behavior, order is part of the runtime contract.
+
 ## Jobs
 
 ### `question_extraction`
