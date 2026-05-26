@@ -1,0 +1,767 @@
+#!/usr/bin/env python3
+"""Semantic ambient-recall gate for AIppocampus.
+
+The deterministic prompt hook is intentionally conservative, but human recall is
+not a fixed phrase table. This module adds an optional DeepSeek-compatible
+semantic layer that can:
+
+- decide whether a prompt wants old-thread memory at all
+- generate multilingual query aliases for local source search
+- choose recall scope and catch over-personalization risks
+
+The model never becomes a source of truth. Its output only changes what local
+clean-source / registry indexes search for, and final evidence must still come
+from source-backed hits.
+"""
+
+from __future__ import annotations
+
+import argparse
+import concurrent.futures
+import hashlib
+import json
+import os
+import re
+import time
+from pathlib import Path
+from typing import Any, Callable
+
+from aippocampuslib import compact_text, now_utc
+from registry import load_registry, registry_paths, unique_preserve
+from retrieval import split_query_terms
+from subconscious_agent import call_chat_json
+from subconscious_worker import DEFAULT_BASE_URL, DEFAULT_MODEL, clamp_confidence, parse_model_json
+
+
+PROMPT_VERSION = "aippocampus-semantic-recall-gate-v0"
+SCHEMA_VERSION = 1
+DEFAULT_CACHE_NAME = "semantic_recall_cache.json"
+DEFAULT_TRIGGERS_NAME = "semantic_triggers.jsonl"
+DEFAULT_TIMEOUT = int(os.environ.get("AIPPOCAMPUS_SEMANTIC_TIMEOUT", "12"))
+DEFAULT_TEMPERATURE = float(os.environ.get("AIPPOCAMPUS_SEMANTIC_TEMPERATURE", "0.2"))
+DEFAULT_MAX_CACHE_ENTRIES = 256
+DEFAULT_CACHE_TTL_SECONDS = int(os.environ.get("AIPPOCAMPUS_SEMANTIC_CACHE_TTL", str(24 * 60 * 60)))
+DEFAULT_MAX_CATALOG_ITEMS = 28
+DEFAULT_MAX_TRIGGER_ITEMS = 80
+DEFAULT_WORKERS = ("gate", "alias", "scope")
+
+VALID_DECISIONS = {"skip", "background_only", "scent", "evidence"}
+DECISION_RANK = {"skip": 0, "background_only": 1, "scent": 2, "evidence": 3}
+
+
+ChatFn = Callable[[list[dict[str, str]], str, str, str, int | None, int, float], dict[str, Any]]
+
+
+KEY_BLOCK_BOUNDARY = "-----"
+GENERIC_PRIVATE_KEY_BLOCK = (
+    rf"{KEY_BLOCK_BOUNDARY}BEGIN [A-Z ]*PRIVATE KEY{KEY_BLOCK_BOUNDARY}"
+    rf".*?"
+    rf"{KEY_BLOCK_BOUNDARY}END [A-Z ]*PRIVATE KEY{KEY_BLOCK_BOUNDARY}"
+)
+OPENSSH_PRIVATE_KEY_BLOCK = (
+    rf"{KEY_BLOCK_BOUNDARY}BEGIN OPENSSH PRIVATE KEY{KEY_BLOCK_BOUNDARY}"
+    rf".*?"
+    rf"{KEY_BLOCK_BOUNDARY}END OPENSSH PRIVATE KEY{KEY_BLOCK_BOUNDARY}"
+)
+
+HARD_SECRET_PATTERNS = [
+    re.compile(pattern, re.IGNORECASE | re.DOTALL)
+    for pattern in [
+        GENERIC_PRIVATE_KEY_BLOCK,
+        OPENSSH_PRIVATE_KEY_BLOCK,
+    ]
+]
+
+REDACTION_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
+    (
+        "openai_api_key",
+        re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b", re.IGNORECASE),
+        "<redacted:api-key>",
+    ),
+    (
+        "bearer_token",
+        re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]{20,}", re.IGNORECASE),
+        "Bearer <redacted:bearer-token>",
+    ),
+    (
+        "credential_url",
+        re.compile(r"\b([A-Za-z][A-Za-z0-9+.-]*://)[^@\s:/]+:[^@\s]+@"),
+        r"\1<redacted:credentials>@",
+    ),
+    (
+        "secret_assignment",
+        re.compile(
+            r"\b(api[_-]?key|secret|token|password|passwd|cookie|authorization)\b\s*[:=]\s*"
+            r"(\"[^\"]*\"|'[^']*'|[^\s,;&]+)",
+            re.IGNORECASE,
+        ),
+        r"\1=<redacted:secret>",
+    ),
+]
+
+
+SYSTEM_PROMPT = """You are AIppocampus semantic recall gate.
+Your job is to decide whether a user's current prompt should receive ambient
+old-thread memory hints, and to generate multilingual aliases for local memory
+retrieval.
+
+Rules:
+- Be conservative. Ordinary coding/product tasks usually return skip or background_only.
+- Use scent when prior conversation memory may help but is not requested as proof.
+- Use evidence only when the user asks for exact prior wording, last reply, source-backed status, or a decision that depends on old-thread facts.
+- Do not invent facts. Do not answer the user. Do not quote source text.
+- Query aliases are search hints only; they are not claims.
+- Prefer cross-lingual and paraphrase aliases when useful.
+- Avoid over-personalizing generic work prompts.
+- Return JSON only.
+"""
+
+
+def default_cache_path(registry_path: Path | None = None, registry_dir: Path | None = None) -> Path:
+    if registry_path:
+        return registry_path.resolve().parent / DEFAULT_CACHE_NAME
+    json_path, _ = registry_paths(registry_dir)
+    return json_path.resolve().parent / DEFAULT_CACHE_NAME
+
+
+def default_semantic_triggers_path(registry_path: Path | None = None, registry_dir: Path | None = None) -> Path:
+    if registry_path:
+        return registry_path.resolve().parent / DEFAULT_TRIGGERS_NAME
+    json_path, _ = registry_paths(registry_dir)
+    return json_path.resolve().parent / DEFAULT_TRIGGERS_NAME
+
+
+def semantic_gate_mode(value: str | None = None) -> str:
+    raw = (value if value is not None else os.environ.get("AIPPOCAMPUS_SEMANTIC_GATE", "auto")).strip().casefold()
+    if raw in {"0", "false", "off", "no", "disabled"}:
+        return "off"
+    if raw in {"1", "true", "on", "yes", "force"}:
+        return "on"
+    return "auto"
+
+
+def semantic_gate_enabled(mode: str | None = None, *, api_key: str | None = None, api_key_env: str = "DEEPSEEK_API_KEY") -> bool:
+    resolved = semantic_gate_mode(mode)
+    if resolved == "off":
+        return False
+    key = api_key or os.environ.get(api_key_env)
+    if resolved == "on":
+        return bool(key)
+    return bool(key)
+
+
+def sanitize_prompt_for_semantic_gate(prompt: str) -> tuple[str, dict[str, Any]]:
+    """Redact likely credentials before sending prompt text to a semantic model.
+
+    The prompt hook is automatic, so credential handling must be stricter than a
+    normal chat completion. Still, many useful prompts mention a token or
+    connection string while asking a memory question. We redact known secret
+    shapes and only hard-block prompts that are private-key dumps or mostly
+    credentials after redaction.
+    """
+
+    original = str(prompt or "")
+    hard_matches = [pattern.pattern for pattern in HARD_SECRET_PATTERNS if pattern.search(original)]
+    if hard_matches:
+        return "", {
+            "redacted": True,
+            "redaction_count": 0,
+            "redaction_types": ["private_key_block"],
+            "hard_block": True,
+            "reason": "private key block detected",
+        }
+    sanitized = original
+    redaction_types: list[str] = []
+    redaction_count = 0
+    for label, pattern, replacement in REDACTION_PATTERNS:
+        sanitized, count = pattern.subn(replacement, sanitized)
+        if count:
+            redaction_types.append(label)
+            redaction_count += count
+    remaining = re.sub(r"<redacted:[^>]+>", " ", sanitized)
+    remaining = re.sub(r"\s+", " ", remaining).strip()
+    hard_block = bool(redaction_count and len(remaining) < 12)
+    return sanitized, {
+        "redacted": bool(redaction_count),
+        "redaction_count": redaction_count,
+        "redaction_types": unique_preserve(redaction_types, limit=8),
+        "hard_block": hard_block,
+        "reason": "prompt mostly secret/credential material after redaction" if hard_block else "",
+    }
+
+
+def prompt_may_contain_secret(prompt: str) -> bool:
+    _, policy = sanitize_prompt_for_semantic_gate(prompt)
+    return bool(policy.get("redacted") or policy.get("hard_block"))
+
+
+def load_json(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def load_jsonl(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as fh:
+        for line in fh:
+            if not line.strip():
+                continue
+            try:
+                item = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(item, dict):
+                rows.append(item)
+    return rows
+
+
+def normalize_alias(value: Any) -> str:
+    text = re.sub(r"\s+", " ", str(value or "")).strip(" \t\r\n\"'`.,;:!?，。；：！？、")
+    if not text:
+        return ""
+    if len(text) > 96:
+        return ""
+    if re.search(r"[A-Za-z]:\\|/(Users|home|tmp|var)/", text):
+        return ""
+    if prompt_may_contain_secret(text):
+        return ""
+    return text
+
+
+def collect_aliases(values: list[Any], limit: int = 24) -> list[str]:
+    aliases: list[str] = []
+    for value in values:
+        if isinstance(value, list):
+            aliases.extend(collect_aliases(value, limit=limit))
+            continue
+        text = normalize_alias(value)
+        if text:
+            aliases.append(text)
+            aliases.extend(split_query_terms([text])[:4])
+    return unique_preserve(aliases, limit=limit)
+
+
+def current_project_hint(registry: dict[str, Any], cwd: Path) -> str | None:
+    target = str(cwd.resolve()).casefold()
+    best: tuple[int, str] | None = None
+    for entry in registry.get("threads") or []:
+        paths = entry.get("paths") or {}
+        workspace = str(paths.get("workspace") or (entry.get("session_meta") or {}).get("cwd") or "")
+        if not workspace:
+            continue
+        try:
+            workspace_low = str(Path(workspace).resolve()).casefold()
+        except Exception:
+            workspace_low = workspace.casefold()
+        score = 0
+        if workspace_low == target:
+            score = 3
+        elif target.startswith(workspace_low) or workspace_low.startswith(target):
+            score = 2
+        if score:
+            label = str(entry.get("project_label") or entry.get("workspace_name") or "")
+            if label and (best is None or score > best[0]):
+                best = (score, label)
+    return best[1] if best else None
+
+
+def entry_catalog_item(entry: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "thread_key": entry.get("thread_key"),
+        "title": compact_text(str(entry.get("title") or entry.get("workspace_name") or ""), 80),
+        "project_label": entry.get("project_label") or entry.get("workspace_name"),
+        "anchors": unique_preserve([str(x) for x in entry.get("anchor_titles") or []], limit=5),
+        "keywords": unique_preserve([str(x) for x in entry.get("keywords") or []], limit=10),
+        "summary": compact_text(str(entry.get("summary") or ""), 280),
+        "updated_at": entry.get("updated_at") or (entry.get("session_meta") or {}).get("timestamp"),
+    }
+
+
+def registry_catalog(registry: dict[str, Any], *, cwd: Path, limit: int = DEFAULT_MAX_CATALOG_ITEMS) -> list[dict[str, Any]]:
+    project = current_project_hint(registry, cwd)
+    scored: list[tuple[tuple[int, str], dict[str, Any]]] = []
+    for entry in registry.get("threads") or []:
+        if not isinstance(entry, dict):
+            continue
+        has_memory_surface = bool(entry.get("anchor_titles") or entry.get("keywords") or entry.get("summary"))
+        if not has_memory_surface:
+            continue
+        same_project = project and project == (entry.get("project_label") or entry.get("workspace_name"))
+        score = 2 if same_project else 0
+        score += 1 if entry.get("anchor_titles") else 0
+        score += 1 if entry.get("keywords") else 0
+        scored.append(((score, str(entry.get("updated_at") or "")), entry_catalog_item(entry)))
+    scored.sort(key=lambda item: item[0], reverse=True)
+    return [item for _, item in scored[:limit]]
+
+
+def trigger_from_working_memory(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "source": "working_memory",
+        "title": compact_text(str(row.get("title") or ""), 90),
+        "aliases": collect_aliases(
+            [
+                row.get("title"),
+                row.get("trigger_terms") or [],
+                row.get("concepts") or [],
+            ],
+            limit=12,
+        ),
+        "when_to_use": compact_text(str(row.get("summary") or row.get("recommendation") or ""), 220),
+        "when_not_to_use": str(row.get("ask_policy") or ""),
+        "confidence": row.get("confidence"),
+        "route": row.get("route"),
+        "project_label": row.get("project_label"),
+    }
+
+
+def trigger_from_association(term: str, row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "source": "association",
+        "title": term,
+        "aliases": collect_aliases([term, row.get("related_terms") or []], limit=12),
+        "when_to_use": "Use as an ambient recall association only; search source before treating as evidence.",
+        "status": row.get("status"),
+        "confidence": row.get("confidence"),
+    }
+
+
+def load_semantic_triggers(path: Path | None) -> list[dict[str, Any]]:
+    if not path or not path.exists():
+        return []
+    out: list[dict[str, Any]] = []
+    for row in load_jsonl(path):
+        if row.get("status") in {"inactive", "parked"}:
+            continue
+        if row.get("kind") not in {None, "aippocampus_semantic_trigger"}:
+            continue
+        out.append(
+            {
+                "source": "semantic_triggers",
+                "title": compact_text(str(row.get("title") or row.get("concept") or ""), 90),
+                "aliases": collect_aliases([row.get("aliases") or [], row.get("trigger_terms") or [], row.get("concept")], limit=16),
+                "when_to_use": compact_text(str(row.get("when_to_use") or row.get("summary") or ""), 220),
+                "when_not_to_use": compact_text(str(row.get("when_not_to_use") or ""), 180),
+                "confidence": row.get("confidence"),
+            }
+        )
+    return out
+
+
+def trigger_catalog(
+    *,
+    associations: dict[str, Any] | None = None,
+    working_memory: list[dict[str, Any]] | None = None,
+    semantic_triggers_path: Path | None = None,
+    limit: int = DEFAULT_MAX_TRIGGER_ITEMS,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    rows.extend(load_semantic_triggers(semantic_triggers_path))
+    for row in working_memory or []:
+        if row.get("status") == "active":
+            rows.append(trigger_from_working_memory(row))
+    assoc_terms = associations.get("terms") if isinstance(associations, dict) else {}
+    if isinstance(assoc_terms, dict):
+        scored = sorted(
+            assoc_terms.items(),
+            key=lambda item: (float((item[1] or {}).get("confidence") or 0.0), str(item[0])),
+            reverse=True,
+        )
+        for term, row in scored[: max(0, limit - len(rows))]:
+            if not isinstance(row, dict):
+                continue
+            if row.get("status") == "verified" or float(row.get("confidence") or 0.0) >= 0.82:
+                rows.append(trigger_from_association(str(term), row))
+    return rows[:limit]
+
+
+def catalog_payload(
+    *,
+    prompt: str,
+    cwd: Path,
+    registry: dict[str, Any],
+    associations: dict[str, Any] | None = None,
+    working_memory: list[dict[str, Any]] | None = None,
+    semantic_triggers_path: Path | None = None,
+) -> dict[str, Any]:
+    return {
+        "prompt_version": PROMPT_VERSION,
+        "prompt": compact_text(prompt, 1200),
+        "current_project_hint": current_project_hint(registry, cwd),
+        "memory_catalog": registry_catalog(registry, cwd=cwd),
+        "trigger_catalog": trigger_catalog(
+            associations=associations,
+            working_memory=working_memory,
+            semantic_triggers_path=semantic_triggers_path,
+        ),
+    }
+
+
+def worker_prompt(worker: str, payload: dict[str, Any]) -> str:
+    schema = {
+        "worker": worker,
+        "decision": "skip|background_only|scent|evidence",
+        "intent": "ordinary_task|recall|continuation|decision_check|preference_update|implementation",
+        "confidence": 0.0,
+        "query_aliases": ["short multilingual search aliases"],
+        "memory_scope": ["current_project|registered_threads|cross_project|working_memory"],
+        "negative_contexts": ["when not to recall"],
+        "anti_personalization_risk": "low|medium|high",
+        "reason": "short reason",
+    }
+    task = {
+        "gate": "Decide whether ambient memory should surface. Be strict about skip vs scent.",
+        "alias": "Generate multilingual/paraphrase query aliases for local retrieval. Do not decide facts.",
+        "scope": "Choose memory scope and detect over-personalization risk.",
+    }.get(worker, "Analyze semantic recall relevance.")
+    return json.dumps(
+        {
+            "task": task,
+            "output_schema": schema,
+            "input": payload,
+        },
+        ensure_ascii=False,
+        indent=2,
+    )
+
+
+def parse_worker_response(response: dict[str, Any], worker: str) -> dict[str, Any]:
+    parsed = parse_model_json(response)
+    decision = str(parsed.get("decision") or "skip").strip().casefold()
+    if decision not in VALID_DECISIONS:
+        decision = "skip"
+    aliases = collect_aliases([parsed.get("query_aliases") or [], parsed.get("aliases") or [], parsed.get("concept_aliases") or []])
+    scopes = unique_preserve([str(x) for x in parsed.get("memory_scope") or [] if str(x).strip()], limit=8)
+    negatives = unique_preserve([str(x) for x in parsed.get("negative_contexts") or [] if str(x).strip()], limit=8)
+    risk = str(parsed.get("anti_personalization_risk") or "medium").strip().casefold()
+    if risk not in {"low", "medium", "high"}:
+        risk = "medium"
+    return {
+        "worker": worker,
+        "decision": decision,
+        "intent": str(parsed.get("intent") or "").strip()[:80],
+        "confidence": clamp_confidence(parsed.get("confidence")),
+        "query_aliases": aliases,
+        "memory_scope": scopes,
+        "negative_contexts": negatives,
+        "anti_personalization_risk": risk,
+        "reason": compact_text(str(parsed.get("reason") or ""), 220),
+    }
+
+
+def run_worker(
+    worker: str,
+    *,
+    payload: dict[str, Any],
+    api_key: str,
+    model: str,
+    base_url: str,
+    timeout: int,
+    temperature: float,
+    chat_fn: ChatFn,
+) -> dict[str, Any]:
+    response = chat_fn(
+        [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": worker_prompt(worker, payload)},
+        ],
+        api_key,
+        model,
+        base_url,
+        None,
+        timeout,
+        temperature,
+    )
+    parsed = parse_worker_response(response, worker)
+    parsed["usage"] = response.get("usage") or {}
+    return parsed
+
+
+def merge_workers(workers: list[dict[str, Any]], errors: list[str]) -> dict[str, Any]:
+    decision = "skip"
+    confidence_values: list[float] = []
+    aliases: list[str] = []
+    scopes: list[str] = []
+    negatives: list[str] = []
+    reasons: list[str] = []
+    risk = "medium"
+    intents: list[str] = []
+    for row in workers:
+        row_decision = str(row.get("decision") or "skip")
+        if DECISION_RANK.get(row_decision, 0) > DECISION_RANK.get(decision, 0):
+            decision = row_decision
+        confidence_values.append(float(row.get("confidence") or 0.0))
+        aliases.extend(row.get("query_aliases") or [])
+        scopes.extend(row.get("memory_scope") or [])
+        negatives.extend(row.get("negative_contexts") or [])
+        if row.get("reason"):
+            reasons.append(str(row.get("reason")))
+        if row.get("intent"):
+            intents.append(str(row.get("intent")))
+        if row.get("anti_personalization_risk") == "high":
+            risk = "high"
+        elif risk != "high" and row.get("anti_personalization_risk") == "low":
+            risk = "low"
+    confidence = max(confidence_values or [0.0])
+    if risk == "high" and decision == "scent" and confidence < 0.82:
+        decision = "background_only"
+        reasons.append("downgraded by high anti-personalization risk")
+    if decision == "evidence" and confidence < 0.6:
+        decision = "scent"
+        reasons.append("downgraded low-confidence evidence request")
+    if decision == "scent" and confidence < 0.35:
+        decision = "background_only"
+        reasons.append("downgraded low-confidence scent")
+    return {
+        "decision": decision,
+        "confidence": round(confidence, 4),
+        "intent": unique_preserve(intents, limit=4)[0] if intents else "",
+        "query_aliases": collect_aliases(aliases, limit=24),
+        "memory_scope": unique_preserve(scopes, limit=8),
+        "negative_contexts": unique_preserve(negatives, limit=8),
+        "anti_personalization_risk": risk,
+        "reasons": unique_preserve(reasons + errors, limit=8),
+    }
+
+
+def cache_fingerprint(
+    *,
+    prompt: str,
+    cwd: Path,
+    registry_path: Path | None = None,
+    semantic_triggers_path: Path | None = None,
+    mode: str = "auto",
+) -> str:
+    parts = [PROMPT_VERSION, semantic_gate_mode(mode), re.sub(r"\s+", " ", prompt).strip(), str(cwd.resolve()).casefold()]
+    for path in [registry_path, semantic_triggers_path]:
+        if path and path.exists():
+            try:
+                stat = path.stat()
+                parts.append(f"{path.resolve()}:{stat.st_mtime_ns}:{stat.st_size}")
+            except OSError:
+                parts.append(str(path))
+    return "sg_" + hashlib.sha1("\n".join(parts).encode("utf-8")).hexdigest()[:24]
+
+
+def read_cache(path: Path, key: str, *, ttl_seconds: int = DEFAULT_CACHE_TTL_SECONDS) -> dict[str, Any] | None:
+    data = load_json(path)
+    entry = (data.get("entries") or {}).get(key) if isinstance(data.get("entries"), dict) else None
+    if not isinstance(entry, dict):
+        return None
+    created = float(entry.get("created_unix") or 0.0)
+    if ttl_seconds > 0 and created and time.time() - created > ttl_seconds:
+        return None
+    result = entry.get("result")
+    if isinstance(result, dict):
+        result = dict(result)
+        result["cached"] = True
+        return result
+    return None
+
+
+def write_cache(path: Path, key: str, result: dict[str, Any], *, max_entries: int = DEFAULT_MAX_CACHE_ENTRIES) -> None:
+    data = load_json(path)
+    entries = data.get("entries") if isinstance(data.get("entries"), dict) else {}
+    slim = dict(result)
+    slim.pop("elapsed_ms", None)
+    slim.pop("cached", None)
+    entries[key] = {"created_at": now_utc(), "created_unix": time.time(), "result": slim}
+    if len(entries) > max_entries:
+        kept = sorted(entries.items(), key=lambda item: float((item[1] or {}).get("created_unix") or 0.0), reverse=True)[:max_entries]
+        entries = dict(kept)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(
+        json.dumps({"schema_version": SCHEMA_VERSION, "updated_at": now_utc(), "entries": entries}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+        newline="\n",
+    )
+    tmp.replace(path)
+
+
+def unavailable_result(reason: str, *, elapsed_ms: float = 0.0) -> dict[str, Any]:
+    return {
+        "kind": "aippocampus_semantic_recall_gate",
+        "schema_version": SCHEMA_VERSION,
+        "prompt_version": PROMPT_VERSION,
+        "available": False,
+        "decision": "skip",
+        "confidence": 0.0,
+        "query_aliases": [],
+        "memory_scope": [],
+        "negative_contexts": [],
+        "anti_personalization_risk": "medium",
+        "reasons": [reason],
+        "workers": [],
+        "errors": [reason],
+        "secret_policy": None,
+        "cached": False,
+        "elapsed_ms": round(elapsed_ms, 2),
+    }
+
+
+def run_semantic_gate(
+    prompt: str,
+    *,
+    cwd: Path | str,
+    registry: dict[str, Any] | None = None,
+    registry_path: Path | str | None = None,
+    associations: dict[str, Any] | None = None,
+    working_memory: list[dict[str, Any]] | None = None,
+    semantic_triggers_path: Path | str | None = None,
+    cache_path: Path | str | None = None,
+    mode: str | None = None,
+    api_key: str | None = None,
+    api_key_env: str = "DEEPSEEK_API_KEY",
+    model: str = DEFAULT_MODEL,
+    base_url: str = DEFAULT_BASE_URL,
+    timeout: int = DEFAULT_TIMEOUT,
+    temperature: float = DEFAULT_TEMPERATURE,
+    workers: tuple[str, ...] = DEFAULT_WORKERS,
+    use_cache: bool = True,
+    chat_fn: ChatFn = call_chat_json,
+) -> dict[str, Any]:
+    start = time.perf_counter()
+    prompt = str(prompt or "").strip()
+    sanitized_prompt, secret_policy = sanitize_prompt_for_semantic_gate(prompt)
+    cwd_path = Path(cwd).resolve()
+    registry_path_obj = Path(registry_path).resolve() if registry_path else None
+    triggers_path = Path(semantic_triggers_path).resolve() if semantic_triggers_path else (
+        default_semantic_triggers_path(registry_path=registry_path_obj) if registry_path_obj else None
+    )
+    key_value = api_key or os.environ.get(api_key_env)
+    if not semantic_gate_enabled(mode, api_key=key_value, api_key_env=api_key_env):
+        return unavailable_result("semantic gate disabled or missing api key")
+    if not prompt:
+        return unavailable_result("empty prompt")
+    if secret_policy.get("hard_block"):
+        result = unavailable_result(str(secret_policy.get("reason") or "sensitive prompt hard-blocked"))
+        result["secret_policy"] = secret_policy
+        return result
+
+    cache = Path(cache_path).resolve() if cache_path else (
+        default_cache_path(registry_path=registry_path_obj) if registry_path_obj else None
+    )
+    cache_key = cache_fingerprint(
+        prompt=sanitized_prompt,
+        cwd=cwd_path,
+        registry_path=registry_path_obj,
+        semantic_triggers_path=triggers_path,
+        mode=mode or "auto",
+    )
+    if use_cache and cache:
+        cached = read_cache(cache, cache_key)
+        if cached:
+            cached["elapsed_ms"] = round((time.perf_counter() - start) * 1000, 2)
+            return cached
+
+    if registry is None:
+        registry = load_registry(registry_path_obj) if registry_path_obj else {"threads": []}
+    payload = catalog_payload(
+        prompt=sanitized_prompt,
+        cwd=cwd_path,
+        registry=registry,
+        associations=associations,
+        working_memory=working_memory,
+        semantic_triggers_path=triggers_path,
+    )
+    parsed_workers: list[dict[str, Any]] = []
+    errors: list[str] = []
+    worker_names = tuple(worker for worker in workers if worker in set(DEFAULT_WORKERS))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(worker_names))) as executor:
+        futures = {
+            executor.submit(
+                run_worker,
+                worker,
+                payload=payload,
+                api_key=str(key_value),
+                model=model,
+                base_url=base_url,
+                timeout=timeout,
+                temperature=temperature,
+                chat_fn=chat_fn,
+            ): worker
+            for worker in worker_names
+        }
+        for future in concurrent.futures.as_completed(futures):
+            worker = futures[future]
+            try:
+                parsed_workers.append(future.result())
+            except Exception as exc:
+                errors.append(f"{worker}: {exc}")
+
+    merged = merge_workers(parsed_workers, errors)
+    elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
+    result = {
+        "kind": "aippocampus_semantic_recall_gate",
+        "schema_version": SCHEMA_VERSION,
+        "prompt_version": PROMPT_VERSION,
+        "available": bool(parsed_workers),
+        **merged,
+        "workers": parsed_workers,
+        "errors": errors,
+        "secret_policy": secret_policy,
+        "cached": False,
+        "elapsed_ms": elapsed_ms,
+    }
+    if not parsed_workers and errors:
+        result["available"] = False
+        result["decision"] = "skip"
+    if use_cache and cache and result.get("available"):
+        try:
+            write_cache(cache, cache_key, result)
+        except Exception:
+            pass
+    return result
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--prompt", required=True)
+    parser.add_argument("--cwd", default=os.getcwd())
+    parser.add_argument("--registry")
+    parser.add_argument("--associations")
+    parser.add_argument("--working-memory")
+    parser.add_argument("--semantic-triggers")
+    parser.add_argument("--cache")
+    parser.add_argument("--mode", choices=["auto", "on", "off"], default=None)
+    parser.add_argument("--no-cache", action="store_true")
+    parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT)
+    parser.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE)
+    parser.add_argument("--json", action="store_true", dest="json_output")
+    args = parser.parse_args()
+
+    registry_path = Path(args.registry).resolve() if args.registry else registry_paths()[0]
+    result = run_semantic_gate(
+        args.prompt,
+        cwd=Path(args.cwd),
+        registry_path=registry_path,
+        associations=load_json(Path(args.associations).resolve()) if args.associations else None,
+        working_memory=load_jsonl(Path(args.working_memory).resolve()) if args.working_memory else None,
+        semantic_triggers_path=Path(args.semantic_triggers).resolve() if args.semantic_triggers else None,
+        cache_path=Path(args.cache).resolve() if args.cache else None,
+        mode=args.mode,
+        timeout=args.timeout,
+        temperature=args.temperature,
+        use_cache=not args.no_cache,
+    )
+    if args.json_output:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        print(f"semantic gate: {result.get('decision')} confidence={result.get('confidence')} cached={result.get('cached')}")
+        if result.get("query_aliases"):
+            print("aliases: " + ", ".join(result.get("query_aliases")[:12]))
+        for reason in result.get("reasons") or []:
+            print(f"- {reason}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,4 @@
+interface:
+  display_name: "AIppocampus"
+  short_description: "Recall and maintain source-backed Codex conversation memory"
+  default_prompt: "Use $aippocampus to discover registered conversation memories, build clean source, decide whether earlier context should be recalled, run hybrid/RAG-lite retrieval, and update anchors/checkpoints."

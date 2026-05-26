@@ -1,0 +1,24 @@
+# Lightweight provenance catalog for the skill package shipped in this repo.
+
+skills:
+  - name: aippocampus
+    path: skills/aippocampus
+    origin: local
+    public_status: included
+    license: MIT
+    optional_env:
+      - CODEX_HOME
+      - DEEPSEEK_API_KEY
+      - AIPPOCAMPUS_SEMANTIC_GATE
+      - AIPPOCAMPUS_VAULT
+      - AIPPOCAMPUS_STYLE_SOURCE
+      - AIPPOCAMPUS_SCRIPT_SOURCE
+      - AIPPOCAMPUS_SITE_MARK
+      - AIPPOCAMPUS_SITE_TITLE
+    legacy_env:
+      - CODEX_MEMORY_VAULT
+      - CODEX_MEMORY_STYLE_SOURCE
+      - CODEX_MEMORY_SCRIPT_SOURCE
+      - CODEX_MEMORY_SITE_MARK
+      - CODEX_MEMORY_SITE_TITLE
+    notes: "Source-backed conversation memory for AI agents, with clean-source indexes, registry search, ambient recall hooks, optional DeepSeek-compatible semantic/subconscious jobs, and a roadmap for sync, MCP, and plugin distribution."

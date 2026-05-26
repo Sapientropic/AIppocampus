@@ -1,0 +1,622 @@
+#!/usr/bin/env python3
+"""Hook-safe scheduler for AIppocampus subconscious jobs.
+
+The lifecycle hook may call this script frequently, so this file must stay
+cheap in `--maybe-start` mode. It only decides whether a project has enough new
+clean-source material, records a small state file, and starts a detached worker.
+The expensive DeepSeek jobs run in the detached `--run-due` process.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import time
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+from aippocampuslib import codex_home, now_utc
+
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+STATE_SCHEMA_VERSION = 1
+DEFAULT_COOLDOWN_SECONDS = 6 * 60 * 60
+DEFAULT_MIN_NEW_TURNS = 12
+DEFAULT_ENQUEUE_COOLDOWN_SECONDS = 10 * 60
+DEFAULT_STALE_LOCK_SECONDS = 2 * 60 * 60
+DEFAULT_MAX_TURNS = 96
+DEFAULT_MAX_FINDINGS = 220
+DEFAULT_API_KEY_ENV = "DEEPSEEK_API_KEY"
+
+
+@dataclass
+class ProjectStats:
+    label: str
+    clean_turn_count: int
+    clean_message_count: int
+    thread_count: int
+    latest_updated_at: str
+    tags: list[str]
+    workspaces: list[str]
+
+
+class FileLock:
+    def __init__(self, path: Path, *, stale_seconds: int = DEFAULT_STALE_LOCK_SECONDS) -> None:
+        self.path = path
+        self.stale_seconds = stale_seconds
+        self.fd: int | None = None
+
+    def __enter__(self) -> "FileLock":
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            self.fd = os.open(str(self.path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            try:
+                age = time.time() - self.path.stat().st_mtime
+            except OSError:
+                age = 0
+            if age > self.stale_seconds:
+                try:
+                    self.path.unlink()
+                except OSError:
+                    pass
+                self.fd = os.open(str(self.path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            else:
+                raise RuntimeError("subconscious scheduler already running")
+        os.write(self.fd, json.dumps({"pid": os.getpid(), "created_at": now_utc()}).encode("utf-8"))
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+        if self.fd is not None:
+            os.close(self.fd)
+            self.fd = None
+        try:
+            self.path.unlink()
+        except OSError:
+            pass
+
+
+def registry_dir(path: Path | None = None) -> Path:
+    return path or (codex_home() / "aippocampus-registry")
+
+
+def registry_path(root: Path) -> Path:
+    return root / "threads.json"
+
+
+def state_path(root: Path, override: Path | None = None) -> Path:
+    return override or (root / "subconscious_state.json")
+
+
+def log_path(root: Path) -> Path:
+    return root / "subconscious_scheduler.log"
+
+
+def load_json(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def save_json(path: Path, data: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
+    tmp.replace(path)
+
+
+def load_state(path: Path) -> dict[str, Any]:
+    data = load_json(path)
+    data.setdefault("schema_version", STATE_SCHEMA_VERSION)
+    data.setdefault("projects", {})
+    return data
+
+
+def save_state(path: Path, data: dict[str, Any]) -> None:
+    data["schema_version"] = STATE_SCHEMA_VERSION
+    data["updated_at"] = now_utc()
+    save_json(path, data)
+
+
+def norm_path(value: str | None) -> str:
+    if not value:
+        return ""
+    try:
+        return str(Path(value).resolve()).casefold()
+    except Exception:
+        return value.casefold()
+
+
+def thread_workspace(thread: dict[str, Any]) -> str:
+    paths = thread.get("paths") or {}
+    return str(paths.get("workspace") or (thread.get("session_meta") or {}).get("cwd") or "")
+
+
+def thread_project_label(thread: dict[str, Any]) -> str:
+    return str(thread.get("project_label") or thread.get("workspace_name") or "default")
+
+
+def project_stats_from_registry(registry: dict[str, Any]) -> dict[str, ProjectStats]:
+    buckets: dict[str, dict[str, Any]] = {}
+    for thread in registry.get("threads") or []:
+        if not isinstance(thread, dict):
+            continue
+        label = thread_project_label(thread)
+        bucket = buckets.setdefault(
+            label,
+            {
+                "label": label,
+                "clean_turn_count": 0,
+                "clean_message_count": 0,
+                "thread_count": 0,
+                "latest_updated_at": "",
+                "tags": set(),
+                "workspaces": set(),
+            },
+        )
+        bucket["thread_count"] += 1
+        bucket["clean_turn_count"] += int(thread.get("clean_turn_count") or 0)
+        bucket["clean_message_count"] += int(thread.get("clean_message_count") or 0)
+        updated = str(thread.get("updated_at") or "")
+        if updated > bucket["latest_updated_at"]:
+            bucket["latest_updated_at"] = updated
+        for tag in thread.get("project_tags") or []:
+            if tag:
+                bucket["tags"].add(str(tag))
+        workspace = thread_workspace(thread)
+        if workspace:
+            bucket["workspaces"].add(workspace)
+    return {
+        label: ProjectStats(
+            label=label,
+            clean_turn_count=int(bucket["clean_turn_count"]),
+            clean_message_count=int(bucket["clean_message_count"]),
+            thread_count=int(bucket["thread_count"]),
+            latest_updated_at=str(bucket["latest_updated_at"]),
+            tags=sorted(bucket["tags"]),
+            workspaces=sorted(bucket["workspaces"]),
+        )
+        for label, bucket in buckets.items()
+    }
+
+
+def project_for_cwd(registry: dict[str, Any], cwd: Path | None) -> str | None:
+    if cwd is None:
+        return None
+    target = norm_path(str(cwd))
+    best: tuple[int, str] | None = None
+    sep = os.sep.casefold()
+    for thread in registry.get("threads") or []:
+        if not isinstance(thread, dict):
+            continue
+        workspace = norm_path(thread_workspace(thread))
+        if not workspace:
+            continue
+        if workspace == target:
+            score = 3
+        elif target.startswith(workspace + sep) or workspace.startswith(target + sep):
+            score = 2
+        else:
+            continue
+        label = thread_project_label(thread)
+        if best is None or score > best[0]:
+            best = (score, label)
+    return best[1] if best else None
+
+
+def due_reason(
+    stats: ProjectStats,
+    project_state: dict[str, Any],
+    *,
+    now_ts: float,
+    cooldown_seconds: int,
+    min_new_turns: int,
+) -> str | None:
+    last_run = float(project_state.get("last_run_ts") or 0.0)
+    if last_run and now_ts - last_run < cooldown_seconds:
+        return None
+    last_turns = int(project_state.get("last_clean_turn_count") or 0)
+    new_turns = stats.clean_turn_count - last_turns
+    if last_run <= 0 and stats.clean_turn_count >= 3:
+        return "first_run"
+    if new_turns >= min_new_turns:
+        return f"new_turns:{new_turns}"
+    return None
+
+
+def parse_utc_ts(value: str) -> float | None:
+    if not value:
+        return None
+    try:
+        if value.endswith("Z"):
+            value = value[:-1] + "+00:00"
+        return datetime.fromisoformat(value).timestamp()
+    except ValueError:
+        return None
+
+
+def iso_from_ts(value: float) -> str:
+    return datetime.fromtimestamp(value, tz=timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def finding_mentions_project(item: dict[str, Any], label: str) -> bool:
+    if item.get("project_label") == label:
+        return True
+    for ref in item.get("source_refs") or []:
+        if isinstance(ref, dict) and ref.get("project_label") == label:
+            return True
+    return False
+
+
+def latest_staging_ts(root: Path, label: str) -> float | None:
+    latest: float | None = None
+    for path in [root / "subconscious_jobs.jsonl", root / "promotion_candidates.jsonl"]:
+        if not path.exists():
+            continue
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            if not line.strip():
+                continue
+            try:
+                item = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(item, dict) or not finding_mentions_project(item, label):
+                continue
+            ts = parse_utc_ts(str(item.get("created_at") or ""))
+            if ts is not None and (latest is None or ts > latest):
+                latest = ts
+    return latest
+
+
+def bootstrap_project_state_from_staging(
+    root: Path,
+    stats: ProjectStats,
+    project_state: dict[str, Any],
+    *,
+    now_ts: float,
+    cooldown_seconds: int,
+) -> None:
+    if project_state.get("last_run_ts"):
+        return
+    latest = latest_staging_ts(root, stats.label)
+    if latest is None or now_ts - latest >= cooldown_seconds:
+        return
+    # Manual subconscious runs should count as recent work, or the freshly
+    # installed hook will immediately repeat the same expensive project pass.
+    project_state["last_run_ts"] = latest
+    project_state["last_run_at"] = iso_from_ts(latest)
+    project_state["last_clean_turn_count"] = stats.clean_turn_count
+    project_state["last_clean_message_count"] = stats.clean_message_count
+    project_state["last_thread_count"] = stats.thread_count
+    project_state["last_status"] = "bootstrapped_from_staging"
+
+
+def focus_for(stats: ProjectStats) -> str:
+    tag_text = ", ".join(stats.tags[:8])
+    if tag_text:
+        return f"{stats.label} project memory, recent decisions, architecture, product strategy, user preferences, recall triggers, tags: {tag_text}"
+    return f"{stats.label} project memory, recent decisions, architecture, product strategy, user preferences, recall triggers"
+
+
+def objective_for(stats: ProjectStats) -> str:
+    return (
+        f"Consolidate recent clean-source memory for project {stats.label}. "
+        "Prefer source-backed findings that improve future recall, decision continuity, "
+        "project drift awareness, trigger mining, deduplication, and contradiction review. "
+        "Avoid trivial short utterances, tool/debug noise, and broad personalization."
+    )
+
+
+def run_text(cmd: list[str], *, cwd: Path = SCRIPT_DIR, log: Path | None = None) -> str:
+    proc = subprocess.run(
+        cmd,
+        cwd=str(cwd),
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        check=False,
+    )
+    output = (proc.stdout or "") + (proc.stderr or "")
+    if log:
+        with log.open("a", encoding="utf-8", newline="\n") as fh:
+            fh.write(f"\n[{now_utc()}] $ {' '.join(cmd)}\n")
+            fh.write(output)
+    if proc.returncode != 0:
+        raise RuntimeError(output.strip() or f"command failed: {cmd}")
+    return output
+
+
+def run_project(stats: ProjectStats, *, root: Path, max_turns: int, max_findings: int, log: Path) -> dict[str, Any]:
+    # Deterministic prep is kept in the detached worker, not the foreground hook,
+    # so the hook can return quickly while the sleep-time pass does heavier
+    # consolidation safely in staging files.
+    commands = [
+        [sys.executable, str(SCRIPT_DIR / "build_project_timeline.py")],
+        [sys.executable, str(SCRIPT_DIR / "build_concept_graph.py")],
+        [
+            sys.executable,
+            str(SCRIPT_DIR / "subconscious_jobs.py"),
+            "--job",
+            "all",
+            "--project",
+            stats.label,
+            "--objective",
+            objective_for(stats),
+            "--max-turns",
+            str(max_turns),
+        ],
+        [
+            sys.executable,
+            str(SCRIPT_DIR / "subconscious_review.py"),
+            "--max-findings",
+            str(max_findings),
+            "--focus",
+            focus_for(stats),
+        ],
+        [sys.executable, str(SCRIPT_DIR / "semantic_trigger_router.py")],
+        [sys.executable, str(SCRIPT_DIR / "memory_candidate_router.py")],
+        [sys.executable, str(SCRIPT_DIR / "build_concept_graph.py")],
+    ]
+    outputs: list[str] = []
+    for cmd in commands:
+        outputs.append(run_text(cmd, log=log).strip())
+    return {
+        "project": stats.label,
+        "commands": len(commands),
+        "last_output": outputs[-1] if outputs else "",
+    }
+
+
+def start_detached(cmd: list[str], *, root: Path) -> int:
+    log = log_path(root)
+    log.parent.mkdir(parents=True, exist_ok=True)
+    out = log.open("ab")
+    creationflags = 0
+    if os.name == "nt":
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
+    proc = subprocess.Popen(
+        cmd,
+        cwd=str(SCRIPT_DIR),
+        stdin=subprocess.DEVNULL,
+        stdout=out,
+        stderr=subprocess.STDOUT,
+        close_fds=False if os.name == "nt" else True,
+        creationflags=creationflags,
+    )
+    out.close()
+    return int(proc.pid)
+
+
+def choose_projects(
+    *,
+    root: Path,
+    cwd: Path | None,
+    project: str | None,
+    all_projects: bool,
+    state: dict[str, Any],
+    now_ts: float,
+    cooldown_seconds: int,
+    min_new_turns: int,
+) -> list[tuple[ProjectStats, str]]:
+    registry = load_json(registry_path(root))
+    stats_by_label = project_stats_from_registry(registry)
+    if all_projects:
+        labels = sorted(stats_by_label)
+    elif project:
+        labels = [project]
+    else:
+        inferred = project_for_cwd(registry, cwd)
+        labels = [inferred] if inferred else []
+
+    due: list[tuple[ProjectStats, str]] = []
+    projects_state = state.setdefault("projects", {})
+    for label in labels:
+        if not label:
+            continue
+        stats = stats_by_label.get(label)
+        if not stats:
+            continue
+        project_state = projects_state.setdefault(label, {})
+        bootstrap_project_state_from_staging(
+            root,
+            stats,
+            project_state,
+            now_ts=now_ts,
+            cooldown_seconds=cooldown_seconds,
+        )
+        reason = due_reason(
+            stats,
+            project_state,
+            now_ts=now_ts,
+            cooldown_seconds=cooldown_seconds,
+            min_new_turns=min_new_turns,
+        )
+        if reason:
+            due.append((stats, reason))
+    return due
+
+
+def maybe_start(args: argparse.Namespace) -> dict[str, Any]:
+    root = registry_dir(Path(args.registry_dir).resolve() if args.registry_dir else None)
+    state_file = state_path(root, Path(args.state_file).resolve() if args.state_file else None)
+    state = load_state(state_file)
+    now_ts = time.time()
+    if os.environ.get("AIIPPOCAMPUS_SUBCONSCIOUS_HOOK", "1").lower() in {"0", "false", "off", "no"}:
+        return {"started": False, "skipped": "disabled_by_env", "projects": []}
+    if not os.environ.get(args.api_key_env):
+        return {"started": False, "skipped": f"missing_{args.api_key_env}", "projects": []}
+
+    due = choose_projects(
+        root=root,
+        cwd=Path(args.cwd).resolve() if args.cwd else None,
+        project=args.project,
+        all_projects=args.all_projects,
+        state=state,
+        now_ts=now_ts,
+        cooldown_seconds=args.cooldown_seconds,
+        min_new_turns=args.min_new_turns,
+    )
+    if not due:
+        save_state(state_file, state)
+        return {"started": False, "skipped": "no_due_projects", "projects": []}
+    if args.dry_run:
+        save_state(state_file, state)
+        return {
+            "started": False,
+            "dry_run": True,
+            "projects": [{"label": stats.label, "reason": reason} for stats, reason in due],
+        }
+    filtered: list[tuple[ProjectStats, str]] = []
+    for stats, reason in due:
+        project_state = state.setdefault("projects", {}).setdefault(stats.label, {})
+        last_enqueue = float(project_state.get("last_enqueue_ts") or 0.0)
+        if last_enqueue and now_ts - last_enqueue < DEFAULT_ENQUEUE_COOLDOWN_SECONDS:
+            continue
+        project_state["last_enqueue_ts"] = now_ts
+        project_state["last_enqueue_at"] = now_utc()
+        project_state["last_enqueue_reason"] = reason
+        filtered.append((stats, reason))
+    save_state(state_file, state)
+    due = filtered
+    if not due:
+        return {"started": False, "skipped": "enqueue_cooldown", "projects": []}
+    cmd = [
+        sys.executable,
+        str(SCRIPT_DIR / "subconscious_scheduler.py"),
+        "--run-due",
+        "--registry-dir",
+        str(root),
+        "--state-file",
+        str(state_file),
+        "--cooldown-seconds",
+        str(args.cooldown_seconds),
+        "--min-new-turns",
+        str(args.min_new_turns),
+        "--max-turns",
+        str(args.max_turns),
+        "--max-findings",
+        str(args.max_findings),
+        "--api-key-env",
+        args.api_key_env,
+    ]
+    if args.cwd:
+        cmd.extend(["--cwd", str(Path(args.cwd).resolve())])
+    if args.project:
+        cmd.extend(["--project", args.project])
+    if args.all_projects:
+        cmd.append("--all-projects")
+    pid = start_detached(cmd, root=root)
+    return {
+        "started": True,
+        "pid": pid,
+        "projects": [{"label": stats.label, "reason": reason} for stats, reason in due],
+        "log": str(log_path(root)),
+    }
+
+
+def run_due(args: argparse.Namespace) -> dict[str, Any]:
+    root = registry_dir(Path(args.registry_dir).resolve() if args.registry_dir else None)
+    state_file = state_path(root, Path(args.state_file).resolve() if args.state_file else None)
+    log = log_path(root)
+    now_ts = time.time()
+    with FileLock(root / "subconscious_scheduler.lock"):
+        state = load_state(state_file)
+        due = choose_projects(
+            root=root,
+            cwd=Path(args.cwd).resolve() if args.cwd else None,
+            project=args.project,
+            all_projects=args.all_projects,
+            state=state,
+            now_ts=now_ts,
+            cooldown_seconds=args.cooldown_seconds,
+            min_new_turns=args.min_new_turns,
+        )
+        if not due:
+            save_state(state_file, state)
+            return {"ran": False, "skipped": "no_due_projects", "projects": []}
+        results = []
+        for stats, reason in due:
+            project_state = state.setdefault("projects", {}).setdefault(stats.label, {})
+            project_state["last_start_ts"] = time.time()
+            project_state["last_start_at"] = now_utc()
+            project_state["last_reason"] = reason
+            project_state["last_status"] = "running"
+            save_state(state_file, state)
+            try:
+                result = run_project(stats, root=root, max_turns=args.max_turns, max_findings=args.max_findings, log=log)
+                project_state["last_status"] = "success"
+                project_state["last_error"] = None
+                project_state["last_run_ts"] = time.time()
+                project_state["last_run_at"] = now_utc()
+                project_state["last_clean_turn_count"] = stats.clean_turn_count
+                project_state["last_clean_message_count"] = stats.clean_message_count
+                project_state["last_thread_count"] = stats.thread_count
+                results.append(result)
+            except Exception as exc:
+                project_state["last_status"] = "error"
+                project_state["last_error"] = str(exc)
+                project_state["last_error_at"] = now_utc()
+                results.append({"project": stats.label, "error": str(exc)})
+            finally:
+                project_state["last_finish_at"] = now_utc()
+                save_state(state_file, state)
+        return {"ran": True, "projects": [{"label": stats.label, "reason": reason} for stats, reason in due], "results": results}
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--maybe-start", action="store_true", help="Hook-safe mode: start a detached run only when due.")
+    mode.add_argument("--run-due", action="store_true", help="Run due projects synchronously.")
+    parser.add_argument("--registry-dir")
+    parser.add_argument("--state-file")
+    parser.add_argument("--cwd")
+    parser.add_argument("--project")
+    parser.add_argument("--all-projects", action="store_true")
+    parser.add_argument("--cooldown-seconds", type=int, default=DEFAULT_COOLDOWN_SECONDS)
+    parser.add_argument("--min-new-turns", type=int, default=DEFAULT_MIN_NEW_TURNS)
+    parser.add_argument("--max-turns", type=int, default=DEFAULT_MAX_TURNS)
+    parser.add_argument("--max-findings", type=int, default=DEFAULT_MAX_FINDINGS)
+    parser.add_argument("--api-key-env", default=DEFAULT_API_KEY_ENV)
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--json", action="store_true", dest="json_output")
+    args = parser.parse_args()
+
+    try:
+        if args.run_due:
+            result = run_due(args)
+        else:
+            result = maybe_start(args)
+        if args.json_output:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        elif result.get("started"):
+            print(f"subconscious scheduler started: pid {result.get('pid')}")
+        elif result.get("ran"):
+            print("subconscious scheduler ran")
+        else:
+            print(f"subconscious scheduler skipped: {result.get('skipped')}")
+        return 0
+    except Exception as exc:
+        if args.json_output:
+            print(json.dumps({"error": str(exc)}, ensure_ascii=False, indent=2))
+        else:
+            print(f"subconscious scheduler error: {exc}", file=sys.stderr)
+        return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
