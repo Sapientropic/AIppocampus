@@ -360,8 +360,8 @@ def worker_prompt(worker: str, payload: dict[str, Any]) -> str:
     return json.dumps(
         {
             "input": payload,
-            "task": task,
             "output_schema": schema,
+            "task": task,
         },
         ensure_ascii=False,
         indent=2,

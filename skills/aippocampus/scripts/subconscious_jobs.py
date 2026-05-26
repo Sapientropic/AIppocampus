@@ -240,9 +240,6 @@ def jobs_initial_payload(job: str, objective: str, turns: list[dict[str, Any]], 
         },
         "job": job,
         "job_spec": spec,
-        "objective": objective or spec["purpose"],
-        "tool_budget": max_steps,
-        "minimum_tool_steps_before_final": min_tool_steps,
         "final_schema": {
             "action": "final",
             "findings": [
@@ -276,6 +273,9 @@ def jobs_initial_payload(job: str, objective: str, turns: list[dict[str, Any]], 
                 }
             ],
         },
+        "tool_budget": max_steps,
+        "minimum_tool_steps_before_final": min_tool_steps,
+        "objective": objective or spec["purpose"],
     }
     payload = sanitize_external_model_payload(payload)
     return json.dumps(payload, ensure_ascii=False, indent=2)

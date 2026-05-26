@@ -34,6 +34,7 @@ class SubconsciousReviewTests(unittest.TestCase):
         keys = list(payload.keys())
 
         self.assertLess(keys.index("findings"), keys.index("focus"))
+        self.assertLess(keys.index("focus_rule"), keys.index("focus"))
 
     def test_review_payload_redacts_external_model_sensitive_text(self) -> None:
         payload = review.compact_review_payload(

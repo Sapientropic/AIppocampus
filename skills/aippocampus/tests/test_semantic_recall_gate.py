@@ -124,6 +124,7 @@ class SemanticRecallGateTests(unittest.TestCase):
         worker_keys = list(worker_payload.keys())
         self.assertLess(worker_keys.index("input"), worker_keys.index("task"))
         self.assertLess(worker_keys.index("input"), worker_keys.index("output_schema"))
+        self.assertLess(worker_keys.index("output_schema"), worker_keys.index("task"))
 
     def test_semantic_gate_reports_aggregate_deepseek_cache_metrics(self) -> None:
         def chat_fn(messages, api_key, model, base_url, max_tokens, timeout, temperature):

@@ -474,9 +474,9 @@ def agent_initial_payload(objective: str, turns: list[dict[str, Any]], max_steps
             "expand_concepts": {"args": {"terms": ["..."], "depth": 2, "limit": 12}},
             "recent_edges": {"args": {"terms": ["..."], "limit": 8}},
         },
-        "objective": objective or "Propose source-backed concept edges for AIppocampus ambient recall.",
         "tool_budget": max_steps,
         "minimum_tool_steps_before_final": min_tool_steps,
+        "objective": objective or "Propose source-backed concept edges for AIppocampus ambient recall.",
     }
     payload = sanitize_external_model_payload(payload)
     return json.dumps(payload, ensure_ascii=False, indent=2)

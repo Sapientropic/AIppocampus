@@ -32,6 +32,8 @@ class SubconsciousJobsTests(unittest.TestCase):
 
         self.assertLess(keys.index("initial_turns"), keys.index("objective"))
         self.assertLess(keys.index("initial_turns"), keys.index("job_spec"))
+        self.assertLess(keys.index("final_schema"), keys.index("objective"))
+        self.assertLess(keys.index("minimum_tool_steps_before_final"), keys.index("objective"))
 
     def test_initial_payload_redacts_external_model_sensitive_text(self) -> None:
         payload = jobs.jobs_initial_payload(

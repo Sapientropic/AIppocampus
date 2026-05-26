@@ -169,11 +169,11 @@ def compact_review_payload(findings: list[dict[str, Any]], duplicate_groups: lis
             for finding in findings
         ],
         "deterministic_duplicate_groups": duplicate_groups[:20],
-        "focus": focus,
         "focus_rule": (
             "Prefer candidates inside the focus. Put off-focus findings into weak_findings "
             "unless they are clearly reusable global memory."
         ),
+        "focus": focus,
     }
     return sanitize_external_model_payload(payload)
 
