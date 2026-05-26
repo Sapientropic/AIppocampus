@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-from aippocampus_prompt_hook import (
+from prompt_recall_core import (
     ASSOCIATIVE_CUES,
     CONCEPT_EXPANSION_MAX_TERMS,
     CONCEPT_TRIGGERS,
