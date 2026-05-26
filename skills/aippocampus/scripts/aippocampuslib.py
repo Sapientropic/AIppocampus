@@ -44,10 +44,22 @@ def norm_path(path: str | Path) -> str:
     return str(Path(path).resolve()).casefold()
 
 
+ROLLOUT_DISCOVERY_DIRS = ("sessions", "archived_sessions")
+
+
 def iter_rollouts(home: Path) -> Iterable[Path]:
-    sessions = home / "sessions"
-    if sessions.exists():
-        yield from sessions.rglob("rollout-*.jsonl")
+    """Yield Codex Desktop raw rollouts from live and app-archived storage.
+
+    Codex Desktop's thread archive can move rollout JSONL files from the dated
+    `sessions/` tree into the flat `archived_sessions/` directory. AIppocampus
+    treats both locations as immutable audit sources; this is not the same as
+    the optional cold-archive flow that writes generated gzip copies.
+    """
+
+    for dirname in ROLLOUT_DISCOVERY_DIRS:
+        root = home / dirname
+        if root.exists():
+            yield from root.rglob("rollout-*.jsonl")
 
 
 def read_session_meta(path: Path) -> dict | None:

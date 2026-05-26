@@ -38,6 +38,18 @@ Schema upgrades should be rebuildable. Do not put embeddings, DWM state, or
 debug provenance into `messages.jsonl`; use sidecars joined by `message_id` or
 `turn_id`.
 
+## Raw Rollout Discovery
+
+Raw rollout lookup scans both `$CODEX_HOME/sessions/` and
+`$CODEX_HOME/archived_sessions/`. Codex Desktop's thread archive can move raw
+rollout JSONL files into the flat `archived_sessions/` directory, and those
+files remain the source-backed audit surface for locate, health, clean-source
+rebuilds, and raw search.
+
+Treat `archived_sessions/` as a read-only app-owned source location. It is not
+AIppocampus cold archive, and it should still resolve to the same session-keyed
+global thread store under `$CODEX_HOME/aippocampus-registry/threads/`.
+
 ## Local Index
 
 `scripts/build_index.py` writes `messages.jsonl`, `source_index.sqlite`,

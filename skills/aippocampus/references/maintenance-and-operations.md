@@ -70,6 +70,13 @@ manual cleanup outside the script.
 For smaller/private migration, prefer `export_bundle.py --no-raw` when raw
 history is not needed.
 
+Codex Desktop's own thread archive is a different mechanism: the app may move
+raw rollout JSONL files from `$CODEX_HOME/sessions/` into
+`$CODEX_HOME/archived_sessions/`. AIppocampus scans that directory read-only so
+health, locate, and search keep working after a thread is archived. Do not treat
+that app-owned location as a cold-archive output, and do not delete, compress,
+or rewrite those files from AIppocampus maintenance commands.
+
 ## Thread Slimming Policy
 
 Do not slim live Desktop rollout JSONL by default. The app owns that file, and

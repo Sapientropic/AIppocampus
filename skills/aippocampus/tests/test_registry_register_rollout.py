@@ -108,6 +108,22 @@ class RegisterRolloutTests(unittest.TestCase):
         self.assertEqual(result["count"], 1)
         self.assertEqual(result["planned"][0]["thread_key"], "session:session-other")
 
+    def test_scan_sessions_dry_run_reports_archived_rollouts(self) -> None:
+        original_home = registry.codex_home
+        registry.codex_home = lambda: self.root
+        archived = self.root / "archived_sessions"
+        archived.mkdir(parents=True)
+        target = archived / "rollout-archived.jsonl"
+        target.write_text(self.rollout.read_text(encoding="utf-8"), encoding="utf-8")
+        try:
+            result = registry.scan_session_rollouts(registry_dir=self.registry_dir, dry_run=True)
+        finally:
+            registry.codex_home = original_home
+
+        self.assertEqual(result["count"], 1)
+        self.assertEqual(result["planned"][0]["thread_key"], "session:session-other")
+        self.assertIn("archived_sessions", result["planned"][0]["rollout"])
+
     def test_deep_search_demotes_injected_skill_hits(self) -> None:
         clean_dir = self.root / "clean"
         clean_dir.mkdir()
