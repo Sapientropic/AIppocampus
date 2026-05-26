@@ -46,6 +46,12 @@ def save_hooks(path: Path, data: dict[str, Any]) -> None:
 
 def command_for(script: Path, *, log: bool = False) -> str:
     command = f'"{Path(sys.executable).resolve()}" "{script.resolve()}"'
+    if os.name == "nt":
+        # Codex Desktop executes hook command strings through PowerShell on
+        # Windows. A quoted executable at the start of the line is parsed as a
+        # string expression and exits with code 1; the call operator keeps
+        # paths-with-spaces safe and preserves the hook as fail-open glue.
+        command = f"& {command}"
     if log:
         command += " --log"
     return command

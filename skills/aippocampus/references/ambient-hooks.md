@@ -29,6 +29,12 @@ Useful commands:
 - `python ...\simulate_multilingual_prompt_hook.py --cwd "$PWD"`
 - `python ...\install_aippocampus_prompt_hook.py install|status|uninstall`
 
+On Windows, installers prefix generated hook commands with PowerShell's call
+operator (`&`) so quoted Python paths execute instead of being parsed as string
+expressions. This is an invocation fix only: it must not broaden prompt
+triggering, write prompt text to logs, or blur the `scent` versus `evidence`
+boundary.
+
 The global prompt hook has a small foreground budget. Its default
 `--semantic-timeout` is lower than the standalone semantic gate so optional
 semantic work cannot consume the whole Codex `UserPromptSubmit` timeout. Do not

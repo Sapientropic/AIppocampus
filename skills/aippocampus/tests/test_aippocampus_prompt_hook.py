@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import json
 import os
 import sqlite3
@@ -45,6 +46,18 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertEqual(hook.assess_prompt.__module__, "prompt_recall_decision")
         self.assertEqual(hook.context_for_hook.__module__, "prompt_context_render")
         self.assertEqual(hook.hook_stdout_payload.__module__, "prompt_context_render")
+
+    def test_hook_input_from_stdin_reads_codex_json_after_split(self) -> None:
+        old_stdin = sys.stdin
+        payload = {"prompt": "hook smoke 测试", "cwd": str(self.workspace)}
+        try:
+            sys.stdin = io.StringIO(json.dumps(payload, ensure_ascii=False))
+            parsed = hook.hook_input_from_stdin()
+        finally:
+            sys.stdin = old_stdin
+
+        self.assertEqual(parsed["prompt"], payload["prompt"])
+        self.assertEqual(parsed["cwd"], payload["cwd"])
 
     def _write_sqlite(self) -> None:
         con = sqlite3.connect(self.sqlite)

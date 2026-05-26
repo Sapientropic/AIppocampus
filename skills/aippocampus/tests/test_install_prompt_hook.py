@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -27,6 +28,15 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
 
     def read_hooks(self) -> dict:
         return json.loads(self.hooks_json.read_text(encoding="utf-8"))
+
+    def test_generated_command_is_windows_shell_safe(self) -> None:
+        command = installer.command_for(self.script)
+
+        if os.name == "nt":
+            self.assertTrue(command.startswith("& "), command)
+        else:
+            self.assertFalse(command.startswith("& "), command)
+        self.assertIn(str(self.script.resolve()), command)
 
     def test_install_preserves_existing_hooks_and_is_idempotent(self) -> None:
         self.hooks_json.write_text(
