@@ -13,7 +13,7 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from aippocampuslib import codex_home, locate_rollout, read_session_meta
+from aippocampuslib import codex_home, default_thread_index_dir, locate_rollout, read_session_meta, resolve_artifact_path
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -75,7 +75,7 @@ def main() -> int:
     parser.add_argument("--rollout")
     parser.add_argument("--anchors", default="thread-anchors.md")
     parser.add_argument("--output")
-    parser.add_argument("--work-dir", default=".aippocampus")
+    parser.add_argument("--work-dir", default=None, help="Defaults to the global thread store's index directory.")
     parser.add_argument("--no-raw", action="store_true", help="Do not include raw rollout JSONL.")
     parser.add_argument("--hash-source", action="store_true")
     args = parser.parse_args()
@@ -85,9 +85,7 @@ def main() -> int:
     anchors = Path(args.anchors)
     if not anchors.is_absolute():
         anchors = cwd / anchors
-    work_dir = Path(args.work_dir)
-    if not work_dir.is_absolute():
-        work_dir = cwd / work_dir
+    work_dir = resolve_artifact_path(args.work_dir, cwd, default_thread_index_dir(cwd, rollout))
     work_dir.mkdir(parents=True, exist_ok=True)
     bundle_root = work_dir / "bundle"
     if bundle_root.exists():

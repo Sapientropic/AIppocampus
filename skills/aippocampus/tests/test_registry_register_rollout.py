@@ -108,6 +108,46 @@ class RegisterRolloutTests(unittest.TestCase):
         self.assertEqual(result["count"], 1)
         self.assertEqual(result["planned"][0]["thread_key"], "session:session-other")
 
+    def test_deep_search_demotes_injected_skill_hits(self) -> None:
+        clean_dir = self.root / "clean"
+        clean_dir.mkdir()
+        messages = clean_dir / "messages.jsonl"
+        rows = [
+            {
+                "message_id": "msg-noise",
+                "turn_id": "turn-noise",
+                "source_line": 10,
+                "role": "user",
+                "phase": "",
+                "turn_index": 1,
+                "is_final": False,
+                "text": "<skill><name>aippocampus</name> AIppocampus CodexHome global project</skill>",
+            },
+            {
+                "message_id": "msg-real",
+                "turn_id": "turn-real",
+                "source_line": 20,
+                "role": "assistant",
+                "phase": "final_answer",
+                "turn_index": 2,
+                "is_final": True,
+                "text": "AIppocampus 生成产物默认写到 CodexHome global store，project-local 只是兼容模式。",
+            },
+        ]
+        messages.write_text("\n".join(json.dumps(row, ensure_ascii=False) for row in rows), encoding="utf-8")
+        entry = {
+            "paths": {
+                "clean_source_messages_jsonl": str(messages),
+            }
+        }
+
+        score, hits = registry.deep_search_entry(entry, ["AIppocampus", "CodexHome", "global", "project"], max_hits=2)
+
+        self.assertGreater(score, 0)
+        self.assertEqual(hits[0]["message_id"], "msg-real")
+        self.assertTrue(hits[1]["search_noise"])
+        self.assertLess(hits[1]["rank_score"], hits[0]["rank_score"])
+
 
 if __name__ == "__main__":
     unittest.main()

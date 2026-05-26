@@ -9,10 +9,10 @@ import os
 from pathlib import Path
 
 from retrieval import split_query_terms
-from aippocampuslib import compact_text
+from aippocampuslib import compact_text, default_thread_clean_source_dir, resolve_artifact_path
 
 
-DEFAULT_CLEAN_SOURCE_DIR = ".aippocampus/clean-source"
+LEGACY_CLEAN_SOURCE_DIR = ".aippocampus/clean-source"
 
 
 def iter_clean_messages(path: Path) -> list[dict]:
@@ -54,14 +54,17 @@ def search_clean_source(
     cwd: str | Path,
     patterns: list[str],
     *,
-    clean_source_dir: str | Path = DEFAULT_CLEAN_SOURCE_DIR,
+    clean_source_dir: str | Path | None = None,
     limit: int = 10,
     snippet_chars: int = 700,
 ) -> dict:
     cwd = Path(cwd).resolve()
-    source_dir = Path(clean_source_dir)
-    if not source_dir.is_absolute():
-        source_dir = cwd / source_dir
+    if clean_source_dir is None:
+        global_dir = default_thread_clean_source_dir(cwd)
+        legacy_dir = cwd / LEGACY_CLEAN_SOURCE_DIR
+        source_dir = global_dir if (global_dir / "messages.jsonl").exists() or not (legacy_dir / "messages.jsonl").exists() else legacy_dir
+    else:
+        source_dir = resolve_artifact_path(clean_source_dir, cwd, default_thread_clean_source_dir(cwd))
     messages_path = source_dir / "messages.jsonl"
     terms = split_query_terms(patterns)
 
@@ -101,7 +104,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("patterns", nargs="+")
     parser.add_argument("--cwd", default=os.getcwd())
-    parser.add_argument("--clean-source-dir", default=DEFAULT_CLEAN_SOURCE_DIR)
+    parser.add_argument("--clean-source-dir", default=None, help="Defaults to global clean source, with project-local legacy fallback.")
     parser.add_argument("--max", type=int, default=10)
     parser.add_argument("--snippet-chars", type=int, default=700)
     parser.add_argument("--json", action="store_true", dest="json_output")

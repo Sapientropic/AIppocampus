@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -110,6 +112,68 @@ class SubconsciousSchedulerTests(unittest.TestCase):
 
         self.assertFalse(result["started"])
         self.assertEqual(result["projects"][0]["label"], "T-Sense")
+
+    def test_maybe_start_respects_active_project_lease(self) -> None:
+        state_file = self.root / "subconscious_state.json"
+        scheduler.save_json(
+            state_file,
+            {
+                "projects": {
+                    "T-Sense": {
+                        "lease_until_ts": 9_999_999_999,
+                        "lease_id": "existing-lease",
+                    }
+                }
+            },
+        )
+        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "x"}, clear=True), patch.object(
+            scheduler,
+            "start_detached",
+            side_effect=AssertionError("leased project should not start another detached worker"),
+        ):
+            result = scheduler.maybe_start(self.args(state_file=str(state_file)))
+
+        self.assertFalse(result["started"])
+        self.assertEqual(result["skipped"], "leased_projects")
+
+    def test_concurrent_maybe_start_launches_one_detached_worker(self) -> None:
+        state_file = self.root / "subconscious_state.json"
+        launches = 0
+        launch_lock = threading.Lock()
+        release_second_thread = threading.Event()
+        results: list[dict[str, object]] = []
+
+        def slow_start_detached(cmd: list[str], *, root: Path) -> int:
+            del cmd, root
+            nonlocal launches
+            with launch_lock:
+                launches += 1
+            release_second_thread.set()
+            time.sleep(0.1)
+            return 1234
+
+        def call_maybe_start() -> None:
+            release_second_thread.wait(timeout=1)
+            results.append(scheduler.maybe_start(self.args(state_file=str(state_file))))
+
+        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "x"}, clear=True), patch.object(
+            scheduler,
+            "start_detached",
+            side_effect=slow_start_detached,
+        ):
+            first = threading.Thread(target=call_maybe_start)
+            second = threading.Thread(target=call_maybe_start)
+            first.start()
+            second.start()
+            release_second_thread.set()
+            first.join(timeout=2)
+            second.join(timeout=2)
+
+        self.assertEqual(launches, 1)
+        self.assertEqual(sum(1 for item in results if item.get("started")), 1)
+        skipped = [item.get("skipped") for item in results if not item.get("started")]
+        self.assertEqual(len(skipped), 1)
+        self.assertIn(skipped[0], {"enqueue_locked", "leased_projects"})
 
     def test_staging_bootstrap_prevents_immediate_duplicate_first_run(self) -> None:
         jobs = self.root / "subconscious_jobs.jsonl"

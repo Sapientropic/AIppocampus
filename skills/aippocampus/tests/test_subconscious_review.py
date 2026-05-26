@@ -15,6 +15,35 @@ import subconscious_review as review  # noqa: E402
 
 
 class SubconsciousReviewTests(unittest.TestCase):
+    def test_review_payload_redacts_external_model_sensitive_text(self) -> None:
+        payload = review.compact_review_payload(
+            [
+                {
+                    "fingerprint": "sf_secret",
+                    "job": "project_drift",
+                    "kind": "project_drift",
+                    "title": "Secret route",
+                    "summary": (
+                        "Do not leak api_key=sk-thisshouldnotleave-local-test-1234567890 "
+                        r"or C:\Users\Administrator\Secrets\review.txt"
+                    ),
+                    "recommendation": "Bearer abcdefghijklmnopqrstuvwxyz1234567890",
+                    "confidence": 0.9,
+                    "source_refs": [],
+                }
+            ],
+            [],
+            focus="token=abc123secretvalue",
+        )
+        text = json.dumps(payload, ensure_ascii=False)
+
+        self.assertNotIn("sk-thisshouldnotleave-local-test-1234567890", text)
+        self.assertNotIn("abcdefghijklmnopqrstuvwxyz1234567890", text)
+        self.assertNotIn("abc123secretvalue", text)
+        self.assertNotIn(r"C:\\Users\\Administrator", text)
+        self.assertIn("<redacted:api-key>", text)
+        self.assertIn("<redacted:local-path>", text)
+
     def test_recent_findings_normalizes_quality_and_fingerprint(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "subconscious_jobs.jsonl"

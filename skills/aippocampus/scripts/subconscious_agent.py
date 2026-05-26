@@ -18,7 +18,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from aippocampuslib import compact_text, now_utc
+from aippocampuslib import (
+    cli_error_payload,
+    cli_exit_code_for_error_code,
+    compact_text,
+    now_utc,
+    sanitize_external_model_payload,
+)
 from build_concept_graph import concept_is_noise, default_concept_graph_path, expand_concepts
 from registry import load_registry, registry_paths, unique_preserve
 from retrieval import split_query_terms
@@ -124,7 +130,7 @@ def call_chat_json(
     url = base_url.rstrip("/") + "/chat/completions"
     body: dict[str, Any] = {
         "model": model,
-        "messages": messages,
+        "messages": sanitize_external_model_payload(messages),
         "temperature": temperature,
         "response_format": {"type": "json_object"},
     }
@@ -468,6 +474,7 @@ def agent_initial_payload(objective: str, turns: list[dict[str, Any]], max_steps
             "recent_edges": {"args": {"terms": ["..."], "limit": 8}},
         },
     }
+    payload = sanitize_external_model_payload(payload)
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
@@ -523,7 +530,7 @@ def run_agent(
     final_edges: list[dict[str, Any]] | None = None
     tool_count = 0
     for step in range(step_budget):
-        response = chat_fn(messages, api_key, model, base_url, max_tokens, timeout, temperature)
+        response = chat_fn(sanitize_external_model_payload(messages), api_key, model, base_url, max_tokens, timeout, temperature)
         add_usage(usage_total, compact_usage(response.get("usage") or {}))
         action = parse_action(response)
         transcript.append({"step": step + 1, "action": action})
@@ -611,7 +618,7 @@ def run_agent(
                 ),
             }
         ]
-        response = chat_fn(repair_messages, api_key, model, base_url, max_tokens, timeout, temperature)
+        response = chat_fn(sanitize_external_model_payload(repair_messages), api_key, model, base_url, max_tokens, timeout, temperature)
         add_usage(usage_total, compact_usage(response.get("usage") or {}))
         repair_action = parse_action(response)
         final_attempts.append(repair_action)
@@ -679,25 +686,32 @@ def main() -> int:
     timeline_path = Path(args.timeline).resolve() if args.timeline else default_project_timeline_path(registry_path=registry_path)
     concept_graph_path = Path(args.concept_graph).resolve() if args.concept_graph else default_concept_graph_path(registry_path=registry_path)
     output_path = Path(args.output).resolve() if args.output else default_staging_path(registry_path=registry_path)
-    result = run_agent(
-        registry_path=registry_path,
-        timeline_path=timeline_path,
-        concept_graph_path=concept_graph_path,
-        output_path=output_path,
-        project=args.project,
-        objective=args.objective,
-        max_turns=args.max_turns,
-        max_steps=args.max_steps,
-        min_tool_steps=args.min_tool_steps,
-        model=args.model,
-        base_url=args.base_url,
-        api_key=os.environ.get(args.api_key_env),
-        max_tokens=args.max_tokens,
-        timeout=args.timeout,
-        temperature=args.temperature,
-        dry_run=args.dry_run,
-        no_write=args.no_write,
-    )
+    try:
+        result = run_agent(
+            registry_path=registry_path,
+            timeline_path=timeline_path,
+            concept_graph_path=concept_graph_path,
+            output_path=output_path,
+            project=args.project,
+            objective=args.objective,
+            max_turns=args.max_turns,
+            max_steps=args.max_steps,
+            min_tool_steps=args.min_tool_steps,
+            model=args.model,
+            base_url=args.base_url,
+            api_key=os.environ.get(args.api_key_env),
+            max_tokens=args.max_tokens,
+            timeout=args.timeout,
+            temperature=args.temperature,
+            dry_run=args.dry_run,
+            no_write=args.no_write,
+        )
+    except Exception as exc:
+        if not args.json_output:
+            raise
+        result = cli_error_payload(exc)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return cli_exit_code_for_error_code(result["error"]["code"])
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:

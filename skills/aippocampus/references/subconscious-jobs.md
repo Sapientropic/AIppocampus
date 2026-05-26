@@ -37,6 +37,9 @@ but they must not rewrite source, delete source, or directly write formal memory
   `hook_trigger`/project candidates into `semantic_triggers.jsonl`, so the
   prompt hook can use data-driven semantic cues instead of expanding hard-coded
   phrase lists.
+- `build_cognitive_map.py`: deterministic materializer for DeepSeek-proposed
+  landmarks, regions, and routes. It never creates routes from registry
+  keywords alone.
 - `$CODEX_HOME/aippocampus-registry/subconscious_edges.jsonl`: staging concept
   edges consumed by `build_concept_graph.py`.
 - `$CODEX_HOME/aippocampus-registry/subconscious_jobs.jsonl`: staging findings
@@ -47,6 +50,8 @@ but they must not rewrite source, delete source, or directly write formal memory
   consumed by the prompt hook as source-backed staging, not formal truth.
 - `$CODEX_HOME/aippocampus-registry/semantic_triggers.jsonl`: dynamic trigger
   rows consumed by `semantic_recall_gate.py`.
+- `$CODEX_HOME/aippocampus-registry/cognitive_map.json`: hook-safe mental-map
+  sidecar consumed by the prompt hook as scent, not evidence.
 
 ## Shared Agent Contract
 
@@ -63,6 +68,9 @@ Defaults are quality-oriented:
 - `--max-steps 0` means use the hard safety cap.
 - Hard safety cap: 64 steps.
 - `--min-tool-steps 1`.
+- `--concurrency 4` for `subconscious_jobs.py`.
+- `--samples-per-job 1`; raise this when you want multiple independent
+  DeepSeek passes for reducer-quality diversity.
 - `--temperature 0.2`.
 - No default `max_tokens` cap.
 
@@ -81,7 +89,48 @@ Every accepted finding also gets deterministic metadata before it is written:
 - `quality.promotion_readiness`: compact blended score.
 - `quality.bucket`: `strong`, `usable`, `weak`, or `noise`.
 
+## Concurrency Contract
+
+DeepSeek can be used aggressively, but hooks must stay cheap. The split is:
+
+- hooks call `subconscious_scheduler.py --maybe-start` only
+- the scheduler uses a short enqueue lock plus per-project lease fields in
+  `subconscious_state.json`
+- detached workers run `subconscious_jobs.py` with `--concurrency` and optional
+  `--samples-per-job`
+- worker threads call DeepSeek concurrently, but the parent process serializes
+  writes to `subconscious_jobs.jsonl` and `subconscious_edges.jsonl`
+- one failed or malformed sample must be isolated as `ok=false`; successful
+  samples continue, and the batch reports `failure_count` / `partial_failure`
+- reducers and materializers still own promotion, route filtering, semantic
+  triggers, working memory, and cognitive-map sidecars
+
+This makes high concurrency safe across multiple Codex threads: duplicate hook
+starts should collapse into one leased project run, and foreground hooks should
+only read stable sidecars.
+
 ## Jobs
+
+### `question_extraction`
+
+Purpose: extract genuine user questions and explicit unresolved frontiers.
+
+Output kinds:
+
+- `question_candidate`: a real question the user was pursuing, with
+  `question_text`, `question_short`, optional `intent_orientation`,
+  `what_features`, `where_context`, `phase_context`, and
+  `collaboration_context`. `question_text` is a short normalized question, not
+  a pasted transcript. If the model emits a long raw excerpt, validation may
+  compress it to `question_short`/title or reject it.
+- `frontier_marker`: a source-backed stopping point or unresolved boundary,
+  with `frontier_type` and `boundary_reason`.
+
+This is not a regex job and not every sentence with a question mark qualifies.
+DeepSeek should use tool observations and source refs to decide whether the
+question mattered. `frontier_marker` is stricter: emit it only when the source
+explicitly shows a block, deferral, missing evidence, dissatisfaction, or scope
+boundary.
 
 ### `concept_edges`
 
@@ -115,6 +164,23 @@ It must avoid:
 
 Good triggers are concrete, user-natural phrases that would help a future hook
 smell relevant memory without forcing it into the foreground.
+
+### `cognitive_map`
+
+Purpose: propose hippocampus-like mental-map structure: landmarks, regions,
+route cues, possible detours, and negative cues.
+
+This is the intelligent part of the cognitive map. DeepSeek should inspect
+clean source and propose source-backed navigation, for example:
+
+- landmark: `AIppocampus`
+- region: `memory architecture`
+- route cues: `心理地图`, `位置细胞`, `网格细胞`
+- target thread keys backed by source refs
+
+`build_cognitive_map.py` then validates and materializes the result. If no
+`cognitive_map` finding exists, the sidecar may contain episodes but must report
+zero routes and `needs_subconscious`.
 
 ### `memory_dedup`
 
@@ -172,10 +238,32 @@ Run one focused job:
 python "$env:CODEX_HOME\skills\aippocampus\scripts\subconscious_jobs.py" --job project_drift --project "T-Sense" --json
 ```
 
+Run no-write question/frontier extraction smoke:
+
+```powershell
+python "$env:CODEX_HOME\skills\aippocampus\scripts\subconscious_jobs.py" --job question_extraction --project "AIppocampus" --no-write --json
+```
+
+For the higher-level onboarding wrapper, prefer:
+
+```powershell
+python "$env:CODEX_HOME\skills\aippocampus\scripts\onboard_codex.py" --frontier-mode smoke --format json --cwd "$PWD"
+```
+
+That wrapper returns compact `sample_findings` and defaults the frontier scope
+to the current project inferred from `--cwd`. Use `--frontier-project *` only
+when intentionally inspecting whole-machine frontier quality.
+
 Run all jobs:
 
 ```powershell
-python "$env:CODEX_HOME\skills\aippocampus\scripts\subconscious_jobs.py" --job all --project "T-Sense" --json
+python "$env:CODEX_HOME\skills\aippocampus\scripts\subconscious_jobs.py" --job all --project "T-Sense" --concurrency 4 --json
+```
+
+Run multiple independent samples per job:
+
+```powershell
+python "$env:CODEX_HOME\skills\aippocampus\scripts\subconscious_jobs.py" --job cognitive_map --project "AIppocampus" --concurrency 4 --samples-per-job 3 --json
 ```
 
 Rebuild concept graph after `concept_edges`:
@@ -223,6 +311,8 @@ workflow can consume the strongest candidates".
 Staging findings can be consumed in several ways:
 
 - concept edges can feed `concept_index.sqlite`
+- cognitive-map findings can feed `cognitive_map.json` for hook-safe
+  wayfinding
 - trigger candidates can feed future hook association generation
 - preference candidates can feed a formal memory review workflow
 - contradiction candidates can become human review prompts

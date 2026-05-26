@@ -8,7 +8,19 @@ import json
 import os
 from pathlib import Path
 
-from aippocampuslib import codex_home, file_sha256, iter_messages, locate_rollout, parse_anchor_file
+from aippocampuslib import (
+    codex_home,
+    default_thread_checkpoint_state_path,
+    default_thread_clean_source_dir,
+    default_thread_graphify_corpus_dir,
+    default_thread_index_dir,
+    default_thread_segments_dir,
+    file_sha256,
+    iter_messages,
+    locate_rollout,
+    parse_anchor_file,
+    resolve_artifact_path,
+)
 
 
 def load_json(path: Path) -> dict:
@@ -33,12 +45,12 @@ def action(action_id: str, severity: str, reason: str, command: str) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cwd", default=os.getcwd())
-    parser.add_argument("--index-dir", default=".aippocampus")
+    parser.add_argument("--index-dir", default=None, help="Defaults to the CODEX_HOME global thread store.")
     parser.add_argument("--anchors", default="thread-anchors.md")
-    parser.add_argument("--graphify-corpus", default=".aippocampus/graphify-corpus")
-    parser.add_argument("--segments-dir", default=".aippocampus/segments")
-    parser.add_argument("--checkpoint-state", default=".aippocampus/checkpoint_state.json")
-    parser.add_argument("--clean-source-dir", default=".aippocampus/clean-source")
+    parser.add_argument("--graphify-corpus", default=None, help="Defaults to the global thread store's graphify-corpus.")
+    parser.add_argument("--segments-dir", default=None, help="Defaults to the global thread store's segments directory.")
+    parser.add_argument("--checkpoint-state", default=None, help="Defaults to the global thread store's checkpoint state.")
+    parser.add_argument("--clean-source-dir", default=None, help="Defaults to the global thread store's clean-source directory.")
     parser.add_argument("--max-stale-messages", type=int, default=25)
     parser.add_argument("--max-stale-bytes", type=int, default=5 * 1024 * 1024)
     parser.add_argument("--checkpoint-messages", type=int, default=30)
@@ -50,26 +62,15 @@ def main() -> int:
     args = parser.parse_args()
 
     cwd = Path(args.cwd).resolve()
-    index_dir = Path(args.index_dir)
-    if not index_dir.is_absolute():
-        index_dir = cwd / index_dir
+    rollout = locate_rollout(cwd, codex_home())
+    index_dir = resolve_artifact_path(args.index_dir, cwd, default_thread_index_dir(cwd, rollout))
     anchors = Path(args.anchors)
     if not anchors.is_absolute():
         anchors = cwd / anchors
-    graphify_corpus = Path(args.graphify_corpus)
-    if not graphify_corpus.is_absolute():
-        graphify_corpus = cwd / graphify_corpus
-    segments_dir = Path(args.segments_dir)
-    if not segments_dir.is_absolute():
-        segments_dir = cwd / segments_dir
-    checkpoint_state = Path(args.checkpoint_state)
-    if not checkpoint_state.is_absolute():
-        checkpoint_state = cwd / checkpoint_state
-    clean_source_dir = Path(args.clean_source_dir)
-    if not clean_source_dir.is_absolute():
-        clean_source_dir = cwd / clean_source_dir
-
-    rollout = locate_rollout(cwd, codex_home())
+    graphify_corpus = resolve_artifact_path(args.graphify_corpus, cwd, default_thread_graphify_corpus_dir(cwd, rollout))
+    segments_dir = resolve_artifact_path(args.segments_dir, cwd, default_thread_segments_dir(cwd, rollout))
+    checkpoint_state = resolve_artifact_path(args.checkpoint_state, cwd, default_thread_checkpoint_state_path(cwd, rollout))
+    clean_source_dir = resolve_artifact_path(args.clean_source_dir, cwd, default_thread_clean_source_dir(cwd, rollout))
     rollout_stat = rollout.stat()
     current_message_count, last_line = count_messages(rollout)
     current_anchor_count = len(parse_anchor_file(anchors))

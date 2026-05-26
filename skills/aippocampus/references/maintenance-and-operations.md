@@ -61,9 +61,11 @@ classifies files as:
 - `archive_or_delete_after_human_review`
 
 `cold_archive.py` creates a gzip raw-rollout copy plus manifests, anchors, index
-manifests, and reports under `.aippocampus/cold-archives/`. It must not delete
-or rewrite the live rollout. Verify decompressed SHA-256 before any manual
-cleanup outside the script.
+manifests, and reports under the global thread store's `cold-archives/`
+directory by default. Passing `--output-dir .aippocampus/cold-archives` is an
+explicit local audit/export path, not a public commit surface. It must not
+delete or rewrite the live rollout. Verify decompressed SHA-256 before any
+manual cleanup outside the script.
 
 For smaller/private migration, prefer `export_bundle.py --no-raw` when raw
 history is not needed.
@@ -115,7 +117,7 @@ Graph and vault commands:
 - Treat bundles, registry rows, vault notes, and rollouts as local private
   history.
 - Do not search secrets or unrelated private logs without explicit user scope.
-- Do not run multiple writers against the same `.aippocampus` directory in
-  parallel.
+- Do not run multiple writers against the same generated artifact output
+  directory in parallel.
 - Rebuild generated JSONL/SQLite artifacts instead of migrating them in place
   unless the migration has tests.

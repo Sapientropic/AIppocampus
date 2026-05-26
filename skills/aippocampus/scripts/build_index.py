@@ -14,6 +14,7 @@ from retrieval import build_rag_chunks
 from aippocampuslib import (
     build_anchor_graph,
     codex_home,
+    default_thread_index_dir,
     file_sha256,
     locate_rollout,
     normalize_rollout,
@@ -21,6 +22,7 @@ from aippocampuslib import (
     parse_anchor_file,
     public_session_meta,
     read_session_meta,
+    resolve_artifact_path,
 )
 
 
@@ -180,7 +182,11 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument("--rollout")
-    parser.add_argument("--output-dir", default=".aippocampus")
+    parser.add_argument(
+        "--output-dir",
+        default=None,
+        help="Defaults to the CODEX_HOME global thread store; pass .aippocampus for project-local output.",
+    )
     parser.add_argument("--anchors", default="thread-anchors.md")
     parser.add_argument("--include-tools", action="store_true")
     parser.add_argument("--hash-source", action="store_true")
@@ -191,9 +197,7 @@ def main() -> int:
 
     cwd = Path(args.cwd).resolve()
     rollout = Path(args.rollout) if args.rollout else locate_rollout(cwd, codex_home())
-    output_dir = Path(args.output_dir)
-    if not output_dir.is_absolute():
-        output_dir = cwd / output_dir
+    output_dir = resolve_artifact_path(args.output_dir, cwd, default_thread_index_dir(cwd, rollout))
     output_dir.mkdir(parents=True, exist_ok=True)
 
     raw_meta = read_session_meta(rollout) or {}
@@ -227,6 +231,12 @@ def main() -> int:
         "schema_version": 1,
         "created_at": now_utc(),
         "cwd": str(cwd),
+        "artifact_scope": "global_thread_store" if args.output_dir is None else "explicit_output_dir",
+        "storage_policy": {
+            "default": "CODEX_HOME/aippocampus-registry/threads/<thread>/index",
+            "legacy_project_local": ".aippocampus",
+            "why": "Indexes are private generated recall artifacts; project-local output is explicit compatibility, not the default.",
+        },
         "source_rollout": str(rollout),
         "source_rollout_size": stat.st_size,
         "source_rollout_mtime": stat.st_mtime,

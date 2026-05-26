@@ -20,6 +20,14 @@ class DocsHealthTests(unittest.TestCase):
         self.assertLessEqual(result["metrics"]["skill_lines"], docs_health.MAX_SKILL_LINES)
         self.assertLessEqual(result["metrics"]["skill_words"], docs_health.MAX_SKILL_WORDS)
 
+    def test_private_thread_anchor_artifact_is_gitignored(self) -> None:
+        repo_root = docs_health.find_repo_root(ROOT)
+        self.assertIsNotNone(repo_root)
+
+        gitignore = (repo_root / ".gitignore").read_text(encoding="utf-8")
+
+        self.assertIn("thread-anchors.md", gitignore)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -5,8 +5,12 @@ details here instead of expanding `SKILL.md`.
 
 ## Clean Source
 
-`scripts/build_clean_source.py` creates the daily-use source layer under
-`.aippocampus/clean-source/`.
+`scripts/build_clean_source.py` creates the daily-use source layer under the
+global thread store by default:
+`$CODEX_HOME/aippocampus-registry/threads/<thread>/clean-source/`.
+
+Passing an explicit `--output-dir .aippocampus/clean-source` still writes a
+project-local compatibility copy.
 
 Clean source keeps:
 
@@ -36,9 +40,10 @@ debug provenance into `messages.jsonl`; use sidecars joined by `message_id` or
 
 ## Local Index
 
-`scripts/build_index.py` writes `.aippocampus/messages.jsonl`,
-`.aippocampus/source_index.sqlite`, `.aippocampus/graph.json`, RAG-lite chunks,
-and `.aippocampus/manifest.json`.
+`scripts/build_index.py` writes `messages.jsonl`, `source_index.sqlite`,
+`graph.json`, RAG-lite chunks, and `manifest.json` under the global thread store
+by default. Passing `--output-dir .aippocampus` preserves the old project-local
+mode when a portable bundle, repo-local audit, or explicit debug run needs it.
 
 Default retrieval is local hybrid search:
 
@@ -69,8 +74,8 @@ optional adapter for very fuzzy queries or large corpora.
 
 For hundred-MB or GB threads, use segments:
 
-- `build_segments.py` creates sealed `seg-0001/`, `seg-0002/`, etc. under
-  `.aippocampus/segments/`.
+- `build_segments.py` creates sealed `seg-0001/`, `seg-0002/`, etc. under the
+  global index directory's `segments/` folder by default.
 - Each segment has its own `messages.jsonl` and `source_index.sqlite`.
 - The segment manifest records source rollout size/mtime, anchor hash, byte
   spans, line spans, message spans, and index paths.
@@ -82,6 +87,10 @@ key.
 
 ## Global Registry
 
+The global thread store is the canonical generated-artifact location. This keeps
+AIppocampus useful when a new project is opened and avoids dropping private
+rollout-derived files into public repositories by default.
+
 `scripts/registry.py` is the machine-wide discovery layer. It stores where
 thread memories live; it is not a duplicate of every thread.
 
@@ -89,6 +98,7 @@ Default registry files under `$CODEX_HOME/aippocampus-registry/` include:
 
 - `threads.json` and `threads.md`
 - `associations.json`
+- `cognitive_map.json`
 - `concept_index.sqlite`
 - `semantic_triggers.jsonl`
 - `semantic_recall_cache.json`
@@ -99,6 +109,7 @@ Default registry files under `$CODEX_HOME/aippocampus-registry/` include:
 
 Common commands:
 
+- `python ...\onboard_codex.py --all --format json`
 - `python ...\registry.py register --cwd "$PWD" --build-index`
 - `python ...\registry.py register-rollout --rollout "<rollout.jsonl>" --project "<label>"`
 - `python ...\registry.py scan-sessions --dry-run`
@@ -107,6 +118,48 @@ Common commands:
 - `python ...\registry.py search --metadata-only "terms"`
 
 In a new thread, check the registry before saying old memory is unavailable.
+
+`onboard_codex.py` is the preferred first-install and agent-facing wrapper. It
+returns a single JSON envelope with `ok`, `data`, `next`, and `meta`, including
+before/after registry counts, repair actions, cognitive-map status, and
+frontier extraction availability. Use `--dry-run` before large imports when an
+agent needs a preview. The command keeps generated artifacts in the global
+registry and treats project-local `.aippocampus/` as explicit export/debug
+compatibility only. When `--frontier-mode smoke|write` is used without an
+explicit `--frontier-project`, the command infers the current `--cwd` project
+and includes compact `sample_findings` in the frontier result so an agent can
+judge quality before writing. Use `--frontier-project *` only for a global
+whole-machine frontier pass.
+
+Full-machine search has one important boundary: old clean-source files may
+already contain injected skill or instruction carrier blocks from earlier
+builds. Registry deep search keeps those hits auditable but demotes them with a
+structural `search_noise` marker so repeated tool/skill instructions do not
+outrank real user turns or assistant final answers.
+
+## Cognitive Map
+
+`build_cognitive_map.py` materializes `$CODEX_HOME/aippocampus-registry/cognitive_map.json`.
+This is the AIppocampus "mental map" layer: episodes come from registry rows,
+while landmarks, regions, and routes come only from source-backed DeepSeek
+subconscious findings with `job=cognitive_map`.
+
+Do not create routes directly from registry keywords. Registry metadata can
+place an episode on the map, but the model-assisted subconscious layer must
+propose the navigable route. The deterministic builder validates source refs,
+filters weak findings when quality metadata is present, clamps fields, and
+writes a hook-safe sidecar. Prompt hooks may use route matches as scent and
+query expansion; exact claims still require clean-source, SQLite, or raw-rollout
+evidence.
+
+Question/frontier findings are not cognitive-map routes by themselves. They are
+stored as `subconscious_jobs.jsonl` findings from the `question_extraction` job
+and may later feed hook scent, boundary maps, or review workflows. A
+`frontier_marker` must point to an explicit stopping point or unresolved
+boundary; do not infer one merely because a question was asked. A
+`question_candidate` should carry a short normalized `question_text`; overlong
+raw monologues are compressed to `question_short`/title when available or
+rejected before staging.
 
 ## Associations And Concept Graph
 
@@ -136,8 +189,8 @@ on a network CDN.
 
 ## Graphify Bridge
 
-`prepare_graphify_corpus.py` exports a prepared corpus under
-`.aippocampus/graphify-corpus/`: anchors, index metadata, anchor graph, and
+`prepare_graphify_corpus.py` exports a prepared corpus under the global index
+directory's `graphify-corpus/`: anchors, index metadata, anchor graph, and
 chunked transcript Markdown with source provenance.
 
 Run the separate `graphify` skill only when the user wants deeper graph

@@ -11,7 +11,15 @@ import subprocess
 import sys
 from pathlib import Path
 
-from aippocampuslib import file_sha256, now_utc
+from aippocampuslib import (
+    codex_home,
+    default_thread_graphify_corpus_dir,
+    default_thread_index_dir,
+    file_sha256,
+    locate_rollout,
+    now_utc,
+    resolve_artifact_path,
+)
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -129,7 +137,7 @@ def write_readme(path: Path, manifest: dict, files: list[Path], cwd: Path) -> No
         "",
         "This folder is prepared by `$aippocampus` so `$graphify` can build a deeper reusable graph when needed.",
         "",
-        "It is intentionally separate from `.aippocampus/graph.json`: that file is a lightweight anchor graph; this corpus is input for a fuller Graphify pass.",
+        "It is intentionally separate from the lightweight anchor graph in the thread index; this corpus is input for a fuller Graphify pass.",
         "",
         "## Contents",
         "",
@@ -143,7 +151,7 @@ def write_readme(path: Path, manifest: dict, files: list[Path], cwd: Path) -> No
         "",
         "```powershell",
         "$runtime = python \"$env:CODEX_HOME\\skills\\graphify\\scripts\\ensure_graphify.py\" | ConvertFrom-Json",
-        "& $runtime.python \"$env:CODEX_HOME\\skills\\graphify\\scripts\\detect_corpus.py\" \"$PWD\\.aippocampus\\graphify-corpus\"",
+        "& $runtime.python \"$env:CODEX_HOME\\skills\\graphify\\scripts\\detect_corpus.py\" \"<graphify_corpus_dir>\"",
         "# Then use the Graphify skill on this folder when a deep graph/report is worth the extra cost.",
         "```",
         "",
@@ -158,23 +166,20 @@ def write_readme(path: Path, manifest: dict, files: list[Path], cwd: Path) -> No
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cwd", default=os.getcwd())
-    parser.add_argument("--index-dir", default=".aippocampus")
+    parser.add_argument("--index-dir", default=None, help="Defaults to the CODEX_HOME global thread store.")
     parser.add_argument("--anchors", default="thread-anchors.md")
-    parser.add_argument("--output", default=".aippocampus/graphify-corpus")
+    parser.add_argument("--output", default=None, help="Defaults to the global thread store's graphify-corpus directory.")
     parser.add_argument("--max-chars-per-chunk", type=int, default=60000)
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
     cwd = Path(args.cwd).resolve()
-    index_dir = Path(args.index_dir)
-    if not index_dir.is_absolute():
-        index_dir = cwd / index_dir
+    rollout = locate_rollout(cwd, codex_home())
+    index_dir = resolve_artifact_path(args.index_dir, cwd, default_thread_index_dir(cwd, rollout))
     anchors = Path(args.anchors)
     if not anchors.is_absolute():
         anchors = cwd / anchors
-    output_dir = Path(args.output)
-    if not output_dir.is_absolute():
-        output_dir = cwd / output_dir
+    output_dir = resolve_artifact_path(args.output, cwd, default_thread_graphify_corpus_dir(cwd, rollout))
 
     manifest_path = index_dir / "manifest.json"
     messages_path = index_dir / "messages.jsonl"

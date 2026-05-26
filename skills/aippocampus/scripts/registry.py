@@ -16,12 +16,16 @@ from retrieval import expanded_terms_from_anchors, match_anchors, search_hybrid_
 from aippocampuslib import (
     codex_home,
     compact_text,
+    default_thread_clean_source_dir,
+    default_thread_index_dir,
+    is_injected_instruction_text,
     iter_rollouts,
     locate_rollout,
     now_utc,
     parse_anchor_file,
     public_session_meta,
     read_session_meta,
+    thread_key_from_rollout as lib_thread_key_from_rollout,
 )
 
 
@@ -212,10 +216,23 @@ def register_current_thread(
     build_index: bool = False,
 ) -> dict:
     cwd = cwd.resolve()
-    index_dir = cwd / ".aippocampus"
+    try:
+        rollout = locate_rollout(cwd, codex_home())
+    except Exception:
+        rollout = None
+    default_index_dir = default_thread_index_dir(cwd, rollout)
+    legacy_index_dir = cwd / ".aippocampus"
+    index_dir = (
+        default_index_dir
+        if build_index or (default_index_dir / "manifest.json").exists() or not (legacy_index_dir / "manifest.json").exists()
+        else legacy_index_dir
+    )
     if build_index and not (index_dir / "manifest.json").exists():
         run_json([sys.executable, str(SCRIPT_DIR / "build_index.py"), "--cwd", str(cwd), "--json"])
-    clean_source_dir = index_dir / "clean-source"
+    clean_source_dir = default_thread_clean_source_dir(cwd, rollout)
+    legacy_clean_source_dir = legacy_index_dir / "clean-source"
+    if not build_index and not (clean_source_dir / "manifest.json").exists() and (legacy_clean_source_dir / "manifest.json").exists():
+        clean_source_dir = legacy_clean_source_dir
     if build_index and not (clean_source_dir / "manifest.json").exists():
         run_json([sys.executable, str(SCRIPT_DIR / "build_clean_source.py"), "--cwd", str(cwd), "--json"])
 
@@ -231,7 +248,6 @@ def register_current_thread(
     anchor_titles, keywords, summary = anchor_summary(anchors)
     project = project_fields(cwd)
 
-    rollout: Path | None = None
     if manifest.get("source_rollout"):
         rollout = Path(manifest["source_rollout"])
     else:
@@ -300,12 +316,7 @@ def register_current_thread(
 
 
 def thread_key_from_rollout(rollout: Path, meta: dict | None = None) -> str:
-    meta = meta if meta is not None else public_session_meta(read_session_meta(rollout))
-    session_id = (meta or {}).get("id")
-    if session_id:
-        return f"session:{session_id}"
-    digest = hashlib.sha1(str(rollout.resolve()).casefold().encode("utf-8")).hexdigest()[:16]
-    return f"rollout:{digest}"
+    return lib_thread_key_from_rollout(rollout, meta)
 
 
 def register_rollout_thread(
@@ -525,6 +536,30 @@ def entry_search_score(entry: dict, terms: list[str]) -> float:
     return score
 
 
+def search_noise_reason(text: str) -> str | None:
+    """Classify repeated runtime carrier text that should not dominate recall.
+
+    This is a ranking boundary, not a deletion rule. Old indexes may already
+    contain injected skill or instruction carriers, so registry search must keep
+    them auditable while making real user/final-answer evidence win.
+    """
+
+    if is_injected_instruction_text(text):
+        return "injected_instruction"
+    return None
+
+
+def clean_hit_rank_score(message: dict, score: float) -> tuple[float, str | None]:
+    text = str(message.get("text") or "")
+    reason = search_noise_reason(text)
+    rank_score = float(score)
+    if reason:
+        rank_score *= 0.05
+    if message.get("role") == "assistant" and str(message.get("phase") or "") == "final_answer":
+        rank_score *= 1.12
+    return rank_score, reason
+
+
 def deep_search_entry(entry: dict, terms: list[str], max_hits: int = 3) -> tuple[float, list[dict]]:
     paths = entry.get("paths") or {}
     clean_messages = paths.get("clean_source_messages_jsonl")
@@ -537,8 +572,9 @@ def deep_search_entry(entry: dict, terms: list[str], max_hits: int = 3) -> tuple
                 score = score_message(message, terms)
                 if score <= 0:
                     continue
-                clean_hits.append((score, message))
-            clean_hits.sort(key=lambda item: (-item[0], int(item[1].get("source_line") or 0)))
+                rank_score, noise_reason = clean_hit_rank_score(message, score)
+                clean_hits.append((rank_score, score, noise_reason, message))
+            clean_hits.sort(key=lambda item: (-item[0], int(item[3].get("source_line") or 0)))
             if clean_hits:
                 compact_hits = [
                     {
@@ -554,11 +590,14 @@ def deep_search_entry(entry: dict, terms: list[str], max_hits: int = 3) -> tuple
                         "turn_index": message.get("turn_index"),
                         "is_final": message.get("is_final"),
                         "score": round(score, 3),
+                        "rank_score": round(rank_score, 3),
+                        "search_noise": bool(noise_reason),
+                        "noise_reason": noise_reason,
                         "snippet": compact_text(str(message.get("text") or ""), 260),
                     }
-                    for score, message in clean_hits[:max_hits]
+                    for rank_score, score, noise_reason, message in clean_hits[:max_hits]
                 ]
-                return max(score for score, _ in clean_hits[:max_hits]) * 0.08, compact_hits
+                return max(rank_score for rank_score, *_ in clean_hits[:max_hits]) * 0.08, compact_hits
         except Exception:
             pass
 

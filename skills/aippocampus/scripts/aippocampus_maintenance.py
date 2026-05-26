@@ -36,6 +36,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument("--append-checkpoint", action="store_true", help="Append checkpoint candidates instead of only suggesting them.")
+    parser.add_argument("--no-refresh-cognitive-map", action="store_true", help="Do not refresh the cognitive-map sidecar from existing subconscious findings.")
     parser.add_argument("--no-refresh-graphify", action="store_true", help="Do not refresh the prepared Graphify corpus.")
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
@@ -69,6 +70,18 @@ def main() -> int:
         # shard metadata points at the latest anchors and message count.
         out = run_text([sys.executable, str(SCRIPT_DIR / "build_segments.py"), "--cwd", str(cwd)])
         actions.append({"id": "build_segments", "output": out.strip()})
+        health = run_json(health_cmd)
+
+    if not args.no_refresh_cognitive_map:
+        # Cognitive-map routes are produced by the detached subconscious layer;
+        # maintenance only validates and materializes whatever staging already
+        # exists, keeping this foreground pass model-free and hook-safe.
+        cognitive_map = run_json([
+            sys.executable,
+            str(SCRIPT_DIR / "build_cognitive_map.py"),
+            "--json",
+        ])
+        actions.append({"id": "build_cognitive_map", "result": cognitive_map})
         health = run_json(health_cmd)
 
     if has_action(health, "prepare_graphify_corpus") and not args.no_refresh_graphify:

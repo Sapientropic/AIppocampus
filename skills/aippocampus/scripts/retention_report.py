@@ -15,7 +15,16 @@ from pathlib import Path
 from typing import Any
 
 from rollout_size_audit import audit_rollout
-from aippocampuslib import codex_home, file_sha256, locate_rollout, now_utc, parse_anchor_file
+from aippocampuslib import (
+    codex_home,
+    default_thread_index_dir,
+    default_thread_retention_dir,
+    file_sha256,
+    locate_rollout,
+    now_utc,
+    parse_anchor_file,
+    resolve_artifact_path,
+)
 
 
 CORE_INDEX_FILES = {
@@ -406,9 +415,9 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument("--rollout")
-    parser.add_argument("--index-dir", default=".aippocampus")
+    parser.add_argument("--index-dir", default=None, help="Defaults to the CODEX_HOME global thread store.")
     parser.add_argument("--anchors", default="thread-anchors.md")
-    parser.add_argument("--output-dir", default=".aippocampus/retention")
+    parser.add_argument("--output-dir", default=None, help="Defaults to the global thread store's retention directory.")
     parser.add_argument("--top", type=int, default=12)
     parser.add_argument("--no-hash", action="store_true")
     parser.add_argument("--write", action="store_true")
@@ -417,15 +426,11 @@ def main() -> int:
 
     cwd = Path(args.cwd).resolve()
     rollout = Path(args.rollout) if args.rollout else locate_rollout(cwd, codex_home())
-    index_dir = Path(args.index_dir)
-    if not index_dir.is_absolute():
-        index_dir = cwd / index_dir
+    index_dir = resolve_artifact_path(args.index_dir, cwd, default_thread_index_dir(cwd, rollout))
     anchors = Path(args.anchors)
     if not anchors.is_absolute():
         anchors = cwd / anchors
-    output_dir = Path(args.output_dir)
-    if not output_dir.is_absolute():
-        output_dir = cwd / output_dir
+    output_dir = resolve_artifact_path(args.output_dir, cwd, default_thread_retention_dir(cwd, rollout))
 
     report = build_report(cwd, rollout, index_dir=index_dir, anchors=anchors, top=args.top, hash_rollout=not args.no_hash)
     if args.write:

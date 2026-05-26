@@ -12,7 +12,16 @@ import shutil
 from pathlib import Path
 
 from retention_report import build_report, markdown_report, human_bytes
-from aippocampuslib import codex_home, file_sha256, locate_rollout, now_utc, read_session_meta
+from aippocampuslib import (
+    codex_home,
+    default_thread_cold_archive_dir,
+    default_thread_index_dir,
+    file_sha256,
+    locate_rollout,
+    now_utc,
+    read_session_meta,
+    resolve_artifact_path,
+)
 
 
 def slugify(value: str, fallback: str = "thread") -> str:
@@ -38,9 +47,9 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument("--rollout")
-    parser.add_argument("--index-dir", default=".aippocampus")
+    parser.add_argument("--index-dir", default=None, help="Defaults to the CODEX_HOME global thread store.")
     parser.add_argument("--anchors", default="thread-anchors.md")
-    parser.add_argument("--output-dir", default=".aippocampus/cold-archives")
+    parser.add_argument("--output-dir", default=None, help="Defaults to the global thread store's cold-archives directory.")
     parser.add_argument("--compresslevel", type=int, default=6)
     parser.add_argument("--include-normalized-messages", action="store_true", default=True)
     parser.add_argument("--no-normalized-messages", action="store_false", dest="include_normalized_messages")
@@ -49,15 +58,11 @@ def main() -> int:
 
     cwd = Path(args.cwd).resolve()
     rollout = Path(args.rollout) if args.rollout else locate_rollout(cwd, codex_home())
-    index_dir = Path(args.index_dir)
-    if not index_dir.is_absolute():
-        index_dir = cwd / index_dir
+    index_dir = resolve_artifact_path(args.index_dir, cwd, default_thread_index_dir(cwd, rollout))
     anchors = Path(args.anchors)
     if not anchors.is_absolute():
         anchors = cwd / anchors
-    output_dir = Path(args.output_dir)
-    if not output_dir.is_absolute():
-        output_dir = cwd / output_dir
+    output_dir = resolve_artifact_path(args.output_dir, cwd, default_thread_cold_archive_dir(cwd, rollout))
 
     meta = read_session_meta(rollout) or {}
     session_id = slugify(str(meta.get("id") or rollout.stem), fallback=rollout.stem)

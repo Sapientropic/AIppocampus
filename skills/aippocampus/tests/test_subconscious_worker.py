@@ -82,6 +82,36 @@ class SubconsciousWorkerTests(unittest.TestCase):
 
         self.assertEqual(len(turns), 3)
 
+    def test_external_model_turn_payloads_redact_secrets_and_local_paths(self) -> None:
+        timeline = {
+            "projects": {
+                "project:ai": {
+                    "project_label": "AIppocampus",
+                    "latest_turns": [
+                        {
+                            "thread_key": "session:secret",
+                            "timestamp": "2026-05-25T00:00:00Z",
+                            "turn_index": 1,
+                            "user": (
+                                "继续海马体配置，api_key=sk-thisshouldnotleave-local-test-1234567890 "
+                                r"本地文件在 C:\Users\Administrator\Secrets\token.txt"
+                            ),
+                            "assistant": "Authorization: Bearer abcdefghijklmnopqrstuvwxyz1234567890",
+                        }
+                    ],
+                }
+            }
+        }
+
+        turns = worker.select_timeline_turns(timeline, project="AIppocampus", max_turns=1)
+        payload = worker.user_prompt_for_turns(turns)
+
+        self.assertNotIn("sk-thisshouldnotleave-local-test-1234567890", payload)
+        self.assertNotIn("abcdefghijklmnopqrstuvwxyz1234567890", payload)
+        self.assertNotIn(r"C:\\Users\\Administrator", payload)
+        self.assertIn("<redacted:api-key>", payload)
+        self.assertIn("<redacted:local-path>", payload)
+
     def test_call_deepseek_omits_max_tokens_by_default(self) -> None:
         captured: dict[str, object] = {}
 

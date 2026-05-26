@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 from registry import register_current_thread
-from aippocampuslib import compact_text, now_utc, parse_anchor_file
+from aippocampuslib import compact_text, default_thread_index_dir, now_utc, parse_anchor_file
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -4020,9 +4020,9 @@ def main() -> int:
         run_text([sys.executable, str(SCRIPT_DIR / "aippocampus_maintenance.py"), "--cwd", str(cwd)])
 
     health = run_json([sys.executable, str(SCRIPT_DIR / "aippocampus_health.py"), "--cwd", str(cwd), "--json"])
-    index_dir = cwd / ".aippocampus"
+    index_dir = Path((health.get("index") or {}).get("dir") or default_thread_index_dir(cwd))
     manifest = load_json(index_dir / "manifest.json")
-    checkpoint_state = load_json(index_dir / "checkpoint_state.json")
+    checkpoint_state = load_json(Path((health.get("checkpoint") or {}).get("state") or (index_dir / "checkpoint_state.json")))
     anchors_path = cwd / "thread-anchors.md"
     anchors = parse_anchor_file(anchors_path)
 

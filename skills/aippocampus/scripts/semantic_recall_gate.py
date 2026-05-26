@@ -26,7 +26,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-from aippocampuslib import compact_text, now_utc
+from aippocampuslib import compact_text, now_utc, sanitize_external_model_text
 from registry import load_registry, registry_paths, unique_preserve
 from retrieval import split_query_terms
 from subconscious_agent import call_chat_json
@@ -50,54 +50,6 @@ DECISION_RANK = {"skip": 0, "background_only": 1, "scent": 2, "evidence": 3}
 
 
 ChatFn = Callable[[list[dict[str, str]], str, str, str, int | None, int, float], dict[str, Any]]
-
-
-KEY_BLOCK_BOUNDARY = "-----"
-GENERIC_PRIVATE_KEY_BLOCK = (
-    rf"{KEY_BLOCK_BOUNDARY}BEGIN [A-Z ]*PRIVATE KEY{KEY_BLOCK_BOUNDARY}"
-    rf".*?"
-    rf"{KEY_BLOCK_BOUNDARY}END [A-Z ]*PRIVATE KEY{KEY_BLOCK_BOUNDARY}"
-)
-OPENSSH_PRIVATE_KEY_BLOCK = (
-    rf"{KEY_BLOCK_BOUNDARY}BEGIN OPENSSH PRIVATE KEY{KEY_BLOCK_BOUNDARY}"
-    rf".*?"
-    rf"{KEY_BLOCK_BOUNDARY}END OPENSSH PRIVATE KEY{KEY_BLOCK_BOUNDARY}"
-)
-
-HARD_SECRET_PATTERNS = [
-    re.compile(pattern, re.IGNORECASE | re.DOTALL)
-    for pattern in [
-        GENERIC_PRIVATE_KEY_BLOCK,
-        OPENSSH_PRIVATE_KEY_BLOCK,
-    ]
-]
-
-REDACTION_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
-    (
-        "openai_api_key",
-        re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b", re.IGNORECASE),
-        "<redacted:api-key>",
-    ),
-    (
-        "bearer_token",
-        re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]{20,}", re.IGNORECASE),
-        "Bearer <redacted:bearer-token>",
-    ),
-    (
-        "credential_url",
-        re.compile(r"\b([A-Za-z][A-Za-z0-9+.-]*://)[^@\s:/]+:[^@\s]+@"),
-        r"\1<redacted:credentials>@",
-    ),
-    (
-        "secret_assignment",
-        re.compile(
-            r"\b(api[_-]?key|secret|token|password|passwd|cookie|authorization)\b\s*[:=]\s*"
-            r"(\"[^\"]*\"|'[^']*'|[^\s,;&]+)",
-            re.IGNORECASE,
-        ),
-        r"\1=<redacted:secret>",
-    ),
-]
 
 
 SYSTEM_PROMPT = """You are AIppocampus semantic recall gate.
@@ -160,34 +112,7 @@ def sanitize_prompt_for_semantic_gate(prompt: str) -> tuple[str, dict[str, Any]]
     credentials after redaction.
     """
 
-    original = str(prompt or "")
-    hard_matches = [pattern.pattern for pattern in HARD_SECRET_PATTERNS if pattern.search(original)]
-    if hard_matches:
-        return "", {
-            "redacted": True,
-            "redaction_count": 0,
-            "redaction_types": ["private_key_block"],
-            "hard_block": True,
-            "reason": "private key block detected",
-        }
-    sanitized = original
-    redaction_types: list[str] = []
-    redaction_count = 0
-    for label, pattern, replacement in REDACTION_PATTERNS:
-        sanitized, count = pattern.subn(replacement, sanitized)
-        if count:
-            redaction_types.append(label)
-            redaction_count += count
-    remaining = re.sub(r"<redacted:[^>]+>", " ", sanitized)
-    remaining = re.sub(r"\s+", " ", remaining).strip()
-    hard_block = bool(redaction_count and len(remaining) < 12)
-    return sanitized, {
-        "redacted": bool(redaction_count),
-        "redaction_count": redaction_count,
-        "redaction_types": unique_preserve(redaction_types, limit=8),
-        "hard_block": hard_block,
-        "reason": "prompt mostly secret/credential material after redaction" if hard_block else "",
-    }
+    return sanitize_external_model_text(prompt)
 
 
 def prompt_may_contain_secret(prompt: str) -> bool:

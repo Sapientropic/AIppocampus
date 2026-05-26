@@ -29,6 +29,28 @@ Useful commands:
 - `python ...\simulate_multilingual_prompt_hook.py --cwd "$PWD"`
 - `python ...\install_aippocampus_prompt_hook.py install|status|uninstall`
 
+The global prompt hook has a small foreground budget. Its default
+`--semantic-timeout` is lower than the standalone semantic gate so optional
+semantic work cannot consume the whole Codex `UserPromptSubmit` timeout. Do not
+raise this default unless the hook timeout is raised and fresh, uncached memory
+prompts still complete within budget.
+
+The foreground default is three seconds. Treat that as a scent/cache pass, not
+as the full recall budget; explicit `active_recall.py`, `runtime recall`, and
+standalone `semantic_recall_gate.py` can spend longer when the user asks for
+source-backed memory.
+
+When an explicit memory cue already has local association or working-memory
+overlap, the prompt hook skips the external semantic gate and goes straight to
+local evidence. This protects hook latency without removing the deeper semantic
+path for fuzzy or cross-lingual prompts.
+
+The prompt hook can also read `cognitive_map.json`. Cognitive-map routes are
+materialized from detached DeepSeek subconscious jobs, so a route match is
+already prior semantic work and should skip foreground DeepSeek spend. The hook
+uses those routes only as `scent`: they can add query terms and candidate
+threads, but they are never evidence by themselves.
+
 ## Semantic Gate
 
 When `DEEPSEEK_API_KEY` is present and `AIPPOCAMPUS_SEMANTIC_GATE` is not `off`,
@@ -104,9 +126,20 @@ that lifecycle hooks should call. It must return quickly, check lock/cooldown
 state, require `DEEPSEEK_API_KEY`, and start detached work only when enough new
 clean-source turns exist.
 
+Multiple Codex threads may hit lifecycle hooks around the same time. The
+scheduler keeps `--maybe-start` hook-safe by taking a short enqueue lock and by
+leasing each due project before starting detached work. Later hook calls should
+see the active lease and skip instead of launching duplicate DeepSeek workers.
+The detached worker clears the lease when it finishes; stale leases expire.
+
 The detached worker may run timeline prep, subconscious jobs, review,
-semantic-trigger materialization, working-memory routing, and concept graph
-rebuilds. It still writes only staging or soft-memory artifacts.
+semantic-trigger materialization, working-memory routing, cognitive-map
+materialization, and concept graph rebuilds. It still writes only staging,
+navigation, or soft-memory artifacts.
+
+DeepSeek concurrency belongs inside the detached worker, not in the foreground
+hook. `subconscious_jobs.py` can run multiple job/sample calls concurrently, but
+staging JSONL and sidecar materialization remain serialized and atomic.
 
 Useful commands:
 

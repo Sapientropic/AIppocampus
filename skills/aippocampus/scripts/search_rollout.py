@@ -22,28 +22,40 @@ from retrieval import (
     search_hybrid_index,
     split_query_terms,
 )
-from aippocampuslib import compact_text, iter_messages, locate_rollout
+from aippocampuslib import compact_text, default_thread_index_dir, iter_messages, locate_rollout
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
 
-def auto_index_path(cwd: str) -> Path:
+def auto_index_path(cwd: str, rollout: Path | None = None, *, prefer_existing: bool = True) -> Path:
     root = Path(cwd).resolve()
+    global_index = default_thread_index_dir(root, rollout) / "source_index.sqlite"
     preferred = root / ".aippocampus" / "source_index.sqlite"
-    if preferred.exists():
-        return preferred
+    if prefer_existing:
+        if global_index.exists():
+            return global_index
+        if preferred.exists():
+            return preferred
     legacy = root / ".thread-memory-index" / "thread_index.sqlite"
-    return legacy if legacy.exists() else preferred
+    if prefer_existing and legacy.exists():
+        return legacy
+    return global_index
 
 
-def auto_graph_path(cwd: str) -> Path:
+def auto_graph_path(cwd: str, rollout: Path | None = None, *, prefer_existing: bool = True) -> Path:
     root = Path(cwd).resolve()
+    global_graph = default_thread_index_dir(root, rollout) / "graph.json"
     preferred = root / ".aippocampus" / "graph.json"
-    if preferred.exists():
-        return preferred
+    if prefer_existing:
+        if global_graph.exists():
+            return global_graph
+        if preferred.exists():
+            return preferred
     legacy = root / ".thread-memory-index" / "graph.json"
-    return legacy if legacy.exists() else preferred
+    if prefer_existing and legacy.exists():
+        return legacy
+    return global_graph
 
 
 def resolve_anchor_path(cwd: str, anchors: str) -> Path:
@@ -165,9 +177,9 @@ def main() -> int:
     parser.add_argument("patterns", nargs="+", help="Literal clues or regex patterns to search.")
     parser.add_argument("--rollout", help="Explicit rollout JSONL path.")
     parser.add_argument("--cwd", default=os.getcwd(), help="Workspace cwd used to locate rollout.")
-    parser.add_argument("--index", help="SQLite index path. Defaults to .aippocampus/source_index.sqlite when present.")
+    parser.add_argument("--index", help="SQLite index path. Defaults to the global thread store, with project-local legacy fallback.")
     parser.add_argument("--anchors", default="thread-anchors.md", help="Anchor file used for hybrid query expansion.")
-    parser.add_argument("--build-index", action="store_true", help="Build/rebuild .aippocampus/source_index.sqlite before searching.")
+    parser.add_argument("--build-index", action="store_true", help="Build/rebuild the global default index before searching unless --index is provided.")
     parser.add_argument("--no-index", action="store_true", help="Force streaming JSONL regex search.")
     parser.add_argument("--include-tools", action="store_true")
     parser.add_argument("--mode", choices=["literal", "ranked", "hybrid"], default="hybrid")
@@ -183,7 +195,7 @@ def main() -> int:
 
     cwd = str(Path(args.cwd).resolve())
     rollout = Path(args.rollout) if args.rollout else None
-    index = Path(args.index) if args.index else auto_index_path(cwd)
+    index = Path(args.index) if args.index else auto_index_path(cwd, rollout, prefer_existing=not args.build_index)
     anchor_path = resolve_anchor_path(cwd, args.anchors)
 
     source = None
@@ -191,7 +203,7 @@ def main() -> int:
     query_terms = split_query_terms(args.patterns)
     anchors = match_anchors(anchor_path, query_terms) if anchor_path.exists() else []
     expanded_terms = expanded_terms_from_anchors(query_terms, anchors) if args.mode == "hybrid" else query_terms
-    graph = graph_neighbors(auto_graph_path(cwd), expanded_terms) if args.mode == "hybrid" else []
+    graph = graph_neighbors(auto_graph_path(cwd, rollout, prefer_existing=not args.build_index), expanded_terms) if args.mode == "hybrid" else []
     rag_context: list[dict] = []
 
     if not args.no_index:

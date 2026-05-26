@@ -11,9 +11,10 @@ life-wide continuity without false claims of innate model memory.
 
 - `skills/aippocampus/`: installable skill package.
 - `skills/aippocampus/SKILL.md`: slim runtime entrypoint.
-- `skills/aippocampus/references/roadmap.md`: product roadmap and north star.
 - `skills/aippocampus/references/`: detailed contracts loaded on demand.
 - `skills/aippocampus/scripts/`: deterministic helpers.
+- `docs/roadmap.md`: product roadmap and north star.
+- `docs/the-unfinished-map.md`: the origin essay; do not mirror it elsewhere.
 - `sources/skill-sources.yaml`: lightweight provenance.
 
 Do not duplicate long rules across multiple docs. Keep one canonical location

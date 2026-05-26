@@ -20,14 +20,82 @@ REQUIRED_REFERENCES = [
     "retrieval-and-storage.md",
     "maintenance-and-operations.md",
     "subconscious-jobs.md",
-    "roadmap.md",
-    "gb-scale-roadmap.md",
-    "wukong-mining-notes.md",
+]
+
+REQUIRED_PROJECT_DOCS = [
+    "docs/README.md",
+    "docs/roadmap.md",
+    "docs/next-iteration-plan.md",
+    "docs/gb-scale-roadmap.md",
+    "docs/wukong-mining-notes.md",
+    "docs/technical-differentiation-analysis.md",
+]
+
+REQUIRED_PRIVATE_GITIGNORE_PATTERNS = [
+    ".aippocampus/",
+    "aippocampus-registry/",
+    "thread-anchors.md",
+]
+
+ORIGIN_PHRASES = [
+    "生命还能变成什么，而我能不能在变化后仍然是我。",
 ]
 
 
 def count_words(text: str) -> int:
     return len(re.findall(r"\S+", text))
+
+
+def find_repo_root(skill_root: Path) -> Path | None:
+    for candidate in [skill_root.parent.parent, *skill_root.parents]:
+        if (candidate / "README.md").exists() and (candidate / "skills" / skill_root.name).exists():
+            return candidate
+    return None
+
+
+def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
+    issues: list[str] = []
+    metrics: dict[str, Any] = {"repo_docs_checked": True}
+
+    origin_stub = repo_root / "docs" / "origin.md"
+    if origin_stub.exists():
+        issues.append("docs/origin.md duplicates the origin essay; link docs/the-unfinished-map.md instead")
+
+    gitignore = repo_root / ".gitignore"
+    if not gitignore.exists():
+        issues.append("missing .gitignore for private generated memory artifacts")
+    else:
+        ignored = {
+            line.strip().strip("/")
+            for line in gitignore.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        }
+        for pattern in REQUIRED_PRIVATE_GITIGNORE_PATTERNS:
+            if pattern.strip("/") not in ignored:
+                issues.append(f"private generated artifact is not gitignored: {pattern}")
+
+    essay = repo_root / "docs" / "the-unfinished-map.md"
+    if not essay.exists():
+        issues.append("missing canonical origin essay: docs/the-unfinished-map.md")
+        return issues, metrics
+
+    markdown_files = [
+        path
+        for path in repo_root.rglob("*.md")
+        if ".git" not in path.parts and "__pycache__" not in path.parts
+    ]
+    metrics["repo_markdown_files"] = len(markdown_files)
+    for phrase in ORIGIN_PHRASES:
+        owners = [
+            path.relative_to(repo_root).as_posix()
+            for path in markdown_files
+            if phrase in path.read_text(encoding="utf-8")
+        ]
+        if owners != ["docs/the-unfinished-map.md"]:
+            issues.append(
+                f"origin phrase should live only in docs/the-unfinished-map.md; found in {owners}"
+            )
+    return issues, metrics
 
 
 def check_docs(root: Path) -> dict[str, Any]:
@@ -72,6 +140,17 @@ def check_docs(root: Path) -> dict[str, Any]:
 
     if "changelog" in text.lower() and "Do not append changelog-style notes" not in text:
         issues.append("SKILL.md mentions changelog without the stable-entrypoint guardrail")
+
+    repo_root = find_repo_root(root)
+    if repo_root:
+        for rel_path in REQUIRED_PROJECT_DOCS:
+            if not (repo_root / rel_path).exists():
+                issues.append(f"missing project doc: {rel_path}")
+        repo_issues, repo_metrics = check_repo_docs(repo_root)
+        issues.extend(repo_issues)
+        metrics.update(repo_metrics)
+    else:
+        metrics["repo_docs_checked"] = False
 
     return {
         "ok": not issues,

@@ -12,7 +12,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-from aippocampuslib import compact_text, now_utc
+from aippocampuslib import (
+    codex_home,
+    compact_text,
+    default_thread_checkpoint_state_path,
+    default_thread_index_dir,
+    now_utc,
+    resolve_artifact_path,
+)
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -116,6 +123,20 @@ def append_anchor(path: Path, candidate: dict) -> None:
         f.write(prefix + "\n".join(lines))
 
 
+def portable_source_path(path: Path, cwd: Path) -> str:
+    """Return a source path suitable for anchors that may be exported later."""
+    try:
+        return path.resolve().relative_to(cwd.resolve()).as_posix()
+    except ValueError:
+        pass
+    try:
+        return "$CODEX_HOME/" + path.resolve().relative_to(codex_home().resolve()).as_posix()
+    except ValueError:
+        # Keep anchors free of machine-specific absolute paths even when callers
+        # point the index outside the workspace and outside CODEX_HOME.
+        return path.name
+
+
 def update_state(path: Path, candidate: dict, appended: bool, total_messages: int) -> None:
     old = load_json(path)
     state = dict(old)
@@ -136,9 +157,9 @@ def update_state(path: Path, candidate: dict, appended: bool, total_messages: in
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cwd", default=os.getcwd())
-    parser.add_argument("--index-dir", default=".aippocampus")
+    parser.add_argument("--index-dir", default=None, help="Defaults to the CODEX_HOME global thread store.")
     parser.add_argument("--anchors", default="thread-anchors.md")
-    parser.add_argument("--state", default=".aippocampus/checkpoint_state.json")
+    parser.add_argument("--state", default=None, help="Defaults to the global thread store's checkpoint state.")
     parser.add_argument("--recent", type=int, default=24)
     parser.add_argument("--title")
     parser.add_argument("--keywords")
@@ -150,15 +171,11 @@ def main() -> int:
     args = parser.parse_args()
 
     cwd = Path(args.cwd).resolve()
-    index_dir = Path(args.index_dir)
-    if not index_dir.is_absolute():
-        index_dir = cwd / index_dir
+    index_dir = resolve_artifact_path(args.index_dir, cwd, default_thread_index_dir(cwd))
     anchors = Path(args.anchors)
     if not anchors.is_absolute():
         anchors = cwd / anchors
-    state_path = Path(args.state)
-    if not state_path.is_absolute():
-        state_path = cwd / state_path
+    state_path = resolve_artifact_path(args.state, cwd, default_thread_checkpoint_state_path(cwd))
 
     if not args.no_build:
         run_build_index(cwd, index_dir, anchors)
@@ -200,7 +217,7 @@ def main() -> int:
         "notes": notes,
         "quotes": quotes,
         "sources": [
-            f"{index_dir / 'messages.jsonl'} lines {first_line}-{last_line}",
+            f"{portable_source_path(index_dir / 'messages.jsonl', cwd)} lines {first_line}-{last_line}",
         ],
         "line_range": {"start": first_line, "end": last_line},
         "message_count": len(recent),

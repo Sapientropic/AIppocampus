@@ -15,10 +15,20 @@ import json
 import os
 from pathlib import Path
 
-from aippocampuslib import codex_home, file_sha256, locate_rollout, normalize_rollout, now_utc, read_session_meta, public_session_meta
+from aippocampuslib import (
+    codex_home,
+    default_thread_clean_source_dir,
+    file_sha256,
+    locate_rollout,
+    normalize_rollout,
+    now_utc,
+    public_session_meta,
+    read_session_meta,
+    resolve_artifact_path,
+)
 
 
-DEFAULT_OUTPUT_DIR = ".aippocampus/clean-source"
+LEGACY_OUTPUT_DIR = ".aippocampus/clean-source"
 CLEAN_SOURCE_SCHEMA_VERSION = 2
 SIGNATURE_CONTRACT_VERSION = "aippocampus-signature-sidecar-v1"
 
@@ -131,7 +141,7 @@ def build_clean_source(
     cwd: str | Path,
     *,
     rollout: str | Path | None = None,
-    output_dir: str | Path = DEFAULT_OUTPUT_DIR,
+    output_dir: str | Path | None = None,
     hash_source: bool = False,
 ) -> dict:
     cwd = Path(cwd).resolve()
@@ -139,9 +149,7 @@ def build_clean_source(
     if not rollout_path.is_absolute():
         rollout_path = cwd / rollout_path
 
-    out = Path(output_dir)
-    if not out.is_absolute():
-        out = cwd / out
+    out = resolve_artifact_path(output_dir, cwd, default_thread_clean_source_dir(cwd, rollout_path))
     out.mkdir(parents=True, exist_ok=True)
 
     raw_meta = read_session_meta(rollout_path) or {}
@@ -171,6 +179,12 @@ def build_clean_source(
         "kind": "aippocampus_clean_source",
         "created_at": now_utc(),
         "cwd": str(cwd),
+        "artifact_scope": "global_thread_store" if output_dir is None else "explicit_output_dir",
+        "storage_policy": {
+            "default": "CODEX_HOME/aippocampus-registry/threads/<thread>/clean-source",
+            "legacy_project_local": LEGACY_OUTPUT_DIR,
+            "why": "Clean source is private cross-project memory; project-local output is explicit compatibility, not the default.",
+        },
         "source_id": source_id,
         "source_rollout": str(rollout_path),
         "source_rollout_size": stat.st_size,
@@ -222,7 +236,11 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument("--rollout")
-    parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR)
+    parser.add_argument(
+        "--output-dir",
+        default=None,
+        help="Defaults to the CODEX_HOME global thread store; pass .aippocampus/clean-source for project-local output.",
+    )
     parser.add_argument("--hash-source", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()

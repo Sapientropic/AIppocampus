@@ -41,6 +41,11 @@ class AmbientRecallHookTests(unittest.TestCase):
         else:
             os.environ["AIPPOCAMPUS_SEMANTIC_GATE"] = self.old_semantic_gate
 
+    def test_prompt_hook_keeps_decision_and_rendering_in_split_modules(self) -> None:
+        self.assertEqual(hook.assess_prompt.__module__, "prompt_recall_decision")
+        self.assertEqual(hook.context_for_hook.__module__, "prompt_context_render")
+        self.assertEqual(hook.hook_stdout_payload.__module__, "prompt_context_render")
+
     def _write_sqlite(self) -> None:
         con = sqlite3.connect(self.sqlite)
         try:
@@ -222,6 +227,41 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertEqual(result["decision"], "skip")
         self.assertIsNone(result["semantic_gate"])
 
+    def test_explicit_recall_with_local_association_skips_foreground_semantic_gate(self) -> None:
+        associations = self.root / "associations.json"
+        associations.write_text(
+            json.dumps(
+                {
+                    "terms": {
+                        "外置海马体": {
+                            "term": "外置海马体",
+                            "status": "verified",
+                            "confidence": 0.95,
+                            "hit_count": 3,
+                            "threads": [{"thread_key": "session:test-old"}],
+                        }
+                    }
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        def fail_semantic_gate(*args, **kwargs) -> dict:
+            raise AssertionError("local association should avoid foreground semantic spend")
+
+        result = hook.assess_prompt(
+            "还记得外置海马体这件事吗？",
+            cwd=self.workspace,
+            registry_path=self.registry,
+            associations_path=associations,
+            semantic_gate_fn=fail_semantic_gate,
+            search_budget=0,
+        )
+
+        self.assertEqual(result["decision"], "scent")
+        self.assertIsNone(result["semantic_gate"])
+
     def test_associative_prompt_emits_scent_without_evidence(self) -> None:
         result = hook.assess_prompt(
             "hook 机制就像人类的触发式联想，我们可以把小海马体做得更主动一点",
@@ -307,6 +347,62 @@ class AmbientRecallHookTests(unittest.TestCase):
             " ".join(str(reason) for reason in result["reasons"]),
         )
         self.assertNotIn("ambient recall", result["query_terms"])
+
+    def test_cognitive_map_route_emits_scent_without_direct_registry_match(self) -> None:
+        cognitive_map_path = self.registry.parent / "cognitive_map.json"
+        cognitive_map_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "kind": "aippocampus_cognitive_map",
+                    "status": "active",
+                    "routes": [
+                        {
+                            "route_id": "cmr_test",
+                            "kind": "cognitive_map_route",
+                            "source": "deepseek_subconscious_jobs",
+                            "landmark_ids": ["lm_aippocampus"],
+                            "landmark_labels": ["AIppocampus", "外置海马体"],
+                            "region_ids": ["region_architecture"],
+                            "region_labels": ["memory architecture"],
+                            "route_cues": ["心理地图", "位置细胞", "网格细胞"],
+                            "query_terms": ["外置海马体", "触发式召回"],
+                            "thread_keys": ["session:test-old"],
+                            "confidence": 0.9,
+                            "source_refs": [{"thread_key": "session:test-old", "line": 356}],
+                        }
+                    ],
+                    "landmarks": [
+                        {
+                            "landmark_id": "lm_aippocampus",
+                            "label": "AIppocampus",
+                            "aliases": ["外置海马体", "认知地图"],
+                            "thread_keys": ["session:test-old"],
+                            "confidence": 0.9,
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        def fail_semantic_gate(*args, **kwargs) -> dict:
+            raise AssertionError("cognitive map route should avoid foreground semantic spend")
+
+        result = hook.assess_prompt(
+            "咱们继续心理地图和位置细胞这条升级",
+            cwd=self.workspace,
+            registry_path=self.registry,
+            cognitive_map_path=cognitive_map_path,
+            semantic_gate_fn=fail_semantic_gate,
+            search_budget=0,
+        )
+
+        self.assertEqual(result["decision"], "scent")
+        self.assertEqual(result["candidates"][0]["thread_key"], "session:test-old")
+        self.assertIn("外置海马体", result["query_terms"])
+        self.assertIn("cognitive map route", " ".join(result["reasons"]))
 
     def test_semantic_gate_alias_can_emit_scent_without_hardcoded_cue(self) -> None:
         registry_path = self.root / "semantic-registry" / "threads.json"

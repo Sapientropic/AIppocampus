@@ -14,10 +14,18 @@ import json
 import os
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-from aippocampuslib import compact_text, now_utc
+from aippocampuslib import (
+    cli_error_payload,
+    cli_error_payload_from_message,
+    cli_exit_code_for_error_code,
+    compact_text,
+    now_utc,
+    sanitize_external_model_payload,
+)
 from build_concept_graph import default_concept_graph_path
 from registry import registry_paths
 from subconscious_agent import (
@@ -51,8 +59,23 @@ from subconscious_worker import (
 
 PROMPT_VERSION = "aippocampus-subconscious-jobs-v0"
 DEFAULT_JOBS_OUTPUT_NAME = "subconscious_jobs.jsonl"
+DEFAULT_CONCURRENCY = int(os.environ.get("AIPPOCAMPUS_SUBCONSCIOUS_CONCURRENCY", "4"))
+DEFAULT_SAMPLES_PER_JOB = int(os.environ.get("AIPPOCAMPUS_SUBCONSCIOUS_SAMPLES_PER_JOB", "1"))
 
 JOB_SPECS: dict[str, dict[str, Any]] = {
+    "question_extraction": {
+        "purpose": "Extract genuine user questions plus explicit unresolved frontier markers from source-backed turns.",
+        "finding_kind": "question_candidate",
+        "finding_kinds": ["question_candidate", "frontier_marker"],
+        "must_include": ["title", "summary", "confidence", "source_refs", "question_text or frontier_type"],
+        "notes": (
+            "Use question_candidate for a real question the user was pursuing, not every interrogative sentence. "
+            "Use frontier_marker only when the source explicitly shows a stopping point, unresolved boundary, missing evidence, "
+            "scope boundary, or dissatisfaction. Include intent_orientation, what_features, where_context, phase_context, "
+            "and collaboration_context when available. Keep question_text short and normalized; do not paste a long "
+            "monologue into the question field. Use question_short as the stable label when the source wording is long."
+        ),
+    },
     "concept_edges": {
         "purpose": "Propose source-backed concept graph edges for ambient recall.",
         "finding_kind": "concept_edge",
@@ -70,6 +93,16 @@ JOB_SPECS: dict[str, dict[str, Any]] = {
         "finding_kind": "trigger_candidate",
         "must_include": ["title", "summary", "confidence", "source_refs"],
         "notes": "Avoid trivial utterances, Goal/system injection, and broad personalizing triggers.",
+    },
+    "cognitive_map": {
+        "purpose": "Propose source-backed mental-map landmarks, regions, and routes for ambient recall navigation.",
+        "finding_kind": "cognitive_map_route",
+        "must_include": ["title", "summary", "confidence", "source_refs", "landmarks", "regions", "route_cues", "target_thread_keys"],
+        "notes": (
+            "Think like a hippocampal cognitive map: landmarks are durable concepts, regions are decision/topic spaces, "
+            "route_cues are prompts that should navigate to those sources, and negative_cues describe contexts that should not trigger the route. "
+            "Do not invent facts; every target_thread_key must be backed by source_refs."
+        ),
     },
     "memory_dedup": {
         "purpose": "Identify duplicate or near-duplicate memory material across registered clean sources.",
@@ -110,6 +143,8 @@ def finding_fingerprint(finding: dict[str, Any]) -> str:
         normalize_for_fingerprint(str(finding.get("src") or "")),
         normalize_for_fingerprint(str(finding.get("dst") or "")),
         normalize_for_fingerprint(str(finding.get("edge_type") or "")),
+        normalize_for_fingerprint(str(finding.get("question_text") or "")),
+        normalize_for_fingerprint(str(finding.get("frontier_type") or "")),
     ]
     digest = hashlib.sha1("\n".join(parts).encode("utf-8")).hexdigest()[:20]
     return f"sf_{digest}"
@@ -136,8 +171,10 @@ def estimate_finding_quality(job: str, finding: dict[str, Any]) -> dict[str, Any
     evidence_strength = min(1.0, 0.35 + ref_count * 0.16 + thread_count * 0.10 + final_refs * 0.06)
     specificity = min(1.0, 0.25 + min(summary_len, 420) / 600 + min(len(finding.get("concepts") or []), 6) * 0.04)
     actionability = 0.35 + (0.28 if recommendation else 0.0)
-    if job in {"decision_evolution", "project_drift", "preference_candidates", "contradiction_scan"}:
+    if job in {"question_extraction", "decision_evolution", "project_drift", "preference_candidates", "contradiction_scan"}:
         actionability += 0.12
+    if job == "cognitive_map":
+        actionability += 0.10
     novelty = 0.58
     if job == "concept_edges":
         novelty += 0.08 if finding.get("src") and finding.get("dst") else -0.12
@@ -216,10 +253,27 @@ def jobs_initial_payload(job: str, objective: str, turns: list[dict[str, Any]], 
                     "src": "required for concept_edges only",
                     "dst": "required for concept_edges only",
                     "edge_type": "required for concept_edges only",
+                    "landmarks": "required for cognitive_map only; list of durable concepts/places",
+                    "regions": "required for cognitive_map only; list of topic/decision spaces",
+                    "route_cues": "required for cognitive_map only; prompts or semantic cues that should navigate here",
+                    "negative_cues": "optional for cognitive_map; contexts that should not trigger this route",
+                    "target_thread_keys": "required for cognitive_map only; must be backed by source_refs",
+                    "route_kind": "optional for cognitive_map: association|preplay|detour|blocked_route",
+                    "question_text": "required for question_candidate only; exact or lightly normalized user question",
+                    "question_short": "optional for question_candidate; stable short label",
+                    "intent_orientation": "optional for question_candidate; angle of approach such as debugging, architecture, philosophy, writing",
+                    "what_features": "optional for question_candidate; content features independent of where it appeared",
+                    "where_context": "optional for question_candidate; thread/project/source context",
+                    "phase_context": "optional for question_candidate; work stage such as new-project start, post-compaction, pre-closeout",
+                    "collaboration_context": "optional for question_candidate; agent/profile/collaborator context when source-backed",
+                    "frontier_type": "required for frontier_marker only: unresolved|blocked|deferred|unsatisfied|needs_external_evidence|scope_boundary",
+                    "boundary_reason": "required for frontier_marker only; why this is a stopping point, not merely a question",
+                    "linked_question_short": "optional for frontier_marker; short label of related question",
                 }
             ],
         },
     }
+    payload = sanitize_external_model_payload(payload)
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
@@ -255,6 +309,129 @@ def refs_for_finding(finding: dict[str, Any], source_bank: dict[str, dict[str, A
             }
         )
     return refs[:5]
+
+
+def response_content(response: dict[str, Any]) -> str:
+    choices = response.get("choices") or []
+    if not choices:
+        return ""
+    return str(((choices[0].get("message") or {}).get("content") or "").strip())
+
+
+def parse_action_for_job(response: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return parse_action(response)
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        return {
+            "action": "parse_error",
+            "error": compact_text(f"{type(exc).__name__}: {exc}", 260),
+            "raw_preview": compact_text(response_content(response), 1000),
+        }
+
+
+def compact_string_list(values: Any, *, limit: int = 12, chars: int = 90) -> list[str]:
+    if isinstance(values, str):
+        source = [values]
+    elif isinstance(values, list):
+        source = values
+    else:
+        source = []
+    out: list[str] = []
+    for value in source:
+        text = compact_text(str(value or "").strip(), chars)
+        if text:
+            out.append(text)
+    return list(dict.fromkeys(out))[:limit]
+
+
+def validate_cognitive_map_fields(item: dict[str, Any], refs: list[dict[str, Any]]) -> dict[str, Any] | None:
+    landmarks = compact_string_list(item.get("landmarks") or item.get("concepts"), limit=10)
+    regions = compact_string_list(item.get("regions"), limit=8)
+    route_cues = compact_string_list(item.get("route_cues") or item.get("aliases"), limit=16)
+    if not landmarks or not route_cues:
+        return None
+    ref_threads = list(dict.fromkeys(str(ref.get("thread_key") or "") for ref in refs if ref.get("thread_key")))
+    requested = compact_string_list(item.get("target_thread_keys"), limit=16)
+    target_thread_keys = [key for key in requested if key in ref_threads] or ref_threads
+    if not target_thread_keys:
+        return None
+    route_kind = str(item.get("route_kind") or "association").strip() or "association"
+    if route_kind not in {"association", "preplay", "detour", "blocked_route"}:
+        route_kind = "association"
+    return {
+        "landmarks": landmarks,
+        "regions": regions,
+        "route_cues": route_cues,
+        "negative_cues": compact_string_list(item.get("negative_cues"), limit=10),
+        "target_thread_keys": target_thread_keys,
+        "route_kind": route_kind,
+    }
+
+
+ALLOWED_QUESTION_FINDING_KINDS = {"question_candidate", "frontier_marker"}
+ALLOWED_FRONTIER_TYPES = {
+    "unresolved",
+    "blocked",
+    "deferred",
+    "unsatisfied",
+    "needs_external_evidence",
+    "scope_boundary",
+}
+QUESTION_TEXT_MAX_CHARS = 140
+
+
+def short_question_fallback(item: dict[str, Any]) -> str:
+    for key in ("question_short", "title"):
+        value = compact_text(str(item.get(key) or ""), QUESTION_TEXT_MAX_CHARS)
+        if value:
+            return value
+    return ""
+
+
+def validate_question_fields(item: dict[str, Any]) -> dict[str, Any] | None:
+    kind = str(item.get("kind") or "").strip()
+    if kind not in ALLOWED_QUESTION_FINDING_KINDS:
+        kind = "question_candidate"
+    if kind == "question_candidate":
+        raw_question_text = str(item.get("question_text") or item.get("question") or "").strip()
+        question_text = compact_text(raw_question_text, QUESTION_TEXT_MAX_CHARS)
+        question_text_compressed = False
+        if len(raw_question_text) > QUESTION_TEXT_MAX_CHARS:
+            fallback = short_question_fallback(item)
+            if not fallback:
+                return None
+            question_text = fallback
+            question_text_compressed = True
+        if not question_text:
+            return None
+        return {
+            "kind": kind,
+            "question_text": question_text,
+            "question_text_compressed": question_text_compressed,
+            "question_short": compact_text(str(item.get("question_short") or item.get("title") or ""), 90),
+            "intent_orientation": compact_text(str(item.get("intent_orientation") or ""), 80),
+            "what_features": compact_string_list(item.get("what_features") or item.get("concepts"), limit=10),
+            "where_context": compact_string_list(item.get("where_context"), limit=8),
+            "phase_context": compact_text(str(item.get("phase_context") or ""), 80),
+            "collaboration_context": compact_string_list(item.get("collaboration_context"), limit=8),
+        }
+
+    frontier_type = str(item.get("frontier_type") or "unresolved").strip()
+    if frontier_type not in ALLOWED_FRONTIER_TYPES:
+        frontier_type = "unresolved"
+    boundary_reason = compact_text(str(item.get("boundary_reason") or item.get("summary") or ""), 260)
+    if not boundary_reason:
+        return None
+    return {
+        "kind": kind,
+        "frontier_type": frontier_type,
+        "boundary_reason": boundary_reason,
+        "linked_question_short": compact_text(str(item.get("linked_question_short") or item.get("question_short") or ""), 90),
+        "intent_orientation": compact_text(str(item.get("intent_orientation") or ""), 80),
+        "where_context": compact_string_list(item.get("where_context"), limit=8),
+        "phase_context": compact_text(str(item.get("phase_context") or ""), 80),
+        "collaboration_context": compact_string_list(item.get("collaboration_context"), limit=8),
+    }
 
 
 def validate_findings(job: str, parsed: dict[str, Any], source_bank: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
@@ -293,9 +470,23 @@ def validate_findings(job: str, parsed: dict[str, Any], source_bank: dict[str, d
                     "why": compact_text(str(item.get("why") or item.get("summary") or ""), 220),
                 }
             )
+        if job == "question_extraction":
+            question_fields = validate_question_fields(item)
+            if not question_fields:
+                continue
+            finding.update(question_fields)
+        if job == "cognitive_map":
+            route_fields = validate_cognitive_map_fields(item, refs)
+            if not route_fields:
+                continue
+            finding.update(route_fields)
         if not finding["title"]:
             if job == "concept_edges":
                 finding["title"] = f"{finding.get('src')} -> {finding.get('dst')}"
+            elif job == "question_extraction" and finding.get("question_short"):
+                finding["title"] = finding["question_short"]
+            elif job == "cognitive_map":
+                finding["title"] = " -> ".join(finding.get("landmarks") or [])[:120]
             else:
                 finding["title"] = compact_text(finding["summary"], 120)
         if not finding["summary"] and job != "concept_edges":
@@ -367,18 +558,29 @@ def run_one_job(
     chat_fn: ChatFn = call_chat_json,
     dry_run: bool = False,
     no_write: bool = False,
+    defer_writes: bool = False,
+    sample_index: int = 1,
+    sample_count: int = 1,
 ) -> dict[str, Any]:
     timeline = load_json(timeline_path)
     turns = select_timeline_turns(timeline, project=project, max_turns=max_turns)
     state = AgentState(source_bank=source_bank_from_turns(turns))
     step_budget = effective_step_budget(max_steps)
-    batch_id = f"subconscious-job-{job}-{int(time.time())}"
-    initial_payload = jobs_initial_payload(job, objective, turns, step_budget, min_tool_steps)
+    batch_id = f"subconscious-job-{job}-{time.time_ns()}-{os.getpid()}-{sample_index}"
+    sample_objective = objective
+    if sample_count > 1:
+        sample_objective = (
+            f"{objective}\n\nDiversity sample {sample_index}/{sample_count}: "
+            "use a distinct angle, search path, or cue framing while staying source-backed."
+        ).strip()
+    initial_payload = jobs_initial_payload(job, sample_objective, turns, step_budget, min_tool_steps)
     if dry_run:
         return {
             "ok": True,
             "dry_run": True,
             "job": job,
+            "sample_index": sample_index,
+            "sample_count": sample_count,
             "turn_count": len(turns),
             "effective_step_budget": step_budget,
             "prompt_preview": compact_text(initial_payload, 2600),
@@ -400,10 +602,29 @@ def run_one_job(
     findings: list[dict[str, Any]] = []
     tool_count = 0
     for step in range(step_budget):
-        response = chat_fn(messages, api_key, model, base_url, max_tokens, timeout, temperature)
+        response = chat_fn(sanitize_external_model_payload(messages), api_key, model, base_url, max_tokens, timeout, temperature)
         add_usage(usage_total, compact_usage(response.get("usage") or {}))
-        action = parse_action(response)
+        action = parse_action_for_job(response)
         transcript.append({"step": step + 1, "action": action})
+        if action.get("action") == "parse_error":
+            if step + 1 < step_budget:
+                messages.append({"role": "assistant", "content": action.get("raw_preview") or ""})
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": json.dumps(
+                            {
+                                "error": "Previous response was not valid JSON.",
+                                "details": action.get("error"),
+                                "instruction": "Return exactly one JSON object with action=tool or action=final. Do not wrap it in Markdown.",
+                                "available_refs": list(state.source_bank.keys())[:32],
+                            },
+                            ensure_ascii=False,
+                        ),
+                    }
+                )
+                continue
+            break
         if action.get("action") == "final":
             final_attempts.append(action)
             if tool_count < max(0, int(min_tool_steps)) and step + 1 < step_budget:
@@ -473,17 +694,17 @@ def run_one_job(
                 ),
             }
         ]
-        response = chat_fn(repair_messages, api_key, model, base_url, max_tokens, timeout, temperature)
+        response = chat_fn(sanitize_external_model_payload(repair_messages), api_key, model, base_url, max_tokens, timeout, temperature)
         add_usage(usage_total, compact_usage(response.get("usage") or {}))
-        repair_action = parse_action(response)
+        repair_action = parse_action_for_job(response)
         final_attempts.append(repair_action)
         if repair_action.get("action") == "final":
             findings = validate_findings(job, repair_action, state.source_bank)
 
+    edges = concept_findings_to_edges(findings)
     edge_count = 0
-    if not no_write:
+    if not no_write and not defer_writes:
         append_job_findings(jobs_output_path, findings, model=model, batch_id=batch_id, usage=usage_total)
-        edges = concept_findings_to_edges(findings)
         if edges:
             append_staging_edges(
                 edges_output_path,
@@ -499,17 +720,20 @@ def run_one_job(
         "ok": True,
         "dry_run": False,
         "job": job,
+        "sample_index": sample_index,
+        "sample_count": sample_count,
         "model": model,
         "turn_count": len(turns),
         "finding_count": len(findings),
-        "edge_count": edge_count if not no_write else len(concept_findings_to_edges(findings)),
+        "edge_count": edge_count if (not no_write and not defer_writes) else len(edges),
         "findings": findings,
         "tool_steps": [item for item in transcript if (item.get("action") or {}).get("action") == "tool"],
         "final_attempts": final_attempts,
         "usage": usage_total,
         "jobs_output": str(jobs_output_path),
         "edges_output": str(edges_output_path),
-        "wrote": False if no_write else True,
+        "wrote": False if no_write or defer_writes else True,
+        "deferred_write": bool(defer_writes and not no_write),
         "batch_id": batch_id,
         "effective_step_budget": step_budget,
         "temperature": temperature,
@@ -537,11 +761,44 @@ def run_jobs(
     temperature: float,
     dry_run: bool = False,
     no_write: bool = False,
+    concurrency: int = DEFAULT_CONCURRENCY,
+    samples_per_job: int = DEFAULT_SAMPLES_PER_JOB,
+    chat_fn: ChatFn = call_chat_json,
 ) -> dict[str, Any]:
-    results = []
+    results: list[dict[str, Any]] = []
     usage_total: dict[str, Any] = {}
-    for job in jobs:
-        result = run_one_job(
+    task_specs = [
+        (task_index, job, sample_index)
+        for task_index, (job, sample_index) in enumerate(
+            (job, sample_index)
+            for job in jobs
+            for sample_index in range(1, max(1, int(samples_per_job)) + 1)
+        )
+    ]
+
+    def failed_result(job: str, sample_index: int, exc: BaseException) -> dict[str, Any]:
+        return {
+            "ok": False,
+            "dry_run": False,
+            "job": job,
+            "sample_index": sample_index,
+            "sample_count": max(1, int(samples_per_job)),
+            "model": model,
+            "finding_count": 0,
+            "edge_count": 0,
+            "findings": [],
+            "tool_steps": [],
+            "final_attempts": [],
+            "usage": {},
+            "jobs_output": str(jobs_output_path),
+            "edges_output": str(edges_output_path),
+            "wrote": False,
+            "deferred_write": False,
+            "error": compact_text(f"{type(exc).__name__}: {exc}", 500),
+        }
+
+    def run_task(job: str, sample_index: int) -> dict[str, Any]:
+        return run_one_job(
             job=job,
             registry_path=registry_path,
             timeline_path=timeline_path,
@@ -559,21 +816,84 @@ def run_jobs(
             max_tokens=max_tokens,
             timeout=timeout,
             temperature=temperature,
+            chat_fn=chat_fn,
             dry_run=dry_run,
             no_write=no_write,
+            defer_writes=not no_write,
+            sample_index=sample_index,
+            sample_count=max(1, int(samples_per_job)),
         )
-        results.append(result)
+
+    max_workers = max(1, min(int(concurrency or 1), len(task_specs) or 1))
+    indexed_results: list[tuple[int, dict[str, Any]]] = []
+    if max_workers == 1:
+        for task_index, job, sample_index in task_specs:
+            try:
+                indexed_results.append((task_index, run_task(job, sample_index)))
+            except Exception as exc:
+                indexed_results.append((task_index, failed_result(job, sample_index, exc)))
+    else:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(run_task, job, sample_index): (task_index, job, sample_index)
+                for task_index, job, sample_index in task_specs
+            }
+            for future in as_completed(futures):
+                task_index, job, sample_index = futures[future]
+                try:
+                    indexed_results.append((task_index, future.result()))
+                except Exception as exc:
+                    indexed_results.append((task_index, failed_result(job, sample_index, exc)))
+    indexed_results.sort(key=lambda item: item[0])
+    results = [result for _, result in indexed_results]
+
+    if not no_write and not dry_run:
+        # DeepSeek calls can run concurrently, but staging files are append-only
+        # shared artifacts. Serialize writes here so multi-sample runs do not
+        # interleave JSONL rows or edge batches under parallel workers.
+        for result in results:
+            if result.get("ok") is False:
+                continue
+            append_job_findings(
+                jobs_output_path,
+                result.get("findings") or [],
+                model=model,
+                batch_id=str(result.get("batch_id") or ""),
+                usage=result.get("usage") or {},
+            )
+            edges = concept_findings_to_edges(result.get("findings") or [])
+            if edges:
+                append_staging_edges(
+                    edges_output_path,
+                    edges,
+                    model=model,
+                    batch_id=str(result.get("batch_id") or ""),
+                    usage=result.get("usage") or {},
+                    prompt_version=PROMPT_VERSION,
+                    source="deepseek_subconscious_jobs",
+                )
+            result["wrote"] = True
+            result["deferred_write"] = False
+    for result in results:
         add_usage(usage_total, result.get("usage") or {})
+    successful_count = sum(1 for result in results if result.get("ok") is not False)
+    failure_count = sum(1 for result in results if result.get("ok") is False)
     return {
-        "ok": True,
+        "ok": successful_count > 0 or not task_specs,
         "jobs": results,
         "job_count": len(results),
+        "successful_job_count": successful_count,
+        "failure_count": failure_count,
+        "partial_failure": failure_count > 0 and successful_count > 0,
+        "requested_job_count": len(jobs),
+        "samples_per_job": max(1, int(samples_per_job)),
+        "concurrency": max_workers,
         "finding_count": sum(int(result.get("finding_count") or 0) for result in results),
         "edge_count": sum(int(result.get("edge_count") or 0) for result in results),
         "usage": usage_total,
         "jobs_output": str(jobs_output_path),
         "edges_output": str(edges_output_path),
-        "wrote": False if no_write else True,
+        "wrote": False if no_write or dry_run else successful_count > 0,
     }
 
 
@@ -597,6 +917,8 @@ def main() -> int:
     parser.add_argument("--max-tokens", type=int, default=None)
     parser.add_argument("--timeout", type=int, default=120)
     parser.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE)
+    parser.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY)
+    parser.add_argument("--samples-per-job", type=int, default=DEFAULT_SAMPLES_PER_JOB)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--no-write", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
@@ -607,27 +929,40 @@ def main() -> int:
     concept_graph_path = Path(args.concept_graph).resolve() if args.concept_graph else default_concept_graph_path(registry_path=registry_path)
     jobs_output_path = Path(args.jobs_output).resolve() if args.jobs_output else default_jobs_output_path(registry_path=registry_path)
     edges_output_path = Path(args.edges_output).resolve() if args.edges_output else default_staging_path(registry_path=registry_path)
-    result = run_jobs(
-        jobs=job_names(args.job),
-        registry_path=registry_path,
-        timeline_path=timeline_path,
-        concept_graph_path=concept_graph_path,
-        jobs_output_path=jobs_output_path,
-        edges_output_path=edges_output_path,
-        project=args.project,
-        objective=args.objective,
-        max_turns=args.max_turns,
-        max_steps=args.max_steps,
-        min_tool_steps=args.min_tool_steps,
-        model=args.model,
-        base_url=args.base_url,
-        api_key=os.environ.get(args.api_key_env),
-        max_tokens=args.max_tokens,
-        timeout=args.timeout,
-        temperature=args.temperature,
-        dry_run=args.dry_run,
-        no_write=args.no_write,
-    )
+    try:
+        result = run_jobs(
+            jobs=job_names(args.job),
+            registry_path=registry_path,
+            timeline_path=timeline_path,
+            concept_graph_path=concept_graph_path,
+            jobs_output_path=jobs_output_path,
+            edges_output_path=edges_output_path,
+            project=args.project,
+            objective=args.objective,
+            max_turns=args.max_turns,
+            max_steps=args.max_steps,
+            min_tool_steps=args.min_tool_steps,
+            model=args.model,
+            base_url=args.base_url,
+            api_key=os.environ.get(args.api_key_env),
+            max_tokens=args.max_tokens,
+            timeout=args.timeout,
+            temperature=args.temperature,
+            concurrency=args.concurrency,
+            samples_per_job=args.samples_per_job,
+            dry_run=args.dry_run,
+            no_write=args.no_write,
+        )
+    except Exception as exc:
+        if not args.json_output:
+            raise
+        result = cli_error_payload(exc)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return cli_exit_code_for_error_code(result["error"]["code"])
+    if not result.get("ok") and not result.get("error"):
+        first_error = next((str(item.get("error") or "") for item in result.get("jobs") or [] if item.get("error")), "")
+        if first_error:
+            result["error"] = cli_error_payload_from_message(first_error)["error"]
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
@@ -635,7 +970,9 @@ def main() -> int:
         print(f"findings: {result['finding_count']}")
         print(f"concept edges: {result['edge_count']}")
         print(f"jobs output: {result['jobs_output']}")
-    return 0
+    if result.get("ok"):
+        return 0
+    return cli_exit_code_for_error_code(str((result.get("error") or {}).get("code") or "runtime_error"))
 
 
 if __name__ == "__main__":

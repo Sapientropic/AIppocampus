@@ -9,7 +9,7 @@ import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 
 def now_utc() -> str:
@@ -21,6 +21,23 @@ def codex_home() -> Path:
     if env:
         return Path(env)
     return Path.home() / ".codex"
+
+
+def safe_path_name(value: str, fallback: str = "item") -> str:
+    value = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "-", str(value)).strip()
+    value = re.sub(r"\s+", "-", value)
+    value = value.rstrip(".- ")
+    return value[:120] or fallback
+
+
+def aippocampus_registry_dir(home: Path | None = None) -> Path:
+    env = os.environ.get("AIPPOCAMPUS_REGISTRY_DIR")
+    if env:
+        return Path(env)
+    legacy_env = os.environ.get("THREAD_MEMORY_REGISTRY_DIR")
+    if legacy_env:
+        return Path(legacy_env)
+    return (home or codex_home()) / "aippocampus-registry"
 
 
 def norm_path(path: str | Path) -> str:
@@ -84,6 +101,84 @@ def locate_rollout(cwd: str | Path, home: Path | None = None, latest: bool = Fal
     if latest and latest_seen:
         return latest_seen[1]
     raise FileNotFoundError(f"no rollout found for cwd: {cwd}")
+
+
+def thread_key_from_rollout(rollout: str | Path, meta: dict | None = None) -> str:
+    rollout_path = Path(rollout)
+    session_meta = meta if meta is not None else public_session_meta(read_session_meta(rollout_path))
+    session_id = (session_meta or {}).get("id")
+    if session_id:
+        return f"session:{session_id}"
+    digest = hashlib.sha1(str(rollout_path.resolve()).casefold().encode("utf-8")).hexdigest()[:16]
+    return f"rollout:{digest}"
+
+
+def workspace_thread_key(cwd: str | Path) -> str:
+    cwd_path = Path(cwd).resolve()
+    digest = hashlib.sha1(str(cwd_path).casefold().encode("utf-8")).hexdigest()[:12]
+    return f"workspace:{safe_path_name(cwd_path.name, 'workspace')}:{digest}"
+
+
+def default_thread_store_dir(
+    cwd: str | Path,
+    rollout: str | Path | None = None,
+    *,
+    home: Path | None = None,
+    registry_dir: Path | None = None,
+) -> Path:
+    """Return the machine-wide artifact store for a thread.
+
+    AIppocampus is a cross-project continuity layer, so generated recall
+    artifacts should not default to the active repository. A workspace-local
+    `.aippocampus` path is still valid when explicitly requested, but the
+    implicit default is the registry thread store under CODEX_HOME.
+    """
+
+    cwd_path = Path(cwd).resolve()
+    rollout_path: Path | None = Path(rollout) if rollout else None
+    if rollout_path is None:
+        try:
+            rollout_path = locate_rollout(cwd_path, home or codex_home())
+        except Exception:
+            rollout_path = None
+    thread_key = thread_key_from_rollout(rollout_path) if rollout_path else workspace_thread_key(cwd_path)
+    root = (registry_dir or aippocampus_registry_dir(home)).resolve()
+    return root / "threads" / safe_path_name(thread_key, "thread")
+
+
+def default_thread_index_dir(cwd: str | Path, rollout: str | Path | None = None) -> Path:
+    return default_thread_store_dir(cwd, rollout) / "index"
+
+
+def default_thread_clean_source_dir(cwd: str | Path, rollout: str | Path | None = None) -> Path:
+    return default_thread_store_dir(cwd, rollout) / "clean-source"
+
+
+def default_thread_segments_dir(cwd: str | Path, rollout: str | Path | None = None) -> Path:
+    return default_thread_index_dir(cwd, rollout) / "segments"
+
+
+def default_thread_graphify_corpus_dir(cwd: str | Path, rollout: str | Path | None = None) -> Path:
+    return default_thread_index_dir(cwd, rollout) / "graphify-corpus"
+
+
+def default_thread_checkpoint_state_path(cwd: str | Path, rollout: str | Path | None = None) -> Path:
+    return default_thread_index_dir(cwd, rollout) / "checkpoint_state.json"
+
+
+def default_thread_retention_dir(cwd: str | Path, rollout: str | Path | None = None) -> Path:
+    return default_thread_index_dir(cwd, rollout) / "retention"
+
+
+def default_thread_cold_archive_dir(cwd: str | Path, rollout: str | Path | None = None) -> Path:
+    return default_thread_index_dir(cwd, rollout) / "cold-archives"
+
+
+def resolve_artifact_path(value: str | Path | None, cwd: str | Path, default_path: Path) -> Path:
+    if value is None:
+        return default_path
+    path = Path(value)
+    return path if path.is_absolute() else Path(cwd).resolve() / path
 
 
 def iter_jsonl(path: Path) -> Iterable[tuple[int, dict]]:
@@ -160,6 +255,38 @@ def empty_turn(turn_index: int, line_no: int, timestamp: str | None) -> dict:
     }
 
 
+INJECTED_INSTRUCTION_PREFIXES = (
+    "# AGENTS.md instructions",
+    "<skill>",
+    "<permissions instructions>",
+    "<environment_context>",
+    "<collaboration_mode>",
+    "<skills_instructions>",
+    "<plugins_instructions>",
+    "<app-context>",
+    "WECHAT SESSION INSTRUCTIONS",
+    "WECHAT THREAD CONTINUITY REFRESH",
+    "WECHAT SESSION INSTRUCTIONS REFRESH",
+)
+
+
+def is_injected_instruction_text(text: str) -> bool:
+    """Return True for known runtime carrier blocks, not topical user prose.
+
+    Full-machine onboarding makes any repeated carrier text show up hundreds of
+    times. If these blocks enter clean source or registry search as normal user
+    messages, they outrank the real project evidence. Keep this structural and
+    prefix-based; do not turn it into a user-facing topic filter.
+    """
+
+    stripped = str(text or "").lstrip()
+    if any(stripped.startswith(prefix) for prefix in INJECTED_INSTRUCTION_PREFIXES):
+        return True
+    if re.match(r"^<developer(?:\s|>)", stripped, flags=re.IGNORECASE):
+        return True
+    return False
+
+
 def normalize_rollout(rollout: Path, include_tools: bool = False) -> tuple[list[dict], list[dict]]:
     """Return deduped visible messages plus turn summaries.
 
@@ -190,7 +317,7 @@ def normalize_rollout(rollout: Path, include_tools: bool = False) -> tuple[list[
         if not msg or not msg.get("text"):
             continue
         text = msg["text"].lstrip()
-        if msg["role"] == "user" and text.startswith("# AGENTS.md instructions"):
+        if msg["role"] == "user" and is_injected_instruction_text(text):
             continue
 
         phase = str(msg.get("phase") or "")
@@ -243,6 +370,162 @@ def compact_text(text: str, max_chars: int) -> str:
         return text
     half = max_chars // 2
     return text[:half].rstrip() + " ... " + text[-half:].lstrip()
+
+
+KEY_BLOCK_BOUNDARY = "-----"
+GENERIC_PRIVATE_KEY_BLOCK = (
+    rf"{KEY_BLOCK_BOUNDARY}BEGIN [A-Z ]*PRIVATE KEY{KEY_BLOCK_BOUNDARY}"
+    rf".*?"
+    rf"{KEY_BLOCK_BOUNDARY}END [A-Z ]*PRIVATE KEY{KEY_BLOCK_BOUNDARY}"
+)
+OPENSSH_PRIVATE_KEY_BLOCK = (
+    rf"{KEY_BLOCK_BOUNDARY}BEGIN OPENSSH PRIVATE KEY{KEY_BLOCK_BOUNDARY}"
+    rf".*?"
+    rf"{KEY_BLOCK_BOUNDARY}END OPENSSH PRIVATE KEY{KEY_BLOCK_BOUNDARY}"
+)
+
+EXTERNAL_MODEL_HARD_SECRET_PATTERNS = [
+    re.compile(pattern, re.IGNORECASE | re.DOTALL)
+    for pattern in [
+        GENERIC_PRIVATE_KEY_BLOCK,
+        OPENSSH_PRIVATE_KEY_BLOCK,
+    ]
+]
+
+EXTERNAL_MODEL_REDACTION_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
+    (
+        "openai_api_key",
+        re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b", re.IGNORECASE),
+        "<redacted:api-key>",
+    ),
+    (
+        "bearer_token",
+        re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]{20,}", re.IGNORECASE),
+        "Bearer <redacted:bearer-token>",
+    ),
+    (
+        "credential_url",
+        re.compile(r"\b([A-Za-z][A-Za-z0-9+.-]*://)[^@\s:/]+:[^@\s]+@"),
+        r"\1<redacted:credentials>@",
+    ),
+    (
+        "secret_assignment",
+        re.compile(
+            r"\b(api[_-]?key|secret|token|password|passwd|cookie|authorization)\b\s*[:=]\s*"
+            r"(\"[^\"]*\"|'[^']*'|(?!(?:<redacted:))[^\s,;&]+)",
+            re.IGNORECASE,
+        ),
+        r"\1=<redacted:secret>",
+    ),
+    (
+        "json_escaped_windows_local_path",
+        re.compile(r"(?<![\w])(?:[A-Za-z]:\\\\[^\"'\s<>]+)"),
+        "<redacted:local-path>",
+    ),
+    (
+        "windows_local_path",
+        re.compile(r"(?<![\w])(?:[A-Za-z]:\\(?:[^\\/:*?\"<>|\r\n\t ]+\\?)+[^\\/:*?\"<>|\r\n\t ]*)"),
+        "<redacted:local-path>",
+    ),
+    (
+        "posix_local_path",
+        re.compile(r"(?<![\w:/])/(?:Users|home|root|tmp|var|mnt|Volumes|private)/(?:[^\s\"'<>]+)"),
+        "<redacted:local-path>",
+    ),
+]
+
+
+def sanitize_external_model_text(text: str) -> tuple[str, dict[str, Any]]:
+    """Redact likely secrets before automatic external-model calls.
+
+    Clean source can include pasted credentials or machine-local paths. This
+    helper is intentionally shared by all DeepSeek-compatible routes so new
+    workers do not accidentally bypass the prompt-hook privacy boundary.
+    """
+
+    original = str(text or "")
+    hard_matches = [pattern.pattern for pattern in EXTERNAL_MODEL_HARD_SECRET_PATTERNS if pattern.search(original)]
+    if hard_matches:
+        return "", {
+            "redacted": True,
+            "redaction_count": 0,
+            "redaction_types": ["private_key_block"],
+            "hard_block": True,
+            "reason": "private key block detected",
+        }
+
+    sanitized = original
+    redaction_types: list[str] = []
+    redaction_count = 0
+    for label, pattern, replacement in EXTERNAL_MODEL_REDACTION_PATTERNS:
+        sanitized, count = pattern.subn(replacement, sanitized)
+        if count:
+            redaction_types.append(label)
+            redaction_count += count
+
+    remaining = re.sub(r"<redacted:[^>]+>", " ", sanitized)
+    remaining = re.sub(r"\s+", " ", remaining).strip()
+    hard_block = bool(redaction_count and len(remaining) < 12)
+    return sanitized, {
+        "redacted": bool(redaction_count),
+        "redaction_count": redaction_count,
+        "redaction_types": list(dict.fromkeys(redaction_types))[:8],
+        "hard_block": hard_block,
+        "reason": "prompt mostly secret/credential material after redaction" if hard_block else "",
+    }
+
+
+def sanitize_external_model_payload(value: Any) -> Any:
+    if isinstance(value, str):
+        sanitized, _ = sanitize_external_model_text(value)
+        return sanitized
+    if isinstance(value, list):
+        return [sanitize_external_model_payload(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(sanitize_external_model_payload(item) for item in value)
+    if isinstance(value, dict):
+        return {key: sanitize_external_model_payload(item) for key, item in value.items()}
+    return value
+
+
+def cli_error_code_from_message(message: str) -> str:
+    low = str(message or "").casefold()
+    if "missing deepseek api key" in low or "missing api key" in low:
+        return "missing_api_key"
+    if "no such file" in low or "cannot find the file" in low or "filenotfounderror" in low:
+        return "missing_file"
+    if "jsondecodeerror" in low or "invalid json" in low:
+        return "invalid_json"
+    return "runtime_error"
+
+
+def cli_exit_code_for_error_code(code: str) -> int:
+    return 2 if code in {"missing_api_key", "missing_file", "invalid_json"} else 1
+
+
+def cli_error_payload(exc: BaseException) -> dict[str, Any]:
+    message = compact_text(f"{type(exc).__name__}: {exc}", 800)
+    code = cli_error_code_from_message(message)
+    return {
+        "ok": False,
+        "error": {
+            "code": code,
+            "message": message,
+        },
+        "data": None,
+    }
+
+
+def cli_error_payload_from_message(message: str) -> dict[str, Any]:
+    clean_message = compact_text(str(message or ""), 800)
+    return {
+        "ok": False,
+        "error": {
+            "code": cli_error_code_from_message(clean_message),
+            "message": clean_message,
+        },
+        "data": None,
+    }
 
 
 def file_sha256(path: Path, chunk_size: int = 1024 * 1024) -> str:

@@ -11,7 +11,13 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from aippocampuslib import compact_text, now_utc
+from aippocampuslib import (
+    cli_error_payload,
+    cli_exit_code_for_error_code,
+    compact_text,
+    now_utc,
+    sanitize_external_model_payload,
+)
 from registry import registry_paths, unique_preserve
 from retrieval import split_query_terms
 from subconscious_agent import (
@@ -127,7 +133,7 @@ def deterministic_duplicate_groups(findings: list[dict[str, Any]]) -> list[dict[
 
 
 def compact_review_payload(findings: list[dict[str, Any]], duplicate_groups: list[dict[str, Any]], focus: str = "") -> dict[str, Any]:
-    return {
+    payload = {
         "prompt_version": PROMPT_VERSION,
         "source_prompt_version": JOBS_PROMPT_VERSION,
         "task": "review_subconscious_findings_for_promotion",
@@ -162,6 +168,7 @@ def compact_review_payload(findings: list[dict[str, Any]], duplicate_groups: lis
         ],
         "deterministic_duplicate_groups": duplicate_groups[:20],
     }
+    return sanitize_external_model_payload(payload)
 
 
 def validate_review(parsed: dict[str, Any], findings_by_id: dict[str, dict[str, Any]]) -> dict[str, Any]:
@@ -390,20 +397,27 @@ def main() -> int:
     registry_path = Path(args.registry).resolve() if args.registry else registry_paths(Path(args.registry_dir).resolve() if args.registry_dir else None)[0]
     jobs_path = Path(args.jobs_input).resolve() if args.jobs_input else default_jobs_output_path(registry_path=registry_path)
     output_path = Path(args.output).resolve() if args.output else default_review_output_path(registry_path=registry_path)
-    result = run_review(
-        jobs_path=jobs_path,
-        output_path=output_path,
-        max_findings=args.max_findings,
-        jobs=args.job,
-        focus=args.focus,
-        model=args.model,
-        base_url=args.base_url,
-        api_key=os.environ.get(args.api_key_env),
-        max_tokens=args.max_tokens,
-        timeout=args.timeout,
-        temperature=args.temperature,
-        no_write=args.no_write,
-    )
+    try:
+        result = run_review(
+            jobs_path=jobs_path,
+            output_path=output_path,
+            max_findings=args.max_findings,
+            jobs=args.job,
+            focus=args.focus,
+            model=args.model,
+            base_url=args.base_url,
+            api_key=os.environ.get(args.api_key_env),
+            max_tokens=args.max_tokens,
+            timeout=args.timeout,
+            temperature=args.temperature,
+            no_write=args.no_write,
+        )
+    except Exception as exc:
+        if not args.json_output:
+            raise
+        result = cli_error_payload(exc)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return cli_exit_code_for_error_code(result["error"]["code"])
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:

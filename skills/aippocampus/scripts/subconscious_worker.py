@@ -20,7 +20,13 @@ from typing import Any
 
 from build_concept_graph import concept_is_noise
 from registry import registry_paths, unique_preserve
-from aippocampuslib import compact_text, now_utc
+from aippocampuslib import (
+    cli_error_payload,
+    cli_exit_code_for_error_code,
+    compact_text,
+    now_utc,
+    sanitize_external_model_payload,
+)
 
 
 PROMPT_VERSION = "aippocampus-subconscious-v0"
@@ -139,6 +145,7 @@ def user_prompt_for_turns(turns: list[dict[str, Any]]) -> str:
         "task": "propose_source_backed_concept_edges",
         "turns": turns,
     }
+    payload = sanitize_external_model_payload(payload)
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
@@ -372,19 +379,26 @@ def main() -> int:
     registry_path = Path(args.registry).resolve() if args.registry else registry_paths(Path(args.registry_dir).resolve() if args.registry_dir else None)[0]
     timeline_path = Path(args.timeline).resolve() if args.timeline else default_project_timeline_path(registry_path=registry_path)
     output_path = Path(args.output).resolve() if args.output else default_staging_path(registry_path=registry_path)
-    result = run_worker(
-        timeline_path=timeline_path,
-        output_path=output_path,
-        project=args.project,
-        max_turns=args.max_turns,
-        model=args.model,
-        base_url=args.base_url,
-        api_key=os.environ.get(args.api_key_env),
-        max_tokens=args.max_tokens,
-        timeout=args.timeout,
-        dry_run=args.dry_run,
-        no_write=args.no_write,
-    )
+    try:
+        result = run_worker(
+            timeline_path=timeline_path,
+            output_path=output_path,
+            project=args.project,
+            max_turns=args.max_turns,
+            model=args.model,
+            base_url=args.base_url,
+            api_key=os.environ.get(args.api_key_env),
+            max_tokens=args.max_tokens,
+            timeout=args.timeout,
+            dry_run=args.dry_run,
+            no_write=args.no_write,
+        )
+    except Exception as exc:
+        if not args.json_output:
+            raise
+        result = cli_error_payload(exc)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return cli_exit_code_for_error_code(result["error"]["code"])
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:

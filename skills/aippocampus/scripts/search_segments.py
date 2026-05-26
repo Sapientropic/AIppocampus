@@ -18,17 +18,24 @@ from retrieval import (
     search_rag_chunks,
     split_query_terms,
 )
+from aippocampuslib import default_thread_segments_dir
 from search_rollout import auto_graph_path, resolve_anchor_path, search_index_literal
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
 
-def manifest_path(cwd: Path, segments_dir: str) -> Path:
-    path = Path(segments_dir)
-    if not path.is_absolute():
-        path = cwd / path
-    return path / "manifest.json"
+def manifest_path(cwd: Path, segments_dir: str | None, *, prefer_existing: bool = True) -> Path:
+    if segments_dir:
+        path = Path(segments_dir)
+        if not path.is_absolute():
+            path = cwd / path
+        return path / "manifest.json"
+    global_manifest = default_thread_segments_dir(cwd) / "manifest.json"
+    legacy_manifest = cwd / ".aippocampus" / "segments" / "manifest.json"
+    if prefer_existing and not global_manifest.exists() and legacy_manifest.exists():
+        return legacy_manifest
+    return global_manifest
 
 
 def load_manifest(path: Path) -> dict:
@@ -160,7 +167,7 @@ def main() -> int:
     parser.add_argument("patterns", nargs="+", help="Literal clues or recall prompt.")
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument("--rollout")
-    parser.add_argument("--segments-dir", default=".aippocampus/segments")
+    parser.add_argument("--segments-dir", default=None, help="Defaults to global segments, with project-local legacy fallback.")
     parser.add_argument("--anchors", default="thread-anchors.md")
     parser.add_argument("--build-segments", action="store_true")
     parser.add_argument("--mode", choices=["literal", "ranked", "hybrid"], default="hybrid")
@@ -175,7 +182,7 @@ def main() -> int:
     args = parser.parse_args()
 
     cwd = Path(args.cwd).resolve()
-    manifest = manifest_path(cwd, args.segments_dir)
+    manifest = manifest_path(cwd, args.segments_dir, prefer_existing=not args.build_segments)
     ensure_segments(cwd, args.rollout, manifest, args.build_segments)
     data = load_manifest(manifest)
     if not data:

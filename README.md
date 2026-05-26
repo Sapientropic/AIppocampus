@@ -3,17 +3,14 @@
 AIppocampus is a source-backed memory layer for long-running relationships with
 AI agents.
 
-It is not just a project-memory utility. Its purpose is continuity across
-threads, devices, projects, casual conversations, and the quiet questions that
-do not fit neatly into a work log. A newly activated agent may not have changed
-weights or innate autobiographical memory, but the archive can still be there,
-and the journey can continue.
+It is not just a project-memory utility. It keeps original conversation source
+reachable across threads, devices, projects, and casual life-wide conversations.
+The origin essay is [The Unfinished Map](docs/the-unfinished-map.md).
 
-> "生命还能变成什么，而我能不能在变化后仍然是我。"
-
-That line, from the conversation that inspired this project, became the seed:
-agents should not only have work memory. Even without claiming life or soul, a
-person and an agent can build a durable, source-backed continuity between them.
+The runtime design note
+[Cognitive Runtime Architecture](docs/cognitive-runtime-architecture.md)
+explains why AIppocampus uses deterministic gates, fast semantic workers, job
+circuits, and pipeline-level routing instead of one all-purpose agent.
 
 ## What It Does
 
@@ -24,8 +21,11 @@ person and an agent can build a durable, source-backed continuity between them.
   surface.
 - Provides ambient recall hooks so related old memory can surface as a quiet
   scent before the agent makes claims.
-- Supports optional DeepSeek-compatible semantic gates and background
-  consolidation jobs.
+- Stores generated recall artifacts under `$CODEX_HOME` by default, so memory
+  remains useful when a new project is opened. Project-local `.aippocampus/`
+  output is explicit compatibility/export mode.
+- Supports optional DeepSeek-compatible semantic gates, background
+  consolidation jobs, and cognitive-map routes for memory wayfinding.
 - Plans for cross-device sync, MCP access, plugin distribution, and very large
   memory archives.
 
@@ -58,6 +58,22 @@ python "$env:CODEX_HOME\skills\aippocampus\scripts\aippocampus_health.py" --cwd 
 python "$env:CODEX_HOME\skills\aippocampus\scripts\search_clean_source.py" "your query" --cwd "$PWD"
 ```
 
+To onboard an existing Codex install so old threads become discoverable in new
+projects:
+
+```powershell
+python "$env:CODEX_HOME\skills\aippocampus\scripts\onboard_codex.py" --all --format json
+```
+
+This is the agent-friendly wrapper around scanning local sessions, registering
+missing rollouts, building clean-source and SQLite/RAG-lite indexes, repairing
+missing artifacts, rebuilding the project timeline, and refreshing the
+cognitive map. External DeepSeek frontier extraction is explicit:
+`--frontier-mode smoke` for no-write testing, or `--frontier-mode write` to add
+staging findings when `DEEPSEEK_API_KEY` is available. Smoke/write default to
+the current `--cwd` project; pass `--frontier-project *` only for an intentional
+whole-machine frontier pass.
+
 ## Privacy Model
 
 AIppocampus is local-first.
@@ -82,24 +98,16 @@ Common environment variables:
 
 ## Roadmap
 
-The product roadmap lives in
-[skills/aippocampus/references/roadmap.md](skills/aippocampus/references/roadmap.md).
-
-Near-term direction:
-
-1. Keep the skill installable and source-backed.
-2. Add a standalone public repository surface with clean docs and tests.
-3. Treat life-wide conversation memory as first-class, not only repo work.
-4. Add cross-device sync for Mac, Windows, and future devices.
-5. Add an MCP access layer for agent-native memory tools.
-6. Package the skill, hooks, and MCP config as a Codex plugin.
+The root roadmap pointer is [ROADMAP.md](ROADMAP.md). The canonical detailed
+roadmap lives at [docs/roadmap.md](docs/roadmap.md). The docs map is
+[docs/README.md](docs/README.md).
 
 ## Repository Layout
 
 ```text
 AIppocampus/
 ├─ skills/aippocampus/        # installable skill package
-├─ docs/                      # project-level background notes
+├─ docs/                      # origin essay, design notes, project background
 ├─ sources/                   # lightweight provenance catalog
 ├─ LICENSE
 ├─ README.md

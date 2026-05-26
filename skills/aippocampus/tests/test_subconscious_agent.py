@@ -16,6 +16,29 @@ import subconscious_agent as agent  # noqa: E402
 
 
 class SubconsciousAgentTests(unittest.TestCase):
+    def test_initial_payload_redacts_external_model_sensitive_text(self) -> None:
+        payload = agent.agent_initial_payload(
+            "review memory routing",
+            [
+                {
+                    "turn_ref": "t0",
+                    "user": (
+                        "帮我看 token=abc123secretvalue 和 "
+                        r"C:\Users\Administrator\Secrets\agent.txt"
+                    ),
+                    "assistant": "sk-thisshouldnotleave-local-test-1234567890",
+                }
+            ],
+            max_steps=1,
+            min_tool_steps=0,
+        )
+
+        self.assertNotIn("abc123secretvalue", payload)
+        self.assertNotIn("sk-thisshouldnotleave-local-test-1234567890", payload)
+        self.assertNotIn(r"C:\\Users\\Administrator", payload)
+        self.assertIn("<redacted:secret>", payload)
+        self.assertIn("<redacted:local-path>", payload)
+
     def test_validate_agent_edges_accepts_tool_observation_refs(self) -> None:
         parsed = {
             "edges": [
@@ -191,6 +214,117 @@ class SubconsciousAgentTests(unittest.TestCase):
         self.assertEqual(len(calls), 3)
         self.assertEqual(len(result["tool_steps"]), 1)
         self.assertEqual(result["edges"][0]["source_refs"][0]["ref"], "o0")
+
+    def test_tool_observations_are_redacted_before_second_model_call(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            messages_path = root / "messages.jsonl"
+            messages_path.write_text(
+                json.dumps(
+                    {
+                        "message_id": "m1",
+                        "turn_id": "turn-1",
+                        "source_line": 10,
+                        "role": "user",
+                        "phase": "",
+                        "turn_index": 1,
+                        "text": (
+                            "api_key=sk-thisshouldnotleave-local-test-1234567890 "
+                            r"C:\Users\Administrator\Secrets\agent-tool.txt"
+                        ),
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            registry_path = root / "threads.json"
+            registry_path.write_text(
+                json.dumps(
+                    {
+                        "threads": [
+                            {
+                                "thread_key": "session:one",
+                                "title": "Secret test",
+                                "project_label": "AIppocampus",
+                                "project_tags": ["AIppocampus"],
+                                "paths": {"clean_source_messages_jsonl": str(messages_path)},
+                            }
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            timeline_path = root / "project_timeline.json"
+            timeline_path.write_text(
+                json.dumps(
+                    {
+                        "projects": {
+                            "project:ai": {
+                                "project_label": "AIppocampus",
+                                "latest_turns": [
+                                    {
+                                        "thread_key": "session:one",
+                                        "title": "Secret test",
+                                        "turn_id": "turn-1",
+                                        "turn_index": 1,
+                                        "user": "find api key source",
+                                        "assistant": "ok",
+                                    }
+                                ],
+                            }
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            calls: list[list[dict[str, str]]] = []
+
+            def fake_chat(
+                messages: list[dict[str, str]],
+                api_key: str,
+                model: str,
+                base_url: str,
+                max_tokens: int | None,
+                timeout: int,
+                temperature: float,
+            ) -> dict[str, Any]:
+                del api_key, model, base_url, max_tokens, timeout, temperature
+                calls.append(messages)
+                content = (
+                    {"action": "tool", "tool": "search_clean_source", "args": {"terms": ["api_key"], "limit": 1}}
+                    if len(calls) == 1
+                    else {"action": "final", "edges": []}
+                )
+                return {"choices": [{"message": {"content": json.dumps(content, ensure_ascii=False)}}], "usage": {"total_tokens": 1}}
+
+            agent.run_agent(
+                registry_path=registry_path,
+                timeline_path=timeline_path,
+                concept_graph_path=root / "missing.sqlite",
+                output_path=root / "subconscious_edges.jsonl",
+                project="AIppocampus",
+                objective="test redaction",
+                max_turns=4,
+                max_steps=2,
+                min_tool_steps=1,
+                model="deepseek-v4-flash",
+                base_url="https://example.invalid",
+                api_key="test",
+                max_tokens=None,
+                timeout=1,
+                temperature=0.2,
+                chat_fn=fake_chat,
+                no_write=True,
+            )
+
+        second_call = json.dumps(calls[1], ensure_ascii=False)
+        self.assertNotIn("sk-thisshouldnotleave-local-test-1234567890", second_call)
+        self.assertNotIn(r"C:\\Users\\Administrator", second_call)
+        self.assertIn("<redacted:api-key>", second_call)
+        self.assertIn("<redacted:local-path>", second_call)
 
 
 if __name__ == "__main__":

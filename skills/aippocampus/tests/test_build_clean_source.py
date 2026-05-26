@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -18,10 +19,17 @@ class BuildCleanSourceTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.cwd = Path(self.tmp.name)
+        self.old_codex_home = os.environ.get("CODEX_HOME")
+        self.codex_home = self.cwd / "codex-home"
+        os.environ["CODEX_HOME"] = str(self.codex_home)
         self.rollout = self.cwd / "rollout-test.jsonl"
         self._write_rollout()
 
     def tearDown(self) -> None:
+        if self.old_codex_home is None:
+            os.environ.pop("CODEX_HOME", None)
+        else:
+            os.environ["CODEX_HOME"] = self.old_codex_home
         self.tmp.cleanup()
 
     def _append(self, item: dict) -> None:
@@ -93,14 +101,19 @@ class BuildCleanSourceTests(unittest.TestCase):
         self.assertEqual(result["schema_version"], 2)
         self.assertEqual(result["upgrade_contract"]["principle"], "approximate_locate_then_exact_reconstruct")
         self.assertIn("message_id", result["identity_policy"]["stable_join_keys"])
+        self.assertEqual(result["artifact_scope"], "global_thread_store")
         self.assertEqual(result["message_count"], 4)
         self.assertEqual(result["turn_count"], 2)
-        self.assertTrue((self.cwd / ".aippocampus" / "clean-source" / "messages.jsonl").exists())
-        self.assertTrue((self.cwd / ".aippocampus" / "clean-source" / "turns.jsonl").exists())
+        messages_path = Path(result["outputs"]["messages_jsonl"])
+        turns_path = Path(result["outputs"]["turns_jsonl"])
+        self.assertTrue(messages_path.exists())
+        self.assertTrue(turns_path.exists())
+        self.assertIn("aippocampus-registry", str(messages_path))
+        self.assertFalse((self.cwd / ".aippocampus").exists())
 
         messages = [
             json.loads(line)
-            for line in (self.cwd / ".aippocampus" / "clean-source" / "messages.jsonl").read_text(encoding="utf-8").splitlines()
+            for line in messages_path.read_text(encoding="utf-8").splitlines()
         ]
         text = "\n".join(item["text"] for item in messages)
 
@@ -125,7 +138,7 @@ class BuildCleanSourceTests(unittest.TestCase):
 
         turns = [
             json.loads(line)
-            for line in (self.cwd / ".aippocampus" / "clean-source" / "turns.jsonl").read_text(encoding="utf-8").splitlines()
+            for line in turns_path.read_text(encoding="utf-8").splitlines()
         ]
         self.assertEqual(turns[0]["assistant_phase"], "final_answer")
         self.assertEqual(turns[1]["assistant_phase"], "commentary_fallback")
@@ -135,6 +148,36 @@ class BuildCleanSourceTests(unittest.TestCase):
         self.assertEqual(turns[0]["message_ids"][0], first["message_id"])
         self.assertEqual(turns[0]["clean_start_ordinal"], 0)
         self.assertEqual(turns[0]["clean_end_ordinal"], 1)
+
+    def test_clean_source_drops_skill_injection_blocks(self) -> None:
+        self._append(
+            {
+                "type": "event_msg",
+                "timestamp": "2026-05-26T04:00:03Z",
+                "payload": {
+                    "type": "user_message",
+                    "message": "<skill>\n<name>aippocampus</name>\n<path>secret-local-path</path>\n---</skill>",
+                },
+            }
+        )
+        self._append(
+            {
+                "type": "event_msg",
+                "timestamp": "2026-05-26T04:00:04Z",
+                "payload": {
+                    "type": "agent_message",
+                    "phase": "final_answer",
+                    "message": "真实回答仍然保留。",
+                },
+            }
+        )
+
+        result = clean_source.build_clean_source(self.cwd, rollout=self.rollout)
+        text = Path(result["outputs"]["messages_jsonl"]).read_text(encoding="utf-8")
+
+        self.assertNotIn("<skill>", text)
+        self.assertNotIn("secret-local-path", text)
+        self.assertIn("真实回答仍然保留。", text)
 
 
 if __name__ == "__main__":

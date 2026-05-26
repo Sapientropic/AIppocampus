@@ -28,9 +28,13 @@ STATE_SCHEMA_VERSION = 1
 DEFAULT_COOLDOWN_SECONDS = 6 * 60 * 60
 DEFAULT_MIN_NEW_TURNS = 12
 DEFAULT_ENQUEUE_COOLDOWN_SECONDS = 10 * 60
+DEFAULT_ENQUEUE_LOCK_STALE_SECONDS = 5 * 60
+DEFAULT_PROJECT_LEASE_SECONDS = 2 * 60 * 60
 DEFAULT_STALE_LOCK_SECONDS = 2 * 60 * 60
 DEFAULT_MAX_TURNS = 96
 DEFAULT_MAX_FINDINGS = 220
+DEFAULT_JOB_CONCURRENCY = 4
+DEFAULT_SAMPLES_PER_JOB = 1
 DEFAULT_API_KEY_ENV = "DEEPSEEK_API_KEY"
 
 
@@ -320,6 +324,40 @@ def objective_for(stats: ProjectStats) -> str:
     )
 
 
+def lease_active(project_state: dict[str, Any], now_ts: float) -> bool:
+    return float(project_state.get("lease_until_ts") or 0.0) > now_ts
+
+
+def claim_project_lease(
+    project_state: dict[str, Any],
+    stats: ProjectStats,
+    reason: str,
+    *,
+    now_ts: float,
+    lease_seconds: int,
+) -> None:
+    lease_id = f"lease-{stats.label}-{int(now_ts)}-{os.getpid()}"
+    until = now_ts + max(60, int(lease_seconds or DEFAULT_PROJECT_LEASE_SECONDS))
+    project_state["lease_id"] = lease_id
+    project_state["lease_started_ts"] = now_ts
+    project_state["lease_started_at"] = iso_from_ts(now_ts)
+    project_state["lease_until_ts"] = until
+    project_state["lease_until_at"] = iso_from_ts(until)
+    project_state["lease_reason"] = reason
+
+
+def clear_project_lease(project_state: dict[str, Any]) -> None:
+    for key in [
+        "lease_id",
+        "lease_started_ts",
+        "lease_started_at",
+        "lease_until_ts",
+        "lease_until_at",
+        "lease_reason",
+    ]:
+        project_state.pop(key, None)
+
+
 def run_text(cmd: list[str], *, cwd: Path = SCRIPT_DIR, log: Path | None = None) -> str:
     proc = subprocess.run(
         cmd,
@@ -340,7 +378,16 @@ def run_text(cmd: list[str], *, cwd: Path = SCRIPT_DIR, log: Path | None = None)
     return output
 
 
-def run_project(stats: ProjectStats, *, root: Path, max_turns: int, max_findings: int, log: Path) -> dict[str, Any]:
+def run_project(
+    stats: ProjectStats,
+    *,
+    root: Path,
+    max_turns: int,
+    max_findings: int,
+    job_concurrency: int,
+    samples_per_job: int,
+    log: Path,
+) -> dict[str, Any]:
     # Deterministic prep is kept in the detached worker, not the foreground hook,
     # so the hook can return quickly while the sleep-time pass does heavier
     # consolidation safely in staging files.
@@ -358,7 +405,12 @@ def run_project(stats: ProjectStats, *, root: Path, max_turns: int, max_findings
             objective_for(stats),
             "--max-turns",
             str(max_turns),
+            "--concurrency",
+            str(job_concurrency),
+            "--samples-per-job",
+            str(samples_per_job),
         ],
+        [sys.executable, str(SCRIPT_DIR / "build_cognitive_map.py")],
         [
             sys.executable,
             str(SCRIPT_DIR / "subconscious_review.py"),
@@ -453,12 +505,24 @@ def choose_projects(
 def maybe_start(args: argparse.Namespace) -> dict[str, Any]:
     root = registry_dir(Path(args.registry_dir).resolve() if args.registry_dir else None)
     state_file = state_path(root, Path(args.state_file).resolve() if args.state_file else None)
-    state = load_state(state_file)
-    now_ts = time.time()
     if os.environ.get("AIIPPOCAMPUS_SUBCONSCIOUS_HOOK", "1").lower() in {"0", "false", "off", "no"}:
         return {"started": False, "skipped": "disabled_by_env", "projects": []}
     if not os.environ.get(args.api_key_env):
         return {"started": False, "skipped": f"missing_{args.api_key_env}", "projects": []}
+
+    try:
+        lock = FileLock(root / "subconscious_enqueue.lock", stale_seconds=DEFAULT_ENQUEUE_LOCK_STALE_SECONDS)
+        with lock:
+            return maybe_start_locked(args, root=root, state_file=state_file)
+    except RuntimeError as exc:
+        if "already running" in str(exc):
+            return {"started": False, "skipped": "enqueue_locked", "projects": []}
+        raise
+
+
+def maybe_start_locked(args: argparse.Namespace, *, root: Path, state_file: Path) -> dict[str, Any]:
+    state = load_state(state_file)
+    now_ts = time.time()
 
     due = choose_projects(
         root=root,
@@ -481,18 +545,35 @@ def maybe_start(args: argparse.Namespace) -> dict[str, Any]:
             "projects": [{"label": stats.label, "reason": reason} for stats, reason in due],
         }
     filtered: list[tuple[ProjectStats, str]] = []
+    leased: list[tuple[ProjectStats, str]] = []
     for stats, reason in due:
         project_state = state.setdefault("projects", {}).setdefault(stats.label, {})
+        if lease_active(project_state, now_ts):
+            leased.append((stats, reason))
+            continue
         last_enqueue = float(project_state.get("last_enqueue_ts") or 0.0)
         if last_enqueue and now_ts - last_enqueue < DEFAULT_ENQUEUE_COOLDOWN_SECONDS:
             continue
         project_state["last_enqueue_ts"] = now_ts
         project_state["last_enqueue_at"] = now_utc()
         project_state["last_enqueue_reason"] = reason
+        claim_project_lease(
+            project_state,
+            stats,
+            reason,
+            now_ts=now_ts,
+            lease_seconds=getattr(args, "lease_seconds", DEFAULT_PROJECT_LEASE_SECONDS),
+        )
         filtered.append((stats, reason))
     save_state(state_file, state)
     due = filtered
     if not due:
+        if leased:
+            return {
+                "started": False,
+                "skipped": "leased_projects",
+                "projects": [{"label": stats.label, "reason": reason} for stats, reason in leased],
+            }
         return {"started": False, "skipped": "enqueue_cooldown", "projects": []}
     cmd = [
         sys.executable,
@@ -510,6 +591,10 @@ def maybe_start(args: argparse.Namespace) -> dict[str, Any]:
         str(args.max_turns),
         "--max-findings",
         str(args.max_findings),
+        "--job-concurrency",
+        str(getattr(args, "job_concurrency", DEFAULT_JOB_CONCURRENCY)),
+        "--samples-per-job",
+        str(getattr(args, "samples_per_job", DEFAULT_SAMPLES_PER_JOB)),
         "--api-key-env",
         args.api_key_env,
     ]
@@ -519,7 +604,13 @@ def maybe_start(args: argparse.Namespace) -> dict[str, Any]:
         cmd.extend(["--project", args.project])
     if args.all_projects:
         cmd.append("--all-projects")
-    pid = start_detached(cmd, root=root)
+    try:
+        pid = start_detached(cmd, root=root)
+    except Exception:
+        for stats, _reason in due:
+            clear_project_lease(state.setdefault("projects", {}).setdefault(stats.label, {}))
+        save_state(state_file, state)
+        raise
     return {
         "started": True,
         "pid": pid,
@@ -557,7 +648,15 @@ def run_due(args: argparse.Namespace) -> dict[str, Any]:
             project_state["last_status"] = "running"
             save_state(state_file, state)
             try:
-                result = run_project(stats, root=root, max_turns=args.max_turns, max_findings=args.max_findings, log=log)
+                result = run_project(
+                    stats,
+                    root=root,
+                    max_turns=args.max_turns,
+                    max_findings=args.max_findings,
+                    job_concurrency=getattr(args, "job_concurrency", DEFAULT_JOB_CONCURRENCY),
+                    samples_per_job=getattr(args, "samples_per_job", DEFAULT_SAMPLES_PER_JOB),
+                    log=log,
+                )
                 project_state["last_status"] = "success"
                 project_state["last_error"] = None
                 project_state["last_run_ts"] = time.time()
@@ -572,6 +671,7 @@ def run_due(args: argparse.Namespace) -> dict[str, Any]:
                 project_state["last_error_at"] = now_utc()
                 results.append({"project": stats.label, "error": str(exc)})
             finally:
+                clear_project_lease(project_state)
                 project_state["last_finish_at"] = now_utc()
                 save_state(state_file, state)
         return {"ran": True, "projects": [{"label": stats.label, "reason": reason} for stats, reason in due], "results": results}
@@ -591,6 +691,9 @@ def main() -> int:
     parser.add_argument("--min-new-turns", type=int, default=DEFAULT_MIN_NEW_TURNS)
     parser.add_argument("--max-turns", type=int, default=DEFAULT_MAX_TURNS)
     parser.add_argument("--max-findings", type=int, default=DEFAULT_MAX_FINDINGS)
+    parser.add_argument("--job-concurrency", type=int, default=DEFAULT_JOB_CONCURRENCY)
+    parser.add_argument("--samples-per-job", type=int, default=DEFAULT_SAMPLES_PER_JOB)
+    parser.add_argument("--lease-seconds", type=int, default=DEFAULT_PROJECT_LEASE_SECONDS)
     parser.add_argument("--api-key-env", default=DEFAULT_API_KEY_ENV)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
