@@ -11,7 +11,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +18,8 @@ from aippocampuslib import codex_home, now_utc
 
 
 DEFAULT_SEARCH_BUDGET_FALLBACK = 3
-PROMPT_HOOK_SEMANTIC_TIMEOUT_FALLBACK = int(os.environ.get("AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT", "3"))
+PROMPT_HOOK_SEMANTIC_TIMEOUT_FALLBACK = float(os.environ.get("AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT", "0.8"))
+PROMPT_HOOK_MAX_ELAPSED_MS_FALLBACK = int(os.environ.get("AIPPOCAMPUS_PROMPT_HOOK_BUDGET_MS", "4200"))
 _RUNTIME_EXPORTS = {
     "DEFAULT_SEARCH_BUDGET",
     "PROMPT_HOOK_SEMANTIC_TIMEOUT",
@@ -150,13 +150,19 @@ def main() -> int:
     parser.add_argument("--semantic-gate", choices=["auto", "on", "off"], default=None)
     parser.add_argument(
         "--semantic-timeout",
-        type=int,
+        type=float,
         default=PROMPT_HOOK_SEMANTIC_TIMEOUT_FALLBACK,
         help=(
             "Foreground budget for optional semantic-gate work. Keep this below "
             "the Codex UserPromptSubmit hook timeout; standalone semantic_recall_gate.py "
             "keeps its larger default."
         ),
+    )
+    parser.add_argument(
+        "--max-elapsed-ms",
+        type=int,
+        default=PROMPT_HOOK_MAX_ELAPSED_MS_FALLBACK,
+        help="Fail-open foreground budget for the whole prompt hook. Use 0 to disable.",
     )
     parser.add_argument("--no-semantic-gate", action="store_true")
     parser.add_argument("--no-cognitive-map", action="store_true")
@@ -194,6 +200,7 @@ def main() -> int:
             use_cognitive_map=not args.no_cognitive_map,
             use_concept_graph=not args.no_concept_graph,
             search_budget=args.search_budget,
+            max_elapsed_ms=args.max_elapsed_ms,
         )
         if args.log or args.log_skip:
             write_debug_log(result, hook_input=hook_input, include_skip=args.log_skip)

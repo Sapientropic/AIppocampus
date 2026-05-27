@@ -135,6 +135,7 @@ class BuildCleanSourceTests(unittest.TestCase):
         self.assertEqual(first["raw_end_line"], first["source_line"])
         self.assertEqual(first["clean_ordinal"], 0)
         self.assertEqual(len(first["content_sha256"]), 64)
+        self.assertEqual(first["scope_labels"], ["technical_work", "open_question"])
 
         turns = [
             json.loads(line)
@@ -148,6 +149,72 @@ class BuildCleanSourceTests(unittest.TestCase):
         self.assertEqual(turns[0]["message_ids"][0], first["message_id"])
         self.assertEqual(turns[0]["clean_start_ordinal"], 0)
         self.assertEqual(turns[0]["clean_end_ordinal"], 1)
+        self.assertEqual(turns[0]["scope_labels"], ["technical_work", "open_question"])
+
+    def test_clean_source_adds_life_wide_scope_labels(self) -> None:
+        self._append(
+            {
+                "type": "event_msg",
+                "timestamp": "2026-05-26T01:03:00Z",
+                "payload": {
+                    "type": "user_message",
+                    "message": "最近我读到一篇文章，突然有个点子：把这些焦虑和长期问题也保留下来，可以吗？",
+                },
+            }
+        )
+        self._append(
+            {
+                "type": "event_msg",
+                "timestamp": "2026-05-26T01:03:05Z",
+                "payload": {
+                    "type": "agent_message",
+                    "phase": "final_answer",
+                    "message": "可以，它应该作为 life-wide clean source 保存，而不是只算项目任务。",
+                },
+            }
+        )
+
+        result = clean_source.build_clean_source(self.cwd, rollout=self.rollout)
+        messages = [
+            json.loads(line)
+            for line in Path(result["outputs"]["messages_jsonl"]).read_text(encoding="utf-8").splitlines()
+        ]
+        turns = [
+            json.loads(line)
+            for line in Path(result["outputs"]["turns_jsonl"]).read_text(encoding="utf-8").splitlines()
+        ]
+
+        life_message = next(item for item in messages if "突然有个点子" in item["text"])
+        self.assertEqual(
+            life_message["scope_labels"],
+            ["personal_reflection", "reading_notes", "idea_seed", "life_context", "open_question"],
+        )
+        self.assertEqual(
+            turns[2]["scope_labels"],
+            ["personal_reflection", "reading_notes", "idea_seed", "life_context", "technical_work", "open_question"],
+        )
+
+    def test_scope_labels_do_not_match_short_ascii_needles_inside_words(self) -> None:
+        self.assertNotIn(
+            "technical_work",
+            clean_source.infer_scope_labels("I read an article about capital cities and daily life."),
+        )
+        self.assertIn("technical_work", clean_source.infer_scope_labels("Call the API from the CLI."))
+        self.assertNotIn("open_question", clean_source.infer_scope_labels("The archive should remember casual sparks."))
+        self.assertIn("open_question", clean_source.infer_scope_labels("Should I keep casual sparks?"))
+
+    def test_scope_labels_keep_fuzzy_casual_importance_out_of_static_lexicon(self) -> None:
+        labels = clean_source.infer_scope_labels(
+            "This is not a project task, but I keep circling back to the lighthouse metaphor; "
+            "it feels like a pivot, and I'm excited by it."
+        )
+
+        self.assertEqual(labels, [])
+
+        dissatisfied = clean_source.infer_scope_labels(
+            "I'm dissatisfied with the current framing; it feels like a dilemma, not a task."
+        )
+        self.assertEqual(dissatisfied, [])
 
     def test_clean_source_drops_skill_injection_blocks(self) -> None:
         self._append(

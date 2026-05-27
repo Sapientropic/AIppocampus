@@ -5,13 +5,17 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
+TESTS = ROOT / "tests"
+sys.path.insert(0, str(TESTS))
 sys.path.insert(0, str(SCRIPTS))
 
 import semantic_recall_gate as gate  # noqa: E402
+from redaction_fixtures import FAKE_TEST_OPENAI_API_KEY, FAKE_TEST_SECRET_VALUE  # noqa: E402
 
 
 def fake_response(payload: dict, usage: dict | None = None) -> dict:
@@ -164,7 +168,7 @@ class SemanticRecallGateTests(unittest.TestCase):
             raise AssertionError("model should not be called for secret-like prompts")
 
         result = gate.run_semantic_gate(
-            "api_key=sk-thisshouldnotleave-local-test-1234567890",
+            f"api_key={FAKE_TEST_OPENAI_API_KEY}",
             cwd=self.workspace,
             registry=self.registry,
             registry_path=self.registry_path,
@@ -193,7 +197,7 @@ class SemanticRecallGateTests(unittest.TestCase):
             )
 
         result = gate.run_semantic_gate(
-            "用这个 token=abc123secretvalue 继续海马体记忆配置吗？",
+            f"用这个 token={FAKE_TEST_SECRET_VALUE} 继续海马体记忆配置吗？",
             cwd=self.workspace,
             registry=self.registry,
             registry_path=self.registry_path,
@@ -206,7 +210,7 @@ class SemanticRecallGateTests(unittest.TestCase):
         self.assertTrue(result["secret_policy"]["redacted"])
         self.assertFalse(result["secret_policy"]["hard_block"])
         self.assertTrue(seen_prompts)
-        self.assertNotIn("abc123secretvalue", "\n".join(seen_prompts))
+        self.assertNotIn(FAKE_TEST_SECRET_VALUE, "\n".join(seen_prompts))
         self.assertIn("<redacted:secret>", "\n".join(seen_prompts))
 
     def test_private_key_block_still_hard_blocks(self) -> None:
@@ -273,6 +277,34 @@ class SemanticRecallGateTests(unittest.TestCase):
         self.assertEqual(second["decision"], "scent")
         self.assertTrue(second["cached"])
         self.assertEqual(calls["count"], 3)
+
+    def test_cache_write_error_is_reported_without_blocking_gate(self) -> None:
+        def chat_fn(messages, api_key, model, base_url, max_tokens, timeout, temperature):
+            return fake_response(
+                {
+                    "decision": "scent",
+                    "confidence": 0.8,
+                    "query_aliases": ["AIppocampus"],
+                    "anti_personalization_risk": "low",
+                    "reason": "cache write warning test",
+                }
+            )
+
+        with patch.object(gate, "write_cache", side_effect=OSError("readonly cache")):
+            result = gate.run_semantic_gate(
+                "脑内续接器",
+                cwd=self.workspace,
+                registry=self.registry,
+                registry_path=self.registry_path,
+                cache_path=self.root / "semantic_recall_cache.json",
+                api_key="test-key",
+                chat_fn=chat_fn,
+            )
+
+        self.assertTrue(result["available"])
+        self.assertEqual(result["decision"], "scent")
+        self.assertEqual(result["warnings"][0]["stage"], "cache_write")
+        self.assertIn("readonly cache", result["warnings"][0]["message"])
 
 
 if __name__ == "__main__":

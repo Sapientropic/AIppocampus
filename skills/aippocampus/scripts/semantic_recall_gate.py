@@ -646,6 +646,7 @@ def run_semantic_gate(
         **merged,
         "workers": parsed_workers,
         "errors": errors,
+        "warnings": [],
         "usage": usage_total,
         "cache": deepseek_cache_metrics_from_usage(usage_total),
         "secret_policy": secret_policy,
@@ -658,8 +659,17 @@ def run_semantic_gate(
     if use_cache and cache and result.get("available"):
         try:
             write_cache(cache, cache_key, result)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Cache writes are an optimization and must not break the foreground
+            # hook, but operator/debug callers still need to see degraded state.
+            result.setdefault("warnings", []).append(
+                {
+                    "stage": "cache_write",
+                    "path": str(cache),
+                    "error_type": type(exc).__name__,
+                    "message": str(exc),
+                }
+            )
     return result
 
 

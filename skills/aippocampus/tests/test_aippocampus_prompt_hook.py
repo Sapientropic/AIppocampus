@@ -469,6 +469,67 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertIn("AIppocampus", result["query_terms"])
         self.assertIn("semantic gate", " ".join(result["reasons"]))
 
+    def test_foreground_budget_caps_semantic_gate_timeout(self) -> None:
+        registry_path = self.root / "semantic-budget-registry" / "threads.json"
+        registry_path.parent.mkdir()
+        registry_path.write_text(
+            json.dumps({"schema_version": 1, "threads": []}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        seen: dict[str, float] = {}
+
+        def fake_semantic_gate(prompt: str, **kwargs) -> dict:
+            seen["timeout"] = float(kwargs["timeout"])
+            return {
+                "available": False,
+                "decision": "skip",
+                "confidence": 0.0,
+                "query_aliases": [],
+                "memory_scope": [],
+                "reasons": ["test"],
+                "workers": [],
+                "errors": [],
+                "cached": False,
+            }
+
+        result = hook.assess_prompt(
+            "那个脑内续接器现在怎么样了？",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            semantic_gate_fn=fake_semantic_gate,
+            semantic_timeout=3,
+            max_elapsed_ms=3000,
+            search_budget=0,
+        )
+
+        self.assertIn("timeout", seen)
+        self.assertLessEqual(seen["timeout"], 1.8)
+        self.assertEqual(result["semantic_gate"]["available"], False)
+
+    def test_tiny_foreground_budget_skips_semantic_gate(self) -> None:
+        registry_path = self.root / "semantic-budget-skip-registry" / "threads.json"
+        registry_path.parent.mkdir()
+        registry_path.write_text(
+            json.dumps({"schema_version": 1, "threads": []}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        def fail_semantic_gate(*args, **kwargs) -> dict:
+            raise AssertionError("semantic gate should be skipped when no foreground budget remains")
+
+        result = hook.assess_prompt(
+            "那个脑内续接器现在怎么样了？",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            semantic_gate_fn=fail_semantic_gate,
+            semantic_timeout=3,
+            max_elapsed_ms=1,
+            search_budget=0,
+        )
+
+        self.assertEqual(result["semantic_gate"]["available"], False)
+        self.assertIn("foreground budget", " ".join(result["semantic_gate"]["reasons"]))
+
     def test_multilingual_natural_language_can_reach_semantic_gate(self) -> None:
         registry_path = self.root / "semantic-registry-ru" / "threads.json"
         registry_path.parent.mkdir()
@@ -825,6 +886,246 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertEqual(result["decision"], "scent")
         self.assertEqual(result["candidates"][0]["thread_key"], "session:timeline-latest")
         self.assertIn("project timeline", " ".join(result["reasons"]))
+
+    def test_life_wide_timeline_recency_cue_can_add_quiet_scent(self) -> None:
+        registry_path = self.root / "life-registry" / "threads.json"
+        registry_path.parent.mkdir()
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:life-wide",
+                            "title": "Life continuity notes",
+                            "project_label": "Journal",
+                            "session_meta": {"timestamp": "2026-05-24T00:00:00Z"},
+                            "paths": {"workspace": str(self.root / "journal")},
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        (registry_path.parent / "project_timeline.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "life_wide": {
+                        "labels": {
+                            "personal_reflection": {
+                                "scope_label": "personal_reflection",
+                                "latest_turns": [
+                                    {
+                                        "thread_key": "session:life-wide",
+                                        "title": "Life continuity notes",
+                                        "timestamp": "2026-05-24T00:00:00Z",
+                                        "turn_id": "turn-life-1",
+                                        "scope_labels": ["personal_reflection", "open_question"],
+                                        "topic_terms": ["焦虑", "问题"],
+                                        "source_refs": [
+                                            {
+                                                "thread_key": "session:life-wide",
+                                                "message_id": "msg-life-1",
+                                                "turn_id": "turn-life-1",
+                                                "clean_ordinal": 4,
+                                                "source_line": 77,
+                                                "role": "user",
+                                                "phase": "",
+                                            }
+                                        ],
+                                    }
+                                ],
+                            }
+                        }
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        result = hook.assess_prompt(
+            "最近那个焦虑问题我后来有推进吗？",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            use_semantic_gate=False,
+            search_budget=0,
+        )
+
+        self.assertEqual(result["decision"], "scent")
+        self.assertEqual(result["candidates"][0]["thread_key"], "session:life-wide")
+        self.assertTrue(result["candidates"][0]["life_wide_timeline_source"])
+        self.assertIn("personal_reflection", result["candidates"][0]["scope_labels"])
+        self.assertNotIn("source_refs", result["candidates"][0])
+        self.assertEqual(result["candidates"][0]["source_ref_count"], 1)
+        self.assertIn("life-wide timeline", " ".join(result["reasons"]))
+
+    def test_life_wide_timeline_does_not_trigger_for_ordinary_code_prompt(self) -> None:
+        registry_path = self.root / "life-code-registry" / "threads.json"
+        registry_path.parent.mkdir()
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:life-wide",
+                            "title": "Life continuity notes",
+                            "project_label": "Journal",
+                            "paths": {"workspace": str(self.root / "journal")},
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        (registry_path.parent / "project_timeline.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "life_wide": {
+                        "labels": {
+                            "personal_reflection": {
+                                "scope_label": "personal_reflection",
+                                "latest_turns": [
+                                    {
+                                        "thread_key": "session:life-wide",
+                                        "scope_labels": ["personal_reflection"],
+                                        "topic_terms": ["焦虑"],
+                                    }
+                                ],
+                            }
+                        }
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        result = hook.assess_prompt(
+            "最近帮我修 TypeScript build error，顺手跑测试",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            use_semantic_gate=False,
+            search_budget=0,
+        )
+
+        self.assertEqual(result["decision"], "skip")
+        self.assertFalse(result["candidates"])
+
+    def test_life_wide_timeline_does_not_trigger_for_generic_status_prompt(self) -> None:
+        registry_path = self.root / "life-status-registry" / "threads.json"
+        registry_path.parent.mkdir()
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:life-wide",
+                            "title": "Life continuity notes",
+                            "project_label": "Journal",
+                            "paths": {"workspace": str(self.root / "journal")},
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        (registry_path.parent / "project_timeline.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "life_wide": {
+                        "labels": {
+                            "personal_reflection": {
+                                "scope_label": "personal_reflection",
+                                "latest_turns": [
+                                    {
+                                        "thread_key": "session:life-wide",
+                                        "scope_labels": ["personal_reflection", "open_question"],
+                                        "topic_terms": ["焦虑", "问题"],
+                                    }
+                                ],
+                            }
+                        }
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        result = hook.assess_prompt(
+            "最近这个问题的状态怎么样？",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            use_semantic_gate=False,
+            search_budget=0,
+        )
+
+        self.assertEqual(result["decision"], "skip")
+        self.assertFalse(result["candidates"])
+
+    def test_life_wide_timeline_does_not_substring_match_lifecycle(self) -> None:
+        registry_path = self.root / "life-english-registry" / "threads.json"
+        registry_path.parent.mkdir()
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:life-wide",
+                            "title": "Life continuity notes",
+                            "project_label": "Journal",
+                            "paths": {"workspace": str(self.root / "journal")},
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        (registry_path.parent / "project_timeline.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "life_wide": {
+                        "labels": {
+                            "life_context": {
+                                "scope_label": "life_context",
+                                "latest_turns": [
+                                    {
+                                        "thread_key": "session:life-wide",
+                                        "scope_labels": ["life_context"],
+                                        "topic_terms": ["life"],
+                                    }
+                                ],
+                            }
+                        }
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        result = hook.assess_prompt(
+            "latest lifecycle hook status",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            use_semantic_gate=False,
+            search_budget=0,
+        )
+
+        self.assertEqual(result["decision"], "skip")
+        self.assertFalse(result["candidates"])
 
     def test_working_memory_can_emit_soft_scent_without_manual_review_queue(self) -> None:
         registry_path = self.root / "working-registry" / "threads.json"

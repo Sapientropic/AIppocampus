@@ -12,21 +12,13 @@ import json
 import math
 import os
 import re
-import sqlite3
 import sys
-import time
 import unicodedata
 from pathlib import Path
 from typing import Any
 
-from build_associations import default_associations_path, load_associations, match_associations, source_text_is_noise
-from build_cognitive_map import default_cognitive_map_path, load_cognitive_map, match_cognitive_map
-from build_concept_graph import default_concept_graph_path, expand_concepts
-from memory_candidate_router import default_working_memory_path, load_working_memory, match_working_memory, strip_for_hook
-from registry import deep_search_entry, entry_search_score, load_registry, registry_paths, unique_preserve
+from registry import deep_search_entry, entry_search_score, registry_paths, unique_preserve
 from retrieval import CONCEPT_TRIGGERS, RECALL_TRIGGERS, split_query_terms
-from semantic_recall_gate import default_semantic_triggers_path, run_semantic_gate
-from aippocampuslib import compact_text
 
 
 PROMPT_HOOK_SEMANTIC_TIMEOUT = int(os.environ.get("AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT", "3"))
@@ -181,6 +173,71 @@ RECENCY_CUES = {
     "外面",
     "latest",
     "recent",
+}
+
+LIFE_WIDE_TIMELINE_CANDIDATE_LIMIT = 3
+LIFE_WIDE_SCOPE_LABEL_CUES = {
+    "personal_reflection": {
+        "焦虑",
+        "困惑",
+        "感觉",
+        "感受",
+        "自我",
+        "reflection",
+        "anxiety",
+        "feeling",
+    },
+    "relationship_continuity": {
+        "关系",
+        "我们聊",
+        "我和你",
+        "陪伴",
+        "continuity",
+        "relationship",
+    },
+    "reading_notes": {
+        "读到",
+        "看过",
+        "那篇",
+        "这篇",
+        "文章",
+        "书",
+        "reading",
+        "article",
+        "book",
+    },
+    "idea_seed": {
+        "点子",
+        "想法",
+        "灵感",
+        "脑洞",
+        "idea",
+        "spark",
+    },
+    "preference": {
+        "偏好",
+        "喜欢",
+        "不喜欢",
+        "以后",
+        "preference",
+        "prefer",
+    },
+    "life_context": {
+        "生活",
+        "日常",
+        "人生",
+        "近况",
+        "life",
+        "daily",
+    },
+    "open_question": {
+        "问题",
+        "疑问",
+        "要不要",
+        "该不该",
+        "是否",
+        "question",
+    },
 }
 
 SEMANTIC_GATE_LIGHT_CUES = {
@@ -495,6 +552,117 @@ def project_matches_prompt(project: dict[str, Any], prompt: str, cwd: Path) -> b
     return any(label and label.casefold() in cwd_low for label in labels)
 
 
+def matched_life_wide_timeline_cues(prompt: str) -> tuple[list[str], list[str]]:
+    if not matched_terms(prompt, RECENCY_CUES):
+        return [], []
+    # Life-wide timeline is global and personal by nature. Require both a
+    # recency cue and a scope-label scent so ordinary status/code prompts do not
+    # get over-personalized by ambient recall.
+    labels: list[str] = []
+    cue_terms: list[str] = []
+    for label, cues in LIFE_WIDE_SCOPE_LABEL_CUES.items():
+        hits = matched_life_wide_cue_terms(prompt, cues)
+        if not hits:
+            continue
+        labels.append(label)
+        cue_terms.extend(hits)
+    # "问题/question" is common in task and status prompts. It can help once
+    # another life-wide label is present, but must not summon personal memory
+    # by itself.
+    if labels and set(labels).issubset({"open_question"}):
+        return [], []
+    return labels, unique_preserve(cue_terms, limit=8)
+
+
+def matched_life_wide_cue_terms(prompt: str, cues: set[str]) -> list[str]:
+    low = prompt.casefold()
+    hits: list[str] = []
+    for cue in sorted(cues, key=len, reverse=True):
+        cue_text = cue.casefold()
+        if re.fullmatch(r"[a-z0-9_]+(?:\s+[a-z0-9_]+)*", cue_text):
+            pattern = r"(?<![a-z0-9_])" + r"\s+".join(re.escape(part) for part in cue_text.split()) + r"(?![a-z0-9_])"
+            if re.search(pattern, low):
+                hits.append(cue)
+            continue
+        if cue_text in low:
+            hits.append(cue)
+    return hits
+
+
+def merge_life_wide_timeline_candidates(
+    candidates: list[dict[str, Any]],
+    registry: dict[str, Any],
+    timeline: dict[str, Any],
+    prompt: str,
+    query_terms: list[str],
+) -> list[dict[str, Any]]:
+    labels, cue_terms = matched_life_wide_timeline_cues(prompt)
+    if not labels:
+        return candidates
+    life_wide = timeline.get("life_wide") or {}
+    label_groups = life_wide.get("labels") or {}
+    if not isinstance(label_groups, dict):
+        return candidates
+
+    by_thread = {entry.get("thread_key"): entry for entry in registry.get("threads") or []}
+    by_key = {item.get("thread_key"): item for item in candidates}
+    added_threads: set[str] = set()
+    recency_terms = matched_terms(prompt, RECENCY_CUES)
+    for label in labels:
+        group = label_groups.get(label) or {}
+        if not isinstance(group, dict):
+            continue
+        for turn in group.get("latest_turns") or []:
+            if not isinstance(turn, dict):
+                continue
+            thread_key = turn.get("thread_key")
+            if not thread_key:
+                continue
+            entry = by_thread.get(thread_key)
+            if not entry:
+                continue
+            scope_labels = [str(value) for value in turn.get("scope_labels") or [] if isinstance(value, str)]
+            source_refs = [ref for ref in turn.get("source_refs") or [] if isinstance(ref, dict)]
+            source_ref_count = len(source_refs)
+            matched = unique_preserve(
+                recency_terms
+                + cue_terms
+                + [label]
+                + [str(value) for value in (turn.get("topic_terms") or [])[:3]],
+                limit=8,
+            )
+            boost = SCENT_THRESHOLD + 4.0
+            existing = by_key.get(thread_key)
+            if existing:
+                existing["score"] = round(float(existing.get("score") or 0.0) + boost, 3)
+                existing["matched_terms"] = unique_preserve(list(existing.get("matched_terms") or []) + matched, limit=8)
+                existing["timeline_source"] = True
+                existing["life_wide_timeline_source"] = True
+                existing["scope_labels"] = unique_preserve(list(existing.get("scope_labels") or []) + scope_labels, limit=8)
+                if source_ref_count:
+                    existing["source_ref_count"] = max(int(existing.get("source_ref_count") or 0), source_ref_count)
+                if source_refs and not existing.get("source_refs"):
+                    existing["source_refs"] = source_refs[:3]
+                if turn.get("turn_id") and not existing.get("timeline_turn_id"):
+                    existing["timeline_turn_id"] = turn.get("turn_id")
+            else:
+                item = candidate_summary(entry, boost, query_terms)
+                item["matched_terms"] = unique_preserve(list(item.get("matched_terms") or []) + matched, limit=8)
+                item["timeline_source"] = True
+                item["life_wide_timeline_source"] = True
+                item["scope_labels"] = scope_labels
+                item["source_refs"] = source_refs[:3]
+                item["source_ref_count"] = source_ref_count
+                item["timeline_turn_id"] = turn.get("turn_id")
+                candidates.append(item)
+                by_key[thread_key] = item
+            added_threads.add(str(thread_key))
+            if len(added_threads) >= LIFE_WIDE_TIMELINE_CANDIDATE_LIMIT:
+                return sort_candidates(candidates)
+            break
+    return sort_candidates(candidates)
+
+
 def merge_timeline_candidates(
     candidates: list[dict[str, Any]],
     registry: dict[str, Any],
@@ -536,6 +704,7 @@ def merge_timeline_candidates(
         item["timeline_source"] = True
         candidates.append(item)
         by_key[thread_key] = item
+    candidates = merge_life_wide_timeline_candidates(candidates, registry, timeline, prompt, query_terms)
     return sort_candidates(candidates)
 
 
@@ -619,8 +788,11 @@ def fallback_search_candidates(registry: dict[str, Any], query_terms: list[str],
     candidates: list[dict[str, Any]] = []
     for entry in registry.get("threads") or []:
         paths = entry.get("paths") or {}
-        sqlite_path = Path(paths.get("sqlite") or "")
-        if not sqlite_path.exists():
+        sqlite_value = paths.get("sqlite")
+        if not sqlite_value:
+            continue
+        sqlite_path = Path(str(sqlite_value))
+        if not sqlite_path.exists() or not sqlite_path.is_file():
             continue
         item = candidate_summary(entry, SCENT_THRESHOLD, query_terms)
         item["fallback"] = True
@@ -710,6 +882,7 @@ def strip_private_fields(candidates: list[dict[str, Any]]) -> list[dict[str, Any
         copy.pop("_entry", None)
         copy.pop("probe_line", None)
         copy.pop("probe_phase", None)
+        copy.pop("source_refs", None)
         out.append(copy)
     return out
 

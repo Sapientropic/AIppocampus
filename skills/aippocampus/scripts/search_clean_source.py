@@ -8,8 +8,10 @@ import json
 import os
 from pathlib import Path
 
+from build_clean_source import SCOPE_LABEL_ORDER
 from retrieval import split_query_terms
 from aippocampuslib import compact_text, default_thread_clean_source_dir, resolve_artifact_path
+from semantic_scope_labels import load_semantic_scope_labels, merged_scope_labels, semantic_labels_for_message
 
 
 LEGACY_CLEAN_SOURCE_DIR = ".aippocampus/clean-source"
@@ -57,6 +59,7 @@ def search_clean_source(
     clean_source_dir: str | Path | None = None,
     limit: int = 10,
     snippet_chars: int = 700,
+    scope_labels: list[str] | None = None,
 ) -> dict:
     cwd = Path(cwd).resolve()
     if clean_source_dir is None:
@@ -66,10 +69,34 @@ def search_clean_source(
     else:
         source_dir = resolve_artifact_path(clean_source_dir, cwd, default_thread_clean_source_dir(cwd))
     messages_path = source_dir / "messages.jsonl"
+    semantic_sidecar = load_semantic_scope_labels(source_dir)
     terms = split_query_terms(patterns)
+    label_filter = [str(label).strip() for label in scope_labels or [] if str(label).strip()]
+    known_scope_labels = set(SCOPE_LABEL_ORDER)
+    warnings = [
+        {
+            "code": "unknown_scope_label",
+            "scope_label": label,
+            "message": f"Unknown scope label: {label}",
+        }
+        for label in label_filter
+        if label not in known_scope_labels
+    ]
+    missing_scope_label_count = 0
 
     matches = []
     for message in iter_clean_messages(messages_path):
+        if "scope_labels" not in message:
+            missing_scope_label_count += 1
+        base_scope_labels = [
+            str(label)
+            for label in message.get("scope_labels", [])
+            if isinstance(label, str)
+        ]
+        semantic_scope_labels = semantic_labels_for_message(message, semantic_sidecar)
+        message_scope_labels = merged_scope_labels(base_scope_labels, semantic_scope_labels)
+        if label_filter and not set(label_filter).intersection(message_scope_labels):
+            continue
         score = score_message(message, terms)
         if score <= 0:
             continue
@@ -88,14 +115,26 @@ def search_clean_source(
                 "phase": message.get("phase") or "",
                 "turn_index": message.get("turn_index"),
                 "is_final": bool(message.get("is_final")),
+                "scope_labels": message_scope_labels,
+                "semantic_scope_labels": semantic_scope_labels,
                 "score": round(score, 3),
                 "snippet": compact_text(str(message.get("text") or ""), snippet_chars),
             }
         )
     matches.sort(key=lambda item: (-float(item.get("score") or 0.0), int(item.get("source_line") or 0)))
+    if label_filter and missing_scope_label_count:
+        warnings.append(
+            {
+                "code": "missing_scope_labels",
+                "count": missing_scope_label_count,
+                "message": "Some clean-source messages predate scope_labels; rebuild clean source before treating filtered results as complete.",
+            }
+        )
     return {
         "source": str(messages_path),
         "query_terms": terms,
+        "scope_labels": label_filter,
+        "warnings": warnings,
         "matches": matches[:limit],
     }
 
@@ -107,6 +146,12 @@ def main() -> int:
     parser.add_argument("--clean-source-dir", default=None, help="Defaults to global clean source, with project-local legacy fallback.")
     parser.add_argument("--max", type=int, default=10)
     parser.add_argument("--snippet-chars", type=int, default=700)
+    parser.add_argument(
+        "--scope-label",
+        action="append",
+        default=None,
+        help="Filter to clean-source messages carrying this scope label. Repeat for OR semantics.",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
@@ -116,6 +161,7 @@ def main() -> int:
         clean_source_dir=args.clean_source_dir,
         limit=args.max,
         snippet_chars=args.snippet_chars,
+        scope_labels=args.scope_label,
     )
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -127,6 +173,8 @@ def main() -> int:
                 f"phase={match.get('phase') or '(none)'} | score={match.get('score')}"
             )
             print(f"  {match.get('snippet')}")
+        for warning in result.get("warnings") or []:
+            print(f"warning: {warning.get('code')}: {warning.get('message')}")
     return 0 if result["matches"] else 1
 
 

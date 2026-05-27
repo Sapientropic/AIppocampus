@@ -5,19 +5,41 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
 from build_associations import extract_terms_from_text, source_text_is_noise
+from build_clean_source import SCOPE_LABEL_ORDER
 from registry import load_registry, registry_paths, unique_preserve
 from aippocampuslib import compact_text, now_utc
+from semantic_scope_labels import load_semantic_scope_labels, merged_scope_labels, semantic_labels_for_message
 
 
 TIMELINE_SCHEMA_VERSION = 1
 DEFAULT_MAX_PER_PROJECT = 80
+DEFAULT_MAX_PER_LIFE_LABEL = 80
 DEFAULT_MAX_TURNS_PER_THREAD = 3
+LIFE_RECURRING_MARKERS = (
+    "焦虑",
+    "困惑",
+    "问题",
+    "点子",
+    "想法",
+    "灵感",
+    "喜欢",
+    "不喜欢",
+    "读到",
+    "文章",
+    "生活",
+    "偏好",
+    "anxiety",
+    "question",
+    "idea",
+    "spark",
+    "preference",
+)
 TOPIC_MARKERS = [
     "T-Sense",
     "Go runtime",
@@ -62,6 +84,34 @@ def iter_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def resolve_registry_member_path(value: str | None, registry_path: Path | None = None) -> Path | None:
+    if not value:
+        return None
+    path = Path(str(value).replace("\\", "/"))
+    if path.is_absolute() or registry_path is None:
+        return path
+    if path.drive or ".." in path.parts:
+        return None
+
+    # Public bundles keep registry/threads.json beside clean-source/ and index/
+    # at the bundle root. Machine registries usually store absolute paths, but
+    # portable examples and exports need relative paths to remain useful after
+    # moving between machines.
+    registry_root = registry_path.resolve().parent
+    bundle_root = registry_root.parent
+    candidates = [(registry_root, registry_root / path)]
+    if bundle_root != registry_root:
+        candidates.append((bundle_root, bundle_root / path))
+    for root, candidate in candidates:
+        resolved = candidate.resolve()
+        resolved_root = root.resolve()
+        if resolved != resolved_root and resolved_root not in resolved.parents:
+            continue
+        if resolved.exists():
+            return resolved
+    return candidates[0][1]
+
+
 def sortable_turn_value(turn: dict[str, Any]) -> tuple[int, int]:
     turn_index = turn.get("turn_index")
     line = turn.get("assistant_line") or turn.get("user_line") or turn.get("raw_end_line") or turn.get("end_line") or 0
@@ -89,26 +139,85 @@ def messages_for_turn(turn: dict[str, Any], messages_by_id: dict[str, dict[str, 
 
 def topic_terms_for_text(text: str) -> list[str]:
     marker_hits = [marker for marker in TOPIC_MARKERS if marker.casefold() in text.casefold()]
+    life_hits = [marker for marker in LIFE_RECURRING_MARKERS if marker.casefold() in text.casefold()]
     latin_phrases = [
         phrase.strip()
         for phrase in re.findall(r"[A-Za-z][A-Za-z0-9_.+-]*(?:\s+[A-Za-z][A-Za-z0-9_.+-]*){0,3}", text)
         if len(phrase.strip()) >= 3
     ]
     mined = extract_terms_from_text(text)
-    return unique_preserve(marker_hits + latin_phrases + mined, limit=12)
+    return unique_preserve(marker_hits + life_hits + latin_phrases + mined, limit=12)
 
 
-def latest_turns_for_entry(entry: dict[str, Any], *, max_turns: int = DEFAULT_MAX_TURNS_PER_THREAD) -> list[dict[str, Any]]:
+def canonical_scope_labels(values: list[Any]) -> list[str]:
+    present = {str(value) for value in values if isinstance(value, str)}
+    return [label for label in SCOPE_LABEL_ORDER if label in present]
+
+
+def scope_labels_for_turn(turn: dict[str, Any], turn_messages: list[dict[str, Any]]) -> list[str]:
+    labels: list[Any] = []
+    labels.extend(turn.get("scope_labels") or [])
+    for message in turn_messages:
+        labels.extend(message.get("scope_labels") or [])
+    return canonical_scope_labels(labels)
+
+
+def semantic_scope_labels_for_turn(turn_messages: list[dict[str, Any]]) -> list[str]:
+    labels: list[Any] = []
+    for message in turn_messages:
+        labels.extend(message.get("semantic_scope_labels") or [])
+    return canonical_scope_labels(labels)
+
+
+def source_refs_for_messages(turn_messages: list[dict[str, Any]], *, thread_key: str | None = None) -> list[dict[str, Any]]:
+    refs: list[dict[str, Any]] = []
+    for message in turn_messages:
+        refs.append(
+            {
+                "thread_key": thread_key,
+                "message_id": message.get("message_id") or message.get("id"),
+                "turn_id": message.get("turn_id"),
+                "source_id": message.get("source_id"),
+                "clean_ordinal": message.get("clean_ordinal"),
+                "source_line": message.get("source_line"),
+                "role": message.get("role"),
+                "phase": message.get("phase") or "",
+            }
+        )
+    return refs
+
+
+def timeline_project_key(entry: dict[str, Any]) -> str:
+    return str(entry.get("project_key") or f"project:{entry.get('project_label') or entry.get('workspace_name') or 'unknown'}")
+
+
+def latest_turns_for_entry(
+    entry: dict[str, Any],
+    *,
+    registry_path: Path | None = None,
+    max_turns: int = DEFAULT_MAX_TURNS_PER_THREAD,
+) -> list[dict[str, Any]]:
     paths = entry.get("paths") or {}
     messages_path_value = paths.get("clean_source_messages_jsonl")
     if not messages_path_value:
         return []
-    messages_path = Path(messages_path_value)
-    messages = iter_jsonl(messages_path)
+    messages_path = resolve_registry_member_path(str(messages_path_value), registry_path)
+    if messages_path is None:
+        return []
+    semantic_sidecar = load_semantic_scope_labels(messages_path.parent)
+    messages = []
+    for item in iter_jsonl(messages_path):
+        semantic_labels = semantic_labels_for_message(item, semantic_sidecar)
+        if semantic_labels:
+            item = dict(item)
+            item["semantic_scope_labels"] = semantic_labels
+            item["scope_labels"] = merged_scope_labels(list(item.get("scope_labels") or []), semantic_labels)
+        messages.append(item)
     if not messages:
         return []
     turns_path_value = paths.get("clean_source_turns_jsonl")
-    turns = iter_jsonl(Path(turns_path_value)) if turns_path_value else []
+    turns_path = resolve_registry_member_path(str(turns_path_value), registry_path) if turns_path_value else None
+    turns = iter_jsonl(turns_path) if turns_path else []
     if not turns:
         seen_turn_ids = unique_preserve([str(item.get("turn_id") or "") for item in messages if item.get("turn_id")])
         turns = [{"turn_id": turn_id} for turn_id in seen_turn_ids]
@@ -147,11 +256,13 @@ def latest_turns_for_entry(entry: dict[str, Any], *, max_turns: int = DEFAULT_MA
             or entry.get("updated_at")
         )
         topic_terms = topic_terms_for_text(user_text + " " + assistant_text)
+        scope_labels = scope_labels_for_turn(turn, turn_messages)
+        semantic_scope_labels = semantic_scope_labels_for_turn(turn_messages)
         rows.append(
             {
                 "thread_key": entry.get("thread_key"),
                 "title": entry.get("title") or entry.get("workspace_name") or entry.get("thread_key"),
-                "project_key": entry.get("project_key"),
+                "project_key": timeline_project_key(entry),
                 "project_label": entry.get("project_label") or entry.get("workspace_name"),
                 "timestamp": timestamp,
                 "turn_id": turn.get("turn_id") or (user or assistant or {}).get("turn_id"),
@@ -161,7 +272,10 @@ def latest_turns_for_entry(entry: dict[str, Any], *, max_turns: int = DEFAULT_MA
                 "assistant_phase": (assistant or {}).get("phase") or turn.get("assistant_phase") or "",
                 "user": compact_text(user_text, 320),
                 "assistant": compact_text(assistant_text, 420),
+                "scope_labels": scope_labels,
+                "semantic_scope_labels": semantic_scope_labels,
                 "topic_terms": topic_terms[:12],
+                "source_refs": source_refs_for_messages(turn_messages, thread_key=str(entry.get("thread_key") or "")),
             }
         )
         if len(rows) >= max_turns:
@@ -169,16 +283,70 @@ def latest_turns_for_entry(entry: dict[str, Any], *, max_turns: int = DEFAULT_MA
     return rows
 
 
+def build_life_wide_timeline(rows: list[dict[str, Any]], *, max_per_label: int = DEFAULT_MAX_PER_LIFE_LABEL) -> dict[str, Any]:
+    label_groups: dict[str, list[dict[str, Any]]] = {label: [] for label in SCOPE_LABEL_ORDER}
+    for row in rows:
+        for label in row.get("scope_labels") or []:
+            if label in label_groups:
+                label_groups[label].append(row)
+
+    labels: dict[str, dict[str, Any]] = {}
+    for label in SCOPE_LABEL_ORDER:
+        group_rows = label_groups[label]
+        if not group_rows:
+            continue
+        group_rows.sort(
+            key=lambda item: (
+                str(item.get("timestamp") or ""),
+                int(item.get("turn_index") or 0),
+                int(item.get("assistant_line") or item.get("user_line") or 0),
+            ),
+            reverse=True,
+        )
+        term_counter: Counter[str] = Counter()
+        for row in group_rows:
+            for term in row.get("topic_terms") or []:
+                term_counter[str(term)] += 1
+        recurring_terms = [
+            {"term": term, "count": count}
+            for term, count in sorted(term_counter.items(), key=lambda item: (-item[1], item[0].casefold()))
+            if count >= 2
+        ][:12]
+        labels[label] = {
+            "scope_label": label,
+            "turn_count": len(group_rows),
+            "thread_count": len({row.get("thread_key") for row in group_rows if row.get("thread_key")}),
+            "project_count": len({
+                row.get("project_key") or row.get("project_label")
+                for row in group_rows
+                if row.get("project_key") or row.get("project_label")
+            }),
+            "recurring_terms": recurring_terms,
+            "latest_turns": group_rows[: max(1, int(max_per_label))],
+        }
+
+    return {
+        "schema_version": 1,
+        "kind": "aippocampus_life_wide_timeline",
+        "source": "clean_source_scope_labels",
+        "boundary": "Navigation sidecar only; exact claims still require clean-source source_refs.",
+        "label_count": len(labels),
+        "labels": labels,
+    }
+
+
 def build_project_timeline(
     registry_path: Path,
     *,
     max_per_project: int = DEFAULT_MAX_PER_PROJECT,
+    max_per_life_label: int = DEFAULT_MAX_PER_LIFE_LABEL,
     max_turns_per_thread: int = DEFAULT_MAX_TURNS_PER_THREAD,
 ) -> dict[str, Any]:
     registry = load_registry(registry_path)
     projects: dict[str, dict[str, Any]] = {}
+    life_rows: list[dict[str, Any]] = []
     for entry in registry.get("threads") or []:
-        project_key = entry.get("project_key") or f"project:{entry.get('project_label') or entry.get('workspace_name') or 'unknown'}"
+        project_key = timeline_project_key(entry)
         project = projects.setdefault(
             str(project_key),
             {
@@ -193,7 +361,9 @@ def build_project_timeline(
             },
         )
         project["thread_count"] += 1
-        project["latest_turns"].extend(latest_turns_for_entry(entry, max_turns=max_turns_per_thread))
+        entry_turns = latest_turns_for_entry(entry, registry_path=registry_path, max_turns=max_turns_per_thread)
+        project["latest_turns"].extend(entry_turns)
+        life_rows.extend([turn for turn in entry_turns if turn.get("scope_labels")])
 
     for project in projects.values():
         project["latest_turns"].sort(
@@ -213,6 +383,7 @@ def build_project_timeline(
         "source_registry": str(registry_path),
         "project_count": len(projects),
         "projects": dict(sorted(projects.items(), key=lambda item: str(item[1].get("project_label") or item[0]).casefold())),
+        "life_wide": build_life_wide_timeline(life_rows, max_per_label=max_per_life_label),
     }
 
 
@@ -229,6 +400,7 @@ def main() -> int:
     parser.add_argument("--registry-dir")
     parser.add_argument("--output")
     parser.add_argument("--max-per-project", type=int, default=DEFAULT_MAX_PER_PROJECT)
+    parser.add_argument("--max-per-life-label", type=int, default=DEFAULT_MAX_PER_LIFE_LABEL)
     parser.add_argument("--max-turns-per-thread", type=int, default=DEFAULT_MAX_TURNS_PER_THREAD)
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
@@ -238,6 +410,7 @@ def main() -> int:
     result = build_project_timeline(
         registry_path,
         max_per_project=args.max_per_project,
+        max_per_life_label=args.max_per_life_label,
         max_turns_per_thread=args.max_turns_per_thread,
     )
     save_project_timeline(output_path, result)
