@@ -17,6 +17,8 @@ skill live under `skills/aippocampus/references/`.
   review checklist.
 - `public-readiness-verification.md` - dated verification evidence for the
   current public-readiness slice.
+- `memory-decision-benchmark-plan.md` - benchmark design for quiet-by-default
+  recall decisions, source fidelity, and payload privacy.
 - `next-iteration-plan.md` - short handoff for the next development slices.
 - `未干的地图.md` - canonical Chinese origin essay; do not mirror its full text
   elsewhere.
@@ -54,3 +56,7 @@ Do not place raw rollouts, generated indexes, private anchors, registry exports,
 or local-machine paths in this docs folder. Generated memory artifacts belong
 in the global `$CODEX_HOME/aippocampus-registry/threads/<thread>/...` store by
 default, or in explicit local export/debug paths that stay gitignored.
+Public benchmark-corpus scripts and curated samples live in
+`benchmark_corpus/`. Keep local caches, generated outputs, benchmark reports,
+and private exports out of git unless a future change deliberately promotes a
+small public subset with provenance.

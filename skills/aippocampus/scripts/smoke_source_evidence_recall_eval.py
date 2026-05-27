@@ -199,6 +199,7 @@ def select_eval_cases(
                     "case_id": case_id,
                     "prompt_kind": PROMPT_KIND,
                     "prompt": selected_prompt_text(terms),
+                    "source_terms": terms,
                     "query_terms": split_query_terms([selected_prompt_text(terms)]),
                     "scope_labels": unique_preserve(
                         [
@@ -248,6 +249,44 @@ def hit_scope_matches(hit: dict[str, Any], labels: list[str]) -> bool:
     present = {str(label) for label in hit.get("scope_labels") or []}
     present.update(str(label) for label in hit.get("semantic_scope_labels") or [])
     return bool(present.intersection(labels))
+
+
+def turn_key_for_row(row: dict[str, Any]) -> tuple[str, str] | None:
+    message = row.get("message") if isinstance(row.get("message"), dict) else {}
+    thread_key = str(row.get("thread_key") or "")
+    turn_id = str(message.get("turn_id") or "")
+    if not thread_key or not turn_id:
+        return None
+    return (thread_key, turn_id)
+
+
+def turn_scope_label_index(corpus: list[dict[str, Any]]) -> dict[tuple[str, str], set[str]]:
+    index: dict[tuple[str, str], set[str]] = {}
+    for row in corpus:
+        key = turn_key_for_row(row)
+        if key is None:
+            continue
+        message = row.get("message") if isinstance(row.get("message"), dict) else {}
+        labels = index.setdefault(key, set())
+        labels.update(str(label) for label in message.get("scope_labels") or [])
+        labels.update(str(label) for label in message.get("semantic_scope_labels") or [])
+    return index
+
+
+def row_or_turn_scope_matches(
+    row: dict[str, Any],
+    labels: list[str],
+    turn_scope_labels: dict[tuple[str, str], set[str]],
+) -> bool:
+    if not labels:
+        return True
+    message = row.get("message") if isinstance(row.get("message"), dict) else {}
+    if hit_scope_matches(message, labels):
+        return True
+    key = turn_key_for_row(row)
+    if key is None:
+        return False
+    return bool(turn_scope_labels.get(key, set()).intersection(labels))
 
 
 def clean_source_corpus(registry: dict[str, Any]) -> tuple[list[dict[str, Any]], int]:
@@ -363,14 +402,24 @@ def search_expected_evidence_dynamic_source(
     *,
     top_k: int,
 ) -> dict[str, Any]:
-    terms = list(case.get("query_terms") or [])
+    # `query_terms` intentionally mirrors the full fuzzy prompt. For this
+    # diagnostic source-evidence ranking, prefer source-derived cue terms when
+    # they are available so the stable prompt frame ("previous life-wide
+    # fragment...") cannot dominate over the actual evidence discriminators.
+    terms = list(case.get("source_terms") or case.get("query_terms") or [])
     labels = [str(label) for label in case.get("scope_labels") or []]
     expected = case.get("expected") or {}
     idf = dynamic_term_idf(corpus, terms)
+    turn_scope_labels = turn_scope_label_index(corpus)
     scored_hits: list[dict[str, Any]] = []
     for row in corpus:
         message = row.get("message") if isinstance(row.get("message"), dict) else {}
-        if not hit_scope_matches(message, labels):
+        # Clean-source can split one turn across multiple rows: a user row may
+        # carry the scope label while the sibling assistant row carries the
+        # source-derived query terms. Share scope only within the exact
+        # thread+turn boundary; widening this to a thread-level fallback would
+        # reintroduce unrelated private-context false positives.
+        if not row_or_turn_scope_matches(row, labels, turn_scope_labels):
             continue
         base_score = score_message(message, terms)
         idf_score = dynamic_source_score(str(row.get("text_low") or ""), terms, idf)
@@ -417,6 +466,160 @@ def sanitized_case_result(case: dict[str, Any], search_result: dict[str, Any]) -
         "expected_evidence": case.get("expected_evidence"),
         "passed": bool(search_result.get("passed")),
         "rank": search_result.get("rank"),
+    }
+
+
+def expected_rows_for_case(
+    corpus: list[dict[str, Any]], case: dict[str, Any]
+) -> list[dict[str, Any]]:
+    expected = case.get("expected") or {}
+    rows: list[dict[str, Any]] = []
+    for row in corpus:
+        message = row.get("message") if isinstance(row.get("message"), dict) else {}
+        if str(row.get("thread_key") or "") != str(expected.get("thread_key") or ""):
+            continue
+        if hit_matches_expected(
+            {
+                "message_id": message.get("message_id") or message.get("id"),
+                "turn_id": message.get("turn_id"),
+            },
+            expected,
+        ):
+            rows.append(row)
+    return rows
+
+
+def query_overlap_count(row: dict[str, Any], query_terms: list[str]) -> int:
+    text = str(row.get("text_low") or "")
+    return sum(1 for term in query_terms if str(term).casefold() in text)
+
+
+def classify_failure(
+    *,
+    expected_rows_found: int,
+    scope_match_rows: int,
+    query_overlap_rows: int,
+    scope_and_query_overlap_rows: int,
+    extended_rank: Any,
+) -> str:
+    if expected_rows_found == 0:
+        return "expected_source_missing_from_corpus"
+    if scope_match_rows and query_overlap_rows and not scope_and_query_overlap_rows:
+        return "scope_term_split_across_expected_turn"
+    if query_overlap_rows and not scope_match_rows:
+        return "expected_match_missing_scope_labels"
+    if scope_match_rows and not query_overlap_rows:
+        return "selected_prompt_terms_not_on_expected_source"
+    if scope_and_query_overlap_rows:
+        return "rank_below_top_k" if extended_rank else "candidate_scored_but_too_low"
+    return "no_retrievable_signal_on_expected_source"
+
+
+def source_evidence_failure_diagnostics(
+    *,
+    cases: list[dict[str, Any]],
+    results: list[tuple[dict[str, Any], dict[str, Any]]],
+    corpus: list[dict[str, Any]],
+    top_k: int,
+    ranking: str,
+    extended_top_k: int = 20,
+) -> dict[str, Any]:
+    """Return sanitized failure categories for selected source-evidence misses.
+
+    The diagnostics intentionally count shape and ranking facts only. They do
+    not include query text, snippets, message ids, thread keys, local paths, or
+    raw source refs, because this smoke often runs over private real history.
+    """
+
+    failed = [
+        (case, result)
+        for case, result in results
+        if not bool(result.get("passed"))
+    ]
+    categories = {
+        "expected_source_missing_from_corpus": 0,
+        "scope_term_split_across_expected_turn": 0,
+        "expected_match_missing_scope_labels": 0,
+        "selected_prompt_terms_not_on_expected_source": 0,
+        "rank_below_top_k": 0,
+        "candidate_scored_but_too_low": 0,
+        "no_retrievable_signal_on_expected_source": 0,
+        "not_diagnosed_for_ranking": 0,
+    }
+    failed_cases: list[dict[str, Any]] = []
+    if ranking != "dynamic_source" or not corpus:
+        categories["not_diagnosed_for_ranking"] = len(failed)
+        return {
+            "failed_count": len(failed),
+            "top_k": int(top_k),
+            "extended_top_k": int(extended_top_k),
+            "categories": categories,
+            "failed_cases": [
+                {
+                    "case_id": case.get("case_id"),
+                    "category": "not_diagnosed_for_ranking",
+                }
+                for case, _ in failed
+            ],
+        }
+
+    for case, result in failed:
+        query_terms = [str(term) for term in case.get("query_terms") or []]
+        labels = [str(label) for label in case.get("scope_labels") or []]
+        expected_rows = expected_rows_for_case(corpus, case)
+        row_stats = []
+        for row in expected_rows:
+            message = row.get("message") if isinstance(row.get("message"), dict) else {}
+            overlap = query_overlap_count(row, query_terms)
+            row_stats.append(
+                {
+                    "scope_match": hit_scope_matches(message, labels),
+                    "query_overlap_count": overlap,
+                }
+            )
+        scope_match_rows = sum(1 for item in row_stats if item["scope_match"])
+        query_overlap_rows = sum(1 for item in row_stats if item["query_overlap_count"] > 0)
+        scope_and_query_overlap_rows = sum(
+            1
+            for item in row_stats
+            if item["scope_match"] and item["query_overlap_count"] > 0
+        )
+        extended = search_expected_evidence_dynamic_source(
+            corpus,
+            case,
+            top_k=max(int(top_k), int(extended_top_k)),
+        )
+        extended_rank = extended.get("rank")
+        category = classify_failure(
+            expected_rows_found=len(expected_rows),
+            scope_match_rows=scope_match_rows,
+            query_overlap_rows=query_overlap_rows,
+            scope_and_query_overlap_rows=scope_and_query_overlap_rows,
+            extended_rank=extended_rank,
+        )
+        categories[category] = categories.get(category, 0) + 1
+        failed_cases.append(
+            {
+                "case_id": case.get("case_id"),
+                "category": category,
+                "rank": result.get("rank"),
+                "extended_rank": extended_rank,
+                "expected_rows_found": len(expected_rows),
+                "expected_scope_match_rows": scope_match_rows,
+                "expected_query_overlap_rows": query_overlap_rows,
+                "expected_scope_and_query_overlap_rows": scope_and_query_overlap_rows,
+                "expected_max_query_overlap": max(
+                    [item["query_overlap_count"] for item in row_stats],
+                    default=0,
+                ),
+            }
+        )
+    return {
+        "failed_count": len(failed),
+        "top_k": int(top_k),
+        "extended_top_k": int(extended_top_k),
+        "categories": categories,
+        "failed_cases": failed_cases,
     }
 
 
@@ -473,6 +676,7 @@ def run_source_evidence_recall_eval(
     )
     if ranking == "registry":
         corpus_warning_count = 0
+        corpus: list[dict[str, Any]] = []
         results = [
             (
                 case,
@@ -516,6 +720,13 @@ def run_source_evidence_recall_eval(
         "warning_count": warning_count,
         "ranking": ranking,
         "cases": [sanitized_case_result(case, result) for case, result in results],
+        "failure_diagnostics": source_evidence_failure_diagnostics(
+            cases=cases,
+            results=results,
+            corpus=corpus,
+            top_k=top_k,
+            ranking=ranking,
+        ),
         "privacy_boundary": {
             "raw_text_emitted": False,
             "snippets_emitted": False,

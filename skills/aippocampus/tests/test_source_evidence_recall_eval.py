@@ -183,6 +183,179 @@ class SourceEvidenceRecallEvalTests(unittest.TestCase):
         self.assertEqual(result["status"], "insufficient_selected_cases")
         self.assertIn("selected_semantic_source_evidence", result["cannot_claim"])
 
+    def test_dynamic_source_uses_turn_scope_when_terms_live_on_sibling_message(
+        self,
+    ) -> None:
+        case = {
+            "case_id": "evidence:test-turn-scope",
+            "query_terms": ["lighthouse", "continuity"],
+            "scope_labels": ["personal_reflection"],
+            "expected": {
+                "thread_key": "session:life",
+                "message_id": "msg_user",
+                "turn_id": "turn_life",
+            },
+        }
+        corpus = [
+            {
+                "thread_key": "session:life",
+                "text_low": "plain user request",
+                "entry": {},
+                "message": {
+                    "message_id": "msg_user",
+                    "turn_id": "turn_life",
+                    "scope_labels": ["personal_reflection"],
+                    "text": "Plain user request",
+                },
+            },
+            {
+                "thread_key": "session:life",
+                "text_low": "lighthouse continuity pivot",
+                "entry": {},
+                "message": {
+                    "message_id": "msg_assistant",
+                    "turn_id": "turn_life",
+                    "scope_labels": [],
+                    "text": "lighthouse continuity pivot",
+                },
+            },
+            {
+                "thread_key": "session:life",
+                "text_low": "lighthouse continuity unrelated turn",
+                "entry": {},
+                "message": {
+                    "message_id": "msg_other_turn",
+                    "turn_id": "turn_other",
+                    "scope_labels": [],
+                    "text": "lighthouse continuity unrelated turn",
+                },
+            },
+        ]
+
+        result = recall_eval.search_expected_evidence_dynamic_source(
+            corpus, case, top_k=1
+        )
+
+        self.assertTrue(result["passed"])
+        self.assertEqual(result["rank"], 1)
+
+    def test_dynamic_source_scores_source_terms_not_generic_prompt_frame(
+        self,
+    ) -> None:
+        case = {
+            "case_id": "evidence:test-source-terms",
+            "query_terms": [
+                "之前",
+                "那个",
+                "life-wide、像个人线索或想法火花的片段，和",
+                "片段",
+                "lighthouse",
+                "continuity",
+            ],
+            "source_terms": ["lighthouse", "continuity"],
+            "scope_labels": ["personal_reflection"],
+            "expected": {
+                "thread_key": "session:life",
+                "message_id": "msg_expected",
+                "turn_id": "turn_life",
+            },
+        }
+        corpus = [
+            {
+                "thread_key": "session:life",
+                "text_low": (
+                    "life-wide、像个人线索或想法火花的片段，和 "
+                    "life-wide、像个人线索或想法火花的片段，和 "
+                    "之前 那个 片段"
+                ),
+                "entry": {},
+                "message": {
+                    "message_id": "msg_generic",
+                    "turn_id": "turn_generic",
+                    "scope_labels": ["personal_reflection"],
+                    "text": (
+                        "life-wide、像个人线索或想法火花的片段，和 "
+                        "life-wide、像个人线索或想法火花的片段，和 "
+                        "之前 那个 片段"
+                    ),
+                },
+            },
+            {
+                "thread_key": "session:life",
+                "text_low": "lighthouse continuity pivot",
+                "entry": {},
+                "message": {
+                    "message_id": "msg_expected",
+                    "turn_id": "turn_life",
+                    "scope_labels": ["personal_reflection"],
+                    "text": "lighthouse continuity pivot",
+                },
+            },
+        ]
+
+        result = recall_eval.search_expected_evidence_dynamic_source(
+            corpus, case, top_k=1
+        )
+
+        self.assertTrue(result["passed"])
+        self.assertEqual(result["rank"], 1)
+
+    def test_failure_diagnostics_classify_scope_term_split_without_private_text(self) -> None:
+        case = {
+            "case_id": "evidence:test-split",
+            "query_terms": ["lighthouse", "continuity"],
+            "scope_labels": ["personal_reflection"],
+            "expected": {
+                "thread_key": "session:life",
+                "message_id": "msg_user",
+                "turn_id": "turn_life",
+            },
+        }
+        corpus = [
+            {
+                "thread_key": "session:life",
+                "text_low": "plain user request",
+                "entry": {},
+                "message": {
+                    "message_id": "msg_user",
+                    "turn_id": "turn_life",
+                    "scope_labels": ["personal_reflection"],
+                    "text": "Plain user request",
+                },
+            },
+            {
+                "thread_key": "session:life",
+                "text_low": "lighthouse continuity pivot",
+                "entry": {},
+                "message": {
+                    "message_id": "msg_assistant",
+                    "turn_id": "turn_life",
+                    "scope_labels": [],
+                    "text": "lighthouse continuity pivot",
+                },
+            },
+        ]
+
+        diagnostics = recall_eval.source_evidence_failure_diagnostics(
+            cases=[case],
+            results=[(case, {"passed": False, "rank": None})],
+            corpus=corpus,
+            top_k=5,
+            ranking="dynamic_source",
+        )
+
+        rendered = json.dumps(diagnostics, ensure_ascii=False)
+        self.assertEqual(diagnostics["failed_count"], 1)
+        self.assertEqual(
+            diagnostics["categories"]["scope_term_split_across_expected_turn"], 1
+        )
+        self.assertEqual(
+            diagnostics["failed_cases"][0]["category"],
+            "scope_term_split_across_expected_turn",
+        )
+        self.assertNotIn("lighthouse", rendered)
+        self.assertNotIn("msg_user", rendered)
+
 
 if __name__ == "__main__":
     unittest.main()
