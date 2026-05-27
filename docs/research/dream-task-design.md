@@ -198,6 +198,40 @@ Extractive tasks are deterministic-first (rules + semantic gates).
 Integrative tasks are semantic-first (require model reasoning) and must always
 be clearly flagged as dream output, not source-grounded fact.
 
+## Dream Outputs As Reusable Inference Substrate
+
+Dream tasks should not be treated as a foreground answerer. Their job is to
+move expensive integrative reasoning out of the moment when the user is waiting
+and into a slower background layer. The foreground agent should usually read
+small, already-validated dream outputs instead of asking a live reflect path to
+rediscover the same pattern from scratch.
+
+This matters for questions such as:
+
+- "What unnamed question has the user been circling for the last few months?"
+- "Which thread patterns keep recurring under different surface topics?"
+- "What blind spot or unresolved edge should color the next conversation?"
+
+Those questions are too synthetic for ordinary retrieval and too latency-prone
+for every prompt to solve live. Dream outputs should therefore be stored as
+reusable `source-backed hypothesis` records:
+
+- `finding_kind`: `blind_spot`, `emergence_signal`,
+  `cross_thread_resonance`, `trajectory_hint`, or `synthesis_hypothesis`
+- `dream_function`: `compensatory`, `prospective`, `amplification`, or
+  `active_imagination`
+- `source_refs`: the clean-source turns or thread-level findings that inspired
+  the hypothesis
+- `confidence`, `counter_evidence`, `updated_at`, and `expires_or_review_after`
+- `downstream_use`: whether the finding may feed a cognitive portrait,
+  ambient recall card, thread ambient cache, or explicit user-facing review
+
+The contract stays conservative: a dream finding is not a fact and must not
+rewrite clean source. It is a prepared interpretive layer over source. When the
+user asks a high-level continuity question, or when ambient recall detects a
+matching theme, the agent can retrieve these records as a starting map, then
+follow `source_refs` back to clean source before making strong claims.
+
 ## The Hero's Journey Insight
 
 The Hero's Journey (Campbell) has a known flaw: it imposes a quest narrative
