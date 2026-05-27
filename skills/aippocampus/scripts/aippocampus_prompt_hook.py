@@ -18,10 +18,10 @@ from aippocampuslib import codex_home, now_utc
 
 DEFAULT_SEARCH_BUDGET_FALLBACK = 3
 PROMPT_HOOK_SEMANTIC_TIMEOUT_FALLBACK = float(
-    os.environ.get("AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT", "0.8")
+    os.environ.get("AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT", "12")
 )
 PROMPT_HOOK_MAX_ELAPSED_MS_FALLBACK = int(
-    os.environ.get("AIPPOCAMPUS_PROMPT_HOOK_BUDGET_MS", "4200")
+    os.environ.get("AIPPOCAMPUS_PROMPT_HOOK_BUDGET_MS", "0")
 )
 _RUNTIME_EXPORTS = {
     "DEFAULT_SEARCH_BUDGET",
@@ -166,16 +166,15 @@ def main() -> int:
         type=float,
         default=PROMPT_HOOK_SEMANTIC_TIMEOUT_FALLBACK,
         help=(
-            "Foreground budget for optional semantic-gate work. Keep this below "
-            "the Codex UserPromptSubmit hook timeout; standalone semantic_recall_gate.py "
-            "keeps its larger default."
+            "Timeout for optional semantic-gate work. The default favors recall "
+            "quality; pass a smaller value only for explicit smoke/debug runs."
         ),
     )
     parser.add_argument(
         "--max-elapsed-ms",
         type=int,
         default=PROMPT_HOOK_MAX_ELAPSED_MS_FALLBACK,
-        help="Fail-open foreground budget for the whole prompt hook. Use 0 to disable.",
+        help="Optional fail-open budget for the whole prompt hook. Default 0 disables it.",
     )
     parser.add_argument("--no-semantic-gate", action="store_true")
     parser.add_argument("--no-cognitive-map", action="store_true")

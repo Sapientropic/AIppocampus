@@ -165,6 +165,46 @@ def _decision_reasons(
     return reasons
 
 
+def _explicit_evidence_request_is_ambiguous(
+    prompt: str,
+    candidates: list[dict[str, Any]],
+) -> bool:
+    if len(candidates) < 2:
+        return False
+    strong = [
+        candidate
+        for candidate in candidates[:3]
+        if float(candidate.get("score") or 0.0) >= SCENT_THRESHOLD
+    ]
+    if len(strong) < 2:
+        return False
+    labels = unique_preserve(
+        [str(candidate.get("project_label") or "") for candidate in strong if candidate.get("project_label")],
+        limit=4,
+    )
+    if len(labels) < 2:
+        return False
+    prompt_low = prompt.casefold()
+    if any(label and label.casefold() in prompt_low for label in labels):
+        return False
+    shared_terms: dict[str, set[str]] = {}
+    for candidate in strong:
+        label = str(candidate.get("project_label") or "")
+        for term in candidate.get("matched_terms") or []:
+            normalized = str(term or "").strip().casefold()
+            if len(normalized) < 3:
+                continue
+            shared_terms.setdefault(normalized, set()).add(label)
+    if not any(len(term_labels) >= 2 for term_labels in shared_terms.values()):
+        return False
+    scores = [float(candidate.get("score") or 0.0) for candidate in strong[:2]]
+    # If two project scopes are effectively tied on the same short entity and
+    # the prompt did not name a project, source evidence would be guesswork.
+    # Keep the ambient hint as scent and let the foreground model ask/follow up
+    # instead of surfacing the wrong source-backed snippet.
+    return abs(scores[0] - scores[1]) <= max(6.0, min(scores) * 0.15)
+
+
 def _run_semantic_gate_for_prompt(
     *,
     prompt: str,
@@ -431,6 +471,11 @@ def assess_prompt(
         semantic_result=semantic_result,
         suppressed=suppressed,
     )
+    ambiguous_evidence_request = bool(
+        explicit and _explicit_evidence_request_is_ambiguous(prompt, candidates)
+    )
+    if ambiguous_evidence_request:
+        reasons.append("source evidence withheld: ambiguous cross-project entity")
 
     evidence: list[dict[str, Any]] = []
     decision = "skip"
@@ -453,6 +498,7 @@ def assess_prompt(
             candidates
             and search_budget > 0
             and (explicit or important or semantic_wants_evidence)
+            and not ambiguous_evidence_request
             and _budget_allows(start, max_elapsed_ms, EVIDENCE_MIN_REMAINING_MS)
         ):
             evidence = collect_evidence(candidates, query_terms, search_budget)

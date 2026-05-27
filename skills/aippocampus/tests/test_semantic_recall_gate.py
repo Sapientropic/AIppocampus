@@ -131,6 +131,109 @@ class SemanticRecallGateTests(unittest.TestCase):
         self.assertLess(worker_keys.index("input"), worker_keys.index("output_schema"))
         self.assertLess(worker_keys.index("output_schema"), worker_keys.index("task"))
 
+    def test_semantic_gate_payload_adds_prompt_relevant_catalog_after_prompt(self) -> None:
+        registry = {"schema_version": 1, "threads": []}
+        for idx in range(35):
+            registry["threads"].append(
+                {
+                    "thread_key": f"session:filler-{idx}",
+                    "project_label": "AIppocampus",
+                    "anchor_titles": [f"filler topic {idx}"],
+                    "keywords": [f"filler-{idx}"],
+                    "summary": f"Filler memory surface {idx}.",
+                    "paths": {"workspace": str(self.workspace)},
+                }
+            )
+        registry["threads"].append(
+            {
+                "thread_key": "session:target",
+                "project_label": "AIppocampus",
+                "anchor_titles": ["rare semantic marker continuation"],
+                "keywords": ["raresemanticmarker", "continuation target"],
+                "summary": "The target memory that should survive catalog truncation.",
+                "paths": {"workspace": str(self.workspace)},
+            }
+        )
+
+        payload = gate.catalog_payload(
+            prompt="继续 raresemanticmarker 这条线索",
+            cwd=self.workspace,
+            registry=registry,
+            associations={"terms": {}},
+            working_memory=[],
+            semantic_triggers_path=None,
+        )
+
+        payload_keys = list(payload.keys())
+        self.assertLess(payload_keys.index("memory_catalog"), payload_keys.index("prompt"))
+        self.assertLess(payload_keys.index("trigger_catalog"), payload_keys.index("prompt"))
+        self.assertGreater(payload_keys.index("prompt_relevant_catalog"), payload_keys.index("prompt"))
+        self.assertEqual(len(payload["memory_catalog"]), 36)
+        self.assertIn(
+            "session:target",
+            [item["thread_key"] for item in payload["memory_catalog"]],
+        )
+        self.assertLessEqual(
+            len(payload["prompt_relevant_catalog"]),
+            gate.DEFAULT_MAX_PROMPT_RELEVANT_CATALOG_ITEMS,
+        )
+        self.assertIn(
+            "session:target",
+            [item["thread_key"] for item in payload["prompt_relevant_catalog"]],
+        )
+
+    def test_semantic_gate_payload_adds_prompt_relevant_triggers_after_prompt(self) -> None:
+        triggers_path = self.root / "semantic_triggers.jsonl"
+        rows = []
+        for idx in range(90):
+            rows.append(
+                {
+                    "kind": "aippocampus_semantic_trigger",
+                    "title": f"filler trigger {idx}",
+                    "aliases": [f"filler-trigger-{idx}"],
+                    "status": "active",
+                    "confidence": 0.9,
+                }
+            )
+        rows.append(
+            {
+                "kind": "aippocampus_semantic_trigger",
+                "title": "rare trigger target",
+                "aliases": ["raresidecartrigger"],
+                "status": "active",
+                "confidence": 0.9,
+            }
+        )
+        triggers_path.write_text(
+            "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
+            encoding="utf-8",
+        )
+
+        payload = gate.catalog_payload(
+            prompt="继续 raresidecartrigger 这条线索",
+            cwd=self.workspace,
+            registry=self.registry,
+            associations={"terms": {}},
+            working_memory=[],
+            semantic_triggers_path=triggers_path,
+        )
+
+        payload_keys = list(payload.keys())
+        self.assertGreater(payload_keys.index("prompt_relevant_triggers"), payload_keys.index("prompt"))
+        self.assertEqual(len(payload["trigger_catalog"]), 91)
+        self.assertIn(
+            "rare trigger target",
+            [item["title"] for item in payload["trigger_catalog"]],
+        )
+        self.assertLessEqual(
+            len(payload["prompt_relevant_triggers"]),
+            gate.DEFAULT_MAX_PROMPT_RELEVANT_TRIGGER_ITEMS,
+        )
+        self.assertIn(
+            "rare trigger target",
+            [item["title"] for item in payload["prompt_relevant_triggers"]],
+        )
+
     def test_semantic_gate_reports_aggregate_deepseek_cache_metrics(self) -> None:
         def chat_fn(messages, api_key, model, base_url, max_tokens, timeout, temperature):
             del messages, api_key, model, base_url, max_tokens, timeout, temperature

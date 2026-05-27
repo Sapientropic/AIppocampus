@@ -15,6 +15,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import aippocampus_prompt_hook as hook  # noqa: E402
 import build_concept_graph as concept_graph  # noqa: E402
+import prompt_recall_core as recall_core  # noqa: E402
 
 
 class AmbientRecallHookTests(unittest.TestCase):
@@ -161,6 +162,31 @@ class AmbientRecallHookTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
+
+    def _write_single_thread_registry(
+        self,
+        *,
+        title: str,
+        keywords: list[str],
+        summary: str,
+    ) -> Path:
+        registry_path = self.root / f"{title.lower().replace(' ', '-')}-registry" / "threads.json"
+        registry_path.parent.mkdir()
+        entry = {
+            "thread_key": "session:single-thread",
+            "title": title,
+            "workspace_name": "single-thread",
+            "updated_at": "2026-05-25T19:00:00Z",
+            "anchor_titles": [title],
+            "keywords": keywords,
+            "summary": summary,
+            "paths": {"workspace": str(self.old), "sqlite": str(self.sqlite)},
+        }
+        registry_path.write_text(
+            json.dumps({"schema_version": 1, "threads": [entry]}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        return registry_path
 
     def _write_clean_thread(self, thread_key: str, timestamp: str, text: str) -> Path:
         clean_dir = self.root / thread_key.replace(":", "-") / "clean-source"
@@ -318,6 +344,80 @@ class AmbientRecallHookTests(unittest.TestCase):
 
         self.assertEqual(result["decision"], "skip")
         self.assertIsNone(hook.context_for_hook(result))
+
+    def test_vague_continuation_without_semantic_stays_silent_despite_overlap(self) -> None:
+        registry_path = self._write_single_thread_registry(
+            title="Python list.sort None",
+            keywords=["Python", "list.sort", "None", "missing keys"],
+            summary="Prior coding conversation about list.sort returning None.",
+        )
+
+        result = hook.assess_prompt(
+            "继续刚才这个编程问题，重点是 list.sort None",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            use_semantic_gate=False,
+            search_budget=0,
+        )
+
+        self.assertEqual(result["decision"], "skip")
+        self.assertGreaterEqual(result["score"], hook.SCENT_THRESHOLD)
+        self.assertFalse(result["evidence"])
+
+    def test_weaker_vague_continuation_needs_semantic_positive_to_scent(self) -> None:
+        registry_path = self._write_single_thread_registry(
+            title="Python list.sort None",
+            keywords=["Python", "list.sort", "None", "missing keys"],
+            summary="Prior coding conversation about list.sort returning None.",
+        )
+
+        local_result = hook.assess_prompt(
+            "这个问题后面怎么接，重点是 list.sort None",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            use_semantic_gate=False,
+            search_budget=0,
+        )
+
+        self.assertEqual(local_result["decision"], "skip")
+
+        def fake_semantic_gate(prompt: str, **kwargs) -> dict:
+            return {
+                "available": True,
+                "decision": "scent",
+                "confidence": 0.86,
+                "intent": "continuation",
+                "query_aliases": ["list.sort", "None"],
+                "memory_scope": ["registered_threads"],
+                "anti_personalization_risk": "low",
+                "reasons": ["vague continuation with source overlap"],
+                "workers": [],
+                "errors": [],
+                "cached": False,
+            }
+
+        semantic_result = hook.assess_prompt(
+            "这个问题后面怎么接，重点是 list.sort None",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            semantic_gate_fn=fake_semantic_gate,
+            search_budget=0,
+        )
+
+        self.assertEqual(semantic_result["decision"], "scent")
+        self.assertIn("semantic gate", " ".join(str(reason) for reason in semantic_result["reasons"]))
+
+    def test_short_english_associative_cues_require_token_boundaries(self) -> None:
+        matches = recall_core.matched_terms(
+            "Rewrite the paragraphs while leveraging the background examples.",
+            recall_core.ASSOCIATIVE_CUES,
+        )
+
+        self.assertNotIn("rag", matches)
+        self.assertNotIn("hook", recall_core.matched_terms("Handle this webhook payload.", {"hook"}))
+        self.assertNotIn("hook", recall_core.matched_terms("Write a Header Hook for this course.", recall_core.ASSOCIATIVE_CUES))
+        self.assertNotIn("evidence", recall_core.matched_terms("Summarize the evidence in these articles.", recall_core.ASSOCIATIVE_CUES))
+        self.assertIn("rag", recall_core.matched_terms("Use RAG-lite for recall.", {"rag"}))
 
     def test_dynamic_association_can_emit_scent_without_hardcoded_cue(self) -> None:
         associations = self.registry.parent / "associations.json"

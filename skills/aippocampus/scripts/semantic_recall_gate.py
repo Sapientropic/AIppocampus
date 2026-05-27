@@ -45,8 +45,13 @@ DEFAULT_TIMEOUT = int(os.environ.get("AIPPOCAMPUS_SEMANTIC_TIMEOUT", "12"))
 DEFAULT_TEMPERATURE = float(os.environ.get("AIPPOCAMPUS_SEMANTIC_TEMPERATURE", "0.2"))
 DEFAULT_MAX_CACHE_ENTRIES = 256
 DEFAULT_CACHE_TTL_SECONDS = int(os.environ.get("AIPPOCAMPUS_SEMANTIC_CACHE_TTL", str(24 * 60 * 60)))
-DEFAULT_MAX_CATALOG_ITEMS = 28
-DEFAULT_MAX_TRIGGER_ITEMS = 80
+# Foreground semantic recall is quality-first. A limit of 0 means "send the full
+# compact catalog"; env limits are explicit debug/perf overrides, not product
+# defaults, because truncating the catalog silently turns into recall loss.
+DEFAULT_MAX_CATALOG_ITEMS = int(os.environ.get("AIPPOCAMPUS_SEMANTIC_CATALOG_LIMIT", "0"))
+DEFAULT_MAX_PROMPT_RELEVANT_CATALOG_ITEMS = 8
+DEFAULT_MAX_TRIGGER_ITEMS = int(os.environ.get("AIPPOCAMPUS_SEMANTIC_TRIGGER_LIMIT", "0"))
+DEFAULT_MAX_PROMPT_RELEVANT_TRIGGER_ITEMS = 8
 DEFAULT_WORKERS = ("gate", "alias", "scope")
 
 VALID_DECISIONS = {"skip", "background_only", "scent", "evidence"}
@@ -223,8 +228,33 @@ def entry_catalog_item(entry: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def catalog_overlap_score(entry: dict[str, Any], prompt_terms: list[str]) -> int:
+    if not prompt_terms:
+        return 0
+    blob = " ".join(
+        [
+            str(entry.get("title") or ""),
+            str(entry.get("project_label") or ""),
+            " ".join(str(x) for x in entry.get("anchor_titles") or []),
+            " ".join(str(x) for x in entry.get("keywords") or []),
+            str(entry.get("summary") or ""),
+        ]
+    ).casefold()
+    score = 0
+    for term in prompt_terms:
+        normalized = str(term or "").strip().casefold()
+        if len(normalized) < 2:
+            continue
+        if normalized in blob:
+            score += 3 if len(normalized) >= 6 else 1
+    return score
+
+
 def registry_catalog(
-    registry: dict[str, Any], *, cwd: Path, limit: int = DEFAULT_MAX_CATALOG_ITEMS
+    registry: dict[str, Any],
+    *,
+    cwd: Path,
+    limit: int = DEFAULT_MAX_CATALOG_ITEMS,
 ) -> list[dict[str, Any]]:
     project = current_project_hint(registry, cwd)
     scored: list[tuple[tuple[int, str], dict[str, Any]]] = []
@@ -242,6 +272,32 @@ def registry_catalog(
         score = 2 if same_project else 0
         score += 1 if entry.get("anchor_titles") else 0
         score += 1 if entry.get("keywords") else 0
+        scored.append(((score, str(entry.get("updated_at") or "")), entry_catalog_item(entry)))
+    scored.sort(key=lambda item: item[0], reverse=True)
+    items = [item for _, item in scored]
+    return items if limit <= 0 else items[:limit]
+
+
+def prompt_relevant_catalog(
+    registry: dict[str, Any],
+    *,
+    cwd: Path,
+    prompt: str,
+    limit: int = DEFAULT_MAX_PROMPT_RELEVANT_CATALOG_ITEMS,
+) -> list[dict[str, Any]]:
+    prompt_terms = split_query_terms([prompt])[:40] if prompt else []
+    project = current_project_hint(registry, cwd)
+    scored: list[tuple[tuple[int, str], dict[str, Any]]] = []
+    for entry in registry.get("threads") or []:
+        if not isinstance(entry, dict):
+            continue
+        overlap = catalog_overlap_score(entry, prompt_terms)
+        if overlap <= 0:
+            continue
+        same_project = project and project == (
+            entry.get("project_label") or entry.get("workspace_name")
+        )
+        score = overlap + (2 if same_project else 0)
         scored.append(((score, str(entry.get("updated_at") or "")), entry_catalog_item(entry)))
     scored.sort(key=lambda item: item[0], reverse=True)
     return [item for _, item in scored[:limit]]
@@ -280,6 +336,28 @@ def trigger_from_association(term: str, row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def trigger_overlap_score(trigger: dict[str, Any], prompt_terms: list[str]) -> int:
+    if not prompt_terms:
+        return 0
+    blob = " ".join(
+        [
+            str(trigger.get("title") or ""),
+            " ".join(str(x) for x in trigger.get("aliases") or []),
+            str(trigger.get("when_to_use") or ""),
+            str(trigger.get("when_not_to_use") or ""),
+            str(trigger.get("project_label") or ""),
+        ]
+    ).casefold()
+    score = 0
+    for term in prompt_terms:
+        normalized = str(term or "").strip().casefold()
+        if len(normalized) < 2:
+            continue
+        if normalized in blob:
+            score += 3 if len(normalized) >= 6 else 1
+    return score
+
+
 def load_semantic_triggers(path: Path | None) -> list[dict[str, Any]]:
     if not path or not path.exists():
         return []
@@ -307,12 +385,11 @@ def load_semantic_triggers(path: Path | None) -> list[dict[str, Any]]:
     return out
 
 
-def trigger_catalog(
+def all_trigger_rows(
     *,
     associations: dict[str, Any] | None = None,
     working_memory: list[dict[str, Any]] | None = None,
     semantic_triggers_path: Path | None = None,
-    limit: int = DEFAULT_MAX_TRIGGER_ITEMS,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     rows.extend(load_semantic_triggers(semantic_triggers_path))
@@ -326,12 +403,55 @@ def trigger_catalog(
             key=lambda item: (float((item[1] or {}).get("confidence") or 0.0), str(item[0])),
             reverse=True,
         )
-        for term, row in scored[: max(0, limit - len(rows))]:
+        for term, row in scored:
             if not isinstance(row, dict):
                 continue
             if row.get("status") == "verified" or float(row.get("confidence") or 0.0) >= 0.82:
                 rows.append(trigger_from_association(str(term), row))
-    return rows[:limit]
+    return rows
+
+
+def trigger_catalog(
+    *,
+    associations: dict[str, Any] | None = None,
+    working_memory: list[dict[str, Any]] | None = None,
+    semantic_triggers_path: Path | None = None,
+    limit: int = DEFAULT_MAX_TRIGGER_ITEMS,
+) -> list[dict[str, Any]]:
+    rows = all_trigger_rows(
+        associations=associations,
+        working_memory=working_memory,
+        semantic_triggers_path=semantic_triggers_path,
+    )
+    return rows if limit <= 0 else rows[:limit]
+
+
+def prompt_relevant_triggers(
+    *,
+    prompt: str,
+    associations: dict[str, Any] | None = None,
+    working_memory: list[dict[str, Any]] | None = None,
+    semantic_triggers_path: Path | None = None,
+    limit: int = DEFAULT_MAX_PROMPT_RELEVANT_TRIGGER_ITEMS,
+) -> list[dict[str, Any]]:
+    prompt_terms = split_query_terms([prompt])[:40] if prompt else []
+    scored: list[tuple[tuple[int, float, str], dict[str, Any]]] = []
+    for row in all_trigger_rows(
+        associations=associations,
+        working_memory=working_memory,
+        semantic_triggers_path=semantic_triggers_path,
+    ):
+        overlap = trigger_overlap_score(row, prompt_terms)
+        if overlap <= 0:
+            continue
+        scored.append(
+            (
+                (overlap, float(row.get("confidence") or 0.0), str(row.get("title") or "")),
+                row,
+            )
+        )
+    scored.sort(key=lambda item: item[0], reverse=True)
+    return [item for _, item in scored[:limit]]
 
 
 def catalog_payload(
@@ -356,6 +476,17 @@ def catalog_payload(
             semantic_triggers_path=semantic_triggers_path,
         ),
         "prompt": compact_text(prompt, 1200),
+        "prompt_relevant_catalog": prompt_relevant_catalog(
+            registry,
+            cwd=cwd,
+            prompt=prompt,
+        ),
+        "prompt_relevant_triggers": prompt_relevant_triggers(
+            prompt=prompt,
+            associations=associations,
+            working_memory=working_memory,
+            semantic_triggers_path=semantic_triggers_path,
+        ),
     }
 
 

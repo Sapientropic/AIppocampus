@@ -76,6 +76,12 @@ GENERIC_TRIGGER_TERMS = {
     "tests",
     "implement",
     "maintain",
+    # Single generic action nouns should not wake a high-risk working-memory
+    # item by themselves. Specific terms in the same row, such as a tool name or
+    # consent gate phrase, remain enough to match.
+    "flow",
+    "mutation",
+    "mutations",
     "按钮",
     "样式",
     "测试",

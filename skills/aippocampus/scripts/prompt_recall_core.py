@@ -20,7 +20,7 @@ from typing import Any
 from registry import deep_search_entry, entry_search_score, registry_paths, unique_preserve
 from retrieval import CONCEPT_TRIGGERS, RECALL_TRIGGERS, split_query_terms
 
-PROMPT_HOOK_SEMANTIC_TIMEOUT = int(os.environ.get("AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT", "3"))
+PROMPT_HOOK_SEMANTIC_TIMEOUT = int(os.environ.get("AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT", "12"))
 SCENT_THRESHOLD = 5.0
 EVIDENCE_THRESHOLD = 10.0
 DEFAULT_SEARCH_BUDGET = 3
@@ -96,8 +96,8 @@ ASSOCIATIVE_CUES = {
     "触发",
     "钩子",
     "hook机制",
-    "hook",
-    "hooks",
+    "prompt hook",
+    "UserPromptSubmit",
     "海马体",
     "小海马体",
     "外置海马体",
@@ -109,7 +109,8 @@ ASSOCIATIVE_CUES = {
     "ambient recall",
     "active recall",
     "scent",
-    "evidence",
+    "source evidence",
+    "source-backed evidence",
     "记忆",
     "召回",
     "世界线",
@@ -323,7 +324,24 @@ def registry_json_path(registry_path: Path | None = None, registry_dir: Path | N
 
 def matched_terms(prompt: str, terms: set[str]) -> list[str]:
     low = prompt.casefold()
-    return [term for term in sorted(terms, key=len, reverse=True) if term.casefold() in low]
+    matches: list[str] = []
+    for term in sorted(terms, key=len, reverse=True):
+        needle = term.casefold()
+        if not needle:
+            continue
+        if re.search(r"[A-Za-z0-9_]", needle):
+            # Short English cues such as "rag", "api", and "hook" are useful
+            # when they appear as terms, but dangerous as raw substrings:
+            # "paragraphs", "leveraging", and "webhook" should not become
+            # memory cues. Non-ASCII cue words keep the existing substring
+            # behavior because Chinese does not have whitespace token
+            # boundaries.
+            pattern = rf"(?<![A-Za-z0-9_]){re.escape(needle)}(?![A-Za-z0-9_])"
+            if re.search(pattern, low):
+                matches.append(term)
+        elif needle in low:
+            matches.append(term)
+    return matches
 
 
 def prompt_is_code_surface(prompt: str) -> bool:
@@ -1130,6 +1148,8 @@ def strip_semantic_gate(result: dict[str, Any] | None) -> dict[str, Any] | None:
         "reasons": result.get("reasons") or [],
         "cached": bool(result.get("cached")),
         "elapsed_ms": result.get("elapsed_ms"),
+        "usage": result.get("usage") or {},
+        "cache": result.get("cache") or {},
         "workers": workers,
         "errors": result.get("errors") or [],
     }
