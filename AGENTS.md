@@ -12,7 +12,10 @@ life-wide continuity without false claims of innate model memory.
 - `skills/aippocampus/`: installable skill package.
 - `skills/aippocampus/SKILL.md`: slim runtime entrypoint.
 - `skills/aippocampus/references/`: detailed contracts loaded on demand.
-- `skills/aippocampus/scripts/`: deterministic helpers.
+- `skills/aippocampus/scripts/`: runtime helpers that need to ship with the installable skill.
+- `tests/aippocampus/`: repository-level unit and integration tests.
+- `benchmarks/aippocampus/`: repository-level benchmark runners.
+- `tools/aippocampus/`: repository-level smoke, docs-health, and maintenance tools.
 - `docs/roadmap.md`: product roadmap and north star.
 - `docs/未干的地图.md`: the canonical Chinese origin essay; do not mirror it elsewhere.
 - `docs/the-unfinished-map.md`: English transcreation of the origin essay.
@@ -34,6 +37,8 @@ and link to it.
 ## Editing Rules
 
 - Keep `SKILL.md` concise. Put detailed operation notes in `references/`.
+- Keep tests, benchmarks, and repository smoke/readiness tools out of the
+  installable skill body unless they are genuinely runtime entrypoints.
 - Keep clean source source-backed; summaries and model-organized findings are
   navigation layers, not truth.
 - Preserve casual/life-wide memory as first-class. Do not narrow the project
@@ -44,11 +49,11 @@ and link to it.
 
 ## Verification
 
-Before claiming the repository is healthy, run from `skills/aippocampus/`:
+Before claiming the repository is healthy, run from the repository root:
 
 ```powershell
-python scripts\check_docs_health.py --json
-python -m unittest discover -s tests
+python tools\aippocampus\docs\check_docs_health.py --json
+python -m unittest discover -s tests -t .
 ```
 
 For public-readiness changes, also scan the repository for local paths and

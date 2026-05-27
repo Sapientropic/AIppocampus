@@ -35,7 +35,7 @@ from semantic_scope_labels import (
     label_evidence_min_confidence,
     semantic_scope_label_rows_from_findings,
 )
-from smoke_semantic_scope_source_review import LABEL_GUIDANCE, parse_agent_action
+from semantic_scope_source_review_core import LABEL_GUIDANCE, parse_agent_action
 from subconscious_agent import add_usage, call_chat_json, compact_usage
 from subconscious_jobs import default_jobs_output_path
 from subconscious_worker import DEFAULT_BASE_URL

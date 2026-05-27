@@ -53,9 +53,8 @@ The skill entrypoint is [skills/aippocampus/SKILL.md](skills/aippocampus/SKILL.m
 From this repository:
 
 ```powershell
-cd .\skills\aippocampus
-python scripts\check_docs_health.py --json
-python -m unittest discover -s tests
+python tools\aippocampus\docs\check_docs_health.py --json
+python -m unittest discover -s tests -t .
 ```
 
 For normal use inside a Codex workspace, start with:

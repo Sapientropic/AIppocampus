@@ -11,47 +11,45 @@ only summarized evidence.
 ## Commands Run
 
 ```powershell
-cd .\skills\aippocampus
-python scripts\check_docs_health.py --json
-python -m unittest discover -s tests
-python -m compileall -q .
-python -m ruff check . --config ..\..\pyproject.toml
-cd ..\..
+python tools\aippocampus\docs\check_docs_health.py --json
+python -m unittest discover -s tests -t .
+python -m compileall -q skills plugins tests tools benchmarks benchmark_corpus
+python -m ruff check skills plugins tests tools benchmarks
 python .\skills\aippocampus\scripts\build_project_timeline.py --registry .\examples\public-memory-bundle\registry\threads.json --output .\.tmp\public-project-timeline.json --json
 python .\skills\aippocampus\scripts\build_semantic_scope_labels.py --jobs-output .\examples\public-memory-bundle\registry\subconscious_jobs.jsonl --clean-source-dir .\examples\public-memory-bundle\clean-source --no-write --json
 python .\skills\aippocampus\scripts\search_clean_source.py "casual sparks" --cwd . --clean-source-dir .\examples\public-memory-bundle\clean-source --scope-label idea_seed --json
 python .\skills\aippocampus\scripts\search_clean_source.py "lighthouse metaphor pivot" --cwd . --clean-source-dir .\examples\public-memory-bundle\clean-source --scope-label personal_reflection --scope-label idea_seed --json
 python .\skills\aippocampus\scripts\onboard_codex.py --all --no-cognitive-map --frontier-mode off --format json
-python .\skills\aippocampus\scripts\smoke_life_wide_registry.py --require-evidence --json
-python .\skills\aippocampus\scripts\smoke_semantic_scope_real_history.py --live --write-sidecars --require-labels --max-turns 80 --max-steps 2 --min-tool-steps 0 --concurrency 6 --samples-per-job 3 --min-sidecar-rows 18 --min-sidecar-threads 7 --min-timeline-turns 50 --json
-python .\skills\aippocampus\scripts\smoke_semantic_scope_real_history.py --live --write-sidecars --require-labels --full-candidate-coverage --candidate-batch-size 24 --samples-per-job 1 --concurrency 6 --max-steps 1 --min-tool-steps 0 --max-tokens 4000 --timeout 120 --min-sidecar-rows 50 --min-sidecar-threads 20 --min-timeline-turns 80 --json
-python .\skills\aippocampus\scripts\smoke_semantic_scope_real_history.py --live --write-sidecars --require-labels --max-turns 96 --max-steps 1 --min-tool-steps 0 --concurrency 4 --samples-per-job 2 --max-tokens 5000 --timeout 160 --min-sidecar-rows 80 --min-sidecar-threads 20 --min-timeline-turns 50 --json
-python .\skills\aippocampus\scripts\smoke_semantic_scope_real_history.py --require-labels --min-sidecar-rows 90 --min-sidecar-threads 20 --min-timeline-turns 50 --json
+python .\tools\aippocampus\smoke\smoke_life_wide_registry.py --require-evidence --json
+python .\tools\aippocampus\smoke\smoke_semantic_scope_real_history.py --live --write-sidecars --require-labels --max-turns 80 --max-steps 2 --min-tool-steps 0 --concurrency 6 --samples-per-job 3 --min-sidecar-rows 18 --min-sidecar-threads 7 --min-timeline-turns 50 --json
+python .\tools\aippocampus\smoke\smoke_semantic_scope_real_history.py --live --write-sidecars --require-labels --full-candidate-coverage --candidate-batch-size 24 --samples-per-job 1 --concurrency 6 --max-steps 1 --min-tool-steps 0 --max-tokens 4000 --timeout 120 --min-sidecar-rows 50 --min-sidecar-threads 20 --min-timeline-turns 80 --json
+python .\tools\aippocampus\smoke\smoke_semantic_scope_real_history.py --live --write-sidecars --require-labels --max-turns 96 --max-steps 1 --min-tool-steps 0 --concurrency 4 --samples-per-job 2 --max-tokens 5000 --timeout 160 --min-sidecar-rows 80 --min-sidecar-threads 20 --min-timeline-turns 50 --json
+python .\tools\aippocampus\smoke\smoke_semantic_scope_real_history.py --require-labels --min-sidecar-rows 90 --min-sidecar-threads 20 --min-timeline-turns 50 --json
 python .\skills\aippocampus\scripts\subconscious_jobs.py --job semantic_scope_labeling --max-turns 7 --max-steps 1 --min-tool-steps 0 --samples-per-job 2 --concurrency 2 --max-tokens 600 --timeout 120 --no-write --json
-python .\skills\aippocampus\scripts\smoke_semantic_scope_real_history.py --live --require-labels --max-turns 32 --max-steps 2 --min-tool-steps 0 --concurrency 2 --samples-per-job 2 --max-tokens 5000 --timeout 180 --min-sidecar-rows 1 --min-sidecar-threads 1 --min-timeline-turns 1 --json
-python .\skills\aippocampus\scripts\smoke_source_evidence_recall_eval.py --max-cases 24 --min-cases 12 --top-k 5 --min-hit-rate 0.85 --json
-python .\skills\aippocampus\scripts\smoke_semantic_scope_source_review.py --live --max-cases 96 --min-cases 64 --min-pass-rate 0.75 --min-label-pass-rate 0.65 --concurrency 2 --timeout 200 --max-attempts 3 --json
-python .\skills\aippocampus\scripts\smoke_semantic_scope_source_review.py --live --max-cases 4 --min-cases 1 --min-pass-rate 0 --min-label-pass-rate 0 --concurrency 2 --timeout 120 --max-attempts 1 --json
-python .\skills\aippocampus\scripts\smoke_semantic_scope_source_review.py --live --max-cases 5 --min-cases 5 --min-pass-rate 0.75 --min-label-pass-rate 0.65 --min-review-confidence 0.65 --concurrency 3 --timeout 160 --max-attempts 2 --json
-python -m unittest tests.test_deepseek_model_routing tests.test_semantic_scope_source_review.SemanticScopeSourceReviewTests.test_agentic_source_review_uses_pro_route_and_tool_observation tests.test_semantic_scope_suppressed_recovery
+python .\tools\aippocampus\smoke\smoke_semantic_scope_real_history.py --live --require-labels --max-turns 32 --max-steps 2 --min-tool-steps 0 --concurrency 2 --samples-per-job 2 --max-tokens 5000 --timeout 180 --min-sidecar-rows 1 --min-sidecar-threads 1 --min-timeline-turns 1 --json
+python .\tools\aippocampus\smoke\smoke_source_evidence_recall_eval.py --max-cases 24 --min-cases 12 --top-k 5 --min-hit-rate 0.85 --json
+python .\tools\aippocampus\smoke\smoke_semantic_scope_source_review.py --live --max-cases 96 --min-cases 64 --min-pass-rate 0.75 --min-label-pass-rate 0.65 --concurrency 2 --timeout 200 --max-attempts 3 --json
+python .\tools\aippocampus\smoke\smoke_semantic_scope_source_review.py --live --max-cases 4 --min-cases 1 --min-pass-rate 0 --min-label-pass-rate 0 --concurrency 2 --timeout 120 --max-attempts 1 --json
+python .\tools\aippocampus\smoke\smoke_semantic_scope_source_review.py --live --max-cases 5 --min-cases 5 --min-pass-rate 0.75 --min-label-pass-rate 0.65 --min-review-confidence 0.65 --concurrency 3 --timeout 160 --max-attempts 2 --json
+python -m unittest tests.aippocampus.test_deepseek_model_routing tests.aippocampus.test_semantic_scope_source_review.SemanticScopeSourceReviewTests.test_agentic_source_review_uses_pro_route_and_tool_observation tests.aippocampus.test_semantic_scope_suppressed_recovery
 python .\skills\aippocampus\scripts\semantic_scope_suppressed_recovery.py --max-cases 8 --json
 python .\skills\aippocampus\scripts\semantic_scope_suppressed_recovery.py --live --max-cases 3 --min-recovered-labels 1 --timeout 240 --max-tokens 6000 --max-steps 3 --min-tool-steps 1 --json
-python .\skills\aippocampus\scripts\smoke_semantic_scope_source_review.py --live --agentic-review --max-cases 5 --min-cases 5 --min-pass-rate 0.75 --min-label-pass-rate 0.65 --min-review-confidence 0.65 --concurrency 2 --timeout 240 --max-tokens 4000 --review-max-steps 3 --min-tool-steps 1 --json
-python .\skills\aippocampus\scripts\benchmark_fts5_recall.py --cases 100 --min-cases 50 --top-k 10 --output .\.tmp\fts5-recall-benchmark-100.json
+python .\tools\aippocampus\smoke\smoke_semantic_scope_source_review.py --live --agentic-review --max-cases 5 --min-cases 5 --min-pass-rate 0.75 --min-label-pass-rate 0.65 --min-review-confidence 0.65 --concurrency 2 --timeout 240 --max-tokens 4000 --review-max-steps 3 --min-tool-steps 1 --json
+python .\benchmarks\aippocampus\benchmark_fts5_recall.py --cases 100 --min-cases 50 --top-k 10 --output .\.tmp\fts5-recall-benchmark-100.json
 python .\skills\aippocampus\scripts\aippocampus_mcp_server.py --list-tools
 python .\plugins\aippocampus\build_plugin_package.py --repo-root . --json
 python .\plugins\aippocampus\smoke_plugin_install.py --repo-root . --json
 python .\plugins\aippocampus\smoke_real_codex_host.py --repo-root . --json
-python .\skills\aippocampus\scripts\smoke_cross_device_sync.py --repo-root . --json
-python .\skills\aippocampus\scripts\smoke_object_storage_sync.py --repo-root . --json
-python .\skills\aippocampus\scripts\smoke_alternate_runtime_sync.py --repo-root . --runtime all --json
+python .\tools\aippocampus\smoke\smoke_cross_device_sync.py --repo-root . --json
+python .\tools\aippocampus\smoke\smoke_object_storage_sync.py --repo-root . --json
+python .\tools\aippocampus\smoke\smoke_alternate_runtime_sync.py --repo-root . --runtime all --json
 python .\skills\aippocampus\scripts\aippocampus_lifecycle_hook.py --event SessionStart --cwd . --json --max-elapsed-ms 8000
-python .\skills\aippocampus\scripts\run_stage_0_5_smoke.py --repo-root . --json
+python .\tools\aippocampus\smoke\run_stage_0_5_smoke.py --repo-root . --json
 ```
 
 Results:
 
-- full unit suite: 258 tests passed
+- full unit suite: 308 tests passed
 - docs health: `ok=true`
 - Python compile check: passed
 - Ruff check: passed. The Ruff baseline now includes full Pyflakes (`F`) plus

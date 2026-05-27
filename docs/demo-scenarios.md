@@ -41,33 +41,33 @@ runtime.
 Observe existing dynamic sidecar coverage without calling an external model:
 
 ```powershell
-python .\skills\aippocampus\scripts\smoke_semantic_scope_real_history.py --json
+python .\tools\aippocampus\smoke\smoke_semantic_scope_real_history.py --json
 ```
 
 Run a bounded live DeepSeek-compatible batch only when external-model use is
 intentional:
 
 ```powershell
-python .\skills\aippocampus\scripts\smoke_semantic_scope_real_history.py --live --write-sidecars --require-labels --max-turns 24 --max-steps 2 --min-tool-steps 0 --concurrency 4 --samples-per-job 2 --json
+python .\tools\aippocampus\smoke\smoke_semantic_scope_real_history.py --live --write-sidecars --require-labels --max-turns 24 --max-steps 2 --min-tool-steps 0 --concurrency 4 --samples-per-job 2 --json
 ```
 
 Evaluate the currently selected full life-wide candidate slice in batches:
 
 ```powershell
-python .\skills\aippocampus\scripts\smoke_semantic_scope_real_history.py --live --write-sidecars --require-labels --full-candidate-coverage --candidate-batch-size 24 --samples-per-job 1 --concurrency 6 --max-steps 1 --min-tool-steps 0 --json
+python .\tools\aippocampus\smoke\smoke_semantic_scope_real_history.py --live --write-sidecars --require-labels --full-candidate-coverage --candidate-batch-size 24 --samples-per-job 1 --concurrency 6 --max-steps 1 --min-tool-steps 0 --json
 ```
 
 Check selected fuzzy life-wide source-evidence prompts against clean-source
 search, without emitting raw private wording:
 
 ```powershell
-python .\skills\aippocampus\scripts\smoke_source_evidence_recall_eval.py --max-cases 24 --min-cases 12 --top-k 5 --min-hit-rate 0.85 --json
+python .\tools\aippocampus\smoke\smoke_source_evidence_recall_eval.py --max-cases 24 --min-cases 12 --top-k 5 --min-hit-rate 0.85 --json
 ```
 
 Review selected semantic sidecar labels against their clean-source messages:
 
 ```powershell
-python .\skills\aippocampus\scripts\smoke_semantic_scope_source_review.py --live --max-cases 96 --min-cases 64 --min-pass-rate 0.75 --min-label-pass-rate 0.65 --concurrency 2 --timeout 200 --max-attempts 3 --json
+python .\tools\aippocampus\smoke\smoke_semantic_scope_source_review.py --live --max-cases 96 --min-cases 64 --min-pass-rate 0.75 --min-label-pass-rate 0.65 --concurrency 2 --timeout 200 --max-attempts 3 --json
 ```
 
 Expected result: output is aggregate-only. Live mode writes source-backed
@@ -112,7 +112,7 @@ Cannot claim: that every project thread has already been onboarded.
 ## Scenario 6: Multilingual Recall Smoke
 
 ```powershell
-python .\skills\aippocampus\scripts\simulate_multilingual_prompt_hook.py --cwd .
+python .\tools\aippocampus\smoke\simulate_multilingual_prompt_hook.py --cwd .
 ```
 
 Expected result: multilingual hook smoke cases pass or report concrete failing
@@ -176,7 +176,7 @@ object-storage backend has been exercised.
 ## Scenario 9b: Single-Machine Cross-Device Sync Smoke
 
 ```powershell
-python .\skills\aippocampus\scripts\smoke_cross_device_sync.py --repo-root . --json
+python .\tools\aippocampus\smoke\smoke_cross_device_sync.py --repo-root . --json
 ```
 
 Expected result: the smoke models device A and device B registries, strips or
@@ -190,7 +190,7 @@ folder client, or object-storage backend has been exercised.
 ## Scenario 9c: Docker/WSL Alternate-Runtime Sync Smoke
 
 ```powershell
-python .\skills\aippocampus\scripts\smoke_alternate_runtime_sync.py --repo-root . --runtime all --json
+python .\tools\aippocampus\smoke\smoke_alternate_runtime_sync.py --repo-root . --runtime all --json
 ```
 
 Expected result: the host creates the sync bundle, then the alternate runtime
@@ -204,7 +204,7 @@ object-storage backend has been exercised.
 ## Scenario 9d: HTTP Object-Storage Sync Smoke
 
 ```powershell
-python .\skills\aippocampus\scripts\smoke_object_storage_sync.py --repo-root . --json
+python .\tools\aippocampus\smoke\smoke_object_storage_sync.py --repo-root . --json
 ```
 
 Expected result: the smoke starts a local HTTP object store, pushes the sync

@@ -21,7 +21,7 @@ their full contracts.
   marketplace/plugin install, MCP host discovery, `sync_status` tool calls, and
   cleanup through real app-server methods.
 - The single-machine dual-device sync smoke exists at
-  `skills/aippocampus/scripts/smoke_cross_device_sync.py`; it verifies
+  `tools/aippocampus/smoke/smoke_cross_device_sync.py`; it verifies
   portable locators, target-registry path repair, bidirectional conflict
   preservation, cross-OS-shaped source locator cleanup, and raw rollout
   opt-in boundaries without claiming a real second machine or cloud backend.
@@ -43,7 +43,7 @@ their full contracts.
   `retrieval.py` at module load time, and `prompt_recall_core.py` becoming a
   broad foreground import hub again.
 - The real-history FTS5 recall benchmark exists at
-  `skills/aippocampus/scripts/benchmark_fts5_recall.py`. Its first 100-case
+  `benchmarks/aippocampus/benchmark_fts5_recall.py`. Its first 100-case
   aggregate run over the 949-thread local registry found 99/100 FTS5 top-10
   hits, with the single miss caused by the expected clean-source line being
   absent from the corresponding SQLite index. The onboarding consistency probe

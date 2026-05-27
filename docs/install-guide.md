@@ -17,15 +17,14 @@ Restart Codex or reload skills if your runtime requires it.
 Verify the package from the repository:
 
 ```powershell
-cd .\skills\aippocampus
-python scripts\check_docs_health.py --json
-python -m unittest discover -s tests
+python tools\aippocampus\docs\check_docs_health.py --json
+python -m unittest discover -s tests -t .
 ```
 
 For a repo-level Stage 0-5 public-readiness smoke, run:
 
 ```powershell
-python .\skills\aippocampus\scripts\run_stage_0_5_smoke.py --repo-root . --json
+python .\tools\aippocampus\smoke\run_stage_0_5_smoke.py --repo-root . --json
 ```
 
 This runs the documented local smoke gates, package-level plugin staging,
@@ -140,5 +139,5 @@ object-storage smoke verifies the protocol path without requiring cloud
 credentials:
 
 ```powershell
-python .\skills\aippocampus\scripts\smoke_object_storage_sync.py --repo-root . --json
+python .\tools\aippocampus\smoke\smoke_object_storage_sync.py --repo-root . --json
 ```

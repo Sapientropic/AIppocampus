@@ -25,7 +25,7 @@ missed fuzzy recall.
 ## Existing Baseline
 
 The existing lexical/source baseline lives in
-`skills/aippocampus/scripts/benchmark_fts5_recall.py`. It answers a narrower
+`benchmarks/aippocampus/benchmark_fts5_recall.py`. It answers a narrower
 question: given a source-backed recall case, can the FTS5 and production hybrid
 paths navigate back to the expected clean-source message?
 
@@ -37,41 +37,41 @@ same thing under more complicated names.
 
 The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
 
-- `skills/aippocampus/tests/test_routing_boundaries.py` fixes deterministic
+- `tests/aippocampus/test_routing_boundaries.py` fixes deterministic
   routing and working-memory boundary expectations.
-- `skills/aippocampus/scripts/benchmark_memory_decision_gate.py` runs the Track
+- `benchmarks/aippocampus/benchmark_memory_decision_gate.py` runs the Track
   A synthetic and ShareGPT-coding gate-decision benchmark against the real
   `assess_prompt()` path.
-- `skills/aippocampus/tests/test_benchmark_memory_decision_gate.py` checks
+- `tests/aippocampus/test_benchmark_memory_decision_gate.py` checks
   three-class metrics, report sanitization, and explicit private-debug opt-in.
-- `skills/aippocampus/scripts/benchmark_payload_fidelity.py` runs the thin Track
+- `benchmarks/aippocampus/benchmark_payload_fidelity.py` runs the thin Track
   C synthetic payload-fidelity benchmark against the final `context_for_hook()`
   output.
-- `skills/aippocampus/tests/test_benchmark_payload_fidelity.py` checks payload
+- `tests/aippocampus/test_benchmark_payload_fidelity.py` checks payload
   metrics, source-fidelity accounting, parked-memory protection, and sanitized
   report defaults.
-- `skills/aippocampus/scripts/benchmark_source_evidence_retrieval.py` runs the
+- `benchmarks/aippocampus/benchmark_source_evidence_retrieval.py` runs the
   Track B real-history retrieval wrapper, reusing the existing FTS5 source-line
   benchmark and selected source-evidence recall evaluation. It also has an
   opt-in ShareGPT public-corpus source-evidence slice with message-level and
   turn-level hit metrics, plus an opt-in standard retrieval-QA adapter for
   LoCoMo and LongMemEval V1 source/session recall metrics.
-- `skills/aippocampus/tests/test_benchmark_source_evidence_retrieval.py` checks
+- `tests/aippocampus/test_benchmark_source_evidence_retrieval.py` checks
   Track B report shape, diagnostic status, ShareGPT public-corpus case
   generation, LoCoMo/LongMemEval source ref handling, and default privacy
   boundaries.
-- `skills/aippocampus/scripts/benchmark_suite.py` runs the repeatable baseline
+- `benchmarks/aippocampus/benchmark_suite.py` runs the repeatable baseline
   suite across Track A, Track B, Track C, and the broader deterministic
   source-label diagnostic slice, with opt-in ShareGPT public Track B, standard
   retrieval-QA Track B, and live semantic-gate tracks.
-- `skills/aippocampus/scripts/benchmark_live_semantic_gate.py` runs the optional
+- `benchmarks/aippocampus/benchmark_live_semantic_gate.py` runs the optional
   live semantic-gate slice over public ShareGPT coding clean-source cases. It
   uses the real prompt hook and configured DeepSeek-compatible backend, but
   emits only sanitized aggregate/case diagnostics.
-- `skills/aippocampus/tests/test_benchmark_suite.py` checks that the suite can
+- `tests/aippocampus/test_benchmark_suite.py` checks that the suite can
   capture a baseline even when Track B is diagnostic-only, while keeping
   `quality_gate_ok` separate from baseline capture.
-- `skills/aippocampus/tests/test_benchmark_live_semantic_gate.py` checks missing
+- `tests/aippocampus/test_benchmark_live_semantic_gate.py` checks missing
   backend handling, sanitized report boundaries, and live semantic diagnostics.
 
 This slice is a smoke gate, not a real-history quality claim. It proves the
@@ -81,17 +81,17 @@ budget curves, and larger live semantic-model verification.
 
 ### Repeatable Baseline Command
 
-Run from `skills/aippocampus/`:
+Run from the repository root:
 
 ```powershell
-python scripts\benchmark_suite.py
+python benchmarks\aippocampus\benchmark_suite.py
 ```
 
 For a machine-local JSON artifact, write into the gitignored private benchmark
 area:
 
 ```powershell
-python scripts\benchmark_suite.py --json --output ..\..\benchmark_corpus\reports\baseline-suite.json
+python benchmarks\aippocampus\benchmark_suite.py --json --output benchmark_corpus\reports\baseline-suite.json
 ```
 
 Default suite semantics:
@@ -112,16 +112,16 @@ The ShareGPT public Track B slice uses the converted public clean-source corpus
 to create source-evidence retrieval cases with stable source refs. It is local
 and opt-in because the generated corpus is large and gitignored.
 
-Run from `skills/aippocampus/`:
+Run from the repository root:
 
 ```powershell
-python scripts\benchmark_source_evidence_retrieval.py --include-sharegpt-public --sharegpt-public-conversations 100 --sharegpt-public-cases 200 --sharegpt-public-min-cases 50
+python benchmarks\aippocampus\benchmark_source_evidence_retrieval.py --include-sharegpt-public --sharegpt-public-conversations 100 --sharegpt-public-cases 200 --sharegpt-public-min-cases 50
 ```
 
 Or include it in the suite:
 
 ```powershell
-python scripts\benchmark_suite.py --include-sharegpt-public-track-b --sharegpt-public-conversations 100 --sharegpt-public-cases 200 --sharegpt-public-min-cases 50
+python benchmarks\aippocampus\benchmark_suite.py --include-sharegpt-public-track-b --sharegpt-public-conversations 100 --sharegpt-public-cases 200 --sharegpt-public-min-cases 50
 ```
 
 Boundary:
@@ -141,16 +141,16 @@ Live semantic checks are intentionally outside the required CI/default suite.
 They exercise the real semantic backend and can vary by provider, model, cache,
 quota, and network state.
 
-Run from `skills/aippocampus/`:
+Run from the repository root:
 
 ```powershell
-python scripts\benchmark_live_semantic_gate.py --sharegpt-conversations 100 --semantic-mode on --semantic-workers gate --output ..\..\.tmp\live-semantic-gate-100.json
+python benchmarks\aippocampus\benchmark_live_semantic_gate.py --sharegpt-conversations 100 --semantic-mode on --semantic-workers gate --output .tmp\live-semantic-gate-100.json
 ```
 
 Or include the same optional track in the suite:
 
 ```powershell
-python scripts\benchmark_suite.py --include-live-semantic --live-semantic-conversations 100 --live-semantic-mode on --live-semantic-workers gate
+python benchmarks\aippocampus\benchmark_suite.py --include-live-semantic --live-semantic-conversations 100 --live-semantic-mode on --live-semantic-workers gate
 ```
 
 Report boundary:
@@ -319,7 +319,7 @@ Current smoke and diagnostic results from 2026-05-27:
   correct, macro F1 1.0, over-escalation 0, evidence false positives 0,
   semantic model calls 0
 - public-real ShareGPT coding Track A P1 gate benchmark:
-  `python scripts\benchmark_memory_decision_gate.py --case-set sharegpt-coding --sharegpt-conversations 100`
+  `python benchmarks\aippocampus\benchmark_memory_decision_gate.py --case-set sharegpt-coding --sharegpt-conversations 100`
   produced 500 cases from the first 100 converted coding conversations; current
   baseline is 500/500 correct, accuracy 1.0, macro F1 1.0,
   `scent_or_evidence_recall` 1.0, `evidence_recall` 1.0, evidence false
@@ -639,20 +639,20 @@ Implementation should reuse existing benchmark/test patterns where possible.
 
 Scripts:
 
-- `skills/aippocampus/scripts/benchmark_memory_decision_gate.py`
-- `skills/aippocampus/scripts/benchmark_source_evidence_retrieval.py`
-- `skills/aippocampus/scripts/benchmark_payload_fidelity.py`
-- `skills/aippocampus/scripts/benchmark_live_semantic_gate.py`
-- `skills/aippocampus/scripts/benchmark_suite.py`
+- `benchmarks/aippocampus/benchmark_memory_decision_gate.py`
+- `benchmarks/aippocampus/benchmark_source_evidence_retrieval.py`
+- `benchmarks/aippocampus/benchmark_payload_fidelity.py`
+- `benchmarks/aippocampus/benchmark_live_semantic_gate.py`
+- `benchmarks/aippocampus/benchmark_suite.py`
 
 Tests:
 
-- `skills/aippocampus/tests/test_routing_boundaries.py`
-- `skills/aippocampus/tests/test_benchmark_memory_decision_gate.py`
-- `skills/aippocampus/tests/test_benchmark_source_evidence_retrieval.py`
-- `skills/aippocampus/tests/test_benchmark_payload_fidelity.py`
-- `skills/aippocampus/tests/test_benchmark_live_semantic_gate.py`
-- `skills/aippocampus/tests/test_benchmark_suite.py`
+- `tests/aippocampus/test_routing_boundaries.py`
+- `tests/aippocampus/test_benchmark_memory_decision_gate.py`
+- `tests/aippocampus/test_benchmark_source_evidence_retrieval.py`
+- `tests/aippocampus/test_benchmark_payload_fidelity.py`
+- `tests/aippocampus/test_benchmark_live_semantic_gate.py`
+- `tests/aippocampus/test_benchmark_suite.py`
 
 Reusable existing pieces:
 

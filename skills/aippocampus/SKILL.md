@@ -146,5 +146,6 @@ move the operational contract into one reference doc.
   history.
 - Run maintenance writes serially on Windows; SQLite replacement can hit file
   locks if index, vault sync, and maintenance writers overlap.
-- For docs work, run `python ...\check_docs_health.py` so `SKILL.md` stays an
-  entrypoint rather than becoming a release log.
+- For repository docs work, run
+  `python tools\aippocampus\docs\check_docs_health.py` from the repo root so
+  `SKILL.md` stays an entrypoint rather than becoming a release log.

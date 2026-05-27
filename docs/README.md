@@ -4,6 +4,10 @@ This folder holds product direction, architecture notes, and research context
 for the public AIppocampus repository. Runtime contracts for the installable
 skill live under `skills/aippocampus/references/`.
 
+The installable skill body is intentionally slim: tests live in
+`tests/aippocampus/`, benchmark runners in `benchmarks/aippocampus/`, and
+repository smoke/docs-maintenance tools in `tools/aippocampus/`.
+
 ## Stable Product Direction
 
 - `roadmap.md` - north star, staged roadmap, and release criteria.
