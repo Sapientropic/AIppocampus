@@ -1,0 +1,13 @@
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["skills/aippocampus/scripts", "skills/aippocampus/tests"]
+extend-exclude = [
+    ".aippocampus",
+    "graphify-out",
+]
+
+[tool.ruff.lint]
+# Keep style-only churn out of the baseline, but run full Pyflakes so unused
+# imports, undefined names, and stale locals do not hide import-coupling debt.
+select = ["E9", "F"]

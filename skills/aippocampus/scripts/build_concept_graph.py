@@ -12,7 +12,6 @@ import argparse
 import hashlib
 import json
 import math
-import os
 import sqlite3
 from pathlib import Path
 from typing import Any

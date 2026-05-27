@@ -14,11 +14,11 @@ import argparse
 import hashlib
 import json
 import os
-from collections import Counter, defaultdict
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from aippocampuslib import compact_text, codex_home, extract_message, iter_jsonl, iter_messages, locate_rollout
+from aippocampuslib import compact_text, codex_home, extract_message, iter_messages, locate_rollout
 
 
 AGENTS_PREFIX = "# AGENTS.md instructions"

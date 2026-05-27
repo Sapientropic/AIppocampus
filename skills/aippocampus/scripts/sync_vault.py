@@ -56,7 +56,6 @@ def main() -> int:
 
     health = run_json([sys.executable, str(SCRIPT_DIR / "aippocampus_health.py"), "--cwd", str(cwd), "--json"])
     index_dir = Path((health.get("index") or {}).get("dir") or default_thread_index_dir(cwd))
-    manifest = load_json(index_dir / "manifest.json")
     checkpoint_state = load_json(Path((health.get("checkpoint") or {}).get("state") or (index_dir / "checkpoint_state.json")))
     anchors_path = cwd / "thread-anchors.md"
     anchors = parse_anchor_file(anchors_path)
