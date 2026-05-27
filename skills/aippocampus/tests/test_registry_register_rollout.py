@@ -164,6 +164,62 @@ class RegisterRolloutTests(unittest.TestCase):
         self.assertTrue(hits[1]["search_noise"])
         self.assertLess(hits[1]["rank_score"], hits[0]["rank_score"])
 
+    def test_deep_search_merges_semantic_scope_label_sidecar(self) -> None:
+        clean_dir = self.root / "semantic-clean"
+        clean_dir.mkdir()
+        messages = clean_dir / "messages.jsonl"
+        messages.write_text(
+            json.dumps(
+                {
+                    "message_id": "msg-metaphor",
+                    "turn_id": "turn-metaphor",
+                    "source_line": 12,
+                    "role": "user",
+                    "phase": "",
+                    "turn_index": 1,
+                    "scope_labels": [],
+                    "text": "This lighthouse metaphor feels like a pivot.",
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (clean_dir / "semantic-scope-labels.jsonl").write_text(
+            json.dumps(
+                {
+                    "message_id": "msg-metaphor",
+                    "source": "deepseek_subconscious_scope_labels",
+                    "scope_labels": ["personal_reflection", "idea_seed"],
+                    "confidence": 0.86,
+                    "label_evidence": [
+                        {
+                            "label": "personal_reflection",
+                            "reason": "The source says the metaphor feels pivotal.",
+                            "confidence": 0.86,
+                        },
+                        {
+                            "label": "idea_seed",
+                            "reason": "The source frames the lighthouse metaphor as a pivot idea.",
+                            "confidence": 0.86,
+                        },
+                    ],
+                    "source_refs": [{"message_id": "msg-metaphor", "source_line": 12}],
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        entry = {"paths": {"clean_source_messages_jsonl": str(messages)}}
+
+        score, hits = registry.deep_search_entry(entry, ["lighthouse", "metaphor"], max_hits=1)
+
+        self.assertGreater(score, 0)
+        self.assertEqual(hits[0]["message_id"], "msg-metaphor")
+        self.assertEqual(hits[0]["semantic_scope_labels"], ["personal_reflection", "idea_seed"])
+        self.assertEqual(hits[0]["scope_labels"], ["personal_reflection", "idea_seed"])
+
 
 if __name__ == "__main__":
     unittest.main()

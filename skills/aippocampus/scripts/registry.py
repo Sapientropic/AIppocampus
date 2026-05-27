@@ -12,7 +12,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-from retrieval import expanded_terms_from_anchors, match_anchors, search_hybrid_index, split_query_terms
 from aippocampuslib import (
     codex_home,
     compact_text,
@@ -560,15 +559,32 @@ def clean_hit_rank_score(message: dict, score: float) -> tuple[float, str | None
     return rank_score, reason
 
 
-def deep_search_entry(entry: dict, terms: list[str], max_hits: int = 3) -> tuple[float, list[dict]]:
+def _search_warning(stage: str, path: str | Path, exc: Exception) -> dict:
+    return {
+        "stage": stage,
+        "path": str(path),
+        "error_type": type(exc).__name__,
+        "message": str(exc),
+    }
+
+
+def deep_search_entry_result(entry: dict, terms: list[str], max_hits: int = 3) -> dict:
     paths = entry.get("paths") or {}
+    warnings: list[dict] = []
     clean_messages = paths.get("clean_source_messages_jsonl")
     if clean_messages:
         try:
             from search_clean_source import iter_clean_messages, score_message
+            from semantic_scope_labels import load_semantic_scope_labels, merged_scope_labels, semantic_labels_for_message
 
             clean_hits = []
+            semantic_sidecar = load_semantic_scope_labels(Path(clean_messages).parent)
             for message in iter_clean_messages(Path(clean_messages)):
+                semantic_scope_labels = semantic_labels_for_message(message, semantic_sidecar)
+                if semantic_scope_labels:
+                    message = dict(message)
+                    message["semantic_scope_labels"] = semantic_scope_labels
+                    message["scope_labels"] = merged_scope_labels(list(message.get("scope_labels") or []), semantic_scope_labels)
                 score = score_message(message, terms)
                 if score <= 0:
                     continue
@@ -589,6 +605,16 @@ def deep_search_entry(entry: dict, terms: list[str], max_hits: int = 3) -> tuple
                         "phase": message.get("phase") or "",
                         "turn_index": message.get("turn_index"),
                         "is_final": message.get("is_final"),
+                        "scope_labels": [
+                            label
+                            for label in message.get("scope_labels", [])
+                            if isinstance(label, str)
+                        ],
+                        "semantic_scope_labels": [
+                            label
+                            for label in message.get("semantic_scope_labels", [])
+                            if isinstance(label, str)
+                        ],
                         "score": round(score, 3),
                         "rank_score": round(rank_score, 3),
                         "search_noise": bool(noise_reason),
@@ -597,13 +623,22 @@ def deep_search_entry(entry: dict, terms: list[str], max_hits: int = 3) -> tuple
                     }
                     for rank_score, score, noise_reason, message in clean_hits[:max_hits]
                 ]
-                return max(rank_score for rank_score, *_ in clean_hits[:max_hits]) * 0.08, compact_hits
-        except Exception:
-            pass
+                return {
+                    "score": max(rank_score for rank_score, *_ in clean_hits[:max_hits]) * 0.08,
+                    "hits": compact_hits,
+                    "warnings": warnings,
+                }
+        except Exception as exc:
+            warnings.append(_search_warning("clean_source", clean_messages, exc))
 
     sqlite_path = Path(paths.get("sqlite") or "")
     if not sqlite_path.exists():
-        return 0.0, []
+        return {"score": 0.0, "hits": [], "warnings": warnings}
+    # Registry is the low-level catalog imported by many scripts. Keep retrieval
+    # as a use-site dependency so a future retrieval helper can refer back to
+    # registry data without creating an import-time cycle.
+    from retrieval import expanded_terms_from_anchors, match_anchors, search_hybrid_index
+
     anchors_value = paths.get("anchors")
     anchors_path = Path(anchors_value) if anchors_value else None
     anchors = match_anchors(anchors_path, terms, limit=4) if anchors_path and anchors_path.is_file() else []
@@ -619,8 +654,9 @@ def deep_search_entry(entry: dict, terms: list[str], max_hits: int = 3) -> tuple
             snippet_chars=260,
             context_radius=0,
         )
-    except Exception:
-        return 0.0, []
+    except Exception as exc:
+        warnings.append(_search_warning("sqlite", sqlite_path, exc))
+        return {"score": 0.0, "hits": [], "warnings": warnings}
     score = max((float(hit.get("score") or 0.0) for hit in hits), default=0.0) * 0.08
     compact_hits = [
         {
@@ -635,7 +671,12 @@ def deep_search_entry(entry: dict, terms: list[str], max_hits: int = 3) -> tuple
         }
         for hit in hits
     ]
-    return score, compact_hits
+    return {"score": score, "hits": compact_hits, "warnings": warnings}
+
+
+def deep_search_entry(entry: dict, terms: list[str], max_hits: int = 3) -> tuple[float, list[dict]]:
+    result = deep_search_entry_result(entry, terms, max_hits=max_hits)
+    return float(result.get("score") or 0.0), list(result.get("hits") or [])
 
 
 def print_entries(entries: list[dict]) -> None:
@@ -776,14 +817,22 @@ def main() -> int:
         return 0
 
     if args.command == "search":
+        from retrieval import split_query_terms
+
         query_terms = split_query_terms(args.terms)
         scored = []
+        warnings = []
         for entry in registry.get("threads", []):
             score = entry_search_score(entry, query_terms)
             index_hits = []
             if not args.metadata_only:
-                deep_score, index_hits = deep_search_entry(entry, query_terms)
-                score += deep_score
+                deep_result = deep_search_entry_result(entry, query_terms)
+                score += float(deep_result.get("score") or 0.0)
+                index_hits = list(deep_result.get("hits") or [])
+                for warning in deep_result.get("warnings") or []:
+                    item = dict(warning)
+                    item["thread_key"] = entry.get("thread_key")
+                    warnings.append(item)
             if score > 0:
                 item = dict(entry)
                 item["score"] = round(score, 3)
@@ -792,10 +841,17 @@ def main() -> int:
         scored.sort(key=lambda item: (-item["score"], item.get("updated_at") or ""))
         scored = scored[: args.max]
         if args.json_output:
-            print(json.dumps({"registry": str(json_path), "matches": scored}, ensure_ascii=False, indent=2))
+            print(json.dumps({"registry": str(json_path), "matches": scored, "warnings": warnings}, ensure_ascii=False, indent=2))
         else:
             print(f"registry: {json_path}")
             print_entries(scored)
+            if warnings:
+                print("search warnings:")
+                for warning in warnings[:8]:
+                    print(
+                        f"- {warning.get('thread_key') or '(unknown)'} | "
+                        f"{warning.get('stage')} | {warning.get('error_type')}: {warning.get('message')}"
+                    )
         return 0 if scored else 1
 
     if args.command == "show":
