@@ -4,6 +4,10 @@ This is the short handoff for the next development slice after the current
 technical-debt baseline. It points to canonical docs instead of duplicating
 their full contracts.
 
+Keep this file as a task queue and preservation checklist. Detailed Stage 0-5
+evidence belongs in `stage-0-5-readiness.md`; dated command evidence belongs in
+`public-readiness-verification.md`.
+
 ## Current Baseline To Preserve
 
 - Public repo boundary: no raw rollouts, registry exports, private anchors,
@@ -43,14 +47,9 @@ their full contracts.
   `retrieval.py` at module load time, and `prompt_recall_core.py` becoming a
   broad foreground import hub again.
 - The real-history FTS5 recall benchmark exists at
-  `benchmarks/aippocampus/benchmark_fts5_recall.py`. Its first 100-case
-  aggregate run over the 949-thread local registry found 99/100 FTS5 top-10
-  hits, with the single miss caused by the expected clean-source line being
-  absent from the corresponding SQLite index. The onboarding consistency probe
-  now detects that class of stale SQLite index, and the local repair pass found
-  and rebuilt 5 stale indexes; the post-repair benchmark reached 100/100 FTS5
-  top-10 hits with no absent expected lines. Preserve the distinction between
-  lexical/ranking misses and stale-index consistency misses.
+  `benchmarks/aippocampus/benchmark_fts5_recall.py`. Preserve the distinction
+  between lexical/ranking misses and stale-index consistency misses; detailed
+  dated metrics belong in the readiness snapshot or verification ledger.
 - Segment rebuilds must preserve the last-known-good manifest and segment dirs
   when a rebuild fails.
 
@@ -80,39 +79,9 @@ their full contracts.
    - `project_timeline.json` now also carries a `life_wide` section that groups
      bounded recent labeled clean-source turns across registered
      threads/projects with `source_refs`.
-   - The local real-history registry has been broadened to 949 registered
-     threads. The full-candidate live semantic sidecar smoke selected 609
-     currently unlabeled life-wide candidate turns across 98 threads, evaluated
-     every selected candidate in successful DeepSeek-compatible batches, and
-     expanded materialized semantic sidecars to 27 threads/119 rows before
-     stricter source-review filtering. The current v2 prompt requires
-     per-label evidence for every materialized label and the materializer no
-     longer falls back to row-level confidence. A fresh v2 no-write DeepSeek
-     probe accepted 11 findings / 15 labels with complete sufficient
-     per-label evidence across seven labels, while the current strict
-     materialization intentionally keeps only 2 threads/5 rows/5 timeline turns
-     after suppressing labels whose evidence over-inferred beyond clean source.
-     Smoke output includes claim-level, ratio, candidate-coverage, evidence
-     completeness, and cannot-claim guards.
-   - `smoke_source_evidence_recall_eval.py` now adds selected fuzzy life-wide
-     source-evidence prompts. It chooses dynamic low-frequency source cue terms
-     instead of expanding a fuzzy word list, then uses dynamic clean-source
-     corpus-rarity reranking to check whether search returns the expected
-     clean-source evidence; the current selected top-5 eval is 24/24 hits.
-   - `smoke_semantic_scope_source_review.py` now adds a live
-     DeepSeek-compatible label-case review pass. It samples one sidecar label
-     per case, reports per-label pass rates, retries transient reviewer
-     failures, and currently verifies 5/5 labels in the strict materialization
-     as supported by clean source. Earlier broader review failures are now used
-     as suppression signals instead of pass-rate dilution.
-   - `semantic_scope_suppressed_recovery.py` now gives Pro an explicit
-     tool-loop path for labels suppressed by strict sidecar gates. It filters
-     out old empty-evidence candidates, inspects clean source through a tool,
-     and the latest live smoke restored 3/5 selected candidate labels through
-     the unchanged strict materializer. A stricter Pro-agent source-review run
-     still flagged `personal_reflection` / `reading_notes` ambiguity, so those
-     cases should guide the next evidence-generation pass rather than loosening
-     sidecar gates.
+   - Current real-history coverage numbers, strict source-review results, and
+     Pro-agent recovery evidence live in `stage-0-5-readiness.md`. Do not mirror
+     those metrics here unless this file becomes a release changelog.
    - Next broaden high-confidence recovery for suppressed soft labels
      (`relationship_continuity`, `open_question`, `idea_seed`,
      `technical_work`, `life_context`, `preference`) through better model

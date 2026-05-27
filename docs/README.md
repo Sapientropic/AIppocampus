@@ -1,12 +1,24 @@
 # AIppocampus Docs
 
-This folder holds product direction, architecture notes, and research context
-for the public AIppocampus repository. Runtime contracts for the installable
-skill live under `skills/aippocampus/references/`.
+This folder holds product direction, architecture notes, dated evidence, and
+research context for the public AIppocampus repository. Runtime contracts for
+the installable skill live under `skills/aippocampus/references/`.
 
 The installable skill body is intentionally slim: tests live in
 `tests/aippocampus/`, benchmark runners in `benchmarks/aippocampus/`, and
 repository smoke/docs-maintenance tools in `tools/aippocampus/`.
+
+## Authority Map
+
+- Current product requirements: `roadmap.md`.
+- Current Stage 0-5 claim boundary: `stage-0-5-readiness.md`.
+- Dated verification ledger: `public-readiness-verification.md`.
+- Runtime skill contracts: `skills/aippocampus/SKILL.md` and
+  `skills/aippocampus/references/`.
+- Exploratory research: `research/README.md`.
+
+Keep long rules, status matrices, and command logs in one authoritative place.
+Other docs should link to that place and add only local context.
 
 ## Stable Product Direction
 
@@ -19,8 +31,8 @@ repository smoke/docs-maintenance tools in `tools/aippocampus/`.
 - `demo-scenarios.md` - public-safe demo flows using synthetic memory data.
 - `privacy-security-checklist.md` - public-readiness privacy and security
   review checklist.
-- `public-readiness-verification.md` - dated verification evidence for the
-  current public-readiness slice.
+- `public-readiness-verification.md` - dated verification ledger. It preserves
+  command evidence but is not the canonical status page.
 - `memory-decision-benchmark-plan.md` - benchmark design for quiet-by-default
   recall decisions, source fidelity, and payload privacy.
 - `next-iteration-plan.md` - short handoff for the next development slices.
@@ -49,6 +61,8 @@ repository smoke/docs-maintenance tools in `tools/aippocampus/`.
 
 ## Research And Positioning
 
+- `research/README.md` - index and evidence map for speculative research notes;
+  these notes are not runtime contracts.
 - `technical-differentiation-analysis.md` - strategic hypothesis draft. Treat
   claims as positioning until externally sourced.
 - `wukong-mining-notes.md` - scoring-fusion and mining notes for long-memory

@@ -16,20 +16,28 @@ strong claims need source-backed evidence.
    - Why AIppocampus exists.
    - Frames the product goal as presence through sustained, source-backed
      acquaintance rather than persona construction.
-2. [Dream Task Design](dream-task-design.md)
+2. [Journey Tracking](journey-tracking.md)
+   - The product ontology shift.
+   - Frames long-running continuity as first-person plural journeys rather
+     than third-person user modeling.
+3. [Reflection Space](reflection-space.md)
+   - The user-facing surface for journeys.
+   - Proposes an optional map room where the interaction mode changes from
+     task-solving to reflection and review.
+4. [Dream Task Design](dream-task-design.md)
    - The most direct implementation path.
    - Proposes integrative subconscious jobs: compensatory analysis first, then
      prospective analysis, amplification, and active imagination.
-3. [Ambient Associative Recall](ambient-associative-recall.md)
+5. [Ambient Associative Recall](ambient-associative-recall.md)
    - The user-facing recall behavior.
    - Designs active gentle nudges, private recall cards, thread ambient cache,
      and timeboxed DeepSeek scouts that warm multi-turn agent threads without
      making the foreground hook wait for a full batch.
-4. [Thread Intuition Layer](affect-side-channel.md)
+6. [Thread Intuition Layer](affect-side-channel.md)
    - The intuition-layer candidate.
    - Explores compact thread mood markers, especially hexagram arcs plus a
      "do not decode" instruction, as a low-token background signal.
-5. [Compact Activation Signals](compact-activation-signals.md)
+7. [Compact Activation Signals](compact-activation-signals.md)
    - The long-shot research frontier.
    - Keeps the question of activation-efficient memory alive, while current
      reviewer consensus points the near-term path back to structured text
@@ -52,9 +60,9 @@ The strongest near-term path is:
 ```text
 clean source
   -> existing extractive metadata
-  -> structured cognitive portrait
+  -> journey tracking / structured cognitive portrait
   -> ambient associative recall
-  -> compensatory dream task
+  -> compensatory dream task / reflection space
   -> optional intuition marker
 ```
 

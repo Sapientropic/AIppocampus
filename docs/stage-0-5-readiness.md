@@ -5,6 +5,11 @@ This is a current-state evidence matrix for completing roadmap stages 0 through
 what the current worktree can and cannot honestly claim.
 
 Snapshot date: 2026-05-27.
+Repository-layout command paths refreshed: 2026-05-28.
+
+Keep this page focused on claim boundaries and missing proof. Dated command
+evidence belongs in `docs/public-readiness-verification.md`; next-slice task
+handoff belongs in `docs/next-iteration-plan.md`.
 
 ## Can Claim Now
 
@@ -158,7 +163,7 @@ Snapshot date: 2026-05-27.
 | Stage | Current evidence | Missing proof |
 | --- | --- | --- |
 | 0 | `python -m unittest discover -s tests -t .` passes 308 tests, docs health, hook installer tests, onboarding tests, Ruff `E9` + full Pyflakes `F`, and import-coupling guards for script cycles / hook import fan-out | Keep full suite green after each slice |
-| 1 | `README.md`, `CONTRIBUTING.md`, architecture/install/demo/privacy docs, synthetic example bundle, docs health guardrails, dated full-suite/scan notes, `run_stage_0_5_smoke.py` unified smoke runner | External install review, repeated full-suite/scan evidence after each release slice |
+| 1 | `README.md`, `CONTRIBUTING.md`, architecture/install/demo/privacy docs, synthetic example bundle, docs health guardrails, dated full-suite/scan notes, and `tools/aippocampus/smoke/run_stage_0_5_smoke.py` unified smoke runner | External install review, repeated full-suite/scan evidence after each release slice |
 | 2 | Registry, clean source, cognitive map, semantic triggers, subconscious jobs, deterministic `scope_labels`, mocked DeepSeek `semantic_scope_labeling` job-to-sidecar test, `build_semantic_scope_labels.py` materializer, dynamic `semantic-scope-labels.jsonl` sidecar merging with strict per-label evidence gates for every materialized label, scope-filtered clean-source search, public casual-important metaphor/pivot example, `life_wide` timeline groups with source refs, quiet life-wide ambient scent with anti-over-personalization tests, real-registry aggregate coverage smoke with claim-level/ratio guards, refreshed 949-thread local registry, full-candidate real-history semantic sidecar smoke evaluating 609 selected candidates and expanding to 27 threads/119 rows before strict filtering, v2 fresh DeepSeek probe with 11 findings / 15 accepted labels / complete per-label evidence, current strict sidecars at 2 threads/5 rows/5 timeline turns, selected source-evidence recall eval with 24/24 top-5 hits, selected source-review smoke with 5/5 supported current strict label cases, DeepSeek flash/pro route tests, and live Pro-agent suppressed-label recovery restoring 3/5 candidate labels without relaxing strict gates | Broader human/source review, broader Pro-agent recovery, and better model-side evidence to restore high-confidence coverage for suppressed soft labels |
 | 3 | `sync_bundle.py`, `sync_object_storage.py`, `export_bundle.py`, `import_bundle.py`, global thread store defaults, semantic scope-label sidecar sync, device-neutral bundle registry locators, target-registry path repair on pull, conflict-preserving pull tests, single-machine dual-device/cross-OS-path-shape smoke, local HTTP object-storage adapter smoke, Docker/WSL alternate-runtime smoke when available, and install docs | Physical second-machine or managed cloud/object-storage provider smoke |
 | 4 | `aippocampus_mcp_server.py`, `.mcp.json`, MCP unit tests, source stdio JSON-RPC process smoke, installed-plugin `.mcp.json` JSON-RPC smoke, real Codex app-server MCP host list and `mcpServer/tool/call sync_status` smoke | Interactive Desktop UI / alternate Codex client verification |

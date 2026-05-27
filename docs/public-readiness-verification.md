@@ -1,14 +1,27 @@
 # Public Readiness Verification
 
-Date: 2026-05-27.
+Initial evidence date: 2026-05-27.
+Repository-layout command paths refreshed: 2026-05-28.
 
-This file records dated evidence. Stable privacy rules live in
-`docs/privacy-security-checklist.md`; this file should be refreshed when public
-release evidence changes. Do not paste raw command JSON here: local smoke
-outputs may contain machine-specific temporary paths, so this document keeps
-only summarized evidence.
+This file is a dated verification ledger. It preserves summarized command
+evidence for release-readiness work, but the current Stage 0-5 claim boundary
+lives in `docs/stage-0-5-readiness.md` and the canonical product requirements
+remain in `docs/roadmap.md`.
 
-## Commands Run
+Stable privacy rules live in `docs/privacy-security-checklist.md`. Do not paste
+raw command JSON here: local smoke outputs may contain machine-specific
+temporary paths, so this document keeps only summarized evidence.
+
+## 2026-05-28 Layout Refresh
+
+The installable skill body is now runtime-only: repository tests live in
+`tests/aippocampus/`, benchmark runners in `benchmarks/aippocampus/`, and
+smoke/docs-maintenance tools in `tools/aippocampus/`. The command ledger below
+uses those paths. Ordinary docs-only edits do not require every heavy smoke in
+this ledger; use `stage-0-5-readiness.md` to decide which evidence is needed
+for a specific claim.
+
+## Command Ledger
 
 ```powershell
 python tools\aippocampus\docs\check_docs_health.py --json
