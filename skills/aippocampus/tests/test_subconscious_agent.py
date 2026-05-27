@@ -10,9 +10,17 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
+TESTS = ROOT / "tests"
+sys.path.insert(0, str(TESTS))
 sys.path.insert(0, str(SCRIPTS))
 
 import subconscious_agent as agent  # noqa: E402
+from redaction_fixtures import (  # noqa: E402
+    FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER,
+    FAKE_TEST_OPENAI_API_KEY,
+    FAKE_TEST_SECRET_VALUE,
+    fake_test_windows_path,
+)
 
 
 class SubconsciousAgentTests(unittest.TestCase):
@@ -36,20 +44,17 @@ class SubconsciousAgentTests(unittest.TestCase):
             [
                 {
                     "turn_ref": "t0",
-                    "user": (
-                        "帮我看 token=abc123secretvalue 和 "
-                        r"C:\Users\Administrator\Secrets\agent.txt"
-                    ),
-                    "assistant": "sk-thisshouldnotleave-local-test-1234567890",
+                    "user": f"帮我看 token={FAKE_TEST_SECRET_VALUE} 和 {fake_test_windows_path('agent.txt')}",
+                    "assistant": FAKE_TEST_OPENAI_API_KEY,
                 }
             ],
             max_steps=1,
             min_tool_steps=0,
         )
 
-        self.assertNotIn("abc123secretvalue", payload)
-        self.assertNotIn("sk-thisshouldnotleave-local-test-1234567890", payload)
-        self.assertNotIn(r"C:\\Users\\Administrator", payload)
+        self.assertNotIn(FAKE_TEST_SECRET_VALUE, payload)
+        self.assertNotIn(FAKE_TEST_OPENAI_API_KEY, payload)
+        self.assertNotIn(FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER, payload)
         self.assertIn("<redacted:secret>", payload)
         self.assertIn("<redacted:local-path>", payload)
 
@@ -249,10 +254,7 @@ class SubconsciousAgentTests(unittest.TestCase):
                         "role": "user",
                         "phase": "",
                         "turn_index": 1,
-                        "text": (
-                            "api_key=sk-thisshouldnotleave-local-test-1234567890 "
-                            r"C:\Users\Administrator\Secrets\agent-tool.txt"
-                        ),
+                        "text": f"api_key={FAKE_TEST_OPENAI_API_KEY} {fake_test_windows_path('agent-tool.txt')}",
                     },
                     ensure_ascii=False,
                 )
@@ -342,8 +344,8 @@ class SubconsciousAgentTests(unittest.TestCase):
             )
 
         second_call = json.dumps(calls[1], ensure_ascii=False)
-        self.assertNotIn("sk-thisshouldnotleave-local-test-1234567890", second_call)
-        self.assertNotIn(r"C:\\Users\\Administrator", second_call)
+        self.assertNotIn(FAKE_TEST_OPENAI_API_KEY, second_call)
+        self.assertNotIn(FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER, second_call)
         self.assertIn("<redacted:api-key>", second_call)
         self.assertIn("<redacted:local-path>", second_call)
 

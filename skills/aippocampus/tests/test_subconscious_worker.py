@@ -9,9 +9,17 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
+TESTS = ROOT / "tests"
+sys.path.insert(0, str(TESTS))
 sys.path.insert(0, str(SCRIPTS))
 
 import subconscious_worker as worker  # noqa: E402
+from redaction_fixtures import (  # noqa: E402
+    FAKE_TEST_BEARER_TOKEN,
+    FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER,
+    FAKE_TEST_OPENAI_API_KEY,
+    fake_test_windows_path,
+)
 
 
 class SubconsciousWorkerTests(unittest.TestCase):
@@ -93,10 +101,10 @@ class SubconsciousWorkerTests(unittest.TestCase):
                             "timestamp": "2026-05-25T00:00:00Z",
                             "turn_index": 1,
                             "user": (
-                                "继续海马体配置，api_key=sk-thisshouldnotleave-local-test-1234567890 "
-                                r"本地文件在 C:\Users\Administrator\Secrets\token.txt"
+                                f"继续海马体配置，api_key={FAKE_TEST_OPENAI_API_KEY} "
+                                f"本地文件在 {fake_test_windows_path('token.txt')}"
                             ),
-                            "assistant": "Authorization: Bearer abcdefghijklmnopqrstuvwxyz1234567890",
+                            "assistant": f"Authorization: Bearer {FAKE_TEST_BEARER_TOKEN}",
                         }
                     ],
                 }
@@ -106,9 +114,9 @@ class SubconsciousWorkerTests(unittest.TestCase):
         turns = worker.select_timeline_turns(timeline, project="AIppocampus", max_turns=1)
         payload = worker.user_prompt_for_turns(turns)
 
-        self.assertNotIn("sk-thisshouldnotleave-local-test-1234567890", payload)
-        self.assertNotIn("abcdefghijklmnopqrstuvwxyz1234567890", payload)
-        self.assertNotIn(r"C:\\Users\\Administrator", payload)
+        self.assertNotIn(FAKE_TEST_OPENAI_API_KEY, payload)
+        self.assertNotIn(FAKE_TEST_BEARER_TOKEN, payload)
+        self.assertNotIn(FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER, payload)
         self.assertIn("<redacted:api-key>", payload)
         self.assertIn("<redacted:local-path>", payload)
 

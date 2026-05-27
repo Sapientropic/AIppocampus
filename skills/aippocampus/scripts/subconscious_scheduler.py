@@ -33,8 +33,8 @@ DEFAULT_PROJECT_LEASE_SECONDS = 2 * 60 * 60
 DEFAULT_STALE_LOCK_SECONDS = 2 * 60 * 60
 DEFAULT_MAX_TURNS = 96
 DEFAULT_MAX_FINDINGS = 220
-DEFAULT_JOB_CONCURRENCY = 4
-DEFAULT_SAMPLES_PER_JOB = 1
+DEFAULT_JOB_CONCURRENCY = int(os.environ.get("AIPPOCAMPUS_SUBCONSCIOUS_JOB_CONCURRENCY", "4"))
+DEFAULT_SAMPLES_PER_JOB = int(os.environ.get("AIPPOCAMPUS_SUBCONSCIOUS_SAMPLES_PER_JOB", "2"))
 DEFAULT_API_KEY_ENV = "DEEPSEEK_API_KEY"
 
 
@@ -392,11 +392,13 @@ def run_project(
     # so the hook can return quickly while the sleep-time pass does heavier
     # consolidation safely in staging files.
     commands = [
-        [sys.executable, str(SCRIPT_DIR / "build_project_timeline.py")],
-        [sys.executable, str(SCRIPT_DIR / "build_concept_graph.py")],
+        [sys.executable, str(SCRIPT_DIR / "build_project_timeline.py"), "--registry-dir", str(root)],
+        [sys.executable, str(SCRIPT_DIR / "build_concept_graph.py"), "--registry-dir", str(root)],
         [
             sys.executable,
             str(SCRIPT_DIR / "subconscious_jobs.py"),
+            "--registry-dir",
+            str(root),
             "--job",
             "all",
             "--project",
@@ -410,18 +412,29 @@ def run_project(
             "--samples-per-job",
             str(samples_per_job),
         ],
-        [sys.executable, str(SCRIPT_DIR / "build_cognitive_map.py")],
+        [
+            sys.executable,
+            str(SCRIPT_DIR / "build_semantic_scope_labels.py"),
+            "--registry-dir",
+            str(root),
+            "--project",
+            stats.label,
+        ],
+        [sys.executable, str(SCRIPT_DIR / "build_project_timeline.py"), "--registry-dir", str(root)],
+        [sys.executable, str(SCRIPT_DIR / "build_cognitive_map.py"), "--registry-dir", str(root)],
         [
             sys.executable,
             str(SCRIPT_DIR / "subconscious_review.py"),
+            "--registry-dir",
+            str(root),
             "--max-findings",
             str(max_findings),
             "--focus",
             focus_for(stats),
         ],
-        [sys.executable, str(SCRIPT_DIR / "semantic_trigger_router.py")],
-        [sys.executable, str(SCRIPT_DIR / "memory_candidate_router.py")],
-        [sys.executable, str(SCRIPT_DIR / "build_concept_graph.py")],
+        [sys.executable, str(SCRIPT_DIR / "semantic_trigger_router.py"), "--registry-dir", str(root)],
+        [sys.executable, str(SCRIPT_DIR / "memory_candidate_router.py"), "--registry-dir", str(root)],
+        [sys.executable, str(SCRIPT_DIR / "build_concept_graph.py"), "--registry-dir", str(root)],
     ]
     outputs: list[str] = []
     for cmd in commands:
@@ -446,7 +459,10 @@ def start_detached(cmd: list[str], *, root: Path) -> int:
         stdin=subprocess.DEVNULL,
         stdout=out,
         stderr=subprocess.STDOUT,
-        close_fds=False if os.name == "nt" else True,
+        # Hook callers often run with stdout/stderr captured by the host. Do
+        # not let detached workers inherit those handles, or the foreground
+        # hook may wait until the background DeepSeek pass exits.
+        close_fds=True,
         creationflags=creationflags,
     )
     out.close()
@@ -505,7 +521,12 @@ def choose_projects(
 def maybe_start(args: argparse.Namespace) -> dict[str, Any]:
     root = registry_dir(Path(args.registry_dir).resolve() if args.registry_dir else None)
     state_file = state_path(root, Path(args.state_file).resolve() if args.state_file else None)
-    if os.environ.get("AIIPPOCAMPUS_SUBCONSCIOUS_HOOK", "1").lower() in {"0", "false", "off", "no"}:
+    hook_env = os.environ.get("AIPPOCAMPUS_SUBCONSCIOUS_HOOK")
+    if hook_env is None:
+        # Keep the old misspelled knob as a compatibility fallback only; the
+        # public prefix is AIPPOCAMPUS_* and should be the one documented/used.
+        hook_env = os.environ.get("AIIPPOCAMPUS_SUBCONSCIOUS_HOOK", "1")
+    if hook_env.lower() in {"0", "false", "off", "no"}:
         return {"started": False, "skipped": "disabled_by_env", "projects": []}
     if not os.environ.get(args.api_key_env):
         return {"started": False, "skipped": f"missing_{args.api_key_env}", "projects": []}
@@ -697,6 +718,11 @@ def main() -> int:
     parser.add_argument("--api-key-env", default=DEFAULT_API_KEY_ENV)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Return a non-zero status on scheduler errors. Hook mode stays fail-open by default.",
+    )
     args = parser.parse_args()
 
     try:
@@ -718,7 +744,7 @@ def main() -> int:
             print(json.dumps({"error": str(exc)}, ensure_ascii=False, indent=2))
         else:
             print(f"subconscious scheduler error: {exc}", file=sys.stderr)
-        return 0
+        return 1 if args.strict else 0
 
 
 if __name__ == "__main__":

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import os
 import sys
 import tempfile
@@ -106,12 +108,45 @@ class SubconsciousSchedulerTests(unittest.TestCase):
 
         self.assertEqual(result["skipped"], "missing_DEEPSEEK_API_KEY")
 
+    def test_maybe_start_respects_subconscious_hook_disable_env(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"AIPPOCAMPUS_SUBCONSCIOUS_HOOK": "off", "DEEPSEEK_API_KEY": "x"},
+            clear=True,
+        ):
+            result = scheduler.maybe_start(self.args(dry_run=True))
+
+        self.assertEqual(result["skipped"], "disabled_by_env")
+        self.assertEqual(result["projects"], [])
+
     def test_maybe_start_dry_run_reports_due_project(self) -> None:
         with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "x"}, clear=True):
             result = scheduler.maybe_start(self.args(dry_run=True))
 
         self.assertFalse(result["started"])
         self.assertEqual(result["projects"][0]["label"], "T-Sense")
+
+    def test_maybe_start_uses_parallel_deepseek_defaults_for_detached_worker(self) -> None:
+        captured: dict[str, object] = {}
+
+        def fake_start_detached(cmd: list[str], *, root: Path) -> int:
+            captured["cmd"] = cmd
+            captured["root"] = root
+            return 4321
+
+        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "x"}, clear=True), patch.object(
+            scheduler,
+            "start_detached",
+            side_effect=fake_start_detached,
+        ):
+            result = scheduler.maybe_start(self.args())
+
+        cmd = [str(item) for item in captured["cmd"]]
+        self.assertTrue(result["started"])
+        self.assertIn("--job-concurrency", cmd)
+        self.assertEqual(cmd[cmd.index("--job-concurrency") + 1], "4")
+        self.assertIn("--samples-per-job", cmd)
+        self.assertEqual(cmd[cmd.index("--samples-per-job") + 1], "2")
 
     def test_maybe_start_respects_active_project_lease(self) -> None:
         state_file = self.root / "subconscious_state.json"
@@ -194,6 +229,55 @@ class SubconsciousSchedulerTests(unittest.TestCase):
 
         self.assertEqual(state["projects"]["T-Sense"]["last_status"], "bootstrapped_from_staging")
         self.assertEqual(state["projects"]["T-Sense"]["last_clean_turn_count"], 15)
+
+    def test_run_project_materializes_semantic_scope_labels_before_rebuilding_timeline(self) -> None:
+        stats = scheduler.project_stats_from_registry(self.registry)["T-Sense"]
+        commands: list[list[str]] = []
+
+        def fake_run_text(cmd: list[str], *, cwd: Path = scheduler.SCRIPT_DIR, log: Path | None = None) -> str:
+            del cwd, log
+            commands.append(cmd)
+            return "ok"
+
+        with patch.object(scheduler, "run_text", side_effect=fake_run_text):
+            result = scheduler.run_project(
+                stats,
+                root=self.root,
+                max_turns=8,
+                max_findings=12,
+                job_concurrency=1,
+                samples_per_job=1,
+                log=self.root / "log.txt",
+            )
+
+        scripts = [Path(command[1]).name for command in commands]
+        self.assertIn("build_semantic_scope_labels.py", scripts)
+        semantic_index = scripts.index("build_semantic_scope_labels.py")
+        timeline_indexes = [index for index, name in enumerate(scripts) if name == "build_project_timeline.py"]
+        self.assertLess(scripts.index("subconscious_jobs.py"), semantic_index)
+        self.assertTrue(any(index > semantic_index for index in timeline_indexes))
+        self.assertEqual(result["commands"], len(commands))
+        self.assertTrue(all("--registry-dir" in command for command in commands))
+
+    def test_main_without_strict_keeps_hook_fail_open(self) -> None:
+        with patch.object(sys, "argv", ["subconscious_scheduler.py", "--maybe-start"]), patch.object(
+            scheduler,
+            "maybe_start",
+            side_effect=RuntimeError("boom"),
+        ), contextlib.redirect_stderr(io.StringIO()):
+            code = scheduler.main()
+
+        self.assertEqual(code, 0)
+
+    def test_main_strict_returns_nonzero_on_operator_error(self) -> None:
+        with patch.object(sys, "argv", ["subconscious_scheduler.py", "--maybe-start", "--strict"]), patch.object(
+            scheduler,
+            "maybe_start",
+            side_effect=RuntimeError("boom"),
+        ), contextlib.redirect_stderr(io.StringIO()):
+            code = scheduler.main()
+
+        self.assertEqual(code, 1)
 
 
 if __name__ == "__main__":

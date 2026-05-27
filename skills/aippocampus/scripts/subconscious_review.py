@@ -22,17 +22,16 @@ from aippocampuslib import (
 from registry import registry_paths, unique_preserve
 from retrieval import split_query_terms
 from subconscious_agent import (
-    DEFAULT_MAX_STEPS,
     DEFAULT_TEMPERATURE,
-    add_usage,
     call_chat_json,
     compact_usage,
     parse_action,
 )
 from subconscious_jobs import (
-    DEFAULT_JOBS_OUTPUT_NAME,
     PROMPT_VERSION as JOBS_PROMPT_VERSION,
     default_jobs_output_path,
+)
+from subconscious_job_validation import (
     estimate_finding_quality,
     finding_fingerprint,
 )
@@ -41,6 +40,7 @@ from subconscious_worker import DEFAULT_BASE_URL, DEFAULT_MODEL, clamp_confidenc
 
 PROMPT_VERSION = "aippocampus-subconscious-review-v0"
 DEFAULT_REVIEW_OUTPUT_NAME = "promotion_candidates.jsonl"
+NAVIGATION_ONLY_JOBS = {"semantic_scope_labeling"}
 
 REVIEW_SYSTEM_PROMPT = """You are AIppocampus subconscious review.
 You review staging findings from prior subconscious jobs and decide what is
@@ -109,6 +109,8 @@ def recent_findings(path: Path, *, max_findings: int = 80, jobs: list[str] | Non
     rows = [normalize_finding(row) for row in iter_jsonl(path)]
     if job_filter:
         rows = [row for row in rows if str(row.get("job") or "") in job_filter]
+    else:
+        rows = [row for row in rows if str(row.get("job") or "") not in NAVIGATION_ONLY_JOBS]
     rows.sort(key=lambda row: str(row.get("created_at") or ""), reverse=True)
     return rows[: max(1, int(max_findings))]
 
@@ -186,6 +188,8 @@ def validate_review(parsed: dict[str, Any], findings_by_id: dict[str, dict[str, 
         source_ids = unique_preserve([str(value) for value in item.get("source_finding_ids") or [] if str(value).strip()], limit=12)
         source_findings = [findings_by_id[source_id] for source_id in source_ids if source_id in findings_by_id]
         if not source_findings:
+            continue
+        if any(str(finding.get("job") or "") in NAVIGATION_ONLY_JOBS for finding in source_findings):
             continue
         confidence = clamp_confidence(item.get("confidence"))
         if confidence < 0.45:

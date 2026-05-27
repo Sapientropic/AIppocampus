@@ -28,10 +28,11 @@ from aippocampuslib import (
     now_utc,
     sanitize_external_model_payload,
 )
+from deepseek_model_routing import flash_model
 
 
 PROMPT_VERSION = "aippocampus-subconscious-v0"
-DEFAULT_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-flash")
+DEFAULT_MODEL = flash_model()
 DEFAULT_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
 DEFAULT_MAX_TURNS = 48
 
@@ -128,6 +129,20 @@ def select_timeline_turns(
                     "user_line": turn.get("user_line"),
                     "assistant_line": turn.get("assistant_line"),
                     "topic_terms": unique_preserve([str(item) for item in turn.get("topic_terms") or []], limit=16),
+                    "scope_labels": unique_preserve([str(item) for item in turn.get("scope_labels") or []], limit=12),
+                    "semantic_scope_labels": unique_preserve([str(item) for item in turn.get("semantic_scope_labels") or []], limit=12),
+                    "source_refs": [
+                        {
+                            "thread_key": ref.get("thread_key"),
+                            "message_id": ref.get("message_id"),
+                            "turn_id": ref.get("turn_id"),
+                            "source_line": ref.get("source_line"),
+                            "role": ref.get("role"),
+                            "phase": ref.get("phase") or "",
+                        }
+                        for ref in turn.get("source_refs") or []
+                        if isinstance(ref, dict)
+                    ][:8],
                     "user": compact_text(str(turn.get("user") or ""), 420),
                     "assistant": compact_text(str(turn.get("assistant") or ""), 760),
                 }
@@ -141,13 +156,12 @@ def select_timeline_turns(
 
 
 def user_prompt_for_turns(turns: list[dict[str, Any]]) -> str:
-    # Keep source turns immediately after the prompt version; future worker
-    # variants can add task-specific directives after this shared prefix without
-    # sacrificing DeepSeek KV-cache reuse.
+    # Keep the stable task tag before source turns so broad runs over different
+    # source slices still share a small but useful DeepSeek prefix.
     payload = {
         "prompt_version": PROMPT_VERSION,
-        "turns": turns,
         "task": "propose_source_backed_concept_edges",
+        "turns": turns,
     }
     payload = sanitize_external_model_payload(payload)
     return json.dumps(payload, ensure_ascii=False, indent=2)
