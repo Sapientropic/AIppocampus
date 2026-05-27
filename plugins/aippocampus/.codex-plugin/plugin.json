@@ -1,0 +1,36 @@
+{
+  "name": "aippocampus",
+  "version": "0.1.0",
+  "description": "Source-backed continuity memory for Codex agents across threads, projects, devices, and life-wide conversations.",
+  "author": {
+    "name": "AIppocampus contributors"
+  },
+  "license": "MIT",
+  "keywords": [
+    "memory",
+    "continuity",
+    "codex",
+    "clean-source",
+    "mcp",
+    "hooks"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "AIppocampus",
+    "shortDescription": "Recover source-backed conversation memory without pretending the model has innate memory.",
+    "longDescription": "AIppocampus packages the installable skill and local MCP tools for source-backed continuity. Hook installers and optional DeepSeek-compatible routes are included, but hooks and external-model paths require explicit user action after reviewing the privacy boundary.",
+    "developerName": "AIppocampus contributors",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read"
+    ],
+    "defaultPrompt": [
+      "Search my AIppocampus memory for this topic.",
+      "Show the latest reply from this Codex thread.",
+      "Check AIppocampus memory health before continuing."
+    ],
+    "brandColor": "#256D85"
+  }
+}

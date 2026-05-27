@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "aippocampus": {
+      "command": "python",
+      "args": [
+        "./skills/aippocampus/scripts/aippocampus_mcp_server.py"
+      ]
+    }
+  }
+}
