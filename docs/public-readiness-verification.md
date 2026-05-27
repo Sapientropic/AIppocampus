@@ -122,15 +122,19 @@ Results:
   local 949-thread registry without writing private text to the report. The
   sampled corpus observed 949 registry threads, 949 clean-source threads, 949
   SQLite index threads, 800 eligible threads after visible-source/noise/safety
-  filtering, and 9,420 clean-source messages. The benchmark mixed 81 exact
-  `source_phrase` cases with 19 `normalized_source_phrase` cases. FTS5 hit
-  90/100 in top-1, 99/100 in top-5, and 99/100 in top-10. The one top-10 miss
-  was categorized as `expected_line_absent_from_sqlite`, so among the 99 cases
-  whose expected clean-source line was present in SQLite, FTS5 top-10 hit rate
-  was 1.0. The production hybrid path matched the same 99/100 top-10 result.
-  The output uses hashed case ids, hashed thread ids, source line numbers, and
-  aggregate metrics; it does not include raw query text or snippets unless
-  `--include-private-text` is explicitly requested for local debugging.
+  filtering, and 9,420 clean-source messages. The first run found 99/100 FTS5
+  top-10 hits; the single miss was categorized as
+  `expected_line_absent_from_sqlite`, not a lexical FTS ranking miss. The
+  onboarding consistency probe then found 5 stale SQLite indexes and repaired
+  all 5 by rebuilding from the matching source rollouts. The post-repair
+  benchmark observed 9,424 clean-source messages and mixed 84 exact
+  `source_phrase` cases with 16 `normalized_source_phrase` cases. FTS5 hit
+  91/100 in top-1, 100/100 in top-5, and 100/100 in top-10, with
+  `expected_line_absent_from_sqlite=0`. The production hybrid path matched the
+  same 100/100 top-10 result. The output uses hashed case ids, hashed thread
+  ids, source line numbers, and aggregate metrics; it does not include raw
+  query text or snippets unless `--include-private-text` is explicitly
+  requested for local debugging.
 - selected semantic label source-review smoke: passed. The new
   `smoke_semantic_scope_source_review.py` ran a live DeepSeek-compatible review
   over selected sidecar label cases after strict filtering, with retry support

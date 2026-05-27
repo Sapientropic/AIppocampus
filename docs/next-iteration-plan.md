@@ -46,7 +46,10 @@ their full contracts.
   `skills/aippocampus/scripts/benchmark_fts5_recall.py`. Its first 100-case
   aggregate run over the 949-thread local registry found 99/100 FTS5 top-10
   hits, with the single miss caused by the expected clean-source line being
-  absent from the corresponding SQLite index. Preserve the distinction between
+  absent from the corresponding SQLite index. The onboarding consistency probe
+  now detects that class of stale SQLite index, and the local repair pass found
+  and rebuilt 5 stale indexes; the post-repair benchmark reached 100/100 FTS5
+  top-10 hits with no absent expected lines. Preserve the distinction between
   lexical/ranking misses and stale-index consistency misses.
 - Segment rebuilds must preserve the last-known-good manifest and segment dirs
   when a rebuild fails.

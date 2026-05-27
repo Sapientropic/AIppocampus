@@ -114,6 +114,50 @@ class OnboardCodexTests(unittest.TestCase):
         )
         self.assertTrue((self.registry_dir / "project_timeline.json").exists())
 
+    def test_repair_detects_and_rebuilds_sqlite_stale_against_clean_source(self) -> None:
+        initial = registry.register_rollout_thread(
+            self.rollout,
+            cwd=self.cwd,
+            registry_dir=self.registry_dir,
+            build_index=True,
+        )
+        self._append(
+            {
+                "type": "event_msg",
+                "timestamp": "2026-05-26T03:00:03Z",
+                "payload": {
+                    "type": "user_message",
+                    "message": "新增 clean-source 但旧 SQLite 还没有的 freshness marker。",
+                },
+            }
+        )
+        refreshed_clean_only = registry.register_rollout_thread(
+            self.rollout,
+            cwd=self.cwd,
+            registry_dir=self.registry_dir,
+            build_index=False,
+        )
+        self.assertEqual(
+            initial["entry"]["paths"]["sqlite"], refreshed_clean_only["entry"]["paths"]["sqlite"]
+        )
+
+        stats = onboard.registry_stats(registry_dir=self.registry_dir)
+
+        self.assertEqual(stats["stale_sqlite"], 1)
+        self.assertIn("sqlite_index", stats["repair_artifacts"][0]["stale"])
+        self.assertTrue(
+            any(
+                issue["code"] == "missing_clean_source_lines"
+                for issue in stats["repair_artifacts"][0]["issues"]
+            )
+        )
+
+        repair = onboard.repair_missing_artifacts(registry_dir=self.registry_dir, build_index=True)
+        repaired_stats = onboard.registry_stats(registry_dir=self.registry_dir)
+
+        self.assertEqual(repair["repaired_count"], 1)
+        self.assertEqual(repaired_stats["stale_sqlite"], 0)
+
     def test_frontier_smoke_exposes_compact_sample_findings_and_infers_project(self) -> None:
         captured: dict[str, Any] = {}
 

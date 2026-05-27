@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sqlite3
 import sys
 import time
 from pathlib import Path
@@ -62,6 +63,148 @@ def path_exists(value: Any) -> bool:
         return False
 
 
+def load_json_file(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def maybe_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def maybe_float(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def clean_source_line_range(message: dict[str, Any]) -> tuple[int, int] | None:
+    start = maybe_int(message.get("raw_start_line") or message.get("source_line"))
+    end = maybe_int(message.get("raw_end_line") or message.get("source_line") or start)
+    if start is None or end is None:
+        return None
+    return min(start, end), max(start, end)
+
+
+def clean_source_missing_sqlite_lines(
+    clean_source_messages: Path, sqlite_path: Path, *, sample_limit: int = 5
+) -> dict[str, Any]:
+    try:
+        con = sqlite3.connect(sqlite_path)
+        try:
+            rows = con.execute("SELECT line FROM messages").fetchall()
+        finally:
+            con.close()
+    except sqlite3.Error as exc:
+        return {"checked": 0, "missing_count": 0, "samples": [], "error": str(exc)}
+    sqlite_lines = {int(row[0]) for row in rows if row and row[0] is not None}
+    checked = 0
+    missing_count = 0
+    samples: list[dict[str, Any]] = []
+    try:
+        with clean_source_messages.open("r", encoding="utf-8") as f:
+            for line in f:
+                try:
+                    message = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(message, dict):
+                    continue
+                line_range = clean_source_line_range(message)
+                if not line_range:
+                    continue
+                checked += 1
+                start, end = line_range
+                if any(
+                    raw_line in sqlite_lines for raw_line in range(start, min(end, start + 100) + 1)
+                ):
+                    continue
+                missing_count += 1
+                if len(samples) < sample_limit:
+                    samples.append(
+                        {
+                            "message_id": message.get("message_id") or message.get("id"),
+                            "line_start": start,
+                            "line_end": end,
+                        }
+                    )
+    except OSError as exc:
+        return {
+            "checked": checked,
+            "missing_count": missing_count,
+            "samples": samples,
+            "error": str(exc),
+        }
+    return {"checked": checked, "missing_count": missing_count, "samples": samples}
+
+
+def sqlite_consistency_issues(entry: dict[str, Any]) -> list[dict[str, Any]]:
+    paths = entry.get("paths") or {}
+    clean_messages = Path(str(paths.get("clean_source_messages_jsonl") or ""))
+    sqlite_path = Path(str(paths.get("sqlite") or ""))
+    if not clean_messages.exists() or not sqlite_path.exists():
+        return []
+    issues: list[dict[str, Any]] = []
+    clean_manifest = load_json_file(clean_messages.parent / "manifest.json")
+    index_manifest = load_json_file(sqlite_path.parent / "manifest.json")
+    if clean_manifest and index_manifest:
+        clean_rollout = str(clean_manifest.get("source_rollout") or "")
+        index_rollout = str(index_manifest.get("source_rollout") or "")
+        if clean_rollout and index_rollout and not same_path(clean_rollout, Path(index_rollout)):
+            issues.append({"code": "source_rollout_mismatch"})
+        clean_size = maybe_int(clean_manifest.get("source_rollout_size"))
+        index_size = maybe_int(index_manifest.get("source_rollout_size"))
+        if clean_size is not None and index_size is not None and clean_size > index_size:
+            issues.append(
+                {
+                    "code": "source_rollout_size_behind",
+                    "clean_source_size": clean_size,
+                    "sqlite_source_size": index_size,
+                }
+            )
+        clean_mtime = maybe_float(clean_manifest.get("source_rollout_mtime"))
+        index_mtime = maybe_float(index_manifest.get("source_rollout_mtime"))
+        if clean_mtime is not None and index_mtime is not None and clean_mtime > index_mtime:
+            issues.append({"code": "source_rollout_mtime_behind"})
+        clean_count = maybe_int(clean_manifest.get("message_count"))
+        index_count = maybe_int(index_manifest.get("message_count"))
+        if clean_count is not None and index_count is not None and clean_count > index_count:
+            issues.append(
+                {
+                    "code": "message_count_behind",
+                    "clean_source_messages": clean_count,
+                    "sqlite_messages": index_count,
+                }
+            )
+    # Opening every SQLite file and scanning every clean-source line makes
+    # full-machine onboarding unnecessarily slow. Use manifest freshness as
+    # the cheap gate, then do the line-level probe only when the manifests
+    # already suggest the index may lag behind clean source.
+    if issues or not clean_manifest or not index_manifest:
+        line_probe = clean_source_missing_sqlite_lines(clean_messages, sqlite_path)
+        if line_probe.get("error"):
+            issues.append({"code": "sqlite_line_probe_failed", "message": line_probe["error"]})
+        elif int(line_probe.get("missing_count") or 0) > 0:
+            issues.append(
+                {
+                    "code": "missing_clean_source_lines",
+                    "checked": line_probe.get("checked"),
+                    "missing_count": line_probe.get("missing_count"),
+                    "samples": line_probe.get("samples") or [],
+                }
+            )
+    return issues
+
+
 def registry_stats(*, registry_dir: Path | None = None) -> dict[str, Any]:
     json_path, _ = registry_paths(registry_dir)
     registry = load_registry(json_path)
@@ -71,6 +214,7 @@ def registry_stats(*, registry_dir: Path | None = None) -> dict[str, Any]:
     graph_count = 0
     rollout_count = 0
     missing: list[dict[str, Any]] = []
+    stale: list[dict[str, Any]] = []
     for entry in threads:
         paths = entry.get("paths") or {}
         missing_fields: list[str] = []
@@ -98,6 +242,20 @@ def registry_stats(*, registry_dir: Path | None = None) -> dict[str, Any]:
                     "missing": missing_fields,
                 }
             )
+        else:
+            issues = sqlite_consistency_issues(entry)
+            if issues:
+                stale.append(
+                    {
+                        "thread_key": entry.get("thread_key"),
+                        "title": entry.get("title"),
+                        "rollout": paths.get("rollout"),
+                        "workspace": paths.get("workspace"),
+                        "stale": ["sqlite_index"],
+                        "issues": issues,
+                    }
+                )
+    repair_artifacts = [*missing, *stale]
     return {
         "registry": str(json_path),
         "thread_count": len(threads),
@@ -109,7 +267,15 @@ def registry_stats(*, registry_dir: Path | None = None) -> dict[str, Any]:
         "missing_sqlite": len([item for item in missing if "sqlite_index" in item["missing"]]),
         "missing_graph_json": len([item for item in missing if "graph_json" in item["missing"]]),
         "missing_artifacts": missing,
+        "stale_sqlite": len(stale),
+        "stale_artifacts": stale,
+        "repair_artifacts": repair_artifacts,
     }
+
+
+def public_registry_stats(stats: dict[str, Any]) -> dict[str, Any]:
+    private_detail_keys = {"missing_artifacts", "stale_artifacts", "repair_artifacts"}
+    return {key: value for key, value in stats.items() if key not in private_detail_keys}
 
 
 def same_path(left: str | None, right: Path) -> bool:
@@ -304,7 +470,7 @@ def repair_missing_artifacts(
     stats = registry_stats(registry_dir=registry_dir)
     repaired: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
-    candidates = stats.get("missing_artifacts") or []
+    candidates = stats.get("repair_artifacts") or stats.get("missing_artifacts") or []
     if max_repair is not None:
         candidates = candidates[: max(0, int(max_repair))]
     for item in candidates:
@@ -327,10 +493,14 @@ def repair_missing_artifacts(
                 "thread_key": result["entry"].get("thread_key"),
                 "title": result["entry"].get("title"),
                 "missing_before": item.get("missing") or [],
+                "stale_before": item.get("stale") or [],
+                "issues_before": item.get("issues") or [],
             }
         )
     return {
-        "candidate_count": len(stats.get("missing_artifacts") or []),
+        "candidate_count": len(
+            stats.get("repair_artifacts") or stats.get("missing_artifacts") or []
+        ),
         "attempted_count": len(candidates),
         "repaired_count": len(repaired),
         "skipped_count": len(skipped),
@@ -503,7 +673,9 @@ def run_onboarding(
     )
     plan = {
         "would_register_count": scan_plan.get("count", 0),
-        "would_repair_count": len(stats_before.get("missing_artifacts") or []),
+        "would_repair_count": len(
+            stats_before.get("repair_artifacts") or stats_before.get("missing_artifacts") or []
+        ),
         "would_refresh_current": bool(refresh_current),
         "would_build_timeline": bool(build_timeline),
         "would_build_cognitive_map": bool(build_cognitive_map),
@@ -511,7 +683,9 @@ def run_onboarding(
         "frontier_project_scope": planned_frontier_project,
         "frontier_project_scope_reason": planned_frontier_project_reason,
         "sample_candidates": (scan_plan.get("planned") or [])[:10],
-        "repair_preview": (stats_before.get("missing_artifacts") or [])[:10],
+        "repair_preview": (
+            stats_before.get("repair_artifacts") or stats_before.get("missing_artifacts") or []
+        )[:10],
         "repair_probe": repair_plan,
     }
     if dry_run:
@@ -523,7 +697,7 @@ def run_onboarding(
                     "default": "CODEX_HOME/aippocampus-registry",
                     "project_local": "explicit compatibility/export only",
                 },
-                "stats_before": {k: v for k, v in stats_before.items() if k != "missing_artifacts"},
+                "stats_before": public_registry_stats(stats_before),
                 "plan": plan,
                 "boundary": {
                     "search_noise": {
@@ -649,10 +823,10 @@ def run_onboarding(
                 "default": "CODEX_HOME/aippocampus-registry",
                 "project_local": "explicit compatibility/export only",
             },
-            "stats_before": {k: v for k, v in stats_before.items() if k != "missing_artifacts"},
+            "stats_before": public_registry_stats(stats_before),
             "plan": plan,
             "actions": actions,
-            "stats_after": {k: v for k, v in stats_after.items() if k != "missing_artifacts"},
+            "stats_after": public_registry_stats(stats_after),
             "boundary": boundary,
         },
         "next": build_next_hints(dry_run=False, frontier_mode=frontier_mode),
