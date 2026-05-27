@@ -42,6 +42,12 @@ their full contracts.
   test guards against same-directory script cycles, `registry.py` pulling
   `retrieval.py` at module load time, and `prompt_recall_core.py` becoming a
   broad foreground import hub again.
+- The real-history FTS5 recall benchmark exists at
+  `skills/aippocampus/scripts/benchmark_fts5_recall.py`. Its first 100-case
+  aggregate run over the 949-thread local registry found 99/100 FTS5 top-10
+  hits, with the single miss caused by the expected clean-source line being
+  absent from the corresponding SQLite index. Preserve the distinction between
+  lexical/ranking misses and stale-index consistency misses.
 - Segment rebuilds must preserve the last-known-good manifest and segment dirs
   when a rebuild fails.
 

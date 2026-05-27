@@ -37,6 +37,7 @@ python -m unittest tests.test_deepseek_model_routing tests.test_semantic_scope_s
 python .\skills\aippocampus\scripts\semantic_scope_suppressed_recovery.py --max-cases 8 --json
 python .\skills\aippocampus\scripts\semantic_scope_suppressed_recovery.py --live --max-cases 3 --min-recovered-labels 1 --timeout 240 --max-tokens 6000 --max-steps 3 --min-tool-steps 1 --json
 python .\skills\aippocampus\scripts\smoke_semantic_scope_source_review.py --live --agentic-review --max-cases 5 --min-cases 5 --min-pass-rate 0.75 --min-label-pass-rate 0.65 --min-review-confidence 0.65 --concurrency 2 --timeout 240 --max-tokens 4000 --review-max-steps 3 --min-tool-steps 1 --json
+python .\skills\aippocampus\scripts\benchmark_fts5_recall.py --cases 100 --min-cases 50 --top-k 10 --output .\.tmp\fts5-recall-benchmark-100.json
 python .\skills\aippocampus\scripts\aippocampus_mcp_server.py --list-tools
 python .\plugins\aippocampus\build_plugin_package.py --repo-root . --json
 python .\plugins\aippocampus\smoke_plugin_install.py --repo-root . --json
@@ -116,6 +117,20 @@ Results:
   eight canonical labels represented. The output used hashed case ids and
   aggregate counts only, with no raw text, snippets, titles, source refs, or
   absolute paths.
+- FTS5 real-history recall benchmark: passed. The new
+  `benchmark_fts5_recall.py` built 100 source-backed recall cases from the
+  local 949-thread registry without writing private text to the report. The
+  sampled corpus observed 949 registry threads, 949 clean-source threads, 949
+  SQLite index threads, 800 eligible threads after visible-source/noise/safety
+  filtering, and 9,420 clean-source messages. The benchmark mixed 81 exact
+  `source_phrase` cases with 19 `normalized_source_phrase` cases. FTS5 hit
+  90/100 in top-1, 99/100 in top-5, and 99/100 in top-10. The one top-10 miss
+  was categorized as `expected_line_absent_from_sqlite`, so among the 99 cases
+  whose expected clean-source line was present in SQLite, FTS5 top-10 hit rate
+  was 1.0. The production hybrid path matched the same 99/100 top-10 result.
+  The output uses hashed case ids, hashed thread ids, source line numbers, and
+  aggregate metrics; it does not include raw query text or snippets unless
+  `--include-private-text` is explicitly requested for local debugging.
 - selected semantic label source-review smoke: passed. The new
   `smoke_semantic_scope_source_review.py` ran a live DeepSeek-compatible review
   over selected sidecar label cases after strict filtering, with retry support
