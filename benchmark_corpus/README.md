@@ -1,0 +1,132 @@
+# Benchmark Corpus
+
+This folder holds public conversation-corpus inputs and converters for
+AIppocampus benchmark work.
+
+## Contents
+
+- `convert_to_aippocampus.py` converts public conversation datasets into
+  AIppocampus clean-source `messages.jsonl` and `turns.jsonl`.
+- `testdata_wildchat.jsonl` is a tiny checked-in fixture in WildChat-like JSONL
+  shape, useful for smoke-testing the converter without network access.
+
+Supported converter sources:
+
+- `allenai/WildChat-4.8M` (`odc-by`)
+- `tucnguyen/ShareChat` (`CC BY-NC 4.0`, gated access; keep attribution to
+  the original dataset)
+- ShareGPT-style JSONL dumps with `{human, assistant}` turn-pair arrays
+- local JSONL files with `conversation` or `conversations` message arrays
+
+`sharegpt_manifest.json` records the current clean-source dataset sizes and the
+intended benchmark use for the locally generated ShareGPT outputs.
+
+## Usage
+
+Run a local smoke conversion:
+
+```powershell
+python benchmark_corpus\convert_to_aippocampus.py --source local --input benchmark_corpus\testdata_wildchat.jsonl --output .tmp\benchmark-corpus-smoke
+```
+
+Run a public dataset stream:
+
+```powershell
+python benchmark_corpus\convert_to_aippocampus.py --source wildchat --max-convs 200 --output .tmp\wildchat-clean-source
+```
+
+Regenerate the current ShareGPT clean-source corpora from local public JSONL
+inputs:
+
+```powershell
+python benchmark_corpus\convert_to_aippocampus.py --source sharegpt --input benchmark_corpus\sharegpt_raw --min-turns 2 --output benchmark_corpus\output\sharegpt_all_multiturn
+python benchmark_corpus\convert_to_aippocampus.py --source sharegpt --input benchmark_corpus\sharegpt_raw --min-turns 2 --coding-only --output benchmark_corpus\output\sharegpt_coding_multiturn
+```
+
+Run the Track A P1 gate-decision baseline over the coding corpus:
+
+```powershell
+cd skills\aippocampus
+python scripts\benchmark_memory_decision_gate.py --case-set sharegpt-coding --sharegpt-conversations 100 --output ..\..\benchmark_corpus\reports\sharegpt-p1-gate-100.json
+```
+
+Run the optional public-corpus Track B source-evidence baseline over the broad
+ShareGPT corpus:
+
+```powershell
+cd skills\aippocampus
+python scripts\benchmark_source_evidence_retrieval.py --include-sharegpt-public --sharegpt-public-conversations 100 --sharegpt-public-cases 200 --sharegpt-public-min-cases 50 --output ..\..\benchmark_corpus\reports\sharegpt-track-b-public-100.json
+```
+
+This Track B slice reports message-level and turn-level source hits. It is a
+public-corpus retrieval baseline, not a private real-history source-evidence
+quality claim.
+
+Run the optional standard retrieval-QA Track B adapter:
+
+```powershell
+cd skills\aippocampus
+python scripts\benchmark_source_evidence_retrieval.py --include-standard-public --standard-dataset locomo --standard-questions 100 --standard-min-questions 20 --standard-top-k 10 --output ..\..\benchmark_corpus\reports\locomo-track-b-standard-100.json
+python scripts\benchmark_source_evidence_retrieval.py --include-standard-public --standard-dataset longmemeval-v1-oracle --standard-questions 50 --standard-min-questions 20 --standard-top-k 10 --output ..\..\benchmark_corpus\reports\longmemeval-oracle-track-b-standard-50.json
+```
+
+The standard adapter reports retrieval-only session/source R@K and MRR. LoCoMo
+uses evidence dialogue ids; LongMemEval V1 uses answer sessions and
+`has_answer` message flags when present. Reports include exact evidence-line
+hits, context-visible evidence-line hits, context-improved counts, and top-K
+context-rescued counts; the default context radius is 5 source lines because
+AIppocampus source payloads normally carry a small bounded neighboring context
+window. It does not score answer generation or Track A gate decisions.
+LongMemEval V2 currently lacks explicit source-evidence refs in this adapter
+and is reported as skipped rather than assigned a fake R@K.
+
+Run the optional semantic second-stage line reranker over the same source
+boundary:
+
+```powershell
+cd skills\aippocampus
+python scripts\benchmark_source_evidence_retrieval.py --include-standard-public --standard-dataset longmemeval-v1-oracle --standard-questions 50 --standard-min-questions 20 --standard-top-k 10 --standard-line-reranker semantic --standard-line-reranker-workers 0 --output ..\..\benchmark_corpus\reports\longmemeval-oracle-track-b-standard-50-semantic-line-reranker.json
+```
+
+`--standard-line-reranker semantic` requires a configured DeepSeek-compatible
+backend. It ranks only candidate line numbers from the top-session/top-context
+candidate set; it does not generate answers, add outside source lines, or use
+ground-truth labels as input. The candidate boundary uses both the original
+question terms and a content-term query variant with generic question words
+removed; this is meant to reduce LoCoMo-style speaker/generic-term noise while
+preserving the raw query as a fallback. Reports keep `semantic_only_*` metrics
+separate from FTS-preserving `reranked_*` metrics, so a live reranker
+improvement cannot hide regressions to first-stage exact hits. Candidate
+evidence coverage is reported only as an oracle diagnostic after scoring; it is
+not sent to the reranker. `--standard-line-reranker-workers 0` resolves to
+roughly half the requested question count for faster live runs.
+
+Run the optional live semantic-gate smoke over the coding corpus:
+
+```powershell
+cd skills\aippocampus
+python scripts\benchmark_live_semantic_gate.py --sharegpt-conversations 100 --semantic-mode on --semantic-workers gate --output ..\..\benchmark_corpus\reports\live-semantic-gate-100.json
+```
+
+The live smoke is not part of the required default suite. It needs a configured
+DeepSeek-compatible semantic backend and writes sanitized reports only. Use
+the default case parallelism for large local runs unless provider rate limits
+say otherwise: `--case-workers 0` resolves to
+`ceil(sharegpt_conversations / 2)`, so 100 conversations use 50 case workers.
+Parallel runs disable the local JSON semantic result cache while still
+reporting provider-side prefix-cache usage.
+
+## Repository Boundary
+
+Public, documented corpus samples and deterministic conversion scripts may be
+tracked in git. Local Hugging Face caches, full third-party benchmark downloads
+(including smaller academic files), generated clean-source outputs, and
+benchmark reports stay ignored unless a future change deliberately promotes a
+curated subset with provenance and license/storage notes.
+
+`benchmark_corpus\sharegpt_raw\` is intentionally ignored. It is a local input
+staging area for large public JSONL files and should not be treated as a
+trackable fixture.
+
+Do not add private user exports, raw Codex rollouts, tokens, cookies, or
+machine-local paths here.

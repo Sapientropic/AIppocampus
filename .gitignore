@@ -28,3 +28,21 @@ reviews/
 .tmp/
 dist/
 build/
+
+# Public benchmark corpus workspace. Keep scripts, manifests, and curated public
+# samples trackable; keep local caches and generated outputs out of git.
+benchmark_corpus/.cache/
+benchmark_corpus/output/
+benchmark_corpus/outputs/
+benchmark_corpus/reports/
+benchmark_corpus/sharegpt_raw/
+
+# Keep public full downloads local by default. The repo tracks scripts,
+# manifests, and smaller curated fixtures; promote full corpora only with an
+# explicit provenance/license/storage decision.
+benchmark_corpus/locomo/locomo10.json
+benchmark_corpus/longmemeval/longmemeval_oracle.json
+benchmark_corpus/longmemeval/longmemeval_s_cleaned.json
+benchmark_corpus/longmemeval/longmemeval_m_cleaned.json
+benchmark_corpus/longmemeval/v2_questions.jsonl
+benchmark_corpus/longmemeval/v2_trajectories.jsonl

@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "kind": "aippocampus_public_benchmark_corpus_manifest",
+  "updated_at": "2026-05-28",
+  "source_family": "ShareGPT-style public JSONL conversations",
+  "redistribution_note": "The full raw and generated clean-source corpora are large local artifacts. Verify upstream license terms before redistributing a full derived corpus.",
+  "local_inputs": {
+    "path": "benchmark_corpus/sharegpt_raw/",
+    "git_policy": "ignored",
+    "format": "JSONL rows with conversation_id, category, and conversation entries containing human/assistant fields"
+  },
+  "conversion": {
+    "script": "benchmark_corpus/convert_to_aippocampus.py",
+    "all_multiturn_command": "python benchmark_corpus/convert_to_aippocampus.py --source sharegpt --input benchmark_corpus/sharegpt_raw --min-turns 2 --output benchmark_corpus/output/sharegpt_all_multiturn",
+    "coding_multiturn_command": "python benchmark_corpus/convert_to_aippocampus.py --source sharegpt --input benchmark_corpus/sharegpt_raw --min-turns 2 --coding-only --output benchmark_corpus/output/sharegpt_coding_multiturn"
+  },
+  "datasets": [
+    {
+      "id": "sharegpt_all_multiturn",
+      "path": "benchmark_corpus/output/sharegpt_all_multiturn/",
+      "git_policy": "ignored",
+      "conversation_count": 194255,
+      "message_count": 1408912,
+      "approx_size": "1.4G",
+      "intended_tracks": [
+        "Track B semantic retrieval",
+        "general recall tests"
+      ]
+    },
+    {
+      "id": "sharegpt_coding_multiturn",
+      "path": "benchmark_corpus/output/sharegpt_coding_multiturn/",
+      "git_policy": "ignored",
+      "conversation_count": 68573,
+      "message_count": 464227,
+      "approx_size": "517M",
+      "turn_distribution": {
+        "three_or_more_turn_conversations": 44472,
+        "three_or_more_turn_share": 0.64
+      },
+      "intended_tracks": [
+        "Track A Gate Decision"
+      ]
+    }
+  ],
+  "reported_source_mix": {
+    "common_zh": 76000,
+    "common_en": 79000,
+    "computer_en": 20000,
+    "computer_zh": 20000,
+    "unknow_zh": 38000,
+    "category_count": 35,
+    "note": "Source-family counts are reported conversion context and are not a replacement for the clean-source dataset row counts above."
+  },
+  "benchmark_entrypoints": [
+    {
+      "track": "Track A P1",
+      "command": "cd skills/aippocampus && python scripts/benchmark_memory_decision_gate.py --case-set sharegpt-coding --sharegpt-conversations 100 --output ../../benchmark_corpus/reports/sharegpt-p1-gate-100.json",
+      "report_policy": "reports/ is ignored by default"
+    },
+    {
+      "track": "Track B public source-evidence retrieval",
+      "command": "cd skills/aippocampus && python scripts/benchmark_source_evidence_retrieval.py --include-sharegpt-public --sharegpt-public-conversations 100 --sharegpt-public-cases 200 --sharegpt-public-min-cases 50 --output ../../benchmark_corpus/reports/sharegpt-track-b-public-100.json",
+      "report_policy": "reports/ is ignored by default",
+      "claim_boundary": "public-corpus source-evidence retrieval baseline; does not replace private real-history source-evidence quality"
+    }
+  ]
+}
