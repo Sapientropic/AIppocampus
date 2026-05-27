@@ -7,7 +7,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -123,7 +122,10 @@ class BuildAssociationsTests(unittest.TestCase):
             },
         }
         self.registry.write_text(
-            json.dumps({"schema_version": 1, "updated_at": "2026-05-25T19:00:00Z", "threads": [entry]}, ensure_ascii=False),
+            json.dumps(
+                {"schema_version": 1, "updated_at": "2026-05-25T19:00:00Z", "threads": [entry]},
+                ensure_ascii=False,
+            ),
             encoding="utf-8",
         )
 
@@ -237,7 +239,10 @@ class BuildAssociationsTests(unittest.TestCase):
         }
         clean_registry = self.root / "registry" / "clean-only.json"
         clean_registry.write_text(
-            json.dumps({"schema_version": 1, "updated_at": "2026-05-25T19:00:00Z", "threads": [entry]}, ensure_ascii=False),
+            json.dumps(
+                {"schema_version": 1, "updated_at": "2026-05-25T19:00:00Z", "threads": [entry]},
+                ensure_ascii=False,
+            ),
             encoding="utf-8",
         )
 
@@ -245,7 +250,9 @@ class BuildAssociationsTests(unittest.TestCase):
         terms = result["terms"]
 
         self.assertIn("进入被动联想范围", terms)
-        self.assertEqual(terms["进入被动联想范围"]["threads"][0]["source"], "clean_source_final_answer")
+        self.assertEqual(
+            terms["进入被动联想范围"]["threads"][0]["source"], "clean_source_final_answer"
+        )
         self.assertEqual(terms["进入被动联想范围"]["threads"][0]["line"], 30)
 
 

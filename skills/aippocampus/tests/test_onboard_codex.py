@@ -8,7 +8,6 @@ import unittest
 from pathlib import Path
 from typing import Any
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -55,7 +54,10 @@ class OnboardCodexTests(unittest.TestCase):
             {
                 "type": "event_msg",
                 "timestamp": "2026-05-26T03:00:01Z",
-                "payload": {"type": "user_message", "message": "把全部 Codex 线程纳入 AIppocampus。"},
+                "payload": {
+                    "type": "user_message",
+                    "message": "把全部 Codex 线程纳入 AIppocampus。",
+                },
             }
         )
         self._append(
@@ -107,7 +109,9 @@ class OnboardCodexTests(unittest.TestCase):
         self.assertEqual(result["data"]["actions"]["scan_sessions"]["registered_count"], 1)
         self.assertEqual(result["data"]["actions"]["cognitive_map"]["route_count"], 0)
         self.assertEqual(result["data"]["boundary"]["frontier"]["status"], "not_run")
-        self.assertGreaterEqual(result["data"]["actions"]["project_timeline"]["life_label_count"], 1)
+        self.assertGreaterEqual(
+            result["data"]["actions"]["project_timeline"]["life_label_count"], 1
+        )
         self.assertTrue((self.registry_dir / "project_timeline.json").exists())
 
     def test_frontier_smoke_exposes_compact_sample_findings_and_infers_project(self) -> None:
@@ -187,7 +191,9 @@ class OnboardCodexTests(unittest.TestCase):
         self.assertEqual(frontier["raw_finding_count"], 3)
         self.assertEqual(frontier["finding_count"], 2)
         self.assertEqual(frontier["filtered_stale_count"], 1)
-        self.assertNotIn("refresh-registered", json.dumps(frontier["sample_findings"], ensure_ascii=False))
+        self.assertNotIn(
+            "refresh-registered", json.dumps(frontier["sample_findings"], ensure_ascii=False)
+        )
         self.assertIn("Current onboarding state after maintenance", captured["objective"])
         self.assertIn("missing_clean=0", captured["objective"])
 
@@ -212,7 +218,9 @@ class OnboardCodexTests(unittest.TestCase):
                 os.environ["DEEPSEEK_API_KEY"] = old_api_key
 
         self.assertEqual(result["ok"], "partial")
-        self.assertEqual(result["data"]["boundary"]["frontier"]["status"], "blocked_missing_api_key")
+        self.assertEqual(
+            result["data"]["boundary"]["frontier"]["status"], "blocked_missing_api_key"
+        )
 
 
 if __name__ == "__main__":

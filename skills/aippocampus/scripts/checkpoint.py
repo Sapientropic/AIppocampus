@@ -21,7 +21,6 @@ from aippocampuslib import (
     resolve_artifact_path,
 )
 
-
 SCRIPT_DIR = Path(__file__).resolve().parent
 KNOWN_TERMS = [
     "Graphify",
@@ -56,7 +55,9 @@ def run_build_index(cwd: Path, index_dir: Path, anchors: Path) -> None:
         "--anchors",
         str(anchors),
     ]
-    proc = subprocess.run(cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False)
+    proc = subprocess.run(
+        cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False
+    )
     if proc.returncode != 0:
         raise RuntimeError(proc.stdout or proc.stderr)
 
@@ -83,7 +84,10 @@ def extract_keywords(text: str, limit: int = 10) -> list[str]:
     for match in re.findall(r"\b[A-Za-z][A-Za-z0-9_.:-]{3,}\b", text):
         if match.casefold() not in {"http", "https", "true", "false", "none", "null"}:
             counts[match] += 1
-    for match in re.findall(r"[\u4e00-\u9fffA-Za-z0-9-]{0,16}(?:记忆|海马体|图谱|线程|压缩|锚点|索引|导出|导入|机制|飞升|机仆|对话|自我)[\u4e00-\u9fffA-Za-z0-9-]{0,16}", text):
+    for match in re.findall(
+        r"[\u4e00-\u9fffA-Za-z0-9-]{0,16}(?:记忆|海马体|图谱|线程|压缩|锚点|索引|导出|导入|机制|飞升|机仆|对话|自我)[\u4e00-\u9fffA-Za-z0-9-]{0,16}",
+        text,
+    ):
         if 2 <= len(match) <= 36:
             counts[match] += 2
     return [key for key, _ in counts.most_common(limit)]
@@ -93,16 +97,20 @@ def append_anchor(path: Path, candidate: dict) -> None:
     created = not path.exists()
     lines = []
     if created:
-        lines.extend([
-            "# Thread Anchors",
-            "",
-            "Concise index for recovering important context from this long Codex thread.",
-            "",
-        ])
-    lines.extend([
-        f"## {candidate['title']}",
-        f"- Date: {candidate['date']}",
-    ])
+        lines.extend(
+            [
+                "# Thread Anchors",
+                "",
+                "Concise index for recovering important context from this long Codex thread.",
+                "",
+            ]
+        )
+    lines.extend(
+        [
+            f"## {candidate['title']}",
+            f"- Date: {candidate['date']}",
+        ]
+    )
     if candidate["keywords"]:
         lines.append(f"- Keywords: {','.join(candidate['keywords'])}")
     for note in candidate["notes"]:
@@ -140,12 +148,14 @@ def portable_source_path(path: Path, cwd: Path) -> str:
 def update_state(path: Path, candidate: dict, appended: bool, total_messages: int) -> None:
     old = load_json(path)
     state = dict(old)
-    state.update({
-        "updated_at": now_utc(),
-        "last_checked_message_count": total_messages,
-        "last_checked_line": candidate["line_range"]["end"],
-        "last_candidate": candidate,
-    })
+    state.update(
+        {
+            "updated_at": now_utc(),
+            "last_checked_message_count": total_messages,
+            "last_checked_line": candidate["line_range"]["end"],
+            "last_candidate": candidate,
+        }
+    )
     if appended:
         state["last_captured_message_count"] = total_messages
         state["last_captured_line"] = candidate["line_range"]["end"]
@@ -157,15 +167,25 @@ def update_state(path: Path, candidate: dict, appended: bool, total_messages: in
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cwd", default=os.getcwd())
-    parser.add_argument("--index-dir", default=None, help="Defaults to the CODEX_HOME global thread store.")
+    parser.add_argument(
+        "--index-dir", default=None, help="Defaults to the CODEX_HOME global thread store."
+    )
     parser.add_argument("--anchors", default="thread-anchors.md")
-    parser.add_argument("--state", default=None, help="Defaults to the global thread store's checkpoint state.")
+    parser.add_argument(
+        "--state", default=None, help="Defaults to the global thread store's checkpoint state."
+    )
     parser.add_argument("--recent", type=int, default=24)
     parser.add_argument("--title")
     parser.add_argument("--keywords")
     parser.add_argument("--note", action="append", default=[])
-    parser.add_argument("--append", action="store_true", help="Append the candidate to thread-anchors.md.")
-    parser.add_argument("--no-build", action="store_true", help="Use the existing messages.jsonl without rebuilding.")
+    parser.add_argument(
+        "--append", action="store_true", help="Append the candidate to thread-anchors.md."
+    )
+    parser.add_argument(
+        "--no-build",
+        action="store_true",
+        help="Use the existing messages.jsonl without rebuilding.",
+    )
     parser.add_argument("--no-state", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
@@ -182,7 +202,7 @@ def main() -> int:
 
     messages_path = index_dir / "messages.jsonl"
     messages = read_messages(messages_path)
-    recent = messages[-max(1, args.recent):]
+    recent = messages[-max(1, args.recent) :]
     if not recent:
         raise RuntimeError("no messages available for checkpoint")
 
@@ -197,9 +217,7 @@ def main() -> int:
     date = now_utc()[:10]
 
     user_snippets = [
-        compact_text(m.get("text", ""), 220)
-        for m in recent
-        if m.get("role") == "user"
+        compact_text(m.get("text", ""), 220) for m in recent if m.get("role") == "user"
     ][-3:]
     notes = list(args.note)
     if not notes:

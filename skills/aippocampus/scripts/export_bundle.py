@@ -13,8 +13,13 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from aippocampuslib import codex_home, default_thread_index_dir, locate_rollout, read_session_meta, resolve_artifact_path
-
+from aippocampuslib import (
+    codex_home,
+    default_thread_index_dir,
+    locate_rollout,
+    read_session_meta,
+    resolve_artifact_path,
+)
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -23,7 +28,9 @@ def timestamp_slug() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
-def run_build_index(cwd: Path, rollout: Path, index_dir: Path, anchors: Path, hash_source: bool) -> dict:
+def run_build_index(
+    cwd: Path, rollout: Path, index_dir: Path, anchors: Path, hash_source: bool
+) -> dict:
     cmd = [
         sys.executable,
         str(SCRIPT_DIR / "build_index.py"),
@@ -39,7 +46,9 @@ def run_build_index(cwd: Path, rollout: Path, index_dir: Path, anchors: Path, ha
     ]
     if hash_source:
         cmd.append("--hash-source")
-    proc = subprocess.run(cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False)
+    proc = subprocess.run(
+        cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False
+    )
     if proc.returncode != 0:
         raise RuntimeError(proc.stdout or proc.stderr)
     return json.loads(proc.stdout)
@@ -61,8 +70,8 @@ def write_handoff(path: Path, manifest: dict, include_raw: bool) -> None:
         "Suggested recovery commands:",
         "",
         "```powershell",
-        "python \"$env:CODEX_HOME\\skills\\aippocampus\\scripts\\import_bundle.py\" \"<this zip>\"",
-        "python \"$env:CODEX_HOME\\skills\\aippocampus\\scripts\\search_rollout.py\" \"keyword\" --index \"<extracted>\\source_index.sqlite\"",
+        'python "$env:CODEX_HOME\\skills\\aippocampus\\scripts\\import_bundle.py" "<this zip>"',
+        'python "$env:CODEX_HOME\\skills\\aippocampus\\scripts\\search_rollout.py" "keyword" --index "<extracted>\\source_index.sqlite"',
         "```",
         "",
     ]
@@ -75,7 +84,9 @@ def main() -> int:
     parser.add_argument("--rollout")
     parser.add_argument("--anchors", default="thread-anchors.md")
     parser.add_argument("--output")
-    parser.add_argument("--work-dir", default=None, help="Defaults to the global thread store's index directory.")
+    parser.add_argument(
+        "--work-dir", default=None, help="Defaults to the global thread store's index directory."
+    )
     parser.add_argument("--no-raw", action="store_true", help="Do not include raw rollout JSONL.")
     parser.add_argument("--hash-source", action="store_true")
     args = parser.parse_args()
@@ -95,7 +106,9 @@ def main() -> int:
     index_dir = bundle_root / "index"
     manifest = run_build_index(cwd, rollout, index_dir, anchors, args.hash_source)
     meta = read_session_meta(rollout) or {}
-    bundle_name = args.output or f"aippocampus-bundle-{meta.get('id', 'thread')}-{timestamp_slug()}.zip"
+    bundle_name = (
+        args.output or f"aippocampus-bundle-{meta.get('id', 'thread')}-{timestamp_slug()}.zip"
+    )
     output = Path(bundle_name)
     if not output.is_absolute():
         output = cwd / output
@@ -126,7 +139,13 @@ def main() -> int:
             if file.is_file():
                 zf.write(file, file.relative_to(bundle_root))
 
-    print(json.dumps({"bundle": str(output), "size": output.stat().st_size, "source_rollout": str(rollout)}, ensure_ascii=False, indent=2))
+    print(
+        json.dumps(
+            {"bundle": str(output), "size": output.stat().st_size, "source_rollout": str(rollout)},
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
     return 0
 
 

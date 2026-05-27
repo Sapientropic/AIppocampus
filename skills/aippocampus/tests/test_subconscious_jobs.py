@@ -10,15 +10,14 @@ import unittest
 from pathlib import Path
 from typing import Any
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 TESTS = ROOT / "tests"
 sys.path.insert(0, str(TESTS))
 sys.path.insert(0, str(SCRIPTS))
 
-import subconscious_jobs as jobs  # noqa: E402
 import build_semantic_scope_labels as semantic_scope_materializer  # noqa: E402
+import subconscious_jobs as jobs  # noqa: E402
 from redaction_fixtures import (  # noqa: E402
     FAKE_TEST_BEARER_TOKEN,
     FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER,
@@ -68,7 +67,9 @@ class SubconsciousJobsTests(unittest.TestCase):
         self.assertNotIn("def validate_findings", runner_source)
         self.assertNotIn("def estimate_finding_quality", runner_source)
 
-    def test_jobs_initial_payload_keeps_static_contract_before_turns_and_variable_objective_after_turns(self) -> None:
+    def test_jobs_initial_payload_keeps_static_contract_before_turns_and_variable_objective_after_turns(
+        self,
+    ) -> None:
         payload = json.loads(
             jobs.jobs_initial_payload(
                 "concept_edges",
@@ -244,7 +245,7 @@ class SubconsciousJobsTests(unittest.TestCase):
                             "label": "personal_reflection",
                             "reason": "The source describes the metaphor as personally meaningful.",
                             "confidence": 0.86,
-                        }
+                        },
                     ],
                 },
                 {
@@ -285,7 +286,10 @@ class SubconsciousJobsTests(unittest.TestCase):
         self.assertEqual(findings[0]["message_id"], "msg_metaphor")
         self.assertEqual(findings[0]["scope_labels"], ["personal_reflection", "idea_seed"])
         self.assertEqual(findings[0]["source_refs"][0]["message_id"], "msg_metaphor")
-        self.assertEqual([item["label"] for item in findings[0]["label_evidence"]], ["personal_reflection", "idea_seed"])
+        self.assertEqual(
+            [item["label"] for item in findings[0]["label_evidence"]],
+            ["personal_reflection", "idea_seed"],
+        )
 
     def test_semantic_scope_labeling_filters_labels_without_per_label_evidence(self) -> None:
         parsed = {
@@ -334,7 +338,9 @@ class SubconsciousJobsTests(unittest.TestCase):
 
         self.assertEqual(len(findings), 1)
         self.assertEqual(findings[0]["scope_labels"], ["reading_notes"])
-        self.assertEqual([item["label"] for item in findings[0]["label_evidence"]], ["reading_notes"])
+        self.assertEqual(
+            [item["label"] for item in findings[0]["label_evidence"]], ["reading_notes"]
+        )
 
     def test_semantic_scope_labeling_payload_exposes_message_source_refs(self) -> None:
         timeline = {
@@ -365,10 +371,14 @@ class SubconsciousJobsTests(unittest.TestCase):
         }
 
         turns = jobs.select_timeline_turns(timeline, project="Life-wide", max_turns=4)
-        payload = json.loads(jobs.jobs_initial_payload("semantic_scope_labeling", "label fuzzy turns", turns, 2, 0))
+        payload = json.loads(
+            jobs.jobs_initial_payload("semantic_scope_labeling", "label fuzzy turns", turns, 2, 0)
+        )
 
         self.assertEqual(payload["job"], "semantic_scope_labeling")
-        self.assertEqual(payload["initial_turns"][0]["source_refs"][0]["message_id"], "msg_metaphor")
+        self.assertEqual(
+            payload["initial_turns"][0]["source_refs"][0]["message_id"], "msg_metaphor"
+        )
         self.assertIn("scope_labels", payload["final_schema"]["findings"][0])
         self.assertIn("label_evidence", payload["final_schema"]["findings"][0])
         self.assertIn("label_evidence", payload["job_spec"]["notes"])
@@ -524,7 +534,9 @@ class SubconsciousJobsTests(unittest.TestCase):
             self.assertTrue(jobs_output.exists())
             self.assertTrue(edges_output.exists())
             self.assertEqual(result["cache"]["hit_rate"], 0.8)
-            self.assertIn("aippocampus_subconscious_job_finding", jobs_output.read_text(encoding="utf-8"))
+            self.assertIn(
+                "aippocampus_subconscious_job_finding", jobs_output.read_text(encoding="utf-8")
+            )
             self.assertIn("aippocampus_subconscious_edge", edges_output.read_text(encoding="utf-8"))
 
     def test_semantic_scope_labeling_job_materializes_dynamic_sidecar(self) -> None:
@@ -623,12 +635,15 @@ class SubconsciousJobsTests(unittest.TestCase):
                                     "label": "life_context",
                                     "reason": "The source frames the metaphor as personally meaningful lived context.",
                                     "confidence": 0.94,
-                                }
+                                },
                             ],
                         }
                     ],
                 }
-                return {"choices": [{"message": {"content": json.dumps(content, ensure_ascii=False)}}], "usage": {"total_tokens": 1}}
+                return {
+                    "choices": [{"message": {"content": json.dumps(content, ensure_ascii=False)}}],
+                    "usage": {"total_tokens": 1},
+                }
 
             result = jobs.run_one_job(
                 job="semantic_scope_labeling",
@@ -659,7 +674,10 @@ class SubconsciousJobsTests(unittest.TestCase):
             self.assertEqual(staged["source"], "deepseek_subconscious_jobs")
             self.assertEqual(staged["finding_kind"], "semantic_scope_labels")
             self.assertEqual(staged["message_id"], "msg_metaphor")
-            self.assertEqual([item["label"] for item in staged["label_evidence"]], ["personal_reflection", "idea_seed", "life_context"])
+            self.assertEqual(
+                [item["label"] for item in staged["label_evidence"]],
+                ["personal_reflection", "idea_seed", "life_context"],
+            )
 
             materialized = semantic_scope_materializer.build_semantic_scope_labels(
                 jobs_output_path=jobs_output,
@@ -667,10 +685,16 @@ class SubconsciousJobsTests(unittest.TestCase):
             )
 
             self.assertEqual(materialized["row_count"], 1)
-            sidecar = json.loads((clean_source_dir / "semantic-scope-labels.jsonl").read_text(encoding="utf-8").splitlines()[0])
+            sidecar = json.loads(
+                (clean_source_dir / "semantic-scope-labels.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()[0]
+            )
             self.assertEqual(sidecar["message_id"], "msg_metaphor")
             self.assertEqual(sidecar["source_job"], "deepseek_subconscious_jobs")
-            self.assertEqual(sidecar["scope_labels"], ["personal_reflection", "idea_seed", "life_context"])
+            self.assertEqual(
+                sidecar["scope_labels"], ["personal_reflection", "idea_seed", "life_context"]
+            )
 
     def test_run_jobs_can_execute_samples_concurrently_without_parallel_writes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -739,7 +763,10 @@ class SubconsciousJobsTests(unittest.TestCase):
                         }
                     ],
                 }
-                return {"choices": [{"message": {"content": json.dumps(content, ensure_ascii=False)}}], "usage": {"total_tokens": 1}}
+                return {
+                    "choices": [{"message": {"content": json.dumps(content, ensure_ascii=False)}}],
+                    "usage": {"total_tokens": 1},
+                }
 
             result = jobs.run_jobs(
                 jobs=["project_drift", "trigger_mining"],
@@ -837,7 +864,10 @@ class SubconsciousJobsTests(unittest.TestCase):
                         }
                     ],
                 }
-                return {"choices": [{"message": {"content": json.dumps(content, ensure_ascii=False)}}], "usage": {"total_tokens": 1}}
+                return {
+                    "choices": [{"message": {"content": json.dumps(content, ensure_ascii=False)}}],
+                    "usage": {"total_tokens": 1},
+                }
 
             result = jobs.run_jobs(
                 jobs=["project_drift"],
@@ -909,7 +939,16 @@ class SubconsciousJobsTests(unittest.TestCase):
                 nonlocal calls
                 calls += 1
                 if calls == 1:
-                    return {"choices": [{"message": {"content": '{"action":"final","findings":[{"title":"broken"'}}], "usage": {"total_tokens": 1}}
+                    return {
+                        "choices": [
+                            {
+                                "message": {
+                                    "content": '{"action":"final","findings":[{"title":"broken"'
+                                }
+                            }
+                        ],
+                        "usage": {"total_tokens": 1},
+                    }
                 content = {
                     "action": "final",
                     "findings": [
@@ -922,7 +961,10 @@ class SubconsciousJobsTests(unittest.TestCase):
                         }
                     ],
                 }
-                return {"choices": [{"message": {"content": json.dumps(content, ensure_ascii=False)}}], "usage": {"total_tokens": 1}}
+                return {
+                    "choices": [{"message": {"content": json.dumps(content, ensure_ascii=False)}}],
+                    "usage": {"total_tokens": 1},
+                }
 
             result = jobs.run_one_job(
                 job="project_drift",
@@ -1026,11 +1068,18 @@ class SubconsciousJobsTests(unittest.TestCase):
                 del api_key, model, base_url, max_tokens, timeout, temperature
                 calls.append(messages)
                 content = (
-                    {"action": "tool", "tool": "search_clean_source", "args": {"terms": ["token"], "limit": 1}}
+                    {
+                        "action": "tool",
+                        "tool": "search_clean_source",
+                        "args": {"terms": ["token"], "limit": 1},
+                    }
                     if len(calls) == 1
                     else {"action": "final", "findings": []}
                 )
-                return {"choices": [{"message": {"content": json.dumps(content, ensure_ascii=False)}}], "usage": {"total_tokens": 1}}
+                return {
+                    "choices": [{"message": {"content": json.dumps(content, ensure_ascii=False)}}],
+                    "usage": {"total_tokens": 1},
+                }
 
             jobs.run_one_job(
                 job="project_drift",
@@ -1114,7 +1163,10 @@ class SubconsciousJobsTests(unittest.TestCase):
                         }
                     ],
                 }
-                return {"choices": [{"message": {"content": json.dumps(content, ensure_ascii=False)}}], "usage": {"total_tokens": 1}}
+                return {
+                    "choices": [{"message": {"content": json.dumps(content, ensure_ascii=False)}}],
+                    "usage": {"total_tokens": 1},
+                }
 
             result = jobs.run_jobs(
                 jobs=["project_drift"],

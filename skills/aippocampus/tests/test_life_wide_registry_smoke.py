@@ -6,7 +6,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -98,7 +97,9 @@ class LifeWideRegistrySmokeTests(unittest.TestCase):
         }
 
     def _write_registry(self, entries: list[dict]) -> None:
-        self.registry_path.write_text(json.dumps({"threads": entries}, ensure_ascii=False), encoding="utf-8")
+        self.registry_path.write_text(
+            json.dumps({"threads": entries}, ensure_ascii=False), encoding="utf-8"
+        )
 
     def test_smoke_reports_counts_without_private_text_or_refs(self) -> None:
         self._write_registry(

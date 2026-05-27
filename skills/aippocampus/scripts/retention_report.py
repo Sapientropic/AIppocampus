@@ -14,7 +14,6 @@ import os
 from pathlib import Path
 from typing import Any
 
-from rollout_size_audit import audit_rollout
 from aippocampuslib import (
     codex_home,
     default_thread_index_dir,
@@ -25,7 +24,7 @@ from aippocampuslib import (
     parse_anchor_file,
     resolve_artifact_path,
 )
-
+from rollout_size_audit import audit_rollout
 
 CORE_INDEX_FILES = {
     "manifest.json",
@@ -103,97 +102,109 @@ def generated_artifact_items(index_dir: Path) -> list[dict[str, Any]]:
     sqlite_path = index_dir / "source_index.sqlite"
     if sqlite_path.exists():
         size = sqlite_path.stat().st_size
-        items.append(item(
-            "rebuildable-main-sqlite",
-            "Main SQLite/FTS index",
-            kind="rebuildable_generated_index",
-            path=str(sqlite_path),
-            bytes_count=size,
-            action="rebuildable_delete_under_disk_pressure",
-            safety="safe_to_delete_after_raw_rollout_and_anchors_are_available",
-            evidence=[
-                "Created by build_index.py from the raw rollout plus thread-anchors.md.",
-                "Deleting it only removes speed/cache, not source conversation history.",
-            ],
-            confidence=0.9,
-        ))
+        items.append(
+            item(
+                "rebuildable-main-sqlite",
+                "Main SQLite/FTS index",
+                kind="rebuildable_generated_index",
+                path=str(sqlite_path),
+                bytes_count=size,
+                action="rebuildable_delete_under_disk_pressure",
+                safety="safe_to_delete_after_raw_rollout_and_anchors_are_available",
+                evidence=[
+                    "Created by build_index.py from the raw rollout plus thread-anchors.md.",
+                    "Deleting it only removes speed/cache, not source conversation history.",
+                ],
+                confidence=0.9,
+            )
+        )
 
     segments_dir = index_dir / "segments"
     if segments_dir.exists():
         segment_sqlites = list(segments_dir.glob("seg-*/source_index.sqlite"))
         segment_sqlite_bytes = sum(path.stat().st_size for path in segment_sqlites if path.exists())
         if segment_sqlites:
-            items.append(item(
-                "rebuildable-segment-sqlite",
-                "Segment SQLite indexes",
-                kind="rebuildable_generated_index",
-                path=str(segments_dir),
-                bytes_count=segment_sqlite_bytes,
-                action="rebuildable_delete_under_disk_pressure",
-                safety="safe_to_delete_after_raw_rollout_and_anchors_are_available",
-                evidence=[
-                    f"{len(segment_sqlites)} segment SQLite files found.",
-                    "Created by build_segments.py; segment manifests and indexes can be rebuilt.",
-                ],
-                confidence=0.9,
-            ))
+            items.append(
+                item(
+                    "rebuildable-segment-sqlite",
+                    "Segment SQLite indexes",
+                    kind="rebuildable_generated_index",
+                    path=str(segments_dir),
+                    bytes_count=segment_sqlite_bytes,
+                    action="rebuildable_delete_under_disk_pressure",
+                    safety="safe_to_delete_after_raw_rollout_and_anchors_are_available",
+                    evidence=[
+                        f"{len(segment_sqlites)} segment SQLite files found.",
+                        "Created by build_segments.py; segment manifests and indexes can be rebuilt.",
+                    ],
+                    confidence=0.9,
+                )
+            )
 
     graphify_dir = index_dir / "graphify-corpus"
     if graphify_dir.exists():
         size = dir_size(graphify_dir)
-        items.append(item(
-            "rebuildable-graphify-corpus",
-            "Graphify bridge corpus",
-            kind="rebuildable_generated_corpus",
-            path=str(graphify_dir),
-            bytes_count=size,
-            action="rebuildable_delete_under_disk_pressure",
-            safety="safe_to_delete_after_index_and_anchors_are_available",
-            evidence=[
-                "Created by prepare_graphify_corpus.py from index metadata, graph, anchors, and normalized messages.",
-                "Deleting it removes the prepared bridge, not the raw thread memory.",
-            ],
-            confidence=0.86,
-        ))
+        items.append(
+            item(
+                "rebuildable-graphify-corpus",
+                "Graphify bridge corpus",
+                kind="rebuildable_generated_corpus",
+                path=str(graphify_dir),
+                bytes_count=size,
+                action="rebuildable_delete_under_disk_pressure",
+                safety="safe_to_delete_after_index_and_anchors_are_available",
+                evidence=[
+                    "Created by prepare_graphify_corpus.py from index metadata, graph, anchors, and normalized messages.",
+                    "Deleting it removes the prepared bridge, not the raw thread memory.",
+                ],
+                confidence=0.86,
+            )
+        )
 
     bundle_dir = index_dir / "bundle"
     if bundle_dir.exists():
-        items.append(item(
-            "delete-bundle-staging",
-            "Temporary export bundle staging directory",
-            kind="temporary_generated_staging",
-            path=str(bundle_dir),
-            bytes_count=dir_size(bundle_dir),
-            action="delete_when_no_export_is_running",
-            safety="usually_safe_to_delete_after_confirming_no_export_process_is_active",
-            evidence=[
-                "export_bundle.py recreates this staging directory before each export.",
-                "It is not the canonical raw rollout or anchor file.",
-            ],
-            confidence=0.82,
-        ))
+        items.append(
+            item(
+                "delete-bundle-staging",
+                "Temporary export bundle staging directory",
+                kind="temporary_generated_staging",
+                path=str(bundle_dir),
+                bytes_count=dir_size(bundle_dir),
+                action="delete_when_no_export_is_running",
+                safety="usually_safe_to_delete_after_confirming_no_export_process_is_active",
+                evidence=[
+                    "export_bundle.py recreates this staging directory before each export.",
+                    "It is not the canonical raw rollout or anchor file.",
+                ],
+                confidence=0.82,
+            )
+        )
 
     screenshot_files = [
-        file for file in index_dir.glob("*")
-        if file.is_file() and file.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".json"}
+        file
+        for file in index_dir.glob("*")
+        if file.is_file()
+        and file.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".json"}
         and file.name not in CORE_INDEX_FILES
     ]
     screenshot_bytes = sum(path.stat().st_size for path in screenshot_files if path.exists())
     if screenshot_files:
-        items.append(item(
-            "review-artifacts",
-            "Ad hoc UI review screenshots/JSON traces",
-            kind="user_review_artifact",
-            path=str(index_dir),
-            bytes_count=screenshot_bytes,
-            action="archive_or_delete_after_human_review",
-            safety="needs_human_confirmation",
-            evidence=[
-                f"{len(screenshot_files)} non-core PNG/JPEG/WebP/JSON files found under .aippocampus.",
-                "These are useful for visual debugging but are not needed for raw text recall.",
-            ],
-            confidence=0.78,
-        ))
+        items.append(
+            item(
+                "review-artifacts",
+                "Ad hoc UI review screenshots/JSON traces",
+                kind="user_review_artifact",
+                path=str(index_dir),
+                bytes_count=screenshot_bytes,
+                action="archive_or_delete_after_human_review",
+                safety="needs_human_confirmation",
+                evidence=[
+                    f"{len(screenshot_files)} non-core PNG/JPEG/WebP/JSON files found under .aippocampus.",
+                    "These are useful for visual debugging but are not needed for raw text recall.",
+                ],
+                confidence=0.78,
+            )
+        )
 
     return items
 
@@ -349,7 +360,11 @@ def build_report(
         },
         "items": items,
         "totals_by_action": {
-            action: {"bytes": size, "human_bytes": human_bytes(size), "rollout_percent": pct(size, rollout_size)}
+            action: {
+                "bytes": size,
+                "human_bytes": human_bytes(size),
+                "rollout_percent": pct(size, rollout_size),
+            }
             for action, size in sorted(totals.items(), key=lambda kv: kv[1], reverse=True)
         },
         "recommendations": [
@@ -391,20 +406,24 @@ def markdown_report(report: dict[str, Any]) -> str:
             f"| `{entry['safety']}` | `{entry['action']}` | {entry['label']} | "
             f"{entry['human_bytes']} | {evidence} |"
         )
-    lines.extend([
-        "",
-        "## Totals By Action",
-        "",
-        "| Action | Size | Rollout % |",
-        "| --- | ---: | ---: |",
-    ])
+    lines.extend(
+        [
+            "",
+            "## Totals By Action",
+            "",
+            "| Action | Size | Rollout % |",
+            "| --- | ---: | ---: |",
+        ]
+    )
     for action, row in report["totals_by_action"].items():
         lines.append(f"| `{action}` | {row['human_bytes']} | {row['rollout_percent']}% |")
-    lines.extend([
-        "",
-        "## Recommendations",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "## Recommendations",
+            "",
+        ]
+    )
     for rec in report["recommendations"]:
         lines.append(f"- {rec}")
     lines.append("")
@@ -415,9 +434,15 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument("--rollout")
-    parser.add_argument("--index-dir", default=None, help="Defaults to the CODEX_HOME global thread store.")
+    parser.add_argument(
+        "--index-dir", default=None, help="Defaults to the CODEX_HOME global thread store."
+    )
     parser.add_argument("--anchors", default="thread-anchors.md")
-    parser.add_argument("--output-dir", default=None, help="Defaults to the global thread store's retention directory.")
+    parser.add_argument(
+        "--output-dir",
+        default=None,
+        help="Defaults to the global thread store's retention directory.",
+    )
     parser.add_argument("--top", type=int, default=12)
     parser.add_argument("--no-hash", action="store_true")
     parser.add_argument("--write", action="store_true")
@@ -430,12 +455,23 @@ def main() -> int:
     anchors = Path(args.anchors)
     if not anchors.is_absolute():
         anchors = cwd / anchors
-    output_dir = resolve_artifact_path(args.output_dir, cwd, default_thread_retention_dir(cwd, rollout))
+    output_dir = resolve_artifact_path(
+        args.output_dir, cwd, default_thread_retention_dir(cwd, rollout)
+    )
 
-    report = build_report(cwd, rollout, index_dir=index_dir, anchors=anchors, top=args.top, hash_rollout=not args.no_hash)
+    report = build_report(
+        cwd,
+        rollout,
+        index_dir=index_dir,
+        anchors=anchors,
+        top=args.top,
+        hash_rollout=not args.no_hash,
+    )
     if args.write:
         output_dir.mkdir(parents=True, exist_ok=True)
-        (output_dir / "retention_report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        (output_dir / "retention_report.json").write_text(
+            json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         (output_dir / "retention_report.md").write_text(markdown_report(report), encoding="utf-8")
 
     if args.json_output:

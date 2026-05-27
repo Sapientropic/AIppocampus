@@ -37,7 +37,6 @@ from retrieval import split_query_terms
 from subconscious_agent import add_usage, call_chat_json, compact_usage
 from subconscious_worker import DEFAULT_BASE_URL, DEFAULT_MODEL, clamp_confidence, parse_model_json
 
-
 PROMPT_VERSION = "aippocampus-semantic-recall-gate-v0"
 SCHEMA_VERSION = 1
 DEFAULT_CACHE_NAME = "semantic_recall_cache.json"
@@ -81,7 +80,9 @@ def default_cache_path(registry_path: Path | None = None, registry_dir: Path | N
     return json_path.resolve().parent / DEFAULT_CACHE_NAME
 
 
-def default_semantic_triggers_path(registry_path: Path | None = None, registry_dir: Path | None = None) -> Path:
+def default_semantic_triggers_path(
+    registry_path: Path | None = None, registry_dir: Path | None = None
+) -> Path:
     if registry_path:
         return registry_path.resolve().parent / DEFAULT_TRIGGERS_NAME
     json_path, _ = registry_paths(registry_dir)
@@ -89,7 +90,11 @@ def default_semantic_triggers_path(registry_path: Path | None = None, registry_d
 
 
 def semantic_gate_mode(value: str | None = None) -> str:
-    raw = (value if value is not None else os.environ.get("AIPPOCAMPUS_SEMANTIC_GATE", "auto")).strip().casefold()
+    raw = (
+        (value if value is not None else os.environ.get("AIPPOCAMPUS_SEMANTIC_GATE", "auto"))
+        .strip()
+        .casefold()
+    )
     if raw in {"0", "false", "off", "no", "disabled"}:
         return "off"
     if raw in {"1", "true", "on", "yes", "force"}:
@@ -97,7 +102,9 @@ def semantic_gate_mode(value: str | None = None) -> str:
     return "auto"
 
 
-def semantic_gate_enabled(mode: str | None = None, *, api_key: str | None = None, api_key_env: str = "DEEPSEEK_API_KEY") -> bool:
+def semantic_gate_enabled(
+    mode: str | None = None, *, api_key: str | None = None, api_key_env: str = "DEEPSEEK_API_KEY"
+) -> bool:
     resolved = semantic_gate_mode(mode)
     if resolved == "off":
         return False
@@ -183,7 +190,9 @@ def current_project_hint(registry: dict[str, Any], cwd: Path) -> str | None:
     best: tuple[int, str] | None = None
     for entry in registry.get("threads") or []:
         paths = entry.get("paths") or {}
-        workspace = str(paths.get("workspace") or (entry.get("session_meta") or {}).get("cwd") or "")
+        workspace = str(
+            paths.get("workspace") or (entry.get("session_meta") or {}).get("cwd") or ""
+        )
         if not workspace:
             continue
         try:
@@ -214,16 +223,22 @@ def entry_catalog_item(entry: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def registry_catalog(registry: dict[str, Any], *, cwd: Path, limit: int = DEFAULT_MAX_CATALOG_ITEMS) -> list[dict[str, Any]]:
+def registry_catalog(
+    registry: dict[str, Any], *, cwd: Path, limit: int = DEFAULT_MAX_CATALOG_ITEMS
+) -> list[dict[str, Any]]:
     project = current_project_hint(registry, cwd)
     scored: list[tuple[tuple[int, str], dict[str, Any]]] = []
     for entry in registry.get("threads") or []:
         if not isinstance(entry, dict):
             continue
-        has_memory_surface = bool(entry.get("anchor_titles") or entry.get("keywords") or entry.get("summary"))
+        has_memory_surface = bool(
+            entry.get("anchor_titles") or entry.get("keywords") or entry.get("summary")
+        )
         if not has_memory_surface:
             continue
-        same_project = project and project == (entry.get("project_label") or entry.get("workspace_name"))
+        same_project = project and project == (
+            entry.get("project_label") or entry.get("workspace_name")
+        )
         score = 2 if same_project else 0
         score += 1 if entry.get("anchor_titles") else 0
         score += 1 if entry.get("keywords") else 0
@@ -244,7 +259,9 @@ def trigger_from_working_memory(row: dict[str, Any]) -> dict[str, Any]:
             ],
             limit=12,
         ),
-        "when_to_use": compact_text(str(row.get("summary") or row.get("recommendation") or ""), 220),
+        "when_to_use": compact_text(
+            str(row.get("summary") or row.get("recommendation") or ""), 220
+        ),
         "when_not_to_use": str(row.get("ask_policy") or ""),
         "confidence": row.get("confidence"),
         "route": row.get("route"),
@@ -276,8 +293,13 @@ def load_semantic_triggers(path: Path | None) -> list[dict[str, Any]]:
             {
                 "source": "semantic_triggers",
                 "title": compact_text(str(row.get("title") or row.get("concept") or ""), 90),
-                "aliases": collect_aliases([row.get("aliases") or [], row.get("trigger_terms") or [], row.get("concept")], limit=16),
-                "when_to_use": compact_text(str(row.get("when_to_use") or row.get("summary") or ""), 220),
+                "aliases": collect_aliases(
+                    [row.get("aliases") or [], row.get("trigger_terms") or [], row.get("concept")],
+                    limit=16,
+                ),
+                "when_to_use": compact_text(
+                    str(row.get("when_to_use") or row.get("summary") or ""), 220
+                ),
                 "when_not_to_use": compact_text(str(row.get("when_not_to_use") or ""), 180),
                 "confidence": row.get("confidence"),
             }
@@ -373,9 +395,19 @@ def parse_worker_response(response: dict[str, Any], worker: str) -> dict[str, An
     decision = str(parsed.get("decision") or "skip").strip().casefold()
     if decision not in VALID_DECISIONS:
         decision = "skip"
-    aliases = collect_aliases([parsed.get("query_aliases") or [], parsed.get("aliases") or [], parsed.get("concept_aliases") or []])
-    scopes = unique_preserve([str(x) for x in parsed.get("memory_scope") or [] if str(x).strip()], limit=8)
-    negatives = unique_preserve([str(x) for x in parsed.get("negative_contexts") or [] if str(x).strip()], limit=8)
+    aliases = collect_aliases(
+        [
+            parsed.get("query_aliases") or [],
+            parsed.get("aliases") or [],
+            parsed.get("concept_aliases") or [],
+        ]
+    )
+    scopes = unique_preserve(
+        [str(x) for x in parsed.get("memory_scope") or [] if str(x).strip()], limit=8
+    )
+    negatives = unique_preserve(
+        [str(x) for x in parsed.get("negative_contexts") or [] if str(x).strip()], limit=8
+    )
     risk = str(parsed.get("anti_personalization_risk") or "medium").strip().casefold()
     if risk not in {"low", "medium", "high"}:
         risk = "medium"
@@ -475,7 +507,12 @@ def cache_fingerprint(
     semantic_triggers_path: Path | None = None,
     mode: str = "auto",
 ) -> str:
-    parts = [PROMPT_VERSION, semantic_gate_mode(mode), re.sub(r"\s+", " ", prompt).strip(), str(cwd.resolve()).casefold()]
+    parts = [
+        PROMPT_VERSION,
+        semantic_gate_mode(mode),
+        re.sub(r"\s+", " ", prompt).strip(),
+        str(cwd.resolve()).casefold(),
+    ]
     for path in [registry_path, semantic_triggers_path]:
         if path and path.exists():
             try:
@@ -486,7 +523,9 @@ def cache_fingerprint(
     return "sg_" + hashlib.sha1("\n".join(parts).encode("utf-8")).hexdigest()[:24]
 
 
-def read_cache(path: Path, key: str, *, ttl_seconds: int = DEFAULT_CACHE_TTL_SECONDS) -> dict[str, Any] | None:
+def read_cache(
+    path: Path, key: str, *, ttl_seconds: int = DEFAULT_CACHE_TTL_SECONDS
+) -> dict[str, Any] | None:
     data = load_json(path)
     entry = (data.get("entries") or {}).get(key) if isinstance(data.get("entries"), dict) else None
     if not isinstance(entry, dict):
@@ -502,7 +541,9 @@ def read_cache(path: Path, key: str, *, ttl_seconds: int = DEFAULT_CACHE_TTL_SEC
     return None
 
 
-def write_cache(path: Path, key: str, result: dict[str, Any], *, max_entries: int = DEFAULT_MAX_CACHE_ENTRIES) -> None:
+def write_cache(
+    path: Path, key: str, result: dict[str, Any], *, max_entries: int = DEFAULT_MAX_CACHE_ENTRIES
+) -> None:
     data = load_json(path)
     entries = data.get("entries") if isinstance(data.get("entries"), dict) else {}
     slim = dict(result)
@@ -510,12 +551,20 @@ def write_cache(path: Path, key: str, result: dict[str, Any], *, max_entries: in
     slim.pop("cached", None)
     entries[key] = {"created_at": now_utc(), "created_unix": time.time(), "result": slim}
     if len(entries) > max_entries:
-        kept = sorted(entries.items(), key=lambda item: float((item[1] or {}).get("created_unix") or 0.0), reverse=True)[:max_entries]
+        kept = sorted(
+            entries.items(),
+            key=lambda item: float((item[1] or {}).get("created_unix") or 0.0),
+            reverse=True,
+        )[:max_entries]
         entries = dict(kept)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(
-        json.dumps({"schema_version": SCHEMA_VERSION, "updated_at": now_utc(), "entries": entries}, ensure_ascii=False, indent=2),
+        json.dumps(
+            {"schema_version": SCHEMA_VERSION, "updated_at": now_utc(), "entries": entries},
+            ensure_ascii=False,
+            indent=2,
+        ),
         encoding="utf-8",
         newline="\n",
     )
@@ -569,8 +618,14 @@ def run_semantic_gate(
     sanitized_prompt, secret_policy = sanitize_prompt_for_semantic_gate(prompt)
     cwd_path = Path(cwd).resolve()
     registry_path_obj = Path(registry_path).resolve() if registry_path else None
-    triggers_path = Path(semantic_triggers_path).resolve() if semantic_triggers_path else (
-        default_semantic_triggers_path(registry_path=registry_path_obj) if registry_path_obj else None
+    triggers_path = (
+        Path(semantic_triggers_path).resolve()
+        if semantic_triggers_path
+        else (
+            default_semantic_triggers_path(registry_path=registry_path_obj)
+            if registry_path_obj
+            else None
+        )
     )
     key_value = api_key or os.environ.get(api_key_env)
     if not semantic_gate_enabled(mode, api_key=key_value, api_key_env=api_key_env):
@@ -578,12 +633,16 @@ def run_semantic_gate(
     if not prompt:
         return unavailable_result("empty prompt")
     if secret_policy.get("hard_block"):
-        result = unavailable_result(str(secret_policy.get("reason") or "sensitive prompt hard-blocked"))
+        result = unavailable_result(
+            str(secret_policy.get("reason") or "sensitive prompt hard-blocked")
+        )
         result["secret_policy"] = secret_policy
         return result
 
-    cache = Path(cache_path).resolve() if cache_path else (
-        default_cache_path(registry_path=registry_path_obj) if registry_path_obj else None
+    cache = (
+        Path(cache_path).resolve()
+        if cache_path
+        else (default_cache_path(registry_path=registry_path_obj) if registry_path_obj else None)
     )
     cache_key = cache_fingerprint(
         prompt=sanitized_prompt,
@@ -695,8 +754,12 @@ def main() -> int:
         cwd=Path(args.cwd),
         registry_path=registry_path,
         associations=load_json(Path(args.associations).resolve()) if args.associations else None,
-        working_memory=load_jsonl(Path(args.working_memory).resolve()) if args.working_memory else None,
-        semantic_triggers_path=Path(args.semantic_triggers).resolve() if args.semantic_triggers else None,
+        working_memory=load_jsonl(Path(args.working_memory).resolve())
+        if args.working_memory
+        else None,
+        semantic_triggers_path=Path(args.semantic_triggers).resolve()
+        if args.semantic_triggers
+        else None,
         cache_path=Path(args.cache).resolve() if args.cache else None,
         mode=args.mode,
         timeout=args.timeout,
@@ -706,7 +769,9 @@ def main() -> int:
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
-        print(f"semantic gate: {result.get('decision')} confidence={result.get('confidence')} cached={result.get('cached')}")
+        print(
+            f"semantic gate: {result.get('decision')} confidence={result.get('confidence')} cached={result.get('cached')}"
+        )
         if result.get("query_aliases"):
             print("aliases: " + ", ".join(result.get("query_aliases")[:12]))
         for reason in result.get("reasons") or []:

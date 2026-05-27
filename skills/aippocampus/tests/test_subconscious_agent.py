@@ -7,7 +7,6 @@ import unittest
 from pathlib import Path
 from typing import Any
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 TESTS = ROOT / "tests"
@@ -317,11 +316,18 @@ class SubconsciousAgentTests(unittest.TestCase):
                 del api_key, model, base_url, max_tokens, timeout, temperature
                 calls.append(messages)
                 content = (
-                    {"action": "tool", "tool": "search_clean_source", "args": {"terms": ["api_key"], "limit": 1}}
+                    {
+                        "action": "tool",
+                        "tool": "search_clean_source",
+                        "args": {"terms": ["api_key"], "limit": 1},
+                    }
                     if len(calls) == 1
                     else {"action": "final", "edges": []}
                 )
-                return {"choices": [{"message": {"content": json.dumps(content, ensure_ascii=False)}}], "usage": {"total_tokens": 1}}
+                return {
+                    "choices": [{"message": {"content": json.dumps(content, ensure_ascii=False)}}],
+                    "usage": {"total_tokens": 1},
+                }
 
             agent.run_agent(
                 registry_path=registry_path,

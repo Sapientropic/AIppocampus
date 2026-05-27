@@ -46,7 +46,6 @@ from prompt_recall_core import (
 from registry import unique_preserve
 from semantic_recall_gate import run_semantic_gate
 
-
 POST_SEMANTIC_RESERVE_MS = 1200.0
 SEMANTIC_MIN_TIMEOUT_SECONDS = 0.5
 PROBE_MIN_REMAINING_MS = 700.0
@@ -141,7 +140,9 @@ def _decision_reasons(
     if important:
         reasons.append("importance cue: " + ", ".join(important[:3]))
     if candidates:
-        reasons.append("registry overlap: " + ", ".join(str(item["title"]) for item in candidates[:2]))
+        reasons.append(
+            "registry overlap: " + ", ".join(str(item["title"]) for item in candidates[:2])
+        )
     if any(item.get("probe_score") for item in candidates[:3]):
         reasons.append("clean-source probe rerank")
     if any(item.get("life_wide_timeline_source") for item in candidates[:3]):
@@ -162,6 +163,98 @@ def _decision_reasons(
     if suppressed:
         reasons.append("suppressed ordinary code-surface prompt")
     return reasons
+
+
+def _run_semantic_gate_for_prompt(
+    *,
+    prompt: str,
+    cwd_path: Path,
+    registry: dict[str, Any],
+    registry_path: Path,
+    associations: dict[str, Any],
+    working_memory_rows: list[dict[str, Any]],
+    semantic_triggers_file: Path,
+    semantic_cache_path: Path | str | None,
+    semantic_gate_mode: str | None,
+    semantic_timeout: float,
+    semantic_gate_fn: Callable[..., dict[str, Any]] | None,
+    use_semantic_gate: bool,
+    start: float,
+    max_elapsed_ms: int | None,
+    explicit: list[str],
+    associative: list[str],
+    important: list[str],
+    association_matches: list[dict[str, Any]],
+    working_memory_matches: list[dict[str, Any]],
+    cognitive_map_matches: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    if (
+        use_semantic_gate
+        and prompt
+        and should_run_semantic_gate(
+            prompt,
+            explicit=explicit,
+            associative=associative,
+            important=important,
+            association_matches=association_matches,
+            working_memory_matches=working_memory_matches,
+            cognitive_map_matches=cognitive_map_matches,
+        )
+    ):
+        gate = semantic_gate_fn or run_semantic_gate
+        budgeted_timeout = _semantic_timeout_for_budget(
+            start, max_elapsed_ms, float(semantic_timeout)
+        )
+        if budgeted_timeout is None:
+            return _semantic_budget_result("semantic gate skipped by prompt hook foreground budget")
+        try:
+            return gate(
+                prompt,
+                cwd=cwd_path,
+                registry=registry,
+                registry_path=registry_path,
+                associations=associations,
+                working_memory=working_memory_rows,
+                semantic_triggers_path=semantic_triggers_file,
+                cache_path=Path(semantic_cache_path).resolve() if semantic_cache_path else None,
+                mode=semantic_gate_mode,
+                timeout=budgeted_timeout,
+            )
+        except Exception as exc:
+            return {
+                "available": False,
+                "decision": "skip",
+                "confidence": 0.0,
+                "query_aliases": [],
+                "reasons": [f"semantic gate error: {exc}"],
+                "errors": [str(exc)],
+            }
+    if (
+        use_semantic_gate
+        and max_elapsed_ms
+        and not _budget_allows(start, max_elapsed_ms, POST_SEMANTIC_RESERVE_MS)
+    ):
+        return _semantic_budget_result("semantic gate skipped by prompt hook foreground budget")
+    return None
+
+
+def _noise_prompt_result(context: Any, start: float) -> dict[str, Any]:
+    elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
+    return {
+        "decision": "skip",
+        "score": 0.0,
+        "confidence": "low",
+        **context.hook_path_fields(),
+        "query_terms": [],
+        "cognitive_map": [],
+        "concept_expansions": [],
+        "reasons": ["suppressed system/goal noise"],
+        "candidates": [],
+        "evidence": [],
+        "working_memory": [],
+        "semantic_gate": None,
+        "elapsed_ms": elapsed_ms,
+    }
 
 
 def assess_prompt(
@@ -204,22 +297,7 @@ def assess_prompt(
     concept_file = context.concept_graph_path
     semantic_triggers_file = context.semantic_triggers_path
     if context.is_noise:
-        elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
-        return {
-            "decision": "skip",
-            "score": 0.0,
-            "confidence": "low",
-            **context.hook_path_fields(),
-            "query_terms": [],
-            "cognitive_map": [],
-            "concept_expansions": [],
-            "reasons": ["suppressed system/goal noise"],
-            "candidates": [],
-            "evidence": [],
-            "working_memory": [],
-            "semantic_gate": None,
-            "elapsed_ms": elapsed_ms,
-        }
+        return _noise_prompt_result(context, start)
     registry = context.registry
     cognitive_map_matches = context.cognitive_map_matches
     working_memory_rows = context.working_memory_rows
@@ -229,45 +307,28 @@ def assess_prompt(
     pre_explicit = context.pre_explicit
     pre_associative = context.pre_associative
     pre_important = context.pre_important
-    semantic_result: dict[str, Any] | None = None
-    if use_semantic_gate and prompt and should_run_semantic_gate(
-        prompt,
+    semantic_result = _run_semantic_gate_for_prompt(
+        prompt=prompt,
+        cwd_path=cwd_path,
+        registry=registry,
+        registry_path=path,
+        associations=associations,
+        working_memory_rows=working_memory_rows,
+        semantic_triggers_file=semantic_triggers_file,
+        semantic_cache_path=semantic_cache_path,
+        semantic_gate_mode=semantic_gate_mode,
+        semantic_timeout=semantic_timeout,
+        semantic_gate_fn=semantic_gate_fn,
+        use_semantic_gate=use_semantic_gate,
+        start=start,
+        max_elapsed_ms=max_elapsed_ms,
         explicit=pre_explicit,
         associative=pre_associative,
         important=pre_important,
         association_matches=association_matches,
         working_memory_matches=working_memory_matches,
         cognitive_map_matches=cognitive_map_matches,
-    ):
-        gate = semantic_gate_fn or run_semantic_gate
-        budgeted_timeout = _semantic_timeout_for_budget(start, max_elapsed_ms, float(semantic_timeout))
-        if budgeted_timeout is None:
-            semantic_result = _semantic_budget_result("semantic gate skipped by prompt hook foreground budget")
-        else:
-            try:
-                semantic_result = gate(
-                    prompt,
-                    cwd=cwd_path,
-                    registry=registry,
-                    registry_path=path,
-                    associations=associations,
-                    working_memory=working_memory_rows,
-                    semantic_triggers_path=semantic_triggers_file,
-                    cache_path=Path(semantic_cache_path).resolve() if semantic_cache_path else None,
-                    mode=semantic_gate_mode,
-                    timeout=budgeted_timeout,
-                )
-            except Exception as exc:
-                semantic_result = {
-                    "available": False,
-                    "decision": "skip",
-                    "confidence": 0.0,
-                    "query_aliases": [],
-                    "reasons": [f"semantic gate error: {exc}"],
-                    "errors": [str(exc)],
-                }
-    elif use_semantic_gate and max_elapsed_ms and not _budget_allows(start, max_elapsed_ms, POST_SEMANTIC_RESERVE_MS):
-        semantic_result = _semantic_budget_result("semantic gate skipped by prompt hook foreground budget")
+    )
     seed_terms = unique_preserve(
         (expand_query_terms(prompt) if prompt else [])
         + cognitive_map_terms(cognitive_map_matches)
@@ -283,10 +344,16 @@ def assess_prompt(
     important = pre_important
 
     candidates = score_candidates(prompt, registry, query_terms) if prompt else []
-    candidates = merge_cognitive_map_candidates(candidates, registry, cognitive_map_matches, query_terms)
-    candidates = merge_association_candidates(candidates, registry, association_matches, query_terms)
+    candidates = merge_cognitive_map_candidates(
+        candidates, registry, cognitive_map_matches, query_terms
+    )
+    candidates = merge_association_candidates(
+        candidates, registry, association_matches, query_terms
+    )
     timeline = load_project_timeline(default_project_timeline_path(path))
-    candidates = merge_timeline_candidates(candidates, registry, timeline, prompt, cwd_path, query_terms)
+    candidates = merge_timeline_candidates(
+        candidates, registry, timeline, prompt, cwd_path, query_terms
+    )
     if (
         not candidates
         and use_concept_graph
@@ -298,13 +365,23 @@ def assess_prompt(
         # registry associations. Once direct association/timeline candidates
         # already exist, expanding concepts can easily introduce semantic drift
         # and corrupt clean-source probe ranking, so keep it as a fallback.
-        concept_expansions = expand_concepts(concept_file, seed_terms, depth=2, max_terms=CONCEPT_EXPANSION_MAX_TERMS)
+        concept_expansions = expand_concepts(
+            concept_file, seed_terms, depth=2, max_terms=CONCEPT_EXPANSION_MAX_TERMS
+        )
         if concept_expansions:
-            query_terms = unique_preserve(seed_terms + concept_expansion_terms(concept_expansions), limit=40)
+            query_terms = unique_preserve(
+                seed_terms + concept_expansion_terms(concept_expansions), limit=40
+            )
             candidates = score_candidates(prompt, registry, query_terms) if prompt else []
-            candidates = merge_cognitive_map_candidates(candidates, registry, cognitive_map_matches, query_terms)
-            candidates = merge_association_candidates(candidates, registry, association_matches, query_terms)
-            candidates = merge_timeline_candidates(candidates, registry, timeline, prompt, cwd_path, query_terms)
+            candidates = merge_cognitive_map_candidates(
+                candidates, registry, cognitive_map_matches, query_terms
+            )
+            candidates = merge_association_candidates(
+                candidates, registry, association_matches, query_terms
+            )
+            candidates = merge_timeline_candidates(
+                candidates, registry, timeline, prompt, cwd_path, query_terms
+            )
     if not candidates and (explicit or associative):
         # Metadata can miss memorable wording that only exists inside the
         # SQLite message index. When the user explicitly asks to recover prior
@@ -323,7 +400,11 @@ def assess_prompt(
         or semantic_memory_cue
         or timeline_memory_cue
     )
-    if candidates and has_memory_cue and _budget_allows(start, max_elapsed_ms, PROBE_MIN_REMAINING_MS):
+    if (
+        candidates
+        and has_memory_cue
+        and _budget_allows(start, max_elapsed_ms, PROBE_MIN_REMAINING_MS)
+    ):
         candidates = rerank_candidates_with_probe(candidates, query_terms)
     suppressed = should_suppress(
         prompt,
@@ -335,7 +416,9 @@ def assess_prompt(
         semantic_memory_cue=semantic_memory_cue,
     )
     top_score = float(candidates[0]["score"]) if candidates else 0.0
-    working_score = max([float(item.get("score") or 0.0) for item in working_memory_matches] or [0.0])
+    working_score = max(
+        [float(item.get("score") or 0.0) for item in working_memory_matches] or [0.0]
+    )
     reasons = _decision_reasons(
         explicit=explicit,
         associative=associative,
@@ -351,15 +434,21 @@ def assess_prompt(
 
     evidence: list[dict[str, Any]] = []
     decision = "skip"
-    if not suppressed and has_memory_cue and (candidates or working_memory_matches) and (
-        top_score >= SCENT_THRESHOLD or working_score >= SCENT_THRESHOLD or explicit or associative
-        or cognitive_map_matches
-        or semantic_memory_cue
+    if (
+        not suppressed
+        and has_memory_cue
+        and (candidates or working_memory_matches)
+        and (
+            top_score >= SCENT_THRESHOLD
+            or working_score >= SCENT_THRESHOLD
+            or explicit
+            or associative
+            or cognitive_map_matches
+            or semantic_memory_cue
+        )
     ):
         decision = "scent"
-        semantic_wants_evidence = bool(
-            semantic_gate_can_request_evidence(prompt, semantic_result)
-        )
+        semantic_wants_evidence = bool(semantic_gate_can_request_evidence(prompt, semantic_result))
         if (
             candidates
             and search_budget > 0
@@ -398,7 +487,11 @@ def assess_prompt(
     return {
         "decision": decision,
         "score": round(max(top_score, working_score), 3),
-        "confidence": "high" if decision == "evidence" else "medium" if decision == "scent" else "low",
+        "confidence": "high"
+        if decision == "evidence"
+        else "medium"
+        if decision == "scent"
+        else "low",
         **context.hook_path_fields(),
         "query_terms": query_terms[:16],
         "cognitive_map": cognitive_map_matches[:4],

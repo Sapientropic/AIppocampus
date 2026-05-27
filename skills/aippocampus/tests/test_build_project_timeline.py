@@ -6,7 +6,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -63,7 +62,9 @@ class ProjectTimelineTests(unittest.TestCase):
                 "text": assistant,
             },
         ]
-        messages.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows), encoding="utf-8")
+        messages.write_text(
+            "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows), encoding="utf-8"
+        )
         turns.write_text(
             json.dumps(
                 {
@@ -73,7 +74,9 @@ class ProjectTimelineTests(unittest.TestCase):
                     "assistant_line": 12,
                     "message_ids": [f"{name}-u", f"{name}-a"],
                     "assistant_phase": "final_answer",
-                    "scope_labels": sorted(set((user_scope_labels or []) + (assistant_scope_labels or []))),
+                    "scope_labels": sorted(
+                        set((user_scope_labels or []) + (assistant_scope_labels or []))
+                    ),
                 },
                 ensure_ascii=False,
             )
@@ -119,7 +122,10 @@ class ProjectTimelineTests(unittest.TestCase):
                 },
             },
         ]
-        self.registry.write_text(json.dumps({"schema_version": 1, "threads": entries}, ensure_ascii=False), encoding="utf-8")
+        self.registry.write_text(
+            json.dumps({"schema_version": 1, "threads": entries}, ensure_ascii=False),
+            encoding="utf-8",
+        )
 
         result = timeline.build_project_timeline(self.registry, max_per_project=5)
         project = result["projects"]["project:t-sense"]
@@ -170,9 +176,14 @@ class ProjectTimelineTests(unittest.TestCase):
                 },
             },
         ]
-        self.registry.write_text(json.dumps({"schema_version": 1, "threads": entries}, ensure_ascii=False), encoding="utf-8")
+        self.registry.write_text(
+            json.dumps({"schema_version": 1, "threads": entries}, ensure_ascii=False),
+            encoding="utf-8",
+        )
 
-        result = timeline.build_project_timeline(self.registry, max_per_project=5, max_per_life_label=5)
+        result = timeline.build_project_timeline(
+            self.registry, max_per_project=5, max_per_life_label=5
+        )
         personal = result["life_wide"]["labels"]["personal_reflection"]
 
         self.assertEqual(personal["thread_count"], 2)
@@ -219,7 +230,9 @@ class ProjectTimelineTests(unittest.TestCase):
                             "confidence": 0.94,
                         },
                     ],
-                    "source_refs": [{"message_id": "metaphor-u", "source_line": 10, "role": "user"}],
+                    "source_refs": [
+                        {"message_id": "metaphor-u", "source_line": 10, "role": "user"}
+                    ],
                 },
                 ensure_ascii=False,
             )
@@ -322,7 +335,9 @@ class ProjectTimelineTests(unittest.TestCase):
         self.assertEqual(idea["latest_turns"][0]["project_key"], "project:Public Demo")
         self.assertEqual(idea["project_count"], 1)
         self.assertEqual(idea["latest_turns"][0]["source_refs"][0]["message_id"], "msg_public")
-        self.assertEqual(idea["latest_turns"][0]["source_refs"][0]["thread_key"], "public-example-thread")
+        self.assertEqual(
+            idea["latest_turns"][0]["source_refs"][0]["thread_key"], "public-example-thread"
+        )
         self.assertEqual(idea["latest_turns"][0]["source_refs"][0]["clean_ordinal"], 0)
 
     def test_timeline_rejects_relative_registry_paths_that_escape_bundle(self) -> None:

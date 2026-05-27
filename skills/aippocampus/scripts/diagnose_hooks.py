@@ -20,9 +20,10 @@ from typing import Any
 
 from aippocampuslib import codex_home, now_utc
 
-
 DEFAULT_EVENTS = ("UserPromptSubmit", "Stop")
-DEFAULT_DIAGNOSTIC_PROMPT = "Can you recover the last memory-system discussion and relevant context?"
+DEFAULT_DIAGNOSTIC_PROMPT = (
+    "Can you recover the last memory-system discussion and relevant context?"
+)
 SCRIPT_PATH_RE = re.compile(r'"([^"]+\.py)"|(?:^|\s)([^\s"]+\.py)(?=\s|$)', re.IGNORECASE)
 
 
@@ -74,7 +75,9 @@ def script_paths_from_command(command: str) -> list[Path]:
     return paths
 
 
-def hook_input_for_event(event: str, *, cwd: Path, prompt: str, last_assistant_message: str) -> dict[str, Any]:
+def hook_input_for_event(
+    event: str, *, cwd: Path, prompt: str, last_assistant_message: str
+) -> dict[str, Any]:
     base: dict[str, Any] = {
         "hook_event_name": event,
         "cwd": str(cwd),
@@ -126,8 +129,16 @@ def run_command(command: str, *, stdin_payload: dict[str, Any], timeout: float) 
         }
     except subprocess.TimeoutExpired as exc:
         elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
-        stdout = exc.stdout.decode("utf-8", errors="replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
-        stderr = exc.stderr.decode("utf-8", errors="replace") if isinstance(exc.stderr, bytes) else (exc.stderr or "")
+        stdout = (
+            exc.stdout.decode("utf-8", errors="replace")
+            if isinstance(exc.stdout, bytes)
+            else (exc.stdout or "")
+        )
+        stderr = (
+            exc.stderr.decode("utf-8", errors="replace")
+            if isinstance(exc.stderr, bytes)
+            else (exc.stderr or "")
+        )
         return {
             "timed_out": True,
             "returncode": None,
@@ -152,7 +163,15 @@ def diagnose(
     data = load_hooks(hooks_json)
     handlers = configured_handlers(data, events)
     rows: list[dict[str, Any]] = []
-    summary = {"total": 0, "ran": 0, "errors": 0, "timeouts": 0, "would_timeout": 0, "slow": 0, "missing_scripts": 0}
+    summary = {
+        "total": 0,
+        "ran": 0,
+        "errors": 0,
+        "timeouts": 0,
+        "would_timeout": 0,
+        "slow": 0,
+        "missing_scripts": 0,
+    }
 
     for row in handlers:
         summary["total"] += 1
@@ -237,7 +256,9 @@ def print_text(result: dict[str, Any]) -> None:
             print(f"- {label}: {risk}, timeout={timeout:g}s")
         else:
             print(f"- {label}: {risk}, elapsed={elapsed:g}ms, timeout={timeout:g}s")
-        missing = [script["path"] for script in item.get("scripts") or [] if not script.get("exists")]
+        missing = [
+            script["path"] for script in item.get("scripts") or [] if not script.get("exists")
+        ]
         if missing:
             print("  missing script: " + "; ".join(missing[:3]))
         if item.get("stderr_tail"):
@@ -256,7 +277,9 @@ def main() -> int:
     parser.add_argument("--events", default=",".join(DEFAULT_EVENTS))
     parser.add_argument("--prompt", default=DEFAULT_DIAGNOSTIC_PROMPT)
     parser.add_argument("--last-assistant-message", default="diagnostic run")
-    parser.add_argument("--no-run", action="store_true", help="Only inspect hook config; do not execute commands.")
+    parser.add_argument(
+        "--no-run", action="store_true", help="Only inspect hook config; do not execute commands."
+    )
     parser.add_argument("--max-seconds", type=float, default=60.0)
     parser.add_argument("--padding-seconds", type=float, default=2.0)
     parser.add_argument("--warn-ratio", type=float, default=0.8)
@@ -279,7 +302,14 @@ def main() -> int:
     else:
         print_text(result)
     summary = result.get("summary") or {}
-    return 1 if any(int(summary.get(key) or 0) for key in ("errors", "timeouts", "would_timeout", "missing_scripts")) else 0
+    return (
+        1
+        if any(
+            int(summary.get(key) or 0)
+            for key in ("errors", "timeouts", "would_timeout", "missing_scripts")
+        )
+        else 0
+    )
 
 
 if __name__ == "__main__":

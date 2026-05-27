@@ -16,11 +16,10 @@ from typing import Any
 
 from aippocampuslib import compact_text, now_utc
 from build_associations import normalize_term, source_text_is_noise, term_is_noise
+from memory_candidate_router import default_candidates_path, iter_jsonl, write_jsonl
 from registry import registry_paths, unique_preserve
 from retrieval import split_query_terms
 from semantic_recall_gate import default_semantic_triggers_path
-from memory_candidate_router import default_candidates_path, iter_jsonl, write_jsonl
-
 
 TRIGGER_SCHEMA_VERSION = 1
 TRIGGER_TYPES = {"hook_trigger", "project_memory", "concept_edge"}
@@ -59,7 +58,12 @@ def source_refs(candidate: dict[str, Any]) -> list[dict[str, Any]]:
     for ref in candidate.get("source_refs") or []:
         if not isinstance(ref, dict):
             continue
-        line = ref.get("source_line") or ref.get("assistant_line") or ref.get("user_line") or ref.get("line")
+        line = (
+            ref.get("source_line")
+            or ref.get("assistant_line")
+            or ref.get("user_line")
+            or ref.get("line")
+        )
         clean = {
             "thread_key": ref.get("thread_key"),
             "title": ref.get("title"),
@@ -68,7 +72,11 @@ def source_refs(candidate: dict[str, Any]) -> list[dict[str, Any]]:
             "line": line,
             "message_id": ref.get("message_id"),
         }
-        key = (str(clean.get("thread_key") or ""), str(clean.get("line") or ""), str(clean.get("message_id") or ""))
+        key = (
+            str(clean.get("thread_key") or ""),
+            str(clean.get("line") or ""),
+            str(clean.get("message_id") or ""),
+        )
         if key in seen:
             continue
         seen.add(key)
@@ -145,10 +153,16 @@ def build_semantic_triggers(
             continue
         key = str(trigger.get("trigger_id"))
         existing = by_key.get(key)
-        if existing and float(existing.get("confidence") or 0.0) >= float(trigger.get("confidence") or 0.0):
+        if existing and float(existing.get("confidence") or 0.0) >= float(
+            trigger.get("confidence") or 0.0
+        ):
             continue
         by_key[key] = trigger
-    rows = sorted(by_key.values(), key=lambda row: (float(row.get("confidence") or 0.0), str(row.get("title") or "")), reverse=True)
+    rows = sorted(
+        by_key.values(),
+        key=lambda row: (float(row.get("confidence") or 0.0), str(row.get("title") or "")),
+        reverse=True,
+    )
     write_jsonl(output_path, rows)
     summary = {
         "schema_version": TRIGGER_SCHEMA_VERSION,
@@ -170,9 +184,21 @@ def main() -> int:
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
-    registry_path = Path(args.registry).resolve() if args.registry else registry_paths(Path(args.registry_dir).resolve() if args.registry_dir else None)[0]
-    candidates = Path(args.candidates).resolve() if args.candidates else default_candidates_path(registry_path=registry_path)
-    output = Path(args.output).resolve() if args.output else default_semantic_triggers_path(registry_path=registry_path)
+    registry_path = (
+        Path(args.registry).resolve()
+        if args.registry
+        else registry_paths(Path(args.registry_dir).resolve() if args.registry_dir else None)[0]
+    )
+    candidates = (
+        Path(args.candidates).resolve()
+        if args.candidates
+        else default_candidates_path(registry_path=registry_path)
+    )
+    output = (
+        Path(args.output).resolve()
+        if args.output
+        else default_semantic_triggers_path(registry_path=registry_path)
+    )
     result = build_semantic_triggers(candidates_path=candidates, output_path=output)
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))

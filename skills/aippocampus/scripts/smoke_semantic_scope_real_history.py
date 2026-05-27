@@ -20,11 +20,12 @@ from pathlib import Path
 from typing import Any
 
 from aippocampuslib import aippocampus_registry_dir, compact_text, deepseek_cache_metrics_from_usage
+from build_concept_graph import default_concept_graph_path
 from build_project_timeline import build_project_timeline, save_project_timeline
 from build_semantic_scope_labels import build_semantic_scope_labels_for_registry
+from semantic_scope_labels import label_evidence_is_sufficient
 from smoke_life_wide_registry import coverage_ratios, run_life_wide_registry_smoke
 from subconscious_agent import call_chat_json
-from semantic_scope_labels import label_evidence_is_sufficient
 from subconscious_jobs import (
     DEFAULT_CONCURRENCY,
     DEFAULT_SAMPLES_PER_JOB,
@@ -34,9 +35,12 @@ from subconscious_jobs import (
     run_one_job,
     run_tasks_in_sample_waves,
 )
-from subconscious_worker import DEFAULT_BASE_URL, DEFAULT_MODEL, default_project_timeline_path, default_staging_path
-from build_concept_graph import default_concept_graph_path
-
+from subconscious_worker import (
+    DEFAULT_BASE_URL,
+    DEFAULT_MODEL,
+    default_project_timeline_path,
+    default_staging_path,
+)
 
 DEFAULT_LIVE_CONCURRENCY = max(2, DEFAULT_CONCURRENCY)
 DEFAULT_LIVE_SAMPLES_PER_JOB = max(2, DEFAULT_SAMPLES_PER_JOB)
@@ -47,17 +51,35 @@ SEMANTIC_CANDIDATE_PROJECT_LABEL = "Stage 2 life-wide semantic candidates"
 
 
 def dynamic_counts(life_smoke: dict[str, Any]) -> dict[str, int]:
-    artifacts = life_smoke.get("artifact_counts") if isinstance(life_smoke.get("artifact_counts"), dict) else {}
-    timeline = life_smoke.get("timeline_coverage") if isinstance(life_smoke.get("timeline_coverage"), dict) else {}
+    artifacts = (
+        life_smoke.get("artifact_counts")
+        if isinstance(life_smoke.get("artifact_counts"), dict)
+        else {}
+    )
+    timeline = (
+        life_smoke.get("timeline_coverage")
+        if isinstance(life_smoke.get("timeline_coverage"), dict)
+        else {}
+    )
     return {
         "semantic_sidecar_threads": int(artifacts.get("semantic_sidecar_threads") or 0),
         "semantic_sidecar_rows": int(artifacts.get("semantic_sidecar_rows") or 0),
-        "messages_with_semantic_scope_labels": int(artifacts.get("messages_with_semantic_scope_labels") or 0),
-        "timeline_latest_turns_with_semantic_scope_labels": int(timeline.get("latest_turns_with_semantic_scope_labels") or 0),
+        "messages_with_semantic_scope_labels": int(
+            artifacts.get("messages_with_semantic_scope_labels") or 0
+        ),
+        "timeline_latest_turns_with_semantic_scope_labels": int(
+            timeline.get("latest_turns_with_semantic_scope_labels") or 0
+        ),
     }
 
 
-def semantic_status(counts: dict[str, int], *, min_sidecar_rows: int, min_sidecar_threads: int, min_timeline_turns: int) -> str:
+def semantic_status(
+    counts: dict[str, int],
+    *,
+    min_sidecar_rows: int,
+    min_sidecar_threads: int,
+    min_timeline_turns: int,
+) -> str:
     if counts.get("semantic_sidecar_rows", 0) < min_sidecar_rows:
         return "insufficient_dynamic_sidecar_rows"
     if counts.get("semantic_sidecar_threads", 0) < min_sidecar_threads:
@@ -67,7 +89,9 @@ def semantic_status(counts: dict[str, int], *, min_sidecar_rows: int, min_sideca
     return "sufficient"
 
 
-def refresh_timeline(registry_path: Path, timeline_path: Path, *, max_turns_per_thread: int, max_per_life_label: int) -> dict[str, Any]:
+def refresh_timeline(
+    registry_path: Path, timeline_path: Path, *, max_turns_per_thread: int, max_per_life_label: int
+) -> dict[str, Any]:
     timeline = build_project_timeline(
         registry_path,
         max_turns_per_thread=max_turns_per_thread,
@@ -116,7 +140,9 @@ def compact_label_evidence_metrics(result: dict[str, Any]) -> dict[str, Any]:
         for finding in job.get("findings") or []:
             if not isinstance(finding, dict):
                 continue
-            labels = [str(label) for label in finding.get("scope_labels") or [] if str(label).strip()]
+            labels = [
+                str(label) for label in finding.get("scope_labels") or [] if str(label).strip()
+            ]
             if not labels:
                 continue
             findings_with_labels += 1
@@ -159,10 +185,17 @@ def compact_materialize_result(result: dict[str, Any] | None) -> dict[str, Any] 
 def semantic_claim_level(status: str, *, live: bool) -> str:
     if status == "live_model_missing_api_key":
         return "blocked_live_model"
-    if status in {"live_model_failed", "live_model_partial_failure", "live_model_no_findings", "materialization_empty"}:
+    if status in {
+        "live_model_failed",
+        "live_model_partial_failure",
+        "live_model_no_findings",
+        "materialization_empty",
+    }:
         return "failed_live_model_slice"
     if status == "sufficient":
-        return "dynamic_semantic_sidecar_slice" if live else "observed_dynamic_semantic_sidecar_slice"
+        return (
+            "dynamic_semantic_sidecar_slice" if live else "observed_dynamic_semantic_sidecar_slice"
+        )
     if status == "live_model_findings_observed":
         return "fresh_live_model_findings_observed"
     return "diagnostic_only"
@@ -199,7 +232,9 @@ def turn_identity(turn: dict[str, Any]) -> str:
     )
 
 
-def semantic_candidate_timeline_from_life_wide(timeline: dict[str, Any], *, max_turns: int | None) -> dict[str, Any]:
+def semantic_candidate_timeline_from_life_wide(
+    timeline: dict[str, Any], *, max_turns: int | None
+) -> dict[str, Any]:
     life_wide = timeline.get("life_wide") if isinstance(timeline.get("life_wide"), dict) else {}
     label_groups = life_wide.get("labels") if isinstance(life_wide.get("labels"), dict) else {}
     candidates: list[dict[str, Any]] = []
@@ -240,13 +275,17 @@ def semantic_candidate_timeline_from_life_wide(timeline: dict[str, Any], *, max_
                 "project_key": SEMANTIC_CANDIDATE_PROJECT_KEY,
                 "project_label": SEMANTIC_CANDIDATE_PROJECT_LABEL,
                 "project_tags": ["stage2", "life-wide", "semantic-scope"],
-                "thread_count": len({turn.get("thread_key") for turn in candidates if turn.get("thread_key")}),
+                "thread_count": len(
+                    {turn.get("thread_key") for turn in candidates if turn.get("thread_key")}
+                ),
                 "latest_turns": candidates,
             }
         },
         "candidate_metrics": {
             "candidate_turn_count": len(candidates),
-            "candidate_thread_count": len({turn.get("thread_key") for turn in candidates if turn.get("thread_key")}),
+            "candidate_thread_count": len(
+                {turn.get("thread_key") for turn in candidates if turn.get("thread_key")}
+            ),
             "skipped_already_semantic": skipped_already_semantic,
             "skipped_without_refs": skipped_without_refs,
             "limit_applied": limit,
@@ -270,7 +309,9 @@ def candidate_timeline_for_turns(turns: list[dict[str, Any]]) -> dict[str, Any]:
                 "project_key": SEMANTIC_CANDIDATE_PROJECT_KEY,
                 "project_label": SEMANTIC_CANDIDATE_PROJECT_LABEL,
                 "project_tags": ["stage2", "life-wide", "semantic-scope", "candidate-batch"],
-                "thread_count": len({turn.get("thread_key") for turn in turns if turn.get("thread_key")}),
+                "thread_count": len(
+                    {turn.get("thread_key") for turn in turns if turn.get("thread_key")}
+                ),
                 "latest_turns": turns,
             }
         },
@@ -295,7 +336,9 @@ def batch_candidate_coverage(
     candidate_batch_size: int,
     source_turn_cap: int,
 ) -> dict[str, Any]:
-    evaluated = sum(batch_sizes[index] for index in successful_batch_indexes if 0 <= index < len(batch_sizes))
+    evaluated = sum(
+        batch_sizes[index] for index in successful_batch_indexes if 0 <= index < len(batch_sizes)
+    )
     unevaluated = max(0, int(candidate_turn_count) - int(evaluated))
     return {
         "full_candidate_coverage_requested": bool(full_candidate_coverage),
@@ -307,7 +350,9 @@ def batch_candidate_coverage(
         "successful_batch_count": len(successful_batch_indexes),
         "failed_batch_count": len(failed_batch_indexes),
         "source_turn_cap": int(source_turn_cap),
-        "full_candidate_coverage_passed": bool(full_candidate_coverage and unevaluated == 0 and not failed_batch_indexes),
+        "full_candidate_coverage_passed": bool(
+            full_candidate_coverage and unevaluated == 0 and not failed_batch_indexes
+        ),
         "boundary": "Coverage means every selected candidate turn was sent to the semantic model; it does not mean every candidate deserved a label.",
     }
 
@@ -390,7 +435,10 @@ def run_candidate_batches(
         timeline_paths: list[Path] = []
         for batch_index, batch in enumerate(batches):
             path = tmp_root / f"candidate_batch_{batch_index}.json"
-            path.write_text(json.dumps(candidate_timeline_for_turns(batch), ensure_ascii=False, indent=2), encoding="utf-8")
+            path.write_text(
+                json.dumps(candidate_timeline_for_turns(batch), ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
             timeline_paths.append(path)
 
         def run_task(task: dict[str, int]) -> dict[str, Any]:
@@ -480,9 +528,13 @@ def run_candidate_batches(
 def life_smoke_coverage_ratios(life_smoke: dict[str, Any]) -> dict[str, Any]:
     return coverage_ratios(
         {
-            "artifact_counts": life_smoke.get("artifact_counts") if isinstance(life_smoke.get("artifact_counts"), dict) else {},
+            "artifact_counts": life_smoke.get("artifact_counts")
+            if isinstance(life_smoke.get("artifact_counts"), dict)
+            else {},
         },
-        life_smoke.get("timeline_coverage") if isinstance(life_smoke.get("timeline_coverage"), dict) else None,
+        life_smoke.get("timeline_coverage")
+        if isinstance(life_smoke.get("timeline_coverage"), dict)
+        else None,
     )
 
 
@@ -514,10 +566,26 @@ def run_semantic_scope_real_history_smoke(
     full_candidate_source_turn_cap: int = DEFAULT_FULL_CANDIDATE_SOURCE_TURN_CAP,
     chat_fn=None,
 ) -> dict[str, Any]:
-    registry = Path(registry_path).resolve() if registry_path else (aippocampus_registry_dir() / "threads.json").resolve()
-    timeline = Path(timeline_path).resolve() if timeline_path else default_project_timeline_path(registry_path=registry)
-    jobs_output = Path(jobs_output_path).resolve() if jobs_output_path else default_jobs_output_path(registry_path=registry)
-    edges_output = Path(edges_output_path).resolve() if edges_output_path else default_staging_path(registry_path=registry)
+    registry = (
+        Path(registry_path).resolve()
+        if registry_path
+        else (aippocampus_registry_dir() / "threads.json").resolve()
+    )
+    timeline = (
+        Path(timeline_path).resolve()
+        if timeline_path
+        else default_project_timeline_path(registry_path=registry)
+    )
+    jobs_output = (
+        Path(jobs_output_path).resolve()
+        if jobs_output_path
+        else default_jobs_output_path(registry_path=registry)
+    )
+    edges_output = (
+        Path(edges_output_path).resolve()
+        if edges_output_path
+        else default_staging_path(registry_path=registry)
+    )
     concept_graph = default_concept_graph_path(registry_path=registry)
 
     privacy_boundary = {
@@ -602,7 +670,9 @@ def run_semantic_scope_real_history_smoke(
             },
         }
 
-    source_turn_cap = max(1, int(full_candidate_source_turn_cap if full_candidate_coverage else max_turns))
+    source_turn_cap = max(
+        1, int(full_candidate_source_turn_cap if full_candidate_coverage else max_turns)
+    )
     refresh_before = refresh_timeline(
         registry,
         timeline,
@@ -627,14 +697,18 @@ def run_semantic_scope_real_history_smoke(
         if int((semantic_candidate_metrics or {}).get("candidate_turn_count") or 0) > 0:
             candidate_temp = tempfile.TemporaryDirectory(prefix="aippocampus-semantic-candidates-")
             job_timeline_path = Path(candidate_temp.name) / "project_timeline.json"
-            job_timeline_path.write_text(json.dumps(candidate_timeline, ensure_ascii=False, indent=2), encoding="utf-8")
+            job_timeline_path.write_text(
+                json.dumps(candidate_timeline, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
     objective = (
         "Label real-history clean-source turns that are semantically life-wide, casual-important, "
         "or idea-evolution material. Prefer dynamic semantic judgments over lexical keyword matches. "
         "Use only canonical scope labels and exact source-backed message refs."
     )
     try:
-        use_candidate_batches = bool(project is None and candidate_timeline and full_candidate_coverage)
+        use_candidate_batches = bool(
+            project is None and candidate_timeline and full_candidate_coverage
+        )
         if use_candidate_batches:
             job_result = run_candidate_batches(
                 registry_path=registry,
@@ -656,12 +730,22 @@ def run_semantic_scope_real_history_smoke(
                 write_sidecars=write_sidecars,
                 chat_fn=chat_fn or call_chat_json,
             )
-            batches = (job_result.get("candidate_batches") or {}) if isinstance(job_result.get("candidate_batches"), dict) else {}
+            batches = (
+                (job_result.get("candidate_batches") or {})
+                if isinstance(job_result.get("candidate_batches"), dict)
+                else {}
+            )
             candidate_coverage = batch_candidate_coverage(
-                candidate_turn_count=int((semantic_candidate_metrics or {}).get("candidate_turn_count") or 0),
+                candidate_turn_count=int(
+                    (semantic_candidate_metrics or {}).get("candidate_turn_count") or 0
+                ),
                 batch_sizes=[int(value) for value in batches.get("batch_sizes") or []],
-                successful_batch_indexes={int(value) for value in batches.get("successful_batch_indexes") or []},
-                failed_batch_indexes={int(value) for value in batches.get("failed_batch_indexes") or []},
+                successful_batch_indexes={
+                    int(value) for value in batches.get("successful_batch_indexes") or []
+                },
+                failed_batch_indexes={
+                    int(value) for value in batches.get("failed_batch_indexes") or []
+                },
                 full_candidate_coverage=full_candidate_coverage,
                 candidate_batch_size=candidate_batch_size or DEFAULT_CANDIDATE_BATCH_SIZE,
                 source_turn_cap=source_turn_cap,
@@ -737,7 +821,11 @@ def run_semantic_scope_real_history_smoke(
         status_after = "materialization_empty"
     elif not write_sidecars and status_after != "sufficient":
         status_after = "live_model_findings_observed"
-    elif full_candidate_coverage and candidate_coverage and int(candidate_coverage.get("unevaluated_candidate_turn_count") or 0) > 0:
+    elif (
+        full_candidate_coverage
+        and candidate_coverage
+        and int(candidate_coverage.get("unevaluated_candidate_turn_count") or 0) > 0
+    ):
         status_after = "incomplete_candidate_coverage"
 
     if not live:
@@ -754,7 +842,9 @@ def run_semantic_scope_real_history_smoke(
         "ok": ok,
         "stage2_semantic_sidecar_status": status_after,
         "claim_level": semantic_claim_level(status_after, live=True),
-        "cannot_claim": semantic_cannot_claim(status_after, live=True, write_sidecars=write_sidecars),
+        "cannot_claim": semantic_cannot_claim(
+            status_after, live=True, write_sidecars=write_sidecars
+        ),
         "live_model_used": True,
         "sidecars_written": bool(write_sidecars and materialized and materialized.get("wrote")),
         "timeline_refreshed": bool(refresh_after),
@@ -776,7 +866,8 @@ def run_semantic_scope_real_history_smoke(
             "min_timeline_turns": min_timeline_turns,
             "require_labels": require_labels,
             "full_candidate_coverage": full_candidate_coverage,
-            "candidate_batch_size": candidate_batch_size or (DEFAULT_CANDIDATE_BATCH_SIZE if full_candidate_coverage else 0),
+            "candidate_batch_size": candidate_batch_size
+            or (DEFAULT_CANDIDATE_BATCH_SIZE if full_candidate_coverage else 0),
             "full_candidate_source_turn_cap": source_turn_cap,
         },
     }
@@ -805,9 +896,20 @@ def main() -> int:
     parser.add_argument("--min-sidecar-rows", type=int, default=1)
     parser.add_argument("--min-sidecar-threads", type=int, default=1)
     parser.add_argument("--min-timeline-turns", type=int, default=1)
-    parser.add_argument("--full-candidate-coverage", action="store_true", help="Evaluate every currently selected unlabeled life-wide candidate turn.")
-    parser.add_argument("--candidate-batch-size", type=int, default=0, help="Turn count per semantic candidate batch when --full-candidate-coverage is used.")
-    parser.add_argument("--full-candidate-source-turn-cap", type=int, default=DEFAULT_FULL_CANDIDATE_SOURCE_TURN_CAP)
+    parser.add_argument(
+        "--full-candidate-coverage",
+        action="store_true",
+        help="Evaluate every currently selected unlabeled life-wide candidate turn.",
+    )
+    parser.add_argument(
+        "--candidate-batch-size",
+        type=int,
+        default=0,
+        help="Turn count per semantic candidate batch when --full-candidate-coverage is used.",
+    )
+    parser.add_argument(
+        "--full-candidate-source-turn-cap", type=int, default=DEFAULT_FULL_CANDIDATE_SOURCE_TURN_CAP
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 

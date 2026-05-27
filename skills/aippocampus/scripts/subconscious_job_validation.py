@@ -35,7 +35,9 @@ def finding_fingerprint(finding: dict[str, Any]) -> str:
         normalize_for_fingerprint(str(finding.get("question_text") or "")),
         normalize_for_fingerprint(str(finding.get("frontier_type") or "")),
         normalize_for_fingerprint(str(finding.get("message_id") or "")),
-        normalize_for_fingerprint(" ".join(str(label) for label in finding.get("scope_labels") or [])),
+        normalize_for_fingerprint(
+            " ".join(str(label) for label in finding.get("scope_labels") or [])
+        ),
     ]
     digest = hashlib.sha1("\n".join(parts).encode("utf-8")).hexdigest()[:20]
     return f"sf_{digest}"
@@ -56,13 +58,25 @@ def estimate_finding_quality(job: str, finding: dict[str, Any]) -> dict[str, Any
     confidence = clamp_confidence(finding.get("confidence"))
     ref_count = len(refs)
     thread_count = len({str(ref.get("thread_key") or "") for ref in refs if ref.get("thread_key")})
-    final_refs = sum(1 for ref in refs if ref.get("assistant_line") or ref.get("source_line") or ref.get("message_id"))
+    final_refs = sum(
+        1
+        for ref in refs
+        if ref.get("assistant_line") or ref.get("source_line") or ref.get("message_id")
+    )
     summary_len = len(str(finding.get("summary") or finding.get("why") or ""))
     recommendation = bool(str(finding.get("recommendation") or "").strip())
     evidence_strength = min(1.0, 0.35 + ref_count * 0.16 + thread_count * 0.10 + final_refs * 0.06)
-    specificity = min(1.0, 0.25 + min(summary_len, 420) / 600 + min(len(finding.get("concepts") or []), 6) * 0.04)
+    specificity = min(
+        1.0, 0.25 + min(summary_len, 420) / 600 + min(len(finding.get("concepts") or []), 6) * 0.04
+    )
     actionability = 0.35 + (0.28 if recommendation else 0.0)
-    if job in {"question_extraction", "decision_evolution", "project_drift", "preference_candidates", "contradiction_scan"}:
+    if job in {
+        "question_extraction",
+        "decision_evolution",
+        "project_drift",
+        "preference_candidates",
+        "contradiction_scan",
+    }:
         actionability += 0.12
     if job == "cognitive_map":
         actionability += 0.10
@@ -103,11 +117,15 @@ def normalize_ref_id(ref_item: Any) -> str:
     if isinstance(ref_item, str):
         return ref_item.strip()
     if isinstance(ref_item, dict):
-        return str(ref_item.get("ref") or ref_item.get("turn_ref") or ref_item.get("obs_ref") or "").strip()
+        return str(
+            ref_item.get("ref") or ref_item.get("turn_ref") or ref_item.get("obs_ref") or ""
+        ).strip()
     return ""
 
 
-def refs_for_finding(finding: dict[str, Any], source_bank: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+def refs_for_finding(
+    finding: dict[str, Any], source_bank: dict[str, dict[str, Any]]
+) -> list[dict[str, Any]]:
     refs: list[dict[str, Any]] = []
     for ref_item in finding.get("source_refs") or []:
         ref_id = normalize_ref_id(ref_item)
@@ -175,13 +193,17 @@ def compact_string_list(values: Any, *, limit: int = 12, chars: int = 90) -> lis
     return list(dict.fromkeys(out))[:limit]
 
 
-def validate_cognitive_map_fields(item: dict[str, Any], refs: list[dict[str, Any]]) -> dict[str, Any] | None:
+def validate_cognitive_map_fields(
+    item: dict[str, Any], refs: list[dict[str, Any]]
+) -> dict[str, Any] | None:
     landmarks = compact_string_list(item.get("landmarks") or item.get("concepts"), limit=10)
     regions = compact_string_list(item.get("regions"), limit=8)
     route_cues = compact_string_list(item.get("route_cues") or item.get("aliases"), limit=16)
     if not landmarks or not route_cues:
         return None
-    ref_threads = list(dict.fromkeys(str(ref.get("thread_key") or "") for ref in refs if ref.get("thread_key")))
+    ref_threads = list(
+        dict.fromkeys(str(ref.get("thread_key") or "") for ref in refs if ref.get("thread_key"))
+    )
     requested = compact_string_list(item.get("target_thread_keys"), limit=16)
     target_thread_keys = [key for key in requested if key in ref_threads] or ref_threads
     if not target_thread_keys:
@@ -239,25 +261,35 @@ def validate_question_fields(item: dict[str, Any]) -> dict[str, Any] | None:
             "kind": kind,
             "question_text": question_text,
             "question_text_compressed": question_text_compressed,
-            "question_short": compact_text(str(item.get("question_short") or item.get("title") or ""), 90),
+            "question_short": compact_text(
+                str(item.get("question_short") or item.get("title") or ""), 90
+            ),
             "intent_orientation": compact_text(str(item.get("intent_orientation") or ""), 80),
-            "what_features": compact_string_list(item.get("what_features") or item.get("concepts"), limit=10),
+            "what_features": compact_string_list(
+                item.get("what_features") or item.get("concepts"), limit=10
+            ),
             "where_context": compact_string_list(item.get("where_context"), limit=8),
             "phase_context": compact_text(str(item.get("phase_context") or ""), 80),
-            "collaboration_context": compact_string_list(item.get("collaboration_context"), limit=8),
+            "collaboration_context": compact_string_list(
+                item.get("collaboration_context"), limit=8
+            ),
         }
 
     frontier_type = str(item.get("frontier_type") or "unresolved").strip()
     if frontier_type not in ALLOWED_FRONTIER_TYPES:
         frontier_type = "unresolved"
-    boundary_reason = compact_text(str(item.get("boundary_reason") or item.get("summary") or ""), 260)
+    boundary_reason = compact_text(
+        str(item.get("boundary_reason") or item.get("summary") or ""), 260
+    )
     if not boundary_reason:
         return None
     return {
         "kind": kind,
         "frontier_type": frontier_type,
         "boundary_reason": boundary_reason,
-        "linked_question_short": compact_text(str(item.get("linked_question_short") or item.get("question_short") or ""), 90),
+        "linked_question_short": compact_text(
+            str(item.get("linked_question_short") or item.get("question_short") or ""), 90
+        ),
         "intent_orientation": compact_text(str(item.get("intent_orientation") or ""), 80),
         "where_context": compact_string_list(item.get("where_context"), limit=8),
         "phase_context": compact_text(str(item.get("phase_context") or ""), 80),
@@ -274,7 +306,9 @@ def canonical_scope_labels(values: Any) -> list[str]:
     return [label for label in SCOPE_LABEL_ORDER if label in present]
 
 
-def exact_message_refs_for_semantic_label(message_id: str, refs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def exact_message_refs_for_semantic_label(
+    message_id: str, refs: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
     exact: list[dict[str, Any]] = []
     for ref in refs:
         if str(ref.get("message_id") or "").strip() == message_id:
@@ -312,9 +346,13 @@ def exact_message_refs_for_semantic_label(message_id: str, refs: list[dict[str, 
     return list(deduped.values())[:5]
 
 
-def validate_semantic_scope_label_fields(item: dict[str, Any], refs: list[dict[str, Any]]) -> dict[str, Any] | None:
+def validate_semantic_scope_label_fields(
+    item: dict[str, Any], refs: list[dict[str, Any]]
+) -> dict[str, Any] | None:
     message_id = str(item.get("message_id") or item.get("target_message_id") or "").strip()
-    labels = filtered_semantic_scope_labels(item, list(item.get("scope_labels") or item.get("labels") or []))
+    labels = filtered_semantic_scope_labels(
+        item, list(item.get("scope_labels") or item.get("labels") or [])
+    )
     if not message_id or not labels:
         return None
     exact_refs = exact_message_refs_for_semantic_label(message_id, refs)
@@ -326,11 +364,15 @@ def validate_semantic_scope_label_fields(item: dict[str, Any], refs: list[dict[s
         "scope_labels": labels,
         "source_refs": exact_refs,
         "label_evidence": label_evidence_for_labels(item, labels),
-        "rationale": compact_text(str(item.get("rationale") or item.get("summary") or item.get("why") or ""), 260),
+        "rationale": compact_text(
+            str(item.get("rationale") or item.get("summary") or item.get("why") or ""), 260
+        ),
     }
 
 
-def validate_findings(job: str, parsed: dict[str, Any], source_bank: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+def validate_findings(
+    job: str, parsed: dict[str, Any], source_bank: dict[str, dict[str, Any]]
+) -> list[dict[str, Any]]:
     spec = JOB_SPECS[job]
     out: list[dict[str, Any]] = []
     for item in parsed.get("findings") or []:
@@ -347,8 +389,14 @@ def validate_findings(job: str, parsed: dict[str, Any], source_bank: dict[str, d
             "summary": compact_text(str(item.get("summary") or item.get("why") or ""), 480),
             "confidence": round(confidence, 4),
             "source_refs": refs,
-            "concepts": [compact_text(str(value), 80) for value in item.get("concepts") or [] if str(value).strip()][:12],
-            "recommendation": compact_text(str(item.get("recommendation") or item.get("suggested_next_action") or ""), 260),
+            "concepts": [
+                compact_text(str(value), 80)
+                for value in item.get("concepts") or []
+                if str(value).strip()
+            ][:12],
+            "recommendation": compact_text(
+                str(item.get("recommendation") or item.get("suggested_next_action") or ""), 260
+            ),
         }
         if job == "concept_edges":
             src = compact_text(str(item.get("src") or ""), 100)

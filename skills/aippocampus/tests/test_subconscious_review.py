@@ -6,7 +6,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 TESTS = ROOT / "tests"
@@ -114,7 +113,10 @@ class SubconsciousReviewTests(unittest.TestCase):
                     "source_refs": [{"thread_key": "session:one", "assistant_line": 14}],
                 },
             ]
-            path.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows), encoding="utf-8")
+            path.write_text(
+                "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
+                encoding="utf-8",
+            )
 
             findings = review.recent_findings(path)
 

@@ -20,7 +20,6 @@ from build_clean_source import SCOPE_LABEL_ORDER
 from build_project_timeline import build_project_timeline
 from registry import load_registry
 
-
 NON_TECHNICAL_LIFE_LABELS = tuple(label for label in SCOPE_LABEL_ORDER if label != "technical_work")
 
 
@@ -146,14 +145,18 @@ def summarize_scope_coverage(registry: dict[str, Any]) -> dict[str, Any]:
         "clean_source_schema_versions": dict(sorted(schema_versions.items())),
         "scope_label_coverage": {
             "canonical_label_count": len(labels),
-            "non_technical_life_label_count": len([label for label in labels if label in NON_TECHNICAL_LIFE_LABELS]),
+            "non_technical_life_label_count": len(
+                [label for label in labels if label in NON_TECHNICAL_LIFE_LABELS]
+            ),
             "labels": labels,
         },
         "warnings": dict(sorted(warnings.items())),
     }
 
 
-def summarize_timeline(registry_path: Path, *, max_turns_per_thread: int, max_per_life_label: int) -> dict[str, Any]:
+def summarize_timeline(
+    registry_path: Path, *, max_turns_per_thread: int, max_per_life_label: int
+) -> dict[str, Any]:
     timeline = build_project_timeline(
         registry_path,
         max_turns_per_thread=max_turns_per_thread,
@@ -177,8 +180,12 @@ def summarize_timeline(registry_path: Path, *, max_turns_per_thread: int, max_pe
             "thread_count": int(group.get("thread_count") or 0),
             "project_count": int(group.get("project_count") or 0),
             "latest_turn_count": len(latest_turns),
-            "latest_turns_source_backed": sum(1 for turn in latest_turns if turn.get("source_refs")),
-            "latest_turns_with_semantic_scope_labels": sum(1 for turn in latest_turns if turn.get("semantic_scope_labels")),
+            "latest_turns_source_backed": sum(
+                1 for turn in latest_turns if turn.get("source_refs")
+            ),
+            "latest_turns_with_semantic_scope_labels": sum(
+                1 for turn in latest_turns if turn.get("semantic_scope_labels")
+            ),
         }
     return {
         "computed_in_memory": True,
@@ -199,10 +206,16 @@ def determine_evidence_status(
     min_life_labels: int,
     min_life_threads: int,
 ) -> str:
-    artifact_counts = coverage.get("artifact_counts") if isinstance(coverage.get("artifact_counts"), dict) else {}
+    artifact_counts = (
+        coverage.get("artifact_counts") if isinstance(coverage.get("artifact_counts"), dict) else {}
+    )
     if int(artifact_counts.get("threads") or 0) <= 0:
         return "skipped_empty_registry"
-    scope = coverage.get("scope_label_coverage") if isinstance(coverage.get("scope_label_coverage"), dict) else {}
+    scope = (
+        coverage.get("scope_label_coverage")
+        if isinstance(coverage.get("scope_label_coverage"), dict)
+        else {}
+    )
     non_technical_count = int(scope.get("non_technical_life_label_count") or 0)
     threads_with_life = int(artifact_counts.get("threads_with_non_technical_life_labels") or 0)
     if non_technical_count < min_life_labels or threads_with_life < min_life_threads:
@@ -230,20 +243,34 @@ def coverage_ratios(coverage: dict[str, Any], timeline: dict[str, Any] | None) -
     slice-level diagnostic into a full-history claim.
     """
 
-    artifact_counts = coverage.get("artifact_counts") if isinstance(coverage.get("artifact_counts"), dict) else {}
+    artifact_counts = (
+        coverage.get("artifact_counts") if isinstance(coverage.get("artifact_counts"), dict) else {}
+    )
     timeline = timeline if isinstance(timeline, dict) else {}
     thread_count = int(artifact_counts.get("threads") or 0)
     message_count = int(artifact_counts.get("clean_source_messages") or 0)
     timeline_turns = int(timeline.get("latest_turn_count") or 0)
     semantic_sidecar_rows = int(artifact_counts.get("semantic_sidecar_rows") or 0)
     return {
-        "labeled_message_ratio": ratio(int(artifact_counts.get("messages_with_scope_labels") or 0), message_count),
-        "life_labeled_thread_ratio": ratio(int(artifact_counts.get("threads_with_non_technical_life_labels") or 0), thread_count),
-        "scope_labeled_thread_ratio": ratio(int(artifact_counts.get("threads_with_scope_labels") or 0), thread_count),
-        "semantic_sidecar_thread_ratio": ratio(int(artifact_counts.get("semantic_sidecar_threads") or 0), thread_count),
+        "labeled_message_ratio": ratio(
+            int(artifact_counts.get("messages_with_scope_labels") or 0), message_count
+        ),
+        "life_labeled_thread_ratio": ratio(
+            int(artifact_counts.get("threads_with_non_technical_life_labels") or 0), thread_count
+        ),
+        "scope_labeled_thread_ratio": ratio(
+            int(artifact_counts.get("threads_with_scope_labels") or 0), thread_count
+        ),
+        "semantic_sidecar_thread_ratio": ratio(
+            int(artifact_counts.get("semantic_sidecar_threads") or 0), thread_count
+        ),
         "semantic_sidecar_row_count": semantic_sidecar_rows,
-        "source_backed_timeline_turn_ratio": ratio(int(timeline.get("latest_turns_source_backed") or 0), timeline_turns),
-        "semantic_timeline_turn_ratio": ratio(int(timeline.get("latest_turns_with_semantic_scope_labels") or 0), timeline_turns),
+        "source_backed_timeline_turn_ratio": ratio(
+            int(timeline.get("latest_turns_source_backed") or 0), timeline_turns
+        ),
+        "semantic_timeline_turn_ratio": ratio(
+            int(timeline.get("latest_turns_with_semantic_scope_labels") or 0), timeline_turns
+        ),
     }
 
 
@@ -276,7 +303,11 @@ def run_life_wide_registry_smoke(
     max_turns_per_thread: int = 5,
     max_per_life_label: int = 20,
 ) -> dict[str, Any]:
-    path = Path(registry_path).resolve() if registry_path else (aippocampus_registry_dir() / "threads.json").resolve()
+    path = (
+        Path(registry_path).resolve()
+        if registry_path
+        else (aippocampus_registry_dir() / "threads.json").resolve()
+    )
     privacy_boundary = {
         "raw_text_emitted": False,
         "snippets_emitted": False,
@@ -290,7 +321,11 @@ def run_life_wide_registry_smoke(
         coverage = {
             "artifact_counts": {},
             "clean_source_schema_versions": {},
-            "scope_label_coverage": {"canonical_label_count": 0, "non_technical_life_label_count": 0, "labels": {}},
+            "scope_label_coverage": {
+                "canonical_label_count": 0,
+                "non_technical_life_label_count": 0,
+                "labels": {},
+            },
             "warnings": {"missing_registry": 1},
         }
         return {
@@ -301,7 +336,11 @@ def run_life_wide_registry_smoke(
             "privacy_boundary": privacy_boundary,
             "registry": {"exists": False},
             "artifact_counts": {},
-            "scope_label_coverage": {"canonical_label_count": 0, "non_technical_life_label_count": 0, "labels": {}},
+            "scope_label_coverage": {
+                "canonical_label_count": 0,
+                "non_technical_life_label_count": 0,
+                "labels": {},
+            },
             "timeline_coverage": None,
             "coverage_ratios": coverage_ratios(coverage, None),
             "warnings": {"missing_registry": 1},
@@ -310,7 +349,9 @@ def run_life_wide_registry_smoke(
     registry = load_registry(path)
     coverage = summarize_scope_coverage(registry)
     timeline = (
-        summarize_timeline(path, max_turns_per_thread=max_turns_per_thread, max_per_life_label=max_per_life_label)
+        summarize_timeline(
+            path, max_turns_per_thread=max_turns_per_thread, max_per_life_label=max_per_life_label
+        )
         if compute_timeline
         else None
     )
@@ -343,7 +384,10 @@ def run_life_wide_registry_smoke(
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--registry", help="Path to threads.json. Defaults to CODEX_HOME/aippocampus-registry/threads.json.")
+    parser.add_argument(
+        "--registry",
+        help="Path to threads.json. Defaults to CODEX_HOME/aippocampus-registry/threads.json.",
+    )
     parser.add_argument("--no-compute-timeline", action="store_true")
     parser.add_argument("--require-evidence", action="store_true")
     parser.add_argument("--min-life-labels", type=int, default=2)

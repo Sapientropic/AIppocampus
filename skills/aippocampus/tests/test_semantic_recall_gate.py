@@ -7,7 +7,6 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 TESTS = ROOT / "tests"
@@ -53,7 +52,9 @@ class SemanticRecallGateTests(unittest.TestCase):
                 }
             ],
         }
-        self.registry_path.write_text(json.dumps(self.registry, ensure_ascii=False), encoding="utf-8")
+        self.registry_path.write_text(
+            json.dumps(self.registry, ensure_ascii=False), encoding="utf-8"
+        )
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
@@ -217,12 +218,14 @@ class SemanticRecallGateTests(unittest.TestCase):
         def chat_fn(*args, **kwargs):
             raise AssertionError("model should not be called for private keys")
 
-        private_key_block = "\n".join([
-            "看看这个",
-            "-----" + "BEGIN PRIVATE KEY" + "-----",
-            "abc",
-            "-----" + "END PRIVATE KEY" + "-----",
-        ])
+        private_key_block = "\n".join(
+            [
+                "看看这个",
+                "-----" + "BEGIN PRIVATE KEY" + "-----",
+                "abc",
+                "-----" + "END PRIVATE KEY" + "-----",
+            ]
+        )
 
         result = gate.run_semantic_gate(
             private_key_block,

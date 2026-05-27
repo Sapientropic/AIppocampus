@@ -7,14 +7,13 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-import sync_bundle  # noqa: E402
-import smoke_cross_device_sync  # noqa: E402
 import smoke_alternate_runtime_sync  # noqa: E402
+import smoke_cross_device_sync  # noqa: E402
+import sync_bundle  # noqa: E402
 
 
 class SyncBundleTests(unittest.TestCase):
@@ -108,19 +107,28 @@ class SyncBundleTests(unittest.TestCase):
         self.assertIn("registry/working_memory.jsonl", relative_paths)
         self.assertIn("registry/cognitive_map.json", relative_paths)
         self.assertIn("registry/threads/session-test/clean-source/messages.jsonl", relative_paths)
-        self.assertIn("registry/threads/session-test/clean-source/semantic-scope-labels.jsonl", relative_paths)
+        self.assertIn(
+            "registry/threads/session-test/clean-source/semantic-scope-labels.jsonl", relative_paths
+        )
         self.assertIn("registry/threads/session-test/index/manifest.json", relative_paths)
         self.assertNotIn("rollout.jsonl", "\n".join(relative_paths))
-        portable_registry = json.loads((self.sync_dir / "registry" / "threads.json").read_text(encoding="utf-8"))
+        portable_registry = json.loads(
+            (self.sync_dir / "registry" / "threads.json").read_text(encoding="utf-8")
+        )
         portable_paths = portable_registry["threads"][0]["paths"]
-        self.assertEqual(portable_paths["clean_source_messages_jsonl"], "registry/threads/session-test/clean-source/messages.jsonl")
+        self.assertEqual(
+            portable_paths["clean_source_messages_jsonl"],
+            "registry/threads/session-test/clean-source/messages.jsonl",
+        )
         self.assertIsNone(portable_paths["workspace"])
         self.assertIsNone(portable_paths["rollout"])
 
     def test_pull_copies_missing_files_and_preserves_conflicts(self) -> None:
         sync_bundle.push_sync_bundle(self.registry, self.sync_dir)
         target_registry = self.root / "target-registry"
-        target_messages = target_registry / "threads" / "session-test" / "clean-source" / "messages.jsonl"
+        target_messages = (
+            target_registry / "threads" / "session-test" / "clean-source" / "messages.jsonl"
+        )
         target_messages.parent.mkdir(parents=True)
         target_messages.write_text("different local content\n", encoding="utf-8")
 
@@ -143,10 +151,21 @@ class SyncBundleTests(unittest.TestCase):
         self.assertTrue(result["path_repair"]["ok"])
         repaired = json.loads((target_registry / "threads.json").read_text(encoding="utf-8"))
         paths = repaired["threads"][0]["paths"]
-        self.assertEqual(paths["registry_thread_store"], str(target_registry / "threads" / "session-test"))
-        self.assertEqual(paths["clean_source_messages_jsonl"], str(target_registry / "threads" / "session-test" / "clean-source" / "messages.jsonl"))
-        self.assertEqual(paths["clean_source_turns_jsonl"], str(target_registry / "threads" / "session-test" / "clean-source" / "turns.jsonl"))
-        self.assertEqual(paths["graph_json"], str(target_registry / "threads" / "session-test" / "index" / "graph.json"))
+        self.assertEqual(
+            paths["registry_thread_store"], str(target_registry / "threads" / "session-test")
+        )
+        self.assertEqual(
+            paths["clean_source_messages_jsonl"],
+            str(target_registry / "threads" / "session-test" / "clean-source" / "messages.jsonl"),
+        )
+        self.assertEqual(
+            paths["clean_source_turns_jsonl"],
+            str(target_registry / "threads" / "session-test" / "clean-source" / "turns.jsonl"),
+        )
+        self.assertEqual(
+            paths["graph_json"],
+            str(target_registry / "threads" / "session-test" / "index" / "graph.json"),
+        )
         self.assertIsNone(paths["workspace"])
         self.assertIsNone(paths["rollout"])
         self.assertNotIn(str(self.registry), json.dumps(repaired, ensure_ascii=False))
@@ -165,7 +184,9 @@ class SyncBundleTests(unittest.TestCase):
 
     def test_pull_fails_when_registry_path_repair_fails(self) -> None:
         sync_bundle.push_sync_bundle(self.registry, self.sync_dir)
-        synced_registry = json.loads((self.sync_dir / "registry" / "threads.json").read_text(encoding="utf-8"))
+        synced_registry = json.loads(
+            (self.sync_dir / "registry" / "threads.json").read_text(encoding="utf-8")
+        )
         synced_registry["threads"][0]["thread_key"] = "missing-thread"
         (self.sync_dir / "registry" / "threads.json").write_text(
             json.dumps(synced_registry, ensure_ascii=False),
@@ -215,7 +236,9 @@ class SyncBundleTests(unittest.TestCase):
 
         sync_bundle.push_sync_bundle(self.registry, self.sync_dir, include_raw=False)
 
-        manifest = json.loads((self.sync_dir / sync_bundle.SYNC_MANIFEST_NAME).read_text(encoding="utf-8"))
+        manifest = json.loads(
+            (self.sync_dir / sync_bundle.SYNC_MANIFEST_NAME).read_text(encoding="utf-8")
+        )
         self.assertFalse(manifest["raw_rollout_included"])
         self.assertFalse((self.sync_dir / "raw-rollouts").exists())
 
@@ -231,7 +254,9 @@ class SyncBundleTests(unittest.TestCase):
         self.assertEqual(result["steps"]["push_raw_opt_in"]["file_count"], 11)
         self.assertIsNone(result["observed"]["portable_paths"]["workspace"])
         self.assertIsNone(result["observed"]["portable_paths"]["rollout"])
-        self.assertIn("registry/threads/", result["observed"]["portable_paths"]["clean_source_messages_jsonl"])
+        self.assertIn(
+            "registry/threads/", result["observed"]["portable_paths"]["clean_source_messages_jsonl"]
+        )
         self.assertGreaterEqual(result["observed"]["device_b_conflict_count"], 1)
         self.assertGreaterEqual(result["observed"]["device_a_conflict_count"], 1)
         self.assertTrue(
@@ -274,7 +299,9 @@ class SyncBundleTests(unittest.TestCase):
         self.assertTrue(result["ok"], result.get("failures"))
 
     def test_alternate_runtime_smoke_skips_missing_runtime_unless_required(self) -> None:
-        with mock.patch.object(smoke_alternate_runtime_sync, "docker_available", return_value=(False, "docker_missing")):
+        with mock.patch.object(
+            smoke_alternate_runtime_sync, "docker_available", return_value=(False, "docker_missing")
+        ):
             skipped = smoke_alternate_runtime_sync.run_alternate_runtime_sync_smoke(
                 ROOT,
                 runtime="docker",
@@ -294,10 +321,18 @@ class SyncBundleTests(unittest.TestCase):
 
     def test_alternate_runtime_wsl_path_failure_is_structured_skip(self) -> None:
         with (
-            mock.patch.object(smoke_alternate_runtime_sync, "wsl_available", return_value=(True, "python3")),
-            mock.patch.object(smoke_alternate_runtime_sync, "wsl_paths", side_effect=RuntimeError("path translation failed")),
+            mock.patch.object(
+                smoke_alternate_runtime_sync, "wsl_available", return_value=(True, "python3")
+            ),
+            mock.patch.object(
+                smoke_alternate_runtime_sync,
+                "wsl_paths",
+                side_effect=RuntimeError("path translation failed"),
+            ),
         ):
-            result = smoke_alternate_runtime_sync.run_alternate_runtime_sync_smoke(ROOT, runtime="wsl")
+            result = smoke_alternate_runtime_sync.run_alternate_runtime_sync_smoke(
+                ROOT, runtime="wsl"
+            )
 
         self.assertTrue(result["ok"])
         self.assertFalse(result["claims"]["alternate_runtime_executed"])

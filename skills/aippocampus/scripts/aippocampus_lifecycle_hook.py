@@ -24,7 +24,6 @@ from typing import Any
 
 from aippocampuslib import codex_home, now_utc
 
-
 SCRIPT_DIR = Path(__file__).resolve().parent
 STATE_SCHEMA_VERSION = 1
 STOP_COOLDOWN_SECONDS = 15 * 60
@@ -101,7 +100,13 @@ def cooldown_active(state: dict[str, Any], field: str, now_ts: float, cooldown: 
     return last > 0 and now_ts - last < cooldown
 
 
-def decide_actions(event: str, health: dict[str, Any], workspace_state: dict[str, Any], *, now_ts: float | None = None) -> list[str]:
+def decide_actions(
+    event: str,
+    health: dict[str, Any],
+    workspace_state: dict[str, Any],
+    *,
+    now_ts: float | None = None,
+) -> list[str]:
     now_ts = time.time() if now_ts is None else now_ts
     if event not in SUPPORTED_EVENTS:
         return []
@@ -136,7 +141,9 @@ def decide_actions(event: str, health: dict[str, Any], workspace_state: dict[str
         return unique_actions(actions)
 
     if event in {"PreCompact", "PostCompact"}:
-        if event == "PostCompact" and cooldown_active(workspace_state, "last_compact_ts", now_ts, COMPACT_COOLDOWN_SECONDS):
+        if event == "PostCompact" and cooldown_active(
+            workspace_state, "last_compact_ts", now_ts, COMPACT_COOLDOWN_SECONDS
+        ):
             return []
         actions.append("build_index")
         actions.append("build_clean_source")
@@ -164,7 +171,9 @@ def unique_actions(actions: list[str]) -> list[str]:
 
 
 def run_json(cmd: list[str]) -> dict[str, Any]:
-    proc = subprocess.run(cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False)
+    proc = subprocess.run(
+        cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False
+    )
     if proc.returncode != 0:
         raise RuntimeError(proc.stdout or proc.stderr)
     return json.loads(proc.stdout)
@@ -189,7 +198,9 @@ def run_json_timeout(cmd: list[str], *, timeout: float) -> dict[str, Any]:
 
 
 def run_text(cmd: list[str]) -> str:
-    proc = subprocess.run(cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False)
+    proc = subprocess.run(
+        cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False
+    )
     if proc.returncode != 0:
         raise RuntimeError(proc.stdout or proc.stderr)
     return proc.stdout
@@ -212,7 +223,9 @@ def start_detached_json(cmd: list[str], *, log_name: str) -> dict[str, Any]:
     out = log.open("ab")
     creationflags = 0
     if os.name == "nt":
-        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(
+            subprocess, "DETACHED_PROCESS", 0
+        )
     proc = subprocess.Popen(
         cmd,
         cwd=str(SCRIPT_DIR),
@@ -237,7 +250,13 @@ def run_action(cwd: Path, action: str) -> dict[str, Any]:
         )
     if action == "build_clean_source":
         return run_json_timeout(
-            [sys.executable, str(SCRIPT_DIR / "build_clean_source.py"), "--cwd", str(cwd), "--json"],
+            [
+                sys.executable,
+                str(SCRIPT_DIR / "build_clean_source.py"),
+                "--cwd",
+                str(cwd),
+                "--json",
+            ],
             timeout=ACTION_TIMEOUT_SECONDS[action],
         )
     if action == "build_segments":
@@ -247,7 +266,14 @@ def run_action(cwd: Path, action: str) -> dict[str, Any]:
         )
     if action == "register":
         return run_json_timeout(
-            [sys.executable, str(SCRIPT_DIR / "registry.py"), "register", "--cwd", str(cwd), "--json"],
+            [
+                sys.executable,
+                str(SCRIPT_DIR / "registry.py"),
+                "register",
+                "--cwd",
+                str(cwd),
+                "--json",
+            ],
             timeout=ACTION_TIMEOUT_SECONDS[action],
         )
     if action == "build_associations":
@@ -266,7 +292,14 @@ def run_action(cwd: Path, action: str) -> dict[str, Any]:
         # per-project leases collapse duplicate starts, and DeepSeek work stays
         # in the detached worker.
         return start_detached_json(
-            [sys.executable, str(SCRIPT_DIR / "subconscious_scheduler.py"), "--maybe-start", "--cwd", str(cwd), "--json"],
+            [
+                sys.executable,
+                str(SCRIPT_DIR / "subconscious_scheduler.py"),
+                "--maybe-start",
+                "--cwd",
+                str(cwd),
+                "--json",
+            ],
             log_name="subconscious_scheduler_hook.log",
         )
     raise ValueError(f"unknown maintenance action: {action}")
@@ -297,7 +330,9 @@ def remember_detached_action(workspace_state: dict[str, Any], action: str, now_t
     workspace_state[f"last_{action}_enqueue_at"] = now_utc()
 
 
-def update_workspace_state(workspace_state: dict[str, Any], event: str, actions: list[str], *, now_ts: float) -> None:
+def update_workspace_state(
+    workspace_state: dict[str, Any], event: str, actions: list[str], *, now_ts: float
+) -> None:
     workspace_state["last_event"] = event
     workspace_state["last_event_ts"] = now_ts
     workspace_state["last_event_at"] = now_utc()
@@ -422,7 +457,9 @@ def run_maintenance(
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--event", help="Dry-run event override. Hook mode reads hook_event_name from stdin.")
+    parser.add_argument(
+        "--event", help="Dry-run event override. Hook mode reads hook_event_name from stdin."
+    )
     parser.add_argument("--cwd", help="Workspace override. Hook mode reads cwd from stdin.")
     parser.add_argument("--state-file")
     parser.add_argument("--dry-run", action="store_true")

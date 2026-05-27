@@ -6,7 +6,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -47,7 +46,10 @@ class RegisterRolloutTests(unittest.TestCase):
             {
                 "type": "event_msg",
                 "timestamp": "2026-05-26T03:00:01Z",
-                "payload": {"type": "user_message", "message": "把这个旧线程纳入 AIppocampus 记忆范围。"},
+                "payload": {
+                    "type": "user_message",
+                    "message": "把这个旧线程纳入 AIppocampus 记忆范围。",
+                },
             }
         )
         self._append(
@@ -150,14 +152,18 @@ class RegisterRolloutTests(unittest.TestCase):
                 "text": "AIppocampus 生成产物默认写到 CodexHome global store，project-local 只是兼容模式。",
             },
         ]
-        messages.write_text("\n".join(json.dumps(row, ensure_ascii=False) for row in rows), encoding="utf-8")
+        messages.write_text(
+            "\n".join(json.dumps(row, ensure_ascii=False) for row in rows), encoding="utf-8"
+        )
         entry = {
             "paths": {
                 "clean_source_messages_jsonl": str(messages),
             }
         }
 
-        score, hits = registry.deep_search_entry(entry, ["AIppocampus", "CodexHome", "global", "project"], max_hits=2)
+        score, hits = registry.deep_search_entry(
+            entry, ["AIppocampus", "CodexHome", "global", "project"], max_hits=2
+        )
 
         self.assertGreater(score, 0)
         self.assertEqual(hits[0]["message_id"], "msg-real")

@@ -28,7 +28,6 @@ from aippocampuslib import (
     resolve_artifact_path,
 )
 
-
 LEGACY_OUTPUT_DIR = ".aippocampus/clean-source"
 CLEAN_SOURCE_SCHEMA_VERSION = 2
 SIGNATURE_CONTRACT_VERSION = "aippocampus-signature-sidecar-v1"
@@ -176,7 +175,10 @@ def _semantic_key(role: str, phase: str, text: str) -> str:
 def _scope_needle_matches(lowered_text: str, needle: str) -> bool:
     lowered_needle = needle.casefold()
     if ASCII_NEEDLE_RE.match(lowered_needle):
-        return re.search(rf"(?<![a-z0-9_+-]){re.escape(lowered_needle)}(?![a-z0-9_+-])", lowered_text) is not None
+        return (
+            re.search(rf"(?<![a-z0-9_+-]){re.escape(lowered_needle)}(?![a-z0-9_+-])", lowered_text)
+            is not None
+        )
     return lowered_needle in lowered_text
 
 
@@ -184,10 +186,13 @@ def _looks_like_open_question(text: str) -> bool:
     stripped = str(text or "").strip()
     if stripped.endswith(("?", "？")):
         return True
-    return re.match(
-        r"^(why|how|what|when|where|who|which|can i|could i|should i|do i|does|is|are|am)\b",
-        stripped.casefold(),
-    ) is not None
+    return (
+        re.match(
+            r"^(why|how|what|when|where|who|which|can i|could i|should i|do i|does|is|are|am)\b",
+            stripped.casefold(),
+        )
+        is not None
+    )
 
 
 def infer_scope_labels(text: str) -> list[str]:
@@ -222,7 +227,9 @@ def _merge_scope_labels(items: list[dict]) -> list[str]:
     return [label for label in SCOPE_LABEL_ORDER if label in present]
 
 
-def _clean_messages(messages: list[dict], turns: list[dict], source_id: str) -> tuple[list[dict], list[dict]]:
+def _clean_messages(
+    messages: list[dict], turns: list[dict], source_id: str
+) -> tuple[list[dict], list[dict]]:
     by_turn: dict[int, list[dict]] = {}
     for message in messages:
         turn_index = message.get("turn_index")
@@ -244,7 +251,9 @@ def _clean_messages(messages: list[dict], turns: list[dict], source_id: str) -> 
             assistant = next((item for item in items if item.get("line") == fallback_line), None)
             assistant_phase = "commentary_fallback" if assistant else ""
 
-        turn_uid = _stable_id("turn", source_id, turn_id, turn.get("user_line"), turn.get("start_line"), length=20)
+        turn_uid = _stable_id(
+            "turn", source_id, turn_id, turn.get("user_line"), turn.get("start_line"), length=20
+        )
         kept: list[dict] = []
         for item in (user, assistant):
             if not item:
@@ -296,7 +305,9 @@ def _clean_messages(messages: list[dict], turns: list[dict], source_id: str) -> 
                 "user_line": user.get("line") if user else None,
                 "assistant_line": assistant.get("line") if assistant else None,
                 "user_message_id": user_message.get("message_id") if user_message else None,
-                "assistant_message_id": assistant_message.get("message_id") if assistant_message else None,
+                "assistant_message_id": assistant_message.get("message_id")
+                if assistant_message
+                else None,
                 "message_ids": [item["message_id"] for item in kept],
                 "assistant_phase": assistant_phase,
                 "start_line": turn.get("start_line"),
@@ -397,8 +408,17 @@ def build_clean_source(
             },
         },
         "cleaning_policy": {
-            "keeps": ["user_message", "assistant final_answer", "last assistant commentary only when no final_answer exists"],
-            "drops": ["tool payload text", "duplicate visible messages", "injected AGENTS instructions", "routine commentary when final_answer exists"],
+            "keeps": [
+                "user_message",
+                "assistant final_answer",
+                "last assistant commentary only when no final_answer exists",
+            ],
+            "drops": [
+                "tool payload text",
+                "duplicate visible messages",
+                "injected AGENTS instructions",
+                "routine commentary when final_answer exists",
+            ],
             "rewrites_text": False,
         },
         "scope_label_policy": {
@@ -437,7 +457,9 @@ def main() -> int:
         print(json.dumps(manifest, ensure_ascii=False, indent=2))
     else:
         print(f"clean source: {manifest['outputs']['manifest_json']}")
-        print(f"messages: {manifest['outputs']['messages_jsonl']} ({manifest['message_count']} messages)")
+        print(
+            f"messages: {manifest['outputs']['messages_jsonl']} ({manifest['message_count']} messages)"
+        )
         print(f"turns: {manifest['outputs']['turns_jsonl']} ({manifest['turn_count']} turns)")
     return 0
 

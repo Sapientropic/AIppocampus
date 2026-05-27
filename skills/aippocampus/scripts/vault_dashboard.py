@@ -62,31 +62,33 @@ def dashboard_graph_data(anchors: list[dict]) -> dict:
     for idx, anchor in enumerate(anchors, start=1):
         anchor_id = f"anchor-{idx}"
         title = dashboard_anchor_title(anchor, idx)
-        nodes.append({
-            "id": anchor_id,
-            "label": title,
-            "type": "topic",
-            "pane": anchor_id,
-            "local": True,
-            "label_priority": idx,
-        })
+        nodes.append(
+            {
+                "id": anchor_id,
+                "label": title,
+                "type": "topic",
+                "pane": anchor_id,
+                "local": True,
+                "label_priority": idx,
+            }
+        )
         edges.append({"source": "now", "target": anchor_id, "type": "HAS_TOPIC"})
         for keyword in anchor.get("keywords", [])[:2]:
             key = keyword.strip()
             if not key:
                 continue
-            keyword_id = seen_keywords.setdefault(
-                key.lower(), f"keyword-{len(seen_keywords) + 1}"
-            )
+            keyword_id = seen_keywords.setdefault(key.lower(), f"keyword-{len(seen_keywords) + 1}")
             if not any(node["id"] == keyword_id for node in nodes):
-                nodes.append({
-                    "id": keyword_id,
-                    "label": key,
-                    "type": "keyword",
-                    "pane": anchor_id,
-                    "local": False,
-                    "label_priority": 99,
-                })
+                nodes.append(
+                    {
+                        "id": keyword_id,
+                        "label": key,
+                        "type": "keyword",
+                        "pane": anchor_id,
+                        "local": False,
+                        "label_priority": 99,
+                    }
+                )
             edges.append({"source": anchor_id, "target": keyword_id, "type": "HAS_KEYWORD"})
     for page_id, label in [
         ("health", "记忆健康"),
@@ -98,26 +100,30 @@ def dashboard_graph_data(anchors: list[dict]) -> dict:
     ]:
         if any(node["id"] == page_id for node in nodes):
             continue
-        nodes.append({
-            "id": page_id,
-            "label": label,
-            "type": "page",
-            "pane": page_id,
-            "local": True,
-            "label_priority": 12,
-        })
+        nodes.append(
+            {
+                "id": page_id,
+                "label": label,
+                "type": "page",
+                "pane": page_id,
+                "local": True,
+                "label_priority": 12,
+            }
+        )
         edges.append({"source": "now", "target": page_id, "type": "LINKS_TO"})
     for special_id, label in [
         ("graphify", "Graphify corpus"),
     ]:
-        nodes.append({
-            "id": special_id,
-            "label": label,
-            "type": "system",
-            "pane": "heartbeat" if special_id == "graphify" else special_id,
-            "local": special_id != "graphify",
-            "label_priority": 20,
-        })
+        nodes.append(
+            {
+                "id": special_id,
+                "label": label,
+                "type": "system",
+                "pane": "heartbeat" if special_id == "graphify" else special_id,
+                "local": special_id != "graphify",
+                "label_priority": 20,
+            }
+        )
         edges.append({"source": "now", "target": special_id, "type": "TRACKS"})
     return {"nodes": nodes, "edges": edges, "root": "now"}
 
@@ -135,10 +141,13 @@ def dashboard_pane_data_v2(
     checkpoint_state_text = "需要巩固" if health.get("checkpoint", {}).get("due") else "已巩固"
     graphify_state = "需要刷新" if health.get("graphify", {}).get("stale") else "已同步"
 
-    anchor_links = "".join(
-        f"<li><a class='internal-link' href='#anchor-{idx}' data-note='anchor-{idx}'>{html.escape(dashboard_anchor_title(anchor, idx))}</a></li>"
-        for idx, anchor in enumerate(anchors, start=1)
-    ) or "<li>暂无锚点</li>"
+    anchor_links = (
+        "".join(
+            f"<li><a class='internal-link' href='#anchor-{idx}' data-note='anchor-{idx}'>{html.escape(dashboard_anchor_title(anchor, idx))}</a></li>"
+            for idx, anchor in enumerate(anchors, start=1)
+        )
+        or "<li>暂无锚点</li>"
+    )
     recent_items = "".join(
         f"<li><span>{html.escape(msg.get('role', 'message'))}</span>{html.escape(compact_text(msg.get('text', ''), 220))}</li>"
         for msg in recent_messages[-5:]
@@ -148,49 +157,53 @@ def dashboard_pane_data_v2(
         "now": {
             "title": "现在",
             "outline": ["从这里进入", "现在在追的线索", "建议的走法"],
-            "body": "\n".join([
-                "<div class='callout' data-callout='noteinfo'>",
-                "  <div class='callout-title'><div class='callout-icon'>↗</div><div class='callout-title-inner'>Noteinfo</div></div>",
-                "  <div class='callout-content'>",
-                "    <p>这不是一个按指标消费的 dashboard，更像一个会继续长出来的私有笔记空间。</p>",
-                "    <p>它把这个线程的索引、锚点、图谱和 heartbeat 串起来，让以后回来时能沿着线索重新进入。</p>",
-                "  </div>",
-                "</div>",
-                "<p class='codex-lead'>我想把这里做成一种低压力的长期对话空间。</p>",
-                "<h2 id='从这里进入' data-heading='从这里进入'>从这里进入</h2>",
-                "<ul class='link-list'>",
-                "  <li><a class='internal-link' href='#health' data-note='health'>记忆健康</a></li>",
-                "  <li><a class='internal-link' href='#threads' data-note='threads'>正在追的线索</a></li>",
-                "  <li><a class='internal-link' href='#routes' data-note='routes'>建议的走法</a></li>",
-                "  <li><a class='internal-link' href='#anchors' data-note='anchors'>锚点</a></li>",
-                "  <li><a class='internal-link' href='#heartbeat' data-note='heartbeat'>Heartbeat</a></li>",
-                "</ul>",
-                "<h2 id='现在在追的线索' data-heading='现在在追的线索'>现在在追的线索</h2>",
-                f"<ul class='link-list'>{anchor_links}</ul>",
-                "<h2 id='建议的走法' data-heading='建议的走法'>建议的走法</h2>",
-                "<div class='callout' data-callout='links'>",
-                "  <div class='callout-title'><div class='callout-title-inner'>Links</div></div>",
-                "  <div class='callout-content'>",
-                "    <p><a class='internal-link' href='#health' data-note='health'>记忆健康</a> -> <a class='internal-link' href='#heartbeat' data-note='heartbeat'>Heartbeat</a> -> <a class='internal-link' href='#anchors' data-note='anchors'>锚点</a> -> <a class='internal-link' href='#graph'>互动图谱</a></p>",
-                "  </div>",
-                "</div>",
-            ]),
+            "body": "\n".join(
+                [
+                    "<div class='callout' data-callout='noteinfo'>",
+                    "  <div class='callout-title'><div class='callout-icon'>↗</div><div class='callout-title-inner'>Noteinfo</div></div>",
+                    "  <div class='callout-content'>",
+                    "    <p>这不是一个按指标消费的 dashboard，更像一个会继续长出来的私有笔记空间。</p>",
+                    "    <p>它把这个线程的索引、锚点、图谱和 heartbeat 串起来，让以后回来时能沿着线索重新进入。</p>",
+                    "  </div>",
+                    "</div>",
+                    "<p class='codex-lead'>我想把这里做成一种低压力的长期对话空间。</p>",
+                    "<h2 id='从这里进入' data-heading='从这里进入'>从这里进入</h2>",
+                    "<ul class='link-list'>",
+                    "  <li><a class='internal-link' href='#health' data-note='health'>记忆健康</a></li>",
+                    "  <li><a class='internal-link' href='#threads' data-note='threads'>正在追的线索</a></li>",
+                    "  <li><a class='internal-link' href='#routes' data-note='routes'>建议的走法</a></li>",
+                    "  <li><a class='internal-link' href='#anchors' data-note='anchors'>锚点</a></li>",
+                    "  <li><a class='internal-link' href='#heartbeat' data-note='heartbeat'>Heartbeat</a></li>",
+                    "</ul>",
+                    "<h2 id='现在在追的线索' data-heading='现在在追的线索'>现在在追的线索</h2>",
+                    f"<ul class='link-list'>{anchor_links}</ul>",
+                    "<h2 id='建议的走法' data-heading='建议的走法'>建议的走法</h2>",
+                    "<div class='callout' data-callout='links'>",
+                    "  <div class='callout-title'><div class='callout-title-inner'>Links</div></div>",
+                    "  <div class='callout-content'>",
+                    "    <p><a class='internal-link' href='#health' data-note='health'>记忆健康</a> -> <a class='internal-link' href='#heartbeat' data-note='heartbeat'>Heartbeat</a> -> <a class='internal-link' href='#anchors' data-note='anchors'>锚点</a> -> <a class='internal-link' href='#graph'>互动图谱</a></p>",
+                    "  </div>",
+                    "</div>",
+                ]
+            ),
         },
         "health": {
             "title": "记忆健康",
             "outline": ["状态", "索引"],
-            "body": "\n".join([
-                "<h2 id='状态' data-heading='状态'>状态</h2>",
-                "<ul class='status-list'>",
-                f"<li>状态：{html.escape(status)}</li>",
-                f"<li>锚点：{anchor_count}</li>",
-                f"<li>消息：{messages}</li>",
-                f"<li>Checkpoint：{checkpoint_state_text}</li>",
-                f"<li>Graphify corpus：{graphify_state}</li>",
-                "</ul>",
-                "<h2 id='索引' data-heading='索引'>索引</h2>",
-                "<p>SQLite FTS、锚点和轻量图谱共同负责召回；图谱负责导航，不替代原始检索。</p>",
-            ]),
+            "body": "\n".join(
+                [
+                    "<h2 id='状态' data-heading='状态'>状态</h2>",
+                    "<ul class='status-list'>",
+                    f"<li>状态：{html.escape(status)}</li>",
+                    f"<li>锚点：{anchor_count}</li>",
+                    f"<li>消息：{messages}</li>",
+                    f"<li>Checkpoint：{checkpoint_state_text}</li>",
+                    f"<li>Graphify corpus：{graphify_state}</li>",
+                    "</ul>",
+                    "<h2 id='索引' data-heading='索引'>索引</h2>",
+                    "<p>SQLite FTS、锚点和轻量图谱共同负责召回；图谱负责导航，不替代原始检索。</p>",
+                ]
+            ),
         },
         "threads": {
             "title": "正在追的线索",
@@ -200,14 +213,16 @@ def dashboard_pane_data_v2(
         "routes": {
             "title": "建议的走法",
             "outline": ["记忆系统路线", "精神主线路线"],
-            "body": "\n".join([
-                "<h2 id='记忆系统路线' data-heading='记忆系统路线'>记忆系统路线</h2>",
-                "<div class='callout' data-callout='links'><div class='callout-content'>",
-                "<p><a class='internal-link' href='#health' data-note='health'>记忆健康</a> -> <a class='internal-link' href='#heartbeat' data-note='heartbeat'>Heartbeat</a> -> <a class='internal-link' href='#anchors' data-note='anchors'>锚点</a> -> <a class='internal-link' href='#graph'>互动图谱</a></p>",
-                "</div></div>",
-                "<h2 id='精神主线路线' data-heading='精神主线路线'>精神主线路线</h2>",
-                f"<ul class='link-list'>{anchor_links}</ul>",
-            ]),
+            "body": "\n".join(
+                [
+                    "<h2 id='记忆系统路线' data-heading='记忆系统路线'>记忆系统路线</h2>",
+                    "<div class='callout' data-callout='links'><div class='callout-content'>",
+                    "<p><a class='internal-link' href='#health' data-note='health'>记忆健康</a> -> <a class='internal-link' href='#heartbeat' data-note='heartbeat'>Heartbeat</a> -> <a class='internal-link' href='#anchors' data-note='anchors'>锚点</a> -> <a class='internal-link' href='#graph'>互动图谱</a></p>",
+                    "</div></div>",
+                    "<h2 id='精神主线路线' data-heading='精神主线路线'>精神主线路线</h2>",
+                    f"<ul class='link-list'>{anchor_links}</ul>",
+                ]
+            ),
         },
         "anchors": {
             "title": "锚点",
@@ -217,35 +232,46 @@ def dashboard_pane_data_v2(
         "heartbeat": {
             "title": "Heartbeat",
             "outline": ["唤醒路线", "最近 checkpoint"],
-            "body": "\n".join([
-                "<h2 id='唤醒路线' data-heading='唤醒路线'>唤醒路线</h2>",
-                "<p>Heartbeat 会定期唤醒这个线程，运行 memory health，刷新 vault，并在 Slack / PR / feedback 连接可用时检查外部反馈；不可用时明确记为 skipped。</p>",
-                "<h2 id='最近 checkpoint' data-heading='最近 checkpoint'>最近 checkpoint</h2>",
-                f"<p>{html.escape(checkpoint.get('title', 'No checkpoint yet'))}</p>",
-            ]),
+            "body": "\n".join(
+                [
+                    "<h2 id='唤醒路线' data-heading='唤醒路线'>唤醒路线</h2>",
+                    "<p>Heartbeat 会定期唤醒这个线程，运行 memory health，刷新 vault，并在 Slack / PR / feedback 连接可用时检查外部反馈；不可用时明确记为 skipped。</p>",
+                    "<h2 id='最近 checkpoint' data-heading='最近 checkpoint'>最近 checkpoint</h2>",
+                    f"<p>{html.escape(checkpoint.get('title', 'No checkpoint yet'))}</p>",
+                ]
+            ),
         },
         "recent": {
             "title": "最近消息",
             "outline": ["消息"],
-            "body": f"<h2 id='消息' data-heading='消息'>消息</h2><ol class='messages'>{recent_items}</ol>" if recent_items else "<p>暂无最近消息。</p>",
+            "body": f"<h2 id='消息' data-heading='消息'>消息</h2><ol class='messages'>{recent_items}</ol>"
+            if recent_items
+            else "<p>暂无最近消息。</p>",
         },
     }
 
     for idx, anchor in enumerate(anchors, start=1):
         title = dashboard_anchor_title(anchor, idx)
         source_title = anchor.get("title") or f"Anchor {idx}"
-        notes = "".join(f"<li>{html.escape(note)}</li>" for note in anchor.get("notes", [])) or "<li>暂无说明。</li>"
-        keywords = "".join(f"<span>{html.escape(keyword)}</span>" for keyword in anchor.get("keywords", [])[:10])
+        notes = (
+            "".join(f"<li>{html.escape(note)}</li>" for note in anchor.get("notes", []))
+            or "<li>暂无说明。</li>"
+        )
+        keywords = "".join(
+            f"<span>{html.escape(keyword)}</span>" for keyword in anchor.get("keywords", [])[:10]
+        )
         pages[f"anchor-{idx}"] = {
             "title": title,
             "outline": ["关键词", "Notes"],
-            "body": "\n".join([
-                f"<p class='codex-source-title'>{html.escape(source_title)}</p>",
-                "<h2 id='关键词' data-heading='关键词'>关键词</h2>",
-                f"<div class='tags'>{keywords}</div>",
-                "<h2 id='Notes' data-heading='Notes'>Notes</h2>",
-                f"<ul>{notes}</ul>",
-            ]),
+            "body": "\n".join(
+                [
+                    f"<p class='codex-source-title'>{html.escape(source_title)}</p>",
+                    "<h2 id='关键词' data-heading='关键词'>关键词</h2>",
+                    f"<div class='tags'>{keywords}</div>",
+                    "<h2 id='Notes' data-heading='Notes'>Notes</h2>",
+                    f"<ul>{notes}</ul>",
+                ]
+            ),
         }
     return pages
 
@@ -301,7 +327,9 @@ def html_dashboard_v2(
     publish_js = assets.get("publish_js", "")
     pixi_js = assets.get("pixi_js", "")
     d3_js = assets.get("d3_js", "")
-    publish_link = f'  <link rel="stylesheet" href="{html.escape(publish_css)}">\n' if publish_css else ""
+    publish_link = (
+        f'  <link rel="stylesheet" href="{html.escape(publish_css)}">\n' if publish_css else ""
+    )
     publish_script = f'  <script src="{html.escape(publish_js)}"></script>\n' if publish_js else ""
     pixi_script = f'  <script src="{html.escape(pixi_js)}"></script>\n' if pixi_js else ""
     d3_script = f'  <script src="{html.escape(d3_js)}"></script>\n' if d3_js else ""
@@ -320,22 +348,32 @@ def html_dashboard_v2(
         nav_file_v2(dashboard_anchor_title(anchor, idx), f"anchor-{idx}")
         for idx, anchor in enumerate(anchors, start=1)
     ]
-    nav_items_html = "\n".join([
-        nav_file_v2("现在", "now", active=True, main=True),
-        nav_file_v2("记忆健康", "health"),
-        nav_file_v2("正在追的线索", "threads"),
-        nav_file_v2("建议的走法", "routes"),
-        nav_folder_v2("锚点", [
-            nav_file_v2("锚点总览", "anchors"),
-            *anchor_nav,
-        ], expanded=False),
-        nav_file_v2("Heartbeat", "heartbeat"),
-        nav_file_v2("最近消息", "recent"),
-        nav_folder_v2("地图", [
-            nav_file_v2("当前图谱", "now", main=True),
-            nav_file_v2("Graphify corpus", "heartbeat"),
-        ], expanded=False),
-    ])
+    nav_items_html = "\n".join(
+        [
+            nav_file_v2("现在", "now", active=True, main=True),
+            nav_file_v2("记忆健康", "health"),
+            nav_file_v2("正在追的线索", "threads"),
+            nav_file_v2("建议的走法", "routes"),
+            nav_folder_v2(
+                "锚点",
+                [
+                    nav_file_v2("锚点总览", "anchors"),
+                    *anchor_nav,
+                ],
+                expanded=False,
+            ),
+            nav_file_v2("Heartbeat", "heartbeat"),
+            nav_file_v2("最近消息", "recent"),
+            nav_folder_v2(
+                "地图",
+                [
+                    nav_file_v2("当前图谱", "now", main=True),
+                    nav_file_v2("Graphify corpus", "heartbeat"),
+                ],
+                expanded=False,
+            ),
+        ]
+    )
     nav_html = (
         "<div class='tree-item'>"
         "<a class='tree-item-self mod-root is-clickable' href='#now' data-note='now' data-main='true'></a>"
@@ -349,7 +387,9 @@ def html_dashboard_v2(
     expand_icon = "<svg viewBox='0 0 24 24' aria-hidden='true'><path d='M7 7h10v10'/><path d='M7 17 17 7'/></svg>"
     global_icon = "<svg viewBox='0 0 24 24' aria-hidden='true'><circle cx='18' cy='5' r='3'/><circle cx='6' cy='12' r='3'/><circle cx='18' cy='19' r='3'/><line x1='8.59' x2='15.42' y1='13.51' y2='17.49'/><line x1='15.41' x2='8.59' y1='6.51' y2='10.49'/></svg>"
     outline_icon = "<svg viewBox='0 0 24 24' aria-hidden='true'><path d='M4 6h2M10 6h10M4 12h2M10 12h10M4 18h2M10 18h10'/></svg>"
-    menu_icon = "<svg viewBox='0 0 24 24' aria-hidden='true'><path d='M3 6h18M3 12h18M3 18h18'/></svg>"
+    menu_icon = (
+        "<svg viewBox='0 0 24 24' aria-hidden='true'><path d='M3 6h18M3 12h18M3 18h18'/></svg>"
+    )
     mobile_tools_icon = graph_icon
 
     css = dashboard_css_v2()

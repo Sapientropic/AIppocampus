@@ -179,13 +179,19 @@ def build_recall_decision_context(
     if not is_noise:
         registry = load_registry(path)
         project_label = current_project_label(registry, cwd_path)
-        cognitive_map = load_cognitive_map(cognitive_map_file) if use_cognitive_map and cognitive_map_file.exists() else {}
+        cognitive_map = (
+            load_cognitive_map(cognitive_map_file)
+            if use_cognitive_map and cognitive_map_file.exists()
+            else {}
+        )
         cognitive_map_matches = (
             match_cognitive_map(prompt, cognitive_map, project_label=project_label)
             if prompt and cognitive_map
             else []
         )
-        working_memory_rows = load_working_memory(working_memory_file) if working_memory_file.exists() else []
+        working_memory_rows = (
+            load_working_memory(working_memory_file) if working_memory_file.exists() else []
+        )
         working_memory_matches = (
             match_working_memory(
                 prompt,

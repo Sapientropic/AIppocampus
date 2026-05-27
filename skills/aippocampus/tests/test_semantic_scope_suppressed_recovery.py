@@ -7,7 +7,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -108,7 +107,11 @@ class SemanticScopeSuppressedRecoveryTests(unittest.TestCase):
                         {
                             "message": {
                                 "content": json.dumps(
-                                    {"action": "tool", "tool": "inspect_suppressed_case", "args": {}},
+                                    {
+                                        "action": "tool",
+                                        "tool": "inspect_suppressed_case",
+                                        "args": {},
+                                    },
                                     ensure_ascii=False,
                                 )
                             }
@@ -126,7 +129,10 @@ class SemanticScopeSuppressedRecoveryTests(unittest.TestCase):
                                     "findings": [
                                         {
                                             "kind": "semantic_scope_labels",
-                                            "scope_labels": ["relationship_continuity", "open_question"],
+                                            "scope_labels": [
+                                                "relationship_continuity",
+                                                "open_question",
+                                            ],
                                             "summary": "Recovered strict labels with stronger source-grounded evidence.",
                                             "confidence": 0.97,
                                             "label_evidence": [

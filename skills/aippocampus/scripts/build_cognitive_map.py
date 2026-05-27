@@ -19,7 +19,6 @@ from build_associations import normalize_term, source_text_is_noise, term_is_noi
 from registry import load_registry, registry_paths, unique_preserve
 from retrieval import split_query_terms
 
-
 COGNITIVE_MAP_SCHEMA_VERSION = 1
 DEFAULT_COGNITIVE_MAP_NAME = "cognitive_map.json"
 DEFAULT_JOBS_NAME = "subconscious_jobs.jsonl"
@@ -47,7 +46,9 @@ GENERIC_MAP_TERMS = {
 }
 
 
-def default_cognitive_map_path(registry_path: Path | None = None, registry_dir: Path | None = None) -> Path:
+def default_cognitive_map_path(
+    registry_path: Path | None = None, registry_dir: Path | None = None
+) -> Path:
     if registry_path:
         return registry_path.resolve().parent / DEFAULT_COGNITIVE_MAP_NAME
     json_path, _ = registry_paths(registry_dir)
@@ -155,7 +156,12 @@ def source_refs(finding: dict[str, Any]) -> list[dict[str, Any]]:
         if not isinstance(ref, dict):
             continue
         thread_key = str(ref.get("thread_key") or "").strip()
-        line = ref.get("line") or ref.get("source_line") or ref.get("assistant_line") or ref.get("user_line")
+        line = (
+            ref.get("line")
+            or ref.get("source_line")
+            or ref.get("assistant_line")
+            or ref.get("user_line")
+        )
         clean = {
             "thread_key": thread_key,
             "title": ref.get("title"),
@@ -172,11 +178,22 @@ def source_refs(finding: dict[str, Any]) -> list[dict[str, Any]]:
     return refs[:10]
 
 
-def thread_keys_for_route(finding: dict[str, Any], refs: list[dict[str, Any]], registry_threads: set[str]) -> list[str]:
-    ref_threads = unique_preserve([str(ref.get("thread_key") or "") for ref in refs if ref.get("thread_key")], limit=16)
-    requested = unique_preserve([str(value) for value in finding.get("target_thread_keys") or [] if str(value).strip()], limit=16)
+def thread_keys_for_route(
+    finding: dict[str, Any], refs: list[dict[str, Any]], registry_threads: set[str]
+) -> list[str]:
+    ref_threads = unique_preserve(
+        [str(ref.get("thread_key") or "") for ref in refs if ref.get("thread_key")], limit=16
+    )
+    requested = unique_preserve(
+        [str(value) for value in finding.get("target_thread_keys") or [] if str(value).strip()],
+        limit=16,
+    )
     if requested:
-        valid_requested = [key for key in requested if key in registry_threads and (not ref_threads or key in ref_threads)]
+        valid_requested = [
+            key
+            for key in requested
+            if key in registry_threads and (not ref_threads or key in ref_threads)
+        ]
         if valid_requested:
             return valid_requested
     return [key for key in ref_threads if key in registry_threads]
@@ -191,8 +208,12 @@ def episode_from_registry(entry: dict[str, Any]) -> dict[str, Any] | None:
         "title": entry.get("title") or entry.get("workspace_name") or thread_key,
         "project_label": entry.get("project_label") or entry.get("workspace_name"),
         "updated_at": entry.get("updated_at") or (entry.get("session_meta") or {}).get("timestamp"),
-        "anchor_titles": unique_preserve([str(value) for value in entry.get("anchor_titles") or []], limit=6),
-        "keywords": unique_preserve([str(value) for value in entry.get("keywords") or []], limit=10),
+        "anchor_titles": unique_preserve(
+            [str(value) for value in entry.get("anchor_titles") or []], limit=6
+        ),
+        "keywords": unique_preserve(
+            [str(value) for value in entry.get("keywords") or []], limit=10
+        ),
         "summary": compact_text(str(entry.get("summary") or ""), 260),
     }
 
@@ -237,9 +258,13 @@ def quality_allows_route(finding: dict[str, Any]) -> bool:
     return bucket in MIN_ROUTE_QUALITY_BUCKETS
 
 
-def build_cognitive_map(*, registry: dict[str, Any], job_findings: list[dict[str, Any]]) -> dict[str, Any]:
+def build_cognitive_map(
+    *, registry: dict[str, Any], job_findings: list[dict[str, Any]]
+) -> dict[str, Any]:
     registry_entries = [entry for entry in registry.get("threads") or [] if isinstance(entry, dict)]
-    registry_threads = {str(entry.get("thread_key") or "") for entry in registry_entries if entry.get("thread_key")}
+    registry_threads = {
+        str(entry.get("thread_key") or "") for entry in registry_entries if entry.get("thread_key")
+    }
     episodes = [episode for entry in registry_entries if (episode := episode_from_registry(entry))]
     landmarks_by_id: dict[str, dict[str, Any]] = {}
     regions_by_id: dict[str, dict[str, Any]] = {}
@@ -257,13 +282,20 @@ def build_cognitive_map(*, registry: dict[str, Any], job_findings: list[dict[str
         thread_keys = thread_keys_for_route(finding, refs, registry_threads)
         if not thread_keys:
             continue
-        landmarks = compact_string_list(finding.get("landmarks") or finding.get("concepts"), limit=10)
-        route_cues = compact_string_list(finding.get("route_cues") or finding.get("aliases"), limit=16)
+        landmarks = compact_string_list(
+            finding.get("landmarks") or finding.get("concepts"), limit=10
+        )
+        route_cues = compact_string_list(
+            finding.get("route_cues") or finding.get("aliases"), limit=16
+        )
         if not landmarks or not route_cues:
             continue
         regions = compact_string_list(finding.get("regions"), limit=8)
         if not regions:
-            regions = unique_preserve([str(ref.get("project_label") or "") for ref in refs if ref.get("project_label")], limit=4)
+            regions = unique_preserve(
+                [str(ref.get("project_label") or "") for ref in refs if ref.get("project_label")],
+                limit=4,
+            )
         region_ids = [id_for("cmg", region) for region in regions]
         landmark_ids = [id_for("cml", landmark) for landmark in landmarks]
 
@@ -276,14 +308,20 @@ def build_cognitive_map(*, registry: dict[str, Any], job_findings: list[dict[str
                     "thread_keys": unique_preserve(thread_keys, limit=20),
                     "confidence": round(confidence, 4),
                     "source": str(finding.get("source") or "deepseek_subconscious_jobs"),
-                    "source_finding_ids": unique_preserve([str(finding.get("fingerprint") or "")], limit=8),
+                    "source_finding_ids": unique_preserve(
+                        [str(finding.get("fingerprint") or "")], limit=8
+                    ),
                 }
             elif existing:
-                existing["thread_keys"] = unique_preserve(list(existing.get("thread_keys") or []) + thread_keys, limit=20)
+                existing["thread_keys"] = unique_preserve(
+                    list(existing.get("thread_keys") or []) + thread_keys, limit=20
+                )
 
         for landmark, landmark_id in zip(landmarks, landmark_ids):
             existing = landmarks_by_id.get(landmark_id)
-            aliases = unique_preserve(compact_string_list(finding.get("aliases"), limit=12) + route_cues, limit=16)
+            aliases = unique_preserve(
+                compact_string_list(finding.get("aliases"), limit=12) + route_cues, limit=16
+            )
             if better_confidence(existing, confidence):
                 landmarks_by_id[landmark_id] = {
                     "landmark_id": landmark_id,
@@ -293,15 +331,25 @@ def build_cognitive_map(*, registry: dict[str, Any], job_findings: list[dict[str
                     "thread_keys": unique_preserve(thread_keys, limit=20),
                     "confidence": round(confidence, 4),
                     "source": str(finding.get("source") or "deepseek_subconscious_jobs"),
-                    "source_finding_ids": unique_preserve([str(finding.get("fingerprint") or "")], limit=8),
+                    "source_finding_ids": unique_preserve(
+                        [str(finding.get("fingerprint") or "")], limit=8
+                    ),
                     "source_refs": refs[:5],
                 }
             elif existing:
-                existing["aliases"] = unique_preserve(list(existing.get("aliases") or []) + aliases, limit=16)
-                existing["thread_keys"] = unique_preserve(list(existing.get("thread_keys") or []) + thread_keys, limit=20)
-                existing["region_ids"] = unique_preserve(list(existing.get("region_ids") or []) + region_ids, limit=12)
+                existing["aliases"] = unique_preserve(
+                    list(existing.get("aliases") or []) + aliases, limit=16
+                )
+                existing["thread_keys"] = unique_preserve(
+                    list(existing.get("thread_keys") or []) + thread_keys, limit=20
+                )
+                existing["region_ids"] = unique_preserve(
+                    list(existing.get("region_ids") or []) + region_ids, limit=12
+                )
 
-        terms = route_terms(route_cues=route_cues, landmarks=landmarks, regions=regions, finding=finding)
+        terms = route_terms(
+            route_cues=route_cues, landmarks=landmarks, regions=regions, finding=finding
+        )
         route = {
             "route_id": route_id_for(finding, thread_keys, route_cues),
             "kind": "cognitive_map_route",
@@ -389,7 +437,9 @@ def match_cognitive_map(
     if not prompt or not cognitive_map:
         return []
     prompt_low = prompt.casefold()
-    prompt_terms = [term.casefold() for term in split_query_terms([prompt]) if len(term.strip()) >= 3]
+    prompt_terms = [
+        term.casefold() for term in split_query_terms([prompt]) if len(term.strip()) >= 3
+    ]
     matches: list[dict[str, Any]] = []
     for route in cognitive_map.get("routes") or []:
         if not isinstance(route, dict):
@@ -410,7 +460,11 @@ def match_cognitive_map(
         project_boost = 0.0
         if project_label:
             labels = [str(value) for value in route.get("region_labels") or []]
-            labels.extend(str(ref.get("project_label") or "") for ref in route.get("source_refs") or [] if isinstance(ref, dict))
+            labels.extend(
+                str(ref.get("project_label") or "")
+                for ref in route.get("source_refs") or []
+                if isinstance(ref, dict)
+            )
             if any(label and label.casefold() == project_label.casefold() for label in labels):
                 project_boost = 1.5
         score = min(
@@ -428,8 +482,12 @@ def match_cognitive_map(
                 "region_labels": route.get("region_labels") or [],
                 "route_cues": route.get("route_cues") or [],
                 "matched_cues": unique_preserve(matched, limit=8),
-                "query_terms": unique_preserve([str(value) for value in route.get("query_terms") or []], limit=16),
-                "thread_keys": unique_preserve([str(value) for value in route.get("thread_keys") or []], limit=8),
+                "query_terms": unique_preserve(
+                    [str(value) for value in route.get("query_terms") or []], limit=16
+                ),
+                "thread_keys": unique_preserve(
+                    [str(value) for value in route.get("thread_keys") or []], limit=8
+                ),
                 "confidence": route.get("confidence"),
                 "score": round(score, 3),
                 "source": route.get("source"),
@@ -447,7 +505,9 @@ def match_cognitive_map(
     return matches[:limit]
 
 
-def build_from_files(*, registry_path: Path, jobs_path: Path, output_path: Path | None = None) -> dict[str, Any]:
+def build_from_files(
+    *, registry_path: Path, jobs_path: Path, output_path: Path | None = None
+) -> dict[str, Any]:
     registry = load_registry(registry_path)
     findings = load_cognitive_map_findings(jobs_path)
     result = build_cognitive_map(registry=registry, job_findings=findings)
@@ -456,7 +516,9 @@ def build_from_files(*, registry_path: Path, jobs_path: Path, output_path: Path 
     return summarize_result(result, output_path=target, jobs_path=jobs_path)
 
 
-def summarize_result(result: dict[str, Any], *, output_path: Path, jobs_path: Path) -> dict[str, Any]:
+def summarize_result(
+    result: dict[str, Any], *, output_path: Path, jobs_path: Path
+) -> dict[str, Any]:
     return {
         "schema_version": result.get("schema_version"),
         "kind": result.get("kind"),
@@ -487,8 +549,14 @@ def main() -> int:
     registry_dir = Path(args.registry_dir).resolve() if args.registry_dir else None
     if not registry_path:
         registry_path = registry_paths(registry_dir)[0]
-    jobs_path = Path(args.jobs).resolve() if args.jobs else default_jobs_path(registry_path=registry_path)
-    output_path = Path(args.output).resolve() if args.output else default_cognitive_map_path(registry_path=registry_path)
+    jobs_path = (
+        Path(args.jobs).resolve() if args.jobs else default_jobs_path(registry_path=registry_path)
+    )
+    output_path = (
+        Path(args.output).resolve()
+        if args.output
+        else default_cognitive_map_path(registry_path=registry_path)
+    )
     registry = load_registry(registry_path)
     findings = load_cognitive_map_findings(jobs_path)
     result = build_cognitive_map(registry=registry, job_findings=findings)

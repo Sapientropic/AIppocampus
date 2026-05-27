@@ -10,7 +10,6 @@ import sqlite3
 import time
 from pathlib import Path
 
-from retrieval import build_rag_chunks
 from aippocampuslib import (
     build_anchor_graph,
     codex_home,
@@ -24,6 +23,7 @@ from aippocampuslib import (
     read_session_meta,
     resolve_artifact_path,
 )
+from retrieval import build_rag_chunks
 
 
 def make_sqlite(
@@ -39,7 +39,13 @@ def make_sqlite(
     if tmp_path.exists():
         tmp_path.unlink()
     con = sqlite3.connect(tmp_path)
-    rag_status = {"enabled": False, "chunk_count": 0, "chunk_chars": rag_chunk_chars, "fts_enabled": False, "fts_error": None}
+    rag_status = {
+        "enabled": False,
+        "chunk_count": 0,
+        "chunk_chars": rag_chunk_chars,
+        "fts_enabled": False,
+        "fts_error": None,
+    }
     try:
         con.execute(
             "CREATE TABLE messages ("
@@ -146,7 +152,9 @@ def make_sqlite(
                 # Periodic RAG-lite cache: chunk-level FTS finds a relevant
                 # neighborhood first, then search_rollout maps back to raw
                 # message lines. This keeps recall cheap and portable.
-                con.execute("CREATE VIRTUAL TABLE rag_chunks_fts USING fts5(text, tokenize='trigram')")
+                con.execute(
+                    "CREATE VIRTUAL TABLE rag_chunks_fts USING fts5(text, tokenize='trigram')"
+                )
                 con.executemany(
                     "INSERT INTO rag_chunks_fts (rowid, text) VALUES (?, ?)",
                     [(chunk["id"], chunk["text"]) for chunk in chunks],
@@ -190,8 +198,15 @@ def main() -> int:
     parser.add_argument("--anchors", default="thread-anchors.md")
     parser.add_argument("--include-tools", action="store_true")
     parser.add_argument("--hash-source", action="store_true")
-    parser.add_argument("--no-rag-cache", action="store_true", help="Skip periodic local RAG-lite chunk cache.")
-    parser.add_argument("--rag-chunk-chars", type=int, default=2800, help="Approximate character budget per RAG-lite chunk.")
+    parser.add_argument(
+        "--no-rag-cache", action="store_true", help="Skip periodic local RAG-lite chunk cache."
+    )
+    parser.add_argument(
+        "--rag-chunk-chars",
+        type=int,
+        default=2800,
+        help="Approximate character budget per RAG-lite chunk.",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
@@ -231,7 +246,9 @@ def main() -> int:
         "schema_version": 1,
         "created_at": now_utc(),
         "cwd": str(cwd),
-        "artifact_scope": "global_thread_store" if args.output_dir is None else "explicit_output_dir",
+        "artifact_scope": "global_thread_store"
+        if args.output_dir is None
+        else "explicit_output_dir",
         "storage_policy": {
             "default": "CODEX_HOME/aippocampus-registry/threads/<thread>/index",
             "legacy_project_local": ".aippocampus",
@@ -269,8 +286,12 @@ def main() -> int:
         print(f"messages: {messages_path.resolve()} ({len(messages)} messages)")
         print(f"sqlite: {sqlite_path.resolve()} (fts={sqlite_status['fts_enabled']})")
         if sqlite_status.get("rag", {}).get("enabled"):
-            print(f"rag cache: {sqlite_status['rag']['chunk_count']} chunks (fts={sqlite_status['rag']['fts_enabled']})")
-        print(f"graph: {graph_path.resolve()} ({len(graph['nodes'])} nodes, {len(graph['edges'])} edges)")
+            print(
+                f"rag cache: {sqlite_status['rag']['chunk_count']} chunks (fts={sqlite_status['rag']['fts_enabled']})"
+            )
+        print(
+            f"graph: {graph_path.resolve()} ({len(graph['nodes'])} nodes, {len(graph['edges'])} edges)"
+        )
     return 0
 
 

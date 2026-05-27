@@ -12,7 +12,6 @@ from typing import Any
 
 from build_clean_source import SCOPE_LABEL_ORDER, infer_scope_labels
 
-
 MAX_SKILL_LINES = 220
 MAX_SKILL_WORDS = 2600
 MAX_SKILL_CODE_FENCES = 2
@@ -134,10 +133,14 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
             if path.is_file():
                 rel = path.relative_to(example_bundle).as_posix()
                 if rel not in PUBLIC_EXAMPLE_BUNDLE_ALLOWED_FILES:
-                    issues.append(f"unexpected public example bundle file: examples/public-memory-bundle/{rel}")
+                    issues.append(
+                        f"unexpected public example bundle file: examples/public-memory-bundle/{rel}"
+                    )
         for rel_path in PUBLIC_EXAMPLE_BUNDLE_FILES:
             if not (example_bundle / rel_path).exists():
-                issues.append(f"missing public example bundle file: examples/public-memory-bundle/{rel_path}")
+                issues.append(
+                    f"missing public example bundle file: examples/public-memory-bundle/{rel_path}"
+                )
         manifest = {}
         manifest_path = example_bundle / "bundle_manifest.json"
         if manifest_path.exists():
@@ -157,7 +160,9 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
                 issues.append(f"invalid public example clean-source manifest: {type(exc).__name__}")
                 clean_manifest = {}
             if not clean_manifest.get("scope_label_policy"):
-                issues.append("public example clean-source manifest must document scope_label_policy")
+                issues.append(
+                    "public example clean-source manifest must document scope_label_policy"
+                )
         public_messages_by_id: dict[str, dict[str, Any]] = {}
         for rel_path in ["clean-source/messages.jsonl", "clean-source/turns.jsonl"]:
             jsonl_path = example_bundle / rel_path
@@ -168,14 +173,24 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
                     try:
                         item = json.loads(line)
                     except Exception as exc:
-                        issues.append(f"invalid public example JSONL {rel_path}:{line_no}: {type(exc).__name__}")
+                        issues.append(
+                            f"invalid public example JSONL {rel_path}:{line_no}: {type(exc).__name__}"
+                        )
                         continue
                     if not isinstance(item.get("scope_labels"), list):
-                        issues.append(f"public example JSONL missing scope_labels: examples/public-memory-bundle/{rel_path}:{line_no}")
+                        issues.append(
+                            f"public example JSONL missing scope_labels: examples/public-memory-bundle/{rel_path}:{line_no}"
+                        )
                         continue
-                    scope_labels = [label for label in item.get("scope_labels", []) if isinstance(label, str)]
-                    if scope_labels != [label for label in SCOPE_LABEL_ORDER if label in set(scope_labels)]:
-                        issues.append(f"public example JSONL has non-canonical scope_labels order: examples/public-memory-bundle/{rel_path}:{line_no}")
+                    scope_labels = [
+                        label for label in item.get("scope_labels", []) if isinstance(label, str)
+                    ]
+                    if scope_labels != [
+                        label for label in SCOPE_LABEL_ORDER if label in set(scope_labels)
+                    ]:
+                        issues.append(
+                            f"public example JSONL has non-canonical scope_labels order: examples/public-memory-bundle/{rel_path}:{line_no}"
+                        )
                     if rel_path == "clean-source/messages.jsonl":
                         expected = infer_scope_labels(str(item.get("text") or ""))
                         if scope_labels != expected:
@@ -183,12 +198,16 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
                                 f"public example message scope_labels do not match current generator: "
                                 f"examples/public-memory-bundle/{rel_path}:{line_no}"
                             )
-                        public_messages_by_id[str(item.get("message_id") or item.get("id") or "")] = item
+                        public_messages_by_id[
+                            str(item.get("message_id") or item.get("id") or "")
+                        ] = item
                     elif rel_path == "clean-source/turns.jsonl":
                         expected_set = {
                             label
                             for message_id in item.get("message_ids", [])
-                            for label in public_messages_by_id.get(str(message_id), {}).get("scope_labels", [])
+                            for label in public_messages_by_id.get(str(message_id), {}).get(
+                                "scope_labels", []
+                            )
                             if isinstance(label, str)
                         }
                         expected = [label for label in SCOPE_LABEL_ORDER if label in expected_set]
@@ -202,7 +221,9 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
                 text = path.read_text(encoding="utf-8")
                 if SECRET_OR_LOCAL_PATH_RE.search(text):
                     rel = path.relative_to(repo_root).as_posix()
-                    issues.append(f"public example bundle contains secret-like or local-path text: {rel}")
+                    issues.append(
+                        f"public example bundle contains secret-like or local-path text: {rel}"
+                    )
 
     markdown_files = [
         path

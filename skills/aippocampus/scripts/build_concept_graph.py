@@ -16,10 +16,14 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from build_associations import default_associations_path, load_associations, normalize_term, term_is_noise
-from registry import registry_paths, unique_preserve
 from aippocampuslib import now_utc
-
+from build_associations import (
+    default_associations_path,
+    load_associations,
+    normalize_term,
+    term_is_noise,
+)
+from registry import registry_paths, unique_preserve
 
 CONCEPT_GRAPH_SCHEMA_VERSION = 1
 DEFAULT_MAX_RELATED_PER_TERM = 10
@@ -62,21 +66,27 @@ BIDIRECTIONAL_EDGE_TYPES = {
 }
 
 
-def default_concept_graph_path(registry_path: Path | None = None, registry_dir: Path | None = None) -> Path:
+def default_concept_graph_path(
+    registry_path: Path | None = None, registry_dir: Path | None = None
+) -> Path:
     if registry_path:
         return registry_path.resolve().parent / "concept_index.sqlite"
     json_path, _ = registry_paths(registry_dir)
     return json_path.resolve().parent / "concept_index.sqlite"
 
 
-def default_project_timeline_path(registry_path: Path | None = None, registry_dir: Path | None = None) -> Path:
+def default_project_timeline_path(
+    registry_path: Path | None = None, registry_dir: Path | None = None
+) -> Path:
     if registry_path:
         return registry_path.resolve().parent / "project_timeline.json"
     json_path, _ = registry_paths(registry_dir)
     return json_path.resolve().parent / "project_timeline.json"
 
 
-def default_subconscious_edges_path(registry_path: Path | None = None, registry_dir: Path | None = None) -> Path:
+def default_subconscious_edges_path(
+    registry_path: Path | None = None, registry_dir: Path | None = None
+) -> Path:
     if registry_path:
         return registry_path.resolve().parent / "subconscious_edges.jsonl"
     json_path, _ = registry_paths(registry_dir)
@@ -199,9 +209,14 @@ def upsert_concept(
     concept_id = concept_id_for(label)
     normalized = concept_normalized(label)
     now = now_utc()
-    existing = con.execute("SELECT concept_id, status, hit_count, thread_count FROM concepts WHERE concept_id = ?", (concept_id,)).fetchone()
+    existing = con.execute(
+        "SELECT concept_id, status, hit_count, thread_count FROM concepts WHERE concept_id = ?",
+        (concept_id,),
+    ).fetchone()
     if existing:
-        best_status = "verified" if status == "verified" or existing["status"] == "verified" else "staging"
+        best_status = (
+            "verified" if status == "verified" or existing["status"] == "verified" else "staging"
+        )
         con.execute(
             """
             UPDATE concepts
@@ -266,7 +281,9 @@ def upsert_edge(
         (src_id, dst_id, edge_type, scope_key),
     ).fetchone()
     if existing:
-        best_status = "verified" if status == "verified" or existing["status"] == "verified" else "staging"
+        best_status = (
+            "verified" if status == "verified" or existing["status"] == "verified" else "staging"
+        )
         best_confidence = max(float(existing["confidence"] or 0.0), confidence)
         best_evidence = max(int(existing["evidence_count"] or 0), int(evidence_count or 0))
         con.execute(
@@ -370,7 +387,9 @@ def collect_timeline_edges(con: sqlite3.Connection, timeline_path: Path | None) 
         for turn in project.get("latest_turns") or []:
             if not isinstance(turn, dict):
                 continue
-            topic_terms = unique_preserve(project_terms + list(turn.get("topic_terms") or []), limit=18)
+            topic_terms = unique_preserve(
+                project_terms + list(turn.get("topic_terms") or []), limit=18
+            )
             topic_terms = [term for term in topic_terms if not concept_is_noise(term)]
             if len(topic_terms) < 2:
                 continue
@@ -480,7 +499,13 @@ def build_concept_graph(
             status = "verified" if item.get("status") == "verified" else "staging"
             confidence = float(item.get("confidence") or 0.0)
             sources = item.get("threads") or []
-            source_threads = unique_preserve([str(source.get("thread_key") or "") for source in sources if source.get("thread_key")])
+            source_threads = unique_preserve(
+                [
+                    str(source.get("thread_key") or "")
+                    for source in sources
+                    if source.get("thread_key")
+                ]
+            )
             term_id = upsert_concept(
                 con,
                 term,
@@ -491,7 +516,9 @@ def build_concept_graph(
             if not term_id:
                 continue
             edge_type = "verified_related" if status == "verified" else "co_occurs"
-            for related in list(item.get("related_terms") or [])[: max(0, int(max_related_per_term))]:
+            for related in list(item.get("related_terms") or [])[
+                : max(0, int(max_related_per_term))
+            ]:
                 add_bidirectional_edge(
                     con,
                     term,
@@ -509,12 +536,19 @@ def build_concept_graph(
             "kind": "aippocampus_concept_graph",
             "created_at": now_utc(),
             "source_associations": str(associations_path),
-            "source_project_timeline": str(project_timeline_path) if project_timeline_path else None,
-            "source_subconscious_edges": str(subconscious_edges_path) if subconscious_edges_path else None,
+            "source_project_timeline": str(project_timeline_path)
+            if project_timeline_path
+            else None,
+            "source_subconscious_edges": str(subconscious_edges_path)
+            if subconscious_edges_path
+            else None,
             "max_related_per_term": max_related_per_term,
         }
         for key, value in metadata.items():
-            con.execute("INSERT INTO meta(key, value) VALUES (?, ?)", (key, json.dumps(value, ensure_ascii=False)))
+            con.execute(
+                "INSERT INTO meta(key, value) VALUES (?, ?)",
+                (key, json.dumps(value, ensure_ascii=False)),
+            )
         con.commit()
         concepts = con.execute("SELECT COUNT(*) AS count FROM concepts").fetchone()["count"]
         edges = con.execute("SELECT COUNT(*) AS count FROM concept_edges").fetchone()["count"]
@@ -547,7 +581,9 @@ def concept_ids_for_terms(con: sqlite3.Connection, terms: list[str]) -> list[tup
     return out
 
 
-def edge_rows(con: sqlite3.Connection, src_id: str, *, max_degree: int, depth: int) -> list[sqlite3.Row]:
+def edge_rows(
+    con: sqlite3.Connection, src_id: str, *, max_degree: int, depth: int
+) -> list[sqlite3.Row]:
     rows = con.execute(
         """
         SELECT e.*, c.label AS dst_label, c.normalized_label AS dst_normalized
@@ -568,7 +604,11 @@ def edge_rows(con: sqlite3.Connection, src_id: str, *, max_degree: int, depth: i
     # Depth-2 expansion is where semantic drift usually appears. Keep it to
     # verified or very high-confidence edges so a broad co-occurrence chain
     # cannot turn one vague word into a personal-memory flood.
-    return [row for row in rows if row["status"] == "verified" or float(row["confidence"] or 0.0) >= 0.88]
+    return [
+        row
+        for row in rows
+        if row["status"] == "verified" or float(row["confidence"] or 0.0) >= 0.88
+    ]
 
 
 def expand_concepts(
@@ -593,8 +633,7 @@ def expand_concepts(
             return []
         seed_norms = {concept_normalized(label) for _, label in seeds}
         queue: list[tuple[str, float, int, list[str], list[str]]] = [
-            (concept_id, 1.0, 0, [label], [])
-            for concept_id, label in seeds
+            (concept_id, 1.0, 0, [label], []) for concept_id, label in seeds
         ]
         best: dict[str, dict[str, Any]] = {}
         visited: set[tuple[str, int]] = set()
@@ -626,8 +665,23 @@ def expand_concepts(
                 }
                 if not existing or next_score > float(existing.get("score") or 0.0):
                     best[normalized] = row
-                queue.append((edge["dst_concept_id"], next_score, next_depth, path + [label], edge_types + [edge["edge_type"]]))
-        rows = sorted(best.values(), key=lambda item: (-float(item.get("score") or 0.0), int(item.get("depth") or 0), str(item.get("term") or "").casefold()))
+                queue.append(
+                    (
+                        edge["dst_concept_id"],
+                        next_score,
+                        next_depth,
+                        path + [label],
+                        edge_types + [edge["edge_type"]],
+                    )
+                )
+        rows = sorted(
+            best.values(),
+            key=lambda item: (
+                -float(item.get("score") or 0.0),
+                int(item.get("depth") or 0),
+                str(item.get("term") or "").casefold(),
+            ),
+        )
         return rows[: max(1, int(max_terms))]
     except sqlite3.Error:
         return []
@@ -649,11 +703,31 @@ def main() -> int:
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
-    registry_path = Path(args.registry).resolve() if args.registry else registry_paths(Path(args.registry_dir).resolve() if args.registry_dir else None)[0]
-    associations_path = Path(args.associations).resolve() if args.associations else default_associations_path(registry_path=registry_path)
-    project_timeline_path = Path(args.project_timeline).resolve() if args.project_timeline else default_project_timeline_path(registry_path=registry_path)
-    subconscious_edges_path = Path(args.subconscious_edges).resolve() if args.subconscious_edges else default_subconscious_edges_path(registry_path=registry_path)
-    output_path = Path(args.output).resolve() if args.output else default_concept_graph_path(registry_path=registry_path)
+    registry_path = (
+        Path(args.registry).resolve()
+        if args.registry
+        else registry_paths(Path(args.registry_dir).resolve() if args.registry_dir else None)[0]
+    )
+    associations_path = (
+        Path(args.associations).resolve()
+        if args.associations
+        else default_associations_path(registry_path=registry_path)
+    )
+    project_timeline_path = (
+        Path(args.project_timeline).resolve()
+        if args.project_timeline
+        else default_project_timeline_path(registry_path=registry_path)
+    )
+    subconscious_edges_path = (
+        Path(args.subconscious_edges).resolve()
+        if args.subconscious_edges
+        else default_subconscious_edges_path(registry_path=registry_path)
+    )
+    output_path = (
+        Path(args.output).resolve()
+        if args.output
+        else default_concept_graph_path(registry_path=registry_path)
+    )
 
     if args.expand:
         rows = expand_concepts(output_path, args.expand, depth=args.depth)
@@ -662,14 +736,18 @@ def main() -> int:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
             for row in rows:
-                print(f"- {row['term']} | score {row['score']} | depth {row['depth']} | {' -> '.join(row['path'])}")
+                print(
+                    f"- {row['term']} | score {row['score']} | depth {row['depth']} | {' -> '.join(row['path'])}"
+                )
         return 0
 
     result = build_concept_graph(
         associations_path,
         output_path,
         project_timeline_path=project_timeline_path if project_timeline_path.exists() else None,
-        subconscious_edges_path=subconscious_edges_path if subconscious_edges_path.exists() else None,
+        subconscious_edges_path=subconscious_edges_path
+        if subconscious_edges_path.exists()
+        else None,
         max_related_per_term=args.max_related_per_term,
     )
     if args.json_output:

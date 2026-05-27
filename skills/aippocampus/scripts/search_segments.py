@@ -10,6 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from aippocampuslib import default_thread_segments_dir
 from retrieval import (
     expanded_terms_from_anchors,
     graph_neighbors,
@@ -18,9 +19,7 @@ from retrieval import (
     search_rag_chunks,
     split_query_terms,
 )
-from aippocampuslib import default_thread_segments_dir
 from search_rollout import auto_graph_path, resolve_anchor_path, search_index_literal
-
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -57,7 +56,9 @@ def ensure_segments(cwd: Path, rollout: str | None, manifest: Path, force: bool)
     ]
     if rollout:
         cmd.extend(["--rollout", rollout])
-    proc = subprocess.run(cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False)
+    proc = subprocess.run(
+        cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False
+    )
     if proc.returncode != 0:
         raise RuntimeError(proc.stdout or proc.stderr)
 
@@ -102,13 +103,24 @@ def merge_topk(results: list[dict], limit: int) -> list[dict]:
 
     add(pool[0])
     literal_hits = [item for item in pool if (item.get("signals") or {}).get("literal_hits", 0) > 0]
-    add(min((item for item in literal_hits if item.get("role") == "user"), key=lambda item: item.get("line") or 10**12, default=None))
+    add(
+        min(
+            (item for item in literal_hits if item.get("role") == "user"),
+            key=lambda item: item.get("line") or 10**12,
+            default=None,
+        )
+    )
     add(min(literal_hits, key=lambda item: item.get("line") or 10**12, default=None))
-    add(max(
-        (item for item in pool if item.get("role") == "assistant"),
-        key=lambda item: (12.0 if item.get("phase") == "final_answer" or item.get("is_final") else 0.0) + float(item.get("score") or 0),
-        default=None,
-    ))
+    add(
+        max(
+            (item for item in pool if item.get("role") == "assistant"),
+            key=lambda item: (
+                (12.0 if item.get("phase") == "final_answer" or item.get("is_final") else 0.0)
+                + float(item.get("score") or 0)
+            ),
+            default=None,
+        )
+    )
 
     while len(selected) < min(limit, len(pool)):
         selected_segments = {str(item.get("segment_id")) for item in selected}
@@ -128,7 +140,9 @@ def merge_topk(results: list[dict], limit: int) -> list[dict]:
             line = int(item.get("line") or 0)
             if any(abs(line - other) < 25 for other in selected_lines):
                 value -= 8.0
-            if (item.get("signals") or {}).get("literal_hits", 0) > 0 and item.get("role") == "user":
+            if (item.get("signals") or {}).get("literal_hits", 0) > 0 and item.get(
+                "role"
+            ) == "user":
                 value += 3.0
             if best_value is None or value > best_value:
                 best = item
@@ -167,7 +181,11 @@ def main() -> int:
     parser.add_argument("patterns", nargs="+", help="Literal clues or recall prompt.")
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument("--rollout")
-    parser.add_argument("--segments-dir", default=None, help="Defaults to global segments, with project-local legacy fallback.")
+    parser.add_argument(
+        "--segments-dir",
+        default=None,
+        help="Defaults to global segments, with project-local legacy fallback.",
+    )
     parser.add_argument("--anchors", default="thread-anchors.md")
     parser.add_argument("--build-segments", action="store_true")
     parser.add_argument("--mode", choices=["literal", "ranked", "hybrid"], default="hybrid")
@@ -191,8 +209,12 @@ def main() -> int:
     anchor_path = resolve_anchor_path(str(cwd), args.anchors)
     query_terms = split_query_terms(args.patterns)
     anchors = match_anchors(anchor_path, query_terms) if anchor_path.exists() else []
-    expanded_terms = expanded_terms_from_anchors(query_terms, anchors) if args.mode == "hybrid" else query_terms
-    graph = graph_neighbors(auto_graph_path(str(cwd)), expanded_terms) if args.mode == "hybrid" else []
+    expanded_terms = (
+        expanded_terms_from_anchors(query_terms, anchors) if args.mode == "hybrid" else query_terms
+    )
+    graph = (
+        graph_neighbors(auto_graph_path(str(cwd)), expanded_terms) if args.mode == "hybrid" else []
+    )
 
     raw_results: list[dict] = []
     rag_context: list[dict] = []
@@ -204,7 +226,9 @@ def main() -> int:
             continue
         try:
             if args.mode == "literal":
-                hits = search_index_literal(index, args.patterns, args.per_segment, args.snippet_chars)
+                hits = search_index_literal(
+                    index, args.patterns, args.per_segment, args.snippet_chars
+                )
             else:
                 if args.mode == "hybrid" and args.rag_context > 0:
                     for chunk in search_rag_chunks(
@@ -232,7 +256,9 @@ def main() -> int:
             segment_errors.append({"segment_id": segment.get("id"), "error": str(exc)})
 
     results = merge_topk(raw_results, args.max)
-    rag_context.sort(key=lambda item: (-float(item.get("score") or 0.0), int(item.get("start_line") or 10**12)))
+    rag_context.sort(
+        key=lambda item: (-float(item.get("score") or 0.0), int(item.get("start_line") or 10**12))
+    )
     rag_context = rag_context[: args.rag_context]
 
     payload = {
@@ -286,15 +312,23 @@ def main() -> int:
                 f"{' | turn=' + str(item.get('turn_index')) if item.get('turn_index') is not None else ''}"
             )
             if item.get("score") is not None:
-                compact_signals = {k: v for k, v in (item.get("signals") or {}).items() if k != "fts_rank"}
+                compact_signals = {
+                    k: v for k, v in (item.get("signals") or {}).items() if k != "fts_rank"
+                }
                 print(f"  signals: {compact_signals}")
             print(f"  {item['snippet']}")
             if item.get("context"):
                 print("  context:")
                 for ctx in item["context"]:
                     ctx_phase = f"/{ctx.get('phase')}" if ctx.get("phase") else ""
-                    ctx_turn = f" turn={ctx.get('turn_index')}" if ctx.get("turn_index") is not None else ""
-                    print(f"    - {ctx['segment_id']} id {ctx['id']} | line {ctx['line']} | {ctx['role']}{ctx_phase}{ctx_turn}: {ctx['snippet']}")
+                    ctx_turn = (
+                        f" turn={ctx.get('turn_index')}"
+                        if ctx.get("turn_index") is not None
+                        else ""
+                    )
+                    print(
+                        f"    - {ctx['segment_id']} id {ctx['id']} | line {ctx['line']} | {ctx['role']}{ctx_phase}{ctx_turn}: {ctx['snippet']}"
+                    )
     return 0 if results or anchors or rag_context else 1
 
 

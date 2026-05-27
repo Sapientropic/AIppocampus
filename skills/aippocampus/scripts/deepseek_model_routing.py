@@ -6,7 +6,6 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-
 FLASH_ROUTES = {"", "default", "fast", "flash", "cheap", "background"}
 PRO_ROUTES = {"pro", "slow_adjudication", "suppressed_label_recovery", "agentic_source_review"}
 DEFAULT_FLASH_MODEL = "deepseek-v4-flash"

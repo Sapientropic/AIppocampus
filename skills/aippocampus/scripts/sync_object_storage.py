@@ -23,7 +23,6 @@ from urllib.request import Request, urlopen
 
 import sync_bundle
 
-
 OBJECT_BACKEND = "http_object_store"
 DEFAULT_PREFIX = "aippocampus/sync"
 DEFAULT_TIMEOUT_SECONDS = 20.0
@@ -97,7 +96,9 @@ class HttpObjectStoreClient:
             if exc.code == 404:
                 raise FileNotFoundError(key) from exc
             detail = exc.read(512).decode("utf-8", errors="replace")
-            raise RuntimeError(f"object store {method} failed for {key}: HTTP {exc.code} {detail}") from exc
+            raise RuntimeError(
+                f"object store {method} failed for {key}: HTTP {exc.code} {detail}"
+            ) from exc
         except URLError as exc:
             raise RuntimeError(f"object store {method} failed for {key}: {exc.reason}") from exc
 
@@ -150,14 +151,18 @@ def iter_manifest_paths(manifest: dict[str, Any]) -> list[Path]:
     return paths
 
 
-def verify_manifest_objects(client: HttpObjectStoreClient, manifest: dict[str, Any]) -> dict[str, Any]:
+def verify_manifest_objects(
+    client: HttpObjectStoreClient, manifest: dict[str, Any]
+) -> dict[str, Any]:
     issues: list[dict[str, Any]] = []
     checked = 0
     for item in manifest.get("files") or []:
         try:
             relative_path = sync_bundle.validate_relative_sync_path(str(item.get("path") or ""))
         except ValueError as exc:
-            issues.append({"code": "unsafe_path", "path": str(item.get("path") or ""), "message": str(exc)})
+            issues.append(
+                {"code": "unsafe_path", "path": str(item.get("path") or ""), "message": str(exc)}
+            )
             continue
         try:
             data = client.get_object(relative_path)
@@ -193,7 +198,9 @@ def push_object_storage_bundle(
     with tempfile.TemporaryDirectory(prefix="aippocampus-object-sync-push-") as tmp:
         sync_root = Path(tmp)
         local_push = sync_bundle.push_sync_bundle(registry_dir, sync_root, include_raw=include_raw)
-        manifest = local_manifest_for_object_storage(sync_root / sync_bundle.SYNC_MANIFEST_NAME, prefix=prefix)
+        manifest = local_manifest_for_object_storage(
+            sync_root / sync_bundle.SYNC_MANIFEST_NAME, prefix=prefix
+        )
         uploaded: list[dict[str, Any]] = []
         for relative_path in iter_manifest_paths(manifest):
             source = sync_bundle.ensure_within(sync_root, sync_root / relative_path)
@@ -231,7 +238,12 @@ def repair_object_storage_bundle(
             "object_store": safe_endpoint_label(object_store_url),
             "object_prefix": normalize_object_prefix(prefix),
             "manifest_exists": False,
-            "issues": [{"code": "missing_manifest", "path": object_key(prefix, sync_bundle.SYNC_MANIFEST_NAME)}],
+            "issues": [
+                {
+                    "code": "missing_manifest",
+                    "path": object_key(prefix, sync_bundle.SYNC_MANIFEST_NAME),
+                }
+            ],
         }
     except RuntimeError as exc:
         return {
@@ -273,7 +285,9 @@ def status_object_storage_bundle(
     token: str | None = None,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
-    repair = repair_object_storage_bundle(object_store_url, prefix=prefix, token=token, timeout=timeout)
+    repair = repair_object_storage_bundle(
+        object_store_url, prefix=prefix, token=token, timeout=timeout
+    )
     return {
         "ok": bool(repair.get("ok")),
         "backend": OBJECT_BACKEND,
@@ -363,8 +377,12 @@ def token_from_env(env_name: str | None) -> str | None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("command", choices=["status", "push", "pull", "repair"])
-    parser.add_argument("--object-store-url", default=os.environ.get("AIPPOCAMPUS_OBJECT_STORE_URL"))
-    parser.add_argument("--object-prefix", default=os.environ.get("AIPPOCAMPUS_OBJECT_PREFIX", DEFAULT_PREFIX))
+    parser.add_argument(
+        "--object-store-url", default=os.environ.get("AIPPOCAMPUS_OBJECT_STORE_URL")
+    )
+    parser.add_argument(
+        "--object-prefix", default=os.environ.get("AIPPOCAMPUS_OBJECT_PREFIX", DEFAULT_PREFIX)
+    )
     parser.add_argument("--token-env", default="AIPPOCAMPUS_OBJECT_STORE_TOKEN")
     parser.add_argument("--registry-dir", default=None)
     parser.add_argument("--include-raw", action="store_true")
@@ -377,7 +395,9 @@ def main() -> int:
 
     token = token_from_env(args.token_env)
     if args.command == "status":
-        result = status_object_storage_bundle(args.object_store_url, prefix=args.object_prefix, token=token, timeout=args.timeout)
+        result = status_object_storage_bundle(
+            args.object_store_url, prefix=args.object_prefix, token=token, timeout=args.timeout
+        )
     elif args.command == "push":
         result = push_object_storage_bundle(
             args.registry_dir,
@@ -396,7 +416,9 @@ def main() -> int:
             timeout=args.timeout,
         )
     else:
-        result = repair_object_storage_bundle(args.object_store_url, prefix=args.object_prefix, token=token, timeout=args.timeout)
+        result = repair_object_storage_bundle(
+            args.object_store_url, prefix=args.object_prefix, token=token, timeout=args.timeout
+        )
 
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))

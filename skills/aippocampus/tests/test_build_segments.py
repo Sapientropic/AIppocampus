@@ -7,7 +7,6 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -25,8 +24,15 @@ class BuildSegmentsTests(unittest.TestCase):
             rollout.write_text(
                 "\n".join(
                     [
-                        json.dumps({"type": "session_meta", "payload": {"id": "test", "cwd": str(cwd)}}),
-                        json.dumps({"type": "event_msg", "payload": {"type": "user_message", "message": "hello"}}),
+                        json.dumps(
+                            {"type": "session_meta", "payload": {"id": "test", "cwd": str(cwd)}}
+                        ),
+                        json.dumps(
+                            {
+                                "type": "event_msg",
+                                "payload": {"type": "user_message", "message": "hello"},
+                            }
+                        ),
                         json.dumps(
                             {
                                 "type": "event_msg",
@@ -61,10 +67,13 @@ class BuildSegmentsTests(unittest.TestCase):
                 str(output_dir),
                 "--no-rag-cache",
             ]
-            with patch.object(sys, "argv", argv), patch.object(
-                build_segments,
-                "make_sqlite",
-                side_effect=RuntimeError("simulated index failure"),
+            with (
+                patch.object(sys, "argv", argv),
+                patch.object(
+                    build_segments,
+                    "make_sqlite",
+                    side_effect=RuntimeError("simulated index failure"),
+                ),
             ):
                 with self.assertRaises(RuntimeError):
                     build_segments.main()

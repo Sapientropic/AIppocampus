@@ -17,9 +17,8 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from registry import load_registry, registry_paths, unique_preserve
 from aippocampuslib import now_utc
-
+from registry import load_registry, registry_paths, unique_preserve
 
 ASSOCIATION_SCHEMA_VERSION = 1
 DEFAULT_MAX_MESSAGES_PER_THREAD = 120
@@ -156,7 +155,9 @@ DURABLE_CJK_HINTS = {
 }
 
 
-def default_associations_path(registry_path: Path | None = None, registry_dir: Path | None = None) -> Path:
+def default_associations_path(
+    registry_path: Path | None = None, registry_dir: Path | None = None
+) -> Path:
     if registry_path:
         return registry_path.resolve().parent / "associations.json"
     json_path, _ = registry_paths(registry_dir)
@@ -208,7 +209,9 @@ def term_is_noise(term: str) -> bool:
         return True
     if low in {"goals", "budget", "remaining", "active", "paused", "complete"}:
         return True
-    if any("\u4e00" <= ch <= "\u9fff" for ch in term) and any(marker in term for marker in CJK_GLUE_NOISE):
+    if any("\u4e00" <= ch <= "\u9fff" for ch in term) and any(
+        marker in term for marker in CJK_GLUE_NOISE
+    ):
         return True
     if len(term) < 3 and not any("\u4e00" <= ch <= "\u9fff" for ch in term):
         return True
@@ -251,7 +254,9 @@ def component_aliases(term: str) -> list[str]:
 def extract_cjk_terms(text: str) -> list[str]:
     terms: list[str] = []
     sequences = re.findall(r"[\u4e00-\u9fff]{3,32}", text)
-    boundary_pattern = "|".join(re.escape(word) for word in sorted(CJK_BOUNDARY_WORDS, key=len, reverse=True))
+    boundary_pattern = "|".join(
+        re.escape(word) for word in sorted(CJK_BOUNDARY_WORDS, key=len, reverse=True)
+    )
     for seq in sequences:
         if source_text_is_noise(seq):
             continue
@@ -262,7 +267,7 @@ def extract_cjk_terms(text: str) -> list[str]:
                     terms.append(phrase)
         for size in range(3, min(8, len(seq)) + 1):
             for idx in range(0, len(seq) - size + 1):
-                term = seq[idx: idx + size]
+                term = seq[idx : idx + size]
                 if not any(hint in term for hint in DURABLE_CJK_HINTS):
                     continue
                 if not term_is_noise(term):
@@ -347,9 +352,14 @@ def add_association(
         item["confidence"] = max(float(item.get("confidence") or 0.0), confidence)
 
     item["hit_count"] = int(item.get("hit_count") or 0) + 1
-    related = [normalize_term(value) for value in related_terms if normalize_term(value) and normalize_term(value).casefold() != key]
+    related = [
+        normalize_term(value)
+        for value in related_terms
+        if normalize_term(value) and normalize_term(value).casefold() != key
+    ]
     item["related_terms"] = unique_preserve(
-        list(item.get("related_terms") or []) + [value for value in related if not term_is_noise(value)],
+        list(item.get("related_terms") or [])
+        + [value for value in related if not term_is_noise(value)],
         limit=MAX_RELATED_TERMS,
     )
 
@@ -363,7 +373,12 @@ def add_association(
         )
         for source_item in item.get("threads") or []
     }
-    ident = (record.get("thread_key"), record.get("source"), record.get("line"), record.get("phase"))
+    ident = (
+        record.get("thread_key"),
+        record.get("source"),
+        record.get("line"),
+        record.get("phase"),
+    )
     if ident not in existing:
         item.setdefault("threads", []).append(record)
         item["threads"] = item["threads"][:8]
@@ -421,7 +436,9 @@ def clean_source_final_messages(messages_path: Path, limit: int) -> list[dict[st
     return rows[: max(1, int(limit))]
 
 
-def collect_from_entry(entry: dict[str, Any], terms: dict[str, dict[str, Any]], *, max_messages_per_thread: int) -> None:
+def collect_from_entry(
+    entry: dict[str, Any], terms: dict[str, dict[str, Any]], *, max_messages_per_thread: int
+) -> None:
     curated = unique_preserve(
         list(entry.get("anchor_titles") or []) + list(entry.get("keywords") or []),
         limit=80,
@@ -443,7 +460,11 @@ def collect_from_entry(entry: dict[str, Any], terms: dict[str, dict[str, Any]], 
     messages = sqlite_final_messages(sqlite_path, max_messages_per_thread)
     if not messages:
         clean_messages = paths.get("clean_source_messages_jsonl")
-        messages = clean_source_final_messages(Path(clean_messages), max_messages_per_thread) if clean_messages else []
+        messages = (
+            clean_source_final_messages(Path(clean_messages), max_messages_per_thread)
+            if clean_messages
+            else []
+        )
     for message in messages:
         source_terms = extract_terms_from_text(str(message.get("text") or ""))
         if not source_terms:
@@ -463,7 +484,9 @@ def collect_from_entry(entry: dict[str, Any], terms: dict[str, dict[str, Any]], 
             )
 
 
-def build_associations(registry_path: Path, *, max_messages_per_thread: int = DEFAULT_MAX_MESSAGES_PER_THREAD) -> dict[str, Any]:
+def build_associations(
+    registry_path: Path, *, max_messages_per_thread: int = DEFAULT_MAX_MESSAGES_PER_THREAD
+) -> dict[str, Any]:
     registry = load_registry(registry_path)
     terms: dict[str, dict[str, Any]] = {}
     for entry in registry.get("threads") or []:
@@ -494,10 +517,17 @@ def term_in_text(term: str, text: str) -> bool:
         return False
     if any("\u4e00" <= ch <= "\u9fff" for ch in term):
         return term in text
-    return re.search(rf"(?<![A-Za-z0-9_.-]){re.escape(term)}(?![A-Za-z0-9_.-])", text, flags=re.IGNORECASE) is not None
+    return (
+        re.search(
+            rf"(?<![A-Za-z0-9_.-]){re.escape(term)}(?![A-Za-z0-9_.-])", text, flags=re.IGNORECASE
+        )
+        is not None
+    )
 
 
-def match_associations(prompt: str, associations: dict[str, Any], *, limit: int = 6) -> list[dict[str, Any]]:
+def match_associations(
+    prompt: str, associations: dict[str, Any], *, limit: int = 6
+) -> list[dict[str, Any]]:
     matches: list[dict[str, Any]] = []
     if not prompt:
         return matches
@@ -529,12 +559,20 @@ def main() -> int:
     parser.add_argument("--registry")
     parser.add_argument("--registry-dir")
     parser.add_argument("--output")
-    parser.add_argument("--max-messages-per-thread", type=int, default=DEFAULT_MAX_MESSAGES_PER_THREAD)
+    parser.add_argument(
+        "--max-messages-per-thread", type=int, default=DEFAULT_MAX_MESSAGES_PER_THREAD
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
-    registry_path = Path(args.registry).resolve() if args.registry else registry_paths(Path(args.registry_dir).resolve() if args.registry_dir else None)[0]
-    output_path = Path(args.output).resolve() if args.output else default_associations_path(registry_path)
+    registry_path = (
+        Path(args.registry).resolve()
+        if args.registry
+        else registry_paths(Path(args.registry_dir).resolve() if args.registry_dir else None)[0]
+    )
+    output_path = (
+        Path(args.output).resolve() if args.output else default_associations_path(registry_path)
+    )
     result = build_associations(registry_path, max_messages_per_thread=args.max_messages_per_thread)
     save_associations(output_path, result)
     payload = {"output": str(output_path), **result}

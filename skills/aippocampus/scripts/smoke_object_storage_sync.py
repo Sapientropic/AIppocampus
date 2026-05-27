@@ -35,7 +35,9 @@ class LocalObjectStoreHandler(BaseHTTPRequestHandler):
         except ValueError:
             self.send_error(400)
             return None
-        return key, sync_bundle.ensure_within(self.server.bucket_root, self.server.bucket_root / relative_path)
+        return key, sync_bundle.ensure_within(
+            self.server.bucket_root, self.server.bucket_root / relative_path
+        )
 
     def do_PUT(self) -> None:  # noqa: N802
         resolved = self.object_path()
@@ -136,12 +138,16 @@ def run_object_storage_sync_smoke(
         )
         target_b = root / "device-b" / "registry"
 
-        push = sync_object_storage.push_object_storage_bundle(device_a["registry"], endpoint, prefix=prefix)
+        push = sync_object_storage.push_object_storage_bundle(
+            device_a["registry"], endpoint, prefix=prefix
+        )
         status = sync_object_storage.status_object_storage_bundle(endpoint, prefix=prefix)
         repair = sync_object_storage.repair_object_storage_bundle(endpoint, prefix=prefix)
         pull = sync_object_storage.pull_object_storage_bundle(endpoint, target_b, prefix=prefix)
 
-        target_registry = read_json(target_b / "threads.json") if (target_b / "threads.json").is_file() else {}
+        target_registry = (
+            read_json(target_b / "threads.json") if (target_b / "threads.json").is_file() else {}
+        )
         source_markers = [
             str(device_a["registry"]),
             str(device_a["raw_rollout"]),
@@ -156,19 +162,37 @@ def run_object_storage_sync_smoke(
                 failures=failures,
             )
         else:
-            failures.append({"code": "missing_target_registry", "detail": str(target_b / "threads.json")})
+            failures.append(
+                {"code": "missing_target_registry", "detail": str(target_b / "threads.json")}
+            )
 
         methods = sorted({str(item.get("method")) for item in server.requests})
         object_keys = {str(item.get("key")) for item in server.requests}
         manifest_key = sync_object_storage.object_key(prefix, sync_bundle.SYNC_MANIFEST_NAME)
-        require(push.get("ok") is True, "push_failed", failures, json.dumps(push, ensure_ascii=False))
-        require(status.get("ok") is True, "status_failed", failures, json.dumps(status, ensure_ascii=False))
-        require(repair.get("ok") is True, "repair_failed", failures, json.dumps(repair, ensure_ascii=False))
-        require(pull.get("ok") is True, "pull_failed", failures, json.dumps(pull, ensure_ascii=False))
+        require(
+            push.get("ok") is True, "push_failed", failures, json.dumps(push, ensure_ascii=False)
+        )
+        require(
+            status.get("ok") is True,
+            "status_failed",
+            failures,
+            json.dumps(status, ensure_ascii=False),
+        )
+        require(
+            repair.get("ok") is True,
+            "repair_failed",
+            failures,
+            json.dumps(repair, ensure_ascii=False),
+        )
+        require(
+            pull.get("ok") is True, "pull_failed", failures, json.dumps(pull, ensure_ascii=False)
+        )
         require("PUT" in methods, "missing_put_request", failures)
         require("GET" in methods, "missing_get_request", failures)
         require(manifest_key in object_keys, "missing_manifest_object", failures, manifest_key)
-        require(not (target_b / "raw-rollouts").exists(), "raw_rollout_synced_without_opt_in", failures)
+        require(
+            not (target_b / "raw-rollouts").exists(), "raw_rollout_synced_without_opt_in", failures
+        )
 
         result["steps"] = {
             "push": push,

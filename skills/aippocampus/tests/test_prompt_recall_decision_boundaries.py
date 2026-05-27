@@ -8,7 +8,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -154,11 +153,22 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
         )
 
         self.assertEqual(context.registry_path, self.registry_path.resolve())
-        self.assertEqual(context.associations_path, (self.registry_dir / "associations.json").resolve())
-        self.assertEqual(context.cognitive_map_path, (self.registry_dir / "cognitive_map.json").resolve())
-        self.assertEqual(context.concept_graph_path, (self.registry_dir / "concept_index.sqlite").resolve())
-        self.assertEqual(context.working_memory_path, (self.registry_dir / "working_memory.jsonl").resolve())
-        self.assertEqual(context.semantic_triggers_path, (self.registry_dir / "semantic_triggers.jsonl").resolve())
+        self.assertEqual(
+            context.associations_path, (self.registry_dir / "associations.json").resolve()
+        )
+        self.assertEqual(
+            context.cognitive_map_path, (self.registry_dir / "cognitive_map.json").resolve()
+        )
+        self.assertEqual(
+            context.concept_graph_path, (self.registry_dir / "concept_index.sqlite").resolve()
+        )
+        self.assertEqual(
+            context.working_memory_path, (self.registry_dir / "working_memory.jsonl").resolve()
+        )
+        self.assertEqual(
+            context.semantic_triggers_path,
+            (self.registry_dir / "semantic_triggers.jsonl").resolve(),
+        )
         self.assertEqual(context.registry["threads"][0]["thread_key"], "session:boundary")
         self.assertEqual(context.association_matches, [])
         self.assertEqual(context.cognitive_map_matches, [])
@@ -182,7 +192,9 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
             "cognitive_map_path": str((self.registry_dir / "cognitive_map.json").resolve()),
             "concept_graph": str((self.registry_dir / "concept_index.sqlite").resolve()),
             "working_memory_path": str((self.registry_dir / "working_memory.jsonl").resolve()),
-            "semantic_triggers_path": str((self.registry_dir / "semantic_triggers.jsonl").resolve()),
+            "semantic_triggers_path": str(
+                (self.registry_dir / "semantic_triggers.jsonl").resolve()
+            ),
             "query_terms": [],
             "cognitive_map": [],
             "concept_expansions": [],
@@ -193,8 +205,13 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
             "semantic_gate": None,
         }
 
-        self.assertEqual([key for key in result if key != "elapsed_ms"], list(expected_without_elapsed))
-        self.assertEqual({key: value for key, value in result.items() if key != "elapsed_ms"}, expected_without_elapsed)
+        self.assertEqual(
+            [key for key in result if key != "elapsed_ms"], list(expected_without_elapsed)
+        )
+        self.assertEqual(
+            {key: value for key, value in result.items() if key != "elapsed_ms"},
+            expected_without_elapsed,
+        )
         self.assertIsInstance(result["elapsed_ms"], float)
 
     def test_assess_prompt_keeps_orchestration_below_boundary(self) -> None:

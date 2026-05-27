@@ -7,7 +7,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -79,17 +78,11 @@ class InstallMemoryMaintenanceHookTests(unittest.TestCase):
         self.assertIn("Stop", data)
         self.assertIn("PreCompact", data)
         self.assertIn("PostCompact", data)
-        stop_commands = [
-            handler["command"]
-            for group in data["Stop"]
-            for handler in group["hooks"]
-        ]
+        stop_commands = [handler["command"] for group in data["Stop"] for handler in group["hooks"]]
         self.assertIn("python existing_stop.py", stop_commands)
         self.assertEqual(sum("aippocampus_lifecycle_hook.py" in cmd for cmd in stop_commands), 1)
         prompt_commands = [
-            handler["command"]
-            for group in data["UserPromptSubmit"]
-            for handler in group["hooks"]
+            handler["command"] for group in data["UserPromptSubmit"] for handler in group["hooks"]
         ]
         self.assertEqual(prompt_commands, ["python aippocampus_prompt_hook.py"])
 

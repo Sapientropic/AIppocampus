@@ -5,22 +5,23 @@ import shutil
 import sys
 import tempfile
 import unittest
-from unittest import mock
 from pathlib import Path
-
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PLUGIN_ROOT = REPO_ROOT / "plugins" / "aippocampus"
 sys.path.insert(0, str(PLUGIN_ROOT))
 
 import build_plugin_package  # noqa: E402
-import smoke_real_codex_host  # noqa: E402
 import smoke_plugin_install  # noqa: E402
+import smoke_real_codex_host  # noqa: E402
 
 
 class PluginDistributionTests(unittest.TestCase):
     def test_manifest_exposes_ui_metadata_and_mcp_without_auto_enabling_hooks(self) -> None:
-        manifest = json.loads((PLUGIN_ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8"))
+        manifest = json.loads(
+            (PLUGIN_ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8")
+        )
         mcp_config = json.loads((PLUGIN_ROOT / ".mcp.json").read_text(encoding="utf-8"))
 
         self.assertEqual(manifest["name"], "aippocampus")
@@ -48,11 +49,7 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertTrue((built_root / "skills" / "aippocampus" / "SKILL.md").exists())
             self.assertTrue(
                 (
-                    built_root
-                    / "skills"
-                    / "aippocampus"
-                    / "scripts"
-                    / "aippocampus_mcp_server.py"
+                    built_root / "skills" / "aippocampus" / "scripts" / "aippocampus_mcp_server.py"
                 ).exists()
             )
             self.assertTrue(
@@ -114,7 +111,9 @@ class PluginDistributionTests(unittest.TestCase):
             )
             self.assertEqual(result["mcp_jsonrpc_response_ids"], [1, 2, 3])
             self.assertIn("sync_status", result["mcp_jsonrpc_tools"])
-            self.assertEqual(result["mcp_jsonrpc_tool_payload"]["status"], "available_requires_sync_dir")
+            self.assertEqual(
+                result["mcp_jsonrpc_tool_payload"]["status"], "available_requires_sync_dir"
+            )
             self.assertFalse(result["mcp_jsonrpc_tool_is_error"])
 
     def test_install_smoke_does_not_cleanup_unsafe_build_output(self) -> None:
@@ -161,12 +160,17 @@ class PluginDistributionTests(unittest.TestCase):
                 output,
                 run_id,
             )
-            marketplace = json.loads((root / ".agents" / "plugins" / "marketplace.json").read_text(encoding="utf-8"))
+            marketplace = json.loads(
+                (root / ".agents" / "plugins" / "marketplace.json").read_text(encoding="utf-8")
+            )
 
             self.assertEqual(marketplace_name, "aippocampus-real-smoke-unit")
             self.assertEqual(root, marketplace_root)
             self.assertTrue((plugin_dir / ".codex-plugin" / "plugin.json").exists())
-            self.assertEqual(marketplace["plugins"][0]["source"], {"source": "local", "path": "./plugins/aippocampus"})
+            self.assertEqual(
+                marketplace["plugins"][0]["source"],
+                {"source": "local", "path": "./plugins/aippocampus"},
+            )
             self.assertEqual(
                 marketplace["plugins"][0]["policy"],
                 {"installation": "AVAILABLE", "authentication": "ON_USE"},

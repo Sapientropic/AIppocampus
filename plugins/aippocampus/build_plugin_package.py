@@ -8,7 +8,6 @@ import json
 import shutil
 from pathlib import Path
 
-
 PLUGIN_SOURCE_DIR = Path(__file__).resolve().parent
 DEFAULT_OUTPUT = Path("dist") / "aippocampus-plugin"
 IGNORED_NAMES = {
@@ -37,9 +36,7 @@ def safe_replace_dir(output_dir: Path, repo_root: Path) -> None:
     if resolved in forbidden or len(resolved.parts) <= 1:
         raise ValueError(f"refusing to replace unsafe plugin output directory: {resolved}")
     if resolved != dist_root and dist_root not in resolved.parents:
-        raise ValueError(
-            "plugin package output must stay under the repository dist/ directory"
-        )
+        raise ValueError("plugin package output must stay under the repository dist/ directory")
     if output_dir.exists():
         shutil.rmtree(output_dir)
 

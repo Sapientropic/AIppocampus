@@ -15,7 +15,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-
 SCRIPT_DIR = Path(__file__).resolve().parent
 SKILL_ROOT = SCRIPT_DIR.parent
 REPO_ROOT = SCRIPT_DIR.parents[2]
@@ -84,9 +83,15 @@ def build_command_plan(
     timeline_output = repo_root / timeline_smoke_output(run_id)
     plugin_output = repo_root / plugin_build_output(run_id)
     commands = [
-        SmokeCommand("docs_health", [python, "scripts/check_docs_health.py", "--json"], skill_root, 60),
-        SmokeCommand("unit_suite", [python, "-m", "unittest", "discover", "-s", "tests"], skill_root, 240),
-        SmokeCommand("compileall", [python, "-m", "compileall", "-q", "skills", "plugins"], repo_root, 120),
+        SmokeCommand(
+            "docs_health", [python, "scripts/check_docs_health.py", "--json"], skill_root, 60
+        ),
+        SmokeCommand(
+            "unit_suite", [python, "-m", "unittest", "discover", "-s", "tests"], skill_root, 240
+        ),
+        SmokeCommand(
+            "compileall", [python, "-m", "compileall", "-q", "skills", "plugins"], repo_root, 120
+        ),
         SmokeCommand(
             "ruff",
             [python, "-m", "ruff", "check", "skills", "plugins", "--config", "pyproject.toml"],
@@ -147,7 +152,9 @@ def build_command_plan(
             "life_wide_registry_smoke",
             [
                 python,
-                str(repo_root / "skills" / "aippocampus" / "scripts" / "smoke_life_wide_registry.py"),
+                str(
+                    repo_root / "skills" / "aippocampus" / "scripts" / "smoke_life_wide_registry.py"
+                ),
                 "--json",
             ],
             repo_root,
@@ -157,7 +164,13 @@ def build_command_plan(
             "semantic_scope_real_history_smoke",
             [
                 python,
-                str(repo_root / "skills" / "aippocampus" / "scripts" / "smoke_semantic_scope_real_history.py"),
+                str(
+                    repo_root
+                    / "skills"
+                    / "aippocampus"
+                    / "scripts"
+                    / "smoke_semantic_scope_real_history.py"
+                ),
                 "--json",
             ],
             repo_root,
@@ -167,7 +180,13 @@ def build_command_plan(
             "source_evidence_recall_eval",
             [
                 python,
-                str(repo_root / "skills" / "aippocampus" / "scripts" / "smoke_source_evidence_recall_eval.py"),
+                str(
+                    repo_root
+                    / "skills"
+                    / "aippocampus"
+                    / "scripts"
+                    / "smoke_source_evidence_recall_eval.py"
+                ),
                 "--max-cases",
                 "24",
                 "--min-cases",
@@ -183,7 +202,11 @@ def build_command_plan(
         ),
         SmokeCommand(
             "mcp_tool_list",
-            [python, str(repo_root / "skills" / "aippocampus" / "scripts" / "aippocampus_mcp_server.py"), "--list-tools"],
+            [
+                python,
+                str(repo_root / "skills" / "aippocampus" / "scripts" / "aippocampus_mcp_server.py"),
+                "--list-tools",
+            ],
             repo_root,
             60,
         ),
@@ -203,7 +226,13 @@ def build_command_plan(
         ),
         SmokeCommand(
             "plugin_install_smoke",
-            [python, str(repo_root / "plugins" / "aippocampus" / "smoke_plugin_install.py"), "--repo-root", str(repo_root), "--json"],
+            [
+                python,
+                str(repo_root / "plugins" / "aippocampus" / "smoke_plugin_install.py"),
+                "--repo-root",
+                str(repo_root),
+                "--json",
+            ],
             repo_root,
             120,
         ),
@@ -211,7 +240,9 @@ def build_command_plan(
             "cross_device_sync_smoke",
             [
                 python,
-                str(repo_root / "skills" / "aippocampus" / "scripts" / "smoke_cross_device_sync.py"),
+                str(
+                    repo_root / "skills" / "aippocampus" / "scripts" / "smoke_cross_device_sync.py"
+                ),
                 "--repo-root",
                 str(repo_root),
                 "--json",
@@ -223,7 +254,13 @@ def build_command_plan(
             "object_storage_sync_smoke",
             [
                 python,
-                str(repo_root / "skills" / "aippocampus" / "scripts" / "smoke_object_storage_sync.py"),
+                str(
+                    repo_root
+                    / "skills"
+                    / "aippocampus"
+                    / "scripts"
+                    / "smoke_object_storage_sync.py"
+                ),
                 "--repo-root",
                 str(repo_root),
                 "--json",
@@ -235,7 +272,13 @@ def build_command_plan(
             "alternate_runtime_sync_smoke",
             [
                 python,
-                str(repo_root / "skills" / "aippocampus" / "scripts" / "smoke_alternate_runtime_sync.py"),
+                str(
+                    repo_root
+                    / "skills"
+                    / "aippocampus"
+                    / "scripts"
+                    / "smoke_alternate_runtime_sync.py"
+                ),
                 "--repo-root",
                 str(repo_root),
                 "--runtime",
@@ -252,7 +295,13 @@ def build_command_plan(
                 "semantic_scope_source_review_live",
                 [
                     python,
-                    str(repo_root / "skills" / "aippocampus" / "scripts" / "smoke_semantic_scope_source_review.py"),
+                    str(
+                        repo_root
+                        / "skills"
+                        / "aippocampus"
+                        / "scripts"
+                        / "smoke_semantic_scope_source_review.py"
+                    ),
                     "--live",
                     "--max-cases",
                     "96",
@@ -335,14 +384,20 @@ def validate_casual_important_search(payload: dict[str, Any]) -> dict[str, Any]:
             "ok": False,
             "message": "casual-important smoke must return msg_public_005 as the top sidecar-backed match",
         }
-    semantic_labels = [str(label) for label in top.get("semantic_scope_labels") or [] if isinstance(label, str)]
+    semantic_labels = [
+        str(label) for label in top.get("semantic_scope_labels") or [] if isinstance(label, str)
+    ]
     required = {"personal_reflection", "idea_seed"}
     if not required.issubset(set(semantic_labels)):
         return {
             "ok": False,
             "message": "casual-important smoke top match must include semantic_scope_labels from the sidecar",
         }
-    return {"ok": True, "top_message_id": top.get("message_id"), "semantic_scope_labels": semantic_labels}
+    return {
+        "ok": True,
+        "top_message_id": top.get("message_id"),
+        "semantic_scope_labels": semantic_labels,
+    }
 
 
 def validate_command_result(command: SmokeCommand, result: dict[str, Any]) -> dict[str, Any]:
@@ -399,7 +454,9 @@ def run_semantic_scope_generation_smoke(repo_root: Path, run_id: str) -> dict[st
         if not path_is_within(repo_root, clean_source_dir):
             raise ValueError(f"refusing to remove outside repo: {clean_source_dir}")
         shutil.rmtree(clean_source_dir)
-    shutil.copytree(repo_root / "examples" / "public-memory-bundle" / "clean-source", clean_source_dir)
+    shutil.copytree(
+        repo_root / "examples" / "public-memory-bundle" / "clean-source", clean_source_dir
+    )
     sidecar_path = clean_source_dir / "semantic-scope-labels.jsonl"
     if sidecar_path.exists():
         sidecar_path.unlink()
@@ -407,9 +464,17 @@ def run_semantic_scope_generation_smoke(repo_root: Path, run_id: str) -> dict[st
     materialize = run_json_command(
         [
             python,
-            str(repo_root / "skills" / "aippocampus" / "scripts" / "build_semantic_scope_labels.py"),
+            str(
+                repo_root / "skills" / "aippocampus" / "scripts" / "build_semantic_scope_labels.py"
+            ),
             "--jobs-output",
-            str(repo_root / "examples" / "public-memory-bundle" / "registry" / "subconscious_jobs.jsonl"),
+            str(
+                repo_root
+                / "examples"
+                / "public-memory-bundle"
+                / "registry"
+                / "subconscious_jobs.jsonl"
+            ),
             "--clean-source-dir",
             str(clean_source_dir),
             "--json",
@@ -466,11 +531,20 @@ def run_sync_smoke(repo_root: Path) -> dict[str, Any]:
         source_registry.mkdir(parents=True)
         target_registry.mkdir()
         sync_dir.mkdir()
-        shutil.copytree(repo_root / "examples" / "public-memory-bundle" / "registry", source_registry, dirs_exist_ok=True)
+        shutil.copytree(
+            repo_root / "examples" / "public-memory-bundle" / "registry",
+            source_registry,
+            dirs_exist_ok=True,
+        )
         public_clean = repo_root / "examples" / "public-memory-bundle" / "clean-source"
         smoke_clean = source_registry / "threads" / "public-example-thread" / "clean-source"
         smoke_clean.mkdir(parents=True)
-        for filename in ("manifest.json", "messages.jsonl", "turns.jsonl", "semantic-scope-labels.jsonl"):
+        for filename in (
+            "manifest.json",
+            "messages.jsonl",
+            "turns.jsonl",
+            "semantic-scope-labels.jsonl",
+        ):
             shutil.copy2(public_clean / filename, smoke_clean / filename)
         results = []
         for command in ("push", "status", "repair", "pull"):
@@ -494,7 +568,9 @@ def run_sync_smoke(repo_root: Path) -> dict[str, Any]:
                 timeout=60,
                 check=False,
             )
-            payload = json.loads(proc.stdout) if proc.returncode == 0 and proc.stdout.strip() else {}
+            payload = (
+                json.loads(proc.stdout) if proc.returncode == 0 and proc.stdout.strip() else {}
+            )
             results.append(
                 {
                     "command": command,
@@ -529,10 +605,7 @@ def allowed_secret_like_line(line: str) -> bool:
         or "fake_test_windows" in low
     ):
         return True
-    if "api_key" in low and (
-        "if not api_key" in low
-        or "api_key=api_key" in low
-    ):
+    if "api_key" in low and ("if not api_key" in low or "api_key=api_key" in low):
         return True
     return False
 
@@ -588,9 +661,17 @@ def run_stage_0_5_smoke(
                 break
         if all(item["ok"] for item in command_results):
             command_results.append(run_semantic_scope_generation_smoke(repo_root, run_id))
-        sync_result = run_sync_smoke(repo_root) if all(item["ok"] for item in command_results) else None
-        scan_hits = scan_secret_like_strings(repo_root) if sync_result and sync_result.get("ok") else []
-        ok = all(item["ok"] for item in command_results) and bool(sync_result and sync_result.get("ok")) and not scan_hits
+        sync_result = (
+            run_sync_smoke(repo_root) if all(item["ok"] for item in command_results) else None
+        )
+        scan_hits = (
+            scan_secret_like_strings(repo_root) if sync_result and sync_result.get("ok") else []
+        )
+        ok = (
+            all(item["ok"] for item in command_results)
+            and bool(sync_result and sync_result.get("ok"))
+            and not scan_hits
+        )
         result.update(
             {
                 "ok": ok,

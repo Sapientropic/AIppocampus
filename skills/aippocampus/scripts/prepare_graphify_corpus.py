@@ -21,7 +21,6 @@ from aippocampuslib import (
     resolve_artifact_path,
 )
 
-
 SCRIPT_DIR = Path(__file__).resolve().parent
 MARKER = ".thread-memory-graphify-corpus"
 
@@ -45,7 +44,9 @@ def run_build_index(cwd: Path, index_dir: Path, anchors: Path) -> dict:
         str(anchors),
         "--json",
     ]
-    proc = subprocess.run(cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False)
+    proc = subprocess.run(
+        cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False
+    )
     if proc.returncode != 0:
         raise RuntimeError(proc.stdout or proc.stderr)
     return json.loads(proc.stdout)
@@ -150,8 +151,8 @@ def write_readme(path: Path, manifest: dict, files: list[Path], cwd: Path) -> No
         "## Suggested Commands",
         "",
         "```powershell",
-        "$runtime = python \"$env:CODEX_HOME\\skills\\graphify\\scripts\\ensure_graphify.py\" | ConvertFrom-Json",
-        "& $runtime.python \"$env:CODEX_HOME\\skills\\graphify\\scripts\\detect_corpus.py\" \"<graphify_corpus_dir>\"",
+        '$runtime = python "$env:CODEX_HOME\\skills\\graphify\\scripts\\ensure_graphify.py" | ConvertFrom-Json',
+        '& $runtime.python "$env:CODEX_HOME\\skills\\graphify\\scripts\\detect_corpus.py" "<graphify_corpus_dir>"',
         "# Then use the Graphify skill on this folder when a deep graph/report is worth the extra cost.",
         "```",
         "",
@@ -166,9 +167,15 @@ def write_readme(path: Path, manifest: dict, files: list[Path], cwd: Path) -> No
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cwd", default=os.getcwd())
-    parser.add_argument("--index-dir", default=None, help="Defaults to the CODEX_HOME global thread store.")
+    parser.add_argument(
+        "--index-dir", default=None, help="Defaults to the CODEX_HOME global thread store."
+    )
     parser.add_argument("--anchors", default="thread-anchors.md")
-    parser.add_argument("--output", default=None, help="Defaults to the global thread store's graphify-corpus directory.")
+    parser.add_argument(
+        "--output",
+        default=None,
+        help="Defaults to the global thread store's graphify-corpus directory.",
+    )
     parser.add_argument("--max-chars-per-chunk", type=int, default=60000)
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
@@ -179,7 +186,9 @@ def main() -> int:
     anchors = Path(args.anchors)
     if not anchors.is_absolute():
         anchors = cwd / anchors
-    output_dir = resolve_artifact_path(args.output, cwd, default_thread_graphify_corpus_dir(cwd, rollout))
+    output_dir = resolve_artifact_path(
+        args.output, cwd, default_thread_graphify_corpus_dir(cwd, rollout)
+    )
 
     manifest_path = index_dir / "manifest.json"
     messages_path = index_dir / "messages.jsonl"

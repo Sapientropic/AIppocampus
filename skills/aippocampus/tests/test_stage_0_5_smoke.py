@@ -4,9 +4,8 @@ import json
 import sys
 import tempfile
 import unittest
-from unittest import mock
 from pathlib import Path
-
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
@@ -111,7 +110,9 @@ class Stage05SmokeRunnerTests(unittest.TestCase):
             inside = smoke.cleanup_targets(repo_root, run_id)
 
             self.assertIn(repo_root / "dist" / f"aippocampus-plugin-{run_id}", inside)
-            self.assertIn(repo_root / ".tmp" / f"stage-0-5-public-project-timeline-{run_id}.json", inside)
+            self.assertIn(
+                repo_root / ".tmp" / f"stage-0-5-public-project-timeline-{run_id}.json", inside
+            )
             for target in inside:
                 self.assertTrue(smoke.path_is_within(repo_root, target))
 

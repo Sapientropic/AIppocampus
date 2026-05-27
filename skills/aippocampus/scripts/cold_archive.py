@@ -11,7 +11,6 @@ import re
 import shutil
 from pathlib import Path
 
-from retention_report import build_report, markdown_report, human_bytes
 from aippocampuslib import (
     codex_home,
     default_thread_cold_archive_dir,
@@ -22,6 +21,7 @@ from aippocampuslib import (
     read_session_meta,
     resolve_artifact_path,
 )
+from retention_report import build_report, human_bytes, markdown_report
 
 
 def slugify(value: str, fallback: str = "thread") -> str:
@@ -47,12 +47,20 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument("--rollout")
-    parser.add_argument("--index-dir", default=None, help="Defaults to the CODEX_HOME global thread store.")
+    parser.add_argument(
+        "--index-dir", default=None, help="Defaults to the CODEX_HOME global thread store."
+    )
     parser.add_argument("--anchors", default="thread-anchors.md")
-    parser.add_argument("--output-dir", default=None, help="Defaults to the global thread store's cold-archives directory.")
+    parser.add_argument(
+        "--output-dir",
+        default=None,
+        help="Defaults to the global thread store's cold-archives directory.",
+    )
     parser.add_argument("--compresslevel", type=int, default=6)
     parser.add_argument("--include-normalized-messages", action="store_true", default=True)
-    parser.add_argument("--no-normalized-messages", action="store_false", dest="include_normalized_messages")
+    parser.add_argument(
+        "--no-normalized-messages", action="store_false", dest="include_normalized_messages"
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
@@ -62,15 +70,21 @@ def main() -> int:
     anchors = Path(args.anchors)
     if not anchors.is_absolute():
         anchors = cwd / anchors
-    output_dir = resolve_artifact_path(args.output_dir, cwd, default_thread_cold_archive_dir(cwd, rollout))
+    output_dir = resolve_artifact_path(
+        args.output_dir, cwd, default_thread_cold_archive_dir(cwd, rollout)
+    )
 
     meta = read_session_meta(rollout) or {}
     session_id = slugify(str(meta.get("id") or rollout.stem), fallback=rollout.stem)
     archive_dir = output_dir / f"{session_id}-{now_utc().replace(':', '').replace('-', '')}"
     archive_dir.mkdir(parents=True, exist_ok=False)
 
-    report = build_report(cwd, rollout, index_dir=index_dir, anchors=anchors, top=12, hash_rollout=True)
-    (archive_dir / "retention_report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    report = build_report(
+        cwd, rollout, index_dir=index_dir, anchors=anchors, top=12, hash_rollout=True
+    )
+    (archive_dir / "retention_report.json").write_text(
+        json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     (archive_dir / "retention_report.md").write_text(markdown_report(report), encoding="utf-8")
 
     raw_gz = archive_dir / "raw_rollout.jsonl.gz"
@@ -81,10 +95,17 @@ def main() -> int:
         "retention_report_json": str(archive_dir / "retention_report.json"),
         "retention_report_markdown": str(archive_dir / "retention_report.md"),
         "thread_anchors": copy_if_exists(anchors, archive_dir / "thread-anchors.md"),
-        "index_manifest": copy_if_exists(index_dir / "manifest.json", archive_dir / "index_manifest.json"),
+        "index_manifest": copy_if_exists(
+            index_dir / "manifest.json", archive_dir / "index_manifest.json"
+        ),
         "anchor_graph": copy_if_exists(index_dir / "graph.json", archive_dir / "graph.json"),
-        "segments_manifest": copy_if_exists(index_dir / "segments" / "manifest.json", archive_dir / "segments_manifest.json"),
-        "graphify_corpus_manifest": copy_if_exists(index_dir / "graphify-corpus" / "corpus_manifest.json", archive_dir / "graphify_corpus_manifest.json"),
+        "segments_manifest": copy_if_exists(
+            index_dir / "segments" / "manifest.json", archive_dir / "segments_manifest.json"
+        ),
+        "graphify_corpus_manifest": copy_if_exists(
+            index_dir / "graphify-corpus" / "corpus_manifest.json",
+            archive_dir / "graphify_corpus_manifest.json",
+        ),
     }
 
     if args.include_normalized_messages:
@@ -126,7 +147,9 @@ def main() -> int:
             "Only remove generated indexes or old screenshots after confirming the raw rollout, anchors, and this cold archive exist.",
         ],
     }
-    (archive_dir / "cold_archive_manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    (archive_dir / "cold_archive_manifest.json").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
     if args.json_output:
         print(json.dumps(manifest, ensure_ascii=False, indent=2))

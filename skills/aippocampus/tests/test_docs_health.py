@@ -5,7 +5,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -53,7 +52,9 @@ class DocsHealthTests(unittest.TestCase):
         self.assertNotIn("missing public-readiness doc: docs/install-guide.md", result)
         self.assertNotIn("missing public-readiness doc: docs/demo-scenarios.md", result)
         self.assertNotIn("missing public-readiness doc: docs/privacy-security-checklist.md", result)
-        self.assertNotIn("missing public-readiness doc: docs/public-readiness-verification.md", result)
+        self.assertNotIn(
+            "missing public-readiness doc: docs/public-readiness-verification.md", result
+        )
         self.assertNotIn("missing public example memory bundle", result)
         self.assertFalse(any("scope_label_policy" in issue for issue in result), result)
         self.assertFalse(any("missing scope_labels" in issue for issue in result), result)
@@ -126,7 +127,9 @@ class DocsHealthTests(unittest.TestCase):
 
             issues, _ = docs_health.check_repo_docs(repo)
 
-        self.assertIn("public example clean-source manifest must document scope_label_policy", issues)
+        self.assertIn(
+            "public example clean-source manifest must document scope_label_policy", issues
+        )
         self.assertTrue(any("missing scope_labels" in issue for issue in issues), issues)
 
     def test_public_example_guard_rejects_extra_files_and_stale_labels(self) -> None:
@@ -170,8 +173,13 @@ class DocsHealthTests(unittest.TestCase):
 
             issues, _ = docs_health.check_repo_docs(repo)
 
-        self.assertTrue(any("unexpected public example bundle file" in issue for issue in issues), issues)
-        self.assertTrue(any("message scope_labels do not match current generator" in issue for issue in issues), issues)
+        self.assertTrue(
+            any("unexpected public example bundle file" in issue for issue in issues), issues
+        )
+        self.assertTrue(
+            any("message scope_labels do not match current generator" in issue for issue in issues),
+            issues,
+        )
 
 
 if __name__ == "__main__":

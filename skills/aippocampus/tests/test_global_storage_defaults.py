@@ -6,7 +6,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 BUILD_INDEX = ROOT / "scripts" / "build_index.py"
 
@@ -23,7 +22,11 @@ class GlobalStorageDefaultTests(unittest.TestCase):
             {
                 "type": "event_msg",
                 "timestamp": "2026-05-26T00:00:01Z",
-                "payload": {"type": "agent_message", "phase": "final_answer", "message": "默认写入 CodexHome。"},
+                "payload": {
+                    "type": "agent_message",
+                    "phase": "final_answer",
+                    "message": "默认写入 CodexHome。",
+                },
             },
         ]
         rollout.write_text(

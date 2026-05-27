@@ -7,7 +7,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -37,7 +36,9 @@ class BuildCleanSourceTests(unittest.TestCase):
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
 
     def _write_rollout(self) -> None:
-        self._append({"type": "session_meta", "payload": {"id": "session-test", "cwd": str(self.cwd)}})
+        self._append(
+            {"type": "session_meta", "payload": {"id": "session-test", "cwd": str(self.cwd)}}
+        )
         self._append(
             {
                 "type": "event_msg",
@@ -49,14 +50,22 @@ class BuildCleanSourceTests(unittest.TestCase):
             {
                 "type": "event_msg",
                 "timestamp": "2026-05-26T01:00:01Z",
-                "payload": {"type": "agent_message", "phase": "commentary", "message": "我先查一下旧线程。"},
+                "payload": {
+                    "type": "agent_message",
+                    "phase": "commentary",
+                    "message": "我先查一下旧线程。",
+                },
             }
         )
         self._append(
             {
                 "type": "response_item",
                 "timestamp": "2026-05-26T01:00:02Z",
-                "payload": {"type": "function_call_output", "call_id": "call-1", "output": "very large tool output"},
+                "payload": {
+                    "type": "function_call_output",
+                    "call_id": "call-1",
+                    "output": "very large tool output",
+                },
             }
         )
         self._append(
@@ -81,7 +90,11 @@ class BuildCleanSourceTests(unittest.TestCase):
             {
                 "type": "event_msg",
                 "timestamp": "2026-05-26T01:01:01Z",
-                "payload": {"type": "agent_message", "phase": "commentary", "message": "那就保留末尾 commentary 作为 fallback。"},
+                "payload": {
+                    "type": "agent_message",
+                    "phase": "commentary",
+                    "message": "那就保留末尾 commentary 作为 fallback。",
+                },
             }
         )
         self._append(
@@ -99,7 +112,9 @@ class BuildCleanSourceTests(unittest.TestCase):
         result = clean_source.build_clean_source(self.cwd, rollout=self.rollout)
 
         self.assertEqual(result["schema_version"], 2)
-        self.assertEqual(result["upgrade_contract"]["principle"], "approximate_locate_then_exact_reconstruct")
+        self.assertEqual(
+            result["upgrade_contract"]["principle"], "approximate_locate_then_exact_reconstruct"
+        )
         self.assertIn("message_id", result["identity_policy"]["stable_join_keys"])
         self.assertEqual(result["artifact_scope"], "global_thread_store")
         self.assertEqual(result["message_count"], 4)
@@ -112,8 +127,7 @@ class BuildCleanSourceTests(unittest.TestCase):
         self.assertFalse((self.cwd / ".aippocampus").exists())
 
         messages = [
-            json.loads(line)
-            for line in messages_path.read_text(encoding="utf-8").splitlines()
+            json.loads(line) for line in messages_path.read_text(encoding="utf-8").splitlines()
         ]
         text = "\n".join(item["text"] for item in messages)
 
@@ -137,10 +151,7 @@ class BuildCleanSourceTests(unittest.TestCase):
         self.assertEqual(len(first["content_sha256"]), 64)
         self.assertEqual(first["scope_labels"], ["technical_work", "open_question"])
 
-        turns = [
-            json.loads(line)
-            for line in turns_path.read_text(encoding="utf-8").splitlines()
-        ]
+        turns = [json.loads(line) for line in turns_path.read_text(encoding="utf-8").splitlines()]
         self.assertEqual(turns[0]["assistant_phase"], "final_answer")
         self.assertEqual(turns[1]["assistant_phase"], "commentary_fallback")
         self.assertEqual(turns[0]["source_id"], first["source_id"])
@@ -177,11 +188,15 @@ class BuildCleanSourceTests(unittest.TestCase):
         result = clean_source.build_clean_source(self.cwd, rollout=self.rollout)
         messages = [
             json.loads(line)
-            for line in Path(result["outputs"]["messages_jsonl"]).read_text(encoding="utf-8").splitlines()
+            for line in Path(result["outputs"]["messages_jsonl"])
+            .read_text(encoding="utf-8")
+            .splitlines()
         ]
         turns = [
             json.loads(line)
-            for line in Path(result["outputs"]["turns_jsonl"]).read_text(encoding="utf-8").splitlines()
+            for line in Path(result["outputs"]["turns_jsonl"])
+            .read_text(encoding="utf-8")
+            .splitlines()
         ]
 
         life_message = next(item for item in messages if "突然有个点子" in item["text"])
@@ -191,17 +206,33 @@ class BuildCleanSourceTests(unittest.TestCase):
         )
         self.assertEqual(
             turns[2]["scope_labels"],
-            ["personal_reflection", "reading_notes", "idea_seed", "life_context", "technical_work", "open_question"],
+            [
+                "personal_reflection",
+                "reading_notes",
+                "idea_seed",
+                "life_context",
+                "technical_work",
+                "open_question",
+            ],
         )
 
     def test_scope_labels_do_not_match_short_ascii_needles_inside_words(self) -> None:
         self.assertNotIn(
             "technical_work",
-            clean_source.infer_scope_labels("I read an article about capital cities and daily life."),
+            clean_source.infer_scope_labels(
+                "I read an article about capital cities and daily life."
+            ),
         )
-        self.assertIn("technical_work", clean_source.infer_scope_labels("Call the API from the CLI."))
-        self.assertNotIn("open_question", clean_source.infer_scope_labels("The archive should remember casual sparks."))
-        self.assertIn("open_question", clean_source.infer_scope_labels("Should I keep casual sparks?"))
+        self.assertIn(
+            "technical_work", clean_source.infer_scope_labels("Call the API from the CLI.")
+        )
+        self.assertNotIn(
+            "open_question",
+            clean_source.infer_scope_labels("The archive should remember casual sparks."),
+        )
+        self.assertIn(
+            "open_question", clean_source.infer_scope_labels("Should I keep casual sparks?")
+        )
 
     def test_scope_labels_keep_fuzzy_casual_importance_out_of_static_lexicon(self) -> None:
         labels = clean_source.infer_scope_labels(

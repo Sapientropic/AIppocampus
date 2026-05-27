@@ -9,13 +9,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-import search_clean_source as search  # noqa: E402
 import registry  # noqa: E402
+import search_clean_source as search  # noqa: E402
 
 
 class SearchCleanSourceTests(unittest.TestCase):
@@ -83,7 +82,9 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertIn("AIppocampus 是清洗后的原文记忆库", result["matches"][0]["snippet"])
 
     def test_filters_by_scope_label(self) -> None:
-        result = search.search_clean_source(self.cwd, ["长期问题"], scope_labels=["life_context"], limit=5)
+        result = search.search_clean_source(
+            self.cwd, ["长期问题"], scope_labels=["life_context"], limit=5
+        )
 
         self.assertEqual(len(result["matches"]), 1)
         self.assertEqual(result["scope_labels"], ["life_context"])
@@ -136,7 +137,9 @@ class SearchCleanSourceTests(unittest.TestCase):
                             "confidence": 0.94,
                         },
                     ],
-                    "source_refs": [{"message_id": "msg_metaphor", "source_line": 44, "role": "user"}],
+                    "source_refs": [
+                        {"message_id": "msg_metaphor", "source_line": 44, "role": "user"}
+                    ],
                 },
                 ensure_ascii=False,
             )
@@ -152,7 +155,10 @@ class SearchCleanSourceTests(unittest.TestCase):
         )
 
         self.assertEqual(result["matches"][0]["id"], "msg_metaphor")
-        self.assertEqual(result["matches"][0]["semantic_scope_labels"], ["personal_reflection", "idea_seed", "life_context"])
+        self.assertEqual(
+            result["matches"][0]["semantic_scope_labels"],
+            ["personal_reflection", "idea_seed", "life_context"],
+        )
         self.assertIn("personal_reflection", result["matches"][0]["scope_labels"])
 
     def test_scope_filter_warns_for_legacy_messages_without_scope_labels(self) -> None:
@@ -168,13 +174,17 @@ class SearchCleanSourceTests(unittest.TestCase):
         with (self.source / "messages.jsonl").open("a", encoding="utf-8", newline="\n") as f:
             f.write(json.dumps(legacy, ensure_ascii=False) + "\n")
 
-        result = search.search_clean_source(self.cwd, ["长期问题"], scope_labels=["life_context"], limit=5)
+        result = search.search_clean_source(
+            self.cwd, ["长期问题"], scope_labels=["life_context"], limit=5
+        )
 
         self.assertEqual(result["matches"][0]["id"], "msg_life")
         self.assertEqual(result["warnings"][0]["code"], "missing_scope_labels")
 
     def test_unknown_scope_label_is_reported(self) -> None:
-        result = search.search_clean_source(self.cwd, ["长期问题"], scope_labels=["unknown"], limit=5)
+        result = search.search_clean_source(
+            self.cwd, ["长期问题"], scope_labels=["unknown"], limit=5
+        )
 
         self.assertEqual(result["matches"], [])
         self.assertEqual(result["warnings"][0]["code"], "unknown_scope_label")
@@ -235,18 +245,21 @@ class SearchCleanSourceTests(unittest.TestCase):
         )
 
         stdout = io.StringIO()
-        with patch.object(
-            sys,
-            "argv",
-            [
-                "registry.py",
-                "--registry-dir",
-                str(self.cwd),
-                "search",
-                "原文记忆库",
-                "--json",
-            ],
-        ), contextlib.redirect_stdout(stdout):
+        with (
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "registry.py",
+                    "--registry-dir",
+                    str(self.cwd),
+                    "search",
+                    "原文记忆库",
+                    "--json",
+                ],
+            ),
+            contextlib.redirect_stdout(stdout),
+        ):
             code = registry.main()
 
         payload = json.loads(stdout.getvalue())

@@ -42,7 +42,6 @@ from subconscious_worker import (
     select_timeline_turns,
 )
 
-
 PROMPT_VERSION = "aippocampus-subconscious-agent-v0"
 DEFAULT_MAX_STEPS = 16
 HARD_MAX_STEPS = 64
@@ -104,7 +103,9 @@ class AgentState:
 
 
 def compact_usage(usage: dict[str, Any]) -> dict[str, Any]:
-    return {key: value for key, value in usage.items() if isinstance(value, (int, float, str, dict))}
+    return {
+        key: value for key, value in usage.items() if isinstance(value, (int, float, str, dict))
+    }
 
 
 def add_usage(total: dict[str, Any], usage: dict[str, Any]) -> dict[str, Any]:
@@ -192,11 +193,9 @@ def source_bank_from_turns(turns: list[dict[str, Any]]) -> dict[str, dict[str, A
             "turn_index": turn.get("turn_index"),
             "user_line": turn.get("user_line"),
             "assistant_line": turn.get("assistant_line"),
-            "source_refs": [
-                ref
-                for ref in turn.get("source_refs") or []
-                if isinstance(ref, dict)
-            ][:8],
+            "source_refs": [ref for ref in turn.get("source_refs") or [] if isinstance(ref, dict)][
+                :8
+            ],
             "timestamp": turn.get("timestamp"),
         }
     return bank
@@ -219,7 +218,11 @@ def project_matches(entry: dict[str, Any], project: str | None) -> bool:
 
 def registry_entries(registry_path: Path, project: str | None = None) -> list[dict[str, Any]]:
     registry = load_registry(registry_path)
-    return [entry for entry in registry.get("threads") or [] if isinstance(entry, dict) and project_matches(entry, project)]
+    return [
+        entry
+        for entry in registry.get("threads") or []
+        if isinstance(entry, dict) and project_matches(entry, project)
+    ]
 
 
 def normalize_tool_terms(args: dict[str, Any]) -> list[str]:
@@ -254,7 +257,13 @@ def tool_search_clean_source(
             if score <= 0:
                 continue
             hits.append((score, entry, message))
-    hits.sort(key=lambda item: (-item[0], str(item[1].get("updated_at") or ""), int(item[2].get("source_line") or 0)))
+    hits.sort(
+        key=lambda item: (
+            -item[0],
+            str(item[1].get("updated_at") or ""),
+            int(item[2].get("source_line") or 0),
+        )
+    )
     out = []
     for score, entry, message in hits[:limit]:
         ref = state.add_observation(
@@ -305,7 +314,14 @@ def tool_get_turn_context(
     limit = max(1, min(10, int(args.get("limit") or 6)))
     if not thread_key:
         return {"tool": "get_turn_context", "error": "missing thread_key/ref"}
-    entry = next((item for item in registry_entries(registry_path, project) if item.get("thread_key") == thread_key), None)
+    entry = next(
+        (
+            item
+            for item in registry_entries(registry_path, project)
+            if item.get("thread_key") == thread_key
+        ),
+        None,
+    )
     if not entry:
         return {"tool": "get_turn_context", "error": "thread not found"}
     messages_path_value = (entry.get("paths") or {}).get("clean_source_messages_jsonl")
@@ -314,7 +330,9 @@ def tool_get_turn_context(
     messages = []
     for message in iter_clean_messages(Path(messages_path_value)):
         same_turn_id = bool(turn_id and str(message.get("turn_id") or "") == turn_id)
-        same_turn_index = turn_index is not None and str(message.get("turn_index") or "") == str(turn_index)
+        same_turn_index = turn_index is not None and str(message.get("turn_index") or "") == str(
+            turn_index
+        )
         if not same_turn_id and not same_turn_index:
             continue
         messages.append(message)
@@ -346,7 +364,13 @@ def tool_get_turn_context(
                 "snippet": compact_text(str(message.get("text") or ""), 520),
             }
         )
-    return {"tool": "get_turn_context", "thread_key": thread_key, "turn_id": turn_id or None, "turn_index": turn_index, "messages": out}
+    return {
+        "tool": "get_turn_context",
+        "thread_key": thread_key,
+        "turn_id": turn_id or None,
+        "turn_index": turn_index,
+        "messages": out,
+    }
 
 
 def tool_expand_concepts(*, concept_graph_path: Path, args: dict[str, Any]) -> dict[str, Any]:
@@ -368,7 +392,13 @@ def tool_recent_edges(*, staging_path: Path, args: dict[str, Any]) -> dict[str, 
                     item = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                blob = " ".join([str(item.get("src") or ""), str(item.get("dst") or ""), str(item.get("why") or "")]).casefold()
+                blob = " ".join(
+                    [
+                        str(item.get("src") or ""),
+                        str(item.get("dst") or ""),
+                        str(item.get("why") or ""),
+                    ]
+                ).casefold()
                 if terms and not any(term in blob for term in terms):
                     continue
                 rows.append(
@@ -396,9 +426,13 @@ def run_tool(
 ) -> dict[str, Any]:
     try:
         if name == "search_clean_source":
-            return tool_search_clean_source(registry_path=registry_path, project=project, args=args, state=state)
+            return tool_search_clean_source(
+                registry_path=registry_path, project=project, args=args, state=state
+            )
         if name == "get_turn_context":
-            return tool_get_turn_context(registry_path=registry_path, project=project, args=args, state=state)
+            return tool_get_turn_context(
+                registry_path=registry_path, project=project, args=args, state=state
+            )
         if name == "expand_concepts":
             return tool_expand_concepts(concept_graph_path=concept_graph_path, args=args)
         if name == "recent_edges":
@@ -408,7 +442,9 @@ def run_tool(
         return {"tool": name, "error": f"{type(exc).__name__}: {exc}"}
 
 
-def validate_agent_edges(parsed: dict[str, Any], source_bank: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+def validate_agent_edges(
+    parsed: dict[str, Any], source_bank: dict[str, dict[str, Any]]
+) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for edge in parsed.get("edges") or []:
         if not isinstance(edge, dict):
@@ -428,7 +464,9 @@ def validate_agent_edges(parsed: dict[str, Any], source_bank: dict[str, dict[str
             if isinstance(ref_item, str):
                 ref_id = ref_item.strip()
             elif isinstance(ref_item, dict):
-                ref_id = str(ref_item.get("ref") or ref_item.get("turn_ref") or ref_item.get("obs_ref") or "").strip()
+                ref_id = str(
+                    ref_item.get("ref") or ref_item.get("turn_ref") or ref_item.get("obs_ref") or ""
+                ).strip()
             else:
                 continue
             source = source_bank.get(ref_id)
@@ -465,7 +503,9 @@ def validate_agent_edges(parsed: dict[str, Any], source_bank: dict[str, dict[str
     return out
 
 
-def agent_initial_payload(objective: str, turns: list[dict[str, Any]], max_steps: int, min_tool_steps: int) -> str:
+def agent_initial_payload(
+    objective: str, turns: list[dict[str, Any]], max_steps: int, min_tool_steps: int
+) -> str:
     # Keep static tool/budget contract before source turns, then put the
     # run-specific objective last. That gives broad runs a reusable prefix while
     # still letting repeated samples over the same source reuse the source block.
@@ -480,7 +520,8 @@ def agent_initial_payload(objective: str, turns: list[dict[str, Any]], max_steps
         "tool_budget": max_steps,
         "minimum_tool_steps_before_final": min_tool_steps,
         "initial_turns": turns,
-        "objective": objective or "Propose source-backed concept edges for AIppocampus ambient recall.",
+        "objective": objective
+        or "Propose source-backed concept edges for AIppocampus ambient recall.",
     }
     payload = sanitize_external_model_payload(payload)
     return json.dumps(payload, ensure_ascii=False, indent=2)
@@ -538,21 +579,36 @@ def run_agent(
     final_edges: list[dict[str, Any]] | None = None
     tool_count = 0
     for step in range(step_budget):
-        response = chat_fn(sanitize_external_model_payload(messages), api_key, model, base_url, max_tokens, timeout, temperature)
+        response = chat_fn(
+            sanitize_external_model_payload(messages),
+            api_key,
+            model,
+            base_url,
+            max_tokens,
+            timeout,
+            temperature,
+        )
         add_usage(usage_total, compact_usage(response.get("usage") or {}))
         action = parse_action(response)
         transcript.append({"step": step + 1, "action": action})
         if action.get("action") == "final":
             final_attempts.append(action)
             if tool_count < max(0, int(min_tool_steps)) and step + 1 < step_budget:
-                messages.append({"role": "assistant", "content": json.dumps(action, ensure_ascii=False)})
+                messages.append(
+                    {"role": "assistant", "content": json.dumps(action, ensure_ascii=False)}
+                )
                 messages.append(
                     {
                         "role": "user",
                         "content": json.dumps(
                             {
                                 "error": "Call at least one read-only tool before finalizing.",
-                                "allowed_tools": ["search_clean_source", "get_turn_context", "expand_concepts", "recent_edges"],
+                                "allowed_tools": [
+                                    "search_clean_source",
+                                    "get_turn_context",
+                                    "expand_concepts",
+                                    "recent_edges",
+                                ],
                             },
                             ensure_ascii=False,
                         ),
@@ -561,7 +617,9 @@ def run_agent(
                 continue
             candidate_edges = validate_agent_edges(action, state.source_bank)
             if not candidate_edges and step + 1 < step_budget:
-                messages.append({"role": "assistant", "content": json.dumps(action, ensure_ascii=False)})
+                messages.append(
+                    {"role": "assistant", "content": json.dumps(action, ensure_ascii=False)}
+                )
                 messages.append(
                     {
                         "role": "user",
@@ -580,8 +638,17 @@ def run_agent(
             final_edges = candidate_edges
             break
         if action.get("action") != "tool":
-            messages.append({"role": "assistant", "content": json.dumps(action, ensure_ascii=False)})
-            messages.append({"role": "user", "content": json.dumps({"error": "Return action=tool or action=final only."}, ensure_ascii=False)})
+            messages.append(
+                {"role": "assistant", "content": json.dumps(action, ensure_ascii=False)}
+            )
+            messages.append(
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {"error": "Return action=tool or action=final only."}, ensure_ascii=False
+                    ),
+                }
+            )
             continue
         tool_name = str(action.get("tool") or "")
         tool_args = action.get("args") if isinstance(action.get("args"), dict) else {}
@@ -601,7 +668,8 @@ def run_agent(
             {
                 "role": "user",
                 "content": (
-                    "TOOL_RESULT:" + "\n"
+                    "TOOL_RESULT:"
+                    + "\n"
                     + json.dumps(observation, ensure_ascii=False, indent=2)
                     + "\n\nNext: call another tool if needed; otherwise return action=final with source-backed edges. "
                     "Do not return an empty final when the observations contain concrete decisions, libraries, workflows, aliases, or contrasts."
@@ -611,7 +679,11 @@ def run_agent(
 
     if final_action is None:
         final_action = {"edges": []}
-    edges = final_edges if final_edges is not None else validate_agent_edges(final_action, state.source_bank)
+    edges = (
+        final_edges
+        if final_edges is not None
+        else validate_agent_edges(final_action, state.source_bank)
+    )
     if not edges and tool_count > 0:
         repair_messages = messages + [
             {
@@ -626,7 +698,15 @@ def run_agent(
                 ),
             }
         ]
-        response = chat_fn(sanitize_external_model_payload(repair_messages), api_key, model, base_url, max_tokens, timeout, temperature)
+        response = chat_fn(
+            sanitize_external_model_payload(repair_messages),
+            api_key,
+            model,
+            base_url,
+            max_tokens,
+            timeout,
+            temperature,
+        )
         add_usage(usage_total, compact_usage(response.get("usage") or {}))
         repair_action = parse_action(response)
         final_attempts.append(repair_action)
@@ -655,7 +735,9 @@ def run_agent(
         "turn_count": len(turns),
         "edge_count": len(edges),
         "edges": edges,
-        "tool_steps": [item for item in transcript if (item.get("action") or {}).get("action") == "tool"],
+        "tool_steps": [
+            item for item in transcript if (item.get("action") or {}).get("action") == "tool"
+        ],
         "final_attempts": final_attempts,
         "min_tool_steps": min_tool_steps,
         "max_steps": max_steps,
@@ -676,9 +758,16 @@ def main() -> int:
     parser.add_argument("--concept-graph")
     parser.add_argument("--output")
     parser.add_argument("--project")
-    parser.add_argument("--objective", default="Propose source-backed concept edges for AIppocampus ambient recall.")
+    parser.add_argument(
+        "--objective", default="Propose source-backed concept edges for AIppocampus ambient recall."
+    )
     parser.add_argument("--max-turns", type=int, default=DEFAULT_MAX_TURNS)
-    parser.add_argument("--max-steps", type=int, default=DEFAULT_MAX_STEPS, help="Agent step budget. Use 0 for the hard safety cap.")
+    parser.add_argument(
+        "--max-steps",
+        type=int,
+        default=DEFAULT_MAX_STEPS,
+        help="Agent step budget. Use 0 for the hard safety cap.",
+    )
     parser.add_argument("--min-tool-steps", type=int, default=DEFAULT_MIN_TOOL_STEPS)
     parser.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE)
     parser.add_argument("--model", default=DEFAULT_MODEL)
@@ -691,10 +780,26 @@ def main() -> int:
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
-    registry_path = Path(args.registry).resolve() if args.registry else registry_paths(Path(args.registry_dir).resolve() if args.registry_dir else None)[0]
-    timeline_path = Path(args.timeline).resolve() if args.timeline else default_project_timeline_path(registry_path=registry_path)
-    concept_graph_path = Path(args.concept_graph).resolve() if args.concept_graph else default_concept_graph_path(registry_path=registry_path)
-    output_path = Path(args.output).resolve() if args.output else default_staging_path(registry_path=registry_path)
+    registry_path = (
+        Path(args.registry).resolve()
+        if args.registry
+        else registry_paths(Path(args.registry_dir).resolve() if args.registry_dir else None)[0]
+    )
+    timeline_path = (
+        Path(args.timeline).resolve()
+        if args.timeline
+        else default_project_timeline_path(registry_path=registry_path)
+    )
+    concept_graph_path = (
+        Path(args.concept_graph).resolve()
+        if args.concept_graph
+        else default_concept_graph_path(registry_path=registry_path)
+    )
+    output_path = (
+        Path(args.output).resolve()
+        if args.output
+        else default_staging_path(registry_path=registry_path)
+    )
     try:
         result = run_agent(
             registry_path=registry_path,

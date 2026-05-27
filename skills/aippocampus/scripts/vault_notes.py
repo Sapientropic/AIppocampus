@@ -17,12 +17,14 @@ def anchor_note(anchor: dict, thread_home: Path, vault: Path) -> str:
     quotes = anchor.get("quotes", [])
     sources = anchor.get("sources", [])
     lines = [
-        format_frontmatter({
-            "type": "codex-thread-anchor",
-            "thread": str(thread_home.name),
-            "tags": ["codex-memory", "thread-anchor"],
-            "keywords": keywords,
-        }).rstrip(),
+        format_frontmatter(
+            {
+                "type": "codex-thread-anchor",
+                "thread": str(thread_home.name),
+                "tags": ["codex-memory", "thread-anchor"],
+                "keywords": keywords,
+            }
+        ).rstrip(),
         f"# {title}",
         "",
         f"Thread: {wikilink(thread_home / 'Thread Overview.md', vault, thread_home.name)}",
@@ -48,12 +50,14 @@ def anchor_note(anchor: dict, thread_home: Path, vault: Path) -> str:
 def health_note(health: dict, thread_home: Path, vault: Path) -> str:
     actions = health.get("recommended_actions", [])
     lines = [
-        format_frontmatter({
-            "type": "codex-thread-health",
-            "thread": thread_home.name,
-            "updated": now_utc(),
-            "tags": ["codex-memory", "thread-health"],
-        }).rstrip(),
+        format_frontmatter(
+            {
+                "type": "codex-thread-health",
+                "thread": thread_home.name,
+                "updated": now_utc(),
+                "tags": ["codex-memory", "thread-health"],
+            }
+        ).rstrip(),
         "# Memory Health",
         "",
         f"Thread: {wikilink(thread_home / 'Thread Overview.md', vault, thread_home.name)}",
@@ -83,12 +87,14 @@ def health_note(health: dict, thread_home: Path, vault: Path) -> str:
 def checkpoint_note(state: dict, thread_home: Path, vault: Path) -> str:
     candidate = state.get("last_candidate") or {}
     lines = [
-        format_frontmatter({
-            "type": "codex-thread-checkpoint",
-            "thread": thread_home.name,
-            "updated": state.get("updated_at") or now_utc(),
-            "tags": ["codex-memory", "checkpoint"],
-        }).rstrip(),
+        format_frontmatter(
+            {
+                "type": "codex-thread-checkpoint",
+                "thread": thread_home.name,
+                "updated": state.get("updated_at") or now_utc(),
+                "tags": ["codex-memory", "checkpoint"],
+            }
+        ).rstrip(),
         "# Latest Checkpoint",
         "",
         f"Thread: {wikilink(thread_home / 'Thread Overview.md', vault, thread_home.name)}",
@@ -97,20 +103,22 @@ def checkpoint_note(state: dict, thread_home: Path, vault: Path) -> str:
     if not candidate:
         lines.append("No checkpoint candidate recorded yet.")
         return "\n".join(lines)
-    lines.extend([
-        f"## {candidate.get('title', 'Checkpoint Candidate')}",
-        "",
-        f"- Appended count: `{state.get('last_captured_message_count')}`",
-        f"- Last checked count: `{state.get('last_checked_message_count')}`",
-        f"- Line range: `{candidate.get('line_range', {}).get('start')}-{candidate.get('line_range', {}).get('end')}`",
-        "",
-        "## Keywords",
-        "",
-        ", ".join(f"`{k}`" for k in candidate.get("keywords", [])) or "- none",
-        "",
-        "## Notes",
-        "",
-    ])
+    lines.extend(
+        [
+            f"## {candidate.get('title', 'Checkpoint Candidate')}",
+            "",
+            f"- Appended count: `{state.get('last_captured_message_count')}`",
+            f"- Last checked count: `{state.get('last_checked_message_count')}`",
+            f"- Line range: `{candidate.get('line_range', {}).get('start')}-{candidate.get('line_range', {}).get('end')}`",
+            "",
+            "## Keywords",
+            "",
+            ", ".join(f"`{k}`" for k in candidate.get("keywords", [])) or "- none",
+            "",
+            "## Notes",
+            "",
+        ]
+    )
     lines.extend(f"- {note}" for note in candidate.get("notes", []))
     if candidate.get("quotes"):
         lines.extend(["", "## Preserved Phrases", ""])
@@ -121,12 +129,14 @@ def checkpoint_note(state: dict, thread_home: Path, vault: Path) -> str:
 
 def heartbeat_note(thread_home: Path, vault: Path, cwd: Path, automation_name: str | None) -> str:
     lines = [
-        format_frontmatter({
-            "type": "codex-thread-heartbeat",
-            "thread": thread_home.name,
-            "updated": now_utc(),
-            "tags": ["codex-memory", "heartbeat"],
-        }).rstrip(),
+        format_frontmatter(
+            {
+                "type": "codex-thread-heartbeat",
+                "thread": thread_home.name,
+                "updated": now_utc(),
+                "tags": ["codex-memory", "heartbeat"],
+            }
+        ).rstrip(),
         "# Heartbeat",
         "",
         f"Thread: {wikilink(thread_home / 'Thread Overview.md', vault, thread_home.name)}",
@@ -151,16 +161,18 @@ def heartbeat_note(thread_home: Path, vault: Path, cwd: Path, automation_name: s
         lines.append(f"- Suggested automation: `{automation_name}`")
     else:
         lines.append("- No Codex heartbeat automation has been created by this script.")
-    lines.extend([
-        "",
-        "## Local Maintenance Command",
-        "",
-        "```powershell",
-        f"python \"$env:CODEX_HOME\\skills\\aippocampus\\scripts\\aippocampus_maintenance.py\" --cwd \"{cwd}\"",
-        f"python \"$env:CODEX_HOME\\skills\\aippocampus\\scripts\\sync_vault.py\" --cwd \"{cwd}\" --vault \"{vault}\"",
-        "```",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "## Local Maintenance Command",
+            "",
+            "```powershell",
+            f'python "$env:CODEX_HOME\\skills\\aippocampus\\scripts\\aippocampus_maintenance.py" --cwd "{cwd}"',
+            f'python "$env:CODEX_HOME\\skills\\aippocampus\\scripts\\sync_vault.py" --cwd "{cwd}" --vault "{vault}"',
+            "```",
+            "",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -179,56 +191,66 @@ def dashboard_markdown(
         path = thread_home / "Anchors" / f"{safe_filename(title)}.md"
         anchor_lines.append(f"- {wikilink(path, vault, title)}")
     html_rel = Path(os.path.relpath(dashboard_html, start=thread_home)).as_posix()
-    return "\n".join([
-        format_frontmatter({
-            "type": "codex-thread-dashboard",
-            "thread": thread_home.name,
-            "updated": now_utc(),
-            "tags": ["codex-memory", "dashboard"],
-        }).rstrip(),
-        f"# {thread_home.name}",
-        "",
-        "## Control Panel",
-        "",
-        f"- {wikilink(health_path, vault, 'Memory Health')}",
-        f"- {wikilink(checkpoint_path, vault, 'Latest Checkpoint')}",
-        f"- {wikilink(heartbeat_path, vault, 'Heartbeat')}",
-        f"- HTML dashboard: [{dashboard_html.name}]({html_rel})",
-        "",
-        "## Anchors",
-        "",
-        "\n".join(anchor_lines) if anchor_lines else "- No anchors yet.",
-        "",
-        "## Obsidian Graph Hint",
-        "",
-        "This dashboard writes each anchor as its own note so Obsidian's local graph can show thread-memory relationships through wikilinks and tags.",
-        "",
-    ])
+    return "\n".join(
+        [
+            format_frontmatter(
+                {
+                    "type": "codex-thread-dashboard",
+                    "thread": thread_home.name,
+                    "updated": now_utc(),
+                    "tags": ["codex-memory", "dashboard"],
+                }
+            ).rstrip(),
+            f"# {thread_home.name}",
+            "",
+            "## Control Panel",
+            "",
+            f"- {wikilink(health_path, vault, 'Memory Health')}",
+            f"- {wikilink(checkpoint_path, vault, 'Latest Checkpoint')}",
+            f"- {wikilink(heartbeat_path, vault, 'Heartbeat')}",
+            f"- HTML dashboard: [{dashboard_html.name}]({html_rel})",
+            "",
+            "## Anchors",
+            "",
+            "\n".join(anchor_lines) if anchor_lines else "- No anchors yet.",
+            "",
+            "## Obsidian Graph Hint",
+            "",
+            "This dashboard writes each anchor as its own note so Obsidian's local graph can show thread-memory relationships through wikilinks and tags.",
+            "",
+        ]
+    )
 
 
 def homepage(vault: Path, thread_dashboard: Path) -> str:
-    return "\n".join([
-        format_frontmatter({
-            "type": "codex-memory-home",
-            "updated": now_utc(),
-            "tags": ["codex-memory"],
-        }).rstrip(),
-        f"# {DEFAULT_SITE_TITLE}",
-        "",
-        "这是给长线程记忆准备的本地 vault：人类可读、Obsidian 可连图、Codex 可同步。",
-        "",
-        "## Threads",
-        "",
-        f"- {wikilink(thread_dashboard, vault, thread_dashboard.parent.name)}",
-        "",
-        "## How This Works",
-        "",
-        "- `thread-anchors.md` keeps compact human-readable memory anchors.",
-        "- SQLite FTS keeps old conversation searchable.",
-        "- Graphify corpus is prepared only when deep graph analysis is worth it.",
-        "- Heartbeat wakes the thread to run checks and update this vault.",
-        "",
-    ])
+    return "\n".join(
+        [
+            format_frontmatter(
+                {
+                    "type": "codex-memory-home",
+                    "updated": now_utc(),
+                    "tags": ["codex-memory"],
+                }
+            ).rstrip(),
+            f"# {DEFAULT_SITE_TITLE}",
+            "",
+            "这是给长线程记忆准备的本地 vault：人类可读、Obsidian 可连图、Codex 可同步。",
+            "",
+            "## Threads",
+            "",
+            f"- {wikilink(thread_dashboard, vault, thread_dashboard.parent.name)}",
+            "",
+            "## How This Works",
+            "",
+            "- `thread-anchors.md` keeps compact human-readable memory anchors.",
+            "- SQLite FTS keeps old conversation searchable.",
+            "- Graphify corpus is prepared only when deep graph analysis is worth it.",
+            "- Heartbeat wakes the thread to run checks and update this vault.",
+            "",
+        ]
+    )
+
+
 def obsidian_snippet_css() -> str:
     return """
 /* Optional Codex Memory vault styling.

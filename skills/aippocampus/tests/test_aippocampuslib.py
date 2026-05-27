@@ -7,13 +7,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import aippocampuslib  # noqa: E402
-
 
 LOCATE_ROLLOUT = SCRIPTS / "locate_rollout.py"
 

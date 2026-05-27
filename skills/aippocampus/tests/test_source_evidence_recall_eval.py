@@ -6,7 +6,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -139,7 +138,9 @@ class SourceEvidenceRecallEvalTests(unittest.TestCase):
         )
         return clean
 
-    def test_selected_fuzzy_life_wide_prompt_hits_expected_clean_source_without_leaking_text(self) -> None:
+    def test_selected_fuzzy_life_wide_prompt_hits_expected_clean_source_without_leaking_text(
+        self,
+    ) -> None:
         self._write_fixture(with_sidecar=True)
 
         result = recall_eval.run_source_evidence_recall_eval(

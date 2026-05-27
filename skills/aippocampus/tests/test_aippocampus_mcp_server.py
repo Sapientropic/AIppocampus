@@ -8,7 +8,6 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -148,7 +147,9 @@ class AippocampusMcpServerTests(unittest.TestCase):
 
         payload = self.tool_payload(response)
         self.assertEqual(payload["turn"]["turn_id"], "turn_1")
-        self.assertEqual([item["message_id"] for item in payload["messages"]], ["msg_user", "msg_final"])
+        self.assertEqual(
+            [item["message_id"] for item in payload["messages"]], ["msg_user", "msg_final"]
+        )
 
     def test_latest_reply_uses_clean_source_before_raw_rollout(self) -> None:
         response = mcp.handle_request(

@@ -27,11 +27,12 @@ from typing import Any
 import smoke_cross_device_sync
 import sync_bundle
 
-
 # Build drive markers without literal drive-root strings so repo secret/path
 # scans can still flag accidental local absolute paths elsewhere.
 WINDOWS_PATH_MARKERS = tuple(f"{drive}:" + "\\" for drive in ("C", "D", "E")) + ("\\Users\\",)
-DEFAULT_DOCKER_IMAGE = os.environ.get("AIPPOCAMPUS_ALTERNATE_RUNTIME_DOCKER_IMAGE", "python:3.11-slim")
+DEFAULT_DOCKER_IMAGE = os.environ.get(
+    "AIPPOCAMPUS_ALTERNATE_RUNTIME_DOCKER_IMAGE", "python:3.11-slim"
+)
 
 
 @dataclass(frozen=True)
@@ -104,7 +105,9 @@ def docker_available(image: str) -> tuple[bool, str]:
     version = subprocess.run([docker, "--version"], text=True, capture_output=True, check=False)
     if version.returncode != 0:
         return False, "docker_unavailable"
-    inspect = subprocess.run([docker, "image", "inspect", image], text=True, capture_output=True, check=False)
+    inspect = subprocess.run(
+        [docker, "image", "inspect", image], text=True, capture_output=True, check=False
+    )
     if inspect.returncode != 0:
         return False, f"docker_image_missing:{image}"
     return True, version.stdout.strip()
@@ -145,7 +148,9 @@ def wsl_available() -> tuple[bool, str]:
     wsl = shutil.which("wsl.exe") or shutil.which("wsl")
     if not wsl:
         return False, "wsl_not_found"
-    probe = subprocess.run([wsl, "sh", "-lc", "command -v python3"], capture_output=True, check=False)
+    probe = subprocess.run(
+        [wsl, "sh", "-lc", "command -v python3"], capture_output=True, check=False
+    )
     if probe.returncode != 0:
         return False, "wsl_python3_missing"
     return True, decode_process_bytes(probe.stdout).strip() or "python3"
@@ -162,7 +167,9 @@ def fallback_wsl_mount_path(path: Path) -> str | None:
 
 def wsl_path(path: Path) -> str:
     wsl = shutil.which("wsl.exe") or shutil.which("wsl") or "wsl.exe"
-    proc = subprocess.run([wsl, "wslpath", "-a", str(path.resolve())], capture_output=True, check=False)
+    proc = subprocess.run(
+        [wsl, "wslpath", "-a", str(path.resolve())], capture_output=True, check=False
+    )
     stdout = decode_process_bytes(proc.stdout).strip()
     if proc.returncode == 0 and stdout:
         return stdout
@@ -221,30 +228,46 @@ def read_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def validate_target_registry(target_registry_json: Path, *, runtime_root_marker: str) -> dict[str, Any]:
+def validate_target_registry(
+    target_registry_json: Path, *, runtime_root_marker: str
+) -> dict[str, Any]:
     failures: list[dict[str, str]] = []
     if not target_registry_json.is_file():
-        return {"ok": False, "failures": [{"code": "missing_target_registry", "detail": str(target_registry_json)}]}
+        return {
+            "ok": False,
+            "failures": [{"code": "missing_target_registry", "detail": str(target_registry_json)}],
+        }
     registry = read_json(target_registry_json)
     text = json.dumps(registry, ensure_ascii=False)
     for marker in WINDOWS_PATH_MARKERS:
         if marker in text:
             failures.append({"code": "windows_locator_leaked", "detail": marker})
     paths = smoke_cross_device_sync.locator_values(registry)
-    for key in ("registry_thread_store", "clean_source_messages_jsonl", "clean_source_turns_jsonl", "graph_json"):
+    for key in (
+        "registry_thread_store",
+        "clean_source_messages_jsonl",
+        "clean_source_turns_jsonl",
+        "graph_json",
+    ):
         value = str(paths.get(key) or "")
         if not value.startswith(runtime_root_marker):
             failures.append({"code": "locator_not_repaired_to_runtime", "detail": f"{key}={value}"})
         if "\\" in value:
             failures.append({"code": "runtime_locator_uses_backslash", "detail": f"{key}={value}"})
     if paths.get("workspace") is not None:
-        failures.append({"code": "workspace_should_stay_unresolved", "detail": str(paths.get("workspace"))})
+        failures.append(
+            {"code": "workspace_should_stay_unresolved", "detail": str(paths.get("workspace"))}
+        )
     if paths.get("rollout") is not None:
-        failures.append({"code": "raw_rollout_should_stay_excluded", "detail": str(paths.get("rollout"))})
+        failures.append(
+            {"code": "raw_rollout_should_stay_excluded", "detail": str(paths.get("rollout"))}
+        )
     return {"ok": not failures, "failures": failures, "paths": paths}
 
 
-def run_runtime_smoke(runtime: str, root: Path, runtime_dir: Path, *, docker_image: str) -> dict[str, Any]:
+def run_runtime_smoke(
+    runtime: str, root: Path, runtime_dir: Path, *, docker_image: str
+) -> dict[str, Any]:
     if runtime == "docker":
         available, reason = docker_available(docker_image)
         if not available:
@@ -252,11 +275,35 @@ def run_runtime_smoke(runtime: str, root: Path, runtime_dir: Path, *, docker_ima
         paths = docker_paths(root, runtime_dir)
         status = docker_run(docker_image, root, paths, "status")
         repair = docker_run(docker_image, root, paths, "repair") if status.get("ok") else None
-        pull = docker_run(docker_image, root, paths, "pull") if repair and repair.get("ok") else None
-        validation = validate_target_registry(root / "docker-target-registry" / "threads.json", runtime_root_marker="/work/docker-target-registry") if pull and pull.get("ok") else {"ok": False, "failures": [{"code": "pull_not_ok", "detail": json.dumps((pull or {}).get("payload", {}), ensure_ascii=False)}]}
+        pull = (
+            docker_run(docker_image, root, paths, "pull") if repair and repair.get("ok") else None
+        )
+        validation = (
+            validate_target_registry(
+                root / "docker-target-registry" / "threads.json",
+                runtime_root_marker="/work/docker-target-registry",
+            )
+            if pull and pull.get("ok")
+            else {
+                "ok": False,
+                "failures": [
+                    {
+                        "code": "pull_not_ok",
+                        "detail": json.dumps((pull or {}).get("payload", {}), ensure_ascii=False),
+                    }
+                ],
+            }
+        )
         return {
             "runtime": runtime,
-            "ok": bool(status.get("ok") and repair and repair.get("ok") and pull and pull.get("ok") and validation.get("ok")),
+            "ok": bool(
+                status.get("ok")
+                and repair
+                and repair.get("ok")
+                and pull
+                and pull.get("ok")
+                and validation.get("ok")
+            ),
             "skipped": False,
             "image": docker_image,
             "status": status,
@@ -276,10 +323,32 @@ def run_runtime_smoke(runtime: str, root: Path, runtime_dir: Path, *, docker_ima
         status = wsl_run(paths, "status")
         repair = wsl_run(paths, "repair") if status.get("ok") else None
         pull = wsl_run(paths, "pull") if repair and repair.get("ok") else None
-        validation = validate_target_registry(root / "wsl-target-registry" / "threads.json", runtime_root_marker=paths.target_registry) if pull and pull.get("ok") else {"ok": False, "failures": [{"code": "pull_not_ok", "detail": json.dumps((pull or {}).get("payload", {}), ensure_ascii=False)}]}
+        validation = (
+            validate_target_registry(
+                root / "wsl-target-registry" / "threads.json",
+                runtime_root_marker=paths.target_registry,
+            )
+            if pull and pull.get("ok")
+            else {
+                "ok": False,
+                "failures": [
+                    {
+                        "code": "pull_not_ok",
+                        "detail": json.dumps((pull or {}).get("payload", {}), ensure_ascii=False),
+                    }
+                ],
+            }
+        )
         return {
             "runtime": runtime,
-            "ok": bool(status.get("ok") and repair and repair.get("ok") and pull and pull.get("ok") and validation.get("ok")),
+            "ok": bool(
+                status.get("ok")
+                and repair
+                and repair.get("ok")
+                and pull
+                and pull.get("ok")
+                and validation.get("ok")
+            ),
             "skipped": False,
             "status": status,
             "repair": repair,
@@ -336,8 +405,14 @@ def run_alternate_runtime_sync_smoke(
             "claims": {
                 "single_machine_dual_device_model": True,
                 "alternate_runtime_executed": bool(ran),
-                "docker_runtime_executed": any(item.get("runtime") == "docker" and not item.get("skipped") for item in runtime_results),
-                "wsl_runtime_executed": any(item.get("runtime") == "wsl" and not item.get("skipped") for item in runtime_results),
+                "docker_runtime_executed": any(
+                    item.get("runtime") == "docker" and not item.get("skipped")
+                    for item in runtime_results
+                ),
+                "wsl_runtime_executed": any(
+                    item.get("runtime") == "wsl" and not item.get("skipped")
+                    for item in runtime_results
+                ),
                 "real_cloud_backend": False,
                 "physical_second_machine": False,
             },

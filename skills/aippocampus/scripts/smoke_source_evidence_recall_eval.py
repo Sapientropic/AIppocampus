@@ -23,8 +23,11 @@ from build_project_timeline import build_project_timeline
 from registry import deep_search_entry_result, entry_search_score, load_registry
 from retrieval import GENERIC_ANCHOR_TERMS, split_query_terms, unique_preserve
 from search_clean_source import iter_clean_messages, score_message
-from semantic_scope_labels import load_semantic_scope_labels, merged_scope_labels, semantic_labels_for_message
-
+from semantic_scope_labels import (
+    load_semantic_scope_labels,
+    merged_scope_labels,
+    semantic_labels_for_message,
+)
 
 PROMPT_KIND = "fuzzy_life_wide_source_evidence"
 NON_TECHNICAL_LABELS = tuple(label for label in SCOPE_LABEL_ORDER if label != "technical_work")
@@ -78,7 +81,11 @@ def selected_prompt_terms(
         ]
         unique_terms = sorted(
             specific_terms,
-            key=lambda term: (int(term_counts.get(term.casefold(), 0)), -len(term), term.casefold()),
+            key=lambda term: (
+                int(term_counts.get(term.casefold(), 0)),
+                -len(term),
+                term.casefold(),
+            ),
         )
     return unique_preserve(unique_terms, limit=limit)
 
@@ -94,13 +101,17 @@ def expected_ref_for_turn(turn: dict[str, Any]) -> dict[str, Any] | None:
     refs = [ref for ref in turn.get("source_refs") or [] if isinstance(ref, dict)]
     if not refs:
         return None
-    return next((ref for ref in refs if ref.get("role") == "user" and ref.get("message_id")), None) or next(
+    return next(
+        (ref for ref in refs if ref.get("role") == "user" and ref.get("message_id")), None
+    ) or next(
         (ref for ref in refs if ref.get("message_id")),
         None,
     )
 
 
-def turn_has_required_semantic_label(turn: dict[str, Any], *, require_semantic_sidecar: bool) -> bool:
+def turn_has_required_semantic_label(
+    turn: dict[str, Any], *, require_semantic_sidecar: bool
+) -> bool:
     if not require_semantic_sidecar:
         return True
     return bool(turn.get("semantic_scope_labels"))
@@ -117,7 +128,13 @@ def topic_term_counts(timeline: dict[str, Any]) -> dict[str, int]:
         for turn in group.get("latest_turns") or []:
             if not isinstance(turn, dict):
                 continue
-            turn_id = "|".join([str(turn.get("thread_key") or ""), str(turn.get("turn_id") or ""), str(turn.get("turn_index") or "")])
+            turn_id = "|".join(
+                [
+                    str(turn.get("thread_key") or ""),
+                    str(turn.get("turn_id") or ""),
+                    str(turn.get("turn_index") or ""),
+                ]
+            )
             for term in unique_preserve([str(item) for item in turn.get("topic_terms") or []]):
                 key = term.casefold()
                 identity = (turn_id, key)
@@ -131,7 +148,10 @@ def topic_term_counts(timeline: dict[str, Any]) -> dict[str, int]:
 def prompt_specificity_score(terms: list[str], term_counts: dict[str, int]) -> float:
     if not terms:
         return 0.0
-    return sum(1.0 / max(1, int(term_counts.get(term.casefold(), 1))) for term in terms) + len(terms) * 0.05
+    return (
+        sum(1.0 / max(1, int(term_counts.get(term.casefold(), 1))) for term in terms)
+        + len(terms) * 0.05
+    )
 
 
 def select_eval_cases(
@@ -151,12 +171,16 @@ def select_eval_cases(
         if not isinstance(group, dict):
             continue
         for turn in group.get("latest_turns") or []:
-            if not isinstance(turn, dict) or not turn_has_required_semantic_label(turn, require_semantic_sidecar=require_semantic_sidecar):
+            if not isinstance(turn, dict) or not turn_has_required_semantic_label(
+                turn, require_semantic_sidecar=require_semantic_sidecar
+            ):
                 continue
             ref = expected_ref_for_turn(turn)
             if not ref:
                 continue
-            terms = selected_prompt_terms(turn, term_counts=term_counts, max_term_frequency=max_term_frequency)
+            terms = selected_prompt_terms(
+                turn, term_counts=term_counts, max_term_frequency=max_term_frequency
+            )
             if not terms:
                 continue
             identity = "|".join(
@@ -177,7 +201,11 @@ def select_eval_cases(
                     "prompt": selected_prompt_text(terms),
                     "query_terms": split_query_terms([selected_prompt_text(terms)]),
                     "scope_labels": unique_preserve(
-                        [label, *list(turn.get("semantic_scope_labels") or []), *list(turn.get("scope_labels") or [])],
+                        [
+                            label,
+                            *list(turn.get("semantic_scope_labels") or []),
+                            *list(turn.get("scope_labels") or []),
+                        ],
                         limit=8,
                     ),
                     "expected": {
@@ -193,14 +221,21 @@ def select_eval_cases(
                     "_specificity_score": prompt_specificity_score(terms, term_counts),
                 }
             )
-    candidates.sort(key=lambda case: (-float(case.get("_specificity_score") or 0.0), str(case.get("case_id") or "")))
+    candidates.sort(
+        key=lambda case: (
+            -float(case.get("_specificity_score") or 0.0),
+            str(case.get("case_id") or ""),
+        )
+    )
     for case in candidates:
         case.pop("_specificity_score", None)
     return candidates[: max(1, int(max_cases))]
 
 
 def hit_matches_expected(hit: dict[str, Any], expected: dict[str, Any]) -> bool:
-    if expected.get("message_id") and str(hit.get("message_id") or "") == str(expected.get("message_id")):
+    if expected.get("message_id") and str(hit.get("message_id") or "") == str(
+        expected.get("message_id")
+    ):
         return True
     if expected.get("turn_id") and str(hit.get("turn_id") or "") == str(expected.get("turn_id")):
         return True
@@ -232,7 +267,9 @@ def clean_source_corpus(registry: dict[str, Any]) -> tuple[list[dict[str, Any]],
                 if semantic_scope_labels:
                     message = dict(message)
                     message["semantic_scope_labels"] = semantic_scope_labels
-                    message["scope_labels"] = merged_scope_labels(list(message.get("scope_labels") or []), semantic_scope_labels)
+                    message["scope_labels"] = merged_scope_labels(
+                        list(message.get("scope_labels") or []), semantic_scope_labels
+                    )
                 rows.append(
                     {
                         "thread_key": entry.get("thread_key"),
@@ -296,18 +333,24 @@ def search_expected_evidence_registry(
         for hit in deep_result.get("hits") or []:
             if not isinstance(hit, dict) or not hit_scope_matches(hit, labels):
                 continue
-            score = float(hit.get("rank_score") or hit.get("score") or 0.0) + float(metadata_score) * 0.02
+            score = (
+                float(hit.get("rank_score") or hit.get("score") or 0.0)
+                + float(metadata_score) * 0.02
+            )
             scored_hits.append(
                 {
                     "thread_key": entry.get("thread_key"),
                     "message_id": hit.get("message_id"),
                     "turn_id": hit.get("turn_id"),
                     "score": score,
-                    "matched_expected": str(entry.get("thread_key") or "") == str(expected.get("thread_key") or "")
+                    "matched_expected": str(entry.get("thread_key") or "")
+                    == str(expected.get("thread_key") or "")
                     and hit_matches_expected(hit, expected),
                 }
             )
-    scored_hits.sort(key=lambda item: (-float(item.get("score") or 0.0), str(item.get("thread_key") or "")))
+    scored_hits.sort(
+        key=lambda item: (-float(item.get("score") or 0.0), str(item.get("thread_key") or ""))
+    )
     for rank, hit in enumerate(scored_hits[: max(1, int(top_k))], start=1):
         if hit.get("matched_expected"):
             return {"passed": True, "rank": rank, "warning_count": warnings}
@@ -342,7 +385,8 @@ def search_expected_evidence_dynamic_source(
                 "turn_id": message.get("turn_id"),
                 "score": score,
                 "source_line": message.get("source_line"),
-                "matched_expected": str(row.get("thread_key") or "") == str(expected.get("thread_key") or "")
+                "matched_expected": str(row.get("thread_key") or "")
+                == str(expected.get("thread_key") or "")
                 and hit_matches_expected(
                     {
                         "message_id": message.get("message_id") or message.get("id"),
@@ -352,7 +396,13 @@ def search_expected_evidence_dynamic_source(
                 ),
             }
         )
-    scored_hits.sort(key=lambda item: (-float(item.get("score") or 0.0), str(item.get("thread_key") or ""), int(item.get("source_line") or 0)))
+    scored_hits.sort(
+        key=lambda item: (
+            -float(item.get("score") or 0.0),
+            str(item.get("thread_key") or ""),
+            int(item.get("source_line") or 0),
+        )
+    )
     for rank, hit in enumerate(scored_hits[: max(1, int(top_k))], start=1):
         if hit.get("matched_expected"):
             return {"passed": True, "rank": rank, "warning_count": 0}
@@ -404,7 +454,11 @@ def run_source_evidence_recall_eval(
     max_term_frequency: int = 8,
     ranking: str = "dynamic_source",
 ) -> dict[str, Any]:
-    registry_file = Path(registry_path).resolve() if registry_path else (aippocampus_registry_dir() / "threads.json").resolve()
+    registry_file = (
+        Path(registry_path).resolve()
+        if registry_path
+        else (aippocampus_registry_dir() / "threads.json").resolve()
+    )
     registry = load_registry(registry_file)
     timeline = build_project_timeline(
         registry_file,
@@ -420,7 +474,12 @@ def run_source_evidence_recall_eval(
     if ranking == "registry":
         corpus_warning_count = 0
         results = [
-            (case, search_expected_evidence_registry(registry, case, top_k=top_k, max_hits_per_entry=max_hits_per_entry))
+            (
+                case,
+                search_expected_evidence_registry(
+                    registry, case, top_k=top_k, max_hits_per_entry=max_hits_per_entry
+                ),
+            )
             for case in cases
         ]
     elif ranking == "dynamic_source":
@@ -434,12 +493,16 @@ def run_source_evidence_recall_eval(
     passed_count = sum(1 for _, result in results if result.get("passed"))
     status = eval_status(len(cases), passed_count, min_cases=min_cases, min_hit_rate=min_hit_rate)
     labels = sorted({label for case in cases for label in case.get("scope_labels") or []})
-    warning_count = corpus_warning_count + sum(int(result.get("warning_count") or 0) for _, result in results)
+    warning_count = corpus_warning_count + sum(
+        int(result.get("warning_count") or 0) for _, result in results
+    )
     hit_rate = round((passed_count / len(cases)) if cases else 0.0, 4)
     return {
         "ok": status == "sufficient",
         "status": status,
-        "claim_level": "selected_source_evidence_recall_eval" if status == "sufficient" else "diagnostic_only",
+        "claim_level": "selected_source_evidence_recall_eval"
+        if status == "sufficient"
+        else "diagnostic_only",
         "cannot_claim": cannot_claim(status),
         "prompt_kind": PROMPT_KIND,
         "case_count": len(cases),
@@ -487,7 +550,9 @@ def main() -> int:
     parser.add_argument("--max-turns-per-thread", type=int, default=5000)
     parser.add_argument("--max-per-life-label", type=int, default=5000)
     parser.add_argument("--max-term-frequency", type=int, default=8)
-    parser.add_argument("--ranking", choices=["dynamic_source", "registry"], default="dynamic_source")
+    parser.add_argument(
+        "--ranking", choices=["dynamic_source", "registry"], default="dynamic_source"
+    )
     parser.add_argument("--allow-deterministic-labels", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
@@ -509,7 +574,9 @@ def main() -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         print(f"source-evidence recall eval: {result.get('status')}")
-        print(f"cases: {result.get('case_count')} passed: {result.get('passed_count')} hit_rate: {result.get('top_k_hit_rate')}")
+        print(
+            f"cases: {result.get('case_count')} passed: {result.get('passed_count')} hit_rate: {result.get('top_k_hit_rate')}"
+        )
     return 0 if result.get("ok") else 1
 
 

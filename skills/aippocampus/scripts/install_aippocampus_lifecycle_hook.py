@@ -12,7 +12,6 @@ from typing import Any
 
 from aippocampuslib import codex_home
 
-
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_TIMEOUT_SECONDS = 20
 EVENTS = ("SessionStart", "Stop", "PreCompact", "PostCompact")
@@ -67,7 +66,13 @@ def is_maintenance_handler(handler: dict[str, Any], script: Path) -> bool:
     # Match both the new AIppocampus handler and the old thread-memory handler
     # so reinstalling upgrades lifecycle hooks in-place instead of leaving
     # stale Stop/PreCompact/PostCompact commands behind.
-    return any(name in command for name in ("aippocampus_lifecycle_hook.py", "memory_maintenance_hook.py")) or script_resolved in command
+    return (
+        any(
+            name in command
+            for name in ("aippocampus_lifecycle_hook.py", "memory_maintenance_hook.py")
+        )
+        or script_resolved in command
+    )
 
 
 def groups_for(data: dict[str, Any], event: str) -> list[dict[str, Any]]:
@@ -90,7 +95,11 @@ def prune_event(groups: list[dict[str, Any]], script: Path) -> tuple[list[dict[s
         if not isinstance(handlers, list):
             out.append(group)
             continue
-        kept = [handler for handler in handlers if not (isinstance(handler, dict) and is_maintenance_handler(handler, script))]
+        kept = [
+            handler
+            for handler in handlers
+            if not (isinstance(handler, dict) and is_maintenance_handler(handler, script))
+        ]
         if len(kept) != len(handlers):
             changed = True
         if kept:
@@ -100,7 +109,9 @@ def prune_event(groups: list[dict[str, Any]], script: Path) -> tuple[list[dict[s
     return out, changed
 
 
-def install(path: Path, script: Path, *, timeout: int = DEFAULT_TIMEOUT_SECONDS, log: bool = False) -> dict[str, Any]:
+def install(
+    path: Path, script: Path, *, timeout: int = DEFAULT_TIMEOUT_SECONDS, log: bool = False
+) -> dict[str, Any]:
     data = load_hooks(path)
     changed = False
     target = handler_for(script, timeout=timeout, log=log)
@@ -120,7 +131,13 @@ def install(path: Path, script: Path, *, timeout: int = DEFAULT_TIMEOUT_SECONDS,
         changed = True
     else:
         changed = False
-    return {"changed": changed, "installed": True, "path": str(path), "events": list(EVENTS), "command": target["command"]}
+    return {
+        "changed": changed,
+        "installed": True,
+        "path": str(path),
+        "events": list(EVENTS),
+        "command": target["command"],
+    }
 
 
 def uninstall(path: Path, script: Path) -> dict[str, Any]:
@@ -164,12 +181,16 @@ def status(path: Path, script: Path) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=["install", "uninstall", "status"], nargs="?", default="status")
+    parser.add_argument(
+        "action", choices=["install", "uninstall", "status"], nargs="?", default="status"
+    )
     parser.add_argument("--codex-home", default=os.environ.get("CODEX_HOME") or str(codex_home()))
     parser.add_argument("--hooks-json")
     parser.add_argument("--script", default=str(SCRIPT_DIR / "aippocampus_lifecycle_hook.py"))
     parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT_SECONDS)
-    parser.add_argument("--log", action="store_true", help="Ask the hook to write sanitized lifecycle debug events.")
+    parser.add_argument(
+        "--log", action="store_true", help="Ask the hook to write sanitized lifecycle debug events."
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
@@ -186,7 +207,9 @@ def main() -> int:
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
-        print(f"thread-memory maintenance hooks {'installed' if result.get('installed') else 'not installed'}")
+        print(
+            f"thread-memory maintenance hooks {'installed' if result.get('installed') else 'not installed'}"
+        )
         print(f"hooks: {result.get('path')}")
         if result.get("changed") is not None:
             print(f"changed: {result.get('changed')}")

@@ -9,7 +9,6 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -66,7 +65,7 @@ class SemanticScopeLabelsTests(unittest.TestCase):
                                 "label": "personal_reflection",
                                 "reason": "The source treats the metaphor as personally meaningful.",
                                 "confidence": 0.86,
-                            }
+                            },
                         ],
                         "source_refs": [
                             {
@@ -218,7 +217,10 @@ class SemanticScopeLabelsTests(unittest.TestCase):
         }
 
         self.assertEqual(semantic.filtered_semantic_scope_labels(loose_item), ["technical_work"])
-        self.assertEqual(semantic.filtered_semantic_scope_labels(strong_item), ["relationship_continuity", "open_question"])
+        self.assertEqual(
+            semantic.filtered_semantic_scope_labels(strong_item),
+            ["relationship_continuity", "open_question"],
+        )
 
     def test_materializer_merges_duplicate_findings_by_message(self) -> None:
         messages = {
@@ -276,7 +278,14 @@ class SemanticScopeLabelsTests(unittest.TestCase):
             clean_source = Path(tmp) / "clean-source"
             self.write_jsonl(
                 clean_source / "messages.jsonl",
-                [{"message_id": "msg_keep", "source_line": 7, "text": "A metaphor.", "scope_labels": []}],
+                [
+                    {
+                        "message_id": "msg_keep",
+                        "source_line": 7,
+                        "text": "A metaphor.",
+                        "scope_labels": [],
+                    }
+                ],
             )
             self.write_jsonl(
                 clean_source / "semantic-scope-labels.jsonl",
@@ -337,7 +346,11 @@ class SemanticScopeLabelsTests(unittest.TestCase):
                             {
                                 "thread_key": "thread-one",
                                 "project_label": "Life Chat",
-                                "paths": {"clean_source_messages_jsonl": str(clean_source / "messages.jsonl")},
+                                "paths": {
+                                    "clean_source_messages_jsonl": str(
+                                        clean_source / "messages.jsonl"
+                                    )
+                                },
                             }
                         ]
                     },
@@ -377,7 +390,10 @@ class SemanticScopeLabelsTests(unittest.TestCase):
             self.assertEqual(result["target_count"], 1)
             self.assertEqual(result["row_count"], 1)
             self.assertEqual(list(clean_source.glob(".semantic-scope-labels.jsonl.*.tmp")), [])
-            self.assertIn("msg_keep", (clean_source / "semantic-scope-labels.jsonl").read_text(encoding="utf-8"))
+            self.assertIn(
+                "msg_keep",
+                (clean_source / "semantic-scope-labels.jsonl").read_text(encoding="utf-8"),
+            )
 
     def test_registry_materializer_text_cli_does_not_require_single_output_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -386,7 +402,15 @@ class SemanticScopeLabelsTests(unittest.TestCase):
             clean_source = root / "threads" / "thread-one" / "clean-source"
             self.write_jsonl(
                 clean_source / "messages.jsonl",
-                [{"message_id": "msg_keep", "turn_id": "turn_1", "source_line": 7, "text": "A life-wide idea.", "scope_labels": []}],
+                [
+                    {
+                        "message_id": "msg_keep",
+                        "turn_id": "turn_1",
+                        "source_line": 7,
+                        "text": "A life-wide idea.",
+                        "scope_labels": [],
+                    }
+                ],
             )
             registry_dir.mkdir()
             registry_path = registry_dir / "threads.json"
@@ -397,7 +421,11 @@ class SemanticScopeLabelsTests(unittest.TestCase):
                             {
                                 "thread_key": "thread-one",
                                 "project_label": "Life Chat",
-                                "paths": {"clean_source_messages_jsonl": str(clean_source / "messages.jsonl")},
+                                "paths": {
+                                    "clean_source_messages_jsonl": str(
+                                        clean_source / "messages.jsonl"
+                                    )
+                                },
                             }
                         ]
                     },
@@ -429,17 +457,20 @@ class SemanticScopeLabelsTests(unittest.TestCase):
             )
             stdout = StringIO()
 
-            with patch.object(
-                sys,
-                "argv",
-                [
-                    "build_semantic_scope_labels.py",
-                    "--registry",
-                    str(registry_path),
-                    "--project",
-                    "Life Chat",
-                ],
-            ), redirect_stdout(stdout):
+            with (
+                patch.object(
+                    sys,
+                    "argv",
+                    [
+                        "build_semantic_scope_labels.py",
+                        "--registry",
+                        str(registry_path),
+                        "--project",
+                        "Life Chat",
+                    ],
+                ),
+                redirect_stdout(stdout),
+            ):
                 code = builder.main()
 
         self.assertEqual(code, 0)

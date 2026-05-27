@@ -14,7 +14,6 @@ from typing import Any
 
 from aippocampuslib import sanitize_external_model_payload
 
-
 PROMPT_VERSION = "aippocampus-subconscious-jobs-v2"
 
 JOB_SPECS: dict[str, dict[str, Any]] = {
@@ -22,7 +21,13 @@ JOB_SPECS: dict[str, dict[str, Any]] = {
         "purpose": "Extract genuine user questions plus explicit unresolved frontier markers from source-backed turns.",
         "finding_kind": "question_candidate",
         "finding_kinds": ["question_candidate", "frontier_marker"],
-        "must_include": ["title", "summary", "confidence", "source_refs", "question_text or frontier_type"],
+        "must_include": [
+            "title",
+            "summary",
+            "confidence",
+            "source_refs",
+            "question_text or frontier_type",
+        ],
         "notes": (
             "Use question_candidate for a real question the user was pursuing, not every interrogative sentence. "
             "Use frontier_marker only when the source explicitly shows a stopping point, unresolved boundary, missing evidence, "
@@ -52,7 +57,16 @@ JOB_SPECS: dict[str, dict[str, Any]] = {
     "cognitive_map": {
         "purpose": "Propose source-backed mental-map landmarks, regions, and routes for ambient recall navigation.",
         "finding_kind": "cognitive_map_route",
-        "must_include": ["title", "summary", "confidence", "source_refs", "landmarks", "regions", "route_cues", "target_thread_keys"],
+        "must_include": [
+            "title",
+            "summary",
+            "confidence",
+            "source_refs",
+            "landmarks",
+            "regions",
+            "route_cues",
+            "target_thread_keys",
+        ],
         "notes": (
             "Think like a hippocampal cognitive map: landmarks are durable concepts, regions are decision/topic spaces, "
             "route_cues are prompts that should navigate to those sources, and negative_cues describe contexts that should not trigger the route. "
@@ -65,7 +79,14 @@ JOB_SPECS: dict[str, dict[str, Any]] = {
             "This is the DeepSeek/subconscious path for semantic judgments that must not be hard-coded into the deterministic lexical rules."
         ),
         "finding_kind": "semantic_scope_labels",
-        "must_include": ["message_id", "scope_labels", "label_evidence", "summary", "confidence", "source_refs"],
+        "must_include": [
+            "message_id",
+            "scope_labels",
+            "label_evidence",
+            "summary",
+            "confidence",
+            "source_refs",
+        ],
         "notes": (
             "Use only canonical scope_labels from the provided list. Prefer labels for fuzzy personal reflection, idea evolution, "
             "relationship continuity, and unresolved questions. Treat personal_reflection, relationship_continuity, "
@@ -126,7 +147,9 @@ def job_names(value: str) -> list[str]:
     return [value]
 
 
-def jobs_initial_payload(job: str, objective: str, turns: list[dict[str, Any]], max_steps: int, min_tool_steps: int) -> str:
+def jobs_initial_payload(
+    job: str, objective: str, turns: list[dict[str, Any]], max_steps: int, min_tool_steps: int
+) -> str:
     spec = JOB_SPECS[job]
     # DeepSeek caches exact completed prefixes. Put the stable circuit contract
     # before source turns so different source batches can still reuse the
@@ -168,8 +191,8 @@ def jobs_initial_payload(job: str, objective: str, turns: list[dict[str, Any]], 
                     "scope_labels": "required for semantic_scope_labeling only; canonical labels such as personal_reflection or idea_seed",
                     "label_evidence": (
                         "required for semantic_scope_labeling; one entry for every label in scope_labels: "
-                        "{\"label\":\"canonical label\", "
-                        "\"reason\":\"short source-grounded reason\", \"confidence\":0.0}"
+                        '{"label":"canonical label", '
+                        '"reason":"short source-grounded reason", "confidence":0.0}'
                     ),
                     "question_text": "required for question_candidate only; exact or lightly normalized user question",
                     "question_short": "optional for question_candidate; stable short label",

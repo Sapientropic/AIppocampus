@@ -12,18 +12,17 @@ import subprocess
 import sys
 from pathlib import Path
 
+from aippocampuslib import compact_text, default_thread_index_dir, iter_messages, locate_rollout
 from retrieval import (
     diversify_results,
     expanded_terms_from_anchors,
     graph_neighbors,
     match_anchors,
     message_select_columns,
-    search_rag_chunks,
     search_hybrid_index,
+    search_rag_chunks,
     split_query_terms,
 )
-from aippocampuslib import compact_text, default_thread_index_dir, iter_messages, locate_rollout
-
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -83,7 +82,9 @@ def ensure_index(cwd: str, rollout: Path | None, index: Path, *, force: bool = F
     ]
     if rollout:
         cmd.extend(["--rollout", str(rollout)])
-    proc = subprocess.run(cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False)
+    proc = subprocess.run(
+        cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False
+    )
     if proc.returncode != 0:
         raise RuntimeError(proc.stdout or proc.stderr)
 
@@ -98,7 +99,9 @@ def fts_query(patterns: list[str]) -> str:
     return " OR ".join(phrases)
 
 
-def search_index_literal(index: Path, patterns: list[str], limit: int, snippet_chars: int) -> list[dict]:
+def search_index_literal(
+    index: Path, patterns: list[str], limit: int, snippet_chars: int
+) -> list[dict]:
     con = sqlite3.connect(index)
     con.row_factory = sqlite3.Row
     try:
@@ -108,7 +111,7 @@ def search_index_literal(index: Path, patterns: list[str], limit: int, snippet_c
             if query:
                 rows = con.execute(
                     f"""
-                    SELECT {message_select_columns(con, 'm')}
+                    SELECT {message_select_columns(con, "m")}
                     FROM messages_fts f
                     JOIN messages m ON m.id = f.rowid
                     WHERE messages_fts MATCH ?
@@ -148,25 +151,29 @@ def search_index_literal(index: Path, patterns: list[str], limit: int, snippet_c
         con.close()
 
 
-def search_rollout_stream(rollout: Path, patterns: list[str], include_tools: bool, limit: int, snippet_chars: int) -> list[dict]:
+def search_rollout_stream(
+    rollout: Path, patterns: list[str], include_tools: bool, limit: int, snippet_chars: int
+) -> list[dict]:
     regexes = [re.compile(p, re.IGNORECASE) for p in patterns]
     results = []
     for msg in iter_messages(rollout, include_tools=include_tools):
         text = msg["text"]
         if not any(r.search(text) for r in regexes):
             continue
-        results.append({
-            "line": msg["line"],
-            "timestamp": msg["timestamp"],
-            "role": msg["role"],
-            "kind": msg["kind"],
-            "phase": msg.get("phase") or "",
-            "turn_index": msg.get("turn_index"),
-            "is_final": bool(msg.get("is_final")),
-            "score": None,
-            "signals": {"mode": "stream"},
-            "snippet": compact_text(text, snippet_chars),
-        })
+        results.append(
+            {
+                "line": msg["line"],
+                "timestamp": msg["timestamp"],
+                "role": msg["role"],
+                "kind": msg["kind"],
+                "phase": msg.get("phase") or "",
+                "turn_index": msg.get("turn_index"),
+                "is_final": bool(msg.get("is_final")),
+                "score": None,
+                "signals": {"mode": "stream"},
+                "snippet": compact_text(text, snippet_chars),
+            }
+        )
         if len(results) >= limit:
             break
     return results
@@ -177,17 +184,54 @@ def main() -> int:
     parser.add_argument("patterns", nargs="+", help="Literal clues or regex patterns to search.")
     parser.add_argument("--rollout", help="Explicit rollout JSONL path.")
     parser.add_argument("--cwd", default=os.getcwd(), help="Workspace cwd used to locate rollout.")
-    parser.add_argument("--index", help="SQLite index path. Defaults to the global thread store, with project-local legacy fallback.")
-    parser.add_argument("--anchors", default="thread-anchors.md", help="Anchor file used for hybrid query expansion.")
-    parser.add_argument("--build-index", action="store_true", help="Build/rebuild the global default index before searching unless --index is provided.")
-    parser.add_argument("--no-index", action="store_true", help="Force streaming JSONL regex search.")
+    parser.add_argument(
+        "--index",
+        help="SQLite index path. Defaults to the global thread store, with project-local legacy fallback.",
+    )
+    parser.add_argument(
+        "--anchors",
+        default="thread-anchors.md",
+        help="Anchor file used for hybrid query expansion.",
+    )
+    parser.add_argument(
+        "--build-index",
+        action="store_true",
+        help="Build/rebuild the global default index before searching unless --index is provided.",
+    )
+    parser.add_argument(
+        "--no-index", action="store_true", help="Force streaming JSONL regex search."
+    )
     parser.add_argument("--include-tools", action="store_true")
     parser.add_argument("--mode", choices=["literal", "ranked", "hybrid"], default="hybrid")
-    parser.add_argument("--context", type=int, default=0, help="Include N neighboring normalized messages around each hit in JSON/text output.")
-    parser.add_argument("--candidate-max", type=int, default=160, help="Internal candidate pool for ranked/hybrid search.")
-    parser.add_argument("--diversity", choices=["none", "balanced", "early"], default="balanced", help="Reorder hybrid hits to avoid one recap cluster crowding out source-diverse evidence.")
-    parser.add_argument("--rag-context", type=int, default=3, help="Return N RAG-lite chunk hits alongside message hits in hybrid mode.")
-    parser.add_argument("--show-anchors", action="store_true", help="Print matched anchors and graph neighbors before message hits.")
+    parser.add_argument(
+        "--context",
+        type=int,
+        default=0,
+        help="Include N neighboring normalized messages around each hit in JSON/text output.",
+    )
+    parser.add_argument(
+        "--candidate-max",
+        type=int,
+        default=160,
+        help="Internal candidate pool for ranked/hybrid search.",
+    )
+    parser.add_argument(
+        "--diversity",
+        choices=["none", "balanced", "early"],
+        default="balanced",
+        help="Reorder hybrid hits to avoid one recap cluster crowding out source-diverse evidence.",
+    )
+    parser.add_argument(
+        "--rag-context",
+        type=int,
+        default=3,
+        help="Return N RAG-lite chunk hits alongside message hits in hybrid mode.",
+    )
+    parser.add_argument(
+        "--show-anchors",
+        action="store_true",
+        help="Print matched anchors and graph neighbors before message hits.",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--max", type=int, default=30)
     parser.add_argument("--snippet-chars", type=int, default=700)
@@ -195,15 +239,27 @@ def main() -> int:
 
     cwd = str(Path(args.cwd).resolve())
     rollout = Path(args.rollout) if args.rollout else None
-    index = Path(args.index) if args.index else auto_index_path(cwd, rollout, prefer_existing=not args.build_index)
+    index = (
+        Path(args.index)
+        if args.index
+        else auto_index_path(cwd, rollout, prefer_existing=not args.build_index)
+    )
     anchor_path = resolve_anchor_path(cwd, args.anchors)
 
     source = None
     results: list[dict]
     query_terms = split_query_terms(args.patterns)
     anchors = match_anchors(anchor_path, query_terms) if anchor_path.exists() else []
-    expanded_terms = expanded_terms_from_anchors(query_terms, anchors) if args.mode == "hybrid" else query_terms
-    graph = graph_neighbors(auto_graph_path(cwd, rollout, prefer_existing=not args.build_index), expanded_terms) if args.mode == "hybrid" else []
+    expanded_terms = (
+        expanded_terms_from_anchors(query_terms, anchors) if args.mode == "hybrid" else query_terms
+    )
+    graph = (
+        graph_neighbors(
+            auto_graph_path(cwd, rollout, prefer_existing=not args.build_index), expanded_terms
+        )
+        if args.mode == "hybrid"
+        else []
+    )
     rag_context: list[dict] = []
 
     if not args.no_index:
@@ -239,11 +295,15 @@ def main() -> int:
         else:
             rollout = rollout or locate_rollout(cwd)
             source = str(rollout)
-            results = search_rollout_stream(rollout, args.patterns, args.include_tools, args.max, args.snippet_chars)
+            results = search_rollout_stream(
+                rollout, args.patterns, args.include_tools, args.max, args.snippet_chars
+            )
     else:
         rollout = rollout or locate_rollout(cwd)
         source = str(rollout)
-        results = search_rollout_stream(rollout, args.patterns, args.include_tools, args.max, args.snippet_chars)
+        results = search_rollout_stream(
+            rollout, args.patterns, args.include_tools, args.max, args.snippet_chars
+        )
 
     payload = {
         "source": source,
@@ -290,7 +350,9 @@ def main() -> int:
             score = f" score {r['score']} |" if r.get("score") is not None else ""
             phase = f" | phase={r.get('phase')}" if r.get("phase") else ""
             turn = f" | turn={r.get('turn_index')}" if r.get("turn_index") is not None else ""
-            print(f"\n-{row_id}{score} line {r['line']} | {r['timestamp']} | {r['role']} | {r['kind']}{phase}{turn}")
+            print(
+                f"\n-{row_id}{score} line {r['line']} | {r['timestamp']} | {r['role']} | {r['kind']}{phase}{turn}"
+            )
             signals = r.get("signals") or {}
             if r.get("score") is not None:
                 compact_signals = {k: v for k, v in signals.items() if k != "fts_rank"}
@@ -300,8 +362,14 @@ def main() -> int:
                 print("  context:")
                 for ctx in r["context"]:
                     ctx_phase = f"/{ctx.get('phase')}" if ctx.get("phase") else ""
-                    ctx_turn = f" turn={ctx.get('turn_index')}" if ctx.get("turn_index") is not None else ""
-                    print(f"    - id {ctx['id']} | line {ctx['line']} | {ctx['role']}{ctx_phase}{ctx_turn}: {ctx['snippet']}")
+                    ctx_turn = (
+                        f" turn={ctx.get('turn_index')}"
+                        if ctx.get("turn_index") is not None
+                        else ""
+                    )
+                    print(
+                        f"    - id {ctx['id']} | line {ctx['line']} | {ctx['role']}{ctx_phase}{ctx_turn}: {ctx['snippet']}"
+                    )
     return 0 if results or anchors else 1
 
 

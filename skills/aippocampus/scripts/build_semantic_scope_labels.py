@@ -71,14 +71,20 @@ def build_semantic_scope_labels(
     }
 
 
-def clean_source_dirs_from_registry(registry_path: Path, *, project: str | None = None) -> list[Path]:
+def clean_source_dirs_from_registry(
+    registry_path: Path, *, project: str | None = None
+) -> list[Path]:
     registry = load_registry(registry_path)
     dirs: list[Path] = []
     for entry in registry.get("threads") or []:
         if not isinstance(entry, dict) or not entry_matches_project(entry, project):
             continue
         messages_path_value = (entry.get("paths") or {}).get("clean_source_messages_jsonl")
-        messages_path = resolve_registry_member_path(str(messages_path_value), registry_path) if messages_path_value else None
+        messages_path = (
+            resolve_registry_member_path(str(messages_path_value), registry_path)
+            if messages_path_value
+            else None
+        )
         if messages_path and messages_path.exists():
             dirs.append(messages_path.parent)
     return list(dict.fromkeys(dirs))
@@ -130,14 +136,22 @@ def main() -> int:
     try:
         registry_path = None
         if args.registry or args.registry_dir or not args.clean_source_dir:
-            registry_path = Path(args.registry).resolve() if args.registry else registry_paths(Path(args.registry_dir).resolve() if args.registry_dir else None)[0]
+            registry_path = (
+                Path(args.registry).resolve()
+                if args.registry
+                else registry_paths(
+                    Path(args.registry_dir).resolve() if args.registry_dir else None
+                )[0]
+            )
         jobs_output_path = (
             Path(args.jobs_output).resolve()
             if args.jobs_output
             else (registry_path.parent / "subconscious_jobs.jsonl" if registry_path else None)
         )
         if jobs_output_path is None:
-            raise ValueError("--jobs-output is required when --clean-source-dir is used without --registry/--registry-dir")
+            raise ValueError(
+                "--jobs-output is required when --clean-source-dir is used without --registry/--registry-dir"
+            )
         if args.clean_source_dir:
             result = build_semantic_scope_labels(
                 jobs_output_path=jobs_output_path,

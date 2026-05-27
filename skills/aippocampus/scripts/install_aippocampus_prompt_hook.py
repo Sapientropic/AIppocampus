@@ -12,7 +12,6 @@ from typing import Any
 
 from aippocampuslib import codex_home
 
-
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_HOOK_TIMEOUT_SECONDS = 5
 
@@ -70,7 +69,10 @@ def is_ambient_handler(handler: dict[str, Any], script: Path) -> bool:
     # Match both the new AIppocampus handler and the old thread-memory handler
     # so reinstalling upgrades hooks in-place instead of leaving duplicate
     # UserPromptSubmit entries pointing at a renamed script.
-    return any(name in command for name in ("aippocampus_prompt_hook.py", "ambient_recall_hook.py")) or script_resolved in command
+    return (
+        any(name in command for name in ("aippocampus_prompt_hook.py", "ambient_recall_hook.py"))
+        or script_resolved in command
+    )
 
 
 def user_prompt_groups(data: dict[str, Any]) -> list[dict[str, Any]]:
@@ -82,7 +84,9 @@ def user_prompt_groups(data: dict[str, Any]) -> list[dict[str, Any]]:
     return groups
 
 
-def install(path: Path, script: Path, *, timeout: int = DEFAULT_HOOK_TIMEOUT_SECONDS, log: bool = False) -> dict[str, Any]:
+def install(
+    path: Path, script: Path, *, timeout: int = DEFAULT_HOOK_TIMEOUT_SECONDS, log: bool = False
+) -> dict[str, Any]:
     data = load_hooks(path)
     groups = user_prompt_groups(data)
     target = ambient_hook(script, timeout=timeout, log=log)
@@ -92,11 +96,24 @@ def install(path: Path, script: Path, *, timeout: int = DEFAULT_HOOK_TIMEOUT_SEC
         handlers = group.get("hooks") if isinstance(group, dict) else None
         if not isinstance(handlers, list):
             continue
-        existing = [handler for handler in handlers if isinstance(handler, dict) and is_ambient_handler(handler, script)]
+        existing = [
+            handler
+            for handler in handlers
+            if isinstance(handler, dict) and is_ambient_handler(handler, script)
+        ]
         if existing:
             if len(existing) == 1 and existing[0] == target:
-                return {"changed": False, "installed": True, "path": str(path), "command": target["command"]}
-            group["hooks"] = [handler for handler in handlers if not (isinstance(handler, dict) and is_ambient_handler(handler, script))]
+                return {
+                    "changed": False,
+                    "installed": True,
+                    "path": str(path),
+                    "command": target["command"],
+                }
+            group["hooks"] = [
+                handler
+                for handler in handlers
+                if not (isinstance(handler, dict) and is_ambient_handler(handler, script))
+            ]
             changed = True
 
     if not groups:
@@ -135,7 +152,11 @@ def uninstall(path: Path, script: Path) -> dict[str, Any]:
         if not isinstance(handlers, list):
             kept_groups.append(group)
             continue
-        kept = [handler for handler in handlers if not (isinstance(handler, dict) and is_ambient_handler(handler, script))]
+        kept = [
+            handler
+            for handler in handlers
+            if not (isinstance(handler, dict) and is_ambient_handler(handler, script))
+        ]
         if len(kept) != len(handlers):
             changed = True
         if kept:
@@ -154,7 +175,7 @@ def uninstall(path: Path, script: Path) -> dict[str, Any]:
 
 def status(path: Path, script: Path) -> dict[str, Any]:
     data = load_hooks(path)
-    groups = ((data.get("hooks") or {}).get("UserPromptSubmit") or [])
+    groups = (data.get("hooks") or {}).get("UserPromptSubmit") or []
     installed = False
     commands: list[str] = []
     for group in groups if isinstance(groups, list) else []:
@@ -167,12 +188,18 @@ def status(path: Path, script: Path) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=["install", "uninstall", "status"], nargs="?", default="status")
+    parser.add_argument(
+        "action", choices=["install", "uninstall", "status"], nargs="?", default="status"
+    )
     parser.add_argument("--codex-home", default=os.environ.get("CODEX_HOME") or str(codex_home()))
     parser.add_argument("--hooks-json")
     parser.add_argument("--script", default=str(SCRIPT_DIR / "aippocampus_prompt_hook.py"))
     parser.add_argument("--timeout", type=int, default=DEFAULT_HOOK_TIMEOUT_SECONDS)
-    parser.add_argument("--log", action="store_true", help="Ask the hook to write sanitized scent/evidence debug events.")
+    parser.add_argument(
+        "--log",
+        action="store_true",
+        help="Ask the hook to write sanitized scent/evidence debug events.",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 

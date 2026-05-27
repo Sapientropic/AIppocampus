@@ -24,7 +24,6 @@ from typing import Any
 import build_plugin_package
 from smoke_plugin_install import default_build_output, safe_build_output
 
-
 PLUGIN_NAME = "aippocampus"
 REQUIRED_MCP_TOOLS = {
     "search_memory",
@@ -103,7 +102,9 @@ class CodexAppServerClient:
         raise_on_error: bool = True,
     ) -> dict[str, Any]:
         if self._proc.poll() is not None:
-            raise AppServerError(f"codex app-server exited before {method}: {self._proc.returncode}")
+            raise AppServerError(
+                f"codex app-server exited before {method}: {self._proc.returncode}"
+            )
         request_id = self._next_id
         self._next_id += 1
         payload: dict[str, Any] = {"id": request_id, "method": method}
@@ -187,7 +188,9 @@ def safe_remove_tree(root: Path, target: Path) -> bool:
     return True
 
 
-def prepare_local_marketplace(repo_root: Path, build_output: Path, run_id: str) -> tuple[str, Path, Path]:
+def prepare_local_marketplace(
+    repo_root: Path, build_output: Path, run_id: str
+) -> tuple[str, Path, Path]:
     marketplace_name = f"aippocampus-real-smoke-{run_id}"
     marketplace_root = repo_root / ".tmp" / f"aippocampus-real-codex-marketplace-{run_id}"
     if marketplace_root.exists():
@@ -283,7 +286,10 @@ def validate_smoke(result: dict[str, Any]) -> tuple[bool, list[str]]:
         failures.append("plugin was not installed and enabled through Codex plugin manager")
     if PLUGIN_NAME not in after.get("mcpServers", []):
         failures.append("installed plugin did not expose the aippocampus MCP server")
-    if not any(str(name).endswith(":aippocampus") or str(name) == "aippocampus" for name in after.get("skills", [])):
+    if not any(
+        str(name).endswith(":aippocampus") or str(name) == "aippocampus"
+        for name in after.get("skills", [])
+    ):
         failures.append("installed plugin did not expose the aippocampus skill")
 
     tool_names = set(status.get("tool_names") or [])
@@ -366,7 +372,9 @@ def run_real_codex_host_smoke(
 
     try:
         build_plugin_package.build_package(repo_root, output)
-        marketplace_name, marketplace_root, plugin_dir = prepare_local_marketplace(repo_root, output, run_id)
+        marketplace_name, marketplace_root, plugin_dir = prepare_local_marketplace(
+            repo_root, output, run_id
+        )
         result["marketplace_name"] = marketplace_name
         result["marketplace_root"] = str(marketplace_root)
         result["marketplace_plugin_dir"] = str(plugin_dir)
@@ -387,11 +395,18 @@ def run_real_codex_host_smoke(
         add_result = add.get("result") or {}
         marketplace_added = True
         result["marketplace_add"] = add_result
-        marketplace_path = str(Path(str(add_result.get("installedRoot") or marketplace_root)) / ".agents" / "plugins" / "marketplace.json")
+        marketplace_path = str(
+            Path(str(add_result.get("installedRoot") or marketplace_root))
+            / ".agents"
+            / "plugins"
+            / "marketplace.json"
+        )
         plugin_params = {"pluginName": PLUGIN_NAME, "marketplacePath": marketplace_path}
 
         before = client.request("plugin/read", plugin_params, timeout=60)
-        result["plugin_read_before"] = summarize_plugin((before.get("result") or {}).get("plugin") or {})
+        result["plugin_read_before"] = summarize_plugin(
+            (before.get("result") or {}).get("plugin") or {}
+        )
 
         install = client.request("plugin/install", plugin_params, timeout=120)
         result["plugin_install"] = install.get("result") or {}
@@ -469,7 +484,9 @@ def run_real_codex_host_smoke(
                         )
                         archive_error = archive.get("error")
                         archive_message = str((archive_error or {}).get("message") or "")
-                        cleanup["thread_archive_ok"] = "result" in archive or "no rollout found" in archive_message
+                        cleanup["thread_archive_ok"] = (
+                            "result" in archive or "no rollout found" in archive_message
+                        )
                         cleanup["thread_archive_error"] = archive_error
                     except Exception as exc:
                         cleanup["thread_archive_ok"] = False
@@ -482,7 +499,9 @@ def run_real_codex_host_smoke(
                             timeout=120,
                             raise_on_error=False,
                         )
-                        cleanup["plugin_uninstall_ok"] = "result" in uninstall and not uninstall.get("error")
+                        cleanup["plugin_uninstall_ok"] = (
+                            "result" in uninstall and not uninstall.get("error")
+                        )
                         cleanup["plugin_uninstall_error"] = uninstall.get("error")
                     except Exception as exc:
                         cleanup["plugin_uninstall_ok"] = False
@@ -495,7 +514,9 @@ def run_real_codex_host_smoke(
                             timeout=120,
                             raise_on_error=False,
                         )
-                        cleanup["marketplace_remove_ok"] = "result" in remove and not remove.get("error")
+                        cleanup["marketplace_remove_ok"] = "result" in remove and not remove.get(
+                            "error"
+                        )
                         cleanup["marketplace_remove_error"] = remove.get("error")
                     except Exception as exc:
                         cleanup["marketplace_remove_ok"] = False

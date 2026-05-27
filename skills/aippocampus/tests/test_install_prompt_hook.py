@@ -7,7 +7,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -70,7 +69,9 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         self.assertFalse(second["changed"])
         self.assertEqual(len(prompt_hooks), 1)
         self.assertIn(str(self.script), prompt_hooks[0]["command"])
-        self.assertEqual(data["hooks"]["PostToolUse"][0]["hooks"][0]["command"], "python existing.py")
+        self.assertEqual(
+            data["hooks"]["PostToolUse"][0]["hooks"][0]["command"], "python existing.py"
+        )
 
     def test_uninstall_removes_only_ambient_hook(self) -> None:
         installer.install(self.hooks_json, self.script, timeout=5)

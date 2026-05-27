@@ -20,7 +20,6 @@ from typing import Any
 from registry import deep_search_entry, entry_search_score, registry_paths, unique_preserve
 from retrieval import CONCEPT_TRIGGERS, RECALL_TRIGGERS, split_query_terms
 
-
 PROMPT_HOOK_SEMANTIC_TIMEOUT = int(os.environ.get("AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT", "3"))
 SCENT_THRESHOLD = 5.0
 EVIDENCE_THRESHOLD = 10.0
@@ -343,7 +342,9 @@ def explicit_recall_terms(prompt: str) -> list[str]:
 def expand_query_terms(prompt: str) -> list[str]:
     terms = split_query_terms([prompt]) if prompt else []
     expanded = list(terms)
-    for phrase in re.findall(r"[A-Za-z][A-Za-z0-9_.+-]*(?:\s+[A-Za-z][A-Za-z0-9_.+-]*){1,3}", prompt):
+    for phrase in re.findall(
+        r"[A-Za-z][A-Za-z0-9_.+-]*(?:\s+[A-Za-z][A-Za-z0-9_.+-]*){1,3}", prompt
+    ):
         expanded.append(phrase.strip())
     for marker in CJK_CONTENT_MARKERS:
         if marker in prompt:
@@ -382,7 +383,9 @@ def association_term_is_generic(match: dict[str, Any]) -> bool:
     return False
 
 
-def candidate_summary(entry: dict[str, Any], score: float, query_terms: list[str]) -> dict[str, Any]:
+def candidate_summary(
+    entry: dict[str, Any], score: float, query_terms: list[str]
+) -> dict[str, Any]:
     blob = "\n".join(
         [
             entry.get("title") or "",
@@ -396,7 +399,9 @@ def candidate_summary(entry: dict[str, Any], score: float, query_terms: list[str
     return {
         "thread_key": entry.get("thread_key"),
         "title": entry.get("title") or entry.get("workspace_name") or entry.get("thread_key"),
-        "timestamp": (entry.get("session_meta") or {}).get("timestamp") or entry.get("created_at") or entry.get("updated_at"),
+        "timestamp": (entry.get("session_meta") or {}).get("timestamp")
+        or entry.get("created_at")
+        or entry.get("updated_at"),
         "project_label": entry.get("project_label") or entry.get("workspace_name"),
         "score": round(score, 3),
         "matched_terms": unique_preserve(matched, limit=8),
@@ -440,7 +445,9 @@ def fuzzy_entry_score(entry: dict[str, Any], query_terms: list[str]) -> float:
     return min(score, 9.0)
 
 
-def score_candidates(prompt: str, registry: dict[str, Any], query_terms: list[str]) -> list[dict[str, Any]]:
+def score_candidates(
+    prompt: str, registry: dict[str, Any], query_terms: list[str]
+) -> list[dict[str, Any]]:
     explicit = explicit_recall_terms(prompt)
     associative = matched_terms(prompt, set(CONCEPT_TRIGGERS) | ASSOCIATIVE_CUES)
     important = matched_terms(prompt, IMPORTANCE_CUES)
@@ -462,7 +469,13 @@ def score_candidates(prompt: str, registry: dict[str, Any], query_terms: list[st
 
 
 def association_document_frequency(match: dict[str, Any], total_threads: int) -> int:
-    thread_count = len({source.get("thread_key") for source in match.get("threads") or [] if source.get("thread_key")})
+    thread_count = len(
+        {
+            source.get("thread_key")
+            for source in match.get("threads") or []
+            if source.get("thread_key")
+        }
+    )
     hit_count = int(match.get("hit_count") or 0)
     if total_threads <= 0:
         return max(1, thread_count or hit_count or 1)
@@ -507,13 +520,17 @@ def merge_association_candidates(
             if existing:
                 existing["score"] = round(float(existing.get("score") or 0.0) + boost, 3)
                 existing["matched_terms"] = unique_preserve(
-                    list(existing.get("matched_terms") or []) + list(match.get("matched_terms") or []) + [match.get("term") or ""],
+                    list(existing.get("matched_terms") or [])
+                    + list(match.get("matched_terms") or [])
+                    + [match.get("term") or ""],
                     limit=8,
                 )
                 continue
             item = candidate_summary(entry, boost, query_terms)
             item["matched_terms"] = unique_preserve(
-                list(item.get("matched_terms") or []) + list(match.get("matched_terms") or []) + [match.get("term") or ""],
+                list(item.get("matched_terms") or [])
+                + list(match.get("matched_terms") or [])
+                + [match.get("term") or ""],
                 limit=8,
             )
             item["association_source"] = True
@@ -580,7 +597,11 @@ def matched_life_wide_cue_terms(prompt: str, cues: set[str]) -> list[str]:
     for cue in sorted(cues, key=len, reverse=True):
         cue_text = cue.casefold()
         if re.fullmatch(r"[a-z0-9_]+(?:\s+[a-z0-9_]+)*", cue_text):
-            pattern = r"(?<![a-z0-9_])" + r"\s+".join(re.escape(part) for part in cue_text.split()) + r"(?![a-z0-9_])"
+            pattern = (
+                r"(?<![a-z0-9_])"
+                + r"\s+".join(re.escape(part) for part in cue_text.split())
+                + r"(?![a-z0-9_])"
+            )
             if re.search(pattern, low):
                 hits.append(cue)
             continue
@@ -621,7 +642,9 @@ def merge_life_wide_timeline_candidates(
             entry = by_thread.get(thread_key)
             if not entry:
                 continue
-            scope_labels = [str(value) for value in turn.get("scope_labels") or [] if isinstance(value, str)]
+            scope_labels = [
+                str(value) for value in turn.get("scope_labels") or [] if isinstance(value, str)
+            ]
             source_refs = [ref for ref in turn.get("source_refs") or [] if isinstance(ref, dict)]
             source_ref_count = len(source_refs)
             matched = unique_preserve(
@@ -635,19 +658,27 @@ def merge_life_wide_timeline_candidates(
             existing = by_key.get(thread_key)
             if existing:
                 existing["score"] = round(float(existing.get("score") or 0.0) + boost, 3)
-                existing["matched_terms"] = unique_preserve(list(existing.get("matched_terms") or []) + matched, limit=8)
+                existing["matched_terms"] = unique_preserve(
+                    list(existing.get("matched_terms") or []) + matched, limit=8
+                )
                 existing["timeline_source"] = True
                 existing["life_wide_timeline_source"] = True
-                existing["scope_labels"] = unique_preserve(list(existing.get("scope_labels") or []) + scope_labels, limit=8)
+                existing["scope_labels"] = unique_preserve(
+                    list(existing.get("scope_labels") or []) + scope_labels, limit=8
+                )
                 if source_ref_count:
-                    existing["source_ref_count"] = max(int(existing.get("source_ref_count") or 0), source_ref_count)
+                    existing["source_ref_count"] = max(
+                        int(existing.get("source_ref_count") or 0), source_ref_count
+                    )
                 if source_refs and not existing.get("source_refs"):
                     existing["source_refs"] = source_refs[:3]
                 if turn.get("turn_id") and not existing.get("timeline_turn_id"):
                     existing["timeline_turn_id"] = turn.get("turn_id")
             else:
                 item = candidate_summary(entry, boost, query_terms)
-                item["matched_terms"] = unique_preserve(list(item.get("matched_terms") or []) + matched, limit=8)
+                item["matched_terms"] = unique_preserve(
+                    list(item.get("matched_terms") or []) + matched, limit=8
+                )
                 item["timeline_source"] = True
                 item["life_wide_timeline_source"] = True
                 item["scope_labels"] = scope_labels
@@ -691,20 +722,26 @@ def merge_timeline_candidates(
         if existing:
             existing["score"] = round(float(existing.get("score") or 0.0) + boost, 3)
             existing["matched_terms"] = unique_preserve(
-                list(existing.get("matched_terms") or []) + matched_terms(prompt, RECENCY_CUES) + [project.get("project_label") or ""],
+                list(existing.get("matched_terms") or [])
+                + matched_terms(prompt, RECENCY_CUES)
+                + [project.get("project_label") or ""],
                 limit=8,
             )
             existing["timeline_source"] = True
             continue
         item = candidate_summary(entry, boost, query_terms)
         item["matched_terms"] = unique_preserve(
-            list(item.get("matched_terms") or []) + matched_terms(prompt, RECENCY_CUES) + [project.get("project_label") or ""],
+            list(item.get("matched_terms") or [])
+            + matched_terms(prompt, RECENCY_CUES)
+            + [project.get("project_label") or ""],
             limit=8,
         )
         item["timeline_source"] = True
         candidates.append(item)
         by_key[thread_key] = item
-    candidates = merge_life_wide_timeline_candidates(candidates, registry, timeline, prompt, query_terms)
+    candidates = merge_life_wide_timeline_candidates(
+        candidates, registry, timeline, prompt, query_terms
+    )
     return sort_candidates(candidates)
 
 
@@ -748,11 +785,15 @@ def merge_cognitive_map_candidates(
             existing = by_key.get(thread_key)
             if existing:
                 existing["score"] = round(float(existing.get("score") or 0.0) + boost, 3)
-                existing["matched_terms"] = unique_preserve(list(existing.get("matched_terms") or []) + matched_terms, limit=8)
+                existing["matched_terms"] = unique_preserve(
+                    list(existing.get("matched_terms") or []) + matched_terms, limit=8
+                )
                 existing["cognitive_map_source"] = True
                 continue
             item = candidate_summary(entry, boost, query_terms)
-            item["matched_terms"] = unique_preserve(list(item.get("matched_terms") or []) + matched_terms, limit=8)
+            item["matched_terms"] = unique_preserve(
+                list(item.get("matched_terms") or []) + matched_terms, limit=8
+            )
             item["cognitive_map_source"] = True
             candidates.append(item)
             by_key[thread_key] = item
@@ -778,13 +819,16 @@ def rerank_candidates_with_probe(
             candidate["probe_line"] = hit.get("line")
             candidate["probe_phase"] = hit.get("phase") or ""
         candidate["score"] = round(
-            float(candidate.get("score") or 0.0) + min(SCENT_PROBE_SCORE_CAP, probe_score * SCENT_PROBE_SCORE_MULTIPLIER),
+            float(candidate.get("score") or 0.0)
+            + min(SCENT_PROBE_SCORE_CAP, probe_score * SCENT_PROBE_SCORE_MULTIPLIER),
             3,
         )
     return sort_candidates(candidates)
 
 
-def fallback_search_candidates(registry: dict[str, Any], query_terms: list[str], limit: int = 5) -> list[dict[str, Any]]:
+def fallback_search_candidates(
+    registry: dict[str, Any], query_terms: list[str], limit: int = 5
+) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
     for entry in registry.get("threads") or []:
         paths = entry.get("paths") or {}
@@ -840,7 +884,9 @@ def should_suppress(
     return False
 
 
-def collect_evidence(candidates: list[dict[str, Any]], query_terms: list[str], budget: int) -> list[dict[str, Any]]:
+def collect_evidence(
+    candidates: list[dict[str, Any]], query_terms: list[str], budget: int
+) -> list[dict[str, Any]]:
     evidence: list[dict[str, Any]] = []
     remaining = max(0, budget)
     content_terms = evidence_content_terms(query_terms)
@@ -855,7 +901,11 @@ def collect_evidence(candidates: list[dict[str, Any]], query_terms: list[str], b
             snippet_low = str(hit.get("snippet") or "").casefold()
             hit_score = float(hit.get("score") or 0.0)
             clean_source_high_confidence = hit.get("source") == "clean_source" and hit_score >= 50
-            if content_terms and not clean_source_high_confidence and not any(term.casefold() in snippet_low for term in content_terms):
+            if (
+                content_terms
+                and not clean_source_high_confidence
+                and not any(term.casefold() in snippet_low for term in content_terms)
+            ):
                 continue
             item = {
                 "thread_key": candidate.get("thread_key"),
@@ -892,7 +942,9 @@ def is_decision_continuation(prompt: str) -> bool:
 
 
 def concept_expansion_terms(expansions: list[dict[str, Any]]) -> list[str]:
-    return unique_preserve([str(item.get("term") or "") for item in expansions], limit=CONCEPT_EXPANSION_MAX_TERMS)
+    return unique_preserve(
+        [str(item.get("term") or "") for item in expansions], limit=CONCEPT_EXPANSION_MAX_TERMS
+    )
 
 
 def current_project_label(registry: dict[str, Any], cwd: Path) -> str | None:
@@ -901,7 +953,9 @@ def current_project_label(registry: dict[str, Any], cwd: Path) -> str | None:
     best: tuple[int, str] | None = None
     for entry in registry.get("threads") or []:
         paths = entry.get("paths") or {}
-        workspace = str(paths.get("workspace") or (entry.get("session_meta") or {}).get("cwd") or "")
+        workspace = str(
+            paths.get("workspace") or (entry.get("session_meta") or {}).get("cwd") or ""
+        )
         if not workspace:
             continue
         try:
@@ -925,7 +979,9 @@ def working_memory_terms(matches: list[dict[str, Any]]) -> list[str]:
     for match in matches:
         terms.extend(str(value) for value in match.get("matched_terms") or [])
         terms.extend(str(value) for value in match.get("trigger_terms") or [])
-        terms.extend(split_query_terms([str(match.get("title") or ""), str(match.get("summary") or "")]))
+        terms.extend(
+            split_query_terms([str(match.get("title") or ""), str(match.get("summary") or "")])
+        )
     return unique_preserve([term for term in terms if term.strip()], limit=24)
 
 
@@ -1017,7 +1073,9 @@ def should_run_semantic_gate(
         # A materialized cognitive route is already the result of detached
         # DeepSeek work. Do not spend foreground hook time asking DeepSeek again.
         return False
-    if prompt_is_code_surface(prompt) and not (explicit or associative or important or working_memory_matches):
+    if prompt_is_code_surface(prompt) and not (
+        explicit or associative or important or working_memory_matches
+    ):
         # This is a spend/latency brake, not the recall brain. Dynamic
         # associations can include ordinary implementation words such as
         # dashboard/hover/test; those should not make every code task call a
@@ -1050,7 +1108,9 @@ def strip_semantic_gate(result: dict[str, Any] | None) -> dict[str, Any] | None:
                 "worker": worker.get("worker"),
                 "decision": worker.get("decision"),
                 "confidence": worker.get("confidence"),
-                "query_aliases": unique_preserve([str(value) for value in worker.get("query_aliases") or []], limit=8),
+                "query_aliases": unique_preserve(
+                    [str(value) for value in worker.get("query_aliases") or []], limit=8
+                ),
                 "memory_scope": worker.get("memory_scope") or [],
                 "anti_personalization_risk": worker.get("anti_personalization_risk"),
                 "reason": worker.get("reason"),
@@ -1061,7 +1121,9 @@ def strip_semantic_gate(result: dict[str, Any] | None) -> dict[str, Any] | None:
         "decision": result.get("decision"),
         "confidence": result.get("confidence"),
         "intent": result.get("intent"),
-        "query_aliases": unique_preserve([str(value) for value in result.get("query_aliases") or []], limit=12),
+        "query_aliases": unique_preserve(
+            [str(value) for value in result.get("query_aliases") or []], limit=12
+        ),
         "memory_scope": result.get("memory_scope") or [],
         "negative_contexts": result.get("negative_contexts") or [],
         "anti_personalization_risk": result.get("anti_personalization_risk"),

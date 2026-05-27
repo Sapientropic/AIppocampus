@@ -10,7 +10,6 @@ import shutil
 import subprocess
 from pathlib import Path
 
-
 SCRIPT_DIR = Path(__file__).resolve().parent
 
 
@@ -23,7 +22,9 @@ def optional_env_path(name: str, legacy_name: str | None = None) -> Path | None:
     return Path(value) if value else None
 
 
-DEFAULT_VAULT = Path(env_value("AIPPOCAMPUS_VAULT", "CODEX_MEMORY_VAULT") or (Path.home() / "AIppocampus Memory"))
+DEFAULT_VAULT = Path(
+    env_value("AIPPOCAMPUS_VAULT", "CODEX_MEMORY_VAULT") or (Path.home() / "AIppocampus Memory")
+)
 DEFAULT_STYLE_SOURCE = optional_env_path("AIPPOCAMPUS_STYLE_SOURCE", "CODEX_MEMORY_STYLE_SOURCE")
 DEFAULT_SCRIPT_SOURCE = optional_env_path("AIPPOCAMPUS_SCRIPT_SOURCE", "CODEX_MEMORY_SCRIPT_SOURCE")
 DEFAULT_SITE_MARK = optional_env_path("AIPPOCAMPUS_SITE_MARK", "CODEX_MEMORY_SITE_MARK")
@@ -56,14 +57,18 @@ def wikilink(path: Path, vault: Path, label: str | None = None) -> str:
 
 
 def run_json(cmd: list[str]) -> dict:
-    proc = subprocess.run(cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False)
+    proc = subprocess.run(
+        cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False
+    )
     if proc.returncode != 0:
         raise RuntimeError(proc.stdout or proc.stderr)
     return json.loads(proc.stdout)
 
 
 def run_text(cmd: list[str]) -> str:
-    proc = subprocess.run(cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False)
+    proc = subprocess.run(
+        cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False
+    )
     if proc.returncode != 0:
         raise RuntimeError(proc.stdout or proc.stderr)
     return proc.stdout

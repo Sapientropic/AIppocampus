@@ -24,7 +24,6 @@ from typing import Any
 
 import sync_bundle
 
-
 THREAD_KEY = "session:cross-device-smoke"
 THREAD_DIR = sync_bundle.thread_dir_name(THREAD_KEY)
 
@@ -63,7 +62,9 @@ def create_device_registry(
     index_dir = thread_store / "index"
     raw_rollout = device_root / "raw" / "rollout.jsonl"
 
-    write_json(clean_source / "manifest.json", {"kind": "aippocampus_clean_source", "device": device_name})
+    write_json(
+        clean_source / "manifest.json", {"kind": "aippocampus_clean_source", "device": device_name}
+    )
     write_jsonl(
         clean_source / "messages.jsonl",
         [
@@ -95,7 +96,9 @@ def create_device_registry(
     raw_rollout.parent.mkdir(parents=True, exist_ok=True)
     raw_rollout.write_text("raw private rollout\n", encoding="utf-8")
 
-    stale_other_os = fake_posix_workspace() if "\\" in workspace_locator else fake_windows_workspace()
+    stale_other_os = (
+        fake_posix_workspace() if "\\" in workspace_locator else fake_windows_workspace()
+    )
     write_json(
         registry / "threads.json",
         {
@@ -174,7 +177,12 @@ def validate_portable_registry(
         "graph_json",
     ):
         value = paths.get(key)
-        require(isinstance(value, str) and value.startswith("registry/"), "non_portable_locator", failures, key)
+        require(
+            isinstance(value, str) and value.startswith("registry/"),
+            "non_portable_locator",
+            failures,
+            key,
+        )
         require("\\" not in str(value), "portable_locator_uses_backslash", failures, key)
     require(registry.get("sync_portable_paths") is True, "missing_sync_portable_marker", failures)
 
@@ -191,14 +199,22 @@ def validate_target_registry(
         require(marker not in text, "source_locator_leak_after_pull", failures, marker)
     paths = locator_values(registry)
     expected_root = target_registry / "threads" / THREAD_DIR
-    require(paths.get("registry_thread_store") == str(expected_root), "target_thread_store_not_repaired", failures)
+    require(
+        paths.get("registry_thread_store") == str(expected_root),
+        "target_thread_store_not_repaired",
+        failures,
+    )
     require(
         paths.get("clean_source_messages_jsonl")
         == str(expected_root / "clean-source" / "messages.jsonl"),
         "target_messages_not_repaired",
         failures,
     )
-    require(paths.get("graph_json") == str(expected_root / "index" / "graph.json"), "target_graph_not_repaired", failures)
+    require(
+        paths.get("graph_json") == str(expected_root / "index" / "graph.json"),
+        "target_graph_not_repaired",
+        failures,
+    )
     require(paths.get("workspace") is None, "target_workspace_not_unresolved", failures)
 
 
@@ -255,14 +271,29 @@ def run_cross_device_sync_smoke(
             fake_windows_workspace(),
             fake_posix_workspace(),
         ]
-        validate_portable_registry(portable_registry, source_markers=source_markers, failures=failures)
+        validate_portable_registry(
+            portable_registry, source_markers=source_markers, failures=failures
+        )
 
         target_b = device_b_root / "registry"
         pull_b = sync_bundle.pull_sync_bundle(sync_dir, target_b)
         target_registry = read_json(target_b / "threads.json")
-        validate_target_registry(target_registry, target_registry=target_b, source_markers=source_markers, failures=failures)
-        require((target_b / "threads" / THREAD_DIR / "clean-source" / "semantic-scope-labels.jsonl").is_file(), "missing_semantic_sidecar_after_pull", failures)
-        require(not (target_b / "raw-rollouts").exists(), "raw_rollout_synced_without_opt_in", failures)
+        validate_target_registry(
+            target_registry,
+            target_registry=target_b,
+            source_markers=source_markers,
+            failures=failures,
+        )
+        require(
+            (
+                target_b / "threads" / THREAD_DIR / "clean-source" / "semantic-scope-labels.jsonl"
+            ).is_file(),
+            "missing_semantic_sidecar_after_pull",
+            failures,
+        )
+        require(
+            not (target_b / "raw-rollouts").exists(), "raw_rollout_synced_without_opt_in", failures
+        )
 
         b_messages = target_b / "threads" / THREAD_DIR / "clean-source" / "messages.jsonl"
         b_messages.write_text(
@@ -281,20 +312,42 @@ def run_cross_device_sync_smoke(
         )
         conflict_pull_b = sync_bundle.pull_sync_bundle(sync_dir, target_b)
         conflict_files_b = list((target_b / ".sync-conflicts").rglob("messages.jsonl"))
-        require(conflict_pull_b.get("conflicts", 0) >= 1, "expected_device_b_conflict", failures, json_text(conflict_pull_b))
-        require("Device B local edit" in b_messages.read_text(encoding="utf-8"), "device_b_local_edit_overwritten", failures)
+        require(
+            conflict_pull_b.get("conflicts", 0) >= 1,
+            "expected_device_b_conflict",
+            failures,
+            json_text(conflict_pull_b),
+        )
+        require(
+            "Device B local edit" in b_messages.read_text(encoding="utf-8"),
+            "device_b_local_edit_overwritten",
+            failures,
+        )
         require(bool(conflict_files_b), "missing_device_b_conflict_copy", failures)
         if conflict_files_b:
-            require("Device A original" in conflict_files_b[0].read_text(encoding="utf-8"), "conflict_copy_missing_source_content", failures)
+            require(
+                "Device A original" in conflict_files_b[0].read_text(encoding="utf-8"),
+                "conflict_copy_missing_source_content",
+                failures,
+            )
 
         sync_dir_b = root / "device-b-to-a-sync"
         push_b = sync_bundle.push_sync_bundle(target_b, sync_dir_b)
         conflict_pull_a = sync_bundle.pull_sync_bundle(sync_dir_b, device_a["registry"])
         conflict_files_a = list((device_a["registry"] / ".sync-conflicts").rglob("messages.jsonl"))
-        require(conflict_pull_a.get("conflicts", 0) >= 1, "expected_device_a_conflict", failures, json_text(conflict_pull_a))
+        require(
+            conflict_pull_a.get("conflicts", 0) >= 1,
+            "expected_device_a_conflict",
+            failures,
+            json_text(conflict_pull_a),
+        )
         require(bool(conflict_files_a), "missing_device_a_conflict_copy", failures)
         if conflict_files_a:
-            require("Device B local edit" in conflict_files_a[0].read_text(encoding="utf-8"), "reverse_conflict_missing_target_content", failures)
+            require(
+                "Device B local edit" in conflict_files_a[0].read_text(encoding="utf-8"),
+                "reverse_conflict_missing_target_content",
+                failures,
+            )
 
         raw_sync = root / "raw-opt-in-sync"
         raw_target = root / "device-c-raw-target" / "registry"
@@ -303,7 +356,11 @@ def run_cross_device_sync_smoke(
         raw_registry = read_json(raw_target / "threads.json")
         raw_paths = locator_values(raw_registry)
         expected_raw = raw_target / "raw-rollouts" / f"{THREAD_DIR}.jsonl"
-        require(raw_paths.get("rollout") == str(expected_raw), "raw_rollout_not_repaired_to_target", failures)
+        require(
+            raw_paths.get("rollout") == str(expected_raw),
+            "raw_rollout_not_repaired_to_target",
+            failures,
+        )
         require(expected_raw.is_file(), "raw_rollout_file_missing_after_opt_in", failures)
 
         result["steps"] = {

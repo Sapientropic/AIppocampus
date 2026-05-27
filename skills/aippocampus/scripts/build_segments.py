@@ -16,7 +16,6 @@ import shutil
 import time
 from pathlib import Path
 
-from build_index import make_sqlite
 from aippocampuslib import (
     codex_home,
     default_thread_segments_dir,
@@ -29,7 +28,7 @@ from aippocampuslib import (
     read_session_meta,
     resolve_artifact_path,
 )
-
+from build_index import make_sqlite
 
 DEFAULT_SEGMENT_BYTES = 64 * 1024 * 1024
 DEFAULT_MAX_MESSAGES = 1200
@@ -149,7 +148,9 @@ def install_staged_segments(staging_dir: Path, output_dir: Path, manifest: dict)
         for name in staged_names:
             shutil.move(str(staging_dir / name), str(output_dir / name))
 
-        manifest_tmp.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        manifest_tmp.write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         manifest_tmp.replace(manifest_path)
     except Exception:
         for name in staged_names:
@@ -189,7 +190,9 @@ def main() -> int:
 
     cwd = Path(args.cwd).resolve()
     rollout = Path(args.rollout) if args.rollout else locate_rollout(cwd, codex_home())
-    output_dir = resolve_artifact_path(args.output_dir, cwd, default_thread_segments_dir(cwd, rollout))
+    output_dir = resolve_artifact_path(
+        args.output_dir, cwd, default_thread_segments_dir(cwd, rollout)
+    )
     anchor_path = Path(args.anchors)
     if not anchor_path.is_absolute():
         anchor_path = cwd / anchor_path
@@ -232,7 +235,11 @@ def main() -> int:
                 for message in group["messages"]
                 if message.get("turn_index") is not None
             }
-            segment_turns = [turns_by_id[turn_id] for turn_id in sorted(segment_turn_ids) if turn_id in turns_by_id]
+            segment_turns = [
+                turns_by_id[turn_id]
+                for turn_id in sorted(segment_turn_ids)
+                if turn_id in turns_by_id
+            ]
             sqlite_status = make_sqlite(
                 build_sqlite_path,
                 group["messages"],
@@ -264,7 +271,9 @@ def main() -> int:
             "schema_version": 1,
             "created_at": now_utc(),
             "cwd": str(cwd),
-            "artifact_scope": "global_thread_store" if args.output_dir is None else "explicit_output_dir",
+            "artifact_scope": "global_thread_store"
+            if args.output_dir is None
+            else "explicit_output_dir",
             "source_rollout": str(rollout),
             "source_rollout_size": rollout_stat.st_size,
             "source_rollout_mtime": rollout_stat.st_mtime,

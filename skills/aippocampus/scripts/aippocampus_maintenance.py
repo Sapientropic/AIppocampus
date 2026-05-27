@@ -10,19 +10,22 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 SCRIPT_DIR = Path(__file__).resolve().parent
 
 
 def run_json(cmd: list[str]) -> dict:
-    proc = subprocess.run(cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False)
+    proc = subprocess.run(
+        cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False
+    )
     if proc.returncode != 0:
         raise RuntimeError(proc.stdout or proc.stderr)
     return json.loads(proc.stdout)
 
 
 def run_text(cmd: list[str]) -> str:
-    proc = subprocess.run(cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False)
+    proc = subprocess.run(
+        cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False
+    )
     if proc.returncode != 0:
         raise RuntimeError(proc.stdout or proc.stderr)
     return proc.stdout
@@ -35,16 +38,34 @@ def has_action(health: dict, action_id: str) -> bool:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cwd", default=os.getcwd())
-    parser.add_argument("--append-checkpoint", action="store_true", help="Append checkpoint candidates instead of only suggesting them.")
-    parser.add_argument("--no-refresh-cognitive-map", action="store_true", help="Do not refresh the cognitive-map sidecar from existing subconscious findings.")
-    parser.add_argument("--no-refresh-graphify", action="store_true", help="Do not refresh the prepared Graphify corpus.")
+    parser.add_argument(
+        "--append-checkpoint",
+        action="store_true",
+        help="Append checkpoint candidates instead of only suggesting them.",
+    )
+    parser.add_argument(
+        "--no-refresh-cognitive-map",
+        action="store_true",
+        help="Do not refresh the cognitive-map sidecar from existing subconscious findings.",
+    )
+    parser.add_argument(
+        "--no-refresh-graphify",
+        action="store_true",
+        help="Do not refresh the prepared Graphify corpus.",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
     cwd = Path(args.cwd).resolve()
     actions: list[dict] = []
 
-    health_cmd = [sys.executable, str(SCRIPT_DIR / "aippocampus_health.py"), "--cwd", str(cwd), "--json"]
+    health_cmd = [
+        sys.executable,
+        str(SCRIPT_DIR / "aippocampus_health.py"),
+        "--cwd",
+        str(cwd),
+        "--json",
+    ]
     health = run_json(health_cmd)
     actions.append({"id": "health_initial", "result": health})
 
@@ -58,7 +79,9 @@ def main() -> int:
         if args.append_checkpoint:
             cmd.append("--append")
         checkpoint = run_json(cmd)
-        actions.append({"id": "checkpoint", "appended": args.append_checkpoint, "result": checkpoint})
+        actions.append(
+            {"id": "checkpoint", "appended": args.append_checkpoint, "result": checkpoint}
+        )
         health = run_json(health_cmd)
         if args.append_checkpoint:
             run_text([sys.executable, str(SCRIPT_DIR / "build_index.py"), "--cwd", str(cwd)])
@@ -76,22 +99,26 @@ def main() -> int:
         # Cognitive-map routes are produced by the detached subconscious layer;
         # maintenance only validates and materializes whatever staging already
         # exists, keeping this foreground pass model-free and hook-safe.
-        cognitive_map = run_json([
-            sys.executable,
-            str(SCRIPT_DIR / "build_cognitive_map.py"),
-            "--json",
-        ])
+        cognitive_map = run_json(
+            [
+                sys.executable,
+                str(SCRIPT_DIR / "build_cognitive_map.py"),
+                "--json",
+            ]
+        )
         actions.append({"id": "build_cognitive_map", "result": cognitive_map})
         health = run_json(health_cmd)
 
     if has_action(health, "prepare_graphify_corpus") and not args.no_refresh_graphify:
-        graphify = run_json([
-            sys.executable,
-            str(SCRIPT_DIR / "prepare_graphify_corpus.py"),
-            "--cwd",
-            str(cwd),
-            "--json",
-        ])
+        graphify = run_json(
+            [
+                sys.executable,
+                str(SCRIPT_DIR / "prepare_graphify_corpus.py"),
+                "--cwd",
+                str(cwd),
+                "--json",
+            ]
+        )
         actions.append({"id": "prepare_graphify_corpus", "result": graphify})
         health = run_json(health_cmd)
 

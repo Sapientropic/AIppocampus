@@ -18,14 +18,15 @@ import sync_object_storage
 from aippocampuslib import default_thread_clean_source_dir, locate_rollout, resolve_artifact_path
 from search_clean_source import iter_clean_messages, search_clean_source
 
-
 SCRIPT_DIR = Path(__file__).resolve().parent
 SERVER_NAME = "aippocampus"
 SERVER_VERSION = "0.1.0"
 DEFAULT_PROTOCOL_VERSION = "2025-11-25"
 
 
-def tool_schema(name: str, description: str, properties: dict[str, Any], required: list[str] | None = None) -> dict[str, Any]:
+def tool_schema(
+    name: str, description: str, properties: dict[str, Any], required: list[str] | None = None
+) -> dict[str, Any]:
     return {
         "name": name,
         "description": description,
@@ -69,7 +70,10 @@ TOOLS: list[dict[str, Any]] = [
     tool_schema(
         "list_threads",
         "List machine-wide registered AIppocampus threads.",
-        {"registry_dir": {"type": "string"}, "max": {"type": "integer", "minimum": 1, "maximum": 100}},
+        {
+            "registry_dir": {"type": "string"},
+            "max": {"type": "integer", "minimum": 1, "maximum": 100},
+        },
     ),
     tool_schema(
         "register_thread",
@@ -176,7 +180,8 @@ def call_latest_reply(arguments: dict[str, Any]) -> dict[str, Any]:
     final_messages = [
         item
         for item in messages
-        if item.get("role") == "assistant" and (item.get("is_final") or item.get("phase") == "final_answer")
+        if item.get("role") == "assistant"
+        and (item.get("is_final") or item.get("phase") == "final_answer")
     ]
     if final_messages and not arguments.get("rollout"):
         return text_result(
@@ -201,7 +206,11 @@ def call_get_turn_context(arguments: dict[str, Any]) -> dict[str, Any]:
     turn_index = arguments.get("turn_index")
     if not turn_id and message_id:
         matched = next(
-            (item for item in messages if item.get("message_id") == message_id or item.get("id") == message_id),
+            (
+                item
+                for item in messages
+                if item.get("message_id") == message_id or item.get("id") == message_id
+            ),
             None,
         )
         if matched:
@@ -217,7 +226,9 @@ def call_get_turn_context(arguments: dict[str, Any]) -> dict[str, Any]:
             selected_turn = turn
             break
     if selected_turn is None:
-        return tool_error("turn_not_found", "No clean-source turn matched the requested identifier.")
+        return tool_error(
+            "turn_not_found", "No clean-source turn matched the requested identifier."
+        )
 
     message_ids = set(selected_turn.get("message_ids") or [])
     selected_messages = [
@@ -227,7 +238,9 @@ def call_get_turn_context(arguments: dict[str, Any]) -> dict[str, Any]:
         or item.get("id") in message_ids
         or item.get("turn_id") == selected_turn.get("turn_id")
     ]
-    selected_messages.sort(key=lambda item: int(item.get("clean_ordinal") or item.get("source_line") or 0))
+    selected_messages.sort(
+        key=lambda item: int(item.get("clean_ordinal") or item.get("source_line") or 0)
+    )
     return text_result(
         {
             "source": str(source_dir),
@@ -238,7 +251,9 @@ def call_get_turn_context(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def call_list_threads(arguments: dict[str, Any]) -> dict[str, Any]:
-    registry_dir = Path(str(arguments["registry_dir"])).resolve() if arguments.get("registry_dir") else None
+    registry_dir = (
+        Path(str(arguments["registry_dir"])).resolve() if arguments.get("registry_dir") else None
+    )
     json_path, _ = registry.registry_paths(registry_dir)
     payload = registry.load_registry(json_path)
     limit = int(arguments.get("max") or len(payload.get("threads") or []) or 0)
@@ -247,7 +262,9 @@ def call_list_threads(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def call_register_thread(arguments: dict[str, Any]) -> dict[str, Any]:
-    registry_dir = Path(str(arguments["registry_dir"])).resolve() if arguments.get("registry_dir") else None
+    registry_dir = (
+        Path(str(arguments["registry_dir"])).resolve() if arguments.get("registry_dir") else None
+    )
     result = registry.register_current_thread(
         cwd_arg(arguments),
         registry_dir=registry_dir,
@@ -306,7 +323,9 @@ def call_memory_health(arguments: dict[str, Any]) -> dict[str, Any]:
         str(cwd_arg(arguments)),
         "--json",
     ]
-    proc = subprocess.run(cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False)
+    proc = subprocess.run(
+        cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False
+    )
     if proc.returncode != 0:
         return tool_error("health_check_failed", (proc.stdout or proc.stderr).strip())
     return text_result(json.loads(proc.stdout))
@@ -360,7 +379,9 @@ def handle_request(request: dict[str, Any]) -> dict[str, Any] | None:
         try:
             return jsonrpc_result(request_id, handler(arguments))
         except Exception as exc:
-            return jsonrpc_result(request_id, tool_error("tool_failed", f"{type(exc).__name__}: {exc}"))
+            return jsonrpc_result(
+                request_id, tool_error("tool_failed", f"{type(exc).__name__}: {exc}")
+            )
     if method in {"notifications/initialized", "ping"}:
         return jsonrpc_result(request_id, {})
     return jsonrpc_error(request_id, -32601, f"Method not found: {method}")
@@ -396,7 +417,9 @@ def serve_stdio() -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--list-tools", action="store_true", help="Print the tool catalog as JSON and exit.")
+    parser.add_argument(
+        "--list-tools", action="store_true", help="Print the tool catalog as JSON and exit."
+    )
     args = parser.parse_args()
     if args.list_tools:
         print(json.dumps({"tools": TOOLS}, ensure_ascii=False, indent=2))

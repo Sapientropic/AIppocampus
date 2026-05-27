@@ -18,8 +18,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from aippocampuslib import compact_text, codex_home, extract_message, iter_messages, locate_rollout
-
+from aippocampuslib import codex_home, compact_text, extract_message, iter_messages, locate_rollout
 
 AGENTS_PREFIX = "# AGENTS.md instructions"
 
@@ -34,7 +33,9 @@ def payload_subtype(item: dict[str, Any]) -> tuple[str, str, str]:
     if item_type == "response_item" and payload_type == "message":
         content = payload.get("content") or []
         if content and isinstance(content[0], dict):
-            part_types = sorted({str(part.get("type") or "") for part in content if isinstance(part, dict)})
+            part_types = sorted(
+                {str(part.get("type") or "") for part in content if isinstance(part, dict)}
+            )
             if part_types:
                 payload_type += ":" + ",".join(part_types)
     return item_type, payload_type, role
@@ -156,7 +157,9 @@ def audit_rollout(rollout: Path, *, top: int = 15) -> dict[str, Any]:
 
             msg = extract_message(item, include_tools=False)
             if msg and msg.get("text"):
-                digest = hashlib.sha1((msg["role"] + "\0" + msg["text"]).encode("utf-8")).hexdigest()
+                digest = hashlib.sha1(
+                    (msg["role"] + "\0" + msg["text"]).encode("utf-8")
+                ).hexdigest()
                 text_bytes = len(msg["text"].encode("utf-8"))
                 visible_message_bytes += text_bytes
                 if message_hashes[digest]:

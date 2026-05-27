@@ -27,7 +27,12 @@ from typing import Any
 from aippocampuslib import compact_text
 from build_cognitive_map import build_from_files as build_cognitive_map_from_files
 from build_cognitive_map import default_cognitive_map_path
-from build_project_timeline import build_project_timeline, default_timeline_path, save_project_timeline
+from build_concept_graph import default_concept_graph_path
+from build_project_timeline import (
+    build_project_timeline,
+    default_timeline_path,
+    save_project_timeline,
+)
 from registry import (
     load_registry,
     register_current_thread,
@@ -35,10 +40,15 @@ from registry import (
     registry_paths,
     scan_session_rollouts,
 )
-from subconscious_jobs import JOB_SPECS, DEFAULT_BASE_URL, DEFAULT_MODEL, append_job_findings, default_jobs_output_path, run_jobs
+from subconscious_jobs import (
+    DEFAULT_BASE_URL,
+    DEFAULT_MODEL,
+    JOB_SPECS,
+    append_job_findings,
+    default_jobs_output_path,
+    run_jobs,
+)
 from subconscious_worker import default_staging_path
-from build_concept_graph import default_concept_graph_path
-
 
 ONBOARD_SCHEMA_VERSION = 1
 
@@ -180,7 +190,9 @@ def sample_findings_for_frontier(result: dict[str, Any], *, limit: int = 5) -> l
 
 
 def frontier_maintenance_context(stats: dict[str, Any], actions: dict[str, Any]) -> str:
-    refresh = actions.get("refresh_current") if isinstance(actions.get("refresh_current"), dict) else {}
+    refresh = (
+        actions.get("refresh_current") if isinstance(actions.get("refresh_current"), dict) else {}
+    )
     return (
         "Current onboarding state after maintenance: "
         f"threads={stats.get('thread_count')}, "
@@ -215,15 +227,22 @@ def stale_completed_frontier_reason(finding: dict[str, Any], stats: dict[str, An
         for key in ("title", "summary", "boundary_reason", "linked_question_short")
     ).casefold()
     mentions_injection_refresh = (
-        ("clean-source" in text or "clean source" in text or "注入" in text or "injection" in text)
-        and ("refresh-registered" in text or "refresh" in text or "重写" in text or "未刷新" in text or "unrefreshed" in text)
+        "clean-source" in text or "clean source" in text or "注入" in text or "injection" in text
+    ) and (
+        "refresh-registered" in text
+        or "refresh" in text
+        or "重写" in text
+        or "未刷新" in text
+        or "unrefreshed" in text
     )
     if mentions_injection_refresh:
         return "current_registry_artifacts_complete"
     return ""
 
 
-def filter_frontier_result_for_current_state(result: dict[str, Any], stats: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+def filter_frontier_result_for_current_state(
+    result: dict[str, Any], stats: dict[str, Any]
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     filtered = dict(result)
     stale: list[dict[str, Any]] = []
     jobs: list[dict[str, Any]] = []
@@ -255,7 +274,9 @@ def filter_frontier_result_for_current_state(result: dict[str, Any], stats: dict
     return filtered, stale
 
 
-def write_filtered_frontier_findings(result: dict[str, Any], jobs_output: Path, *, model: str) -> int:
+def write_filtered_frontier_findings(
+    result: dict[str, Any], jobs_output: Path, *, model: str
+) -> int:
     written = 0
     for job_result in result.get("jobs") or []:
         if not isinstance(job_result, dict):
@@ -366,7 +387,9 @@ def frontier_boundary_result(
         timeline_path=timeline_path,
         concept_graph_path=default_concept_graph_path(registry_path=registry_path),
         jobs_output_path=jobs_output,
-        edges_output_path=default_staging_path(registry_path=registry_path, registry_dir=registry_dir),
+        edges_output_path=default_staging_path(
+            registry_path=registry_path, registry_dir=registry_dir
+        ),
         project=project,
         objective=(
             "Extract genuine recurring questions and explicit unresolved frontier markers "
@@ -386,10 +409,14 @@ def frontier_boundary_result(
         samples_per_job=samples_per_job,
         no_write=True,
     )
-    filtered_result, stale_findings = filter_frontier_result_for_current_state(result, maintenance_stats)
+    filtered_result, stale_findings = filter_frontier_result_for_current_state(
+        result, maintenance_stats
+    )
     written_count = 0
     if not no_write:
-        written_count = write_filtered_frontier_findings(filtered_result, jobs_output, model=DEFAULT_MODEL)
+        written_count = write_filtered_frontier_findings(
+            filtered_result, jobs_output, model=DEFAULT_MODEL
+        )
     successful_count = int(filtered_result.get("successful_job_count") or 0)
     failure_count = int(filtered_result.get("failure_count") or 0)
     finding_count = int(filtered_result.get("finding_count") or 0)
@@ -469,7 +496,11 @@ def run_onboarding(
         tags=tags,
         dry_run=True,
     )
-    repair_plan = repair_missing_artifacts(registry_dir=registry_dir, build_index=build_index, max_repair=0) if repair_indexes else {}
+    repair_plan = (
+        repair_missing_artifacts(registry_dir=registry_dir, build_index=build_index, max_repair=0)
+        if repair_indexes
+        else {}
+    )
     plan = {
         "would_register_count": scan_plan.get("count", 0),
         "would_repair_count": len(stats_before.get("missing_artifacts") or []),
@@ -495,7 +526,9 @@ def run_onboarding(
                 "stats_before": {k: v for k, v in stats_before.items() if k != "missing_artifacts"},
                 "plan": plan,
                 "boundary": {
-                    "search_noise": {"status": "mitigated_by_clean_source_filter_and_registry_rank_penalty"},
+                    "search_noise": {
+                        "status": "mitigated_by_clean_source_filter_and_registry_rank_penalty"
+                    },
                     "frontier": {
                         "status": "not_run",
                         "question_extraction_available": "question_extraction" in JOB_SPECS,
@@ -506,7 +539,10 @@ def run_onboarding(
                 },
             },
             "next": build_next_hints(dry_run=True, frontier_mode=frontier_mode),
-            "meta": {"schema_version": ONBOARD_SCHEMA_VERSION, "duration_ms": int((time.perf_counter() - started) * 1000)},
+            "meta": {
+                "schema_version": ONBOARD_SCHEMA_VERSION,
+                "duration_ms": int((time.perf_counter() - started) * 1000),
+            },
         }
 
     actions: dict[str, Any] = {}
@@ -525,10 +561,14 @@ def run_onboarding(
         "registry": scan_result.get("registry"),
     }
     if repair_indexes:
-        actions["repair_missing_artifacts"] = repair_missing_artifacts(registry_dir=registry_dir, build_index=build_index)
+        actions["repair_missing_artifacts"] = repair_missing_artifacts(
+            registry_dir=registry_dir, build_index=build_index
+        )
     if refresh_current:
         try:
-            current = register_current_thread(cwd, registry_dir=registry_dir, build_index=build_index)
+            current = register_current_thread(
+                cwd, registry_dir=registry_dir, build_index=build_index
+            )
             actions["refresh_current"] = {
                 "ok": True,
                 "thread_key": current["entry"].get("thread_key"),
@@ -616,7 +656,10 @@ def run_onboarding(
             "boundary": boundary,
         },
         "next": build_next_hints(dry_run=False, frontier_mode=frontier_mode),
-        "meta": {"schema_version": ONBOARD_SCHEMA_VERSION, "duration_ms": int((time.perf_counter() - started) * 1000)},
+        "meta": {
+            "schema_version": ONBOARD_SCHEMA_VERSION,
+            "duration_ms": int((time.perf_counter() - started) * 1000),
+        },
     }
 
 
@@ -634,28 +677,82 @@ def print_text(result: dict[str, Any]) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Onboard local Codex sessions into the AIppocampus global registry.")
-    parser.add_argument("--all", action="store_true", help="Scan all local Codex sessions. This is the default; the flag is kept for agent readability.")
-    parser.add_argument("--cwd", default=os.getcwd(), help="Current workspace to refresh after global session onboarding.")
-    parser.add_argument("--registry-dir", help="Defaults to $AIPPOCAMPUS_REGISTRY_DIR or $CODEX_HOME/aippocampus-registry.")
-    parser.add_argument("--max", type=int, help="Maximum number of sessions to register, newest first.")
-    parser.add_argument("--cwd-filter", help="Only include sessions whose recorded cwd contains this text.")
+    parser = argparse.ArgumentParser(
+        description="Onboard local Codex sessions into the AIppocampus global registry."
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Scan all local Codex sessions. This is the default; the flag is kept for agent readability.",
+    )
+    parser.add_argument(
+        "--cwd",
+        default=os.getcwd(),
+        help="Current workspace to refresh after global session onboarding.",
+    )
+    parser.add_argument(
+        "--registry-dir",
+        help="Defaults to $AIPPOCAMPUS_REGISTRY_DIR or $CODEX_HOME/aippocampus-registry.",
+    )
+    parser.add_argument(
+        "--max", type=int, help="Maximum number of sessions to register, newest first."
+    )
+    parser.add_argument(
+        "--cwd-filter", help="Only include sessions whose recorded cwd contains this text."
+    )
     parser.add_argument("--project", help="Project label to attach to newly registered sessions.")
-    parser.add_argument("--tag", action="append", default=[], help="Extra tag to attach to newly registered sessions. Can be repeated.")
-    parser.add_argument("--refresh-registered", action="store_true", help="Refresh sessions already in the registry.")
-    parser.add_argument("--no-build-index", action="store_true", help="Build clean-source only; skip SQLite/RAG-lite index generation.")
-    parser.add_argument("--no-repair", action="store_true", help="Do not repair already registered rows missing clean-source or indexes.")
-    parser.add_argument("--no-refresh-current", action="store_true", help="Do not refresh the current workspace thread after global onboarding.")
-    parser.add_argument("--no-timeline", action="store_true", help="Do not rebuild project_timeline.json.")
-    parser.add_argument("--no-cognitive-map", action="store_true", help="Do not rebuild cognitive_map.json from existing subconscious findings.")
-    parser.add_argument("--frontier-mode", choices=["off", "auto", "smoke", "write"], default="off", help="Run question/frontier extraction: off, no-write smoke, or write staging findings.")
-    parser.add_argument("--frontier-project", help="Optional project label filter for frontier extraction. Defaults to the current --cwd project; use '*' for global.")
+    parser.add_argument(
+        "--tag",
+        action="append",
+        default=[],
+        help="Extra tag to attach to newly registered sessions. Can be repeated.",
+    )
+    parser.add_argument(
+        "--refresh-registered",
+        action="store_true",
+        help="Refresh sessions already in the registry.",
+    )
+    parser.add_argument(
+        "--no-build-index",
+        action="store_true",
+        help="Build clean-source only; skip SQLite/RAG-lite index generation.",
+    )
+    parser.add_argument(
+        "--no-repair",
+        action="store_true",
+        help="Do not repair already registered rows missing clean-source or indexes.",
+    )
+    parser.add_argument(
+        "--no-refresh-current",
+        action="store_true",
+        help="Do not refresh the current workspace thread after global onboarding.",
+    )
+    parser.add_argument(
+        "--no-timeline", action="store_true", help="Do not rebuild project_timeline.json."
+    )
+    parser.add_argument(
+        "--no-cognitive-map",
+        action="store_true",
+        help="Do not rebuild cognitive_map.json from existing subconscious findings.",
+    )
+    parser.add_argument(
+        "--frontier-mode",
+        choices=["off", "auto", "smoke", "write"],
+        default="off",
+        help="Run question/frontier extraction: off, no-write smoke, or write staging findings.",
+    )
+    parser.add_argument(
+        "--frontier-project",
+        help="Optional project label filter for frontier extraction. Defaults to the current --cwd project; use '*' for global.",
+    )
     parser.add_argument("--frontier-concurrency", type=int, default=3)
     parser.add_argument("--frontier-samples-per-job", type=int, default=2)
     parser.add_argument("--frontier-max-turns", type=int, default=180)
     parser.add_argument("--dry-run", "--preview", action="store_true", dest="dry_run")
     parser.add_argument("--format", choices=["auto", "json", "text"], default="auto")
-    parser.add_argument("--json", action="store_true", dest="json_output", help="Alias for --format json.")
+    parser.add_argument(
+        "--json", action="store_true", dest="json_output", help="Alias for --format json."
+    )
     args = parser.parse_args()
 
     registry_dir = Path(args.registry_dir).resolve() if args.registry_dir else None
@@ -679,7 +776,11 @@ def main() -> int:
         frontier_samples_per_job=args.frontier_samples_per_job,
         frontier_max_turns=args.frontier_max_turns,
     )
-    wants_json = args.json_output or args.format == "json" or (args.format == "auto" and not sys.stdout.isatty())
+    wants_json = (
+        args.json_output
+        or args.format == "json"
+        or (args.format == "auto" and not sys.stdout.isatty())
+    )
     if wants_json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:

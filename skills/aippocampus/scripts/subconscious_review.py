@@ -27,16 +27,17 @@ from subconscious_agent import (
     compact_usage,
     parse_action,
 )
-from subconscious_jobs import (
-    PROMPT_VERSION as JOBS_PROMPT_VERSION,
-    default_jobs_output_path,
-)
 from subconscious_job_validation import (
     estimate_finding_quality,
     finding_fingerprint,
 )
+from subconscious_jobs import (
+    PROMPT_VERSION as JOBS_PROMPT_VERSION,
+)
+from subconscious_jobs import (
+    default_jobs_output_path,
+)
 from subconscious_worker import DEFAULT_BASE_URL, DEFAULT_MODEL, clamp_confidence
-
 
 PROMPT_VERSION = "aippocampus-subconscious-review-v0"
 DEFAULT_REVIEW_OUTPUT_NAME = "promotion_candidates.jsonl"
@@ -71,7 +72,9 @@ Final schema:
 """
 
 
-def default_review_output_path(registry_path: Path | None = None, registry_dir: Path | None = None) -> Path:
+def default_review_output_path(
+    registry_path: Path | None = None, registry_dir: Path | None = None
+) -> Path:
     if registry_path:
         return registry_path.resolve().parent / DEFAULT_REVIEW_OUTPUT_NAME
     json_path, _ = registry_paths(registry_dir)
@@ -104,7 +107,9 @@ def normalize_finding(row: dict[str, Any]) -> dict[str, Any]:
     return finding
 
 
-def recent_findings(path: Path, *, max_findings: int = 80, jobs: list[str] | None = None) -> list[dict[str, Any]]:
+def recent_findings(
+    path: Path, *, max_findings: int = 80, jobs: list[str] | None = None
+) -> list[dict[str, Any]]:
     job_filter = {job for job in jobs or [] if job and job != "all"}
     rows = [normalize_finding(row) for row in iter_jsonl(path)]
     if job_filter:
@@ -123,7 +128,10 @@ def deterministic_duplicate_groups(findings: list[dict[str, Any]]) -> list[dict[
     for fingerprint, rows in groups.items():
         if len(rows) < 2:
             continue
-        rows.sort(key=lambda row: float((row.get("quality") or {}).get("promotion_readiness") or 0.0), reverse=True)
+        rows.sort(
+            key=lambda row: float((row.get("quality") or {}).get("promotion_readiness") or 0.0),
+            reverse=True,
+        )
         out.append(
             {
                 "fingerprint": fingerprint,
@@ -135,7 +143,9 @@ def deterministic_duplicate_groups(findings: list[dict[str, Any]]) -> list[dict[
     return out
 
 
-def compact_review_payload(findings: list[dict[str, Any]], duplicate_groups: list[dict[str, Any]], focus: str = "") -> dict[str, Any]:
+def compact_review_payload(
+    findings: list[dict[str, Any]], duplicate_groups: list[dict[str, Any]], focus: str = ""
+) -> dict[str, Any]:
     # Findings are the large stable input. Focus is a run-specific lens, so keep
     # it after findings to preserve DeepSeek prefix-cache reuse across review
     # passes over the same staging set.
@@ -162,7 +172,9 @@ def compact_review_payload(findings: list[dict[str, Any]], duplicate_groups: lis
                         "thread_key": ref.get("thread_key"),
                         "title": ref.get("title"),
                         "turn_index": ref.get("turn_index"),
-                        "line": ref.get("source_line") or ref.get("assistant_line") or ref.get("user_line"),
+                        "line": ref.get("source_line")
+                        or ref.get("assistant_line")
+                        or ref.get("user_line"),
                     }
                     for ref in finding.get("source_refs") or []
                     if isinstance(ref, dict)
@@ -180,16 +192,25 @@ def compact_review_payload(findings: list[dict[str, Any]], duplicate_groups: lis
     return sanitize_external_model_payload(payload)
 
 
-def validate_review(parsed: dict[str, Any], findings_by_id: dict[str, dict[str, Any]]) -> dict[str, Any]:
+def validate_review(
+    parsed: dict[str, Any], findings_by_id: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
     candidates = []
     for item in parsed.get("promotion_candidates") or []:
         if not isinstance(item, dict):
             continue
-        source_ids = unique_preserve([str(value) for value in item.get("source_finding_ids") or [] if str(value).strip()], limit=12)
-        source_findings = [findings_by_id[source_id] for source_id in source_ids if source_id in findings_by_id]
+        source_ids = unique_preserve(
+            [str(value) for value in item.get("source_finding_ids") or [] if str(value).strip()],
+            limit=12,
+        )
+        source_findings = [
+            findings_by_id[source_id] for source_id in source_ids if source_id in findings_by_id
+        ]
         if not source_findings:
             continue
-        if any(str(finding.get("job") or "") in NAVIGATION_ONLY_JOBS for finding in source_findings):
+        if any(
+            str(finding.get("job") or "") in NAVIGATION_ONLY_JOBS for finding in source_findings
+        ):
             continue
         confidence = clamp_confidence(item.get("confidence"))
         if confidence < 0.45:
@@ -203,7 +224,9 @@ def validate_review(parsed: dict[str, Any], findings_by_id: dict[str, dict[str, 
                             "thread_key": ref.get("thread_key"),
                             "title": ref.get("title"),
                             "turn_index": ref.get("turn_index"),
-                            "line": ref.get("source_line") or ref.get("assistant_line") or ref.get("user_line"),
+                            "line": ref.get("source_line")
+                            or ref.get("assistant_line")
+                            or ref.get("user_line"),
                         }
                     )
         candidates.append(
@@ -222,7 +245,10 @@ def validate_review(parsed: dict[str, Any], findings_by_id: dict[str, dict[str, 
         if not isinstance(item, dict):
             continue
         canonical = str(item.get("canonical_finding_id") or "")
-        duplicates = unique_preserve([str(value) for value in item.get("duplicate_finding_ids") or [] if str(value).strip()], limit=24)
+        duplicates = unique_preserve(
+            [str(value) for value in item.get("duplicate_finding_ids") or [] if str(value).strip()],
+            limit=24,
+        )
         if canonical and duplicates:
             duplicate_groups.append(
                 {
@@ -237,7 +263,12 @@ def validate_review(parsed: dict[str, Any], findings_by_id: dict[str, dict[str, 
             continue
         finding_id = str(item.get("finding_id") or "")
         if finding_id in findings_by_id:
-            weak_findings.append({"finding_id": finding_id, "reason": compact_text(str(item.get("reason") or ""), 260)})
+            weak_findings.append(
+                {
+                    "finding_id": finding_id,
+                    "reason": compact_text(str(item.get("reason") or ""), 260),
+                }
+            )
     return {
         "promotion_candidates": candidates,
         "duplicate_groups": duplicate_groups,
@@ -289,7 +320,9 @@ def apply_focus_filter(review: dict[str, Any], focus: str) -> dict[str, Any]:
     return review
 
 
-def append_review_output(path: Path, review: dict[str, Any], *, model: str, batch_id: str, usage: dict[str, Any]) -> None:
+def append_review_output(
+    path: Path, review: dict[str, Any], *, model: str, batch_id: str, usage: dict[str, Any]
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8", newline="\n") as fh:
         for candidate in review.get("promotion_candidates") or []:
@@ -351,19 +384,34 @@ def run_review(
 ) -> dict[str, Any]:
     findings = recent_findings(jobs_path, max_findings=max_findings, jobs=jobs)
     duplicate_groups = deterministic_duplicate_groups(findings)
-    findings_by_id = {str(finding.get("fingerprint")): finding for finding in findings if finding.get("fingerprint")}
+    findings_by_id = {
+        str(finding.get("fingerprint")): finding
+        for finding in findings
+        if finding.get("fingerprint")
+    }
     batch_id = f"subconscious-review-{int(time.time())}"
     if not api_key:
         raise RuntimeError("missing DeepSeek API key; set DEEPSEEK_API_KEY or pass --api-key-env")
     messages = [
         {"role": "system", "content": REVIEW_SYSTEM_PROMPT},
-        {"role": "user", "content": json.dumps(compact_review_payload(findings, duplicate_groups, focus), ensure_ascii=False, indent=2)},
+        {
+            "role": "user",
+            "content": json.dumps(
+                compact_review_payload(findings, duplicate_groups, focus),
+                ensure_ascii=False,
+                indent=2,
+            ),
+        },
     ]
     response = call_chat_json(messages, api_key, model, base_url, max_tokens, timeout, temperature)
     usage = compact_usage(response.get("usage") or {})
     parsed = parse_action(response)
     if parsed.get("action") != "final":
-        parsed = {"promotion_candidates": [], "duplicate_groups": duplicate_groups, "weak_findings": []}
+        parsed = {
+            "promotion_candidates": [],
+            "duplicate_groups": duplicate_groups,
+            "weak_findings": [],
+        }
     review = validate_review(parsed, findings_by_id)
     review = apply_focus_filter(review, focus)
     if not review["duplicate_groups"]:
@@ -406,9 +454,21 @@ def main() -> int:
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
-    registry_path = Path(args.registry).resolve() if args.registry else registry_paths(Path(args.registry_dir).resolve() if args.registry_dir else None)[0]
-    jobs_path = Path(args.jobs_input).resolve() if args.jobs_input else default_jobs_output_path(registry_path=registry_path)
-    output_path = Path(args.output).resolve() if args.output else default_review_output_path(registry_path=registry_path)
+    registry_path = (
+        Path(args.registry).resolve()
+        if args.registry
+        else registry_paths(Path(args.registry_dir).resolve() if args.registry_dir else None)[0]
+    )
+    jobs_path = (
+        Path(args.jobs_input).resolve()
+        if args.jobs_input
+        else default_jobs_output_path(registry_path=registry_path)
+    )
+    output_path = (
+        Path(args.output).resolve()
+        if args.output
+        else default_review_output_path(registry_path=registry_path)
+    )
     try:
         result = run_review(
             jobs_path=jobs_path,

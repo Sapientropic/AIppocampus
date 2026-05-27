@@ -5,7 +5,6 @@ import sys
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -39,7 +38,12 @@ class DeepSeekModelRoutingTests(unittest.TestCase):
         self.assertEqual(routing.resolve_model_route("default").model, "deepseek-v4-flash")
         self.assertEqual(routing.resolve_model_route("fast").model, "deepseek-v4-flash")
 
-        for route in ["pro", "slow_adjudication", "suppressed_label_recovery", "agentic_source_review"]:
+        for route in [
+            "pro",
+            "slow_adjudication",
+            "suppressed_label_recovery",
+            "agentic_source_review",
+        ]:
             resolved = routing.resolve_model_route(route)
             self.assertEqual(resolved.model, "deepseek-v4-pro")
             self.assertEqual(resolved.tier, "pro")
@@ -49,8 +53,12 @@ class DeepSeekModelRoutingTests(unittest.TestCase):
         os.environ["AIPPOCAMPUS_DEEPSEEK_PRO_MODEL"] = "pro-expensive"
 
         self.assertEqual(routing.resolve_model_route("default").model, "legacy-flash")
-        self.assertEqual(routing.resolve_model_route("agentic_source_review").model, "pro-expensive")
-        self.assertEqual(routing.resolve_model_route("default", explicit_model="manual").model, "manual")
+        self.assertEqual(
+            routing.resolve_model_route("agentic_source_review").model, "pro-expensive"
+        )
+        self.assertEqual(
+            routing.resolve_model_route("default", explicit_model="manual").model, "manual"
+        )
 
 
 if __name__ == "__main__":

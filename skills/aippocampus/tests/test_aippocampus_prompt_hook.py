@@ -9,7 +9,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -156,7 +155,10 @@ class AmbientRecallHookTests(unittest.TestCase):
             },
         }
         self.registry.write_text(
-            json.dumps({"schema_version": 1, "updated_at": "2026-05-25T19:00:00Z", "threads": [entry]}, ensure_ascii=False),
+            json.dumps(
+                {"schema_version": 1, "updated_at": "2026-05-25T19:00:00Z", "threads": [entry]},
+                ensure_ascii=False,
+            ),
             encoding="utf-8",
         )
 
@@ -515,7 +517,9 @@ class AmbientRecallHookTests(unittest.TestCase):
         )
 
         def fail_semantic_gate(*args, **kwargs) -> dict:
-            raise AssertionError("semantic gate should be skipped when no foreground budget remains")
+            raise AssertionError(
+                "semantic gate should be skipped when no foreground budget remains"
+            )
 
         result = hook.assess_prompt(
             "那个脑内续接器现在怎么样了？",
@@ -778,7 +782,12 @@ class AmbientRecallHookTests(unittest.TestCase):
                             "confidence": 0.62,
                             "hit_count": 40,
                             "related_terms": [],
-                            "threads": [{"thread_key": "session:old-project", "title": "T-Sense · 2026-05-20"}],
+                            "threads": [
+                                {
+                                    "thread_key": "session:old-project",
+                                    "title": "T-Sense · 2026-05-20",
+                                }
+                            ],
                         }
                     },
                 },
@@ -1163,7 +1172,9 @@ class AmbientRecallHookTests(unittest.TestCase):
                     "confidence": 0.7,
                     "project_label": "T-Sense",
                     "trigger_terms": ["Jackie", "mutation", "consent gate", "Review card"],
-                    "source_refs": [{"thread_key": "session:app", "title": "T-Sense-App", "line": 149}],
+                    "source_refs": [
+                        {"thread_key": "session:app", "title": "T-Sense-App", "line": 149}
+                    ],
                 },
                 ensure_ascii=False,
             )

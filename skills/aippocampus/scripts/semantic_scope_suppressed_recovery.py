@@ -15,7 +15,12 @@ import os
 from pathlib import Path
 from typing import Any
 
-from aippocampuslib import aippocampus_registry_dir, compact_text, deepseek_cache_metrics_from_usage, sanitize_external_model_payload
+from aippocampuslib import (
+    aippocampus_registry_dir,
+    compact_text,
+    deepseek_cache_metrics_from_usage,
+    sanitize_external_model_payload,
+)
 from build_clean_source import SCOPE_LABEL_ORDER
 from build_project_timeline import resolve_registry_member_path
 from deepseek_model_routing import resolve_model_route
@@ -35,23 +40,35 @@ from subconscious_agent import add_usage, call_chat_json, compact_usage
 from subconscious_jobs import default_jobs_output_path
 from subconscious_worker import DEFAULT_BASE_URL
 
-
 PROMPT_KIND = "semantic_scope_suppressed_label_recovery"
 
 
 def case_hash(*values: Any) -> str:
-    return "recover:" + hashlib.sha256("\0".join(str(value or "") for value in values).encode("utf-8")).hexdigest()[:16]
+    return (
+        "recover:"
+        + hashlib.sha256(
+            "\0".join(str(value or "") for value in values).encode("utf-8")
+        ).hexdigest()[:16]
+    )
 
 
-def selected_suppressed_cases(registry_path: Path, jobs_output_path: Path, *, max_cases: int) -> list[dict[str, Any]]:
+def selected_suppressed_cases(
+    registry_path: Path, jobs_output_path: Path, *, max_cases: int
+) -> list[dict[str, Any]]:
     registry = load_registry(registry_path)
-    findings = [item for item in iter_jsonl(jobs_output_path) if is_semantic_scope_label_finding(item)]
+    findings = [
+        item for item in iter_jsonl(jobs_output_path) if is_semantic_scope_label_finding(item)
+    ]
     candidates: list[dict[str, Any]] = []
     for entry in registry.get("threads") or []:
         if not isinstance(entry, dict):
             continue
         messages_path_value = (entry.get("paths") or {}).get("clean_source_messages_jsonl")
-        messages_path = resolve_registry_member_path(str(messages_path_value), registry_path) if messages_path_value else None
+        messages_path = (
+            resolve_registry_member_path(str(messages_path_value), registry_path)
+            if messages_path_value
+            else None
+        )
         if not messages_path or not messages_path.exists():
             continue
         clean_source_dir = messages_path.parent
@@ -61,7 +78,9 @@ def selected_suppressed_cases(registry_path: Path, jobs_output_path: Path, *, ma
             message = messages_by_id.get(message_id)
             if not message:
                 continue
-            proposed = canonical_scope_labels(list(finding.get("scope_labels") or finding.get("labels") or []))
+            proposed = canonical_scope_labels(
+                list(finding.get("scope_labels") or finding.get("labels") or [])
+            )
             accepted = set(filtered_semantic_scope_labels(finding, proposed))
             evidence = label_evidence_map(finding)
             suppressed = [
@@ -74,7 +93,11 @@ def selected_suppressed_cases(registry_path: Path, jobs_output_path: Path, *, ma
             if not suppressed:
                 continue
             evidence_gaps = [
-                max(0.0, label_evidence_min_confidence(label) - float((evidence.get(label) or {}).get("confidence") or 0.0))
+                max(
+                    0.0,
+                    label_evidence_min_confidence(label)
+                    - float((evidence.get(label) or {}).get("confidence") or 0.0),
+                )
                 for label in suppressed
             ]
             candidates.append(
@@ -85,13 +108,15 @@ def selected_suppressed_cases(registry_path: Path, jobs_output_path: Path, *, ma
                     "turn_id": message.get("turn_id"),
                     "labels": suppressed,
                     "original_label_evidence": {
-                        label: evidence.get(label) or {}
-                        for label in suppressed
+                        label: evidence.get(label) or {} for label in suppressed
                     },
-                    "source_refs": finding.get("source_refs") or [{"message_id": message_id, "source_line": message.get("source_line")}],
+                    "source_refs": finding.get("source_refs")
+                    or [{"message_id": message_id, "source_line": message.get("source_line")}],
                     "text": compact_text(str(message.get("text") or ""), 1400),
                     "_selection_min_gap": min(evidence_gaps) if evidence_gaps else 1.0,
-                    "_selection_avg_gap": sum(evidence_gaps) / len(evidence_gaps) if evidence_gaps else 1.0,
+                    "_selection_avg_gap": sum(evidence_gaps) / len(evidence_gaps)
+                    if evidence_gaps
+                    else 1.0,
                 }
             )
     candidates.sort(
@@ -109,13 +134,17 @@ def selected_suppressed_cases(registry_path: Path, jobs_output_path: Path, *, ma
         if case_id in seen:
             continue
         seen.add(case_id)
-        selected.append({key: value for key, value in item.items() if not key.startswith("_selection_")})
+        selected.append(
+            {key: value for key, value in item.items() if not key.startswith("_selection_")}
+        )
         if len(selected) >= max(1, int(max_cases)):
             break
     return selected
 
 
-def recovery_messages(case: dict[str, Any], *, max_steps: int, min_tool_steps: int, model_route: str) -> list[dict[str, str]]:
+def recovery_messages(
+    case: dict[str, Any], *, max_steps: int, min_tool_steps: int, model_route: str
+) -> list[dict[str, str]]:
     payload = {
         "prompt_kind": PROMPT_KIND,
         "model_route": model_route,
@@ -134,7 +163,11 @@ def recovery_messages(case: dict[str, Any], *, max_steps: int, min_tool_steps: i
                     "summary": "short source-grounded rationale without quoting private text",
                     "confidence": 0.0,
                     "label_evidence": [
-                        {"label": "label", "reason": "specific source-grounded reason", "confidence": 0.0}
+                        {
+                            "label": "label",
+                            "reason": "specific source-grounded reason",
+                            "confidence": 0.0,
+                        }
                     ],
                     "source_refs": ["use inspected source refs"],
                 }
@@ -178,7 +211,9 @@ def run_recovery_case(
     chat_fn,
     model_route: str,
 ) -> dict[str, Any]:
-    messages = recovery_messages(case, max_steps=max_steps, min_tool_steps=min_tool_steps, model_route=model_route)
+    messages = recovery_messages(
+        case, max_steps=max_steps, min_tool_steps=min_tool_steps, model_route=model_route
+    )
     usage_total: dict[str, Any] = {}
     recovered_findings: list[dict[str, Any]] = []
     tool_step_count = 0
@@ -216,13 +251,30 @@ def run_recovery_case(
             else:
                 observation = {"ok": False, "error": "unknown tool"}
             tool_step_count += 1
-            messages.append({"role": "assistant", "content": json.dumps(action, ensure_ascii=False)})
-            messages.append({"role": "user", "content": "TOOL_RESULT:\n" + json.dumps(observation, ensure_ascii=False)})
+            messages.append(
+                {"role": "assistant", "content": json.dumps(action, ensure_ascii=False)}
+            )
+            messages.append(
+                {
+                    "role": "user",
+                    "content": "TOOL_RESULT:\n" + json.dumps(observation, ensure_ascii=False),
+                }
+            )
             continue
         if action.get("action") == "final":
             if tool_step_count < max(0, int(min_tool_steps)):
-                messages.append({"role": "assistant", "content": json.dumps(action, ensure_ascii=False)})
-                messages.append({"role": "user", "content": json.dumps({"error": "Call inspect_suppressed_case before final."}, ensure_ascii=False)})
+                messages.append(
+                    {"role": "assistant", "content": json.dumps(action, ensure_ascii=False)}
+                )
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": json.dumps(
+                            {"error": "Call inspect_suppressed_case before final."},
+                            ensure_ascii=False,
+                        ),
+                    }
+                )
                 continue
             final_payload = action
             for key in ["result", "output"]:
@@ -246,19 +298,30 @@ def run_recovery_case(
                 refs = [
                     ref
                     for ref in normalized.get("source_refs") or []
-                    if isinstance(ref, dict) and str(ref.get("message_id") or "").strip() == str(case.get("message_id") or "")
+                    if isinstance(ref, dict)
+                    and str(ref.get("message_id") or "").strip()
+                    == str(case.get("message_id") or "")
                 ]
                 normalized["source_refs"] = refs or list(case.get("source_refs") or [])
                 recovered_findings.append(normalized)
             break
         messages.append({"role": "assistant", "content": json.dumps(action, ensure_ascii=False)})
-        messages.append({"role": "user", "content": json.dumps({"error": "Return action=tool or action=final only."}, ensure_ascii=False)})
+        messages.append(
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {"error": "Return action=tool or action=final only."}, ensure_ascii=False
+                ),
+            }
+        )
     message = {
         "message_id": case.get("message_id"),
         "turn_id": case.get("turn_id"),
         "source_line": 0,
     }
-    rows = semantic_scope_label_rows_from_findings(recovered_findings, {str(case.get("message_id")): message})
+    rows = semantic_scope_label_rows_from_findings(
+        recovered_findings, {str(case.get("message_id")): message}
+    )
     recovered_labels = sorted({label for row in rows for label in row.get("scope_labels") or []})
     return {
         "case_id": case.get("case_id"),
@@ -289,8 +352,16 @@ def run_suppressed_label_recovery_smoke(
     min_tool_steps: int = 1,
     chat_fn=None,
 ) -> dict[str, Any]:
-    registry = Path(registry_path).resolve() if registry_path else (aippocampus_registry_dir() / "threads.json").resolve()
-    jobs_output = Path(jobs_output_path).resolve() if jobs_output_path else default_jobs_output_path(registry_path=registry)
+    registry = (
+        Path(registry_path).resolve()
+        if registry_path
+        else (aippocampus_registry_dir() / "threads.json").resolve()
+    )
+    jobs_output = (
+        Path(jobs_output_path).resolve()
+        if jobs_output_path
+        else default_jobs_output_path(registry_path=registry)
+    )
     route = resolve_model_route(model_route, explicit_model=model)
     cases = selected_suppressed_cases(registry, jobs_output, max_cases=max_cases)
     privacy_boundary = {
@@ -314,7 +385,9 @@ def run_suppressed_label_recovery_smoke(
             "candidate_label_count": sum(len(case.get("labels") or []) for case in cases),
             "strict_recovered_label_count": 0,
             "strict_gate_relaxed": False,
-            "label_coverage": sorted({label for case in cases for label in case.get("labels") or []}),
+            "label_coverage": sorted(
+                {label for case in cases for label in case.get("labels") or []}
+            ),
             "cases": [],
             "privacy_boundary": privacy_boundary,
         }
@@ -330,7 +403,9 @@ def run_suppressed_label_recovery_smoke(
             "candidate_label_count": sum(len(case.get("labels") or []) for case in cases),
             "strict_recovered_label_count": 0,
             "strict_gate_relaxed": False,
-            "label_coverage": sorted({label for case in cases for label in case.get("labels") or []}),
+            "label_coverage": sorted(
+                {label for case in cases for label in case.get("labels") or []}
+            ),
             "cases": [],
             "privacy_boundary": privacy_boundary,
         }
@@ -355,11 +430,17 @@ def run_suppressed_label_recovery_smoke(
     for item in results:
         add_usage(usage_total, item.get("usage") or {})
     recovered_count = sum(int(item.get("strict_recovered_label_count") or 0) for item in results)
-    status = "sufficient" if recovered_count >= int(min_recovered_labels) else "insufficient_recovered_labels"
+    status = (
+        "sufficient"
+        if recovered_count >= int(min_recovered_labels)
+        else "insufficient_recovered_labels"
+    )
     return {
         "ok": status == "sufficient",
         "status": status,
-        "claim_level": "pro_agent_suppressed_label_recovery" if status == "sufficient" else "diagnostic_only",
+        "claim_level": "pro_agent_suppressed_label_recovery"
+        if status == "sufficient"
+        else "diagnostic_only",
         "live_model_used": True,
         "model_route": route.as_dict(),
         "case_count": len(cases),
@@ -367,7 +448,9 @@ def run_suppressed_label_recovery_smoke(
         "strict_recovered_label_count": recovered_count,
         "strict_gate_relaxed": False,
         "label_coverage": sorted({label for case in cases for label in case.get("labels") or []}),
-        "recovered_label_coverage": sorted({label for item in results for label in item.get("strict_recovered_labels") or []}),
+        "recovered_label_coverage": sorted(
+            {label for item in results for label in item.get("strict_recovered_labels") or []}
+        ),
         "usage": usage_total,
         "cache": deepseek_cache_metrics_from_usage(usage_total),
         "cases": results,

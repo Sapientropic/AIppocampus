@@ -6,7 +6,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -40,12 +39,16 @@ class SemanticTriggerRouterTests(unittest.TestCase):
                     "summary": "DeepSeek semantic gate replaces brittle hard-coded cue phrases for ambient recall.",
                     "recommendation": "Use semantic aliases when user paraphrases memory continuity.",
                     "confidence": 0.86,
-                    "source_refs": [{"thread_key": "session:a", "title": "AIppocampus", "line": 42}],
+                    "source_refs": [
+                        {"thread_key": "session:a", "title": "AIppocampus", "line": 42}
+                    ],
                 }
             ]
         )
 
-        result = router.build_semantic_triggers(candidates_path=self.candidates, output_path=self.output)
+        result = router.build_semantic_triggers(
+            candidates_path=self.candidates, output_path=self.output
+        )
         rows = [json.loads(line) for line in self.output.read_text(encoding="utf-8").splitlines()]
 
         self.assertEqual(result["trigger_count"], 1)
@@ -75,7 +78,9 @@ class SemanticTriggerRouterTests(unittest.TestCase):
             ]
         )
 
-        result = router.build_semantic_triggers(candidates_path=self.candidates, output_path=self.output)
+        result = router.build_semantic_triggers(
+            candidates_path=self.candidates, output_path=self.output
+        )
         self.assertEqual(result["trigger_count"], 0)
         self.assertEqual(self.output.read_text(encoding="utf-8"), "")
 

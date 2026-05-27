@@ -11,7 +11,6 @@ from typing import Any
 
 from aippocampus_prompt_hook import assess_prompt
 
-
 DEFAULT_CASES: list[dict[str, Any]] = [
     {
         "name": "go_runtime_decision",
@@ -82,7 +81,9 @@ def decision_ok(result: dict[str, Any], case: dict[str, Any]) -> tuple[bool, str
     needle = str(case.get("expect_candidate_contains") or "").casefold()
     if needle:
         haystack = "\n".join(
-            str(item.get("title") or "") + "\n" + " ".join(str(value) for value in item.get("matched_terms") or [])
+            str(item.get("title") or "")
+            + "\n"
+            + " ".join(str(value) for value in item.get("matched_terms") or [])
             for item in result.get("candidates") or []
         ).casefold()
         if needle not in haystack:
@@ -127,8 +128,7 @@ def run_cases(
                 "evidence_count": len(result.get("evidence") or []),
                 "concept_expansion_count": len(result.get("concept_expansions") or []),
                 "concept_expansions": [
-                    item.get("term")
-                    for item in (result.get("concept_expansions") or [])[:5]
+                    item.get("term") for item in (result.get("concept_expansions") or [])[:5]
                 ],
                 "elapsed_ms": result.get("elapsed_ms"),
                 "reasons": result.get("reasons") or [],
@@ -144,7 +144,9 @@ def run_cases(
 
 
 def print_table(result: dict[str, Any]) -> None:
-    print(f"cases: {result['case_count']} | passed: {result['passed']} | failed: {result['failed']}")
+    print(
+        f"cases: {result['case_count']} | passed: {result['passed']} | failed: {result['failed']}"
+    )
     for row in result["rows"]:
         mark = "OK" if row["ok"] else "FAIL"
         top = row.get("top_candidate") or "-"

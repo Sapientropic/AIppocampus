@@ -9,7 +9,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -57,7 +56,9 @@ class ArchitectureBoundaryTests(unittest.TestCase):
     def test_prompt_hook_exits_zero_when_split_helper_install_lags(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
-            shutil.copy2(SCRIPTS / "aippocampus_prompt_hook.py", tmp_path / "aippocampus_prompt_hook.py")
+            shutil.copy2(
+                SCRIPTS / "aippocampus_prompt_hook.py", tmp_path / "aippocampus_prompt_hook.py"
+            )
             shutil.copy2(SCRIPTS / "aippocampuslib.py", tmp_path / "aippocampuslib.py")
             env = {**os.environ, "CODEX_HOME": str(tmp_path / "codex-home")}
             payload = json.dumps({"prompt": "继续清债", "cwd": str(ROOT)}, ensure_ascii=False)

@@ -24,10 +24,14 @@ from pathlib import Path
 from typing import Any
 
 from aippocampuslib import compact_text, now_utc
-from build_associations import extract_terms_from_text, normalize_term, source_text_is_noise, term_is_noise
+from build_associations import (
+    extract_terms_from_text,
+    normalize_term,
+    source_text_is_noise,
+    term_is_noise,
+)
 from registry import registry_paths, unique_preserve
 from retrieval import split_query_terms
-
 
 ROUTER_SCHEMA_VERSION = 1
 DEFAULT_CANDIDATES_NAME = "promotion_candidates.jsonl"
@@ -78,7 +82,9 @@ GENERIC_TRIGGER_TERMS = {
 }
 
 
-def default_candidates_path(registry_path: Path | None = None, registry_dir: Path | None = None) -> Path:
+def default_candidates_path(
+    registry_path: Path | None = None, registry_dir: Path | None = None
+) -> Path:
     if registry_path:
         return registry_path.resolve().parent / DEFAULT_CANDIDATES_NAME
     json_path, _ = registry_paths(registry_dir)
@@ -92,14 +98,18 @@ def default_jobs_path(registry_path: Path | None = None, registry_dir: Path | No
     return json_path.resolve().parent / DEFAULT_JOBS_NAME
 
 
-def default_working_memory_path(registry_path: Path | None = None, registry_dir: Path | None = None) -> Path:
+def default_working_memory_path(
+    registry_path: Path | None = None, registry_dir: Path | None = None
+) -> Path:
     if registry_path:
         return registry_path.resolve().parent / DEFAULT_WORKING_MEMORY_NAME
     json_path, _ = registry_paths(registry_dir)
     return json_path.resolve().parent / DEFAULT_WORKING_MEMORY_NAME
 
 
-def default_summary_path(registry_path: Path | None = None, registry_dir: Path | None = None) -> Path:
+def default_summary_path(
+    registry_path: Path | None = None, registry_dir: Path | None = None
+) -> Path:
     if registry_path:
         return registry_path.resolve().parent / DEFAULT_SUMMARY_NAME
     json_path, _ = registry_paths(registry_dir)
@@ -201,17 +211,27 @@ def merged_source_refs(
     seen: set[tuple[str, str, str]] = set()
     out: list[dict[str, Any]] = []
     for ref in refs:
-        line = ref.get("source_line") or ref.get("assistant_line") or ref.get("user_line") or ref.get("line")
+        line = (
+            ref.get("source_line")
+            or ref.get("assistant_line")
+            or ref.get("user_line")
+            or ref.get("line")
+        )
         thread_key = ref.get("thread_key")
         clean = {
             "thread_key": thread_key,
             "title": ref.get("title"),
-            "project_label": ref.get("project_label") or (thread_projects or {}).get(str(thread_key or "")),
+            "project_label": ref.get("project_label")
+            or (thread_projects or {}).get(str(thread_key or "")),
             "turn_index": ref.get("turn_index"),
             "line": line,
             "message_id": ref.get("message_id"),
         }
-        key = (str(clean.get("thread_key") or ""), str(clean.get("line") or ""), str(clean.get("message_id") or ""))
+        key = (
+            str(clean.get("thread_key") or ""),
+            str(clean.get("line") or ""),
+            str(clean.get("message_id") or ""),
+        )
         if key in seen:
             continue
         seen.add(key)
@@ -220,11 +240,15 @@ def merged_source_refs(
 
 
 def project_label_from_refs(refs: list[dict[str, Any]]) -> str | None:
-    labels = unique_preserve([str(ref.get("project_label") or "") for ref in refs if ref.get("project_label")], limit=3)
+    labels = unique_preserve(
+        [str(ref.get("project_label") or "") for ref in refs if ref.get("project_label")], limit=3
+    )
     return labels[0] if len(labels) == 1 else None
 
 
-def concepts_from_findings(candidate: dict[str, Any], findings_by_id: dict[str, dict[str, Any]]) -> list[str]:
+def concepts_from_findings(
+    candidate: dict[str, Any], findings_by_id: dict[str, dict[str, Any]]
+) -> list[str]:
     values: list[str] = []
     for finding_id in candidate.get("source_finding_ids") or []:
         finding = findings_by_id.get(str(finding_id))
@@ -234,7 +258,9 @@ def concepts_from_findings(candidate: dict[str, Any], findings_by_id: dict[str, 
         for key in ("src", "dst"):
             if finding.get(key):
                 values.append(str(finding.get(key)))
-    return unique_preserve([normalize_term(value) for value in values if normalize_term(value)], limit=18)
+    return unique_preserve(
+        [normalize_term(value) for value in values if normalize_term(value)], limit=18
+    )
 
 
 def source_strength(candidate: dict[str, Any], refs: list[dict[str, Any]]) -> dict[str, Any]:
@@ -267,19 +293,39 @@ def route_candidate(candidate: dict[str, Any], strength: dict[str, Any]) -> tupl
         return PARK, "medium", f"{candidate_type} is not foreground recall material"
     if candidate_type in REVIEW_TYPES:
         if confidence >= 0.55:
-            return CONFIRM_WHEN_RELEVANT, "high", "tension or contradiction should only interrupt when a current action depends on it"
+            return (
+                CONFIRM_WHEN_RELEVANT,
+                "high",
+                "tension or contradiction should only interrupt when a current action depends on it",
+            )
         return PARK, "high", "weak contradiction candidate"
     if candidate_type in PREFERENCE_TYPES:
         if confidence >= 0.85 and ref_count >= 3 and thread_count >= 2:
-            return USE_WITH_SOURCE, "medium", "well-supported preference; use as current working hypothesis, not permanent identity"
+            return (
+                USE_WITH_SOURCE,
+                "medium",
+                "well-supported preference; use as current working hypothesis, not permanent identity",
+            )
         if confidence >= 0.65:
-            return CONFIRM_WHEN_RELEVANT, "high", "personal preference may drift, so confirm only when relevant"
+            return (
+                CONFIRM_WHEN_RELEVANT,
+                "high",
+                "personal preference may drift, so confirm only when relevant",
+            )
         return PARK, "high", "preference candidate too weak"
     if candidate_type in PROJECT_FACT_TYPES:
         if confidence >= 0.75 and ref_count >= 1:
-            return USE_WITH_SOURCE, "medium", "project fact is useful as source-backed working memory"
+            return (
+                USE_WITH_SOURCE,
+                "medium",
+                "project fact is useful as source-backed working memory",
+            )
         if confidence >= 0.60:
-            return CONFIRM_WHEN_RELEVANT, "medium", "project direction candidate needs relevant-situation confirmation"
+            return (
+                CONFIRM_WHEN_RELEVANT,
+                "medium",
+                "project direction candidate needs relevant-situation confirmation",
+            )
         return PARK, "medium", "project candidate too weak"
     if candidate_type in LOW_RISK_TYPES:
         if confidence >= 0.70:
@@ -300,7 +346,9 @@ def ask_policy_for(route: str) -> str:
     return "do_not_use_in_foreground"
 
 
-def trigger_terms_for(candidate: dict[str, Any], concepts: list[str], project_label: str | None) -> list[str]:
+def trigger_terms_for(
+    candidate: dict[str, Any], concepts: list[str], project_label: str | None
+) -> list[str]:
     text = "\n".join(
         [
             str(candidate.get("title") or ""),
@@ -354,7 +402,9 @@ def route_entry(
         "project_label": project_label,
         "trigger_terms": trigger_terms_for(candidate, concepts, project_label),
         "concepts": concepts,
-        "source_finding_ids": unique_preserve([str(value) for value in candidate.get("source_finding_ids") or []], limit=12),
+        "source_finding_ids": unique_preserve(
+            [str(value) for value in candidate.get("source_finding_ids") or []], limit=12
+        ),
         "source_refs": refs[:8],
         "source_strength": strength,
         "source_candidate_batch_id": candidate.get("batch_id"),
@@ -440,7 +490,11 @@ def match_working_memory(
         if row.get("status") != "active" or row.get("route") not in ACTIVE_ROUTES:
             continue
         row_project = row.get("project_label")
-        if row_project and project_label and str(row_project).casefold() != project_label.casefold():
+        if (
+            row_project
+            and project_label
+            and str(row_project).casefold() != project_label.casefold()
+        ):
             continue
         if row_project and not project_label and str(row_project).casefold() not in prompt_low:
             continue
@@ -449,12 +503,21 @@ def match_working_memory(
             if broad_match_term(str(term), str(row_project or "")):
                 continue
             low = str(term).casefold()
-            if low and (low in prompt_low or any(part and part in low for part in split_query_terms([prompt]) if len(part) >= 4)):
+            if low and (
+                low in prompt_low
+                or any(
+                    part and part in low for part in split_query_terms([prompt]) if len(part) >= 4
+                )
+            ):
                 matched.append(str(term))
         if not matched:
             continue
-        route_bonus = {USE_SILENTLY: 0.5, USE_WITH_SOURCE: 1.5, CONFIRM_WHEN_RELEVANT: 1.0}.get(str(row.get("route")), 0.0)
-        score = min(20.0, len(matched) * 2.0 + float(row.get("confidence") or 0.0) * 6.0 + route_bonus)
+        route_bonus = {USE_SILENTLY: 0.5, USE_WITH_SOURCE: 1.5, CONFIRM_WHEN_RELEVANT: 1.0}.get(
+            str(row.get("route")), 0.0
+        )
+        score = min(
+            20.0, len(matched) * 2.0 + float(row.get("confidence") or 0.0) * 6.0 + route_bonus
+        )
         copy = dict(row)
         copy["matched_terms"] = unique_preserve(matched, limit=8)
         copy["score"] = round(score, 3)
@@ -506,10 +569,24 @@ def main() -> int:
 
     registry_path = Path(args.registry).resolve() if args.registry else None
     registry_dir = Path(args.registry_dir).resolve() if args.registry_dir else None
-    candidates = Path(args.candidates).resolve() if args.candidates else default_candidates_path(registry_path, registry_dir)
-    jobs = Path(args.jobs).resolve() if args.jobs else default_jobs_path(registry_path, registry_dir)
-    output = Path(args.output).resolve() if args.output else default_working_memory_path(registry_path, registry_dir)
-    summary_path = Path(args.summary).resolve() if args.summary else default_summary_path(registry_path, registry_dir)
+    candidates = (
+        Path(args.candidates).resolve()
+        if args.candidates
+        else default_candidates_path(registry_path, registry_dir)
+    )
+    jobs = (
+        Path(args.jobs).resolve() if args.jobs else default_jobs_path(registry_path, registry_dir)
+    )
+    output = (
+        Path(args.output).resolve()
+        if args.output
+        else default_working_memory_path(registry_path, registry_dir)
+    )
+    summary_path = (
+        Path(args.summary).resolve()
+        if args.summary
+        else default_summary_path(registry_path, registry_dir)
+    )
     result = route_candidates(candidates, jobs)
     rows = result.pop("rows")
     if not args.no_write:

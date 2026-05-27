@@ -27,12 +27,6 @@ from aippocampuslib import (
 )
 from build_concept_graph import default_concept_graph_path
 from registry import registry_paths
-from subconscious_job_circuits import JOB_SPECS, PROMPT_VERSION, job_names, jobs_initial_payload
-from subconscious_job_plan import JobRunTask, plan_job_run_tasks, sample_count, worker_count
-from subconscious_job_validation import (
-    QUESTION_TEXT_MAX_CHARS,
-    validate_findings,
-)
 from subconscious_agent import (
     AGENT_SYSTEM_PROMPT,
     DEFAULT_MAX_STEPS,
@@ -48,6 +42,12 @@ from subconscious_agent import (
     run_tool,
     source_bank_from_turns,
 )
+from subconscious_job_circuits import JOB_SPECS, PROMPT_VERSION, job_names, jobs_initial_payload
+from subconscious_job_plan import JobRunTask, plan_job_run_tasks, sample_count, worker_count
+from subconscious_job_validation import (
+    QUESTION_TEXT_MAX_CHARS,
+    validate_findings,
+)
 from subconscious_worker import (
     DEFAULT_BASE_URL,
     DEFAULT_MAX_TURNS,
@@ -59,14 +59,15 @@ from subconscious_worker import (
     select_timeline_turns,
 )
 
-
 DEFAULT_JOBS_OUTPUT_NAME = "subconscious_jobs.jsonl"
 DEFAULT_CONCURRENCY = int(os.environ.get("AIPPOCAMPUS_SUBCONSCIOUS_CONCURRENCY", "4"))
 DEFAULT_SAMPLES_PER_JOB = int(os.environ.get("AIPPOCAMPUS_SUBCONSCIOUS_SAMPLES_PER_JOB", "2"))
 __all__ = ["QUESTION_TEXT_MAX_CHARS", "validate_findings"]
 
 
-def default_jobs_output_path(registry_path: Path | None = None, registry_dir: Path | None = None) -> Path:
+def default_jobs_output_path(
+    registry_path: Path | None = None, registry_dir: Path | None = None
+) -> Path:
     if registry_path:
         return registry_path.resolve().parent / DEFAULT_JOBS_OUTPUT_NAME
     json_path, _ = registry_paths(registry_dir)
@@ -91,7 +92,9 @@ def parse_action_for_job(response: dict[str, Any]) -> dict[str, Any]:
         }
 
 
-def append_job_findings(path: Path, findings: list[dict[str, Any]], *, model: str, batch_id: str, usage: dict[str, Any]) -> None:
+def append_job_findings(
+    path: Path, findings: list[dict[str, Any]], *, model: str, batch_id: str, usage: dict[str, Any]
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8", newline="\n") as fh:
         for finding in findings:
@@ -167,7 +170,9 @@ def run_one_job(
             f"{objective}\n\nDiversity sample {sample_index}/{sample_count}: "
             "use a distinct angle, search path, or cue framing while staying source-backed."
         ).strip()
-    initial_payload = jobs_initial_payload(job, sample_objective, turns, step_budget, min_tool_steps)
+    initial_payload = jobs_initial_payload(
+        job, sample_objective, turns, step_budget, min_tool_steps
+    )
     if dry_run:
         return {
             "ok": True,
@@ -196,7 +201,15 @@ def run_one_job(
     findings: list[dict[str, Any]] = []
     tool_count = 0
     for step in range(step_budget):
-        response = chat_fn(sanitize_external_model_payload(messages), api_key, model, base_url, max_tokens, timeout, temperature)
+        response = chat_fn(
+            sanitize_external_model_payload(messages),
+            api_key,
+            model,
+            base_url,
+            max_tokens,
+            timeout,
+            temperature,
+        )
         add_usage(usage_total, compact_usage(response.get("usage") or {}))
         action = parse_action_for_job(response)
         transcript.append({"step": step + 1, "action": action})
@@ -222,12 +235,24 @@ def run_one_job(
         if action.get("action") == "final":
             final_attempts.append(action)
             if tool_count < max(0, int(min_tool_steps)) and step + 1 < step_budget:
-                messages.append({"role": "assistant", "content": json.dumps(action, ensure_ascii=False)})
-                messages.append({"role": "user", "content": json.dumps({"error": "Call at least one read-only tool before finalizing."}, ensure_ascii=False)})
+                messages.append(
+                    {"role": "assistant", "content": json.dumps(action, ensure_ascii=False)}
+                )
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": json.dumps(
+                            {"error": "Call at least one read-only tool before finalizing."},
+                            ensure_ascii=False,
+                        ),
+                    }
+                )
                 continue
             candidate_findings = validate_findings(job, action, state.source_bank)
             if not candidate_findings and step + 1 < step_budget:
-                messages.append({"role": "assistant", "content": json.dumps(action, ensure_ascii=False)})
+                messages.append(
+                    {"role": "assistant", "content": json.dumps(action, ensure_ascii=False)}
+                )
                 messages.append(
                     {
                         "role": "user",
@@ -245,8 +270,17 @@ def run_one_job(
             findings = candidate_findings
             break
         if action.get("action") != "tool":
-            messages.append({"role": "assistant", "content": json.dumps(action, ensure_ascii=False)})
-            messages.append({"role": "user", "content": json.dumps({"error": "Return action=tool or action=final only."}, ensure_ascii=False)})
+            messages.append(
+                {"role": "assistant", "content": json.dumps(action, ensure_ascii=False)}
+            )
+            messages.append(
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {"error": "Return action=tool or action=final only."}, ensure_ascii=False
+                    ),
+                }
+            )
             continue
         tool_name = str(action.get("tool") or "")
         tool_args = action.get("args") if isinstance(action.get("args"), dict) else {}
@@ -266,7 +300,8 @@ def run_one_job(
             {
                 "role": "user",
                 "content": (
-                    "TOOL_RESULT:" + "\n"
+                    "TOOL_RESULT:"
+                    + "\n"
                     + json.dumps(observation, ensure_ascii=False, indent=2)
                     + "\n\nNext: call another tool if needed; otherwise return action=final with source-backed findings. "
                     "Do not return empty findings when observations contain useful durable structure."
@@ -288,7 +323,15 @@ def run_one_job(
                 ),
             }
         ]
-        response = chat_fn(sanitize_external_model_payload(repair_messages), api_key, model, base_url, max_tokens, timeout, temperature)
+        response = chat_fn(
+            sanitize_external_model_payload(repair_messages),
+            api_key,
+            model,
+            base_url,
+            max_tokens,
+            timeout,
+            temperature,
+        )
         add_usage(usage_total, compact_usage(response.get("usage") or {}))
         repair_action = parse_action_for_job(response)
         final_attempts.append(repair_action)
@@ -298,7 +341,9 @@ def run_one_job(
     edges = concept_findings_to_edges(findings)
     edge_count = 0
     if not no_write and not defer_writes:
-        append_job_findings(jobs_output_path, findings, model=model, batch_id=batch_id, usage=usage_total)
+        append_job_findings(
+            jobs_output_path, findings, model=model, batch_id=batch_id, usage=usage_total
+        )
         if edges:
             append_staging_edges(
                 edges_output_path,
@@ -321,7 +366,9 @@ def run_one_job(
         "finding_count": len(findings),
         "edge_count": edge_count if (not no_write and not defer_writes) else len(edges),
         "findings": findings,
-        "tool_steps": [item for item in transcript if (item.get("action") or {}).get("action") == "tool"],
+        "tool_steps": [
+            item for item in transcript if (item.get("action") or {}).get("action") == "tool"
+        ],
         "final_attempts": final_attempts,
         "usage": usage_total,
         "cache": deepseek_cache_metrics_from_usage(usage_total),
@@ -367,9 +414,19 @@ def run_tasks_in_sample_waves(
         if wave_workers == 1:
             for task in wave:
                 try:
-                    indexed_results.append((int(task["index"] if isinstance(task, dict) else task.index), run_task(task)))
+                    indexed_results.append(
+                        (
+                            int(task["index"] if isinstance(task, dict) else task.index),
+                            run_task(task),
+                        )
+                    )
                 except Exception as exc:
-                    indexed_results.append((int(task["index"] if isinstance(task, dict) else task.index), failed_task(task, exc)))
+                    indexed_results.append(
+                        (
+                            int(task["index"] if isinstance(task, dict) else task.index),
+                            failed_task(task, exc),
+                        )
+                    )
             continue
         with ThreadPoolExecutor(max_workers=wave_workers) as executor:
             futures = {executor.submit(run_task, task): task for task in wave}
@@ -549,11 +606,31 @@ def main() -> int:
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
-    registry_path = Path(args.registry).resolve() if args.registry else registry_paths(Path(args.registry_dir).resolve() if args.registry_dir else None)[0]
-    timeline_path = Path(args.timeline).resolve() if args.timeline else default_project_timeline_path(registry_path=registry_path)
-    concept_graph_path = Path(args.concept_graph).resolve() if args.concept_graph else default_concept_graph_path(registry_path=registry_path)
-    jobs_output_path = Path(args.jobs_output).resolve() if args.jobs_output else default_jobs_output_path(registry_path=registry_path)
-    edges_output_path = Path(args.edges_output).resolve() if args.edges_output else default_staging_path(registry_path=registry_path)
+    registry_path = (
+        Path(args.registry).resolve()
+        if args.registry
+        else registry_paths(Path(args.registry_dir).resolve() if args.registry_dir else None)[0]
+    )
+    timeline_path = (
+        Path(args.timeline).resolve()
+        if args.timeline
+        else default_project_timeline_path(registry_path=registry_path)
+    )
+    concept_graph_path = (
+        Path(args.concept_graph).resolve()
+        if args.concept_graph
+        else default_concept_graph_path(registry_path=registry_path)
+    )
+    jobs_output_path = (
+        Path(args.jobs_output).resolve()
+        if args.jobs_output
+        else default_jobs_output_path(registry_path=registry_path)
+    )
+    edges_output_path = (
+        Path(args.edges_output).resolve()
+        if args.edges_output
+        else default_staging_path(registry_path=registry_path)
+    )
     try:
         result = run_jobs(
             jobs=job_names(args.job),
@@ -585,7 +662,14 @@ def main() -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return cli_exit_code_for_error_code(result["error"]["code"])
     if not result.get("ok") and not result.get("error"):
-        first_error = next((str(item.get("error") or "") for item in result.get("jobs") or [] if item.get("error")), "")
+        first_error = next(
+            (
+                str(item.get("error") or "")
+                for item in result.get("jobs") or []
+                if item.get("error")
+            ),
+            "",
+        )
         if first_error:
             result["error"] = cli_error_payload_from_message(first_error)["error"]
     if args.json_output:
@@ -597,7 +681,9 @@ def main() -> int:
         print(f"jobs output: {result['jobs_output']}")
     if result.get("ok"):
         return 0
-    return cli_exit_code_for_error_code(str((result.get("error") or {}).get("code") or "runtime_error"))
+    return cli_exit_code_for_error_code(
+        str((result.get("error") or {}).get("code") or "runtime_error")
+    )
 
 
 if __name__ == "__main__":

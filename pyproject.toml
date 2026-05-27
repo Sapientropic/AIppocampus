@@ -8,6 +8,6 @@ extend-exclude = [
 ]
 
 [tool.ruff.lint]
-# Keep style-only churn out of the baseline, but run full Pyflakes so unused
-# imports, undefined names, and stale locals do not hide import-coupling debt.
-select = ["E9", "F"]
+# Keep broad style churn out of lint, but enforce Pyflakes and import order so
+# stale locals and flat same-directory imports do not hide real coupling debt.
+select = ["E9", "F", "I"]

@@ -11,7 +11,6 @@ from typing import Any, Iterable
 
 from aippocampuslib import aippocampus_registry_dir, file_sha256, now_utc, safe_path_name
 
-
 SYNC_SCHEMA_VERSION = 1
 SYNC_MANIFEST_NAME = "aippocampus-sync-manifest.json"
 ROOT_SIDECARS = (
@@ -94,7 +93,7 @@ def iter_registry_sync_files(registry_dir: Path) -> Iterable[tuple[Path, Path]]:
 def iter_raw_rollout_files(registry_dir: Path) -> Iterable[tuple[Path, Path]]:
     registry = load_json(registry_dir / "threads.json")
     for entry in registry.get("threads") or []:
-        rollout = ((entry.get("paths") or {}).get("rollout"))
+        rollout = (entry.get("paths") or {}).get("rollout")
         if not rollout:
             continue
         source = Path(rollout)
@@ -132,23 +131,47 @@ def portable_registry_for_sync(registry_dir: Path, *, include_raw: bool) -> dict
         # device locators, so they are cleared unless raw rollout was explicitly
         # included in the bundle.
         paths["workspace"] = None
-        paths["registry_thread_store"] = thread_root.as_posix() if local_thread_root.exists() else None
+        paths["registry_thread_store"] = (
+            thread_root.as_posix() if local_thread_root.exists() else None
+        )
         clean_root = local_thread_root / "clean-source"
-        paths["clean_source_dir"] = (thread_root / "clean-source").as_posix() if clean_root.exists() else None
+        paths["clean_source_dir"] = (
+            (thread_root / "clean-source").as_posix() if clean_root.exists() else None
+        )
         paths["clean_source_messages_jsonl"] = (
-            thread_root / "clean-source" / "messages.jsonl"
-        ).as_posix() if (clean_root / "messages.jsonl").is_file() else None
+            (thread_root / "clean-source" / "messages.jsonl").as_posix()
+            if (clean_root / "messages.jsonl").is_file()
+            else None
+        )
         paths["clean_source_turns_jsonl"] = (
-            thread_root / "clean-source" / "turns.jsonl"
-        ).as_posix() if (clean_root / "turns.jsonl").is_file() else None
+            (thread_root / "clean-source" / "turns.jsonl").as_posix()
+            if (clean_root / "turns.jsonl").is_file()
+            else None
+        )
         index_root = local_thread_root / "index"
         paths["index_dir"] = (thread_root / "index").as_posix() if index_root.exists() else None
-        paths["graph_json"] = (thread_root / "index" / "graph.json").as_posix() if (index_root / "graph.json").is_file() else None
-        paths["messages_jsonl"] = (thread_root / "index" / "messages.jsonl").as_posix() if (index_root / "messages.jsonl").is_file() else None
-        paths["sqlite"] = (thread_root / "index" / "source_index.sqlite").as_posix() if (index_root / "source_index.sqlite").is_file() else None
+        paths["graph_json"] = (
+            (thread_root / "index" / "graph.json").as_posix()
+            if (index_root / "graph.json").is_file()
+            else None
+        )
+        paths["messages_jsonl"] = (
+            (thread_root / "index" / "messages.jsonl").as_posix()
+            if (index_root / "messages.jsonl").is_file()
+            else None
+        )
+        paths["sqlite"] = (
+            (thread_root / "index" / "source_index.sqlite").as_posix()
+            if (index_root / "source_index.sqlite").is_file()
+            else None
+        )
         raw_name = Path("raw-rollouts") / f"{thread_dir_name(key)}.jsonl"
         raw_source = paths.get("rollout")
-        paths["rollout"] = raw_name.as_posix() if include_raw and raw_source and Path(raw_source).is_file() else None
+        paths["rollout"] = (
+            raw_name.as_posix()
+            if include_raw and raw_source and Path(raw_source).is_file()
+            else None
+        )
         item["paths"] = paths
         item["path_locator_policy"] = {
             "kind": "portable_sync_locators",
@@ -162,7 +185,9 @@ def portable_registry_for_sync(registry_dir: Path, *, include_raw: bool) -> dict
     return portable
 
 
-def write_sync_file(source: Path, destination: Path, *, registry_root: Path, relative_path: Path, include_raw: bool) -> None:
+def write_sync_file(
+    source: Path, destination: Path, *, registry_root: Path, relative_path: Path, include_raw: bool
+) -> None:
     if relative_path.as_posix() == "registry/threads.json":
         save_json(destination, portable_registry_for_sync(registry_root, include_raw=include_raw))
         return
@@ -182,14 +207,22 @@ def push_sync_bundle(
     *,
     include_raw: bool = False,
 ) -> dict:
-    registry_root = Path(registry_dir).resolve() if registry_dir else aippocampus_registry_dir().resolve()
+    registry_root = (
+        Path(registry_dir).resolve() if registry_dir else aippocampus_registry_dir().resolve()
+    )
     sync_root = Path(sync_dir).resolve()
     sync_root.mkdir(parents=True, exist_ok=True)
     clear_managed_sync_dirs(sync_root)
 
     copied: list[dict] = []
     for source, relative_path in iter_registry_sync_files(registry_root):
-        write_sync_file(source, sync_root / relative_path, registry_root=registry_root, relative_path=relative_path, include_raw=include_raw)
+        write_sync_file(
+            source,
+            sync_root / relative_path,
+            registry_root=registry_root,
+            relative_path=relative_path,
+            include_raw=include_raw,
+        )
         copied.append(sync_file_entry(sync_root, relative_path))
     if include_raw:
         for source, relative_path in iter_raw_rollout_files(registry_root):
@@ -213,7 +246,12 @@ def push_sync_bundle(
     }
     manifest_path = sync_root / SYNC_MANIFEST_NAME
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-    return {"ok": True, "sync_dir": str(sync_root), "manifest": str(manifest_path), "file_count": len(copied)}
+    return {
+        "ok": True,
+        "sync_dir": str(sync_root),
+        "manifest": str(manifest_path),
+        "file_count": len(copied),
+    }
 
 
 def destination_for(target_registry: Path, relative_path: str) -> Path:
@@ -241,7 +279,12 @@ def repair_registry_locators(target_registry: Path) -> dict[str, Any]:
     registry_path = target_registry / "threads.json"
     registry = load_json(registry_path)
     if not registry:
-        return {"ok": False, "registry": str(registry_path), "repaired_entries": 0, "issues": [{"code": "missing_registry"}]}
+        return {
+            "ok": False,
+            "registry": str(registry_path),
+            "repaired_entries": 0,
+            "issues": [{"code": "missing_registry"}],
+        }
 
     repaired_entries = 0
     unresolved: list[dict[str, str]] = []
@@ -257,20 +300,44 @@ def repair_registry_locators(target_registry: Path) -> dict[str, Any]:
             paths["registry_thread_store"] = str(thread_root)
             clean_root = thread_root / "clean-source"
             paths["clean_source_dir"] = str(clean_root) if clean_root.exists() else None
-            paths["clean_source_messages_jsonl"] = str(clean_root / "messages.jsonl") if (clean_root / "messages.jsonl").is_file() else None
-            paths["clean_source_turns_jsonl"] = str(clean_root / "turns.jsonl") if (clean_root / "turns.jsonl").is_file() else None
+            paths["clean_source_messages_jsonl"] = (
+                str(clean_root / "messages.jsonl")
+                if (clean_root / "messages.jsonl").is_file()
+                else None
+            )
+            paths["clean_source_turns_jsonl"] = (
+                str(clean_root / "turns.jsonl") if (clean_root / "turns.jsonl").is_file() else None
+            )
             index_root = thread_root / "index"
             paths["index_dir"] = str(index_root) if index_root.exists() else None
-            paths["graph_json"] = str(index_root / "graph.json") if (index_root / "graph.json").is_file() else None
-            paths["messages_jsonl"] = str(index_root / "messages.jsonl") if (index_root / "messages.jsonl").is_file() else None
-            paths["sqlite"] = str(index_root / "source_index.sqlite") if (index_root / "source_index.sqlite").is_file() else None
+            paths["graph_json"] = (
+                str(index_root / "graph.json") if (index_root / "graph.json").is_file() else None
+            )
+            paths["messages_jsonl"] = (
+                str(index_root / "messages.jsonl")
+                if (index_root / "messages.jsonl").is_file()
+                else None
+            )
+            paths["sqlite"] = (
+                str(index_root / "source_index.sqlite")
+                if (index_root / "source_index.sqlite").is_file()
+                else None
+            )
         else:
-            unresolved.append({"thread_key": key, "path": str(thread_root), "code": "missing_thread_store"})
+            unresolved.append(
+                {"thread_key": key, "path": str(thread_root), "code": "missing_thread_store"}
+            )
 
-        rollout = resolve_pulled_locator(target_registry, paths.get("rollout")) if paths.get("rollout") else None
+        rollout = (
+            resolve_pulled_locator(target_registry, paths.get("rollout"))
+            if paths.get("rollout")
+            else None
+        )
         paths["rollout"] = rollout
         workspace = paths.get("workspace")
-        paths["workspace"] = str(Path(workspace)) if workspace and Path(workspace).exists() else None
+        paths["workspace"] = (
+            str(Path(workspace)) if workspace and Path(workspace).exists() else None
+        )
         entry["paths"] = paths
         entry["path_locator_policy"] = {
             "kind": "target_device_locators",
@@ -294,7 +361,11 @@ def repair_registry_locators(target_registry: Path) -> dict[str, Any]:
 
 def pull_sync_bundle(sync_dir: str | Path, target_registry_dir: str | Path | None = None) -> dict:
     sync_root = Path(sync_dir).resolve()
-    target_registry = Path(target_registry_dir).resolve() if target_registry_dir else aippocampus_registry_dir().resolve()
+    target_registry = (
+        Path(target_registry_dir).resolve()
+        if target_registry_dir
+        else aippocampus_registry_dir().resolve()
+    )
     manifest = load_json(sync_root / SYNC_MANIFEST_NAME)
     if not manifest:
         raise FileNotFoundError(f"missing sync manifest: {sync_root / SYNC_MANIFEST_NAME}")
@@ -308,7 +379,9 @@ def pull_sync_bundle(sync_dir: str | Path, target_registry_dir: str | Path | Non
         source = ensure_within(sync_root, sync_root / relative_path)
         if not source.is_file():
             continue
-        destination = ensure_within(target_registry, destination_for(target_registry, relative_path.as_posix()))
+        destination = ensure_within(
+            target_registry, destination_for(target_registry, relative_path.as_posix())
+        )
         if not destination.exists():
             copy_file(source, destination)
             copied += 1
@@ -316,7 +389,9 @@ def pull_sync_bundle(sync_dir: str | Path, target_registry_dir: str | Path | Non
         if file_sha256(destination) == item.get("sha256"):
             skipped += 1
             continue
-        conflict_path = ensure_within(conflict_root, destination_for(conflict_root, relative_path.as_posix()))
+        conflict_path = ensure_within(
+            conflict_root, destination_for(conflict_root, relative_path.as_posix())
+        )
         copy_file(source, conflict_path)
         conflicts += 1
 
@@ -348,7 +423,9 @@ def repair_sync_bundle(sync_dir: str | Path) -> dict:
         try:
             relative_path = validate_relative_sync_path(str(item.get("path") or ""))
         except ValueError as exc:
-            issues.append({"code": "unsafe_path", "path": str(item.get("path") or ""), "message": str(exc)})
+            issues.append(
+                {"code": "unsafe_path", "path": str(item.get("path") or ""), "message": str(exc)}
+            )
             continue
         path = sync_root / relative_path
         if not path.exists():
@@ -356,7 +433,14 @@ def repair_sync_bundle(sync_dir: str | Path) -> dict:
             continue
         actual = file_sha256(path)
         if actual != item.get("sha256"):
-            issues.append({"code": "hash_mismatch", "path": relative_path.as_posix(), "expected": item.get("sha256"), "actual": actual})
+            issues.append(
+                {
+                    "code": "hash_mismatch",
+                    "path": relative_path.as_posix(),
+                    "expected": item.get("sha256"),
+                    "actual": actual,
+                }
+            )
     return {
         "ok": not issues,
         "sync_dir": str(sync_root),

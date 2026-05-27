@@ -15,7 +15,8 @@ def latest_reply(rollout: Path) -> dict:
     messages, turns = normalize_rollout(rollout)
     assistant_messages = [msg for msg in messages if msg.get("role") == "assistant"]
     final_messages = [
-        msg for msg in assistant_messages
+        msg
+        for msg in assistant_messages
         if msg.get("phase") == "final_answer" or msg.get("is_final")
     ]
     if final_messages:

@@ -17,7 +17,6 @@ from typing import Any
 from aippocampuslib import compact_text
 from build_clean_source import SCOPE_LABEL_ORDER
 
-
 SEMANTIC_SCOPE_LABELS_FILENAME = "semantic-scope-labels.jsonl"
 SEMANTIC_SCOPE_LABEL_FINDING_KIND = "semantic_scope_labels"
 SEMANTIC_SCOPE_LABEL_JOB = "semantic_scope_labeling"
@@ -53,9 +52,18 @@ def canonical_scope_labels(values: list[Any]) -> list[str]:
     return [label for label in SCOPE_LABEL_ORDER if label in present]
 
 
-def label_evidence_map(item: dict[str, Any], *, fallback_confidence: float | None = None) -> dict[str, dict[str, Any]]:
-    raw_evidence = item.get("label_evidence") or item.get("label_support") or item.get("label_rationales") or {}
-    label_confidences = item.get("label_confidences") if isinstance(item.get("label_confidences"), dict) else {}
+def label_evidence_map(
+    item: dict[str, Any], *, fallback_confidence: float | None = None
+) -> dict[str, dict[str, Any]]:
+    raw_evidence = (
+        item.get("label_evidence")
+        or item.get("label_support")
+        or item.get("label_rationales")
+        or {}
+    )
+    label_confidences = (
+        item.get("label_confidences") if isinstance(item.get("label_confidences"), dict) else {}
+    )
     out: dict[str, dict[str, Any]] = {}
 
     def add(label_value: Any, reason_value: Any = "", confidence_value: Any = None) -> None:
@@ -80,7 +88,11 @@ def label_evidence_map(item: dict[str, Any], *, fallback_confidence: float | Non
                 continue
             add(
                 entry.get("label"),
-                entry.get("reason") or entry.get("rationale") or entry.get("summary") or entry.get("why") or entry.get("evidence"),
+                entry.get("reason")
+                or entry.get("rationale")
+                or entry.get("summary")
+                or entry.get("why")
+                or entry.get("evidence"),
                 entry.get("confidence"),
             )
     elif isinstance(raw_evidence, dict):
@@ -88,7 +100,11 @@ def label_evidence_map(item: dict[str, Any], *, fallback_confidence: float | Non
             if isinstance(value, dict):
                 add(
                     label,
-                    value.get("reason") or value.get("rationale") or value.get("summary") or value.get("why") or value.get("evidence"),
+                    value.get("reason")
+                    or value.get("rationale")
+                    or value.get("summary")
+                    or value.get("why")
+                    or value.get("evidence"),
                     value.get("confidence"),
                 )
             else:
@@ -100,8 +116,12 @@ def label_evidence_map(item: dict[str, Any], *, fallback_confidence: float | Non
     return out
 
 
-def filtered_semantic_scope_labels(item: dict[str, Any], labels: list[Any] | None = None) -> list[str]:
-    canonical = canonical_scope_labels(list(labels if labels is not None else item.get("scope_labels") or item.get("labels") or []))
+def filtered_semantic_scope_labels(
+    item: dict[str, Any], labels: list[Any] | None = None
+) -> list[str]:
+    canonical = canonical_scope_labels(
+        list(labels if labels is not None else item.get("scope_labels") or item.get("labels") or [])
+    )
     evidence = label_evidence_map(item)
     kept: list[str] = []
     for label in canonical:
@@ -112,7 +132,9 @@ def filtered_semantic_scope_labels(item: dict[str, Any], labels: list[Any] | Non
 
 
 def label_evidence_min_confidence(label: str) -> float:
-    return SOURCE_REVIEW_FRAGILE_LABEL_MIN_CONFIDENCE.get(label, DEFAULT_LABEL_EVIDENCE_MIN_CONFIDENCE)
+    return SOURCE_REVIEW_FRAGILE_LABEL_MIN_CONFIDENCE.get(
+        label, DEFAULT_LABEL_EVIDENCE_MIN_CONFIDENCE
+    )
 
 
 def label_evidence_is_sufficient(label: str, evidence: dict[str, Any] | None) -> bool:
@@ -169,7 +191,9 @@ def load_semantic_scope_labels(clean_source_dir: Path) -> dict[str, dict[str, An
     return by_message_id
 
 
-def semantic_labels_for_message(message: dict[str, Any], sidecar: dict[str, dict[str, Any]]) -> list[str]:
+def semantic_labels_for_message(
+    message: dict[str, Any], sidecar: dict[str, dict[str, Any]]
+) -> list[str]:
     message_id = str(message.get("message_id") or message.get("id") or "").strip()
     item = sidecar.get(message_id) or {}
     return list(item.get("scope_labels") or [])
@@ -250,7 +274,9 @@ def semantic_scope_label_row_from_finding(
     message_id = str(item.get("message_id") or "").strip()
     if not message_id or message_id not in messages_by_id:
         return None
-    labels = filtered_semantic_scope_labels(item, list(item.get("scope_labels") or item.get("labels") or []))
+    labels = filtered_semantic_scope_labels(
+        item, list(item.get("scope_labels") or item.get("labels") or [])
+    )
     if not labels:
         return None
     confidence = clamp_confidence(item.get("confidence"))
@@ -269,7 +295,9 @@ def semantic_scope_label_row_from_finding(
         "confidence": round(confidence, 4),
         "source_refs": source_refs,
         "label_evidence": label_evidence_for_labels(item, labels),
-        "rationale": compact_text(str(item.get("rationale") or item.get("summary") or item.get("why") or ""), 260),
+        "rationale": compact_text(
+            str(item.get("rationale") or item.get("summary") or item.get("why") or ""), 260
+        ),
         "boundary": DEFAULT_SEMANTIC_SCOPE_LABEL_BOUNDARY,
     }
 
@@ -282,23 +310,31 @@ def semantic_scope_label_rows_from_findings(
 ) -> list[dict[str, Any]]:
     merged: dict[str, dict[str, Any]] = {}
     for item in findings:
-        row = semantic_scope_label_row_from_finding(item, messages_by_id, min_confidence=min_confidence)
+        row = semantic_scope_label_row_from_finding(
+            item, messages_by_id, min_confidence=min_confidence
+        )
         if not row:
             continue
         existing = merged.get(str(row["message_id"]))
         if not existing:
             merged[str(row["message_id"])] = row
             continue
-        existing["scope_labels"] = merged_scope_labels(existing.get("scope_labels") or [], row.get("scope_labels") or [])
+        existing["scope_labels"] = merged_scope_labels(
+            existing.get("scope_labels") or [], row.get("scope_labels") or []
+        )
         evidence_by_label = {
             str(item.get("label") or ""): item
-            for item in [*list(existing.get("label_evidence") or []), *list(row.get("label_evidence") or [])]
+            for item in [
+                *list(existing.get("label_evidence") or []),
+                *list(row.get("label_evidence") or []),
+            ]
             if isinstance(item, dict) and item.get("label")
         }
         existing["label_evidence"] = [
             evidence_by_label[label]
             for label in existing["scope_labels"]
-            if label in evidence_by_label and label_evidence_is_sufficient(label, evidence_by_label[label])
+            if label in evidence_by_label
+            and label_evidence_is_sufficient(label, evidence_by_label[label])
         ]
         if float(row.get("confidence") or 0.0) > float(existing.get("confidence") or 0.0):
             existing["confidence"] = row["confidence"]
@@ -307,9 +343,13 @@ def semantic_scope_label_rows_from_findings(
         existing["source_refs"] = list(
             {
                 str(ref.get("message_id") or "") + ":" + str(ref.get("source_line") or ""): ref
-                for ref in [*list(existing.get("source_refs") or []), *list(row.get("source_refs") or [])]
+                for ref in [
+                    *list(existing.get("source_refs") or []),
+                    *list(row.get("source_refs") or []),
+                ]
             }.values()
         )[:5]
+
     def sort_key(item: dict[str, Any]) -> tuple[int, str]:
         try:
             line = int(messages_by_id.get(str(item.get("message_id")), {}).get("source_line") or 0)

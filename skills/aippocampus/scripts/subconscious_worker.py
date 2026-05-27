@@ -18,8 +18,6 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from build_concept_graph import concept_is_noise
-from registry import registry_paths, unique_preserve
 from aippocampuslib import (
     cli_error_payload,
     cli_exit_code_for_error_code,
@@ -28,8 +26,9 @@ from aippocampuslib import (
     now_utc,
     sanitize_external_model_payload,
 )
+from build_concept_graph import concept_is_noise
 from deepseek_model_routing import flash_model
-
+from registry import registry_paths, unique_preserve
 
 PROMPT_VERSION = "aippocampus-subconscious-v0"
 DEFAULT_MODEL = flash_model()
@@ -75,14 +74,18 @@ Rules:
 """
 
 
-def default_project_timeline_path(registry_path: Path | None = None, registry_dir: Path | None = None) -> Path:
+def default_project_timeline_path(
+    registry_path: Path | None = None, registry_dir: Path | None = None
+) -> Path:
     if registry_path:
         return registry_path.resolve().parent / "project_timeline.json"
     json_path, _ = registry_paths(registry_dir)
     return json_path.resolve().parent / "project_timeline.json"
 
 
-def default_staging_path(registry_path: Path | None = None, registry_dir: Path | None = None) -> Path:
+def default_staging_path(
+    registry_path: Path | None = None, registry_dir: Path | None = None
+) -> Path:
     if registry_path:
         return registry_path.resolve().parent / "subconscious_edges.jsonl"
     json_path, _ = registry_paths(registry_dir)
@@ -128,9 +131,15 @@ def select_timeline_turns(
                     "turn_index": turn.get("turn_index"),
                     "user_line": turn.get("user_line"),
                     "assistant_line": turn.get("assistant_line"),
-                    "topic_terms": unique_preserve([str(item) for item in turn.get("topic_terms") or []], limit=16),
-                    "scope_labels": unique_preserve([str(item) for item in turn.get("scope_labels") or []], limit=12),
-                    "semantic_scope_labels": unique_preserve([str(item) for item in turn.get("semantic_scope_labels") or []], limit=12),
+                    "topic_terms": unique_preserve(
+                        [str(item) for item in turn.get("topic_terms") or []], limit=16
+                    ),
+                    "scope_labels": unique_preserve(
+                        [str(item) for item in turn.get("scope_labels") or []], limit=12
+                    ),
+                    "semantic_scope_labels": unique_preserve(
+                        [str(item) for item in turn.get("semantic_scope_labels") or []], limit=12
+                    ),
                     "source_refs": [
                         {
                             "thread_key": ref.get("thread_key"),
@@ -147,7 +156,10 @@ def select_timeline_turns(
                     "assistant": compact_text(str(turn.get("assistant") or ""), 760),
                 }
             )
-    rows.sort(key=lambda item: (str(item.get("timestamp") or ""), int(item.get("turn_index") or 0)), reverse=True)
+    rows.sort(
+        key=lambda item: (str(item.get("timestamp") or ""), int(item.get("turn_index") or 0)),
+        reverse=True,
+    )
     if int(max_turns) > 0:
         rows = rows[: max(1, int(max_turns))]
     for idx, row in enumerate(rows):
@@ -395,9 +407,21 @@ def main() -> int:
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
-    registry_path = Path(args.registry).resolve() if args.registry else registry_paths(Path(args.registry_dir).resolve() if args.registry_dir else None)[0]
-    timeline_path = Path(args.timeline).resolve() if args.timeline else default_project_timeline_path(registry_path=registry_path)
-    output_path = Path(args.output).resolve() if args.output else default_staging_path(registry_path=registry_path)
+    registry_path = (
+        Path(args.registry).resolve()
+        if args.registry
+        else registry_paths(Path(args.registry_dir).resolve() if args.registry_dir else None)[0]
+    )
+    timeline_path = (
+        Path(args.timeline).resolve()
+        if args.timeline
+        else default_project_timeline_path(registry_path=registry_path)
+    )
+    output_path = (
+        Path(args.output).resolve()
+        if args.output
+        else default_staging_path(registry_path=registry_path)
+    )
     try:
         result = run_worker(
             timeline_path=timeline_path,

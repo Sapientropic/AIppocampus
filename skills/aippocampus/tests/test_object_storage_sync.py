@@ -9,7 +9,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -127,7 +126,9 @@ class ObjectStorageSyncTests(unittest.TestCase):
 
     def test_object_storage_repair_reports_tampered_object(self) -> None:
         device = self.create_registry()
-        sync_object_storage.push_object_storage_bundle(device["registry"], self.endpoint, prefix=self.prefix)
+        sync_object_storage.push_object_storage_bundle(
+            device["registry"], self.endpoint, prefix=self.prefix
+        )
         tampered = self.bucket / self.prefix / "registry" / "threads.json"
         tampered.write_text("tampered\n", encoding="utf-8")
 

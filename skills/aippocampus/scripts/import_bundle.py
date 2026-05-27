@@ -15,26 +15,32 @@ def timestamp_slug() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
-def append_import_anchor(anchor_path: Path, bundle: Path, extract_dir: Path, manifest: dict) -> None:
+def append_import_anchor(
+    anchor_path: Path, bundle: Path, extract_dir: Path, manifest: dict
+) -> None:
     created = not anchor_path.exists()
     lines = []
     if created:
-        lines.extend([
-            "# Thread Anchors",
+        lines.extend(
+            [
+                "# Thread Anchors",
+                "",
+                "Concise index for recovering important context from this long Codex thread.",
+                "",
+            ]
+        )
+    lines.extend(
+        [
+            "## Imported AIppocampus bundle",
+            f"- Date: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
+            "- Keywords: imported bundle,aippocampus,portable memory",
+            f"- Note: Imported bundle from {bundle}.",
+            f"- Note: Extracted files are under {extract_dir}.",
+            f"- Note: Source cwd was {manifest.get('cwd', 'unknown')}; message count {manifest.get('message_count', 'unknown')}.",
+            f"- Source: {extract_dir / 'index' / 'source_index.sqlite'}",
             "",
-            "Concise index for recovering important context from this long Codex thread.",
-            "",
-        ])
-    lines.extend([
-        "## Imported AIppocampus bundle",
-        f"- Date: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
-        "- Keywords: imported bundle,aippocampus,portable memory",
-        f"- Note: Imported bundle from {bundle}.",
-        f"- Note: Extracted files are under {extract_dir}.",
-        f"- Note: Source cwd was {manifest.get('cwd', 'unknown')}; message count {manifest.get('message_count', 'unknown')}.",
-        f"- Source: {extract_dir / 'index' / 'source_index.sqlite'}",
-        "",
-    ])
+        ]
+    )
     with anchor_path.open("a", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(lines))
 
@@ -79,13 +85,19 @@ def main() -> int:
     if not args.no_anchor:
         append_import_anchor(dest / "thread-anchors.md", bundle, extract_dir, manifest)
 
-    print(json.dumps({
-        "extracted_to": str(extract_dir),
-        "manifest": str(manifest_path) if manifest_path.exists() else None,
-        "sqlite_index": str(extract_dir / "index" / "source_index.sqlite"),
-        "messages_jsonl": str(extract_dir / "index" / "messages.jsonl"),
-        "graph_json": str(extract_dir / "index" / "graph.json"),
-    }, ensure_ascii=False, indent=2))
+    print(
+        json.dumps(
+            {
+                "extracted_to": str(extract_dir),
+                "manifest": str(manifest_path) if manifest_path.exists() else None,
+                "sqlite_index": str(extract_dir / "index" / "source_index.sqlite"),
+                "messages_jsonl": str(extract_dir / "index" / "messages.jsonl"),
+                "graph_json": str(extract_dir / "index" / "graph.json"),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
     return 0
 
 

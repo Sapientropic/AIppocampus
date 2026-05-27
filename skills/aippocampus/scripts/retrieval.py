@@ -20,7 +20,6 @@ from pathlib import Path
 
 from aippocampuslib import compact_text, parse_anchor_file
 
-
 RECALL_TRIGGERS = [
     "还记得",
     "之前",
@@ -185,7 +184,9 @@ def phase_weight(row: sqlite3.Row) -> float:
     return 0.0
 
 
-def row_message_payload(row: sqlite3.Row, snippet_chars: int, *, score: float | None = None, signals: dict | None = None) -> dict:
+def row_message_payload(
+    row: sqlite3.Row, snippet_chars: int, *, score: float | None = None, signals: dict | None = None
+) -> dict:
     payload = {
         "id": row["id"],
         "line": row["line"],
@@ -250,7 +251,11 @@ def split_query_terms(patterns: list[str]) -> list[str]:
         for trigger in RECALL_TRIGGERS:
             cjk = re.sub(re.escape(trigger), " ", cjk, flags=re.IGNORECASE)
         cjk = re.sub(r"[A-Za-z0-9_.-]+", " ", cjk)
-        cjk = re.sub(r"(还记得|记得|这和|有关|关系|那段|这段|我|你|他说|她说|说的|说过|说|一个|一下|那个|这个|那篇|这篇|吗|嘛|呢|吧)", " ", cjk)
+        cjk = re.sub(
+            r"(还记得|记得|这和|有关|关系|那段|这段|我|你|他说|她说|说的|说过|说|一个|一下|那个|这个|那篇|这篇|吗|嘛|呢|吧)",
+            " ",
+            cjk,
+        )
         for chunk in re.split(r"[\s的了和与、，。；：！？,.!?/|+]+", cjk):
             chunk = normalize_term(chunk)
             if 2 <= len(chunk) <= 12 and chunk.casefold() not in STOP_TERMS:
@@ -299,7 +304,8 @@ def match_anchors(anchor_path: Path, terms: list[str], limit: int = 6) -> list[d
         if score <= 0:
             continue
         specific = [
-            term for term in matched
+            term
+            for term in matched
             if term.casefold() not in GENERIC_ANCHOR_TERMS and len(term) > 2
         ]
         if not specific and score < 12:
@@ -307,21 +313,25 @@ def match_anchors(anchor_path: Path, terms: list[str], limit: int = 6) -> list[d
         expanded = [anchor.get("title") or ""]
         expanded.extend(anchor.get("keywords") or [])
         expanded.extend(anchor.get("quotes") or [])
-        matches.append({
-            "index": idx,
-            "title": anchor.get("title") or f"Anchor {idx}",
-            "score": round(score, 3),
-            "matched_terms": matched,
-            "keywords": anchor.get("keywords") or [],
-            "expanded_terms": unique_preserve(expanded, limit=16),
-            "notes": anchor.get("notes") or [],
-            "sources": anchor.get("sources") or [],
-        })
+        matches.append(
+            {
+                "index": idx,
+                "title": anchor.get("title") or f"Anchor {idx}",
+                "score": round(score, 3),
+                "matched_terms": matched,
+                "keywords": anchor.get("keywords") or [],
+                "expanded_terms": unique_preserve(expanded, limit=16),
+                "notes": anchor.get("notes") or [],
+                "sources": anchor.get("sources") or [],
+            }
+        )
     matches.sort(key=lambda item: item["score"], reverse=True)
     return matches[:limit]
 
 
-def expanded_terms_from_anchors(query_terms: list[str], anchor_matches: list[dict], limit: int = 28) -> list[str]:
+def expanded_terms_from_anchors(
+    query_terms: list[str], anchor_matches: list[dict], limit: int = 28
+) -> list[str]:
     expanded = list(query_terms)
     for anchor in anchor_matches:
         expanded.extend(anchor.get("expanded_terms") or [])
@@ -349,7 +359,9 @@ def load_message_by_id(con: sqlite3.Connection, row_id: int) -> dict | None:
     return dict(row)
 
 
-def context_window(con: sqlite3.Connection, row_id: int, radius: int, snippet_chars: int) -> list[dict]:
+def context_window(
+    con: sqlite3.Connection, row_id: int, radius: int, snippet_chars: int
+) -> list[dict]:
     if radius <= 0:
         return []
     rows = con.execute(
@@ -461,7 +473,8 @@ def build_rag_chunks(
             group = turn_groups[turn_index]
             users = [item for item in group if item[1].get("role") == "user"]
             finals = [
-                item for item in group
+                item
+                for item in group
                 if item[1].get("role") == "assistant"
                 and (item[1].get("phase") == "final_answer" or item[1].get("is_final"))
             ]
@@ -494,7 +507,9 @@ def build_rag_chunks(
                 marker += f"/{phase}"
             if turn is not None:
                 marker += f" turn {turn}"
-            text_parts.append(f"[{msg_id} {marker} line {message.get('line')}] {message.get('text') or ''}")
+            text_parts.append(
+                f"[{msg_id} {marker} line {message.get('line')}] {message.get('text') or ''}"
+            )
         text = "\n".join(text_parts)
         query_terms = list(extract_rag_terms(text, limit=64).keys())
         matched = []
@@ -505,18 +520,20 @@ def build_rag_chunks(
         first_id, first = batch[0]
         last_id, last = batch[-1]
         last_flushed_end_id = last_id
-        chunks.append({
-            "id": len(chunks) + 1,
-            "start_message_id": first_id,
-            "end_message_id": last_id,
-            "start_line": first.get("line"),
-            "end_line": last.get("line"),
-            "roles": ",".join(sorted(set(role for role in roles if role))),
-            "anchor_titles": unique_preserve([title for title in matched if title], limit=8),
-            "summary": compact_text(text, 360),
-            "text": text,
-            "terms": extract_rag_terms(text, limit=96),
-        })
+        chunks.append(
+            {
+                "id": len(chunks) + 1,
+                "start_message_id": first_id,
+                "end_message_id": last_id,
+                "start_line": first.get("line"),
+                "end_line": last.get("line"),
+                "roles": ",".join(sorted(set(role for role in roles if role))),
+                "anchor_titles": unique_preserve([title for title in matched if title], limit=8),
+                "summary": compact_text(text, 360),
+                "text": text,
+                "terms": extract_rag_terms(text, limit=96),
+            }
+        )
         if overlap_messages > 0:
             batch = batch[-overlap_messages:]
             batch_chars = sum(len(str(message.get("text") or "")) for _, message in batch)
@@ -571,7 +588,10 @@ def search_rag_chunks_connection(
             for pos, row in enumerate(rows):
                 candidates[row["id"]] = {
                     "row": row,
-                    "signals": {"chunk_fts": max(1.0, 60.0 - pos * 0.7), "chunk_fts_rank": float(row["rank"])},
+                    "signals": {
+                        "chunk_fts": max(1.0, 60.0 - pos * 0.7),
+                        "chunk_fts_rank": float(row["rank"]),
+                    },
                 }
         except sqlite3.Error:
             pass
@@ -617,24 +637,26 @@ def search_rag_chunks_connection(
             + max(0, expanded - literal) * 2.0
             + anchor_hits * 3.0
         )
-        out.append({
-            "id": row_id,
-            "start_message_id": row["start_message_id"],
-            "end_message_id": row["end_message_id"],
-            "start_line": row["start_line"],
-            "end_line": row["end_line"],
-            "roles": row["roles"],
-            "anchor_titles": anchor_titles,
-            "score": round(score, 3),
-            "signals": {
-                **signals,
-                "literal_hits": literal,
-                "expanded_hits": expanded,
-                "anchor_hits": anchor_hits,
-            },
-            "summary": row["summary"],
-            "snippet": compact_text(text, snippet_chars),
-        })
+        out.append(
+            {
+                "id": row_id,
+                "start_message_id": row["start_message_id"],
+                "end_message_id": row["end_message_id"],
+                "start_line": row["start_line"],
+                "end_line": row["end_line"],
+                "roles": row["roles"],
+                "anchor_titles": anchor_titles,
+                "score": round(score, 3),
+                "signals": {
+                    **signals,
+                    "literal_hits": literal,
+                    "expanded_hits": expanded,
+                    "anchor_hits": anchor_hits,
+                },
+                "summary": row["summary"],
+                "snippet": compact_text(text, snippet_chars),
+            }
+        )
 
     out.sort(key=lambda item: (-item["score"], item["start_message_id"]))
     return out[:limit]
@@ -713,9 +735,21 @@ def diversify_results(
 
     add(pool[0])
     literal_hits = [item for item in pool if (item.get("signals") or {}).get("literal_hits", 0) > 0]
-    add(min((item for item in literal_hits if item.get("role") == "user"), key=lambda item: item.get("line") or 10**12, default=None))
+    add(
+        min(
+            (item for item in literal_hits if item.get("role") == "user"),
+            key=lambda item: item.get("line") or 10**12,
+            default=None,
+        )
+    )
     add(min(literal_hits, key=lambda item: item.get("line") or 10**12, default=None))
-    add(max((item for item in pool if item.get("role") == "assistant"), key=lambda item: item.get("score") or 0, default=None))
+    add(
+        max(
+            (item for item in pool if item.get("role") == "assistant"),
+            key=lambda item: item.get("score") or 0,
+            default=None,
+        )
+    )
 
     while len(selected) < min(limit, len(pool)):
         best = None
@@ -765,7 +799,7 @@ def search_hybrid_index(
             try:
                 rows = con.execute(
                     f"""
-                    SELECT {message_select_columns(con, 'm')},
+                    SELECT {message_select_columns(con, "m")},
                            bm25(messages_fts) AS rank
                     FROM messages_fts f
                     JOIN messages m ON m.id = f.rowid
@@ -778,7 +812,10 @@ def search_hybrid_index(
                 for pos, row in enumerate(rows):
                     candidates[row["id"]] = {
                         "row": row,
-                        "signals": {"fts": max(1.0, 80.0 - pos * 0.5), "fts_rank": float(row["rank"])},
+                        "signals": {
+                            "fts": max(1.0, 80.0 - pos * 0.5),
+                            "fts_rank": float(row["rank"]),
+                        },
                     }
             except sqlite3.Error:
                 pass
@@ -844,7 +881,9 @@ def search_hybrid_index(
                     ).fetchall()
                 for row in rows:
                     item = candidates.setdefault(row["id"], {"row": row, "signals": {}})
-                    item["signals"]["rag_chunk"] = max(float(item["signals"].get("rag_chunk", 0.0)), chunk["score"] * 0.35)
+                    item["signals"]["rag_chunk"] = max(
+                        float(item["signals"].get("rag_chunk", 0.0)), chunk["score"] * 0.35
+                    )
                     item["signals"]["rag_chunk_id"] = chunk["id"]
 
         results: list[dict] = []
@@ -886,7 +925,9 @@ def search_hybrid_index(
                 "snippet": compact_text(text, snippet_chars),
             }
             if context_radius > 0:
-                result["context"] = context_window(con, row_id, context_radius, max(180, snippet_chars // 3))
+                result["context"] = context_window(
+                    con, row_id, context_radius, max(180, snippet_chars // 3)
+                )
             results.append(result)
 
         results.sort(key=lambda item: (-item["score"], item["id"]))
@@ -921,18 +962,22 @@ def graph_neighbors(graph_path: Path, terms: list[str], limit: int = 12) -> list
         node = nodes.get(node_id)
         if not node:
             continue
-        neighbors.append({
-            "id": node_id,
-            "type": node.get("type"),
-            "label": node.get("label"),
-            "matched": node_id in matched_ids,
-        })
+        neighbors.append(
+            {
+                "id": node_id,
+                "type": node.get("type"),
+                "label": node.get("label"),
+                "matched": node_id in matched_ids,
+            }
+        )
         if len(neighbors) >= limit:
             break
     return neighbors
 
 
-def active_recall_decision(prompt: str, anchor_matches: list[dict], health: dict | None = None) -> dict:
+def active_recall_decision(
+    prompt: str, anchor_matches: list[dict], health: dict | None = None
+) -> dict:
     low = prompt.casefold()
     reasons: list[str] = []
     score = 0.0
@@ -940,17 +985,24 @@ def active_recall_decision(prompt: str, anchor_matches: list[dict], health: dict
     matched_triggers = [trigger for trigger in RECALL_TRIGGERS if trigger.casefold() in low]
     if matched_triggers:
         score += min(6.0, len(matched_triggers) * 1.5)
-        reasons.append("message contains recall/deictic trigger(s): " + ", ".join(matched_triggers[:6]))
+        reasons.append(
+            "message contains recall/deictic trigger(s): " + ", ".join(matched_triggers[:6])
+        )
 
     matched_concepts = [trigger for trigger in CONCEPT_TRIGGERS if trigger.casefold() in low]
     if matched_concepts:
         score += min(4.0, len(matched_concepts) * 2.0)
-        reasons.append("message mentions durable concept trigger(s): " + ", ".join(matched_concepts[:6]))
+        reasons.append(
+            "message mentions durable concept trigger(s): " + ", ".join(matched_concepts[:6])
+        )
 
     if anchor_matches:
         anchor_score = sum(float(item.get("score") or 0) for item in anchor_matches[:3])
         score += min(5.0, anchor_score / 4.0)
-        reasons.append("message overlaps existing anchors: " + ", ".join(item["title"] for item in anchor_matches[:3]))
+        reasons.append(
+            "message overlaps existing anchors: "
+            + ", ".join(item["title"] for item in anchor_matches[:3])
+        )
 
     if health:
         if health.get("index", {}).get("stale"):
@@ -959,7 +1011,9 @@ def active_recall_decision(prompt: str, anchor_matches: list[dict], health: dict
         if health.get("checkpoint", {}).get("due"):
             score += 1.0
             reasons.append("checkpoint is due")
-        if any(item.get("id") == "consider_graphify" for item in health.get("recommended_actions", [])):
+        if any(
+            item.get("id") == "consider_graphify" for item in health.get("recommended_actions", [])
+        ):
             score += 0.5
             reasons.append("thread crossed the deep graph threshold")
 

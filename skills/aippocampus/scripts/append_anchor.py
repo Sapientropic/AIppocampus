@@ -23,16 +23,20 @@ def main() -> int:
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     lines = []
     if created:
-        lines.extend([
-            "# Thread Anchors",
-            "",
-            "Concise index for recovering important context from this long Codex thread.",
-            "",
-        ])
-    lines.extend([
-        f"## {args.title}",
-        f"- Date: {now}",
-    ])
+        lines.extend(
+            [
+                "# Thread Anchors",
+                "",
+                "Concise index for recovering important context from this long Codex thread.",
+                "",
+            ]
+        )
+    lines.extend(
+        [
+            f"## {args.title}",
+            f"- Date: {now}",
+        ]
+    )
     if args.keywords:
         lines.append(f"- Keywords: {args.keywords}")
     for note in args.note:

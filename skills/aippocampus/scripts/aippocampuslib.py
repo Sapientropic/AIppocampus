@@ -117,7 +117,9 @@ def locate_rollout(cwd: str | Path, home: Path | None = None, latest: bool = Fal
 
 def thread_key_from_rollout(rollout: str | Path, meta: dict | None = None) -> str:
     rollout_path = Path(rollout)
-    session_meta = meta if meta is not None else public_session_meta(read_session_meta(rollout_path))
+    session_meta = (
+        meta if meta is not None else public_session_meta(read_session_meta(rollout_path))
+    )
     session_id = (session_meta or {}).get("id")
     if session_id:
         return f"session:{session_id}"
@@ -153,7 +155,9 @@ def default_thread_store_dir(
             rollout_path = locate_rollout(cwd_path, home or codex_home())
         except Exception:
             rollout_path = None
-    thread_key = thread_key_from_rollout(rollout_path) if rollout_path else workspace_thread_key(cwd_path)
+    thread_key = (
+        thread_key_from_rollout(rollout_path) if rollout_path else workspace_thread_key(cwd_path)
+    )
     root = (registry_dir or aippocampus_registry_dir(home)).resolve()
     return root / "threads" / safe_path_name(thread_key, "thread")
 
@@ -174,7 +178,9 @@ def default_thread_graphify_corpus_dir(cwd: str | Path, rollout: str | Path | No
     return default_thread_index_dir(cwd, rollout) / "graphify-corpus"
 
 
-def default_thread_checkpoint_state_path(cwd: str | Path, rollout: str | Path | None = None) -> Path:
+def default_thread_checkpoint_state_path(
+    cwd: str | Path, rollout: str | Path | None = None
+) -> Path:
     return default_thread_index_dir(cwd, rollout) / "checkpoint_state.json"
 
 
@@ -214,11 +220,26 @@ def extract_message(item: dict, include_tools: bool = False) -> dict | None:
     if typ == "event_msg":
         ptype = payload.get("type")
         if ptype == "user_message":
-            return {"role": "user", "kind": "user_message", "phase": message_phase(payload), "text": payload.get("message") or ""}
+            return {
+                "role": "user",
+                "kind": "user_message",
+                "phase": message_phase(payload),
+                "text": payload.get("message") or "",
+            }
         if ptype == "agent_message":
-            return {"role": "assistant", "kind": "agent_message", "phase": message_phase(payload), "text": payload.get("message") or ""}
+            return {
+                "role": "assistant",
+                "kind": "agent_message",
+                "phase": message_phase(payload),
+                "text": payload.get("message") or "",
+            }
         if include_tools:
-            return {"role": "event", "kind": ptype or "event_msg", "phase": message_phase(payload), "text": json.dumps(payload, ensure_ascii=False)}
+            return {
+                "role": "event",
+                "kind": ptype or "event_msg",
+                "phase": message_phase(payload),
+                "text": json.dumps(payload, ensure_ascii=False),
+            }
 
     if typ == "response_item":
         ptype = payload.get("type")
@@ -235,7 +256,12 @@ def extract_message(item: dict, include_tools: bool = False) -> dict | None:
             text = "\n".join(t for t in texts if t)
             return {"role": role, "kind": "message", "phase": message_phase(payload), "text": text}
         if include_tools and ptype in {"function_call", "function_call_output", "web_search_call"}:
-            return {"role": "tool", "kind": ptype, "phase": "tool", "text": json.dumps(payload, ensure_ascii=False)}
+            return {
+                "role": "tool",
+                "kind": ptype,
+                "phase": "tool",
+                "text": json.dumps(payload, ensure_ascii=False),
+            }
 
     return None
 
@@ -333,7 +359,9 @@ def normalize_rollout(rollout: Path, include_tools: bool = False) -> tuple[list[
             continue
 
         phase = str(msg.get("phase") or "")
-        digest = hashlib.sha1((msg["role"] + "\0" + phase + "\0" + msg["text"]).encode("utf-8")).hexdigest()
+        digest = hashlib.sha1(
+            (msg["role"] + "\0" + phase + "\0" + msg["text"]).encode("utf-8")
+        ).hexdigest()
         if digest in seen:
             continue
         seen.add(digest)
@@ -356,17 +384,19 @@ def normalize_rollout(rollout: Path, include_tools: bool = False) -> tuple[list[
                 turns[turn_index]["final_line"] = line_no
                 turns[turn_index]["final_timestamp"] = timestamp
 
-        messages.append({
-            "line": line_no,
-            "timestamp": timestamp,
-            "role": msg["role"],
-            "kind": msg["kind"],
-            "phase": phase,
-            "turn_index": turn_index,
-            "is_final": is_final,
-            "sha1": digest,
-            "text": msg["text"],
-        })
+        messages.append(
+            {
+                "line": line_no,
+                "timestamp": timestamp,
+                "role": msg["role"],
+                "kind": msg["kind"],
+                "phase": phase,
+                "turn_index": turn_index,
+                "is_final": is_final,
+                "sha1": digest,
+                "text": msg["text"],
+            }
+        )
 
     return messages, list(turns.values())
 
@@ -456,7 +486,11 @@ def sanitize_external_model_text(text: str) -> tuple[str, dict[str, Any]]:
     """
 
     original = str(text or "")
-    hard_matches = [pattern.pattern for pattern in EXTERNAL_MODEL_HARD_SECRET_PATTERNS if pattern.search(original)]
+    hard_matches = [
+        pattern.pattern
+        for pattern in EXTERNAL_MODEL_HARD_SECRET_PATTERNS
+        if pattern.search(original)
+    ]
     if hard_matches:
         return "", {
             "redacted": True,
@@ -572,7 +606,13 @@ def parse_anchor_file(path: Path) -> list[dict]:
         if line.startswith("## "):
             if current:
                 anchors.append(current)
-            current = {"title": line[3:].strip(), "keywords": [], "notes": [], "quotes": [], "sources": []}
+            current = {
+                "title": line[3:].strip(),
+                "keywords": [],
+                "notes": [],
+                "quotes": [],
+                "sources": [],
+            }
             continue
         if not current or not line.startswith("- "):
             continue

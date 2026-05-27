@@ -8,11 +8,14 @@ import json
 import os
 from pathlib import Path
 
+from aippocampuslib import compact_text, default_thread_clean_source_dir, resolve_artifact_path
 from build_clean_source import SCOPE_LABEL_ORDER
 from retrieval import split_query_terms
-from aippocampuslib import compact_text, default_thread_clean_source_dir, resolve_artifact_path
-from semantic_scope_labels import load_semantic_scope_labels, merged_scope_labels, semantic_labels_for_message
-
+from semantic_scope_labels import (
+    load_semantic_scope_labels,
+    merged_scope_labels,
+    semantic_labels_for_message,
+)
 
 LEGACY_CLEAN_SOURCE_DIR = ".aippocampus/clean-source"
 
@@ -65,9 +68,16 @@ def search_clean_source(
     if clean_source_dir is None:
         global_dir = default_thread_clean_source_dir(cwd)
         legacy_dir = cwd / LEGACY_CLEAN_SOURCE_DIR
-        source_dir = global_dir if (global_dir / "messages.jsonl").exists() or not (legacy_dir / "messages.jsonl").exists() else legacy_dir
+        source_dir = (
+            global_dir
+            if (global_dir / "messages.jsonl").exists()
+            or not (legacy_dir / "messages.jsonl").exists()
+            else legacy_dir
+        )
     else:
-        source_dir = resolve_artifact_path(clean_source_dir, cwd, default_thread_clean_source_dir(cwd))
+        source_dir = resolve_artifact_path(
+            clean_source_dir, cwd, default_thread_clean_source_dir(cwd)
+        )
     messages_path = source_dir / "messages.jsonl"
     semantic_sidecar = load_semantic_scope_labels(source_dir)
     terms = split_query_terms(patterns)
@@ -89,9 +99,7 @@ def search_clean_source(
         if "scope_labels" not in message:
             missing_scope_label_count += 1
         base_scope_labels = [
-            str(label)
-            for label in message.get("scope_labels", [])
-            if isinstance(label, str)
+            str(label) for label in message.get("scope_labels", []) if isinstance(label, str)
         ]
         semantic_scope_labels = semantic_labels_for_message(message, semantic_sidecar)
         message_scope_labels = merged_scope_labels(base_scope_labels, semantic_scope_labels)
@@ -121,7 +129,9 @@ def search_clean_source(
                 "snippet": compact_text(str(message.get("text") or ""), snippet_chars),
             }
         )
-    matches.sort(key=lambda item: (-float(item.get("score") or 0.0), int(item.get("source_line") or 0)))
+    matches.sort(
+        key=lambda item: (-float(item.get("score") or 0.0), int(item.get("source_line") or 0))
+    )
     if label_filter and missing_scope_label_count:
         warnings.append(
             {
@@ -143,7 +153,11 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("patterns", nargs="+")
     parser.add_argument("--cwd", default=os.getcwd())
-    parser.add_argument("--clean-source-dir", default=None, help="Defaults to global clean source, with project-local legacy fallback.")
+    parser.add_argument(
+        "--clean-source-dir",
+        default=None,
+        help="Defaults to global clean source, with project-local legacy fallback.",
+    )
     parser.add_argument("--max", type=int, default=10)
     parser.add_argument("--snippet-chars", type=int, default=700)
     parser.add_argument(

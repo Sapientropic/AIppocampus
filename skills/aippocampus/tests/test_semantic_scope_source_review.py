@@ -7,7 +7,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -64,7 +63,7 @@ class SemanticScopeSourceReviewTests(unittest.TestCase):
                             "label": "idea_seed",
                             "reason": "The source frames the metaphor as a continuity pivot.",
                             "confidence": 0.86,
-                        }
+                        },
                     ],
                     "source_refs": [
                         {
@@ -105,8 +104,13 @@ class SemanticScopeSourceReviewTests(unittest.TestCase):
 
         def fake_chat_fn(messages, api_key, model, base_url, max_tokens, timeout, temperature):  # noqa: ANN001
             payload = json.loads(messages[1]["content"])
-            self.assertLess(messages[1]["content"].index("label_guidance_catalog"), messages[1]["content"].index("review_case"))
-            self.assertEqual(payload["review_case"]["label_evidence"]["personal_reflection"]["confidence"], 0.88)
+            self.assertLess(
+                messages[1]["content"].index("label_guidance_catalog"),
+                messages[1]["content"].index("review_case"),
+            )
+            self.assertEqual(
+                payload["review_case"]["label_evidence"]["personal_reflection"]["confidence"], 0.88
+            )
             return {
                 "choices": [
                     {

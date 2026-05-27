@@ -16,10 +16,13 @@ from typing import Any
 
 from aippocampuslib import codex_home, now_utc
 
-
 DEFAULT_SEARCH_BUDGET_FALLBACK = 3
-PROMPT_HOOK_SEMANTIC_TIMEOUT_FALLBACK = float(os.environ.get("AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT", "0.8"))
-PROMPT_HOOK_MAX_ELAPSED_MS_FALLBACK = int(os.environ.get("AIPPOCAMPUS_PROMPT_HOOK_BUDGET_MS", "4200"))
+PROMPT_HOOK_SEMANTIC_TIMEOUT_FALLBACK = float(
+    os.environ.get("AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT", "0.8")
+)
+PROMPT_HOOK_MAX_ELAPSED_MS_FALLBACK = int(
+    os.environ.get("AIPPOCAMPUS_PROMPT_HOOK_BUDGET_MS", "4200")
+)
 _RUNTIME_EXPORTS = {
     "DEFAULT_SEARCH_BUDGET",
     "PROMPT_HOOK_SEMANTIC_TIMEOUT",
@@ -46,6 +49,7 @@ def _load_runtime() -> dict[str, Any]:
     if _RUNTIME_CACHE is not None:
         return _RUNTIME_CACHE
 
+    from prompt_context_render import context_for_hook, hook_stdout_payload  # noqa: PLC0415
     from prompt_recall_core import (  # noqa: PLC0415
         DEFAULT_SEARCH_BUDGET,
         PROMPT_HOOK_SEMANTIC_TIMEOUT,
@@ -55,7 +59,6 @@ def _load_runtime() -> dict[str, Any]:
         merge_association_candidates,
     )
     from prompt_recall_decision import assess_prompt  # noqa: PLC0415
-    from prompt_context_render import context_for_hook, hook_stdout_payload  # noqa: PLC0415
 
     _RUNTIME_CACHE = {
         "DEFAULT_SEARCH_BUDGET": DEFAULT_SEARCH_BUDGET,
@@ -111,7 +114,11 @@ def write_debug_log(
             for item in result.get("cognitive_map", [])[:4]
         ],
         "candidate_threads": [
-            {"thread_key": item.get("thread_key"), "title": item.get("title"), "score": item.get("score")}
+            {
+                "thread_key": item.get("thread_key"),
+                "title": item.get("title"),
+                "score": item.get("score"),
+            }
             for item in result.get("candidates", [])[:3]
         ],
         "working_memory": [
@@ -127,7 +134,11 @@ def write_debug_log(
         if result.get("semantic_gate")
         else None,
         "evidence": [
-            {"thread_key": item.get("thread_key"), "line": item.get("line"), "phase": item.get("phase")}
+            {
+                "thread_key": item.get("thread_key"),
+                "line": item.get("line"),
+                "phase": item.get("phase"),
+            }
             for item in result.get("evidence", [])[:5]
         ],
         "elapsed_ms": result.get("elapsed_ms"),
@@ -138,7 +149,9 @@ def write_debug_log(
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--prompt", help="Dry-run prompt text. If omitted, read Codex hook JSON from stdin.")
+    parser.add_argument(
+        "--prompt", help="Dry-run prompt text. If omitted, read Codex hook JSON from stdin."
+    )
     parser.add_argument("--cwd", help="Workspace cwd override for dry runs.")
     parser.add_argument("--registry")
     parser.add_argument("--registry-dir")
@@ -168,10 +181,23 @@ def main() -> int:
     parser.add_argument("--no-cognitive-map", action="store_true")
     parser.add_argument("--no-concept-graph", action="store_true")
     parser.add_argument("--search-budget", type=int, default=DEFAULT_SEARCH_BUDGET_FALLBACK)
-    parser.add_argument("--json", action="store_true", dest="json_output", help="Print the decision JSON instead of hook stdout JSON.")
-    parser.add_argument("--log", action="store_true", help="Write sanitized non-prompt debug events for scent/evidence decisions.")
-    parser.add_argument("--log-skip", action="store_true", help="Also log skip decisions. Useful only while tuning.")
-    parser.add_argument("--strict", action="store_true", help="Raise hook errors instead of silently continuing.")
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="Print the decision JSON instead of hook stdout JSON.",
+    )
+    parser.add_argument(
+        "--log",
+        action="store_true",
+        help="Write sanitized non-prompt debug events for scent/evidence decisions.",
+    )
+    parser.add_argument(
+        "--log-skip", action="store_true", help="Also log skip decisions. Useful only while tuning."
+    )
+    parser.add_argument(
+        "--strict", action="store_true", help="Raise hook errors instead of silently continuing."
+    )
     args = parser.parse_args()
 
     hook_input: dict[str, Any] = {}

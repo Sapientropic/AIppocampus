@@ -10,7 +10,6 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -24,7 +23,11 @@ import subconscious_worker as worker  # noqa: E402
 class CliJsonContractTests(unittest.TestCase):
     def run_main_json(self, module: object, argv: list[str]) -> tuple[int, dict]:
         stdout = io.StringIO()
-        with patch.object(sys, "argv", argv), patch.dict(os.environ, {}, clear=True), contextlib.redirect_stdout(stdout):
+        with (
+            patch.object(sys, "argv", argv),
+            patch.dict(os.environ, {}, clear=True),
+            contextlib.redirect_stdout(stdout),
+        ):
             code = module.main()
         return code, json.loads(stdout.getvalue())
 

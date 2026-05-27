@@ -17,12 +17,13 @@ from retrieval import (
     split_query_terms,
 )
 
-
 SCRIPT_DIR = Path(__file__).resolve().parent
 
 
 def run_json(cmd: list[str], *, allow_empty_result: bool = False) -> dict:
-    proc = subprocess.run(cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False)
+    proc = subprocess.run(
+        cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False
+    )
     if proc.returncode != 0:
         if allow_empty_result and proc.stdout.strip().startswith("{"):
             return json.loads(proc.stdout)
@@ -69,7 +70,9 @@ def search_terms_from_query(query_terms: list[str], prompt: str) -> list[str]:
             continue
         # Long prompts with deictic words are useful for deciding to recall but
         # poor FTS clauses. Keep their extracted content terms instead.
-        if len(term) > 20 and any(marker in prompt for marker in ("之前", "还记得", "那个", "这个", "那篇", "这篇")):
+        if len(term) > 20 and any(
+            marker in prompt for marker in ("之前", "还记得", "那个", "这个", "那篇", "这篇")
+        ):
             continue
         out.append(term)
     return out or [prompt]
@@ -78,7 +81,11 @@ def search_terms_from_query(query_terms: list[str], prompt: str) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("prompt", nargs="*", help="Current user message or task description.")
-    parser.add_argument("--stdin", action="store_true", help="Read prompt text from stdin and append it to positional text.")
+    parser.add_argument(
+        "--stdin",
+        action="store_true",
+        help="Read prompt text from stdin and append it to positional text.",
+    )
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument("--anchors", default="thread-anchors.md")
     parser.add_argument("--search", choices=["auto", "always", "never"], default="auto")
@@ -92,14 +99,18 @@ def main() -> int:
     if not prompt:
         raise SystemExit("active_recall.py requires prompt text or --stdin")
 
-    health = run_json([sys.executable, str(SCRIPT_DIR / "aippocampus_health.py"), "--cwd", str(cwd), "--json"])
+    health = run_json(
+        [sys.executable, str(SCRIPT_DIR / "aippocampus_health.py"), "--cwd", str(cwd), "--json"]
+    )
     anchor_path = resolve_anchor_path(cwd, args.anchors)
     query_terms = split_query_terms([prompt])
     anchors = match_anchors(anchor_path, query_terms) if anchor_path.exists() else []
     expanded_terms = expanded_terms_from_anchors(query_terms, anchors, limit=24)
     decision = active_recall_decision(prompt, anchors, health)
 
-    should_search = args.search == "always" or (args.search == "auto" and decision["decision"] == "search")
+    should_search = args.search == "always" or (
+        args.search == "auto" and decision["decision"] == "search"
+    )
     search_payload = None
     if should_search:
         # Pass the user's extracted clues to search_rollout and let that command
@@ -165,14 +176,18 @@ def main() -> int:
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
-        print(f"decision: {decision['decision']} (score={decision['score']}, confidence={decision['confidence']})")
+        print(
+            f"decision: {decision['decision']} (score={decision['score']}, confidence={decision['confidence']})"
+        )
         for reason in decision["reasons"]:
             print(f"- {reason}")
         print(f"suggested terms: {', '.join(expanded_terms[:12]) or '(none)'}")
         if search_payload:
             print("\nsearch hits:")
             for hit in search_payload.get("matches", [])[: args.max]:
-                print(f"- score {hit.get('score')} | line {hit.get('line')} | {hit.get('role')}: {hit.get('snippet')}")
+                print(
+                    f"- score {hit.get('score')} | line {hit.get('line')} | {hit.get('role')}: {hit.get('snippet')}"
+                )
         else:
             print("search: skipped")
     return 0

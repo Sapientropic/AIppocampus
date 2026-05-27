@@ -24,9 +24,10 @@ from aippocampuslib import (
     parse_anchor_file,
     public_session_meta,
     read_session_meta,
+)
+from aippocampuslib import (
     thread_key_from_rollout as lib_thread_key_from_rollout,
 )
-
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REGISTRY_SCHEMA_VERSION = 1
@@ -61,7 +62,9 @@ def load_json(path: Path) -> dict:
 
 
 def run_json(cmd: list[str]) -> dict:
-    proc = subprocess.run(cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False)
+    proc = subprocess.run(
+        cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False
+    )
     if proc.returncode != 0:
         raise RuntimeError(proc.stdout or proc.stderr)
     return json.loads(proc.stdout)
@@ -96,7 +99,9 @@ def project_key_for(cwd: Path | None, label: str | None = None) -> str:
     return f"project:{safe_slug(label or 'unknown')}:{digest}"
 
 
-def project_fields(cwd: Path | None, *, project: str | None = None, tags: list[str] | None = None) -> dict:
+def project_fields(
+    cwd: Path | None, *, project: str | None = None, tags: list[str] | None = None
+) -> dict:
     label = project or (cwd.name if cwd else "unknown")
     project_tags = unique_preserve([label, *(tags or [])], limit=24)
     return {
@@ -120,7 +125,11 @@ def load_registry(path: Path) -> dict:
 
 
 def upsert_thread(registry: dict, entry: dict) -> dict:
-    threads = [item for item in registry.get("threads", []) if item.get("thread_key") != entry.get("thread_key")]
+    threads = [
+        item
+        for item in registry.get("threads", [])
+        if item.get("thread_key") != entry.get("thread_key")
+    ]
     threads.append(entry)
     threads.sort(key=lambda item: item.get("updated_at") or "", reverse=True)
     registry["threads"] = threads
@@ -142,20 +151,22 @@ def render_registry_markdown(registry: dict) -> str:
         health = entry.get("health") or {}
         caps = entry.get("capabilities") or {}
         paths = entry.get("paths") or {}
-        lines.extend([
-            f"## {entry.get('title') or entry.get('workspace_name') or entry.get('thread_key')}",
-            "",
-            f"- Thread key: `{entry.get('thread_key')}`",
-            f"- Updated: `{entry.get('updated_at')}`",
-            f"- Project: `{entry.get('project_label') or entry.get('workspace_name')}`",
-            f"- Workspace: `{paths.get('workspace')}`",
-            f"- Messages: `{entry.get('message_count')}`",
-            f"- Size: `{entry.get('rollout_size')}` bytes",
-            f"- Anchors: `{entry.get('anchor_count')}`",
-            f"- Health: `{'OK' if health.get('ok') else 'Needs maintenance'}`",
-            f"- RAG-lite chunks: `{caps.get('rag_chunks')}`",
-            f"- SQLite: `{paths.get('sqlite')}`",
-        ])
+        lines.extend(
+            [
+                f"## {entry.get('title') or entry.get('workspace_name') or entry.get('thread_key')}",
+                "",
+                f"- Thread key: `{entry.get('thread_key')}`",
+                f"- Updated: `{entry.get('updated_at')}`",
+                f"- Project: `{entry.get('project_label') or entry.get('workspace_name')}`",
+                f"- Workspace: `{paths.get('workspace')}`",
+                f"- Messages: `{entry.get('message_count')}`",
+                f"- Size: `{entry.get('rollout_size')}` bytes",
+                f"- Anchors: `{entry.get('anchor_count')}`",
+                f"- Health: `{'OK' if health.get('ok') else 'Needs maintenance'}`",
+                f"- RAG-lite chunks: `{caps.get('rag_chunks')}`",
+                f"- SQLite: `{paths.get('sqlite')}`",
+            ]
+        )
         if paths.get("dashboard_html"):
             lines.append(f"- Dashboard HTML: `{paths.get('dashboard_html')}`")
         if paths.get("vault"):
@@ -178,7 +189,9 @@ def render_registry_markdown(registry: dict) -> str:
 def save_registry(registry: dict, json_path: Path, md_path: Path) -> None:
     json_path.parent.mkdir(parents=True, exist_ok=True)
     tmp = json_path.with_suffix(json_path.suffix + ".tmp")
-    tmp.write_text(json.dumps(registry, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
+    tmp.write_text(
+        json.dumps(registry, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n"
+    )
     tmp.replace(json_path)
     md_path.write_text(render_registry_markdown(registry), encoding="utf-8", newline="\n")
 
@@ -223,23 +236,39 @@ def register_current_thread(
     legacy_index_dir = cwd / ".aippocampus"
     index_dir = (
         default_index_dir
-        if build_index or (default_index_dir / "manifest.json").exists() or not (legacy_index_dir / "manifest.json").exists()
+        if build_index
+        or (default_index_dir / "manifest.json").exists()
+        or not (legacy_index_dir / "manifest.json").exists()
         else legacy_index_dir
     )
     if build_index and not (index_dir / "manifest.json").exists():
         run_json([sys.executable, str(SCRIPT_DIR / "build_index.py"), "--cwd", str(cwd), "--json"])
     clean_source_dir = default_thread_clean_source_dir(cwd, rollout)
     legacy_clean_source_dir = legacy_index_dir / "clean-source"
-    if not build_index and not (clean_source_dir / "manifest.json").exists() and (legacy_clean_source_dir / "manifest.json").exists():
+    if (
+        not build_index
+        and not (clean_source_dir / "manifest.json").exists()
+        and (legacy_clean_source_dir / "manifest.json").exists()
+    ):
         clean_source_dir = legacy_clean_source_dir
     if build_index and not (clean_source_dir / "manifest.json").exists():
-        run_json([sys.executable, str(SCRIPT_DIR / "build_clean_source.py"), "--cwd", str(cwd), "--json"])
+        run_json(
+            [sys.executable, str(SCRIPT_DIR / "build_clean_source.py"), "--cwd", str(cwd), "--json"]
+        )
 
     manifest = load_json(index_dir / "manifest.json")
     clean_manifest = load_json(clean_source_dir / "manifest.json")
     if health is None:
         try:
-            health = run_json([sys.executable, str(SCRIPT_DIR / "aippocampus_health.py"), "--cwd", str(cwd), "--json"])
+            health = run_json(
+                [
+                    sys.executable,
+                    str(SCRIPT_DIR / "aippocampus_health.py"),
+                    "--cwd",
+                    str(cwd),
+                    "--json",
+                ]
+            )
         except Exception:
             health = {}
     anchors_path = cwd / "thread-anchors.md"
@@ -257,9 +286,13 @@ def register_current_thread(
 
     thread_key = thread_key_for(cwd, manifest, rollout)
     session_meta = manifest.get("session_meta") or {}
-    sqlite_path = Path(manifest.get("outputs", {}).get("sqlite") or index_dir / "source_index.sqlite")
+    sqlite_path = Path(
+        manifest.get("outputs", {}).get("sqlite") or index_dir / "source_index.sqlite"
+    )
     graph_path = Path(manifest.get("outputs", {}).get("graph_json") or index_dir / "graph.json")
-    messages_path = Path(manifest.get("outputs", {}).get("messages_jsonl") or index_dir / "messages.jsonl")
+    messages_path = Path(
+        manifest.get("outputs", {}).get("messages_jsonl") or index_dir / "messages.jsonl"
+    )
     rag = manifest.get("rag") or (manifest.get("sqlite") or {}).get("rag") or {}
 
     entry = {
@@ -270,8 +303,10 @@ def register_current_thread(
         "updated_at": now_utc(),
         "created_at": manifest.get("created_at"),
         "session_meta": session_meta,
-        "message_count": manifest.get("message_count") or health.get("rollout", {}).get("message_count"),
-        "rollout_size": manifest.get("source_rollout_size") or health.get("rollout", {}).get("size"),
+        "message_count": manifest.get("message_count")
+        or health.get("rollout", {}).get("message_count"),
+        "rollout_size": manifest.get("source_rollout_size")
+        or health.get("rollout", {}).get("size"),
         "anchor_count": len(anchors),
         "anchor_titles": anchor_titles,
         "keywords": keywords,
@@ -298,9 +333,13 @@ def register_current_thread(
             "messages_jsonl": str(messages_path) if messages_path.exists() else None,
             "sqlite": str(sqlite_path) if sqlite_path.exists() else None,
             "graph_json": str(graph_path) if graph_path.exists() else None,
-            "graphify_corpus": str(index_dir / "graphify-corpus") if (index_dir / "graphify-corpus").exists() else None,
+            "graphify_corpus": str(index_dir / "graphify-corpus")
+            if (index_dir / "graphify-corpus").exists()
+            else None,
             "clean_source_dir": str(clean_source_dir) if clean_source_dir.exists() else None,
-            "clean_source_messages_jsonl": (clean_manifest.get("outputs") or {}).get("messages_jsonl"),
+            "clean_source_messages_jsonl": (clean_manifest.get("outputs") or {}).get(
+                "messages_jsonl"
+            ),
             "clean_source_turns_jsonl": (clean_manifest.get("outputs") or {}).get("turns_jsonl"),
             "vault": str(vault.resolve()) if vault else None,
             "dashboard_note": str(dashboard_note.resolve()) if dashboard_note else None,
@@ -311,7 +350,12 @@ def register_current_thread(
     json_path, md_path = registry_paths(registry_dir)
     registry = upsert_thread(load_registry(json_path), entry)
     save_registry(registry, json_path, md_path)
-    return {"entry": entry, "registry_json": str(json_path), "registry_markdown": str(md_path), "thread_count": len(registry["threads"])}
+    return {
+        "entry": entry,
+        "registry_json": str(json_path),
+        "registry_markdown": str(md_path),
+        "thread_count": len(registry["threads"]),
+    }
 
 
 def thread_key_from_rollout(rollout: Path, meta: dict | None = None) -> str:
@@ -348,31 +392,35 @@ def register_rollout_thread(
     index_dir = store / "index"
     clean_source_dir.mkdir(parents=True, exist_ok=True)
 
-    clean_manifest = run_json([
-        sys.executable,
-        str(SCRIPT_DIR / "build_clean_source.py"),
-        "--cwd",
-        str(cwd),
-        "--rollout",
-        str(rollout),
-        "--output-dir",
-        str(clean_source_dir),
-        "--json",
-    ])
-    index_manifest: dict = {}
-    if build_index:
-        index_dir.mkdir(parents=True, exist_ok=True)
-        index_manifest = run_json([
+    clean_manifest = run_json(
+        [
             sys.executable,
-            str(SCRIPT_DIR / "build_index.py"),
+            str(SCRIPT_DIR / "build_clean_source.py"),
             "--cwd",
             str(cwd),
             "--rollout",
             str(rollout),
             "--output-dir",
-            str(index_dir),
+            str(clean_source_dir),
             "--json",
-        ])
+        ]
+    )
+    index_manifest: dict = {}
+    if build_index:
+        index_dir.mkdir(parents=True, exist_ok=True)
+        index_manifest = run_json(
+            [
+                sys.executable,
+                str(SCRIPT_DIR / "build_index.py"),
+                "--cwd",
+                str(cwd),
+                "--rollout",
+                str(rollout),
+                "--output-dir",
+                str(index_dir),
+                "--json",
+            ]
+        )
     else:
         index_manifest = load_json(index_dir / "manifest.json")
 
@@ -381,7 +429,10 @@ def register_rollout_thread(
     anchor_titles, keywords, summary = anchor_summary(anchors)
     project_meta = project_fields(cwd, project=project, tags=tags)
     timestamp = meta.get("timestamp") or clean_manifest.get("created_at") or ""
-    display_title = title or f"{project_meta['project_label']} · {timestamp or thread_key.split(':', 1)[-1][:8]}"
+    display_title = (
+        title
+        or f"{project_meta['project_label']} · {timestamp or thread_key.split(':', 1)[-1][:8]}"
+    )
     clean_outputs = clean_manifest.get("outputs") or {}
     index_outputs = index_manifest.get("outputs") or {}
     sqlite_path = Path(index_outputs.get("sqlite") or index_dir / "source_index.sqlite")
@@ -490,7 +541,14 @@ def scan_session_rollouts(
     planned = []
     for _, rollout, meta, thread_key in candidates:
         if dry_run:
-            planned.append({"thread_key": thread_key, "rollout": str(rollout), "cwd": meta.get("cwd"), "timestamp": meta.get("timestamp")})
+            planned.append(
+                {
+                    "thread_key": thread_key,
+                    "rollout": str(rollout),
+                    "cwd": meta.get("cwd"),
+                    "timestamp": meta.get("timestamp"),
+                }
+            )
             continue
         result = register_rollout_thread(
             rollout,
@@ -510,17 +568,19 @@ def scan_session_rollouts(
 
 
 def entry_search_score(entry: dict, terms: list[str]) -> float:
-    blob = "\n".join([
-        entry.get("title") or "",
-        entry.get("workspace_name") or "",
-        entry.get("project_label") or "",
-        entry.get("project_key") or "",
-        " ".join(entry.get("project_tags") or []),
-        entry.get("summary") or "",
-        " ".join(entry.get("anchor_titles") or []),
-        " ".join(entry.get("keywords") or []),
-        json.dumps(entry.get("session_meta") or {}, ensure_ascii=False),
-    ]).casefold()
+    blob = "\n".join(
+        [
+            entry.get("title") or "",
+            entry.get("workspace_name") or "",
+            entry.get("project_label") or "",
+            entry.get("project_key") or "",
+            " ".join(entry.get("project_tags") or []),
+            entry.get("summary") or "",
+            " ".join(entry.get("anchor_titles") or []),
+            " ".join(entry.get("keywords") or []),
+            json.dumps(entry.get("session_meta") or {}, ensure_ascii=False),
+        ]
+    ).casefold()
     score = 0.0
     for term in terms:
         low = term.casefold()
@@ -575,7 +635,11 @@ def deep_search_entry_result(entry: dict, terms: list[str], max_hits: int = 3) -
     if clean_messages:
         try:
             from search_clean_source import iter_clean_messages, score_message
-            from semantic_scope_labels import load_semantic_scope_labels, merged_scope_labels, semantic_labels_for_message
+            from semantic_scope_labels import (
+                load_semantic_scope_labels,
+                merged_scope_labels,
+                semantic_labels_for_message,
+            )
 
             clean_hits = []
             semantic_sidecar = load_semantic_scope_labels(Path(clean_messages).parent)
@@ -584,7 +648,9 @@ def deep_search_entry_result(entry: dict, terms: list[str], max_hits: int = 3) -
                 if semantic_scope_labels:
                     message = dict(message)
                     message["semantic_scope_labels"] = semantic_scope_labels
-                    message["scope_labels"] = merged_scope_labels(list(message.get("scope_labels") or []), semantic_scope_labels)
+                    message["scope_labels"] = merged_scope_labels(
+                        list(message.get("scope_labels") or []), semantic_scope_labels
+                    )
                 score = score_message(message, terms)
                 if score <= 0:
                     continue
@@ -641,7 +707,11 @@ def deep_search_entry_result(entry: dict, terms: list[str], max_hits: int = 3) -
 
     anchors_value = paths.get("anchors")
     anchors_path = Path(anchors_value) if anchors_value else None
-    anchors = match_anchors(anchors_path, terms, limit=4) if anchors_path and anchors_path.is_file() else []
+    anchors = (
+        match_anchors(anchors_path, terms, limit=4)
+        if anchors_path and anchors_path.is_file()
+        else []
+    )
     expanded = expanded_terms_from_anchors(terms, anchors, limit=24)
     try:
         hits = search_hybrid_index(
@@ -686,9 +756,13 @@ def print_entries(entries: list[dict]) -> None:
     for entry in entries:
         size = entry.get("rollout_size") or 0
         size_mb = int(size) / (1024 * 1024) if size else 0
-        print(f"- {entry.get('thread_key')} | {entry.get('title')} | {entry.get('message_count')} messages | {size_mb:.1f} MB")
+        print(
+            f"- {entry.get('thread_key')} | {entry.get('title')} | {entry.get('message_count')} messages | {size_mb:.1f} MB"
+        )
         if entry.get("project_label"):
-            print(f"  project: {entry.get('project_label')} ({', '.join(entry.get('project_tags', [])[:8])})")
+            print(
+                f"  project: {entry.get('project_label')} ({', '.join(entry.get('project_tags', [])[:8])})"
+            )
         print(f"  workspace: {entry.get('paths', {}).get('workspace')}")
         if entry.get("summary"):
             print(f"  summary: {compact_text(entry['summary'], 220)}")
@@ -697,12 +771,17 @@ def print_entries(entries: list[dict]) -> None:
         if entry.get("index_hits"):
             print("  index hits:")
             for hit in entry.get("index_hits", [])[:3]:
-                print(f"    - line {hit.get('line')} | {hit.get('role')} | score {hit.get('score')}: {hit.get('snippet')}")
+                print(
+                    f"    - line {hit.get('line')} | {hit.get('role')} | score {hit.get('score')}: {hit.get('snippet')}"
+                )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--registry-dir", help="Defaults to $AIPPOCAMPUS_REGISTRY_DIR or $CODEX_HOME/aippocampus-registry.")
+    parser.add_argument(
+        "--registry-dir",
+        help="Defaults to $AIPPOCAMPUS_REGISTRY_DIR or $CODEX_HOME/aippocampus-registry.",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     register = sub.add_parser("register")
@@ -715,20 +794,45 @@ def main() -> int:
 
     register_rollout = sub.add_parser("register-rollout")
     register_rollout.add_argument("--rollout", required=True)
-    register_rollout.add_argument("--cwd", help="Override the workspace/project path stored in session_meta.")
+    register_rollout.add_argument(
+        "--cwd", help="Override the workspace/project path stored in session_meta."
+    )
     register_rollout.add_argument("--title")
-    register_rollout.add_argument("--project", help="Human project label for grouping related threads.")
-    register_rollout.add_argument("--tag", action="append", default=[], help="Extra project/thread tag. Can be repeated.")
-    register_rollout.add_argument("--build-index", action="store_true", help="Also build the heavier SQLite/RAG-lite index in the registry thread store.")
+    register_rollout.add_argument(
+        "--project", help="Human project label for grouping related threads."
+    )
+    register_rollout.add_argument(
+        "--tag", action="append", default=[], help="Extra project/thread tag. Can be repeated."
+    )
+    register_rollout.add_argument(
+        "--build-index",
+        action="store_true",
+        help="Also build the heavier SQLite/RAG-lite index in the registry thread store.",
+    )
     register_rollout.add_argument("--json", action="store_true", dest="json_output")
 
     scan = sub.add_parser("scan-sessions")
-    scan.add_argument("--build-index", action="store_true", help="Also build SQLite/RAG-lite indexes for newly registered sessions.")
-    scan.add_argument("--refresh", action="store_true", help="Refresh sessions that are already registered.")
-    scan.add_argument("--max", type=int, help="Maximum number of sessions to register, newest first.")
-    scan.add_argument("--cwd-filter", help="Only include sessions whose recorded cwd contains this text.")
+    scan.add_argument(
+        "--build-index",
+        action="store_true",
+        help="Also build SQLite/RAG-lite indexes for newly registered sessions.",
+    )
+    scan.add_argument(
+        "--refresh", action="store_true", help="Refresh sessions that are already registered."
+    )
+    scan.add_argument(
+        "--max", type=int, help="Maximum number of sessions to register, newest first."
+    )
+    scan.add_argument(
+        "--cwd-filter", help="Only include sessions whose recorded cwd contains this text."
+    )
     scan.add_argument("--project", help="Project label to attach to all matched sessions.")
-    scan.add_argument("--tag", action="append", default=[], help="Extra tag to attach to all matched sessions. Can be repeated.")
+    scan.add_argument(
+        "--tag",
+        action="append",
+        default=[],
+        help="Extra tag to attach to all matched sessions. Can be repeated.",
+    )
     scan.add_argument("--dry-run", action="store_true")
     scan.add_argument("--json", action="store_true", dest="json_output")
 
@@ -738,7 +842,11 @@ def main() -> int:
     search = sub.add_parser("search")
     search.add_argument("terms", nargs="+")
     search.add_argument("--max", type=int, default=8)
-    search.add_argument("--metadata-only", action="store_true", help="Only search registry metadata; skip registered SQLite indexes.")
+    search.add_argument(
+        "--metadata-only",
+        action="store_true",
+        help="Only search registry metadata; skip registered SQLite indexes.",
+    )
     search.add_argument("--json", action="store_true", dest="json_output")
 
     show = sub.add_parser("show")
@@ -804,7 +912,9 @@ def main() -> int:
             print(f"registry: {result['registry']}")
             rows = result["planned"] if args.dry_run else result["registered"]
             for item in rows[:20]:
-                print(f"- {item.get('thread_key')} | {item.get('title') or item.get('timestamp')} | {item.get('cwd') or item.get('paths', {}).get('workspace')}")
+                print(
+                    f"- {item.get('thread_key')} | {item.get('title') or item.get('timestamp')} | {item.get('cwd') or item.get('paths', {}).get('workspace')}"
+                )
         return 0
 
     registry = load_registry(json_path)
@@ -841,7 +951,13 @@ def main() -> int:
         scored.sort(key=lambda item: (-item["score"], item.get("updated_at") or ""))
         scored = scored[: args.max]
         if args.json_output:
-            print(json.dumps({"registry": str(json_path), "matches": scored, "warnings": warnings}, ensure_ascii=False, indent=2))
+            print(
+                json.dumps(
+                    {"registry": str(json_path), "matches": scored, "warnings": warnings},
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
         else:
             print(f"registry: {json_path}")
             print_entries(scored)
@@ -855,9 +971,26 @@ def main() -> int:
         return 0 if scored else 1
 
     if args.command == "show":
-        match = next((entry for entry in registry.get("threads", []) if entry.get("thread_key") == args.thread_key), None)
+        match = next(
+            (
+                entry
+                for entry in registry.get("threads", [])
+                if entry.get("thread_key") == args.thread_key
+            ),
+            None,
+        )
         if not match:
-            print(json.dumps({"error": "thread not found", "thread_key": args.thread_key, "registry": str(json_path)}, ensure_ascii=False, indent=2))
+            print(
+                json.dumps(
+                    {
+                        "error": "thread not found",
+                        "thread_key": args.thread_key,
+                        "registry": str(json_path),
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
             return 1
         if args.json_output:
             print(json.dumps(match, ensure_ascii=False, indent=2))

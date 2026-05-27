@@ -8,7 +8,6 @@ import threading
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -105,7 +104,9 @@ class SemanticScopeRealHistorySmokeTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        save_project_timeline(self.timeline, build_project_timeline(self.registry, max_turns_per_thread=4))
+        save_project_timeline(
+            self.timeline, build_project_timeline(self.registry, max_turns_per_thread=4)
+        )
         return clean
 
     def _write_multi_turn_fixture(self, count: int = 3) -> Path:
@@ -165,7 +166,9 @@ class SemanticScopeRealHistorySmokeTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        save_project_timeline(self.timeline, build_project_timeline(self.registry, max_turns_per_thread=count))
+        save_project_timeline(
+            self.timeline, build_project_timeline(self.registry, max_turns_per_thread=count)
+        )
         return clean
 
     def test_observe_only_reports_insufficient_without_external_model(self) -> None:
@@ -182,7 +185,9 @@ class SemanticScopeRealHistorySmokeTests(unittest.TestCase):
 
         rendered = json.dumps(result, ensure_ascii=False)
         self.assertTrue(result["ok"])
-        self.assertEqual(result["stage2_semantic_sidecar_status"], "insufficient_dynamic_sidecar_rows")
+        self.assertEqual(
+            result["stage2_semantic_sidecar_status"], "insufficient_dynamic_sidecar_rows"
+        )
         self.assertFalse(result["live_model_used"])
         self.assertNotIn("private metaphor text", rendered)
         self.assertNotIn("Private Life Title", rendered)
@@ -216,7 +221,9 @@ class SemanticScopeRealHistorySmokeTests(unittest.TestCase):
         )
 
         self.assertFalse(result["ok"])
-        self.assertEqual(result["stage2_semantic_sidecar_status"], "insufficient_dynamic_sidecar_threads")
+        self.assertEqual(
+            result["stage2_semantic_sidecar_status"], "insufficient_dynamic_sidecar_threads"
+        )
 
     def test_live_write_materializes_dynamic_sidecar_without_output_leak(self) -> None:
         clean = self._write_fixture()
@@ -283,7 +290,9 @@ class SemanticScopeRealHistorySmokeTests(unittest.TestCase):
         self.assertTrue(result["live_model_used"])
         self.assertTrue(result["sidecars_written"])
         self.assertGreaterEqual(result["after"]["semantic_sidecar_rows"], 1)
-        self.assertGreaterEqual(result["after"]["timeline_latest_turns_with_semantic_scope_labels"], 1)
+        self.assertGreaterEqual(
+            result["after"]["timeline_latest_turns_with_semantic_scope_labels"], 1
+        )
         self.assertTrue((clean / "semantic-scope-labels.jsonl").exists())
         self.assertEqual(result["claim_level"], "dynamic_semantic_sidecar_slice")
         self.assertIn("semantic_completeness", result["cannot_claim"])
@@ -293,7 +302,9 @@ class SemanticScopeRealHistorySmokeTests(unittest.TestCase):
         self.assertTrue(result["job"]["label_evidence"]["label_evidence_complete"])
         self.assertEqual(result["job"]["label_evidence"]["accepted_label_count"], 4)
         self.assertEqual(result["job"]["label_evidence"]["weak_or_missing_evidence_label_count"], 0)
-        self.assertEqual(result["job"]["label_evidence"]["label_coverage"], ["idea_seed", "personal_reflection"])
+        self.assertEqual(
+            result["job"]["label_evidence"]["label_coverage"], ["idea_seed", "personal_reflection"]
+        )
         self.assertNotIn("private metaphor text", rendered)
         self.assertNotIn("Private Life Title", rendered)
         self.assertNotIn("source_refs", rendered)
@@ -426,7 +437,9 @@ class SemanticScopeRealHistorySmokeTests(unittest.TestCase):
         candidate = smoke.semantic_candidate_timeline_from_life_wide(timeline, max_turns=4)
         turns = candidate["projects"]["stage2_life_wide_semantic_candidates"]["latest_turns"]
 
-        self.assertEqual([turn["thread_key"] for turn in turns], ["session:reflection", "session:idea"])
+        self.assertEqual(
+            [turn["thread_key"] for turn in turns], ["session:reflection", "session:idea"]
+        )
         self.assertEqual(candidate["candidate_metrics"]["candidate_turn_count"], 2)
         self.assertEqual(candidate["candidate_metrics"]["candidate_thread_count"], 2)
 
@@ -465,7 +478,15 @@ class SemanticScopeRealHistorySmokeTests(unittest.TestCase):
                 for idx, message_id in enumerate(message_ids)
             ]
             return {
-                "choices": [{"message": {"content": json.dumps({"action": "final", "findings": findings}, ensure_ascii=False)}}],
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {"action": "final", "findings": findings}, ensure_ascii=False
+                            )
+                        }
+                    }
+                ],
                 "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
             }
 
@@ -492,7 +513,10 @@ class SemanticScopeRealHistorySmokeTests(unittest.TestCase):
         rendered = json.dumps(result, ensure_ascii=False)
         self.assertTrue(result["ok"], rendered)
         self.assertEqual(len(seen_batches), 3)
-        self.assertEqual(sorted(message_id for batch in seen_batches for message_id in batch), ["life-u-1", "life-u-2", "life-u-3"])
+        self.assertEqual(
+            sorted(message_id for batch in seen_batches for message_id in batch),
+            ["life-u-1", "life-u-2", "life-u-3"],
+        )
         self.assertEqual(result["candidate_coverage"]["candidate_turn_count"], 3)
         self.assertEqual(result["candidate_coverage"]["evaluated_candidate_turn_count"], 3)
         self.assertEqual(result["candidate_coverage"]["unevaluated_candidate_turn_count"], 0)
@@ -541,7 +565,15 @@ class SemanticScopeRealHistorySmokeTests(unittest.TestCase):
                 for idx, turn in enumerate(turns)
             ]
             return {
-                "choices": [{"message": {"content": json.dumps({"action": "final", "findings": findings}, ensure_ascii=False)}}],
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {"action": "final", "findings": findings}, ensure_ascii=False
+                            )
+                        }
+                    }
+                ],
                 "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
             }
 

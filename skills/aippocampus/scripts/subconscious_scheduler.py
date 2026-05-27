@@ -22,7 +22,6 @@ from typing import Any
 
 from aippocampuslib import codex_home, now_utc
 
-
 SCRIPT_DIR = Path(__file__).resolve().parent
 STATE_SCHEMA_VERSION = 1
 DEFAULT_COOLDOWN_SECONDS = 6 * 60 * 60
@@ -249,7 +248,12 @@ def parse_utc_ts(value: str) -> float | None:
 
 
 def iso_from_ts(value: float) -> str:
-    return datetime.fromtimestamp(value, tz=timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return (
+        datetime.fromtimestamp(value, tz=timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
 
 
 def finding_mentions_project(item: dict[str, Any], label: str) -> bool:
@@ -392,7 +396,12 @@ def run_project(
     # so the hook can return quickly while the sleep-time pass does heavier
     # consolidation safely in staging files.
     commands = [
-        [sys.executable, str(SCRIPT_DIR / "build_project_timeline.py"), "--registry-dir", str(root)],
+        [
+            sys.executable,
+            str(SCRIPT_DIR / "build_project_timeline.py"),
+            "--registry-dir",
+            str(root),
+        ],
         [sys.executable, str(SCRIPT_DIR / "build_concept_graph.py"), "--registry-dir", str(root)],
         [
             sys.executable,
@@ -420,7 +429,12 @@ def run_project(
             "--project",
             stats.label,
         ],
-        [sys.executable, str(SCRIPT_DIR / "build_project_timeline.py"), "--registry-dir", str(root)],
+        [
+            sys.executable,
+            str(SCRIPT_DIR / "build_project_timeline.py"),
+            "--registry-dir",
+            str(root),
+        ],
         [sys.executable, str(SCRIPT_DIR / "build_cognitive_map.py"), "--registry-dir", str(root)],
         [
             sys.executable,
@@ -432,8 +446,18 @@ def run_project(
             "--focus",
             focus_for(stats),
         ],
-        [sys.executable, str(SCRIPT_DIR / "semantic_trigger_router.py"), "--registry-dir", str(root)],
-        [sys.executable, str(SCRIPT_DIR / "memory_candidate_router.py"), "--registry-dir", str(root)],
+        [
+            sys.executable,
+            str(SCRIPT_DIR / "semantic_trigger_router.py"),
+            "--registry-dir",
+            str(root),
+        ],
+        [
+            sys.executable,
+            str(SCRIPT_DIR / "memory_candidate_router.py"),
+            "--registry-dir",
+            str(root),
+        ],
         [sys.executable, str(SCRIPT_DIR / "build_concept_graph.py"), "--registry-dir", str(root)],
     ]
     outputs: list[str] = []
@@ -452,7 +476,9 @@ def start_detached(cmd: list[str], *, root: Path) -> int:
     out = log.open("ab")
     creationflags = 0
     if os.name == "nt":
-        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(
+            subprocess, "DETACHED_PROCESS", 0
+        )
     proc = subprocess.Popen(
         cmd,
         cwd=str(SCRIPT_DIR),
@@ -532,7 +558,9 @@ def maybe_start(args: argparse.Namespace) -> dict[str, Any]:
         return {"started": False, "skipped": f"missing_{args.api_key_env}", "projects": []}
 
     try:
-        lock = FileLock(root / "subconscious_enqueue.lock", stale_seconds=DEFAULT_ENQUEUE_LOCK_STALE_SECONDS)
+        lock = FileLock(
+            root / "subconscious_enqueue.lock", stale_seconds=DEFAULT_ENQUEUE_LOCK_STALE_SECONDS
+        )
         with lock:
             return maybe_start_locked(args, root=root, state_file=state_file)
     except RuntimeError as exc:
@@ -695,13 +723,21 @@ def run_due(args: argparse.Namespace) -> dict[str, Any]:
                 clear_project_lease(project_state)
                 project_state["last_finish_at"] = now_utc()
                 save_state(state_file, state)
-        return {"ran": True, "projects": [{"label": stats.label, "reason": reason} for stats, reason in due], "results": results}
+        return {
+            "ran": True,
+            "projects": [{"label": stats.label, "reason": reason} for stats, reason in due],
+            "results": results,
+        }
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     mode = parser.add_mutually_exclusive_group()
-    mode.add_argument("--maybe-start", action="store_true", help="Hook-safe mode: start a detached run only when due.")
+    mode.add_argument(
+        "--maybe-start",
+        action="store_true",
+        help="Hook-safe mode: start a detached run only when due.",
+    )
     mode.add_argument("--run-due", action="store_true", help="Run due projects synchronously.")
     parser.add_argument("--registry-dir")
     parser.add_argument("--state-file")

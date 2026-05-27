@@ -15,7 +15,6 @@ from typing import Any
 
 import build_plugin_package
 
-
 PLUGIN_NAME = "aippocampus"
 
 
@@ -91,12 +90,18 @@ def run_mcp_jsonrpc_smoke(plugin_dir: Path) -> dict[str, Any]:
         timeout=10,
         check=False,
     )
-    responses = [json.loads(line) for line in proc.stdout.splitlines() if line.strip()] if proc.returncode == 0 else []
+    responses = (
+        [json.loads(line) for line in proc.stdout.splitlines() if line.strip()]
+        if proc.returncode == 0
+        else []
+    )
     tool_names = []
     tool_payload: dict[str, Any] = {}
     tool_is_error = True
     if len(responses) >= 3:
-        tool_names = [str(item.get("name") or "") for item in responses[1].get("result", {}).get("tools", [])]
+        tool_names = [
+            str(item.get("name") or "") for item in responses[1].get("result", {}).get("tools", [])
+        ]
         tool_result = responses[2].get("result", {})
         tool_is_error = bool(tool_result.get("isError"))
         content = tool_result.get("content") or []
@@ -166,8 +171,12 @@ def smoke_plugin_install(
         shutil.copytree(output, install_dir)
         installed = True
 
-        manifest = json.loads((install_dir / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8"))
-        hooks_auto_enabled = "hooks" in manifest or bool((build_result or {}).get("hooks_auto_enabled"))
+        manifest = json.loads(
+            (install_dir / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8")
+        )
+        hooks_auto_enabled = "hooks" in manifest or bool(
+            (build_result or {}).get("hooks_auto_enabled")
+        )
 
         proc = subprocess.run(
             [*mcp_command_from_config(install_dir), "--list-tools"],
@@ -226,7 +235,9 @@ def main() -> int:
     args = parser.parse_args()
 
     with tempfile.TemporaryDirectory() as tmp:
-        install_root = Path(args.install_root).resolve() if args.install_root else Path(tmp) / "plugins"
+        install_root = (
+            Path(args.install_root).resolve() if args.install_root else Path(tmp) / "plugins"
+        )
         result = smoke_plugin_install(
             args.repo_root,
             install_root,

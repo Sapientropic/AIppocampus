@@ -34,7 +34,6 @@ from vault_sync_utils import (
     write,
 )
 
-
 SCRIPT_DIR = Path(__file__).resolve().parent
 
 
@@ -52,11 +51,17 @@ def main() -> int:
     vault.mkdir(parents=True, exist_ok=True)
 
     if not args.no_hook:
-        run_text([sys.executable, str(SCRIPT_DIR / "aippocampus_maintenance.py"), "--cwd", str(cwd)])
+        run_text(
+            [sys.executable, str(SCRIPT_DIR / "aippocampus_maintenance.py"), "--cwd", str(cwd)]
+        )
 
-    health = run_json([sys.executable, str(SCRIPT_DIR / "aippocampus_health.py"), "--cwd", str(cwd), "--json"])
+    health = run_json(
+        [sys.executable, str(SCRIPT_DIR / "aippocampus_health.py"), "--cwd", str(cwd), "--json"]
+    )
     index_dir = Path((health.get("index") or {}).get("dir") or default_thread_index_dir(cwd))
-    checkpoint_state = load_json(Path((health.get("checkpoint") or {}).get("state") or (index_dir / "checkpoint_state.json")))
+    checkpoint_state = load_json(
+        Path((health.get("checkpoint") or {}).get("state") or (index_dir / "checkpoint_state.json"))
+    )
     anchors_path = cwd / "thread-anchors.md"
     anchors = parse_anchor_file(anchors_path)
 
@@ -87,19 +92,29 @@ def main() -> int:
     write(health_path, health_note(health, thread_home, vault))
     write(checkpoint_path, checkpoint_note(checkpoint_state, thread_home, vault))
     write(heartbeat_path, heartbeat_note(thread_home, vault, cwd, args.automation_name))
-    write(dashboard_path, dashboard_markdown(
-        thread_home,
-        vault,
-        anchors,
-        health_path,
-        checkpoint_path,
-        heartbeat_path,
-        dashboard_html_path,
-    ))
-    write(vault / f"{safe_filename(DEFAULT_SITE_TITLE)} Dashboard.md", homepage(vault, dashboard_path))
+    write(
+        dashboard_path,
+        dashboard_markdown(
+            thread_home,
+            vault,
+            anchors,
+            health_path,
+            checkpoint_path,
+            heartbeat_path,
+            dashboard_html_path,
+        ),
+    )
+    write(
+        vault / f"{safe_filename(DEFAULT_SITE_TITLE)} Dashboard.md", homepage(vault, dashboard_path)
+    )
 
     recent = read_recent_messages(index_dir / "messages.jsonl")
-    write(dashboard_html_path, html_dashboard_v2(thread_slug, health, anchors, checkpoint_state, recent, vault, dashboard_assets))
+    write(
+        dashboard_html_path,
+        html_dashboard_v2(
+            thread_slug, health, anchors, checkpoint_state, recent, vault, dashboard_assets
+        ),
+    )
     write(snippets_dir / "codex-memory-dashboard.css", obsidian_snippet_css())
     registry = register_current_thread(
         cwd,

@@ -18,7 +18,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-from aippocampuslib import aippocampus_registry_dir, compact_text, deepseek_cache_metrics_from_usage, sanitize_external_model_payload
+from aippocampuslib import (
+    aippocampus_registry_dir,
+    compact_text,
+    deepseek_cache_metrics_from_usage,
+    sanitize_external_model_payload,
+)
 from build_clean_source import SCOPE_LABEL_ORDER
 from build_project_timeline import resolve_registry_member_path
 from deepseek_model_routing import resolve_model_route
@@ -26,7 +31,6 @@ from registry import load_registry
 from semantic_scope_labels import clean_messages_by_id, load_semantic_scope_labels
 from subconscious_agent import add_usage, call_chat_json, compact_usage
 from subconscious_worker import DEFAULT_BASE_URL
-
 
 PROMPT_KIND = "semantic_scope_label_source_review"
 LABEL_GUIDANCE = {
@@ -46,14 +50,20 @@ def evidence_hash(*values: Any) -> str:
     return "review:" + hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
-def selected_review_cases(registry_path: Path, *, max_cases: int, min_confidence: float = 0.45) -> list[dict[str, Any]]:
+def selected_review_cases(
+    registry_path: Path, *, max_cases: int, min_confidence: float = 0.45
+) -> list[dict[str, Any]]:
     registry = load_registry(registry_path)
     candidates: list[dict[str, Any]] = []
     for entry in registry.get("threads") or []:
         if not isinstance(entry, dict):
             continue
         messages_path_value = (entry.get("paths") or {}).get("clean_source_messages_jsonl")
-        messages_path = resolve_registry_member_path(str(messages_path_value), registry_path) if messages_path_value else None
+        messages_path = (
+            resolve_registry_member_path(str(messages_path_value), registry_path)
+            if messages_path_value
+            else None
+        )
         if not messages_path or not messages_path.exists():
             continue
         clean_source_dir = messages_path.parent
@@ -63,7 +73,9 @@ def selected_review_cases(registry_path: Path, *, max_cases: int, min_confidence
             message = messages_by_id.get(message_id)
             if not message:
                 continue
-            labels = [label for label in row.get("scope_labels") or [] if label in SCOPE_LABEL_ORDER]
+            labels = [
+                label for label in row.get("scope_labels") or [] if label in SCOPE_LABEL_ORDER
+            ]
             confidence = float(row.get("confidence") or 0.0)
             if not labels or confidence < min_confidence:
                 continue
@@ -78,7 +90,9 @@ def selected_review_cases(registry_path: Path, *, max_cases: int, min_confidence
             for label in labels:
                 candidates.append(
                     {
-                        "case_id": evidence_hash(entry.get("thread_key"), message_id, message.get("turn_id"), label),
+                        "case_id": evidence_hash(
+                            entry.get("thread_key"), message_id, message.get("turn_id"), label
+                        ),
                         "thread_key": entry.get("thread_key"),
                         "message_id": message_id,
                         "turn_id": message.get("turn_id"),
@@ -95,7 +109,13 @@ def selected_review_cases(registry_path: Path, *, max_cases: int, min_confidence
     buckets: dict[str, list[dict[str, Any]]] = {
         label: [
             case
-            for case in sorted(candidates, key=lambda item: (-float(item.get("confidence") or 0.0), str(item.get("case_id") or "")))
+            for case in sorted(
+                candidates,
+                key=lambda item: (
+                    -float(item.get("confidence") or 0.0),
+                    str(item.get("case_id") or ""),
+                ),
+            )
             if label in case.get("labels", [])
         ]
         for label in SCOPE_LABEL_ORDER
@@ -116,7 +136,10 @@ def selected_review_cases(registry_path: Path, *, max_cases: int, min_confidence
                 return selected
         if not progressed:
             break
-    for case in sorted(candidates, key=lambda item: (-float(item.get("confidence") or 0.0), str(item.get("case_id") or ""))):
+    for case in sorted(
+        candidates,
+        key=lambda item: (-float(item.get("confidence") or 0.0), str(item.get("case_id") or "")),
+    ):
         if case["case_id"] in seen:
             continue
         selected.append(case)
@@ -142,7 +165,9 @@ def review_messages(case: dict[str, Any]) -> list[dict[str, str]]:
         "output_schema": {
             "supported_labels": ["labels from input that are supported"],
             "unsupported_labels": ["labels from input that are not supported"],
-            "unsupported_evidence_labels": ["labels whose proposed evidence is missing, generic, or unsupported by the message"],
+            "unsupported_evidence_labels": [
+                "labels whose proposed evidence is missing, generic, or unsupported by the message"
+            ],
             "confidence": 0.0,
             "needs_human_review": False,
         },
@@ -184,10 +209,16 @@ def parse_review_payload(parsed: dict[str, Any], labels: list[str]) -> dict[str,
     unsupported = [label for label in parsed.get("unsupported_labels") or [] if label in proposed]
     unsupported_evidence = [
         label
-        for label in parsed.get("unsupported_evidence_labels") or parsed.get("evidence_unsupported_labels") or []
+        for label in parsed.get("unsupported_evidence_labels")
+        or parsed.get("evidence_unsupported_labels")
+        or []
         if label in proposed
     ]
-    missing = [label for label in labels if label in proposed and label not in supported and label not in unsupported]
+    missing = [
+        label
+        for label in labels
+        if label in proposed and label not in supported and label not in unsupported
+    ]
     unsupported = list(dict.fromkeys([*unsupported, *unsupported_evidence, *missing]))
     supported = [label for label in supported if label not in unsupported]
     try:
@@ -203,7 +234,10 @@ def parse_review_payload(parsed: dict[str, Any], labels: list[str]) -> dict[str,
 
 
 def final_review_payload(action: dict[str, Any]) -> dict[str, Any]:
-    if any(key in action for key in ["supported_labels", "unsupported_labels", "unsupported_evidence_labels"]):
+    if any(
+        key in action
+        for key in ["supported_labels", "unsupported_labels", "unsupported_evidence_labels"]
+    ):
         return action
     for key in ["review", "result", "output"]:
         value = action.get(key)
@@ -217,7 +251,11 @@ def parse_agent_action(response: dict[str, Any]) -> dict[str, Any]:
         parsed = json.loads(response_content(response))
     except json.JSONDecodeError as exc:
         return {"action": "parse_error", "error": str(exc)}
-    return parsed if isinstance(parsed, dict) else {"action": "parse_error", "error": "non-object response"}
+    return (
+        parsed
+        if isinstance(parsed, dict)
+        else {"action": "parse_error", "error": "non-object response"}
+    )
 
 
 def review_case(
@@ -276,7 +314,9 @@ def review_case(
     }
 
 
-def agentic_review_messages(case: dict[str, Any], *, max_steps: int, min_tool_steps: int) -> list[dict[str, str]]:
+def agentic_review_messages(
+    case: dict[str, Any], *, max_steps: int, min_tool_steps: int
+) -> list[dict[str, str]]:
     payload = {
         "prompt_kind": PROMPT_KIND,
         "review_mode": "agentic_source_review",
@@ -352,22 +392,49 @@ def review_case_agentic(
                     "clean_source_message": case.get("text") or "",
                 }
             tool_step_count += 1
-            messages.append({"role": "assistant", "content": json.dumps(action, ensure_ascii=False)})
-            messages.append({"role": "user", "content": "TOOL_RESULT:\n" + json.dumps(observation, ensure_ascii=False)})
+            messages.append(
+                {"role": "assistant", "content": json.dumps(action, ensure_ascii=False)}
+            )
+            messages.append(
+                {
+                    "role": "user",
+                    "content": "TOOL_RESULT:\n" + json.dumps(observation, ensure_ascii=False),
+                }
+            )
             continue
         if action.get("action") == "final":
             if tool_step_count < max(0, int(min_tool_steps)):
-                messages.append({"role": "assistant", "content": json.dumps(action, ensure_ascii=False)})
-                messages.append({"role": "user", "content": json.dumps({"error": "Call inspect_review_case before final."}, ensure_ascii=False)})
+                messages.append(
+                    {"role": "assistant", "content": json.dumps(action, ensure_ascii=False)}
+                )
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": json.dumps(
+                            {"error": "Call inspect_review_case before final."}, ensure_ascii=False
+                        ),
+                    }
+                )
                 continue
-            review = parse_review_payload(final_review_payload(action), list(case.get("labels") or []))
+            review = parse_review_payload(
+                final_review_payload(action), list(case.get("labels") or [])
+            )
             break
         messages.append({"role": "assistant", "content": json.dumps(action, ensure_ascii=False)})
-        messages.append({"role": "user", "content": json.dumps({"error": "Return action=tool or action=final only."}, ensure_ascii=False)})
+        messages.append(
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {"error": "Return action=tool or action=final only."}, ensure_ascii=False
+                ),
+            }
+        )
     if review is None:
         review = {
             "supported_labels": [],
-            "unsupported_labels": [label for label in case.get("labels") or [] if label in SCOPE_LABEL_ORDER],
+            "unsupported_labels": [
+                label for label in case.get("labels") or [] if label in SCOPE_LABEL_ORDER
+            ],
             "confidence": 0.0,
             "needs_human_review": True,
         }
@@ -392,7 +459,9 @@ def review_case_agentic(
     }
 
 
-def review_status(case_count: int, passed_count: int, *, min_cases: int, min_pass_rate: float) -> str:
+def review_status(
+    case_count: int, passed_count: int, *, min_cases: int, min_pass_rate: float
+) -> str:
     if case_count < min_cases:
         return "insufficient_selected_cases"
     pass_rate = (passed_count / case_count) if case_count else 0.0
@@ -417,11 +486,14 @@ def per_label_review_stats(review_results: list[dict[str, Any]]) -> dict[str, di
     return out
 
 
-def failed_label_categories(per_label: dict[str, dict[str, Any]], *, min_label_pass_rate: float) -> list[str]:
+def failed_label_categories(
+    per_label: dict[str, dict[str, Any]], *, min_label_pass_rate: float
+) -> list[str]:
     return [
         label
         for label, stats in per_label.items()
-        if int(stats.get("case_count") or 0) > 0 and float(stats.get("pass_rate") or 0.0) < min_label_pass_rate
+        if int(stats.get("case_count") or 0) > 0
+        and float(stats.get("pass_rate") or 0.0) < min_label_pass_rate
     ]
 
 
@@ -461,10 +533,16 @@ def run_semantic_scope_source_review(
     chat_fn=None,
 ) -> dict[str, Any]:
     resolved_route = resolve_model_route(
-        "agentic_source_review" if agentic_review and model_route == "default" and not model else model_route,
+        "agentic_source_review"
+        if agentic_review and model_route == "default" and not model
+        else model_route,
         explicit_model=model,
     )
-    registry = Path(registry_path).resolve() if registry_path else (aippocampus_registry_dir() / "threads.json").resolve()
+    registry = (
+        Path(registry_path).resolve()
+        if registry_path
+        else (aippocampus_registry_dir() / "threads.json").resolve()
+    )
     cases = selected_review_cases(registry, max_cases=max_cases)
     privacy_boundary = {
         "raw_text_emitted": False,
@@ -490,7 +568,9 @@ def run_semantic_scope_source_review(
             "per_label": {},
             "failed_label_categories": [],
             "min_label_pass_rate": float(min_label_pass_rate),
-            "label_coverage": sorted({label for case in cases for label in case.get("labels") or []}),
+            "label_coverage": sorted(
+                {label for case in cases for label in case.get("labels") or []}
+            ),
             "model_route": resolved_route.as_dict(),
             "cases": [],
             "privacy_boundary": privacy_boundary,
@@ -510,7 +590,9 @@ def run_semantic_scope_source_review(
             "per_label": {},
             "failed_label_categories": [],
             "min_label_pass_rate": float(min_label_pass_rate),
-            "label_coverage": sorted({label for case in cases for label in case.get("labels") or []}),
+            "label_coverage": sorted(
+                {label for case in cases for label in case.get("labels") or []}
+            ),
             "model_route": resolved_route.as_dict(),
             "cases": [],
             "privacy_boundary": privacy_boundary,
@@ -572,13 +654,17 @@ def run_semantic_scope_source_review(
     for item in review_results:
         add_usage(usage_total, item.get("usage") or {})
     passed_count = sum(1 for item in review_results if item.get("passed"))
-    status = review_status(len(cases), passed_count, min_cases=min_cases, min_pass_rate=min_pass_rate)
+    status = review_status(
+        len(cases), passed_count, min_cases=min_cases, min_pass_rate=min_pass_rate
+    )
     pass_rate = round((passed_count / len(cases)) if cases else 0.0, 4)
     per_label = per_label_review_stats(review_results)
     return {
         "ok": status == "sufficient" and failures == 0,
         "status": status if failures == 0 else "live_model_partial_failure",
-        "claim_level": "selected_semantic_label_source_review" if status == "sufficient" and failures == 0 else "diagnostic_only",
+        "claim_level": "selected_semantic_label_source_review"
+        if status == "sufficient" and failures == 0
+        else "diagnostic_only",
         "cannot_claim": cannot_claim(status, live=True),
         "live_model_used": True,
         "case_count": len(cases),
@@ -598,7 +684,9 @@ def run_semantic_scope_source_review(
         "usage": usage_total,
         "cache": deepseek_cache_metrics_from_usage(usage_total),
         "per_label": per_label,
-        "failed_label_categories": failed_label_categories(per_label, min_label_pass_rate=min_label_pass_rate),
+        "failed_label_categories": failed_label_categories(
+            per_label, min_label_pass_rate=min_label_pass_rate
+        ),
         "cases": review_results,
         "privacy_boundary": privacy_boundary,
         "boundary": "DeepSeek-compatible review checks selected sidecar labels against clean source; it is not human review or global correctness.",
@@ -651,7 +739,9 @@ def main() -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         print(f"semantic scope source review: {result.get('status')}")
-        print(f"cases: {result.get('case_count')} passed: {result.get('passed_count')} pass_rate: {result.get('pass_rate')}")
+        print(
+            f"cases: {result.get('case_count')} passed: {result.get('passed_count')} pass_rate: {result.get('pass_rate')}"
+        )
     return 0 if result.get("ok") else 1
 
 
