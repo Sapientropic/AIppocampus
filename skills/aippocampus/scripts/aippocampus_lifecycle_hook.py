@@ -30,6 +30,18 @@ STATE_SCHEMA_VERSION = 1
 STOP_COOLDOWN_SECONDS = 15 * 60
 SESSION_COOLDOWN_SECONDS = 60 * 60
 COMPACT_COOLDOWN_SECONDS = 2 * 60
+DEFAULT_MAX_ELAPSED_MS = int(os.environ.get("AIPPOCAMPUS_LIFECYCLE_HOOK_BUDGET_MS", "15000"))
+ACTION_TIMEOUT_SECONDS = {
+    "build_index": 8.0,
+    "build_clean_source": 8.0,
+    "build_segments": 10.0,
+    "register": 5.0,
+    "subconscious_maybe_start": 3.0,
+}
+DETACHED_ACTION_COOLDOWN_SECONDS = {
+    "build_associations": 15 * 60,
+    "subconscious_maybe_start": 60,
+}
 SUPPORTED_EVENTS = {"SessionStart", "Stop", "PreCompact", "PostCompact"}
 
 
@@ -158,6 +170,24 @@ def run_json(cmd: list[str]) -> dict[str, Any]:
     return json.loads(proc.stdout)
 
 
+def run_json_timeout(cmd: list[str], *, timeout: float) -> dict[str, Any]:
+    try:
+        proc = subprocess.run(
+            cmd,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise TimeoutError(f"child command timed out after {timeout:g}s: {' '.join(cmd)}") from exc
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stdout or proc.stderr)
+    return json.loads(proc.stdout)
+
+
 def run_text(cmd: list[str]) -> str:
     proc = subprocess.run(cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False)
     if proc.returncode != 0:
@@ -166,23 +196,105 @@ def run_text(cmd: list[str]) -> str:
 
 
 def run_health(cwd: Path) -> dict[str, Any]:
-    return run_json([sys.executable, str(SCRIPT_DIR / "aippocampus_health.py"), "--cwd", str(cwd), "--json"])
+    return run_json_timeout(
+        [sys.executable, str(SCRIPT_DIR / "aippocampus_health.py"), "--cwd", str(cwd), "--json"],
+        timeout=5.0,
+    )
+
+
+def maintenance_log_path(name: str) -> Path:
+    return codex_home() / "aippocampus-registry" / "logs" / name
+
+
+def start_detached_json(cmd: list[str], *, log_name: str) -> dict[str, Any]:
+    log = maintenance_log_path(log_name)
+    log.parent.mkdir(parents=True, exist_ok=True)
+    out = log.open("ab")
+    creationflags = 0
+    if os.name == "nt":
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
+    proc = subprocess.Popen(
+        cmd,
+        cwd=str(SCRIPT_DIR),
+        stdin=subprocess.DEVNULL,
+        stdout=out,
+        stderr=subprocess.STDOUT,
+        # Keep lifecycle hooks from waiting on descendant handles in the Codex
+        # host pipe. On Windows, inherited stdout/stderr handles can make the
+        # hook process look alive until the detached maintenance job exits.
+        close_fds=True,
+        creationflags=creationflags,
+    )
+    out.close()
+    return {"detached": True, "pid": int(proc.pid), "log": str(log), "command": cmd}
 
 
 def run_action(cwd: Path, action: str) -> dict[str, Any]:
     if action == "build_index":
-        return run_json([sys.executable, str(SCRIPT_DIR / "build_index.py"), "--cwd", str(cwd), "--json"])
+        return run_json_timeout(
+            [sys.executable, str(SCRIPT_DIR / "build_index.py"), "--cwd", str(cwd), "--json"],
+            timeout=ACTION_TIMEOUT_SECONDS[action],
+        )
     if action == "build_clean_source":
-        return run_json([sys.executable, str(SCRIPT_DIR / "build_clean_source.py"), "--cwd", str(cwd), "--json"])
+        return run_json_timeout(
+            [sys.executable, str(SCRIPT_DIR / "build_clean_source.py"), "--cwd", str(cwd), "--json"],
+            timeout=ACTION_TIMEOUT_SECONDS[action],
+        )
     if action == "build_segments":
-        return run_json([sys.executable, str(SCRIPT_DIR / "build_segments.py"), "--cwd", str(cwd), "--json"])
+        return run_json_timeout(
+            [sys.executable, str(SCRIPT_DIR / "build_segments.py"), "--cwd", str(cwd), "--json"],
+            timeout=ACTION_TIMEOUT_SECONDS[action],
+        )
     if action == "register":
-        return run_json([sys.executable, str(SCRIPT_DIR / "registry.py"), "register", "--cwd", str(cwd), "--json"])
+        return run_json_timeout(
+            [sys.executable, str(SCRIPT_DIR / "registry.py"), "register", "--cwd", str(cwd), "--json"],
+            timeout=ACTION_TIMEOUT_SECONDS[action],
+        )
     if action == "build_associations":
-        return run_json([sys.executable, str(SCRIPT_DIR / "build_associations.py"), "--json"])
+        # A full association rebuild scans the global registry. On real
+        # installations this can take longer than the Codex lifecycle hook
+        # timeout, so hooks enqueue it detached and rely on atomic output writes.
+        return start_detached_json(
+            [sys.executable, str(SCRIPT_DIR / "build_associations.py"), "--json"],
+            log_name="build_associations_hook.log",
+        )
     if action == "subconscious_maybe_start":
-        return run_json([sys.executable, str(SCRIPT_DIR / "subconscious_scheduler.py"), "--maybe-start", "--cwd", str(cwd), "--json"])
+        # The scheduler itself is hook-safe, but importing Python modules,
+        # probing the registry, or waiting on a stale lock can still be enough
+        # to hit Codex host hook limits on busy machines. Keep the foreground
+        # lifecycle hook to enqueue-only behavior; the scheduler's own lock and
+        # per-project leases collapse duplicate starts, and DeepSeek work stays
+        # in the detached worker.
+        return start_detached_json(
+            [sys.executable, str(SCRIPT_DIR / "subconscious_scheduler.py"), "--maybe-start", "--cwd", str(cwd), "--json"],
+            log_name="subconscious_scheduler_hook.log",
+        )
     raise ValueError(f"unknown maintenance action: {action}")
+
+
+def remaining_ms(start: float, max_elapsed_ms: int | None) -> float | None:
+    if not max_elapsed_ms or max_elapsed_ms <= 0:
+        return None
+    return max(0.0, float(max_elapsed_ms) - ((time.perf_counter() - start) * 1000.0))
+
+
+def budget_allows(start: float, max_elapsed_ms: int | None, *, reserve_ms: float = 500.0) -> bool:
+    remaining = remaining_ms(start, max_elapsed_ms)
+    return remaining is None or remaining >= reserve_ms
+
+
+def detached_action_recent(workspace_state: dict[str, Any], action: str, now_ts: float) -> bool:
+    cooldown = DETACHED_ACTION_COOLDOWN_SECONDS.get(action)
+    if not cooldown:
+        return False
+    return cooldown_active(workspace_state, f"last_{action}_enqueue_ts", now_ts, cooldown)
+
+
+def remember_detached_action(workspace_state: dict[str, Any], action: str, now_ts: float) -> None:
+    if action not in DETACHED_ACTION_COOLDOWN_SECONDS:
+        return
+    workspace_state[f"last_{action}_enqueue_ts"] = now_ts
+    workspace_state[f"last_{action}_enqueue_at"] = now_utc()
 
 
 def update_workspace_state(workspace_state: dict[str, Any], event: str, actions: list[str], *, now_ts: float) -> None:
@@ -225,6 +337,7 @@ def run_maintenance(
     state_file: Path | None = None,
     dry_run: bool = False,
     now_ts: float | None = None,
+    max_elapsed_ms: int | None = DEFAULT_MAX_ELAPSED_MS,
 ) -> dict[str, Any]:
     start = time.perf_counter()
     now_ts = time.time() if now_ts is None else now_ts
@@ -242,13 +355,54 @@ def run_maintenance(
             "elapsed_ms": round((time.perf_counter() - start) * 1000, 2),
         }
 
-    health = run_health(cwd)
+    try:
+        health = run_health(cwd)
+    except Exception as exc:
+        if not dry_run:
+            update_workspace_state(workspace_state, event, [], now_ts=now_ts)
+            workspace_state["failure_count"] = int(workspace_state.get("failure_count") or 0) + 1
+            workspace_state["last_error"] = str(exc)
+            workspace_state["last_error_at"] = now_utc()
+            save_state(state, state_file)
+        return {
+            "event": event,
+            "cwd": str(cwd),
+            "state_key": key,
+            "actions": [],
+            "dry_run": dry_run,
+            "results": [],
+            "skipped": "health_error",
+            "error": str(exc),
+            "elapsed_ms": round((time.perf_counter() - start) * 1000, 2),
+        }
     actions = decide_actions(event, health, workspace_state, now_ts=now_ts)
     results: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = []
+    skipped_actions: list[dict[str, Any]] = []
+    completed_actions: list[str] = []
     if not dry_run:
         for action in actions:
-            results.append({"id": action, "result": run_action(cwd, action)})
-        update_workspace_state(workspace_state, event, actions, now_ts=now_ts)
+            if not budget_allows(start, max_elapsed_ms):
+                skipped_actions.append({"id": action, "reason": "foreground_budget"})
+                continue
+            if detached_action_recent(workspace_state, action, now_ts):
+                skipped_actions.append({"id": action, "reason": "detached_enqueue_cooldown"})
+                continue
+            try:
+                result = run_action(cwd, action)
+                if result.get("detached"):
+                    remember_detached_action(workspace_state, action, now_ts)
+                completed_actions.append(action)
+                results.append({"id": action, "result": result})
+            except Exception as exc:
+                error = {"id": action, "error": str(exc)}
+                errors.append(error)
+                results.append(error)
+        update_workspace_state(workspace_state, event, completed_actions, now_ts=now_ts)
+        if errors:
+            workspace_state["failure_count"] = int(workspace_state.get("failure_count") or 0) + 1
+            workspace_state["last_error"] = "; ".join(str(item.get("error")) for item in errors[:3])
+            workspace_state["last_error_at"] = now_utc()
         save_state(state, state_file)
 
     return {
@@ -259,6 +413,8 @@ def run_maintenance(
         "dry_run": dry_run,
         "health_status": health.get("status"),
         "results": results,
+        "errors": errors,
+        "skipped_actions": skipped_actions,
         "skipped": None if actions else "no_actions",
         "elapsed_ms": round((time.perf_counter() - start) * 1000, 2),
     }
@@ -270,6 +426,12 @@ def main() -> int:
     parser.add_argument("--cwd", help="Workspace override. Hook mode reads cwd from stdin.")
     parser.add_argument("--state-file")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--max-elapsed-ms",
+        type=int,
+        default=DEFAULT_MAX_ELAPSED_MS,
+        help="Fail-open foreground budget for the lifecycle hook. Use 0 to disable.",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--log", action="store_true")
     parser.add_argument("--strict", action="store_true")
@@ -289,6 +451,7 @@ def main() -> int:
             cwd,
             state_file=Path(args.state_file).resolve() if args.state_file else None,
             dry_run=args.dry_run,
+            max_elapsed_ms=args.max_elapsed_ms,
         )
         if args.log:
             write_log(result)

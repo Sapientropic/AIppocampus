@@ -350,7 +350,7 @@ def frontier_boundary_result(
         }
     api_key = os.environ.get("DEEPSEEK_API_KEY")
     if not api_key:
-        status = "skipped_missing_api_key" if mode in {"auto", "smoke"} else "blocked_missing_api_key"
+        status = "skipped_missing_api_key" if mode == "auto" else "blocked_missing_api_key"
         return {
             "status": status,
             "question_extraction_available": True,
@@ -390,8 +390,19 @@ def frontier_boundary_result(
     written_count = 0
     if not no_write:
         written_count = write_filtered_frontier_findings(filtered_result, jobs_output, model=DEFAULT_MODEL)
+    successful_count = int(filtered_result.get("successful_job_count") or 0)
+    failure_count = int(filtered_result.get("failure_count") or 0)
+    finding_count = int(filtered_result.get("finding_count") or 0)
+    if failure_count > 0 and successful_count <= 0:
+        status = "model_failed"
+    elif failure_count > 0:
+        status = "model_partial_failure"
+    elif finding_count <= 0:
+        status = "model_no_findings"
+    else:
+        status = "smoke_ok" if no_write else "write_ok"
     return {
-        "status": "smoke_ok" if no_write else "write_ok",
+        "status": status,
         "question_extraction_available": True,
         "project_scope": project,
         "project_scope_reason": project_scope_reason,
@@ -533,6 +544,7 @@ def run_onboarding(
         actions["project_timeline"] = {
             "output": str(timeline_path),
             "project_count": timeline.get("project_count"),
+            "life_label_count": (timeline.get("life_wide") or {}).get("label_count"),
         }
 
     boundary = {
@@ -548,6 +560,7 @@ def run_onboarding(
         actions["project_timeline"] = {
             "output": str(timeline_path),
             "project_count": timeline.get("project_count"),
+            "life_label_count": (timeline.get("life_wide") or {}).get("label_count"),
         }
     active_frontier_project, active_frontier_project_reason = resolve_frontier_project_scope(
         cwd=cwd,
@@ -581,7 +594,12 @@ def run_onboarding(
 
     stats_after = registry_stats(registry_dir=registry_dir)
     ok: bool | str = True
-    if boundary["frontier"].get("status") == "blocked_missing_api_key":
+    if boundary["frontier"].get("status") in {
+        "blocked_missing_api_key",
+        "model_failed",
+        "model_partial_failure",
+        "model_no_findings",
+    }:
         ok = "partial"
     return {
         "ok": ok,

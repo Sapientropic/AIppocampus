@@ -106,6 +106,47 @@ class MemoryMaintenanceHookTests(unittest.TestCase):
 
         self.assertEqual(result["text"], "小海马体")
 
+    def test_build_associations_is_enqueued_detached(self) -> None:
+        original = hook.start_detached_json
+        seen: dict[str, object] = {}
+
+        def fake_start(cmd: list[str], *, log_name: str) -> dict:
+            seen["cmd"] = cmd
+            seen["log_name"] = log_name
+            return {"detached": True, "pid": 1234, "log": "diagnostic.log", "command": cmd}
+
+        try:
+            hook.start_detached_json = fake_start
+            result = hook.run_action(self.cwd, "build_associations")
+        finally:
+            hook.start_detached_json = original
+
+        self.assertTrue(result["detached"])
+        self.assertIn("build_associations.py", " ".join(str(item) for item in seen["cmd"]))
+        self.assertEqual(seen["log_name"], "build_associations_hook.log")
+
+    def test_subconscious_scheduler_is_enqueued_detached_without_foreground_timeout(self) -> None:
+        original = hook.start_detached_json
+        seen: dict[str, object] = {}
+
+        def fake_start(cmd: list[str], *, log_name: str) -> dict:
+            seen["cmd"] = cmd
+            seen["log_name"] = log_name
+            return {"detached": True, "pid": 5678, "log": "subconscious.log", "command": cmd}
+
+        try:
+            hook.start_detached_json = fake_start
+            result = hook.run_action(self.cwd, "subconscious_maybe_start")
+        finally:
+            hook.start_detached_json = original
+
+        rendered = " ".join(str(item) for item in seen["cmd"])
+        self.assertTrue(result["detached"])
+        self.assertIn("subconscious_scheduler.py", rendered)
+        self.assertIn("--maybe-start", rendered)
+        self.assertNotIn("run_json_timeout", rendered)
+        self.assertEqual(seen["log_name"], "subconscious_scheduler_hook.log")
+
 
 if __name__ == "__main__":
     unittest.main()

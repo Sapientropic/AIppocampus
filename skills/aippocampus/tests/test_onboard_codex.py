@@ -107,6 +107,7 @@ class OnboardCodexTests(unittest.TestCase):
         self.assertEqual(result["data"]["actions"]["scan_sessions"]["registered_count"], 1)
         self.assertEqual(result["data"]["actions"]["cognitive_map"]["route_count"], 0)
         self.assertEqual(result["data"]["boundary"]["frontier"]["status"], "not_run")
+        self.assertGreaterEqual(result["data"]["actions"]["project_timeline"]["life_label_count"], 1)
         self.assertTrue((self.registry_dir / "project_timeline.json").exists())
 
     def test_frontier_smoke_exposes_compact_sample_findings_and_infers_project(self) -> None:
@@ -189,6 +190,29 @@ class OnboardCodexTests(unittest.TestCase):
         self.assertNotIn("refresh-registered", json.dumps(frontier["sample_findings"], ensure_ascii=False))
         self.assertIn("Current onboarding state after maintenance", captured["objective"])
         self.assertIn("missing_clean=0", captured["objective"])
+
+    def test_frontier_smoke_missing_deepseek_key_blocks_instead_of_skipping(self) -> None:
+        old_api_key = os.environ.get("DEEPSEEK_API_KEY")
+        os.environ.pop("DEEPSEEK_API_KEY", None)
+        try:
+            result = onboard.run_onboarding(
+                cwd=self.cwd,
+                registry_dir=self.registry_dir,
+                dry_run=False,
+                build_index=True,
+                refresh_current=False,
+                build_timeline=True,
+                build_cognitive_map=False,
+                frontier_mode="smoke",
+            )
+        finally:
+            if old_api_key is None:
+                os.environ.pop("DEEPSEEK_API_KEY", None)
+            else:
+                os.environ["DEEPSEEK_API_KEY"] = old_api_key
+
+        self.assertEqual(result["ok"], "partial")
+        self.assertEqual(result["data"]["boundary"]["frontier"]["status"], "blocked_missing_api_key")
 
 
 if __name__ == "__main__":
