@@ -1,0 +1,24 @@
+{
+  "bundle_schema_version": 1,
+  "kind": "aippocampus_public_example_bundle",
+  "created_at": "2026-05-27T00:00:00Z",
+  "source_label": "public-example-thread",
+  "message_count": 6,
+  "turn_count": 3,
+  "raw_rollout_included": false,
+  "scope_labels": [
+    "personal_reflection",
+    "relationship_continuity",
+    "idea_seed",
+    "life_context",
+    "open_question"
+  ],
+  "bundle_files": {
+    "handoff": "handoff.md",
+    "clean_source_dir": "clean-source",
+    "semantic_scope_labels": "clean-source/semantic-scope-labels.jsonl",
+    "semantic_scope_label_staging": "registry/subconscious_jobs.jsonl",
+    "index_dir": "index",
+    "registry_dir": "registry"
+  }
+}

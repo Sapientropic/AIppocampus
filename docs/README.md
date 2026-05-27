@@ -7,8 +7,21 @@ skill live under `skills/aippocampus/references/`.
 ## Stable Product Direction
 
 - `roadmap.md` - north star, staged roadmap, and release criteria.
+- `stage-0-5-readiness.md` - current evidence matrix for completing roadmap
+  stages 0 through 5; it is a status snapshot, not the canonical roadmap.
+- `architecture-overview.md` - public map of runtime layers and boundaries.
+- `install-guide.md` - public skill, MCP, plugin, hook, and local-sync install
+  paths.
+- `demo-scenarios.md` - public-safe demo flows using synthetic memory data.
+- `privacy-security-checklist.md` - public-readiness privacy and security
+  review checklist.
+- `public-readiness-verification.md` - dated verification evidence for the
+  current public-readiness slice.
 - `next-iteration-plan.md` - short handoff for the next development slices.
-- `the-unfinished-map.md` - origin essay; do not mirror its full text elsewhere.
+- `未干的地图.md` - canonical Chinese origin essay; do not mirror its full text
+  elsewhere.
+- `the-unfinished-map.md` - English transcreation of the origin essay, written
+  for English readers rather than as a literal translation.
 
 ## Architecture And Implementation Plans
 
@@ -18,6 +31,15 @@ skill live under `skills/aippocampus/references/`.
   vector-index planning.
 - `question-tracking-subconscious.md` - Phase 1 question extraction behavior
   plus Phase 2/3 question tracking and theme-emergence designs.
+
+## Browser Extension (New Direction)
+
+- `browser-extension-design.md` - browser extension concept: LLM-as-brain +
+  extension-as-tool-server. Tool call architecture, Claude.ai + ChatGPT technical
+  details, multi-agent architecture review (Kimi + Gemini), ChatGPT interception
+  feasibility correction, reusable assets from CLI codebase, revised evolution
+  path, competitive landscape. Treat external platform/project claims as
+  research leads until re-verified from primary sources.
 
 ## Research And Positioning
 

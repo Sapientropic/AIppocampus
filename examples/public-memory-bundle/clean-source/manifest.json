@@ -1,0 +1,41 @@
+{
+  "schema_version": 2,
+  "kind": "aippocampus_clean_source",
+  "artifact_scope": "public_example",
+  "source_id": "src_public_example",
+  "message_count": 6,
+  "turn_count": 3,
+  "outputs": {
+    "messages_jsonl": "clean-source/messages.jsonl",
+    "turns_jsonl": "clean-source/turns.jsonl",
+    "semantic_scope_labels_jsonl": "clean-source/semantic-scope-labels.jsonl"
+  },
+  "cleaning_policy": {
+    "rewrites_text": false,
+    "drops": [
+      "tool payload text",
+      "private raw rollout envelopes"
+    ]
+  },
+  "scope_label_policy": {
+    "version": "aippocampus-scope-labels-v1",
+    "labels": [
+      "personal_reflection",
+      "relationship_continuity",
+      "reading_notes",
+      "idea_seed",
+      "preference",
+      "life_context",
+      "technical_work",
+      "open_question"
+    ],
+    "method": "deterministic lexical hints over clean visible text",
+    "boundary": "scope_labels are navigation/filtering metadata; source text remains the memory truth."
+  },
+  "semantic_scope_label_sidecar": {
+    "file": "clean-source/semantic-scope-labels.jsonl",
+    "source": "deepseek_subconscious_scope_labels",
+    "example_staging": "registry/subconscious_jobs.jsonl",
+    "boundary": "Optional background semantic hints may add navigation labels; they do not rewrite clean source."
+  }
+}

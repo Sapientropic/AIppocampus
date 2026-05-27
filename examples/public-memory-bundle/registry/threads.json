@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "threads": [
+    {
+      "thread_key": "public-example-thread",
+      "title": "Public Example Thread",
+      "project_label": "AIppocampus public demo",
+      "message_count": 6,
+      "paths": {
+        "clean_source_messages_jsonl": "clean-source/messages.jsonl",
+        "clean_source_turns_jsonl": "clean-source/turns.jsonl",
+        "messages_jsonl": "index/messages.jsonl",
+        "graph_json": "index/graph.json"
+      },
+      "keywords": [
+        "source-backed continuity",
+        "casual sparks",
+        "honest memory",
+        "lighthouse metaphor",
+        "pivot"
+      ]
+    }
+  ]
+}

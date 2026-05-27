@@ -1,0 +1,48 @@
+# Privacy And Security Checklist
+
+Use this checklist before treating AIppocampus as public-ready or sharing a
+bundle, demo, release, or plugin package.
+
+## Source Boundaries
+
+- Clean source may contain private visible conversation text.
+- Raw rollout is audit provenance, not the daily recall surface.
+- Registry rows, vault exports, thread anchors, and sync bundles are private
+  unless intentionally sanitized.
+- Local absolute paths are locators, not identity.
+
+## Before Publishing
+
+- Run docs health and the full test suite.
+- Scan for real local paths, API keys, bearer headers, cookies, tokens, and
+  credential URLs.
+- Inspect scan hits manually. `FAKE_TEST_` fixtures are allowed; real private
+  values are not.
+- Confirm `.aippocampus/`, registry exports, `thread-anchors.md`, logs, and
+  archives remain gitignored.
+- Confirm public examples do not include `rollout.jsonl`.
+
+## Hooks
+
+- Prompt hooks are opt-in because they run on every prompt.
+- Lifecycle hooks may refresh generated artifacts, but they must not delete,
+  archive, or run expensive model work synchronously.
+- Hook installers must preserve unrelated hooks and support uninstall.
+
+## External Models
+
+- DeepSeek-compatible routes are optional.
+- Prompt-time external-model calls must pass through shared redaction.
+- Mostly-secret prompts should hard-skip external calls.
+- Missing API keys should return structured errors, not tracebacks.
+- Semantic sidecars from external-model jobs are navigation hints only; they
+  must target existing clean-source message ids with source refs and must not
+  rewrite source text or enter the default promotion-review path.
+
+## Sync And Plugin Distribution
+
+- Raw rollout sync is excluded by default and must be explicitly requested.
+- Pull operations must preserve local conflicts instead of overwriting.
+- Plugin installation must not silently enable hooks or external-model routes.
+- The standalone repository remains the source of truth; plugin packaging is a
+  distribution surface.

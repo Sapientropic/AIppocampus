@@ -44,6 +44,12 @@ Use `$env:CODEX_HOME\skills\aippocampus\scripts` as the script root.
   `python ...\search_rollout.py "query" --cwd "$PWD" --build-index --mode hybrid`.
 - Run the deterministic recall gate for vague continuity prompts:
   `python ...\active_recall.py "query" --cwd "$PWD" --search auto`.
+- Inspect the local MCP tool surface for plugin/agent clients:
+  `python ...\aippocampus_mcp_server.py --list-tools`.
+- Check or exchange a local-folder sync bundle:
+  `python ...\sync_bundle.py status --sync-dir "<folder>" --json`.
+- Check an HTTP object-storage sync bundle:
+  `python ...\sync_object_storage.py status --object-store-url "<url>" --object-prefix "<prefix>" --json`.
 - First-install / full-machine onboarding:
   `python ...\onboard_codex.py --all --format json`. This is the preferred
   agent entrypoint for registering local Codex sessions, repairing missing

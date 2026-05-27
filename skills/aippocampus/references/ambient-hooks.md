@@ -24,6 +24,7 @@ agent action, but it must not be reported as remembered fact.
 Useful commands:
 
 - `python ...\aippocampus_prompt_hook.py --prompt "hook 机制像人类联想" --json`
+- `python ...\diagnose_hooks.py --events UserPromptSubmit,Stop`
 - `python ...\simulate_prompt_hook.py --cwd "$PWD" --strict`
 - `python ...\simulate_prompt_hook.py --cwd "$PWD" --compare-concept-graph`
 - `python ...\simulate_multilingual_prompt_hook.py --cwd "$PWD"`
@@ -41,10 +42,11 @@ semantic work cannot consume the whole Codex `UserPromptSubmit` timeout. Do not
 raise this default unless the hook timeout is raised and fresh, uncached memory
 prompts still complete within budget.
 
-The foreground default is three seconds. Treat that as a scent/cache pass, not
-as the full recall budget; explicit `active_recall.py`, `runtime recall`, and
-standalone `semantic_recall_gate.py` can spend longer when the user asks for
-source-backed memory.
+The foreground default is about one second for fresh semantic calls, plus a
+whole-hook fail-open budget below the Codex hook timeout. Treat that as a
+scent/cache pass, not as the full recall budget; explicit `active_recall.py`,
+`runtime recall`, and standalone `semantic_recall_gate.py` can spend longer
+when the user asks for source-backed memory.
 
 When an explicit memory cue already has local association or working-memory
 overlap, the prompt hook skips the external semantic gate and goes straight to
@@ -123,7 +125,14 @@ Installed events:
 Useful commands:
 
 - `python ...\aippocampus_lifecycle_hook.py --event Stop --cwd "$PWD" --dry-run --json`
+- `python ...\diagnose_hooks.py --events UserPromptSubmit,Stop`
 - `python ...\install_aippocampus_lifecycle_hook.py install|status|uninstall`
+
+`build_associations.py` scans the global registry and can exceed a lifecycle
+hook timeout on real archives. Lifecycle hooks enqueue that rebuild detached and
+write its output through the normal atomic association writer. Do not move a
+full association rebuild back into the foreground hook path; prompt hooks should
+consume the latest completed sidecar and fail open when it is stale.
 
 ## Scheduler Boundary
 
@@ -144,8 +153,13 @@ materialization, and concept graph rebuilds. It still writes only staging,
 navigation, or soft-memory artifacts.
 
 DeepSeek concurrency belongs inside the detached worker, not in the foreground
-hook. `subconscious_jobs.py` can run multiple job/sample calls concurrently, but
-staging JSONL and sidecar materialization remain serialized and atomic.
+hook. Lifecycle hooks enqueue `subconscious_scheduler.py --maybe-start` as a
+detached process, then return; scheduler locks and project leases collapse
+duplicates. `subconscious_jobs.py` defaults to parallel samples, can run
+multiple job/sample calls concurrently, and keeps staging JSONL plus sidecar
+materialization serialized and atomic. A hook budget miss or model delay should
+mean "background semantic work is not ready yet", not "replace it with a
+mechanical semantic judgment".
 
 Useful commands:
 

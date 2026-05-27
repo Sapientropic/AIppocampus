@@ -9,7 +9,19 @@ skills:
     optional_env:
       - CODEX_HOME
       - DEEPSEEK_API_KEY
+      - AIPPOCAMPUS_REGISTRY_DIR
+      - AIPPOCAMPUS_PROMPT_PROBE_LIMIT
+      - AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT
       - AIPPOCAMPUS_SEMANTIC_GATE
+      - AIPPOCAMPUS_SEMANTIC_TIMEOUT
+      - AIPPOCAMPUS_SEMANTIC_CACHE_TTL
+      - AIPPOCAMPUS_SEMANTIC_TEMPERATURE
+      - AIPPOCAMPUS_OBJECT_STORE_URL
+      - AIPPOCAMPUS_OBJECT_PREFIX
+      - AIPPOCAMPUS_OBJECT_STORE_TOKEN
+      - AIPPOCAMPUS_SUBCONSCIOUS_CONCURRENCY
+      - AIPPOCAMPUS_SUBCONSCIOUS_HOOK
+      - AIPPOCAMPUS_SUBCONSCIOUS_SAMPLES_PER_JOB
       - AIPPOCAMPUS_VAULT
       - AIPPOCAMPUS_STYLE_SOURCE
       - AIPPOCAMPUS_SCRIPT_SOURCE
@@ -21,4 +33,6 @@ skills:
       - CODEX_MEMORY_SCRIPT_SOURCE
       - CODEX_MEMORY_SITE_MARK
       - CODEX_MEMORY_SITE_TITLE
-    notes: "Source-backed conversation memory for AI agents, with clean-source indexes, registry search, ambient recall hooks, optional DeepSeek-compatible semantic/subconscious jobs, and a roadmap for sync, MCP, and plugin distribution."
+      - THREAD_MEMORY_REGISTRY_DIR
+      - AIIPPOCAMPUS_SUBCONSCIOUS_HOOK
+    notes: "Source-backed conversation memory for AI agents, with clean-source indexes, life-wide scope labels and timeline groups, registry search, ambient recall hooks, local/object-storage sync, MCP access, plugin packaging, and optional DeepSeek-compatible semantic/subconscious jobs."

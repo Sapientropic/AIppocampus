@@ -14,7 +14,8 @@ life-wide continuity without false claims of innate model memory.
 - `skills/aippocampus/references/`: detailed contracts loaded on demand.
 - `skills/aippocampus/scripts/`: deterministic helpers.
 - `docs/roadmap.md`: product roadmap and north star.
-- `docs/the-unfinished-map.md`: the origin essay; do not mirror it elsewhere.
+- `docs/未干的地图.md`: the canonical Chinese origin essay; do not mirror it elsewhere.
+- `docs/the-unfinished-map.md`: English transcreation of the origin essay.
 - `sources/skill-sources.yaml`: lightweight provenance.
 
 Do not duplicate long rules across multiple docs. Keep one canonical location

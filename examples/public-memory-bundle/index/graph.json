@@ -1,0 +1,11 @@
+{
+  "nodes": [
+    {"id": "topic:source-backed-continuity", "type": "topic", "label": "source-backed continuity"},
+    {"id": "topic:casual-sparks", "type": "topic", "label": "casual sparks"},
+    {"id": "topic:lighthouse-metaphor", "type": "topic", "label": "lighthouse metaphor"}
+  ],
+  "edges": [
+    {"source": "topic:source-backed-continuity", "target": "topic:casual-sparks", "type": "RELATED_IDEA"},
+    {"source": "topic:casual-sparks", "target": "topic:lighthouse-metaphor", "type": "CASUAL_IMPORTANT_SIGNAL"}
+  ]
+}

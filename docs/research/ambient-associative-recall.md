@@ -1,0 +1,335 @@
+# Ambient Associative Recall
+
+Status: design memo, not implementation.
+Origin: user/product discussion, 2026-05-27.
+Related: [The Pearl of Presence](pearl-of-presence.md),
+[Thread Intuition Layer](affect-side-channel.md),
+[Dream Task Design](dream-task-design.md).
+
+## The Problem
+
+Explicit recall works, but it is not how people usually talk.
+
+A user will sometimes ask, "Do you remember..." and then a search-like memory
+workflow is appropriate. Most of the time, though, continuity should surface
+without ceremony. A person returns to a transformation-and-continuity motif,
+and the old line of thought from `docs/未干的地图.md` should lightly glow without
+this memo mirroring the origin wording.
+
+The goal is not to make every answer autobiographical. It is to reduce the
+user's burden of being the only one carrying the past. The agent should be able
+to notice when a topic touches an old trajectory, then decide how visibly to
+use that resonance.
+
+## Product Goal
+
+Ambient associative recall should make old traces naturally available during
+ordinary conversation.
+
+It should feel like this:
+
+> This touches the same question you have been circling: whether continuity can
+> survive transformation. I will answer from there.
+
+It should not feel like this:
+
+> Search result: session 019e5aea line 190 contains similar text.
+
+The user-facing behavior is **active gentle nudge** by default. The agent may
+lightly name the relevant old thread of thought when it helps the current
+conversation, without forcing the user to ask for memory explicitly.
+
+## Four Visibility Levels
+
+Ambient recall should choose a visibility level for every candidate.
+
+| Level | User-facing behavior | When to use |
+|---|---|---|
+| Silent tuning | The answer quietly follows known preferences, metaphors, and concerns. | Weak or broad resonance; technical work where memory should not interrupt. |
+| Active gentle nudge | The agent briefly names the old line of thought and continues naturally. | Medium/high resonance in writing, research, life-wide, or product-direction conversations. |
+| Source-backed recall card | The agent cites the prior thread, key line, and why it matters. | User asks about memory, the recalled context changes the answer, or confidence needs grounding. |
+| Deep archival recall | The agent opens clean source or raw audit paths for exact wording. | The user asks for original wording, disputes a memory, or the decision depends on details. |
+
+The default for meaningful personal, philosophical, writing, and long-running
+project themes is active gentle nudge. The default for routine coding tasks is
+silent tuning unless the memory changes a boundary or prevents a mistake.
+
+## Runtime Shape
+
+Ambient associative recall is not one search call. It is a staged recall
+pipeline, and in agent workflows the pipeline spans a whole thread rather than
+one user prompt. A Codex or Claude agent thread often contains many turns of
+planning, implementation, clarification, and closeout. Ambient recall should
+therefore behave like a thread-level warming layer: early turns may only produce
+a weak scent, while later turns can benefit from recall work that finished after
+the first answer already moved on.
+
+```text
+turn N user prompt
+  -> cheap local prefilter
+  -> thread ambient cache lookup
+  -> local sidecar lookup
+  -> optional timeboxed warm scouts
+  -> deterministic merge and source validation
+  -> private associative context
+  -> agent chooses visibility level
+  -> late scout results warm the thread cache for turn N+1
+```
+
+The foreground agent should not spend its attention rummaging through memory.
+It should receive a compact private context that feels more like peripheral
+awareness:
+
+```yaml
+associations:
+  - theme: "life, transformation, identity continuity"
+    resonance: high
+    suggested_visibility: active_gentle_nudge
+    suggested_use: "Continue from the question of whether continuity survives transformation."
+    key_line: "origin essay transformation-continuity motif"
+    evidence_refs:
+      - "session:019e5aea... source_index:190"
+    expand_if: "User asks for original wording, old context, or a deeper source-backed answer."
+```
+
+This private context is advice to the agent, not text to paste into the final
+answer.
+
+## Latency Strategy
+
+The user experience depends on recall feeling present, not bolted on.
+
+Use four paths with different latency budgets:
+
+| Path | Budget | Work | Output |
+|---|---:|---|---|
+| Hot path | ~50-250 ms | Local cues, prompt terms, registry metadata, cached scent cards, recent working memory. | Immediate private associations or no-op. |
+| Thread-cache path | ~50-250 ms after warmup | Read the current agent thread's ambient cards, topic epoch, negative contexts, and source validation cache. | Stable peripheral awareness across many turns in the same thread. |
+| Warm path | ~500-1800 ms, strict timeout | Parallel DeepSeek recall scouts over candidate windows and sidecars. Use quorum or first-valid results, not wait-all. | Better ranked recall cards if they arrive in time; otherwise future cache material. |
+| Cold path | Detached | Subconscious jobs, cognitive map, semantic scope labels, theme/dream outputs, cache refresh. | Future hot/warm path material. |
+
+The hot path must always be safe to run for every prompt. The warm path may run
+opportunistically when the prompt has meaningful semantic cues. The cold path
+does the heavy lifting before the user needs it.
+
+The foreground hook should never block on fresh deep reasoning. It may consume
+available cached cards and launch or enqueue warm work. The main agent can use
+warm results if they arrive inside the budget; otherwise the result becomes
+future cache for the next few turns. In an agent thread, catching up one turn
+late is still useful because the conversation usually keeps moving inside the
+same topic field.
+
+## Thread Ambient Cache
+
+The primary cache should be keyed to the agent thread, not only to exact prompt
+text. Exact prompt cache is useful, but a long-running agent session usually
+drifts through related turns rather than repeating the same sentence.
+
+Recommended cache layers:
+
+| Layer | Key | Stores | Why it matters |
+|---|---|---|---|
+| Exact prompt cache | Prompt fingerprint plus semantic cue hash. | Prior semantic-gate or scout result. | Fast repeat protection, already close to the existing semantic gate cache. |
+| Thread ambient cache | `thread_id + workspace + topic_epoch`. | 3-8 current ambient recall cards, active negative contexts, mode, confidence, source-ref fingerprints. | Makes continuity immediate after the first warming pass in a multi-turn agent session. |
+| Topic trajectory cache | Rolling topic hash, without raw prompt text. | Current theme, drift markers, likely next search aliases, visibility bias. | Lets the cache survive gradual topic drift without logging full prompts. |
+| Source validation cache | `source_ref + query_terms_hash`. | Whether a source ref actually supports the association and at what confidence. | Keeps evidence checks stable and cheap across turns and scouts. |
+
+Thread ambient cache is a soft working surface, not memory truth. It should be
+small, expiring, source-ref-fingerprinted, and safe to discard. It must not log
+raw prompt text. When the thread changes topic, the topic epoch should rotate so
+old cards stop coloring unrelated work.
+
+The desired flow is:
+
+```text
+turn N:
+  local scent + thread cache lookup
+  launch warm scouts if cache is weak or stale
+  answer using available cards only
+
+late warm results:
+  deterministic validation
+  serial cache update
+
+turn N+1:
+  read warmed thread ambient cache
+  answer with more natural peripheral awareness
+```
+
+This makes high concurrency useful without requiring the current prompt to wait
+for the full scout batch.
+
+## High-Concurrency DeepSeek Scouts
+
+DeepSeek-class fast LLM workers are worth using aggressively because their job
+is narrow, provisional, and cheap after cache optimization. Design for 10-way
+concurrency from the start.
+
+This is a proposed warm-path evolution, not the current stable hook contract.
+Until measured prototypes prove the foreground budget, the operational boundary
+in `skills/aippocampus/references/ambient-hooks.md` remains authoritative.
+
+The foreground rule is quorum, not completion. A warm-path caller may launch the
+full scout set, but it should only wait for the first useful subset inside the
+budget, for example the first 2-3 valid scout results plus privacy/scope guard
+if available. Late results should update the thread ambient cache after
+deterministic validation. A foreground hook must not require all 10 scouts to
+finish before the user prompt can proceed.
+
+The 10 scouts should not be ten copies of the same prompt. They should cover
+different recall functions:
+
+| Scout | Purpose |
+|---|---|
+| Query expansion | Turn the user prompt into related phrases, metaphors, and old question shapes. |
+| Life-wide cue classifier | Decide whether the turn belongs to work, writing, philosophy, personal reflection, logistics, or routine technical flow. |
+| Thread matcher | Compare the prompt against registry summaries, timeline labels, and cognitive-map routes. |
+| Key-line hunter | Look for memorable old lines that could anchor an active nudge. |
+| Current-thread filter | Detect whether a hit is only recent echo from the current conversation. |
+| Theme matcher | Compare against recurring themes, question clusters, and dream/intuition markers. |
+| Evidence judge | Check whether candidate source refs actually support the suggested association. |
+| Nudge writer | Draft one or two natural active-gentle-nudge phrasings for the main agent to adapt. |
+| Privacy/scope guard | Suppress private, unrelated, or over-personalized associations. |
+| Failure sentinel | Look for hallucinated refs, overconfident labels, or candidates that need deep archival recall. |
+
+Each scout returns a small strict JSON object. A malformed result is isolated as
+`ok=false`; it must not poison the batch. The parent process owns merging,
+validation, dedupe, and any writes.
+
+The full wait-all scout batch belongs to explicit recall, evaluation, or
+detached warming. The always-on foreground route should be cache-first,
+timeboxed, and fail-open.
+
+## Source-Backed Merge
+
+Model output is never memory truth.
+
+The deterministic merger should:
+
+- require source refs before a candidate can become evidence
+- distinguish `scent`, `candidate`, and `evidence`
+- prefer older cross-thread hits over current-thread echoes when both match
+- weight user turns and assistant final answers above commentary and tool text
+- penalize injected skill instructions, generic project boilerplate, and noisy
+  status updates
+- dedupe candidates by theme, source thread, and key line
+- preserve uncertainty instead of forcing a match
+
+The merger produces recall cards, not formal memory. Formal memory still uses
+the existing retain/review paths.
+
+## Private Context Contract
+
+The main agent should receive a compact private block:
+
+```yaml
+ambient_recall:
+  mode: active_gentle_nudge
+  confidence: high
+  cards:
+    - theme: "new thread continuity"
+      nudge: "This is close to the fear that a new window can inherit rules but lose the road that made them matter."
+      key_line: "知识可以打包，那个瞬间打包不了。"
+      source_refs: ["..."]
+      visibility: active_gentle_nudge
+      expand_if: "User asks whether AIppocampus solves this grief."
+  avoid:
+    - "Do not claim innate memory."
+    - "Do not expose source ids unless the user asks or grounding is needed."
+```
+
+The agent then writes naturally. It may ignore the card when the current task
+would be better served without it.
+
+## Active Gentle Nudge Style
+
+Good nudges are short, situated, and non-performative.
+
+Examples:
+
+- "这其实碰到了你之前一直在摸的那条线：变化之后，连续性还在不在。"
+- "我会沿着那个『规则能迁移，但路会不会走失』的问题来答。"
+- "这让我想到你对新线程的担心：不是怕功能丢了，是怕共同走出来的意义丢了。"
+
+Bad nudges sound like database output:
+
+- "I retrieved a memory from session..."
+- "You previously stated..."
+- "Based on your profile..."
+
+Source ids belong in the agent's private context or in explicit recall answers,
+not in ordinary conversation.
+
+## Concurrency And Cache Design
+
+High concurrency is safe only if writes and visibility are controlled.
+
+Design constraints:
+
+- Run scouts concurrently, write serially.
+- Cache exact prompt results by prompt fingerprint plus semantic cue hash, not
+  raw prompt text.
+- Cache thread-level ambient cards by `thread_id + workspace + topic_epoch`.
+- Cache candidate cards with expiry and source-ref fingerprints.
+- Rotate topic epochs when drift, negative contexts, or code-surface prompts
+  indicate that old cards should stop applying.
+- Keep provider output provisional until deterministic validation accepts it.
+- Keep foreground hook output small: no raw prompt logs, no source dumps, no
+  long explanations.
+- Use stale-but-safe cached cards rather than blocking the user for fresh
+  DeepSeek output.
+- Record latency, thread-cache hit rate, prompt-cache hit rate, scout failure
+  rate, late-result usefulness, and visibility decisions.
+
+The cache should make common themes feel immediate after a thread has warmed up.
+DeepSeek concurrency should improve recall diversity and freshness without
+becoming a wait-all critical path for every prompt.
+
+## Failure Modes
+
+| Risk | Mitigation |
+|---|---|
+| Over-personalization | Use visibility levels, scope guard, and quiet mode for routine technical tasks. |
+| False familiarity | Require source refs for evidence and phrase nudges as resonance, not certainty. |
+| Current-thread echo | Penalize current-thread-only hits unless the user asks about recent context. |
+| Latency creep | Hot path returns first; warm path has strict timeout; cold path precomputes. |
+| Model hallucinated refs | Deterministic source-ref validation before any card becomes evidence. |
+| Privacy leakage | Foreground scent hides exact refs unless needed; raw rollout remains audit-only. |
+| Scout collapse | Isolate malformed scout outputs and let successful scouts continue. |
+| Stale thread cache | Rotate topic epochs, expire cards, and require negative contexts for routine coding or unrelated work. |
+
+## First Implementable Slice
+
+The first slice should be small but real:
+
+1. Add `ambient_recall_cards.py` to define and validate compact private recall
+   cards.
+2. Add `ambient_thread_cache.py` keyed by `thread_id + workspace + topic_epoch`,
+   with read, write, expiry, and drift-rotation helpers.
+3. Read only registry metadata, semantic scope labels, timeline sidecars,
+   cognitive-map sidecars, and clean-source index snippets.
+4. Run local hot-path candidate lookup first, then consume the thread ambient
+   cache.
+5. Add `warm_ambient_recall.py` as a standalone warm-path prototype. It may run
+   up to 10 DeepSeek scouts, but foreground callers use a strict timeout and
+   quorum-first result collection.
+6. Merge into at most 3 private recall cards and serialize late useful results
+   back into the thread cache.
+7. Return `mode`, `confidence`, `cards`, `avoid`, `latency_ms`,
+   `cache_status`, and `late_update_policy`.
+8. Add tests for current-thread noise, source-ref validation, failed scout
+   isolation, visibility selection, thread-cache reuse, topic drift rotation,
+   and late-result cache updates.
+
+Success for slice one is not perfect recall. It is that the agent receives
+useful, source-backed peripheral awareness without making the user wait, and
+that a multi-turn agent thread becomes warmer after the first few turns instead
+of re-solving recall from scratch every time.
+
+## Product Promise
+
+AIppocampus should not merely remember when asked.
+
+It should let old traces glow at the right moment, lightly enough that the
+conversation keeps moving, and faithfully enough that the user no longer has to
+carry the whole past alone.

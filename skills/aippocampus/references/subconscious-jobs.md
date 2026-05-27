@@ -40,6 +40,10 @@ but they must not rewrite source, delete source, or directly write formal memory
 - `build_cognitive_map.py`: deterministic materializer for DeepSeek-proposed
   landmarks, regions, and routes. It never creates routes from registry
   keywords alone.
+- `build_semantic_scope_labels.py`: deterministic materializer for
+  DeepSeek/subconscious `semantic_scope_labels` findings. It only writes
+  `semantic-scope-labels.jsonl` rows for existing clean-source message ids with
+  exact source refs.
 - `$CODEX_HOME/aippocampus-registry/subconscious_edges.jsonl`: staging concept
   edges consumed by `build_concept_graph.py`.
 - `$CODEX_HOME/aippocampus-registry/subconscious_jobs.jsonl`: staging findings
@@ -52,6 +56,10 @@ but they must not rewrite source, delete source, or directly write formal memory
   rows consumed by `semantic_recall_gate.py`.
 - `$CODEX_HOME/aippocampus-registry/cognitive_map.json`: hook-safe mental-map
   sidecar consumed by the prompt hook as scent, not evidence.
+- `<clean-source>/semantic-scope-labels.jsonl`: optional per-clean-source
+  sidecar for DeepSeek/subconscious life-wide scope labels. It is keyed by
+  `message_id`, consumed by search and timeline builders, and must not rewrite
+  `messages.jsonl`.
 
 ## Shared Agent Contract
 
@@ -69,8 +77,10 @@ Defaults are quality-oriented:
 - Hard safety cap: 64 steps.
 - `--min-tool-steps 1`.
 - `--concurrency 4` for `subconscious_jobs.py`.
-- `--samples-per-job 1`; raise this when you want multiple independent
-  DeepSeek passes for reducer-quality diversity.
+- `--samples-per-job 2` by default for fresh DeepSeek-backed work, so the
+  foreground hook can enqueue a fast parallel background pass instead of
+  waiting on one fragile model call. Lower it explicitly only for cost-focused
+  operator runs.
 - `--temperature 0.2`.
 - No default `max_tokens` cap.
 
@@ -89,17 +99,50 @@ Every accepted finding also gets deterministic metadata before it is written:
 - `quality.promotion_readiness`: compact blended score.
 - `quality.bucket`: `strong`, `usable`, `weak`, or `noise`.
 
+## DeepSeek Model Routing
+
+`deepseek_model_routing.py` owns the model split for DeepSeek-compatible
+background work:
+
+- default, fast, and hook-adjacent work resolves to `deepseek-v4-flash`
+- `slow_adjudication`, `suppressed_label_recovery`, and
+  `agentic_source_review` resolve to `deepseek-v4-pro`
+- `--model` remains an explicit operator override
+- `AIPPOCAMPUS_DEEPSEEK_FLASH_MODEL` and
+  `AIPPOCAMPUS_DEEPSEEK_PRO_MODEL` override the defaults; legacy
+  `DEEPSEEK_MODEL` remains a flash-route fallback only
+
+Keep Pro out of foreground hooks. Hooks enqueue detached workers and read
+stable sidecars; Pro is for slower evidence work where latency is acceptable.
+`semantic_scope_suppressed_recovery.py` uses Pro to re-adjudicate labels that
+the strict materializer suppressed. It first inspects the clean-source message
+through a tool, then sends the recovered findings back through the unchanged
+strict materializer. This restores labels only when stronger per-label evidence
+passes the same thresholds; it must not lower thresholds or revive empty
+evidence from old broad sidecars.
+
 ## Concurrency Contract
 
 DeepSeek can be used aggressively, but hooks must stay cheap. The split is:
 
 - hooks call `subconscious_scheduler.py --maybe-start` only
+- lifecycle hooks enqueue that scheduler as a detached process; they do not
+  wait on scheduler imports, registry scans, stale locks, or DeepSeek calls
 - the scheduler uses a short enqueue lock plus per-project lease fields in
   `subconscious_state.json`
 - detached workers run `subconscious_jobs.py` with `--concurrency` and optional
   `--samples-per-job`
-- worker threads call DeepSeek concurrently, but the parent process serializes
-  writes to `subconscious_jobs.jsonl` and `subconscious_edges.jsonl`
+- worker threads call DeepSeek concurrently across distinct jobs/batches, but
+  same-prefix diversity samples run in sample waves: sample 1 completes first
+  so DeepSeek can land the KV prefix, then sample 2+ may run. Do not collapse
+  this back into launching all samples at once; simultaneous same-prefix calls
+  often both miss the server cache.
+- the parent process serializes writes to `subconscious_jobs.jsonl` and
+  `subconscious_edges.jsonl`
+- after `semantic_scope_labeling`, the detached project run materializes
+  accepted labels into per-thread `semantic-scope-labels.jsonl` sidecars and
+  rebuilds `project_timeline.json` so search and timeline consumers see the
+  same navigation metadata
 - one failed or malformed sample must be isolated as `ok=false`; successful
   samples continue, and the batch reports `failure_count` / `partial_failure`
 - reducers and materializers still own promotion, route filtering, semantic
@@ -113,20 +156,28 @@ only read stable sidecars.
 
 DeepSeek's server-side KV cache is automatic; AIppocampus does not implement a
 local prompt cache for model calls. The optimization here is prompt shape:
-requests should put stable, bulky inputs before run-specific fields so
-DeepSeek can land and later match complete prefix units. See the official
+requests should put stable contracts first, source payloads next, and
+run-specific fields last so DeepSeek can land and later match complete prefix
+units. See the official
 DeepSeek KV cache guide:
 `https://api-docs.deepseek.com/zh-cn/guides/kv_cache`.
 
 Keep this ordering rule when changing DeepSeek-compatible payload builders:
 
-- stable source/catalog payloads first, such as timeline turns, registry
-  catalog, trigger catalog, findings, and tool lists
-- variable run directives later, such as current prompt, objective, focus,
-  worker name, job spec, diversity sample instruction, and repair text
+- stable contract/schema/tool payloads first, such as job specs, label
+  guidance, output schemas, and tool lists
+- stable source/catalog payloads next, such as timeline turns, registry
+  catalog, trigger catalog, and findings
+- variable run directives last, such as current prompt, objective, focus,
+  worker name, diversity sample instruction, and repair text
 - model responses should preserve `usage.prompt_cache_hit_tokens` and
   `usage.prompt_cache_miss_tokens`; command JSON returns also expose a compact
   `cache` object with `hit_tokens`, `miss_tokens`, and `hit_rate`
+- interpret provider-level cache hit rates by request shape. A broad smoke that
+  creates one new prefix and one follow-up sample per batch can naturally land
+  near 50% even when the second request hits near 99%; the bug signal is the
+  same-prefix follow-up staying cold, or all same-prefix samples launching
+  before the first request can warm the server cache.
 
 This mirrors the T-Sense monitor extraction lesson: stable
 profile/schema/instructions and repeated scan context belong before incremental
@@ -188,6 +239,32 @@ It must avoid:
 
 Good triggers are concrete, user-natural phrases that would help a future hook
 smell relevant memory without forcing it into the foreground.
+
+### `semantic_scope_labeling`
+
+Purpose: add dynamic life-wide navigation labels when lexical rules are too
+blunt.
+
+This is where fuzzy judgments belong: metaphors, pivots, excitement,
+dissatisfaction, dilemmas, recurring fascinations, and other casual-important
+signals that should not become hard-coded phrase-list sprawl. Output should be
+staged `semantic_scope_labels` findings with `message_id`, canonical
+`scope_labels`, `label_evidence`, `confidence`, and exact source refs. Every
+materialized label must have its own short source-grounded evidence reason and
+label-specific confidence; row-level confidence is not a fallback. The
+materializer uses a default evidence threshold plus stricter thresholds for
+source-review-sensitive labels. These thresholds intentionally suppress broad
+or over-inferred labels until DeepSeek can defend them with stronger evidence:
+for example `relationship_continuity` is not a generic "memory over time"
+label, `open_question` is not every immediate question, and `reading_notes` is
+not general film/media reaction. The deterministic
+`build_semantic_scope_labels.py` materializer turns those findings into
+`semantic-scope-labels.jsonl` rows only when the target message exists in clean
+source and at least one source ref points to that same `message_id`. Consumers
+merge these labels for search and timeline navigation, but exact claims still
+require following source refs back to clean source. These findings are
+navigation-only and are excluded from the default promotion-review path so a
+fuzzy label does not become formal memory by accident.
 
 ### `cognitive_map`
 
@@ -296,6 +373,12 @@ Rebuild concept graph after `concept_edges`:
 python "$env:CODEX_HOME\skills\aippocampus\scripts\build_concept_graph.py"
 ```
 
+Materialize semantic life-wide labels after `semantic_scope_labeling`:
+
+```powershell
+python "$env:CODEX_HOME\skills\aippocampus\scripts\build_semantic_scope_labels.py" --jobs-output "$env:CODEX_HOME\aippocampus-registry\subconscious_jobs.jsonl" --clean-source-dir "<thread-clean-source-dir>" --json
+```
+
 For smoke tests without adding staging noise:
 
 ```powershell
@@ -337,6 +420,8 @@ Staging findings can be consumed in several ways:
 - concept edges can feed `concept_index.sqlite`
 - cognitive-map findings can feed `cognitive_map.json` for hook-safe
   wayfinding
+- semantic scope-label findings can feed per-thread
+  `semantic-scope-labels.jsonl` for search/timeline navigation
 - trigger candidates can feed future hook association generation
 - preference candidates can feed a formal memory review workflow
 - contradiction candidates can become human review prompts

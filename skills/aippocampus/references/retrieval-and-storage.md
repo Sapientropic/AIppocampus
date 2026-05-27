@@ -20,6 +20,10 @@ Clean source keeps:
 - source session id, line spans, turn index, phase, timestamps, and hashes
 - stable join keys such as `source_id`, `turn_id`, `message_id`, and
   `content_sha256`
+- deterministic `scope_labels` for life-wide navigation:
+  `personal_reflection`, `relationship_continuity`, `reading_notes`,
+  `idea_seed`, `preference`, `life_context`, `technical_work`, and
+  `open_question`
 
 Clean source drops:
 
@@ -33,6 +37,39 @@ Clean source drops:
 This layer may omit noise, but it must not rewrite expression. Use
 `search_clean_source.py` first for normal recall. Return to raw rollout for
 forensic audit, missing tool output, storage accounting, or source repair.
+
+`scope_labels` are conservative lexical hints over clean visible text. They
+support filtering and future timeline sidecars, but they are not summaries and
+must not be treated as stronger evidence than the quoted source. Search can
+filter them with `search_clean_source.py --scope-label <label>`.
+
+Fuzzy life-wide judgments such as metaphors, pivots, dissatisfaction, or
+excitement should not be solved by endlessly expanding the deterministic phrase
+list. Background semantic jobs stage source-backed `semantic_scope_labels`
+findings in `subconscious_jobs.jsonl`; `build_semantic_scope_labels.py` then
+materializes accepted rows into `semantic-scope-labels.jsonl` beside a
+clean-source directory. Rows are keyed by existing `message_id`s, carry
+canonical `scope_labels`, and must include source refs back to the same
+message. Source-review-sensitive labels such as `personal_reflection`,
+`life_context`, `reading_notes`, and `preference` also require explicit
+per-label model evidence and stricter per-label confidence before the
+materializer keeps them; this protects against broad semantic over-labeling
+without falling back to mechanical phrase-list expansion. Single-thread
+clean-source search, registry deep search, and
+`build_project_timeline.py` merge that sidecar as navigation metadata while
+leaving `messages.jsonl` unchanged. Treat semantic sidecar labels as
+DeepSeek/subconscious hints, not source truth.
+
+For Stage 2 regression evidence, `smoke_semantic_scope_real_history.py` can run
+full selected life-wide candidate coverage in bounded DeepSeek batches, and
+`smoke_source_evidence_recall_eval.py` can build selected fuzzy life-wide
+prompts from dynamic low-frequency source cue terms. The recall eval uses
+dynamic clean-source corpus-rarity reranking for evaluation instead of a fixed
+fuzzy phrase list. `smoke_semantic_scope_source_review.py` can also run a live
+DeepSeek-compatible label-case review that checks selected sidecar labels
+against their matching clean-source messages. These evals prove only that the
+selected prompt or label samples passed their configured thresholds; they are
+not global semantic correctness claims or human review.
 
 Schema upgrades should be rebuildable. Do not put embeddings, DWM state, or
 debug provenance into `messages.jsonl`; use sidecars joined by `message_id` or
@@ -131,6 +168,18 @@ Common commands:
 
 In a new thread, check the registry before saying old memory is unavailable.
 
+`build_project_timeline.py` writes `project_timeline.json`. The `projects`
+section keeps the older project-scoped recent-turn view used by hooks and
+subconscious jobs. The `life_wide` section groups the same bounded recent
+clean-source turns by `scope_labels` across registered threads and projects,
+with `source_refs` pointing back to thread keys, message ids, clean ordinals,
+and source lines. Treat this as a navigation sidecar for recurring concerns and
+idea evolution; do not quote it as source truth without following the refs back
+to clean source. Foreground prompt recall may use `life_wide` only as a quiet
+scent when the prompt contains both a recency cue and a life-wide scope-label
+cue, so ordinary technical or status prompts are not over-personalized by
+global memory.
+
 `onboard_codex.py` is the preferred first-install and agent-facing wrapper. It
 returns a single JSON envelope with `ok`, `data`, `next`, and `meta`, including
 before/after registry counts, repair actions, cognitive-map status, and
@@ -141,13 +190,28 @@ compatibility only. When `--frontier-mode smoke|write` is used without an
 explicit `--frontier-project`, the command infers the current `--cwd` project
 and includes compact `sample_findings` in the frontier result so an agent can
 judge quality before writing. Use `--frontier-project *` only for a global
-whole-machine frontier pass.
+whole-machine frontier pass. Explicit `smoke`/`write` modes are DeepSeek-backed
+quality checks: missing `DEEPSEEK_API_KEY`, model failures, partial failures,
+or zero accepted findings return a partial/blocking frontier status instead of
+quietly falling back to deterministic registry maintenance.
 
 Full-machine search has one important boundary: old clean-source files may
 already contain injected skill or instruction carrier blocks from earlier
 builds. Registry deep search keeps those hits auditable but demotes them with a
 structural `search_noise` marker so repeated tool/skill instructions do not
 outrank real user turns or assistant final answers.
+
+## MCP Access Layer
+
+`scripts/aippocampus_mcp_server.py` is the local MCP surface for agent clients
+that should not shell out through skill instructions for every read. It exposes
+`search_memory`, `latest_reply`, `get_turn_context`, `list_threads`,
+`register_thread`, `sync_status`, and `memory_health`.
+
+Default MCP tools read clean source, registry rows, or health metadata. The
+only mutating tool is `register_thread`, and it is explicit. `sync_status`
+reports real local-folder sync state when the caller supplies `sync_dir`;
+without one, it reports capability truth instead of pretending sync is active.
 
 ## Cognitive Map
 
@@ -215,3 +279,27 @@ the corpus folder's `graphify-out/`.
 include manifest, handoff, index files, graph, anchors, and raw rollout unless
 `--no-raw` is used. `import_bundle.py` extracts the bundle and appends a pointer
 to the current workspace's anchors.
+
+`sync_bundle.py` is the first Stage 3 sync backend. It supports explicit
+local-folder `status`, `push`, `pull`, and `repair` commands over clean source,
+registry rows, manifests, semantic triggers, working memory, and cognitive-map
+sidecars. `sync_object_storage.py` reuses that same bundle manifest over an
+HTTP object-storage transport: each manifest file is stored as an object under
+`AIPPOCAMPUS_OBJECT_PREFIX`, the manifest object is written last, and
+`status`/`repair` verify object content by sha256 before `pull` imports it.
+Raw rollout files are excluded by default and copied only with `--include-raw`.
+Pull never overwrites conflicting local files; it writes the incoming copy under
+`.sync-conflicts/` for manual review.
+
+Push rewrites synced `registry/threads.json` to device-neutral
+bundle-relative locators for generated artifacts and clears source-device
+workspace paths. Pull repairs those generated-artifact locators to the target
+registry's local paths. Raw rollout locators remain absent unless the user
+explicitly opts into `--include-raw`.
+
+The local object-storage smoke starts a throwaway HTTP object store and proves
+the adapter makes real `PUT`/`GET` object calls. That is stronger than copying
+between folders, but it is still not proof of a managed cloud provider or a
+physical second device. `sync_status` on the MCP surface reports local-folder
+capability by default and can report object-storage status when the caller
+supplies an `object_store_url`.

@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "kind": "aippocampus_index",
+  "artifact_scope": "public_example",
+  "message_count": 6,
+  "outputs": {
+    "messages_jsonl": "index/messages.jsonl",
+    "graph_json": "index/graph.json"
+  }
+}

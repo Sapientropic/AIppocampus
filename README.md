@@ -5,7 +5,8 @@ AI agents.
 
 It is not just a project-memory utility. It keeps original conversation source
 reachable across threads, devices, projects, and casual life-wide conversations.
-The origin essay is [The Unfinished Map](docs/the-unfinished-map.md).
+The origin essay is [未干的地图](docs/未干的地图.md), with an English transcreation
+at [The Unfinished Map](docs/the-unfinished-map.md).
 
 The runtime design note
 [Cognitive Runtime Architecture](docs/cognitive-runtime-architecture.md)
@@ -17,6 +18,11 @@ circuits, and pipeline-level routing instead of one all-purpose agent.
 - Builds clean source from Codex conversation rollouts: original visible user
   messages and assistant final answers, not summaries.
 - Searches old conversation memory across current and registered threads.
+- Adds deterministic life-wide scope labels so personal reflection, reading
+  notes, idea seeds, preferences, life context, technical work, and open
+  questions can be found without replacing source text.
+- Builds a source-backed life-wide timeline section from registered clean
+  source, so recurring concerns and idea seeds can be followed across projects.
 - Keeps raw rollout history as optional audit provenance, not the daily memory
   surface.
 - Provides ambient recall hooks so related old memory can surface as a quiet
@@ -26,8 +32,9 @@ circuits, and pipeline-level routing instead of one all-purpose agent.
   output is explicit compatibility/export mode.
 - Supports optional DeepSeek-compatible semantic gates, background
   consolidation jobs, and cognitive-map routes for memory wayfinding.
-- Plans for cross-device sync, MCP access, plugin distribution, and very large
-  memory archives.
+- Provides local-folder sync, HTTP object-storage sync, MCP access, and plugin
+  packaging surfaces, with managed cloud/second-device release hardening still
+  on the roadmap.
 
 ## Install As A Skill
 
@@ -67,12 +74,58 @@ python "$env:CODEX_HOME\skills\aippocampus\scripts\onboard_codex.py" --all --for
 
 This is the agent-friendly wrapper around scanning local sessions, registering
 missing rollouts, building clean-source and SQLite/RAG-lite indexes, repairing
-missing artifacts, rebuilding the project timeline, and refreshing the
-cognitive map. External DeepSeek frontier extraction is explicit:
+missing artifacts, rebuilding the project and life-wide timeline sidecar, and
+refreshing the cognitive map. External DeepSeek frontier extraction is explicit:
 `--frontier-mode smoke` for no-write testing, or `--frontier-mode write` to add
 staging findings when `DEEPSEEK_API_KEY` is available. Smoke/write default to
 the current `--cwd` project; pass `--frontier-project *` only for an intentional
 whole-machine frontier pass.
+
+## MCP And Plugin Preview
+
+The local MCP server is read-mostly by default. It exposes clean-source and
+registry-backed tools such as `search_memory`, `latest_reply`,
+`get_turn_context`, `list_threads`, `register_thread`, `sync_status`, and
+`memory_health`:
+
+```powershell
+python .\skills\aippocampus\scripts\aippocampus_mcp_server.py --list-tools
+```
+
+The repo also carries a Codex plugin source package under
+`plugins/aippocampus/`. Build a local distributable directory with:
+
+```powershell
+python .\plugins\aippocampus\build_plugin_package.py --repo-root . --json
+```
+
+The plugin bundles the skill and MCP config. It does not silently enable prompt
+or lifecycle hooks; run the hook installers explicitly after reviewing the
+privacy and external-model boundary.
+
+## Sync Bundles
+
+The first sync backend is an explicit local folder. The HTTP object-storage
+adapter reuses the same manifest over object `PUT`/`GET`. Both copy clean
+source, manifests, registry rows, and hook-safe sidecars. Raw rollouts stay
+excluded unless `--include-raw` is passed.
+
+```powershell
+python .\skills\aippocampus\scripts\sync_bundle.py status --sync-dir <folder> --json
+python .\skills\aippocampus\scripts\sync_bundle.py push --sync-dir <folder> --json
+python .\skills\aippocampus\scripts\sync_bundle.py pull --sync-dir <folder> --json
+python .\skills\aippocampus\scripts\sync_bundle.py repair --sync-dir <folder> --json
+```
+
+```powershell
+python .\skills\aippocampus\scripts\sync_object_storage.py status --object-store-url <url> --object-prefix <prefix> --json
+python .\skills\aippocampus\scripts\sync_object_storage.py push --object-store-url <url> --object-prefix <prefix> --json
+python .\skills\aippocampus\scripts\sync_object_storage.py pull --object-store-url <url> --object-prefix <prefix> --json
+python .\skills\aippocampus\scripts\sync_object_storage.py repair --object-store-url <url> --object-prefix <prefix> --json
+```
+
+Pull preserves local conflicting files and writes incoming copies under
+`.sync-conflicts/` instead of overwriting.
 
 ## Privacy Model
 
@@ -107,6 +160,7 @@ roadmap lives at [docs/roadmap.md](docs/roadmap.md). The docs map is
 ```text
 AIppocampus/
 ├─ skills/aippocampus/        # installable skill package
+├─ plugins/aippocampus/       # Codex plugin source package
 ├─ docs/                      # origin essay, design notes, project background
 ├─ sources/                   # lightweight provenance catalog
 ├─ LICENSE
