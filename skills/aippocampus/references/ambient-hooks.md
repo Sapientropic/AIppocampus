@@ -199,6 +199,18 @@ already prior semantic work and should skip foreground DeepSeek spend. The hook
 uses those routes only as `scent`: they can add query terms and candidate
 threads, but they are never evidence by themselves.
 
+Cue-to-evidence upgrades are intentionally two-stage. Natural requests such as
+"上次关于 X 的结论是什么" or "找一下之前说 X 的那段" may open a tiny
+clean-source evidence probe even when they do not use formal words like
+"原文" or "引用". Fuzzy personal/status prompts should not be hard-blocked by
+foreground lexical rules; instead, the semantic/subconscious gate may authorize
+an evidence probe when it returns a high-confidence, low-risk recall context.
+That semantic signal is still only routing: the hook may inject evidence only
+after local clean-source/SQLite hits pass quality filtering. Prefer
+`final_answer` and visible user turns over process carriers such as
+`<subagent_notification>`; process noise can remain auditable in source but
+should not be the first evidence card when better human-facing source exists.
+
 ## Semantic Gate
 
 When `DEEPSEEK_API_KEY` is present and `AIPPOCAMPUS_SEMANTIC_GATE` is not `off`,

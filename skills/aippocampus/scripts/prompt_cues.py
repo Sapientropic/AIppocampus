@@ -30,6 +30,17 @@ SEMANTIC_EVIDENCE_TERMS = {
     "我之前说过",
 }
 
+NATURAL_EVIDENCE_PATTERNS = [
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in [
+        r"(找一下|查一下|找找|查查|看看).{0,24}(之前|前面|刚才|上次|说过|那段|那句|结论|判断|原话|原文)",
+        r"(之前|前面|刚才|上次).{0,36}(那段|那句|结论|判断|说法|怎么说|是什么|讲过|说过)",
+        r"(继续).{0,36}(那个|这个|那条|这条).{0,18}(结论|判断|说法|决定)",
+        r"(that|the|this).{0,24}(conclusion|decision|part|bit|quote|wording)",
+        r"(last time|previously|earlier).{0,48}(conclusion|decision|said|quote|wording)",
+    ]
+]
+
 EXPLICIT_RECALL_TERMS = {
     "找回",
     "想起来",
@@ -365,6 +376,26 @@ def evidence_content_terms(query_terms: list[str]) -> list[str]:
     return unique_preserve(terms, limit=10)
 
 
+def natural_evidence_intent(prompt: str) -> list[str]:
+    """Return natural-language source intent cues, not broad memory scent.
+
+    This is deliberately narrower than weak deixis. A bare "继续/那个/上次"
+    should not summon snippets, but ordinary human requests like "上次关于 X 的
+    结论是什么" or "找一下之前说 X 的那段" should be allowed to try a small
+    clean-source evidence upgrade when candidate and hit quality are strong.
+    """
+
+    text = str(prompt or "").strip()
+    if not text:
+        return []
+    matches: list[str] = []
+    for pattern in NATURAL_EVIDENCE_PATTERNS:
+        found = pattern.search(text)
+        if found:
+            matches.append(found.group(0))
+    return unique_preserve(matches, limit=4)
+
+
 def association_term_is_generic(match: dict[str, Any]) -> bool:
     term = str(match.get("term") or "").casefold().strip()
     if term in {value.casefold() for value in GENERIC_ASSOCIATION_TERMS}:
@@ -463,7 +494,26 @@ def semantic_gate_can_request_evidence(prompt: str, result: dict[str, Any] | Non
     # exact/source-backed recall. Otherwise a fuzzy "how is that memory thing
     # going?" can surface old high-scoring fragments instead of staying as a
     # gentle scent for the foreground model to decide on.
-    return bool(explicit_recall_terms(prompt) or matched_terms(prompt, SEMANTIC_EVIDENCE_TERMS))
+    if (
+        explicit_recall_terms(prompt)
+        or matched_terms(prompt, SEMANTIC_EVIDENCE_TERMS)
+        or natural_evidence_intent(prompt)
+    ):
+        return True
+
+    risk = str(result.get("anti_personalization_risk") or "").strip().casefold()
+    if risk == "high":
+        return False
+    intent = str(result.get("intent") or "").strip().casefold()
+    if intent not in {"recall", "continuation", "source_recall", "exact_recall"}:
+        return False
+    if float(result.get("confidence") or 0.0) < 0.82:
+        return False
+    # Subconscious/semantic context may decide a fuzzy status prompt is really a
+    # bounded recall request. That signal can open a local evidence probe, but
+    # the source hit still has to come from clean source/SQLite and pass normal
+    # quality filtering before anything is injected.
+    return bool(result.get("query_aliases") or result.get("memory_scope"))
 
 
 def has_non_cjk_non_latin_letters(prompt: str) -> bool:

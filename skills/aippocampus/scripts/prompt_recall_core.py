@@ -44,6 +44,7 @@ CUE_COMPAT_EXPORTS = (
     "matched_life_wide_cue_terms",
     "matched_life_wide_timeline_cues",
     "matched_terms",
+    "natural_evidence_intent",
     "prompt_is_code_surface",
     "semantic_gate_can_request_evidence",
     "semantic_gate_is_memory_cue",
@@ -71,6 +72,7 @@ is_decision_continuation = prompt_cues.is_decision_continuation
 matched_life_wide_cue_terms = prompt_cues.matched_life_wide_cue_terms
 matched_life_wide_timeline_cues = prompt_cues.matched_life_wide_timeline_cues
 matched_terms = prompt_cues.matched_terms
+natural_evidence_intent = prompt_cues.natural_evidence_intent
 prompt_is_code_surface = prompt_cues.prompt_is_code_surface
 semantic_gate_can_request_evidence = prompt_cues.semantic_gate_can_request_evidence
 semantic_gate_is_memory_cue = prompt_cues.semantic_gate_is_memory_cue
@@ -570,15 +572,15 @@ def should_suppress(
 def collect_evidence(
     candidates: list[dict[str, Any]], query_terms: list[str], budget: int
 ) -> list[dict[str, Any]]:
-    evidence: list[dict[str, Any]] = []
-    remaining = max(0, budget)
+    limit = max(0, budget)
     content_terms = evidence_content_terms(query_terms)
+    pool: list[tuple[float, int, dict[str, Any]]] = []
     for candidate in candidates[:3]:
-        if remaining <= 0:
+        if limit <= 0:
             break
         entry = candidate.get("_entry") or {}
-        _, hits = deep_search_entry(entry, query_terms, max_hits=min(remaining, 2))
-        for hit in hits:
+        _, hits = deep_search_entry(entry, query_terms, max_hits=max(limit * 4, 4))
+        for hit_index, hit in enumerate(hits):
             if not hit.get("line") or not hit.get("snippet"):
                 continue
             snippet_low = str(hit.get("snippet") or "").casefold()
@@ -598,14 +600,51 @@ def collect_evidence(
                 "phase": hit.get("phase") or "",
                 "turn_index": hit.get("turn_index"),
                 "score": hit.get("score"),
+                "rank_score": hit.get("rank_score"),
                 "source": hit.get("source"),
+                "is_final": hit.get("is_final"),
+                "search_noise": hit.get("search_noise"),
+                "noise_reason": hit.get("noise_reason"),
                 "snippet": hit.get("snippet"),
             }
-            evidence.append(item)
-            remaining -= 1
-            if remaining <= 0:
-                break
-    return evidence
+            pool.append((_evidence_hit_quality(item), hit_index, item))
+
+    if not pool:
+        return []
+    has_non_process_hit = any(not _evidence_hit_is_process_noise(item) for _, _, item in pool)
+    selected: list[dict[str, Any]] = []
+    seen: set[tuple[str, Any]] = set()
+    for _, _, item in sorted(pool, key=lambda row: (-row[0], row[1])):
+        if has_non_process_hit and _evidence_hit_is_process_noise(item):
+            continue
+        key = (str(item.get("thread_key") or ""), item.get("line"))
+        if key in seen:
+            continue
+        seen.add(key)
+        selected.append({key: value for key, value in item.items() if value not in {None, ""}})
+        if len(selected) >= limit:
+            break
+    return selected
+
+
+def _evidence_hit_is_process_noise(hit: dict[str, Any]) -> bool:
+    snippet = str(hit.get("snippet") or "").lstrip().casefold()
+    if hit.get("search_noise"):
+        return True
+    return snippet.startswith("<subagent_notification>") or snippet.startswith("<tool")
+
+
+def _evidence_hit_quality(hit: dict[str, Any]) -> float:
+    score = float(hit.get("rank_score") or hit.get("score") or 0.0)
+    if hit.get("source") == "clean_source":
+        score += 20.0
+    if hit.get("phase") == "final_answer" or hit.get("is_final"):
+        score += 80.0
+    elif hit.get("role") == "user":
+        score += 35.0
+    if _evidence_hit_is_process_noise(hit):
+        score -= 1000.0
+    return score
 
 
 def strip_private_fields(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:

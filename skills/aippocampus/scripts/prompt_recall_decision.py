@@ -31,6 +31,7 @@ from prompt_cues import (
     concept_expansion_terms,
     expand_query_terms,
     is_decision_continuation,
+    natural_evidence_intent,
     semantic_gate_can_request_evidence,
     semantic_gate_is_memory_cue,
     semantic_gate_terms,
@@ -135,6 +136,7 @@ def _decision_reasons(
     candidates: list[dict[str, Any]],
     working_memory_matches: list[dict[str, Any]],
     semantic_result: dict[str, Any] | None,
+    natural_evidence: list[str],
     suppressed: bool,
 ) -> list[str]:
     reasons: list[str] = []
@@ -162,6 +164,8 @@ def _decision_reasons(
         )
     if important:
         reasons.append("importance cue: " + ", ".join(important[:3]))
+    if natural_evidence:
+        reasons.append("natural evidence intent: " + ", ".join(natural_evidence[:2]))
     if candidates:
         reasons.append(
             "registry overlap: " + ", ".join(str(item["title"]) for item in candidates[:2])
@@ -470,6 +474,72 @@ def warm_prompt_trace(prompt: str, current_thread_key: str | None) -> list[dict[
     ]
 
 
+def _source_intent_evidence(
+    *,
+    prompt: str,
+    candidates: list[dict[str, Any]],
+    query_terms: list[str],
+    search_budget: int,
+    explicit: list[str],
+    important: list[str],
+    semantic_result: dict[str, Any] | None,
+    natural_evidence: list[str],
+    ambiguous_evidence_request: bool,
+    start: float,
+    max_elapsed_ms: int | None,
+    reasons: list[str],
+) -> list[dict[str, Any]]:
+    semantic_wants_evidence = bool(semantic_gate_can_request_evidence(prompt, semantic_result))
+    natural_wants_evidence = bool(natural_evidence)
+    if not (
+        candidates
+        and search_budget > 0
+        and (explicit or important or semantic_wants_evidence or natural_wants_evidence)
+        and not ambiguous_evidence_request
+        and _budget_allows(start, max_elapsed_ms, EVIDENCE_MIN_REMAINING_MS)
+    ):
+        return []
+    evidence = collect_evidence(candidates, query_terms, search_budget)
+    if evidence and natural_wants_evidence and not (explicit or important or semantic_wants_evidence):
+        reasons.append("natural evidence intent upgrade")
+    if evidence and semantic_wants_evidence and not (explicit or important or natural_wants_evidence):
+        reasons.append("semantic-context evidence upgrade")
+    return evidence
+
+
+def _evidence_lite_continuation(
+    *,
+    prompt: str,
+    candidates: list[dict[str, Any]],
+    query_terms: list[str],
+    search_budget: int,
+    association_matches: list[dict[str, Any]],
+    working_memory_matches: list[dict[str, Any]],
+    start: float,
+    max_elapsed_ms: int | None,
+    reasons: list[str],
+) -> list[dict[str, Any]]:
+    if not (
+        candidates
+        and search_budget > 0
+        and is_decision_continuation(prompt)
+        and float(candidates[0].get("probe_score") or 0.0) >= EVIDENCE_LITE_MIN_PROBE_SCORE
+        and _budget_allows(start, max_elapsed_ms, EVIDENCE_MIN_REMAINING_MS)
+    ):
+        return []
+    if association_matches:
+        evidence = collect_evidence(candidates, query_terms, 1)
+        if evidence:
+            reasons.append("evidence-lite decision continuation")
+            return evidence
+    if working_memory_matches:
+        evidence = collect_evidence(candidates, query_terms, 1)
+        if evidence:
+            reasons.append("working-memory evidence-lite decision continuation")
+            return evidence
+    return []
+
+
 def assess_prompt(
     prompt: str,
     *,
@@ -524,6 +594,7 @@ def assess_prompt(
     pre_explicit = context.pre_explicit
     pre_associative = context.pre_associative
     pre_important = context.pre_important
+    natural_evidence = natural_evidence_intent(prompt)
     semantic_result = _run_semantic_gate_for_prompt(
         prompt=prompt,
         cwd_path=cwd_path,
@@ -614,6 +685,7 @@ def assess_prompt(
         or working_memory_matches
         or semantic_memory_cue
         or timeline_memory_cue
+        or natural_evidence
     )
     if (
         candidates
@@ -644,6 +716,7 @@ def assess_prompt(
         candidates=candidates,
         working_memory_matches=working_memory_matches,
         semantic_result=semantic_result,
+        natural_evidence=natural_evidence,
         suppressed=suppressed,
     )
     ambiguous_evidence_request = bool(
@@ -668,41 +741,30 @@ def assess_prompt(
         )
     ):
         decision = "scent"
-        semantic_wants_evidence = bool(semantic_gate_can_request_evidence(prompt, semantic_result))
-        if (
-            candidates
-            and search_budget > 0
-            and (explicit or important or semantic_wants_evidence)
-            and not ambiguous_evidence_request
-            and _budget_allows(start, max_elapsed_ms, EVIDENCE_MIN_REMAINING_MS)
-        ):
-            evidence = collect_evidence(candidates, query_terms, search_budget)
+        evidence = _source_intent_evidence(
+            prompt=prompt,
+            candidates=candidates,
+            query_terms=query_terms,
+            search_budget=search_budget,
+            explicit=explicit,
+            important=important,
+            semantic_result=semantic_result,
+            natural_evidence=natural_evidence,
+            ambiguous_evidence_request=ambiguous_evidence_request,
+            start=start,
+            max_elapsed_ms=max_elapsed_ms,
+            reasons=reasons,
+        )
+        if evidence:
+            decision = "evidence"
+        else:
+            evidence = _evidence_lite_continuation(
+                prompt=prompt, candidates=candidates, query_terms=query_terms, search_budget=search_budget,
+                association_matches=association_matches, working_memory_matches=working_memory_matches,
+                start=start, max_elapsed_ms=max_elapsed_ms, reasons=reasons,
+            )
             if evidence:
                 decision = "evidence"
-        elif (
-            candidates
-            and search_budget > 0
-            and association_matches
-            and is_decision_continuation(prompt)
-            and float(candidates[0].get("probe_score") or 0.0) >= EVIDENCE_LITE_MIN_PROBE_SCORE
-            and _budget_allows(start, max_elapsed_ms, EVIDENCE_MIN_REMAINING_MS)
-        ):
-            evidence = collect_evidence(candidates, query_terms, 1)
-            if evidence:
-                decision = "evidence"
-                reasons.append("evidence-lite decision continuation")
-        elif (
-            candidates
-            and search_budget > 0
-            and working_memory_matches
-            and is_decision_continuation(prompt)
-            and float(candidates[0].get("probe_score") or 0.0) >= EVIDENCE_LITE_MIN_PROBE_SCORE
-            and _budget_allows(start, max_elapsed_ms, EVIDENCE_MIN_REMAINING_MS)
-        ):
-            evidence = collect_evidence(candidates, query_terms, 1)
-            if evidence:
-                decision = "evidence"
-                reasons.append("working-memory evidence-lite decision continuation")
 
     elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
     result = {

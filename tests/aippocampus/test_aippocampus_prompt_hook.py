@@ -215,6 +215,63 @@ class AmbientRecallHookTests(unittest.TestCase):
         messages.write_text(json.dumps(message, ensure_ascii=False) + "\n", encoding="utf-8")
         return messages
 
+    def _write_clean_thread_rows(self, thread_key: str, rows: list[dict]) -> Path:
+        clean_dir = self.root / thread_key.replace(":", "-") / "clean-source"
+        clean_dir.mkdir(parents=True)
+        messages = clean_dir / "messages.jsonl"
+        normalized = []
+        for index, row in enumerate(rows, start=1):
+            normalized.append(
+                {
+                    "message_id": row.get("message_id") or f"msg-{thread_key}-{index}",
+                    "turn_id": row.get("turn_id") or f"turn-{thread_key}-{index}",
+                    "source_line": row.get("source_line", 40 + index),
+                    "timestamp": row.get("timestamp", "2026-05-25T00:00:00Z"),
+                    "role": row.get("role", "assistant"),
+                    "phase": row.get("phase", "final_answer"),
+                    "turn_index": row.get("turn_index", index),
+                    "is_final": row.get("is_final", row.get("phase", "final_answer") == "final_answer"),
+                    "text": row.get("text", ""),
+                }
+            )
+        messages.write_text(
+            "\n".join(json.dumps(row, ensure_ascii=False) for row in normalized) + "\n",
+            encoding="utf-8",
+        )
+        return messages
+
+    def _write_clean_registry(
+        self,
+        *,
+        thread_key: str,
+        title: str,
+        keywords: list[str],
+        summary: str,
+        messages_path: Path,
+        project_label: str = "AIppocampus",
+    ) -> Path:
+        registry_path = self.root / f"{thread_key.replace(':', '-')}-registry" / "threads.json"
+        registry_path.parent.mkdir()
+        entry = {
+            "thread_key": thread_key,
+            "title": title,
+            "project_label": project_label,
+            "workspace_name": project_label,
+            "updated_at": "2026-05-25T19:00:00Z",
+            "anchor_titles": [title],
+            "keywords": keywords,
+            "summary": summary,
+            "paths": {
+                "workspace": str(self.workspace),
+                "clean_source_messages_jsonl": str(messages_path),
+            },
+        }
+        registry_path.write_text(
+            json.dumps({"schema_version": 1, "threads": [entry]}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        return registry_path
+
     def test_code_only_prompt_stays_silent(self) -> None:
         result = hook.assess_prompt(
             "把 dashboard 的按钮 hover 样式改一下，顺手跑测试",
@@ -818,7 +875,7 @@ class AmbientRecallHookTests(unittest.TestCase):
                 "intent": "recall",
                 "query_aliases": ["外置海马体", "触发式召回"],
                 "memory_scope": ["registered_threads"],
-                "anti_personalization_risk": "low",
+                "anti_personalization_risk": "high",
                 "reasons": ["model wants evidence"],
                 "workers": [],
                 "errors": [],
@@ -835,6 +892,114 @@ class AmbientRecallHookTests(unittest.TestCase):
 
         self.assertEqual(result["decision"], "scent")
         self.assertFalse(result["evidence"])
+
+    def test_semantic_context_can_upgrade_fuzzy_status_to_evidence_when_risk_is_low(self) -> None:
+        def fake_semantic_gate(prompt: str, **kwargs) -> dict:
+            return {
+                "available": True,
+                "decision": "evidence",
+                "confidence": 0.95,
+                "intent": "recall",
+                "query_aliases": ["外置海马体", "触发式召回"],
+                "memory_scope": ["registered_threads"],
+                "anti_personalization_risk": "low",
+                "reasons": ["subconscious context says this is a specific recall, not personalization"],
+                "workers": [],
+                "errors": [],
+                "cached": False,
+            }
+
+        result = hook.assess_prompt(
+            "那个脑内续接器现在怎么样了？",
+            cwd=self.workspace,
+            registry_path=self.registry,
+            semantic_gate_fn=fake_semantic_gate,
+            search_budget=1,
+        )
+
+        self.assertEqual(result["decision"], "evidence")
+        self.assertTrue(result["evidence"])
+        self.assertIn("semantic-context evidence upgrade", " ".join(result["reasons"]))
+
+    def test_natural_evidence_intent_upgrades_strong_scent_to_evidence(self) -> None:
+        messages = self._write_clean_thread_rows(
+            "session:life-evidence",
+            [
+                {
+                    "source_line": 88,
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": (
+                        "结论：life-wide evidence 当前不够，应该写成 honest readiness gate，"
+                        "不能把 semantic sidecar 命中当成已经证实。"
+                    ),
+                }
+            ],
+        )
+        registry_path = self._write_clean_registry(
+            thread_key="session:life-evidence",
+            title="AIppocampus life-wide evidence",
+            keywords=["life-wide evidence", "honest readiness gate", "semantic sidecar"],
+            summary="Stage 2 life-wide evidence 不够，需要 honest readiness gate。",
+            messages_path=messages,
+        )
+
+        result = hook.assess_prompt(
+            "上次关于 life-wide evidence 不够的结论是什么？",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            search_budget=2,
+            use_semantic_gate=False,
+        )
+
+        self.assertEqual(result["decision"], "evidence")
+        self.assertTrue(result["evidence"])
+        self.assertEqual(result["evidence"][0]["phase"], "final_answer")
+        self.assertIn("honest readiness gate", result["evidence"][0]["snippet"])
+        self.assertIn("natural evidence intent", " ".join(result["reasons"]))
+
+    def test_evidence_quality_prefers_final_answer_over_subagent_process_noise(self) -> None:
+        messages = self._write_clean_thread_rows(
+            "session:ambient-loop",
+            [
+                {
+                    "source_line": 41,
+                    "role": "user",
+                    "phase": "",
+                    "is_final": False,
+                    "text": (
+                        "<subagent_notification> ambient recall ambient recall ambient recall "
+                        "闭环 闭环 hook cache evidence process details only </subagent_notification>"
+                    ),
+                },
+                {
+                    "source_line": 120,
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": "ambient recall 闭环是 UserPromptSubmit hook 到 cache 再到 evidence 的运行链路。",
+                },
+            ],
+        )
+        registry_path = self._write_clean_registry(
+            thread_key="session:ambient-loop",
+            title="Ambient recall loop",
+            keywords=["ambient recall", "闭环", "hook", "cache", "evidence"],
+            summary="讨论 ambient recall hook/cache/evidence 闭环。",
+            messages_path=messages,
+        )
+
+        result = hook.assess_prompt(
+            "找一下之前说 ambient recall 闭环的那段",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            search_budget=1,
+            use_semantic_gate=False,
+        )
+
+        self.assertEqual(result["decision"], "evidence")
+        self.assertTrue(result["evidence"])
+        self.assertEqual(result["evidence"][0]["line"], 120)
+        self.assertNotIn("<subagent_notification>", result["evidence"][0]["snippet"])
 
     def test_association_boost_counts_each_thread_once(self) -> None:
         entry = {
