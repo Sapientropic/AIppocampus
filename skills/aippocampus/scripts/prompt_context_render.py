@@ -24,8 +24,12 @@ def ambient_debug_summary(result: dict[str, Any]) -> dict[str, Any] | None:
         status = str((card.get("source_validation") or {}).get("status") or "")
         if status:
             validation_statuses[status] = validation_statuses.get(status, 0) + 1
-    cache_status = ambient.get("cache_status") if isinstance(ambient.get("cache_status"), dict) else {}
-    warm_background = ambient.get("warm_background") if isinstance(ambient.get("warm_background"), dict) else {}
+    raw_cache_status = ambient.get("cache_status")
+    cache_status: dict[str, Any] = raw_cache_status if isinstance(raw_cache_status, dict) else {}
+    raw_warm_background = ambient.get("warm_background")
+    warm_background: dict[str, Any] = (
+        raw_warm_background if isinstance(raw_warm_background, dict) else {}
+    )
     return {
         "mode": ambient.get("mode"),
         "confidence": ambient.get("confidence"),

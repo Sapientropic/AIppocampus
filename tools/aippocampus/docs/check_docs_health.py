@@ -100,6 +100,60 @@ WINDOWS_COMMAND_MARKERS = (
 )
 
 
+def markdown_link_targets(text: str) -> set[str]:
+    targets: set[str] = set()
+    for raw_target in re.findall(r"\[[^\]]+\]\(([^)]+)\)", text):
+        target = raw_target.strip().strip("<>")
+        if "://" in target or target.startswith("#"):
+            continue
+        target = target.split("#", maxsplit=1)[0].strip()
+        if target:
+            targets.add(target)
+    return targets
+
+
+def research_index_issues(repo_root: Path) -> list[str]:
+    issues: list[str] = []
+    research_dir = repo_root / "docs" / "research"
+    if not research_dir.exists():
+        return issues
+
+    root_readme = research_dir / "README.md"
+    if not root_readme.exists():
+        issues.append("research index missing: docs/research/README.md")
+        return issues
+    root_targets = markdown_link_targets(root_readme.read_text(encoding="utf-8"))
+
+    for note in sorted(research_dir.glob("*.md")):
+        if note.name == "README.md":
+            continue
+        rel = note.relative_to(research_dir).as_posix()
+        if rel not in root_targets:
+            issues.append(f"research index does not link docs/research/{rel}")
+
+    for child in sorted(path for path in research_dir.iterdir() if path.is_dir()):
+        markdown_files = sorted(path for path in child.glob("*.md") if path.name != "README.md")
+        if not markdown_files:
+            continue
+        child_rel = child.relative_to(research_dir).as_posix()
+        if f"{child_rel}/README.md" not in root_targets and f"{child_rel}/" not in root_targets:
+            issues.append(f"research index does not link docs/research/{child_rel}/README.md")
+        child_readme = child / "README.md"
+        if not child_readme.exists():
+            issues.append(
+                f"research index subdirectory docs/research/{child_rel} must include README.md"
+            )
+            continue
+        child_targets = markdown_link_targets(child_readme.read_text(encoding="utf-8"))
+        for note in markdown_files:
+            rel = note.relative_to(child).as_posix()
+            if rel not in child_targets:
+                issues.append(
+                    f"research index docs/research/{child_rel}/README.md does not link {rel}"
+                )
+    return issues
+
+
 def windows_context_from_recent_lines(lines: list[str], fence_start_line: int) -> bool:
     recent = "\n".join(lines[max(0, fence_start_line - 5) : fence_start_line - 1]).casefold()
     return "windows" in recent or "powershell" in recent
@@ -189,6 +243,8 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
         doc_path = repo_root / rel_path
         if doc_path.exists():
             issues.extend(public_doc_command_issues(rel_path, doc_path.read_text(encoding="utf-8")))
+
+    issues.extend(research_index_issues(repo_root))
 
     example_bundle = repo_root / "examples" / "public-memory-bundle"
     if not example_bundle.exists():

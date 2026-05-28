@@ -13,7 +13,6 @@ import json
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -25,13 +24,19 @@ from aippocampuslib import (
     deepseek_cache_metrics_from_usage,
     now_utc,
 )
-from build_concept_graph import default_concept_graph_path
-from registry import registry_paths
 from subconscious_job_circuits import JOB_SPECS, PROMPT_VERSION, job_names, jobs_initial_payload
 from subconscious_job_plan import JobRunTask, plan_job_run_tasks, sample_count, worker_count
 from subconscious_job_validation import (
     QUESTION_TEXT_MAX_CHARS,
     validate_findings,
+)
+from subconscious_jobs_config import (
+    DEFAULT_CONCURRENCY,
+    DEFAULT_JOBS_OUTPUT_NAME,
+    DEFAULT_SAMPLES_PER_JOB,
+    JobsRunConfig,
+    default_jobs_output_path,
+    jobs_run_config_from_args,
 )
 from subconscious_runtime import (
     AGENT_SYSTEM_PROMPT,
@@ -53,101 +58,19 @@ from subconscious_worker import (
     DEFAULT_MAX_TURNS,
     DEFAULT_MODEL,
     append_staging_edges,
-    default_project_timeline_path,
-    default_staging_path,
     load_json,
     select_timeline_turns,
 )
 
-DEFAULT_JOBS_OUTPUT_NAME = "subconscious_jobs.jsonl"
-DEFAULT_CONCURRENCY = int(os.environ.get("AIPPOCAMPUS_SUBCONSCIOUS_CONCURRENCY", "4"))
-DEFAULT_SAMPLES_PER_JOB = int(os.environ.get("AIPPOCAMPUS_SUBCONSCIOUS_SAMPLES_PER_JOB", "2"))
-__all__ = ["QUESTION_TEXT_MAX_CHARS", "validate_findings"]
-
-
-@dataclass(frozen=True)
-class JobsRunConfig:
-    jobs: list[str]
-    registry_path: Path
-    timeline_path: Path
-    concept_graph_path: Path
-    jobs_output_path: Path
-    edges_output_path: Path
-    project: str | None
-    objective: str
-    max_turns: int
-    max_steps: int
-    min_tool_steps: int
-    model: str
-    base_url: str
-    api_key: str | None
-    max_tokens: int | None
-    timeout: int
-    temperature: float
-    concurrency: int = DEFAULT_CONCURRENCY
-    samples_per_job: int = DEFAULT_SAMPLES_PER_JOB
-    dry_run: bool = False
-    no_write: bool = False
-
-
-def default_jobs_output_path(
-    registry_path: Path | None = None, registry_dir: Path | None = None
-) -> Path:
-    if registry_path:
-        return registry_path.resolve().parent / DEFAULT_JOBS_OUTPUT_NAME
-    json_path, _ = registry_paths(registry_dir)
-    return json_path.resolve().parent / DEFAULT_JOBS_OUTPUT_NAME
-
-
-def jobs_run_config_from_args(args: Any) -> JobsRunConfig:
-    registry_path = (
-        Path(args.registry).resolve()
-        if args.registry
-        else registry_paths(Path(args.registry_dir).resolve() if args.registry_dir else None)[0]
-    )
-    timeline_path = (
-        Path(args.timeline).resolve()
-        if args.timeline
-        else default_project_timeline_path(registry_path=registry_path)
-    )
-    concept_graph_path = (
-        Path(args.concept_graph).resolve()
-        if args.concept_graph
-        else default_concept_graph_path(registry_path=registry_path)
-    )
-    jobs_output_path = (
-        Path(args.jobs_output).resolve()
-        if args.jobs_output
-        else default_jobs_output_path(registry_path=registry_path)
-    )
-    edges_output_path = (
-        Path(args.edges_output).resolve()
-        if args.edges_output
-        else default_staging_path(registry_path=registry_path)
-    )
-    return JobsRunConfig(
-        jobs=job_names(args.job),
-        registry_path=registry_path,
-        timeline_path=timeline_path,
-        concept_graph_path=concept_graph_path,
-        jobs_output_path=jobs_output_path,
-        edges_output_path=edges_output_path,
-        project=args.project,
-        objective=args.objective,
-        max_turns=args.max_turns,
-        max_steps=args.max_steps,
-        min_tool_steps=args.min_tool_steps,
-        model=args.model,
-        base_url=args.base_url,
-        api_key=os.environ.get(args.api_key_env),
-        max_tokens=args.max_tokens,
-        timeout=args.timeout,
-        temperature=args.temperature,
-        concurrency=args.concurrency,
-        samples_per_job=args.samples_per_job,
-        dry_run=args.dry_run,
-        no_write=args.no_write,
-    )
+__all__ = [
+    "DEFAULT_JOBS_OUTPUT_NAME",
+    "JobsRunConfig",
+    "QUESTION_TEXT_MAX_CHARS",
+    "default_jobs_output_path",
+    "job_names",
+    "jobs_run_config_from_args",
+    "validate_findings",
+]
 
 
 def response_content(response: dict[str, Any]) -> str:

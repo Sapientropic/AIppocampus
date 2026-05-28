@@ -1,0 +1,199 @@
+#!/usr/bin/env python3
+"""Search and ranking helpers for the machine-wide thread registry."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from aippocampuslib import compact_text, is_injected_instruction_text
+
+__all__ = [
+    "entry_search_score",
+    "search_noise_reason",
+    "clean_hit_rank_score",
+    "deep_search_entry_result",
+    "deep_search_entry",
+]
+
+
+def entry_search_score(entry: dict, terms: list[str]) -> float:
+    blob = "\n".join(
+        [
+            entry.get("title") or "",
+            entry.get("workspace_name") or "",
+            entry.get("project_label") or "",
+            entry.get("project_key") or "",
+            " ".join(entry.get("project_tags") or []),
+            entry.get("summary") or "",
+            " ".join(entry.get("anchor_titles") or []),
+            " ".join(entry.get("keywords") or []),
+            json.dumps(entry.get("session_meta") or {}, ensure_ascii=False),
+        ]
+    ).casefold()
+    score = 0.0
+    for term in terms:
+        low = term.casefold()
+        if not low:
+            continue
+        if low in (entry.get("title") or "").casefold():
+            score += 8.0
+        if any(low in str(keyword).casefold() for keyword in entry.get("keywords") or []):
+            score += 4.0
+        if low in blob:
+            score += 1.5
+    return score
+
+
+def search_noise_reason(text: str) -> str | None:
+    """Classify repeated runtime carrier text that should not dominate recall.
+
+    This is a ranking boundary, not a deletion rule. Old indexes may already
+    contain injected skill or instruction carriers, so registry search must keep
+    them auditable while making real user/final-answer evidence win.
+    """
+
+    if is_injected_instruction_text(text):
+        return "injected_instruction"
+    return None
+
+
+def clean_hit_rank_score(message: dict, score: float) -> tuple[float, str | None]:
+    text = str(message.get("text") or "")
+    reason = search_noise_reason(text)
+    rank_score = float(score)
+    if reason:
+        rank_score *= 0.05
+    if message.get("role") == "assistant" and str(message.get("phase") or "") == "final_answer":
+        rank_score *= 1.12
+    return rank_score, reason
+
+
+def _search_warning(stage: str, path: str | Path, exc: Exception) -> dict:
+    return {
+        "stage": stage,
+        "path": str(path),
+        "error_type": type(exc).__name__,
+        "message": str(exc),
+    }
+
+
+def deep_search_entry_result(entry: dict, terms: list[str], max_hits: int = 3) -> dict:
+    paths = entry.get("paths") or {}
+    warnings: list[dict] = []
+    clean_messages = paths.get("clean_source_messages_jsonl")
+    if clean_messages:
+        try:
+            from search_clean_source import iter_clean_messages, score_message
+            from semantic_scope_labels import (
+                load_semantic_scope_labels,
+                merged_scope_labels,
+                semantic_labels_for_message,
+            )
+
+            clean_hits = []
+            semantic_sidecar = load_semantic_scope_labels(Path(clean_messages).parent)
+            for message in iter_clean_messages(Path(clean_messages)):
+                semantic_scope_labels = semantic_labels_for_message(message, semantic_sidecar)
+                if semantic_scope_labels:
+                    message = dict(message)
+                    message["semantic_scope_labels"] = semantic_scope_labels
+                    message["scope_labels"] = merged_scope_labels(
+                        list(message.get("scope_labels") or []), semantic_scope_labels
+                    )
+                score = score_message(message, terms)
+                if score <= 0:
+                    continue
+                rank_score, noise_reason = clean_hit_rank_score(message, score)
+                clean_hits.append((rank_score, score, noise_reason, message))
+            clean_hits.sort(key=lambda item: (-item[0], int(item[3].get("source_line") or 0)))
+            if clean_hits:
+                compact_hits = [
+                    {
+                        "source": "clean_source",
+                        "id": message.get("message_id") or message.get("id"),
+                        "message_id": message.get("message_id") or message.get("id"),
+                        "turn_id": message.get("turn_id"),
+                        "source_id": message.get("source_id"),
+                        "clean_ordinal": message.get("clean_ordinal"),
+                        "line": message.get("source_line"),
+                        "role": message.get("role"),
+                        "phase": message.get("phase") or "",
+                        "turn_index": message.get("turn_index"),
+                        "is_final": message.get("is_final"),
+                        "scope_labels": [
+                            label
+                            for label in message.get("scope_labels", [])
+                            if isinstance(label, str)
+                        ],
+                        "semantic_scope_labels": [
+                            label
+                            for label in message.get("semantic_scope_labels", [])
+                            if isinstance(label, str)
+                        ],
+                        "score": round(score, 3),
+                        "rank_score": round(rank_score, 3),
+                        "search_noise": bool(noise_reason),
+                        "noise_reason": noise_reason,
+                        "snippet": compact_text(str(message.get("text") or ""), 260),
+                    }
+                    for rank_score, score, noise_reason, message in clean_hits[:max_hits]
+                ]
+                return {
+                    "score": max(rank_score for rank_score, *_ in clean_hits[:max_hits]) * 0.08,
+                    "hits": compact_hits,
+                    "warnings": warnings,
+                }
+        except Exception as exc:
+            warnings.append(_search_warning("clean_source", clean_messages, exc))
+
+    sqlite_path = Path(paths.get("sqlite") or "")
+    if not sqlite_path.exists():
+        return {"score": 0.0, "hits": [], "warnings": warnings}
+    # Registry search is imported by low-level registry glue. Keep retrieval as
+    # a use-site dependency so search policy can evolve without an import-time
+    # cycle between catalog bookkeeping and heavier recall execution.
+    from retrieval import expanded_terms_from_anchors, match_anchors, search_hybrid_index
+
+    anchors_value = paths.get("anchors")
+    anchors_path = Path(anchors_value) if anchors_value else None
+    anchors = (
+        match_anchors(anchors_path, terms, limit=4)
+        if anchors_path and anchors_path.is_file()
+        else []
+    )
+    expanded = expanded_terms_from_anchors(terms, anchors, limit=24)
+    try:
+        hits = search_hybrid_index(
+            sqlite_path,
+            terms,
+            expanded,
+            anchors,
+            limit=max_hits,
+            candidate_limit=80,
+            snippet_chars=260,
+            context_radius=0,
+        )
+    except Exception as exc:
+        warnings.append(_search_warning("sqlite", sqlite_path, exc))
+        return {"score": 0.0, "hits": [], "warnings": warnings}
+    score = max((float(hit.get("score") or 0.0) for hit in hits), default=0.0) * 0.08
+    compact_hits = [
+        {
+            "source": "sqlite",
+            "line": hit.get("line"),
+            "role": hit.get("role"),
+            "phase": hit.get("phase") or "",
+            "turn_index": hit.get("turn_index"),
+            "is_final": hit.get("is_final"),
+            "score": hit.get("score"),
+            "snippet": hit.get("snippet"),
+        }
+        for hit in hits
+    ]
+    return {"score": score, "hits": compact_hits, "warnings": warnings}
+
+
+def deep_search_entry(entry: dict, terms: list[str], max_hits: int = 3) -> tuple[float, list[dict]]:
+    result = deep_search_entry_result(entry, terms, max_hits=max_hits)
+    return float(result.get("score") or 0.0), list(result.get("hits") or [])

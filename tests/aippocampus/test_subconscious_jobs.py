@@ -66,6 +66,15 @@ class SubconsciousJobsTests(unittest.TestCase):
         self.assertNotIn("for sample_index in range", runner_source)
 
     def test_jobs_run_config_factory_derives_default_paths_from_registry_dir(self) -> None:
+        config_module = importlib.import_module("subconscious_jobs_config")
+        runner_source = (SCRIPTS / "subconscious_jobs.py").read_text(encoding="utf-8")
+
+        self.assertIs(jobs.JobsRunConfig, config_module.JobsRunConfig)
+        self.assertIs(jobs.jobs_run_config_from_args, config_module.jobs_run_config_from_args)
+        self.assertIs(jobs.default_jobs_output_path, config_module.default_jobs_output_path)
+        self.assertNotIn("class JobsRunConfig", runner_source)
+        self.assertNotIn("def jobs_run_config_from_args", runner_source)
+
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
 

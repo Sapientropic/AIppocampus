@@ -20,6 +20,7 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 import onboard_codex as onboard  # noqa: E402
+import onboard_frontier  # noqa: E402
 import registry  # noqa: E402
 
 
@@ -210,9 +211,9 @@ class OnboardCodexTests(unittest.TestCase):
                 ],
             }
 
-        old_run_jobs = onboard.run_jobs
+        old_run_jobs = onboard_frontier.run_jobs
         old_api_key = os.environ.get("DEEPSEEK_API_KEY")
-        onboard.run_jobs = fake_run_jobs
+        onboard_frontier.run_jobs = fake_run_jobs
         os.environ["DEEPSEEK_API_KEY"] = "test-key"
         try:
             result = onboard.run_onboarding(
@@ -226,7 +227,7 @@ class OnboardCodexTests(unittest.TestCase):
                 frontier_mode="smoke",
             )
         finally:
-            onboard.run_jobs = old_run_jobs
+            onboard_frontier.run_jobs = old_run_jobs
             if old_api_key is None:
                 os.environ.pop("DEEPSEEK_API_KEY", None)
             else:

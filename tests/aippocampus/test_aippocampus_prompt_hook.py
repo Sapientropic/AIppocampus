@@ -1643,7 +1643,7 @@ class AmbientRecallHookTests(unittest.TestCase):
             scheduled.append({"prompt": prompt, **kwargs})
             return {"status": "queued", "job_id": "job-test", "spawned": False}
 
-        with patch("prompt_recall_decision.schedule_warm_ambient_recall", fake_schedule):
+        with patch("prompt_recall_ambient.schedule_warm_ambient_recall", fake_schedule):
             result = hook.assess_prompt(
                 "hook 机制就像人类的触发式联想，我们可以把小海马体做得更主动一点",
                 cwd=self.workspace,
@@ -1732,7 +1732,7 @@ class AmbientRecallHookTests(unittest.TestCase):
             )
             return {"status": "scheduled", "job_id": "job-detached", "spawned": False}
 
-        with patch("prompt_recall_decision.schedule_warm_ambient_recall", fake_schedule):
+        with patch("prompt_recall_ambient.schedule_warm_ambient_recall", fake_schedule):
             first = hook.assess_prompt(
                 "hook 机制就像人类的触发式联想，我们可以把小海马体做得更主动一点",
                 cwd=self.workspace,

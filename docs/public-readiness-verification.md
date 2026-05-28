@@ -1,7 +1,7 @@
 # Public Readiness Verification
 
 Initial evidence date: 2026-05-27.
-Repository-layout command paths refreshed: 2026-05-28.
+Repository-layout command paths refreshed: 2026-05-29.
 
 This file is a dated verification ledger. It preserves summarized command
 evidence for release-readiness work, but the current Stage 0-5 claim boundary
@@ -25,9 +25,11 @@ for a specific claim.
 
 ```powershell
 python tools\aippocampus\docs\check_docs_health.py --json
-python -m unittest discover -s tests -t .
+python tools\aippocampus\run_tests.py --tier fast
+python tools\aippocampus\run_tests.py --tier full
 python -m compileall -q skills plugins tests tools benchmarks benchmark_corpus
-python -m ruff check skills plugins tests tools benchmarks
+python -m ruff check skills plugins tests tools benchmarks benchmark_corpus
+python -m mypy
 python .\skills\aippocampus\scripts\build_project_timeline.py --registry .\examples\public-memory-bundle\registry\threads.json --output .\.tmp\public-project-timeline.json --json
 python .\skills\aippocampus\scripts\build_semantic_scope_labels.py --jobs-output .\examples\public-memory-bundle\registry\subconscious_jobs.jsonl --clean-source-dir .\examples\public-memory-bundle\clean-source --no-write --json
 python .\skills\aippocampus\scripts\search_clean_source.py "casual sparks" --cwd . --clean-source-dir .\examples\public-memory-bundle\clean-source --scope-label idea_seed --json
@@ -62,12 +64,18 @@ python .\tools\aippocampus\smoke\run_stage_0_5_smoke.py --repo-root . --json
 
 Results:
 
-- full unit suite: 308 tests passed
+- fast test tier: 279 tests passed
+- full test tier: 443 tests passed
 - docs health: `ok=true`
 - Python compile check: passed
 - Ruff check: passed. The Ruff baseline now includes full Pyflakes (`F`) plus
   syntax-level `E9`, so unused imports, undefined names, and stale local
   variables are caught instead of only parse-time failures.
+- Mypy check: passed across 54 source files. The architecture guard suite keeps
+  high-risk and 300+ LOC runtime scripts in the mypy baseline, verifies that
+  split helper modules remain available, and keeps repo tools out of the
+  installable runtime package. It intentionally avoids per-function source
+  placement assertions that only mirror the current file layout.
 - prompt hook life-wide ambient scent tests: passed, including ordinary code
   prompt suppression
 - public example project/life-wide timeline smoke: passed

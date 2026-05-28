@@ -127,8 +127,8 @@ def sortable_turn_value(turn: dict[str, Any]) -> tuple[int, int]:
         or 0
     )
     try:
-        turn_int = int(turn_index)
-    except (TypeError, ValueError):
+        turn_int = int(str(turn_index)) if turn_index is not None else 0
+    except ValueError:
         turn_int = 0
     try:
         line_int = int(line)

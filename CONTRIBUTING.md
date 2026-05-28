@@ -22,19 +22,43 @@ or local-path handling.
 ## Development Checks
 
 AIppocampus supports Python 3.10 and newer. Before claiming the repository is
-healthy, run from the repository root:
+healthy, run the fast deterministic path from the repository root:
 
 ```sh
 python tools/aippocampus/docs/check_docs_health.py --json
 python -m ruff check skills plugins tests tools benchmarks benchmark_corpus
 python -m mypy
-python -m unittest discover -s tests -t .
+python tools/aippocampus/run_tests.py --tier fast
 python -m compileall -q skills plugins tests tools benchmarks benchmark_corpus
 ```
+
+Run `python tools/aippocampus/run_tests.py --tier full` before release,
+public-readiness, or broad refactor claims. The `benchmark` and `slow` tiers are
+explicit: use them when touching benchmark runners, prompt-hook integration,
+onboarding, plugin packaging, smoke tools, or sync behavior.
 
 For public-readiness changes, also run a secret/local-path scan and inspect any
 hits. Test fixtures with `FAKE_TEST_` markers are acceptable; real credentials
 or private paths are not.
+
+## Test Debt Policy
+
+- A test belongs in the fast tier only if it is deterministic, cheap, and blocks
+  a real user-visible or runtime-contract regression.
+- Agent guard tests are part of the product process here. Keep cheap
+  architecture and docs-health guards when they prevent recurring agent mistakes:
+  missing public docs, leaked private artifacts, runtime packages absorbing repo
+  tools, import cycles, unchecked high-risk scripts, or hook/orchestrator
+  boundaries that have broken before.
+- Do not add tests that only mirror strings from CI, pyproject, docs, or a
+  preferred file layout. Let the real command or focused helper test own that
+  signal.
+- Benchmark quality, public-readiness smokes, plugin install checks, and
+  end-to-end prompt-hook flows stay in explicit tiers unless a small unit slice
+  can catch the same failure.
+- New tests should name the failure they would catch. If the failure is "someone
+  moved code to a different file", prefer an import-cycle, public API, or runtime
+  behavior check over source-text assertions.
 
 ## Design Rules
 

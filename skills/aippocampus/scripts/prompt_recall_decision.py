@@ -12,18 +12,6 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-from ambient_recall_cards import ambient_recall_from_decision
-from ambient_thread_cache import (
-    default_ambient_cache_path,
-    read_thread_cache,
-    topic_epoch_from_terms,
-    write_thread_cache,
-)
-from ambient_warm_scheduler import (
-    public_warm_schedule_status,
-    schedule_warm_ambient_recall,
-    warm_background_enabled,
-)
 from build_concept_graph import expand_concepts
 from memory_candidate_router import strip_for_hook
 from prompt_cues import (
@@ -38,6 +26,15 @@ from prompt_cues import (
     should_run_semantic_gate,
     working_memory_terms,
 )
+from prompt_recall_ambient import attach_ambient_recall
+from prompt_recall_budget import (
+    EVIDENCE_MIN_REMAINING_MS,
+    POST_SEMANTIC_RESERVE_MS,
+    PROBE_MIN_REMAINING_MS,
+    budget_allows,
+    semantic_budget_result,
+    semantic_timeout_for_budget,
+)
 from prompt_recall_context import build_recall_decision_context
 from prompt_recall_core import (
     DEFAULT_SEARCH_BUDGET,
@@ -45,7 +42,6 @@ from prompt_recall_core import (
     PROMPT_HOOK_SEMANTIC_TIMEOUT,
     SCENT_THRESHOLD,
     cognitive_map_terms,
-    collect_evidence,
     default_project_timeline_path,
     fallback_search_candidates,
     load_project_timeline,
@@ -55,55 +51,10 @@ from prompt_recall_core import (
     rerank_candidates_with_probe,
     score_candidates,
     should_suppress,
-    strip_private_fields,
-    strip_semantic_gate,
 )
+from prompt_recall_evidence import collect_evidence, strip_private_fields, strip_semantic_gate
 from registry import unique_preserve
 from semantic_recall_gate import run_semantic_gate
-
-POST_SEMANTIC_RESERVE_MS = 1200.0
-SEMANTIC_MIN_TIMEOUT_SECONDS = 0.5
-PROBE_MIN_REMAINING_MS = 700.0
-EVIDENCE_MIN_REMAINING_MS = 900.0
-
-
-def _remaining_ms(start: float, max_elapsed_ms: int | None) -> float | None:
-    if not max_elapsed_ms or max_elapsed_ms <= 0:
-        return None
-    return max(0.0, float(max_elapsed_ms) - ((time.perf_counter() - start) * 1000.0))
-
-
-def _budget_allows(start: float, max_elapsed_ms: int | None, min_remaining_ms: float) -> bool:
-    remaining = _remaining_ms(start, max_elapsed_ms)
-    return remaining is None or remaining >= min_remaining_ms
-
-
-def _semantic_timeout_for_budget(
-    start: float,
-    max_elapsed_ms: int | None,
-    requested_timeout: float,
-) -> float | None:
-    if requested_timeout <= 0:
-        return None
-    remaining = _remaining_ms(start, max_elapsed_ms)
-    if remaining is None:
-        return requested_timeout
-    available = remaining - POST_SEMANTIC_RESERVE_MS
-    if available < SEMANTIC_MIN_TIMEOUT_SECONDS * 1000.0:
-        return None
-    return min(requested_timeout, max(SEMANTIC_MIN_TIMEOUT_SECONDS, available / 1000.0))
-
-
-def _semantic_budget_result(reason: str) -> dict[str, Any]:
-    return {
-        "available": False,
-        "decision": "skip",
-        "confidence": 0.0,
-        "query_aliases": [],
-        "memory_scope": [],
-        "reasons": [reason],
-        "errors": [reason],
-    }
 
 
 def _deep_archival_requested(prompt: str) -> bool:
@@ -291,11 +242,11 @@ def _run_semantic_gate_for_prompt(
         )
     ):
         gate = semantic_gate_fn or run_semantic_gate
-        budgeted_timeout = _semantic_timeout_for_budget(
+        budgeted_timeout = semantic_timeout_for_budget(
             start, max_elapsed_ms, float(semantic_timeout)
         )
         if budgeted_timeout is None:
-            return _semantic_budget_result("semantic gate skipped by prompt hook foreground budget")
+            return semantic_budget_result("semantic gate skipped by prompt hook foreground budget")
         try:
             return gate(
                 prompt,
@@ -321,9 +272,9 @@ def _run_semantic_gate_for_prompt(
     if (
         use_semantic_gate
         and max_elapsed_ms
-        and not _budget_allows(start, max_elapsed_ms, POST_SEMANTIC_RESERVE_MS)
+        and not budget_allows(start, max_elapsed_ms, POST_SEMANTIC_RESERVE_MS)
     ):
-        return _semantic_budget_result("semantic gate skipped by prompt hook foreground budget")
+        return semantic_budget_result("semantic gate skipped by prompt hook foreground budget")
     return None
 
 
@@ -344,134 +295,6 @@ def _noise_prompt_result(context: Any, start: float) -> dict[str, Any]:
         "semantic_gate": None,
         "elapsed_ms": elapsed_ms,
     }
-
-
-def _attach_ambient_recall(
-    result: dict[str, Any],
-    *,
-    prompt: str,
-    thread_id: str | None,
-    workspace: str,
-    registry_path: Path,
-    ambient_cache_path: Path | str | None,
-    topic_epoch: str | None,
-    use_thread_cache: bool,
-    warm_background: bool | None,
-    warm_job_dir: Path | str | None,
-    warm_max_workers: int | None,
-    warm_timeout: float | None,
-    warm_quorum: int | None,
-) -> dict[str, Any]:
-    if not use_thread_cache or not thread_id:
-        result["ambient_recall"] = ambient_recall_from_decision(result)
-        return result
-    epoch = topic_epoch or topic_epoch_from_terms([str(term) for term in result.get("query_terms") or []])
-    cache_file = Path(ambient_cache_path).resolve() if ambient_cache_path else default_ambient_cache_path(registry_path)
-    try:
-        cached = read_thread_cache(
-            cache_file,
-            thread_id=thread_id,
-            workspace=workspace,
-            topic_epoch=epoch,
-        )
-        cache_status = {
-            "status": cached.get("status"),
-            "topic_epoch": epoch,
-            "card_count": len(cached.get("cards") or []),
-            "query_aliases": cached.get("query_aliases") or [],
-            "topic_epoch_decision": cached.get("topic_epoch_decision") or None,
-            "visibility_bias": cached.get("visibility_bias") or "",
-        }
-        result["ambient_recall"] = ambient_recall_from_decision(
-            result,
-            cached_cards=cached.get("cards") or [],
-            cache_status=cache_status,
-            cached_cards_first=True,
-        )
-        cache_is_warm = cached.get("status") == "hit" and bool(cached.get("cards"))
-        if result.get("decision") != "skip" and result["ambient_recall"].get("cards"):
-            written = write_thread_cache(
-                cache_file,
-                thread_id=thread_id,
-                workspace=workspace,
-                topic_epoch=epoch,
-                cards=result["ambient_recall"]["cards"],
-                mode=str(result["ambient_recall"].get("mode") or ""),
-                confidence=str(result["ambient_recall"].get("confidence") or ""),
-                negative_contexts=((result.get("semantic_gate") or {}).get("negative_contexts") or []),
-                query_aliases=((result.get("semantic_gate") or {}).get("query_aliases") or result.get("query_terms") or []),
-                visibility_bias=str(result["ambient_recall"].get("mode") or ""),
-            )
-            result["ambient_recall"]["cache_status"] = {
-                **cache_status,
-                "write_status": written.get("status"),
-                "written_card_count": written.get("card_count"),
-            }
-        if result.get("decision") != "skip" and not cache_is_warm and warm_background_enabled(warm_background):
-            current_thread_key = current_thread_key_from_hook_thread_id(thread_id)
-            # The foreground hook may enqueue warming, but the 50-lane scout
-            # batch must run detached. Otherwise DeepSeek tail latency or rate
-            # limiting would turn ambient recall from peripheral awareness into
-            # a blocking path for every user prompt.
-            scheduled = schedule_warm_ambient_recall(
-                prompt,
-                cwd=workspace,
-                thread_id=thread_id,
-                current_thread_key=current_thread_key,
-                prompt_trace=warm_prompt_trace(prompt, current_thread_key),
-                registry_path=registry_path,
-                cache_path=cache_file,
-                topic_epoch=epoch,
-                job_dir=warm_job_dir,
-                max_workers=warm_max_workers,
-                timeout=warm_timeout,
-                quorum=warm_quorum,
-                enabled=warm_background,
-                wait_all_foreground=False,
-            )
-            result["ambient_recall"]["warm_background"] = public_warm_schedule_status(scheduled)
-    except Exception as exc:
-        result["ambient_recall"] = ambient_recall_from_decision(
-            result,
-            cache_status={
-                "status": "error",
-                "topic_epoch": epoch,
-                "error_type": type(exc).__name__,
-                "message": str(exc)[:160],
-            },
-        )
-    return result
-
-
-def current_thread_key_from_hook_thread_id(thread_id: str | None) -> str | None:
-    """Map hook session ids to registry-style source_ref thread keys.
-
-    The thread ambient cache can use the raw hook `thread_id` as part of its
-    private cache key, but warm source-ref echo suppression compares against
-    clean-source refs, whose canonical registry form is `session:<id>`. Keep
-    this adapter small so later agents do not accidentally compare different
-    namespaces and silently lose current-thread echo penalties.
-    """
-
-    text = str(thread_id or "").strip()
-    if not text:
-        return None
-    if ":" in text:
-        return text
-    return f"session:{text}"
-
-
-def warm_prompt_trace(prompt: str, current_thread_key: str | None) -> list[dict[str, Any]]:
-    if not current_thread_key:
-        return []
-    return [
-        {
-            "thread_key": current_thread_key,
-            "role": "user",
-            "phase": "current_prompt",
-            "text": str(prompt or ""),
-        }
-    ]
 
 
 def _source_intent_evidence(
@@ -496,7 +319,7 @@ def _source_intent_evidence(
         and search_budget > 0
         and (explicit or important or semantic_wants_evidence or natural_wants_evidence)
         and not ambiguous_evidence_request
-        and _budget_allows(start, max_elapsed_ms, EVIDENCE_MIN_REMAINING_MS)
+        and budget_allows(start, max_elapsed_ms, EVIDENCE_MIN_REMAINING_MS)
     ):
         return []
     evidence = collect_evidence(candidates, query_terms, search_budget)
@@ -524,7 +347,7 @@ def _evidence_lite_continuation(
         and search_budget > 0
         and is_decision_continuation(prompt)
         and float(candidates[0].get("probe_score") or 0.0) >= EVIDENCE_LITE_MIN_PROBE_SCORE
-        and _budget_allows(start, max_elapsed_ms, EVIDENCE_MIN_REMAINING_MS)
+        and budget_allows(start, max_elapsed_ms, EVIDENCE_MIN_REMAINING_MS)
     ):
         return []
     if association_matches:
@@ -646,7 +469,7 @@ def assess_prompt(
         and use_concept_graph
         and prompt
         and concept_file.exists()
-        and _budget_allows(start, max_elapsed_ms, PROBE_MIN_REMAINING_MS)
+        and budget_allows(start, max_elapsed_ms, PROBE_MIN_REMAINING_MS)
     ):
         # Concept BFS is a recall bridge for prompts whose surface words miss
         # registry associations. Once direct association/timeline candidates
@@ -690,7 +513,7 @@ def assess_prompt(
     if (
         candidates
         and has_memory_cue
-        and _budget_allows(start, max_elapsed_ms, PROBE_MIN_REMAINING_MS)
+        and budget_allows(start, max_elapsed_ms, PROBE_MIN_REMAINING_MS)
     ):
         candidates = rerank_candidates_with_probe(candidates, query_terms)
     suppressed = should_suppress(
@@ -782,7 +605,7 @@ def assess_prompt(
         "semantic_gate": strip_semantic_gate(semantic_result),
         "elapsed_ms": elapsed_ms, "deep_archival_requested": _deep_archival_requested(prompt),
     }
-    return _attach_ambient_recall(
+    return attach_ambient_recall(
         result, prompt=prompt, thread_id=thread_id, workspace=str(cwd_path), registry_path=path,
         ambient_cache_path=ambient_cache_path, topic_epoch=topic_epoch, use_thread_cache=use_thread_cache, warm_background=warm_background, warm_job_dir=warm_job_dir,
         warm_max_workers=warm_max_workers, warm_timeout=warm_timeout, warm_quorum=warm_quorum,

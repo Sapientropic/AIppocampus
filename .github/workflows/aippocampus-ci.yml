@@ -35,8 +35,24 @@ jobs:
       - name: Docs health
         run: python tools/aippocampus/docs/check_docs_health.py --json
 
-      - name: Unit tests
-        run: python -m unittest discover -s tests -t .
+      - name: Fast test tier
+        run: python tools/aippocampus/run_tests.py --tier fast
 
       - name: Compile Python files
         run: python -m compileall -q skills plugins tests tools benchmarks benchmark_corpus
+
+  full-tests:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Full test tier
+        run: python tools/aippocampus/run_tests.py --tier full

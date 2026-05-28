@@ -362,7 +362,8 @@ def initialize_result(params: dict[str, Any]) -> dict[str, Any]:
 def handle_request(request: dict[str, Any]) -> dict[str, Any] | None:
     request_id = request.get("id")
     method = request.get("method")
-    params = request.get("params") if isinstance(request.get("params"), dict) else {}
+    raw_params = request.get("params")
+    params: dict[str, Any] = raw_params if isinstance(raw_params, dict) else {}
 
     if request_id is None:
         return None
@@ -372,7 +373,8 @@ def handle_request(request: dict[str, Any]) -> dict[str, Any] | None:
         return jsonrpc_result(request_id, {"tools": TOOLS})
     if method == "tools/call":
         name = str(params.get("name") or "")
-        arguments = params.get("arguments") if isinstance(params.get("arguments"), dict) else {}
+        raw_arguments = params.get("arguments")
+        arguments: dict[str, Any] = raw_arguments if isinstance(raw_arguments, dict) else {}
         handler = TOOL_CALLS.get(name)
         if handler is None:
             return jsonrpc_result(request_id, tool_error("unknown_tool", f"Unknown tool: {name}"))

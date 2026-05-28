@@ -49,12 +49,17 @@ and link to it.
 
 ## Verification
 
-Before claiming the repository is healthy, run from the repository root:
+For ordinary repo changes, run the fast deterministic path from the repository
+root:
 
 ```powershell
 python tools\aippocampus\docs\check_docs_health.py --json
-python -m unittest discover -s tests -t .
+python tools\aippocampus\run_tests.py --tier fast
 ```
+
+Before release, public-readiness, or broad refactor claims, also run
+`python tools\aippocampus\run_tests.py --tier full` or the specific slow /
+benchmark tier that owns the changed surface.
 
 For public-readiness changes, also scan the repository for local paths and
 secret-like strings.

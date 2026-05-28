@@ -66,6 +66,45 @@ class DocsHealthTests(unittest.TestCase):
         self.assertFalse(any("scope_label_policy" in issue for issue in result), result)
         self.assertFalse(any("missing scope_labels" in issue for issue in result), result)
 
+    def test_research_index_is_complete_for_current_repo(self) -> None:
+        repo_root = docs_health.find_repo_root(ROOT)
+        self.assertIsNotNone(repo_root)
+
+        result = docs_health.check_repo_docs(repo_root)[0]
+
+        self.assertFalse(any("research index" in issue for issue in result), result)
+
+    def test_research_index_reports_unlinked_top_level_notes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            research = repo / "docs" / "research"
+            research.mkdir(parents=True)
+            (research / "README.md").write_text("# Research Notes\n", encoding="utf-8")
+            (research / "unlisted.md").write_text("# Unlisted\n", encoding="utf-8")
+
+            issues = docs_health.research_index_issues(repo)
+
+        self.assertIn("research index does not link docs/research/unlisted.md", issues)
+
+    def test_research_index_reports_unindexed_subdirectories(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            research = repo / "docs" / "research"
+            subdir = research / "topic-pack"
+            subdir.mkdir(parents=True)
+            (research / "README.md").write_text(
+                "# Research Notes\n\n- [Topic Pack](topic-pack/README.md)\n",
+                encoding="utf-8",
+            )
+            (subdir / "case.md").write_text("# Case\n", encoding="utf-8")
+
+            issues = docs_health.research_index_issues(repo)
+
+        self.assertIn(
+            "research index subdirectory docs/research/topic-pack must include README.md",
+            issues,
+        )
+
     def test_public_doc_command_lint_rejects_default_windows_only_blocks(self) -> None:
         issues = docs_health.public_doc_command_issues(
             "README.md",

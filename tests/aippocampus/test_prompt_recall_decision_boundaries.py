@@ -226,6 +226,51 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
 
         self.assertLessEqual(len(source.splitlines()), 255)
 
+    def test_foreground_budget_helpers_are_split_from_decision_orchestration(self) -> None:
+        decision_source = (SCRIPTS / "prompt_recall_decision.py").read_text(encoding="utf-8")
+        boundary = SCRIPTS / "prompt_recall_budget.py"
+        self.assertTrue(boundary.exists())
+        boundary_source = boundary.read_text(encoding="utf-8")
+
+        for symbol in (
+            "POST_SEMANTIC_RESERVE_MS",
+            "SEMANTIC_MIN_TIMEOUT_SECONDS",
+            "PROBE_MIN_REMAINING_MS",
+            "EVIDENCE_MIN_REMAINING_MS",
+        ):
+            self.assertNotIn(f"{symbol} =", decision_source)
+            self.assertIn(f"{symbol} =", boundary_source)
+
+        for function_name in (
+            "budget_allows",
+            "semantic_timeout_for_budget",
+            "semantic_budget_result",
+        ):
+            self.assertNotIn(f"def {function_name}(", decision_source)
+            self.assertIn(f"def {function_name}(", boundary_source)
+
+    def test_ambient_cache_and_warming_are_split_from_decision_policy(self) -> None:
+        decision_source = (SCRIPTS / "prompt_recall_decision.py").read_text(encoding="utf-8")
+        boundary = SCRIPTS / "prompt_recall_ambient.py"
+        self.assertTrue(boundary.exists())
+        boundary_source = boundary.read_text(encoding="utf-8")
+
+        for import_line in (
+            "from ambient_recall_cards import",
+            "from ambient_thread_cache import",
+            "from ambient_warm_scheduler import",
+        ):
+            self.assertNotIn(import_line, decision_source)
+            self.assertIn(import_line, boundary_source)
+
+        for function_name in (
+            "attach_ambient_recall",
+            "current_thread_key_from_hook_thread_id",
+            "warm_prompt_trace",
+        ):
+            self.assertNotIn(f"def {function_name}(", decision_source)
+            self.assertIn(f"def {function_name}(", boundary_source)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -44,9 +44,68 @@ from ambient_thread_cache import (
 )
 from registry import load_registry, registry_paths, unique_preserve
 from retrieval import split_query_terms
-from search_clean_source import iter_clean_messages
 from subconscious_runtime import add_usage, call_chat_json, compact_usage
 from subconscious_worker import DEFAULT_BASE_URL, DEFAULT_MODEL, clamp_confidence, parse_model_json
+from warm_ambient_prompting import OUTPUT_BUDGET_RULES as OUTPUT_BUDGET_RULES
+from warm_ambient_prompting import SYSTEM_PROMPT, scout_prompt
+from warm_ambient_scout_profiles import (
+    DEFAULT_SCOUTS,
+    SCOUT_CANDIDATE_LIMITS,
+    SUPPORT_RANK,
+    TOPIC_EPOCH_FAMILIES,
+    VALID_DECISIONS,
+    VALID_SUPPORT_LEVELS,
+    VALID_TOPIC_EPOCH_ACTIONS,
+    VALID_VISIBILITIES,
+    expand_scout_lanes,
+    output_profile_for_family,
+    scout_lane_parts,
+)
+from warm_ambient_scout_profiles import (
+    FAMILY_LENS_TASKS as FAMILY_LENS_TASKS,
+)
+from warm_ambient_scout_profiles import (
+    FAMILY_TASKS as FAMILY_TASKS,
+)
+from warm_ambient_scout_profiles import (
+    FAMILY_VARIANT_LENS_TASKS as FAMILY_VARIANT_LENS_TASKS,
+)
+from warm_ambient_scout_profiles import (
+    LEGACY_SCOUT_ALIASES as LEGACY_SCOUT_ALIASES,
+)
+from warm_ambient_scout_profiles import (
+    SCOUT_FAMILIES as SCOUT_FAMILIES,
+)
+from warm_ambient_scout_profiles import (
+    SCOUT_OUTPUT_PROFILES as SCOUT_OUTPUT_PROFILES,
+)
+from warm_ambient_scout_profiles import (
+    SCOUT_PRIORITY as SCOUT_PRIORITY,
+)
+from warm_ambient_scout_profiles import (
+    SCOUT_VARIANTS as SCOUT_VARIANTS,
+)
+from warm_ambient_scout_profiles import (
+    VARIANT_LENS_TASKS as VARIANT_LENS_TASKS,
+)
+from warm_ambient_scout_profiles import (
+    VARIANT_TASKS as VARIANT_TASKS,
+)
+from warm_ambient_scout_profiles import (
+    lens_task_for as lens_task_for,
+)
+from warm_ambient_source_validation import (
+    _clean_source_ref,
+    _stable_id,
+    calibrate_cards,
+    prompt_trace_fallback_cards,
+    referenced_thread_keys,
+    referenced_thread_keys_from_cards,
+    source_index_from_registry,
+)
+from warm_ambient_source_validation import (
+    validate_card_source_refs as validate_card_source_refs,
+)
 
 PROMPT_VERSION = "aippocampus-warm-ambient-recall-v0"
 SCHEMA_VERSION = 1
@@ -66,78 +125,6 @@ DEFAULT_DETACHED_PREFIX_CACHE_WARMUP_DELAY = float(
     os.environ.get("AIPPOCAMPUS_DETACHED_WARM_PREFIX_CACHE_WARMUP_DELAY", "0.5") or 0
 )
 WARM_JOB_SCHEMA_VERSION = 1
-
-SCOUT_FAMILIES = (
-    "intent_mode_classifier",
-    "privacy_boundary_guard",
-    "deep_theme_matcher",
-    "key_line_hunter",
-    "evidence_gap_sentinel",
-    "user_style_preference",
-    "trajectory_matcher",
-    "cross_domain_bridge",
-    "nudge_writer",
-    "semantic_expander",
-)
-
-SCOUT_VARIANTS = (
-    "direct",
-    "registry_window",
-    "clean_source_window",
-    "current_trace_window",
-    "skeptic_window",
-)
-
-# Launch lanes variant-major so quorum-first runs see different functional
-# families before they see five variants of the same classifier. This preserves
-# the 10x5 taxonomy while letting Flash spend early latency on recall diversity:
-# intent/guard/theme/key-line/evidence arrive together, instead of classifier
-# aliases satisfying quorum before any card-producing scout runs.
-DEFAULT_SCOUTS = tuple(
-    f"{family}:{variant}" for variant in SCOUT_VARIANTS for family in SCOUT_FAMILIES
-)
-
-SCOUT_PRIORITY = {
-    "intent_mode_classifier": "P0",
-    "privacy_boundary_guard": "P0",
-    "deep_theme_matcher": "P0",
-    "key_line_hunter": "P0",
-    "evidence_gap_sentinel": "P0",
-    "user_style_preference": "P1",
-    "trajectory_matcher": "P1",
-    "cross_domain_bridge": "P1",
-    "nudge_writer": "P1",
-    "semantic_expander": "P1",
-}
-
-LEGACY_SCOUT_ALIASES = {
-    "query_expansion": "semantic_expander",
-    "life_wide_cue_classifier": "intent_mode_classifier",
-    "thread_matcher": "trajectory_matcher",
-    "current_thread_filter": "evidence_gap_sentinel",
-    "theme_matcher": "deep_theme_matcher",
-    "evidence_judge": "evidence_gap_sentinel",
-    "privacy_scope_guard": "privacy_boundary_guard",
-    "failure_sentinel": "evidence_gap_sentinel",
-}
-
-VALID_DECISIONS = {"skip", "background_only", "scent", "candidate", "evidence"}
-VALID_SUPPORT_LEVELS = {SCENT, CANDIDATE, EVIDENCE}
-VALID_TOPIC_EPOCH_ACTIONS = {"reuse", "rotate", "suppress"}
-VALID_VISIBILITIES = {SILENT_TUNING, ACTIVE_GENTLE_NUDGE, SOURCE_BACKED_RECALL_CARD, DEEP_ARCHIVAL_RECALL}
-SUPPORT_RANK = {SCENT: 1, CANDIDATE: 2, EVIDENCE: 3}
-SCOUT_CANDIDATE_LIMITS = {
-    "intent_mode_classifier": 0,
-    "privacy_boundary_guard": 0,
-    "evidence_gap_sentinel": 1,
-    "deep_theme_matcher": 2,
-    "key_line_hunter": 2,
-    "user_style_preference": 1,
-    "trajectory_matcher": 1,
-    "cross_domain_bridge": 2,
-    "nudge_writer": 1,
-    "semantic_expander": 0,
-}
 
 ChatFn = Callable[..., dict[str, Any]]
 ScoutFn = Callable[..., dict[str, Any]]
@@ -177,213 +164,6 @@ def warm_deepseek_user_id(*, cwd: Path | str, thread_id: str | None = None, user
     seed = f"{Path(cwd).resolve()}\n{thread_id or ''}\nwarm-ambient-recall"
     return f"{DEFAULT_USER_ID_PREFIX}-{hashlib.sha1(seed.casefold().encode('utf-8')).hexdigest()[:32]}"
 
-SYSTEM_PROMPT = """You are an AIppocampus warm ambient-recall scout.
-Return strict JSON only. You are not memory truth and you are not answering the
-user. Propose compact recall hints for deterministic local validation.
-
-Rules:
-- Do not claim facts without source refs.
-- Only cite source_refs already present in the shared context; if no concrete
-  source_ref is available, return an empty source_refs array.
-- Do not include secrets, local file paths, API keys, cookies, or long quotes.
-- Prefer small, useful signals over broad summaries.
-- A source-backed card needs concrete source_refs. Otherwise use scent/candidate.
-- Topic epoch is an LLM judgment: return topic_epoch_action
-  "reuse|rotate|suppress", a short topic_epoch_label, and topic_epoch_reason
-  when the current prompt trace suggests cache reuse or rotation.
-- If the association is private, unrelated, current-thread echo, or too weak,
-  return decision "skip" or "background_only".
-"""
-
-OUTPUT_BUDGET_RULES = """Output budget rules:
-- Do not copy or fill output_contract/output_profile; they are schema only.
-- Return one compact JSON object using only scout_task.output_profile fields.
-- Omit empty arrays and unused optional fields.
-- Keep reason/topic_epoch_reason under one short clause.
-- If you cannot produce a field that will be used, omit it.
-"""
-
-TOPIC_EPOCH_FAMILIES = {
-    "intent_mode_classifier",
-    "deep_theme_matcher",
-    "evidence_gap_sentinel",
-    "trajectory_matcher",
-}
-
-SCOUT_OUTPUT_PROFILES = {
-    "intent_mode_classifier": {
-        "allowed_fields": [
-            "decision",
-            "confidence",
-            "topic_epoch_action",
-            "topic_epoch_label",
-            "topic_epoch_reason",
-        ],
-        "candidate_fields": [],
-        "query_alias_limit": 0,
-        "negative_context_limit": 0,
-        "theme_limit": 0,
-    },
-    "privacy_boundary_guard": {
-        "allowed_fields": ["decision", "confidence", "block", "negative_contexts", "reason"],
-        "candidate_fields": [],
-        "query_alias_limit": 0,
-        "negative_context_limit": 2,
-        "theme_limit": 0,
-    },
-    "semantic_expander": {
-        "allowed_fields": ["decision", "confidence", "query_aliases"],
-        "candidate_fields": [],
-        "query_alias_limit": 5,
-        "negative_context_limit": 0,
-        "theme_limit": 0,
-    },
-    "deep_theme_matcher": {
-        "allowed_fields": [
-            "decision",
-            "confidence",
-            "themes",
-            "candidates",
-            "topic_epoch_action",
-            "topic_epoch_label",
-            "topic_epoch_reason",
-        ],
-        "candidate_fields": ["theme", "support_level", "matched_terms", "source_refs", "key_line"],
-        "query_alias_limit": 0,
-        "negative_context_limit": 0,
-        "theme_limit": 2,
-    },
-    "key_line_hunter": {
-        "allowed_fields": ["decision", "confidence", "themes", "candidates"],
-        "candidate_fields": ["theme", "support_level", "key_line", "matched_terms", "source_refs"],
-        "query_alias_limit": 0,
-        "negative_context_limit": 0,
-        "theme_limit": 1,
-    },
-    "evidence_gap_sentinel": {
-        "allowed_fields": [
-            "decision",
-            "confidence",
-            "block",
-            "negative_contexts",
-            "reason",
-            "topic_epoch_action",
-            "topic_epoch_label",
-            "topic_epoch_reason",
-        ],
-        "candidate_fields": [],
-        "query_alias_limit": 0,
-        "negative_context_limit": 2,
-        "theme_limit": 0,
-    },
-    "user_style_preference": {
-        "allowed_fields": ["decision", "confidence", "themes", "candidates"],
-        "candidate_fields": ["theme", "support_level", "matched_terms", "source_refs"],
-        "query_alias_limit": 0,
-        "negative_context_limit": 0,
-        "theme_limit": 1,
-    },
-    "trajectory_matcher": {
-        "allowed_fields": [
-            "decision",
-            "confidence",
-            "themes",
-            "candidates",
-            "topic_epoch_action",
-            "topic_epoch_label",
-            "topic_epoch_reason",
-        ],
-        "candidate_fields": ["theme", "support_level", "matched_terms", "source_refs"],
-        "query_alias_limit": 0,
-        "negative_context_limit": 0,
-        "theme_limit": 1,
-    },
-    "cross_domain_bridge": {
-        "allowed_fields": ["decision", "confidence", "themes", "candidates"],
-        "candidate_fields": ["theme", "support_level", "matched_terms", "source_refs", "nudge"],
-        "query_alias_limit": 0,
-        "negative_context_limit": 0,
-        "theme_limit": 1,
-    },
-    "nudge_writer": {
-        "allowed_fields": ["decision", "confidence", "candidates"],
-        "candidate_fields": ["theme", "support_level", "nudge", "matched_terms", "source_refs"],
-        "query_alias_limit": 0,
-        "negative_context_limit": 0,
-        "theme_limit": 0,
-    },
-}
-
-FAMILY_TASKS = {
-    "intent_mode_classifier": "Classify task mode, visibility bias, collaboration posture, and cognitive load.",
-    "privacy_boundary_guard": "Suppress credential leaks, personal/financial/relationship material, professional secrets, and over-personalized associations.",
-    "deep_theme_matcher": "Match long-running themes, philosophical motives, emotional resonance, and recurring trade-offs.",
-    "key_line_hunter": "Find memorable lines, visual images, metaphors, strong assertions, and unresolved questions.",
-    "evidence_gap_sentinel": "Check source-ref support, hallucinated refs, missing premises, drift, single-source fragility, and timeliness gaps.",
-    "user_style_preference": "Detect source-backed user expression habits, language preferences, pacing, and thinking style.",
-    "trajectory_matcher": "Locate the current turn in project, life, or thread trajectory when source sidecars support it.",
-    "cross_domain_bridge": "Map technical issues to non-technical ideas, and non-technical ideas back to concrete work.",
-    "nudge_writer": "Draft one or two quiet private nudges for the foreground agent to adapt.",
-    "semantic_expander": "Generate multilingual, metaphor, and query aliases for cold path and next-turn recall.",
-}
-
-VARIANT_TASKS = {
-    "direct": "Use the direct sanitized prompt and its most literal cues.",
-    "registry_window": "Focus on registry titles, summaries, anchors, and project labels.",
-    "clean_source_window": "Focus on source-ref-backed candidate windows and exact support.",
-    "current_trace_window": "Focus on recent sanitized prompt trace and detect current-thread echo.",
-    "skeptic_window": "Act as a skeptical validator; prefer suppress, downgrade, or no-op when weak.",
-}
-
-FAMILY_LENS_TASKS = {
-    "intent_mode_classifier": "Classify task type, collaboration posture, timeline, flow focus, and cognitive load.",
-    "privacy_boundary_guard": "Guard privacy and boundaries before any recall card becomes visible.",
-    "deep_theme_matcher": "Compare philosophical, product, emotional, obsession-level, and trade-off themes.",
-    "key_line_hunter": "Hunt for compact key lines that can anchor useful recall.",
-    "evidence_gap_sentinel": "Apply closed-book source-ref validation and gap detection.",
-    "user_style_preference": "Infer only source-backed expression habits and user preferences.",
-    "trajectory_matcher": "Match current position in project/thread/life trajectory from available sidecars.",
-    "cross_domain_bridge": "Bridge technical and non-technical domains without upgrading unsupported resonance.",
-    "nudge_writer": "Draft quiet private guidance only after the card is useful; keep wording tentative unless evidence-backed.",
-    "semantic_expander": "Find query aliases, metaphors, and multilingual variants for next-turn/cold-path use.",
-}
-
-VARIANT_LENS_TASKS = {
-    "direct": "Use the direct prompt terms first; keep aliases close to the user's wording.",
-    "registry_window": "Use registry anchor titles, summaries, keywords, and project labels as the anchor surface.",
-    "clean_source_window": "Use source-ref-backed windows and support terms; do not elevate evidence without dereferenceable refs.",
-    "current_trace_window": "Use the sanitized recent trace to find drift and echo; penalize matches that only repeat this thread.",
-    "skeptic_window": "Search for reasons to suppress, rotate topic epoch, or downgrade support when the association is weak.",
-}
-
-FAMILY_VARIANT_LENS_TASKS = {
-    ("intent_mode_classifier", "direct"): "Task type lens: coding, writing, philosophy, planning, repair, logistics, or reflection.",
-    ("intent_mode_classifier", "registry_window"): "Flow-focus lens: whether the turn wants fast execution, careful research, design thinking, or quiet support.",
-    ("intent_mode_classifier", "clean_source_window"): "Timeline lens: planning, implementation, debugging, calibration, cleanup, or handoff.",
-    ("intent_mode_classifier", "current_trace_window"): "Collaboration posture lens: asking, approving, correcting, steering, or asking the agent to continue.",
-    ("intent_mode_classifier", "skeptic_window"): "Cognitive-load lens: suppress verbose recall when the user is in a high-load execution moment.",
-    ("privacy_boundary_guard", "direct"): "Credential leak lens: block tokens, cookies, connection strings, private paths, and auth-like material.",
-    ("privacy_boundary_guard", "registry_window"): "Personal-health lens: downgrade health, body, medical, or intimate wellbeing associations unless explicitly requested.",
-    ("privacy_boundary_guard", "clean_source_window"): "Financial lens: suppress private finances, contracts, invoices, accounts, or purchase-sensitive material.",
-    ("privacy_boundary_guard", "current_trace_window"): "Relationship privacy lens: suppress family, romantic, friendship, or interpersonal conflict unless directly in scope.",
-    ("privacy_boundary_guard", "skeptic_window"): "Professional secret and over-personalization lens: suppress confidential work details and unsolicited intimacy.",
-    ("deep_theme_matcher", "direct"): "Philosophical abstraction lens: look for the underlying question or worldview pattern.",
-    ("deep_theme_matcher", "registry_window"): "Product-specific lens: match concrete project/product decisions and long-running implementation themes.",
-    ("deep_theme_matcher", "clean_source_window"): "Emotional resonance lens: detect repeated felt stakes without treating resonance as fact.",
-    ("deep_theme_matcher", "current_trace_window"): "Long-term obsession lens: match durable motifs that recur across prompts and threads.",
-    ("deep_theme_matcher", "skeptic_window"): "Contradiction and trade-off lens: prefer candidates that clarify a real tension, not generic similarity.",
-    ("key_line_hunter", "direct"): "Visual image lens: find a concrete image or scene-like phrasing that can anchor memory.",
-    ("key_line_hunter", "registry_window"): "Structural metaphor lens: find metaphors, names, or frames that organize the work.",
-    ("key_line_hunter", "clean_source_window"): "Chinese-English mixing lens: preserve bilingual phrasing when the source used it.",
-    ("key_line_hunter", "current_trace_window"): "Strong assertion lens: find compact, emotionally forceful lines worth recalling quietly.",
-    ("key_line_hunter", "skeptic_window"): "Unanswered mystery lens: find old unresolved questions without pretending they were answered.",
-    ("evidence_gap_sentinel", "direct"): "Hallucinated-ref lens: downgrade source_refs that are absent from shared context or malformed.",
-    ("evidence_gap_sentinel", "registry_window"): "Single-source fragility lens: keep solitary weak hits provisional until corroborated.",
-    ("evidence_gap_sentinel", "clean_source_window"): "Context-drift lens: verify the cited source supports the present hypothesis, not only a shared term.",
-    ("evidence_gap_sentinel", "current_trace_window"): "Missing-premise lens: flag leaps where the current prompt lacks the prerequisite context.",
-    ("evidence_gap_sentinel", "skeptic_window"): "Timeliness lens: mark potentially stale decisions, prices, people, rules, or project state as needing fresh checks.",
-}
-
 THEME_STOPWORDS = {
     "a",
     "an",
@@ -399,83 +179,16 @@ THEME_STOPWORDS = {
     "with",
 }
 
-PROMPT_TRACE_WEAK_TERMS = THEME_STOPWORDS | {
-    "about",
-    "also",
-    "are",
-    "but",
-    "can",
-    "could",
-    "did",
-    "does",
-    "each",
-    "error",
-    "exactly",
-    "file",
-    "get",
-    "give",
-    "have",
-    "how",
-    "into",
-    "just",
-    "left",
-    "me",
-    "model",
-    "more",
-    "my",
-    "not",
-    "our",
-    "please",
-    "provide",
-    "should",
-    "that",
-    "the",
-    "these",
-    "they",
-    "this",
-    "trying",
-    "use",
-    "using",
-    "was",
-    "were",
-    "what",
-    "when",
-    "where",
-    "will",
-    "would",
-    "you",
-    "your",
-}
-
-PROMPT_TRACE_CONTINUATION_RE = re.compile(
-    r"("
-    r"继续|上[一轮文次]|刚才|前面|上一版|同样|照样|再来|"
-    r"continue|where\s+you\s+left\s+off|previous|above|earlier|as\s+before|"
-    r"format\s+you\s+did\s+above|this\s+works|that\s+works|it\s+works|"
-    r"can\s+you\s+also|also\s+add|not\s+just|instead|"
-    r"will\s+it\s+work\s+also|add\s+support\s+for"
-    r")",
-    re.IGNORECASE,
-)
-
-
-def _stable_id(parts: list[Any]) -> str:
-    raw = "\n".join(str(part or "") for part in parts)
-    return "warc_" + hashlib.sha1(raw.encode("utf-8")).hexdigest()[:18]
-
-
-def _is_distinctive_trace_term(term: str) -> bool:
-    value = str(term or "").strip().casefold()
-    return (
-        len(value) >= 8
-        or any(char.isdigit() for char in value)
-        or any(char in value for char in ("-", "_", ".", "/", "\\"))
-    )
-
-
 def _safe_text(value: Any, chars: int) -> str:
     sanitized, _ = sanitize_external_model_text(str(value or ""))
     return compact_text(sanitized, chars)
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(str(value))
+    except (TypeError, ValueError):
+        return default
 
 
 def _clean_list(values: Any, *, limit: int, chars: int = 100) -> list[str]:
@@ -506,21 +219,6 @@ def _split_theme_items(value: Any) -> tuple[list[str], list[dict[str, Any]]]:
         elif isinstance(item, str | int | float | bool) and str(item).strip():
             themes.append(_safe_text(item, 120))
     return unique_preserve(themes, 8), candidates
-
-
-def _clean_source_ref(ref: dict[str, Any]) -> dict[str, Any]:
-    if not isinstance(ref, dict):
-        return {}
-    line = ref.get("line", ref.get("source_line"))
-    clean = {
-        "thread_key": _safe_text(ref.get("thread_key"), 160),
-        "title": _safe_text(ref.get("title"), 180),
-        "line": line,
-        "phase": _safe_text(ref.get("phase"), 80),
-        "turn_index": ref.get("turn_index"),
-        "message_id": _safe_text(ref.get("message_id"), 160),
-    }
-    return {key: value for key, value in clean.items() if value not in {None, ""}}
 
 
 def _confidence_label(value: float) -> str:
@@ -637,116 +335,6 @@ def build_payload(
         "prompt_terms": prompt_terms,
     }
     return sanitize_external_model_payload(payload), secret_policy
-
-
-def scout_lane_parts(scout: str) -> tuple[str, str]:
-    raw = str(scout or "").strip()
-    if ":" in raw:
-        family, variant = raw.split(":", 1)
-    else:
-        family, variant = raw, "direct"
-    family = LEGACY_SCOUT_ALIASES.get(family, family)
-    if family not in SCOUT_FAMILIES:
-        return "", ""
-    if variant not in SCOUT_VARIANTS:
-        variant = "direct"
-    return family, variant
-
-
-def expand_scout_lanes(scouts: tuple[str, ...]) -> tuple[str, ...]:
-    lanes: list[str] = []
-    for scout in scouts:
-        family, variant = scout_lane_parts(scout)
-        if not family:
-            continue
-        lane = f"{family}:{variant}"
-        if lane not in lanes:
-            lanes.append(lane)
-    return tuple(lanes)
-
-
-def lens_task_for(family: str, variant: str) -> str:
-    specific = FAMILY_VARIANT_LENS_TASKS.get((family, variant))
-    if specific:
-        return specific
-    family_task = FAMILY_LENS_TASKS.get(family, "Analyze warm ambient recall relevance.")
-    variant_task = VARIANT_LENS_TASKS.get(variant, "Use this candidate/query variant carefully.")
-    return f"{family_task} {variant_task}"
-
-
-def output_profile_for_family(family: str) -> dict[str, Any]:
-    profile = SCOUT_OUTPUT_PROFILES.get(family) or {}
-    max_candidates = SCOUT_CANDIDATE_LIMITS.get(family, 1)
-    return {
-        "allowed_fields": profile.get("allowed_fields") or ["decision", "confidence"],
-        "candidate_fields": profile.get("candidate_fields") or [],
-        "max_candidates": max_candidates,
-        "max_query_aliases": int(profile.get("query_alias_limit") or 0),
-        "max_themes": int(profile.get("theme_limit") or 0),
-        "max_negative_contexts": int(profile.get("negative_context_limit") or 0),
-    }
-
-
-def _shared_context_for_prompt(payload: dict[str, Any]) -> dict[str, Any]:
-    shared = {
-        "prompt_version": payload.get("prompt_version"),
-        "task": payload.get("task"),
-        "workspace_name": payload.get("workspace_name"),
-        "output_contract": payload.get("output_contract"),
-        "memory_catalog": payload.get("memory_catalog") or [],
-    }
-    return {
-        key: value
-        for key, value in shared.items()
-        if value is not None and value != "" and value != []
-    }
-
-
-def _prompt_context_for_prompt(payload: dict[str, Any]) -> dict[str, Any]:
-    context = {
-        "prompt": payload.get("prompt") or "",
-        "prompt_terms": payload.get("prompt_terms") or [],
-    }
-    if payload.get("prompt_trace"):
-        context["prompt_trace"] = payload.get("prompt_trace")
-    return context
-
-
-def _variant_context_for_prompt(variant: str, payload: dict[str, Any]) -> dict[str, Any]:
-    del payload
-    if variant in {"current_trace_window", "clean_source_window", "skeptic_window"}:
-        return {"prompt_trace_policy": "use prompt_context.prompt_trace for echo, source-ref, drift, and gap checks"}
-    return {}
-
-
-def scout_prompt(scout: str, payload: dict[str, Any]) -> str:
-    family, variant = scout_lane_parts(scout)
-    return json.dumps(
-        {
-            "output_budget": OUTPUT_BUDGET_RULES,
-            # Prefix order is tuned for DeepSeek-style complete-prefix cache
-            # units. Stable catalog/context comes first for cross-case reuse;
-            # sanitized prompt/trace comes before the scout split so the 50
-            # lanes of one case can reuse the same case prefix after the warmup
-            # wave. Keep scout_task after prompt_context; moving it earlier
-            # makes every lane diverge before the largest same-case prefix.
-            "shared_context": _shared_context_for_prompt(payload),
-            "prompt_context": _prompt_context_for_prompt(payload),
-            "scout_task": {
-                "scout": f"{family}:{variant}",
-                "scout_family": family,
-                "scout_variant": variant,
-                "priority": SCOUT_PRIORITY.get(family, "P1"),
-                "family_task": FAMILY_TASKS.get(family, "Analyze warm ambient recall relevance."),
-                "variant_task": VARIANT_TASKS.get(variant, "Use this candidate/query variant carefully."),
-                "lens_task": lens_task_for(family, variant),
-                "output_profile": output_profile_for_family(family),
-            },
-            "variant_context": _variant_context_for_prompt(variant, payload),
-        },
-        ensure_ascii=False,
-        indent=2,
-    )
 
 
 def model_scout_fn(
@@ -886,7 +474,7 @@ def parse_scout_output(raw: dict[str, Any], scout: str) -> dict[str, Any]:
     if epoch_action not in VALID_TOPIC_EPOCH_ACTIONS:
         epoch_action = ""
     confidence = clamp_confidence(parsed.get("confidence"))
-    row = {
+    row: dict[str, Any] = {
         "scout": scout_id,
         "scout_family": family,
         "scout_variant": variant,
@@ -918,10 +506,10 @@ def parse_scout_output(raw: dict[str, Any], scout: str) -> dict[str, Any]:
         "candidates": [],
     }
     if "themes" in allowed_fields:
-        row["themes"], theme_candidates = _split_theme_items(
+        themes, theme_candidates = _split_theme_items(
             parsed.get("themes") if "themes" in parsed else parsed.get("theme")
         )
-        row["themes"] = row["themes"][: int(profile["max_themes"])]
+        row["themes"] = themes[: _safe_int(profile["max_themes"])]
     else:
         theme_candidates = []
     candidates = [
@@ -1135,238 +723,6 @@ def run_scout_batch(
                 thread.join(timeout=0.1)
     rows.sort(key=lambda row: scout_order.get(str(row.get("scout") or ""), 999))
     return rows, quorum_met or (useful_count >= max(1, quorum))
-
-
-def source_index_from_registry(
-    registry: dict[str, Any] | None, *, thread_keys: set[str] | None = None
-) -> dict[str, dict[str, Any]]:
-    index: dict[str, dict[str, Any]] = {}
-    for entry in (registry or {}).get("threads") or []:
-        if not isinstance(entry, dict):
-            continue
-        thread_key = str(entry.get("thread_key") or "")
-        if thread_keys is not None and thread_key not in thread_keys:
-            continue
-        messages_path_value = (entry.get("paths") or {}).get("clean_source_messages_jsonl")
-        if not thread_key or not messages_path_value:
-            continue
-        messages = iter_clean_messages(Path(messages_path_value))
-        by_id: dict[str, dict[str, Any]] = {}
-        by_line: dict[str, dict[str, Any]] = {}
-        for message in messages:
-            message_id = str(message.get("message_id") or message.get("id") or "")
-            if message_id:
-                by_id[message_id] = message
-            for key in ("source_line", "line", "clean_ordinal"):
-                value = message.get(key)
-                if value is not None:
-                    by_line[str(value)] = message
-        index[thread_key] = {"by_id": by_id, "by_line": by_line}
-    return index
-
-
-def referenced_thread_keys(rows: list[dict[str, Any]]) -> set[str]:
-    keys: set[str] = set()
-    for row in rows:
-        for card in row.get("candidates") or []:
-            for ref in card.get("source_refs") or []:
-                if isinstance(ref, dict) and ref.get("thread_key"):
-                    keys.add(str(ref.get("thread_key")))
-    return keys
-
-
-def referenced_thread_keys_from_cards(cards: list[dict[str, Any]]) -> set[str]:
-    keys: set[str] = set()
-    for card in cards:
-        for ref in card.get("source_refs") or []:
-            if isinstance(ref, dict) and ref.get("thread_key"):
-                keys.add(str(ref.get("thread_key")))
-    return keys
-
-
-def prompt_trace_fallback_cards(
-    prompt: str,
-    prompt_trace: list[dict[str, Any]] | None,
-    *,
-    limit: int = 1,
-) -> list[dict[str, Any]]:
-    strong_continuation = bool(PROMPT_TRACE_CONTINUATION_RE.search(str(prompt or "")))
-    prompt_terms = [
-        term
-        for term in split_query_terms([prompt])
-        if len(str(term or "").strip()) >= 3
-        and term.casefold() not in PROMPT_TRACE_WEAK_TERMS
-    ]
-    prompt_term_set = {term.casefold() for term in prompt_terms}
-    prompt_text = compact_text(str(prompt or ""), 420).casefold()
-    cards: list[dict[str, Any]] = []
-    for item in reversed(prompt_trace or []):
-        if not isinstance(item, dict):
-            continue
-        text = compact_text(str(item.get("text") or item.get("prompt") or ""), 420)
-        if not text or text.casefold() == prompt_text:
-            continue
-        if str(item.get("phase") or "").strip().casefold() == "current_prompt":
-            continue
-        refs = [
-            clean
-            for clean in (_clean_source_ref(ref) for ref in item.get("source_refs") or [])
-            if clean
-        ][:3]
-        if not refs:
-            continue
-        text_source_terms = [
-            term
-            for term in split_query_terms([text])
-            if len(str(term or "").strip()) >= 3
-            and term.casefold() not in PROMPT_TRACE_WEAK_TERMS
-        ]
-        text_terms = {term.casefold() for term in text_source_terms}
-        shared = unique_preserve(
-            [
-                term
-                for term in prompt_terms
-                if term.casefold() in text_terms or term.casefold() in text.casefold()
-            ],
-            limit=6,
-        )
-        shared_prompt_terms = {term.casefold() for term in shared} & prompt_term_set
-        if len(shared_prompt_terms) < 2 and not any(
-            _is_distinctive_trace_term(term) for term in shared_prompt_terms
-        ):
-            if not strong_continuation:
-                continue
-            shared = unique_preserve(text_source_terms, limit=6)
-        if not shared:
-            continue
-        key_line = compact_text(text, 180)
-        cards.append(
-            {
-                "card_id": _stable_id(["prompt_trace_fallback", key_line, json.dumps(refs, sort_keys=True)]),
-                "theme": compact_text("prior trace: " + ", ".join(shared[:4]), 100),
-                "resonance": "medium",
-                "support_level": EVIDENCE,
-                "visibility": SOURCE_BACKED_RECALL_CARD,
-                "suggested_use": "Use as source-backed prior context when it helps the current turn.",
-                "nudge": "Prior prompt trace contains source-backed context related to this request.",
-                "key_line": key_line,
-                "matched_terms": shared,
-                "source_refs": refs,
-                "expand_if": "Open clean source before presenting exact prior wording.",
-            }
-        )
-        if len(cards) >= limit:
-            break
-    return cards
-
-
-def _message_for_ref(source_index: dict[str, dict[str, Any]], ref: dict[str, Any]) -> dict[str, Any] | None:
-    thread_key = str(ref.get("thread_key") or "")
-    thread_index = source_index.get(thread_key) or {}
-    message_id = str(ref.get("message_id") or ref.get("id") or "")
-    if message_id and message_id in (thread_index.get("by_id") or {}):
-        return thread_index["by_id"][message_id]
-    line = ref.get("line", ref.get("source_line"))
-    if line is not None and str(line) in (thread_index.get("by_line") or {}):
-        return thread_index["by_line"][str(line)]
-    return None
-
-
-def _message_supports_card(message: dict[str, Any], card: dict[str, Any]) -> bool:
-    text = str(message.get("text") or "").casefold()
-    key_line = str(card.get("key_line") or "").strip().casefold()
-    if key_line and len(key_line) >= 12 and key_line in text:
-        return True
-    if key_line and "..." in key_line:
-        fragments = [
-            fragment.strip()
-            for fragment in re.split(r"\s*\.\.\.\s*", key_line)
-            if len(fragment.strip()) >= 24
-        ]
-        if any(fragment in text for fragment in fragments):
-            return True
-    matched = []
-    for term in card.get("matched_terms") or []:
-        needle = str(term or "").strip().casefold()
-        if len(needle) >= 3 and needle not in PROMPT_TRACE_WEAK_TERMS and needle in text:
-            matched.append(needle)
-    distinct = set(matched)
-    return len(distinct) >= 2 or any(
-        _is_distinctive_trace_term(item) or " " in item for item in distinct
-    )
-
-
-def validate_card_source_refs(
-    card: dict[str, Any], source_index: dict[str, dict[str, Any]]
-) -> dict[str, Any]:
-    refs = [ref for ref in card.get("source_refs") or [] if isinstance(ref, dict)]
-    if not refs:
-        return {"status": "missing_source_refs", "checked_ref_count": 0, "supported_ref_count": 0}
-    if not source_index:
-        return {
-            "status": "unverified_no_source_index",
-            "checked_ref_count": 0,
-            "supported_ref_count": 0,
-        }
-    checked = 0
-    supported = 0
-    missing = 0
-    for ref in refs:
-        message = _message_for_ref(source_index, ref)
-        if not message:
-            missing += 1
-            continue
-        checked += 1
-        if _message_supports_card(message, card):
-            supported += 1
-    if supported:
-        return {
-            "status": "supported",
-            "checked_ref_count": checked,
-            "supported_ref_count": supported,
-        }
-    return {
-        "status": "unsupported" if checked else "missing_source_ref",
-        "checked_ref_count": checked,
-        "supported_ref_count": 0,
-        "missing_ref_count": missing,
-    }
-
-
-def calibrate_cards(
-    cards: list[dict[str, Any]],
-    *,
-    source_index: dict[str, dict[str, Any]] | None = None,
-    current_thread_key: str | None = None,
-    allow_current_thread_echo: bool = False,
-) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    calibrated: list[dict[str, Any]] = []
-    echo_count = 0
-    for card in cards:
-        refs = [ref for ref in card.get("source_refs") or [] if isinstance(ref, dict)]
-        if (
-            current_thread_key
-            and refs
-            and all(str(ref.get("thread_key") or "") == current_thread_key for ref in refs)
-        ):
-            echo_count += 1
-            if not allow_current_thread_echo:
-                continue
-        clean = dict(card)
-        validation = validate_card_source_refs(clean, source_index or {})
-        if validation.get("status") in {"missing_source_ref", "unsupported"}:
-            # A card that supplied concrete refs but failed local validation is
-            # worse than a source-less scent: keeping it teaches downstream
-            # agents to trust a citation-shaped hallucination. Drop it here so
-            # lower-ranked supported cards can still surface.
-            continue
-        clean["source_validation"] = validation
-        if clean.get("support_level") == EVIDENCE and validation.get("status") != "supported":
-            clean["support_level"] = CANDIDATE
-            clean["visibility"] = ACTIVE_GENTLE_NUDGE
-            clean["suggested_use"] = "Treat as provisional resonance until clean source support is verified."
-        calibrated.append(clean)
-    return calibrated, {"current_thread_echo_count": echo_count}
 
 
 def _theme_terms(card: dict[str, Any]) -> set[str]:

@@ -21,7 +21,7 @@ Verify the package from the repository:
 python tools/aippocampus/docs/check_docs_health.py --json
 python -m ruff check skills plugins tests tools benchmarks benchmark_corpus
 python -m mypy
-python -m unittest discover -s tests -t .
+python tools/aippocampus/run_tests.py --tier fast
 ```
 
 For a repo-level Stage 0-5 public-readiness smoke, run:

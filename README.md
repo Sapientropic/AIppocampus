@@ -3,8 +3,10 @@
 AIppocampus is a source-backed memory layer for long-running relationships with
 AI agents.
 
-It supports Python 3.10 and newer. The CI matrix currently verifies Python 3.10
-and 3.11, with a narrow `mypy` baseline for low-noise deterministic modules.
+It supports Python 3.10 and newer. The default CI path verifies Python 3.10 and
+3.11 with docs health, Ruff, mypy, compile checks, and the fast deterministic
+test tier. Slower benchmark and smoke coverage stays available as an explicit
+release/readiness check.
 
 It is not just a project-memory utility. It keeps original conversation source
 reachable across threads, devices, projects, and casual life-wide conversations.
@@ -60,8 +62,13 @@ From this repository:
 python tools/aippocampus/docs/check_docs_health.py --json
 python -m ruff check skills plugins tests tools benchmarks benchmark_corpus
 python -m mypy
-python -m unittest discover -s tests -t .
+python tools/aippocampus/run_tests.py --tier fast
 ```
+
+Use `python tools/aippocampus/run_tests.py --tier full` before making a
+repository-health or public-readiness claim. Use `--tier benchmark` or
+`--tier slow` when touching benchmark runners, smoke tools, plugin packaging,
+onboarding, object sync, or prompt-hook integration behavior.
 
 For normal use inside a Codex workspace, start with:
 

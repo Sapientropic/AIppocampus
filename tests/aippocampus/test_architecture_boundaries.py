@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -23,6 +24,19 @@ for _path in (
 import aippocampus_prompt_hook as prompt_hook  # noqa: E402
 import sync_vault  # noqa: E402
 
+HIGH_RISK_MYPY_SCRIPTS = {
+    "skills/aippocampus/scripts/aippocampus_mcp_server.py",
+    "skills/aippocampus/scripts/aippocampus_lifecycle_hook.py",
+    "skills/aippocampus/scripts/ambient_thread_cache.py",
+    "skills/aippocampus/scripts/build_associations.py",
+    "skills/aippocampus/scripts/build_project_timeline.py",
+    "skills/aippocampus/scripts/memory_candidate_router.py",
+    "skills/aippocampus/scripts/onboard_codex.py",
+    "skills/aippocampus/scripts/prompt_recall_core.py",
+    "skills/aippocampus/scripts/retrieval.py",
+    "skills/aippocampus/scripts/warm_ambient_recall.py",
+}
+
 
 def source_text(module: object) -> str:
     return Path(module.__file__).read_text(encoding="utf-8")
@@ -30,6 +44,22 @@ def source_text(module: object) -> str:
 
 def line_count(module: object) -> int:
     return len(source_text(module).splitlines())
+
+
+def script_line_count(path: Path) -> int:
+    return sum(
+        1
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    )
+
+
+def mypy_file_entries() -> set[str]:
+    text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    match = re.search(r"(?ms)^\[tool\.mypy\].*?^files\s*=\s*\[(.*?)^\]", text)
+    if not match:
+        return set()
+    return set(re.findall(r'"([^"]+\.py)"', match.group(1)))
 
 
 class ArchitectureBoundaryTests(unittest.TestCase):
@@ -73,6 +103,41 @@ class ArchitectureBoundaryTests(unittest.TestCase):
 
         self.assertNotIn("from aippocampus_prompt_hook import", text)
         self.assertNotIn("import aippocampus_prompt_hook", text)
+
+    def test_runtime_boundary_helpers_remain_available(self) -> None:
+        helper_paths = [
+            "onboard_frontier.py",
+            "onboard_status.py",
+            "prompt_recall_ambient.py",
+            "prompt_recall_budget.py",
+            "prompt_recall_evidence.py",
+            "registry_search.py",
+            "retrieval_query_policy.py",
+            "subconscious_jobs_config.py",
+            "warm_ambient_prompting.py",
+            "warm_ambient_scout_profiles.py",
+            "warm_ambient_source_validation.py",
+        ]
+
+        missing = sorted(path for path in helper_paths if not (SCRIPTS / path).is_file())
+
+        self.assertEqual(missing, [])
+
+    def test_mypy_baseline_covers_high_risk_core_scripts(self) -> None:
+        missing = sorted(HIGH_RISK_MYPY_SCRIPTS - mypy_file_entries())
+
+        self.assertEqual(missing, [])
+
+    def test_large_runtime_scripts_stay_in_mypy_baseline(self) -> None:
+        typed = mypy_file_entries()
+        missing = sorted(
+            path.relative_to(REPO_ROOT).as_posix()
+            for path in SCRIPTS.glob("*.py")
+            if script_line_count(path) >= 300
+            and path.relative_to(REPO_ROOT).as_posix() not in typed
+        )
+
+        self.assertEqual(missing, [])
 
     def test_prompt_hook_exits_zero_when_split_helper_install_lags(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
