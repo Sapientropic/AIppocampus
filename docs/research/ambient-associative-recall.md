@@ -388,10 +388,13 @@ The first slice should stay small but real:
    aggregate metrics, validation status counts, error-kind buckets, and cache
    metrics. `benchmark_warm_ambient_sweep.py` now compares quorum-first vs.
    wait-all, worker caps, and timeout values over the same private case pack,
-   ranking quality gates and source health before latency. Live smoke showed
-   the real timeout risk was template-like scout output, so the runtime now
-   keeps `output_contract` compact and uses family-aware output budgets instead
-   of relying on a rigid default `max_tokens` cap.
+   ranking quality gates and source health before latency. Its sanitized
+   `analysis` block gives foreground/detached recommendations plus gate
+   failures, scout error buckets, and source-ref pressure so a wide run can
+   directly inform the next tuning pass. Live smoke showed the real timeout
+   risk was template-like scout output, so the runtime now keeps
+   `output_contract` compact and uses family-aware output budgets instead of
+   relying on a rigid default `max_tokens` cap.
 9. Source-ref validation, current-thread echo suppression, LLM-directed topic
    epoch rotation, and detached late-result cache warming are now implemented.
    Deep archival recall now has a source-backed visibility mode for original

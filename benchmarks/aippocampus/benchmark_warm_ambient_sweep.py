@@ -139,6 +139,30 @@ def compact_quality_gates(value: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def compact_run_profile(row: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(row, dict):
+        return None
+    metrics = row.get("metrics") or {}
+    quality = row.get("quality") or {}
+    return {
+        "run_id": row.get("run_id"),
+        "wait_mode": row.get("wait_mode"),
+        "max_workers": row.get("max_workers"),
+        "timeout": row.get("timeout"),
+        "live_model": row.get("live_model"),
+        "ok": row.get("ok"),
+        "status": row.get("status"),
+        "case_count": metrics.get("case_count"),
+        "case_pass_rate": quality.get("case_pass_rate"),
+        "available_rate": quality.get("available_rate"),
+        "false_evidence_count": quality.get("false_evidence_count"),
+        "missing_source_refs_count": quality.get("missing_source_refs_count"),
+        "scout_error_rate": quality.get("scout_error_rate"),
+        "observed_scout_rate": metrics.get("observed_scout_rate"),
+        "avg_elapsed_ms": metrics.get("avg_elapsed_ms"),
+    }
+
+
 def run_row(
     payload: dict[str, Any],
     *,
@@ -169,6 +193,79 @@ def run_row(
         "metrics": metrics,
         "quality": quality_summary(metrics, gates),
         "quality_gates": gates,
+    }
+
+
+def accumulate_counts(target: dict[str, int], values: dict[str, Any] | list[Any] | tuple[Any, ...]) -> None:
+    if isinstance(values, dict):
+        items = values.items()
+    else:
+        items = ((item, 1) for item in values)
+    for key, value in items:
+        label = str(key or "").strip()
+        if not label:
+            continue
+        target[label] = target.get(label, 0) + safe_int(value or 1)
+
+
+def sweep_analysis(runs: list[dict[str, Any]], leaderboard: list[dict[str, Any]]) -> dict[str, Any]:
+    successful = [row for row in leaderboard if row.get("ok") and (row.get("quality") or {}).get("gates_passed")]
+    foreground = next((row for row in successful if row.get("wait_mode") == "quorum_first"), None)
+    detached = next((row for row in successful if row.get("wait_mode") == "wait_all"), None)
+    status_counts: dict[str, int] = {}
+    failed_gate_counts: dict[str, int] = {}
+    scout_error_kinds: dict[str, int] = {}
+    max_missing_source_refs = 0
+    max_false_evidence = 0
+    for row in runs:
+        status = str(row.get("status") or "unknown")
+        status_counts[status] = status_counts.get(status, 0) + 1
+        accumulate_counts(failed_gate_counts, (row.get("quality_gates") or {}).get("failed") or [])
+        accumulate_counts(scout_error_kinds, (row.get("metrics") or {}).get("scout_error_kinds") or {})
+        max_missing_source_refs = max(
+            max_missing_source_refs,
+            safe_int((row.get("metrics") or {}).get("missing_source_refs_count")),
+        )
+        max_false_evidence = max(
+            max_false_evidence,
+            safe_int((row.get("metrics") or {}).get("false_evidence_count")),
+        )
+    notes: list[str] = []
+    if foreground:
+        notes.append(
+            "foreground candidate: "
+            f"{foreground.get('wait_mode')} workers={foreground.get('max_workers')} "
+            f"timeout={foreground.get('timeout')}"
+        )
+    else:
+        notes.append("foreground candidate missing: no successful quorum_first run")
+    if detached:
+        notes.append(
+            "detached candidate: "
+            f"{detached.get('wait_mode')} workers={detached.get('max_workers')} "
+            f"timeout={detached.get('timeout')}"
+        )
+    else:
+        notes.append("detached candidate missing: no successful wait_all run")
+    if scout_error_kinds:
+        notes.append("scout error buckets need tuning before reading latency as quality")
+    if max_false_evidence:
+        notes.append("false evidence remains the highest-priority quality blocker")
+    elif max_missing_source_refs:
+        notes.append("missing source refs are present; tighten only for source-backed labeled packs")
+    return {
+        "foreground_recommendation": compact_run_profile(foreground),
+        "detached_recommendation": compact_run_profile(detached),
+        "failure_distribution": {
+            "status_counts": status_counts,
+            "failed_gate_counts": failed_gate_counts,
+            "scout_error_kinds": scout_error_kinds,
+        },
+        "quality_pressure": {
+            "max_missing_source_refs_count": max_missing_source_refs,
+            "max_false_evidence_count": max_false_evidence,
+        },
+        "recommendation_notes": notes,
     }
 
 
@@ -255,6 +352,7 @@ def run_warm_ambient_recall_sweep(
     leaderboard = sorted(runs, key=ranking_key, reverse=True)
     best = leaderboard[0] if leaderboard else None
     successful = [row for row in leaderboard if row.get("ok") and (row.get("quality") or {}).get("gates_passed")]
+    analysis = sweep_analysis(runs, leaderboard)
     return {
         "kind": "aippocampus_warm_ambient_recall_sweep",
         "schema_version": SWEEP_SCHEMA_VERSION,
@@ -270,6 +368,7 @@ def run_warm_ambient_recall_sweep(
             "cases_file_sha1": sha1_text(str(cases_file)) if cases_file else None,
         },
         "best": best,
+        "analysis": analysis,
         "runs": runs,
         "leaderboard": leaderboard,
         "privacy_boundary": aggregate_privacy_boundary(runs, payloads),

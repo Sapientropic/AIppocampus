@@ -80,10 +80,13 @@ buckets, and cache usage only. Use
 quorum-first/wait-all, worker caps, and timeout values over the same private
 case pack. The sweep ranks quality gates, case pass rate, false evidence, and
 source-ref health before latency, so it does not accidentally choose the fastest
-configuration that degrades recall. Scout prompts keep `output_contract` as a
-compact schema and add family-aware output budgets so Flash is not asked to
-fill a large template. `--max-tokens` remains an explicit diagnostic override,
-not the default way to control scout length.
+configuration that degrades recall. Its `analysis` block is the first place to
+read after a large run: it names foreground and detached recommendations, gate
+failure counts, scout error buckets, and source-ref pressure without exposing
+case rows. Scout prompts keep `output_contract` as a compact schema and add
+family-aware output budgets so Flash is not asked to fill a large template.
+`--max-tokens` remains an explicit diagnostic override, not the default way to
+control scout length.
 DeepSeek-compatible calls include a stable
 hashed `user_id` by default so the 50 lanes share the same privacy-safe
 scheduling/KV-cache bucket; callers may override it only with an already

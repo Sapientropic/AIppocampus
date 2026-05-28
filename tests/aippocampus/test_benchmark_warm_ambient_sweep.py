@@ -140,6 +140,73 @@ class WarmAmbientSweepTests(unittest.TestCase):
         self.assertEqual(payload["status"], "no_successful_runs")
         self.assertEqual(payload["leaderboard"][0]["status"], "skipped_missing_api_key")
 
+    def test_sweep_analysis_summarizes_failures_and_recommendations(self) -> None:
+        def fake_benchmark(**kwargs):
+            wait_all = bool(kwargs["wait_all"])
+            workers = int(kwargs["max_workers"])
+            if workers == 3:
+                return {
+                    "ok": False,
+                    "status": "insufficient",
+                    "live_model": True,
+                    "metrics": {
+                        "case_count": 5,
+                        "available_rate": 0.4,
+                        "case_pass_rate": 0.6,
+                        "false_evidence_count": 1,
+                        "missing_source_refs_count": 4,
+                        "scout_error_rate": 0.2,
+                        "observed_scout_rate": 0.04,
+                        "avg_elapsed_ms": 100.0,
+                        "max_elapsed_ms": 200.0,
+                        "scout_error_kinds": {"read_timeout": 2},
+                    },
+                    "quality_gates": {
+                        "passed": False,
+                        "failed": ["available_rate", "case_pass_rate", "false_evidence_count"],
+                    },
+                    "privacy_boundary": {"raw_prompt_emitted": False},
+                }
+            return {
+                "ok": True,
+                "status": "sufficient",
+                "live_model": True,
+                "metrics": {
+                    "case_count": 5,
+                    "available_rate": 1.0,
+                    "case_pass_rate": 1.0,
+                    "false_evidence_count": 0,
+                    "missing_source_refs_count": 0 if wait_all else 1,
+                    "scout_error_rate": 0.0,
+                    "observed_scout_rate": 1.0 if wait_all else 0.06,
+                    "avg_elapsed_ms": 800.0 if wait_all else 120.0,
+                    "max_elapsed_ms": 900.0 if wait_all else 150.0,
+                    "scout_error_kinds": {},
+                },
+                "quality_gates": {"passed": True, "failed": []},
+                "privacy_boundary": {"raw_prompt_emitted": False},
+            }
+
+        payload = sweep.run_warm_ambient_recall_sweep(
+            live=True,
+            wait_modes=("quorum_first", "wait_all"),
+            max_workers_values=(3, 5),
+            timeout_values=(30.0,),
+            benchmark_fn=fake_benchmark,
+        )
+
+        analysis = payload["analysis"]
+
+        self.assertEqual(analysis["foreground_recommendation"]["wait_mode"], "quorum_first")
+        self.assertEqual(analysis["foreground_recommendation"]["max_workers"], 5)
+        self.assertEqual(analysis["detached_recommendation"]["wait_mode"], "wait_all")
+        self.assertEqual(analysis["detached_recommendation"]["max_workers"], 5)
+        self.assertEqual(analysis["failure_distribution"]["failed_gate_counts"]["available_rate"], 2)
+        self.assertEqual(analysis["failure_distribution"]["failed_gate_counts"]["case_pass_rate"], 2)
+        self.assertEqual(analysis["failure_distribution"]["failed_gate_counts"]["false_evidence_count"], 2)
+        self.assertEqual(analysis["failure_distribution"]["scout_error_kinds"]["read_timeout"], 4)
+        self.assertIn("foreground", analysis["recommendation_notes"][0])
+
 
 if __name__ == "__main__":
     unittest.main()
