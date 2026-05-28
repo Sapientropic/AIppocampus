@@ -191,16 +191,16 @@ cover different recall functions:
 
 | Scout | Purpose |
 |---|---|
-| Query expansion | Turn the user prompt into related phrases, metaphors, and old question shapes. |
-| Life-wide cue classifier | Decide whether the turn belongs to work, writing, philosophy, personal reflection, logistics, or routine technical flow. |
-| Thread matcher | Compare the prompt against registry summaries, timeline labels, and cognitive-map routes. |
-| Key-line hunter | Look for memorable old lines that could anchor an active nudge. |
-| Current-thread filter | Detect whether a hit is only recent echo from the current conversation. |
-| Theme matcher | Compare against recurring themes, question clusters, and dream/intuition markers. |
-| Evidence judge | Check whether candidate source refs actually support the suggested association. |
-| Nudge writer | Draft one or two natural active-gentle-nudge phrasings for the main agent to adapt. |
-| Privacy/scope guard | Suppress private, unrelated, or over-personalized associations. |
-| Failure sentinel | Look for hallucinated refs, overconfident labels, or candidates that need deep archival recall. |
+| Intent & mode classifier (P0) | Decide task mode, visibility bias, collaboration posture, and cognitive load. |
+| Privacy & boundary guard (P0) | Suppress credentials, personal/financial/relationship material, professional secrets, and over-personalized associations. |
+| Deep theme matcher (P0) | Match long-running philosophical, product, emotional, obsession-level, and trade-off themes. |
+| Key-line hunter (P0) | Find memorable lines, visual images, metaphors, strong assertions, and unresolved questions. |
+| Evidence & gap sentinel (P0) | Validate source refs and downgrade hallucinated, unsupported, stale, or premise-missing candidates. |
+| User style & preference (P1) | Detect source-backed expression habits, language preferences, pacing, and thinking style. |
+| Trajectory matcher (P1) | Locate the current turn in project, life, or thread trajectory when sidecars support it. |
+| Cross-domain bridge (P1) | Map technical issues to non-technical ideas, and non-technical ideas back to concrete work. |
+| Nudge writer (P1) | Draft natural active-gentle-nudge phrasings for the main agent to adapt. |
+| Semantic expander (P1) | Generate multilingual, metaphor, and query aliases for cold path and next-turn recall. |
 
 Each family runs across 5 variants: direct prompt, registry window,
 clean-source/source-ref window, current prompt trace window, and skeptic window.
@@ -237,7 +237,7 @@ The deterministic merger should:
   status updates
 - dedupe candidates by theme, source thread, and key line, then merge
   near-duplicate themes by significant terms before the final card cap
-- let `privacy_scope_guard` and `failure_sentinel` block by scout family even
+- let `privacy_boundary_guard` and `evidence_gap_sentinel` block by scout family even
   when the running lane has a `family:variant` suffix
 - preserve uncertainty instead of forcing a match
 
@@ -347,11 +347,11 @@ The first slice should stay small but real:
    cache. The first integration uses existing hook signals and cache writes;
    deeper cache-first behavior should be tuned after real prompt traces.
 5. Add `warm_ambient_recall.py` as a standalone warm-path prototype. Done for
-   the first shape: it defines 10 named scout families across 5 variants,
-   gives each lane a family/variant `lens_task`, serializes shared context
-   before the lane suffix for prefix-cache friendliness, runs the resulting 50
-   lanes concurrently, isolates malformed outputs, and returns on quorum inside
-   a strict timeout. It fails open when no API key is available.
+   the current shape: it defines the 5 P0 + 5 P1 scout taxonomy above across 5
+   variants, gives each lane a family/variant `lens_task`, serializes shared
+   context before the lane suffix for prefix-cache friendliness, runs the
+   resulting 50 lanes concurrently, isolates malformed outputs, and returns on
+   quorum inside a strict timeout. It fails open when no API key is available.
 6. Merge into at most 3 private recall cards and serialize useful results back
    into the thread cache. Done for quorum results, source-ref validation,
    current-thread echo suppression, guard-family blocking, and similar-theme
@@ -360,7 +360,10 @@ The first slice should stay small but real:
 7. Reuse optional residue export for source-ref-fingerprinted warm cards so
    unused resonance can become dream-task seed material without logging raw
    prompt text.
-8. Source-ref validation, current-thread echo suppression, and LLM-directed
+8. Use `benchmarks/aippocampus/benchmark_warm_ambient_recall.py` for sanitized
+   calibration. Deterministic mode is CI-safe; live mode may call the configured
+   DeepSeek-compatible model but emits only hashes and aggregate metrics.
+9. Source-ref validation, current-thread echo suppression, and LLM-directed
    topic epoch rotation are now in the standalone prototype. Next: tune
    visibility selection and late-result cache updates after more real prompt
    traces.

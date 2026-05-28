@@ -37,18 +37,26 @@ work should update this cache through the same serial writer rather than adding
 a second ambient-memory store.
 
 `warm_ambient_recall.py` is the standalone warm-path prototype for that later
-work. It defines 10 scout families across 5 candidate-window/query variants,
-runs the resulting 50 lanes concurrently, isolates malformed scout output,
-merges at most 3 cards, and writes through `ambient_thread_cache.py`. Scout
-prompts keep the shared payload before the lane-specific `scout_task` suffix,
-and each lane combines a family task with a variant `lens_task` rather than
-repeating one generic prompt. The merger dereferences candidate source refs
-against clean-source messages when possible, merges similar themes before the
-final card cap, suppresses current-thread-only echoes by default, recognizes
-guard blocks by family even with `family:variant` lanes, and lets scouts vote
+work. It defines 10 scout families across 5 candidate-window/query variants:
+5 P0 families for intent/mode, privacy/boundary, deep theme, key-line, and
+evidence/gap checks; plus 5 P1 families for user style, trajectory,
+cross-domain bridge, nudge writing, and semantic expansion. It runs the
+resulting 50 lanes concurrently, isolates malformed scout output, merges at
+most 3 cards, and writes through `ambient_thread_cache.py`. Scout prompts keep
+the shared payload before the lane-specific `scout_task` suffix, and each lane
+combines a family task with a variant `lens_task` rather than repeating one
+generic prompt. The merger dereferences candidate source refs against
+clean-source messages when possible, merges similar themes before the final
+card cap, suppresses current-thread-only echoes by default, recognizes guard
+blocks by family even with `family:variant` lanes, and lets scouts vote
 `reuse|rotate|suppress` for topic epoch handling. It is not part of the default
 foreground hook path: quorum-first runs are allowed to return before all lanes
 finish, and `--wait-all` belongs to explicit evaluation or detached warming.
+
+Use `benchmarks/aippocampus/benchmark_warm_ambient_recall.py` for calibration.
+Deterministic mode is CI-safe. Live mode may call the configured external model
+but must keep output sanitized to prompt hashes, aggregate metrics, validation
+status counts, and cache usage only.
 
 Callers may opt into residue export by passing a residue output path to the
 thread-cache writer. This writes `aippocampus_ambient_residue` JSONL rows for

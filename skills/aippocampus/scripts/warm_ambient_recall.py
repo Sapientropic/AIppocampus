@@ -56,16 +56,16 @@ DEFAULT_MAX_CATALOG_ITEMS = int(os.environ.get("AIPPOCAMPUS_WARM_RECALL_CATALOG_
 DEFAULT_TEMPERATURE = float(os.environ.get("AIPPOCAMPUS_WARM_RECALL_TEMPERATURE", "0.2"))
 
 SCOUT_FAMILIES = (
-    "query_expansion",
-    "life_wide_cue_classifier",
-    "thread_matcher",
+    "intent_mode_classifier",
+    "privacy_boundary_guard",
+    "deep_theme_matcher",
     "key_line_hunter",
-    "current_thread_filter",
-    "theme_matcher",
-    "evidence_judge",
+    "evidence_gap_sentinel",
+    "user_style_preference",
+    "trajectory_matcher",
+    "cross_domain_bridge",
     "nudge_writer",
-    "privacy_scope_guard",
-    "failure_sentinel",
+    "semantic_expander",
 )
 
 SCOUT_VARIANTS = (
@@ -79,6 +79,30 @@ SCOUT_VARIANTS = (
 DEFAULT_SCOUTS = tuple(
     f"{family}:{variant}" for family in SCOUT_FAMILIES for variant in SCOUT_VARIANTS
 )
+
+SCOUT_PRIORITY = {
+    "intent_mode_classifier": "P0",
+    "privacy_boundary_guard": "P0",
+    "deep_theme_matcher": "P0",
+    "key_line_hunter": "P0",
+    "evidence_gap_sentinel": "P0",
+    "user_style_preference": "P1",
+    "trajectory_matcher": "P1",
+    "cross_domain_bridge": "P1",
+    "nudge_writer": "P1",
+    "semantic_expander": "P1",
+}
+
+LEGACY_SCOUT_ALIASES = {
+    "query_expansion": "semantic_expander",
+    "life_wide_cue_classifier": "intent_mode_classifier",
+    "thread_matcher": "trajectory_matcher",
+    "current_thread_filter": "evidence_gap_sentinel",
+    "theme_matcher": "deep_theme_matcher",
+    "evidence_judge": "evidence_gap_sentinel",
+    "privacy_scope_guard": "privacy_boundary_guard",
+    "failure_sentinel": "evidence_gap_sentinel",
+}
 
 VALID_DECISIONS = {"skip", "background_only", "scent", "candidate", "evidence"}
 VALID_SUPPORT_LEVELS = {SCENT, CANDIDATE, EVIDENCE}
@@ -94,6 +118,8 @@ user. Propose compact recall hints for deterministic local validation.
 
 Rules:
 - Do not claim facts without source refs.
+- Only cite source_refs already present in the shared context; if no concrete
+  source_ref is available, return an empty source_refs array.
 - Do not include secrets, local file paths, API keys, cookies, or long quotes.
 - Prefer small, useful signals over broad summaries.
 - A source-backed card needs concrete source_refs. Otherwise use scent/candidate.
@@ -105,16 +131,16 @@ Rules:
 """
 
 FAMILY_TASKS = {
-    "query_expansion": "Find old question shapes, metaphors, and multilingual aliases.",
-    "life_wide_cue_classifier": "Classify whether this is work, writing, philosophy, personal reflection, logistics, or routine technical flow.",
-    "thread_matcher": "Match the prompt against registry summaries, titles, keywords, and route-like labels.",
-    "key_line_hunter": "Find possible memorable old lines that could anchor an active nudge.",
-    "current_thread_filter": "Penalize hits that look like only current-thread echo or status chatter.",
-    "theme_matcher": "Compare against recurring themes, question clusters, and intuition markers.",
-    "evidence_judge": "Check whether candidate source refs truly support the association.",
+    "intent_mode_classifier": "Classify task mode, visibility bias, collaboration posture, and cognitive load.",
+    "privacy_boundary_guard": "Suppress credential leaks, personal/financial/relationship material, professional secrets, and over-personalized associations.",
+    "deep_theme_matcher": "Match long-running themes, philosophical motives, emotional resonance, and recurring trade-offs.",
+    "key_line_hunter": "Find memorable lines, visual images, metaphors, strong assertions, and unresolved questions.",
+    "evidence_gap_sentinel": "Check source-ref support, hallucinated refs, missing premises, drift, single-source fragility, and timeliness gaps.",
+    "user_style_preference": "Detect source-backed user expression habits, language preferences, pacing, and thinking style.",
+    "trajectory_matcher": "Locate the current turn in project, life, or thread trajectory when source sidecars support it.",
+    "cross_domain_bridge": "Map technical issues to non-technical ideas, and non-technical ideas back to concrete work.",
     "nudge_writer": "Draft one or two quiet private nudges for the foreground agent to adapt.",
-    "privacy_scope_guard": "Suppress unrelated, private, or over-personalized associations.",
-    "failure_sentinel": "Flag hallucinated refs, overconfident labels, or cases needing deeper archive recall.",
+    "semantic_expander": "Generate multilingual, metaphor, and query aliases for cold path and next-turn recall.",
 }
 
 VARIANT_TASKS = {
@@ -126,16 +152,16 @@ VARIANT_TASKS = {
 }
 
 FAMILY_LENS_TASKS = {
-    "query_expansion": "Find metaphor, alias, bilingual phrasing, and old-question shapes that can bridge the current prompt to older source.",
-    "life_wide_cue_classifier": "Classify task type, emotional tone, and whether ambient recall should stay silent, active, or source-backed.",
-    "thread_matcher": "Match registry anchors, summaries, project labels, and stable route-like names without inventing source refs.",
-    "key_line_hunter": "Look for compact remembered lines, unresolved questions, or boundary decisions that could anchor a card.",
-    "current_thread_filter": "Estimate current-thread echo risk and flag terms that are only recent status chatter.",
-    "theme_matcher": "Compare recurring themes, question clusters, dream residue, and intuition markers across older threads.",
-    "evidence_judge": "Judge whether proposed source refs actually support the theme; downgrade weak or unsourced evidence.",
+    "intent_mode_classifier": "Classify task type, collaboration posture, timeline, flow focus, and cognitive load.",
+    "privacy_boundary_guard": "Guard privacy and boundaries before any recall card becomes visible.",
+    "deep_theme_matcher": "Compare philosophical, product, emotional, obsession-level, and trade-off themes.",
+    "key_line_hunter": "Hunt for compact key lines that can anchor useful recall.",
+    "evidence_gap_sentinel": "Apply closed-book source-ref validation and gap detection.",
+    "user_style_preference": "Infer only source-backed expression habits and user preferences.",
+    "trajectory_matcher": "Match current position in project/thread/life trajectory from available sidecars.",
+    "cross_domain_bridge": "Bridge technical and non-technical domains without upgrading unsupported resonance.",
     "nudge_writer": "Draft quiet private guidance only after the card is useful; keep wording tentative unless evidence-backed.",
-    "privacy_scope_guard": "Suppress private, unrelated, secret-like, or over-personalized associations before they reach the agent.",
-    "failure_sentinel": "Flag hallucinated refs, contradictory scout claims, and candidates needing deeper archival recall.",
+    "semantic_expander": "Find query aliases, metaphors, and multilingual variants for next-turn/cold-path use.",
 }
 
 VARIANT_LENS_TASKS = {
@@ -144,6 +170,34 @@ VARIANT_LENS_TASKS = {
     "clean_source_window": "Use source-ref-backed windows and support terms; do not elevate evidence without dereferenceable refs.",
     "current_trace_window": "Use the sanitized recent trace to find drift and echo; penalize matches that only repeat this thread.",
     "skeptic_window": "Search for reasons to suppress, rotate topic epoch, or downgrade support when the association is weak.",
+}
+
+FAMILY_VARIANT_LENS_TASKS = {
+    ("intent_mode_classifier", "direct"): "Task type lens: coding, writing, philosophy, planning, repair, logistics, or reflection.",
+    ("intent_mode_classifier", "registry_window"): "Flow-focus lens: whether the turn wants fast execution, careful research, design thinking, or quiet support.",
+    ("intent_mode_classifier", "clean_source_window"): "Timeline lens: planning, implementation, debugging, calibration, cleanup, or handoff.",
+    ("intent_mode_classifier", "current_trace_window"): "Collaboration posture lens: asking, approving, correcting, steering, or asking the agent to continue.",
+    ("intent_mode_classifier", "skeptic_window"): "Cognitive-load lens: suppress verbose recall when the user is in a high-load execution moment.",
+    ("privacy_boundary_guard", "direct"): "Credential leak lens: block tokens, cookies, connection strings, private paths, and auth-like material.",
+    ("privacy_boundary_guard", "registry_window"): "Personal-health lens: downgrade health, body, medical, or intimate wellbeing associations unless explicitly requested.",
+    ("privacy_boundary_guard", "clean_source_window"): "Financial lens: suppress private finances, contracts, invoices, accounts, or purchase-sensitive material.",
+    ("privacy_boundary_guard", "current_trace_window"): "Relationship privacy lens: suppress family, romantic, friendship, or interpersonal conflict unless directly in scope.",
+    ("privacy_boundary_guard", "skeptic_window"): "Professional secret and over-personalization lens: suppress confidential work details and unsolicited intimacy.",
+    ("deep_theme_matcher", "direct"): "Philosophical abstraction lens: look for the underlying question or worldview pattern.",
+    ("deep_theme_matcher", "registry_window"): "Product-specific lens: match concrete project/product decisions and long-running implementation themes.",
+    ("deep_theme_matcher", "clean_source_window"): "Emotional resonance lens: detect repeated felt stakes without treating resonance as fact.",
+    ("deep_theme_matcher", "current_trace_window"): "Long-term obsession lens: match durable motifs that recur across prompts and threads.",
+    ("deep_theme_matcher", "skeptic_window"): "Contradiction and trade-off lens: prefer candidates that clarify a real tension, not generic similarity.",
+    ("key_line_hunter", "direct"): "Visual image lens: find a concrete image or scene-like phrasing that can anchor memory.",
+    ("key_line_hunter", "registry_window"): "Structural metaphor lens: find metaphors, names, or frames that organize the work.",
+    ("key_line_hunter", "clean_source_window"): "Chinese-English mixing lens: preserve bilingual phrasing when the source used it.",
+    ("key_line_hunter", "current_trace_window"): "Strong assertion lens: find compact, emotionally forceful lines worth recalling quietly.",
+    ("key_line_hunter", "skeptic_window"): "Unanswered mystery lens: find old unresolved questions without pretending they were answered.",
+    ("evidence_gap_sentinel", "direct"): "Hallucinated-ref lens: downgrade source_refs that are absent from shared context or malformed.",
+    ("evidence_gap_sentinel", "registry_window"): "Single-source fragility lens: keep solitary weak hits provisional until corroborated.",
+    ("evidence_gap_sentinel", "clean_source_window"): "Context-drift lens: verify the cited source supports the present hypothesis, not only a shared term.",
+    ("evidence_gap_sentinel", "current_trace_window"): "Missing-premise lens: flag leaps where the current prompt lacks the prerequisite context.",
+    ("evidence_gap_sentinel", "skeptic_window"): "Timeliness lens: mark potentially stale decisions, prices, people, rules, or project state as needing fresh checks.",
 }
 
 THEME_STOPWORDS = {
@@ -338,6 +392,7 @@ def scout_lane_parts(scout: str) -> tuple[str, str]:
         family, variant = raw.split(":", 1)
     else:
         family, variant = raw, "direct"
+    family = LEGACY_SCOUT_ALIASES.get(family, family)
     if family not in SCOUT_FAMILIES:
         return "", ""
     if variant not in SCOUT_VARIANTS:
@@ -358,6 +413,9 @@ def expand_scout_lanes(scouts: tuple[str, ...]) -> tuple[str, ...]:
 
 
 def lens_task_for(family: str, variant: str) -> str:
+    specific = FAMILY_VARIANT_LENS_TASKS.get((family, variant))
+    if specific:
+        return specific
     family_task = FAMILY_LENS_TASKS.get(family, "Analyze warm ambient recall relevance.")
     variant_task = VARIANT_LENS_TASKS.get(variant, "Use this candidate/query variant carefully.")
     return f"{family_task} {variant_task}"
@@ -466,6 +524,7 @@ def parse_scout_output(raw: dict[str, Any], scout: str) -> dict[str, Any]:
     if not isinstance(parsed, dict):
         parsed = {}
     family, variant = scout_lane_parts(scout)
+    scout_id = f"{family}:{variant}" if family else str(scout or "")
     decision = str(parsed.get("decision") or "skip").strip().casefold()
     if decision not in VALID_DECISIONS:
         decision = "skip"
@@ -474,7 +533,7 @@ def parse_scout_output(raw: dict[str, Any], scout: str) -> dict[str, Any]:
         epoch_action = ""
     confidence = clamp_confidence(parsed.get("confidence"))
     row = {
-        "scout": scout,
+        "scout": scout_id,
         "scout_family": family,
         "scout_variant": variant,
         "ok": True,
@@ -863,7 +922,7 @@ def merge_scouts(
         for row in rows
         if row.get("ok")
         and row.get("block")
-        and row.get("scout_family") in {"privacy_scope_guard", "failure_sentinel"}
+        and row.get("scout_family") in {"privacy_boundary_guard", "evidence_gap_sentinel"}
     ]
     negative_contexts: list[str] = []
     query_aliases: list[str] = []

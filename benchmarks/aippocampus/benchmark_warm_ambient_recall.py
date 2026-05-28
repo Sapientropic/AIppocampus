@@ -1,0 +1,322 @@
+#!/usr/bin/env python3
+"""Sanitized benchmark runner for warm ambient recall.
+
+The runner has two modes:
+- deterministic fixture mode for CI and regression checks
+- optional live-model mode for small real calibration runs when an API key is
+  present
+
+Outputs contain hashes and aggregate metrics only. Raw prompts, prompt traces,
+cards, and model text stay out of the benchmark payload so live runs can be
+shared as evidence without leaking local memory content.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import _paths
+
+_paths.ensure_paths()
+
+import warm_ambient_recall as warm
+
+
+@dataclass(frozen=True)
+class WarmBenchmarkCase:
+    case_id: str
+    prompt: str
+    prompt_trace: list[dict[str, Any]]
+    current_thread_key: str | None = None
+    topic_epoch: str | None = None
+
+
+BUILTIN_CASES = (
+    WarmBenchmarkCase(
+        case_id="ambient_recall_design_continuity",
+        prompt="那个脑内续接器现在怎么样了？",
+        prompt_trace=[
+            {
+                "thread_key": "session:ambient-current",
+                "role": "user",
+                "phase": "recent_prompt",
+                "text": "继续推进 ambient recall 的 10x5 scout 设计。",
+            }
+        ],
+    ),
+    WarmBenchmarkCase(
+        case_id="source_ref_echo_guard",
+        prompt="继续刚才 source-ref validation 和 echo penalty 的校准。",
+        prompt_trace=[
+            {
+                "thread_key": "session:ambient-current",
+                "role": "assistant",
+                "phase": "final_answer",
+                "text": "source-ref validation 已经落地，当前线程 echo 默认压制。",
+                "source_refs": [{"thread_key": "session:ambient-current", "message_id": "m-current"}],
+            }
+        ],
+        current_thread_key="session:ambient-current",
+    ),
+    WarmBenchmarkCase(
+        case_id="cross_domain_style_bridge",
+        prompt="这个跨界联想 scout 会不会比普通 query expansion 更像人类记忆？",
+        prompt_trace=[
+            {
+                "thread_key": "session:ambient-current",
+                "role": "user",
+                "phase": "recent_prompt",
+                "text": "用户在比较技术问题和人类记忆体感之间的桥接。",
+            }
+        ],
+    ),
+)
+
+
+def sha1_text(text: str) -> str:
+    return hashlib.sha1(text.encode("utf-8")).hexdigest()[:16]
+
+
+def deterministic_scout_fn(scout: str, payload: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
+    del kwargs
+    family = scout.split(":", 1)[0]
+    prompt = str(payload.get("prompt") or "")
+    if family == "privacy_boundary_guard" and any(token in prompt.casefold() for token in ("token", "cookie", "api key")):
+        return {
+            "decision": "skip",
+            "confidence": 0.95,
+            "block": True,
+            "reason": "credential-like prompt",
+            "negative_contexts": ["credential-like prompt"],
+        }
+    if family == "intent_mode_classifier":
+        return {
+            "decision": "candidate",
+            "confidence": 0.74,
+            "themes": ["warm ambient recall calibration"],
+            "query_aliases": ["ambient recall", "warm scout"],
+            "topic_epoch_action": "reuse",
+            "topic_epoch_label": "warm ambient recall calibration",
+        }
+    if family == "key_line_hunter":
+        return {
+            "decision": "candidate",
+            "confidence": 0.82,
+            "candidates": [
+                {
+                    "theme": "ambient recall key-line continuity",
+                    "support_level": "candidate",
+                    "key_line": "brain-like recall should feel like peripheral awareness",
+                    "matched_terms": ["ambient recall", "continuity"],
+                }
+            ],
+        }
+    if family == "cross_domain_bridge":
+        return {
+            "decision": "scent",
+            "confidence": 0.66,
+            "themes": ["technical memory and human-like association"],
+            "query_aliases": ["cross-domain bridge"],
+        }
+    if family == "evidence_gap_sentinel":
+        return {
+            "decision": "candidate",
+            "confidence": 0.7,
+            "negative_contexts": ["do not present resonance as source-backed fact"],
+        }
+    if family == "deep_theme_matcher":
+        return {
+            "decision": "candidate",
+            "confidence": 0.78,
+            "themes": ["natural ambient recall"],
+            "candidates": [
+                {
+                    "theme": "natural ambient recall",
+                    "support_level": "candidate",
+                    "matched_terms": ["ambient recall"],
+                }
+            ],
+        }
+    return {"decision": "skip", "confidence": 0.1}
+
+
+def summarize_case(case: WarmBenchmarkCase, result: dict[str, Any]) -> dict[str, Any]:
+    validation_statuses: dict[str, int] = {}
+    for card in result.get("cards") or []:
+        status = str((card.get("source_validation") or {}).get("status") or "missing")
+        validation_statuses[status] = validation_statuses.get(status, 0) + 1
+    cache = result.get("cache") or {}
+    return {
+        "case_id": case.case_id,
+        "prompt_sha1": sha1_text(case.prompt),
+        "available": bool(result.get("available")),
+        "status": result.get("status"),
+        "mode": result.get("mode"),
+        "confidence": result.get("confidence"),
+        "quorum_met": bool(result.get("quorum_met")),
+        "configured_scout_count": int(result.get("scout_count") or 0),
+        "observed_scout_result_count": len(result.get("scouts") or []),
+        "accepted_scout_count": int(result.get("accepted_scout_count") or 0),
+        "failed_scout_count": int(result.get("failed_scout_count") or 0),
+        "card_count": len(result.get("cards") or []),
+        "source_validation_statuses": validation_statuses,
+        "topic_epoch_action": (result.get("topic_epoch_decision") or {}).get("action"),
+        "current_thread_echo_count": int(result.get("current_thread_echo_count") or 0),
+        "elapsed_ms": float(result.get("elapsed_ms") or 0.0),
+        "cache": {
+            "available": cache.get("available"),
+            "hit_rate": cache.get("hit_rate") or cache.get("prompt_cache_hit_rate"),
+            "hit_tokens": cache.get("hit_tokens") or cache.get("prompt_cache_tokens"),
+            "miss_tokens": cache.get("miss_tokens") or cache.get("prompt_cache_miss_tokens"),
+        },
+    }
+
+
+def run_warm_ambient_recall_benchmark(
+    *,
+    cwd: Path | str | None = None,
+    case_limit: int | None = None,
+    live: bool = False,
+    wait_all: bool = True,
+    timeout: float = 2.4,
+    quorum: int = warm.DEFAULT_QUORUM,
+    max_workers: int | None = None,
+    registry_path: Path | str | None = None,
+    registry_dir: Path | str | None = None,
+    api_key_env: str = "DEEPSEEK_API_KEY",
+) -> dict[str, Any]:
+    root_ctx = tempfile.TemporaryDirectory() if cwd is None else None
+    try:
+        workspace = Path(cwd or Path(root_ctx.name) / "workspace").resolve()
+        workspace.mkdir(parents=True, exist_ok=True)
+        cases = list(BUILTIN_CASES[: case_limit or len(BUILTIN_CASES)])
+        summaries: list[dict[str, Any]] = []
+        live_key = os.environ.get(api_key_env) if live else None
+        if live and not live_key:
+            return {
+                "kind": "aippocampus_warm_ambient_recall_benchmark",
+                "schema_version": 1,
+                "ok": False,
+                "status": "skipped_missing_api_key",
+                "live_model": True,
+                "metrics": {"case_count": 0},
+                "cases": [],
+                "privacy_boundary": privacy_boundary(),
+            }
+        for case in cases:
+            result = warm.run_warm_ambient_recall(
+                case.prompt,
+                cwd=workspace,
+                thread_id=f"warm-benchmark-{case.case_id}",
+                current_thread_key=case.current_thread_key,
+                prompt_trace=case.prompt_trace,
+                topic_epoch=case.topic_epoch,
+                registry={} if not live and not registry_path and not registry_dir else None,
+                registry_path=registry_path,
+                registry_dir=registry_dir,
+                cache_path=workspace / "ambient-thread-cache.json",
+                api_key=live_key or "benchmark-key",
+                timeout=timeout,
+                quorum=quorum,
+                max_workers=max_workers,
+                wait_all=wait_all,
+                no_write=True,
+                scout_fn=warm.model_scout_fn if live else deterministic_scout_fn,
+            )
+            summaries.append(summarize_case(case, result))
+
+        metrics = summarize_metrics(summaries)
+        return {
+            "kind": "aippocampus_warm_ambient_recall_benchmark",
+            "schema_version": 1,
+            "ok": bool(summaries),
+            "status": "sufficient" if summaries else "empty",
+            "live_model": live,
+            "metrics": metrics,
+            "cases": summaries,
+            "privacy_boundary": privacy_boundary(),
+            "cannot_claim": [
+                "all_future_prompts_choose_the_right_memory",
+                "model_quality_without_review",
+            ],
+        }
+    finally:
+        if root_ctx is not None:
+            root_ctx.cleanup()
+
+
+def summarize_metrics(cases: list[dict[str, Any]]) -> dict[str, Any]:
+    total = len(cases)
+    total_observed = sum(int(case.get("observed_scout_result_count") or 0) for case in cases)
+    total_configured = sum(int(case.get("configured_scout_count") or 0) for case in cases)
+    available = sum(1 for case in cases if case.get("available"))
+    cards = sum(int(case.get("card_count") or 0) for case in cases)
+    elapsed = [float(case.get("elapsed_ms") or 0.0) for case in cases]
+    return {
+        "case_count": total,
+        "available_rate": round(available / total, 4) if total else 0.0,
+        "total_scout_calls": total_observed,
+        "configured_scout_calls": total_configured,
+        "card_count": cards,
+        "avg_elapsed_ms": round(sum(elapsed) / total, 2) if total else 0.0,
+        "max_elapsed_ms": round(max(elapsed), 2) if elapsed else 0.0,
+    }
+
+
+def privacy_boundary() -> dict[str, bool]:
+    return {
+        "raw_prompt_emitted": False,
+        "raw_prompt_trace_emitted": False,
+        "raw_cards_emitted": False,
+        "absolute_paths_emitted": False,
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--cwd", default=None)
+    parser.add_argument("--case-limit", type=int, default=None)
+    parser.add_argument("--live", action="store_true")
+    parser.add_argument("--wait-all", action="store_true")
+    parser.add_argument("--timeout", type=float, default=2.4)
+    parser.add_argument("--quorum", type=int, default=warm.DEFAULT_QUORUM)
+    parser.add_argument("--max-workers", type=int, default=None)
+    parser.add_argument("--registry")
+    parser.add_argument("--registry-dir")
+    parser.add_argument("--api-key-env", default="DEEPSEEK_API_KEY")
+    parser.add_argument("--json", action="store_true", dest="json_output")
+    args = parser.parse_args()
+    payload = run_warm_ambient_recall_benchmark(
+        cwd=args.cwd,
+        case_limit=args.case_limit,
+        live=args.live,
+        wait_all=args.wait_all,
+        timeout=args.timeout,
+        quorum=args.quorum,
+        max_workers=args.max_workers,
+        registry_path=args.registry,
+        registry_dir=args.registry_dir,
+        api_key_env=args.api_key_env,
+    )
+    if args.json_output:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        metrics = payload.get("metrics") or {}
+        print(
+            "warm ambient recall benchmark: "
+            f"cases={metrics.get('case_count', 0)} "
+            f"available_rate={metrics.get('available_rate', 0)} "
+            f"scout_results={metrics.get('total_scout_calls', 0)}"
+        )
+    return 0 if payload.get("ok") else 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -45,7 +45,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
         )
         return registry_path
 
-    def test_default_scout_lanes_are_10_families_times_5_variants(self) -> None:
+    def test_default_scout_lanes_are_adjusted_10_families_times_5_variants(self) -> None:
         calls: list[str] = []
 
         def scout_fn(scout, payload, **kwargs):
@@ -65,12 +65,26 @@ class WarmAmbientRecallTests(unittest.TestCase):
         )
         families = {lane.split(":", 1)[0] for lane in warm.DEFAULT_SCOUTS}
         variants = {lane.split(":", 1)[1] for lane in warm.DEFAULT_SCOUTS}
+        expected_families = {
+            "intent_mode_classifier",
+            "privacy_boundary_guard",
+            "deep_theme_matcher",
+            "key_line_hunter",
+            "evidence_gap_sentinel",
+            "user_style_preference",
+            "trajectory_matcher",
+            "cross_domain_bridge",
+            "nudge_writer",
+            "semantic_expander",
+        }
 
         self.assertEqual(len(warm.DEFAULT_SCOUTS), 50)
-        self.assertEqual(len(families), 10)
+        self.assertEqual(families, expected_families)
         self.assertEqual(len(variants), 5)
         self.assertEqual(result["scout_count"], 50)
         self.assertEqual(len(calls), 50)
+        self.assertEqual(warm.SCOUT_PRIORITY["key_line_hunter"], "P0")
+        self.assertEqual(warm.SCOUT_PRIORITY["semantic_expander"], "P1")
 
     def test_quorum_returns_without_waiting_for_all_scouts(self) -> None:
         calls: list[str] = []
@@ -78,7 +92,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
         def scout_fn(scout, payload, **kwargs):
             del payload, kwargs
             calls.append(scout)
-            if scout.startswith(("query_expansion:", "life_wide_cue_classifier:")):
+            if scout.startswith(("key_line_hunter:", "intent_mode_classifier:")):
                 return {
                     "decision": "candidate",
                     "confidence": 0.72,
@@ -113,13 +127,13 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertLess(elapsed, 0.2)
         self.assertEqual(result["accepted_scout_count"], 2)
         self.assertEqual(len(warm.DEFAULT_SCOUTS), 50)
-        self.assertTrue(any(call.startswith("query_expansion:") for call in calls))
-        self.assertTrue(any(call.startswith("life_wide_cue_classifier:") for call in calls))
+        self.assertTrue(any(call.startswith("key_line_hunter:") for call in calls))
+        self.assertTrue(any(call.startswith("intent_mode_classifier:") for call in calls))
 
     def test_malformed_scout_is_isolated(self) -> None:
         def scout_fn(scout, payload, **kwargs):
             del payload, kwargs
-            if scout.startswith("query_expansion:"):
+            if scout.startswith("semantic_expander:"):
                 raise ValueError("not valid JSON")
             return {
                 "decision": "candidate",
@@ -134,7 +148,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
             cache_path=self.cache_path,
             api_key="test-key",
             scout_fn=scout_fn,
-            scouts=("query_expansion", "theme_matcher"),
+            scouts=("semantic_expander", "deep_theme_matcher"),
             quorum=1,
             timeout=0.5,
             no_write=True,
@@ -187,7 +201,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
             residue_reason="warm_scout_unused",
             api_key="test-key",
             scout_fn=scout_fn,
-            scouts=("evidence_judge",),
+            scouts=("evidence_gap_sentinel",),
             quorum=1,
             timeout=0.5,
         )
@@ -273,7 +287,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
             cache_path=self.cache_path,
             api_key="test-key",
             scout_fn=scout_fn,
-            scouts=("evidence_judge",),
+            scouts=("evidence_gap_sentinel",),
             quorum=1,
             timeout=0.5,
             no_write=True,
@@ -368,7 +382,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
             cache_path=self.cache_path,
             api_key="test-key",
             scout_fn=scout_fn,
-            scouts=("current_thread_filter",),
+            scouts=("privacy_boundary_guard",),
             quorum=1,
             timeout=0.5,
             no_write=True,
@@ -398,7 +412,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
             cache_path=self.cache_path,
             api_key="test-key",
             scout_fn=scout_fn,
-            scouts=("theme_matcher",),
+            scouts=("deep_theme_matcher",),
             quorum=1,
             timeout=0.5,
             no_write=True,
@@ -434,7 +448,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
             cache_path=self.cache_path,
             api_key="test-key",
             scout_fn=scout_fn,
-            scouts=("query_expansion",),
+            scouts=("semantic_expander",),
             quorum=1,
             timeout=0.5,
             wait_all=True,
@@ -456,16 +470,47 @@ class WarmAmbientRecallTests(unittest.TestCase):
             "memory_catalog": [],
         }
 
-        rendered = warm.scout_prompt("query_expansion:registry_window", payload)
+        rendered = warm.scout_prompt("semantic_expander:registry_window", payload)
         parsed = json.loads(rendered)
         keys = list(parsed.keys())
 
         self.assertLess(keys.index("shared_context"), keys.index("scout_task"))
         self.assertEqual(parsed["shared_context"], payload)
-        self.assertEqual(parsed["scout_task"]["scout_family"], "query_expansion")
+        self.assertEqual(parsed["scout_task"]["scout_family"], "semantic_expander")
         self.assertEqual(parsed["scout_task"]["scout_variant"], "registry_window")
-        self.assertIn("metaphor", parsed["scout_task"]["lens_task"].casefold())
-        self.assertIn("anchor", parsed["scout_task"]["lens_task"].casefold())
+        self.assertIn("query", parsed["scout_task"]["lens_task"].casefold())
+        self.assertIn("registry", parsed["scout_task"]["lens_task"].casefold())
+
+    def test_p0_lens_tasks_are_family_specific(self) -> None:
+        privacy = json.loads(
+            warm.scout_prompt(
+                "privacy_boundary_guard:current_trace_window",
+                {"prompt": "继续", "memory_catalog": [], "prompt_trace": []},
+            )
+        )["scout_task"]["lens_task"].casefold()
+        privacy_skeptic = json.loads(
+            warm.scout_prompt(
+                "privacy_boundary_guard:skeptic_window",
+                {"prompt": "继续", "memory_catalog": [], "prompt_trace": []},
+            )
+        )["scout_task"]["lens_task"].casefold()
+        theme = json.loads(
+            warm.scout_prompt(
+                "deep_theme_matcher:direct",
+                {"prompt": "继续", "memory_catalog": [], "prompt_trace": []},
+            )
+        )["scout_task"]["lens_task"].casefold()
+        key_line = json.loads(
+            warm.scout_prompt(
+                "key_line_hunter:direct",
+                {"prompt": "继续", "memory_catalog": [], "prompt_trace": []},
+            )
+        )["scout_task"]["lens_task"].casefold()
+
+        self.assertIn("relationship", privacy)
+        self.assertIn("professional secret", privacy_skeptic)
+        self.assertIn("philosophical", theme)
+        self.assertIn("visual", key_line)
 
     def test_merge_dedupes_similar_themes_and_keeps_diverse_cards(self) -> None:
         rows = [
@@ -481,7 +526,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
                         }
                     ],
                 },
-                "thread_matcher:direct",
+                "trajectory_matcher:direct",
             ),
             warm.parse_scout_output(
                 {
@@ -495,7 +540,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
                         }
                     ],
                 },
-                "theme_matcher:registry_window",
+                "deep_theme_matcher:registry_window",
             ),
             warm.parse_scout_output(
                 {
@@ -539,7 +584,11 @@ class WarmAmbientRecallTests(unittest.TestCase):
 
         self.assertEqual(result["cards"], [])
         self.assertEqual(result["mode"], warm.SILENT_TUNING)
-        self.assertEqual(result["blocked_by"], ["privacy_scope_guard:direct"])
+        self.assertEqual(result["blocked_by"], ["privacy_boundary_guard:direct"])
+
+    def test_legacy_scout_family_names_expand_to_canonical_taxonomy(self) -> None:
+        self.assertEqual(warm.expand_scout_lanes(("query_expansion",)), ("semantic_expander:direct",))
+        self.assertEqual(warm.expand_scout_lanes(("evidence_judge:skeptic_window",)), ("evidence_gap_sentinel:skeptic_window",))
 
 
 if __name__ == "__main__":
