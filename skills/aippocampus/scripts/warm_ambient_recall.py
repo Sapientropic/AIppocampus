@@ -281,10 +281,78 @@ THEME_STOPWORDS = {
     "with",
 }
 
+PROMPT_TRACE_WEAK_TERMS = THEME_STOPWORDS | {
+    "about",
+    "also",
+    "are",
+    "but",
+    "can",
+    "could",
+    "did",
+    "does",
+    "each",
+    "error",
+    "exactly",
+    "file",
+    "get",
+    "give",
+    "have",
+    "how",
+    "into",
+    "just",
+    "left",
+    "me",
+    "model",
+    "more",
+    "my",
+    "not",
+    "our",
+    "please",
+    "provide",
+    "should",
+    "that",
+    "the",
+    "these",
+    "they",
+    "this",
+    "trying",
+    "use",
+    "using",
+    "was",
+    "were",
+    "what",
+    "when",
+    "where",
+    "will",
+    "would",
+    "you",
+    "your",
+}
+
+PROMPT_TRACE_CONTINUATION_RE = re.compile(
+    r"("
+    r"继续|上[一轮文次]|刚才|前面|上一版|同样|照样|再来|"
+    r"continue|where\s+you\s+left\s+off|previous|above|earlier|as\s+before|"
+    r"format\s+you\s+did\s+above|this\s+works|that\s+works|it\s+works|"
+    r"can\s+you\s+also|also\s+add|not\s+just|instead|"
+    r"will\s+it\s+work\s+also|add\s+support\s+for"
+    r")",
+    re.IGNORECASE,
+)
+
 
 def _stable_id(parts: list[Any]) -> str:
     raw = "\n".join(str(part or "") for part in parts)
     return "warc_" + hashlib.sha1(raw.encode("utf-8")).hexdigest()[:18]
+
+
+def _is_distinctive_trace_term(term: str) -> bool:
+    value = str(term or "").strip().casefold()
+    return (
+        len(value) >= 8
+        or any(char.isdigit() for char in value)
+        or any(char in value for char in ("-", "_", ".", "/", "\\"))
+    )
 
 
 def _safe_text(value: Any, chars: int) -> str:
@@ -904,10 +972,12 @@ def prompt_trace_fallback_cards(
     *,
     limit: int = 1,
 ) -> list[dict[str, Any]]:
+    strong_continuation = bool(PROMPT_TRACE_CONTINUATION_RE.search(str(prompt or "")))
     prompt_terms = [
         term
         for term in split_query_terms([prompt])
         if len(str(term or "").strip()) >= 3
+        and term.casefold() not in PROMPT_TRACE_WEAK_TERMS
     ]
     prompt_term_set = {term.casefold() for term in prompt_terms}
     prompt_text = compact_text(str(prompt or ""), 420).casefold()
@@ -927,7 +997,13 @@ def prompt_trace_fallback_cards(
         ][:3]
         if not refs:
             continue
-        text_terms = {term.casefold() for term in split_query_terms([text])}
+        text_source_terms = [
+            term
+            for term in split_query_terms([text])
+            if len(str(term or "").strip()) >= 3
+            and term.casefold() not in PROMPT_TRACE_WEAK_TERMS
+        ]
+        text_terms = {term.casefold() for term in text_source_terms}
         shared = unique_preserve(
             [
                 term
@@ -936,7 +1012,14 @@ def prompt_trace_fallback_cards(
             ],
             limit=6,
         )
-        if len({term.casefold() for term in shared} & prompt_term_set) < 2:
+        shared_prompt_terms = {term.casefold() for term in shared} & prompt_term_set
+        if len(shared_prompt_terms) < 2 and not any(
+            _is_distinctive_trace_term(term) for term in shared_prompt_terms
+        ):
+            if not strong_continuation:
+                continue
+            shared = unique_preserve(text_source_terms, limit=6)
+        if not shared:
             continue
         key_line = compact_text(text, 180)
         cards.append(
@@ -976,11 +1059,23 @@ def _message_supports_card(message: dict[str, Any], card: dict[str, Any]) -> boo
     key_line = str(card.get("key_line") or "").strip().casefold()
     if key_line and len(key_line) >= 12 and key_line in text:
         return True
+    if key_line and "..." in key_line:
+        fragments = [
+            fragment.strip()
+            for fragment in re.split(r"\s*\.\.\.\s*", key_line)
+            if len(fragment.strip()) >= 24
+        ]
+        if any(fragment in text for fragment in fragments):
+            return True
+    matched = []
     for term in card.get("matched_terms") or []:
         needle = str(term or "").strip().casefold()
-        if len(needle) >= 2 and needle in text:
-            return True
-    return False
+        if len(needle) >= 3 and needle not in PROMPT_TRACE_WEAK_TERMS and needle in text:
+            matched.append(needle)
+    distinct = set(matched)
+    return len(distinct) >= 2 or any(
+        _is_distinctive_trace_term(item) or " " in item for item in distinct
+    )
 
 
 def validate_card_source_refs(
@@ -1142,29 +1237,43 @@ def merge_scouts(
         and row.get("block")
         and row.get("scout_family") in {"privacy_boundary_guard", "evidence_gap_sentinel"}
     ]
+    privacy_blockers = [
+        row for row in blockers if row.get("scout_family") == "privacy_boundary_guard"
+    ]
+    evidence_blockers = [
+        row for row in blockers if row.get("scout_family") == "evidence_gap_sentinel"
+    ]
     negative_contexts: list[str] = []
     query_aliases: list[str] = []
     for row in rows:
         negative_contexts.extend(row.get("negative_contexts") or [])
         query_aliases.extend(row.get("query_aliases") or [])
-    if blockers:
+    if privacy_blockers:
+        _, calibration = calibrate_cards(
+            fallback_cards or [],
+            source_index=source_index,
+            current_thread_key=current_thread_key,
+            allow_current_thread_echo=allow_current_thread_echo,
+        )
         return {
             "cards": [],
             "mode": SILENT_TUNING,
             "confidence": "low",
             "negative_contexts": unique_preserve(negative_contexts, limit=8),
             "query_aliases": unique_preserve(query_aliases, limit=16),
-            "blocked_by": [row.get("scout") for row in blockers],
+            "blocked_by": [row.get("scout") for row in privacy_blockers],
+            **calibration,
         }
 
     candidates: list[tuple[int, float, dict[str, Any]]] = []
-    for row in rows:
-        if not row.get("ok"):
-            continue
-        confidence = float(row.get("confidence") or 0.0)
-        for card in row.get("candidates") or []:
-            support = str(card.get("support_level") or SCENT)
-            candidates.append((SUPPORT_RANK.get(support, 0), confidence, card))
+    if not evidence_blockers:
+        for row in rows:
+            if not row.get("ok"):
+                continue
+            confidence = float(row.get("confidence") or 0.0)
+            for card in row.get("candidates") or []:
+                support = str(card.get("support_level") or SCENT)
+                candidates.append((SUPPORT_RANK.get(support, 0), confidence, card))
     for card in fallback_cards or []:
         support = str(card.get("support_level") or SCENT)
         candidates.append((SUPPORT_RANK.get(support, 0), 0.62, card))
@@ -1202,6 +1311,21 @@ def merge_scouts(
         allow_current_thread_echo=allow_current_thread_echo,
     )
     cards = cards[: max(0, max_cards)]
+    if evidence_blockers and not cards:
+        # Evidence sentinels are allowed to veto model-generated cards, but not
+        # source-index-validated prompt-trace fallback cards. This preserves the
+        # closed-book anti-hallucination guard without losing the deterministic
+        # current-trace recall path that exists specifically for sparse live
+        # scout failures and over-cautious sentinel blocks.
+        return {
+            "cards": [],
+            "mode": SILENT_TUNING,
+            "confidence": "low",
+            "negative_contexts": unique_preserve(negative_contexts, limit=8),
+            "query_aliases": unique_preserve(query_aliases, limit=16),
+            "blocked_by": [row.get("scout") for row in evidence_blockers],
+            **calibration,
+        }
     max_confidence = max([float(row.get("confidence") or 0.0) for row in rows if row.get("ok")] or [0.0])
     return {
         "cards": cards,
@@ -1209,7 +1333,7 @@ def merge_scouts(
         "confidence": _confidence_label(max_confidence),
         "negative_contexts": unique_preserve(negative_contexts, limit=8),
         "query_aliases": unique_preserve(query_aliases, limit=16),
-        "blocked_by": [],
+        "blocked_by": [row.get("scout") for row in evidence_blockers],
         **calibration,
     }
 

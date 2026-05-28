@@ -496,6 +496,11 @@ def summarize_case(case: WarmBenchmarkCase, result: dict[str, Any]) -> dict[str,
         "source_validation_statuses": validation_statuses,
         "topic_epoch_action": (result.get("topic_epoch_decision") or {}).get("action"),
         "current_thread_echo_count": int(result.get("current_thread_echo_count") or 0),
+        "blocked_by": [
+            str(item)
+            for item in result.get("blocked_by") or []
+            if str(item or "").strip()
+        ],
         "elapsed_ms": float(result.get("elapsed_ms") or 0.0),
         "cache": {
             "available": cache.get("available"),

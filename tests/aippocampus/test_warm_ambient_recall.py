@@ -479,6 +479,53 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertFalse(result["available"])
         self.assertEqual(result["trace_fallback_card_count"], 0)
 
+    def test_prompt_trace_fallback_handles_strong_continuation_without_term_overlap(self) -> None:
+        cards = warm.prompt_trace_fallback_cards(
+            "Please continue exactly where you left off.",
+            [
+                {
+                    "thread_key": "session:old",
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "text": "Register the WordPress plugin block extension, enqueue the editor script, and keep the generated alt text in the image block attributes.",
+                    "source_refs": [
+                        {"thread_key": "session:old", "message_id": "msg-1", "line": 1}
+                    ],
+                },
+                {
+                    "thread_key": "session:old",
+                    "role": "user",
+                    "phase": "current_prompt",
+                    "text": "Please continue exactly where you left off.",
+                    "source_refs": [
+                        {"thread_key": "session:old", "message_id": "msg-2", "line": 2}
+                    ],
+                },
+            ],
+        )
+
+        self.assertEqual(len(cards), 1)
+        self.assertIn("WordPress", cards[0]["key_line"])
+        self.assertNotIn("continue exactly", cards[0]["key_line"])
+
+    def test_prompt_trace_fallback_ignores_generic_error_overlap(self) -> None:
+        cards = warm.prompt_trace_fallback_cards(
+            "I am trying to use my trained model but get error \"config file is not valid JSON.\"",
+            [
+                {
+                    "thread_key": "session:old",
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "text": "The RuntimeError expected scalar type Long but found Int occurs when a tensor dtype is wrong during training.",
+                    "source_refs": [
+                        {"thread_key": "session:old", "message_id": "msg-1", "line": 1}
+                    ],
+                },
+            ],
+        )
+
+        self.assertEqual(cards, [])
+
     def test_warm_merge_writes_thread_cache_and_residue_without_raw_inputs(self) -> None:
         local_path = "E:" + "\\private\\notes\\ambient.md"
         prompt = f"继续 {local_path} 里的 ambient recall 方案"
@@ -972,6 +1019,124 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(result["cards"], [])
         self.assertEqual(result["mode"], warm.SILENT_TUNING)
         self.assertEqual(result["blocked_by"], ["privacy_boundary_guard:direct"])
+
+    def test_privacy_blocker_still_counts_suppressed_current_thread_fallback(self) -> None:
+        rows = [
+            warm.parse_scout_output(
+                {
+                    "decision": "skip",
+                    "confidence": 0.95,
+                    "block": True,
+                    "reason": "private unrelated association",
+                },
+                "privacy_boundary_guard:direct",
+            )
+        ]
+        fallback = [
+            {
+                "theme": "current-thread fallback",
+                "support_level": warm.EVIDENCE,
+                "visibility": warm.SOURCE_BACKED_RECALL_CARD,
+                "key_line": "This was just said in the current thread.",
+                "matched_terms": ["current thread"],
+                "source_refs": [
+                    {"thread_key": "session:current", "message_id": "msg-1", "line": 1}
+                ],
+            }
+        ]
+
+        result = warm.merge_scouts(
+            rows,
+            fallback_cards=fallback,
+            current_thread_key="session:current",
+        )
+
+        self.assertEqual(result["cards"], [])
+        self.assertEqual(result["blocked_by"], ["privacy_boundary_guard:direct"])
+        self.assertEqual(result["current_thread_echo_count"], 1)
+
+    def test_evidence_blocker_preserves_supported_prompt_trace_fallback(self) -> None:
+        rows = [
+            warm.parse_scout_output(
+                {
+                    "decision": "skip",
+                    "confidence": 0.91,
+                    "block": True,
+                    "reason": "model candidate lacks source support",
+                    "candidates": [
+                        {
+                            "theme": "unsupported model-only card",
+                            "support_level": "evidence",
+                            "matched_terms": ["phantom"],
+                            "source_refs": [
+                                {"thread_key": "session:old", "message_id": "missing"}
+                            ],
+                        }
+                    ],
+                },
+                "evidence_gap_sentinel:direct",
+            )
+        ]
+        fallback = [
+            {
+                "theme": "prior trace: booking system",
+                "support_level": warm.EVIDENCE,
+                "visibility": warm.SOURCE_BACKED_RECALL_CARD,
+                "key_line": "Use a generic resource booking model.",
+                "matched_terms": ["booking", "resource"],
+                "source_refs": [
+                    {"thread_key": "session:old", "message_id": "msg-1", "line": 1}
+                ],
+            }
+        ]
+        source_index = {
+            "session:old": {
+                "by_id": {
+                    "msg-1": {
+                        "id": "msg-1",
+                        "line": 1,
+                        "text": "Use a generic resource booking model.",
+                    }
+                },
+                "by_line": {
+                    "1": {
+                        "id": "msg-1",
+                        "line": 1,
+                        "text": "Use a generic resource booking model.",
+                    }
+                },
+            }
+        }
+
+        result = warm.merge_scouts(
+            rows,
+            fallback_cards=fallback,
+            source_index=source_index,
+        )
+
+        self.assertEqual(len(result["cards"]), 1)
+        self.assertEqual(result["cards"][0]["theme"], "prior trace: booking system")
+        self.assertEqual(result["cards"][0]["source_validation"]["status"], "supported")
+        self.assertEqual(result["blocked_by"], ["evidence_gap_sentinel:direct"])
+
+    def test_evidence_blocker_still_silences_when_no_supported_fallback_exists(self) -> None:
+        rows = [
+            warm.parse_scout_output(
+                {
+                    "decision": "skip",
+                    "confidence": 0.91,
+                    "block": True,
+                    "reason": "missing source support",
+                },
+                "evidence_gap_sentinel:direct",
+            )
+        ]
+
+        result = warm.merge_scouts(rows, fallback_cards=[], source_index={})
+
+        self.assertEqual(result["cards"], [])
+        self.assertEqual(result["mode"], warm.SILENT_TUNING)
+        self.assertEqual(result["blocked_by"], ["evidence_gap_sentinel:direct"])
 
     def test_legacy_scout_family_names_expand_to_canonical_taxonomy(self) -> None:
         self.assertEqual(warm.expand_scout_lanes(("query_expansion",)), ("semantic_expander:direct",))

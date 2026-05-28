@@ -139,12 +139,18 @@ For cache tuning, use `--prefix-cache-warmup-scouts 2` with a small
 `--prefix-cache-warmup-delay` on live benchmark/evaluation runs. This preserves
 the full 10x5 scout set while giving DeepSeek a completed same-prefix request
 before the remaining thin scout suffixes launch.
+For wait-all source-ref evaluation, prefer treating `--timeout 45` as the
+stability diagnostic when `--timeout 30` has clean case coverage but a marginal
+read-timeout error rate. Do not compensate by lowering scout concurrency or
+adding rigid `max_tokens` truncation unless quality regressions point there.
 For `topic_epoch_vote` packs, set `--min-available-rate 0`: a valid LLM
 `suppress` vote may intentionally produce no visible card.
 For source-ref packs, keep `--max-false-evidence-count 0` strict. The
 `source_ref_supported` labels require either a strong continuation cue or
 meaningful prior overlap; generic capability questions and prompts pointing at
-freshly pasted current text should not force source-backed recall. Treat
+freshly pasted current text should not force source-backed recall. Prior trace
+rows containing redaction placeholders are excluded from source-ref support
+labels; privacy guard suppression should not fail the source-ref pack. Treat
 `case_pass_rate` as recall coverage, not the only quality signal; a safe miss is
 preferable to surfacing an unsupported citation.
 For echo packs, `current_thread_echo_count` labels are intentionally narrower:
@@ -153,6 +159,13 @@ the benchmark does not reward citing the user's current paste as prior memory.
 The `trace_fallback_card_count` metric counts deterministic fallback cards from
 sanitized prior trace rows. It should improve supported coverage without
 loosening source validation; investigate it separately from model scout recall.
+Runtime merge keeps privacy guard as a hard veto, but an evidence sentinel block
+only suppresses model-generated cards. Locally validated prompt-trace fallback
+cards may still surface, and current-thread fallback still increments the echo
+counter even when visibility is suppressed. Strong continuation cues can fall
+back to the immediately prior source-backed trace when lexical overlap is thin;
+generic `model/error/use` overlap is not enough to require or emit source-backed
+recall.
 
 These warm case packs stay private local artifacts. The subset registry is only
 for source-ref validation against sampled clean-source rows; do not commit the

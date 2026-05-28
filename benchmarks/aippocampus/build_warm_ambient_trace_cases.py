@@ -226,6 +226,7 @@ GENERIC_CAPABILITY_RE = re.compile(
     r"what\s+is|how\s+do\s+you\s+handle|best\s+practices|give\s+me\s+a\s+list)\b",
     re.IGNORECASE,
 )
+REDACTED_PLACEHOLDER_RE = re.compile(r"<redacted:[^>]+>", re.IGNORECASE)
 LABEL_STOP_TERMS = {
     "about",
     "also",
@@ -234,12 +235,15 @@ LABEL_STOP_TERMS = {
     "can",
     "could",
     "does",
+    "error",
+    "file",
     "for",
     "from",
     "have",
     "how",
     "into",
     "just",
+    "model",
     "more",
     "not",
     "please",
@@ -247,6 +251,9 @@ LABEL_STOP_TERMS = {
     "that",
     "the",
     "this",
+    "trying",
+    "use",
+    "using",
     "what",
     "when",
     "where",
@@ -306,6 +313,11 @@ def has_prior_source_support(prompt: str, trace_messages: list[dict[str, Any]]) 
     """
     prior_text = " ".join(str(item.get("text") or "") for item in trace_messages[:-1])
     if not prior_text.strip():
+        return False
+    if REDACTED_PLACEHOLDER_RE.search(prior_text):
+        # Source-ref support labels should not force recall to surface a prior
+        # row that only became safe after credential/path redaction. The echo
+        # pack can still require suppression-count coverage for the same turn.
         return False
     if CURRENT_PROMPT_OBJECT_RE.search(prompt):
         return False
@@ -437,7 +449,7 @@ def build_cases_for_thread(
         }
         if label_template:
             case.update(manual_label_template_fields())
-        apply_label_policy(case, label_policy=label_policy, trace_messages=trace_messages)
+        apply_label_policy(case, label_policy=label_policy, trace_messages=prompt_trace)
         cases.append(case)
     return cases
 
@@ -496,7 +508,7 @@ def build_cases_for_message_group(
         }
         if label_template:
             case.update(manual_label_template_fields())
-        apply_label_policy(case, label_policy=label_policy, trace_messages=trace_messages)
+        apply_label_policy(case, label_policy=label_policy, trace_messages=prompt_trace)
         cases.append(case)
     return cases
 

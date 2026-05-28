@@ -410,9 +410,15 @@ The first slice should stay small but real:
    into the thread cache. Done for quorum-gated writes, source-ref validation,
    current-thread echo suppression, guard-family blocking, similar-theme merge,
    validation metadata, query aliases, topic decision, visibility bias, and a
-   narrow prior-trace fallback for supported source-ref misses; explicit
-   `--wait-all` is reserved for evaluation or detached warming, not the
-   foreground hook.
+   prior-trace fallback for supported source-ref misses. Privacy guard remains
+   a hard visibility veto; evidence sentinels veto model-generated cards but do
+   not suppress prompt-trace fallback cards that pass local source validation.
+   Strong continuation cues such as "continue where you left off", "instead",
+   and "format you did above" can use the immediately prior source-backed trace
+   even when lexical overlap is thin. Generic overlap terms such as
+   "model/error/use" are filtered so source-ref calibration does not reward
+   citing an unrelated old error. Explicit `--wait-all` is reserved for
+   evaluation or detached warming, not the foreground hook.
 7. Reuse optional residue export for source-ref-fingerprinted warm cards so
    unused resonance can become dream-task seed material without logging raw
    prompt text.
@@ -438,7 +444,10 @@ The first slice should stay small but real:
    aid only. Source-ref calibration requires supported evidence only when the
    trace has a strong continuation cue or meaningful prior overlap; generic
    capability questions and prompts pointing at freshly pasted current text
-   should not be forced to cite memory. Echo calibration is narrower and expects
+   should not be forced to cite memory. Prior trace rows containing redaction
+   placeholders are also excluded from source-ref support labels so privacy
+   guard suppression does not become a benchmark failure. Echo calibration is
+   narrower and expects
    `current_thread_echo_count >= 1` only for short, strong continuation turns;
    long pasted-document prompts, generic topic overlap, and current-object
    prompts like "this code" should not be forced to manufacture current-text
@@ -480,6 +489,21 @@ The first slice should stay small but real:
    with scout error rates still below the 0.05 gate but high enough to justify
    a `case_workers=1` stability comparison before treating 2x outer concurrency
    as the default.
+   Follow-up targeted live calibration after the evidence-blocker/fallback
+   adjustment cleared the known miss cluster: source-ref target pack passed
+   11/11 with `false_evidence_count=0`, `scout_error_rate=0`, and
+   `prompt_cache_hit_rate=0.8489`; echo target pack passed 3/3 with
+   `false_evidence_count=0` and `prompt_cache_hit_rate=0.8285`.
+   A rebuilt source-ref 100-case pack based on the sanitized prompt traces
+   narrowed source-required cases to 43. With `case_workers=2`,
+   `max_workers=50`, wait-all, and `timeout=30`, the full 100-case run reached
+   `case_pass_rate=1.0` and `false_evidence_count=0`; the only failed gate was
+   `scout_error_rate=0.0522`, mostly read timeouts, with
+   `prompt_cache_hit_rate=0.8412`. A `timeout=45` early-stop check over 34
+   cases kept `case_pass_rate=1.0`, reduced scout errors to 0.0076, and kept
+   prompt-cache hit rate at 0.8444. Treat this as evidence that 30 seconds is
+   tight for wait-all evaluation; it is not a reason to shrink the 50-lane
+   design or reintroduce `max_tokens` truncation.
 9. Source-ref validation, current-thread echo suppression, LLM-directed topic
    epoch rotation, and detached late-result cache warming are now implemented.
    Deep archival recall now has a source-backed visibility mode for original

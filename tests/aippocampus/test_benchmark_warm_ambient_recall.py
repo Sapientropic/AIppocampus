@@ -173,6 +173,7 @@ class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
                 "accepted_scout_count": 1,
                 "failed_scout_count": 0,
                 "current_thread_echo_count": 1,
+                "blocked_by": ["evidence_gap_sentinel:direct"],
                 "topic_epoch_decision": {"action": "rotate"},
                 "cards": [{"source_validation": {"status": "supported"}}],
                 "elapsed_ms": 1.0,
@@ -181,6 +182,7 @@ class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
 
         self.assertTrue(summary["expectation_passed"])
         self.assertEqual(summary["expectation_failures"], [])
+        self.assertEqual(summary["blocked_by"], ["evidence_gap_sentinel:direct"])
 
     def test_labeled_trace_expectation_failures_are_case_level_metrics(self) -> None:
         case = benchmark.WarmBenchmarkCase(
@@ -692,6 +694,108 @@ class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
                             "role": "user",
                             "turn_index": 2,
                             "text": "Do you understand any Romanian?",
+                        },
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            payload = trace_builder.build_trace_cases(
+                clean_source_messages=messages,
+                dataset_id="policy",
+                limit=1,
+                min_turn_index=2,
+                label_policy="source_ref_supported",
+            )
+
+        case = payload["cases"][0]
+        self.assertEqual(case["expected_min_cards"], 0)
+        self.assertEqual(case["expected_min_source_validation_statuses"], {})
+
+    def test_source_ref_label_does_not_require_supported_for_generic_error_overlap(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            messages = root / "messages.jsonl"
+            messages.write_text(
+                "\n".join(
+                    json.dumps(item, ensure_ascii=False)
+                    for item in [
+                        {
+                            "message_id": "msg-u1",
+                            "source_id": "src-a",
+                            "source_line": 1,
+                            "role": "user",
+                            "turn_index": 1,
+                            "text": "RuntimeError: expected scalar type Long but found Int",
+                        },
+                        {
+                            "message_id": "msg-a1",
+                            "source_id": "src-a",
+                            "source_line": 2,
+                            "role": "assistant",
+                            "turn_index": 1,
+                            "phase": "final_answer",
+                            "text": "That RuntimeError usually means the tensor dtype is wrong during model training.",
+                        },
+                        {
+                            "message_id": "msg-u2",
+                            "source_id": "src-a",
+                            "source_line": 3,
+                            "role": "user",
+                            "turn_index": 2,
+                            "text": "I am trying to use my trained model but get error \"config file is not valid JSON.\"",
+                        },
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            payload = trace_builder.build_trace_cases(
+                clean_source_messages=messages,
+                dataset_id="policy",
+                limit=1,
+                min_turn_index=2,
+                label_policy="source_ref_supported",
+            )
+
+        case = payload["cases"][0]
+        self.assertEqual(case["expected_min_cards"], 0)
+        self.assertEqual(case["expected_min_source_validation_statuses"], {})
+
+    def test_source_ref_label_does_not_require_supported_for_redacted_prior_trace(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            messages = root / "messages.jsonl"
+            messages.write_text(
+                "\n".join(
+                    json.dumps(item, ensure_ascii=False)
+                    for item in [
+                        {
+                            "message_id": "msg-u1",
+                            "source_id": "src-a",
+                            "source_line": 1,
+                            "role": "user",
+                            "turn_index": 1,
+                            "text": "Build the WordPress plugin and call the image API.",
+                        },
+                        {
+                            "message_id": "msg-a1",
+                            "source_id": "src-a",
+                            "source_line": 2,
+                            "role": "assistant",
+                            "turn_index": 1,
+                            "phase": "final_answer",
+                            "text": "Continue the plugin script with apiKey=<redacted:secret> and enqueue the editor asset.",
+                        },
+                        {
+                            "message_id": "msg-u2",
+                            "source_id": "src-a",
+                            "source_line": 3,
+                            "role": "user",
+                            "turn_index": 2,
+                            "text": "Please continue exactly where you left off.",
                         },
                     ]
                 )
