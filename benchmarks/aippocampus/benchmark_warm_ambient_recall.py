@@ -152,6 +152,12 @@ def summarize_case(case: WarmBenchmarkCase, result: dict[str, Any]) -> dict[str,
     for card in result.get("cards") or []:
         status = str((card.get("source_validation") or {}).get("status") or "missing")
         validation_statuses[status] = validation_statuses.get(status, 0) + 1
+    scout_error_kinds: dict[str, int] = {}
+    for row in result.get("scouts") or []:
+        if row.get("ok"):
+            continue
+        kind = str(row.get("error_kind") or warm.scout_error_kind(row.get("reason")))
+        scout_error_kinds[kind] = scout_error_kinds.get(kind, 0) + 1
     cache = result.get("cache") or {}
     return {
         "case_id": case.case_id,
@@ -162,9 +168,11 @@ def summarize_case(case: WarmBenchmarkCase, result: dict[str, Any]) -> dict[str,
         "confidence": result.get("confidence"),
         "quorum_met": bool(result.get("quorum_met")),
         "configured_scout_count": int(result.get("scout_count") or 0),
+        "max_workers": int(result.get("max_workers") or 0),
         "observed_scout_result_count": len(result.get("scouts") or []),
         "accepted_scout_count": int(result.get("accepted_scout_count") or 0),
         "failed_scout_count": int(result.get("failed_scout_count") or 0),
+        "scout_error_kinds": scout_error_kinds,
         "card_count": len(result.get("cards") or []),
         "source_validation_statuses": validation_statuses,
         "topic_epoch_action": (result.get("topic_epoch_decision") or {}).get("action"),
@@ -191,6 +199,7 @@ def run_warm_ambient_recall_benchmark(
     registry_path: Path | str | None = None,
     registry_dir: Path | str | None = None,
     api_key_env: str = "DEEPSEEK_API_KEY",
+    user_id: str | None = None,
 ) -> dict[str, Any]:
     root_ctx = tempfile.TemporaryDirectory() if cwd is None else None
     try:
@@ -223,6 +232,7 @@ def run_warm_ambient_recall_benchmark(
                 registry_dir=registry_dir,
                 cache_path=workspace / "ambient-thread-cache.json",
                 api_key=live_key or "benchmark-key",
+                user_id=user_id,
                 timeout=timeout,
                 quorum=quorum,
                 max_workers=max_workers,
@@ -259,6 +269,10 @@ def summarize_metrics(cases: list[dict[str, Any]]) -> dict[str, Any]:
     available = sum(1 for case in cases if case.get("available"))
     cards = sum(int(case.get("card_count") or 0) for case in cases)
     elapsed = [float(case.get("elapsed_ms") or 0.0) for case in cases]
+    scout_error_kinds: dict[str, int] = {}
+    for case in cases:
+        for kind, count in (case.get("scout_error_kinds") or {}).items():
+            scout_error_kinds[str(kind)] = scout_error_kinds.get(str(kind), 0) + int(count or 0)
     return {
         "case_count": total,
         "available_rate": round(available / total, 4) if total else 0.0,
@@ -267,6 +281,7 @@ def summarize_metrics(cases: list[dict[str, Any]]) -> dict[str, Any]:
         "card_count": cards,
         "avg_elapsed_ms": round(sum(elapsed) / total, 2) if total else 0.0,
         "max_elapsed_ms": round(max(elapsed), 2) if elapsed else 0.0,
+        "scout_error_kinds": scout_error_kinds,
     }
 
 
@@ -291,6 +306,7 @@ def main() -> int:
     parser.add_argument("--registry")
     parser.add_argument("--registry-dir")
     parser.add_argument("--api-key-env", default="DEEPSEEK_API_KEY")
+    parser.add_argument("--user-id", help="Optional DeepSeek user_id; omit to use a stable sanitized hash.")
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
     payload = run_warm_ambient_recall_benchmark(
@@ -304,6 +320,7 @@ def main() -> int:
         registry_path=args.registry,
         registry_dir=args.registry_dir,
         api_key_env=args.api_key_env,
+        user_id=args.user_id,
     )
     if args.json_output:
         print(json.dumps(payload, ensure_ascii=False, indent=2))

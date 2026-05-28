@@ -54,6 +54,7 @@ DEFAULT_QUORUM = int(os.environ.get("AIPPOCAMPUS_WARM_RECALL_QUORUM", "3"))
 DEFAULT_MAX_CARDS = 3
 DEFAULT_MAX_CATALOG_ITEMS = int(os.environ.get("AIPPOCAMPUS_WARM_RECALL_CATALOG_LIMIT", "64"))
 DEFAULT_TEMPERATURE = float(os.environ.get("AIPPOCAMPUS_WARM_RECALL_TEMPERATURE", "0.2"))
+DEFAULT_USER_ID_PREFIX = "aip-warm"
 
 SCOUT_FAMILIES = (
     "intent_mode_classifier",
@@ -111,6 +112,32 @@ SUPPORT_RANK = {SCENT: 1, CANDIDATE: 2, EVIDENCE: 3}
 
 ChatFn = Callable[[list[dict[str, str]], str, str, str, int | None, float, float], dict[str, Any]]
 ScoutFn = Callable[..., dict[str, Any]]
+
+
+def env_positive_int(name: str) -> int | None:
+    raw = str(os.environ.get(name) or "").strip()
+    if not raw:
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        return None
+    return value if value > 0 else None
+
+
+def resolve_max_workers(max_workers: int | None) -> int | None:
+    if max_workers and int(max_workers) > 0:
+        return int(max_workers)
+    return env_positive_int("AIPPOCAMPUS_WARM_RECALL_MAX_WORKERS")
+
+
+def warm_deepseek_user_id(*, cwd: Path | str, thread_id: str | None = None, user_id: str | None = None) -> str:
+    if user_id:
+        if not re.fullmatch(r"[a-zA-Z0-9\-_]{1,512}", user_id):
+            raise ValueError("user_id must match [a-zA-Z0-9\\-_]+ and be at most 512 chars")
+        return user_id
+    seed = f"{Path(cwd).resolve()}\n{thread_id or ''}\nwarm-ambient-recall"
+    return f"{DEFAULT_USER_ID_PREFIX}-{hashlib.sha1(seed.casefold().encode('utf-8')).hexdigest()[:32]}"
 
 SYSTEM_PROMPT = """You are an AIppocampus warm ambient-recall scout.
 Return strict JSON only. You are not memory truth and you are not answering the
@@ -450,8 +477,10 @@ def model_scout_fn(
     max_tokens: int | None,
     timeout: float,
     temperature: float,
+    user_id: str | None,
     chat_fn: ChatFn,
 ) -> dict[str, Any]:
+    kwargs = {"user_id": user_id} if user_id else {}
     return chat_fn(
         [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -463,6 +492,7 @@ def model_scout_fn(
         max_tokens,
         timeout,
         temperature,
+        **kwargs,
     )
 
 
@@ -577,6 +607,7 @@ def parse_scout_output(raw: dict[str, Any], scout: str) -> dict[str, Any]:
 
 def _error_row(scout: str, exc: BaseException) -> dict[str, Any]:
     family, variant = scout_lane_parts(scout)
+    reason = compact_text(f"{type(exc).__name__}: {exc}", 260)
     return {
         "scout": scout,
         "scout_family": family,
@@ -589,11 +620,27 @@ def _error_row(scout: str, exc: BaseException) -> dict[str, Any]:
         "themes": [],
         "negative_contexts": [],
         "block": False,
-        "reason": compact_text(f"{type(exc).__name__}: {exc}", 260),
+        "reason": reason,
+        "error_kind": scout_error_kind(reason),
         "usage": {},
         "candidates": [],
         "useful": False,
     }
+
+
+def scout_error_kind(reason: Any) -> str:
+    text = str(reason or "").casefold()
+    if "429" in text or "rate limit" in text or "rate_limited" in text:
+        return "rate_limited_429"
+    if "timeout" in text or "timed out" in text:
+        return "read_timeout"
+    if "json" in text or "parse" in text or "decode" in text:
+        return "invalid_json"
+    if "401" in text or "403" in text or "auth" in text or "api key" in text:
+        return "auth_error"
+    if "connect" in text or "connection" in text or "network" in text or "urlerror" in text:
+        return "connection_error"
+    return "scout_error"
 
 
 def run_scout(
@@ -606,6 +653,7 @@ def run_scout(
     max_tokens: int | None,
     timeout: float,
     temperature: float,
+    user_id: str | None,
     chat_fn: ChatFn,
     scout_fn: ScoutFn,
 ) -> dict[str, Any]:
@@ -618,6 +666,7 @@ def run_scout(
         max_tokens=max_tokens,
         timeout=timeout,
         temperature=temperature,
+        user_id=user_id,
         chat_fn=chat_fn,
     )
     return parse_scout_output(raw, scout)
@@ -635,6 +684,7 @@ def run_scout_batch(
     temperature: float,
     quorum: int,
     max_workers: int | None,
+    user_id: str | None,
     wait_all: bool,
     chat_fn: ChatFn,
     scout_fn: ScoutFn,
@@ -670,6 +720,7 @@ def run_scout_batch(
                         max_tokens=max_tokens,
                         timeout=timeout,
                         temperature=temperature,
+                        user_id=user_id,
                         chat_fn=chat_fn,
                         scout_fn=scout_fn,
                     )
@@ -1085,6 +1136,7 @@ def run_warm_ambient_recall(
     residue_reason: str = "warm_scout",
     api_key: str | None = None,
     api_key_env: str = "DEEPSEEK_API_KEY",
+    user_id: str | None = None,
     model: str = DEFAULT_MODEL,
     base_url: str = DEFAULT_BASE_URL,
     max_tokens: int | None = None,
@@ -1112,6 +1164,8 @@ def run_warm_ambient_recall(
     key_value = api_key or os.environ.get(api_key_env)
     if not key_value:
         return unavailable_result("missing api key", secret_policy=secret_policy)
+    resolved_user_id = warm_deepseek_user_id(cwd=cwd_path, thread_id=thread_id, user_id=user_id)
+    resolved_max_workers = resolve_max_workers(max_workers)
     registry_obj, registry_path_obj = resolve_registry(
         registry=registry, registry_path=registry_path, registry_dir=registry_dir
     )
@@ -1133,7 +1187,8 @@ def run_warm_ambient_recall(
         timeout=timeout,
         temperature=temperature,
         quorum=quorum,
-        max_workers=max_workers,
+        max_workers=resolved_max_workers,
+        user_id=resolved_user_id,
         wait_all=wait_all,
         chat_fn=chat_fn,
         scout_fn=scout_fn,
@@ -1190,6 +1245,8 @@ def run_warm_ambient_recall(
         "reason": "",
         "quorum_met": quorum_met,
         "scout_count": len(scout_names),
+        "max_workers": resolved_max_workers or len(scout_names),
+        "user_id": resolved_user_id,
         "accepted_scout_count": accepted_count,
         "failed_scout_count": failed_count,
         "scouts": rows,
@@ -1230,6 +1287,7 @@ def main() -> int:
     parser.add_argument("--residue")
     parser.add_argument("--residue-reason", default="warm_scout")
     parser.add_argument("--api-key-env", default="DEEPSEEK_API_KEY")
+    parser.add_argument("--user-id", help="Optional DeepSeek user_id; omit to send a stable sanitized hash.")
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
     parser.add_argument("--max-tokens", type=int, default=None)
@@ -1258,6 +1316,7 @@ def main() -> int:
         residue_reason=args.residue_reason,
         api_key=os.environ.get(args.api_key_env),
         api_key_env=args.api_key_env,
+        user_id=args.user_id,
         model=args.model,
         base_url=args.base_url,
         max_tokens=args.max_tokens,

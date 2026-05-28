@@ -56,7 +56,15 @@ finish, and `--wait-all` belongs to explicit evaluation or detached warming.
 Use `benchmarks/aippocampus/benchmark_warm_ambient_recall.py` for calibration.
 Deterministic mode is CI-safe. Live mode may call the configured external model
 but must keep output sanitized to prompt hashes, aggregate metrics, validation
-status counts, and cache usage only.
+status counts, error-kind buckets, and cache usage only. DeepSeek-compatible
+calls include a stable hashed `user_id` by default so the 50 lanes share the
+same privacy-safe scheduling/KV-cache bucket; callers may override it only with
+an already sanitized `[a-zA-Z0-9_-]` id. Treat `429` and read timeouts as
+different calibration signals: the former means rate/concurrency pressure, the
+latter means the foreground budget is too short for wait-all.
+`AIPPOCAMPUS_WARM_RECALL_MAX_WORKERS` may cap the default live worker count for
+shared accounts or pro-model experiments; keep the normal foreground behavior
+quorum-first.
 
 Callers may opt into residue export by passing a residue output path to the
 thread-cache writer. This writes `aippocampus_ambient_residue` JSONL rows for

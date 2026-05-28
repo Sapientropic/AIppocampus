@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
@@ -85,6 +87,50 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(len(calls), 50)
         self.assertEqual(warm.SCOUT_PRIORITY["key_line_hunter"], "P0")
         self.assertEqual(warm.SCOUT_PRIORITY["semantic_expander"], "P1")
+
+    def test_env_max_workers_becomes_default_concurrency_limit(self) -> None:
+        def scout_fn(scout, payload, **kwargs):
+            del scout, payload, kwargs
+            return {"decision": "skip", "confidence": 0.1}
+
+        with patch.dict(os.environ, {"AIPPOCAMPUS_WARM_RECALL_MAX_WORKERS": "7"}):
+            result = warm.run_warm_ambient_recall(
+                "继续 ambient recall",
+                cwd=self.workspace,
+                thread_id="thread-a",
+                cache_path=self.cache_path,
+                api_key="test-key",
+                scout_fn=scout_fn,
+                wait_all=True,
+                no_write=True,
+            )
+
+        self.assertEqual(result["max_workers"], 7)
+
+    def test_model_scout_uses_stable_sanitized_user_id(self) -> None:
+        seen_user_ids: list[str | None] = []
+
+        def chat_fn(messages, api_key, model, base_url, max_tokens, timeout, temperature, *, user_id=None):
+            del messages, api_key, model, base_url, max_tokens, timeout, temperature
+            seen_user_ids.append(user_id)
+            content = json.dumps({"decision": "skip", "confidence": 0.1})
+            return {"choices": [{"message": {"content": content}}]}
+
+        warm.run_warm_ambient_recall(
+            "继续 ambient recall",
+            cwd=self.workspace,
+            thread_id="thread-a",
+            cache_path=self.cache_path,
+            api_key="test-key",
+            chat_fn=chat_fn,
+            scouts=("intent_mode_classifier", "key_line_hunter"),
+            wait_all=True,
+            no_write=True,
+        )
+
+        self.assertEqual(len(set(seen_user_ids)), 1)
+        self.assertRegex(seen_user_ids[0] or "", r"^aip-warm-[a-f0-9]{32}$")
+        self.assertNotIn(str(self.workspace), seen_user_ids[0] or "")
 
     def test_quorum_returns_without_waiting_for_all_scouts(self) -> None:
         calls: list[str] = []

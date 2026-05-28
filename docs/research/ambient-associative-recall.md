@@ -220,6 +220,17 @@ The full wait-all scout batch belongs to explicit recall, evaluation, or
 detached warming. The always-on foreground route should be cache-first,
 timeboxed, and fail-open.
 
+DeepSeek scheduling details matter more than raw account limit for this path.
+The 50-lane batch is small relative to the documented v4-flash account
+concurrency limit, but foreground latency still depends on request completion.
+Warm scouts therefore send one stable hashed `user_id` for the batch, preserving
+privacy-safe KV-cache/scheduler isolation without embedding user names, prompts,
+or paths. Benchmark output should distinguish `rate_limited_429` from
+`read_timeout`: a 429 asks for concurrency/backoff tuning, while a read timeout
+usually means the caller should stay quorum-first or move wait-all to detached
+evaluation. `AIPPOCAMPUS_WARM_RECALL_MAX_WORKERS` can cap live worker count for
+shared accounts or pro-model experiments without changing the 50-lane taxonomy.
+
 ## Source-Backed Merge
 
 Model output is never memory truth.
@@ -362,7 +373,8 @@ The first slice should stay small but real:
    prompt text.
 8. Use `benchmarks/aippocampus/benchmark_warm_ambient_recall.py` for sanitized
    calibration. Deterministic mode is CI-safe; live mode may call the configured
-   DeepSeek-compatible model but emits only hashes and aggregate metrics.
+   DeepSeek-compatible model but emits only hashes, aggregate metrics,
+   validation status counts, error-kind buckets, and cache metrics.
 9. Source-ref validation, current-thread echo suppression, and LLM-directed
    topic epoch rotation are now in the standalone prototype. Next: tune
    visibility selection and late-result cache updates after more real prompt

@@ -36,6 +36,30 @@ class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
         self.assertNotIn("那个脑内续接器", raw)
         self.assertNotIn("cards", payload["cases"][0])
 
+    def test_benchmark_summarizes_timeout_and_rate_limit_failures(self) -> None:
+        summary = benchmark.summarize_case(
+            benchmark.BUILTIN_CASES[0],
+            {
+                "available": False,
+                "status": "ready",
+                "scout_count": 2,
+                "scouts": [
+                    {"ok": False, "error_kind": "read_timeout"},
+                    {"ok": False, "error_kind": "rate_limited_429"},
+                ],
+                "accepted_scout_count": 0,
+                "failed_scout_count": 2,
+                "cards": [],
+                "elapsed_ms": 100.0,
+            },
+        )
+        metrics = benchmark.summarize_metrics([summary])
+
+        self.assertEqual(summary["scout_error_kinds"]["read_timeout"], 1)
+        self.assertEqual(summary["scout_error_kinds"]["rate_limited_429"], 1)
+        self.assertEqual(metrics["scout_error_kinds"]["read_timeout"], 1)
+        self.assertEqual(metrics["scout_error_kinds"]["rate_limited_429"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

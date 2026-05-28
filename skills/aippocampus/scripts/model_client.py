@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -21,6 +22,7 @@ class ChatClientConfig:
     timeout: float = 60.0
     temperature: float = 0.0
     service_name: str = "OpenAI-compatible chat API"
+    user_id: str | None = None
 
 
 def _chat_completions_url(config: ChatClientConfig) -> str:
@@ -40,6 +42,10 @@ def chat_json(messages: list[dict[str, str]], config: ChatClientConfig) -> dict[
     }
     if config.max_tokens is not None:
         body["max_tokens"] = config.max_tokens
+    if config.user_id:
+        if not re.fullmatch(r"[a-zA-Z0-9\-_]{1,512}", config.user_id):
+            raise ValueError("user_id must match [a-zA-Z0-9\\-_]+ and be at most 512 chars")
+        body["user_id"] = config.user_id
     req = urllib.request.Request(
         url,
         data=json.dumps(body, ensure_ascii=False).encode("utf-8"),

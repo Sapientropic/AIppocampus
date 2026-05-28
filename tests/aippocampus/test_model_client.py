@@ -111,6 +111,37 @@ class ModelClientTests(unittest.TestCase):
         self.assertEqual(captured["url"], "http://localhost:11434/v1/chat/completions")
         self.assertEqual(captured["timeout"], 3)
 
+    def test_chat_json_includes_sanitized_user_id_when_configured(self) -> None:
+        captured: dict[str, object] = {}
+
+        class FakeResponse:
+            def __enter__(self) -> "FakeResponse":
+                return self
+
+            def __exit__(self, *_: object) -> None:
+                return None
+
+            def read(self) -> bytes:
+                return json.dumps({"choices": [{"message": {"content": "{}"}}]}).encode("utf-8")
+
+        def fake_urlopen(req: object, timeout: int) -> FakeResponse:
+            del timeout
+            captured["body"] = json.loads(getattr(req, "data").decode("utf-8"))
+            return FakeResponse()
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            model_client.chat_json(
+                [{"role": "user", "content": "{}"}],
+                model_client.ChatClientConfig(
+                    api_key="test",
+                    model="deepseek-v4-flash",
+                    base_url="https://example.invalid",
+                    user_id="aip-warm-abc_123",
+                ),
+            )
+
+        self.assertEqual(captured["body"]["user_id"], "aip-warm-abc_123")
+
 
 if __name__ == "__main__":
     unittest.main()
