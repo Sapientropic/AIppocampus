@@ -55,6 +55,7 @@ DEFAULT_QUORUM = int(os.environ.get("AIPPOCAMPUS_WARM_RECALL_QUORUM", "3"))
 DEFAULT_MAX_CARDS = 3
 DEFAULT_MAX_CATALOG_ITEMS = int(os.environ.get("AIPPOCAMPUS_WARM_RECALL_CATALOG_LIMIT", "64"))
 DEFAULT_TEMPERATURE = float(os.environ.get("AIPPOCAMPUS_WARM_RECALL_TEMPERATURE", "0.2"))
+DEFAULT_THINKING = os.environ.get("AIPPOCAMPUS_WARM_RECALL_THINKING", "enabled")
 DEFAULT_USER_ID_PREFIX = "aip-warm"
 DEFAULT_PREFIX_CACHE_WARMUP_SCOUTS = int(os.environ.get("AIPPOCAMPUS_WARM_PREFIX_CACHE_WARMUP_SCOUTS", "0") or 0)
 DEFAULT_DETACHED_PREFIX_CACHE_WARMUP_SCOUTS = int(
@@ -138,7 +139,7 @@ SCOUT_CANDIDATE_LIMITS = {
     "semantic_expander": 0,
 }
 
-ChatFn = Callable[[list[dict[str, str]], str, str, str, int | None, float, float], dict[str, Any]]
+ChatFn = Callable[..., dict[str, Any]]
 ScoutFn = Callable[..., dict[str, Any]]
 
 
@@ -157,6 +158,15 @@ def resolve_max_workers(max_workers: int | None) -> int | None:
     if max_workers and int(max_workers) > 0:
         return int(max_workers)
     return env_positive_int("AIPPOCAMPUS_WARM_RECALL_MAX_WORKERS")
+
+
+def resolve_thinking_mode(value: str | None = None) -> str | None:
+    raw = str(DEFAULT_THINKING if value is None else value).strip().casefold()
+    if raw in {"", "provider", "default", "none"}:
+        return None
+    if raw not in {"enabled", "disabled"}:
+        raise ValueError("AIPPOCAMPUS_WARM_RECALL_THINKING must be enabled, disabled, or provider")
+    return raw
 
 
 def warm_deepseek_user_id(*, cwd: Path | str, thread_id: str | None = None, user_id: str | None = None) -> str:
@@ -186,15 +196,123 @@ Rules:
 """
 
 OUTPUT_BUDGET_RULES = """Output budget rules:
-- Do not copy or fill output_contract; it is schema only.
-- Return one compact JSON object, usually under 180 tokens.
+- Do not copy or fill output_contract/output_profile; they are schema only.
+- Return one compact JSON object using only scout_task.output_profile fields.
 - Omit empty arrays and unused optional fields.
-- At most 3 query_aliases, 2 themes, and 2 negative_contexts.
-- Candidate budget: Theme/Key-line/Cross-domain scouts may return up to 2
-  strong candidates; Evidence-gap/Nudge/Trajectory/Style scouts may return 1;
-  Intent/Privacy/Semantic-expander scouts should return no candidates unless
-  they cite concrete source_refs.
+- Keep reason/topic_epoch_reason under one short clause.
+- If you cannot produce a field that will be used, omit it.
 """
+
+TOPIC_EPOCH_FAMILIES = {
+    "intent_mode_classifier",
+    "deep_theme_matcher",
+    "evidence_gap_sentinel",
+    "trajectory_matcher",
+}
+
+SCOUT_OUTPUT_PROFILES = {
+    "intent_mode_classifier": {
+        "allowed_fields": [
+            "decision",
+            "confidence",
+            "topic_epoch_action",
+            "topic_epoch_label",
+            "topic_epoch_reason",
+        ],
+        "candidate_fields": [],
+        "query_alias_limit": 0,
+        "negative_context_limit": 0,
+        "theme_limit": 0,
+    },
+    "privacy_boundary_guard": {
+        "allowed_fields": ["decision", "confidence", "block", "negative_contexts", "reason"],
+        "candidate_fields": [],
+        "query_alias_limit": 0,
+        "negative_context_limit": 2,
+        "theme_limit": 0,
+    },
+    "semantic_expander": {
+        "allowed_fields": ["decision", "confidence", "query_aliases"],
+        "candidate_fields": [],
+        "query_alias_limit": 5,
+        "negative_context_limit": 0,
+        "theme_limit": 0,
+    },
+    "deep_theme_matcher": {
+        "allowed_fields": [
+            "decision",
+            "confidence",
+            "themes",
+            "candidates",
+            "topic_epoch_action",
+            "topic_epoch_label",
+            "topic_epoch_reason",
+        ],
+        "candidate_fields": ["theme", "support_level", "matched_terms", "source_refs", "key_line"],
+        "query_alias_limit": 0,
+        "negative_context_limit": 0,
+        "theme_limit": 2,
+    },
+    "key_line_hunter": {
+        "allowed_fields": ["decision", "confidence", "themes", "candidates"],
+        "candidate_fields": ["theme", "support_level", "key_line", "matched_terms", "source_refs"],
+        "query_alias_limit": 0,
+        "negative_context_limit": 0,
+        "theme_limit": 1,
+    },
+    "evidence_gap_sentinel": {
+        "allowed_fields": [
+            "decision",
+            "confidence",
+            "block",
+            "negative_contexts",
+            "reason",
+            "topic_epoch_action",
+            "topic_epoch_label",
+            "topic_epoch_reason",
+        ],
+        "candidate_fields": [],
+        "query_alias_limit": 0,
+        "negative_context_limit": 2,
+        "theme_limit": 0,
+    },
+    "user_style_preference": {
+        "allowed_fields": ["decision", "confidence", "themes", "candidates"],
+        "candidate_fields": ["theme", "support_level", "matched_terms", "source_refs"],
+        "query_alias_limit": 0,
+        "negative_context_limit": 0,
+        "theme_limit": 1,
+    },
+    "trajectory_matcher": {
+        "allowed_fields": [
+            "decision",
+            "confidence",
+            "themes",
+            "candidates",
+            "topic_epoch_action",
+            "topic_epoch_label",
+            "topic_epoch_reason",
+        ],
+        "candidate_fields": ["theme", "support_level", "matched_terms", "source_refs"],
+        "query_alias_limit": 0,
+        "negative_context_limit": 0,
+        "theme_limit": 1,
+    },
+    "cross_domain_bridge": {
+        "allowed_fields": ["decision", "confidence", "themes", "candidates"],
+        "candidate_fields": ["theme", "support_level", "matched_terms", "source_refs", "nudge"],
+        "query_alias_limit": 0,
+        "negative_context_limit": 0,
+        "theme_limit": 1,
+    },
+    "nudge_writer": {
+        "allowed_fields": ["decision", "confidence", "candidates"],
+        "candidate_fields": ["theme", "support_level", "nudge", "matched_terms", "source_refs"],
+        "query_alias_limit": 0,
+        "negative_context_limit": 0,
+        "theme_limit": 0,
+    },
+}
 
 FAMILY_TASKS = {
     "intent_mode_classifier": "Classify task mode, visibility bias, collaboration posture, and cognitive load.",
@@ -361,6 +479,8 @@ def _safe_text(value: Any, chars: int) -> str:
 
 
 def _clean_list(values: Any, *, limit: int, chars: int = 100) -> list[str]:
+    if int(limit) <= 0:
+        return []
     if isinstance(values, str):
         values = [values]
     if not isinstance(values, list):
@@ -509,15 +629,8 @@ def build_payload(
         "output_contract": {
             "decision": "skip|background_only|scent|candidate|evidence",
             "confidence": 0.0,
-            "optional": (
-                "topic_epoch_action, topic_epoch_label, topic_epoch_reason, "
-                "query_aliases, themes, negative_contexts, candidates, block, reason"
-            ),
-            "candidate_shape": (
-                "theme, support_level, visibility, resonance, suggested_use, nudge, "
-                "key_line, matched_terms, source_refs"
-            ),
-            "limits": "max 3 aliases, max 2 themes, max 2 negative_contexts; candidate budget depends on scout family",
+            "field_budget": "Use only scout_task.output_profile fields; omit disallowed or empty fields.",
+            "source_ref_rule": "Only cite source_refs already present in context.",
         },
         "prompt": compact_text(sanitized_prompt, 1200),
         "prompt_trace": _clean_prompt_trace(prompt_trace or []),
@@ -561,20 +674,75 @@ def lens_task_for(family: str, variant: str) -> str:
     return f"{family_task} {variant_task}"
 
 
+def output_profile_for_family(family: str) -> dict[str, Any]:
+    profile = SCOUT_OUTPUT_PROFILES.get(family) or {}
+    max_candidates = SCOUT_CANDIDATE_LIMITS.get(family, 1)
+    return {
+        "allowed_fields": profile.get("allowed_fields") or ["decision", "confidence"],
+        "candidate_fields": profile.get("candidate_fields") or [],
+        "max_candidates": max_candidates,
+        "max_query_aliases": int(profile.get("query_alias_limit") or 0),
+        "max_themes": int(profile.get("theme_limit") or 0),
+        "max_negative_contexts": int(profile.get("negative_context_limit") or 0),
+    }
+
+
+def _shared_context_for_prompt(payload: dict[str, Any]) -> dict[str, Any]:
+    shared = {
+        "prompt_version": payload.get("prompt_version"),
+        "task": payload.get("task"),
+        "workspace_name": payload.get("workspace_name"),
+        "output_contract": payload.get("output_contract"),
+        "memory_catalog": payload.get("memory_catalog") or [],
+    }
+    return {
+        key: value
+        for key, value in shared.items()
+        if value is not None and value != "" and value != []
+    }
+
+
+def _prompt_context_for_prompt(payload: dict[str, Any]) -> dict[str, Any]:
+    context = {
+        "prompt": payload.get("prompt") or "",
+        "prompt_terms": payload.get("prompt_terms") or [],
+    }
+    if payload.get("prompt_trace"):
+        context["prompt_trace"] = payload.get("prompt_trace")
+    return context
+
+
+def _variant_context_for_prompt(variant: str, payload: dict[str, Any]) -> dict[str, Any]:
+    del payload
+    if variant in {"current_trace_window", "clean_source_window", "skeptic_window"}:
+        return {"prompt_trace_policy": "use prompt_context.prompt_trace for echo, source-ref, drift, and gap checks"}
+    return {}
+
+
 def scout_prompt(scout: str, payload: dict[str, Any]) -> str:
     family, variant = scout_lane_parts(scout)
     return json.dumps(
         {
             "output_budget": OUTPUT_BUDGET_RULES,
-            "shared_context": payload,
+            # Prefix order is tuned for DeepSeek-style complete-prefix cache
+            # units. Stable catalog/context comes first for cross-case reuse;
+            # sanitized prompt/trace comes before the scout split so the 50
+            # lanes of one case can reuse the same case prefix after the warmup
+            # wave. Keep scout_task after prompt_context; moving it earlier
+            # makes every lane diverge before the largest same-case prefix.
+            "shared_context": _shared_context_for_prompt(payload),
+            "prompt_context": _prompt_context_for_prompt(payload),
             "scout_task": {
                 "scout": f"{family}:{variant}",
                 "scout_family": family,
                 "scout_variant": variant,
+                "priority": SCOUT_PRIORITY.get(family, "P1"),
                 "family_task": FAMILY_TASKS.get(family, "Analyze warm ambient recall relevance."),
                 "variant_task": VARIANT_TASKS.get(variant, "Use this candidate/query variant carefully."),
                 "lens_task": lens_task_for(family, variant),
+                "output_profile": output_profile_for_family(family),
             },
+            "variant_context": _variant_context_for_prompt(variant, payload),
         },
         ensure_ascii=False,
         indent=2,
@@ -594,7 +762,10 @@ def model_scout_fn(
     user_id: str | None,
     chat_fn: ChatFn,
 ) -> dict[str, Any]:
-    kwargs = {"user_id": user_id} if user_id else {}
+    thinking = resolve_thinking_mode()
+    kwargs = {"thinking": thinking} if thinking else {}
+    if user_id:
+        kwargs["user_id"] = user_id
     return chat_fn(
         [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -621,10 +792,27 @@ def _candidate_from_theme(theme: str, row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _clean_candidate(candidate: dict[str, Any], *, row: dict[str, Any]) -> dict[str, Any] | None:
+def _clean_candidate(
+    candidate: dict[str, Any],
+    *,
+    row: dict[str, Any],
+    candidate_fields: set[str] | None = None,
+) -> dict[str, Any] | None:
+    candidate_fields = candidate_fields or {
+        "theme",
+        "support_level",
+        "visibility",
+        "resonance",
+        "suggested_use",
+        "nudge",
+        "key_line",
+        "matched_terms",
+        "source_refs",
+        "expand_if",
+    }
     refs = [
         clean for clean in (_clean_source_ref(ref) for ref in candidate.get("source_refs") or []) if clean
-    ][:3]
+    ][:3] if "source_refs" in candidate_fields else []
     support = str(candidate.get("support_level") or row.get("decision") or SCENT).strip().casefold()
     if support not in VALID_SUPPORT_LEVELS:
         support = CANDIDATE if row.get("decision") == "candidate" else SCENT
@@ -638,7 +826,11 @@ def _clean_candidate(candidate: dict[str, Any], *, row: dict[str, Any]) -> dict[
     else:
         visibility = requested_visibility if requested_visibility in {SILENT_TUNING, ACTIVE_GENTLE_NUDGE} else ACTIVE_GENTLE_NUDGE
     theme = _safe_text(candidate.get("theme") or candidate.get("title"), 140)
-    key_line = _safe_text(candidate.get("key_line") or candidate.get("snippet"), 220)
+    key_line = (
+        _safe_text(candidate.get("key_line") or candidate.get("snippet"), 220)
+        if "key_line" in candidate_fields
+        else ""
+    )
     if not theme and not key_line:
         return None
     if not theme:
@@ -650,18 +842,22 @@ def _clean_candidate(candidate: dict[str, Any], *, row: dict[str, Any]) -> dict[
         "support_level": support,
         "visibility": visibility,
         "suggested_use": _safe_text(
-            candidate.get("suggested_use")
+            (candidate.get("suggested_use") if "suggested_use" in candidate_fields else "")
             or ("Use only with the attached source refs." if support == EVIDENCE else "Treat as provisional resonance."),
             220,
         ),
-        "nudge": _safe_text(candidate.get("nudge"), 220),
+        "nudge": _safe_text(candidate.get("nudge"), 220) if "nudge" in candidate_fields else "",
         "key_line": key_line,
         "matched_terms": _clean_list(
-            candidate.get("matched_terms") or row.get("query_aliases") or [], limit=6, chars=80
+            (candidate.get("matched_terms") if "matched_terms" in candidate_fields else [])
+            or row.get("query_aliases")
+            or [],
+            limit=6,
+            chars=80,
         ),
         "source_refs": refs,
         "expand_if": _safe_text(
-            candidate.get("expand_if")
+            (candidate.get("expand_if") if "expand_if" in candidate_fields else "")
             or "Search clean source before presenting exact claims as facts.",
             160,
         ),
@@ -676,10 +872,17 @@ def parse_scout_output(raw: dict[str, Any], scout: str) -> dict[str, Any]:
         parsed = {}
     family, variant = scout_lane_parts(scout)
     scout_id = f"{family}:{variant}" if family else str(scout or "")
+    profile = output_profile_for_family(family)
+    allowed_fields = set(profile["allowed_fields"])
+    candidate_fields = set(profile["candidate_fields"])
     decision = str(parsed.get("decision") or "skip").strip().casefold()
     if decision not in VALID_DECISIONS:
         decision = "skip"
-    epoch_action = str(parsed.get("topic_epoch_action") or "").strip().casefold()
+    epoch_action = (
+        str(parsed.get("topic_epoch_action") or "").strip().casefold()
+        if family in TOPIC_EPOCH_FAMILIES and "topic_epoch_action" in allowed_fields
+        else ""
+    )
     if epoch_action not in VALID_TOPIC_EPOCH_ACTIONS:
         epoch_action = ""
     confidence = clamp_confidence(parsed.get("confidence"))
@@ -699,28 +902,43 @@ def parse_scout_output(raw: dict[str, Any], scout: str) -> dict[str, Any]:
         if epoch_action
         else None,
         "query_aliases": _clean_list(
-            parsed.get("query_aliases") or parsed.get("aliases") or [], limit=12, chars=80
+            parsed.get("query_aliases") or parsed.get("aliases") or [],
+            limit=int(profile["max_query_aliases"]),
+            chars=80,
         ),
         "themes": [],
-        "negative_contexts": _clean_list(parsed.get("negative_contexts") or [], limit=8, chars=120),
-        "block": bool(parsed.get("block")),
-        "reason": _safe_text(parsed.get("reason"), 220),
+        "negative_contexts": _clean_list(
+            parsed.get("negative_contexts") or [],
+            limit=int(profile["max_negative_contexts"]),
+            chars=120,
+        ),
+        "block": bool(parsed.get("block")) if "block" in allowed_fields else False,
+        "reason": _safe_text(parsed.get("reason"), 120) if "reason" in allowed_fields else "",
         "usage": usage,
         "candidates": [],
     }
-    row["themes"], theme_candidates = _split_theme_items(
-        parsed.get("themes") if "themes" in parsed else parsed.get("theme")
-    )
+    if "themes" in allowed_fields:
+        row["themes"], theme_candidates = _split_theme_items(
+            parsed.get("themes") if "themes" in parsed else parsed.get("theme")
+        )
+        row["themes"] = row["themes"][: int(profile["max_themes"])]
+    else:
+        theme_candidates = []
     candidates = [
         item for item in parsed.get("candidates") or [] if isinstance(item, dict)
-    ]
+    ] if "candidates" in allowed_fields else []
     candidates.extend(theme_candidates)
     for theme in row["themes"]:
         if not any(str(item.get("theme") or "").casefold() == theme.casefold() for item in candidates):
             candidates.append(_candidate_from_theme(theme, row))
     candidate_limit = SCOUT_CANDIDATE_LIMITS.get(family, 1)
     row["candidates"] = [
-        card for card in (_clean_candidate(candidate, row=row) for candidate in candidates) if card
+        card
+        for card in (
+            _clean_candidate(candidate, row=row, candidate_fields=candidate_fields)
+            for candidate in candidates
+        )
+        if card
     ][:candidate_limit]
     row["useful"] = bool(
         row["decision"] in {"scent", "candidate", "evidence"}

@@ -23,6 +23,7 @@ class ChatClientConfig:
     temperature: float = 0.0
     service_name: str = "OpenAI-compatible chat API"
     user_id: str | None = None
+    thinking: str | None = None
 
 
 def _chat_completions_url(config: ChatClientConfig) -> str:
@@ -34,14 +35,22 @@ def _chat_completions_url(config: ChatClientConfig) -> str:
 
 def chat_json(messages: list[dict[str, str]], config: ChatClientConfig) -> dict[str, Any]:
     url = _chat_completions_url(config)
+    thinking = ""
+    if config.thinking:
+        thinking = config.thinking.strip().casefold()
+        if thinking not in {"enabled", "disabled"}:
+            raise ValueError("thinking must be 'enabled' or 'disabled'")
     body: dict[str, Any] = {
         "model": config.model,
         "messages": sanitize_external_model_payload(messages),
-        "temperature": config.temperature,
         "response_format": {"type": "json_object"},
     }
+    if thinking != "enabled":
+        body["temperature"] = config.temperature
     if config.max_tokens is not None:
         body["max_tokens"] = config.max_tokens
+    if thinking:
+        body["thinking"] = {"type": thinking}
     if config.user_id:
         if not re.fullmatch(r"[a-zA-Z0-9\-_]{1,512}", config.user_id):
             raise ValueError("user_id must match [a-zA-Z0-9\\-_]+ and be at most 512 chars")

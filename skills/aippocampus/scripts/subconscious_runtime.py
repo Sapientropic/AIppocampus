@@ -58,7 +58,7 @@ Source rules:
 - If tool observations contain concrete decisions, libraries, workflows, or contrasts, do not return an empty final.
 """
 
-ChatFn = Callable[[list[dict[str, str]], str, str, str, int | None, float, float], dict[str, Any]]
+ChatFn = Callable[..., dict[str, Any]]
 
 
 @dataclass
@@ -100,6 +100,7 @@ def call_chat_json(
     temperature: float,
     *,
     user_id: str | None = None,
+    thinking: str | None = None,
 ) -> dict[str, Any]:
     return chat_json(
         messages,
@@ -112,6 +113,7 @@ def call_chat_json(
             temperature=temperature,
             service_name="DeepSeek API",
             user_id=user_id,
+            thinking=thinking,
         ),
     )
 

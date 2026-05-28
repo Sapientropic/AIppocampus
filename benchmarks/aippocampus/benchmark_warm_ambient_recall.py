@@ -332,6 +332,41 @@ def write_progress_row(progress_jsonl: Path | str | None, row: dict[str, Any]) -
         handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 
 
+def _usage_int(usage: dict[str, Any], key: str) -> int:
+    try:
+        return int(usage.get(key) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def summarize_scout_usage_by_family(scouts: list[dict[str, Any]]) -> dict[str, dict[str, int]]:
+    by_family: dict[str, dict[str, int]] = {}
+    for row in scouts:
+        family = str(row.get("scout_family") or "unknown")
+        usage = row.get("usage") if isinstance(row.get("usage"), dict) else {}
+        bucket = by_family.setdefault(
+            family,
+            {
+                "scout_count": 0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "prompt_cache_hit_tokens": 0,
+                "prompt_cache_miss_tokens": 0,
+            },
+        )
+        bucket["scout_count"] += 1
+        for key in (
+            "prompt_tokens",
+            "completion_tokens",
+            "total_tokens",
+            "prompt_cache_hit_tokens",
+            "prompt_cache_miss_tokens",
+        ):
+            bucket[key] += _usage_int(usage, key)
+    return by_family
+
+
 def sha1_text(text: str) -> str:
     return hashlib.sha1(text.encode("utf-8")).hexdigest()[:16]
 
@@ -476,6 +511,7 @@ def summarize_case(case: WarmBenchmarkCase, result: dict[str, Any]) -> dict[str,
     cache_hit_rate = cache["hit_rate"] if "hit_rate" in cache else cache.get("prompt_cache_hit_rate")
     cache_hit_tokens = cache["hit_tokens"] if "hit_tokens" in cache else cache.get("prompt_cache_tokens")
     cache_miss_tokens = cache["miss_tokens"] if "miss_tokens" in cache else cache.get("prompt_cache_miss_tokens")
+    scout_usage_by_family = summarize_scout_usage_by_family(result.get("scouts") or [])
     summary = {
         "case_id": case.case_id,
         "prompt_sha1": sha1_text(case.prompt),
@@ -508,6 +544,7 @@ def summarize_case(case: WarmBenchmarkCase, result: dict[str, Any]) -> dict[str,
             "hit_tokens": cache_hit_tokens,
             "miss_tokens": cache_miss_tokens,
         },
+        "scout_usage_by_family": scout_usage_by_family,
     }
     expectation_failures: list[str] = []
     if case.expected_available is not None and summary["available"] != case.expected_available:
@@ -738,9 +775,30 @@ def summarize_metrics(cases: list[dict[str, Any]]) -> dict[str, Any]:
     )
     elapsed = [float(case.get("elapsed_ms") or 0.0) for case in cases]
     scout_error_kinds: dict[str, int] = {}
+    prompt_tokens = 0
+    completion_tokens = 0
+    total_tokens = 0
+    completion_tokens_by_family: dict[str, int] = {}
+    prompt_cache_hit_tokens_by_family: dict[str, int] = {}
+    prompt_cache_miss_tokens_by_family: dict[str, int] = {}
     for case in cases:
         for kind, count in (case.get("scout_error_kinds") or {}).items():
             scout_error_kinds[str(kind)] = scout_error_kinds.get(str(kind), 0) + int(count or 0)
+        for family, usage in (case.get("scout_usage_by_family") or {}).items():
+            if not isinstance(usage, dict):
+                continue
+            prompt_tokens += _usage_int(usage, "prompt_tokens")
+            completion = _usage_int(usage, "completion_tokens")
+            completion_tokens += completion
+            total_tokens += _usage_int(usage, "total_tokens")
+            key = str(family)
+            completion_tokens_by_family[key] = completion_tokens_by_family.get(key, 0) + completion
+            prompt_cache_hit_tokens_by_family[key] = prompt_cache_hit_tokens_by_family.get(key, 0) + _usage_int(
+                usage, "prompt_cache_hit_tokens"
+            )
+            prompt_cache_miss_tokens_by_family[key] = prompt_cache_miss_tokens_by_family.get(key, 0) + _usage_int(
+                usage, "prompt_cache_miss_tokens"
+            )
     return {
         "case_count": total,
         "available_rate": round(available / total, 4) if total else 0.0,
@@ -759,6 +817,12 @@ def summarize_metrics(cases: list[dict[str, Any]]) -> dict[str, Any]:
         else 0.0,
         "missing_source_refs_count": missing_source_refs,
         "card_count": cards,
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens,
+        "completion_tokens_by_family": dict(sorted(completion_tokens_by_family.items())),
+        "prompt_cache_hit_tokens_by_family": dict(sorted(prompt_cache_hit_tokens_by_family.items())),
+        "prompt_cache_miss_tokens_by_family": dict(sorted(prompt_cache_miss_tokens_by_family.items())),
         "avg_elapsed_ms": round(sum(elapsed) / total, 2) if total else 0.0,
         "max_elapsed_ms": round(max(elapsed), 2) if elapsed else 0.0,
         "scout_error_kinds": scout_error_kinds,

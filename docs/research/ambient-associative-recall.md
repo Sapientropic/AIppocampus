@@ -206,16 +206,28 @@ Each family runs across 5 variants: direct prompt, registry window,
 clean-source/source-ref window, current prompt trace window, and skeptic window.
 This gives sampling depth without losing merge structure.
 
-The runtime prompt keeps the lane-invariant payload first as `shared_context`,
-then appends the small `scout_task` suffix with `scout_family`,
-`scout_variant`, and `lens_task`. This preserves the 10x5 structure while
-making provider prefix-cache reuse possible. Cache-hit ratios remain an
+The runtime prompt keeps the largest shared prefix before the lane split:
+`output_budget`, `shared_context`, and `prompt_context` come before
+`scout_task`. This is deliberate. In a 50-lane batch, same-case prompt and
+trace context is usually the largest reusable prefix; putting the scout task
+before it makes every lane diverge too early and tanks cache hit rate. The
+stable catalog still sits before prompt text for cross-case reuse, but the
+50-lens matrix is not duplicated into every request. Cache-hit ratios remain an
 evaluation target; do not document guessed numbers as measured results.
 Because DeepSeek persists cache prefix units after completed requests, detached
 and evaluation runs should not launch every same-prefix lane cold at the exact
 same instant. Use a small prefix-cache warmup wave, then launch the remaining
 thin scout suffixes; foreground prompt hooks keep warmup disabled and rely on
 the already-written thread cache.
+
+Warm scouts stay quality-first: DeepSeek thinking mode is enabled by default,
+and `AIPPOCAMPUS_WARM_RECALL_THINKING=disabled` is only an explicit diagnostic
+or ablation setting. Do not couple thinking mode to sampling temperature.
+DeepSeek's thinking-mode contract says temperature/top-p style sampling
+parameters are not supported there, so the client omits `temperature` when
+`thinking=enabled`. JSON stability comes from `response_format=json_object`,
+strict parse isolation, output profiles, and deterministic validation rather
+than pretending a high temperature is safe.
 
 Each scout returns a small strict JSON object. A malformed result is isolated as
 `ok=false`; it must not poison the batch. The parent process owns merging,
@@ -265,9 +277,12 @@ and fail-open.
 Do not make `max_tokens` the primary tuning lever. It remains `None` by default
 so Flash can return complete compact JSON; only test token caps as an explicit
 diagnostic after source validation, case pass rate, invalid JSON, and false
-evidence remain stable. `AIPPOCAMPUS_WARM_RECALL_MAX_WORKERS` can cap live
-worker count for shared accounts or pro-model experiments without changing the
-50-lane taxonomy.
+evidence remain stable. If live output costs spike, first inspect
+`completion_tokens_details.reasoning_tokens`, the request `thinking` mode,
+`completion_tokens_by_family`, and per-family prompt-cache hit/miss tokens
+before changing worker count or truncating model answers.
+`AIPPOCAMPUS_WARM_RECALL_MAX_WORKERS` can cap live worker count for shared
+accounts or pro-model experiments without changing the 50-lane taxonomy.
 
 ## Source-Backed Merge
 
@@ -380,11 +395,20 @@ becoming a wait-all critical path for every prompt.
 
 ## First Implementable Slice
 
-Status: Card/cache first has landed, the 50-lane warm prototype exists, and an
-optional detached warm-job bridge now connects foreground cache misses to
-wait-all background warming. The runtime boundary is still narrow: foreground
-hook decisions stay cache-first, while the 50-lane batch runs only in explicit
-warm CLI/evaluation paths or detached jobs.
+Status: implementation slice landed and calibrated. Card/cache first, the
+50-lane warm prototype, detached warm jobs, residue export, source-ref
+validation, current-thread echo suppression, topic-epoch voting, and labeled
+benchmark calibration are all in place. The runtime boundary is intentionally
+narrow: foreground hook decisions stay cache-first, while the 50-lane batch
+runs only in explicit warm CLI/evaluation paths or detached jobs. The installed
+foreground path now default-enqueues detached warming after non-skip cache
+misses when a thread id and `DEEPSEEK_API_KEY` are available; explicit opt-out
+remains available for shared machines and budget debugging. Detached jobs have
+their own default timeout (`AIPPOCAMPUS_DETACHED_WARM_TIMEOUT`, 45s) so the
+runtime loop does not inherit the short standalone foreground-style warm
+timeout. Keep 15s as the foreground-style quorum-first evaluation floor; for
+detached wait-all jobs, use 45s by default because they do not block the user
+and should not sit on the read-timeout boundary.
 
 The first slice should stay small but real:
 
@@ -397,9 +421,11 @@ The first slice should stay small but real:
 3. Read only registry metadata, semantic scope labels, timeline sidecars,
    cognitive-map sidecars, and clean-source index snippets.
 4. Run local hot-path candidate lookup first, then consume the thread ambient
-   cache. Done for foreground cache reads/writes; optional
-   `--warm-background` enqueueing now schedules detached warm work only after a
-   non-skip foreground decision and a weak/missing cache.
+   cache. Done for foreground cache reads/writes; default background enqueueing
+   now schedules detached warm work only after a non-skip foreground decision
+   and a weak/missing cache. Use `--no-warm-background` or
+   `AIPPOCAMPUS_WARM_RECALL_BACKGROUND=0|false|off` to turn this off without
+   changing the runtime contract.
 5. Add `warm_ambient_recall.py` as a standalone warm-path prototype. Done for
    the current shape: it defines the 5 P0 + 5 P1 scout taxonomy above across 5
    variants, gives each lane a family/variant `lens_task`, serializes shared
@@ -485,10 +511,16 @@ The first slice should stay small but real:
    echo-required cases; combined first-10 plus offset-90 live results rescored
    to 0.98 with 2 real misses and `current_thread_echo_count=418`. Topic-vote
    passed 100/100 with actions `suppress=79`, `rotate=17`, `reuse=4`.
-   Prompt-cache hit rate was roughly 0.83-0.85 under this outer concurrency,
-   with scout error rates still below the 0.05 gate but high enough to justify
-   a `case_workers=1` stability comparison before treating 2x outer concurrency
-   as the default.
+   Prompt-cache hit rate was roughly 0.83-0.85 under this outer concurrency.
+   This calibration is sufficient for the implementation slice; do not rerun
+   the same packs unless runtime behavior, prompt layout, model settings, or
+   label policy changes.
+   The 2026-05-28 calibration was not a token smoke test: the provider
+   dashboard showed 36,899 API requests that day across repeated 100-case
+   source-ref, echo, topic-epoch, timeout, worker, and ablation runs. Treat
+   those results as the completed calibration record for this implementation
+   slice, not as a reason to spend another full-day sweep re-confirming the
+   same product boundary.
    Follow-up targeted live calibration after the evidence-blocker/fallback
    adjustment cleared the known miss cluster: source-ref target pack passed
    11/11 with `false_evidence_count=0`, `scout_error_rate=0`, and
@@ -510,11 +542,12 @@ The first slice should stay small but real:
    wording/detail requests. The foreground enqueue path now passes the current
    `session:<id>` source-ref key and a sanitized current-prompt trace into the
    detached warm job, so background scouts can apply echo and topic-drift
-   judgments against real thread context. Prompt-hook cache hits now keep
-   warmed cards ahead of fresh local hints and expose sanitized cache metadata
-   for debugging. Next: compare `case_workers=1` against the current
-   `case_workers=2` results, then tune the 10 remaining source-ref safe misses
-   and the 2 echo misses without loosening the zero-false-evidence gate.
+   judgments against real thread context. This enqueue path is now default-on
+   when the hook has the required runtime inputs, while foreground behavior
+   stays cache-first and fail-open. Prompt-hook cache hits now keep warmed cards
+   ahead of fresh local hints and expose sanitized cache metadata for debugging.
+   Further work should be driven by new regressions or product behavior gaps,
+   not by repeating the completed calibration suite.
 
 Success for slice one is not perfect recall. It is that the agent receives
 useful, source-backed peripheral awareness without making the user wait, and

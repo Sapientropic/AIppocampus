@@ -35,6 +35,9 @@ DEFAULT_DETACHED_PREFIX_CACHE_WARMUP_SCOUTS = int(
 DEFAULT_DETACHED_PREFIX_CACHE_WARMUP_DELAY = float(
     os.environ.get("AIPPOCAMPUS_DETACHED_WARM_PREFIX_CACHE_WARMUP_DELAY", "0.5") or 0
 )
+DEFAULT_DETACHED_WARM_TIMEOUT = float(
+    os.environ.get("AIPPOCAMPUS_DETACHED_WARM_TIMEOUT", "45") or 0
+)
 TRUTHY = {"1", "true", "yes", "on", "enabled"}
 FALSY = {"0", "false", "no", "off", "disabled"}
 
@@ -47,7 +50,11 @@ def warm_background_enabled(enabled: bool | None = None, *, env: dict[str, str] 
         return True
     if raw in FALSY:
         return False
-    return False
+    # Default-on only enqueues detached warming after a foreground cache miss;
+    # the prompt hook still stays cache-first, fail-open, and never waits for
+    # the 50-lane scout batch. Keep the env opt-out for shared machines or
+    # provider-budget debugging.
+    return True
 
 
 def default_warm_job_dir(
@@ -178,7 +185,10 @@ def schedule_warm_ambient_recall(
         "api_key_env": api_key_env,
         "user_id": user_id,
         "scouts": list(scouts or []),
-        "timeout": timeout,
+        # Detached jobs are allowed to spend seconds because they do not block
+        # UserPromptSubmit. Do not inherit the standalone warm CLI's short
+        # foreground-style timeout here, or the default-on loop warms nothing.
+        "timeout": DEFAULT_DETACHED_WARM_TIMEOUT if timeout is None else timeout,
         "quorum": quorum,
         "max_workers": max_workers,
         "prefix_cache_warmup_scouts": DEFAULT_DETACHED_PREFIX_CACHE_WARMUP_SCOUTS

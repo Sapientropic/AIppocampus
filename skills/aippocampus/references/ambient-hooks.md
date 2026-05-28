@@ -57,12 +57,16 @@ finish, and `--wait-all` belongs to explicit evaluation or detached warming.
 When sanitized prior prompt-trace rows already carry source refs, the warm path
 may add one deterministic fallback card, but it must still pass the same local
 source-ref validation and must not use the current prompt as memory.
-When foreground code opts into `--warm-background` or
-`AIPPOCAMPUS_WARM_RECALL_BACKGROUND=1`, `ambient_warm_scheduler.py` writes a
-redacted local job file and starts a detached `warm_ambient_recall.py
---job-file` run. That job uses wait-all by default and writes only through the
-thread-cache writer, so late scout results warm turn N+1 without making turn N
-wait.
+Foreground code schedules background warming by default after non-skip cache
+misses when the hook has a thread id and `DEEPSEEK_API_KEY` is available.
+`ambient_warm_scheduler.py` writes a redacted local job file and starts a
+detached `warm_ambient_recall.py --job-file` run. That job uses wait-all by
+default with its own detached timeout (`AIPPOCAMPUS_DETACHED_WARM_TIMEOUT`,
+default 45s) and writes only through the thread-cache writer, so late scout
+results warm turn N+1 without making turn N wait. Use `--no-warm-background`
+or `AIPPOCAMPUS_WARM_RECALL_BACKGROUND=0|false|off` to disable this on shared
+machines or during provider-budget debugging; `--warm-background` remains an
+explicit enable override.
 
 Use `benchmarks/aippocampus/benchmark_warm_ambient_recall.py` for calibration.
 Deterministic mode is CI-safe and now runs 13 synthetic trace cases behind
@@ -130,7 +134,10 @@ Detached warm jobs use a small prefix-cache warmup wave by default before the
 rest of the 10x5 lanes launch. Benchmark callers can tune this with
 `--prefix-cache-warmup-scouts` and `--prefix-cache-warmup-delay`; foreground
 direct runs should usually leave it at zero and use cached thread cards instead
-of waiting for provider cache construction.
+of waiting for provider cache construction. For detached wait-all jobs, keep
+the default at 45s because they do not block the user; 15s is only the
+foreground-style quorum-first floor, and the 100-case wait-all calibration
+showed 30s as tight with read-timeout pressure.
 
 Callers may opt into residue export by passing a residue output path to the
 thread-cache writer. This writes `aippocampus_ambient_residue` JSONL rows for

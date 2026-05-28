@@ -139,6 +139,14 @@ For cache tuning, use `--prefix-cache-warmup-scouts 2` with a small
 `--prefix-cache-warmup-delay` on live benchmark/evaluation runs. This preserves
 the full 10x5 scout set while giving DeepSeek a completed same-prefix request
 before the remaining thin scout suffixes launch.
+Warm scout prompts keep shared context and sanitized prompt trace before the
+per-lane scout task; moving the scout task earlier may look cache-friendly
+across cases but hurts the larger same-case 50-lane prefix. Benchmark metrics
+include per-family completion tokens and prompt-cache hit/miss tokens so cache
+regressions can be attributed before changing concurrency or prompt layout.
+Thinking mode is quality-first and defaults to enabled; use
+`AIPPOCAMPUS_WARM_RECALL_THINKING=disabled` only as an explicit ablation or
+cost diagnostic, not as the default source-ref calibration path.
 For wait-all source-ref evaluation, prefer treating `--timeout 45` as the
 stability diagnostic when `--timeout 30` has clean case coverage but a marginal
 read-timeout error rate. Do not compensate by lowering scout concurrency or

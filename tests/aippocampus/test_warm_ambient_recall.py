@@ -105,9 +105,9 @@ class WarmAmbientRecallTests(unittest.TestCase):
         prompt = warm.scout_prompt("intent_mode_classifier:direct", payload)
 
         self.assertIn("Do not copy or fill output_contract", prompt)
-        self.assertIn("At most 3 query_aliases", prompt)
-        self.assertIn("Candidate budget", prompt)
-        self.assertIn("up to 2", prompt)
+        self.assertIn("using only scout_task.output_profile fields", prompt)
+        self.assertIn("max_query_aliases", prompt)
+        self.assertIn("max_candidates", prompt)
 
     def test_parse_scout_output_preserves_two_generation_candidates(self) -> None:
         row = warm.parse_scout_output(
@@ -160,7 +160,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
             "intent_mode_classifier:direct",
         )
 
-        self.assertEqual(row["themes"], ["execution mode"])
+        self.assertEqual(row["themes"], [])
         self.assertEqual(row["candidates"], [])
 
     def test_env_max_workers_becomes_default_concurrency_limit(self) -> None:
@@ -182,12 +182,82 @@ class WarmAmbientRecallTests(unittest.TestCase):
 
         self.assertEqual(result["max_workers"], 7)
 
-    def test_model_scout_uses_stable_sanitized_user_id(self) -> None:
-        seen_user_ids: list[str | None] = []
+    def test_warm_background_is_default_on_with_explicit_opt_outs(self) -> None:
+        self.assertTrue(warm_scheduler.warm_background_enabled(env={}))
+        self.assertTrue(
+            warm_scheduler.warm_background_enabled(
+                env={"AIPPOCAMPUS_WARM_RECALL_BACKGROUND": "1"}
+            )
+        )
+        self.assertFalse(
+            warm_scheduler.warm_background_enabled(
+                env={"AIPPOCAMPUS_WARM_RECALL_BACKGROUND": "off"}
+            )
+        )
+        self.assertFalse(
+            warm_scheduler.warm_background_enabled(
+                False, env={"AIPPOCAMPUS_WARM_RECALL_BACKGROUND": "1"}
+            )
+        )
+        self.assertTrue(
+            warm_scheduler.warm_background_enabled(
+                True, env={"AIPPOCAMPUS_WARM_RECALL_BACKGROUND": "off"}
+            )
+        )
 
-        def chat_fn(messages, api_key, model, base_url, max_tokens, timeout, temperature, *, user_id=None):
-            del messages, api_key, model, base_url, max_tokens, timeout, temperature
+    def test_scheduler_queues_by_default_when_spawn_is_disabled(self) -> None:
+        with patch.dict(os.environ, {"AIPPOCAMPUS_WARM_RECALL_BACKGROUND": ""}):
+            result = warm_scheduler.schedule_warm_ambient_recall(
+                "继续 ambient recall",
+                cwd=self.workspace,
+                thread_id="thread-a",
+                cache_path=self.cache_path,
+                topic_epoch="epoch-test",
+                job_dir=self.root / "warm-jobs",
+                spawn=False,
+            )
+
+        self.assertEqual(result["status"], "queued")
+        self.assertTrue(Path(result["job_path"]).exists())
+        job = json.loads(Path(result["job_path"]).read_text(encoding="utf-8"))
+        self.assertEqual(job["timeout"], warm_scheduler.DEFAULT_DETACHED_WARM_TIMEOUT)
+
+    def test_scheduler_env_opt_out_still_disables_default_warming(self) -> None:
+        with patch.dict(os.environ, {"AIPPOCAMPUS_WARM_RECALL_BACKGROUND": "0"}):
+            result = warm_scheduler.schedule_warm_ambient_recall(
+                "继续 ambient recall",
+                cwd=self.workspace,
+                thread_id="thread-a",
+                cache_path=self.cache_path,
+                topic_epoch="epoch-test",
+                job_dir=self.root / "warm-jobs",
+                spawn=False,
+            )
+
+        self.assertEqual(result["status"], "disabled")
+        self.assertFalse((self.root / "warm-jobs").exists())
+
+    def test_model_scout_uses_stable_sanitized_user_id_and_quality_first_thinking(self) -> None:
+        seen_user_ids: list[str | None] = []
+        seen_thinking: list[str | None] = []
+        seen_temperatures: list[float] = []
+
+        def chat_fn(
+            messages,
+            api_key,
+            model,
+            base_url,
+            max_tokens,
+            timeout,
+            temperature,
+            *,
+            user_id=None,
+            thinking=None,
+        ):
+            del messages, api_key, model, base_url, max_tokens, timeout
             seen_user_ids.append(user_id)
+            seen_thinking.append(thinking)
+            seen_temperatures.append(temperature)
             content = json.dumps({"decision": "skip", "confidence": 0.1})
             return {"choices": [{"message": {"content": content}}]}
 
@@ -206,6 +276,52 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(len(set(seen_user_ids)), 1)
         self.assertRegex(seen_user_ids[0] or "", r"^aip-warm-[a-f0-9]{32}$")
         self.assertNotIn(str(self.workspace), seen_user_ids[0] or "")
+        self.assertEqual(set(seen_thinking), {"enabled"})
+        self.assertEqual(set(seen_temperatures), {warm.DEFAULT_TEMPERATURE})
+
+    def test_model_scout_can_disable_thinking_for_explicit_diagnostics(self) -> None:
+        seen_thinking: list[str | None] = []
+        seen_temperatures: list[float] = []
+
+        def chat_fn(
+            messages,
+            api_key,
+            model,
+            base_url,
+            max_tokens,
+            timeout,
+            temperature,
+            *,
+            user_id=None,
+            thinking=None,
+        ):
+            del messages, api_key, model, base_url, max_tokens, timeout, user_id
+            seen_thinking.append(thinking)
+            seen_temperatures.append(temperature)
+            content = json.dumps({"decision": "skip", "confidence": 0.1})
+            return {"choices": [{"message": {"content": content}}]}
+
+        with patch.dict(os.environ, {"AIPPOCAMPUS_WARM_RECALL_THINKING": "disabled"}):
+            previous = warm.DEFAULT_THINKING
+            warm.DEFAULT_THINKING = "disabled"
+            try:
+                warm.run_warm_ambient_recall(
+                    "继续 ambient recall",
+                    cwd=self.workspace,
+                    thread_id="thread-a",
+                    cache_path=self.cache_path,
+                    api_key="test-key",
+                    chat_fn=chat_fn,
+                    scouts=("semantic_expander",),
+                    wait_all=True,
+                    no_write=True,
+                    temperature=0.2,
+                )
+            finally:
+                warm.DEFAULT_THINKING = previous
+
+        self.assertEqual(seen_thinking, ["disabled"])
+        self.assertEqual(seen_temperatures, [0.2])
 
     def test_quorum_returns_without_waiting_for_all_scouts(self) -> None:
         calls: list[str] = []
@@ -566,7 +682,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
             residue_reason="warm_scout_unused",
             api_key="test-key",
             scout_fn=scout_fn,
-            scouts=("evidence_gap_sentinel",),
+            scouts=("key_line_hunter",),
             quorum=1,
             timeout=0.5,
         )
@@ -652,7 +768,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
             cache_path=self.cache_path,
             api_key="test-key",
             scout_fn=scout_fn,
-            scouts=("evidence_gap_sentinel",),
+            scouts=("key_line_hunter",),
             quorum=1,
             timeout=0.5,
             no_write=True,
@@ -711,7 +827,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
             cache_path=self.cache_path,
             api_key="test-key",
             scout_fn=scout_fn,
-            scouts=("evidence_judge",),
+            scouts=("key_line_hunter",),
             quorum=1,
             timeout=0.5,
             no_write=True,
@@ -900,7 +1016,8 @@ class WarmAmbientRecallTests(unittest.TestCase):
             "task": "propose_warm_ambient_recall_hints",
             "prompt": "那个脑内续接器现在怎么样了？",
             "prompt_terms": ["脑内续接器"],
-            "memory_catalog": [],
+            "memory_catalog": [{"thread_key": "session:old", "summary": "ambient recall design"}],
+            "prompt_trace": [{"text": "之前聊过 ambient recall。"}],
         }
 
         rendered = warm.scout_prompt("semantic_expander:registry_window", payload)
@@ -908,12 +1025,92 @@ class WarmAmbientRecallTests(unittest.TestCase):
         keys = list(parsed.keys())
 
         self.assertLess(keys.index("output_budget"), keys.index("shared_context"))
-        self.assertLess(keys.index("shared_context"), keys.index("scout_task"))
-        self.assertEqual(parsed["shared_context"], payload)
+        self.assertLess(keys.index("shared_context"), keys.index("prompt_context"))
+        self.assertLess(keys.index("prompt_context"), keys.index("scout_task"))
+        self.assertLess(keys.index("prompt_context"), keys.index("variant_context"))
+        self.assertNotIn("prompt", parsed["shared_context"])
+        self.assertNotIn("prompt_trace", parsed["shared_context"])
+        self.assertEqual(parsed["prompt_context"]["prompt"], payload["prompt"])
+        self.assertIn("memory_catalog", parsed["shared_context"])
+        self.assertIn("prompt_trace", parsed["prompt_context"])
+        self.assertNotIn("prompt_trace", parsed["variant_context"])
         self.assertEqual(parsed["scout_task"]["scout_family"], "semantic_expander")
         self.assertEqual(parsed["scout_task"]["scout_variant"], "registry_window")
-        self.assertIn("query", parsed["scout_task"]["lens_task"].casefold())
-        self.assertIn("registry", parsed["scout_task"]["lens_task"].casefold())
+        semantic_profile = parsed["scout_task"]["output_profile"]
+        lens = parsed["scout_task"]["lens_task"]
+        self.assertIn("allowed_fields", semantic_profile)
+        self.assertIn("query", lens.casefold())
+        self.assertIn("registry", lens.casefold())
+
+    def test_scout_prompt_keeps_case_context_before_lane_split(self) -> None:
+        payload_a = {
+            "prompt_version": warm.PROMPT_VERSION,
+            "task": "propose_warm_ambient_recall_hints",
+            "prompt": "case A prompt",
+            "prompt_terms": ["case", "a"],
+            "memory_catalog": [],
+            "prompt_trace": [{"text": "case A trace"}],
+        }
+        payload_b = {
+            "prompt_version": warm.PROMPT_VERSION,
+            "task": "propose_warm_ambient_recall_hints",
+            "prompt": "case B prompt",
+            "prompt_terms": ["case", "b"],
+            "memory_catalog": [],
+            "prompt_trace": [{"text": "case B trace"}],
+        }
+
+        prompt_a = warm.scout_prompt("semantic_expander:direct", payload_a)
+        prompt_b = warm.scout_prompt("key_line_hunter:direct", payload_a)
+        prompt_c = warm.scout_prompt("semantic_expander:direct", payload_b)
+        same_case_prefix_a = prompt_a.split('  "scout_task"', 1)[0]
+        same_case_prefix_b = prompt_b.split('  "scout_task"', 1)[0]
+        cross_case_prefix_a = prompt_a.split('  "prompt_context"', 1)[0]
+        cross_case_prefix_c = prompt_c.split('  "prompt_context"', 1)[0]
+
+        self.assertEqual(same_case_prefix_a, same_case_prefix_b)
+        self.assertEqual(cross_case_prefix_a, cross_case_prefix_c)
+        self.assertIn("case A prompt", same_case_prefix_a)
+        self.assertNotIn('"scout":', same_case_prefix_a)
+        self.assertNotIn("case A prompt", cross_case_prefix_a)
+        self.assertNotIn("case B prompt", cross_case_prefix_c)
+
+    def test_scout_prompt_shares_prompt_trace_before_lane_split(self) -> None:
+        payload = {
+            "prompt_version": warm.PROMPT_VERSION,
+            "task": "propose_warm_ambient_recall_hints",
+            "prompt": "继续",
+            "prompt_terms": ["继续"],
+            "memory_catalog": [{"thread_key": "session:old", "summary": "heavy registry"}],
+            "prompt_trace": [{"text": "heavy trace"}],
+        }
+
+        direct = json.loads(warm.scout_prompt("semantic_expander:direct", payload))
+        trace = json.loads(warm.scout_prompt("evidence_gap_sentinel:current_trace_window", payload))
+
+        self.assertIn("prompt_trace", direct["prompt_context"])
+        self.assertIn("prompt_trace", trace["prompt_context"])
+        self.assertIn("memory_catalog", direct["shared_context"])
+        self.assertIn("memory_catalog", trace["shared_context"])
+        self.assertEqual(direct["variant_context"], {})
+        self.assertIn("prompt_trace_policy", trace["variant_context"])
+
+    def test_family_output_profile_omits_unused_fields(self) -> None:
+        privacy = json.loads(
+            warm.scout_prompt("privacy_boundary_guard:direct", {"prompt": "继续"})
+        )["scout_task"]["output_profile"]
+        semantic = json.loads(
+            warm.scout_prompt("semantic_expander:direct", {"prompt": "继续"})
+        )["scout_task"]["output_profile"]
+        key_line = json.loads(
+            warm.scout_prompt("key_line_hunter:direct", {"prompt": "继续"})
+        )["scout_task"]["output_profile"]
+
+        self.assertNotIn("candidates", privacy["allowed_fields"])
+        self.assertIn("query_aliases", semantic["allowed_fields"])
+        self.assertNotIn("topic_epoch_action", semantic["allowed_fields"])
+        self.assertIn("candidates", key_line["allowed_fields"])
+        self.assertIn("key_line", key_line["candidate_fields"])
 
     def test_p0_lens_tasks_are_family_specific(self) -> None:
         privacy = json.loads(

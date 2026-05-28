@@ -1146,6 +1146,107 @@ class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
         self.assertEqual(metrics["missing_source_refs_count"], 3)
         self.assertEqual(metrics["false_evidence_count"], 2)
 
+    def test_case_summary_reports_scout_usage_by_family(self) -> None:
+        summary = benchmark.summarize_case(
+            benchmark.BUILTIN_CASES[0],
+            {
+                "available": True,
+                "status": "ready",
+                "mode": "active_gentle_nudge",
+                "confidence": "medium",
+                "scout_count": 2,
+                "scouts": [
+                    {
+                        "ok": True,
+                        "scout_family": "semantic_expander",
+                        "usage": {
+                            "prompt_tokens": 100,
+                            "completion_tokens": 12,
+                            "total_tokens": 112,
+                            "prompt_cache_hit_tokens": 64,
+                            "prompt_cache_miss_tokens": 36,
+                        },
+                    },
+                    {
+                        "ok": True,
+                        "scout_family": "key_line_hunter",
+                        "usage": {
+                            "prompt_tokens": 120,
+                            "completion_tokens": 80,
+                            "total_tokens": 200,
+                            "prompt_cache_hit_tokens": 80,
+                            "prompt_cache_miss_tokens": 40,
+                        },
+                    },
+                ],
+                "accepted_scout_count": 2,
+                "failed_scout_count": 0,
+                "cards": [],
+                "elapsed_ms": 1.0,
+            },
+        )
+
+        self.assertEqual(summary["scout_usage_by_family"]["semantic_expander"]["completion_tokens"], 12)
+        self.assertEqual(summary["scout_usage_by_family"]["key_line_hunter"]["completion_tokens"], 80)
+        self.assertEqual(summary["scout_usage_by_family"]["semantic_expander"]["prompt_cache_hit_tokens"], 64)
+        self.assertEqual(summary["scout_usage_by_family"]["key_line_hunter"]["prompt_cache_miss_tokens"], 40)
+
+    def test_metrics_aggregate_completion_tokens_by_family(self) -> None:
+        metrics = benchmark.summarize_metrics(
+            [
+                {
+                    "case_id": "usage-a",
+                    "available": True,
+                    "configured_scout_count": 2,
+                    "observed_scout_result_count": 2,
+                    "failed_scout_count": 0,
+                    "expectation_passed": True,
+                    "source_validation_statuses": {},
+                    "scout_usage_by_family": {
+                        "semantic_expander": {
+                            "prompt_tokens": 100,
+                            "completion_tokens": 10,
+                            "total_tokens": 110,
+                            "prompt_cache_hit_tokens": 70,
+                            "prompt_cache_miss_tokens": 30,
+                        },
+                    },
+                },
+                {
+                    "case_id": "usage-b",
+                    "available": True,
+                    "configured_scout_count": 2,
+                    "observed_scout_result_count": 2,
+                    "failed_scout_count": 0,
+                    "expectation_passed": True,
+                    "source_validation_statuses": {},
+                    "scout_usage_by_family": {
+                        "semantic_expander": {
+                            "prompt_tokens": 50,
+                            "completion_tokens": 20,
+                            "total_tokens": 70,
+                            "prompt_cache_hit_tokens": 20,
+                            "prompt_cache_miss_tokens": 30,
+                        },
+                        "key_line_hunter": {
+                            "prompt_tokens": 75,
+                            "completion_tokens": 90,
+                            "total_tokens": 165,
+                            "prompt_cache_hit_tokens": 60,
+                            "prompt_cache_miss_tokens": 15,
+                        },
+                    },
+                },
+            ]
+        )
+
+        self.assertEqual(metrics["completion_tokens"], 120)
+        self.assertEqual(metrics["completion_tokens_by_family"]["semantic_expander"], 30)
+        self.assertEqual(metrics["completion_tokens_by_family"]["key_line_hunter"], 90)
+        self.assertEqual(metrics["prompt_cache_hit_tokens_by_family"]["semantic_expander"], 90)
+        self.assertEqual(metrics["prompt_cache_miss_tokens_by_family"]["semantic_expander"], 60)
+        self.assertEqual(metrics["prompt_cache_hit_tokens_by_family"]["key_line_hunter"], 60)
+
     def test_quality_gates_can_optionally_bound_missing_source_refs(self) -> None:
         gates = benchmark.evaluate_quality_gates(
             cases=[

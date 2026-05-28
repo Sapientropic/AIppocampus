@@ -142,6 +142,83 @@ class ModelClientTests(unittest.TestCase):
 
         self.assertEqual(captured["body"]["user_id"], "aip-warm-abc_123")
 
+    def test_chat_json_can_disable_model_thinking(self) -> None:
+        captured: dict[str, object] = {}
+
+        class FakeResponse:
+            def __enter__(self) -> "FakeResponse":
+                return self
+
+            def __exit__(self, *_: object) -> None:
+                return None
+
+            def read(self) -> bytes:
+                return json.dumps({"choices": [{"message": {"content": "{}"}}]}).encode("utf-8")
+
+        def fake_urlopen(req: object, timeout: int) -> FakeResponse:
+            del timeout
+            captured["body"] = json.loads(getattr(req, "data").decode("utf-8"))
+            return FakeResponse()
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            model_client.chat_json(
+                [{"role": "user", "content": "{}"}],
+                model_client.ChatClientConfig(
+                    api_key="test",
+                    model="deepseek-v4-flash",
+                    base_url="https://example.invalid",
+                    thinking="disabled",
+                ),
+            )
+
+        self.assertEqual(captured["body"]["thinking"], {"type": "disabled"})
+        self.assertIn("temperature", captured["body"])
+
+    def test_chat_json_omits_temperature_for_enabled_thinking(self) -> None:
+        captured: dict[str, object] = {}
+
+        class FakeResponse:
+            def __enter__(self) -> "FakeResponse":
+                return self
+
+            def __exit__(self, *_: object) -> None:
+                return None
+
+            def read(self) -> bytes:
+                return json.dumps({"choices": [{"message": {"content": "{}"}}]}).encode("utf-8")
+
+        def fake_urlopen(req: object, timeout: int) -> FakeResponse:
+            del timeout
+            captured["body"] = json.loads(getattr(req, "data").decode("utf-8"))
+            return FakeResponse()
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            model_client.chat_json(
+                [{"role": "user", "content": "{}"}],
+                model_client.ChatClientConfig(
+                    api_key="test",
+                    model="deepseek-v4-flash",
+                    base_url="https://example.invalid",
+                    temperature=0.2,
+                    thinking="enabled",
+                ),
+            )
+
+        self.assertEqual(captured["body"]["thinking"], {"type": "enabled"})
+        self.assertNotIn("temperature", captured["body"])
+
+    def test_chat_json_rejects_unknown_thinking_mode(self) -> None:
+        with self.assertRaisesRegex(ValueError, "thinking"):
+            model_client.chat_json(
+                [{"role": "user", "content": "{}"}],
+                model_client.ChatClientConfig(
+                    api_key="test",
+                    model="deepseek-v4-flash",
+                    base_url="https://example.invalid",
+                    thinking="fast",
+                ),
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
