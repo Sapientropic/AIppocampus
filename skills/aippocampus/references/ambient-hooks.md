@@ -69,7 +69,11 @@ export unlabeled, sanitized cases from registered clean source; generated
 exports are private working artifacts and should not be committed.
 Live mode may call the configured external model but must keep output sanitized
 to prompt hashes, aggregate metrics, validation status counts, error-kind
-buckets, and cache usage only. DeepSeek-compatible calls include a stable
+buckets, and cache usage only. Scout prompts keep `output_contract` as a compact
+schema and add family-aware output budgets so Flash is not asked to fill a
+large template. `--max-tokens` remains an explicit diagnostic override, not the
+default way to control scout length.
+DeepSeek-compatible calls include a stable
 hashed `user_id` by default so the 50 lanes share the same privacy-safe
 scheduling/KV-cache bucket; callers may override it only with an already
 sanitized `[a-zA-Z0-9_-]` id. Treat `429` and read timeouts as different
@@ -99,6 +103,7 @@ Useful commands:
 - `python benchmarks\aippocampus\build_warm_ambient_trace_cases.py --out .tmp\warm-traces.jsonl --jsonl --json`
 - `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --json`
 - `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --cases-file traces.jsonl --json`
+- `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --cases-file traces.jsonl --live --quorum-first --max-workers 5 --timeout 30 --json`
 - `python ...\install_aippocampus_prompt_hook.py install|status|uninstall`
 
 `deep_archival_recall` is an escalation request, not a license to dump history:

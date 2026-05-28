@@ -437,13 +437,14 @@ def run_warm_ambient_recall_benchmark(
     timeout: float = 2.4,
     quorum: int = warm.DEFAULT_QUORUM,
     max_workers: int | None = None,
+    max_tokens: int | None = None,
     registry_path: Path | str | None = None,
     registry_dir: Path | str | None = None,
     cases_file: Path | str | None = None,
     api_key_env: str = "DEEPSEEK_API_KEY",
     user_id: str | None = None,
     min_available_rate: float = 0.65,
-    min_observed_scout_rate: float = 1.0,
+    min_observed_scout_rate: float | None = None,
     min_case_pass_rate: float = 1.0,
     max_error_rate: float = 0.05,
     max_false_evidence_count: int = 0,
@@ -489,6 +490,7 @@ def run_warm_ambient_recall_benchmark(
                 timeout=timeout,
                 quorum=quorum,
                 max_workers=max_workers,
+                max_tokens=max_tokens,
                 wait_all=wait_all,
                 no_write=True,
                 scout_fn=warm.model_scout_fn if live else deterministic_scout_fn,
@@ -496,10 +498,17 @@ def run_warm_ambient_recall_benchmark(
             summaries.append(summarize_case(case, result))
 
         metrics = summarize_metrics(summaries)
+        effective_min_observed = (
+            float(min_observed_scout_rate)
+            if min_observed_scout_rate is not None
+            else 1.0
+            if wait_all
+            else max(0.0, min(1.0, quorum / max(1, len(warm.DEFAULT_SCOUTS))))
+        )
         quality_gates = evaluate_quality_gates(
             summaries,
             min_available_rate=min_available_rate,
-            min_observed_scout_rate=min_observed_scout_rate,
+            min_observed_scout_rate=effective_min_observed,
             min_case_pass_rate=min_case_pass_rate,
             max_error_rate=max_error_rate,
             max_false_evidence_count=max_false_evidence_count,
@@ -621,13 +630,14 @@ def main() -> int:
     parser.add_argument("--timeout", type=float, default=2.4)
     parser.add_argument("--quorum", type=int, default=warm.DEFAULT_QUORUM)
     parser.add_argument("--max-workers", type=int, default=None)
+    parser.add_argument("--max-tokens", type=int, default=None)
     parser.add_argument("--registry")
     parser.add_argument("--registry-dir")
     parser.add_argument("--cases-file", help="Optional JSON/JSONL sanitized trace case file.")
     parser.add_argument("--api-key-env", default="DEEPSEEK_API_KEY")
     parser.add_argument("--user-id", help="Optional DeepSeek user_id; omit to use a stable sanitized hash.")
     parser.add_argument("--min-available-rate", type=float, default=0.65)
-    parser.add_argument("--min-observed-scout-rate", type=float, default=1.0)
+    parser.add_argument("--min-observed-scout-rate", type=float, default=None)
     parser.add_argument("--min-case-pass-rate", type=float, default=1.0)
     parser.add_argument("--max-error-rate", type=float, default=0.05)
     parser.add_argument("--max-false-evidence-count", type=int, default=0)
@@ -641,6 +651,7 @@ def main() -> int:
         timeout=args.timeout,
         quorum=args.quorum,
         max_workers=args.max_workers,
+        max_tokens=args.max_tokens,
         registry_path=args.registry,
         registry_dir=args.registry_dir,
         cases_file=args.cases_file,

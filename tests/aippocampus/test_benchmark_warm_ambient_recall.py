@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
@@ -287,6 +288,33 @@ class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
         self.assertFalse(gates["passed"])
         self.assertIn("observed_scout_rate", gates["failed"])
 
+    def test_quorum_first_benchmark_defaults_observed_rate_to_quorum_slice(self) -> None:
+        fake_result = {
+            "available": True,
+            "status": "ready",
+            "mode": "active_gentle_nudge",
+            "confidence": "medium",
+            "quorum_met": True,
+            "scout_count": 50,
+            "scouts": [{"ok": True, "useful": True} for _ in range(3)],
+            "accepted_scout_count": 3,
+            "failed_scout_count": 0,
+            "cards": [{"source_validation": {"status": "missing_source_refs"}}],
+            "elapsed_ms": 1.0,
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(benchmark.warm, "run_warm_ambient_recall", return_value=fake_result):
+                payload = benchmark.run_warm_ambient_recall_benchmark(
+                    cwd=Path(tmp) / "workspace",
+                    live=False,
+                    case_limit=1,
+                    wait_all=False,
+                    quorum=3,
+                )
+
+        self.assertTrue(payload["quality_gates"]["passed"])
+        self.assertEqual(payload["quality_gates"]["thresholds"]["min_observed_scout_rate"], 0.06)
+
     def test_missing_source_refs_are_reported_separately_from_false_evidence(self) -> None:
         metrics = benchmark.summarize_metrics(
             [
@@ -333,6 +361,65 @@ class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
         self.assertEqual(summary["scout_error_kinds"]["rate_limited_429"], 1)
         self.assertEqual(metrics["scout_error_kinds"]["read_timeout"], 1)
         self.assertEqual(metrics["scout_error_kinds"]["rate_limited_429"], 1)
+
+    def test_live_benchmark_does_not_default_to_rigid_scout_max_tokens(self) -> None:
+        fake_result = {
+            "available": False,
+            "status": "ready",
+            "mode": "silent_tuning",
+            "confidence": "low",
+            "quorum_met": False,
+            "scout_count": 50,
+            "scouts": [],
+            "accepted_scout_count": 0,
+            "failed_scout_count": 0,
+            "cards": [],
+            "elapsed_ms": 1.0,
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict("os.environ", {"TRACE_TEST_KEY": "present"}):
+                with patch.object(benchmark.warm, "run_warm_ambient_recall", return_value=fake_result) as run:
+                    benchmark.run_warm_ambient_recall_benchmark(
+                        cwd=Path(tmp) / "workspace",
+                        live=True,
+                        case_limit=1,
+                        api_key_env="TRACE_TEST_KEY",
+                        min_available_rate=0.0,
+                        min_observed_scout_rate=0.0,
+                        min_case_pass_rate=0.0,
+                    )
+
+        self.assertIsNone(run.call_args.kwargs["max_tokens"])
+
+    def test_live_benchmark_accepts_custom_scout_max_tokens(self) -> None:
+        fake_result = {
+            "available": False,
+            "status": "ready",
+            "mode": "silent_tuning",
+            "confidence": "low",
+            "quorum_met": False,
+            "scout_count": 50,
+            "scouts": [],
+            "accepted_scout_count": 0,
+            "failed_scout_count": 0,
+            "cards": [],
+            "elapsed_ms": 1.0,
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict("os.environ", {"TRACE_TEST_KEY": "present"}):
+                with patch.object(benchmark.warm, "run_warm_ambient_recall", return_value=fake_result) as run:
+                    benchmark.run_warm_ambient_recall_benchmark(
+                        cwd=Path(tmp) / "workspace",
+                        live=True,
+                        case_limit=1,
+                        api_key_env="TRACE_TEST_KEY",
+                        max_tokens=1536,
+                        min_available_rate=0.0,
+                        min_observed_scout_rate=0.0,
+                        min_case_pass_rate=0.0,
+                    )
+
+        self.assertEqual(run.call_args.kwargs["max_tokens"], 1536)
 
 
 if __name__ == "__main__":

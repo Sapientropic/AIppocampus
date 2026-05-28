@@ -79,8 +79,13 @@ SCOUT_VARIANTS = (
     "skeptic_window",
 )
 
+# Launch lanes variant-major so quorum-first runs see different functional
+# families before they see five variants of the same classifier. This preserves
+# the 10x5 taxonomy while letting Flash spend early latency on recall diversity:
+# intent/guard/theme/key-line/evidence arrive together, instead of classifier
+# aliases satisfying quorum before any card-producing scout runs.
 DEFAULT_SCOUTS = tuple(
-    f"{family}:{variant}" for family in SCOUT_FAMILIES for variant in SCOUT_VARIANTS
+    f"{family}:{variant}" for variant in SCOUT_VARIANTS for family in SCOUT_FAMILIES
 )
 
 SCOUT_PRIORITY = {
@@ -112,6 +117,18 @@ VALID_SUPPORT_LEVELS = {SCENT, CANDIDATE, EVIDENCE}
 VALID_TOPIC_EPOCH_ACTIONS = {"reuse", "rotate", "suppress"}
 VALID_VISIBILITIES = {SILENT_TUNING, ACTIVE_GENTLE_NUDGE, SOURCE_BACKED_RECALL_CARD, DEEP_ARCHIVAL_RECALL}
 SUPPORT_RANK = {SCENT: 1, CANDIDATE: 2, EVIDENCE: 3}
+SCOUT_CANDIDATE_LIMITS = {
+    "intent_mode_classifier": 0,
+    "privacy_boundary_guard": 0,
+    "evidence_gap_sentinel": 1,
+    "deep_theme_matcher": 2,
+    "key_line_hunter": 2,
+    "user_style_preference": 1,
+    "trajectory_matcher": 1,
+    "cross_domain_bridge": 2,
+    "nudge_writer": 1,
+    "semantic_expander": 0,
+}
 
 ChatFn = Callable[[list[dict[str, str]], str, str, str, int | None, float, float], dict[str, Any]]
 ScoutFn = Callable[..., dict[str, Any]]
@@ -158,6 +175,17 @@ Rules:
   when the current prompt trace suggests cache reuse or rotation.
 - If the association is private, unrelated, current-thread echo, or too weak,
   return decision "skip" or "background_only".
+"""
+
+OUTPUT_BUDGET_RULES = """Output budget rules:
+- Do not copy or fill output_contract; it is schema only.
+- Return one compact JSON object, usually under 180 tokens.
+- Omit empty arrays and unused optional fields.
+- At most 3 query_aliases, 2 themes, and 2 negative_contexts.
+- Candidate budget: Theme/Key-line/Cross-domain scouts may return up to 2
+  strong candidates; Evidence-gap/Nudge/Trajectory/Style scouts may return 1;
+  Intent/Privacy/Semantic-expander scouts should return no candidates unless
+  they cite concrete source_refs.
 """
 
 FAMILY_TASKS = {
@@ -388,34 +416,15 @@ def build_payload(
         "output_contract": {
             "decision": "skip|background_only|scent|candidate|evidence",
             "confidence": 0.0,
-            "topic_epoch_action": "reuse|rotate|suppress",
-            "topic_epoch_label": "short cache topic label",
-            "topic_epoch_reason": "why to reuse, rotate, or suppress this topic epoch",
-            "query_aliases": ["short search terms"],
-            "themes": ["short theme labels"],
-            "negative_contexts": ["when not to use this"],
-            "candidates": [
-                {
-                    "theme": "short label",
-                    "support_level": "scent|candidate|evidence",
-                    "visibility": "silent_tuning|active_gentle_nudge|source_backed_recall_card|deep_archival_recall",
-                    "resonance": "low|medium|high",
-                    "suggested_use": "private guidance for the agent",
-                    "nudge": "optional active-gentle-nudge wording",
-                    "key_line": "short sourced line only if available",
-                    "matched_terms": ["terms"],
-                    "source_refs": [
-                        {
-                            "thread_key": "session:...",
-                            "title": "...",
-                            "line": 1,
-                            "message_id": "...",
-                        }
-                    ],
-                }
-            ],
-            "block": False,
-            "reason": "short reason",
+            "optional": (
+                "topic_epoch_action, topic_epoch_label, topic_epoch_reason, "
+                "query_aliases, themes, negative_contexts, candidates, block, reason"
+            ),
+            "candidate_shape": (
+                "theme, support_level, visibility, resonance, suggested_use, nudge, "
+                "key_line, matched_terms, source_refs"
+            ),
+            "limits": "max 3 aliases, max 2 themes, max 2 negative_contexts; candidate budget depends on scout family",
         },
     }
     return sanitize_external_model_payload(payload), secret_policy
@@ -461,6 +470,7 @@ def scout_prompt(scout: str, payload: dict[str, Any]) -> str:
     return json.dumps(
         {
             "shared_context": payload,
+            "output_budget": OUTPUT_BUDGET_RULES,
             "scout_task": {
                 "scout": f"{family}:{variant}",
                 "scout_family": family,
@@ -608,9 +618,10 @@ def parse_scout_output(raw: dict[str, Any], scout: str) -> dict[str, Any]:
     for theme in row["themes"]:
         if not any(str(item.get("theme") or "").casefold() == theme.casefold() for item in candidates):
             candidates.append(_candidate_from_theme(theme, row))
+    candidate_limit = SCOUT_CANDIDATE_LIMITS.get(family, 1)
     row["candidates"] = [
         card for card in (_clean_candidate(candidate, row=row) for candidate in candidates) if card
-    ][:5]
+    ][:candidate_limit]
     row["useful"] = bool(
         row["decision"] in {"scent", "candidate", "evidence"}
         or row["query_aliases"]

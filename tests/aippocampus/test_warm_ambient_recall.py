@@ -84,10 +84,63 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(len(warm.DEFAULT_SCOUTS), 50)
         self.assertEqual(families, expected_families)
         self.assertEqual(len(variants), 5)
+        self.assertEqual(
+            warm.DEFAULT_SCOUTS[:5],
+            (
+                "intent_mode_classifier:direct",
+                "privacy_boundary_guard:direct",
+                "deep_theme_matcher:direct",
+                "key_line_hunter:direct",
+                "evidence_gap_sentinel:direct",
+            ),
+        )
         self.assertEqual(result["scout_count"], 50)
         self.assertEqual(len(calls), 50)
         self.assertEqual(warm.SCOUT_PRIORITY["key_line_hunter"], "P0")
         self.assertEqual(warm.SCOUT_PRIORITY["semantic_expander"], "P1")
+
+    def test_scout_prompt_marks_output_contract_as_schema_not_template(self) -> None:
+        payload, _ = warm.build_payload("继续 ambient recall", cwd=self.workspace, registry={})
+
+        prompt = warm.scout_prompt("intent_mode_classifier:direct", payload)
+
+        self.assertIn("Do not copy or fill output_contract", prompt)
+        self.assertIn("At most 3 query_aliases", prompt)
+        self.assertIn("Candidate budget", prompt)
+        self.assertIn("up to 2", prompt)
+
+    def test_parse_scout_output_preserves_two_generation_candidates(self) -> None:
+        row = warm.parse_scout_output(
+            {
+                "decision": "candidate",
+                "confidence": 0.8,
+                "themes": ["theme one", "theme two"],
+                "candidates": [
+                    {"theme": "candidate one", "support_level": "candidate"},
+                    {"theme": "candidate two", "support_level": "candidate"},
+                    {"theme": "candidate three", "support_level": "candidate"},
+                ],
+            },
+            "deep_theme_matcher:direct",
+        )
+
+        self.assertEqual(len(row["candidates"]), 2)
+        self.assertEqual(row["candidates"][0]["theme"], "candidate one")
+        self.assertEqual(row["candidates"][1]["theme"], "candidate two")
+
+    def test_parse_scout_output_keeps_intent_classifier_candidate_free(self) -> None:
+        row = warm.parse_scout_output(
+            {
+                "decision": "candidate",
+                "confidence": 0.8,
+                "themes": ["execution mode"],
+                "candidates": [{"theme": "too broad", "support_level": "candidate"}],
+            },
+            "intent_mode_classifier:direct",
+        )
+
+        self.assertEqual(row["themes"], ["execution mode"])
+        self.assertEqual(row["candidates"], [])
 
     def test_env_max_workers_becomes_default_concurrency_limit(self) -> None:
         def scout_fn(scout, payload, **kwargs):
@@ -180,7 +233,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
     def test_quorum_not_met_does_not_write_weak_single_scout_cache(self) -> None:
         def scout_fn(scout, payload, **kwargs):
             del payload, kwargs
-            if scout.startswith("intent_mode_classifier"):
+            if scout.startswith("key_line_hunter"):
                 return {
                     "decision": "candidate",
                     "confidence": 0.72,
@@ -202,7 +255,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
             cache_path=self.cache_path,
             api_key="test-key",
             scout_fn=scout_fn,
-            scouts=("intent_mode_classifier:direct", "key_line_hunter:direct"),
+            scouts=("key_line_hunter:direct", "semantic_expander:direct"),
             quorum=2,
             timeout=0.05,
         )
@@ -525,7 +578,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
             cache_path=self.cache_path,
             api_key="test-key",
             scout_fn=scout_fn,
-            scouts=("privacy_boundary_guard",),
+            scouts=("key_line_hunter",),
             quorum=1,
             timeout=0.5,
             no_write=True,
@@ -772,7 +825,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
             spawn=False,
             enabled=True,
             api_key_env="DEEPSEEK_API_KEY",
-            scouts=("intent_mode_classifier:direct", "key_line_hunter:direct"),
+            scouts=("deep_theme_matcher:direct", "key_line_hunter:direct"),
             quorum=1,
         )
 
