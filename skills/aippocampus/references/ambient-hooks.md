@@ -32,7 +32,8 @@ then exact claims should be checked against clean source when they matter.
 When the hook receives a thread/session id, `ambient_thread_cache.py` may store
 up to a few compact cards under a hashed `thread_id + workspace + topic_epoch`
 key. The cache is a soft working surface: it expires, records source-ref
-fingerprints, avoids raw prompt text, and is safe to discard. Later warm-scout
+fingerprints, per-card source validation, query aliases, topic-epoch decision
+metadata, and visibility bias while avoiding raw prompt text. Later warm-scout
 work should update this cache through the same serial writer rather than adding
 a second ambient-memory store.
 
@@ -52,16 +53,24 @@ blocks by family even with `family:variant` lanes, and lets scouts vote
 `reuse|rotate|suppress` for topic epoch handling. It is not part of the default
 foreground hook path: quorum-first runs are allowed to return before all lanes
 finish, and `--wait-all` belongs to explicit evaluation or detached warming.
+When foreground code opts into `--warm-background` or
+`AIPPOCAMPUS_WARM_RECALL_BACKGROUND=1`, `ambient_warm_scheduler.py` writes a
+redacted local job file and starts a detached `warm_ambient_recall.py
+--job-file` run. That job uses wait-all by default and writes only through the
+thread-cache writer, so late scout results warm turn N+1 without making turn N
+wait.
 
 Use `benchmarks/aippocampus/benchmark_warm_ambient_recall.py` for calibration.
-Deterministic mode is CI-safe. Live mode may call the configured external model
-but must keep output sanitized to prompt hashes, aggregate metrics, validation
-status counts, error-kind buckets, and cache usage only. DeepSeek-compatible
-calls include a stable hashed `user_id` by default so the 50 lanes share the
-same privacy-safe scheduling/KV-cache bucket; callers may override it only with
-an already sanitized `[a-zA-Z0-9_-]` id. Treat `429` and read timeouts as
-different calibration signals: the former means rate/concurrency pressure, the
-latter means the foreground budget is too short for wait-all.
+Deterministic mode is CI-safe and now runs 12 synthetic trace cases behind
+quality gates; `--cases-file` accepts larger sanitized JSON/JSONL trace suites.
+Live mode may call the configured external model but must keep output sanitized
+to prompt hashes, aggregate metrics, validation status counts, error-kind
+buckets, and cache usage only. DeepSeek-compatible calls include a stable
+hashed `user_id` by default so the 50 lanes share the same privacy-safe
+scheduling/KV-cache bucket; callers may override it only with an already
+sanitized `[a-zA-Z0-9_-]` id. Treat `429` and read timeouts as different
+calibration signals: the former means rate/concurrency pressure, the latter
+means the foreground budget is too short for wait-all.
 `AIPPOCAMPUS_WARM_RECALL_MAX_WORKERS` may cap the default live worker count for
 shared accounts or pro-model experiments; keep the normal foreground behavior
 quorum-first.
@@ -82,6 +91,9 @@ Useful commands:
 - `python ...\simulate_prompt_hook.py --cwd "$PWD" --compare-concept-graph`
 - `python ...\simulate_multilingual_prompt_hook.py --cwd "$PWD"`
 - `python ...\warm_ambient_recall.py --prompt "继续 ambient recall" --cwd "$PWD" --thread-id dry-run --json`
+- `python ...\warm_ambient_recall.py --job-file <redacted-job.json> --json`
+- `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --json`
+- `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --cases-file traces.jsonl --json`
 - `python ...\install_aippocampus_prompt_hook.py install|status|uninstall`
 
 On Windows, installers prefix generated hook commands with PowerShell's call

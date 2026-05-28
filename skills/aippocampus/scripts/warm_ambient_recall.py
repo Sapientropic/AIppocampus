@@ -55,6 +55,7 @@ DEFAULT_MAX_CARDS = 3
 DEFAULT_MAX_CATALOG_ITEMS = int(os.environ.get("AIPPOCAMPUS_WARM_RECALL_CATALOG_LIMIT", "64"))
 DEFAULT_TEMPERATURE = float(os.environ.get("AIPPOCAMPUS_WARM_RECALL_TEMPERATURE", "0.2"))
 DEFAULT_USER_ID_PREFIX = "aip-warm"
+WARM_JOB_SCHEMA_VERSION = 1
 
 SCOUT_FAMILIES = (
     "intent_mode_classifier",
@@ -1119,6 +1120,116 @@ def unavailable_result(reason: str, *, secret_policy: dict[str, Any] | None = No
     }
 
 
+def _cache_write_summary(cache_write: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(cache_write, dict):
+        return None
+    summary = {
+        "status": cache_write.get("status"),
+        "topic_epoch": cache_write.get("topic_epoch"),
+        "card_count": cache_write.get("card_count"),
+        "source_ref_fingerprint_count": len(cache_write.get("source_ref_fingerprints") or []),
+    }
+    residue = cache_write.get("residue_export")
+    if isinstance(residue, dict):
+        summary["residue_export"] = {
+            "status": residue.get("status"),
+            "topic_epoch": residue.get("topic_epoch"),
+            "residue_count": residue.get("residue_count"),
+            "residue_id": residue.get("residue_id"),
+        }
+    return {key: value for key, value in summary.items() if value is not None}
+
+
+def warm_job_result_summary(job: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
+    error_kinds: dict[str, int] = {}
+    for row in result.get("scouts") or []:
+        if row.get("ok"):
+            continue
+        kind = str(row.get("error_kind") or scout_error_kind(row.get("reason")))
+        error_kinds[kind] = error_kinds.get(kind, 0) + 1
+    return {
+        "kind": "aippocampus_warm_ambient_recall_job_result",
+        "schema_version": WARM_JOB_SCHEMA_VERSION,
+        "job_id": job.get("job_id"),
+        "prompt_sha1": job.get("prompt_sha1"),
+        "created_at": now_utc(),
+        "ok": bool(result.get("ok")),
+        "available": bool(result.get("available")),
+        "status": result.get("status"),
+        "reason": result.get("reason") or "",
+        "quorum_met": bool(result.get("quorum_met")),
+        "configured_scout_count": int(result.get("scout_count") or 0),
+        "observed_scout_result_count": len(result.get("scouts") or []),
+        "accepted_scout_count": int(result.get("accepted_scout_count") or 0),
+        "failed_scout_count": int(result.get("failed_scout_count") or 0),
+        "scout_error_kinds": error_kinds,
+        "card_count": len(result.get("cards") or []),
+        "topic_epoch": result.get("topic_epoch"),
+        "topic_epoch_action": (result.get("topic_epoch_decision") or {}).get("action"),
+        "current_thread_echo_count": int(result.get("current_thread_echo_count") or 0),
+        "cache_write": _cache_write_summary(result.get("cache_write")),
+        "elapsed_ms": float(result.get("elapsed_ms") or 0.0),
+        "late_update_policy": "detached_wait_all_writes_thread_cache",
+        "privacy_boundary": {
+            "raw_prompt_emitted": False,
+            "raw_prompt_trace_emitted": False,
+            "raw_cards_emitted": False,
+            "absolute_paths_emitted": False,
+        },
+    }
+
+
+def run_warm_job_file(
+    job_file: Path | str,
+    *,
+    api_key: str | None = None,
+    chat_fn: ChatFn = call_chat_json,
+    scout_fn: ScoutFn = model_scout_fn,
+) -> dict[str, Any]:
+    job_path = Path(job_file).resolve()
+    job = json.loads(job_path.read_text(encoding="utf-8"))
+    if not isinstance(job, dict):
+        raise ValueError("warm job file must contain a JSON object")
+    if job.get("kind") != "aippocampus_warm_ambient_recall_job":
+        raise ValueError("unsupported warm job kind")
+
+    scouts_value = job.get("scouts") or DEFAULT_SCOUTS
+    scouts = tuple(str(item) for item in scouts_value if str(item or "").strip())
+    result = run_warm_ambient_recall(
+        str(job.get("prompt") or ""),
+        cwd=Path(str(job.get("cwd") or ".")).resolve(),
+        thread_id=str(job.get("thread_id") or "") or None,
+        current_thread_key=str(job.get("current_thread_key") or "") or None,
+        prompt_trace=job.get("prompt_trace") if isinstance(job.get("prompt_trace"), list) else None,
+        topic_epoch=str(job.get("topic_epoch") or "") or None,
+        registry_path=Path(str(job.get("registry_path"))).resolve() if job.get("registry_path") else None,
+        registry_dir=Path(str(job.get("registry_dir"))).resolve() if job.get("registry_dir") else None,
+        cache_path=Path(str(job.get("cache_path"))).resolve() if job.get("cache_path") else None,
+        residue_path=Path(str(job.get("residue_path"))).resolve() if job.get("residue_path") else None,
+        residue_reason="detached_warm_scout",
+        api_key=api_key,
+        api_key_env=str(job.get("api_key_env") or "DEEPSEEK_API_KEY"),
+        user_id=str(job.get("user_id") or "") or None,
+        timeout=float(job.get("timeout") or DEFAULT_TIMEOUT),
+        quorum=int(job.get("quorum") or DEFAULT_QUORUM),
+        max_workers=int(job.get("max_workers") or 0) or None,
+        wait_all=bool(job.get("wait_all", True)),
+        no_write=bool(job.get("no_write", False)),
+        scouts=scouts or DEFAULT_SCOUTS,
+        chat_fn=chat_fn,
+        scout_fn=scout_fn,
+    )
+    summary = warm_job_result_summary(job, result)
+    result_path_value = job.get("result_path")
+    if result_path_value:
+        result_path = Path(str(result_path_value)).resolve()
+        result_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = result_path.with_suffix(result_path.suffix + ".tmp")
+        tmp.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
+        tmp.replace(result_path)
+    return summary
+
+
 def run_warm_ambient_recall(
     prompt: str,
     *,
@@ -1214,8 +1325,18 @@ def run_warm_ambient_recall(
     resolved_cache_path = (
         Path(cache_path).resolve() if cache_path else default_ambient_cache_path(registry_path=registry_path_obj)
     )
+    accepted_count = len([row for row in rows if row.get("ok") and row.get("useful")])
+    failed_count = len([row for row in rows if not row.get("ok")])
     cache_write = None
-    if merged["cards"] and not no_write and not topic_epoch_decision.get("suppress_write"):
+    # A single enthusiastic scout should not poison the soft thread cache. Both
+    # foreground-style quorum runs and detached wait-all runs must meet the
+    # configured quorum before their merged cards become next-turn ambient state.
+    if (
+        merged["cards"]
+        and quorum_met
+        and not no_write
+        and not topic_epoch_decision.get("suppress_write")
+    ):
         cache_write = write_thread_cache(
             resolved_cache_path,
             thread_id=resolved_thread,
@@ -1225,14 +1346,17 @@ def run_warm_ambient_recall(
             mode=merged["mode"],
             confidence=merged["confidence"],
             negative_contexts=merged["negative_contexts"],
+            query_aliases=merged.get("query_aliases") or [],
+            topic_epoch_decision=topic_epoch_decision,
+            visibility_bias=merged["mode"],
             residue_path=Path(residue_path).resolve() if residue_path else None,
             residue_reason=residue_reason,
         )
-    accepted_count = len([row for row in rows if row.get("ok") and row.get("useful")])
-    failed_count = len([row for row in rows if not row.get("ok")])
     status = "written" if cache_write and cache_write.get("status") == "written" else "ready"
     if not rows:
         status = "timeout"
+    elif merged["cards"] and not quorum_met and not no_write:
+        status = "quorum_not_met"
     if topic_epoch_decision.get("suppress_write"):
         status = "suppressed"
     return {
@@ -1240,7 +1364,7 @@ def run_warm_ambient_recall(
         "schema_version": SCHEMA_VERSION,
         "prompt_version": PROMPT_VERSION,
         "ok": True,
-        "available": bool(rows and accepted_count),
+        "available": bool(merged["cards"]),
         "status": status,
         "reason": "",
         "quorum_met": quorum_met,
@@ -1271,7 +1395,8 @@ def run_warm_ambient_recall(
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--prompt", required=True)
+    parser.add_argument("--prompt")
+    parser.add_argument("--job-file")
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument("--thread-id")
     parser.add_argument("--current-thread-key")
@@ -1300,6 +1425,20 @@ def main() -> int:
     parser.add_argument("--strict", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
+
+    if args.job_file:
+        summary = run_warm_job_file(args.job_file)
+        if args.json_output:
+            print(json.dumps(summary, ensure_ascii=False, indent=2))
+        else:
+            print(
+                "warm ambient recall job: "
+                f"status={summary.get('status')} "
+                f"scout_results={summary.get('observed_scout_result_count', 0)}"
+            )
+        return 0 if summary.get("ok") else 2
+    if not args.prompt:
+        parser.error("--prompt is required unless --job-file is provided")
 
     result = run_warm_ambient_recall(
         args.prompt,

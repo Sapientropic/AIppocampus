@@ -161,18 +161,17 @@ def main() -> int:
     parser.add_argument("--semantic-triggers")
     parser.add_argument("--semantic-cache")
     parser.add_argument("--ambient-cache")
+    warm_group = parser.add_mutually_exclusive_group()
+    warm_group.add_argument("--warm-background", action="store_true", dest="warm_background", default=None)
+    warm_group.add_argument("--no-warm-background", action="store_false", dest="warm_background")
+    parser.add_argument("--warm-job-dir")
+    parser.add_argument("--warm-max-workers", type=int, default=None)
+    parser.add_argument("--warm-timeout", type=float, default=None)
+    parser.add_argument("--warm-quorum", type=int, default=None)
     parser.add_argument("--semantic-gate", choices=["auto", "on", "off"], default=None)
     parser.add_argument("--session-id", help="Dry-run thread/session id for ambient thread cache.")
     parser.add_argument("--topic-epoch", help="Override ambient recall topic epoch for dry runs.")
-    parser.add_argument(
-        "--semantic-timeout",
-        type=float,
-        default=PROMPT_HOOK_SEMANTIC_TIMEOUT_FALLBACK,
-        help=(
-            "Timeout for optional semantic-gate work. The default favors recall "
-            "quality; pass a smaller value only for explicit smoke/debug runs."
-        ),
-    )
+    parser.add_argument("--semantic-timeout", type=float, default=PROMPT_HOOK_SEMANTIC_TIMEOUT_FALLBACK)
     parser.add_argument(
         "--max-elapsed-ms",
         type=int,
@@ -184,23 +183,10 @@ def main() -> int:
     parser.add_argument("--no-cognitive-map", action="store_true")
     parser.add_argument("--no-concept-graph", action="store_true")
     parser.add_argument("--search-budget", type=int, default=DEFAULT_SEARCH_BUDGET_FALLBACK)
-    parser.add_argument(
-        "--json",
-        action="store_true",
-        dest="json_output",
-        help="Print the decision JSON instead of hook stdout JSON.",
-    )
-    parser.add_argument(
-        "--log",
-        action="store_true",
-        help="Write sanitized non-prompt debug events for scent/evidence decisions.",
-    )
-    parser.add_argument(
-        "--log-skip", action="store_true", help="Also log skip decisions. Useful only while tuning."
-    )
-    parser.add_argument(
-        "--strict", action="store_true", help="Raise hook errors instead of silently continuing."
-    )
+    parser.add_argument("--json", action="store_true", dest="json_output")
+    parser.add_argument("--log", action="store_true")
+    parser.add_argument("--log-skip", action="store_true")
+    parser.add_argument("--strict", action="store_true")
     args = parser.parse_args()
 
     hook_input: dict[str, Any] = {}
@@ -235,6 +221,11 @@ def main() -> int:
             thread_id=thread_id,
             topic_epoch=args.topic_epoch,
             use_thread_cache=not args.no_thread_cache,
+            warm_background=args.warm_background,
+            warm_job_dir=Path(args.warm_job_dir) if args.warm_job_dir else None,
+            warm_max_workers=args.warm_max_workers,
+            warm_timeout=args.warm_timeout,
+            warm_quorum=args.warm_quorum,
         )
         if args.log or args.log_skip:
             write_debug_log(result, hook_input=hook_input, include_skip=args.log_skip)

@@ -13,6 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+import ambient_warm_scheduler as warm_scheduler  # noqa: E402
 import warm_ambient_recall as warm  # noqa: E402
 
 
@@ -175,6 +176,41 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(len(warm.DEFAULT_SCOUTS), 50)
         self.assertTrue(any(call.startswith("key_line_hunter:") for call in calls))
         self.assertTrue(any(call.startswith("intent_mode_classifier:") for call in calls))
+
+    def test_quorum_not_met_does_not_write_weak_single_scout_cache(self) -> None:
+        def scout_fn(scout, payload, **kwargs):
+            del payload, kwargs
+            if scout.startswith("intent_mode_classifier"):
+                return {
+                    "decision": "candidate",
+                    "confidence": 0.72,
+                    "candidates": [
+                        {
+                            "theme": "single scout should stay out of cache",
+                            "support_level": "candidate",
+                            "matched_terms": ["single", "scout"],
+                        }
+                    ],
+                }
+            time.sleep(0.2)
+            return {"decision": "skip", "confidence": 0.1}
+
+        result = warm.run_warm_ambient_recall(
+            "继续 ambient recall 但 quorum 不足",
+            cwd=self.workspace,
+            thread_id="thread-a",
+            cache_path=self.cache_path,
+            api_key="test-key",
+            scout_fn=scout_fn,
+            scouts=("intent_mode_classifier:direct", "key_line_hunter:direct"),
+            quorum=2,
+            timeout=0.05,
+        )
+
+        self.assertFalse(result["quorum_met"])
+        self.assertEqual(result["status"], "quorum_not_met")
+        self.assertIsNone(result["cache_write"])
+        self.assertFalse(self.cache_path.exists())
 
     def test_malformed_scout_is_isolated(self) -> None:
         def scout_fn(scout, payload, **kwargs):
@@ -635,6 +671,92 @@ class WarmAmbientRecallTests(unittest.TestCase):
     def test_legacy_scout_family_names_expand_to_canonical_taxonomy(self) -> None:
         self.assertEqual(warm.expand_scout_lanes(("query_expansion",)), ("semantic_expander:direct",))
         self.assertEqual(warm.expand_scout_lanes(("evidence_judge:skeptic_window",)), ("evidence_gap_sentinel:skeptic_window",))
+
+    def test_scheduler_writes_sanitized_detached_job_without_raw_prompt(self) -> None:
+        local_path = "E:" + "\\private\\notes\\ambient.md"
+        result = warm_scheduler.schedule_warm_ambient_recall(
+            f"继续 {local_path} 里的 ambient recall 方案",
+            cwd=self.workspace,
+            thread_id="thread-a",
+            registry_path=self.root / "registry" / "threads.json",
+            cache_path=self.cache_path,
+            topic_epoch="epoch-test",
+            job_dir=self.root / "warm-jobs",
+            spawn=False,
+            enabled=True,
+            api_key_env="DEEPSEEK_API_KEY",
+            scouts=("intent_mode_classifier:direct",),
+        )
+        job = json.loads(Path(result["job_path"]).read_text(encoding="utf-8"))
+        raw_job = json.dumps(job, ensure_ascii=False)
+
+        self.assertEqual(result["status"], "queued")
+        self.assertEqual(job["thread_id"], "thread-a")
+        self.assertEqual(job["topic_epoch"], "epoch-test")
+        self.assertTrue(job["wait_all"])
+        self.assertFalse(job["no_write"])
+        self.assertIn("<redacted:local-path>", job["prompt"])
+        self.assertNotIn(local_path, raw_job)
+        self.assertNotIn("private", raw_job.casefold())
+        self.assertNotIn("ambient.md", raw_job.casefold())
+
+    def test_detached_job_waits_all_and_writes_late_scout_results_to_cache(self) -> None:
+        job_result = warm_scheduler.schedule_warm_ambient_recall(
+            "继续 ambient recall late cache",
+            cwd=self.workspace,
+            thread_id="thread-a",
+            cache_path=self.cache_path,
+            topic_epoch="epoch-test",
+            job_dir=self.root / "warm-jobs",
+            spawn=False,
+            enabled=True,
+            api_key_env="DEEPSEEK_API_KEY",
+            scouts=("intent_mode_classifier:direct", "key_line_hunter:direct"),
+            quorum=1,
+        )
+
+        def scout_fn(scout, payload, **kwargs):
+            del payload, kwargs
+            if scout.startswith("key_line_hunter"):
+                time.sleep(0.03)
+                return {
+                    "decision": "candidate",
+                    "confidence": 0.82,
+                    "candidates": [
+                        {
+                            "theme": "metaphor key-line resonance",
+                            "support_level": "candidate",
+                            "matched_terms": ["metaphor", "key-line"],
+                        }
+                    ],
+                }
+            return {
+                "decision": "candidate",
+                "confidence": 0.72,
+                "candidates": [
+                        {
+                            "theme": "intent mode continuity",
+                            "support_level": "candidate",
+                            "matched_terms": ["intent", "mode"],
+                        }
+                ],
+            }
+
+        summary = warm.run_warm_job_file(
+            Path(job_result["job_path"]),
+            api_key="test-key",
+            scout_fn=scout_fn,
+        )
+        cache_payload = json.loads(self.cache_path.read_text(encoding="utf-8"))
+        cache_cards = next(iter(cache_payload["entries"].values()))["cards"]
+        themes = [card["theme"] for card in cache_cards]
+
+        self.assertEqual(summary["status"], "written")
+        self.assertEqual(summary["observed_scout_result_count"], 2)
+        self.assertEqual(summary["accepted_scout_count"], 2)
+        self.assertNotIn("cards", summary)
+        self.assertIn("intent mode continuity", themes)
+        self.assertIn("metaphor key-line resonance", themes)
 
 
 if __name__ == "__main__":

@@ -153,13 +153,42 @@ def _compact_card(card: dict[str, Any]) -> dict[str, Any]:
         "key_line",
         "matched_terms",
         "source_refs",
+        "source_validation",
         "expand_if",
     }
     clean = {key: card.get(key) for key in allowed if key in card}
     for key in ("theme", "suggested_use", "nudge", "key_line", "expand_if"):
         if key in clean:
             clean[key] = compact_text(str(clean[key] or ""), 260)
+    validation = clean.get("source_validation")
+    if isinstance(validation, dict):
+        clean["source_validation"] = {
+            "status": compact_text(str(validation.get("status") or ""), 80),
+            "checked_ref_count": _safe_int(validation.get("checked_ref_count")),
+            "supported_ref_count": _safe_int(validation.get("supported_ref_count")),
+            "missing_ref_count": _safe_int(validation.get("missing_ref_count")),
+        }
     return clean
+
+
+def _safe_int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _compact_topic_epoch_decision(value: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    result = {
+        "action": compact_text(str(value.get("action") or ""), 32),
+        "label": compact_text(str(value.get("label") or ""), 120),
+        "reason": compact_text(str(value.get("reason") or ""), 220),
+        "confidence": value.get("confidence"),
+        "source_scout": compact_text(str(value.get("source_scout") or ""), 120),
+    }
+    return {key: item for key, item in result.items() if item not in ("", None)}
 
 
 def _residue_record(
@@ -276,6 +305,9 @@ def read_thread_cache(
         "confidence": entry.get("confidence"),
         "cards": cards,
         "source_ref_fingerprints": entry.get("source_ref_fingerprints") or [],
+        "query_aliases": entry.get("query_aliases") or [],
+        "topic_epoch_decision": entry.get("topic_epoch_decision") or None,
+        "visibility_bias": entry.get("visibility_bias") or None,
     }
 
 
@@ -289,6 +321,9 @@ def write_thread_cache(
     mode: str = "active_gentle_nudge",
     confidence: str = "medium",
     negative_contexts: list[str] | None = None,
+    query_aliases: list[str] | None = None,
+    topic_epoch_decision: dict[str, Any] | None = None,
+    visibility_bias: str | None = None,
     residue_path: Path | str | None = None,
     residue_reason: str = "cache_write",
     max_cards: int = DEFAULT_MAX_CARDS,
@@ -312,6 +347,12 @@ def write_thread_cache(
         "cards": compact_cards,
         "negative_contexts": [compact_text(str(item or ""), 120) for item in (negative_contexts or [])[:8]],
         "source_ref_fingerprints": _source_ref_fingerprints(compact_cards),
+        "query_aliases": unique_preserve(
+            [compact_text(str(item or ""), 120) for item in (query_aliases or []) if str(item or "").strip()],
+            limit=16,
+        ),
+        "topic_epoch_decision": _compact_topic_epoch_decision(topic_epoch_decision),
+        "visibility_bias": compact_text(str(visibility_bias or ""), 80),
     }
     if len(entries) > max_entries:
         kept = sorted(

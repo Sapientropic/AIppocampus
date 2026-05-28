@@ -19,6 +19,11 @@ from ambient_thread_cache import (
     topic_epoch_from_terms,
     write_thread_cache,
 )
+from ambient_warm_scheduler import (
+    public_warm_schedule_status,
+    schedule_warm_ambient_recall,
+    warm_background_enabled,
+)
 from build_concept_graph import expand_concepts
 from memory_candidate_router import strip_for_hook
 from prompt_cues import (
@@ -331,12 +336,18 @@ def _noise_prompt_result(context: Any, start: float) -> dict[str, Any]:
 def _attach_ambient_recall(
     result: dict[str, Any],
     *,
+    prompt: str,
     thread_id: str | None,
     workspace: str,
     registry_path: Path,
     ambient_cache_path: Path | str | None,
     topic_epoch: str | None,
     use_thread_cache: bool,
+    warm_background: bool | None,
+    warm_job_dir: Path | str | None,
+    warm_max_workers: int | None,
+    warm_timeout: float | None,
+    warm_quorum: int | None,
 ) -> dict[str, Any]:
     if not use_thread_cache or not thread_id:
         result["ambient_recall"] = ambient_recall_from_decision(result)
@@ -360,6 +371,7 @@ def _attach_ambient_recall(
             cached_cards=cached.get("cards") or [],
             cache_status=cache_status,
         )
+        cache_is_warm = cached.get("status") == "hit" and bool(cached.get("cards"))
         if result.get("decision") != "skip" and result["ambient_recall"].get("cards"):
             written = write_thread_cache(
                 cache_file,
@@ -370,12 +382,34 @@ def _attach_ambient_recall(
                 mode=str(result["ambient_recall"].get("mode") or ""),
                 confidence=str(result["ambient_recall"].get("confidence") or ""),
                 negative_contexts=((result.get("semantic_gate") or {}).get("negative_contexts") or []),
+                query_aliases=((result.get("semantic_gate") or {}).get("query_aliases") or result.get("query_terms") or []),
+                visibility_bias=str(result["ambient_recall"].get("mode") or ""),
             )
             result["ambient_recall"]["cache_status"] = {
                 **cache_status,
                 "write_status": written.get("status"),
                 "written_card_count": written.get("card_count"),
             }
+        if result.get("decision") != "skip" and not cache_is_warm and warm_background_enabled(warm_background):
+            # The foreground hook may enqueue warming, but the 50-lane scout
+            # batch must run detached. Otherwise DeepSeek tail latency or rate
+            # limiting would turn ambient recall from peripheral awareness into
+            # a blocking path for every user prompt.
+            scheduled = schedule_warm_ambient_recall(
+                prompt,
+                cwd=workspace,
+                thread_id=thread_id,
+                registry_path=registry_path,
+                cache_path=cache_file,
+                topic_epoch=epoch,
+                job_dir=warm_job_dir,
+                max_workers=warm_max_workers,
+                timeout=warm_timeout,
+                quorum=warm_quorum,
+                enabled=warm_background,
+                wait_all_foreground=False,
+            )
+            result["ambient_recall"]["warm_background"] = public_warm_schedule_status(scheduled)
     except Exception as exc:
         result["ambient_recall"] = ambient_recall_from_decision(
             result,
@@ -411,6 +445,8 @@ def assess_prompt(
     max_elapsed_ms: int | None = None,
     thread_id: str | None = None, ambient_cache_path: Path | str | None = None,
     topic_epoch: str | None = None, use_thread_cache: bool = True,
+    warm_background: bool | None = None, warm_job_dir: Path | str | None = None,
+    warm_max_workers: int | None = None, warm_timeout: float | None = None, warm_quorum: int | None = None,
 ) -> dict[str, Any]:
     start = time.perf_counter()
     context = build_recall_decision_context(
@@ -638,7 +674,7 @@ def assess_prompt(
         "elapsed_ms": elapsed_ms,
     }
     return _attach_ambient_recall(
-        result, thread_id=thread_id, workspace=str(cwd_path), registry_path=path,
-        ambient_cache_path=ambient_cache_path, topic_epoch=topic_epoch,
-        use_thread_cache=use_thread_cache,
+        result, prompt=prompt, thread_id=thread_id, workspace=str(cwd_path), registry_path=path,
+        ambient_cache_path=ambient_cache_path, topic_epoch=topic_epoch, use_thread_cache=use_thread_cache, warm_background=warm_background, warm_job_dir=warm_job_dir,
+        warm_max_workers=warm_max_workers, warm_timeout=warm_timeout, warm_quorum=warm_quorum,
     )

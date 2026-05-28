@@ -1,6 +1,6 @@
 # Ambient Associative Recall
 
-Status: design memo, not implementation.
+Status: design memo with implementation tracker; not the full runtime contract.
 Origin: user/product discussion, 2026-05-27.
 Related: [The Pearl of Presence](pearl-of-presence.md),
 [Thread Intuition Layer](affect-side-channel.md),
@@ -130,8 +130,8 @@ Recommended cache layers:
 | Layer | Key | Stores | Why it matters |
 |---|---|---|---|
 | Exact prompt cache | Prompt fingerprint plus semantic cue hash. | Prior semantic-gate or scout result. | Fast repeat protection, already close to the existing semantic gate cache. |
-| Thread ambient cache | `thread_id + workspace + topic_epoch`. | 3-8 current ambient recall cards, active negative contexts, mode, confidence, source-ref fingerprints. | Makes continuity immediate after the first warming pass in a multi-turn agent session. |
-| Topic trajectory cache | Rolling topic hash, without raw prompt text. | Current theme, drift markers, likely next search aliases, visibility bias. | Lets the cache survive gradual topic drift without logging full prompts. |
+| Thread ambient cache | `thread_id + workspace + topic_epoch`. | 3-8 current ambient recall cards, active negative contexts, mode, confidence, source-ref fingerprints, query aliases, topic decision, visibility bias. | Makes continuity immediate after the first warming pass in a multi-turn agent session. |
+| Topic trajectory cache | Rolling topic hash, without raw prompt text. | Current theme, drift markers, likely next search aliases, visibility bias. | Still intentionally folded into the thread cache for now; split it only if real traces prove the metadata needs its own lifecycle. |
 | Clean-source validation pass | Candidate `source_refs` plus prompt/card terms. | Per-card validation status and source-ref fingerprints in the thread cache. | Keeps evidence checks source-backed without adding a second ambient-memory store. |
 
 Thread ambient cache is a soft working surface, not memory truth. It should be
@@ -338,11 +338,11 @@ becoming a wait-all critical path for every prompt.
 
 ## First Implementable Slice
 
-Status: Card/cache first has landed, and the first standalone warm-scout
-prototype now exists. The runtime boundary is still intentionally narrow:
-foreground hook decisions can produce compact private recall cards and write
-them to a thread ambient cache, while `warm_ambient_recall.py` runs the
-50-lane warm experiment outside the foreground hook.
+Status: Card/cache first has landed, the 50-lane warm prototype exists, and an
+optional detached warm-job bridge now connects foreground cache misses to
+wait-all background warming. The runtime boundary is still narrow: foreground
+hook decisions stay cache-first, while the 50-lane batch runs only in explicit
+warm CLI/evaluation paths or detached jobs.
 
 The first slice should stay small but real:
 
@@ -355,8 +355,9 @@ The first slice should stay small but real:
 3. Read only registry metadata, semantic scope labels, timeline sidecars,
    cognitive-map sidecars, and clean-source index snippets.
 4. Run local hot-path candidate lookup first, then consume the thread ambient
-   cache. The first integration uses existing hook signals and cache writes;
-   deeper cache-first behavior should be tuned after real prompt traces.
+   cache. Done for foreground cache reads/writes; optional
+   `--warm-background` enqueueing now schedules detached warm work only after a
+   non-skip foreground decision and a weak/missing cache.
 5. Add `warm_ambient_recall.py` as a standalone warm-path prototype. Done for
    the current shape: it defines the 5 P0 + 5 P1 scout taxonomy above across 5
    variants, gives each lane a family/variant `lens_task`, serializes shared
@@ -364,21 +365,25 @@ The first slice should stay small but real:
    resulting 50 lanes concurrently, isolates malformed outputs, and returns on
    quorum inside a strict timeout. It fails open when no API key is available.
 6. Merge into at most 3 private recall cards and serialize useful results back
-   into the thread cache. Done for quorum results, source-ref validation,
-   current-thread echo suppression, guard-family blocking, and similar-theme
-   merge; explicit `--wait-all` is reserved for evaluation or detached warming,
-   not the foreground hook.
+   into the thread cache. Done for quorum-gated writes, source-ref validation,
+   current-thread echo suppression, guard-family blocking, similar-theme merge,
+   validation metadata, query aliases, topic decision, and visibility bias;
+   explicit `--wait-all` is reserved for evaluation or detached warming, not
+   the foreground hook.
 7. Reuse optional residue export for source-ref-fingerprinted warm cards so
    unused resonance can become dream-task seed material without logging raw
    prompt text.
 8. Use `benchmarks/aippocampus/benchmark_warm_ambient_recall.py` for sanitized
-   calibration. Deterministic mode is CI-safe; live mode may call the configured
+   calibration. Deterministic mode now uses 12 built-in cases and quality gates
+   for available rate, observed scout result rate, expectation pass rate, error
+   rate, and false evidence; `--cases-file` can add larger sanitized JSON/JSONL
+   prompt-trace suites. Live mode may call the configured
    DeepSeek-compatible model but emits only hashes, aggregate metrics,
    validation status counts, error-kind buckets, and cache metrics.
-9. Source-ref validation, current-thread echo suppression, and LLM-directed
-   topic epoch rotation are now in the standalone prototype. Next: tune
-   visibility selection and late-result cache updates after more real prompt
-   traces.
+9. Source-ref validation, current-thread echo suppression, LLM-directed topic
+   epoch rotation, and detached late-result cache warming are now implemented.
+   Next: tune visibility selection, deep archival recall behavior, and a larger
+   real-trace/manual benchmark corpus.
 
 Success for slice one is not perfect recall. It is that the agent receives
 useful, source-backed peripheral awareness without making the user wait, and

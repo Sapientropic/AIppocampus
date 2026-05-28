@@ -37,6 +37,7 @@ pretty = true
 files = [
     "skills/aippocampus/scripts/aippocampuslib.py",
     "skills/aippocampus/scripts/aippocampus_health.py",
+    "skills/aippocampus/scripts/ambient_warm_scheduler.py",
     "skills/aippocampus/scripts/build_clean_source.py",
     "skills/aippocampus/scripts/build_cognitive_map.py",
     "skills/aippocampus/scripts/deepseek_model_routing.py",

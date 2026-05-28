@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
@@ -1453,6 +1454,32 @@ class AmbientRecallHookTests(unittest.TestCase):
             "additionalContext",
             payload["hookSpecificOutput"],
         )
+
+    def test_prompt_hook_can_enqueue_background_warm_job_on_cache_miss(self) -> None:
+        scheduled: list[dict] = []
+
+        def fake_schedule(prompt: str, **kwargs):
+            scheduled.append({"prompt": prompt, **kwargs})
+            return {"status": "queued", "job_id": "job-test", "spawned": False}
+
+        with patch("prompt_recall_decision.schedule_warm_ambient_recall", fake_schedule):
+            result = hook.assess_prompt(
+                "hook 机制就像人类的触发式联想，我们可以把小海马体做得更主动一点",
+                cwd=self.workspace,
+                registry_path=self.registry,
+                thread_id="thread-a",
+                topic_epoch="epoch-test",
+                warm_background=True,
+                search_budget=0,
+            )
+
+        self.assertEqual(result["decision"], "scent")
+        self.assertEqual(len(scheduled), 1)
+        self.assertEqual(scheduled[0]["thread_id"], "thread-a")
+        self.assertEqual(scheduled[0]["topic_epoch"], "epoch-test")
+        self.assertFalse(scheduled[0]["wait_all_foreground"])
+        self.assertEqual(result["ambient_recall"]["warm_background"]["status"], "queued")
+        self.assertEqual(result["ambient_recall"]["warm_background"]["job_id"], "job-test")
 
 
 if __name__ == "__main__":

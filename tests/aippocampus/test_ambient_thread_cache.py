@@ -54,6 +54,48 @@ class AmbientThreadCacheTests(unittest.TestCase):
         self.assertNotIn("private/workspace", raw.replace("\\", "/"))
         self.assertNotIn("prompt", raw.casefold())
 
+    def test_thread_cache_preserves_validation_and_topic_metadata(self) -> None:
+        cache_path = self.root / "ambient-thread-cache.json"
+        card = {
+            "card_id": "arc_validation",
+            "theme": "validated ambient recall",
+            "support_level": "evidence",
+            "source_refs": [{"thread_key": "session:old", "line": 42, "message_id": "msg-1"}],
+            "source_validation": {
+                "status": "supported",
+                "checked_ref_count": 1,
+                "supported_ref_count": 1,
+            },
+        }
+
+        cache.write_thread_cache(
+            cache_path,
+            thread_id="thread-a",
+            workspace="E:/private/workspace",
+            topic_epoch="epoch-validation",
+            cards=[card],
+            mode="source_backed_recall_card",
+            confidence="high",
+            query_aliases=["ambient recall", "warm scout"],
+            topic_epoch_decision={"action": "rotate", "label": "ambient recall", "confidence": 0.8},
+            visibility_bias="source_backed_recall_card",
+        )
+        loaded = cache.read_thread_cache(
+            cache_path,
+            thread_id="thread-a",
+            workspace="E:/private/workspace",
+            topic_epoch="epoch-validation",
+        )
+        raw = cache_path.read_text(encoding="utf-8")
+
+        self.assertEqual(loaded["status"], "hit")
+        self.assertEqual(loaded["cards"][0]["source_validation"]["status"], "supported")
+        self.assertEqual(loaded["query_aliases"], ["ambient recall", "warm scout"])
+        self.assertEqual(loaded["topic_epoch_decision"]["action"], "rotate")
+        self.assertEqual(loaded["visibility_bias"], "source_backed_recall_card")
+        self.assertNotIn("private/workspace", raw.replace("\\", "/"))
+        self.assertNotIn("prompt", raw.casefold())
+
     def test_cache_entry_expires(self) -> None:
         cache_path = self.root / "ambient-thread-cache.json"
         cache.write_thread_cache(

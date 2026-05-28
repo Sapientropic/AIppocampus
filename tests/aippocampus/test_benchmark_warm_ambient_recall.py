@@ -36,6 +36,82 @@ class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
         self.assertNotIn("那个脑内续接器", raw)
         self.assertNotIn("cards", payload["cases"][0])
 
+    def test_deterministic_benchmark_uses_quality_gates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = benchmark.run_warm_ambient_recall_benchmark(
+                cwd=Path(tmp) / "workspace",
+                live=False,
+            )
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["status"], "sufficient")
+        self.assertGreaterEqual(payload["metrics"]["case_count"], 10)
+        self.assertEqual(
+            payload["metrics"]["total_scout_calls"],
+            payload["metrics"]["configured_scout_calls"],
+        )
+        self.assertTrue(payload["quality_gates"]["passed"])
+        self.assertEqual(payload["quality_gates"]["failed_case_ids"], [])
+
+    def test_benchmark_loads_cases_file_for_larger_trace_calibration(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cases_file = root / "cases.json"
+            cases_file.write_text(
+                json.dumps(
+                    [
+                        {
+                            "case_id": "custom_trace",
+                            "prompt": "继续校准 detached warm job",
+                            "prompt_trace": [
+                                {
+                                    "thread_key": "session:custom",
+                                    "role": "user",
+                                    "text": "detached warm job should write thread cache later",
+                                }
+                            ],
+                            "expected_available": True,
+                            "expected_min_cards": 1,
+                        }
+                    ],
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            payload = benchmark.run_warm_ambient_recall_benchmark(
+                cwd=root / "workspace",
+                cases_file=cases_file,
+                live=False,
+            )
+
+        raw = json.dumps(payload, ensure_ascii=False)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["metrics"]["case_count"], 1)
+        self.assertEqual(payload["cases"][0]["case_id"], "custom_trace")
+        self.assertNotIn("detached warm job", raw)
+
+    def test_quality_gates_fail_when_observed_scout_rate_is_too_low(self) -> None:
+        gates = benchmark.evaluate_quality_gates(
+            cases=[
+                {
+                    "case_id": "partial",
+                    "configured_scout_count": 50,
+                    "observed_scout_result_count": 3,
+                    "available": True,
+                    "expectation_passed": True,
+                    "failed_scout_count": 0,
+                    "source_validation_statuses": {},
+                }
+            ],
+            min_available_rate=0.5,
+            min_observed_scout_rate=0.9,
+            min_case_pass_rate=1.0,
+        )
+
+        self.assertFalse(gates["passed"])
+        self.assertIn("observed_scout_rate", gates["failed"])
+
     def test_benchmark_summarizes_timeout_and_rate_limit_failures(self) -> None:
         summary = benchmark.summarize_case(
             benchmark.BUILTIN_CASES[0],
