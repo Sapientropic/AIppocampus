@@ -437,6 +437,67 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(result["cards"][0]["support_level"], "evidence")
         self.assertEqual(result["cards"][0]["source_validation"]["status"], "supported")
 
+    def test_supported_deep_archival_visibility_survives_merge(self) -> None:
+        messages = self._write_clean_thread(
+            "session:old",
+            [
+                {
+                    "message_id": "msg-1",
+                    "source_line": 42,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": "The original wording was: continuity survives transformation.",
+                }
+            ],
+        )
+        registry_path = self._write_registry(
+            [
+                {
+                    "thread_key": "session:old",
+                    "title": "Old ambient thread",
+                    "paths": {"clean_source_messages_jsonl": str(messages)},
+                }
+            ]
+        )
+
+        def scout_fn(scout, payload, **kwargs):
+            del scout, payload, kwargs
+            return {
+                "decision": "evidence",
+                "confidence": 0.92,
+                "candidates": [
+                    {
+                        "theme": "original wording",
+                        "support_level": "evidence",
+                        "visibility": "deep_archival_recall",
+                        "key_line": "continuity survives transformation",
+                        "matched_terms": ["continuity"],
+                        "source_refs": [
+                            {"thread_key": "session:old", "message_id": "msg-1", "line": 42}
+                        ],
+                    }
+                ],
+            }
+
+        result = warm.run_warm_ambient_recall(
+            "找回原话 continuity survives transformation",
+            cwd=self.workspace,
+            thread_id="thread-a",
+            registry_path=registry_path,
+            cache_path=self.cache_path,
+            api_key="test-key",
+            scout_fn=scout_fn,
+            scouts=("key_line_hunter",),
+            quorum=1,
+            timeout=0.5,
+            no_write=True,
+        )
+
+        self.assertEqual(result["mode"], "deep_archival_recall")
+        self.assertEqual(result["cards"][0]["support_level"], "evidence")
+        self.assertEqual(result["cards"][0]["visibility"], "deep_archival_recall")
+
     def test_current_thread_echo_is_suppressed_by_default(self) -> None:
         def scout_fn(scout, payload, **kwargs):
             del scout, payload, kwargs

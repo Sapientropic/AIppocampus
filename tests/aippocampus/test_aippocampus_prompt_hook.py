@@ -1437,6 +1437,21 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertNotIn("line 999", context)
         self.assertIn("final_answer", context)
 
+    def test_original_wording_prompt_uses_deep_archival_recall(self) -> None:
+        result = hook.assess_prompt(
+            "你还能找回之前那句生命还能变成什么的原话吗？",
+            cwd=self.workspace,
+            registry_path=self.registry,
+            search_budget=3,
+        )
+
+        self.assertEqual(result["decision"], "evidence")
+        self.assertTrue(result["deep_archival_requested"])
+        self.assertEqual(result["ambient_recall"]["mode"], "deep_archival_recall")
+        context = hook.context_for_hook(result)
+        self.assertIsNotNone(context)
+        self.assertIn("deep archival", context.casefold())
+
     def test_hook_json_uses_user_prompt_submit_additional_context(self) -> None:
         result = hook.assess_prompt(
             "你之前说过外置海马体为什么重要吗？",

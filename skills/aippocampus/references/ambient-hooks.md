@@ -61,8 +61,12 @@ thread-cache writer, so late scout results warm turn N+1 without making turn N
 wait.
 
 Use `benchmarks/aippocampus/benchmark_warm_ambient_recall.py` for calibration.
-Deterministic mode is CI-safe and now runs 12 synthetic trace cases behind
-quality gates; `--cases-file` accepts larger sanitized JSON/JSONL trace suites.
+Deterministic mode is CI-safe and now runs 13 synthetic trace cases behind
+quality gates, including a source-backed deep archival recall case;
+`--cases-file` accepts larger sanitized JSON/JSONL trace suites. For real-trace
+calibration, `benchmarks/aippocampus/build_warm_ambient_trace_cases.py` can
+export unlabeled, sanitized cases from registered clean source; generated
+exports are private working artifacts and should not be committed.
 Live mode may call the configured external model but must keep output sanitized
 to prompt hashes, aggregate metrics, validation status counts, error-kind
 buckets, and cache usage only. DeepSeek-compatible calls include a stable
@@ -92,9 +96,15 @@ Useful commands:
 - `python ...\simulate_multilingual_prompt_hook.py --cwd "$PWD"`
 - `python ...\warm_ambient_recall.py --prompt "继续 ambient recall" --cwd "$PWD" --thread-id dry-run --json`
 - `python ...\warm_ambient_recall.py --job-file <redacted-job.json> --json`
+- `python benchmarks\aippocampus\build_warm_ambient_trace_cases.py --out .tmp\warm-traces.jsonl --jsonl --json`
 - `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --json`
 - `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --cases-file traces.jsonl --json`
 - `python ...\install_aippocampus_prompt_hook.py install|status|uninstall`
+
+`deep_archival_recall` is an escalation request, not a license to dump history:
+the foreground agent should open clean source first using the card's
+`source_refs`, and only use raw audit paths when clean source cannot settle an
+exact wording or provenance dispute.
 
 On Windows, installers prefix generated hook commands with PowerShell's call
 operator (`&`) so quoted Python paths execute instead of being parsed as string

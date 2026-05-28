@@ -105,6 +105,15 @@ def _semantic_budget_result(reason: str) -> dict[str, Any]:
     }
 
 
+def _deep_archival_requested(prompt: str) -> bool:
+    text = str(prompt or "").casefold()
+    cues = (
+        "原话", "原文", "逐字", "准确怎么说", "具体怎么说", "一字不差",
+        "exact wording", "original wording", "verbatim", "quote", "dispute",
+    )
+    return any(cue in text for cue in cues)
+
+
 def _association_seed_terms(association_matches: list[dict[str, Any]]) -> list[str]:
     association_terms: list[str] = []
     for match in association_matches:
@@ -671,7 +680,7 @@ def assess_prompt(
         "evidence": evidence[:search_budget],
         "working_memory": strip_for_hook(working_memory_matches[:3]),
         "semantic_gate": strip_semantic_gate(semantic_result),
-        "elapsed_ms": elapsed_ms,
+        "elapsed_ms": elapsed_ms, "deep_archival_requested": _deep_archival_requested(prompt),
     }
     return _attach_ambient_recall(
         result, prompt=prompt, thread_id=thread_id, workspace=str(cwd_path), registry_path=path,

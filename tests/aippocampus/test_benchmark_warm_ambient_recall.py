@@ -13,6 +13,7 @@ for _path in (BENCHMARKS, SCRIPTS):
     sys.path.insert(0, str(_path))
 
 import benchmark_warm_ambient_recall as benchmark  # noqa: E402
+import build_warm_ambient_trace_cases as trace_builder  # noqa: E402
 
 
 class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
@@ -50,6 +51,9 @@ class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
             payload["metrics"]["total_scout_calls"],
             payload["metrics"]["configured_scout_calls"],
         )
+        deep_case = next(case for case in payload["cases"] if case["case_id"] == "deep_archival_original_wording")
+        self.assertEqual(deep_case["mode"], "deep_archival_recall")
+        self.assertEqual(deep_case["source_validation_statuses"], {"supported": 1})
         self.assertTrue(payload["quality_gates"]["passed"])
         self.assertEqual(payload["quality_gates"]["failed_case_ids"], [])
 
@@ -91,6 +95,177 @@ class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["cases"][0]["case_id"], "custom_trace")
         self.assertNotIn("detached warm job", raw)
 
+    def test_trace_case_builder_exports_sanitized_registry_cases(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            local_path = "E:" + "\\private\\trace\\memory.md"
+            private_title = "E:" + "\\private\\registry title"
+            fake_key = "sk-" + "abcdefghijklmnopqrstuvwxyz123456"
+            clean_dir = root / "registry" / "threads" / "session-test" / "clean-source"
+            clean_dir.mkdir(parents=True)
+            messages = clean_dir / "messages.jsonl"
+            messages.write_text(
+                "\n".join(
+                    json.dumps(item, ensure_ascii=False)
+                    for item in [
+                        {
+                            "message_id": "msg-secret",
+                            "source_line": 1,
+                            "role": "user",
+                            "phase": "recent_prompt",
+                            "text": "api" + "_key=" + fake_key,
+                        },
+                        {
+                            "message_id": "msg-context",
+                            "source_line": 2,
+                            "role": "assistant",
+                            "phase": "final_answer",
+                            "is_final": True,
+                            "text": f"旧上下文提到 {local_path}，不应原样进入 case。",
+                        },
+                        {
+                            "message_id": "msg-user",
+                            "source_line": 3,
+                            "role": "user",
+                            "phase": "recent_prompt",
+                            "text": "继续推进 ambient recall 的真实 prompt trace 校准。",
+                        },
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            registry_path = root / "registry" / "threads.json"
+            registry_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "threads": [
+                            {
+                                "thread_key": "session:test",
+                                "title": private_title,
+                                "paths": {"clean_source_messages_jsonl": str(messages)},
+                            }
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            payload = trace_builder.build_trace_cases(
+                registry_path=registry_path,
+                limit=5,
+                per_thread=5,
+                trace_window=2,
+            )
+
+        raw = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(payload["case_count"], 1)
+        self.assertEqual(payload["skipped"]["redacted_prompt"], 1)
+        self.assertTrue(payload["cases"][0]["case_id"].startswith("trace_"))
+        self.assertEqual(payload["cases"][0]["current_thread_key"], "session:test")
+        self.assertEqual(payload["cases"][0]["expected_available"], None)
+        self.assertEqual(payload["cases"][0]["expected_min_cards"], 0)
+        self.assertEqual(payload["cases"][0]["prompt"], "继续推进 ambient recall 的真实 prompt trace 校准。")
+        self.assertEqual(payload["cases"][0]["prompt_trace"][-1]["source_refs"][0]["line"], 3)
+        self.assertIn("<redacted:local-path>", raw)
+        self.assertNotIn(fake_key, raw)
+        self.assertNotIn("E:" + "\\private", raw)
+        self.assertNotIn(str(root), raw)
+
+    def test_trace_case_builder_output_feeds_warm_benchmark(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            clean_dir = root / "clean"
+            clean_dir.mkdir()
+            messages = clean_dir / "messages.jsonl"
+            messages.write_text(
+                "\n".join(
+                    json.dumps(item, ensure_ascii=False)
+                    for item in [
+                        {
+                            "message_id": "msg-1",
+                            "source_line": 10,
+                            "role": "assistant",
+                            "phase": "final_answer",
+                            "is_final": True,
+                            "text": "detached warm job 会把 late results 写回 thread cache。",
+                        },
+                        {
+                            "message_id": "msg-2",
+                            "source_line": 11,
+                            "role": "user",
+                            "phase": "recent_prompt",
+                            "text": "继续校准 detached warm job。",
+                        },
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            registry_path = root / "threads.json"
+            registry_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "threads": [
+                            {
+                                "thread_key": "session:trace",
+                                "paths": {"clean_source_messages_jsonl": str(messages)},
+                            }
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            payload = trace_builder.build_trace_cases(registry_path=registry_path, limit=1)
+            cases_file = root / "warm-cases.jsonl"
+            trace_builder.write_cases_file(payload["cases"], cases_file, jsonl=True)
+
+            benchmark_payload = benchmark.run_warm_ambient_recall_benchmark(
+                cwd=root / "workspace",
+                cases_file=cases_file,
+                live=False,
+            )
+
+        self.assertTrue(benchmark_payload["ok"])
+        self.assertEqual(benchmark_payload["metrics"]["case_count"], 1)
+        self.assertNotIn("detached warm job", json.dumps(benchmark_payload, ensure_ascii=False))
+
+    def test_cases_file_redacts_private_case_id_before_reporting(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            private_id = "E:" + "\\private\\trace\\warm.jsonl"
+            cases_file = root / "cases.json"
+            cases_file.write_text(
+                json.dumps(
+                    [
+                        {
+                            "case_id": private_id,
+                            "prompt": "继续校准 detached warm job",
+                            "prompt_trace": [],
+                            "expected_available": True,
+                            "expected_min_cards": 1,
+                        }
+                    ],
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            payload = benchmark.run_warm_ambient_recall_benchmark(
+                cwd=root / "workspace",
+                cases_file=cases_file,
+                live=False,
+            )
+
+        raw = json.dumps(payload, ensure_ascii=False)
+        self.assertTrue(payload["cases"][0]["case_id"].startswith("case_"))
+        self.assertNotIn(private_id, raw)
+        self.assertNotIn("private", raw.casefold())
+
     def test_quality_gates_fail_when_observed_scout_rate_is_too_low(self) -> None:
         gates = benchmark.evaluate_quality_gates(
             cases=[
@@ -111,6 +286,29 @@ class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
 
         self.assertFalse(gates["passed"])
         self.assertIn("observed_scout_rate", gates["failed"])
+
+    def test_missing_source_refs_are_reported_separately_from_false_evidence(self) -> None:
+        metrics = benchmark.summarize_metrics(
+            [
+                {
+                    "case_id": "missing",
+                    "available": True,
+                    "configured_scout_count": 50,
+                    "observed_scout_result_count": 50,
+                    "failed_scout_count": 0,
+                    "card_count": 3,
+                    "expectation_passed": True,
+                    "source_validation_statuses": {
+                        "missing_source_refs": 3,
+                        "unsupported": 1,
+                        "missing_source_ref": 1,
+                    },
+                }
+            ]
+        )
+
+        self.assertEqual(metrics["missing_source_refs_count"], 3)
+        self.assertEqual(metrics["false_evidence_count"], 2)
 
     def test_benchmark_summarizes_timeout_and_rate_limit_failures(self) -> None:
         summary = benchmark.summarize_case(

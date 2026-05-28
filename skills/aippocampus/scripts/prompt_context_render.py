@@ -85,6 +85,8 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
             theme = compact_text(str(card.get("theme") or ""), 120)
             suggested_use = compact_text(str(card.get("suggested_use") or ""), 180)
             source_note = " source-backed refs available" if support == "evidence" else ""
+            if visibility == "deep_archival_recall":
+                source_note += " deep archival requested"
             lines.append(f"- {visibility}/{support}: {theme}.{source_note} Use: {suggested_use}")
         lines.append("Let these cards tune the answer; do not paste them verbatim.")
     if result.get("reasons"):

@@ -374,16 +374,20 @@ The first slice should stay small but real:
    unused resonance can become dream-task seed material without logging raw
    prompt text.
 8. Use `benchmarks/aippocampus/benchmark_warm_ambient_recall.py` for sanitized
-   calibration. Deterministic mode now uses 12 built-in cases and quality gates
+   calibration. Deterministic mode now uses 13 built-in cases and quality gates
    for available rate, observed scout result rate, expectation pass rate, error
-   rate, and false evidence; `--cases-file` can add larger sanitized JSON/JSONL
-   prompt-trace suites. Live mode may call the configured
+   rate, false evidence, and missing-source-ref visibility; `--cases-file` can
+   add larger sanitized JSON/JSONL prompt-trace suites. Real-trace calibration
+   can now start from `benchmarks/aippocampus/build_warm_ambient_trace_cases.py`,
+   which exports unlabeled private cases from registered clean source while
+   skipping redacted prompts by default. Live mode may call the configured
    DeepSeek-compatible model but emits only hashes, aggregate metrics,
    validation status counts, error-kind buckets, and cache metrics.
 9. Source-ref validation, current-thread echo suppression, LLM-directed topic
    epoch rotation, and detached late-result cache warming are now implemented.
-   Next: tune visibility selection, deep archival recall behavior, and a larger
-   real-trace/manual benchmark corpus.
+   Deep archival recall now has a source-backed visibility mode for original
+   wording/detail requests. Next: build a labeled manual benchmark subset from
+   real traces and tune live-model quality thresholds.
 
 Success for slice one is not perfect recall. It is that the agent receives
 useful, source-backed peripheral awareness without making the user wait, and

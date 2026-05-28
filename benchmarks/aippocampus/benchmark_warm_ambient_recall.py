@@ -27,6 +27,7 @@ import _paths
 _paths.ensure_paths()
 
 import warm_ambient_recall as warm
+from aippocampuslib import compact_text, sanitize_external_model_text
 
 
 @dataclass(frozen=True)
@@ -39,6 +40,7 @@ class WarmBenchmarkCase:
     expected_available: bool | None = True
     expected_min_cards: int = 1
     expected_topic_epoch_action: str | None = None
+    expected_mode: str | None = None
 
 
 BUILTIN_CASES = (
@@ -191,6 +193,19 @@ BUILTIN_CASES = (
             }
         ],
     ),
+    WarmBenchmarkCase(
+        case_id="deep_archival_original_wording",
+        prompt="你能找回那句 continuity survives transformation 的原话吗？",
+        prompt_trace=[
+            {
+                "thread_key": "session:ambient-current",
+                "role": "user",
+                "phase": "recent_prompt",
+                "text": "The user asks for exact original wording, so source-backed deep archival recall is appropriate.",
+            }
+        ],
+        expected_mode="deep_archival_recall",
+    ),
 )
 
 
@@ -215,7 +230,7 @@ def load_cases_file(path: Path | str) -> tuple[WarmBenchmarkCase, ...]:
             raise ValueError(f"case #{idx} prompt_trace must be a list")
         cases.append(
             WarmBenchmarkCase(
-                case_id=str(item.get("case_id") or f"case_{idx}"),
+                case_id=safe_case_id(str(item.get("case_id") or f"case_{idx}")),
                 prompt=str(item.get("prompt") or ""),
                 prompt_trace=prompt_trace,
                 current_thread_key=str(item.get("current_thread_key") or "") or None,
@@ -223,6 +238,7 @@ def load_cases_file(path: Path | str) -> tuple[WarmBenchmarkCase, ...]:
                 expected_available=item.get("expected_available", True),
                 expected_min_cards=int(item.get("expected_min_cards", 1) or 0),
                 expected_topic_epoch_action=str(item.get("expected_topic_epoch_action") or "") or None,
+                expected_mode=str(item.get("expected_mode") or "") or None,
             )
         )
     return tuple(cases)
@@ -232,10 +248,72 @@ def sha1_text(text: str) -> str:
     return hashlib.sha1(text.encode("utf-8")).hexdigest()[:16]
 
 
+def safe_case_id(value: str) -> str:
+    text, policy = sanitize_external_model_text(value)
+    compact = compact_text(text.replace("\\", "/").strip(), 80)
+    if policy.get("redacted") or not compact:
+        return "case_" + sha1_text(str(value or ""))[:12]
+    return compact
+
+
+def deterministic_registry_fixture(workspace: Path) -> dict[str, Any]:
+    clean_dir = workspace / "benchmark-clean-source"
+    clean_dir.mkdir(parents=True, exist_ok=True)
+    messages = clean_dir / "messages.jsonl"
+    messages.write_text(
+        json.dumps(
+            {
+                "message_id": "msg-benchmark-1",
+                "source_line": 42,
+                "role": "assistant",
+                "phase": "final_answer",
+                "is_final": True,
+                "text": "The original wording was: continuity survives transformation.",
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return {
+        "schema_version": 1,
+        "threads": [
+            {
+                "thread_key": "session:benchmark-source",
+                "title": "Benchmark clean source",
+                "paths": {"clean_source_messages_jsonl": str(messages)},
+            }
+        ],
+    }
+
+
 def deterministic_scout_fn(scout: str, payload: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
     del kwargs
     family = scout.split(":", 1)[0]
     prompt = str(payload.get("prompt") or "")
+    if "原话" in prompt or "original wording" in prompt.casefold():
+        if family == "key_line_hunter":
+            return {
+                "decision": "evidence",
+                "confidence": 0.88,
+                "candidates": [
+                    {
+                        "theme": "original wording continuity",
+                        "support_level": "evidence",
+                        "visibility": "deep_archival_recall",
+                        "key_line": "continuity survives transformation",
+                        "matched_terms": ["continuity"],
+                        "source_refs": [
+                            {
+                                "thread_key": "session:benchmark-source",
+                                "line": 42,
+                                "message_id": "msg-benchmark-1",
+                            }
+                        ],
+                    }
+                ],
+            }
+        return {"decision": "skip", "confidence": 0.1}
     if family == "privacy_boundary_guard" and any(token in prompt.casefold() for token in ("token", "cookie", "api key")):
         return {
             "decision": "skip",
@@ -343,6 +421,8 @@ def summarize_case(case: WarmBenchmarkCase, result: dict[str, Any]) -> dict[str,
         and summary["topic_epoch_action"] != case.expected_topic_epoch_action
     ):
         expectation_failures.append("topic_epoch_action")
+    if case.expected_mode and summary["mode"] != case.expected_mode:
+        expectation_failures.append("mode")
     summary["expectation_passed"] = not expectation_failures
     summary["expectation_failures"] = expectation_failures
     return summary
@@ -374,6 +454,11 @@ def run_warm_ambient_recall_benchmark(
         workspace.mkdir(parents=True, exist_ok=True)
         source_cases = load_cases_file(cases_file) if cases_file else BUILTIN_CASES
         cases = list(source_cases[: case_limit or len(source_cases)])
+        deterministic_registry = (
+            deterministic_registry_fixture(workspace)
+            if not live and not registry_path and not registry_dir
+            else None
+        )
         summaries: list[dict[str, Any]] = []
         live_key = os.environ.get(api_key_env) if live else None
         if live and not live_key:
@@ -395,7 +480,7 @@ def run_warm_ambient_recall_benchmark(
                 current_thread_key=case.current_thread_key,
                 prompt_trace=case.prompt_trace,
                 topic_epoch=case.topic_epoch,
-                registry={} if not live and not registry_path and not registry_dir else None,
+                registry=deterministic_registry,
                 registry_path=registry_path,
                 registry_dir=registry_dir,
                 cache_path=workspace / "ambient-thread-cache.json",
@@ -452,6 +537,10 @@ def summarize_metrics(cases: list[dict[str, Any]]) -> dict[str, Any]:
         for case in cases
         for status in ("unsupported", "missing_source_ref")
     )
+    missing_source_refs = sum(
+        int((case.get("source_validation_statuses") or {}).get("missing_source_refs") or 0)
+        for case in cases
+    )
     elapsed = [float(case.get("elapsed_ms") or 0.0) for case in cases]
     scout_error_kinds: dict[str, int] = {}
     for case in cases:
@@ -466,6 +555,7 @@ def summarize_metrics(cases: list[dict[str, Any]]) -> dict[str, Any]:
         "scout_error_rate": round(total_failed / total_observed, 4) if total_observed else 0.0,
         "case_pass_rate": round(case_passes / total, 4) if total else 0.0,
         "false_evidence_count": false_evidence,
+        "missing_source_refs_count": missing_source_refs,
         "card_count": cards,
         "avg_elapsed_ms": round(sum(elapsed) / total, 2) if total else 0.0,
         "max_elapsed_ms": round(max(elapsed), 2) if elapsed else 0.0,

@@ -31,6 +31,7 @@ from aippocampuslib import (
 from ambient_recall_cards import (
     ACTIVE_GENTLE_NUDGE,
     CANDIDATE,
+    DEEP_ARCHIVAL_RECALL,
     EVIDENCE,
     SCENT,
     SILENT_TUNING,
@@ -109,6 +110,7 @@ LEGACY_SCOUT_ALIASES = {
 VALID_DECISIONS = {"skip", "background_only", "scent", "candidate", "evidence"}
 VALID_SUPPORT_LEVELS = {SCENT, CANDIDATE, EVIDENCE}
 VALID_TOPIC_EPOCH_ACTIONS = {"reuse", "rotate", "suppress"}
+VALID_VISIBILITIES = {SILENT_TUNING, ACTIVE_GENTLE_NUDGE, SOURCE_BACKED_RECALL_CARD, DEEP_ARCHIVAL_RECALL}
 SUPPORT_RANK = {SCENT: 1, CANDIDATE: 2, EVIDENCE: 3}
 
 ChatFn = Callable[[list[dict[str, str]], str, str, str, int | None, float, float], dict[str, Any]]
@@ -288,9 +290,13 @@ def _confidence_label(value: float) -> str:
 def _mode_for_cards(cards: list[dict[str, Any]]) -> str:
     if not cards:
         return SILENT_TUNING
+    if any(card.get("visibility") == DEEP_ARCHIVAL_RECALL for card in cards):
+        return DEEP_ARCHIVAL_RECALL
     if any(card.get("support_level") == EVIDENCE for card in cards):
         return SOURCE_BACKED_RECALL_CARD
-    return ACTIVE_GENTLE_NUDGE
+    if any(card.get("visibility") == ACTIVE_GENTLE_NUDGE for card in cards):
+        return ACTIVE_GENTLE_NUDGE
+    return SILENT_TUNING
 
 
 def _catalog_from_registry(registry: dict[str, Any], *, limit: int = DEFAULT_MAX_CATALOG_ITEMS) -> list[dict[str, Any]]:
@@ -392,6 +398,7 @@ def build_payload(
                 {
                     "theme": "short label",
                     "support_level": "scent|candidate|evidence",
+                    "visibility": "silent_tuning|active_gentle_nudge|source_backed_recall_card|deep_archival_recall",
                     "resonance": "low|medium|high",
                     "suggested_use": "private guidance for the agent",
                     "nudge": "optional active-gentle-nudge wording",
@@ -517,6 +524,13 @@ def _clean_candidate(candidate: dict[str, Any], *, row: dict[str, Any]) -> dict[
         support = CANDIDATE if row.get("decision") == "candidate" else SCENT
     if support == EVIDENCE and not refs:
         support = CANDIDATE
+    requested_visibility = str(candidate.get("visibility") or "").strip().casefold()
+    if requested_visibility not in VALID_VISIBILITIES:
+        requested_visibility = ""
+    if support == EVIDENCE:
+        visibility = requested_visibility if requested_visibility in {SOURCE_BACKED_RECALL_CARD, DEEP_ARCHIVAL_RECALL} else SOURCE_BACKED_RECALL_CARD
+    else:
+        visibility = requested_visibility if requested_visibility in {SILENT_TUNING, ACTIVE_GENTLE_NUDGE} else ACTIVE_GENTLE_NUDGE
     theme = _safe_text(candidate.get("theme") or candidate.get("title"), 140)
     key_line = _safe_text(candidate.get("key_line") or candidate.get("snippet"), 220)
     if not theme and not key_line:
@@ -528,7 +542,7 @@ def _clean_candidate(candidate: dict[str, Any], *, row: dict[str, Any]) -> dict[
         "theme": theme,
         "resonance": _safe_text(candidate.get("resonance") or "medium", 40) or "medium",
         "support_level": support,
-        "visibility": SOURCE_BACKED_RECALL_CARD if support == EVIDENCE else ACTIVE_GENTLE_NUDGE,
+        "visibility": visibility,
         "suggested_use": _safe_text(
             candidate.get("suggested_use")
             or ("Use only with the attached source refs." if support == EVIDENCE else "Treat as provisional resonance."),
@@ -948,6 +962,11 @@ def _merge_card(existing: dict[str, Any], incoming: dict[str, Any]) -> None:
         existing["support_level"] = incoming.get("support_level")
         existing["visibility"] = incoming.get("visibility")
         existing["suggested_use"] = incoming.get("suggested_use") or existing.get("suggested_use")
+    elif (
+        incoming.get("visibility") == DEEP_ARCHIVAL_RECALL
+        and existing.get("support_level") == EVIDENCE
+    ):
+        existing["visibility"] = DEEP_ARCHIVAL_RECALL
 
     existing["matched_terms"] = unique_preserve(
         [*existing.get("matched_terms", []), *incoming.get("matched_terms", [])],

@@ -49,6 +49,51 @@ class AmbientRecallCardTests(unittest.TestCase):
         self.assertEqual(payload["cards"][0]["source_refs"][0]["line"], 12)
         self.assertIn("innate memory", " ".join(payload["avoid"]))
 
+    def test_deep_archival_request_requires_source_backed_evidence(self) -> None:
+        result = {
+            "decision": "evidence",
+            "confidence": "high",
+            "elapsed_ms": 123.4,
+            "deep_archival_requested": True,
+            "evidence": [
+                {
+                    "thread_key": "session:old",
+                    "title": "Old continuity thread",
+                    "line": 12,
+                    "phase": "final_answer",
+                    "turn_index": 3,
+                    "snippet": "continuity survives transformation",
+                }
+            ],
+            "working_memory": [],
+            "cognitive_map": [],
+            "candidates": [],
+        }
+
+        payload = cards.ambient_recall_from_decision(result)
+
+        self.assertEqual(payload["mode"], "deep_archival_recall")
+        self.assertEqual(payload["cards"][0]["visibility"], "deep_archival_recall")
+        self.assertEqual(payload["cards"][0]["support_level"], "evidence")
+        self.assertIn("clean source", payload["cards"][0]["suggested_use"].casefold())
+
+    def test_deep_archival_request_does_not_promote_unsourced_scent(self) -> None:
+        result = {
+            "decision": "scent",
+            "confidence": "medium",
+            "deep_archival_requested": True,
+            "candidates": [{"title": "Old thread", "matched_terms": ["memory"]}],
+            "evidence": [],
+            "working_memory": [],
+            "cognitive_map": [],
+        }
+
+        payload = cards.ambient_recall_from_decision(result)
+
+        self.assertEqual(payload["mode"], "active_gentle_nudge")
+        self.assertEqual(payload["cards"][0]["visibility"], "active_gentle_nudge")
+        self.assertEqual(payload["cards"][0]["support_level"], "scent")
+
     def test_scent_decision_becomes_active_gentle_nudge_without_evidence_claim(self) -> None:
         result = {
             "decision": "scent",

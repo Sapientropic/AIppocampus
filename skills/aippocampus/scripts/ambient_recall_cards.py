@@ -19,6 +19,7 @@ MAX_CARDS = 3
 SILENT_TUNING = "silent_tuning"
 ACTIVE_GENTLE_NUDGE = "active_gentle_nudge"
 SOURCE_BACKED_RECALL_CARD = "source_backed_recall_card"
+DEEP_ARCHIVAL_RECALL = "deep_archival_recall"
 
 SCENT = "scent"
 CANDIDATE = "candidate"
@@ -84,22 +85,31 @@ def _theme_from_item(item: dict[str, Any], fallback: str) -> str:
     return fallback
 
 
-def _evidence_card(item: dict[str, Any]) -> dict[str, Any]:
+def _evidence_card(item: dict[str, Any], *, deep_archival: bool = False) -> dict[str, Any]:
     theme = _theme_from_item(item, "source-backed prior context")
     key_line = _safe_text(item.get("snippet"), 220)
     ref = _clean_source_ref(item)
+    visibility = DEEP_ARCHIVAL_RECALL if deep_archival and ref else SOURCE_BACKED_RECALL_CARD
     return {
         "card_id": _stable_id([EVIDENCE, theme, ref.get("thread_key"), ref.get("line"), key_line]),
         "theme": theme,
         "resonance": "high",
         "support_level": EVIDENCE,
-        "visibility": SOURCE_BACKED_RECALL_CARD,
-        "suggested_use": "Use this only when the prior source changes the current answer or needs grounding.",
+        "visibility": visibility,
+        "suggested_use": (
+            "Open clean source before using exact wording; raw audit is only for disputed or missing clean-source details."
+            if visibility == DEEP_ARCHIVAL_RECALL
+            else "Use this only when the prior source changes the current answer or needs grounding."
+        ),
         "nudge": "",
         "key_line": key_line,
         "matched_terms": _clean_terms(item.get("matched_terms") or []),
         "source_refs": [ref] if ref else [],
-        "expand_if": "User asks for original wording, source details, or a disputed memory.",
+        "expand_if": (
+            "Open clean source for the exact line; use raw audit only if clean source cannot settle the detail."
+            if visibility == DEEP_ARCHIVAL_RECALL
+            else "User asks for original wording, source details, or a disputed memory."
+        ),
     }
 
 
@@ -184,6 +194,8 @@ def _dedupe_cards(cards: list[dict[str, Any]], *, limit: int) -> list[dict[str, 
 def _mode_for_cards(decision: str, cards: list[dict[str, Any]]) -> str:
     if not cards:
         return SILENT_TUNING
+    if any(card.get("visibility") == DEEP_ARCHIVAL_RECALL for card in cards):
+        return DEEP_ARCHIVAL_RECALL
     if decision == "evidence" or any(card.get("support_level") == EVIDENCE for card in cards):
         return SOURCE_BACKED_RECALL_CARD
     if any(card.get("visibility") == ACTIVE_GENTLE_NUDGE for card in cards):
@@ -199,9 +211,10 @@ def ambient_recall_from_decision(
     max_cards: int = MAX_CARDS,
 ) -> dict[str, Any]:
     decision = str(result.get("decision") or "skip")
+    deep_archival = bool(result.get("deep_archival_requested"))
     cards: list[dict[str, Any]] = []
     if result.get("evidence"):
-        cards.extend(_evidence_card(item) for item in result.get("evidence") or [])
+        cards.extend(_evidence_card(item, deep_archival=deep_archival) for item in result.get("evidence") or [])
     if result.get("working_memory"):
         cards.extend(_working_memory_card(item) for item in result.get("working_memory") or [])
     if not cards and result.get("cognitive_map"):
