@@ -226,9 +226,10 @@ concurrency limit, but foreground latency still depends on useful scout
 completion. Warm scouts therefore send one stable hashed `user_id` for the
 batch, preserving privacy-safe KV-cache/scheduler isolation without embedding
 user names, prompts, or paths. Benchmark output should distinguish
-`rate_limited_429` from `read_timeout`: a 429 asks for concurrency/backoff
-tuning, while a read timeout usually means the caller should stay quorum-first
-or move wait-all to detached evaluation.
+`rate_limited_429`, `service_unavailable_503`, and `read_timeout`: 429 asks for
+concurrency/backoff tuning, 503 means the provider is currently too busy to read
+quality from the run, and read timeout usually means the caller should stay
+quorum-first or move wait-all to detached evaluation.
 
 Initial live calibration on `benchmark_corpus/output/sharegpt_coding_multiturn`
 showed that low worker caps can underuse Flash rather than protect it: on a
@@ -239,6 +240,14 @@ passed at 15s, but 8s under-sampled useful scouts and failed the availability
 gate. Treat 15s as the current foreground-style evaluation floor for public
 corpus sweeps, and keep the actual foreground hook cache-first/asynchronous so
 the user never waits for that wall time.
+
+Large case packs need two separate concurrency dials. `--max-workers` controls
+the 50 scout lanes inside one case; `--case-workers` controls how many cases run
+at once. Do not treat `case_workers=50` as the natural companion to
+`max_workers=50`: that would create up to 2500 simultaneous provider calls.
+Use `--case-offset`, `--case-limit`, and `--progress-jsonl` / `--progress-dir`
+for sharded long runs so interrupted calibration still leaves sanitized
+per-case evidence.
 
 Do not make `max_tokens` the primary tuning lever. It remains `None` by default
 so Flash can return complete compact JSON; only test token caps as an explicit

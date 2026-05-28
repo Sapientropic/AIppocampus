@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -95,6 +96,59 @@ class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["metrics"]["case_count"], 1)
         self.assertEqual(payload["cases"][0]["case_id"], "custom_trace")
         self.assertNotIn("detached warm job", raw)
+
+    def test_benchmark_runs_cases_concurrently_when_case_workers_is_set(self) -> None:
+        active = 0
+        max_active = 0
+        original_scout = benchmark.deterministic_scout_fn
+
+        def slow_scout(*args, **kwargs):
+            nonlocal active, max_active
+            active += 1
+            max_active = max(max_active, active)
+            time.sleep(0.02)
+            active -= 1
+            return original_scout(*args, **kwargs)
+
+        with tempfile.TemporaryDirectory() as tmp, patch.object(benchmark, "deterministic_scout_fn", slow_scout):
+            payload = benchmark.run_warm_ambient_recall_benchmark(
+                cwd=Path(tmp) / "workspace",
+                case_limit=4,
+                live=False,
+                wait_all=True,
+                max_workers=1,
+                case_workers=2,
+            )
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["metrics"]["case_count"], 4)
+        self.assertEqual(payload["config"]["case_workers"], 2)
+        self.assertGreaterEqual(max_active, 2)
+
+    def test_benchmark_writes_sanitized_progress_jsonl_per_case(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            progress = root / "progress.jsonl"
+            payload = benchmark.run_warm_ambient_recall_benchmark(
+                cwd=root / "workspace",
+                case_limit=3,
+                live=False,
+                progress_jsonl=progress,
+            )
+
+            rows = [
+                json.loads(line)
+                for line in progress.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+
+        raw = json.dumps(rows, ensure_ascii=False)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(rows[0]["event"], "case_completed")
+        self.assertIn("prompt_sha1", rows[0]["case"])
+        self.assertNotIn("prompt_trace", raw)
+        self.assertNotIn("那个脑内续接器", raw)
 
     def test_labeled_trace_expectations_cover_source_echo_and_topic(self) -> None:
         case = benchmark.WarmBenchmarkCase(
@@ -763,6 +817,11 @@ class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
         self.assertEqual(summary["scout_error_kinds"]["rate_limited_429"], 1)
         self.assertEqual(metrics["scout_error_kinds"]["read_timeout"], 1)
         self.assertEqual(metrics["scout_error_kinds"]["rate_limited_429"], 1)
+
+    def test_warm_error_kind_separates_provider_busy_from_generic_scout_error(self) -> None:
+        reason = 'RuntimeError: DeepSeek API HTTP 503: {"error":{"code":"service_unavailable_error"}}'
+
+        self.assertEqual(benchmark.warm.scout_error_kind(reason), "service_unavailable_503")
 
     def test_live_benchmark_does_not_default_to_rigid_scout_max_tokens(self) -> None:
         fake_result = {

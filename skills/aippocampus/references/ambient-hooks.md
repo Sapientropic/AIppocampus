@@ -109,6 +109,12 @@ means the foreground budget is too short for wait-all.
 `AIPPOCAMPUS_WARM_RECALL_MAX_WORKERS` may cap the default live worker count for
 shared accounts or pro-model experiments; keep the normal foreground behavior
 quorum-first.
+For long labeled packs, keep case-level and scout-level concurrency separate:
+`--max-workers` is the per-case 10x5 scout lane cap, while `--case-workers` is
+outer case parallelism. Use small outer values such as 2-4 plus
+`--case-offset`, `--case-limit`, and `--progress-jsonl` / `--progress-dir` for
+resumable long runs. A `service_unavailable_503` bucket means the provider was
+too busy; do not read it as a source-ref, echo, or topic-epoch quality signal.
 
 Callers may opt into residue export by passing a residue output path to the
 thread-cache writer. This writes `aippocampus_ambient_residue` JSONL rows for
@@ -131,8 +137,8 @@ Useful commands:
 - `python benchmarks\aippocampus\build_warm_ambient_trace_cases.py --clean-source-dir benchmark_corpus\output\sharegpt_coding_multiturn --dataset-id sharegpt_coding_multiturn --out .tmp\warm-sharegpt-coding-100-source-ref.jsonl --jsonl --subset-messages-out .tmp\warm-sharegpt-coding-100-pack\clean-source\messages.jsonl --registry-out .tmp\warm-sharegpt-coding-100-pack\threads.json --limit 100 --per-thread 1 --trace-window 6 --min-turn-index 2 --label-template --label-policy source_ref_supported --json`
 - `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --json`
 - `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --cases-file traces.jsonl --json`
-- `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --cases-file traces.jsonl --registry .tmp\warm-sharegpt-coding-pack\threads.json --live --quorum-first --max-workers 50 --timeout 15 --json`
-- `python benchmarks\aippocampus\benchmark_warm_ambient_sweep.py --cases-file traces.jsonl --registry .tmp\warm-sharegpt-coding-pack\threads.json --live --wait-modes quorum_first,wait_all --max-workers-list 20,50 --timeouts 15,30 --json`
+- `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --cases-file traces.jsonl --registry .tmp\warm-sharegpt-coding-pack\threads.json --live --quorum-first --case-offset 0 --case-limit 10 --case-workers 2 --max-workers 50 --timeout 15 --progress-jsonl .tmp\warm-progress-source-ref-000.jsonl --json`
+- `python benchmarks\aippocampus\benchmark_warm_ambient_sweep.py --cases-file traces.jsonl --registry .tmp\warm-sharegpt-coding-pack\threads.json --live --wait-modes quorum_first,wait_all --case-workers 2 --progress-dir .tmp\warm-progress --max-workers-list 20,50 --timeouts 15,30 --json`
 - `python ...\install_aippocampus_prompt_hook.py install|status|uninstall`
 
 `deep_archival_recall` is an escalation request, not a license to dump history:

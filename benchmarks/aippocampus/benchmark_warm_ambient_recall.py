@@ -14,10 +14,12 @@ shared as evidence without leaking local memory content.
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import hashlib
 import json
 import os
 import tempfile
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -28,6 +30,8 @@ _paths.ensure_paths()
 
 import warm_ambient_recall as warm
 from aippocampuslib import compact_text, sanitize_external_model_text
+
+DEFAULT_CASE_WORKERS = 1
 
 
 @dataclass(frozen=True)
@@ -296,6 +300,38 @@ def parse_expected_count_map(value: Any) -> dict[str, int]:
     return result
 
 
+def resolve_case_workers(*, case_count: int, case_workers: int | None) -> int:
+    requested = int(case_workers if case_workers is not None else DEFAULT_CASE_WORKERS)
+    if requested > 0:
+        return requested
+    # Auto mode is intentionally more conservative than the semantic-gate
+    # benchmark: each warm case can itself launch 50 scout lanes, so resolving
+    # 100 cases to 50 outer workers would create thousands of simultaneous
+    # provider calls. Four outer workers keeps long live runs observable without
+    # turning 10x5 scout parallelism into an accidental load test.
+    return max(1, min(4, (max(1, int(case_count)) + 24) // 25))
+
+
+def select_cases(
+    source_cases: tuple[WarmBenchmarkCase, ...],
+    *,
+    case_offset: int = 0,
+    case_limit: int | None = None,
+) -> list[WarmBenchmarkCase]:
+    start = max(0, int(case_offset or 0))
+    end = None if case_limit is None else start + max(0, int(case_limit))
+    return list(source_cases[start:end])
+
+
+def write_progress_row(progress_jsonl: Path | str | None, row: dict[str, Any]) -> None:
+    if not progress_jsonl:
+        return
+    target = Path(progress_jsonl)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+
+
 def sha1_text(text: str) -> str:
     return hashlib.sha1(text.encode("utf-8")).hexdigest()[:16]
 
@@ -499,18 +535,21 @@ def summarize_case(case: WarmBenchmarkCase, result: dict[str, Any]) -> dict[str,
 def run_warm_ambient_recall_benchmark(
     *,
     cwd: Path | str | None = None,
+    case_offset: int = 0,
     case_limit: int | None = None,
     live: bool = False,
     wait_all: bool = True,
     timeout: float = 2.4,
     quorum: int = warm.DEFAULT_QUORUM,
     max_workers: int | None = None,
+    case_workers: int | None = DEFAULT_CASE_WORKERS,
     max_tokens: int | None = None,
     registry_path: Path | str | None = None,
     registry_dir: Path | str | None = None,
     cases_file: Path | str | None = None,
     api_key_env: str = "DEEPSEEK_API_KEY",
     user_id: str | None = None,
+    progress_jsonl: Path | str | None = None,
     min_available_rate: float = 0.65,
     min_observed_scout_rate: float | None = None,
     min_case_pass_rate: float = 1.0,
@@ -523,12 +562,17 @@ def run_warm_ambient_recall_benchmark(
         workspace = Path(cwd or Path(root_ctx.name) / "workspace").resolve()
         workspace.mkdir(parents=True, exist_ok=True)
         source_cases = load_cases_file(cases_file) if cases_file else BUILTIN_CASES
-        cases = list(source_cases[: case_limit or len(source_cases)])
+        cases = select_cases(source_cases, case_offset=case_offset, case_limit=case_limit)
+        resolved_case_workers = resolve_case_workers(
+            case_count=len(cases),
+            case_workers=case_workers,
+        )
         deterministic_registry = (
             deterministic_registry_fixture(workspace)
             if not live and not registry_path and not registry_dir
             else None
         )
+        progress_lock = threading.Lock()
         summaries: list[dict[str, Any]] = []
         live_key = os.environ.get(api_key_env) if live else None
         if live and not live_key:
@@ -539,10 +583,18 @@ def run_warm_ambient_recall_benchmark(
                 "status": "skipped_missing_api_key",
                 "live_model": True,
                 "metrics": {"case_count": 0},
+                "config": {
+                    "case_offset": max(0, int(case_offset or 0)),
+                    "case_limit": case_limit,
+                    "case_workers": resolved_case_workers,
+                    "max_workers": max_workers,
+                    "wait_all": wait_all,
+                    "timeout": timeout,
+                },
                 "cases": [],
                 "privacy_boundary": privacy_boundary(),
             }
-        for case in cases:
+        def run_case(case: WarmBenchmarkCase) -> dict[str, Any]:
             result = warm.run_warm_ambient_recall(
                 case.prompt,
                 cwd=workspace,
@@ -564,7 +616,37 @@ def run_warm_ambient_recall_benchmark(
                 no_write=True,
                 scout_fn=warm.model_scout_fn if live else deterministic_scout_fn,
             )
-            summaries.append(summarize_case(case, result))
+            return summarize_case(case, result)
+
+        def record_case(index: int, summary: dict[str, Any]) -> None:
+            with progress_lock:
+                write_progress_row(
+                    progress_jsonl,
+                    {
+                        "event": "case_completed",
+                        "case_index": index,
+                        "case": summary,
+                    },
+                )
+
+        if resolved_case_workers <= 1 or len(cases) <= 1:
+            for index, case in enumerate(cases, start=max(0, int(case_offset or 0))):
+                summary = run_case(case)
+                summaries.append(summary)
+                record_case(index, summary)
+        else:
+            ordered: list[dict[str, Any] | None] = [None] * len(cases)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=resolved_case_workers) as executor:
+                futures = {
+                    executor.submit(run_case, case): offset
+                    for offset, case in enumerate(cases)
+                }
+                for future in concurrent.futures.as_completed(futures):
+                    offset = futures[future]
+                    summary = future.result()
+                    ordered[offset] = summary
+                    record_case(max(0, int(case_offset or 0)) + offset, summary)
+            summaries.extend(summary for summary in ordered if summary is not None)
 
         metrics = summarize_metrics(summaries)
         effective_min_observed = (
@@ -589,6 +671,15 @@ def run_warm_ambient_recall_benchmark(
             "ok": bool(summaries) and bool(quality_gates.get("passed")),
             "status": "sufficient" if summaries and quality_gates.get("passed") else "insufficient" if summaries else "empty",
             "live_model": live,
+            "config": {
+                "case_offset": max(0, int(case_offset or 0)),
+                "case_limit": case_limit,
+                "case_workers": resolved_case_workers,
+                "max_workers": max_workers,
+                "wait_all": wait_all,
+                "timeout": timeout,
+                "progress_jsonl": bool(progress_jsonl),
+            },
             "metrics": metrics,
             "quality_gates": quality_gates,
             "cases": summaries,
@@ -700,6 +791,7 @@ def privacy_boundary() -> dict[str, bool]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cwd", default=None)
+    parser.add_argument("--case-offset", type=int, default=0)
     parser.add_argument("--case-limit", type=int, default=None)
     parser.add_argument("--live", action="store_true")
     parser.add_argument("--wait-all", action="store_true", dest="wait_all", default=True)
@@ -707,12 +799,19 @@ def main() -> int:
     parser.add_argument("--timeout", type=float, default=2.4)
     parser.add_argument("--quorum", type=int, default=warm.DEFAULT_QUORUM)
     parser.add_argument("--max-workers", type=int, default=None)
+    parser.add_argument(
+        "--case-workers",
+        type=int,
+        default=DEFAULT_CASE_WORKERS,
+        help="Outer case concurrency. Use 0 for conservative auto mode.",
+    )
     parser.add_argument("--max-tokens", type=int, default=None)
     parser.add_argument("--registry")
     parser.add_argument("--registry-dir")
     parser.add_argument("--cases-file", help="Optional JSON/JSONL sanitized trace case file.")
     parser.add_argument("--api-key-env", default="DEEPSEEK_API_KEY")
     parser.add_argument("--user-id", help="Optional DeepSeek user_id; omit to use a stable sanitized hash.")
+    parser.add_argument("--progress-jsonl", help="Optional sanitized per-case progress JSONL path.")
     parser.add_argument("--min-available-rate", type=float, default=0.65)
     parser.add_argument("--min-observed-scout-rate", type=float, default=None)
     parser.add_argument("--min-case-pass-rate", type=float, default=1.0)
@@ -723,18 +822,21 @@ def main() -> int:
     args = parser.parse_args()
     payload = run_warm_ambient_recall_benchmark(
         cwd=args.cwd,
+        case_offset=args.case_offset,
         case_limit=args.case_limit,
         live=args.live,
         wait_all=args.wait_all,
         timeout=args.timeout,
         quorum=args.quorum,
         max_workers=args.max_workers,
+        case_workers=args.case_workers,
         max_tokens=args.max_tokens,
         registry_path=args.registry,
         registry_dir=args.registry_dir,
         cases_file=args.cases_file,
         api_key_env=args.api_key_env,
         user_id=args.user_id,
+        progress_jsonl=args.progress_jsonl,
         min_available_rate=args.min_available_rate,
         min_observed_scout_rate=args.min_observed_scout_rate,
         min_case_pass_rate=args.min_case_pass_rate,

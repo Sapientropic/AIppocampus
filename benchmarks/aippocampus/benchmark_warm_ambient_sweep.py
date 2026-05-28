@@ -304,11 +304,14 @@ def run_warm_ambient_recall_sweep(
     wait_modes: tuple[str, ...] | list[str] | None = DEFAULT_WAIT_MODES,
     max_workers_values: tuple[int, ...] | list[int] | None = DEFAULT_MAX_WORKERS,
     timeout_values: tuple[float, ...] | list[float] | None = DEFAULT_TIMEOUTS,
+    case_offset: int = 0,
     case_limit: int | None = None,
+    case_workers: int | None = benchmark.DEFAULT_CASE_WORKERS,
     quorum: int = benchmark.warm.DEFAULT_QUORUM,
     max_tokens: int | None = None,
     api_key_env: str = "DEEPSEEK_API_KEY",
     user_id: str | None = None,
+    progress_dir: Path | str | None = None,
     min_available_rate: float = 0.65,
     min_observed_scout_rate: float | None = None,
     min_case_pass_rate: float = 1.0,
@@ -322,23 +325,33 @@ def run_warm_ambient_recall_sweep(
     timeouts = tuple(float(value) for value in (timeout_values or DEFAULT_TIMEOUTS))
     payloads: list[dict[str, Any]] = []
     runs: list[dict[str, Any]] = []
+    progress_root = Path(progress_dir) if progress_dir else None
     for wait_mode in modes:
         for max_workers in workers:
             for timeout in timeouts:
+                progress_jsonl = None
+                if progress_root is not None:
+                    progress_jsonl = progress_root / (
+                        f"{wait_mode}-case{case_offset}-limit{case_limit or 'all'}-"
+                        f"workers{max_workers}-timeout{timeout:g}.jsonl"
+                    )
                 payload = benchmark_fn(
                     cwd=cwd,
+                    case_offset=case_offset,
                     case_limit=case_limit,
                     live=live,
                     wait_all=wait_mode == "wait_all",
                     timeout=timeout,
                     quorum=quorum,
                     max_workers=max_workers,
+                    case_workers=case_workers,
                     max_tokens=max_tokens,
                     registry_path=registry_path,
                     registry_dir=registry_dir,
                     cases_file=cases_file,
                     api_key_env=api_key_env,
                     user_id=user_id,
+                    progress_jsonl=progress_jsonl,
                     min_available_rate=min_available_rate,
                     min_observed_scout_rate=min_observed_scout_rate,
                     min_case_pass_rate=min_case_pass_rate,
@@ -371,9 +384,12 @@ def run_warm_ambient_recall_sweep(
             "max_workers": list(workers),
             "timeouts": list(timeouts),
             "run_count": len(runs),
+            "case_offset": case_offset,
             "case_limit": case_limit,
+            "case_workers": case_workers,
             "cases_file_sha1": sha1_text(str(cases_file)) if cases_file else None,
             "registry_sha1": sha1_text(str(registry_path or registry_dir)) if (registry_path or registry_dir) else None,
+            "progress_dir_enabled": bool(progress_root),
         },
         "best": best,
         "analysis": analysis,
@@ -398,11 +414,19 @@ def main() -> int:
     parser.add_argument("--wait-modes", default="quorum_first")
     parser.add_argument("--max-workers-list", default="50")
     parser.add_argument("--timeouts", default="30")
+    parser.add_argument("--case-offset", type=int, default=0)
     parser.add_argument("--case-limit", type=int, default=None)
+    parser.add_argument(
+        "--case-workers",
+        type=int,
+        default=benchmark.DEFAULT_CASE_WORKERS,
+        help="Outer case concurrency passed to the warm benchmark. Use 0 for conservative auto mode.",
+    )
     parser.add_argument("--quorum", type=int, default=benchmark.warm.DEFAULT_QUORUM)
     parser.add_argument("--max-tokens", type=int, default=None)
     parser.add_argument("--api-key-env", default="DEEPSEEK_API_KEY")
     parser.add_argument("--user-id")
+    parser.add_argument("--progress-dir", help="Optional directory for sanitized per-run case progress JSONL files.")
     parser.add_argument("--min-available-rate", type=float, default=0.65)
     parser.add_argument("--min-observed-scout-rate", type=float, default=None)
     parser.add_argument("--min-case-pass-rate", type=float, default=1.0)
@@ -420,11 +444,14 @@ def main() -> int:
         wait_modes=parse_csv_items(args.wait_modes),
         max_workers_values=parse_int_csv(args.max_workers_list, default=DEFAULT_MAX_WORKERS),
         timeout_values=parse_float_csv(args.timeouts, default=DEFAULT_TIMEOUTS),
+        case_offset=args.case_offset,
         case_limit=args.case_limit,
+        case_workers=args.case_workers,
         quorum=args.quorum,
         max_tokens=args.max_tokens,
         api_key_env=args.api_key_env,
         user_id=args.user_id,
+        progress_dir=args.progress_dir,
         min_available_rate=args.min_available_rate,
         min_observed_scout_rate=args.min_observed_scout_rate,
         min_case_pass_rate=args.min_case_pass_rate,

@@ -158,6 +158,49 @@ class WarmAmbientSweepTests(unittest.TestCase):
         self.assertEqual(calls[0]["registry_path"], registry)
         self.assertIsNone(calls[0]["registry_dir"])
 
+    def test_sweep_passes_case_concurrency_and_progress_dir(self) -> None:
+        calls: list[dict] = []
+
+        def fake_benchmark(**kwargs):
+            calls.append(kwargs)
+            return {
+                "ok": True,
+                "status": "sufficient",
+                "live_model": True,
+                "metrics": {
+                    "case_count": 3,
+                    "available_rate": 1.0,
+                    "case_pass_rate": 1.0,
+                    "false_evidence_count": 0,
+                    "missing_source_refs_count": 0,
+                    "scout_error_rate": 0.0,
+                    "observed_scout_rate": 0.2,
+                    "avg_elapsed_ms": 1.0,
+                    "max_elapsed_ms": 1.0,
+                    "scout_error_kinds": {},
+                },
+                "quality_gates": {"passed": True, "failed": []},
+                "privacy_boundary": {"raw_prompt_emitted": False},
+            }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = sweep.run_warm_ambient_recall_sweep(
+                live=True,
+                case_offset=10,
+                case_limit=3,
+                case_workers=2,
+                progress_dir=Path(tmp) / "progress",
+                benchmark_fn=fake_benchmark,
+            )
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(calls[0]["case_offset"], 10)
+        self.assertEqual(calls[0]["case_limit"], 3)
+        self.assertEqual(calls[0]["case_workers"], 2)
+        self.assertIsNotNone(calls[0]["progress_jsonl"])
+        self.assertEqual(payload["matrix"]["case_workers"], 2)
+        self.assertTrue(payload["matrix"]["progress_dir_enabled"])
+
     def test_sweep_default_workers_match_full_warm_lane_count(self) -> None:
         calls: list[dict] = []
 
