@@ -28,6 +28,7 @@ _RUNTIME_EXPORTS = {
     "PROMPT_HOOK_SEMANTIC_TIMEOUT",
     "SCENT_THRESHOLD",
     "association_boost",
+    "ambient_debug_summary",
     "assess_prompt",
     "context_for_hook",
     "hook_input_from_stdin",
@@ -49,7 +50,11 @@ def _load_runtime() -> dict[str, Any]:
     if _RUNTIME_CACHE is not None:
         return _RUNTIME_CACHE
 
-    from prompt_context_render import context_for_hook, hook_stdout_payload  # noqa: PLC0415
+    from prompt_context_render import (  # noqa: PLC0415
+        ambient_debug_summary,
+        context_for_hook,
+        hook_stdout_payload,
+    )
     from prompt_recall_core import (  # noqa: PLC0415
         DEFAULT_SEARCH_BUDGET,
         PROMPT_HOOK_SEMANTIC_TIMEOUT,
@@ -65,6 +70,7 @@ def _load_runtime() -> dict[str, Any]:
         "PROMPT_HOOK_SEMANTIC_TIMEOUT": PROMPT_HOOK_SEMANTIC_TIMEOUT,
         "SCENT_THRESHOLD": SCENT_THRESHOLD,
         "association_boost": association_boost,
+        "ambient_debug_summary": ambient_debug_summary,
         "assess_prompt": assess_prompt,
         "context_for_hook": context_for_hook,
         "hook_input_from_stdin": hook_input_from_stdin,
@@ -91,6 +97,7 @@ def write_debug_log(
         return
     path = log_path or (codex_home() / "aippocampus-registry" / "aippocampus_prompt_hook.jsonl")
     path.parent.mkdir(parents=True, exist_ok=True)
+    ambient_summary = _load_runtime()["ambient_debug_summary"](result)
     event = {
         "timestamp": now_utc(),
         "session_id": (hook_input or {}).get("session_id"),
@@ -141,6 +148,7 @@ def write_debug_log(
             }
             for item in result.get("evidence", [])[:5]
         ],
+        "ambient_recall": ambient_summary,
         "elapsed_ms": result.get("elapsed_ms"),
     }
     with path.open("a", encoding="utf-8", newline="\n") as fh:

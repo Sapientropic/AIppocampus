@@ -22,6 +22,7 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 import aippocampus_prompt_hook as hook  # noqa: E402
+import ambient_thread_cache as thread_cache  # noqa: E402
 import build_concept_graph as concept_graph  # noqa: E402
 import prompt_cues as recall_cues  # noqa: E402
 
@@ -1498,6 +1499,148 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertFalse(scheduled[0]["wait_all_foreground"])
         self.assertEqual(result["ambient_recall"]["warm_background"]["status"], "queued")
         self.assertEqual(result["ambient_recall"]["warm_background"]["job_id"], "job-test")
+
+    def test_prompt_hook_prioritizes_warm_thread_cache_and_exposes_metadata(self) -> None:
+        cache_path = self.root / "ambient-cache.json"
+        thread_cache.write_thread_cache(
+            cache_path,
+            thread_id="thread-a",
+            workspace=str(self.workspace),
+            topic_epoch="epoch-cache",
+            cards=[
+                {
+                    "card_id": "cached-card",
+                    "theme": "cached warm context",
+                    "support_level": "candidate",
+                    "visibility": "active_gentle_nudge",
+                    "matched_terms": ["ambient recall"],
+                }
+            ],
+            mode="active_gentle_nudge",
+            confidence="medium",
+            query_aliases=["cached alias"],
+            topic_epoch_decision={"action": "reuse", "label": "ambient", "confidence": 0.7},
+            visibility_bias="active_gentle_nudge",
+        )
+
+        result = hook.assess_prompt(
+            "hook 机制就像人类的触发式联想，我们可以把小海马体做得更主动一点",
+            cwd=self.workspace,
+            registry_path=self.registry,
+            thread_id="thread-a",
+            topic_epoch="epoch-cache",
+            ambient_cache_path=cache_path,
+            search_budget=0,
+        )
+
+        ambient = result["ambient_recall"]
+        self.assertEqual(ambient["cache_status"]["status"], "hit")
+        self.assertEqual(ambient["cache_status"]["query_aliases"], ["cached alias"])
+        self.assertEqual(ambient["cache_status"]["topic_epoch_decision"]["action"], "reuse")
+        self.assertEqual(ambient["cache_status"]["visibility_bias"], "active_gentle_nudge")
+        self.assertEqual(ambient["cards"][0]["card_id"], "cached-card")
+
+    def test_prompt_hook_next_turn_reads_detached_warm_cache_without_rescheduling(self) -> None:
+        cache_path = self.root / "ambient-cache-next-turn.json"
+        scheduled: list[dict] = []
+
+        def fake_schedule(prompt: str, **kwargs):
+            scheduled.append({"prompt": prompt, **kwargs})
+            thread_cache.write_thread_cache(
+                kwargs["cache_path"],
+                thread_id=kwargs["thread_id"],
+                workspace=str(kwargs["cwd"]),
+                topic_epoch=kwargs["topic_epoch"],
+                cards=[
+                    {
+                        "card_id": "detached-card",
+                        "theme": "detached warm result",
+                        "support_level": "candidate",
+                        "visibility": "active_gentle_nudge",
+                        "matched_terms": ["ambient recall"],
+                    }
+                ],
+                mode="active_gentle_nudge",
+                confidence="medium",
+                query_aliases=["detached alias"],
+                topic_epoch_decision={"action": "reuse", "label": "ambient", "confidence": 0.8},
+            )
+            return {"status": "scheduled", "job_id": "job-detached", "spawned": False}
+
+        with patch("prompt_recall_decision.schedule_warm_ambient_recall", fake_schedule):
+            first = hook.assess_prompt(
+                "hook 机制就像人类的触发式联想，我们可以把小海马体做得更主动一点",
+                cwd=self.workspace,
+                registry_path=self.registry,
+                thread_id="thread-a",
+                topic_epoch="epoch-next",
+                ambient_cache_path=cache_path,
+                warm_background=True,
+                search_budget=0,
+            )
+            second = hook.assess_prompt(
+                "继续这个 ambient recall 方向",
+                cwd=self.workspace,
+                registry_path=self.registry,
+                thread_id="thread-a",
+                topic_epoch="epoch-next",
+                ambient_cache_path=cache_path,
+                warm_background=True,
+                search_budget=0,
+            )
+
+        self.assertEqual(first["ambient_recall"]["warm_background"]["status"], "scheduled")
+        self.assertEqual(len(scheduled), 1)
+        self.assertEqual(second["ambient_recall"]["cache_status"]["status"], "hit")
+        self.assertEqual(second["ambient_recall"]["cards"][0]["card_id"], "detached-card")
+        self.assertNotIn("warm_background", second["ambient_recall"])
+
+    def test_prompt_hook_debug_log_summarizes_ambient_cache_without_raw_prompt(self) -> None:
+        result = {
+            "decision": "scent",
+            "score": 0.7,
+            "confidence": "medium",
+            "query_terms": ["ambient"],
+            "concept_expansions": [],
+            "cognitive_map": [],
+            "candidates": [],
+            "working_memory": [],
+            "semantic_gate": None,
+            "evidence": [],
+            "elapsed_ms": 12.0,
+            "ambient_recall": {
+                "mode": "active_gentle_nudge",
+                "confidence": "medium",
+                "cards": [
+                    {
+                        "card_id": "card-a",
+                        "theme": "ambient",
+                        "visibility": "active_gentle_nudge",
+                        "source_validation": {"status": "supported"},
+                    }
+                ],
+                "cache_status": {
+                    "status": "hit",
+                    "topic_epoch": "epoch-debug",
+                    "card_count": 1,
+                },
+                "warm_background": {"status": "queued", "spawned": False},
+            },
+        }
+        log_path = self.root / "debug.jsonl"
+
+        hook.write_debug_log(
+            result,
+            hook_input={"prompt": "DO NOT LOG THIS PROMPT", "session_id": "thread-a"},
+            log_path=log_path,
+        )
+        event = json.loads(log_path.read_text(encoding="utf-8"))
+        raw = log_path.read_text(encoding="utf-8")
+
+        self.assertNotIn("DO NOT LOG THIS PROMPT", raw)
+        self.assertEqual(event["ambient_recall"]["cache"]["status"], "hit")
+        self.assertEqual(event["ambient_recall"]["warm_background"]["status"], "queued")
+        self.assertEqual(event["ambient_recall"]["source_validation_statuses"]["supported"], 1)
 
 
 if __name__ == "__main__":

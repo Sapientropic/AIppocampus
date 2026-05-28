@@ -54,6 +54,9 @@ family even with `family:variant` lanes, and lets scouts vote
 `reuse|rotate|suppress` for topic epoch handling. It is not part of the default
 foreground hook path: quorum-first runs are allowed to return before all lanes
 finish, and `--wait-all` belongs to explicit evaluation or detached warming.
+When sanitized prior prompt-trace rows already carry source refs, the warm path
+may add one deterministic fallback card, but it must still pass the same local
+source-ref validation and must not use the current prompt as memory.
 When foreground code opts into `--warm-background` or
 `AIPPOCAMPUS_WARM_RECALL_BACKGROUND=1`, `ambient_warm_scheduler.py` writes a
 redacted local job file and starts a detached `warm_ambient_recall.py
@@ -88,6 +91,8 @@ expected.
 For source-ref live sweeps, keep `--max-false-evidence-count 0` strict and
 treat `case_pass_rate` as recall coverage; safe no-card misses are preferable
 to unsupported citation-shaped evidence.
+Use `trace_fallback_card_count` to separate deterministic prior-trace fallback
+coverage from model-generated scout coverage.
 Live mode may call the configured external model but must keep output sanitized
 to prompt hashes, aggregate metrics, validation status counts, error-kind
 buckets, and cache usage only. Use

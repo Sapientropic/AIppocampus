@@ -92,6 +92,7 @@ def compact_metrics(metrics: dict[str, Any]) -> dict[str, Any]:
         "available_rate",
         "configured_scout_calls",
         "prefix_cache_warmup_scout_calls",
+        "trace_fallback_card_count",
         "total_scout_calls",
         "observed_scout_rate",
         "case_pass_rate",

@@ -950,6 +950,25 @@ class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
         self.assertEqual(metrics["prompt_cache_miss_tokens"], 100)
         self.assertEqual(metrics["prompt_cache_hit_rate"], 0.5)
 
+    def test_benchmark_metrics_track_trace_fallback_cards(self) -> None:
+        summary = benchmark.summarize_case(
+            benchmark.BUILTIN_CASES[0],
+            {
+                "available": True,
+                "status": "ready",
+                "scout_count": 50,
+                "scouts": [],
+                "accepted_scout_count": 0,
+                "failed_scout_count": 0,
+                "trace_fallback_card_count": 1,
+                "cards": [{"source_validation": {"status": "supported"}}],
+            },
+        )
+        metrics = benchmark.summarize_metrics([summary])
+
+        self.assertEqual(summary["trace_fallback_card_count"], 1)
+        self.assertEqual(metrics["trace_fallback_card_count"], 1)
+
     def test_case_summary_preserves_zero_prompt_cache_metrics(self) -> None:
         summary = benchmark.summarize_case(
             benchmark.BUILTIN_CASES[0],

@@ -490,6 +490,7 @@ def summarize_case(case: WarmBenchmarkCase, result: dict[str, Any]) -> dict[str,
         "observed_scout_result_count": len(result.get("scouts") or []),
         "accepted_scout_count": int(result.get("accepted_scout_count") or 0),
         "failed_scout_count": int(result.get("failed_scout_count") or 0),
+        "trace_fallback_card_count": int(result.get("trace_fallback_card_count") or 0),
         "scout_error_kinds": scout_error_kinds,
         "card_count": len(result.get("cards") or []),
         "source_validation_statuses": validation_statuses,
@@ -711,6 +712,9 @@ def summarize_metrics(cases: list[dict[str, Any]]) -> dict[str, Any]:
     total_observed = sum(int(case.get("observed_scout_result_count") or 0) for case in cases)
     total_configured = sum(int(case.get("configured_scout_count") or 0) for case in cases)
     total_prefix_warmup = sum(int(case.get("prefix_cache_warmup_scout_count") or 0) for case in cases)
+    total_trace_fallback = sum(
+        int(case.get("trace_fallback_card_count") or 0) for case in cases
+    )
     available = sum(1 for case in cases if case.get("available"))
     cards = sum(int(case.get("card_count") or 0) for case in cases)
     total_failed = sum(int(case.get("failed_scout_count") or 0) for case in cases)
@@ -738,6 +742,7 @@ def summarize_metrics(cases: list[dict[str, Any]]) -> dict[str, Any]:
         "total_scout_calls": total_observed,
         "configured_scout_calls": total_configured,
         "prefix_cache_warmup_scout_calls": total_prefix_warmup,
+        "trace_fallback_card_count": total_trace_fallback,
         "observed_scout_rate": round(total_observed / total_configured, 4) if total_configured else 0.0,
         "scout_error_rate": round(total_failed / total_observed, 4) if total_observed else 0.0,
         "case_pass_rate": round(case_passes / total, 4) if total else 0.0,

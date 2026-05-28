@@ -279,6 +279,9 @@ The deterministic merger should:
 - dereference source refs against clean-source messages when a registry path is
   available; cards with concrete refs that are missing locally or unsupported
   are dropped so lower-ranked supported cards can surface instead
+- use sanitized prior prompt-trace refs as a deterministic fallback only when
+  they overlap the current prompt and still pass the same local source
+  validation; never use the current prompt itself as memory
 - distinguish `scent`, `candidate`, and `evidence`
 - suppress current-thread-only echoes by default unless the caller explicitly
   allows recent-thread recall
@@ -406,9 +409,10 @@ The first slice should stay small but real:
 6. Merge into at most 3 private recall cards and serialize useful results back
    into the thread cache. Done for quorum-gated writes, source-ref validation,
    current-thread echo suppression, guard-family blocking, similar-theme merge,
-   validation metadata, query aliases, topic decision, and visibility bias;
-   explicit `--wait-all` is reserved for evaluation or detached warming, not
-   the foreground hook.
+   validation metadata, query aliases, topic decision, visibility bias, and a
+   narrow prior-trace fallback for supported source-ref misses; explicit
+   `--wait-all` is reserved for evaluation or detached warming, not the
+   foreground hook.
 7. Reuse optional residue export for source-ref-fingerprinted warm cards so
    unused resonance can become dream-task seed material without logging raw
    prompt text.
@@ -448,7 +452,9 @@ The first slice should stay small but real:
    error-kind buckets, and cache metrics.
    For source-ref packs, `false_evidence_count == 0` is the hard safety gate;
    `case_pass_rate` is recall coverage and may be tuned separately because a
-   safe miss is better than an unsupported citation.
+   safe miss is better than an unsupported citation. The benchmark reports
+   `trace_fallback_card_count` so live sweeps can distinguish model recall from
+   deterministic prior-trace fallback coverage.
    `benchmark_warm_ambient_sweep.py` now compares quorum-first vs. wait-all,
    worker caps, and timeout values over the same private case pack, ranking
    quality gates and source health before latency. Its sanitized `analysis`
@@ -466,9 +472,11 @@ The first slice should stay small but real:
    wording/detail requests. The foreground enqueue path now passes the current
    `session:<id>` source-ref key and a sanitized current-prompt trace into the
    detached warm job, so background scouts can apply echo and topic-drift
-   judgments against real thread context. Next: run the private 100-case
-   source-ref, echo, and topic-vote packs across a wider live matrix and tune
-   live-model quality thresholds from the resulting failure distribution.
+   judgments against real thread context. Prompt-hook cache hits now keep
+   warmed cards ahead of fresh local hints and expose sanitized cache metadata
+   for debugging. Next: run the private 100-case source-ref, echo, and
+   topic-vote packs across a wider live matrix and tune live-model quality
+   thresholds from the resulting failure distribution.
 
 Success for slice one is not perfect recall. It is that the agent receives
 useful, source-backed peripheral awareness without making the user wait, and

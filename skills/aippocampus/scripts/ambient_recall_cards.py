@@ -208,11 +208,14 @@ def ambient_recall_from_decision(
     *,
     cached_cards: list[dict[str, Any]] | None = None,
     cache_status: dict[str, Any] | None = None,
+    cached_cards_first: bool = False,
     max_cards: int = MAX_CARDS,
 ) -> dict[str, Any]:
     decision = str(result.get("decision") or "skip")
     deep_archival = bool(result.get("deep_archival_requested"))
     cards: list[dict[str, Any]] = []
+    if cached_cards and cached_cards_first:
+        cards.extend(dict(card) for card in cached_cards if isinstance(card, dict))
     if result.get("evidence"):
         cards.extend(_evidence_card(item, deep_archival=deep_archival) for item in result.get("evidence") or [])
     if result.get("working_memory"):
@@ -221,7 +224,7 @@ def ambient_recall_from_decision(
         cards.extend(_cognitive_map_card(item) for item in result.get("cognitive_map") or [])
     if not cards and result.get("candidates"):
         cards.extend(_candidate_card(item) for item in result.get("candidates") or [])
-    if cached_cards:
+    if cached_cards and not cached_cards_first:
         cards.extend(dict(card) for card in cached_cards if isinstance(card, dict))
 
     cards = _dedupe_cards(cards, limit=max(0, max_cards))

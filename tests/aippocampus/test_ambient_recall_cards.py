@@ -139,6 +139,32 @@ class AmbientRecallCardTests(unittest.TestCase):
         self.assertEqual(payload["cards"], [])
         self.assertEqual(payload["cache_status"]["status"], "not_used")
 
+    def test_cached_cards_can_be_prioritized_over_fresh_candidates(self) -> None:
+        payload = cards.ambient_recall_from_decision(
+            {
+                "decision": "scent",
+                "confidence": "medium",
+                "elapsed_ms": 3.0,
+                "query_terms": ["ambient"],
+                "candidates": [{"title": "fresh candidate", "matched_terms": ["ambient"]}],
+                "evidence": [],
+                "working_memory": [],
+                "cognitive_map": [],
+            },
+            cached_cards=[
+                {
+                    "card_id": "cached-card",
+                    "theme": "cached warm context",
+                    "support_level": "candidate",
+                    "visibility": "active_gentle_nudge",
+                }
+            ],
+            cached_cards_first=True,
+        )
+
+        self.assertEqual(payload["cards"][0]["card_id"], "cached-card")
+        self.assertEqual(payload["cards"][0]["theme"], "cached warm context")
+
     def test_card_text_redacts_local_paths_before_future_scouts_can_read_it(self) -> None:
         local_path = "E:" + "\\private\\secret\\notes.md"
         payload = cards.ambient_recall_from_decision(

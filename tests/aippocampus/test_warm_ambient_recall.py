@@ -355,6 +355,130 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(result["scouts"][1]["ok"], True)
         self.assertEqual(result["cards"][0]["theme"], "warm cache")
 
+    def test_prompt_trace_fallback_can_surface_supported_prior_context(self) -> None:
+        messages = self._write_clean_thread(
+            "session:old",
+            [
+                {
+                    "message_id": "msg-1",
+                    "source_line": 1,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": "Use docker-compose.yml with a host log volume and keep the original service layout.",
+                },
+                {
+                    "message_id": "msg-2",
+                    "source_line": 2,
+                    "role": "user",
+                    "text": "Please add logging without changing the compose file completely.",
+                },
+            ],
+        )
+        registry_path = self._write_registry(
+            [
+                {
+                    "thread_key": "session:old",
+                    "title": "Docker logging",
+                    "paths": {"clean_source_messages_jsonl": str(messages)},
+                }
+            ]
+        )
+
+        def scout_fn(scout, payload, **kwargs):
+            del scout, payload, kwargs
+            return {"decision": "skip", "confidence": 0.1}
+
+        result = warm.run_warm_ambient_recall(
+            "Please use the old docker-compose.yml and add logging",
+            cwd=self.workspace,
+            thread_id="thread-a",
+            registry_path=registry_path,
+            cache_path=self.cache_path,
+            api_key="test-key",
+            scout_fn=scout_fn,
+            scouts=("deep_theme_matcher",),
+            prompt_trace=[
+                {
+                    "thread_key": "session:old",
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "text": "Use docker-compose.yml with a host log volume and keep the original service layout.",
+                    "source_refs": [{"thread_key": "session:old", "message_id": "msg-1", "line": 1}],
+                },
+                {
+                    "thread_key": "session:old",
+                    "role": "user",
+                    "phase": "current_prompt",
+                    "text": "Please use the old docker-compose.yml and add logging",
+                    "source_refs": [{"thread_key": "session:old", "message_id": "msg-2", "line": 2}],
+                },
+            ],
+            quorum=1,
+            timeout=0.5,
+            wait_all=True,
+            no_write=True,
+        )
+
+        self.assertTrue(result["available"])
+        self.assertEqual(result["trace_fallback_card_count"], 1)
+        self.assertEqual(result["cards"][0]["source_validation"]["status"], "supported")
+        self.assertEqual(result["cards"][0]["support_level"], "evidence")
+        self.assertNotIn("current_prompt", result["cards"][0]["key_line"])
+
+    def test_prompt_trace_fallback_does_not_use_current_prompt_as_memory(self) -> None:
+        messages = self._write_clean_thread(
+            "session:old",
+            [
+                {
+                    "message_id": "msg-1",
+                    "source_line": 1,
+                    "role": "user",
+                    "text": "What are some advanced use cases for Node.js?",
+                }
+            ],
+        )
+        registry_path = self._write_registry(
+            [
+                {
+                    "thread_key": "session:old",
+                    "title": "Node prompt",
+                    "paths": {"clean_source_messages_jsonl": str(messages)},
+                }
+            ]
+        )
+
+        def scout_fn(scout, payload, **kwargs):
+            del scout, payload, kwargs
+            return {"decision": "skip", "confidence": 0.1}
+
+        result = warm.run_warm_ambient_recall(
+            "What are some advanced use cases for Node.js?",
+            cwd=self.workspace,
+            thread_id="thread-a",
+            registry_path=registry_path,
+            cache_path=self.cache_path,
+            api_key="test-key",
+            scout_fn=scout_fn,
+            scouts=("deep_theme_matcher",),
+            prompt_trace=[
+                {
+                    "thread_key": "session:old",
+                    "role": "user",
+                    "phase": "current_prompt",
+                    "text": "What are some advanced use cases for Node.js?",
+                    "source_refs": [{"thread_key": "session:old", "message_id": "msg-1", "line": 1}],
+                }
+            ],
+            quorum=1,
+            timeout=0.5,
+            wait_all=True,
+            no_write=True,
+        )
+
+        self.assertFalse(result["available"])
+        self.assertEqual(result["trace_fallback_card_count"], 0)
+
     def test_warm_merge_writes_thread_cache_and_residue_without_raw_inputs(self) -> None:
         local_path = "E:" + "\\private\\notes\\ambient.md"
         prompt = f"继续 {local_path} 里的 ambient recall 方案"

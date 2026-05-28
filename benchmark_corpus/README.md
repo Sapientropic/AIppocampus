@@ -144,6 +144,9 @@ For `topic_epoch_vote` packs, set `--min-available-rate 0`: a valid LLM
 For source-ref packs, keep `--max-false-evidence-count 0` strict. Treat
 `case_pass_rate` as recall coverage, not the only quality signal; a safe miss is
 preferable to surfacing an unsupported citation.
+The `trace_fallback_card_count` metric counts deterministic fallback cards from
+sanitized prior trace rows. It should improve supported coverage without
+loosening source validation; investigate it separately from model scout recall.
 
 These warm case packs stay private local artifacts. The subset registry is only
 for source-ref validation against sampled clean-source rows; do not commit the

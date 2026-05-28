@@ -374,11 +374,15 @@ def _attach_ambient_recall(
             "status": cached.get("status"),
             "topic_epoch": epoch,
             "card_count": len(cached.get("cards") or []),
+            "query_aliases": cached.get("query_aliases") or [],
+            "topic_epoch_decision": cached.get("topic_epoch_decision") or None,
+            "visibility_bias": cached.get("visibility_bias") or "",
         }
         result["ambient_recall"] = ambient_recall_from_decision(
             result,
             cached_cards=cached.get("cards") or [],
             cache_status=cache_status,
+            cached_cards_first=True,
         )
         cache_is_warm = cached.get("status") == "hit" and bool(cached.get("cards"))
         if result.get("decision") != "skip" and result["ambient_recall"].get("cards"):

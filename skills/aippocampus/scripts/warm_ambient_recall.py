@@ -889,6 +889,76 @@ def referenced_thread_keys(rows: list[dict[str, Any]]) -> set[str]:
     return keys
 
 
+def referenced_thread_keys_from_cards(cards: list[dict[str, Any]]) -> set[str]:
+    keys: set[str] = set()
+    for card in cards:
+        for ref in card.get("source_refs") or []:
+            if isinstance(ref, dict) and ref.get("thread_key"):
+                keys.add(str(ref.get("thread_key")))
+    return keys
+
+
+def prompt_trace_fallback_cards(
+    prompt: str,
+    prompt_trace: list[dict[str, Any]] | None,
+    *,
+    limit: int = 1,
+) -> list[dict[str, Any]]:
+    prompt_terms = [
+        term
+        for term in split_query_terms([prompt])
+        if len(str(term or "").strip()) >= 3
+    ]
+    prompt_term_set = {term.casefold() for term in prompt_terms}
+    prompt_text = compact_text(str(prompt or ""), 420).casefold()
+    cards: list[dict[str, Any]] = []
+    for item in reversed(prompt_trace or []):
+        if not isinstance(item, dict):
+            continue
+        text = compact_text(str(item.get("text") or item.get("prompt") or ""), 420)
+        if not text or text.casefold() == prompt_text:
+            continue
+        if str(item.get("phase") or "").strip().casefold() == "current_prompt":
+            continue
+        refs = [
+            clean
+            for clean in (_clean_source_ref(ref) for ref in item.get("source_refs") or [])
+            if clean
+        ][:3]
+        if not refs:
+            continue
+        text_terms = {term.casefold() for term in split_query_terms([text])}
+        shared = unique_preserve(
+            [
+                term
+                for term in prompt_terms
+                if term.casefold() in text_terms or term.casefold() in text.casefold()
+            ],
+            limit=6,
+        )
+        if len({term.casefold() for term in shared} & prompt_term_set) < 2:
+            continue
+        key_line = compact_text(text, 180)
+        cards.append(
+            {
+                "card_id": _stable_id(["prompt_trace_fallback", key_line, json.dumps(refs, sort_keys=True)]),
+                "theme": compact_text("prior trace: " + ", ".join(shared[:4]), 100),
+                "resonance": "medium",
+                "support_level": EVIDENCE,
+                "visibility": SOURCE_BACKED_RECALL_CARD,
+                "suggested_use": "Use as source-backed prior context when it helps the current turn.",
+                "nudge": "Prior prompt trace contains source-backed context related to this request.",
+                "key_line": key_line,
+                "matched_terms": shared,
+                "source_refs": refs,
+                "expand_if": "Open clean source before presenting exact prior wording.",
+            }
+        )
+        if len(cards) >= limit:
+            break
+    return cards
+
+
 def _message_for_ref(source_index: dict[str, dict[str, Any]], ref: dict[str, Any]) -> dict[str, Any] | None:
     thread_key = str(ref.get("thread_key") or "")
     thread_index = source_index.get(thread_key) or {}
@@ -1060,6 +1130,7 @@ def merge_scouts(
     rows: list[dict[str, Any]],
     *,
     max_cards: int = DEFAULT_MAX_CARDS,
+    fallback_cards: list[dict[str, Any]] | None = None,
     source_index: dict[str, dict[str, Any]] | None = None,
     current_thread_key: str | None = None,
     allow_current_thread_echo: bool = False,
@@ -1094,6 +1165,9 @@ def merge_scouts(
         for card in row.get("candidates") or []:
             support = str(card.get("support_level") or SCENT)
             candidates.append((SUPPORT_RANK.get(support, 0), confidence, card))
+    for card in fallback_cards or []:
+        support = str(card.get("support_level") or SCENT)
+        candidates.append((SUPPORT_RANK.get(support, 0), 0.62, card))
     candidates.sort(
         key=lambda item: (
             -item[0],
@@ -1410,10 +1484,13 @@ def run_warm_ambient_recall(
         chat_fn=chat_fn,
         scout_fn=scout_fn,
     )
+    fallback_cards = prompt_trace_fallback_cards(prompt, payload.get("prompt_trace") or [])
+    source_thread_keys = referenced_thread_keys(rows) | referenced_thread_keys_from_cards(fallback_cards)
     merged = merge_scouts(
         rows,
+        fallback_cards=fallback_cards,
         source_index=source_index_from_registry(
-            registry_obj, thread_keys=referenced_thread_keys(rows)
+            registry_obj, thread_keys=source_thread_keys
         ),
         current_thread_key=current_thread_key,
         allow_current_thread_echo=allow_current_thread_echo,
@@ -1481,6 +1558,7 @@ def run_warm_ambient_recall(
         "user_id": resolved_user_id,
         "accepted_scout_count": accepted_count,
         "failed_scout_count": failed_count,
+        "trace_fallback_card_count": len(fallback_cards),
         "scouts": rows,
         "mode": merged["mode"],
         "confidence": merged["confidence"],

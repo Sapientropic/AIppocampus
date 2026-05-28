@@ -10,6 +10,43 @@ from aippocampuslib import compact_text
 MAX_CONTEXT_CHARS = 1800
 
 
+def ambient_debug_summary(result: dict[str, Any]) -> dict[str, Any] | None:
+    ambient = result.get("ambient_recall") if isinstance(result.get("ambient_recall"), dict) else {}
+    if not ambient:
+        return None
+    cards = [card for card in ambient.get("cards", []) if isinstance(card, dict)]
+    validation_statuses: dict[str, int] = {}
+    visibility_counts: dict[str, int] = {}
+    for card in cards[:8]:
+        visibility = str(card.get("visibility") or "")
+        if visibility:
+            visibility_counts[visibility] = visibility_counts.get(visibility, 0) + 1
+        status = str((card.get("source_validation") or {}).get("status") or "")
+        if status:
+            validation_statuses[status] = validation_statuses.get(status, 0) + 1
+    cache_status = ambient.get("cache_status") if isinstance(ambient.get("cache_status"), dict) else {}
+    warm_background = ambient.get("warm_background") if isinstance(ambient.get("warm_background"), dict) else {}
+    return {
+        "mode": ambient.get("mode"),
+        "confidence": ambient.get("confidence"),
+        "card_count": len(cards),
+        "cache": {
+            "status": cache_status.get("status"),
+            "topic_epoch": cache_status.get("topic_epoch"),
+            "card_count": cache_status.get("card_count"),
+            "write_status": cache_status.get("write_status"),
+        },
+        "warm_background": {
+            "status": warm_background.get("status"),
+            "spawned": warm_background.get("spawned"),
+        }
+        if warm_background
+        else None,
+        "visibility_counts": visibility_counts,
+        "source_validation_statuses": validation_statuses,
+    }
+
+
 def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHARS) -> str | None:
     decision = result.get("decision")
     if decision == "skip":
