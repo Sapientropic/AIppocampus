@@ -23,7 +23,10 @@ import benchmark_warm_ambient_recall as benchmark
 
 SWEEP_SCHEMA_VERSION = 1
 DEFAULT_WAIT_MODES = ("quorum_first",)
-DEFAULT_MAX_WORKERS = (5,)
+# Match the runtime's 10x5 lane design by default. Lower worker counts are
+# still useful for provider/backoff diagnosis, but making them the live sweep
+# default can under-sample useful scouts and falsely make Flash look weak.
+DEFAULT_MAX_WORKERS = (50,)
 DEFAULT_TIMEOUTS = (30.0,)
 VALID_WAIT_MODES = {"quorum_first", "wait_all"}
 
@@ -295,6 +298,8 @@ def run_warm_ambient_recall_sweep(
     *,
     cwd: Path | str | None = None,
     cases_file: Path | str | None = None,
+    registry_path: Path | str | None = None,
+    registry_dir: Path | str | None = None,
     live: bool = False,
     wait_modes: tuple[str, ...] | list[str] | None = DEFAULT_WAIT_MODES,
     max_workers_values: tuple[int, ...] | list[int] | None = DEFAULT_MAX_WORKERS,
@@ -329,6 +334,8 @@ def run_warm_ambient_recall_sweep(
                     quorum=quorum,
                     max_workers=max_workers,
                     max_tokens=max_tokens,
+                    registry_path=registry_path,
+                    registry_dir=registry_dir,
                     cases_file=cases_file,
                     api_key_env=api_key_env,
                     user_id=user_id,
@@ -366,6 +373,7 @@ def run_warm_ambient_recall_sweep(
             "run_count": len(runs),
             "case_limit": case_limit,
             "cases_file_sha1": sha1_text(str(cases_file)) if cases_file else None,
+            "registry_sha1": sha1_text(str(registry_path or registry_dir)) if (registry_path or registry_dir) else None,
         },
         "best": best,
         "analysis": analysis,
@@ -384,9 +392,11 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cwd", default=None)
     parser.add_argument("--cases-file")
+    parser.add_argument("--registry")
+    parser.add_argument("--registry-dir")
     parser.add_argument("--live", action="store_true")
     parser.add_argument("--wait-modes", default="quorum_first")
-    parser.add_argument("--max-workers-list", default="5")
+    parser.add_argument("--max-workers-list", default="50")
     parser.add_argument("--timeouts", default="30")
     parser.add_argument("--case-limit", type=int, default=None)
     parser.add_argument("--quorum", type=int, default=benchmark.warm.DEFAULT_QUORUM)
@@ -404,6 +414,8 @@ def main() -> int:
     payload = run_warm_ambient_recall_sweep(
         cwd=args.cwd,
         cases_file=args.cases_file,
+        registry_path=args.registry,
+        registry_dir=args.registry_dir,
         live=args.live,
         wait_modes=parse_csv_items(args.wait_modes),
         max_workers_values=parse_int_csv(args.max_workers_list, default=DEFAULT_MAX_WORKERS),

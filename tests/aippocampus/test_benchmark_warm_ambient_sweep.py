@@ -116,6 +116,82 @@ class WarmAmbientSweepTests(unittest.TestCase):
             payload["leaderboard"][1]["metrics"]["avg_elapsed_ms"],
         )
 
+    def test_sweep_passes_registry_to_warm_benchmark(self) -> None:
+        calls: list[dict] = []
+
+        def fake_benchmark(**kwargs):
+            calls.append(kwargs)
+            return {
+                "ok": True,
+                "status": "sufficient",
+                "live_model": False,
+                "metrics": {
+                    "case_count": 1,
+                    "available_rate": 1.0,
+                    "case_pass_rate": 1.0,
+                    "false_evidence_count": 0,
+                    "missing_source_refs_count": 0,
+                    "scout_error_rate": 0.0,
+                    "observed_scout_rate": 1.0,
+                    "avg_elapsed_ms": 1.0,
+                    "max_elapsed_ms": 1.0,
+                    "scout_error_kinds": {},
+                },
+                "quality_gates": {"passed": True, "failed": []},
+                "privacy_boundary": {"raw_prompt_emitted": False},
+            }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry = root / "threads.json"
+            registry.write_text('{"schema_version":1,"threads":[]}', encoding="utf-8")
+            payload = sweep.run_warm_ambient_recall_sweep(
+                live=False,
+                registry_path=registry,
+                wait_modes=("wait_all",),
+                max_workers_values=(5,),
+                timeout_values=(2.0,),
+                benchmark_fn=fake_benchmark,
+            )
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(calls[0]["registry_path"], registry)
+        self.assertIsNone(calls[0]["registry_dir"])
+
+    def test_sweep_default_workers_match_full_warm_lane_count(self) -> None:
+        calls: list[dict] = []
+
+        def fake_benchmark(**kwargs):
+            calls.append(kwargs)
+            return {
+                "ok": True,
+                "status": "sufficient",
+                "live_model": True,
+                "metrics": {
+                    "case_count": 1,
+                    "available_rate": 1.0,
+                    "case_pass_rate": 1.0,
+                    "false_evidence_count": 0,
+                    "missing_source_refs_count": 0,
+                    "scout_error_rate": 0.0,
+                    "observed_scout_rate": 0.06,
+                    "avg_elapsed_ms": 1.0,
+                    "max_elapsed_ms": 1.0,
+                    "scout_error_kinds": {},
+                },
+                "quality_gates": {"passed": True, "failed": []},
+                "privacy_boundary": {"raw_prompt_emitted": False},
+            }
+
+        payload = sweep.run_warm_ambient_recall_sweep(
+            live=True,
+            benchmark_fn=fake_benchmark,
+        )
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(calls[0]["max_workers"], 50)
+        self.assertIsNone(calls[0]["max_tokens"])
+
     def test_sweep_reports_no_successful_runs(self) -> None:
         def fake_benchmark(**kwargs):
             del kwargs

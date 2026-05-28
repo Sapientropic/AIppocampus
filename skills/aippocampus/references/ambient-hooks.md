@@ -64,12 +64,17 @@ Use `benchmarks/aippocampus/benchmark_warm_ambient_recall.py` for calibration.
 Deterministic mode is CI-safe and now runs 13 synthetic trace cases behind
 quality gates, including a source-backed deep archival recall case;
 `--cases-file` accepts larger sanitized JSON/JSONL trace suites. For real-trace
-calibration, `benchmarks/aippocampus/build_warm_ambient_trace_cases.py` can
-export sanitized cases from registered clean source. Add `--label-template`
-when preparing a private review pack; the emitted labels cover allowed
-topic-epoch actions, minimum source-validation status counts, and
-current-thread echo bounds. Generated exports are private working artifacts and
-should not be committed. The runner also supports optional
+or public-corpus calibration,
+`benchmarks/aippocampus/build_warm_ambient_trace_cases.py` can export sanitized
+cases from registered clean source or from an explicit clean-source
+`messages.jsonl` / directory. When sampling `benchmark_corpus/output/...`, pass
+`--subset-messages-out` and `--registry-out`, then pass that registry to the
+benchmark; this gives source-ref validation a tiny sampled dereference surface
+without exposing the full generated corpus. Add `--label-template` when
+preparing a private review pack; the emitted labels cover allowed topic-epoch
+actions, minimum source-validation status counts, and current-thread echo
+bounds. Generated exports are private working artifacts and should not be
+committed. The runner also supports optional
 `--max-missing-source-refs-count` for stricter source-ref tuning runs; leave it
 unset when measuring broad candidate/scent recall where unsourced hints are
 expected.
@@ -86,7 +91,11 @@ failure counts, scout error buckets, and source-ref pressure without exposing
 case rows. Scout prompts keep `output_contract` as a compact schema and add
 family-aware output budgets so Flash is not asked to fill a large template.
 `--max-tokens` remains an explicit diagnostic override, not the default way to
-control scout length.
+control scout length. Current public-corpus live smoke points to 15s and 20-50
+workers as the first real tuning band for quorum-first evaluation; 8s
+under-samples useful scouts, and 5/10 workers can make Flash look worse by not
+launching enough lanes in time. Keep lower worker caps as explicit 429/shared
+account diagnostics, not as the quality baseline.
 DeepSeek-compatible calls include a stable
 hashed `user_id` by default so the 50 lanes share the same privacy-safe
 scheduling/KV-cache bucket; callers may override it only with an already
@@ -115,10 +124,11 @@ Useful commands:
 - `python ...\warm_ambient_recall.py --prompt "继续 ambient recall" --cwd "$PWD" --thread-id dry-run --json`
 - `python ...\warm_ambient_recall.py --job-file <redacted-job.json> --json`
 - `python benchmarks\aippocampus\build_warm_ambient_trace_cases.py --out .tmp\warm-traces.jsonl --jsonl --label-template --json`
+- `python benchmarks\aippocampus\build_warm_ambient_trace_cases.py --clean-source-dir benchmark_corpus\output\sharegpt_coding_multiturn --dataset-id sharegpt_coding_multiturn --out .tmp\warm-sharegpt-coding.jsonl --jsonl --subset-messages-out .tmp\warm-sharegpt-coding-pack\clean-source\messages.jsonl --registry-out .tmp\warm-sharegpt-coding-pack\threads.json --limit 40 --per-thread 1 --trace-window 6 --label-template --json`
 - `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --json`
 - `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --cases-file traces.jsonl --json`
-- `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --cases-file traces.jsonl --live --quorum-first --max-workers 5 --timeout 30 --json`
-- `python benchmarks\aippocampus\benchmark_warm_ambient_sweep.py --cases-file traces.jsonl --live --wait-modes quorum_first,wait_all --max-workers-list 3,5,10 --timeouts 8,15,30 --json`
+- `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --cases-file traces.jsonl --registry .tmp\warm-sharegpt-coding-pack\threads.json --live --quorum-first --max-workers 50 --timeout 15 --json`
+- `python benchmarks\aippocampus\benchmark_warm_ambient_sweep.py --cases-file traces.jsonl --registry .tmp\warm-sharegpt-coding-pack\threads.json --live --wait-modes quorum_first,wait_all --max-workers-list 20,50 --timeouts 15,30 --json`
 - `python ...\install_aippocampus_prompt_hook.py install|status|uninstall`
 
 `deep_archival_recall` is an escalation request, not a license to dump history:

@@ -357,6 +357,134 @@ class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
         self.assertEqual(benchmark_payload["metrics"]["case_count"], 1)
         self.assertNotIn("detached warm job", json.dumps(benchmark_payload, ensure_ascii=False))
 
+    def test_trace_case_builder_reads_clean_source_messages_without_registry(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            messages = root / "messages.jsonl"
+            messages.write_text(
+                "\n".join(
+                    json.dumps(item, ensure_ascii=False)
+                    for item in [
+                        {
+                            "message_id": "msg-a1",
+                            "source_id": "src-a",
+                            "source_line": 1,
+                            "role": "assistant",
+                            "phase": "final_answer",
+                            "text": "first conversation prior assistant line",
+                        },
+                        {
+                            "message_id": "msg-a2",
+                            "source_id": "src-a",
+                            "source_line": 2,
+                            "role": "user",
+                            "phase": "recent_prompt",
+                            "text": "继续校准 benchmark corpus 的 warm recall。",
+                        },
+                        {
+                            "message_id": "msg-b1",
+                            "source_id": "src-b",
+                            "source_line": 1,
+                            "role": "assistant",
+                            "phase": "final_answer",
+                            "text": "second conversation must not leak into first trace",
+                        },
+                        {
+                            "message_id": "msg-b2",
+                            "source_id": "src-b",
+                            "source_line": 2,
+                            "role": "user",
+                            "phase": "recent_prompt",
+                            "text": "继续测试另一个 corpus conversation。",
+                        },
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            payload = trace_builder.build_trace_cases(
+                clean_source_messages=messages,
+                dataset_id="sharegpt_coding_multiturn",
+                limit=2,
+                per_thread=1,
+                trace_window=2,
+            )
+
+        raw = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(payload["source_mode"], "clean_source_messages")
+        self.assertEqual(payload["case_count"], 2)
+        self.assertTrue(payload["source_subset"]["thread_key"].startswith("corpus:"))
+        self.assertEqual(payload["cases"][0]["current_thread_key"], payload["source_subset"]["thread_key"])
+        self.assertEqual(payload["cases"][0]["prompt_trace"][0]["text"], "first conversation prior assistant line")
+        self.assertEqual(payload["cases"][0]["prompt_trace"][-1]["source_refs"][0]["message_id"], "msg-a2")
+        self.assertNotIn("second conversation must not leak", json.dumps(payload["cases"][0], ensure_ascii=False))
+        self.assertNotIn(str(root), raw)
+
+    def test_trace_case_builder_writes_clean_source_case_pack_for_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            messages = root / "messages.jsonl"
+            messages.write_text(
+                "\n".join(
+                    json.dumps(item, ensure_ascii=False)
+                    for item in [
+                        {
+                            "message_id": "msg-source",
+                            "source_id": "src-one",
+                            "source_line": 1,
+                            "role": "assistant",
+                            "phase": "final_answer",
+                            "text": "continuity survives transformation",
+                        },
+                        {
+                            "message_id": "msg-user",
+                            "source_id": "src-one",
+                            "source_line": 2,
+                            "role": "user",
+                            "phase": "recent_prompt",
+                            "text": "找回 continuity 的原话。",
+                        },
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            payload = trace_builder.build_trace_cases(
+                clean_source_messages=messages,
+                dataset_id="tiny-corpus",
+                limit=1,
+                trace_window=2,
+                label_template=True,
+            )
+            cases_path = root / "cases.jsonl"
+            subset_path = root / "case-pack" / "clean-source" / "messages.jsonl"
+            registry_path = root / "case-pack" / "threads.json"
+
+            trace_builder.write_cases_file(payload["cases"], cases_path, jsonl=True)
+            trace_builder.write_clean_source_case_pack(
+                payload,
+                messages_path=subset_path,
+                registry_path=registry_path,
+            )
+
+            registry = json.loads(registry_path.read_text(encoding="utf-8"))
+            subset_rows = [
+                json.loads(line)
+                for line in subset_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            written_case = json.loads(cases_path.read_text(encoding="utf-8").splitlines()[0])
+
+        self.assertEqual(registry["threads"][0]["thread_key"], payload["source_subset"]["thread_key"])
+        self.assertEqual(
+            registry["threads"][0]["paths"]["clean_source_messages_jsonl"],
+            str(subset_path),
+        )
+        self.assertEqual([row["message_id"] for row in subset_rows], ["msg-source", "msg-user"])
+        self.assertEqual(payload["cases"][0]["expected_topic_epoch_actions"], [])
+        self.assertEqual(written_case["case_id"], payload["cases"][0]["case_id"])
+
     def test_cases_file_redacts_private_case_id_before_reporting(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

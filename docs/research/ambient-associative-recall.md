@@ -105,7 +105,7 @@ Use four paths with different latency budgets:
 |---|---:|---|---|
 | Hot path | ~50-250 ms | Local cues, prompt terms, registry metadata, cached scent cards, recent working memory. | Immediate private associations or no-op. |
 | Thread-cache path | ~50-250 ms after warmup | Read the current agent thread's ambient cards, topic epoch, negative contexts, and source validation cache. | Stable peripheral awareness across many turns in the same thread. |
-| Warm path | ~500-1800 ms, strict timeout | Parallel DeepSeek recall scouts over candidate windows and sidecars. Use quorum or first-valid results, not wait-all. | Better ranked recall cards if they arrive in time; otherwise future cache material. |
+| Warm path | async foreground enqueue; live quorum calibration currently needs seconds, not milliseconds | Parallel DeepSeek recall scouts over candidate windows and sidecars. Use quorum-first for foreground-style evaluation, wait-all only detached/evaluation. | Better ranked recall cards if they arrive in time; otherwise future cache material. |
 | Cold path | Detached | Subconscious jobs, cognitive map, semantic scope labels, theme/dream outputs, cache refresh. | Future hot/warm path material. |
 
 The hot path must always be safe to run for every prompt. The warm path may run
@@ -222,14 +222,30 @@ timeboxed, and fail-open.
 
 DeepSeek scheduling details matter more than raw account limit for this path.
 The 50-lane batch is small relative to the documented v4-flash account
-concurrency limit, but foreground latency still depends on request completion.
-Warm scouts therefore send one stable hashed `user_id` for the batch, preserving
-privacy-safe KV-cache/scheduler isolation without embedding user names, prompts,
-or paths. Benchmark output should distinguish `rate_limited_429` from
-`read_timeout`: a 429 asks for concurrency/backoff tuning, while a read timeout
-usually means the caller should stay quorum-first or move wait-all to detached
-evaluation. `AIPPOCAMPUS_WARM_RECALL_MAX_WORKERS` can cap live worker count for
-shared accounts or pro-model experiments without changing the 50-lane taxonomy.
+concurrency limit, but foreground latency still depends on useful scout
+completion. Warm scouts therefore send one stable hashed `user_id` for the
+batch, preserving privacy-safe KV-cache/scheduler isolation without embedding
+user names, prompts, or paths. Benchmark output should distinguish
+`rate_limited_429` from `read_timeout`: a 429 asks for concurrency/backoff
+tuning, while a read timeout usually means the caller should stay quorum-first
+or move wait-all to detached evaluation.
+
+Initial live calibration on `benchmark_corpus/output/sharegpt_coding_multiturn`
+showed that low worker caps can underuse Flash rather than protect it: on a
+small public-corpus case pack, quorum-first with 5/10 workers at 15s only reached
+`available_rate=0.5`, while 50 workers reached `available_rate=1.0` with no
+429/read-timeout bucket. A follow-up 6-case run found 20 and 50 workers both
+passed at 15s, but 8s under-sampled useful scouts and failed the availability
+gate. Treat 15s as the current foreground-style evaluation floor for public
+corpus sweeps, and keep the actual foreground hook cache-first/asynchronous so
+the user never waits for that wall time.
+
+Do not make `max_tokens` the primary tuning lever. It remains `None` by default
+so Flash can return complete compact JSON; only test token caps as an explicit
+diagnostic after source validation, case pass rate, invalid JSON, and false
+evidence remain stable. `AIPPOCAMPUS_WARM_RECALL_MAX_WORKERS` can cap live
+worker count for shared accounts or pro-model experiments without changing the
+50-lane taxonomy.
 
 ## Source-Backed Merge
 
@@ -379,22 +395,26 @@ The first slice should stay small but real:
    rate, false evidence, and missing-source-ref visibility; `--cases-file` can
    add larger sanitized JSON/JSONL prompt-trace suites. Real-trace calibration
    can now start from `benchmarks/aippocampus/build_warm_ambient_trace_cases.py`,
-   which exports private cases from registered clean source while skipping
-   redacted prompts by default. `--label-template` adds empty manual labels for
-   source-ref validation status counts, current-thread echo bounds, and allowed
-   topic-epoch actions; the benchmark runner treats those labels as per-case
-   expectation failures without emitting raw prompts or cards. Live mode may
-   call the configured DeepSeek-compatible model but emits only hashes,
-   aggregate metrics, validation status counts, error-kind buckets, and cache
-   metrics. `benchmark_warm_ambient_sweep.py` now compares quorum-first vs.
-   wait-all, worker caps, and timeout values over the same private case pack,
-   ranking quality gates and source health before latency. Its sanitized
-   `analysis` block gives foreground/detached recommendations plus gate
-   failures, scout error buckets, and source-ref pressure so a wide run can
-   directly inform the next tuning pass. Live smoke showed the real timeout
-   risk was template-like scout output, so the runtime now keeps
-   `output_contract` compact and uses family-aware output budgets instead of
-   relying on a rigid default `max_tokens` cap.
+   which exports private cases from registered clean source or an explicit
+   clean-source `messages.jsonl` such as `benchmark_corpus/output/...`, while
+   skipping redacted prompts by default. For corpus sweeps, pair
+   `--clean-source-dir` or `--clean-source-messages` with `--subset-messages-out`
+   and `--registry-out`; the subset registry lets source-ref validation deref
+   sampled public-corpus lines without exposing the full generated corpus.
+   `--label-template` adds empty manual labels for source-ref validation status
+   counts, current-thread echo bounds, and allowed topic-epoch actions; the
+   benchmark runner treats those labels as per-case expectation failures without
+   emitting raw prompts or cards. Live mode may call the configured
+   DeepSeek-compatible model but emits only hashes, aggregate metrics,
+   validation status counts, error-kind buckets, and cache metrics.
+   `benchmark_warm_ambient_sweep.py` now compares quorum-first vs. wait-all,
+   worker caps, and timeout values over the same private case pack, ranking
+   quality gates and source health before latency. Its sanitized `analysis`
+   block gives foreground/detached recommendations plus gate failures, scout
+   error buckets, and source-ref pressure so a wide run can directly inform the
+   next tuning pass. Sweep defaults now keep `max_tokens=None` and use 50
+   workers to match the 10x5 Flash lane design; lower worker lists are explicit
+   rate-limit diagnostics, not the quality baseline.
 9. Source-ref validation, current-thread echo suppression, LLM-directed topic
    epoch rotation, and detached late-result cache warming are now implemented.
    Deep archival recall now has a source-backed visibility mode for original

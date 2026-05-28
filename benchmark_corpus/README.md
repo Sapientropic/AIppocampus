@@ -116,6 +116,18 @@ say otherwise: `--case-workers 0` resolves to
 Parallel runs disable the local JSON semantic result cache while still
 reporting provider-side prefix-cache usage.
 
+Build a private warm ambient recall case pack from the generated coding
+clean-source corpus:
+
+```powershell
+python benchmarks\aippocampus\build_warm_ambient_trace_cases.py --clean-source-dir benchmark_corpus\output\sharegpt_coding_multiturn --dataset-id sharegpt_coding_multiturn --out .tmp\warm-sharegpt-coding.jsonl --jsonl --subset-messages-out .tmp\warm-sharegpt-coding-pack\clean-source\messages.jsonl --registry-out .tmp\warm-sharegpt-coding-pack\threads.json --limit 40 --per-thread 1 --trace-window 6 --label-template --json
+python benchmarks\aippocampus\benchmark_warm_ambient_sweep.py --cases-file .tmp\warm-sharegpt-coding.jsonl --registry .tmp\warm-sharegpt-coding-pack\threads.json --live --wait-modes quorum_first,wait_all --max-workers-list 20,50 --timeouts 15,30 --json
+```
+
+These warm case packs stay private local artifacts. The subset registry is only
+for source-ref validation against sampled clean-source rows; do not commit the
+case pack, subset messages, subset registry, or live sweep output.
+
 ## Repository Boundary
 
 Public, documented corpus samples and deterministic conversion scripts may be
