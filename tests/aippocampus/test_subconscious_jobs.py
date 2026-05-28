@@ -65,6 +65,44 @@ class SubconsciousJobsTests(unittest.TestCase):
         self.assertEqual(plan.worker_count(concurrency=99, task_count=len(tasks)), 4)
         self.assertNotIn("for sample_index in range", runner_source)
 
+    def test_jobs_run_config_factory_derives_default_paths_from_registry_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+
+            class Args:
+                registry = None
+                registry_dir = str(root)
+                timeline = None
+                concept_graph = None
+                jobs_output = None
+                edges_output = None
+                job = "concept_edges"
+                project = "AIppocampus"
+                objective = "test"
+                max_turns = 4
+                max_steps = 2
+                min_tool_steps = 1
+                model = "deepseek-v4-flash"
+                base_url = "https://example.invalid"
+                api_key_env = "MISSING_TEST_KEY"
+                max_tokens = None
+                timeout = 9
+                temperature = 0.2
+                concurrency = 3
+                samples_per_job = 2
+                dry_run = True
+                no_write = False
+
+            config = jobs.jobs_run_config_from_args(Args())
+
+        self.assertEqual(config.registry_path, (root / "threads.json").resolve())
+        self.assertEqual(config.timeline_path, (root / "project_timeline.json").resolve())
+        self.assertEqual(config.jobs_output_path, (root / "subconscious_jobs.jsonl").resolve())
+        self.assertEqual(config.edges_output_path, (root / "subconscious_edges.jsonl").resolve())
+        self.assertEqual(config.jobs, ["concept_edges"])
+        self.assertEqual(config.api_key, None)
+        self.assertTrue(config.dry_run)
+
     def test_job_validation_is_separate_from_runner(self) -> None:
         validation = importlib.import_module("subconscious_job_validation")
         runner_source = (SCRIPTS / "subconscious_jobs.py").read_text(encoding="utf-8")

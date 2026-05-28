@@ -30,17 +30,19 @@ from memory_candidate_router import (
     load_working_memory,
     match_working_memory,
 )
-from prompt_recall_core import (
+from prompt_cues import (
     ASSOCIATIVE_CUES,
-    CONCEPT_TRIGGERS,
     IMPORTANCE_CUES,
     association_term_is_generic,
-    current_project_label,
     explicit_recall_terms,
     matched_terms,
+)
+from prompt_recall_core import (
+    current_project_label,
     registry_json_path,
 )
 from registry import load_registry
+from retrieval import CONCEPT_TRIGGERS
 from semantic_recall_gate import default_semantic_triggers_path
 
 

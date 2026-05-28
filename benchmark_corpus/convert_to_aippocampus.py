@@ -31,14 +31,12 @@ Usage:
 """
 
 import argparse
-import csv
 import hashlib
 import json
 import os
 import sys
-import time
-from pathlib import Path
 from collections import defaultdict
+from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -108,7 +106,6 @@ def convert_wildchat(max_convs: int = 0, lang: str | None = None,
 
         conv_hash = row.get("conversation_hash", stable_id("conv", str(conv_count)))
         source_id = stable_id("src", conv_hash)
-        session_id = str(row.get("timestamp", f"2024-01-01T00:00:00"))
         ts = row.get("timestamp", "")
 
         turn_index = 0
@@ -131,10 +128,8 @@ def convert_wildchat(max_convs: int = 0, lang: str | None = None,
             phase = ""
             if role == "assistant":
                 # Look ahead to see if there's another assistant message in same turn
-                next_user = False
                 for j in range(i + 1, len(conv)):
                     if conv[j].get("role") == "user":
-                        next_user = True
                         break
                     if conv[j].get("role") == "assistant":
                         phase = "commentary"
@@ -184,7 +179,7 @@ def convert_wildchat(max_convs: int = 0, lang: str | None = None,
         if max_convs and conv_count >= max_convs:
             break
 
-    print(f"\nConversion complete:", file=sys.stderr)
+    print("\nConversion complete:", file=sys.stderr)
     print(f"  Conversations: {conv_count}", file=sys.stderr)
     print(f"  Messages: {msg_count}", file=sys.stderr)
     print(f"  Skipped (lang): {skipped_lang}", file=sys.stderr)
@@ -269,7 +264,7 @@ def convert_sharechat(subset: str = "chatgpt", max_convs: int = 0,
                                 all_messages, all_turns)
         conv_count += 1
 
-    print(f"\nConversion complete:", file=sys.stderr)
+    print("\nConversion complete:", file=sys.stderr)
     print(f"  Conversations: {conv_count}", file=sys.stderr)
     print(f"  Messages: {len(all_messages)}", file=sys.stderr)
 
@@ -443,10 +438,8 @@ def convert_sharegpt(input_path: str, max_convs: int = 0, min_turns: int = 1,
                     # Phase: last assistant in turn = final_answer
                     phase = ""
                     if role == "assistant":
-                        next_user = False
                         for j in range(i + 1, len(conv)):
                             if conv[j]["role"] == "user":
-                                next_user = True
                                 break
                             if conv[j]["role"] == "assistant":
                                 phase = "commentary"
@@ -494,7 +487,7 @@ def convert_sharegpt(input_path: str, max_convs: int = 0, min_turns: int = 1,
         if max_convs and conv_count >= max_convs:
             break
 
-    print(f"\nConversion complete:", file=sys.stderr)
+    print("\nConversion complete:", file=sys.stderr)
     print(f"  Conversations: {conv_count}", file=sys.stderr)
     print(f"  Messages: {msg_count}", file=sys.stderr)
     print(f"  Skipped (empty): {skipped_empty}", file=sys.stderr)

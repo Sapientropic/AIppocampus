@@ -132,6 +132,21 @@ class ObjectStorageSyncTests(unittest.TestCase):
         object_keys = {request["key"] for request in self.server.requests}
         self.assertIn(f"{self.prefix}/{sync_bundle.SYNC_MANIFEST_NAME}", object_keys)
 
+    def test_object_store_token_requires_https_unless_endpoint_is_loopback(self) -> None:
+        with self.assertRaisesRegex(ValueError, "requires HTTPS"):
+            sync_object_storage.client_for(
+                "http://object-store.example.invalid",
+                prefix=self.prefix,
+                token="test-token",
+            )
+
+        local_client = sync_object_storage.client_for(
+            self.endpoint,
+            prefix=self.prefix,
+            token="test-token",
+        )
+        self.assertEqual(local_client.headers()["Authorization"], "Bearer test-token")
+
     def test_object_storage_repair_reports_tampered_object(self) -> None:
         device = self.create_registry()
         sync_object_storage.push_object_storage_bundle(

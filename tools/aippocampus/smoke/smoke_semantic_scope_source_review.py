@@ -38,7 +38,7 @@ from semantic_scope_source_review_core import (
     parse_agent_action,
     response_content,
 )
-from subconscious_agent import add_usage, call_chat_json, compact_usage
+from subconscious_runtime import add_usage, call_chat_json, compact_usage
 from subconscious_worker import DEFAULT_BASE_URL
 
 PROMPT_KIND = "semantic_scope_label_source_review"

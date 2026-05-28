@@ -33,6 +33,10 @@ THREAD_FILES = (
 )
 
 
+class SyncManifestError(ValueError):
+    """Raised when an existing sync manifest is present but cannot be trusted."""
+
+
 def load_json(path: Path) -> dict:
     if not path.exists():
         return {}
@@ -40,6 +44,30 @@ def load_json(path: Path) -> dict:
         return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return {}
+
+
+def load_sync_manifest(path: Path, *, missing_ok: bool = False) -> dict[str, Any]:
+    if not path.exists():
+        if missing_ok:
+            return {}
+        raise FileNotFoundError(f"missing sync manifest: {path}")
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SyncManifestError(f"invalid sync manifest JSON: {path}") from exc
+    if not isinstance(data, dict):
+        raise SyncManifestError(f"sync manifest must be a JSON object: {path}")
+    return data
+
+
+def validate_existing_sync_manifest(path: Path) -> dict[str, Any]:
+    manifest = load_sync_manifest(path)
+    if (
+        manifest.get("kind") != "aippocampus_sync_bundle"
+        or manifest.get("schema_version") != SYNC_SCHEMA_VERSION
+    ):
+        raise SyncManifestError(f"unrecognized sync manifest: {path}")
+    return manifest
 
 
 def validate_relative_sync_path(value: str | Path) -> Path:
@@ -55,6 +83,16 @@ def ensure_within(root: Path, path: Path) -> Path:
     if resolved_path != resolved_root and resolved_root not in resolved_path.parents:
         raise ValueError(f"path escapes sync boundary: {path}")
     return resolved_path
+
+
+def paths_overlap(left: Path, right: Path) -> bool:
+    resolved_left = left.resolve()
+    resolved_right = right.resolve()
+    return (
+        resolved_left == resolved_right
+        or resolved_left in resolved_right.parents
+        or resolved_right in resolved_left.parents
+    )
 
 
 def sync_file_entry(sync_root: Path, relative_path: Path) -> dict:
@@ -201,6 +239,29 @@ def clear_managed_sync_dirs(sync_root: Path) -> None:
             shutil.rmtree(target)
 
 
+def ensure_push_sync_root_safe(registry_root: Path, sync_root: Path) -> None:
+    for name in MANAGED_SYNC_DIRS:
+        managed_target = sync_root / name
+        if paths_overlap(managed_target, registry_root):
+            raise ValueError(
+                "refusing to use sync dir because managed path "
+                f"{managed_target} overlaps registry root {registry_root}"
+            )
+
+    managed_dirs = [sync_root / name for name in MANAGED_SYNC_DIRS if (sync_root / name).exists()]
+    if not managed_dirs:
+        return
+
+    manifest_path = sync_root / SYNC_MANIFEST_NAME
+    if not manifest_path.exists():
+        names = ", ".join(path.name for path in managed_dirs)
+        raise ValueError(
+            "refusing to clear existing managed sync dirs without a valid "
+            f"{SYNC_MANIFEST_NAME}: {names}"
+        )
+    validate_existing_sync_manifest(manifest_path)
+
+
 def push_sync_bundle(
     registry_dir: str | Path | None,
     sync_dir: str | Path,
@@ -212,6 +273,7 @@ def push_sync_bundle(
     )
     sync_root = Path(sync_dir).resolve()
     sync_root.mkdir(parents=True, exist_ok=True)
+    ensure_push_sync_root_safe(registry_root, sync_root)
     clear_managed_sync_dirs(sync_root)
 
     copied: list[dict] = []
@@ -366,9 +428,7 @@ def pull_sync_bundle(sync_dir: str | Path, target_registry_dir: str | Path | Non
         if target_registry_dir
         else aippocampus_registry_dir().resolve()
     )
-    manifest = load_json(sync_root / SYNC_MANIFEST_NAME)
-    if not manifest:
-        raise FileNotFoundError(f"missing sync manifest: {sync_root / SYNC_MANIFEST_NAME}")
+    manifest = load_sync_manifest(sync_root / SYNC_MANIFEST_NAME)
 
     copied = 0
     skipped = 0
@@ -410,7 +470,20 @@ def pull_sync_bundle(sync_dir: str | Path, target_registry_dir: str | Path | Non
 def repair_sync_bundle(sync_dir: str | Path) -> dict:
     sync_root = Path(sync_dir).resolve()
     manifest_path = sync_root / SYNC_MANIFEST_NAME
-    manifest = load_json(manifest_path)
+    try:
+        manifest = load_sync_manifest(manifest_path, missing_ok=True)
+    except SyncManifestError as exc:
+        return {
+            "ok": False,
+            "sync_dir": str(sync_root),
+            "issues": [
+                {
+                    "code": "invalid_manifest",
+                    "path": str(manifest_path),
+                    "message": str(exc),
+                }
+            ],
+        }
     if not manifest:
         return {
             "ok": False,
@@ -451,7 +524,25 @@ def repair_sync_bundle(sync_dir: str | Path) -> dict:
 
 def status_sync_bundle(sync_dir: str | Path) -> dict:
     sync_root = Path(sync_dir).resolve()
-    manifest = load_json(sync_root / SYNC_MANIFEST_NAME)
+    manifest_path = sync_root / SYNC_MANIFEST_NAME
+    try:
+        manifest = load_sync_manifest(manifest_path, missing_ok=True)
+    except SyncManifestError as exc:
+        return {
+            "ok": False,
+            "sync_dir": str(sync_root),
+            "manifest_exists": True,
+            "schema_version": None,
+            "file_count": 0,
+            "raw_rollout_included": False,
+            "issues": [
+                {
+                    "code": "invalid_manifest",
+                    "path": str(manifest_path),
+                    "message": str(exc),
+                }
+            ],
+        }
     repair = repair_sync_bundle(sync_root) if manifest else None
     return {
         "ok": bool(manifest) and bool(repair and repair.get("ok")),

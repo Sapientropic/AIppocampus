@@ -61,8 +61,11 @@ def label_evidence_map(
         or item.get("label_rationales")
         or {}
     )
-    label_confidences = (
-        item.get("label_confidences") if isinstance(item.get("label_confidences"), dict) else {}
+    raw_label_confidences = item.get("label_confidences")
+    label_confidences: dict[str, Any] = (
+        {str(label): confidence for label, confidence in raw_label_confidences.items()}
+        if isinstance(raw_label_confidences, dict)
+        else {}
     )
     out: dict[str, dict[str, Any]] = {}
 

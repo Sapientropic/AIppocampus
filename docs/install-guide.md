@@ -8,23 +8,26 @@ surface.
 
 Copy the installable skill package into Codex home:
 
-```powershell
-Copy-Item -Recurse .\skills\aippocampus "$env:CODEX_HOME\skills\aippocampus"
+```sh
+mkdir -p "${CODEX_HOME}/skills"
+cp -R ./skills/aippocampus "${CODEX_HOME}/skills/aippocampus"
 ```
 
 Restart Codex or reload skills if your runtime requires it.
 
 Verify the package from the repository:
 
-```powershell
-python tools\aippocampus\docs\check_docs_health.py --json
+```sh
+python tools/aippocampus/docs/check_docs_health.py --json
+python -m ruff check skills plugins tests tools benchmarks benchmark_corpus
+python -m mypy
 python -m unittest discover -s tests -t .
 ```
 
 For a repo-level Stage 0-5 public-readiness smoke, run:
 
-```powershell
-python .\tools\aippocampus\smoke\run_stage_0_5_smoke.py --repo-root . --json
+```sh
+python ./tools/aippocampus/smoke/run_stage_0_5_smoke.py --repo-root . --json
 ```
 
 This runs the documented local smoke gates, package-level plugin staging,
@@ -35,8 +38,8 @@ scan, then cleans the run-id-scoped `dist/` and `.tmp` artifacts it created.
 
 Register existing Codex sessions and build clean-source indexes:
 
-```powershell
-python "$env:CODEX_HOME\skills\aippocampus\scripts\onboard_codex.py" --all --format json
+```sh
+python "${CODEX_HOME}/skills/aippocampus/scripts/onboard_codex.py" --all --format json
 ```
 
 Use `--dry-run` before broad imports when you want a preview. Generated memory
@@ -47,8 +50,8 @@ not the active project repository.
 
 Inspect the local MCP tool catalog:
 
-```powershell
-python .\skills\aippocampus\scripts\aippocampus_mcp_server.py --list-tools
+```sh
+python ./skills/aippocampus/scripts/aippocampus_mcp_server.py --list-tools
 ```
 
 The initial MCP layer is read-mostly. It exposes clean-source and registry
@@ -58,8 +61,8 @@ tools plus explicit `register_thread` and `sync_status`.
 
 Build the repo-local Codex plugin package:
 
-```powershell
-python .\plugins\aippocampus\build_plugin_package.py --repo-root . --json
+```sh
+python ./plugins/aippocampus/build_plugin_package.py --repo-root . --json
 ```
 
 Build output is restricted to `dist/`. The plugin bundles the skill and MCP
@@ -67,8 +70,8 @@ config, but it does not silently enable prompt or lifecycle hooks.
 
 Run the package-level install/uninstall smoke:
 
-```powershell
-python .\plugins\aippocampus\smoke_plugin_install.py --repo-root . --json
+```sh
+python ./plugins/aippocampus/smoke_plugin_install.py --repo-root . --json
 ```
 
 This stages the built plugin in a temporary plugin root, runs the bundled MCP
@@ -87,9 +90,9 @@ installed those hooks afterward.
 
 Install hooks only after reviewing the privacy boundary:
 
-```powershell
-python "$env:CODEX_HOME\skills\aippocampus\scripts\install_aippocampus_prompt_hook.py" status --json
-python "$env:CODEX_HOME\skills\aippocampus\scripts\install_aippocampus_lifecycle_hook.py" status --json
+```sh
+python "${CODEX_HOME}/skills/aippocampus/scripts/install_aippocampus_prompt_hook.py" status --json
+python "${CODEX_HOME}/skills/aippocampus/scripts/install_aippocampus_lifecycle_hook.py" status --json
 ```
 
 Use `install` or `uninstall` on those scripts when you intentionally want to
@@ -100,11 +103,11 @@ on explicit environment configuration.
 
 The first sync backend is a local folder:
 
-```powershell
-python .\skills\aippocampus\scripts\sync_bundle.py status --sync-dir <folder> --json
-python .\skills\aippocampus\scripts\sync_bundle.py push --sync-dir <folder> --json
-python .\skills\aippocampus\scripts\sync_bundle.py pull --sync-dir <folder> --json
-python .\skills\aippocampus\scripts\sync_bundle.py repair --sync-dir <folder> --json
+```sh
+python ./skills/aippocampus/scripts/sync_bundle.py status --sync-dir <folder> --json
+python ./skills/aippocampus/scripts/sync_bundle.py push --sync-dir <folder> --json
+python ./skills/aippocampus/scripts/sync_bundle.py pull --sync-dir <folder> --json
+python ./skills/aippocampus/scripts/sync_bundle.py repair --sync-dir <folder> --json
 ```
 
 Raw rollouts are excluded unless `--include-raw` is passed.
@@ -124,20 +127,20 @@ The HTTP object-storage adapter uses the same sync manifest and privacy
 contract, but stores each bundle file as an object under a prefix. The endpoint
 must support HTTP `PUT` and `GET` for object keys:
 
-```powershell
-$env:AIPPOCAMPUS_OBJECT_STORE_URL = "https://object-store.example/bucket"
-$env:AIPPOCAMPUS_OBJECT_PREFIX = "aippocampus/sync"
-$env:AIPPOCAMPUS_OBJECT_STORE_TOKEN = "<optional bearer token>"
-python .\skills\aippocampus\scripts\sync_object_storage.py status --json
-python .\skills\aippocampus\scripts\sync_object_storage.py push --json
-python .\skills\aippocampus\scripts\sync_object_storage.py pull --registry-dir <target-registry> --json
-python .\skills\aippocampus\scripts\sync_object_storage.py repair --json
+```sh
+export AIPPOCAMPUS_OBJECT_STORE_URL="https://object-store.example/bucket"
+export AIPPOCAMPUS_OBJECT_PREFIX="aippocampus/sync"
+export AIPPOCAMPUS_OBJECT_STORE_TOKEN="<optional bearer token>"
+python ./skills/aippocampus/scripts/sync_object_storage.py status --json
+python ./skills/aippocampus/scripts/sync_object_storage.py push --json
+python ./skills/aippocampus/scripts/sync_object_storage.py pull --registry-dir <target-registry> --json
+python ./skills/aippocampus/scripts/sync_object_storage.py repair --json
 ```
 
 Raw rollouts are still excluded unless `--include-raw` is passed. The local
 object-storage smoke verifies the protocol path without requiring cloud
 credentials:
 
-```powershell
-python .\tools\aippocampus\smoke\smoke_object_storage_sync.py --repo-root . --json
+```sh
+python ./tools/aippocampus/smoke/smoke_object_storage_sync.py --repo-root . --json
 ```

@@ -21,12 +21,6 @@ from aippocampuslib import (
 )
 from registry import registry_paths, unique_preserve
 from retrieval import split_query_terms
-from subconscious_agent import (
-    DEFAULT_TEMPERATURE,
-    call_chat_json,
-    compact_usage,
-    parse_action,
-)
 from subconscious_job_validation import (
     estimate_finding_quality,
     finding_fingerprint,
@@ -36,6 +30,12 @@ from subconscious_jobs import (
 )
 from subconscious_jobs import (
     default_jobs_output_path,
+)
+from subconscious_runtime import (
+    DEFAULT_TEMPERATURE,
+    call_chat_json,
+    compact_usage,
+    parse_action,
 )
 from subconscious_worker import DEFAULT_BASE_URL, DEFAULT_MODEL, clamp_confidence
 

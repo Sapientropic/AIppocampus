@@ -16,18 +16,20 @@ Do not commit private memory artifacts:
 - private vault exports
 - API keys, cookies, bearer headers, credentials, or local machine paths
 
-Use the fake fixtures under `skills/aippocampus/tests/` when testing redaction
+Use the fake fixtures under `tests/aippocampus/` when testing redaction
 or local-path handling.
 
 ## Development Checks
 
-Before claiming the repository is healthy, run from `skills/aippocampus/`:
+AIppocampus supports Python 3.10 and newer. Before claiming the repository is
+healthy, run from the repository root:
 
-```powershell
-python scripts\check_docs_health.py --json
-python -m unittest discover -s tests
-python -m compileall -q .
-python -m ruff check . --config ..\..\pyproject.toml
+```sh
+python tools/aippocampus/docs/check_docs_health.py --json
+python -m ruff check skills plugins tests tools benchmarks benchmark_corpus
+python -m mypy
+python -m unittest discover -s tests -t .
+python -m compileall -q skills plugins tests tools benchmarks benchmark_corpus
 ```
 
 For public-readiness changes, also run a secret/local-path scan and inspect any

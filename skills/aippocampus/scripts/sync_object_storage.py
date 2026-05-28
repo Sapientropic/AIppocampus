@@ -22,6 +22,7 @@ from urllib.parse import quote, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
 import sync_bundle
+from aippocampuslib import validate_http_endpoint_url, validate_private_credential_transport
 
 OBJECT_BACKEND = "http_object_store"
 DEFAULT_PREFIX = "aippocampus/sync"
@@ -63,9 +64,13 @@ class HttpObjectStoreClient:
     timeout: float = DEFAULT_TIMEOUT_SECONDS
 
     def __post_init__(self) -> None:
-        parsed = urlsplit(self.endpoint_url)
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            raise ValueError("object store endpoint must be an http(s) URL")
+        validate_http_endpoint_url(self.endpoint_url, service_name="object store endpoint")
+        if self.token:
+            validate_private_credential_transport(
+                self.endpoint_url,
+                service_name="object store endpoint",
+                credential_label="object store token",
+            )
         normalize_object_prefix(self.prefix)
 
     def url_for(self, relative_path: str | Path) -> str:

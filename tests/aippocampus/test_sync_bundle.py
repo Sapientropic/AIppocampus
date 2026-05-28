@@ -250,6 +250,46 @@ class SyncBundleTests(unittest.TestCase):
         self.assertFalse(manifest["raw_rollout_included"])
         self.assertFalse((self.sync_dir / "raw-rollouts").exists())
 
+    def test_push_refuses_to_clear_existing_managed_dirs_without_manifest(self) -> None:
+        unmanaged_registry = self.sync_dir / "registry"
+        unmanaged_registry.mkdir(parents=True)
+        sentinel = unmanaged_registry / "sentinel.txt"
+        sentinel.write_text("do not delete\n", encoding="utf-8")
+
+        with self.assertRaisesRegex(ValueError, "without a valid"):
+            sync_bundle.push_sync_bundle(self.registry, self.sync_dir)
+
+        self.assertEqual(sentinel.read_text(encoding="utf-8"), "do not delete\n")
+
+    def test_push_refuses_when_managed_dir_overlaps_registry_root_even_with_manifest(self) -> None:
+        sync_root = self.root
+        manifest = {
+            "schema_version": sync_bundle.SYNC_SCHEMA_VERSION,
+            "kind": "aippocampus_sync_bundle",
+            "files": [],
+        }
+        (sync_root / sync_bundle.SYNC_MANIFEST_NAME).write_text(
+            json.dumps(manifest, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(ValueError, "overlaps registry root"):
+            sync_bundle.push_sync_bundle(self.registry, sync_root)
+
+        self.assertTrue((self.registry / "threads.json").is_file())
+
+    def test_status_reports_invalid_manifest_instead_of_treating_it_as_missing(self) -> None:
+        self.sync_dir.mkdir()
+        manifest_path = self.sync_dir / sync_bundle.SYNC_MANIFEST_NAME
+        manifest_path.write_text("{not json", encoding="utf-8")
+
+        status = sync_bundle.status_sync_bundle(self.sync_dir)
+        repair = sync_bundle.repair_sync_bundle(self.sync_dir)
+
+        self.assertTrue(status["manifest_exists"])
+        self.assertEqual(status["issues"][0]["code"], "invalid_manifest")
+        self.assertEqual(repair["issues"][0]["code"], "invalid_manifest")
+
     def test_cross_device_sync_smoke_models_device_and_path_boundaries(self) -> None:
         result = smoke_cross_device_sync.run_cross_device_sync_smoke(ROOT)
 

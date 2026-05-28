@@ -34,7 +34,7 @@ from aippocampuslib import (
 )
 from registry import load_registry, registry_paths, unique_preserve
 from retrieval import split_query_terms
-from subconscious_agent import add_usage, call_chat_json, compact_usage
+from subconscious_runtime import add_usage, call_chat_json, compact_usage
 from subconscious_worker import DEFAULT_BASE_URL, DEFAULT_MODEL, clamp_confidence, parse_model_json
 
 PROMPT_VERSION = "aippocampus-semantic-recall-gate-v0"
@@ -58,7 +58,7 @@ VALID_DECISIONS = {"skip", "background_only", "scent", "evidence"}
 DECISION_RANK = {"skip": 0, "background_only": 1, "scent": 2, "evidence": 3}
 
 
-ChatFn = Callable[[list[dict[str, str]], str, str, str, int | None, int, float], dict[str, Any]]
+ChatFn = Callable[[list[dict[str, str]], str, str, str, int | None, float, float], dict[str, Any]]
 
 
 SYSTEM_PROMPT = """You are AIppocampus semantic recall gate.
@@ -562,7 +562,7 @@ def run_worker(
     api_key: str,
     model: str,
     base_url: str,
-    timeout: int,
+    timeout: float,
     temperature: float,
     chat_fn: ChatFn,
 ) -> dict[str, Any]:
@@ -676,7 +676,8 @@ def write_cache(
     path: Path, key: str, result: dict[str, Any], *, max_entries: int = DEFAULT_MAX_CACHE_ENTRIES
 ) -> None:
     data = load_json(path)
-    entries = data.get("entries") if isinstance(data.get("entries"), dict) else {}
+    raw_entries = data.get("entries")
+    entries: dict[str, Any] = dict(raw_entries) if isinstance(raw_entries, dict) else {}
     slim = dict(result)
     slim.pop("elapsed_ms", None)
     slim.pop("cached", None)
@@ -738,7 +739,7 @@ def run_semantic_gate(
     api_key_env: str = "DEEPSEEK_API_KEY",
     model: str = DEFAULT_MODEL,
     base_url: str = DEFAULT_BASE_URL,
-    timeout: int = DEFAULT_TIMEOUT,
+    timeout: float = DEFAULT_TIMEOUT,
     temperature: float = DEFAULT_TEMPERATURE,
     workers: tuple[str, ...] = DEFAULT_WORKERS,
     use_cache: bool = True,
@@ -903,8 +904,9 @@ def main() -> int:
         print(
             f"semantic gate: {result.get('decision')} confidence={result.get('confidence')} cached={result.get('cached')}"
         )
-        if result.get("query_aliases"):
-            print("aliases: " + ", ".join(result.get("query_aliases")[:12]))
+        query_aliases = result.get("query_aliases")
+        if isinstance(query_aliases, list) and query_aliases:
+            print("aliases: " + ", ".join(str(alias) for alias in query_aliases[:12]))
         for reason in result.get("reasons") or []:
             print(f"- {reason}")
     return 0

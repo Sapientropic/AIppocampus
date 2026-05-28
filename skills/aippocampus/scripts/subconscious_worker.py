@@ -13,8 +13,6 @@ import argparse
 import json
 import os
 import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +26,7 @@ from aippocampuslib import (
 )
 from build_concept_graph import concept_is_noise
 from deepseek_model_routing import flash_model
+from model_client import ChatClientConfig, chat_json
 from registry import registry_paths, unique_preserve
 
 PROMPT_VERSION = "aippocampus-subconscious-v0"
@@ -188,36 +187,21 @@ def call_deepseek(
     max_tokens: int | None,
     timeout: int,
 ) -> dict[str, Any]:
-    url = base_url.rstrip("/") + "/chat/completions"
-    body = {
-        "model": model,
-        "messages": [
+    return chat_json(
+        [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt_for_turns(turns)},
         ],
-        "temperature": 0,
-        "response_format": {"type": "json_object"},
-    }
-    if max_tokens is not None:
-        body["max_tokens"] = max_tokens
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
+        ChatClientConfig(
+            api_key=api_key,
+            model=model,
+            base_url=base_url,
+            max_tokens=max_tokens,
+            timeout=timeout,
+            temperature=0,
+            service_name="DeepSeek API",
+        ),
     )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            response_body = resp.read().decode("utf-8", errors="replace")
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"DeepSeek API HTTP {exc.code}: {detail[:500]}") from exc
-    except urllib.error.URLError as exc:
-        raise RuntimeError(f"DeepSeek API request failed: {exc}") from exc
-    return json.loads(response_body)
 
 
 def parse_model_json(response: dict[str, Any]) -> dict[str, Any]:

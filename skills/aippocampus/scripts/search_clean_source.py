@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 from aippocampuslib import compact_text, default_thread_clean_source_dir, resolve_artifact_path
 from build_clean_source import SCOPE_LABEL_ORDER
@@ -20,8 +21,8 @@ from semantic_scope_labels import (
 LEGACY_CLEAN_SOURCE_DIR = ".aippocampus/clean-source"
 
 
-def iter_clean_messages(path: Path) -> list[dict]:
-    messages: list[dict] = []
+def iter_clean_messages(path: Path) -> list[dict[str, Any]]:
+    messages: list[dict[str, Any]] = []
     if not path.exists():
         return messages
     with path.open("r", encoding="utf-8") as f:
@@ -35,7 +36,7 @@ def iter_clean_messages(path: Path) -> list[dict]:
     return messages
 
 
-def score_message(message: dict, terms: list[str]) -> float:
+def score_message(message: dict[str, Any], terms: list[str]) -> float:
     text = str(message.get("text") or "")
     low = text.casefold()
     score = 0.0
@@ -55,6 +56,20 @@ def score_message(message: dict, terms: list[str]) -> float:
     return score
 
 
+def as_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def as_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def search_clean_source(
     cwd: str | Path,
     patterns: list[str],
@@ -63,7 +78,7 @@ def search_clean_source(
     limit: int = 10,
     snippet_chars: int = 700,
     scope_labels: list[str] | None = None,
-) -> dict:
+) -> dict[str, Any]:
     cwd = Path(cwd).resolve()
     if clean_source_dir is None:
         global_dir = default_thread_clean_source_dir(cwd)
@@ -83,7 +98,7 @@ def search_clean_source(
     terms = split_query_terms(patterns)
     label_filter = [str(label).strip() for label in scope_labels or [] if str(label).strip()]
     known_scope_labels = set(SCOPE_LABEL_ORDER)
-    warnings = [
+    warnings: list[dict[str, Any]] = [
         {
             "code": "unknown_scope_label",
             "scope_label": label,
@@ -94,7 +109,7 @@ def search_clean_source(
     ]
     missing_scope_label_count = 0
 
-    matches = []
+    matches: list[dict[str, Any]] = []
     for message in iter_clean_messages(messages_path):
         if "scope_labels" not in message:
             missing_scope_label_count += 1
@@ -130,7 +145,7 @@ def search_clean_source(
             }
         )
     matches.sort(
-        key=lambda item: (-float(item.get("score") or 0.0), int(item.get("source_line") or 0))
+        key=lambda item: (-as_float(item.get("score")), as_int(item.get("source_line")))
     )
     if label_filter and missing_scope_label_count:
         warnings.append(

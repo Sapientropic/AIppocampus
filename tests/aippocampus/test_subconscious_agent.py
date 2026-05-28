@@ -44,6 +44,38 @@ class SubconsciousAgentTests(unittest.TestCase):
         self.assertLess(keys.index("initial_turns"), keys.index("objective"))
         self.assertLess(keys.index("minimum_tool_steps_before_final"), keys.index("objective"))
 
+    def test_agent_run_config_factory_derives_default_paths_from_registry_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+
+            class Args:
+                registry = None
+                registry_dir = str(root)
+                timeline = None
+                concept_graph = None
+                output = None
+                project = "AIppocampus"
+                objective = "test"
+                max_turns = 4
+                max_steps = 2
+                min_tool_steps = 1
+                model = "deepseek-v4-flash"
+                base_url = "https://example.invalid"
+                api_key_env = "MISSING_TEST_KEY"
+                max_tokens = None
+                timeout = 9
+                temperature = 0.2
+                dry_run = True
+                no_write = False
+
+            config = agent.agent_run_config_from_args(Args())
+
+        self.assertEqual(config.registry_path, (root / "threads.json").resolve())
+        self.assertEqual(config.timeline_path, (root / "project_timeline.json").resolve())
+        self.assertEqual(config.output_path, (root / "subconscious_edges.jsonl").resolve())
+        self.assertEqual(config.api_key, None)
+        self.assertTrue(config.dry_run)
+
     def test_initial_payload_redacts_external_model_sensitive_text(self) -> None:
         payload = agent.agent_initial_payload(
             "review memory routing",

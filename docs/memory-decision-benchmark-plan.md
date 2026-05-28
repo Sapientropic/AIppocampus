@@ -385,6 +385,78 @@ private real-history prompts.
 - Do not emit raw private text, snippets, absolute paths, or local registry
   details in benchmark reports by default.
 
+## Benchmark Positioning: Retrieval Quality vs End-to-End QA
+
+AIppocampus benchmarks measure retrieval and decision quality, not end-to-end
+question-answering accuracy. This is an intentional design choice, not a gap.
+
+The dominant industry benchmarks (LoCoMo LLM-as-Judge, LongMemEval aggregate
+accuracy) score the product of two independent capabilities:
+
+1.  **Memory retrieval**: can the system find the right source?
+2.  **LLM reasoning**: given the retrieved source, can the model produce the
+    correct answer?
+
+These two factors are conflated in a single percentage. Swapping the underlying
+LLM changes the score without any change to the memory system itself. Published
+evidence of this conflation:
+
+- Mem0 LongMemEval: 93.4% (self-test, unspecified model) vs 49%
+  (Vectorize.io independent evaluation with different model/prompt). The 44-point
+  gap is a model and methodology artifact, not a memory quality difference.
+- Mem0 extraction-model ablation on LongMemEval: GPT-5 scores 91.0%, Llama 4
+  Maverick scores 88.6%. Same memory system, same data, 2.4-point spread from
+  model choice alone.
+- Exabase M-1 (96.4% LongMemEval) uses Gemini Flash. Their own analysis states
+  "retrieval architecture drove performance independent of model strength," yet
+  the headline number still depends on which model generates the final answer.
+
+Because of this conflation, leaderboard rankings primarily compare
+memory-system-and-LLM combinations, not memory systems in isolation. A
+higher-ranked system may simply be using a stronger answer-generation model, with
+no clear way to attribute the improvement.
+
+### What AIppocampus measures instead
+
+AIppocampus benchmarks decompose memory quality into orthogonal layers that do
+not depend on answer-generation model choice:
+
+| Layer | Metric | What it measures | Model-dependent? |
+|-------|--------|-----------------|------------------|
+| Track A: Gate Decision | skip/scent/evidence accuracy, macro F1, over-escalation rate | Whether the system chooses the right memory surface | No (deterministic gate + optional semantic, scored against source labels) |
+| Track B: Retrieval | R@K, MRR, message/turn hit rate, context-visible hit rate | Whether the system finds the correct source row | No (retrieval-only, no answer generation) |
+| Track C: Payload Fidelity | source fidelity, privacy breach rate, parked-memory injection count | Whether the final payload is correct and safe | No (synthetic fixtures, mocked semantic gate) |
+
+The optional live semantic-gate track does exercise an external model, but it
+evaluates the gate decision, not answer quality. The model is part of the tested
+path, not part of the scoring rubric.
+
+### When end-to-end QA benchmarks are appropriate
+
+End-to-end LLM-as-Judge benchmarks are useful for product-level comparisons when:
+
+- the product is a complete conversational agent, not a memory layer
+- the evaluation goal is to compare full-stack systems (memory + model + prompt)
+  under identical conditions, including the same LLM, the same judge, and the
+  same prompt template
+- the benchmark controls for model choice by running all systems with the same
+  answer-generation model and the same evaluation model
+
+AIppocampus is a memory layer, not a full-stack agent. Adding LLM-as-Judge
+scores would measure something AIppocampus does not own. If a fair head-to-head
+comparison is needed, the right experiment is: same LLM, same prompt, swap only
+the memory system, measure answer quality delta. That delta, not the absolute
+score, is the memory system's contribution.
+
+### Summary
+
+AIppocampus benchmark metrics are retrieval and decision metrics. They are
+comparable across any system willing to report the same retrieval-only numbers
+(R@K, MRR, decision accuracy) on the same datasets. They are not directly
+comparable to LoCoMo or LongMemEval aggregate accuracy percentages, because
+those measure a different thing. This distinction should be stated explicitly
+in any public benchmark report or comparison.
+
 ## Core Labels
 
 The primary decision label is three-class, matching the prompt hook surface:

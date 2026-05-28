@@ -46,6 +46,13 @@ REQUIRED_PUBLIC_READINESS_DOCS = [
     "docs/public-readiness-verification.md",
 ]
 
+PUBLIC_DOC_COMMAND_LINT_FILES = {
+    "README.md",
+    "docs/install-guide.md",
+    "docs/demo-scenarios.md",
+    "skills/aippocampus/SKILL.md",
+}
+
 PUBLIC_EXAMPLE_BUNDLE_FILES = [
     "bundle_manifest.json",
     "handoff.md",
@@ -82,6 +89,55 @@ SECRET_OR_LOCAL_PATH_RE = re.compile(
     r"\b(api[_-]?key|secret|token|password|cookie|authorization)\b\s*[:=])",
     re.IGNORECASE,
 )
+
+WINDOWS_COMMAND_MARKERS = (
+    "$env:",
+    ".\\",
+    "tools\\",
+    "skills\\",
+    "\\scripts\\",
+    "Copy-Item",
+)
+
+
+def windows_context_from_recent_lines(lines: list[str], fence_start_line: int) -> bool:
+    recent = "\n".join(lines[max(0, fence_start_line - 5) : fence_start_line - 1]).casefold()
+    return "windows" in recent or "powershell" in recent
+
+
+def public_doc_command_issues(rel_path: str, text: str) -> list[str]:
+    issues: list[str] = []
+    lines = text.splitlines()
+    in_fence = False
+    fence_lang = ""
+    fence_start = 0
+    fence_lines: list[str] = []
+    for index, line in enumerate(lines, start=1):
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            if not in_fence:
+                in_fence = True
+                fence_lang = stripped.removeprefix("```").strip().casefold()
+                fence_start = index
+                fence_lines = []
+                continue
+            block = "\n".join(fence_lines)
+            windows_context = windows_context_from_recent_lines(lines, fence_start)
+            if fence_lang in {"powershell", "ps1"} and not windows_context:
+                issues.append(
+                    f"{rel_path}:{fence_start} has a Windows-only command block outside a Windows section"
+                )
+            if any(marker in block for marker in WINDOWS_COMMAND_MARKERS) and not windows_context:
+                issues.append(
+                    f"{rel_path}:{fence_start} has Windows path/env command syntax outside a Windows section"
+                )
+            in_fence = False
+            fence_lang = ""
+            fence_lines = []
+            continue
+        if in_fence:
+            fence_lines.append(line)
+    return issues
 
 
 def count_words(text: str) -> int:
@@ -128,6 +184,11 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
     for rel_path in REQUIRED_PUBLIC_READINESS_DOCS:
         if not (repo_root / rel_path).exists():
             issues.append(f"missing public-readiness doc: {rel_path}")
+
+    for rel_path in sorted(PUBLIC_DOC_COMMAND_LINT_FILES):
+        doc_path = repo_root / rel_path
+        if doc_path.exists():
+            issues.extend(public_doc_command_issues(rel_path, doc_path.read_text(encoding="utf-8")))
 
     example_bundle = repo_root / "examples" / "public-memory-bundle"
     if not example_bundle.exists():

@@ -28,37 +28,46 @@ from aippocampuslib import (
 from aippocampuslib import (
     thread_key_from_rollout as lib_thread_key_from_rollout,
 )
+from registry_store import (
+    REGISTRY_SCHEMA_VERSION,
+    RegistryReadError,
+    default_registry_dir,
+    load_existing_json_object,
+    load_json,
+    load_registry,
+    registry_paths,
+    registry_root,
+    render_registry_markdown,
+    safe_slug,
+    save_registry,
+    thread_store_dir,
+    upsert_thread,
+)
+
+__all__ = [
+    "REGISTRY_SCHEMA_VERSION",
+    "RegistryReadError",
+    "default_registry_dir",
+    "registry_paths",
+    "registry_root",
+    "load_json",
+    "load_existing_json_object",
+    "safe_slug",
+    "thread_store_dir",
+    "load_registry",
+    "upsert_thread",
+    "render_registry_markdown",
+    "save_registry",
+    "unique_preserve",
+    "register_current_thread",
+    "register_rollout_thread",
+    "scan_session_rollouts",
+    "entry_search_score",
+    "deep_search_entry",
+    "deep_search_entry_result",
+]
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-REGISTRY_SCHEMA_VERSION = 1
-
-
-def default_registry_dir() -> Path:
-    env = os.environ.get("AIPPOCAMPUS_REGISTRY_DIR")
-    if env:
-        return Path(env)
-    legacy_env = os.environ.get("THREAD_MEMORY_REGISTRY_DIR")
-    if legacy_env:
-        return Path(legacy_env)
-    return codex_home() / "aippocampus-registry"
-
-
-def registry_paths(registry_dir: Path | None = None) -> tuple[Path, Path]:
-    root = (registry_dir or default_registry_dir()).resolve()
-    return root / "threads.json", root / "threads.md"
-
-
-def registry_root(registry_dir: Path | None = None) -> Path:
-    return (registry_dir or default_registry_dir()).resolve()
-
-
-def load_json(path: Path) -> dict:
-    if not path.exists():
-        return {}
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
 
 
 def run_json(cmd: list[str]) -> dict:
@@ -68,13 +77,6 @@ def run_json(cmd: list[str]) -> dict:
     if proc.returncode != 0:
         raise RuntimeError(proc.stdout or proc.stderr)
     return json.loads(proc.stdout)
-
-
-def safe_slug(value: str, fallback: str = "thread") -> str:
-    value = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "-", value).strip()
-    value = re.sub(r"\s+", "-", value)
-    value = value.rstrip(".- ")
-    return value[:120] or fallback
 
 
 def unique_preserve(items: list[str], limit: int | None = None) -> list[str]:
@@ -109,91 +111,6 @@ def project_fields(
         "project_label": label,
         "project_tags": project_tags,
     }
-
-
-def thread_store_dir(thread_key: str, registry_dir: Path | None = None) -> Path:
-    return registry_root(registry_dir) / "threads" / safe_slug(thread_key)
-
-
-def load_registry(path: Path) -> dict:
-    registry = load_json(path)
-    if not registry:
-        registry = {"schema_version": REGISTRY_SCHEMA_VERSION, "updated_at": None, "threads": []}
-    registry.setdefault("schema_version", REGISTRY_SCHEMA_VERSION)
-    registry.setdefault("threads", [])
-    return registry
-
-
-def upsert_thread(registry: dict, entry: dict) -> dict:
-    threads = [
-        item
-        for item in registry.get("threads", [])
-        if item.get("thread_key") != entry.get("thread_key")
-    ]
-    threads.append(entry)
-    threads.sort(key=lambda item: item.get("updated_at") or "", reverse=True)
-    registry["threads"] = threads
-    registry["updated_at"] = now_utc()
-    return registry
-
-
-def render_registry_markdown(registry: dict) -> str:
-    lines = [
-        "# Thread Memory Registry",
-        "",
-        "Machine-wide index of local Codex thread memories. Use this as the first discovery step in a new thread.",
-        "",
-        f"- Updated: `{registry.get('updated_at')}`",
-        f"- Threads: `{len(registry.get('threads', []))}`",
-        "",
-    ]
-    for entry in registry.get("threads", []):
-        health = entry.get("health") or {}
-        caps = entry.get("capabilities") or {}
-        paths = entry.get("paths") or {}
-        lines.extend(
-            [
-                f"## {entry.get('title') or entry.get('workspace_name') or entry.get('thread_key')}",
-                "",
-                f"- Thread key: `{entry.get('thread_key')}`",
-                f"- Updated: `{entry.get('updated_at')}`",
-                f"- Project: `{entry.get('project_label') or entry.get('workspace_name')}`",
-                f"- Workspace: `{paths.get('workspace')}`",
-                f"- Messages: `{entry.get('message_count')}`",
-                f"- Size: `{entry.get('rollout_size')}` bytes",
-                f"- Anchors: `{entry.get('anchor_count')}`",
-                f"- Health: `{'OK' if health.get('ok') else 'Needs maintenance'}`",
-                f"- RAG-lite chunks: `{caps.get('rag_chunks')}`",
-                f"- SQLite: `{paths.get('sqlite')}`",
-            ]
-        )
-        if paths.get("dashboard_html"):
-            lines.append(f"- Dashboard HTML: `{paths.get('dashboard_html')}`")
-        if paths.get("vault"):
-            lines.append(f"- Vault: `{paths.get('vault')}`")
-        if entry.get("keywords"):
-            lines.extend(["", "Keywords:", ""])
-            lines.append(", ".join(f"`{keyword}`" for keyword in entry.get("keywords", [])[:20]))
-        if entry.get("project_tags"):
-            lines.extend(["", "Project tags:", ""])
-            lines.append(", ".join(f"`{tag}`" for tag in entry.get("project_tags", [])[:20]))
-        if entry.get("anchor_titles"):
-            lines.extend(["", "Anchors:", ""])
-            lines.extend(f"- {title}" for title in entry.get("anchor_titles", [])[:10])
-        if entry.get("summary"):
-            lines.extend(["", entry["summary"]])
-        lines.append("")
-    return "\n".join(lines).rstrip() + "\n"
-
-
-def save_registry(registry: dict, json_path: Path, md_path: Path) -> None:
-    json_path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = json_path.with_suffix(json_path.suffix + ".tmp")
-    tmp.write_text(
-        json.dumps(registry, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n"
-    )
-    tmp.replace(json_path)
-    md_path.write_text(render_registry_markdown(registry), encoding="utf-8", newline="\n")
 
 
 def anchor_summary(anchors: list[dict]) -> tuple[list[str], list[str], str]:

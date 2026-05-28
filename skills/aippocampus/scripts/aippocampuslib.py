@@ -4,12 +4,14 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
+from urllib.parse import SplitResult, urlsplit
 
 
 def now_utc() -> str:
@@ -532,6 +534,40 @@ def sanitize_external_model_payload(value: Any) -> Any:
     if isinstance(value, dict):
         return {key: sanitize_external_model_payload(item) for key, item in value.items()}
     return value
+
+
+def is_loopback_host(hostname: str | None) -> bool:
+    if not hostname:
+        return False
+    host = hostname.rstrip(".").casefold()
+    if host == "localhost" or host.endswith(".localhost"):
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+def validate_http_endpoint_url(endpoint_url: str, *, service_name: str) -> SplitResult:
+    parsed = urlsplit(endpoint_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError(f"{service_name} must be an http(s) URL")
+    if parsed.username or parsed.password:
+        raise ValueError(f"{service_name} must not include credentials")
+    return parsed
+
+
+def validate_private_credential_transport(
+    endpoint_url: str, *, service_name: str, credential_label: str
+) -> None:
+    parsed = validate_http_endpoint_url(endpoint_url, service_name=service_name)
+    # Local model proxies and dev object stores commonly use plain HTTP. Keep
+    # that loopback path usable, but never let bearer-style credentials travel
+    # over network HTTP because the receiving service may still look legitimate.
+    if parsed.scheme == "http" and not is_loopback_host(parsed.hostname):
+        raise ValueError(
+            f"{credential_label} for {service_name} requires HTTPS unless endpoint is loopback"
+        )
 
 
 def deepseek_cache_metrics_from_usage(usage: dict[str, Any] | None) -> dict[str, Any]:

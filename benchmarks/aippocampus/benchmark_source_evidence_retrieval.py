@@ -32,7 +32,7 @@ import benchmark_fts5_recall as fts5_benchmark
 from aippocampuslib import compact_text
 from build_index import make_sqlite
 from retrieval import split_query_terms
-from subconscious_agent import add_usage, call_chat_json, compact_usage
+from subconscious_runtime import add_usage, call_chat_json, compact_usage
 from subconscious_worker import DEFAULT_BASE_URL, DEFAULT_MODEL, clamp_confidence, parse_model_json
 
 SCHEMA_VERSION = 1

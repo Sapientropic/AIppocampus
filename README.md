@@ -3,6 +3,9 @@
 AIppocampus is a source-backed memory layer for long-running relationships with
 AI agents.
 
+It supports Python 3.10 and newer. The CI matrix currently verifies Python 3.10
+and 3.11, with a narrow `mypy` baseline for low-noise deterministic modules.
+
 It is not just a project-memory utility. It keeps original conversation source
 reachable across threads, devices, projects, and casual life-wide conversations.
 The origin essay is [未干的地图](docs/未干的地图.md), with an English transcreation
@@ -40,8 +43,9 @@ circuits, and pipeline-level routing instead of one all-purpose agent.
 
 Copy or link the installable skill folder into your Codex skills directory:
 
-```powershell
-Copy-Item -Recurse .\skills\aippocampus "$env:CODEX_HOME\skills\aippocampus"
+```sh
+mkdir -p "${CODEX_HOME}/skills"
+cp -R ./skills/aippocampus "${CODEX_HOME}/skills/aippocampus"
 ```
 
 Then restart Codex or reload skills if your runtime requires it.
@@ -52,23 +56,25 @@ The skill entrypoint is [skills/aippocampus/SKILL.md](skills/aippocampus/SKILL.m
 
 From this repository:
 
-```powershell
-python tools\aippocampus\docs\check_docs_health.py --json
+```sh
+python tools/aippocampus/docs/check_docs_health.py --json
+python -m ruff check skills plugins tests tools benchmarks benchmark_corpus
+python -m mypy
 python -m unittest discover -s tests -t .
 ```
 
 For normal use inside a Codex workspace, start with:
 
-```powershell
-python "$env:CODEX_HOME\skills\aippocampus\scripts\aippocampus_health.py" --cwd "$PWD"
-python "$env:CODEX_HOME\skills\aippocampus\scripts\search_clean_source.py" "your query" --cwd "$PWD"
+```sh
+python "${CODEX_HOME}/skills/aippocampus/scripts/aippocampus_health.py" --cwd "$PWD"
+python "${CODEX_HOME}/skills/aippocampus/scripts/search_clean_source.py" "your query" --cwd "$PWD"
 ```
 
 To onboard an existing Codex install so old threads become discoverable in new
 projects:
 
-```powershell
-python "$env:CODEX_HOME\skills\aippocampus\scripts\onboard_codex.py" --all --format json
+```sh
+python "${CODEX_HOME}/skills/aippocampus/scripts/onboard_codex.py" --all --format json
 ```
 
 This is the agent-friendly wrapper around scanning local sessions, registering
@@ -87,15 +93,15 @@ registry-backed tools such as `search_memory`, `latest_reply`,
 `get_turn_context`, `list_threads`, `register_thread`, `sync_status`, and
 `memory_health`:
 
-```powershell
-python .\skills\aippocampus\scripts\aippocampus_mcp_server.py --list-tools
+```sh
+python ./skills/aippocampus/scripts/aippocampus_mcp_server.py --list-tools
 ```
 
 The repo also carries a Codex plugin source package under
 `plugins/aippocampus/`. Build a local distributable directory with:
 
-```powershell
-python .\plugins\aippocampus\build_plugin_package.py --repo-root . --json
+```sh
+python ./plugins/aippocampus/build_plugin_package.py --repo-root . --json
 ```
 
 The plugin bundles the skill and MCP config. It does not silently enable prompt
@@ -109,18 +115,18 @@ adapter reuses the same manifest over object `PUT`/`GET`. Both copy clean
 source, manifests, registry rows, and hook-safe sidecars. Raw rollouts stay
 excluded unless `--include-raw` is passed.
 
-```powershell
-python .\skills\aippocampus\scripts\sync_bundle.py status --sync-dir <folder> --json
-python .\skills\aippocampus\scripts\sync_bundle.py push --sync-dir <folder> --json
-python .\skills\aippocampus\scripts\sync_bundle.py pull --sync-dir <folder> --json
-python .\skills\aippocampus\scripts\sync_bundle.py repair --sync-dir <folder> --json
+```sh
+python ./skills/aippocampus/scripts/sync_bundle.py status --sync-dir <folder> --json
+python ./skills/aippocampus/scripts/sync_bundle.py push --sync-dir <folder> --json
+python ./skills/aippocampus/scripts/sync_bundle.py pull --sync-dir <folder> --json
+python ./skills/aippocampus/scripts/sync_bundle.py repair --sync-dir <folder> --json
 ```
 
-```powershell
-python .\skills\aippocampus\scripts\sync_object_storage.py status --object-store-url <url> --object-prefix <prefix> --json
-python .\skills\aippocampus\scripts\sync_object_storage.py push --object-store-url <url> --object-prefix <prefix> --json
-python .\skills\aippocampus\scripts\sync_object_storage.py pull --object-store-url <url> --object-prefix <prefix> --json
-python .\skills\aippocampus\scripts\sync_object_storage.py repair --object-store-url <url> --object-prefix <prefix> --json
+```sh
+python ./skills/aippocampus/scripts/sync_object_storage.py status --object-store-url <url> --object-prefix <prefix> --json
+python ./skills/aippocampus/scripts/sync_object_storage.py push --object-store-url <url> --object-prefix <prefix> --json
+python ./skills/aippocampus/scripts/sync_object_storage.py pull --object-store-url <url> --object-prefix <prefix> --json
+python ./skills/aippocampus/scripts/sync_object_storage.py repair --object-store-url <url> --object-prefix <prefix> --json
 ```
 
 Pull preserves local conflicting files and writes incoming copies under

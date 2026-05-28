@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import time
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -28,6 +29,130 @@ import benchmark_payload_fidelity as payload_benchmark
 import benchmark_source_evidence_retrieval as retrieval_benchmark
 
 SCHEMA_VERSION = 1
+
+
+@dataclass(frozen=True)
+class BenchmarkSuiteConfig:
+    registry_path: Path | None = None
+    include_private_text: bool = False
+    include_track_b: bool = True
+    include_deterministic_source_labels: bool = True
+    include_live_semantic: bool = False
+    gate_case_limit: int | None = None
+    payload_case_limit: int | None = None
+    live_semantic_conversations: int = live_semantic_benchmark.DEFAULT_LIVE_CONVERSATIONS
+    live_semantic_cases: int | None = None
+    live_semantic_min_cases: int = live_semantic_benchmark.DEFAULT_MIN_LIVE_CASES
+    live_semantic_min_surface_recall: float = (
+        live_semantic_benchmark.DEFAULT_MIN_SURFACE_RECALL
+    )
+    live_semantic_mode: str | None = "auto"
+    live_semantic_timeout: int = live_semantic_benchmark.DEFAULT_SEMANTIC_TIMEOUT
+    live_semantic_workers: tuple[str, ...] = live_semantic_benchmark.DEFAULT_WORKERS
+    live_semantic_cache_path: Path | None = None
+    live_semantic_case_workers: int = live_semantic_benchmark.DEFAULT_CASE_WORKERS
+    fts5_cases: int = retrieval_benchmark.DEFAULT_FTS5_CASES
+    fts5_min_cases: int = retrieval_benchmark.DEFAULT_FTS5_MIN_CASES
+    fts5_seed: int = retrieval_benchmark.fts5_benchmark.DEFAULT_SEED
+    fts5_top_k: int = retrieval_benchmark.fts5_benchmark.DEFAULT_TOP_K
+    fts5_candidate_limit: int = retrieval_benchmark.fts5_benchmark.DEFAULT_CANDIDATE_LIMIT
+    source_max_cases: int = retrieval_benchmark.DEFAULT_SOURCE_MAX_CASES
+    source_min_cases: int = retrieval_benchmark.DEFAULT_SOURCE_MIN_CASES
+    source_top_k: int = 5
+    source_min_hit_rate: float = retrieval_benchmark.DEFAULT_SOURCE_MIN_HIT_RATE
+    source_ranking: str = "dynamic_source"
+    source_max_term_frequency: int = 8
+    include_sharegpt_public_track_b: bool = False
+    sharegpt_public_corpus_dir: Path | None = None
+    sharegpt_public_conversations: int = (
+        retrieval_benchmark.DEFAULT_SHAREGPT_PUBLIC_CONVERSATIONS
+    )
+    sharegpt_public_max_cases: int = retrieval_benchmark.DEFAULT_SHAREGPT_PUBLIC_CASES
+    sharegpt_public_min_cases: int = retrieval_benchmark.DEFAULT_SHAREGPT_PUBLIC_MIN_CASES
+    sharegpt_public_top_k: int = retrieval_benchmark.DEFAULT_SHAREGPT_PUBLIC_TOP_K
+    include_standard_public_track_b: bool = False
+    standard_dataset: str = retrieval_benchmark.DEFAULT_STANDARD_DATASET
+    standard_corpus_path: Path | None = None
+    standard_max_questions: int = retrieval_benchmark.DEFAULT_STANDARD_QA_CASES
+    standard_min_questions: int = retrieval_benchmark.DEFAULT_STANDARD_QA_MIN_CASES
+    standard_top_k: int = retrieval_benchmark.DEFAULT_STANDARD_QA_TOP_K
+    standard_context_radius: int = retrieval_benchmark.DEFAULT_STANDARD_QA_CONTEXT_RADIUS
+    standard_min_session_hit_rate: float = (
+        retrieval_benchmark.DEFAULT_STANDARD_QA_MIN_SESSION_HIT_RATE
+    )
+    standard_line_reranker_mode: str = retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_MODE
+    standard_line_reranker_top_sessions: int = (
+        retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_TOP_SESSIONS
+    )
+    standard_line_reranker_max_candidates: int = (
+        retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_MAX_CANDIDATES
+    )
+    standard_line_reranker_timeout: int = (
+        retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_TIMEOUT
+    )
+    standard_line_reranker_max_tokens: int = (
+        retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_MAX_TOKENS
+    )
+    standard_line_reranker_workers: int = (
+        retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_WORKERS
+    )
+
+    def sanitized_payload_config(self) -> dict[str, Any]:
+        return {
+            "suite_mode": "baseline",
+            "registry_path_provided": self.registry_path is not None,
+            "include_private_text": bool(self.include_private_text),
+            "include_track_b": bool(self.include_track_b),
+            "include_deterministic_source_labels": bool(
+                self.include_deterministic_source_labels
+            ),
+            "include_live_semantic": bool(self.include_live_semantic),
+            "gate_case_limit": self.gate_case_limit,
+            "payload_case_limit": self.payload_case_limit,
+            "live_semantic_conversations": int(self.live_semantic_conversations),
+            "live_semantic_cases": self.live_semantic_cases,
+            "live_semantic_min_cases": int(self.live_semantic_min_cases),
+            "live_semantic_min_surface_recall": float(self.live_semantic_min_surface_recall),
+            "live_semantic_mode": self.live_semantic_mode or "auto",
+            "live_semantic_timeout": int(self.live_semantic_timeout),
+            "live_semantic_workers": list(self.live_semantic_workers),
+            "live_semantic_case_workers": int(self.live_semantic_case_workers),
+            "fts5_cases": int(self.fts5_cases),
+            "fts5_min_cases": int(self.fts5_min_cases),
+            "fts5_seed": int(self.fts5_seed),
+            "fts5_top_k": int(self.fts5_top_k),
+            "fts5_candidate_limit": int(self.fts5_candidate_limit),
+            "source_max_cases": int(self.source_max_cases),
+            "source_min_cases": int(self.source_min_cases),
+            "source_top_k": int(self.source_top_k),
+            "source_min_hit_rate": float(self.source_min_hit_rate),
+            "source_ranking": self.source_ranking,
+            "source_max_term_frequency": int(self.source_max_term_frequency),
+            "include_sharegpt_public_track_b": bool(self.include_sharegpt_public_track_b),
+            "sharegpt_public_conversations": int(self.sharegpt_public_conversations),
+            "sharegpt_public_max_cases": int(self.sharegpt_public_max_cases),
+            "sharegpt_public_min_cases": int(self.sharegpt_public_min_cases),
+            "sharegpt_public_top_k": int(self.sharegpt_public_top_k),
+            "include_standard_public_track_b": bool(self.include_standard_public_track_b),
+            "standard_dataset": self.standard_dataset,
+            "standard_max_questions": int(self.standard_max_questions),
+            "standard_min_questions": int(self.standard_min_questions),
+            "standard_top_k": int(self.standard_top_k),
+            "standard_context_radius": int(self.standard_context_radius),
+            "standard_min_session_hit_rate": float(self.standard_min_session_hit_rate),
+            "standard_line_reranker_mode": self.standard_line_reranker_mode,
+            "standard_line_reranker_top_sessions": int(
+                self.standard_line_reranker_top_sessions
+            ),
+            "standard_line_reranker_max_candidates": int(
+                self.standard_line_reranker_max_candidates
+            ),
+            "standard_line_reranker_timeout": int(self.standard_line_reranker_timeout),
+            "standard_line_reranker_max_tokens": int(
+                self.standard_line_reranker_max_tokens
+            ),
+            "standard_line_reranker_workers": int(self.standard_line_reranker_workers),
+        }
 
 
 def now_utc() -> str:
@@ -214,6 +339,107 @@ def run_benchmark_suite(
         retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_WORKERS
     ),
 ) -> dict[str, Any]:
+    return run_benchmark_suite_with_config(
+        BenchmarkSuiteConfig(
+            registry_path=registry_path,
+            include_private_text=include_private_text,
+            include_track_b=include_track_b,
+            include_deterministic_source_labels=include_deterministic_source_labels,
+            include_live_semantic=include_live_semantic,
+            gate_case_limit=gate_case_limit,
+            payload_case_limit=payload_case_limit,
+            live_semantic_conversations=live_semantic_conversations,
+            live_semantic_cases=live_semantic_cases,
+            live_semantic_min_cases=live_semantic_min_cases,
+            live_semantic_min_surface_recall=live_semantic_min_surface_recall,
+            live_semantic_mode=live_semantic_mode,
+            live_semantic_timeout=live_semantic_timeout,
+            live_semantic_workers=live_semantic_workers,
+            live_semantic_cache_path=live_semantic_cache_path,
+            live_semantic_case_workers=live_semantic_case_workers,
+            fts5_cases=fts5_cases,
+            fts5_min_cases=fts5_min_cases,
+            fts5_seed=fts5_seed,
+            fts5_top_k=fts5_top_k,
+            fts5_candidate_limit=fts5_candidate_limit,
+            source_max_cases=source_max_cases,
+            source_min_cases=source_min_cases,
+            source_top_k=source_top_k,
+            source_min_hit_rate=source_min_hit_rate,
+            source_ranking=source_ranking,
+            source_max_term_frequency=source_max_term_frequency,
+            include_sharegpt_public_track_b=include_sharegpt_public_track_b,
+            sharegpt_public_corpus_dir=sharegpt_public_corpus_dir,
+            sharegpt_public_conversations=sharegpt_public_conversations,
+            sharegpt_public_max_cases=sharegpt_public_max_cases,
+            sharegpt_public_min_cases=sharegpt_public_min_cases,
+            sharegpt_public_top_k=sharegpt_public_top_k,
+            include_standard_public_track_b=include_standard_public_track_b,
+            standard_dataset=standard_dataset,
+            standard_corpus_path=standard_corpus_path,
+            standard_max_questions=standard_max_questions,
+            standard_min_questions=standard_min_questions,
+            standard_top_k=standard_top_k,
+            standard_context_radius=standard_context_radius,
+            standard_min_session_hit_rate=standard_min_session_hit_rate,
+            standard_line_reranker_mode=standard_line_reranker_mode,
+            standard_line_reranker_top_sessions=standard_line_reranker_top_sessions,
+            standard_line_reranker_max_candidates=standard_line_reranker_max_candidates,
+            standard_line_reranker_timeout=standard_line_reranker_timeout,
+            standard_line_reranker_max_tokens=standard_line_reranker_max_tokens,
+            standard_line_reranker_workers=standard_line_reranker_workers,
+        )
+    )
+
+
+def run_benchmark_suite_with_config(config: BenchmarkSuiteConfig) -> dict[str, Any]:
+    registry_path = config.registry_path
+    include_private_text = config.include_private_text
+    include_track_b = config.include_track_b
+    include_deterministic_source_labels = config.include_deterministic_source_labels
+    include_live_semantic = config.include_live_semantic
+    gate_case_limit = config.gate_case_limit
+    payload_case_limit = config.payload_case_limit
+    live_semantic_conversations = config.live_semantic_conversations
+    live_semantic_cases = config.live_semantic_cases
+    live_semantic_min_cases = config.live_semantic_min_cases
+    live_semantic_min_surface_recall = config.live_semantic_min_surface_recall
+    live_semantic_mode = config.live_semantic_mode
+    live_semantic_timeout = config.live_semantic_timeout
+    live_semantic_workers = config.live_semantic_workers
+    live_semantic_cache_path = config.live_semantic_cache_path
+    live_semantic_case_workers = config.live_semantic_case_workers
+    fts5_cases = config.fts5_cases
+    fts5_min_cases = config.fts5_min_cases
+    fts5_seed = config.fts5_seed
+    fts5_top_k = config.fts5_top_k
+    fts5_candidate_limit = config.fts5_candidate_limit
+    source_max_cases = config.source_max_cases
+    source_min_cases = config.source_min_cases
+    source_top_k = config.source_top_k
+    source_min_hit_rate = config.source_min_hit_rate
+    source_ranking = config.source_ranking
+    source_max_term_frequency = config.source_max_term_frequency
+    include_sharegpt_public_track_b = config.include_sharegpt_public_track_b
+    sharegpt_public_corpus_dir = config.sharegpt_public_corpus_dir
+    sharegpt_public_conversations = config.sharegpt_public_conversations
+    sharegpt_public_max_cases = config.sharegpt_public_max_cases
+    sharegpt_public_min_cases = config.sharegpt_public_min_cases
+    sharegpt_public_top_k = config.sharegpt_public_top_k
+    include_standard_public_track_b = config.include_standard_public_track_b
+    standard_dataset = config.standard_dataset
+    standard_corpus_path = config.standard_corpus_path
+    standard_max_questions = config.standard_max_questions
+    standard_min_questions = config.standard_min_questions
+    standard_top_k = config.standard_top_k
+    standard_context_radius = config.standard_context_radius
+    standard_min_session_hit_rate = config.standard_min_session_hit_rate
+    standard_line_reranker_mode = config.standard_line_reranker_mode
+    standard_line_reranker_top_sessions = config.standard_line_reranker_top_sessions
+    standard_line_reranker_max_candidates = config.standard_line_reranker_max_candidates
+    standard_line_reranker_timeout = config.standard_line_reranker_timeout
+    standard_line_reranker_max_tokens = config.standard_line_reranker_max_tokens
+    standard_line_reranker_workers = config.standard_line_reranker_workers
     started = time.perf_counter()
     tracks: dict[str, dict[str, Any]] = {
         "gate_decision": gate_benchmark.run_benchmark(
@@ -318,54 +544,7 @@ def run_benchmark_suite(
         "status": status,
         "ok": bool(baseline_captured),
         "quality_gate_ok": bool(quality_gate_ok),
-        "config": {
-            "suite_mode": "baseline",
-            "registry_path_provided": registry_path is not None,
-            "include_private_text": bool(include_private_text),
-            "include_track_b": bool(include_track_b),
-            "include_deterministic_source_labels": bool(
-                include_deterministic_source_labels
-            ),
-            "include_live_semantic": bool(include_live_semantic),
-            "gate_case_limit": gate_case_limit,
-            "payload_case_limit": payload_case_limit,
-            "live_semantic_conversations": int(live_semantic_conversations),
-            "live_semantic_cases": live_semantic_cases,
-            "live_semantic_min_cases": int(live_semantic_min_cases),
-            "live_semantic_min_surface_recall": float(live_semantic_min_surface_recall),
-            "live_semantic_mode": live_semantic_mode or "auto",
-            "live_semantic_timeout": int(live_semantic_timeout),
-            "live_semantic_workers": list(live_semantic_workers),
-            "live_semantic_case_workers": int(live_semantic_case_workers),
-            "fts5_cases": int(fts5_cases),
-            "fts5_min_cases": int(fts5_min_cases),
-            "fts5_seed": int(fts5_seed),
-            "fts5_top_k": int(fts5_top_k),
-            "fts5_candidate_limit": int(fts5_candidate_limit),
-            "source_max_cases": int(source_max_cases),
-            "source_min_cases": int(source_min_cases),
-            "source_top_k": int(source_top_k),
-            "source_min_hit_rate": float(source_min_hit_rate),
-            "source_ranking": source_ranking,
-            "source_max_term_frequency": int(source_max_term_frequency),
-            "include_sharegpt_public_track_b": bool(include_sharegpt_public_track_b),
-            "sharegpt_public_conversations": int(sharegpt_public_conversations),
-            "sharegpt_public_max_cases": int(sharegpt_public_max_cases),
-            "sharegpt_public_min_cases": int(sharegpt_public_min_cases),
-            "sharegpt_public_top_k": int(sharegpt_public_top_k),
-            "include_standard_public_track_b": bool(include_standard_public_track_b),
-            "standard_dataset": standard_dataset,
-            "standard_max_questions": int(standard_max_questions),
-            "standard_min_questions": int(standard_min_questions),
-            "standard_top_k": int(standard_top_k),
-            "standard_context_radius": int(standard_context_radius),
-            "standard_line_reranker_mode": standard_line_reranker_mode,
-            "standard_line_reranker_top_sessions": int(standard_line_reranker_top_sessions),
-            "standard_line_reranker_max_candidates": int(standard_line_reranker_max_candidates),
-            "standard_line_reranker_timeout": int(standard_line_reranker_timeout),
-            "standard_line_reranker_max_tokens": int(standard_line_reranker_max_tokens),
-            "standard_line_reranker_workers": int(standard_line_reranker_workers),
-        },
+        "config": config.sanitized_payload_config(),
         "track_statuses": track_statuses,
         "known_gaps": known_gaps,
         "tracks": tracks,
@@ -391,7 +570,7 @@ def print_human_summary(payload: dict[str, Any]) -> None:
             print(f"  - {name}: {gap.get('status')}")
 
 
-def main() -> int:
+def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--registry", type=Path, default=None)
     parser.add_argument("--include-private-text", action="store_true")
@@ -569,9 +748,11 @@ def main() -> int:
     )
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--output", type=Path, default=None)
-    args = parser.parse_args()
+    return parser
 
-    payload = run_benchmark_suite(
+
+def benchmark_suite_config_from_args(args: argparse.Namespace) -> BenchmarkSuiteConfig:
+    return BenchmarkSuiteConfig(
         registry_path=args.registry,
         include_private_text=args.include_private_text,
         include_track_b=not args.skip_track_b,
@@ -585,9 +766,7 @@ def main() -> int:
         live_semantic_min_surface_recall=args.live_semantic_min_surface_recall,
         live_semantic_mode=args.live_semantic_mode,
         live_semantic_timeout=args.live_semantic_timeout,
-        live_semantic_workers=live_semantic_benchmark.parse_workers(
-            args.live_semantic_workers
-        ),
+        live_semantic_workers=live_semantic_benchmark.parse_workers(args.live_semantic_workers),
         live_semantic_cache_path=args.live_semantic_cache,
         live_semantic_case_workers=args.live_semantic_case_workers,
         fts5_cases=args.fts5_cases,
@@ -622,6 +801,12 @@ def main() -> int:
         standard_line_reranker_max_tokens=args.standard_line_reranker_max_tokens,
         standard_line_reranker_workers=args.standard_line_reranker_workers,
     )
+
+
+def main() -> int:
+    parser = build_arg_parser()
+    args = parser.parse_args()
+    payload = run_benchmark_suite_with_config(benchmark_suite_config_from_args(args))
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(

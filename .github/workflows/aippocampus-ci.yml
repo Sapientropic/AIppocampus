@@ -9,6 +9,10 @@ on:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11"]
 
     steps:
       - name: Check out repository
@@ -17,13 +21,16 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python-version }}
 
-      - name: Install ruff
-        run: python -m pip install ruff
+      - name: Install checks
+        run: python -m pip install ruff mypy
 
       - name: Ruff
-        run: ruff check skills plugins tests tools benchmarks
+        run: ruff check skills plugins tests tools benchmarks benchmark_corpus
+
+      - name: Type check
+        run: mypy
 
       - name: Docs health
         run: python tools/aippocampus/docs/check_docs_health.py --json

@@ -99,6 +99,29 @@ def fake_live_semantic_payload() -> dict:
 
 
 class BenchmarkSuiteTests(unittest.TestCase):
+    def test_suite_config_factory_maps_parser_args(self) -> None:
+        parser = suite.build_arg_parser()
+        args = parser.parse_args(
+            [
+                "--skip-track-b",
+                "--include-live-semantic",
+                "--live-semantic-workers",
+                "deepseek,openai",
+                "--source-max-cases",
+                "7",
+                "--standard-dataset",
+                "locomo",
+            ]
+        )
+
+        config = suite.benchmark_suite_config_from_args(args)
+
+        self.assertFalse(config.include_track_b)
+        self.assertTrue(config.include_live_semantic)
+        self.assertEqual(config.live_semantic_workers, ("deepseek", "openai"))
+        self.assertEqual(config.source_max_cases, 7)
+        self.assertEqual(config.standard_dataset, "locomo")
+
     def test_suite_captures_baseline_even_when_track_b_is_diagnostic(self) -> None:
         with (
             patch.object(

@@ -7,8 +7,8 @@ without exposing private rollouts or personal registry data.
 
 Use the public example bundle:
 
-```powershell
-python .\skills\aippocampus\scripts\search_clean_source.py "without pretending it has innate memory" --cwd . --clean-source-dir .\examples\public-memory-bundle\clean-source --json
+```sh
+python ./skills/aippocampus/scripts/search_clean_source.py "without pretending it has innate memory" --cwd . --clean-source-dir ./examples/public-memory-bundle/clean-source --json
 ```
 
 Expected result: matches come from original visible clean-source text, not a
@@ -18,11 +18,11 @@ Cannot claim: that summaries or model-generated findings are the source.
 
 ## Scenario 2: Fuzzy Life-Topic Recall
 
-```powershell
-python .\skills\aippocampus\scripts\build_semantic_scope_labels.py --jobs-output .\examples\public-memory-bundle\registry\subconscious_jobs.jsonl --clean-source-dir .\examples\public-memory-bundle\clean-source --no-write --json
-python .\skills\aippocampus\scripts\search_clean_source.py "casual sparks" --cwd . --clean-source-dir .\examples\public-memory-bundle\clean-source --json
-python .\skills\aippocampus\scripts\search_clean_source.py "casual sparks" --cwd . --clean-source-dir .\examples\public-memory-bundle\clean-source --scope-label idea_seed --json
-python .\skills\aippocampus\scripts\search_clean_source.py "lighthouse metaphor pivot" --cwd . --clean-source-dir .\examples\public-memory-bundle\clean-source --scope-label personal_reflection --scope-label idea_seed --json
+```sh
+python ./skills/aippocampus/scripts/build_semantic_scope_labels.py --jobs-output ./examples/public-memory-bundle/registry/subconscious_jobs.jsonl --clean-source-dir ./examples/public-memory-bundle/clean-source --no-write --json
+python ./skills/aippocampus/scripts/search_clean_source.py "casual sparks" --cwd . --clean-source-dir ./examples/public-memory-bundle/clean-source --json
+python ./skills/aippocampus/scripts/search_clean_source.py "casual sparks" --cwd . --clean-source-dir ./examples/public-memory-bundle/clean-source --scope-label idea_seed --json
+python ./skills/aippocampus/scripts/search_clean_source.py "lighthouse metaphor pivot" --cwd . --clean-source-dir ./examples/public-memory-bundle/clean-source --scope-label personal_reflection --scope-label idea_seed --json
 ```
 
 Expected result: the public example surfaces a non-project idea seed. This
@@ -40,34 +40,34 @@ runtime.
 
 Observe existing dynamic sidecar coverage without calling an external model:
 
-```powershell
-python .\tools\aippocampus\smoke\smoke_semantic_scope_real_history.py --json
+```sh
+python ./tools/aippocampus/smoke/smoke_semantic_scope_real_history.py --json
 ```
 
 Run a bounded live DeepSeek-compatible batch only when external-model use is
 intentional:
 
-```powershell
-python .\tools\aippocampus\smoke\smoke_semantic_scope_real_history.py --live --write-sidecars --require-labels --max-turns 24 --max-steps 2 --min-tool-steps 0 --concurrency 4 --samples-per-job 2 --json
+```sh
+python ./tools/aippocampus/smoke/smoke_semantic_scope_real_history.py --live --write-sidecars --require-labels --max-turns 24 --max-steps 2 --min-tool-steps 0 --concurrency 4 --samples-per-job 2 --json
 ```
 
 Evaluate the currently selected full life-wide candidate slice in batches:
 
-```powershell
-python .\tools\aippocampus\smoke\smoke_semantic_scope_real_history.py --live --write-sidecars --require-labels --full-candidate-coverage --candidate-batch-size 24 --samples-per-job 1 --concurrency 6 --max-steps 1 --min-tool-steps 0 --json
+```sh
+python ./tools/aippocampus/smoke/smoke_semantic_scope_real_history.py --live --write-sidecars --require-labels --full-candidate-coverage --candidate-batch-size 24 --samples-per-job 1 --concurrency 6 --max-steps 1 --min-tool-steps 0 --json
 ```
 
 Check selected fuzzy life-wide source-evidence prompts against clean-source
 search, without emitting raw private wording:
 
-```powershell
-python .\tools\aippocampus\smoke\smoke_source_evidence_recall_eval.py --max-cases 24 --min-cases 12 --top-k 5 --min-hit-rate 0.85 --json
+```sh
+python ./tools/aippocampus/smoke/smoke_source_evidence_recall_eval.py --max-cases 24 --min-cases 12 --top-k 5 --min-hit-rate 0.85 --json
 ```
 
 Review selected semantic sidecar labels against their clean-source messages:
 
-```powershell
-python .\tools\aippocampus\smoke\smoke_semantic_scope_source_review.py --live --max-cases 96 --min-cases 64 --min-pass-rate 0.75 --min-label-pass-rate 0.65 --concurrency 2 --timeout 200 --max-attempts 3 --json
+```sh
+python ./tools/aippocampus/smoke/smoke_semantic_scope_source_review.py --live --max-cases 96 --min-cases 64 --min-pass-rate 0.75 --min-label-pass-rate 0.65 --concurrency 2 --timeout 200 --max-attempts 3 --json
 ```
 
 Expected result: output is aggregate-only. Live mode writes source-backed
@@ -88,8 +88,8 @@ threads have been semantically labeled or perfectly ranked.
 Build a source-backed project and life-wide timeline from the public example
 registry:
 
-```powershell
-python .\skills\aippocampus\scripts\build_project_timeline.py --registry .\examples\public-memory-bundle\registry\threads.json --output .\.tmp\public-project-timeline.json --json
+```sh
+python ./skills/aippocampus/scripts/build_project_timeline.py --registry ./examples/public-memory-bundle/registry/threads.json --output ./.tmp/public-project-timeline.json --json
 ```
 
 Expected result: the output contains a `life_wide` section with labeled turns
@@ -100,8 +100,8 @@ clean-source turns.
 
 ## Scenario 5: Project Continuity Recall
 
-```powershell
-python .\skills\aippocampus\scripts\aippocampus_mcp_server.py --list-tools
+```sh
+python ./skills/aippocampus/scripts/aippocampus_mcp_server.py --list-tools
 ```
 
 Expected result: `search_memory` and `get_turn_context` are available for
@@ -111,8 +111,8 @@ Cannot claim: that every project thread has already been onboarded.
 
 ## Scenario 6: Multilingual Recall Smoke
 
-```powershell
-python .\tools\aippocampus\smoke\simulate_multilingual_prompt_hook.py --cwd .
+```sh
+python ./tools/aippocampus/smoke/simulate_multilingual_prompt_hook.py --cwd .
 ```
 
 Expected result: multilingual hook smoke cases pass or report concrete failing
@@ -122,8 +122,8 @@ Cannot claim: that optional external semantic gates are enabled.
 
 ## Scenario 7: Inspect MCP Tools
 
-```powershell
-python .\skills\aippocampus\scripts\aippocampus_mcp_server.py --list-tools
+```sh
+python ./skills/aippocampus/scripts/aippocampus_mcp_server.py --list-tools
 ```
 
 Expected result: the tool list includes `search_memory`, `latest_reply`,
@@ -132,8 +132,8 @@ Expected result: the tool list includes `search_memory`, `latest_reply`,
 
 ## Scenario 8: Build A Plugin Package
 
-```powershell
-python .\plugins\aippocampus\build_plugin_package.py --repo-root . --json
+```sh
+python ./plugins/aippocampus/build_plugin_package.py --repo-root . --json
 ```
 
 Expected result: `dist/aippocampus-plugin/` contains `.codex-plugin`,
@@ -143,8 +143,8 @@ Cannot claim: that the plugin has been installed through every Codex client.
 
 ## Scenario 8b: Real Codex Plugin And MCP Host Smoke
 
-```powershell
-python .\plugins\aippocampus\smoke_real_codex_host.py --repo-root . --json
+```sh
+python ./plugins/aippocampus/smoke_real_codex_host.py --repo-root . --json
 ```
 
 Expected result: a run-id-scoped local marketplace is added through the real
@@ -160,10 +160,10 @@ third-party machine installed the public package.
 
 Use a throwaway sync folder:
 
-```powershell
-python .\skills\aippocampus\scripts\sync_bundle.py push --registry-dir .\examples\public-memory-bundle\registry --sync-dir .\.tmp\demo-sync --json
-python .\skills\aippocampus\scripts\sync_bundle.py repair --sync-dir .\.tmp\demo-sync --json
-python .\skills\aippocampus\scripts\sync_bundle.py pull --sync-dir .\.tmp\demo-sync --registry-dir .\.tmp\demo-target-registry --json
+```sh
+python ./skills/aippocampus/scripts/sync_bundle.py push --registry-dir ./examples/public-memory-bundle/registry --sync-dir ./.tmp/demo-sync --json
+python ./skills/aippocampus/scripts/sync_bundle.py repair --sync-dir ./.tmp/demo-sync --json
+python ./skills/aippocampus/scripts/sync_bundle.py pull --sync-dir ./.tmp/demo-sync --registry-dir ./.tmp/demo-target-registry --json
 ```
 
 Expected result: the sync manifest is valid and `raw_rollout_included` remains
@@ -175,8 +175,8 @@ object-storage backend has been exercised.
 
 ## Scenario 9b: Single-Machine Cross-Device Sync Smoke
 
-```powershell
-python .\tools\aippocampus\smoke\smoke_cross_device_sync.py --repo-root . --json
+```sh
+python ./tools/aippocampus/smoke/smoke_cross_device_sync.py --repo-root . --json
 ```
 
 Expected result: the smoke models device A and device B registries, strips or
@@ -189,8 +189,8 @@ folder client, or object-storage backend has been exercised.
 
 ## Scenario 9c: Docker/WSL Alternate-Runtime Sync Smoke
 
-```powershell
-python .\tools\aippocampus\smoke\smoke_alternate_runtime_sync.py --repo-root . --runtime all --json
+```sh
+python ./tools/aippocampus/smoke/smoke_alternate_runtime_sync.py --repo-root . --runtime all --json
 ```
 
 Expected result: the host creates the sync bundle, then the alternate runtime
@@ -203,8 +203,8 @@ object-storage backend has been exercised.
 
 ## Scenario 9d: HTTP Object-Storage Sync Smoke
 
-```powershell
-python .\tools\aippocampus\smoke\smoke_object_storage_sync.py --repo-root . --json
+```sh
+python ./tools/aippocampus/smoke/smoke_object_storage_sync.py --repo-root . --json
 ```
 
 Expected result: the smoke starts a local HTTP object store, pushes the sync
@@ -228,8 +228,8 @@ Cannot claim: that every prompt should include personal history.
 
 Run hook status before installing anything:
 
-```powershell
-python "$env:CODEX_HOME\skills\aippocampus\scripts\install_aippocampus_prompt_hook.py" status --json
+```sh
+python "${CODEX_HOME}/skills/aippocampus/scripts/install_aippocampus_prompt_hook.py" status --json
 ```
 
 Expected result: status is observable without enabling the hook. Installing a
@@ -242,8 +242,8 @@ Cannot claim: that hooks are enabled by plugin install alone.
 
 Use raw search only when clean source is insufficient:
 
-```powershell
-python "$env:CODEX_HOME\skills\aippocampus\scripts\search_rollout.py" "keyword" --cwd .
+```sh
+python "${CODEX_HOME}/skills/aippocampus/scripts/search_rollout.py" "keyword" --cwd .
 ```
 
 Expected result: raw audit remains an explicit operator action.

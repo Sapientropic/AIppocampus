@@ -13,6 +13,7 @@ import json
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -23,11 +24,16 @@ from aippocampuslib import (
     compact_text,
     deepseek_cache_metrics_from_usage,
     now_utc,
-    sanitize_external_model_payload,
 )
 from build_concept_graph import default_concept_graph_path
 from registry import registry_paths
-from subconscious_agent import (
+from subconscious_job_circuits import JOB_SPECS, PROMPT_VERSION, job_names, jobs_initial_payload
+from subconscious_job_plan import JobRunTask, plan_job_run_tasks, sample_count, worker_count
+from subconscious_job_validation import (
+    QUESTION_TEXT_MAX_CHARS,
+    validate_findings,
+)
+from subconscious_runtime import (
     AGENT_SYSTEM_PROMPT,
     DEFAULT_MAX_STEPS,
     DEFAULT_MIN_TOOL_STEPS,
@@ -36,18 +42,12 @@ from subconscious_agent import (
     ChatFn,
     add_usage,
     call_chat_json,
-    compact_usage,
     effective_step_budget,
     parse_action,
     run_tool,
     source_bank_from_turns,
 )
-from subconscious_job_circuits import JOB_SPECS, PROMPT_VERSION, job_names, jobs_initial_payload
-from subconscious_job_plan import JobRunTask, plan_job_run_tasks, sample_count, worker_count
-from subconscious_job_validation import (
-    QUESTION_TEXT_MAX_CHARS,
-    validate_findings,
-)
+from subconscious_tool_loop import run_tool_using_loop
 from subconscious_worker import (
     DEFAULT_BASE_URL,
     DEFAULT_MAX_TURNS,
@@ -65,6 +65,31 @@ DEFAULT_SAMPLES_PER_JOB = int(os.environ.get("AIPPOCAMPUS_SUBCONSCIOUS_SAMPLES_P
 __all__ = ["QUESTION_TEXT_MAX_CHARS", "validate_findings"]
 
 
+@dataclass(frozen=True)
+class JobsRunConfig:
+    jobs: list[str]
+    registry_path: Path
+    timeline_path: Path
+    concept_graph_path: Path
+    jobs_output_path: Path
+    edges_output_path: Path
+    project: str | None
+    objective: str
+    max_turns: int
+    max_steps: int
+    min_tool_steps: int
+    model: str
+    base_url: str
+    api_key: str | None
+    max_tokens: int | None
+    timeout: int
+    temperature: float
+    concurrency: int = DEFAULT_CONCURRENCY
+    samples_per_job: int = DEFAULT_SAMPLES_PER_JOB
+    dry_run: bool = False
+    no_write: bool = False
+
+
 def default_jobs_output_path(
     registry_path: Path | None = None, registry_dir: Path | None = None
 ) -> Path:
@@ -72,6 +97,57 @@ def default_jobs_output_path(
         return registry_path.resolve().parent / DEFAULT_JOBS_OUTPUT_NAME
     json_path, _ = registry_paths(registry_dir)
     return json_path.resolve().parent / DEFAULT_JOBS_OUTPUT_NAME
+
+
+def jobs_run_config_from_args(args: Any) -> JobsRunConfig:
+    registry_path = (
+        Path(args.registry).resolve()
+        if args.registry
+        else registry_paths(Path(args.registry_dir).resolve() if args.registry_dir else None)[0]
+    )
+    timeline_path = (
+        Path(args.timeline).resolve()
+        if args.timeline
+        else default_project_timeline_path(registry_path=registry_path)
+    )
+    concept_graph_path = (
+        Path(args.concept_graph).resolve()
+        if args.concept_graph
+        else default_concept_graph_path(registry_path=registry_path)
+    )
+    jobs_output_path = (
+        Path(args.jobs_output).resolve()
+        if args.jobs_output
+        else default_jobs_output_path(registry_path=registry_path)
+    )
+    edges_output_path = (
+        Path(args.edges_output).resolve()
+        if args.edges_output
+        else default_staging_path(registry_path=registry_path)
+    )
+    return JobsRunConfig(
+        jobs=job_names(args.job),
+        registry_path=registry_path,
+        timeline_path=timeline_path,
+        concept_graph_path=concept_graph_path,
+        jobs_output_path=jobs_output_path,
+        edges_output_path=edges_output_path,
+        project=args.project,
+        objective=args.objective,
+        max_turns=args.max_turns,
+        max_steps=args.max_steps,
+        min_tool_steps=args.min_tool_steps,
+        model=args.model,
+        base_url=args.base_url,
+        api_key=os.environ.get(args.api_key_env),
+        max_tokens=args.max_tokens,
+        timeout=args.timeout,
+        temperature=args.temperature,
+        concurrency=args.concurrency,
+        samples_per_job=args.samples_per_job,
+        dry_run=args.dry_run,
+        no_write=args.no_write,
+    )
 
 
 def response_content(response: dict[str, Any]) -> str:
@@ -195,96 +271,20 @@ def run_one_job(
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": initial_payload},
     ]
-    transcript: list[dict[str, Any]] = []
-    final_attempts: list[dict[str, Any]] = []
-    usage_total: dict[str, Any] = {}
-    findings: list[dict[str, Any]] = []
-    tool_count = 0
-    for step in range(step_budget):
-        response = chat_fn(
-            sanitize_external_model_payload(messages),
-            api_key,
-            model,
-            base_url,
-            max_tokens,
-            timeout,
-            temperature,
-        )
-        add_usage(usage_total, compact_usage(response.get("usage") or {}))
-        action = parse_action_for_job(response)
-        transcript.append({"step": step + 1, "action": action})
-        if action.get("action") == "parse_error":
-            if step + 1 < step_budget:
-                messages.append({"role": "assistant", "content": action.get("raw_preview") or ""})
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": json.dumps(
-                            {
-                                "error": "Previous response was not valid JSON.",
-                                "details": action.get("error"),
-                                "instruction": "Return exactly one JSON object with action=tool or action=final. Do not wrap it in Markdown.",
-                                "available_refs": list(state.source_bank.keys())[:32],
-                            },
-                            ensure_ascii=False,
-                        ),
-                    }
-                )
-                continue
-            break
-        if action.get("action") == "final":
-            final_attempts.append(action)
-            if tool_count < max(0, int(min_tool_steps)) and step + 1 < step_budget:
-                messages.append(
-                    {"role": "assistant", "content": json.dumps(action, ensure_ascii=False)}
-                )
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": json.dumps(
-                            {"error": "Call at least one read-only tool before finalizing."},
-                            ensure_ascii=False,
-                        ),
-                    }
-                )
-                continue
-            candidate_findings = validate_findings(job, action, state.source_bank)
-            if not candidate_findings and step + 1 < step_budget:
-                messages.append(
-                    {"role": "assistant", "content": json.dumps(action, ensure_ascii=False)}
-                )
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": json.dumps(
-                            {
-                                "error": "No valid source-backed findings survived validation.",
-                                "instruction": "Use refs from available_refs. Return action=final with findings, or empty findings only when no durable finding exists.",
-                                "available_refs": list(state.source_bank.keys())[:32],
-                            },
-                            ensure_ascii=False,
-                        ),
-                    }
-                )
-                continue
-            findings = candidate_findings
-            break
-        if action.get("action") != "tool":
-            messages.append(
-                {"role": "assistant", "content": json.dumps(action, ensure_ascii=False)}
-            )
-            messages.append(
-                {
-                    "role": "user",
-                    "content": json.dumps(
-                        {"error": "Return action=tool or action=final only."}, ensure_ascii=False
-                    ),
-                }
-            )
-            continue
-        tool_name = str(action.get("tool") or "")
-        tool_args = action.get("args") if isinstance(action.get("args"), dict) else {}
-        observation = run_tool(
+    loop = run_tool_using_loop(
+        messages=messages,
+        step_budget=step_budget,
+        min_tool_steps=min_tool_steps,
+        chat_fn=chat_fn,
+        api_key=api_key,
+        model=model,
+        base_url=base_url,
+        max_tokens=max_tokens,
+        timeout=timeout,
+        temperature=temperature,
+        parse_response=parse_action_for_job,
+        validate_final=lambda action: validate_findings(job, action, state.source_bank),
+        run_tool_action=lambda tool_name, tool_args: run_tool(
             tool_name,
             tool_args,
             registry_path=registry_path,
@@ -292,57 +292,36 @@ def run_one_job(
             concept_graph_path=concept_graph_path,
             staging_path=edges_output_path,
             state=state,
-        )
-        tool_count += 1
-        transcript[-1]["observation"] = observation
-        messages.append({"role": "assistant", "content": json.dumps(action, ensure_ascii=False)})
-        messages.append(
-            {
-                "role": "user",
-                "content": (
-                    "TOOL_RESULT:"
-                    + "\n"
-                    + json.dumps(observation, ensure_ascii=False, indent=2)
-                    + "\n\nNext: call another tool if needed; otherwise return action=final with source-backed findings. "
-                    "Do not return empty findings when observations contain useful durable structure."
-                ),
-            }
-        )
-
-    if not findings and tool_count > 0:
-        repair_messages = messages + [
-            {
-                "role": "user",
-                "content": json.dumps(
-                    {
-                        "repair": "final_only",
-                        "instruction": "Use existing tool observations and available refs to produce source-backed findings. Do not call tools. Return action=final.",
-                        "available_refs": list(state.source_bank.keys())[:40],
-                    },
-                    ensure_ascii=False,
-                ),
-            }
-        ]
-        response = chat_fn(
-            sanitize_external_model_payload(repair_messages),
-            api_key,
-            model,
-            base_url,
-            max_tokens,
-            timeout,
-            temperature,
-        )
-        add_usage(usage_total, compact_usage(response.get("usage") or {}))
-        repair_action = parse_action_for_job(response)
-        final_attempts.append(repair_action)
-        if repair_action.get("action") == "final":
-            findings = validate_findings(job, repair_action, state.source_bank)
+        ),
+        min_tool_feedback=lambda: {"error": "Call at least one read-only tool before finalizing."},
+        invalid_final_feedback=lambda: {
+            "error": "No valid source-backed findings survived validation.",
+            "instruction": "Use refs from available_refs. Return action=final with findings, or empty findings only when no durable finding exists.",
+            "available_refs": list(state.source_bank.keys())[:32],
+        },
+        repair_feedback=lambda: {
+            "repair": "final_only",
+            "instruction": "Use existing tool observations and available refs to produce source-backed findings. Do not call tools. Return action=final.",
+            "available_refs": list(state.source_bank.keys())[:40],
+        },
+        parse_error_feedback=lambda action: {
+            "error": "Previous response was not valid JSON.",
+            "details": action.get("error"),
+            "instruction": "Return exactly one JSON object with action=tool or action=final. Do not wrap it in Markdown.",
+            "available_refs": list(state.source_bank.keys())[:32],
+        },
+        tool_result_instruction=(
+            "Next: call another tool if needed; otherwise return action=final with source-backed findings. "
+            "Do not return empty findings when observations contain useful durable structure."
+        ),
+    )
+    findings = loop.final_items
 
     edges = concept_findings_to_edges(findings)
     edge_count = 0
     if not no_write and not defer_writes:
         append_job_findings(
-            jobs_output_path, findings, model=model, batch_id=batch_id, usage=usage_total
+            jobs_output_path, findings, model=model, batch_id=batch_id, usage=loop.usage_total
         )
         if edges:
             append_staging_edges(
@@ -350,7 +329,7 @@ def run_one_job(
                 edges,
                 model=model,
                 batch_id=batch_id,
-                usage=usage_total,
+                usage=loop.usage_total,
                 prompt_version=PROMPT_VERSION,
                 source="deepseek_subconscious_jobs",
             )
@@ -366,12 +345,10 @@ def run_one_job(
         "finding_count": len(findings),
         "edge_count": edge_count if (not no_write and not defer_writes) else len(edges),
         "findings": findings,
-        "tool_steps": [
-            item for item in transcript if (item.get("action") or {}).get("action") == "tool"
-        ],
-        "final_attempts": final_attempts,
-        "usage": usage_total,
-        "cache": deepseek_cache_metrics_from_usage(usage_total),
+        "tool_steps": loop.tool_steps,
+        "final_attempts": loop.final_attempts,
+        "usage": loop.usage_total,
+        "cache": deepseek_cache_metrics_from_usage(loop.usage_total),
         "jobs_output": str(jobs_output_path),
         "edges_output": str(edges_output_path),
         "wrote": False if no_write or defer_writes else True,
@@ -579,6 +556,35 @@ def run_jobs(
     }
 
 
+def run_jobs_with_config(
+    config: JobsRunConfig, *, chat_fn: ChatFn = call_chat_json
+) -> dict[str, Any]:
+    return run_jobs(
+        jobs=config.jobs,
+        registry_path=config.registry_path,
+        timeline_path=config.timeline_path,
+        concept_graph_path=config.concept_graph_path,
+        jobs_output_path=config.jobs_output_path,
+        edges_output_path=config.edges_output_path,
+        project=config.project,
+        objective=config.objective,
+        max_turns=config.max_turns,
+        max_steps=config.max_steps,
+        min_tool_steps=config.min_tool_steps,
+        model=config.model,
+        base_url=config.base_url,
+        api_key=config.api_key,
+        max_tokens=config.max_tokens,
+        timeout=config.timeout,
+        temperature=config.temperature,
+        dry_run=config.dry_run,
+        no_write=config.no_write,
+        concurrency=config.concurrency,
+        samples_per_job=config.samples_per_job,
+        chat_fn=chat_fn,
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--registry")
@@ -606,55 +612,8 @@ def main() -> int:
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
-    registry_path = (
-        Path(args.registry).resolve()
-        if args.registry
-        else registry_paths(Path(args.registry_dir).resolve() if args.registry_dir else None)[0]
-    )
-    timeline_path = (
-        Path(args.timeline).resolve()
-        if args.timeline
-        else default_project_timeline_path(registry_path=registry_path)
-    )
-    concept_graph_path = (
-        Path(args.concept_graph).resolve()
-        if args.concept_graph
-        else default_concept_graph_path(registry_path=registry_path)
-    )
-    jobs_output_path = (
-        Path(args.jobs_output).resolve()
-        if args.jobs_output
-        else default_jobs_output_path(registry_path=registry_path)
-    )
-    edges_output_path = (
-        Path(args.edges_output).resolve()
-        if args.edges_output
-        else default_staging_path(registry_path=registry_path)
-    )
     try:
-        result = run_jobs(
-            jobs=job_names(args.job),
-            registry_path=registry_path,
-            timeline_path=timeline_path,
-            concept_graph_path=concept_graph_path,
-            jobs_output_path=jobs_output_path,
-            edges_output_path=edges_output_path,
-            project=args.project,
-            objective=args.objective,
-            max_turns=args.max_turns,
-            max_steps=args.max_steps,
-            min_tool_steps=args.min_tool_steps,
-            model=args.model,
-            base_url=args.base_url,
-            api_key=os.environ.get(args.api_key_env),
-            max_tokens=args.max_tokens,
-            timeout=args.timeout,
-            temperature=args.temperature,
-            concurrency=args.concurrency,
-            samples_per_job=args.samples_per_job,
-            dry_run=args.dry_run,
-            no_write=args.no_write,
-        )
+        result = run_jobs_with_config(jobs_run_config_from_args(args))
     except Exception as exc:
         if not args.json_output:
             raise

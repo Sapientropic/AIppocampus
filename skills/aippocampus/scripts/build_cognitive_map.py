@@ -350,7 +350,7 @@ def build_cognitive_map(
         terms = route_terms(
             route_cues=route_cues, landmarks=landmarks, regions=regions, finding=finding
         )
-        route = {
+        route: dict[str, Any] = {
             "route_id": route_id_for(finding, thread_keys, route_cues),
             "kind": "cognitive_map_route",
             "route_kind": compact_text(str(finding.get("route_kind") or "association"), 40),
@@ -370,21 +370,22 @@ def build_cognitive_map(
             "source_finding_id": finding.get("fingerprint"),
             "source_refs": refs[:8],
         }
-        existing_route = routes_by_id.get(route["route_id"])
+        route_id = str(route["route_id"])
+        existing_route = routes_by_id.get(route_id)
         if better_confidence(existing_route, confidence):
-            routes_by_id[route["route_id"]] = route
+            routes_by_id[route_id] = route
 
     routes = sorted(
         routes_by_id.values(),
         key=lambda item: (float(item.get("confidence") or 0.0), str(item.get("title") or "")),
         reverse=True,
     )
-    landmarks = sorted(
+    landmark_rows = sorted(
         landmarks_by_id.values(),
         key=lambda item: (float(item.get("confidence") or 0.0), str(item.get("label") or "")),
         reverse=True,
     )
-    regions = sorted(
+    region_rows = sorted(
         regions_by_id.values(),
         key=lambda item: (float(item.get("confidence") or 0.0), str(item.get("label") or "")),
         reverse=True,
@@ -398,12 +399,12 @@ def build_cognitive_map(
         "source": "deepseek_subconscious_jobs",
         "source_registry_updated_at": registry.get("updated_at"),
         "episode_count": len(episodes),
-        "landmark_count": len(landmarks),
-        "region_count": len(regions),
+        "landmark_count": len(landmark_rows),
+        "region_count": len(region_rows),
         "route_count": len(routes),
         "episodes": episodes,
-        "landmarks": landmarks,
-        "regions": regions,
+        "landmarks": landmark_rows,
+        "regions": region_rows,
         "routes": routes,
         "rules": {
             "source_boundary": "Routes are model-organized navigation hints, not facts. Verify exact claims against clean source.",

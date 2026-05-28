@@ -32,33 +32,33 @@ here; update the relevant reference doc, script help, or tests instead.
 
 ## First Moves
 
-Use `$env:CODEX_HOME\skills\aippocampus\scripts` as the script root.
+Use `$CODEX_HOME/skills/aippocampus/scripts` as the script root.
 
-- Find the current rollout: `python ...\locate_rollout.py --cwd "$PWD"`.
-- Build the daily source layer: `python ...\build_clean_source.py --cwd "$PWD"`.
-- Build or refresh the index: `python ...\build_index.py --cwd "$PWD"`.
-- Check state before/after long work: `python ...\aippocampus_health.py --cwd "$PWD"`.
-- Recover the latest assistant closeout: `python ...\latest_reply.py --cwd "$PWD"`.
-- Search clean source first: `python ...\search_clean_source.py "query" --cwd "$PWD"`.
+- Find the current rollout: `python .../locate_rollout.py --cwd "$PWD"`.
+- Build the daily source layer: `python .../build_clean_source.py --cwd "$PWD"`.
+- Build or refresh the index: `python .../build_index.py --cwd "$PWD"`.
+- Check state before/after long work: `python .../aippocampus_health.py --cwd "$PWD"`.
+- Recover the latest assistant closeout: `python .../latest_reply.py --cwd "$PWD"`.
+- Search clean source first: `python .../search_clean_source.py "query" --cwd "$PWD"`.
 - Search raw/indexed rollout when clean source is insufficient:
-  `python ...\search_rollout.py "query" --cwd "$PWD" --build-index --mode hybrid`.
+  `python .../search_rollout.py "query" --cwd "$PWD" --build-index --mode hybrid`.
 - Run the deterministic recall gate for vague continuity prompts:
-  `python ...\active_recall.py "query" --cwd "$PWD" --search auto`.
+  `python .../active_recall.py "query" --cwd "$PWD" --search auto`.
 - Inspect the local MCP tool surface for plugin/agent clients:
-  `python ...\aippocampus_mcp_server.py --list-tools`.
+  `python .../aippocampus_mcp_server.py --list-tools`.
 - Check or exchange a local-folder sync bundle:
-  `python ...\sync_bundle.py status --sync-dir "<folder>" --json`.
+  `python .../sync_bundle.py status --sync-dir "<folder>" --json`.
 - Check an HTTP object-storage sync bundle:
-  `python ...\sync_object_storage.py status --object-store-url "<url>" --object-prefix "<prefix>" --json`.
+  `python .../sync_object_storage.py status --object-store-url "<url>" --object-prefix "<prefix>" --json`.
 - First-install / full-machine onboarding:
-  `python ...\onboard_codex.py --all --format json`. This is the preferred
+  `python .../onboard_codex.py --all --format json`. This is the preferred
   agent entrypoint for registering local Codex sessions, repairing missing
   indexes, rebuilding project timeline, and refreshing cognitive-map sidecars.
-- Discover other registered threads: `python ...\registry.py list` or
-  `python ...\registry.py search "terms"`.
-- Register an old rollout: `python ...\registry.py register-rollout --rollout "<rollout.jsonl>" --project "<label>"`.
+- Discover other registered threads: `python .../registry.py list` or
+  `python .../registry.py search "terms"`.
+- Register an old rollout: `python .../registry.py register-rollout --rollout "<rollout.jsonl>" --project "<label>"`.
 - Scan local sessions for unregistered threads:
-  `python ...\registry.py scan-sessions --dry-run`, then rerun without
+  `python .../registry.py scan-sessions --dry-run`, then rerun without
   `--dry-run` when the candidates look right.
 
 Prefer clean-source search for normal recall. Drop to raw rollout only for exact
@@ -147,5 +147,5 @@ move the operational contract into one reference doc.
 - Run maintenance writes serially on Windows; SQLite replacement can hit file
   locks if index, vault sync, and maintenance writers overlap.
 - For repository docs work, run
-  `python tools\aippocampus\docs\check_docs_health.py` from the repo root so
+  `python tools/aippocampus/docs/check_docs_health.py` from the repo root so
   `SKILL.md` stays an entrypoint rather than becoming a release log.

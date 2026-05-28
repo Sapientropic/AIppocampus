@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 from aippocampuslib import (
     codex_home,
@@ -38,8 +39,49 @@ def count_messages(rollout: Path) -> tuple[int, int | None]:
     return count, last_line
 
 
-def action(action_id: str, severity: str, reason: str, command: str) -> dict:
+def action(action_id: str, severity: str, reason: str, command: str) -> dict[str, str]:
     return {"id": action_id, "severity": severity, "reason": reason, "command": command}
+
+
+def render_health_text(result: dict[str, Any]) -> None:
+    status = "OK" if result["ok"] else "needs maintenance"
+    rollout = result["rollout"]
+    index = result["index"]
+    clean_source = result["clean_source"]
+    segments = result["segments"]
+    checkpoint = result["checkpoint"]
+    graphify = result["graphify"]
+    actions = result["recommended_actions"]
+
+    print(f"thread memory health: {status}")
+    print(
+        f"rollout: {rollout['path']} ({rollout['size']} bytes, {rollout['message_count']} messages)"
+    )
+    if index["stale"]:
+        print("index: stale")
+    elif index["message_delta"] or index["byte_delta"]:
+        print(
+            f"index: fresh window ({index['message_delta']} unindexed messages, {index['byte_delta']} new bytes below threshold)"
+        )
+    else:
+        print("index: fresh")
+    if index["rag"]:
+        print(f"rag cache: {index['rag'].get('chunk_count', 0)} chunks")
+    print(f"clean source: {'stale' if clean_source['stale'] else 'fresh'}")
+    if segments["exists"]:
+        print(
+            f"segments: {'stale' if segments['stale'] else 'fresh'} ({segments['segment_count']} shards)"
+        )
+    elif segments["needed"]:
+        print("segments: missing")
+    else:
+        print("segments: not needed yet")
+    print(f"checkpoint: {'due' if checkpoint['due'] else 'not due'}")
+    print(f"graphify corpus: {'stale' if graphify['stale'] else 'fresh'}")
+    if actions:
+        print("\nrecommended actions:")
+        for item in actions:
+            print(f"- {item['id']} [{item['severity']}]: {item['reason']}")
 
 
 def main() -> int:
@@ -282,7 +324,7 @@ def main() -> int:
             )
         )
 
-    result = {
+    result: dict[str, Any] = {
         "ok": not any(a["severity"] in {"critical", "warning"} for a in actions),
         "cwd": str(cwd),
         "rollout": {
@@ -353,36 +395,7 @@ def main() -> int:
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
-        status = "OK" if result["ok"] else "needs maintenance"
-        print(f"thread memory health: {status}")
-        print(
-            f"rollout: {rollout} ({rollout_stat.st_size} bytes, {current_message_count} messages)"
-        )
-        if index_stale:
-            print("index: stale")
-        elif message_delta or byte_delta:
-            print(
-                f"index: fresh window ({message_delta} unindexed messages, {byte_delta} new bytes below threshold)"
-            )
-        else:
-            print("index: fresh")
-        if rag_manifest:
-            print(f"rag cache: {rag_manifest.get('chunk_count', 0)} chunks")
-        print(f"clean source: {'stale' if clean_source_stale else 'fresh'}")
-        if segments_manifest:
-            print(
-                f"segments: {'stale' if segments_stale else 'fresh'} ({result['segments']['segment_count']} shards)"
-            )
-        elif segments_needed:
-            print("segments: missing")
-        else:
-            print("segments: not needed yet")
-        print(f"checkpoint: {'due' if checkpoint_due else 'not due'}")
-        print(f"graphify corpus: {'stale' if graphify_stale else 'fresh'}")
-        if actions:
-            print("\nrecommended actions:")
-            for item in actions:
-                print(f"- {item['id']} [{item['severity']}]: {item['reason']}")
+        render_health_text(result)
 
     if args.exit_code and actions:
         return 2

@@ -15,6 +15,7 @@ import json
 import os
 import re
 from pathlib import Path
+from typing import Any
 
 from aippocampuslib import (
     codex_home,
@@ -330,7 +331,7 @@ def build_clean_source(
     rollout: str | Path | None = None,
     output_dir: str | Path | None = None,
     hash_source: bool = False,
-) -> dict:
+) -> dict[str, Any]:
     cwd = Path(cwd).resolve()
     rollout_path = Path(rollout) if rollout else locate_rollout(cwd, codex_home())
     if not rollout_path.is_absolute():
@@ -361,7 +362,7 @@ def build_clean_source(
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
 
     stat = rollout_path.stat()
-    manifest = {
+    manifest: dict[str, Any] = {
         "schema_version": CLEAN_SOURCE_SCHEMA_VERSION,
         "kind": "aippocampus_clean_source",
         "created_at": now_utc(),

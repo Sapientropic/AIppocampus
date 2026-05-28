@@ -22,7 +22,7 @@ for _path in (
 
 import aippocampus_prompt_hook as hook  # noqa: E402
 import build_concept_graph as concept_graph  # noqa: E402
-import prompt_recall_core as recall_core  # noqa: E402
+import prompt_cues as recall_cues  # noqa: E402
 
 
 class AmbientRecallHookTests(unittest.TestCase):
@@ -415,16 +415,26 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertIn("semantic gate", " ".join(str(reason) for reason in semantic_result["reasons"]))
 
     def test_short_english_associative_cues_require_token_boundaries(self) -> None:
-        matches = recall_core.matched_terms(
+        matches = recall_cues.matched_terms(
             "Rewrite the paragraphs while leveraging the background examples.",
-            recall_core.ASSOCIATIVE_CUES,
+            recall_cues.ASSOCIATIVE_CUES,
         )
 
         self.assertNotIn("rag", matches)
-        self.assertNotIn("hook", recall_core.matched_terms("Handle this webhook payload.", {"hook"}))
-        self.assertNotIn("hook", recall_core.matched_terms("Write a Header Hook for this course.", recall_core.ASSOCIATIVE_CUES))
-        self.assertNotIn("evidence", recall_core.matched_terms("Summarize the evidence in these articles.", recall_core.ASSOCIATIVE_CUES))
-        self.assertIn("rag", recall_core.matched_terms("Use RAG-lite for recall.", {"rag"}))
+        self.assertNotIn("hook", recall_cues.matched_terms("Handle this webhook payload.", {"hook"}))
+        self.assertNotIn(
+            "hook",
+            recall_cues.matched_terms(
+                "Write a Header Hook for this course.", recall_cues.ASSOCIATIVE_CUES
+            ),
+        )
+        self.assertNotIn(
+            "evidence",
+            recall_cues.matched_terms(
+                "Summarize the evidence in these articles.", recall_cues.ASSOCIATIVE_CUES
+            ),
+        )
+        self.assertIn("rag", recall_cues.matched_terms("Use RAG-lite for recall.", {"rag"}))
 
     def test_dynamic_association_can_emit_scent_without_hardcoded_cue(self) -> None:
         associations = self.registry.parent / "associations.json"

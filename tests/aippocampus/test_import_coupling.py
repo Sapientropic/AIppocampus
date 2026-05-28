@@ -81,6 +81,21 @@ class ImportCouplingTests(unittest.TestCase):
         edges = same_dir_import_edges(top_level_only=True)
         self.assertNotIn("retrieval", edges["registry"])
 
+    def test_registry_storage_is_separate_from_registry_runner(self) -> None:
+        store_path = SCRIPTS / "registry_store.py"
+        self.assertTrue(store_path.exists())
+        edges = same_dir_import_edges(top_level_only=True)
+
+        self.assertIn("registry_store", edges["registry"])
+        self.assertNotIn("registry", edges["registry_store"])
+
+        registry_source = (SCRIPTS / "registry.py").read_text(encoding="utf-8")
+        store_source = store_path.read_text(encoding="utf-8")
+        self.assertNotIn("def load_registry", registry_source)
+        self.assertIn("def load_registry", store_source)
+        self.assertNotIn("def save_registry", registry_source)
+        self.assertIn("def save_registry", store_source)
+
     def test_prompt_recall_core_stays_small_foreground_gate(self) -> None:
         edges = same_dir_import_edges()
         forbidden = {
@@ -92,6 +107,73 @@ class ImportCouplingTests(unittest.TestCase):
         }
         self.assertLessEqual(len(edges["prompt_recall_core"]), 4)
         self.assertFalse(forbidden & edges["prompt_recall_core"])
+
+    def test_prompt_recall_cues_are_separate_from_scoring_policy(self) -> None:
+        cues_path = SCRIPTS / "prompt_cues.py"
+        self.assertTrue(cues_path.exists())
+        edges = same_dir_import_edges(top_level_only=True)
+
+        self.assertIn("prompt_cues", edges["prompt_recall_core"])
+        self.assertFalse(
+            {
+                "prompt_recall_core",
+                "registry",
+                "search_clean_source",
+                "semantic_recall_gate",
+            }
+            & edges["prompt_cues"]
+        )
+
+        core_source = (SCRIPTS / "prompt_recall_core.py").read_text(encoding="utf-8")
+        cues_source = cues_path.read_text(encoding="utf-8")
+        self.assertIn("CUE_COMPAT_EXPORTS", core_source)
+        self.assertNotIn("def matched_terms", core_source)
+        self.assertIn("def matched_terms", cues_source)
+        self.assertNotIn("CODE_SURFACE_CUES = {", core_source)
+        self.assertIn("CODE_SURFACE_CUES =", cues_source)
+
+        cue_compat_names = {
+            "ASSOCIATIVE_CUES",
+            "CONCEPT_EXPANSION_MAX_TERMS",
+            "IMPORTANCE_CUES",
+            "association_term_is_generic",
+            "concept_expansion_terms",
+            "expand_query_terms",
+            "explicit_recall_terms",
+            "is_decision_continuation",
+            "matched_terms",
+            "semantic_gate_can_request_evidence",
+            "semantic_gate_is_memory_cue",
+            "semantic_gate_terms",
+            "should_run_semantic_gate",
+            "working_memory_terms",
+        }
+        for rel_path in ("prompt_recall_context.py", "prompt_recall_decision.py"):
+            tree = ast.parse((SCRIPTS / rel_path).read_text(encoding="utf-8"))
+            imported_from_core = {
+                alias.name
+                for node in ast.walk(tree)
+                if isinstance(node, ast.ImportFrom) and node.module == "prompt_recall_core"
+                for alias in node.names
+            }
+            self.assertFalse(cue_compat_names & imported_from_core)
+
+    def test_subconscious_jobs_do_not_depend_on_agent_runner(self) -> None:
+        runtime_path = SCRIPTS / "subconscious_runtime.py"
+        loop_path = SCRIPTS / "subconscious_tool_loop.py"
+        self.assertTrue(runtime_path.exists())
+        self.assertTrue(loop_path.exists())
+        edges = same_dir_import_edges(top_level_only=True)
+
+        self.assertIn("subconscious_runtime", edges["subconscious_agent"])
+        self.assertIn("subconscious_runtime", edges["subconscious_jobs"])
+        self.assertIn("subconscious_tool_loop", edges["subconscious_agent"])
+        self.assertIn("subconscious_tool_loop", edges["subconscious_jobs"])
+        self.assertNotIn("subconscious_agent", edges["subconscious_jobs"])
+        self.assertFalse({"subconscious_agent", "subconscious_jobs"} & edges["subconscious_runtime"])
+        self.assertFalse(
+            {"subconscious_agent", "subconscious_jobs"} & edges["subconscious_tool_loop"]
+        )
 
     def test_runtime_scripts_do_not_import_smoke_modules(self) -> None:
         edges = same_dir_import_edges()

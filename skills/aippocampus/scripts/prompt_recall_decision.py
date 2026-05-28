@@ -14,34 +14,36 @@ from typing import Any, Callable
 
 from build_concept_graph import expand_concepts
 from memory_candidate_router import strip_for_hook
+from prompt_cues import (
+    CONCEPT_EXPANSION_MAX_TERMS,
+    concept_expansion_terms,
+    expand_query_terms,
+    is_decision_continuation,
+    semantic_gate_can_request_evidence,
+    semantic_gate_is_memory_cue,
+    semantic_gate_terms,
+    should_run_semantic_gate,
+    working_memory_terms,
+)
 from prompt_recall_context import build_recall_decision_context
 from prompt_recall_core import (
-    CONCEPT_EXPANSION_MAX_TERMS,
     DEFAULT_SEARCH_BUDGET,
     EVIDENCE_LITE_MIN_PROBE_SCORE,
     PROMPT_HOOK_SEMANTIC_TIMEOUT,
     SCENT_THRESHOLD,
     cognitive_map_terms,
     collect_evidence,
-    concept_expansion_terms,
     default_project_timeline_path,
-    expand_query_terms,
     fallback_search_candidates,
-    is_decision_continuation,
     load_project_timeline,
     merge_association_candidates,
     merge_cognitive_map_candidates,
     merge_timeline_candidates,
     rerank_candidates_with_probe,
     score_candidates,
-    semantic_gate_can_request_evidence,
-    semantic_gate_is_memory_cue,
-    semantic_gate_terms,
-    should_run_semantic_gate,
     should_suppress,
     strip_private_fields,
     strip_semantic_gate,
-    working_memory_terms,
 )
 from registry import unique_preserve
 from semantic_recall_gate import run_semantic_gate
@@ -163,6 +165,28 @@ def _decision_reasons(
     if suppressed:
         reasons.append("suppressed ordinary code-surface prompt")
     return reasons
+
+
+def _score_recall_candidates(
+    *,
+    prompt: str,
+    registry: dict[str, Any],
+    timeline: dict[str, Any],
+    cwd_path: Path,
+    query_terms: list[str],
+    cognitive_map_matches: list[dict[str, Any]],
+    association_matches: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if not prompt:
+        return []
+    candidates = score_candidates(prompt, registry, query_terms)
+    candidates = merge_cognitive_map_candidates(
+        candidates, registry, cognitive_map_matches, query_terms
+    )
+    candidates = merge_association_candidates(
+        candidates, registry, association_matches, query_terms
+    )
+    return merge_timeline_candidates(candidates, registry, timeline, prompt, cwd_path, query_terms)
 
 
 def _explicit_evidence_request_is_ambiguous(
@@ -383,16 +407,15 @@ def assess_prompt(
     associative = pre_associative
     important = pre_important
 
-    candidates = score_candidates(prompt, registry, query_terms) if prompt else []
-    candidates = merge_cognitive_map_candidates(
-        candidates, registry, cognitive_map_matches, query_terms
-    )
-    candidates = merge_association_candidates(
-        candidates, registry, association_matches, query_terms
-    )
     timeline = load_project_timeline(default_project_timeline_path(path))
-    candidates = merge_timeline_candidates(
-        candidates, registry, timeline, prompt, cwd_path, query_terms
+    candidates = _score_recall_candidates(
+        prompt=prompt,
+        registry=registry,
+        timeline=timeline,
+        cwd_path=cwd_path,
+        query_terms=query_terms,
+        cognitive_map_matches=cognitive_map_matches,
+        association_matches=association_matches,
     )
     if (
         not candidates
@@ -412,15 +435,14 @@ def assess_prompt(
             query_terms = unique_preserve(
                 seed_terms + concept_expansion_terms(concept_expansions), limit=40
             )
-            candidates = score_candidates(prompt, registry, query_terms) if prompt else []
-            candidates = merge_cognitive_map_candidates(
-                candidates, registry, cognitive_map_matches, query_terms
-            )
-            candidates = merge_association_candidates(
-                candidates, registry, association_matches, query_terms
-            )
-            candidates = merge_timeline_candidates(
-                candidates, registry, timeline, prompt, cwd_path, query_terms
+            candidates = _score_recall_candidates(
+                prompt=prompt,
+                registry=registry,
+                timeline=timeline,
+                cwd_path=cwd_path,
+                query_terms=query_terms,
+                cognitive_map_matches=cognitive_map_matches,
+                association_matches=association_matches,
             )
     if not candidates and (explicit or associative):
         # Metadata can miss memorable wording that only exists inside the

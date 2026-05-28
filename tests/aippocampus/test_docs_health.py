@@ -66,6 +66,38 @@ class DocsHealthTests(unittest.TestCase):
         self.assertFalse(any("scope_label_policy" in issue for issue in result), result)
         self.assertFalse(any("missing scope_labels" in issue for issue in result), result)
 
+    def test_public_doc_command_lint_rejects_default_windows_only_blocks(self) -> None:
+        issues = docs_health.public_doc_command_issues(
+            "README.md",
+            "\n".join(
+                [
+                    "## First Checks",
+                    "",
+                    "```powershell",
+                    "python tools\\aippocampus\\docs\\check_docs_health.py --json",
+                    "```",
+                ]
+            ),
+        )
+
+        self.assertTrue(any("Windows-only command block" in issue for issue in issues), issues)
+
+    def test_public_doc_command_lint_allows_explicit_windows_section(self) -> None:
+        issues = docs_health.public_doc_command_issues(
+            "README.md",
+            "\n".join(
+                [
+                    "### Windows PowerShell",
+                    "",
+                    "```powershell",
+                    'python "$env:CODEX_HOME\\skills\\aippocampus\\scripts\\aippocampus_health.py"',
+                    "```",
+                ]
+            ),
+        )
+
+        self.assertEqual(issues, [])
+
     def test_repo_markdown_scan_ignores_tmp_prompts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)

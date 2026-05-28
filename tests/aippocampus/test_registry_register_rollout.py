@@ -102,6 +102,21 @@ class RegisterRolloutTests(unittest.TestCase):
         data = json.loads((self.registry_dir / "threads.json").read_text(encoding="utf-8"))
         self.assertEqual(data["threads"][0]["thread_key"], "session:session-other")
 
+    def test_existing_registry_json_corruption_blocks_write_path(self) -> None:
+        registry_path = self.registry_dir / "threads.json"
+        self.registry_dir.mkdir()
+        original = "{broken registry json"
+        registry_path.write_text(original, encoding="utf-8")
+
+        with self.assertRaises(registry.RegistryReadError):
+            registry.register_rollout_thread(
+                self.rollout,
+                project="Life OS",
+                registry_dir=self.registry_dir,
+            )
+
+        self.assertEqual(registry_path.read_text(encoding="utf-8"), original)
+
     def test_scan_sessions_dry_run_reports_unregistered_rollouts(self) -> None:
         original_home = registry.codex_home
         registry.codex_home = lambda: self.root

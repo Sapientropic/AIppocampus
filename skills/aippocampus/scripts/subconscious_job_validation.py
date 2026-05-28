@@ -382,7 +382,7 @@ def validate_findings(
         refs = refs_for_finding(item, source_bank)
         if confidence < 0.45 or not refs:
             continue
-        finding = {
+        finding: dict[str, Any] = {
             "job": job,
             "kind": str(item.get("kind") or spec["finding_kind"]),
             "title": compact_text(str(item.get("title") or ""), 140),
@@ -435,9 +435,10 @@ def validate_findings(
             elif job == "question_extraction" and finding.get("question_short"):
                 finding["title"] = finding["question_short"]
             elif job == "cognitive_map":
-                finding["title"] = " -> ".join(finding.get("landmarks") or [])[:120]
+                landmark_titles = [str(value) for value in finding.get("landmarks") or []]
+                finding["title"] = " -> ".join(landmark_titles)[:120]
             else:
-                finding["title"] = compact_text(finding["summary"], 120)
+                finding["title"] = compact_text(str(finding["summary"]), 120)
         if not finding["summary"] and job != "concept_edges":
             continue
         finding["fingerprint"] = finding_fingerprint(finding)

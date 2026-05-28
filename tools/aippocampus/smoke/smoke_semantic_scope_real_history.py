@@ -30,7 +30,6 @@ from build_concept_graph import default_concept_graph_path
 from build_project_timeline import build_project_timeline, save_project_timeline
 from build_semantic_scope_labels import build_semantic_scope_labels_for_registry
 from semantic_scope_labels import label_evidence_is_sufficient
-from subconscious_agent import call_chat_json
 from subconscious_jobs import (
     DEFAULT_CONCURRENCY,
     DEFAULT_SAMPLES_PER_JOB,
@@ -40,6 +39,7 @@ from subconscious_jobs import (
     run_one_job,
     run_tasks_in_sample_waves,
 )
+from subconscious_runtime import call_chat_json
 from subconscious_worker import (
     DEFAULT_BASE_URL,
     DEFAULT_MODEL,
