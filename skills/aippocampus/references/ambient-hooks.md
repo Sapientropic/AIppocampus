@@ -39,9 +39,13 @@ a second ambient-memory store.
 `warm_ambient_recall.py` is the standalone warm-path prototype for that later
 work. It defines 10 scout families across 5 candidate-window/query variants,
 runs the resulting 50 lanes concurrently, isolates malformed scout output,
-merges at most 3 cards, and writes through `ambient_thread_cache.py`. It also
-dereferences candidate source refs against clean-source messages when possible,
-suppresses current-thread-only echoes by default, and lets scouts vote
+merges at most 3 cards, and writes through `ambient_thread_cache.py`. Scout
+prompts keep the shared payload before the lane-specific `scout_task` suffix,
+and each lane combines a family task with a variant `lens_task` rather than
+repeating one generic prompt. The merger dereferences candidate source refs
+against clean-source messages when possible, merges similar themes before the
+final card cap, suppresses current-thread-only echoes by default, recognizes
+guard blocks by family even with `family:variant` lanes, and lets scouts vote
 `reuse|rotate|suppress` for topic epoch handling. It is not part of the default
 foreground hook path: quorum-first runs are allowed to return before all lanes
 finish, and `--wait-all` belongs to explicit evaluation or detached warming.

@@ -132,7 +132,7 @@ Recommended cache layers:
 | Exact prompt cache | Prompt fingerprint plus semantic cue hash. | Prior semantic-gate or scout result. | Fast repeat protection, already close to the existing semantic gate cache. |
 | Thread ambient cache | `thread_id + workspace + topic_epoch`. | 3-8 current ambient recall cards, active negative contexts, mode, confidence, source-ref fingerprints. | Makes continuity immediate after the first warming pass in a multi-turn agent session. |
 | Topic trajectory cache | Rolling topic hash, without raw prompt text. | Current theme, drift markers, likely next search aliases, visibility bias. | Lets the cache survive gradual topic drift without logging full prompts. |
-| Source validation cache | `source_ref + query_terms_hash`. | Whether a source ref actually supports the association and at what confidence. | Keeps evidence checks stable and cheap across turns and scouts. |
+| Clean-source validation pass | Candidate `source_refs` plus prompt/card terms. | Per-card validation status and source-ref fingerprints in the thread cache. | Keeps evidence checks source-backed without adding a second ambient-memory store. |
 
 Thread ambient cache is a soft working surface, not memory truth. It should be
 small, expiring, source-ref-fingerprinted, and safe to discard. It must not log
@@ -206,6 +206,12 @@ Each family runs across 5 variants: direct prompt, registry window,
 clean-source/source-ref window, current prompt trace window, and skeptic window.
 This gives sampling depth without losing merge structure.
 
+The runtime prompt keeps the lane-invariant payload first as `shared_context`,
+then appends the small `scout_task` suffix with `scout_family`,
+`scout_variant`, and `lens_task`. This preserves the 10x5 structure while
+making provider prefix-cache reuse possible. Cache-hit ratios remain an
+evaluation target; do not document guessed numbers as measured results.
+
 Each scout returns a small strict JSON object. A malformed result is isolated as
 `ok=false`; it must not poison the batch. The parent process owns merging,
 validation, dedupe, and any writes.
@@ -229,7 +235,10 @@ The deterministic merger should:
 - weight user turns and assistant final answers above commentary and tool text
 - penalize injected skill instructions, generic project boilerplate, and noisy
   status updates
-- dedupe candidates by theme, source thread, and key line
+- dedupe candidates by theme, source thread, and key line, then merge
+  near-duplicate themes by significant terms before the final card cap
+- let `privacy_scope_guard` and `failure_sentinel` block by scout family even
+  when the running lane has a `family:variant` suffix
 - preserve uncertainty instead of forcing a match
 
 The merger produces recall cards, not formal memory. Formal memory still uses
@@ -339,12 +348,15 @@ The first slice should stay small but real:
    deeper cache-first behavior should be tuned after real prompt traces.
 5. Add `warm_ambient_recall.py` as a standalone warm-path prototype. Done for
    the first shape: it defines 10 named scout families across 5 variants,
-   runs the resulting 50 lanes concurrently, isolates malformed outputs, and
-   returns on quorum inside a strict timeout. It fails open when no API key is
-   available.
+   gives each lane a family/variant `lens_task`, serializes shared context
+   before the lane suffix for prefix-cache friendliness, runs the resulting 50
+   lanes concurrently, isolates malformed outputs, and returns on quorum inside
+   a strict timeout. It fails open when no API key is available.
 6. Merge into at most 3 private recall cards and serialize useful results back
-   into the thread cache. Done for quorum results; explicit `--wait-all` is
-   reserved for evaluation or detached warming, not the foreground hook.
+   into the thread cache. Done for quorum results, source-ref validation,
+   current-thread echo suppression, guard-family blocking, and similar-theme
+   merge; explicit `--wait-all` is reserved for evaluation or detached warming,
+   not the foreground hook.
 7. Reuse optional residue export for source-ref-fingerprinted warm cards so
    unused resonance can become dream-task seed material without logging raw
    prompt text.

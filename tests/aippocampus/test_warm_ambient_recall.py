@@ -447,6 +447,100 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertNotIn(local_path.casefold(), raw_payload.casefold())
         self.assertNotIn("memory.md", raw_payload.casefold())
 
+    def test_scout_prompt_uses_shared_context_prefix_and_family_lens_detail(self) -> None:
+        payload = {
+            "prompt_version": warm.PROMPT_VERSION,
+            "task": "propose_warm_ambient_recall_hints",
+            "prompt": "那个脑内续接器现在怎么样了？",
+            "prompt_terms": ["脑内续接器"],
+            "memory_catalog": [],
+        }
+
+        rendered = warm.scout_prompt("query_expansion:registry_window", payload)
+        parsed = json.loads(rendered)
+        keys = list(parsed.keys())
+
+        self.assertLess(keys.index("shared_context"), keys.index("scout_task"))
+        self.assertEqual(parsed["shared_context"], payload)
+        self.assertEqual(parsed["scout_task"]["scout_family"], "query_expansion")
+        self.assertEqual(parsed["scout_task"]["scout_variant"], "registry_window")
+        self.assertIn("metaphor", parsed["scout_task"]["lens_task"].casefold())
+        self.assertIn("anchor", parsed["scout_task"]["lens_task"].casefold())
+
+    def test_merge_dedupes_similar_themes_and_keeps_diverse_cards(self) -> None:
+        rows = [
+            warm.parse_scout_output(
+                {
+                    "decision": "candidate",
+                    "confidence": 0.9,
+                    "candidates": [
+                        {
+                            "theme": "ambient recall cache validation",
+                            "support_level": "candidate",
+                            "matched_terms": ["ambient recall", "cache"],
+                        }
+                    ],
+                },
+                "thread_matcher:direct",
+            ),
+            warm.parse_scout_output(
+                {
+                    "decision": "candidate",
+                    "confidence": 0.85,
+                    "candidates": [
+                        {
+                            "theme": "cache validation for ambient recall",
+                            "support_level": "candidate",
+                            "matched_terms": ["cache", "validation"],
+                        }
+                    ],
+                },
+                "theme_matcher:registry_window",
+            ),
+            warm.parse_scout_output(
+                {
+                    "decision": "candidate",
+                    "confidence": 0.8,
+                    "candidates": [
+                        {
+                            "theme": "dream residue handoff",
+                            "support_level": "candidate",
+                            "matched_terms": ["dream", "residue"],
+                        }
+                    ],
+                },
+                "key_line_hunter:direct",
+            ),
+        ]
+
+        result = warm.merge_scouts(rows, max_cards=3)
+        themes = [card["theme"] for card in result["cards"]]
+
+        self.assertEqual(len(result["cards"]), 2)
+        self.assertIn("ambient recall cache validation", themes)
+        self.assertIn("dream residue handoff", themes)
+        ambient_card = next(card for card in result["cards"] if card["theme"].startswith("ambient"))
+        self.assertIn("validation", ambient_card["matched_terms"])
+
+    def test_guard_family_blocks_even_when_lane_has_variant_suffix(self) -> None:
+        rows = [
+            warm.parse_scout_output(
+                {
+                    "decision": "skip",
+                    "confidence": 0.95,
+                    "block": True,
+                    "reason": "private unrelated association",
+                },
+                "privacy_scope_guard:direct",
+            )
+        ]
+
+        result = warm.merge_scouts(rows)
+
+        self.assertEqual(result["cards"], [])
+        self.assertEqual(result["mode"], warm.SILENT_TUNING)
+        self.assertEqual(result["blocked_by"], ["privacy_scope_guard:direct"])
+
 
 if __name__ == "__main__":
     unittest.main()

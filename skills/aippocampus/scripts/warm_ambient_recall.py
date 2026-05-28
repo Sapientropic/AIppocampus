@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 import queue
+import re
 import threading
 import time
 from pathlib import Path
@@ -122,6 +123,42 @@ VARIANT_TASKS = {
     "clean_source_window": "Focus on source-ref-backed candidate windows and exact support.",
     "current_trace_window": "Focus on recent sanitized prompt trace and detect current-thread echo.",
     "skeptic_window": "Act as a skeptical validator; prefer suppress, downgrade, or no-op when weak.",
+}
+
+FAMILY_LENS_TASKS = {
+    "query_expansion": "Find metaphor, alias, bilingual phrasing, and old-question shapes that can bridge the current prompt to older source.",
+    "life_wide_cue_classifier": "Classify task type, emotional tone, and whether ambient recall should stay silent, active, or source-backed.",
+    "thread_matcher": "Match registry anchors, summaries, project labels, and stable route-like names without inventing source refs.",
+    "key_line_hunter": "Look for compact remembered lines, unresolved questions, or boundary decisions that could anchor a card.",
+    "current_thread_filter": "Estimate current-thread echo risk and flag terms that are only recent status chatter.",
+    "theme_matcher": "Compare recurring themes, question clusters, dream residue, and intuition markers across older threads.",
+    "evidence_judge": "Judge whether proposed source refs actually support the theme; downgrade weak or unsourced evidence.",
+    "nudge_writer": "Draft quiet private guidance only after the card is useful; keep wording tentative unless evidence-backed.",
+    "privacy_scope_guard": "Suppress private, unrelated, secret-like, or over-personalized associations before they reach the agent.",
+    "failure_sentinel": "Flag hallucinated refs, contradictory scout claims, and candidates needing deeper archival recall.",
+}
+
+VARIANT_LENS_TASKS = {
+    "direct": "Use the direct prompt terms first; keep aliases close to the user's wording.",
+    "registry_window": "Use registry anchor titles, summaries, keywords, and project labels as the anchor surface.",
+    "clean_source_window": "Use source-ref-backed windows and support terms; do not elevate evidence without dereferenceable refs.",
+    "current_trace_window": "Use the sanitized recent trace to find drift and echo; penalize matches that only repeat this thread.",
+    "skeptic_window": "Search for reasons to suppress, rotate topic epoch, or downgrade support when the association is weak.",
+}
+
+THEME_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "as",
+    "for",
+    "in",
+    "of",
+    "on",
+    "or",
+    "the",
+    "to",
+    "with",
 }
 
 
@@ -320,16 +357,25 @@ def expand_scout_lanes(scouts: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(lanes)
 
 
+def lens_task_for(family: str, variant: str) -> str:
+    family_task = FAMILY_LENS_TASKS.get(family, "Analyze warm ambient recall relevance.")
+    variant_task = VARIANT_LENS_TASKS.get(variant, "Use this candidate/query variant carefully.")
+    return f"{family_task} {variant_task}"
+
+
 def scout_prompt(scout: str, payload: dict[str, Any]) -> str:
     family, variant = scout_lane_parts(scout)
     return json.dumps(
         {
-            "input": payload,
-            "scout": scout,
-            "scout_family": family,
-            "scout_variant": variant,
-            "task": FAMILY_TASKS.get(family, "Analyze warm ambient recall relevance."),
-            "variant_task": VARIANT_TASKS.get(variant, "Use this candidate/query variant carefully."),
+            "shared_context": payload,
+            "scout_task": {
+                "scout": f"{family}:{variant}",
+                "scout_family": family,
+                "scout_variant": variant,
+                "family_task": FAMILY_TASKS.get(family, "Analyze warm ambient recall relevance."),
+                "variant_task": VARIANT_TASKS.get(variant, "Use this candidate/query variant carefully."),
+                "lens_task": lens_task_for(family, variant),
+            },
         },
         ensure_ascii=False,
         indent=2,
@@ -739,6 +785,71 @@ def calibrate_cards(
     return calibrated, {"current_thread_echo_count": echo_count}
 
 
+def _theme_terms(card: dict[str, Any]) -> set[str]:
+    text = " ".join(
+        [
+            str(card.get("theme") or ""),
+            " ".join(str(term or "") for term in card.get("matched_terms") or []),
+        ]
+    )
+    terms: set[str] = set()
+    for term in re.findall(r"[\w\u4e00-\u9fff]+", text.casefold()):
+        clean = term.strip("_")
+        if not clean or clean in THEME_STOPWORDS:
+            continue
+        if clean.isascii() and len(clean) < 2:
+            continue
+        terms.add(clean)
+    return terms
+
+
+def _similar_theme(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    theme_a = str(a.get("theme") or "").strip().casefold()
+    theme_b = str(b.get("theme") or "").strip().casefold()
+    if theme_a and theme_a == theme_b:
+        return True
+    if min(len(theme_a), len(theme_b)) >= 12 and (theme_a in theme_b or theme_b in theme_a):
+        return True
+    terms_a = _theme_terms(a)
+    terms_b = _theme_terms(b)
+    if not terms_a or not terms_b:
+        return False
+    shared = terms_a & terms_b
+    return len(shared) >= 2 and (len(shared) / min(len(terms_a), len(terms_b))) >= 0.5
+
+
+def _merge_source_refs(left: list[dict[str, Any]], right: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    merged: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for ref in [*left, *right]:
+        key = json.dumps(ref, ensure_ascii=False, sort_keys=True)
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(ref)
+    return merged[:3]
+
+
+def _merge_card(existing: dict[str, Any], incoming: dict[str, Any]) -> None:
+    if SUPPORT_RANK.get(str(incoming.get("support_level") or ""), 0) > SUPPORT_RANK.get(
+        str(existing.get("support_level") or ""), 0
+    ):
+        existing["support_level"] = incoming.get("support_level")
+        existing["visibility"] = incoming.get("visibility")
+        existing["suggested_use"] = incoming.get("suggested_use") or existing.get("suggested_use")
+
+    existing["matched_terms"] = unique_preserve(
+        [*existing.get("matched_terms", []), *incoming.get("matched_terms", [])],
+        limit=8,
+    )
+    existing["source_refs"] = _merge_source_refs(
+        existing.get("source_refs") or [], incoming.get("source_refs") or []
+    )
+    for field in ("key_line", "nudge", "expand_if"):
+        if not existing.get(field) and incoming.get(field):
+            existing[field] = incoming[field]
+
+
 def merge_scouts(
     rows: list[dict[str, Any]],
     *,
@@ -752,7 +863,7 @@ def merge_scouts(
         for row in rows
         if row.get("ok")
         and row.get("block")
-        and row.get("scout") in {"privacy_scope_guard", "failure_sentinel"}
+        and row.get("scout_family") in {"privacy_scope_guard", "failure_sentinel"}
     ]
     negative_contexts: list[str] = []
     query_aliases: list[str] = []
@@ -787,6 +898,11 @@ def merge_scouts(
     cards: list[dict[str, Any]] = []
     seen: set[str] = set()
     for _, _, card in candidates:
+        similar = next((existing for existing in cards if _similar_theme(existing, card)), None)
+        if similar:
+            _merge_card(similar, card)
+            continue
+
         key = "|".join(
             [
                 str(card.get("theme") or "").casefold(),
