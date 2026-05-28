@@ -379,18 +379,25 @@ The first slice should stay small but real:
    rate, false evidence, and missing-source-ref visibility; `--cases-file` can
    add larger sanitized JSON/JSONL prompt-trace suites. Real-trace calibration
    can now start from `benchmarks/aippocampus/build_warm_ambient_trace_cases.py`,
-   which exports unlabeled private cases from registered clean source while
-   skipping redacted prompts by default. Live mode may call the configured
-   DeepSeek-compatible model but emits only hashes, aggregate metrics,
-   validation status counts, error-kind buckets, and cache metrics. Live smoke
-   showed the real timeout risk was template-like scout output, so the runtime
-   now keeps `output_contract` compact and uses family-aware output budgets
-   instead of relying on a rigid default `max_tokens` cap.
+   which exports private cases from registered clean source while skipping
+   redacted prompts by default. `--label-template` adds empty manual labels for
+   source-ref validation status counts, current-thread echo bounds, and allowed
+   topic-epoch actions; the benchmark runner treats those labels as per-case
+   expectation failures without emitting raw prompts or cards. Live mode may
+   call the configured DeepSeek-compatible model but emits only hashes,
+   aggregate metrics, validation status counts, error-kind buckets, and cache
+   metrics. Live smoke showed the real timeout risk was template-like scout
+   output, so the runtime now keeps `output_contract` compact and uses
+   family-aware output budgets instead of relying on a rigid default
+   `max_tokens` cap.
 9. Source-ref validation, current-thread echo suppression, LLM-directed topic
    epoch rotation, and detached late-result cache warming are now implemented.
    Deep archival recall now has a source-backed visibility mode for original
-   wording/detail requests. Next: build a labeled manual benchmark subset from
-   real traces and tune live-model quality thresholds.
+   wording/detail requests. The foreground enqueue path now passes the current
+   `session:<id>` source-ref key and a sanitized current-prompt trace into the
+   detached warm job, so background scouts can apply echo and topic-drift
+   judgments against real thread context. Next: fill a private labeled benchmark
+   subset from real traces and tune live-model quality thresholds.
 
 Success for slice one is not perfect recall. It is that the agent receives
 useful, source-backed peripheral awareness without making the user wait, and

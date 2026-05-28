@@ -96,6 +96,77 @@ class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["cases"][0]["case_id"], "custom_trace")
         self.assertNotIn("detached warm job", raw)
 
+    def test_labeled_trace_expectations_cover_source_echo_and_topic(self) -> None:
+        case = benchmark.WarmBenchmarkCase(
+            case_id="labeled_trace",
+            prompt="继续校准真实 trace",
+            prompt_trace=[],
+            expected_min_source_validation_statuses={"supported": 1},
+            expected_min_current_thread_echo_count=1,
+            expected_max_current_thread_echo_count=1,
+            expected_topic_epoch_actions=("reuse", "rotate"),
+        )
+
+        summary = benchmark.summarize_case(
+            case,
+            {
+                "available": True,
+                "status": "ready",
+                "mode": "source_backed_recall_card",
+                "confidence": "high",
+                "scout_count": 50,
+                "scouts": [{"ok": True, "useful": True}],
+                "accepted_scout_count": 1,
+                "failed_scout_count": 0,
+                "current_thread_echo_count": 1,
+                "topic_epoch_decision": {"action": "rotate"},
+                "cards": [{"source_validation": {"status": "supported"}}],
+                "elapsed_ms": 1.0,
+            },
+        )
+
+        self.assertTrue(summary["expectation_passed"])
+        self.assertEqual(summary["expectation_failures"], [])
+
+    def test_labeled_trace_expectation_failures_are_case_level_metrics(self) -> None:
+        case = benchmark.WarmBenchmarkCase(
+            case_id="labeled_trace",
+            prompt="继续校准真实 trace",
+            prompt_trace=[],
+            expected_min_source_validation_statuses={"supported": 2},
+            expected_min_current_thread_echo_count=1,
+            expected_max_current_thread_echo_count=1,
+            expected_topic_epoch_actions=("rotate",),
+        )
+
+        summary = benchmark.summarize_case(
+            case,
+            {
+                "available": True,
+                "status": "ready",
+                "mode": "active_gentle_nudge",
+                "confidence": "medium",
+                "scout_count": 50,
+                "scouts": [{"ok": True, "useful": True}],
+                "accepted_scout_count": 1,
+                "failed_scout_count": 0,
+                "current_thread_echo_count": 2,
+                "topic_epoch_decision": {"action": "reuse"},
+                "cards": [{"source_validation": {"status": "supported"}}],
+                "elapsed_ms": 1.0,
+            },
+        )
+
+        self.assertFalse(summary["expectation_passed"])
+        self.assertEqual(
+            summary["expectation_failures"],
+            [
+                "topic_epoch_action",
+                "source_validation:supported",
+                "current_thread_echo:max",
+            ],
+        )
+
     def test_trace_case_builder_exports_sanitized_registry_cases(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -174,6 +245,57 @@ class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
         self.assertNotIn(fake_key, raw)
         self.assertNotIn("E:" + "\\private", raw)
         self.assertNotIn(str(root), raw)
+
+    def test_trace_case_builder_can_emit_manual_label_template(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            clean_dir = root / "clean"
+            clean_dir.mkdir()
+            messages = clean_dir / "messages.jsonl"
+            messages.write_text(
+                json.dumps(
+                    {
+                        "message_id": "msg-1",
+                        "source_line": 1,
+                        "role": "user",
+                        "phase": "recent_prompt",
+                        "text": "继续校准 source-ref validation 和 topic drift。",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            registry_path = root / "threads.json"
+            registry_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "threads": [
+                            {
+                                "thread_key": "session:trace",
+                                "paths": {"clean_source_messages_jsonl": str(messages)},
+                            }
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            payload = trace_builder.build_trace_cases(
+                registry_path=registry_path,
+                limit=1,
+                label_template=True,
+            )
+
+        case = payload["cases"][0]
+        self.assertTrue(payload["label_template"])
+        self.assertEqual(case["expected_topic_epoch_actions"], [])
+        self.assertEqual(case["expected_min_source_validation_statuses"], {})
+        self.assertIsNone(case["expected_min_current_thread_echo_count"])
+        self.assertIsNone(case["expected_max_current_thread_echo_count"])
+        self.assertIn("source-ref", case["label_notes"])
 
     def test_trace_case_builder_output_feeds_warm_benchmark(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -337,6 +459,25 @@ class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
 
         self.assertEqual(metrics["missing_source_refs_count"], 3)
         self.assertEqual(metrics["false_evidence_count"], 2)
+
+    def test_quality_gates_can_optionally_bound_missing_source_refs(self) -> None:
+        gates = benchmark.evaluate_quality_gates(
+            cases=[
+                {
+                    "case_id": "missing",
+                    "available": True,
+                    "configured_scout_count": 50,
+                    "observed_scout_result_count": 50,
+                    "failed_scout_count": 0,
+                    "expectation_passed": True,
+                    "source_validation_statuses": {"missing_source_refs": 2},
+                }
+            ],
+            max_missing_source_refs_count=1,
+        )
+
+        self.assertFalse(gates["passed"])
+        self.assertIn("missing_source_refs_count", gates["failed"])
 
     def test_benchmark_summarizes_timeout_and_rate_limit_failures(self) -> None:
         summary = benchmark.summarize_case(

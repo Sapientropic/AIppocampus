@@ -101,6 +101,7 @@ def build_cases_for_thread(
     trace_window: int,
     min_prompt_chars: int,
     include_redacted_prompts: bool,
+    label_template: bool,
     skipped: dict[str, int],
 ) -> list[dict[str, Any]]:
     thread_key = compact_text(str(entry.get("thread_key") or ""), 160)
@@ -138,17 +139,32 @@ def build_cases_for_thread(
             for row in (trace_row_for(item, thread_key=thread_key) for item in trace_messages)
             if row is not None
         ]
-        cases.append(
-            {
-                "case_id": case_id_for(thread_key=thread_key, message=message),
-                "prompt": prompt,
-                "prompt_trace": prompt_trace,
-                "current_thread_key": thread_key,
-                "expected_available": None,
-                "expected_min_cards": 0,
-            }
-        )
+        case = {
+            "case_id": case_id_for(thread_key=thread_key, message=message),
+            "prompt": prompt,
+            "prompt_trace": prompt_trace,
+            "current_thread_key": thread_key,
+            "expected_available": None,
+            "expected_min_cards": 0,
+        }
+        if label_template:
+            case.update(manual_label_template_fields())
+        cases.append(case)
     return cases
+
+
+def manual_label_template_fields() -> dict[str, Any]:
+    return {
+        "expected_topic_epoch_action": None,
+        "expected_topic_epoch_actions": [],
+        "expected_min_source_validation_statuses": {},
+        "expected_min_current_thread_echo_count": None,
+        "expected_max_current_thread_echo_count": None,
+        "label_notes": (
+            "Private manual labels: set topic epoch action(s), source-ref validation "
+            "status counts, and current-thread echo bounds after reviewing this sanitized trace."
+        ),
+    }
 
 
 def build_trace_cases(
@@ -160,6 +176,7 @@ def build_trace_cases(
     trace_window: int = 6,
     min_prompt_chars: int = 8,
     include_redacted_prompts: bool = False,
+    label_template: bool = False,
 ) -> dict[str, Any]:
     path = (
         Path(registry_path).resolve()
@@ -184,6 +201,7 @@ def build_trace_cases(
             trace_window=trace_window,
             min_prompt_chars=min_prompt_chars,
             include_redacted_prompts=include_redacted_prompts,
+            label_template=label_template,
             skipped=skipped,
         )
         remaining = max(0, limit - len(cases))
@@ -194,6 +212,7 @@ def build_trace_cases(
         "schema_version": 1,
         "registry_sha1": sha1_text(str(path)),
         "case_count": len(cases),
+        "label_template": bool(label_template),
         "cases": cases,
         "skipped": skipped,
         "privacy_boundary": {
@@ -229,6 +248,11 @@ def main() -> int:
     parser.add_argument("--trace-window", type=int, default=6)
     parser.add_argument("--min-prompt-chars", type=int, default=8)
     parser.add_argument("--include-redacted-prompts", action="store_true")
+    parser.add_argument(
+        "--label-template",
+        action="store_true",
+        help="Emit empty manual labels for source-ref, echo, and topic-drift calibration.",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
@@ -240,12 +264,14 @@ def main() -> int:
         trace_window=args.trace_window,
         min_prompt_chars=args.min_prompt_chars,
         include_redacted_prompts=args.include_redacted_prompts,
+        label_template=args.label_template,
     )
     output = write_cases_file(payload["cases"], args.out, jsonl=args.jsonl)
     summary = {
         "kind": payload["kind"],
         "schema_version": payload["schema_version"],
         "case_count": payload["case_count"],
+        "label_template": payload["label_template"],
         "skipped": payload["skipped"],
         "output": str(output),
         "privacy_boundary": payload["privacy_boundary"],

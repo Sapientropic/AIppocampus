@@ -40,6 +40,10 @@ class WarmBenchmarkCase:
     expected_available: bool | None = True
     expected_min_cards: int = 1
     expected_topic_epoch_action: str | None = None
+    expected_topic_epoch_actions: tuple[str, ...] = ()
+    expected_min_source_validation_statuses: dict[str, int] | None = None
+    expected_min_current_thread_echo_count: int | None = None
+    expected_max_current_thread_echo_count: int | None = None
     expected_mode: str | None = None
 
 
@@ -238,10 +242,58 @@ def load_cases_file(path: Path | str) -> tuple[WarmBenchmarkCase, ...]:
                 expected_available=item.get("expected_available", True),
                 expected_min_cards=int(item.get("expected_min_cards", 1) or 0),
                 expected_topic_epoch_action=str(item.get("expected_topic_epoch_action") or "") or None,
+                expected_topic_epoch_actions=parse_expected_actions(
+                    item.get("expected_topic_epoch_actions")
+                ),
+                expected_min_source_validation_statuses=parse_expected_count_map(
+                    item.get("expected_min_source_validation_statuses")
+                ),
+                expected_min_current_thread_echo_count=optional_int(
+                    item.get("expected_min_current_thread_echo_count")
+                ),
+                expected_max_current_thread_echo_count=optional_int(
+                    item.get("expected_max_current_thread_echo_count")
+                ),
                 expected_mode=str(item.get("expected_mode") or "") or None,
             )
         )
     return tuple(cases)
+
+
+def optional_int(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def parse_expected_actions(value: Any) -> tuple[str, ...]:
+    if isinstance(value, str):
+        values = [value]
+    elif isinstance(value, (list, tuple)):
+        values = value
+    else:
+        values = []
+    actions = [
+        compact_text(str(item or "").strip().casefold(), 32)
+        for item in values
+        if str(item or "").strip()
+    ]
+    return tuple(dict.fromkeys(actions))
+
+
+def parse_expected_count_map(value: Any) -> dict[str, int]:
+    if not isinstance(value, dict):
+        return {}
+    result: dict[str, int] = {}
+    for key, raw_count in value.items():
+        label = compact_text(str(key or "").strip(), 80)
+        count = optional_int(raw_count)
+        if label and count is not None and count > 0:
+            result[label] = count
+    return result
 
 
 def sha1_text(text: str) -> str:
@@ -421,6 +473,22 @@ def summarize_case(case: WarmBenchmarkCase, result: dict[str, Any]) -> dict[str,
         and summary["topic_epoch_action"] != case.expected_topic_epoch_action
     ):
         expectation_failures.append("topic_epoch_action")
+    if case.expected_topic_epoch_actions and summary["topic_epoch_action"] not in case.expected_topic_epoch_actions:
+        expectation_failures.append("topic_epoch_action")
+    for status, expected_count in (case.expected_min_source_validation_statuses or {}).items():
+        if int(validation_statuses.get(status) or 0) < int(expected_count):
+            expectation_failures.append(f"source_validation:{status}")
+    echo_count = int(summary["current_thread_echo_count"])
+    if (
+        case.expected_min_current_thread_echo_count is not None
+        and echo_count < case.expected_min_current_thread_echo_count
+    ):
+        expectation_failures.append("current_thread_echo:min")
+    if (
+        case.expected_max_current_thread_echo_count is not None
+        and echo_count > case.expected_max_current_thread_echo_count
+    ):
+        expectation_failures.append("current_thread_echo:max")
     if case.expected_mode and summary["mode"] != case.expected_mode:
         expectation_failures.append("mode")
     summary["expectation_passed"] = not expectation_failures
@@ -448,6 +516,7 @@ def run_warm_ambient_recall_benchmark(
     min_case_pass_rate: float = 1.0,
     max_error_rate: float = 0.05,
     max_false_evidence_count: int = 0,
+    max_missing_source_refs_count: int | None = None,
 ) -> dict[str, Any]:
     root_ctx = tempfile.TemporaryDirectory() if cwd is None else None
     try:
@@ -512,6 +581,7 @@ def run_warm_ambient_recall_benchmark(
             min_case_pass_rate=min_case_pass_rate,
             max_error_rate=max_error_rate,
             max_false_evidence_count=max_false_evidence_count,
+            max_missing_source_refs_count=max_missing_source_refs_count,
         )
         return {
             "kind": "aippocampus_warm_ambient_recall_benchmark",
@@ -580,6 +650,7 @@ def evaluate_quality_gates(
     min_case_pass_rate: float = 1.0,
     max_error_rate: float = 0.05,
     max_false_evidence_count: int = 0,
+    max_missing_source_refs_count: int | None = None,
 ) -> dict[str, Any]:
     metrics = summarize_metrics(cases)
     failed: list[str] = []
@@ -593,6 +664,11 @@ def evaluate_quality_gates(
         failed.append("scout_error_rate")
     if int(metrics.get("false_evidence_count") or 0) > max_false_evidence_count:
         failed.append("false_evidence_count")
+    if (
+        max_missing_source_refs_count is not None
+        and int(metrics.get("missing_source_refs_count") or 0) > max_missing_source_refs_count
+    ):
+        failed.append("missing_source_refs_count")
     return {
         "passed": not failed,
         "failed": failed,
@@ -602,6 +678,7 @@ def evaluate_quality_gates(
             "min_case_pass_rate": min_case_pass_rate,
             "max_error_rate": max_error_rate,
             "max_false_evidence_count": max_false_evidence_count,
+            "max_missing_source_refs_count": max_missing_source_refs_count,
         },
         "failed_case_ids": [
             str(case.get("case_id") or "")
@@ -641,6 +718,7 @@ def main() -> int:
     parser.add_argument("--min-case-pass-rate", type=float, default=1.0)
     parser.add_argument("--max-error-rate", type=float, default=0.05)
     parser.add_argument("--max-false-evidence-count", type=int, default=0)
+    parser.add_argument("--max-missing-source-refs-count", type=int, default=None)
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
     payload = run_warm_ambient_recall_benchmark(
@@ -662,6 +740,7 @@ def main() -> int:
         min_case_pass_rate=args.min_case_pass_rate,
         max_error_rate=args.max_error_rate,
         max_false_evidence_count=args.max_false_evidence_count,
+        max_missing_source_refs_count=args.max_missing_source_refs_count,
     )
     if args.json_output:
         print(json.dumps(payload, ensure_ascii=False, indent=2))

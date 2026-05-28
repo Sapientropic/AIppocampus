@@ -65,8 +65,14 @@ Deterministic mode is CI-safe and now runs 13 synthetic trace cases behind
 quality gates, including a source-backed deep archival recall case;
 `--cases-file` accepts larger sanitized JSON/JSONL trace suites. For real-trace
 calibration, `benchmarks/aippocampus/build_warm_ambient_trace_cases.py` can
-export unlabeled, sanitized cases from registered clean source; generated
-exports are private working artifacts and should not be committed.
+export sanitized cases from registered clean source. Add `--label-template`
+when preparing a private review pack; the emitted labels cover allowed
+topic-epoch actions, minimum source-validation status counts, and
+current-thread echo bounds. Generated exports are private working artifacts and
+should not be committed. The runner also supports optional
+`--max-missing-source-refs-count` for stricter source-ref tuning runs; leave it
+unset when measuring broad candidate/scent recall where unsourced hints are
+expected.
 Live mode may call the configured external model but must keep output sanitized
 to prompt hashes, aggregate metrics, validation status counts, error-kind
 buckets, and cache usage only. Scout prompts keep `output_contract` as a compact
@@ -100,7 +106,7 @@ Useful commands:
 - `python ...\simulate_multilingual_prompt_hook.py --cwd "$PWD"`
 - `python ...\warm_ambient_recall.py --prompt "继续 ambient recall" --cwd "$PWD" --thread-id dry-run --json`
 - `python ...\warm_ambient_recall.py --job-file <redacted-job.json> --json`
-- `python benchmarks\aippocampus\build_warm_ambient_trace_cases.py --out .tmp\warm-traces.jsonl --jsonl --json`
+- `python benchmarks\aippocampus\build_warm_ambient_trace_cases.py --out .tmp\warm-traces.jsonl --jsonl --label-template --json`
 - `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --json`
 - `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --cases-file traces.jsonl --json`
 - `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --cases-file traces.jsonl --live --quorum-first --max-workers 5 --timeout 30 --json`

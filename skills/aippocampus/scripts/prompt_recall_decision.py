@@ -400,6 +400,7 @@ def _attach_ambient_recall(
                 "written_card_count": written.get("card_count"),
             }
         if result.get("decision") != "skip" and not cache_is_warm and warm_background_enabled(warm_background):
+            current_thread_key = current_thread_key_from_hook_thread_id(thread_id)
             # The foreground hook may enqueue warming, but the 50-lane scout
             # batch must run detached. Otherwise DeepSeek tail latency or rate
             # limiting would turn ambient recall from peripheral awareness into
@@ -408,6 +409,8 @@ def _attach_ambient_recall(
                 prompt,
                 cwd=workspace,
                 thread_id=thread_id,
+                current_thread_key=current_thread_key,
+                prompt_trace=warm_prompt_trace(prompt, current_thread_key),
                 registry_path=registry_path,
                 cache_path=cache_file,
                 topic_epoch=epoch,
@@ -430,6 +433,37 @@ def _attach_ambient_recall(
             },
         )
     return result
+
+
+def current_thread_key_from_hook_thread_id(thread_id: str | None) -> str | None:
+    """Map hook session ids to registry-style source_ref thread keys.
+
+    The thread ambient cache can use the raw hook `thread_id` as part of its
+    private cache key, but warm source-ref echo suppression compares against
+    clean-source refs, whose canonical registry form is `session:<id>`. Keep
+    this adapter small so later agents do not accidentally compare different
+    namespaces and silently lose current-thread echo penalties.
+    """
+
+    text = str(thread_id or "").strip()
+    if not text:
+        return None
+    if ":" in text:
+        return text
+    return f"session:{text}"
+
+
+def warm_prompt_trace(prompt: str, current_thread_key: str | None) -> list[dict[str, Any]]:
+    if not current_thread_key:
+        return []
+    return [
+        {
+            "thread_key": current_thread_key,
+            "role": "user",
+            "phase": "current_prompt",
+            "text": str(prompt or ""),
+        }
+    ]
 
 
 def assess_prompt(
