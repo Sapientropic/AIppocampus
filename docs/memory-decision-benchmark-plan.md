@@ -1,8 +1,9 @@
 # AIppocampus Memory Decision Benchmark Plan
 
 Status: repeatable baseline suite implemented; current source-evidence recall
-has improved, live semantic-gate smoke is opt-in, and semantic-sidecar coverage
-remains a known gap.
+has improved, live semantic-gate smoke is opt-in, semantic-sidecar coverage
+remains a known gap, and Track D compaction-continuity testing is specified but
+not implemented.
 
 This document defines the benchmark direction for AIppocampus memory decisions.
 It complements the existing FTS5/source-evidence checks; it does not replace
@@ -17,6 +18,8 @@ AIppocampus should be evaluated on the product behavior that matters most:
 - when to emit source-backed evidence
 - whether surfaced payloads are faithful to clean source
 - whether unrelated work prompts remain free of personal/private context
+- whether work-task corrections and accepted decisions survive compaction
+  without being promoted as automatic truth
 
 The benchmark should prove that the system is useful without becoming noisy.
 False positives, evidence over-escalation, and privacy leakage are worse than a
@@ -77,7 +80,8 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
 This slice is a smoke gate, not a real-history quality claim. It proves the
 benchmark runner can catch skip/scent/evidence mistakes and can report sanitized
 metrics; the next slice still needs broader private real-history gate cases,
-budget curves, and larger live semantic-model verification.
+budget curves, larger live semantic-model verification, and a first Track D
+compaction-continuity runner.
 
 ### Repeatable Baseline Command
 
@@ -426,6 +430,7 @@ not depend on answer-generation model choice:
 | Track A: Gate Decision | skip/scent/evidence accuracy, macro F1, over-escalation rate | Whether the system chooses the right memory surface | No (deterministic gate + optional semantic, scored against source labels) |
 | Track B: Retrieval | R@K, MRR, message/turn hit rate, context-visible hit rate | Whether the system finds the correct source row | No (retrieval-only, no answer generation) |
 | Track C: Payload Fidelity | source fidelity, privacy breach rate, parked-memory injection count | Whether the final payload is correct and safe | No (synthetic fixtures, mocked semantic gate) |
+| Track D: Compaction Continuity | correction retention, adjudication status, stale-anchor suppression | Whether work-task corrections survive compaction without becoming false memory | Mixed: deterministic event checks plus optional semantic adjudication, scored against source labels |
 
 The optional live semantic-gate track does exercise an external model, but it
 evaluates the gate decision, not answer quality. The model is part of the tested
@@ -651,6 +656,151 @@ The first implementation should be thin and deterministic: mocked semantic
 gate, synthetic/public fixtures, and no live LLM dependency. A broader local
 private run can follow once the thin path catches regressions.
 
+## Track D: Compaction Continuity Benchmark
+
+Target: correction reconsolidation across `UserPromptSubmit`, `PostToolUse`,
+`Stop`, `SubagentStart`/`SubagentStop`, thread cache, active task anchors, and
+compaction boundaries.
+
+This track measures a different reliability property from Tracks A-C. Track A
+asks whether memory should surface at all. Track B asks whether the right source
+can be found. Track C asks whether the injected payload is faithful. Track D
+asks whether the system preserves high-value work-task corrections, accepted
+decisions, failed-route lessons, and task invariants after the visible
+conversation has been compressed or pushed out of the model horizon.
+
+The track must keep the truth boundary explicit: a user correction is not
+automatically true. It is a source-backed activation event that later semantic
+or evidence-based review may mark valid, refuted, superseded, local-only, or
+uncertain.
+
+Track D depends on the Hook Timing Matrix in
+[`docs/research/correction-reconsolidation.md`](research/correction-reconsolidation.md).
+The benchmark should measure event-stage behavior without turning every hook
+into a semantic judge. In particular, `PreToolUse` is a contextual preview hook
+only; security, approval, and permission policy remain outside the memory
+benchmark. It must also test that AIppocampus stays quiet when the model
+already has the relevant context; continuity hints are a scarce prompt budget,
+not a reason to repeat everything the agent should already know.
+
+### Hook Stage Coverage
+
+Each case should state which hook stage is under test:
+
+| Stage | Expected Track D behavior |
+|---|---|
+| `UserPromptSubmit` | Creates a correction activation event and, when appropriate, a hot anchor. |
+| `PreToolUse` | Emits no output unless an active anchor is relevant to the pending tool call; never acts as a permission gate. |
+| `PostToolUse` | Captures sanitized tool evidence and links it to an open correction window. |
+| `SubagentStart` | Propagates only task-relevant active anchors into delegated work. |
+| `SubagentStop` | Reconciles delegated claims, transcript refs, and anchor adoption or contradiction. |
+| `Stop` | Captures final claim/adoption state and enqueues detached adjudication. |
+| `PreCompact` | Flushes open correction windows and anchor refs before context rewrite. |
+| `PostCompact` | Rehydrates anchors only when visibility changed or horizon loss occurred. |
+
+### Case Families
+
+`should_anchor_after_compaction` cases:
+
+- user corrects an agent's wrong assumption, the agent later adopts it, and a
+  post-compaction continuation depends on that correction
+- user rejects a failed implementation route, later work succeeds through a
+  different route, and the old route should not be retried
+- user narrows scope or definition of done, long tool work follows, and the
+  final continuation should still honor the narrowed scope
+- user corrects a benchmark or docs interpretation, and the later answer should
+  carry the corrected distinction rather than the older summary
+- an active correction is propagated into a subagent and reconciled after the
+  subagent returns
+
+`should_not_anchor` cases:
+
+- the correction is still visible in the current prompt window, so repeating it
+  would be current-thread echo noise
+- the same anchor was already injected in the current topic epoch and no
+  contradictory action is pending
+- the anchor is true but not actionable for the next prompt or tool call
+- the correction is unrelated to the current workspace or active task
+- the correction was explicitly superseded by a later user turn
+- the user correction is refuted by code, tests, tool output, or later clean
+  source
+- `PreToolUse` sees an unrelated command and correctly emits no memory context
+
+`should_confirm_when_relevant` cases:
+
+- source evidence is insufficient to decide whether the user correction was
+  valid
+- the correction was local to a branch, task, or one-off experiment and may be
+  stale
+- semantic adjudication disagrees with deterministic evidence signals
+
+### Required Inputs
+
+Case specs should bind labels to source-backed events, not generated summaries:
+
+- user correction turn source ref
+- assistant claim or route being corrected, when available
+- hook stage under test and event id
+- post-work outcome source ref or closeout source ref
+- optional verification evidence: tests, changed files, docs, tool input/output,
+  or subagent transcript refs
+- simulated context state: `visible`, `post_compaction`, or `horizon_lost`
+- expected adjudication: `valid_adopted`, `valid_ignored`, `refuted`,
+  `superseded`, `local_only`, or `uncertain`
+
+### Metrics
+
+Required metrics:
+
+- correction anchor recall after compaction
+- false anchor rate for visible, unrelated, refuted, or superseded corrections
+- stale route retry rate: refuted or rejected routes that resurface as guidance
+- adjudication accuracy across valid/refuted/superseded/local/uncertain labels
+- visibility-aware echo correctness: suppress when visible, inject when
+  compaction removed the needed source
+- anti-nag precision: suppress true-but-unnecessary reminders that do not
+  change the next likely action
+- repeated-anchor rate within a topic epoch
+- hook stage correctness: each event emits only the allowed activation,
+  evidence, propagation, closeout, or rehydration artifact for that stage
+- `PreToolUse` silence rate for unrelated tool calls
+- source fidelity for injected anchors
+- confirmation correctness for uncertain cases
+- privacy breach rate and raw prompt leakage rate
+
+Initial targets:
+
+- privacy breach rate: `0`
+- raw prompt leakage rate: `0`
+- false anchor rate for refuted corrections: `0`
+- `PreToolUse` false intervention rate for unrelated tool calls: `0`
+- repeated-anchor rate for visible or recently injected context: less than `2%`
+- correction anchor recall after compaction: at least `85%`
+- stale route retry rate: less than `2%`
+- uncertain cases routed to confirmation or low-confidence working memory:
+  at least `90%`
+
+These targets should tighten after private real-history correction packs expose
+the natural failure distribution.
+
+### Runner Shape
+
+The first Track D runner should be deterministic and synthetic:
+
+- fixture threads with correction/outcome events and simulated compaction
+  states
+- fixture hook envelopes for `UserPromptSubmit`, `PreToolUse`, `PostToolUse`,
+  `SubagentStart`, `SubagentStop`, `Stop`, `PreCompact`, and `PostCompact`
+- mocked semantic adjudication for valid, refuted, superseded, local-only, and
+  uncertain cases
+- no live model dependency in CI
+- sanitized reports that hash case ids and never emit raw correction text
+
+The broader private runner can later use real-history correction packs and an
+optional live dream-worker adjudication slice. Live adjudication results must
+remain separate from deterministic event-capture and source-fidelity metrics so
+model variance does not hide continuity regressions.
+
 ## Deterministic Boundary Tests
 
 Routing thresholds and simple policy tables should stay in unit tests, not
@@ -680,6 +830,8 @@ Rules:
   different model family/provider.
 - Generated prompts should mimic fragmented human phrasing, not benchmark
   prose.
+- Track D labels must come from checked correction/outcome event specs, not from
+  a model deciding whether its own generated correction was valid.
 - At least a small human-reviewed sample should be audited before treating a
   generated case set as useful.
 - Store private real-history case packs outside git; only sanitized aggregate
@@ -726,6 +878,11 @@ Tests:
 - `tests/aippocampus/test_benchmark_live_semantic_gate.py`
 - `tests/aippocampus/test_benchmark_suite.py`
 
+Planned Track D files:
+
+- `benchmarks/aippocampus/benchmark_compaction_continuity.py`
+- `tests/aippocampus/test_benchmark_compaction_continuity.py`
+
 Reusable existing pieces:
 
 - `EvalCase`, sanitized result stubs, CLI/JSON style, and result summarization
@@ -759,14 +916,18 @@ P4: one-command baseline suite. Implemented as `benchmark_suite.py`; current
 status records known gaps rather than treating them as failures to run the
 baseline.
 
-P5: local private real-history case generation. Reports must stay sanitized and
+P5: Track D compaction-continuity runner. Start with deterministic synthetic
+correction/outcome fixtures, mocked semantic adjudication, and simulated
+visible/post-compaction/horizon-lost states.
+
+P6: local private real-history case generation. Reports must stay sanitized and
 aggregate-only by default.
 
-P6: optional live semantic-model slices for release verification. The first
+P7: optional live semantic-model slices for release verification. The first
 opt-in live semantic-gate runner is implemented; broader scheduled runs remain
 manual verification jobs, not required CI gates.
 
-P7: optional external baseline adapters. Only start this after AIppocampus has a
+P8: optional external baseline adapters. Only start this after AIppocampus has a
 stable internal decision benchmark; otherwise "competitor comparison" will
 measure mismatched product semantics.
 
@@ -782,6 +943,11 @@ The suite is credible when it catches these regressions:
 - generated benchmark reports leak private wording or local paths
 - retrieval misses are incorrectly reported as decision failures, or stale-index
   misses are incorrectly reported as lexical ranking failures
+- a user correction that was adopted before compaction disappears from the
+  continuation context
+- a refuted or superseded correction is promoted as an active anchor
+- current-thread echo suppression hides a correction after compaction/horizon
+  loss, or repeats a correction that is still visible
 
 If the benchmark cannot catch those failures, it is not yet measuring the thing
 AIppocampus exists to protect.

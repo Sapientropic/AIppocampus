@@ -5,7 +5,9 @@ Anthropic Managed Agents Dreams are confirmed as an adjacent official Research
 Preview, but this memo's Jung-inspired dream tasks are an AIppocampus-specific
 design proposal.
 Origin: conversation between user and Claude Code, 2026-05-27.
-Related: [affect-side-channel.md](affect-side-channel.md), [compact-activation-signals.md](compact-activation-signals.md).
+Related: [affect-side-channel.md](affect-side-channel.md),
+[compact-activation-signals.md](compact-activation-signals.md),
+[correction-reconsolidation.md](correction-reconsolidation.md).
 
 ## TL;DR
 
@@ -262,6 +264,21 @@ exported. A residue seed needs source-ref fingerprints so the dream worker can
 re-open clean source before producing compensatory, prospective, amplification,
 or active-imagination output.
 
+### Correction Reconsolidation
+
+User corrections and model closeouts form a smaller, higher-reliability dream
+loop than broad ambient residue. A correction is a trigger for adjudication, not
+truth by itself: the user may be right, locally right, superseded later, or
+wrong. The foreground hook should capture compact source-backed activation
+events; post-work hooks should capture outcome and verification evidence; a
+detached semantic worker should decide whether the correction becomes an active
+task anchor, soft working memory, a promotion candidate, or a refuted
+correction note.
+
+Keep the detailed contract in
+[Correction Reconsolidation](correction-reconsolidation.md) so this memo stays
+focused on the general dream-task layer.
+
 ## The Hero's Journey Insight
 
 The Hero's Journey (Campbell) has a known flaw: it imposes a quest narrative
@@ -376,3 +393,10 @@ narrative) is also its strength (people want to be protagonists), and that
 AIppocampus's goal is to help the agent stay on the journey with the user —
 not by imposing narrative structure, but by maintaining enough intuition that
 the agent doesn't lose the thread.
+
+**User insight (2026-05-28):**
+Framed user corrections and model closeouts as two natural hooks for a
+subconscious reconsolidation loop. The key addition is that work-task
+continuity needs semantic adjudication: a user's correction should be captured
+and preserved across compaction, but later dream work must still be able to
+mark it valid, refuted, superseded, local-only, or uncertain.

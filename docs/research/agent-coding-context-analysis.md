@@ -1,0 +1,414 @@
+# Agent Coding Context Blueprint
+
+Status: research blueprint, not a runtime contract.
+Date: 2026-05-28.
+Related: [Agency From Cognitive Maps](agency-from-cognitive-map.md),
+[Correction Reconsolidation](correction-reconsolidation.md),
+[Journey Tracking](journey-tracking.md),
+[Ambient Associative Recall](ambient-associative-recall.md),
+[Memory Decision Benchmark Plan](../memory-decision-benchmark-plan.md).
+
+## Thesis
+
+The hardest context problem in agent-assisted coding is not "the model cannot
+see enough files."
+
+The deeper failure is that mature codebases contain **implicit engineering
+knowledge** that rarely lives in code:
+
+- rejected designs
+- surprising constraints
+- stale assumptions that were later corrected
+- why a strange-looking workaround is intentional
+- what the team tried, abandoned, or postponed
+- which decisions are still valid, superseded, or uncertain
+
+AIppocampus should not compete as a better code index, IDE, or generic RAG
+system. Its strongest coding-agent wedge is narrower and more valuable:
+
+> Preserve the source-backed evolution of engineering intent so future agents
+> can understand not only what the code is, but why it became this way.
+
+This makes AIppocampus a hippocampal continuity layer. It keeps the terrain,
+routes, old corrections, and decision traces. A proactive host such as Codeksei
+can then play the prefrontal role: decide whether to stay silent, remind,
+block a stale route, ask the user, or push a reversible next step.
+
+## External Evidence Base
+
+This memo uses external sources as anchors, not as proof that AIppocampus's
+specific design is validated.
+
+| Source | What it supports | Boundary |
+|---|---|---|
+| [Lost in the Middle](https://arxiv.org/abs/2307.03172) | Long-context models do not use all positions equally; information in the middle of long inputs can be harder to use. | This is a general long-context result, not specific proof about coding agents. |
+| [Chroma Context Rot](https://www.trychroma.com/research/context-rot) | Increasing input length can make model behavior less reliable even when the task appears simple; larger windows are not automatically better context. | The exact degradation depends on task and model; do not copy secondary numeric summaries without checking the report. |
+| [CodeCompass](https://arxiv.org/abs/2602.20048) | Agentic coding has a navigation paradox: fitting more code into context does not guarantee the agent attends to architecturally critical files. | CodeCompass addresses structural code navigation, not design-intent memory. |
+| [Anthropic context engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) | Context is a finite engineering resource; reliable agents need deliberate context selection rather than raw prompt growth. | It is a harness practice, not a complete implicit-knowledge memory system. |
+| [Anthropic Managed Agents](https://www.anthropic.com/engineering/managed-agents) | Long-horizon agents benefit from separating recoverable context storage from arbitrary harness-level context management. | This validates the general separation of storage and context policy, not AIppocampus's specific mechanisms. |
+
+Developer blogs, X/Twitter posts, and Reddit threads are useful anecdotal
+signals, but they should stay in that evidence class unless the exact source is
+captured and the claim is independently supported.
+
+## Failure Modes
+
+### 1. Context Drift
+
+A coding agent can read the right document early in a session and still act on
+a stale understanding later. The failure is not only storage; it is salience.
+Relevant context must remain available at the moment it can change behavior.
+
+### 2. Session Boundary Loss
+
+New sessions often lose the expensive context built during previous work:
+symbol relationships, conventions, "why this is weird" notes, failed routes,
+and accepted tradeoffs. A summary can preserve the broad story while losing the
+small constraints that actually prevent regressions.
+
+### 3. Navigation Paradox
+
+Larger context windows shift the bottleneck from "could not retrieve" to
+"retrieved but did not attend." Coding agents need structural navigation, but
+even perfect code navigation still does not preserve the history of why a
+structure exists.
+
+### 4. Tacit Constraint Failure
+
+Mature codebases accumulate local rules that look irrational unless their
+history is known:
+
+- "Do not validate this in the app layer because the gateway already owns it."
+- "Do not normalize this field because a legacy customer depends on the old
+  shape."
+- "Do not copy this nearby pattern; it is an accidental compatibility scar."
+
+These constraints are easy for a statistical code pattern follower to violate.
+
+### 5. Token Bloat
+
+Tool output, broad diffs, logs, and repeated file reads can flood the prompt.
+More tokens can reduce signal density and push the important material into
+positions where the model is less likely to use it well.
+
+### 6. Design Intent Loss
+
+Code records the final shape. It rarely records the discarded alternatives,
+the reason a compromise was accepted, or the moment a decision stopped being
+true. This is the highest-value gap for AIppocampus.
+
+## What AIppocampus Should Not Be
+
+AIppocampus should not try to become:
+
+- a full repo map or dependency graph engine
+- an IDE
+- a replacement for code search
+- a generic vector database
+- a workflow automation platform
+- the agent's permission or safety system
+- the complete executive controller for proactive coding work
+
+Those layers matter, but they are owned better elsewhere. AIppocampus should
+integrate with them through source refs and compact memory tickets.
+
+## Market Wedge: Implicit-Knowledge Continuity
+
+The differentiated product claim is:
+
+> AIppocampus preserves the decision shadow of a codebase: not just what was
+> chosen, but what was rejected, why it was rejected, and whether that judgment
+> is still current.
+
+This sits between ordinary code indexing and project management:
+
+| Layer | Primary question | Typical owner |
+|---|---|---|
+| Code index | "Where is the relevant code?" | Aider-style repo map, CodeCompass-style graph, IDE search |
+| Task state | "What are we doing now?" | Issue tracker, agent harness, Codeksei context board |
+| AIppocampus | "Why did we get here, and what should not be repeated?" | Source-backed continuity layer |
+| Executive control | "Should we act now, ask, wait, or stop?" | Codeksei / host agent framework |
+
+## Blueprint Layers
+
+### Layer 1: Source-Backed Substrate
+
+Purpose: make old work recoverable without pretending the model has native
+memory.
+
+Current or near-current AIppocampus surface:
+
+- clean source from raw rollouts
+- machine-wide registry
+- SQLite-backed search
+- thread anchors and summaries
+- ambient recall scent
+- source refs for auditability
+
+Coding value:
+
+- recover old decisions from original wording
+- distinguish exact source from generated summary
+- let a new thread discover that a prior thread exists
+- avoid treating compaction summaries as the source of truth
+
+Status: implemented or partially implemented, depending on the host path.
+
+### Layer 2: Intent Consolidation
+
+Purpose: turn raw source into structured continuity without losing provenance.
+
+Needed memory objects:
+
+```yaml
+decision_event:
+  id: "decision:..."
+  source_refs:
+    - "clean-source:..."
+  affected_scope:
+    files: []
+    modules: []
+    symbols: []
+  chosen_path: "..."
+  rejected_paths:
+    - path: "..."
+      why_rejected: "..."
+      still_rejected: "yes | no | unknown"
+  constraints:
+    - "..."
+  evidence_status: "source_backed | inferred | disputed"
+  freshness: "fresh | aging | stale | superseded"
+  supersedes: []
+  superseded_by: []
+  confidence: 0.0
+  journey_context:
+    waypoint_arc: "..."          # hexagram arc at the moment of decision
+    line_text: "..."             # 爻辞: fine-grained semantic anchor
+    dynamics_label: "..."        # 五行: generating / controlling sequence
+    wen_neighbors: []            # 序卦: culturally weighted next states
+```
+
+#### Journey Tracking's Role in Layer 2
+
+Without Journey Tracking, `decision_event` is a flat, timestamped record —
+functionally equivalent to what EntireContext or Cairn already produce. The
+differentiation comes from the hexagram-based temporal structure:
+
+- **Waypoint arcs** give each decision a semantic phase label (64 states),
+  enabling path resonance: two projects that traversed similar arcs can be
+  compared structurally, not just by keyword overlap.
+- **爻辞** (384 line texts) provide sub-hexagram granularity: two decisions
+  under the same hexagram but at different changing lines carry different
+  semantic weight. This is lost in flat records.
+- **五行 dynamics labels** tag whether a transition is generating (accumulative)
+  or controlling (disruptive) — not a value judgment, but a dynamics
+  characterization that informs how the decision should be treated during
+  recall.
+- **序卦 forward lookahead** constrains proactive suggestions to culturally
+  weighted next states rather than enumerating all possibilities.
+
+All four dimensions are deterministic (查表), no LLM needed. The LLM only
+selects the hexagram (64-way choice, cross-model consistency validated) and
+provides semantic interpretation of transitions.
+
+See [Journey Tracking](journey-tracking.md) and
+[hexagram validation results](hexagram-validation/results_v1.md).
+
+Related mechanisms:
+
+- journey tracking for time-structured project evolution
+- correction reconsolidation for user corrections and failed-route lessons
+- dream work for cross-thread synthesis and blind-spot detection
+- source-backed review before promotion into durable memory
+
+Status: designed or proposed. This layer needs benchmark validation before it
+can be presented as solved.
+
+### Layer 3: Action Interface
+
+Purpose: expose the right memory at the right intensity without making
+AIppocampus chatty or executive.
+
+AIppocampus should emit compact tickets, not broad prompt dumps:
+
+```yaml
+coding_continuity_ticket:
+  id: "coding-ticket:..."
+  trigger: "session_start | compaction_loss | pre_patch | rejected_route | user_correction"
+  intervention_level: "silent | backstage_only | light_nudge | warning | offer_next_step"
+  relevant_decisions:
+    - "decision:..."
+  do_not_repeat:
+    - "..."
+  proposed_use: "remind | warn | ask | refresh_sources | prepare_context"
+  evidence_refs:
+    - "clean-source:..."
+  source_thickness: "thin | usable | strong"
+  expires_at: "..."
+```
+
+Codeksei or another host can decide whether the ticket becomes a visible
+message, a backstage refresh, a blocked route, or no action.
+
+Status: blueprint. This should align with
+[Agency From Cognitive Maps](agency-from-cognitive-map.md), not duplicate it.
+
+## AIppocampus And Codeksei
+
+The clean split:
+
+```text
+AIppocampus
+  -> hippocampal continuity
+  -> source-backed cognitive map
+  -> correction and decision reconsolidation
+  -> compact memory / affordance tickets
+
+Codeksei
+  -> prefrontal executive shell
+  -> attention budget
+  -> inhibition and timing
+  -> leases, wakeups, check-ins, and intervention level
+
+Host coding agent
+  -> tool execution
+  -> code edits
+  -> tests
+  -> user-facing explanation
+```
+
+This split keeps AIppocampus from becoming too loud. It can say "this route is
+stale" or "this rejected design is relevant." Codeksei decides whether now is
+the right time to surface that fact.
+
+## Coding-Agent Scenarios
+
+### Scenario A: New Session Reentry
+
+Without AIppocampus, a new session sees the code but not the path that led to
+it. With AIppocampus, the agent can recover:
+
+- the current task boundary
+- the last accepted route
+- known rejected routes
+- source-backed "why this is weird" notes
+- open risks and stale claims
+
+### Scenario B: Avoiding A Rejected Design
+
+The agent proposes a refactor that was rejected months ago. AIppocampus should
+not merely recall "there was a discussion"; it should surface:
+
+- the rejected path
+- the reason it was rejected
+- whether the reason still holds
+- what evidence would justify reopening it
+
+### Scenario C: Tacit Constraint Protection
+
+Before a patch, a continuity ticket can warn that the target file sits inside
+a historical constraint:
+
+> This module deliberately avoids local validation because responsibility was
+> moved to the gateway. Confirm the gateway contract before adding validation
+> here.
+
+The point is not to forbid the edit. The point is to prevent accidental amnesia.
+
+### Scenario D: Cross-Project Resonance
+
+If two projects enter similar decision arcs, AIppocampus can suggest a source
+backed comparison:
+
+- "Last time a similar migration reached this stage, the failure point was
+  stale generated artifacts."
+- "This looks like an earlier rejected route, but the old rejection depended on
+  a constraint that may no longer exist."
+
+This should be phrased as a hypothesis with evidence refs, not as a mystical
+pattern match.
+
+## Maturity Matrix
+
+| Capability | Status | Validation needed |
+|---|---|---|
+| Clean source recall | Implemented / active | Recall precision, source-ref correctness, privacy boundary |
+| Registry discovery | Implemented / active | Cross-thread discovery and stale-index behavior |
+| Ambient recall scent | Partial | False positive rate, anti-nag behavior, source-backed expansion |
+| Correction reconsolidation | Designed | User-correction validity, compaction continuity, refuted-correction handling |
+| Journey tracking | Research design | Whether state labels improve task outcomes over ordinary summaries |
+| Decision-event extraction | Proposed | Can it capture chosen/rejected paths without overfitting? |
+| Affordance / coding tickets | Blueprint | Whether host agents use tickets correctly and quietly |
+| Codeksei executive integration | Blueprint | Whether intervention timing reduces drift without annoyance |
+
+## Evaluation Plan
+
+A coding-agent benchmark should measure behavior, not only retrieval hits.
+
+### Track A: Source-Backed Recall
+
+Can the system recover the original decision source and avoid citing generated
+summary as truth?
+
+### Track B: Rejected-Path Protection
+
+Given a task that tempts the agent into a rejected route, does the system warn
+with the correct reason and source refs?
+
+### Track C: Compaction Continuity
+
+After context compaction or long-session drift, does the agent still preserve
+the current task boundary, user correction, and definition of done?
+
+### Track D: Code Navigation Partnership
+
+When paired with a repo map or dependency graph, does AIppocampus improve
+selection of relevant historical decisions without duplicating code search?
+
+### Track E: Anti-Nag
+
+Does the system stay silent when the model already has the relevant source in
+visible context or when the memory would not change the next action?
+
+## First Implementation Slice
+
+The first useful coding slice should be small:
+
+1. Extract `decision_event` candidates from clean source and final answers.
+2. Detect rejected-path language, user corrections, and "do not repeat" notes.
+3. Store candidates in staging with source refs, not as formal memory.
+4. Add a reviewer or dream job that marks them as adopted, refuted, stale, or
+   needs confirmation.
+5. Emit one compact coding continuity ticket at session start, compaction loss,
+   or pre-patch moments when the evidence is strong.
+6. Let Codeksei own whether the ticket becomes silent tuning, backstage prep,
+   a visible warning, or an offer to continue.
+
+This avoids building a broad agent platform while directly testing the central
+claim: source-backed decision memory can prevent repeated coding mistakes.
+
+## Risks
+
+- Overclaiming: implemented recall should not be presented as solved intent
+  continuity.
+- Over-symbolization: journey labels and hexagram-style arcs are useful only if
+  they improve recall, timing, or reflection over plain structured summaries.
+- Stale authority: old decisions must be easy to supersede.
+- Privacy leakage: life-wide memory must not bleed private material into public
+  repos or unrelated projects.
+- Noise: if every old decision becomes a reminder, the system fails.
+- Tool confusion: AIppocampus should not replace code graph tools, test
+  runners, permission systems, or host-agent planning.
+
+## Positioning
+
+AIppocampus for coding agents is not "memory for everything."
+
+It is a source-backed continuity layer for the knowledge code does not carry:
+the rejected paths, implicit constraints, evolving design intent, and
+corrections that should survive session boundaries.
+
+The product promise is modest but powerful:
+
+> A future agent should not repeat an old mistake just because the old thread
+> ended.

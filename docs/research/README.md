@@ -33,15 +33,36 @@ strong claims need source-backed evidence.
    - Designs active gentle nudges, private recall cards, thread ambient cache,
      and timeboxed DeepSeek scouts that warm multi-turn agent threads without
      making the foreground hook wait for a full batch.
-6. [Thread Intuition Layer](affect-side-channel.md)
+6. [Correction Reconsolidation](correction-reconsolidation.md)
+   - The reliability layer for user corrections and failed-route lessons.
+   - Designs hook-triggered correction windows, outcome events, detached dream
+     adjudication, and anti-nag reminder budgets for compaction continuity.
+7. [Agency From Cognitive Maps](agency-from-cognitive-map.md)
+   - The next-stage agency hypothesis.
+   - Maps source-backed continuity into affordance tickets that a proactive
+     host can use for bounded, reversible, anti-nag initiative.
+8. [Agent Coding Context Blueprint](agent-coding-context-analysis.md)
+   - The agent-coding market wedge.
+   - Positions AIppocampus as a source-backed implicit-knowledge continuity
+     layer for rejected paths, tacit constraints, and design-intent evolution,
+     with Codeksei as the executive control shell.
+9. [Thread Intuition Layer](affect-side-channel.md)
    - The intuition-layer candidate.
    - Explores compact thread mood markers, especially hexagram arcs plus a
      "do not decode" instruction, as a low-token background signal.
-7. [Compact Activation Signals](compact-activation-signals.md)
+10. [Compact Activation Signals](compact-activation-signals.md)
    - The long-shot research frontier.
    - Keeps the question of activation-efficient memory alive, while current
      reviewer consensus points the near-term path back to structured text
      cognitive portraits.
+
+## Study Packs
+
+- [Hexagram Validation](hexagram-validation/README.md)
+  - Local validation notes and deterministic helper code for the hexagram /
+    five-tone intuition-layer experiments.
+  - Treat this as experiment evidence for research navigation, not as a runtime
+    contract.
 
 ## Evidence Levels
 
@@ -89,6 +110,22 @@ source-backed integration first.
 - [Claude Managed Agents Dreams](https://platform.claude.com/docs/en/managed-agents/dreams)
   confirm an official Research Preview where Dreams read memory stores and
   past sessions to produce a reorganized output memory store.
+- [LangGraph](https://docs.langchain.com/oss/javascript/langgraph/overview),
+  [AutoGPT](https://agpt.co/), [Manus Agent Mode](https://help.manus.im/en/articles/11711128-what-are-the-differences-between-chat-mode-and-agent-mode),
+  [AutoGen](https://microsoft.github.io/autogen/), [CrewAI](https://docs.crewai.com/),
+  [OpenHands](https://github.com/OpenHands/OpenHands), [SWE-agent](https://github.com/SWE-agent/SWE-agent),
+  and [Voyager](https://voyager.minedojo.org/) confirm broad external demand
+  for stateful, workflow-capable, and task-executing agents. They are execution
+  and orchestration anchors rather than evidence that AIppocampus's agency
+  ticket design is already validated.
+- [Lost in the Middle](https://arxiv.org/abs/2307.03172),
+  [Chroma Context Rot](https://www.trychroma.com/research/context-rot),
+  [CodeCompass](https://arxiv.org/abs/2602.20048), and
+  [Anthropic context engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
+  anchor the coding-agent context problem: long context, code navigation, and
+  harness-level context selection are active problems. They support the problem
+  framing, not a claim that AIppocampus's implicit-knowledge blueprint is
+  validated.
 
 ## Maintenance Notes
 
