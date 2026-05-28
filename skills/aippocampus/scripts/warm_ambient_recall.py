@@ -42,6 +42,7 @@ from ambient_thread_cache import (
 )
 from registry import load_registry, registry_paths, unique_preserve
 from retrieval import split_query_terms
+from search_clean_source import iter_clean_messages
 from subconscious_runtime import add_usage, call_chat_json, compact_usage
 from subconscious_worker import DEFAULT_BASE_URL, DEFAULT_MODEL, clamp_confidence, parse_model_json
 
@@ -53,7 +54,7 @@ DEFAULT_MAX_CARDS = 3
 DEFAULT_MAX_CATALOG_ITEMS = int(os.environ.get("AIPPOCAMPUS_WARM_RECALL_CATALOG_LIMIT", "64"))
 DEFAULT_TEMPERATURE = float(os.environ.get("AIPPOCAMPUS_WARM_RECALL_TEMPERATURE", "0.2"))
 
-DEFAULT_SCOUTS = (
+SCOUT_FAMILIES = (
     "query_expansion",
     "life_wide_cue_classifier",
     "thread_matcher",
@@ -66,8 +67,21 @@ DEFAULT_SCOUTS = (
     "failure_sentinel",
 )
 
+SCOUT_VARIANTS = (
+    "direct",
+    "registry_window",
+    "clean_source_window",
+    "current_trace_window",
+    "skeptic_window",
+)
+
+DEFAULT_SCOUTS = tuple(
+    f"{family}:{variant}" for family in SCOUT_FAMILIES for variant in SCOUT_VARIANTS
+)
+
 VALID_DECISIONS = {"skip", "background_only", "scent", "candidate", "evidence"}
 VALID_SUPPORT_LEVELS = {SCENT, CANDIDATE, EVIDENCE}
+VALID_TOPIC_EPOCH_ACTIONS = {"reuse", "rotate", "suppress"}
 SUPPORT_RANK = {SCENT: 1, CANDIDATE: 2, EVIDENCE: 3}
 
 ChatFn = Callable[[list[dict[str, str]], str, str, str, int | None, float, float], dict[str, Any]]
@@ -82,9 +96,33 @@ Rules:
 - Do not include secrets, local file paths, API keys, cookies, or long quotes.
 - Prefer small, useful signals over broad summaries.
 - A source-backed card needs concrete source_refs. Otherwise use scent/candidate.
+- Topic epoch is an LLM judgment: return topic_epoch_action
+  "reuse|rotate|suppress", a short topic_epoch_label, and topic_epoch_reason
+  when the current prompt trace suggests cache reuse or rotation.
 - If the association is private, unrelated, current-thread echo, or too weak,
   return decision "skip" or "background_only".
 """
+
+FAMILY_TASKS = {
+    "query_expansion": "Find old question shapes, metaphors, and multilingual aliases.",
+    "life_wide_cue_classifier": "Classify whether this is work, writing, philosophy, personal reflection, logistics, or routine technical flow.",
+    "thread_matcher": "Match the prompt against registry summaries, titles, keywords, and route-like labels.",
+    "key_line_hunter": "Find possible memorable old lines that could anchor an active nudge.",
+    "current_thread_filter": "Penalize hits that look like only current-thread echo or status chatter.",
+    "theme_matcher": "Compare against recurring themes, question clusters, and intuition markers.",
+    "evidence_judge": "Check whether candidate source refs truly support the association.",
+    "nudge_writer": "Draft one or two quiet private nudges for the foreground agent to adapt.",
+    "privacy_scope_guard": "Suppress unrelated, private, or over-personalized associations.",
+    "failure_sentinel": "Flag hallucinated refs, overconfident labels, or cases needing deeper archive recall.",
+}
+
+VARIANT_TASKS = {
+    "direct": "Use the direct sanitized prompt and its most literal cues.",
+    "registry_window": "Focus on registry titles, summaries, anchors, and project labels.",
+    "clean_source_window": "Focus on source-ref-backed candidate windows and exact support.",
+    "current_trace_window": "Focus on recent sanitized prompt trace and detect current-thread echo.",
+    "skeptic_window": "Act as a skeptical validator; prefer suppress, downgrade, or no-op when weak.",
+}
 
 
 def _stable_id(parts: list[Any]) -> str:
@@ -157,6 +195,48 @@ def _catalog_from_registry(registry: dict[str, Any], *, limit: int = DEFAULT_MAX
     return rows
 
 
+def _registry_path_from_args(
+    registry_path: Path | str | None = None, registry_dir: Path | str | None = None
+) -> Path:
+    return (
+        Path(registry_path).resolve()
+        if registry_path
+        else registry_paths(Path(registry_dir).resolve() if registry_dir else None)[0]
+    )
+
+
+def resolve_registry(
+    *,
+    registry: dict[str, Any] | None = None,
+    registry_path: Path | str | None = None,
+    registry_dir: Path | str | None = None,
+) -> tuple[dict[str, Any], Path]:
+    path = _registry_path_from_args(registry_path, registry_dir)
+    return (registry if isinstance(registry, dict) else load_registry(path), path)
+
+
+def _clean_prompt_trace(trace: Any, *, limit: int = 12) -> list[dict[str, Any]]:
+    if not isinstance(trace, list):
+        return []
+    rows: list[dict[str, Any]] = []
+    for item in trace[:limit]:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "thread_key": _safe_text(item.get("thread_key"), 160),
+                "role": _safe_text(item.get("role"), 40),
+                "phase": _safe_text(item.get("phase"), 80),
+                "turn_index": item.get("turn_index"),
+                "text": _safe_text(item.get("text") or item.get("prompt") or item.get("summary"), 420),
+                "source_refs": [
+                    ref for ref in (_clean_source_ref(ref) for ref in item.get("source_refs") or []) if ref
+                ][:3],
+            }
+        )
+    return rows
+
+
 def build_payload(
     prompt: str,
     *,
@@ -164,15 +244,12 @@ def build_payload(
     registry: dict[str, Any] | None = None,
     registry_path: Path | str | None = None,
     registry_dir: Path | str | None = None,
+    prompt_trace: list[dict[str, Any]] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     sanitized_prompt, secret_policy = sanitize_external_model_text(prompt)
     registry_obj = registry
     if registry_obj is None:
-        path = (
-            Path(registry_path).resolve()
-            if registry_path
-            else registry_paths(Path(registry_dir).resolve() if registry_dir else None)[0]
-        )
+        path = _registry_path_from_args(registry_path, registry_dir)
         registry_obj = load_registry(path)
     prompt_terms = split_query_terms([sanitized_prompt])[:16]
     payload = {
@@ -181,10 +258,14 @@ def build_payload(
         "memory_catalog": _catalog_from_registry(registry_obj),
         "workspace_name": _safe_text(Path(cwd).resolve().name, 120),
         "prompt": compact_text(sanitized_prompt, 1200),
+        "prompt_trace": _clean_prompt_trace(prompt_trace or []),
         "prompt_terms": prompt_terms,
         "output_contract": {
             "decision": "skip|background_only|scent|candidate|evidence",
             "confidence": 0.0,
+            "topic_epoch_action": "reuse|rotate|suppress",
+            "topic_epoch_label": "short cache topic label",
+            "topic_epoch_reason": "why to reuse, rotate, or suppress this topic epoch",
             "query_aliases": ["short search terms"],
             "themes": ["short theme labels"],
             "negative_contexts": ["when not to use this"],
@@ -214,24 +295,41 @@ def build_payload(
     return sanitize_external_model_payload(payload), secret_policy
 
 
+def scout_lane_parts(scout: str) -> tuple[str, str]:
+    raw = str(scout or "").strip()
+    if ":" in raw:
+        family, variant = raw.split(":", 1)
+    else:
+        family, variant = raw, "direct"
+    if family not in SCOUT_FAMILIES:
+        return "", ""
+    if variant not in SCOUT_VARIANTS:
+        variant = "direct"
+    return family, variant
+
+
+def expand_scout_lanes(scouts: tuple[str, ...]) -> tuple[str, ...]:
+    lanes: list[str] = []
+    for scout in scouts:
+        family, variant = scout_lane_parts(scout)
+        if not family:
+            continue
+        lane = f"{family}:{variant}"
+        if lane not in lanes:
+            lanes.append(lane)
+    return tuple(lanes)
+
+
 def scout_prompt(scout: str, payload: dict[str, Any]) -> str:
-    tasks = {
-        "query_expansion": "Find old question shapes, metaphors, and multilingual aliases.",
-        "life_wide_cue_classifier": "Classify whether this is work, writing, philosophy, personal reflection, logistics, or routine technical flow.",
-        "thread_matcher": "Match the prompt against registry summaries, titles, keywords, and route-like labels.",
-        "key_line_hunter": "Find possible memorable old lines that could anchor an active nudge.",
-        "current_thread_filter": "Penalize hits that look like only current-thread echo or status chatter.",
-        "theme_matcher": "Compare against recurring themes, question clusters, and intuition markers.",
-        "evidence_judge": "Check whether candidate source refs truly support the association.",
-        "nudge_writer": "Draft one or two quiet private nudges for the foreground agent to adapt.",
-        "privacy_scope_guard": "Suppress unrelated, private, or over-personalized associations.",
-        "failure_sentinel": "Flag hallucinated refs, overconfident labels, or cases needing deeper archive recall.",
-    }
+    family, variant = scout_lane_parts(scout)
     return json.dumps(
         {
             "input": payload,
             "scout": scout,
-            "task": tasks.get(scout, "Analyze warm ambient recall relevance."),
+            "scout_family": family,
+            "scout_variant": variant,
+            "task": FAMILY_TASKS.get(family, "Analyze warm ambient recall relevance."),
+            "variant_task": VARIANT_TASKS.get(variant, "Use this candidate/query variant carefully."),
         },
         ensure_ascii=False,
         indent=2,
@@ -321,15 +419,29 @@ def parse_scout_output(raw: dict[str, Any], scout: str) -> dict[str, Any]:
     parsed = parse_model_json(raw) if raw.get("choices") else raw
     if not isinstance(parsed, dict):
         parsed = {}
+    family, variant = scout_lane_parts(scout)
     decision = str(parsed.get("decision") or "skip").strip().casefold()
     if decision not in VALID_DECISIONS:
         decision = "skip"
+    epoch_action = str(parsed.get("topic_epoch_action") or "").strip().casefold()
+    if epoch_action not in VALID_TOPIC_EPOCH_ACTIONS:
+        epoch_action = ""
     confidence = clamp_confidence(parsed.get("confidence"))
     row = {
         "scout": scout,
+        "scout_family": family,
+        "scout_variant": variant,
         "ok": True,
         "decision": decision,
         "confidence": confidence,
+        "topic_epoch": {
+            "action": epoch_action,
+            "label": _safe_text(parsed.get("topic_epoch_label"), 120),
+            "reason": _safe_text(parsed.get("topic_epoch_reason"), 220),
+            "confidence": confidence,
+        }
+        if epoch_action
+        else None,
         "query_aliases": _clean_list(
             parsed.get("query_aliases") or parsed.get("aliases") or [], limit=12, chars=80
         ),
@@ -359,11 +471,15 @@ def parse_scout_output(raw: dict[str, Any], scout: str) -> dict[str, Any]:
 
 
 def _error_row(scout: str, exc: BaseException) -> dict[str, Any]:
+    family, variant = scout_lane_parts(scout)
     return {
         "scout": scout,
+        "scout_family": family,
+        "scout_variant": variant,
         "ok": False,
         "decision": "skip",
         "confidence": 0.0,
+        "topic_epoch": None,
         "query_aliases": [],
         "themes": [],
         "negative_contexts": [],
@@ -494,7 +610,143 @@ def run_scout_batch(
     return rows, quorum_met or (useful_count >= max(1, quorum))
 
 
-def merge_scouts(rows: list[dict[str, Any]], *, max_cards: int = DEFAULT_MAX_CARDS) -> dict[str, Any]:
+def source_index_from_registry(
+    registry: dict[str, Any] | None, *, thread_keys: set[str] | None = None
+) -> dict[str, dict[str, Any]]:
+    index: dict[str, dict[str, Any]] = {}
+    for entry in (registry or {}).get("threads") or []:
+        if not isinstance(entry, dict):
+            continue
+        thread_key = str(entry.get("thread_key") or "")
+        if thread_keys is not None and thread_key not in thread_keys:
+            continue
+        messages_path_value = (entry.get("paths") or {}).get("clean_source_messages_jsonl")
+        if not thread_key or not messages_path_value:
+            continue
+        messages = iter_clean_messages(Path(messages_path_value))
+        by_id: dict[str, dict[str, Any]] = {}
+        by_line: dict[str, dict[str, Any]] = {}
+        for message in messages:
+            message_id = str(message.get("message_id") or message.get("id") or "")
+            if message_id:
+                by_id[message_id] = message
+            for key in ("source_line", "line", "clean_ordinal"):
+                value = message.get(key)
+                if value is not None:
+                    by_line[str(value)] = message
+        index[thread_key] = {"by_id": by_id, "by_line": by_line}
+    return index
+
+
+def referenced_thread_keys(rows: list[dict[str, Any]]) -> set[str]:
+    keys: set[str] = set()
+    for row in rows:
+        for card in row.get("candidates") or []:
+            for ref in card.get("source_refs") or []:
+                if isinstance(ref, dict) and ref.get("thread_key"):
+                    keys.add(str(ref.get("thread_key")))
+    return keys
+
+
+def _message_for_ref(source_index: dict[str, dict[str, Any]], ref: dict[str, Any]) -> dict[str, Any] | None:
+    thread_key = str(ref.get("thread_key") or "")
+    thread_index = source_index.get(thread_key) or {}
+    message_id = str(ref.get("message_id") or ref.get("id") or "")
+    if message_id and message_id in (thread_index.get("by_id") or {}):
+        return thread_index["by_id"][message_id]
+    line = ref.get("line", ref.get("source_line"))
+    if line is not None and str(line) in (thread_index.get("by_line") or {}):
+        return thread_index["by_line"][str(line)]
+    return None
+
+
+def _message_supports_card(message: dict[str, Any], card: dict[str, Any]) -> bool:
+    text = str(message.get("text") or "").casefold()
+    key_line = str(card.get("key_line") or "").strip().casefold()
+    if key_line and len(key_line) >= 12 and key_line in text:
+        return True
+    for term in card.get("matched_terms") or []:
+        needle = str(term or "").strip().casefold()
+        if len(needle) >= 2 and needle in text:
+            return True
+    return False
+
+
+def validate_card_source_refs(
+    card: dict[str, Any], source_index: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
+    refs = [ref for ref in card.get("source_refs") or [] if isinstance(ref, dict)]
+    if not refs:
+        return {"status": "missing_source_refs", "checked_ref_count": 0, "supported_ref_count": 0}
+    if not source_index:
+        return {
+            "status": "unverified_no_source_index",
+            "checked_ref_count": 0,
+            "supported_ref_count": 0,
+        }
+    checked = 0
+    supported = 0
+    missing = 0
+    for ref in refs:
+        message = _message_for_ref(source_index, ref)
+        if not message:
+            missing += 1
+            continue
+        checked += 1
+        if _message_supports_card(message, card):
+            supported += 1
+    if supported:
+        return {
+            "status": "supported",
+            "checked_ref_count": checked,
+            "supported_ref_count": supported,
+        }
+    return {
+        "status": "unsupported" if checked else "missing_source_ref",
+        "checked_ref_count": checked,
+        "supported_ref_count": 0,
+        "missing_ref_count": missing,
+    }
+
+
+def calibrate_cards(
+    cards: list[dict[str, Any]],
+    *,
+    source_index: dict[str, dict[str, Any]] | None = None,
+    current_thread_key: str | None = None,
+    allow_current_thread_echo: bool = False,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    calibrated: list[dict[str, Any]] = []
+    echo_count = 0
+    for card in cards:
+        refs = [ref for ref in card.get("source_refs") or [] if isinstance(ref, dict)]
+        if (
+            current_thread_key
+            and refs
+            and all(str(ref.get("thread_key") or "") == current_thread_key for ref in refs)
+        ):
+            echo_count += 1
+            if not allow_current_thread_echo:
+                continue
+        clean = dict(card)
+        validation = validate_card_source_refs(clean, source_index or {})
+        clean["source_validation"] = validation
+        if clean.get("support_level") == EVIDENCE and validation.get("status") != "supported":
+            clean["support_level"] = CANDIDATE
+            clean["visibility"] = ACTIVE_GENTLE_NUDGE
+            clean["suggested_use"] = "Treat as provisional resonance until clean source support is verified."
+        calibrated.append(clean)
+    return calibrated, {"current_thread_echo_count": echo_count}
+
+
+def merge_scouts(
+    rows: list[dict[str, Any]],
+    *,
+    max_cards: int = DEFAULT_MAX_CARDS,
+    source_index: dict[str, dict[str, Any]] | None = None,
+    current_thread_key: str | None = None,
+    allow_current_thread_echo: bool = False,
+) -> dict[str, Any]:
     blockers = [
         row
         for row in rows
@@ -547,8 +799,13 @@ def merge_scouts(rows: list[dict[str, Any]], *, max_cards: int = DEFAULT_MAX_CAR
             continue
         seen.add(key)
         cards.append(card)
-        if len(cards) >= max(0, max_cards):
-            break
+    cards, calibration = calibrate_cards(
+        cards,
+        source_index=source_index,
+        current_thread_key=current_thread_key,
+        allow_current_thread_echo=allow_current_thread_echo,
+    )
+    cards = cards[: max(0, max_cards)]
     max_confidence = max([float(row.get("confidence") or 0.0) for row in rows if row.get("ok")] or [0.0])
     return {
         "cards": cards,
@@ -557,6 +814,62 @@ def merge_scouts(rows: list[dict[str, Any]], *, max_cards: int = DEFAULT_MAX_CAR
         "negative_contexts": unique_preserve(negative_contexts, limit=8),
         "query_aliases": unique_preserve(query_aliases, limit=16),
         "blocked_by": [],
+        **calibration,
+    }
+
+
+def resolve_topic_epoch(
+    *,
+    rows: list[dict[str, Any]],
+    prior_topic_epoch: str | None,
+    fallback_terms: list[str],
+) -> tuple[str, dict[str, Any]]:
+    votes: list[dict[str, Any]] = []
+    for row in rows:
+        vote = row.get("topic_epoch")
+        if not isinstance(vote, dict):
+            continue
+        action = str(vote.get("action") or "").strip().casefold()
+        if action not in VALID_TOPIC_EPOCH_ACTIONS:
+            continue
+        votes.append(
+            {
+                "action": action,
+                "label": _safe_text(vote.get("label"), 120),
+                "reason": _safe_text(vote.get("reason"), 220),
+                "confidence": clamp_confidence(vote.get("confidence")),
+                "scout": row.get("scout"),
+            }
+        )
+    if not votes:
+        epoch = prior_topic_epoch or topic_epoch_from_terms(fallback_terms)
+        return epoch, {
+            "action": "fallback",
+            "label": "",
+            "reason": "no scout topic-epoch vote",
+            "confidence": 0.0,
+            "source_scout": None,
+            "suppress_write": False,
+        }
+
+    action_priority = {"suppress": 3, "rotate": 2, "reuse": 1}
+    votes.sort(key=lambda item: (-action_priority[item["action"]], -float(item["confidence"])))
+    chosen = votes[0]
+    action = chosen["action"]
+    label = chosen.get("label") or ""
+    if action == "reuse" and prior_topic_epoch:
+        epoch = prior_topic_epoch
+    elif label:
+        epoch = topic_epoch_from_terms([label])
+    else:
+        epoch = prior_topic_epoch or topic_epoch_from_terms(fallback_terms)
+    return epoch, {
+        "action": action,
+        "label": label,
+        "reason": chosen.get("reason") or "",
+        "confidence": chosen.get("confidence") or 0.0,
+        "source_scout": chosen.get("scout"),
+        "suppress_write": action == "suppress",
     }
 
 
@@ -585,6 +898,9 @@ def run_warm_ambient_recall(
     *,
     cwd: Path | str,
     thread_id: str | None = None,
+    current_thread_key: str | None = None,
+    allow_current_thread_echo: bool = False,
+    prompt_trace: list[dict[str, Any]] | None = None,
     topic_epoch: str | None = None,
     registry: dict[str, Any] | None = None,
     registry_path: Path | str | None = None,
@@ -621,15 +937,17 @@ def run_warm_ambient_recall(
     key_value = api_key or os.environ.get(api_key_env)
     if not key_value:
         return unavailable_result("missing api key", secret_policy=secret_policy)
+    registry_obj, registry_path_obj = resolve_registry(
+        registry=registry, registry_path=registry_path, registry_dir=registry_dir
+    )
     payload, secret_policy = build_payload(
         prompt,
         cwd=cwd_path,
-        registry=registry,
-        registry_path=registry_path,
-        registry_dir=registry_dir,
+        registry=registry_obj,
+        prompt_trace=prompt_trace,
     )
 
-    scout_names = tuple(name for name in scouts if name in set(DEFAULT_SCOUTS))
+    scout_names = expand_scout_lanes(scouts)
     rows, quorum_met = run_scout_batch(
         scouts=scout_names,
         payload=payload,
@@ -645,25 +963,29 @@ def run_warm_ambient_recall(
         chat_fn=chat_fn,
         scout_fn=scout_fn,
     )
-    merged = merge_scouts(rows)
+    merged = merge_scouts(
+        rows,
+        source_index=source_index_from_registry(
+            registry_obj, thread_keys=referenced_thread_keys(rows)
+        ),
+        current_thread_key=current_thread_key,
+        allow_current_thread_echo=allow_current_thread_echo,
+    )
     usage_total: dict[str, Any] = {}
     for row in rows:
         add_usage(usage_total, compact_usage(row.get("usage") or {}))
     terms_for_epoch = unique_preserve(
         [*payload.get("prompt_terms", []), *merged.get("query_aliases", [])], limit=16
     )
-    resolved_epoch = topic_epoch or topic_epoch_from_terms(terms_for_epoch)
-    resolved_thread = thread_id or workspace_thread_key(cwd_path)
-    registry_path_obj = (
-        Path(registry_path).resolve()
-        if registry_path
-        else registry_paths(Path(registry_dir).resolve() if registry_dir else None)[0]
+    resolved_epoch, topic_epoch_decision = resolve_topic_epoch(
+        rows=rows, prior_topic_epoch=topic_epoch, fallback_terms=terms_for_epoch
     )
+    resolved_thread = thread_id or workspace_thread_key(cwd_path)
     resolved_cache_path = (
         Path(cache_path).resolve() if cache_path else default_ambient_cache_path(registry_path=registry_path_obj)
     )
     cache_write = None
-    if merged["cards"] and not no_write:
+    if merged["cards"] and not no_write and not topic_epoch_decision.get("suppress_write"):
         cache_write = write_thread_cache(
             resolved_cache_path,
             thread_id=resolved_thread,
@@ -681,6 +1003,8 @@ def run_warm_ambient_recall(
     status = "written" if cache_write and cache_write.get("status") == "written" else "ready"
     if not rows:
         status = "timeout"
+    if topic_epoch_decision.get("suppress_write"):
+        status = "suppressed"
     return {
         "kind": "aippocampus_warm_ambient_recall",
         "schema_version": SCHEMA_VERSION,
@@ -697,9 +1021,11 @@ def run_warm_ambient_recall(
         "mode": merged["mode"],
         "confidence": merged["confidence"],
         "topic_epoch": resolved_epoch,
+        "topic_epoch_decision": topic_epoch_decision,
         "cards": merged["cards"],
         "negative_contexts": merged["negative_contexts"],
         "blocked_by": merged["blocked_by"],
+        "current_thread_echo_count": merged.get("current_thread_echo_count", 0),
         "cache_write": cache_write,
         "usage": usage_total,
         "cache": deepseek_cache_metrics_from_usage(usage_total),
@@ -716,6 +1042,12 @@ def main() -> int:
     parser.add_argument("--prompt", required=True)
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument("--thread-id")
+    parser.add_argument("--current-thread-key")
+    parser.add_argument("--allow-current-thread-echo", action="store_true")
+    parser.add_argument(
+        "--prompt-trace-json",
+        help="Optional sanitized prompt trace JSON array for warm calibration.",
+    )
     parser.add_argument("--topic-epoch")
     parser.add_argument("--registry")
     parser.add_argument("--registry-dir")
@@ -740,6 +1072,9 @@ def main() -> int:
         args.prompt,
         cwd=args.cwd,
         thread_id=args.thread_id,
+        current_thread_key=args.current_thread_key,
+        allow_current_thread_echo=args.allow_current_thread_echo,
+        prompt_trace=json.loads(args.prompt_trace_json) if args.prompt_trace_json else None,
         topic_epoch=args.topic_epoch,
         registry_path=args.registry,
         registry_dir=args.registry_dir,

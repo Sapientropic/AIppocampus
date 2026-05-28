@@ -171,22 +171,23 @@ for the full scout batch.
 ## High-Concurrency DeepSeek Scouts
 
 DeepSeek-class fast LLM workers are worth using aggressively because their job
-is narrow, provisional, and cheap after cache optimization. Design for 10-way
-concurrency from the start.
+is narrow, provisional, and cheap after cache optimization. The warm prototype
+now uses 50 structured lanes: 10 functional scout families across 5
+candidate-window/query variants.
 
 This is a proposed warm-path evolution, not the current stable hook contract.
 Until measured prototypes prove the foreground budget, the operational boundary
 in `skills/aippocampus/references/ambient-hooks.md` remains authoritative.
 
 The foreground rule is quorum, not completion. A warm-path caller may launch the
-full scout set, but it should only wait for the first useful subset inside the
+full lane set, but it should only wait for the first useful subset inside the
 budget, for example the first 2-3 valid scout results plus privacy/scope guard
 if available. Late results should update the thread ambient cache after
-deterministic validation. A foreground hook must not require all 10 scouts to
+deterministic validation. A foreground hook must not require all 50 lanes to
 finish before the user prompt can proceed.
 
-The 10 scouts should not be ten copies of the same prompt. They should cover
-different recall functions:
+The 10 scout families should not be ten copies of the same prompt. They should
+cover different recall functions:
 
 | Scout | Purpose |
 |---|---|
@@ -200,6 +201,10 @@ different recall functions:
 | Nudge writer | Draft one or two natural active-gentle-nudge phrasings for the main agent to adapt. |
 | Privacy/scope guard | Suppress private, unrelated, or over-personalized associations. |
 | Failure sentinel | Look for hallucinated refs, overconfident labels, or candidates that need deep archival recall. |
+
+Each family runs across 5 variants: direct prompt, registry window,
+clean-source/source-ref window, current prompt trace window, and skeptic window.
+This gives sampling depth without losing merge structure.
 
 Each scout returns a small strict JSON object. A malformed result is isolated as
 `ok=false`; it must not poison the batch. The parent process owns merging,
@@ -216,8 +221,11 @@ Model output is never memory truth.
 The deterministic merger should:
 
 - require source refs before a candidate can become evidence
+- dereference source refs against clean-source messages when a registry path is
+  available, and downgrade unsupported evidence to candidate
 - distinguish `scent`, `candidate`, and `evidence`
-- prefer older cross-thread hits over current-thread echoes when both match
+- suppress current-thread-only echoes by default unless the caller explicitly
+  allows recent-thread recall
 - weight user turns and assistant final answers above commentary and tool text
 - penalize injected skill instructions, generic project boilerplate, and noisy
   status updates
@@ -280,8 +288,9 @@ Design constraints:
   raw prompt text.
 - Cache thread-level ambient cards by `thread_id + workspace + topic_epoch`.
 - Cache candidate cards with expiry and source-ref fingerprints.
-- Rotate topic epochs when drift, negative contexts, or code-surface prompts
-  indicate that old cards should stop applying.
+- Rotate topic epochs from scout output, not hard-coded prompt rules. Scouts
+  vote `reuse`, `rotate`, or `suppress` with a short topic label; the parent
+  hashes that label and never stores raw prompt text.
 - Keep provider output provisional until deterministic validation accepts it.
 - Keep foreground hook output small: no raw prompt logs, no source dumps, no
   long explanations.
@@ -313,7 +322,7 @@ Status: Card/cache first has landed, and the first standalone warm-scout
 prototype now exists. The runtime boundary is still intentionally narrow:
 foreground hook decisions can produce compact private recall cards and write
 them to a thread ambient cache, while `warm_ambient_recall.py` runs the
-10-scout experiment outside the foreground hook.
+50-lane warm experiment outside the foreground hook.
 
 The first slice should stay small but real:
 
@@ -329,18 +338,20 @@ The first slice should stay small but real:
    cache. The first integration uses existing hook signals and cache writes;
    deeper cache-first behavior should be tuned after real prompt traces.
 5. Add `warm_ambient_recall.py` as a standalone warm-path prototype. Done for
-   the first shape: it defines the 10 named scouts, runs them concurrently,
-   isolates malformed outputs, and returns on quorum inside a strict timeout.
-   It fails open when no API key is available.
+   the first shape: it defines 10 named scout families across 5 variants,
+   runs the resulting 50 lanes concurrently, isolates malformed outputs, and
+   returns on quorum inside a strict timeout. It fails open when no API key is
+   available.
 6. Merge into at most 3 private recall cards and serialize useful results back
    into the thread cache. Done for quorum results; explicit `--wait-all` is
    reserved for evaluation or detached warming, not the foreground hook.
 7. Reuse optional residue export for source-ref-fingerprinted warm cards so
    unused resonance can become dream-task seed material without logging raw
    prompt text.
-8. Next: strengthen source-ref validation, current-thread echo penalties,
-   visibility selection, topic drift rotation, and late-result cache updates
-   after real prompt traces.
+8. Source-ref validation, current-thread echo suppression, and LLM-directed
+   topic epoch rotation are now in the standalone prototype. Next: tune
+   visibility selection and late-result cache updates after more real prompt
+   traces.
 
 Success for slice one is not perfect recall. It is that the agent receives
 useful, source-backed peripheral awareness without making the user wait, and

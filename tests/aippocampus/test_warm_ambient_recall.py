@@ -26,13 +26,59 @@ class WarmAmbientRecallTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
+    def _write_clean_thread(self, thread_key: str, rows: list[dict]) -> Path:
+        clean_dir = self.root / "clean" / thread_key.replace(":", "-")
+        clean_dir.mkdir(parents=True)
+        messages_path = clean_dir / "messages.jsonl"
+        messages_path.write_text(
+            "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
+            encoding="utf-8",
+        )
+        return messages_path
+
+    def _write_registry(self, entries: list[dict]) -> Path:
+        registry_path = self.root / "registry" / "threads.json"
+        registry_path.parent.mkdir(parents=True, exist_ok=True)
+        registry_path.write_text(
+            json.dumps({"schema_version": 1, "threads": entries}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        return registry_path
+
+    def test_default_scout_lanes_are_10_families_times_5_variants(self) -> None:
+        calls: list[str] = []
+
+        def scout_fn(scout, payload, **kwargs):
+            del payload, kwargs
+            calls.append(scout)
+            return {"decision": "skip", "confidence": 0.1}
+
+        result = warm.run_warm_ambient_recall(
+            "继续 ambient recall",
+            cwd=self.workspace,
+            thread_id="thread-a",
+            cache_path=self.cache_path,
+            api_key="test-key",
+            scout_fn=scout_fn,
+            wait_all=True,
+            no_write=True,
+        )
+        families = {lane.split(":", 1)[0] for lane in warm.DEFAULT_SCOUTS}
+        variants = {lane.split(":", 1)[1] for lane in warm.DEFAULT_SCOUTS}
+
+        self.assertEqual(len(warm.DEFAULT_SCOUTS), 50)
+        self.assertEqual(len(families), 10)
+        self.assertEqual(len(variants), 5)
+        self.assertEqual(result["scout_count"], 50)
+        self.assertEqual(len(calls), 50)
+
     def test_quorum_returns_without_waiting_for_all_scouts(self) -> None:
         calls: list[str] = []
 
         def scout_fn(scout, payload, **kwargs):
             del payload, kwargs
             calls.append(scout)
-            if scout in {"query_expansion", "life_wide_cue_classifier"}:
+            if scout.startswith(("query_expansion:", "life_wide_cue_classifier:")):
                 return {
                     "decision": "candidate",
                     "confidence": 0.72,
@@ -66,14 +112,14 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertTrue(result["quorum_met"])
         self.assertLess(elapsed, 0.2)
         self.assertEqual(result["accepted_scout_count"], 2)
-        self.assertGreaterEqual(len(warm.DEFAULT_SCOUTS), 10)
-        self.assertIn("query_expansion", calls)
-        self.assertIn("life_wide_cue_classifier", calls)
+        self.assertEqual(len(warm.DEFAULT_SCOUTS), 50)
+        self.assertTrue(any(call.startswith("query_expansion:") for call in calls))
+        self.assertTrue(any(call.startswith("life_wide_cue_classifier:") for call in calls))
 
     def test_malformed_scout_is_isolated(self) -> None:
         def scout_fn(scout, payload, **kwargs):
             del payload, kwargs
-            if scout == "query_expansion":
+            if scout.startswith("query_expansion:"):
                 raise ValueError("not valid JSON")
             return {
                 "decision": "candidate",
@@ -176,6 +222,230 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(result["status"], "unavailable")
         self.assertEqual(result["reason"], "missing api key")
         self.assertFalse(self.cache_path.exists())
+
+    def test_source_validation_downgrades_unsupported_evidence_ref(self) -> None:
+        messages = self._write_clean_thread(
+            "session:old",
+            [
+                {
+                    "message_id": "msg-1",
+                    "source_line": 42,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": "This source discusses unrelated registry maintenance only.",
+                }
+            ],
+        )
+        registry_path = self._write_registry(
+            [
+                {
+                    "thread_key": "session:old",
+                    "title": "Old ambient thread",
+                    "paths": {"clean_source_messages_jsonl": str(messages)},
+                }
+            ]
+        )
+
+        def scout_fn(scout, payload, **kwargs):
+            del scout, payload, kwargs
+            return {
+                "decision": "evidence",
+                "confidence": 0.9,
+                "candidates": [
+                    {
+                        "theme": "ambient validation",
+                        "support_level": "evidence",
+                        "key_line": "Card/cache first, then warm scouts.",
+                        "matched_terms": ["warm scouts"],
+                        "source_refs": [
+                            {"thread_key": "session:old", "message_id": "msg-1", "line": 42}
+                        ],
+                    }
+                ],
+            }
+
+        result = warm.run_warm_ambient_recall(
+            "继续 warm scouts",
+            cwd=self.workspace,
+            thread_id="thread-a",
+            registry_path=registry_path,
+            cache_path=self.cache_path,
+            api_key="test-key",
+            scout_fn=scout_fn,
+            scouts=("evidence_judge",),
+            quorum=1,
+            timeout=0.5,
+            no_write=True,
+        )
+
+        self.assertEqual(result["cards"][0]["support_level"], "candidate")
+        self.assertEqual(result["cards"][0]["source_validation"]["status"], "unsupported")
+
+    def test_source_validation_keeps_supported_evidence_ref(self) -> None:
+        messages = self._write_clean_thread(
+            "session:old",
+            [
+                {
+                    "message_id": "msg-1",
+                    "source_line": 42,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": "The design says: Card/cache first, then warm scouts. This validates ambient recall.",
+                }
+            ],
+        )
+        registry_path = self._write_registry(
+            [
+                {
+                    "thread_key": "session:old",
+                    "title": "Old ambient thread",
+                    "paths": {"clean_source_messages_jsonl": str(messages)},
+                }
+            ]
+        )
+
+        def scout_fn(scout, payload, **kwargs):
+            del scout, payload, kwargs
+            return {
+                "decision": "evidence",
+                "confidence": 0.9,
+                "candidates": [
+                    {
+                        "theme": "ambient validation",
+                        "support_level": "evidence",
+                        "key_line": "Card/cache first, then warm scouts.",
+                        "matched_terms": ["ambient recall"],
+                        "source_refs": [
+                            {"thread_key": "session:old", "message_id": "msg-1", "line": 42}
+                        ],
+                    }
+                ],
+            }
+
+        result = warm.run_warm_ambient_recall(
+            "继续 ambient recall",
+            cwd=self.workspace,
+            thread_id="thread-a",
+            registry_path=registry_path,
+            cache_path=self.cache_path,
+            api_key="test-key",
+            scout_fn=scout_fn,
+            scouts=("evidence_judge",),
+            quorum=1,
+            timeout=0.5,
+            no_write=True,
+        )
+
+        self.assertEqual(result["cards"][0]["support_level"], "evidence")
+        self.assertEqual(result["cards"][0]["source_validation"]["status"], "supported")
+
+    def test_current_thread_echo_is_suppressed_by_default(self) -> None:
+        def scout_fn(scout, payload, **kwargs):
+            del scout, payload, kwargs
+            return {
+                "decision": "evidence",
+                "confidence": 0.9,
+                "candidates": [
+                    {
+                        "theme": "current echo",
+                        "support_level": "evidence",
+                        "key_line": "This was just said in the current thread.",
+                        "matched_terms": ["current thread"],
+                        "source_refs": [
+                            {"thread_key": "session:current", "message_id": "msg-current", "line": 7}
+                        ],
+                    }
+                ],
+            }
+
+        result = warm.run_warm_ambient_recall(
+            "继续当前话题",
+            cwd=self.workspace,
+            thread_id="thread-a",
+            current_thread_key="session:current",
+            cache_path=self.cache_path,
+            api_key="test-key",
+            scout_fn=scout_fn,
+            scouts=("current_thread_filter",),
+            quorum=1,
+            timeout=0.5,
+            no_write=True,
+        )
+
+        self.assertEqual(result["cards"], [])
+        self.assertEqual(result["current_thread_echo_count"], 1)
+
+    def test_llm_topic_epoch_rotation_uses_scout_label_not_prompt_terms(self) -> None:
+        label = "semantic scope sidecar calibration"
+
+        def scout_fn(scout, payload, **kwargs):
+            del scout, payload, kwargs
+            return {
+                "decision": "candidate",
+                "confidence": 0.8,
+                "topic_epoch_action": "rotate",
+                "topic_epoch_label": label,
+                "topic_epoch_reason": "The prompt trace moved to sidecar calibration.",
+                "candidates": [{"theme": "epoch rotation", "support_level": "candidate"}],
+            }
+
+        result = warm.run_warm_ambient_recall(
+            "unrelated deterministic prompt terms should not define the epoch",
+            cwd=self.workspace,
+            thread_id="thread-a",
+            cache_path=self.cache_path,
+            api_key="test-key",
+            scout_fn=scout_fn,
+            scouts=("theme_matcher",),
+            quorum=1,
+            timeout=0.5,
+            no_write=True,
+        )
+        prompt_terms_epoch = warm.topic_epoch_from_terms(
+            ["unrelated deterministic prompt terms should not define the epoch"]
+        )
+
+        self.assertEqual(result["topic_epoch"], warm.topic_epoch_from_terms([label]))
+        self.assertNotEqual(result["topic_epoch"], prompt_terms_epoch)
+        self.assertEqual(result["topic_epoch_decision"]["action"], "rotate")
+
+    def test_prompt_trace_is_sanitized_before_scout_payload(self) -> None:
+        local_path = "C:" + "\\private\\trace\\memory.md"
+        seen_payloads: list[dict] = []
+
+        def scout_fn(scout, payload, **kwargs):
+            del scout, kwargs
+            seen_payloads.append(payload)
+            return {"decision": "skip", "confidence": 0.1}
+
+        warm.run_warm_ambient_recall(
+            "继续 ambient recall",
+            cwd=self.workspace,
+            thread_id="thread-a",
+            prompt_trace=[
+                {
+                    "thread_key": "session:current",
+                    "role": "user",
+                    "text": f"trace mentions {local_path}",
+                }
+            ],
+            cache_path=self.cache_path,
+            api_key="test-key",
+            scout_fn=scout_fn,
+            scouts=("query_expansion",),
+            quorum=1,
+            timeout=0.5,
+            wait_all=True,
+            no_write=True,
+        )
+        raw_payload = json.dumps(seen_payloads[0], ensure_ascii=False)
+
+        self.assertIn("prompt_trace", seen_payloads[0])
+        self.assertIn("<redacted:local-path>", raw_payload)
+        self.assertNotIn(local_path.casefold(), raw_payload.casefold())
+        self.assertNotIn("memory.md", raw_payload.casefold())
 
 
 if __name__ == "__main__":
