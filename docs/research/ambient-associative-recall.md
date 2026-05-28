@@ -386,10 +386,12 @@ The first slice should stay small but real:
    expectation failures without emitting raw prompts or cards. Live mode may
    call the configured DeepSeek-compatible model but emits only hashes,
    aggregate metrics, validation status counts, error-kind buckets, and cache
-   metrics. Live smoke showed the real timeout risk was template-like scout
-   output, so the runtime now keeps `output_contract` compact and uses
-   family-aware output budgets instead of relying on a rigid default
-   `max_tokens` cap.
+   metrics. `benchmark_warm_ambient_sweep.py` now compares quorum-first vs.
+   wait-all, worker caps, and timeout values over the same private case pack,
+   ranking quality gates and source health before latency. Live smoke showed
+   the real timeout risk was template-like scout output, so the runtime now
+   keeps `output_contract` compact and uses family-aware output budgets instead
+   of relying on a rigid default `max_tokens` cap.
 9. Source-ref validation, current-thread echo suppression, LLM-directed topic
    epoch rotation, and detached late-result cache warming are now implemented.
    Deep archival recall now has a source-backed visibility mode for original
@@ -397,7 +399,8 @@ The first slice should stay small but real:
    `session:<id>` source-ref key and a sanitized current-prompt trace into the
    detached warm job, so background scouts can apply echo and topic-drift
    judgments against real thread context. Next: fill a private labeled benchmark
-   subset from real traces and tune live-model quality thresholds.
+   subset from real traces, run the sweep across a wider live matrix, and tune
+   live-model quality thresholds from the resulting failure distribution.
 
 Success for slice one is not perfect recall. It is that the agent receives
 useful, source-backed peripheral awareness without making the user wait, and

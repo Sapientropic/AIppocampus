@@ -75,10 +75,15 @@ unset when measuring broad candidate/scent recall where unsourced hints are
 expected.
 Live mode may call the configured external model but must keep output sanitized
 to prompt hashes, aggregate metrics, validation status counts, error-kind
-buckets, and cache usage only. Scout prompts keep `output_contract` as a compact
-schema and add family-aware output budgets so Flash is not asked to fill a
-large template. `--max-tokens` remains an explicit diagnostic override, not the
-default way to control scout length.
+buckets, and cache usage only. Use
+`benchmarks/aippocampus/benchmark_warm_ambient_sweep.py` to compare
+quorum-first/wait-all, worker caps, and timeout values over the same private
+case pack. The sweep ranks quality gates, case pass rate, false evidence, and
+source-ref health before latency, so it does not accidentally choose the fastest
+configuration that degrades recall. Scout prompts keep `output_contract` as a
+compact schema and add family-aware output budgets so Flash is not asked to
+fill a large template. `--max-tokens` remains an explicit diagnostic override,
+not the default way to control scout length.
 DeepSeek-compatible calls include a stable
 hashed `user_id` by default so the 50 lanes share the same privacy-safe
 scheduling/KV-cache bucket; callers may override it only with an already
@@ -110,6 +115,7 @@ Useful commands:
 - `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --json`
 - `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --cases-file traces.jsonl --json`
 - `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --cases-file traces.jsonl --live --quorum-first --max-workers 5 --timeout 30 --json`
+- `python benchmarks\aippocampus\benchmark_warm_ambient_sweep.py --cases-file traces.jsonl --live --wait-modes quorum_first,wait_all --max-workers-list 3,5,10 --timeouts 8,15,30 --json`
 - `python ...\install_aippocampus_prompt_hook.py install|status|uninstall`
 
 `deep_archival_recall` is an escalation request, not a license to dump history:
