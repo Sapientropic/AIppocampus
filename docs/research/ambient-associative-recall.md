@@ -211,6 +211,11 @@ then appends the small `scout_task` suffix with `scout_family`,
 `scout_variant`, and `lens_task`. This preserves the 10x5 structure while
 making provider prefix-cache reuse possible. Cache-hit ratios remain an
 evaluation target; do not document guessed numbers as measured results.
+Because DeepSeek persists cache prefix units after completed requests, detached
+and evaluation runs should not launch every same-prefix lane cold at the exact
+same instant. Use a small prefix-cache warmup wave, then launch the remaining
+thin scout suffixes; foreground prompt hooks keep warmup disabled and rely on
+the already-written thread cache.
 
 Each scout returns a small strict JSON object. A malformed result is isolated as
 `ok=false`; it must not poison the batch. The parent process owns merging,
@@ -249,6 +254,14 @@ Use `--case-offset`, `--case-limit`, and `--progress-jsonl` / `--progress-dir`
 for sharded long runs so interrupted calibration still leaves sanitized
 per-case evidence.
 
+The cache optimization path now has two separate controls:
+`--prefix-cache-warmup-scouts` controls how many initial same-prefix scout lanes
+complete before the rest of the batch launches, and
+`--prefix-cache-warmup-delay` can add a small detached/evaluation pause after
+that warmup. Detached warm jobs default to a tiny warmup wave; foreground-style
+direct calls default to zero warmup so user-visible latency stays cache-first
+and fail-open.
+
 Do not make `max_tokens` the primary tuning lever. It remains `None` by default
 so Flash can return complete compact JSON; only test token caps as an explicit
 diagnostic after source validation, case pass rate, invalid JSON, and false
@@ -264,7 +277,8 @@ The deterministic merger should:
 
 - require source refs before a candidate can become evidence
 - dereference source refs against clean-source messages when a registry path is
-  available, and downgrade unsupported evidence to candidate
+  available; cards with concrete refs that are missing locally or unsupported
+  are dropped so lower-ranked supported cards can surface instead
 - distinguish `scent`, `candidate`, and `evidence`
 - suppress current-thread-only echoes by default unless the caller explicitly
   allows recent-thread recall
@@ -417,14 +431,24 @@ The first slice should stay small but real:
    automated 100-case labeled pack, build separate views with
    `--label-policy source_ref_supported`, `--label-policy echo_guard`, and
    `--label-policy topic_epoch_vote`; keep `topic_epoch_heuristic` as a review
-   aid only. Echo calibration expects `current_thread_echo_count >= 1` because
-   the metric counts suppressed current-thread echo attempts, not leaked cards.
+   aid only. Source-ref calibration requires supported evidence only when the
+   trace has prior overlapping support; clean topic jumps should not be forced
+   to cite the user's current prompt as memory. Echo calibration expects
+   `current_thread_echo_count >= 1` only for short continuation turns; long
+   pasted-document prompts should not be forced to manufacture current-text
+   echoes. The metric counts suppressed current-thread echo attempts, not
+   leaked cards.
    Topic epoch rotation remains an LLM judgment: the automated gate requires an
    explicit `reuse|rotate|suppress` vote, not agreement with a local lexical
-   heuristic. The benchmark runner treats labels as per-case expectation
-   failures without emitting raw prompts or cards. Live mode may call the
-   configured DeepSeek-compatible model but emits only hashes, aggregate
-   metrics, validation status counts, error-kind buckets, and cache metrics.
+   heuristic. Run topic-vote packs with `--min-available-rate 0`, because a
+   valid `suppress` vote may intentionally leave no visible card. The benchmark
+   runner treats labels as per-case expectation failures without emitting raw
+   prompts or cards. Live mode may call the configured DeepSeek-compatible
+   model but emits only hashes, aggregate metrics, validation status counts,
+   error-kind buckets, and cache metrics.
+   For source-ref packs, `false_evidence_count == 0` is the hard safety gate;
+   `case_pass_rate` is recall coverage and may be tuned separately because a
+   safe miss is better than an unsupported citation.
    `benchmark_warm_ambient_sweep.py` now compares quorum-first vs. wait-all,
    worker caps, and timeout values over the same private case pack, ranking
    quality gates and source health before latency. Its sanitized `analysis`

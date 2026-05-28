@@ -48,8 +48,9 @@ the shared payload before the lane-specific `scout_task` suffix, and each lane
 combines a family task with a variant `lens_task` rather than repeating one
 generic prompt. The merger dereferences candidate source refs against
 clean-source messages when possible, merges similar themes before the final
-card cap, suppresses current-thread-only echoes by default, recognizes guard
-blocks by family even with `family:variant` lanes, and lets scouts vote
+card cap, drops cards whose concrete source refs are missing or unsupported,
+suppresses current-thread-only echoes by default, recognizes guard blocks by
+family even with `family:variant` lanes, and lets scouts vote
 `reuse|rotate|suppress` for topic epoch handling. It is not part of the default
 foreground hook path: quorum-first runs are allowed to return before all lanes
 finish, and `--wait-all` belongs to explicit evaluation or detached warming.
@@ -73,15 +74,20 @@ benchmark; this gives source-ref validation a tiny sampled dereference surface
 without exposing the full generated corpus. Use `--min-turn-index 2` when the
 calibration target needs real prior context. Add `--label-template` when
 preparing a private review pack; then use focused `--label-policy` values for
-automated gates: `source_ref_supported` requires a supported source-ref card,
-`echo_guard` requires the current-thread echo penalty to fire at least once,
+automated gates: `source_ref_supported` requires a supported source-ref card
+only when prior trace context overlaps the prompt, `echo_guard` requires the
+current-thread echo penalty to fire at least once for short continuation turns,
 and `topic_epoch_vote` requires an explicit LLM `reuse|rotate|suppress` topic
-vote. `topic_epoch_heuristic` is a review-only aid because topic epoch rotation
-must not be hard-coded to a lexical rule. Generated exports are private working
+vote.
+`topic_epoch_heuristic` is a review-only aid because topic epoch rotation must
+not be hard-coded to a lexical rule. Generated exports are private working
 artifacts and should not be committed. The runner also supports optional
 `--max-missing-source-refs-count` for stricter source-ref tuning runs; leave it
 unset when measuring broad candidate/scent recall where unsourced hints are
 expected.
+For source-ref live sweeps, keep `--max-false-evidence-count 0` strict and
+treat `case_pass_rate` as recall coverage; safe no-card misses are preferable
+to unsupported citation-shaped evidence.
 Live mode may call the configured external model but must keep output sanitized
 to prompt hashes, aggregate metrics, validation status counts, error-kind
 buckets, and cache usage only. Use
@@ -115,6 +121,11 @@ outer case parallelism. Use small outer values such as 2-4 plus
 `--case-offset`, `--case-limit`, and `--progress-jsonl` / `--progress-dir` for
 resumable long runs. A `service_unavailable_503` bucket means the provider was
 too busy; do not read it as a source-ref, echo, or topic-epoch quality signal.
+Detached warm jobs use a small prefix-cache warmup wave by default before the
+rest of the 10x5 lanes launch. Benchmark callers can tune this with
+`--prefix-cache-warmup-scouts` and `--prefix-cache-warmup-delay`; foreground
+direct runs should usually leave it at zero and use cached thread cards instead
+of waiting for provider cache construction.
 
 Callers may opt into residue export by passing a residue output path to the
 thread-cache writer. This writes `aippocampus_ambient_residue` JSONL rows for
@@ -137,8 +148,9 @@ Useful commands:
 - `python benchmarks\aippocampus\build_warm_ambient_trace_cases.py --clean-source-dir benchmark_corpus\output\sharegpt_coding_multiturn --dataset-id sharegpt_coding_multiturn --out .tmp\warm-sharegpt-coding-100-source-ref.jsonl --jsonl --subset-messages-out .tmp\warm-sharegpt-coding-100-pack\clean-source\messages.jsonl --registry-out .tmp\warm-sharegpt-coding-100-pack\threads.json --limit 100 --per-thread 1 --trace-window 6 --min-turn-index 2 --label-template --label-policy source_ref_supported --json`
 - `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --json`
 - `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --cases-file traces.jsonl --json`
-- `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --cases-file traces.jsonl --registry .tmp\warm-sharegpt-coding-pack\threads.json --live --quorum-first --case-offset 0 --case-limit 10 --case-workers 2 --max-workers 50 --timeout 15 --progress-jsonl .tmp\warm-progress-source-ref-000.jsonl --json`
-- `python benchmarks\aippocampus\benchmark_warm_ambient_sweep.py --cases-file traces.jsonl --registry .tmp\warm-sharegpt-coding-pack\threads.json --live --wait-modes quorum_first,wait_all --case-workers 2 --progress-dir .tmp\warm-progress --max-workers-list 20,50 --timeouts 15,30 --json`
+- `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --cases-file traces.jsonl --registry .tmp\warm-sharegpt-coding-pack\threads.json --live --quorum-first --case-offset 0 --case-limit 10 --case-workers 2 --max-workers 50 --prefix-cache-warmup-scouts 2 --prefix-cache-warmup-delay 0.5 --timeout 15 --progress-jsonl .tmp\warm-progress-source-ref-000.jsonl --json`
+- `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --cases-file .tmp\warm-sharegpt-coding-100-topic-vote.jsonl --registry .tmp\warm-sharegpt-coding-100-pack\threads.json --live --wait-all --case-workers 1 --max-workers 50 --prefix-cache-warmup-scouts 2 --prefix-cache-warmup-delay 0.5 --timeout 30 --min-available-rate 0 --json`
+- `python benchmarks\aippocampus\benchmark_warm_ambient_sweep.py --cases-file traces.jsonl --registry .tmp\warm-sharegpt-coding-pack\threads.json --live --wait-modes quorum_first,wait_all --case-workers 2 --progress-dir .tmp\warm-progress --prefix-cache-warmup-scouts 2 --prefix-cache-warmup-delay 0.5 --max-workers-list 20,50 --timeouts 15,30 --json`
 - `python ...\install_aippocampus_prompt_hook.py install|status|uninstall`
 
 `deep_archival_recall` is an escalation request, not a license to dump history:

@@ -218,6 +218,39 @@ def infer_topic_epoch_action(prompt: str, trace_messages: list[dict[str, Any]]) 
     return "rotate"
 
 
+def has_prior_source_support(prompt: str, trace_messages: list[dict[str, Any]]) -> bool:
+    """Return whether the trace has prior material worth requiring as support.
+
+    The source-ref pack calibrates dereferencing, not current-prompt echo. If a
+    sampled turn is a clean topic jump, requiring a supported card usually
+    rewards citing the user's just-submitted prompt as if it were memory. Keep
+    those cases in the pack, but do not make them fail for omitting an echo.
+    """
+    prior_text = " ".join(str(item.get("text") or "") for item in trace_messages[:-1])
+    if not prior_text.strip():
+        return False
+    if FOLLOWUP_CUE_RE.search(prompt):
+        return True
+    prompt_terms = set(split_query_terms([prompt])[:30])
+    prior_terms = set(split_query_terms([prior_text])[:80])
+    return len(prompt_terms.intersection(prior_terms)) >= 2
+
+
+def should_expect_echo_penalty(prompt: str, trace_messages: list[dict[str, Any]]) -> bool:
+    """Decide whether a live echo benchmark should require an echo attempt.
+
+    Long pasted documents are a bad echo target: requiring an echo there nudges
+    scouts to cite the user's current text as memory. The deterministic guard
+    still suppresses any same-thread refs if they appear, but the live label
+    should only require an echo count for short, clearly-continuing turns.
+    """
+    if len(prompt) > 1200:
+        return False
+    return FOLLOWUP_CUE_RE.search(prompt) is not None or has_prior_source_support(
+        prompt, trace_messages
+    )
+
+
 def apply_label_policy(
     case: dict[str, Any],
     *,
@@ -234,16 +267,24 @@ def apply_label_policy(
         # otherwise valid refs from the sampled prompt trace are suppressed by
         # the echo guard before the benchmark can count supported evidence.
         case.pop("current_thread_key", None)
-        case["expected_min_cards"] = max(1, int(case.get("expected_min_cards") or 0))
-        case["expected_min_source_validation_statuses"] = {"supported": 1}
-        notes.append("auto label: require at least one supported source-ref card")
+        if has_prior_source_support(str(case.get("prompt") or ""), trace_messages):
+            case["expected_min_cards"] = max(1, int(case.get("expected_min_cards") or 0))
+            case["expected_min_source_validation_statuses"] = {"supported": 1}
+            notes.append("auto label: require at least one supported prior source-ref card")
+        else:
+            case["expected_min_cards"] = 0
+            case["expected_min_source_validation_statuses"] = {}
+            notes.append("auto label: topic jump has no prior support requirement")
     elif label_policy == "echo_guard":
         # `current_thread_echo_count` counts cards suppressed by the echo
-        # filter, not leaked cards. For this calibration view, require the
-        # penalty to actually exercise on source refs from the sampled prompt
-        # trace instead of rewarding scouts that never cite the trace.
-        case["expected_min_current_thread_echo_count"] = 1
-        notes.append("auto label: current-thread echo penalty should trigger")
+        # filter, not leaked cards. Require an echo attempt only for short
+        # continuation turns where citing recent thread refs would be natural.
+        if should_expect_echo_penalty(str(case.get("prompt") or ""), trace_messages):
+            case["expected_min_current_thread_echo_count"] = 1
+            notes.append("auto label: current-thread echo penalty should trigger")
+        else:
+            case["expected_min_current_thread_echo_count"] = None
+            notes.append("auto label: long/topic-jump prompt has no echo-trigger requirement")
     elif label_policy == "topic_epoch_heuristic":
         action = infer_topic_epoch_action(str(case.get("prompt") or ""), trace_messages)
         case["expected_topic_epoch_actions"] = [action]

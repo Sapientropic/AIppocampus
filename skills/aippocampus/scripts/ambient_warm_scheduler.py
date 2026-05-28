@@ -29,6 +29,12 @@ from ambient_thread_cache import default_ambient_cache_path
 
 JOB_SCHEMA_VERSION = 1
 DEFAULT_JOB_DIR_NAME = "ambient_warm_jobs"
+DEFAULT_DETACHED_PREFIX_CACHE_WARMUP_SCOUTS = int(
+    os.environ.get("AIPPOCAMPUS_DETACHED_WARM_PREFIX_CACHE_WARMUP_SCOUTS", "2") or 0
+)
+DEFAULT_DETACHED_PREFIX_CACHE_WARMUP_DELAY = float(
+    os.environ.get("AIPPOCAMPUS_DETACHED_WARM_PREFIX_CACHE_WARMUP_DELAY", "0.5") or 0
+)
 TRUTHY = {"1", "true", "yes", "on", "enabled"}
 FALSY = {"0", "false", "no", "off", "disabled"}
 
@@ -113,6 +119,8 @@ def schedule_warm_ambient_recall(
     timeout: float | None = None,
     quorum: int | None = None,
     max_workers: int | None = None,
+    prefix_cache_warmup_scouts: int | None = None,
+    prefix_cache_warmup_delay: float | None = None,
     job_dir: Path | str | None = None,
     enabled: bool | None = None,
     spawn: bool = True,
@@ -173,6 +181,12 @@ def schedule_warm_ambient_recall(
         "timeout": timeout,
         "quorum": quorum,
         "max_workers": max_workers,
+        "prefix_cache_warmup_scouts": DEFAULT_DETACHED_PREFIX_CACHE_WARMUP_SCOUTS
+        if prefix_cache_warmup_scouts is None
+        else int(prefix_cache_warmup_scouts),
+        "prefix_cache_warmup_delay": DEFAULT_DETACHED_PREFIX_CACHE_WARMUP_DELAY
+        if prefix_cache_warmup_delay is None
+        else float(prefix_cache_warmup_delay),
         "wait_all": True,
         "no_write": False,
         "result_path": str(result_path),
@@ -191,4 +205,3 @@ def schedule_warm_ambient_recall(
         "prompt_sha1": job["prompt_sha1"],
         "secret_policy": secret_policy,
     }
-

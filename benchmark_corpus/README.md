@@ -125,7 +125,8 @@ one label policy masking another:
 python benchmarks\aippocampus\build_warm_ambient_trace_cases.py --clean-source-dir benchmark_corpus\output\sharegpt_coding_multiturn --dataset-id sharegpt_coding_multiturn --out .tmp\warm-sharegpt-coding-100-source-ref.jsonl --jsonl --subset-messages-out .tmp\warm-sharegpt-coding-100-pack\clean-source\messages.jsonl --registry-out .tmp\warm-sharegpt-coding-100-pack\threads.json --limit 100 --per-thread 1 --trace-window 6 --min-turn-index 2 --label-template --label-policy source_ref_supported --json
 python benchmarks\aippocampus\build_warm_ambient_trace_cases.py --clean-source-dir benchmark_corpus\output\sharegpt_coding_multiturn --dataset-id sharegpt_coding_multiturn --out .tmp\warm-sharegpt-coding-100-echo.jsonl --jsonl --subset-messages-out .tmp\warm-sharegpt-coding-100-pack\clean-source\messages.jsonl --registry-out .tmp\warm-sharegpt-coding-100-pack\threads.json --limit 100 --per-thread 1 --trace-window 6 --min-turn-index 2 --label-template --label-policy echo_guard --json
 python benchmarks\aippocampus\build_warm_ambient_trace_cases.py --clean-source-dir benchmark_corpus\output\sharegpt_coding_multiturn --dataset-id sharegpt_coding_multiturn --out .tmp\warm-sharegpt-coding-100-topic-vote.jsonl --jsonl --subset-messages-out .tmp\warm-sharegpt-coding-100-pack\clean-source\messages.jsonl --registry-out .tmp\warm-sharegpt-coding-100-pack\threads.json --limit 100 --per-thread 1 --trace-window 6 --min-turn-index 2 --label-template --label-policy topic_epoch_vote --json
-python benchmarks\aippocampus\benchmark_warm_ambient_sweep.py --cases-file .tmp\warm-sharegpt-coding-100-source-ref.jsonl --registry .tmp\warm-sharegpt-coding-100-pack\threads.json --live --wait-modes quorum_first,wait_all --case-workers 2 --progress-dir .tmp\warm-progress-source-ref --max-workers-list 20,50 --timeouts 15,30 --json
+python benchmarks\aippocampus\benchmark_warm_ambient_sweep.py --cases-file .tmp\warm-sharegpt-coding-100-source-ref.jsonl --registry .tmp\warm-sharegpt-coding-100-pack\threads.json --live --wait-modes quorum_first,wait_all --case-workers 2 --progress-dir .tmp\warm-progress-source-ref --prefix-cache-warmup-scouts 2 --prefix-cache-warmup-delay 0.5 --max-workers-list 20,50 --timeouts 15,30 --json
+python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --cases-file .tmp\warm-sharegpt-coding-100-topic-vote.jsonl --registry .tmp\warm-sharegpt-coding-100-pack\threads.json --live --wait-all --case-workers 1 --max-workers 50 --prefix-cache-warmup-scouts 2 --prefix-cache-warmup-delay 0.5 --timeout 30 --min-available-rate 0 --json
 ```
 
 For warm recall, `--max-workers` is per-case scout concurrency and
@@ -134,6 +135,15 @@ runs because `case_workers=4` with `max_workers=50` can already issue up to 200
 simultaneous scout requests. Use `--case-offset`, `--case-limit`, and
 `--progress-dir` to shard 100-case packs and keep sanitized partial evidence if
 a provider returns `service_unavailable_503` or a run is interrupted.
+For cache tuning, use `--prefix-cache-warmup-scouts 2` with a small
+`--prefix-cache-warmup-delay` on live benchmark/evaluation runs. This preserves
+the full 10x5 scout set while giving DeepSeek a completed same-prefix request
+before the remaining thin scout suffixes launch.
+For `topic_epoch_vote` packs, set `--min-available-rate 0`: a valid LLM
+`suppress` vote may intentionally produce no visible card.
+For source-ref packs, keep `--max-false-evidence-count 0` strict. Treat
+`case_pass_rate` as recall coverage, not the only quality signal; a safe miss is
+preferable to surfacing an unsupported citation.
 
 These warm case packs stay private local artifacts. The subset registry is only
 for source-ref validation against sampled clean-source rows; do not commit the

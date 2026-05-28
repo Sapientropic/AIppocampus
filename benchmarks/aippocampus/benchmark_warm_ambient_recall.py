@@ -473,6 +473,9 @@ def summarize_case(case: WarmBenchmarkCase, result: dict[str, Any]) -> dict[str,
         kind = str(row.get("error_kind") or warm.scout_error_kind(row.get("reason")))
         scout_error_kinds[kind] = scout_error_kinds.get(kind, 0) + 1
     cache = result.get("cache") or {}
+    cache_hit_rate = cache["hit_rate"] if "hit_rate" in cache else cache.get("prompt_cache_hit_rate")
+    cache_hit_tokens = cache["hit_tokens"] if "hit_tokens" in cache else cache.get("prompt_cache_tokens")
+    cache_miss_tokens = cache["miss_tokens"] if "miss_tokens" in cache else cache.get("prompt_cache_miss_tokens")
     summary = {
         "case_id": case.case_id,
         "prompt_sha1": sha1_text(case.prompt),
@@ -483,6 +486,7 @@ def summarize_case(case: WarmBenchmarkCase, result: dict[str, Any]) -> dict[str,
         "quorum_met": bool(result.get("quorum_met")),
         "configured_scout_count": int(result.get("scout_count") or 0),
         "max_workers": int(result.get("max_workers") or 0),
+        "prefix_cache_warmup_scout_count": int(result.get("prefix_cache_warmup_scout_count") or 0),
         "observed_scout_result_count": len(result.get("scouts") or []),
         "accepted_scout_count": int(result.get("accepted_scout_count") or 0),
         "failed_scout_count": int(result.get("failed_scout_count") or 0),
@@ -494,9 +498,9 @@ def summarize_case(case: WarmBenchmarkCase, result: dict[str, Any]) -> dict[str,
         "elapsed_ms": float(result.get("elapsed_ms") or 0.0),
         "cache": {
             "available": cache.get("available"),
-            "hit_rate": cache.get("hit_rate") or cache.get("prompt_cache_hit_rate"),
-            "hit_tokens": cache.get("hit_tokens") or cache.get("prompt_cache_tokens"),
-            "miss_tokens": cache.get("miss_tokens") or cache.get("prompt_cache_miss_tokens"),
+            "hit_rate": cache_hit_rate,
+            "hit_tokens": cache_hit_tokens,
+            "miss_tokens": cache_miss_tokens,
         },
     }
     expectation_failures: list[str] = []
@@ -543,6 +547,8 @@ def run_warm_ambient_recall_benchmark(
     quorum: int = warm.DEFAULT_QUORUM,
     max_workers: int | None = None,
     case_workers: int | None = DEFAULT_CASE_WORKERS,
+    prefix_cache_warmup_scouts: int = warm.DEFAULT_PREFIX_CACHE_WARMUP_SCOUTS,
+    prefix_cache_warmup_delay: float = warm.DEFAULT_PREFIX_CACHE_WARMUP_DELAY,
     max_tokens: int | None = None,
     registry_path: Path | str | None = None,
     registry_dir: Path | str | None = None,
@@ -588,6 +594,8 @@ def run_warm_ambient_recall_benchmark(
                     "case_limit": case_limit,
                     "case_workers": resolved_case_workers,
                     "max_workers": max_workers,
+                    "prefix_cache_warmup_scouts": prefix_cache_warmup_scouts,
+                    "prefix_cache_warmup_delay": prefix_cache_warmup_delay,
                     "wait_all": wait_all,
                     "timeout": timeout,
                 },
@@ -611,6 +619,8 @@ def run_warm_ambient_recall_benchmark(
                 timeout=timeout,
                 quorum=quorum,
                 max_workers=max_workers,
+                prefix_cache_warmup_scouts=prefix_cache_warmup_scouts,
+                prefix_cache_warmup_delay=prefix_cache_warmup_delay,
                 max_tokens=max_tokens,
                 wait_all=wait_all,
                 no_write=True,
@@ -676,6 +686,8 @@ def run_warm_ambient_recall_benchmark(
                 "case_limit": case_limit,
                 "case_workers": resolved_case_workers,
                 "max_workers": max_workers,
+                "prefix_cache_warmup_scouts": prefix_cache_warmup_scouts,
+                "prefix_cache_warmup_delay": prefix_cache_warmup_delay,
                 "wait_all": wait_all,
                 "timeout": timeout,
                 "progress_jsonl": bool(progress_jsonl),
@@ -698,6 +710,7 @@ def summarize_metrics(cases: list[dict[str, Any]]) -> dict[str, Any]:
     total = len(cases)
     total_observed = sum(int(case.get("observed_scout_result_count") or 0) for case in cases)
     total_configured = sum(int(case.get("configured_scout_count") or 0) for case in cases)
+    total_prefix_warmup = sum(int(case.get("prefix_cache_warmup_scout_count") or 0) for case in cases)
     available = sum(1 for case in cases if case.get("available"))
     cards = sum(int(case.get("card_count") or 0) for case in cases)
     total_failed = sum(int(case.get("failed_scout_count") or 0) for case in cases)
@@ -707,6 +720,9 @@ def summarize_metrics(cases: list[dict[str, Any]]) -> dict[str, Any]:
         for case in cases
         for status in ("unsupported", "missing_source_ref")
     )
+    prompt_cache_hit_tokens = sum(int((case.get("cache") or {}).get("hit_tokens") or 0) for case in cases)
+    prompt_cache_miss_tokens = sum(int((case.get("cache") or {}).get("miss_tokens") or 0) for case in cases)
+    prompt_cache_total = prompt_cache_hit_tokens + prompt_cache_miss_tokens
     missing_source_refs = sum(
         int((case.get("source_validation_statuses") or {}).get("missing_source_refs") or 0)
         for case in cases
@@ -721,10 +737,16 @@ def summarize_metrics(cases: list[dict[str, Any]]) -> dict[str, Any]:
         "available_rate": round(available / total, 4) if total else 0.0,
         "total_scout_calls": total_observed,
         "configured_scout_calls": total_configured,
+        "prefix_cache_warmup_scout_calls": total_prefix_warmup,
         "observed_scout_rate": round(total_observed / total_configured, 4) if total_configured else 0.0,
         "scout_error_rate": round(total_failed / total_observed, 4) if total_observed else 0.0,
         "case_pass_rate": round(case_passes / total, 4) if total else 0.0,
         "false_evidence_count": false_evidence,
+        "prompt_cache_hit_tokens": prompt_cache_hit_tokens,
+        "prompt_cache_miss_tokens": prompt_cache_miss_tokens,
+        "prompt_cache_hit_rate": round(prompt_cache_hit_tokens / prompt_cache_total, 4)
+        if prompt_cache_total
+        else 0.0,
         "missing_source_refs_count": missing_source_refs,
         "card_count": cards,
         "avg_elapsed_ms": round(sum(elapsed) / total, 2) if total else 0.0,
@@ -805,6 +827,8 @@ def main() -> int:
         default=DEFAULT_CASE_WORKERS,
         help="Outer case concurrency. Use 0 for conservative auto mode.",
     )
+    parser.add_argument("--prefix-cache-warmup-scouts", type=int, default=warm.DEFAULT_PREFIX_CACHE_WARMUP_SCOUTS)
+    parser.add_argument("--prefix-cache-warmup-delay", type=float, default=warm.DEFAULT_PREFIX_CACHE_WARMUP_DELAY)
     parser.add_argument("--max-tokens", type=int, default=None)
     parser.add_argument("--registry")
     parser.add_argument("--registry-dir")
@@ -830,6 +854,8 @@ def main() -> int:
         quorum=args.quorum,
         max_workers=args.max_workers,
         case_workers=args.case_workers,
+        prefix_cache_warmup_scouts=args.prefix_cache_warmup_scouts,
+        prefix_cache_warmup_delay=args.prefix_cache_warmup_delay,
         max_tokens=args.max_tokens,
         registry_path=args.registry,
         registry_dir=args.registry_dir,

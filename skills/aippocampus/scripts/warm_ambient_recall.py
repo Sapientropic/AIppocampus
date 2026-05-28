@@ -56,6 +56,14 @@ DEFAULT_MAX_CARDS = 3
 DEFAULT_MAX_CATALOG_ITEMS = int(os.environ.get("AIPPOCAMPUS_WARM_RECALL_CATALOG_LIMIT", "64"))
 DEFAULT_TEMPERATURE = float(os.environ.get("AIPPOCAMPUS_WARM_RECALL_TEMPERATURE", "0.2"))
 DEFAULT_USER_ID_PREFIX = "aip-warm"
+DEFAULT_PREFIX_CACHE_WARMUP_SCOUTS = int(os.environ.get("AIPPOCAMPUS_WARM_PREFIX_CACHE_WARMUP_SCOUTS", "0") or 0)
+DEFAULT_DETACHED_PREFIX_CACHE_WARMUP_SCOUTS = int(
+    os.environ.get("AIPPOCAMPUS_DETACHED_WARM_PREFIX_CACHE_WARMUP_SCOUTS", "2") or 0
+)
+DEFAULT_PREFIX_CACHE_WARMUP_DELAY = float(os.environ.get("AIPPOCAMPUS_WARM_PREFIX_CACHE_WARMUP_DELAY", "0") or 0)
+DEFAULT_DETACHED_PREFIX_CACHE_WARMUP_DELAY = float(
+    os.environ.get("AIPPOCAMPUS_DETACHED_WARM_PREFIX_CACHE_WARMUP_DELAY", "0.5") or 0
+)
 WARM_JOB_SCHEMA_VERSION = 1
 
 SCOUT_FAMILIES = (
@@ -289,7 +297,27 @@ def _clean_list(values: Any, *, limit: int, chars: int = 100) -> list[str]:
         values = [values]
     if not isinstance(values, list):
         return []
-    return unique_preserve([_safe_text(item, chars) for item in values if str(item or "").strip()], limit)
+    scalar_values = [
+        item
+        for item in values
+        if isinstance(item, str | int | float | bool) and str(item).strip()
+    ]
+    return unique_preserve([_safe_text(item, chars) for item in scalar_values], limit)
+
+
+def _split_theme_items(value: Any) -> tuple[list[str], list[dict[str, Any]]]:
+    """Separate plain theme labels from model-returned card-like theme objects."""
+    if isinstance(value, dict):
+        return [], [value]
+    items = value if isinstance(value, list) else [value] if isinstance(value, str) else []
+    themes: list[str] = []
+    candidates: list[dict[str, Any]] = []
+    for item in items:
+        if isinstance(item, dict):
+            candidates.append(item)
+        elif isinstance(item, str | int | float | bool) and str(item).strip():
+            themes.append(_safe_text(item, 120))
+    return unique_preserve(themes, 8), candidates
 
 
 def _clean_source_ref(ref: dict[str, Any]) -> dict[str, Any]:
@@ -410,9 +438,6 @@ def build_payload(
         "task": "propose_warm_ambient_recall_hints",
         "memory_catalog": _catalog_from_registry(registry_obj),
         "workspace_name": _safe_text(Path(cwd).resolve().name, 120),
-        "prompt": compact_text(sanitized_prompt, 1200),
-        "prompt_trace": _clean_prompt_trace(prompt_trace or []),
-        "prompt_terms": prompt_terms,
         "output_contract": {
             "decision": "skip|background_only|scent|candidate|evidence",
             "confidence": 0.0,
@@ -426,6 +451,9 @@ def build_payload(
             ),
             "limits": "max 3 aliases, max 2 themes, max 2 negative_contexts; candidate budget depends on scout family",
         },
+        "prompt": compact_text(sanitized_prompt, 1200),
+        "prompt_trace": _clean_prompt_trace(prompt_trace or []),
+        "prompt_terms": prompt_terms,
     }
     return sanitize_external_model_payload(payload), secret_policy
 
@@ -469,8 +497,8 @@ def scout_prompt(scout: str, payload: dict[str, Any]) -> str:
     family, variant = scout_lane_parts(scout)
     return json.dumps(
         {
-            "shared_context": payload,
             "output_budget": OUTPUT_BUDGET_RULES,
+            "shared_context": payload,
             "scout_task": {
                 "scout": f"{family}:{variant}",
                 "scout_family": family,
@@ -605,16 +633,20 @@ def parse_scout_output(raw: dict[str, Any], scout: str) -> dict[str, Any]:
         "query_aliases": _clean_list(
             parsed.get("query_aliases") or parsed.get("aliases") or [], limit=12, chars=80
         ),
-        "themes": _clean_list(parsed.get("themes") or parsed.get("theme") or [], limit=8, chars=120),
+        "themes": [],
         "negative_contexts": _clean_list(parsed.get("negative_contexts") or [], limit=8, chars=120),
         "block": bool(parsed.get("block")),
         "reason": _safe_text(parsed.get("reason"), 220),
         "usage": usage,
         "candidates": [],
     }
+    row["themes"], theme_candidates = _split_theme_items(
+        parsed.get("themes") if "themes" in parsed else parsed.get("theme")
+    )
     candidates = [
         item for item in parsed.get("candidates") or [] if isinstance(item, dict)
     ]
+    candidates.extend(theme_candidates)
     for theme in row["themes"]:
         if not any(str(item.get("theme") or "").casefold() == theme.casefold() for item in candidates):
             candidates.append(_candidate_from_theme(theme, row))
@@ -716,6 +748,8 @@ def run_scout_batch(
     max_workers: int | None,
     user_id: str | None,
     wait_all: bool,
+    prefix_cache_warmup_scouts: int = 0,
+    prefix_cache_warmup_delay: float = 0.0,
     chat_fn: ChatFn,
     scout_fn: ScoutFn,
 ) -> tuple[list[dict[str, Any]], bool]:
@@ -726,12 +760,50 @@ def run_scout_batch(
     rows: list[dict[str, Any]] = []
     useful_count = 0
     quorum_met = False
+    received = 0
     deadline = time.perf_counter() + max(0.01, timeout)
     tasks: queue.Queue[str] = queue.Queue()
     results: queue.Queue[dict[str, Any]] = queue.Queue()
     stop_event = threading.Event()
-    for scout in scouts:
+    warmup_count = max(0, min(int(prefix_cache_warmup_scouts or 0), len(scouts)))
+    warmup_scouts = scouts[:warmup_count]
+    remaining_scouts = scouts[warmup_count:]
+    for scout in remaining_scouts:
         tasks.put(scout)
+
+    def execute_scout(scout: str) -> dict[str, Any]:
+        try:
+            return run_scout(
+                scout,
+                payload=payload,
+                api_key=api_key,
+                model=model,
+                base_url=base_url,
+                max_tokens=max_tokens,
+                timeout=timeout,
+                temperature=temperature,
+                user_id=user_id,
+                chat_fn=chat_fn,
+                scout_fn=scout_fn,
+            )
+        except Exception as exc:  # isolate malformed or failed scout output
+            return _error_row(scout, exc)
+
+    # DeepSeek persists cache prefix units only after prior requests complete.
+    # For a 50-lane same-prefix scout batch, launching every lane at once often
+    # makes the whole wave cold. A small warm-up wave lets detached/evaluation
+    # runs pay one or two scout calls first, then the remaining thin suffixes can
+    # reuse the now-persisted shared context. Foreground callers keep this at 0.
+    for scout in warmup_scouts:
+        row = execute_scout(scout)
+        rows.append(row)
+        received += 1
+        if row.get("ok") and row.get("useful"):
+            useful_count += 1
+        if not wait_all and useful_count >= max(1, quorum):
+            return sorted(rows, key=lambda row: scout_order.get(str(row.get("scout") or ""), 999)), True
+    if warmup_scouts and remaining_scouts and prefix_cache_warmup_delay > 0:
+        time.sleep(max(0.0, float(prefix_cache_warmup_delay)))
 
     def worker_loop() -> None:
         while not stop_event.is_set():
@@ -740,23 +812,7 @@ def run_scout_batch(
             except queue.Empty:
                 return
             try:
-                try:
-                    row = run_scout(
-                        scout,
-                        payload=payload,
-                        api_key=api_key,
-                        model=model,
-                        base_url=base_url,
-                        max_tokens=max_tokens,
-                        timeout=timeout,
-                        temperature=temperature,
-                        user_id=user_id,
-                        chat_fn=chat_fn,
-                        scout_fn=scout_fn,
-                    )
-                except Exception as exc:  # isolate malformed or failed scout output
-                    row = _error_row(scout, exc)
-                results.put(row)
+                results.put(execute_scout(scout))
             finally:
                 tasks.task_done()
 
@@ -765,12 +821,11 @@ def run_scout_batch(
     # owns all writes, so abandoned late rows cannot mutate cache state.
     threads = [
         threading.Thread(target=worker_loop, name=f"aippocampus-warm-{idx}", daemon=True)
-        for idx in range(min(worker_count, len(scouts)))
+        for idx in range(min(worker_count, len(remaining_scouts)))
     ]
     for thread in threads:
         thread.start()
 
-    received = 0
     try:
         while received < len(scouts):
             remaining = None if wait_all else max(0.0, deadline - time.perf_counter())
@@ -916,6 +971,12 @@ def calibrate_cards(
                 continue
         clean = dict(card)
         validation = validate_card_source_refs(clean, source_index or {})
+        if validation.get("status") in {"missing_source_ref", "unsupported"}:
+            # A card that supplied concrete refs but failed local validation is
+            # worse than a source-less scent: keeping it teaches downstream
+            # agents to trust a citation-shaped hallucination. Drop it here so
+            # lower-ranked supported cards can still surface.
+            continue
         clean["source_validation"] = validation
         if clean.get("support_level") == EVIDENCE and validation.get("status") != "supported":
             clean["support_level"] = CANDIDATE
@@ -1194,6 +1255,7 @@ def warm_job_result_summary(job: dict[str, Any], result: dict[str, Any]) -> dict
         "quorum_met": bool(result.get("quorum_met")),
         "configured_scout_count": int(result.get("scout_count") or 0),
         "observed_scout_result_count": len(result.get("scouts") or []),
+        "prefix_cache_warmup_scout_count": int(result.get("prefix_cache_warmup_scout_count") or 0),
         "accepted_scout_count": int(result.get("accepted_scout_count") or 0),
         "failed_scout_count": int(result.get("failed_scout_count") or 0),
         "scout_error_kinds": error_kinds,
@@ -1247,6 +1309,12 @@ def run_warm_job_file(
         timeout=float(job.get("timeout") or DEFAULT_TIMEOUT),
         quorum=int(job.get("quorum") or DEFAULT_QUORUM),
         max_workers=int(job.get("max_workers") or 0) or None,
+        prefix_cache_warmup_scouts=int(
+            job.get("prefix_cache_warmup_scouts") or DEFAULT_DETACHED_PREFIX_CACHE_WARMUP_SCOUTS
+        ),
+        prefix_cache_warmup_delay=float(
+            job.get("prefix_cache_warmup_delay") or DEFAULT_DETACHED_PREFIX_CACHE_WARMUP_DELAY
+        ),
         wait_all=bool(job.get("wait_all", True)),
         no_write=bool(job.get("no_write", False)),
         scouts=scouts or DEFAULT_SCOUTS,
@@ -1290,6 +1358,8 @@ def run_warm_ambient_recall(
     scouts: tuple[str, ...] = DEFAULT_SCOUTS,
     quorum: int = DEFAULT_QUORUM,
     max_workers: int | None = None,
+    prefix_cache_warmup_scouts: int = DEFAULT_PREFIX_CACHE_WARMUP_SCOUTS,
+    prefix_cache_warmup_delay: float = DEFAULT_PREFIX_CACHE_WARMUP_DELAY,
     wait_all: bool = False,
     no_write: bool = False,
     chat_fn: ChatFn = call_chat_json,
@@ -1335,6 +1405,8 @@ def run_warm_ambient_recall(
         max_workers=resolved_max_workers,
         user_id=resolved_user_id,
         wait_all=wait_all,
+        prefix_cache_warmup_scouts=prefix_cache_warmup_scouts,
+        prefix_cache_warmup_delay=prefix_cache_warmup_delay,
         chat_fn=chat_fn,
         scout_fn=scout_fn,
     )
@@ -1404,6 +1476,8 @@ def run_warm_ambient_recall(
         "quorum_met": quorum_met,
         "scout_count": len(scout_names),
         "max_workers": resolved_max_workers or len(scout_names),
+        "prefix_cache_warmup_scout_count": max(0, min(int(prefix_cache_warmup_scouts or 0), len(scout_names))),
+        "prefix_cache_warmup_delay": max(0.0, float(prefix_cache_warmup_delay or 0.0)),
         "user_id": resolved_user_id,
         "accepted_scout_count": accepted_count,
         "failed_scout_count": failed_count,
@@ -1454,6 +1528,8 @@ def main() -> int:
     parser.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE)
     parser.add_argument("--quorum", type=int, default=DEFAULT_QUORUM)
     parser.add_argument("--max-workers", type=int, default=None)
+    parser.add_argument("--prefix-cache-warmup-scouts", type=int, default=DEFAULT_PREFIX_CACHE_WARMUP_SCOUTS)
+    parser.add_argument("--prefix-cache-warmup-delay", type=float, default=DEFAULT_PREFIX_CACHE_WARMUP_DELAY)
     parser.add_argument("--wait-all", action="store_true")
     parser.add_argument("--no-write", action="store_true")
     parser.add_argument("--strict", action="store_true")
@@ -1497,6 +1573,8 @@ def main() -> int:
         temperature=args.temperature,
         quorum=args.quorum,
         max_workers=args.max_workers,
+        prefix_cache_warmup_scouts=args.prefix_cache_warmup_scouts,
+        prefix_cache_warmup_delay=args.prefix_cache_warmup_delay,
         wait_all=args.wait_all,
         no_write=args.no_write,
     )

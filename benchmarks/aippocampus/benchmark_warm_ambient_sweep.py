@@ -91,10 +91,14 @@ def compact_metrics(metrics: dict[str, Any]) -> dict[str, Any]:
         "case_count",
         "available_rate",
         "configured_scout_calls",
+        "prefix_cache_warmup_scout_calls",
         "total_scout_calls",
         "observed_scout_rate",
         "case_pass_rate",
         "false_evidence_count",
+        "prompt_cache_hit_tokens",
+        "prompt_cache_miss_tokens",
+        "prompt_cache_hit_rate",
         "missing_source_refs_count",
         "scout_error_rate",
         "avg_elapsed_ms",
@@ -307,6 +311,8 @@ def run_warm_ambient_recall_sweep(
     case_offset: int = 0,
     case_limit: int | None = None,
     case_workers: int | None = benchmark.DEFAULT_CASE_WORKERS,
+    prefix_cache_warmup_scouts: int = benchmark.warm.DEFAULT_PREFIX_CACHE_WARMUP_SCOUTS,
+    prefix_cache_warmup_delay: float = benchmark.warm.DEFAULT_PREFIX_CACHE_WARMUP_DELAY,
     quorum: int = benchmark.warm.DEFAULT_QUORUM,
     max_tokens: int | None = None,
     api_key_env: str = "DEEPSEEK_API_KEY",
@@ -345,6 +351,8 @@ def run_warm_ambient_recall_sweep(
                     quorum=quorum,
                     max_workers=max_workers,
                     case_workers=case_workers,
+                    prefix_cache_warmup_scouts=prefix_cache_warmup_scouts,
+                    prefix_cache_warmup_delay=prefix_cache_warmup_delay,
                     max_tokens=max_tokens,
                     registry_path=registry_path,
                     registry_dir=registry_dir,
@@ -387,6 +395,8 @@ def run_warm_ambient_recall_sweep(
             "case_offset": case_offset,
             "case_limit": case_limit,
             "case_workers": case_workers,
+            "prefix_cache_warmup_scouts": prefix_cache_warmup_scouts,
+            "prefix_cache_warmup_delay": prefix_cache_warmup_delay,
             "cases_file_sha1": sha1_text(str(cases_file)) if cases_file else None,
             "registry_sha1": sha1_text(str(registry_path or registry_dir)) if (registry_path or registry_dir) else None,
             "progress_dir_enabled": bool(progress_root),
@@ -422,6 +432,8 @@ def main() -> int:
         default=benchmark.DEFAULT_CASE_WORKERS,
         help="Outer case concurrency passed to the warm benchmark. Use 0 for conservative auto mode.",
     )
+    parser.add_argument("--prefix-cache-warmup-scouts", type=int, default=benchmark.warm.DEFAULT_PREFIX_CACHE_WARMUP_SCOUTS)
+    parser.add_argument("--prefix-cache-warmup-delay", type=float, default=benchmark.warm.DEFAULT_PREFIX_CACHE_WARMUP_DELAY)
     parser.add_argument("--quorum", type=int, default=benchmark.warm.DEFAULT_QUORUM)
     parser.add_argument("--max-tokens", type=int, default=None)
     parser.add_argument("--api-key-env", default="DEEPSEEK_API_KEY")
@@ -447,6 +459,8 @@ def main() -> int:
         case_offset=args.case_offset,
         case_limit=args.case_limit,
         case_workers=args.case_workers,
+        prefix_cache_warmup_scouts=args.prefix_cache_warmup_scouts,
+        prefix_cache_warmup_delay=args.prefix_cache_warmup_delay,
         quorum=args.quorum,
         max_tokens=args.max_tokens,
         api_key_env=args.api_key_env,

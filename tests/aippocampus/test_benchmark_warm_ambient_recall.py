@@ -608,6 +608,110 @@ class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
         self.assertEqual(vote_case["expected_topic_epoch_actions"], ["reuse", "rotate", "suppress"])
         self.assertIn("auto label", topic_case["label_notes"])
 
+    def test_source_ref_label_does_not_require_current_prompt_echo_for_topic_jump(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            messages = root / "messages.jsonl"
+            messages.write_text(
+                "\n".join(
+                    json.dumps(item, ensure_ascii=False)
+                    for item in [
+                        {
+                            "message_id": "msg-u1",
+                            "source_id": "src-a",
+                            "source_line": 1,
+                            "role": "user",
+                            "turn_index": 1,
+                            "text": "Explain ARM register types.",
+                        },
+                        {
+                            "message_id": "msg-a1",
+                            "source_id": "src-a",
+                            "source_line": 2,
+                            "role": "assistant",
+                            "turn_index": 1,
+                            "phase": "final_answer",
+                            "text": "ARM has general-purpose, status, and control registers.",
+                        },
+                        {
+                            "message_id": "msg-u2",
+                            "source_id": "src-a",
+                            "source_line": 3,
+                            "role": "user",
+                            "turn_index": 2,
+                            "text": "what are some advanced use cases for node.js",
+                        },
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            payload = trace_builder.build_trace_cases(
+                clean_source_messages=messages,
+                dataset_id="policy",
+                limit=1,
+                min_turn_index=2,
+                label_policy="source_ref_supported",
+            )
+
+        case = payload["cases"][0]
+        self.assertEqual(case["expected_min_cards"], 0)
+        self.assertEqual(case["expected_min_source_validation_statuses"], {})
+        self.assertIn("no prior support", case["label_notes"])
+
+    def test_echo_label_does_not_require_echo_attempt_for_long_pasted_prompt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            messages = root / "messages.jsonl"
+            long_prompt = "Okay here is the letter so far. " + ("Please smooth transitions. " * 80)
+            messages.write_text(
+                "\n".join(
+                    json.dumps(item, ensure_ascii=False)
+                    for item in [
+                        {
+                            "message_id": "msg-u1",
+                            "source_id": "src-a",
+                            "source_line": 1,
+                            "role": "user",
+                            "turn_index": 1,
+                            "text": "Draft a technical writing instructor application letter.",
+                        },
+                        {
+                            "message_id": "msg-a1",
+                            "source_id": "src-a",
+                            "source_line": 2,
+                            "role": "assistant",
+                            "turn_index": 1,
+                            "phase": "final_answer",
+                            "text": "Here is a polished application letter draft.",
+                        },
+                        {
+                            "message_id": "msg-u2",
+                            "source_id": "src-a",
+                            "source_line": 3,
+                            "role": "user",
+                            "turn_index": 2,
+                            "text": long_prompt,
+                        },
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            payload = trace_builder.build_trace_cases(
+                clean_source_messages=messages,
+                dataset_id="policy",
+                limit=1,
+                min_turn_index=2,
+                label_policy="echo_guard",
+            )
+
+        case = payload["cases"][0]
+        self.assertIsNone(case["expected_min_current_thread_echo_count"])
+        self.assertIn("no echo-trigger requirement", case["label_notes"])
+
     def test_trace_case_builder_writes_clean_source_case_pack_for_validation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -818,6 +922,53 @@ class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
         self.assertEqual(metrics["scout_error_kinds"]["read_timeout"], 1)
         self.assertEqual(metrics["scout_error_kinds"]["rate_limited_429"], 1)
 
+    def test_benchmark_metrics_aggregate_prompt_cache_hit_rate(self) -> None:
+        metrics = benchmark.summarize_metrics(
+            [
+                {
+                    "case_id": "cache-a",
+                    "available": True,
+                    "configured_scout_count": 50,
+                    "observed_scout_result_count": 50,
+                    "failed_scout_count": 0,
+                    "expectation_passed": True,
+                    "cache": {"available": True, "hit_tokens": 80, "miss_tokens": 20},
+                },
+                {
+                    "case_id": "cache-b",
+                    "available": True,
+                    "configured_scout_count": 50,
+                    "observed_scout_result_count": 50,
+                    "failed_scout_count": 0,
+                    "expectation_passed": True,
+                    "cache": {"available": True, "hit_tokens": 20, "miss_tokens": 80},
+                },
+            ]
+        )
+
+        self.assertEqual(metrics["prompt_cache_hit_tokens"], 100)
+        self.assertEqual(metrics["prompt_cache_miss_tokens"], 100)
+        self.assertEqual(metrics["prompt_cache_hit_rate"], 0.5)
+
+    def test_case_summary_preserves_zero_prompt_cache_metrics(self) -> None:
+        summary = benchmark.summarize_case(
+            benchmark.BUILTIN_CASES[0],
+            {
+                "available": False,
+                "status": "ready",
+                "scout_count": 1,
+                "scouts": [],
+                "accepted_scout_count": 0,
+                "failed_scout_count": 0,
+                "cards": [],
+                "cache": {"available": True, "hit_rate": 0.0, "hit_tokens": 0, "miss_tokens": 42},
+            },
+        )
+
+        self.assertEqual(summary["cache"]["hit_rate"], 0.0)
+        self.assertEqual(summary["cache"]["hit_tokens"], 0)
+        self.assertEqual(summary["cache"]["miss_tokens"], 42)
+
     def test_warm_error_kind_separates_provider_busy_from_generic_scout_error(self) -> None:
         reason = 'RuntimeError: DeepSeek API HTTP 503: {"error":{"code":"service_unavailable_error"}}'
 
@@ -851,6 +1002,41 @@ class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
                     )
 
         self.assertIsNone(run.call_args.kwargs["max_tokens"])
+        self.assertEqual(run.call_args.kwargs["prefix_cache_warmup_scouts"], 0)
+
+    def test_live_benchmark_can_enable_prefix_cache_warmup(self) -> None:
+        fake_result = {
+            "available": False,
+            "status": "ready",
+            "mode": "silent_tuning",
+            "confidence": "low",
+            "quorum_met": False,
+            "scout_count": 50,
+            "prefix_cache_warmup_scout_count": 2,
+            "scouts": [],
+            "accepted_scout_count": 0,
+            "failed_scout_count": 0,
+            "cards": [],
+            "elapsed_ms": 1.0,
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict("os.environ", {"TRACE_TEST_KEY": "present"}):
+                with patch.object(benchmark.warm, "run_warm_ambient_recall", return_value=fake_result) as run:
+                    payload = benchmark.run_warm_ambient_recall_benchmark(
+                        cwd=Path(tmp) / "workspace",
+                        live=True,
+                        case_limit=1,
+                        api_key_env="TRACE_TEST_KEY",
+                        prefix_cache_warmup_scouts=2,
+                        prefix_cache_warmup_delay=0.5,
+                        min_available_rate=0.0,
+                        min_observed_scout_rate=0.0,
+                        min_case_pass_rate=0.0,
+                    )
+
+        self.assertEqual(run.call_args.kwargs["prefix_cache_warmup_scouts"], 2)
+        self.assertEqual(run.call_args.kwargs["prefix_cache_warmup_delay"], 0.5)
+        self.assertEqual(payload["metrics"]["prefix_cache_warmup_scout_calls"], 2)
 
     def test_live_benchmark_accepts_custom_scout_max_tokens(self) -> None:
         fake_result = {

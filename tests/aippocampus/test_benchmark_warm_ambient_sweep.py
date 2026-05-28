@@ -189,6 +189,8 @@ class WarmAmbientSweepTests(unittest.TestCase):
                 case_offset=10,
                 case_limit=3,
                 case_workers=2,
+                prefix_cache_warmup_scouts=2,
+                prefix_cache_warmup_delay=0.25,
                 progress_dir=Path(tmp) / "progress",
                 benchmark_fn=fake_benchmark,
             )
@@ -197,8 +199,11 @@ class WarmAmbientSweepTests(unittest.TestCase):
         self.assertEqual(calls[0]["case_offset"], 10)
         self.assertEqual(calls[0]["case_limit"], 3)
         self.assertEqual(calls[0]["case_workers"], 2)
+        self.assertEqual(calls[0]["prefix_cache_warmup_scouts"], 2)
+        self.assertEqual(calls[0]["prefix_cache_warmup_delay"], 0.25)
         self.assertIsNotNone(calls[0]["progress_jsonl"])
         self.assertEqual(payload["matrix"]["case_workers"], 2)
+        self.assertEqual(payload["matrix"]["prefix_cache_warmup_scouts"], 2)
         self.assertTrue(payload["matrix"]["progress_dir_enabled"])
 
     def test_sweep_default_workers_match_full_warm_lane_count(self) -> None:

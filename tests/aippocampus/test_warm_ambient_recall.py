@@ -128,6 +128,27 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(row["candidates"][0]["theme"], "candidate one")
         self.assertEqual(row["candidates"][1]["theme"], "candidate two")
 
+    def test_parse_scout_output_treats_theme_object_as_candidate(self) -> None:
+        row = warm.parse_scout_output(
+            {
+                "decision": "candidate",
+                "confidence": 0.8,
+                "theme": {
+                    "theme": "resource booking generalization",
+                    "support_level": "evidence",
+                    "key_line": "I need a general resources booking system",
+                    "source_refs": [
+                        {"thread_key": "session:old", "message_id": "msg-1", "line": 7}
+                    ],
+                },
+            },
+            "deep_theme_matcher:direct",
+        )
+
+        self.assertEqual(row["themes"], [])
+        self.assertEqual(row["candidates"][0]["theme"], "resource booking generalization")
+        self.assertEqual(row["candidates"][0]["source_refs"][0]["message_id"], "msg-1")
+
     def test_parse_scout_output_keeps_intent_classifier_candidate_free(self) -> None:
         row = warm.parse_scout_output(
             {
@@ -229,6 +250,44 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(len(warm.DEFAULT_SCOUTS), 50)
         self.assertTrue(any(call.startswith("key_line_hunter:") for call in calls))
         self.assertTrue(any(call.startswith("intent_mode_classifier:") for call in calls))
+
+    def test_prefix_cache_warmup_runs_initial_scout_before_parallel_followups(self) -> None:
+        calls: list[str] = []
+        warmup_completed = False
+        premature_followups: list[str] = []
+
+        def scout_fn(scout, payload, **kwargs):
+            nonlocal warmup_completed
+            del payload, kwargs
+            calls.append(scout)
+            if len(calls) == 1:
+                time.sleep(0.02)
+                warmup_completed = True
+            elif not warmup_completed:
+                premature_followups.append(scout)
+            return {"decision": "skip", "confidence": 0.1}
+
+        result = warm.run_warm_ambient_recall(
+            "继续 ambient recall prefix cache",
+            cwd=self.workspace,
+            thread_id="thread-a",
+            cache_path=self.cache_path,
+            api_key="test-key",
+            scout_fn=scout_fn,
+            scouts=(
+                "intent_mode_classifier:direct",
+                "key_line_hunter:direct",
+                "deep_theme_matcher:direct",
+            ),
+            max_workers=3,
+            prefix_cache_warmup_scouts=1,
+            wait_all=True,
+            no_write=True,
+        )
+
+        self.assertEqual(calls[0], "intent_mode_classifier:direct")
+        self.assertEqual(premature_followups, [])
+        self.assertEqual(result["prefix_cache_warmup_scout_count"], 1)
 
     def test_quorum_not_met_does_not_write_weak_single_scout_cache(self) -> None:
         def scout_fn(scout, payload, **kwargs):
@@ -372,7 +431,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(result["reason"], "missing api key")
         self.assertFalse(self.cache_path.exists())
 
-    def test_source_validation_downgrades_unsupported_evidence_ref(self) -> None:
+    def test_source_validation_drops_unsupported_evidence_ref(self) -> None:
         messages = self._write_clean_thread(
             "session:old",
             [
@@ -428,8 +487,8 @@ class WarmAmbientRecallTests(unittest.TestCase):
             no_write=True,
         )
 
-        self.assertEqual(result["cards"][0]["support_level"], "candidate")
-        self.assertEqual(result["cards"][0]["source_validation"]["status"], "unsupported")
+        self.assertFalse(result["available"])
+        self.assertEqual(result["cards"], [])
 
     def test_source_validation_keeps_supported_evidence_ref(self) -> None:
         messages = self._write_clean_thread(
@@ -657,7 +716,14 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertNotIn(local_path.casefold(), raw_payload.casefold())
         self.assertNotIn("memory.md", raw_payload.casefold())
 
-    def test_scout_prompt_uses_shared_context_prefix_and_family_lens_detail(self) -> None:
+    def test_build_payload_keeps_stable_contract_before_prompt_specific_fields(self) -> None:
+        payload, _ = warm.build_payload("继续 ambient recall", cwd=self.workspace, registry={})
+        keys = list(payload.keys())
+
+        self.assertLess(keys.index("output_contract"), keys.index("prompt"))
+        self.assertLess(keys.index("memory_catalog"), keys.index("prompt"))
+
+    def test_scout_prompt_uses_cache_friendly_prefix_and_family_lens_detail(self) -> None:
         payload = {
             "prompt_version": warm.PROMPT_VERSION,
             "task": "propose_warm_ambient_recall_hints",
@@ -670,6 +736,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
         parsed = json.loads(rendered)
         keys = list(parsed.keys())
 
+        self.assertLess(keys.index("output_budget"), keys.index("shared_context"))
         self.assertLess(keys.index("shared_context"), keys.index("scout_task"))
         self.assertEqual(parsed["shared_context"], payload)
         self.assertEqual(parsed["scout_task"]["scout_family"], "semantic_expander")
@@ -809,6 +876,8 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(job["topic_epoch"], "epoch-test")
         self.assertTrue(job["wait_all"])
         self.assertFalse(job["no_write"])
+        self.assertGreaterEqual(job["prefix_cache_warmup_scouts"], 1)
+        self.assertGreater(job["prefix_cache_warmup_delay"], 0)
         self.assertIn("<redacted:local-path>", job["prompt"])
         self.assertNotIn(local_path, raw_job)
         self.assertNotIn("private", raw_job.casefold())
