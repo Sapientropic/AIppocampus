@@ -206,6 +206,55 @@ FOLLOWUP_CUE_RE = re.compile(
     r"(继续|上[一轮文次]|刚才|这个|这些|它|其|再|仍然|same|continue|previous|above|this|that|it)",
     re.IGNORECASE,
 )
+STRONG_CONTINUATION_CUE_RE = re.compile(
+    r"("
+    r"继续|上[一轮文次]|刚才|前面|上一版|同样|照样|再来|"
+    r"do\s+the\s+same|same\s+with|continue|previous|above|earlier|as\s+before|"
+    r"this\s+works|that\s+works|it\s+works|can\s+you\s+also|also\s+add|"
+    r"not\s+just|instead|will\s+it\s+work\s+also|add\s+support\s+for"
+    r")",
+    re.IGNORECASE,
+)
+CURRENT_PROMPT_OBJECT_RE = re.compile(
+    r"\b(this|following|below)\s+"
+    r"(code|sentence|text|information|letter|prompt|query|script|template|file|error)\b|"
+    r"limit\s+your\s+response\s+to",
+    re.IGNORECASE,
+)
+GENERIC_CAPABILITY_RE = re.compile(
+    r"\b(do\s+you\s+understand|can\s+you\s+speak|are\s+you\s+able\s+to|"
+    r"what\s+is|how\s+do\s+you\s+handle|best\s+practices|give\s+me\s+a\s+list)\b",
+    re.IGNORECASE,
+)
+LABEL_STOP_TERMS = {
+    "about",
+    "also",
+    "and",
+    "are",
+    "can",
+    "could",
+    "does",
+    "for",
+    "from",
+    "have",
+    "how",
+    "into",
+    "just",
+    "more",
+    "not",
+    "please",
+    "should",
+    "that",
+    "the",
+    "this",
+    "what",
+    "when",
+    "where",
+    "with",
+    "would",
+    "you",
+    "your",
+}
 
 
 def infer_topic_epoch_action(prompt: str, trace_messages: list[dict[str, Any]]) -> str:
@@ -216,6 +265,35 @@ def infer_topic_epoch_action(prompt: str, trace_messages: list[dict[str, Any]]) 
     if FOLLOWUP_CUE_RE.search(prompt) or overlap >= 2:
         return "reuse"
     return "rotate"
+
+
+def meaningful_overlap_count(prompt: str, prior_text: str) -> int:
+    prompt_terms = {
+        term.casefold()
+        for term in split_query_terms([prompt])[:40]
+        if len(str(term or "").strip()) >= 3 and term.casefold() not in LABEL_STOP_TERMS
+    }
+    prior_terms = {
+        term.casefold()
+        for term in split_query_terms([prior_text])[:120]
+        if len(str(term or "").strip()) >= 3 and term.casefold() not in LABEL_STOP_TERMS
+    }
+    return len(prompt_terms.intersection(prior_terms))
+
+
+def has_strong_continuation_signal(prompt: str) -> bool:
+    if not STRONG_CONTINUATION_CUE_RE.search(prompt):
+        return False
+    # "this code/sentence/information" usually points at material inside the
+    # current prompt, not memory from the previous turn. Do not train the echo
+    # benchmark to reward scouts for citing the user's fresh paste as history.
+    if CURRENT_PROMPT_OBJECT_RE.search(prompt) and not re.search(
+        r"(do\s+the\s+same|same\s+with|continue|previous|above|earlier|刚才|继续)",
+        prompt,
+        re.IGNORECASE,
+    ):
+        return False
+    return True
 
 
 def has_prior_source_support(prompt: str, trace_messages: list[dict[str, Any]]) -> bool:
@@ -229,11 +307,13 @@ def has_prior_source_support(prompt: str, trace_messages: list[dict[str, Any]]) 
     prior_text = " ".join(str(item.get("text") or "") for item in trace_messages[:-1])
     if not prior_text.strip():
         return False
-    if FOLLOWUP_CUE_RE.search(prompt):
+    if CURRENT_PROMPT_OBJECT_RE.search(prompt):
+        return False
+    if GENERIC_CAPABILITY_RE.search(prompt) and not has_strong_continuation_signal(prompt):
+        return False
+    if has_strong_continuation_signal(prompt):
         return True
-    prompt_terms = set(split_query_terms([prompt])[:30])
-    prior_terms = set(split_query_terms([prior_text])[:80])
-    return len(prompt_terms.intersection(prior_terms)) >= 2
+    return meaningful_overlap_count(prompt, prior_text) >= 3
 
 
 def should_expect_echo_penalty(prompt: str, trace_messages: list[dict[str, Any]]) -> bool:
@@ -244,11 +324,9 @@ def should_expect_echo_penalty(prompt: str, trace_messages: list[dict[str, Any]]
     still suppresses any same-thread refs if they appear, but the live label
     should only require an echo count for short, clearly-continuing turns.
     """
-    if len(prompt) > 1200:
+    if len(prompt) > 500:
         return False
-    return FOLLOWUP_CUE_RE.search(prompt) is not None or has_prior_source_support(
-        prompt, trace_messages
-    )
+    return has_strong_continuation_signal(prompt)
 
 
 def apply_label_policy(

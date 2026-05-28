@@ -141,9 +141,15 @@ the full 10x5 scout set while giving DeepSeek a completed same-prefix request
 before the remaining thin scout suffixes launch.
 For `topic_epoch_vote` packs, set `--min-available-rate 0`: a valid LLM
 `suppress` vote may intentionally produce no visible card.
-For source-ref packs, keep `--max-false-evidence-count 0` strict. Treat
+For source-ref packs, keep `--max-false-evidence-count 0` strict. The
+`source_ref_supported` labels require either a strong continuation cue or
+meaningful prior overlap; generic capability questions and prompts pointing at
+freshly pasted current text should not force source-backed recall. Treat
 `case_pass_rate` as recall coverage, not the only quality signal; a safe miss is
 preferable to surfacing an unsupported citation.
+For echo packs, `current_thread_echo_count` labels are intentionally narrower:
+they require short, strong continuation turns rather than any topic overlap, so
+the benchmark does not reward citing the user's current paste as prior memory.
 The `trace_fallback_card_count` metric counts deterministic fallback cards from
 sanitized prior trace rows. It should improve supported coverage without
 loosening source validation; investigate it separately from model scout recall.

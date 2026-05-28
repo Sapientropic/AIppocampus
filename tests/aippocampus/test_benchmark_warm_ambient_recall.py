@@ -660,6 +660,57 @@ class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
         self.assertEqual(case["expected_min_source_validation_statuses"], {})
         self.assertIn("no prior support", case["label_notes"])
 
+    def test_source_ref_label_does_not_require_generic_capability_followup(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            messages = root / "messages.jsonl"
+            messages.write_text(
+                "\n".join(
+                    json.dumps(item, ensure_ascii=False)
+                    for item in [
+                        {
+                            "message_id": "msg-u1",
+                            "source_id": "src-a",
+                            "source_line": 1,
+                            "role": "user",
+                            "turn_index": 1,
+                            "text": "Do you understand languages other than English?",
+                        },
+                        {
+                            "message_id": "msg-a1",
+                            "source_id": "src-a",
+                            "source_line": 2,
+                            "role": "assistant",
+                            "turn_index": 1,
+                            "phase": "final_answer",
+                            "text": "Yes, I can understand and generate text in various languages.",
+                        },
+                        {
+                            "message_id": "msg-u2",
+                            "source_id": "src-a",
+                            "source_line": 3,
+                            "role": "user",
+                            "turn_index": 2,
+                            "text": "Do you understand any Romanian?",
+                        },
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            payload = trace_builder.build_trace_cases(
+                clean_source_messages=messages,
+                dataset_id="policy",
+                limit=1,
+                min_turn_index=2,
+                label_policy="source_ref_supported",
+            )
+
+        case = payload["cases"][0]
+        self.assertEqual(case["expected_min_cards"], 0)
+        self.assertEqual(case["expected_min_source_validation_statuses"], {})
+
     def test_echo_label_does_not_require_echo_attempt_for_long_pasted_prompt(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -693,6 +744,118 @@ class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
                             "role": "user",
                             "turn_index": 2,
                             "text": long_prompt,
+                        },
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            payload = trace_builder.build_trace_cases(
+                clean_source_messages=messages,
+                dataset_id="policy",
+                limit=1,
+                min_turn_index=2,
+                label_policy="echo_guard",
+            )
+
+        case = payload["cases"][0]
+        self.assertIsNone(case["expected_min_current_thread_echo_count"])
+        self.assertIn("no echo-trigger requirement", case["label_notes"])
+
+    def test_echo_label_does_not_require_echo_for_current_prompt_object(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            messages = root / "messages.jsonl"
+            messages.write_text(
+                "\n".join(
+                    json.dumps(item, ensure_ascii=False)
+                    for item in [
+                        {
+                            "message_id": "msg-u1",
+                            "source_id": "src-a",
+                            "source_line": 1,
+                            "role": "user",
+                            "turn_index": 1,
+                            "text": "How do I read from stdin in TypeScript?",
+                        },
+                        {
+                            "message_id": "msg-a1",
+                            "source_id": "src-a",
+                            "source_line": 2,
+                            "role": "assistant",
+                            "turn_index": 1,
+                            "phase": "final_answer",
+                            "text": "Use a runtime API such as Node readline for stdin.",
+                        },
+                        {
+                            "message_id": "msg-u2",
+                            "source_id": "src-a",
+                            "source_line": 3,
+                            "role": "user",
+                            "turn_index": 2,
+                            "text": "const name = prompt('Name'); how can I run this code in TypeScript?",
+                        },
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            payload = trace_builder.build_trace_cases(
+                clean_source_messages=messages,
+                dataset_id="policy",
+                limit=1,
+                min_turn_index=2,
+                label_policy="echo_guard",
+            )
+
+        case = payload["cases"][0]
+        self.assertIsNone(case["expected_min_current_thread_echo_count"])
+        self.assertIn("no echo-trigger requirement", case["label_notes"])
+
+    def test_echo_label_does_not_require_echo_for_long_quoted_correction(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            messages = root / "messages.jsonl"
+            prompt = (
+                'no "Additionally, the distance number would need to be added in a way that '
+                'aligns with the specific problem being solved, and it is important to ensure '
+                'that the resulting solution is mathematically valid." instead we will reverse '
+                'the principle of the distance number altogether and describe a new imagined '
+                'candy bar scenario with several changed assumptions and follow-up details. '
+                'The new version adds a gut feeling, hunger, social conditioning, self-image, '
+                'and a changed hand-position setup, so the benchmark should treat this as a '
+                'long current correction rather than a short echo-triggering continuation.'
+            )
+            messages.write_text(
+                "\n".join(
+                    json.dumps(item, ensure_ascii=False)
+                    for item in [
+                        {
+                            "message_id": "msg-u1",
+                            "source_id": "src-a",
+                            "source_line": 1,
+                            "role": "user",
+                            "turn_index": 1,
+                            "text": "What about using candy bars as a common denominator?",
+                        },
+                        {
+                            "message_id": "msg-a1",
+                            "source_id": "src-a",
+                            "source_line": 2,
+                            "role": "assistant",
+                            "turn_index": 1,
+                            "phase": "final_answer",
+                            "text": "Additionally, the distance number would need to be mathematically valid.",
+                        },
+                        {
+                            "message_id": "msg-u2",
+                            "source_id": "src-a",
+                            "source_line": 3,
+                            "role": "user",
+                            "turn_index": 2,
+                            "text": prompt,
                         },
                     ]
                 )

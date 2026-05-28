@@ -436,10 +436,12 @@ The first slice should stay small but real:
    `--label-policy source_ref_supported`, `--label-policy echo_guard`, and
    `--label-policy topic_epoch_vote`; keep `topic_epoch_heuristic` as a review
    aid only. Source-ref calibration requires supported evidence only when the
-   trace has prior overlapping support; clean topic jumps should not be forced
-   to cite the user's current prompt as memory. Echo calibration expects
-   `current_thread_echo_count >= 1` only for short continuation turns; long
-   pasted-document prompts should not be forced to manufacture current-text
+   trace has a strong continuation cue or meaningful prior overlap; generic
+   capability questions and prompts pointing at freshly pasted current text
+   should not be forced to cite memory. Echo calibration is narrower and expects
+   `current_thread_echo_count >= 1` only for short, strong continuation turns;
+   long pasted-document prompts, generic topic overlap, and current-object
+   prompts like "this code" should not be forced to manufacture current-text
    echoes. The metric counts suppressed current-thread echo attempts, not
    leaked cards.
    Topic epoch rotation remains an LLM judgment: the automated gate requires an
@@ -466,6 +468,18 @@ The first slice should stay small but real:
    should read the three focused packs separately: source-ref support for
    evidence grounding, echo-guard activation for current-thread suppression,
    and topic-epoch vote presence for drift handling.
+   2026-05-28 live 100-case calibration with `max_workers=50`,
+   `case_workers=2`, wait-all, and prefix warmup showed the current quality
+   shape: source-ref had `false_evidence_count=0` and raw `case_pass_rate=0.84`;
+   after tightening the labels to 54 true source-required cases, the same run
+   rescored to 0.90 with 10 real safe misses. Echo labels tightened to 22 true
+   echo-required cases; combined first-10 plus offset-90 live results rescored
+   to 0.98 with 2 real misses and `current_thread_echo_count=418`. Topic-vote
+   passed 100/100 with actions `suppress=79`, `rotate=17`, `reuse=4`.
+   Prompt-cache hit rate was roughly 0.83-0.85 under this outer concurrency,
+   with scout error rates still below the 0.05 gate but high enough to justify
+   a `case_workers=1` stability comparison before treating 2x outer concurrency
+   as the default.
 9. Source-ref validation, current-thread echo suppression, LLM-directed topic
    epoch rotation, and detached late-result cache warming are now implemented.
    Deep archival recall now has a source-backed visibility mode for original
@@ -474,9 +488,9 @@ The first slice should stay small but real:
    detached warm job, so background scouts can apply echo and topic-drift
    judgments against real thread context. Prompt-hook cache hits now keep
    warmed cards ahead of fresh local hints and expose sanitized cache metadata
-   for debugging. Next: run the private 100-case source-ref, echo, and
-   topic-vote packs across a wider live matrix and tune live-model quality
-   thresholds from the resulting failure distribution.
+   for debugging. Next: compare `case_workers=1` against the current
+   `case_workers=2` results, then tune the 10 remaining source-ref safe misses
+   and the 2 echo misses without loosening the zero-false-evidence gate.
 
 Success for slice one is not perfect recall. It is that the agent receives
 useful, source-backed peripheral awareness without making the user wait, and
