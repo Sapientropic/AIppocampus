@@ -12,6 +12,13 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
+from ambient_recall_cards import ambient_recall_from_decision
+from ambient_thread_cache import (
+    default_ambient_cache_path,
+    read_thread_cache,
+    topic_epoch_from_terms,
+    write_thread_cache,
+)
 from build_concept_graph import expand_concepts
 from memory_candidate_router import strip_for_hook
 from prompt_cues import (
@@ -321,6 +328,67 @@ def _noise_prompt_result(context: Any, start: float) -> dict[str, Any]:
     }
 
 
+def _attach_ambient_recall(
+    result: dict[str, Any],
+    *,
+    thread_id: str | None,
+    workspace: str,
+    registry_path: Path,
+    ambient_cache_path: Path | str | None,
+    topic_epoch: str | None,
+    use_thread_cache: bool,
+) -> dict[str, Any]:
+    if not use_thread_cache or not thread_id:
+        result["ambient_recall"] = ambient_recall_from_decision(result)
+        return result
+    epoch = topic_epoch or topic_epoch_from_terms([str(term) for term in result.get("query_terms") or []])
+    cache_file = Path(ambient_cache_path).resolve() if ambient_cache_path else default_ambient_cache_path(registry_path)
+    try:
+        cached = read_thread_cache(
+            cache_file,
+            thread_id=thread_id,
+            workspace=workspace,
+            topic_epoch=epoch,
+        )
+        cache_status = {
+            "status": cached.get("status"),
+            "topic_epoch": epoch,
+            "card_count": len(cached.get("cards") or []),
+        }
+        result["ambient_recall"] = ambient_recall_from_decision(
+            result,
+            cached_cards=cached.get("cards") or [],
+            cache_status=cache_status,
+        )
+        if result.get("decision") != "skip" and result["ambient_recall"].get("cards"):
+            written = write_thread_cache(
+                cache_file,
+                thread_id=thread_id,
+                workspace=workspace,
+                topic_epoch=epoch,
+                cards=result["ambient_recall"]["cards"],
+                mode=str(result["ambient_recall"].get("mode") or ""),
+                confidence=str(result["ambient_recall"].get("confidence") or ""),
+                negative_contexts=((result.get("semantic_gate") or {}).get("negative_contexts") or []),
+            )
+            result["ambient_recall"]["cache_status"] = {
+                **cache_status,
+                "write_status": written.get("status"),
+                "written_card_count": written.get("card_count"),
+            }
+    except Exception as exc:
+        result["ambient_recall"] = ambient_recall_from_decision(
+            result,
+            cache_status={
+                "status": "error",
+                "topic_epoch": epoch,
+                "error_type": type(exc).__name__,
+                "message": str(exc)[:160],
+            },
+        )
+    return result
+
+
 def assess_prompt(
     prompt: str,
     *,
@@ -341,6 +409,8 @@ def assess_prompt(
     use_concept_graph: bool = True,
     search_budget: int = DEFAULT_SEARCH_BUDGET,
     max_elapsed_ms: int | None = None,
+    thread_id: str | None = None, ambient_cache_path: Path | str | None = None,
+    topic_epoch: str | None = None, use_thread_cache: bool = True,
 ) -> dict[str, Any]:
     start = time.perf_counter()
     context = build_recall_decision_context(
@@ -552,14 +622,10 @@ def assess_prompt(
                 reasons.append("working-memory evidence-lite decision continuation")
 
     elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
-    return {
+    result = {
         "decision": decision,
         "score": round(max(top_score, working_score), 3),
-        "confidence": "high"
-        if decision == "evidence"
-        else "medium"
-        if decision == "scent"
-        else "low",
+        "confidence": "high" if decision == "evidence" else "medium" if decision == "scent" else "low",
         **context.hook_path_fields(),
         "query_terms": query_terms[:16],
         "cognitive_map": cognitive_map_matches[:4],
@@ -571,3 +637,8 @@ def assess_prompt(
         "semantic_gate": strip_semantic_gate(semantic_result),
         "elapsed_ms": elapsed_ms,
     }
+    return _attach_ambient_recall(
+        result, thread_id=thread_id, workspace=str(cwd_path), registry_path=path,
+        ambient_cache_path=ambient_cache_path, topic_epoch=topic_epoch,
+        use_thread_cache=use_thread_cache,
+    )

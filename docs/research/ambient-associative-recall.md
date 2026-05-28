@@ -139,6 +139,14 @@ small, expiring, source-ref-fingerprinted, and safe to discard. It must not log
 raw prompt text. When the thread changes topic, the topic epoch should rotate so
 old cards stop coloring unrelated work.
 
+Safe to discard does not have to mean wasted. The cache may optionally export
+`ambient_residue` rows when a topic epoch rotates, a cache entry expires, or a
+caller explicitly wants to keep source-backed unused resonance for future dream
+work. Residue is a dream seed, not a dream finding and not formal memory. It
+keeps card ids, themes, support levels, source-ref fingerprints, and negative
+contexts while still avoiding raw prompt text. Unsourced one-off scent cards
+should stay disposable by default.
+
 The desired flow is:
 
 ```text
@@ -150,6 +158,7 @@ turn N:
 late warm results:
   deterministic validation
   serial cache update
+  optional residue export for source-backed unused resonance
 
 turn N+1:
   read warmed thread ambient cache
@@ -300,17 +309,26 @@ becoming a wait-all critical path for every prompt.
 
 ## First Implementable Slice
 
-The first slice should be small but real:
+Status: Card/cache first has started landing in runtime. The implemented
+boundary is intentionally narrower than the full 10-scout design: foreground
+hook decisions can now produce compact private recall cards and optionally
+write them to a thread ambient cache, while high-concurrency scouts remain the
+next warm-path prototype.
+
+The first slice should stay small but real:
 
 1. Add `ambient_recall_cards.py` to define and validate compact private recall
-   cards.
+   cards. Done for the first runtime shape.
 2. Add `ambient_thread_cache.py` keyed by `thread_id + workspace + topic_epoch`,
-   with read, write, expiry, and drift-rotation helpers.
+   with read, write, expiry, and drift-rotation helpers. Done for the first
+   local JSON cache; it stores hashed thread/workspace identities and no raw
+   prompt text.
 3. Read only registry metadata, semantic scope labels, timeline sidecars,
    cognitive-map sidecars, and clean-source index snippets.
 4. Run local hot-path candidate lookup first, then consume the thread ambient
-   cache.
-5. Add `warm_ambient_recall.py` as a standalone warm-path prototype. It may run
+   cache. The first integration uses existing hook signals and cache writes;
+   deeper cache-first behavior should be tuned after real prompt traces.
+5. Next: add `warm_ambient_recall.py` as a standalone warm-path prototype. It may run
    up to 10 DeepSeek scouts, but foreground callers use a strict timeout and
    quorum-first result collection.
 6. Merge into at most 3 private recall cards and serialize late useful results

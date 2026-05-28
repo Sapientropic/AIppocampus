@@ -321,9 +321,14 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertEqual(result["decision"], "scent")
         self.assertGreaterEqual(result["score"], hook.SCENT_THRESHOLD)
         self.assertTrue(result["candidates"])
+        self.assertEqual(result["ambient_recall"]["mode"], "active_gentle_nudge")
+        self.assertEqual(
+            result["ambient_recall"]["cards"][0]["visibility"], "active_gentle_nudge"
+        )
         context = hook.context_for_hook(result)
         self.assertIsNotNone(context)
         self.assertIn("Ambient recall scent", context)
+        self.assertIn("Ambient recall private context", context)
         self.assertIn("Use only if it helps", context)
         self.assertNotIn("line 190", context)
 

@@ -75,6 +75,18 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
                 f"threads {', '.join(item.get('thread_keys') or [])}"
             )
         lines.append("Treat these as wayfinding only; verify exact claims against clean source.")
+    ambient = result.get("ambient_recall") or {}
+    ambient_cards = ambient.get("cards") or []
+    if ambient_cards:
+        lines.append("Ambient recall private context (card/cache first; not user text):")
+        for card in ambient_cards[:3]:
+            support = str(card.get("support_level") or "scent")
+            visibility = str(card.get("visibility") or ambient.get("mode") or "silent_tuning")
+            theme = compact_text(str(card.get("theme") or ""), 120)
+            suggested_use = compact_text(str(card.get("suggested_use") or ""), 180)
+            source_note = " source-backed refs available" if support == "evidence" else ""
+            lines.append(f"- {visibility}/{support}: {theme}.{source_note} Use: {suggested_use}")
+        lines.append("Let these cards tune the answer; do not paste them verbatim.")
     if result.get("reasons"):
         lines.append("Why: " + "; ".join(str(reason) for reason in result.get("reasons", [])[:3]))
     context = "\n".join(lines)

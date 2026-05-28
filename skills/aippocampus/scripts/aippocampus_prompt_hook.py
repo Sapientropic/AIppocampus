@@ -160,7 +160,10 @@ def main() -> int:
     parser.add_argument("--working-memory")
     parser.add_argument("--semantic-triggers")
     parser.add_argument("--semantic-cache")
+    parser.add_argument("--ambient-cache")
     parser.add_argument("--semantic-gate", choices=["auto", "on", "off"], default=None)
+    parser.add_argument("--session-id", help="Dry-run thread/session id for ambient thread cache.")
+    parser.add_argument("--topic-epoch", help="Override ambient recall topic epoch for dry runs.")
     parser.add_argument(
         "--semantic-timeout",
         type=float,
@@ -177,6 +180,7 @@ def main() -> int:
         help="Optional fail-open budget for the whole prompt hook. Default 0 disables it.",
     )
     parser.add_argument("--no-semantic-gate", action="store_true")
+    parser.add_argument("--no-thread-cache", action="store_true")
     parser.add_argument("--no-cognitive-map", action="store_true")
     parser.add_argument("--no-concept-graph", action="store_true")
     parser.add_argument("--search-budget", type=int, default=DEFAULT_SEARCH_BUDGET_FALLBACK)
@@ -209,6 +213,7 @@ def main() -> int:
         else:
             prompt = args.prompt
             cwd = Path(args.cwd or os.getcwd())
+        thread_id = str(args.session_id or hook_input.get("session_id") or "").strip() or None
         result = runtime["assess_prompt"](
             prompt,
             cwd=cwd,
@@ -219,6 +224,7 @@ def main() -> int:
             working_memory_path=Path(args.working_memory) if args.working_memory else None,
             semantic_triggers_path=Path(args.semantic_triggers) if args.semantic_triggers else None,
             semantic_cache_path=Path(args.semantic_cache) if args.semantic_cache else None,
+            ambient_cache_path=Path(args.ambient_cache) if args.ambient_cache else None,
             semantic_gate_mode="off" if args.no_semantic_gate else args.semantic_gate,
             semantic_timeout=args.semantic_timeout,
             use_semantic_gate=not args.no_semantic_gate,
@@ -226,6 +232,9 @@ def main() -> int:
             use_concept_graph=not args.no_concept_graph,
             search_budget=args.search_budget,
             max_elapsed_ms=args.max_elapsed_ms,
+            thread_id=thread_id,
+            topic_epoch=args.topic_epoch,
+            use_thread_cache=not args.no_thread_cache,
         )
         if args.log or args.log_skip:
             write_debug_log(result, hook_input=hook_input, include_skip=args.log_skip)

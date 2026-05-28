@@ -232,6 +232,36 @@ user asks a high-level continuity question, or when ambient recall detects a
 matching theme, the agent can retrieve these records as a starting map, then
 follow `source_refs` back to clean source before making strong claims.
 
+### Ambient Residue As Dream Seed
+
+Thread ambient cache can also feed dream work, but only through an intermediate
+residue layer. A cache card is foreground working context; a dream finding is a
+model-synthesized interpretive output. Collapsing those two would turn short
+term resonance into overconfident story.
+
+The bridge is `ambient_residue`: a small JSONL seed exported from
+`ambient_thread_cache.py` when a topic epoch rotates, a cache entry expires, or
+an operator explicitly wants to preserve useful unused resonance. Residue is
+not a dream output. It is only a source-ref-fingerprinted hint that says:
+"something here was warm enough to hand to a later dream task."
+
+Residue rows should stay narrow:
+
+- `kind`: `aippocampus_ambient_residue`
+- `status`: `dream_seed`
+- `topic_epoch`, `reason`, `mode`, `confidence`
+- `card_ids`, `themes`, `support_levels`
+- `source_ref_fingerprints`, not raw prompt text
+- `negative_contexts`, if they explain why a card stayed quiet
+- `downstream_use`: `dream_task_seed`
+- `dream_contract`: seed only; not a dream finding, memory fact, or
+  source-backed claim
+
+The first export policy is conservative: unsourced one-off scent cards are not
+exported. A residue seed needs source-ref fingerprints so the dream worker can
+re-open clean source before producing compensatory, prospective, amplification,
+or active-imagination output.
+
 ## The Hero's Journey Insight
 
 The Hero's Journey (Campbell) has a known flaw: it imposes a quest narrative

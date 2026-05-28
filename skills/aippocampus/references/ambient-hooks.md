@@ -21,9 +21,32 @@ Outcomes:
 Keep `scent` and `evidence` distinct. A weak association can steer the next
 agent action, but it must not be reported as remembered fact.
 
+Prompt decisions may also include a private `ambient_recall` block built by
+`ambient_recall_cards.py`. This block normalizes existing hook signals into
+compact cards with `mode`, `confidence`, `cards`, `avoid`, `latency_ms`,
+`cache_status`, and `late_update_policy`. Cards are guidance for the agent, not
+text to paste into the final answer. `scent` and `candidate` cards are
+resonance only; only `evidence` cards may be treated as source-backed, and even
+then exact claims should be checked against clean source when they matter.
+
+When the hook receives a thread/session id, `ambient_thread_cache.py` may store
+up to a few compact cards under a hashed `thread_id + workspace + topic_epoch`
+key. The cache is a soft working surface: it expires, records source-ref
+fingerprints, avoids raw prompt text, and is safe to discard. Later warm-scout
+work should update this cache through the same serial writer rather than adding
+a second ambient-memory store.
+
+Callers may opt into residue export by passing a residue output path to the
+thread-cache writer. This writes `aippocampus_ambient_residue` JSONL rows for
+source-ref-fingerprinted cards so future dream jobs can inspect unused
+resonance. Residue is only a dream seed: it is not formal memory, not a dream
+finding, and not source-backed text by itself. Unsourced one-off scent cards
+are skipped by default.
+
 Useful commands:
 
 - `python ...\aippocampus_prompt_hook.py --prompt "hook 机制像人类联想" --json`
+- `python ...\aippocampus_prompt_hook.py --prompt "ambient recall" --session-id dry-run --json`
 - `python ...\diagnose_hooks.py --events UserPromptSubmit,Stop`
 - `python ...\simulate_prompt_hook.py --cwd "$PWD" --strict`
 - `python ...\simulate_prompt_hook.py --cwd "$PWD" --compare-concept-graph`
