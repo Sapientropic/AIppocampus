@@ -36,6 +36,13 @@ fingerprints, avoids raw prompt text, and is safe to discard. Later warm-scout
 work should update this cache through the same serial writer rather than adding
 a second ambient-memory store.
 
+`warm_ambient_recall.py` is the first standalone warm-path prototype for that
+later work. It defines 10 named scouts, runs them concurrently, isolates
+malformed scout output, merges at most 3 cards, and writes through
+`ambient_thread_cache.py`. It is not part of the default foreground hook path:
+quorum-first runs are allowed to return before all scouts finish, and
+`--wait-all` belongs to explicit evaluation or detached warming.
+
 Callers may opt into residue export by passing a residue output path to the
 thread-cache writer. This writes `aippocampus_ambient_residue` JSONL rows for
 source-ref-fingerprinted cards so future dream jobs can inspect unused
@@ -51,6 +58,7 @@ Useful commands:
 - `python ...\simulate_prompt_hook.py --cwd "$PWD" --strict`
 - `python ...\simulate_prompt_hook.py --cwd "$PWD" --compare-concept-graph`
 - `python ...\simulate_multilingual_prompt_hook.py --cwd "$PWD"`
+- `python ...\warm_ambient_recall.py --prompt "继续 ambient recall" --cwd "$PWD" --thread-id dry-run --json`
 - `python ...\install_aippocampus_prompt_hook.py install|status|uninstall`
 
 On Windows, installers prefix generated hook commands with PowerShell's call

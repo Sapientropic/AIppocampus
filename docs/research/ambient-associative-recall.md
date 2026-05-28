@@ -309,11 +309,11 @@ becoming a wait-all critical path for every prompt.
 
 ## First Implementable Slice
 
-Status: Card/cache first has started landing in runtime. The implemented
-boundary is intentionally narrower than the full 10-scout design: foreground
-hook decisions can now produce compact private recall cards and optionally
-write them to a thread ambient cache, while high-concurrency scouts remain the
-next warm-path prototype.
+Status: Card/cache first has landed, and the first standalone warm-scout
+prototype now exists. The runtime boundary is still intentionally narrow:
+foreground hook decisions can produce compact private recall cards and write
+them to a thread ambient cache, while `warm_ambient_recall.py` runs the
+10-scout experiment outside the foreground hook.
 
 The first slice should stay small but real:
 
@@ -328,16 +328,19 @@ The first slice should stay small but real:
 4. Run local hot-path candidate lookup first, then consume the thread ambient
    cache. The first integration uses existing hook signals and cache writes;
    deeper cache-first behavior should be tuned after real prompt traces.
-5. Next: add `warm_ambient_recall.py` as a standalone warm-path prototype. It may run
-   up to 10 DeepSeek scouts, but foreground callers use a strict timeout and
-   quorum-first result collection.
-6. Merge into at most 3 private recall cards and serialize late useful results
-   back into the thread cache.
-7. Return `mode`, `confidence`, `cards`, `avoid`, `latency_ms`,
-   `cache_status`, and `late_update_policy`.
-8. Add tests for current-thread noise, source-ref validation, failed scout
-   isolation, visibility selection, thread-cache reuse, topic drift rotation,
-   and late-result cache updates.
+5. Add `warm_ambient_recall.py` as a standalone warm-path prototype. Done for
+   the first shape: it defines the 10 named scouts, runs them concurrently,
+   isolates malformed outputs, and returns on quorum inside a strict timeout.
+   It fails open when no API key is available.
+6. Merge into at most 3 private recall cards and serialize useful results back
+   into the thread cache. Done for quorum results; explicit `--wait-all` is
+   reserved for evaluation or detached warming, not the foreground hook.
+7. Reuse optional residue export for source-ref-fingerprinted warm cards so
+   unused resonance can become dream-task seed material without logging raw
+   prompt text.
+8. Next: strengthen source-ref validation, current-thread echo penalties,
+   visibility selection, topic drift rotation, and late-result cache updates
+   after real prompt traces.
 
 Success for slice one is not perfect recall. It is that the agent receives
 useful, source-backed peripheral awareness without making the user wait, and
