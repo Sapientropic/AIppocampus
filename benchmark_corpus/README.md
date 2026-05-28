@@ -117,11 +117,15 @@ Parallel runs disable the local JSON semantic result cache while still
 reporting provider-side prefix-cache usage.
 
 Build a private warm ambient recall case pack from the generated coding
-clean-source corpus:
+clean-source corpus. Use separate labeled views so source-ref support,
+current-thread echo activation, and topic epoch voting can be tightened without
+one label policy masking another:
 
 ```powershell
-python benchmarks\aippocampus\build_warm_ambient_trace_cases.py --clean-source-dir benchmark_corpus\output\sharegpt_coding_multiturn --dataset-id sharegpt_coding_multiturn --out .tmp\warm-sharegpt-coding.jsonl --jsonl --subset-messages-out .tmp\warm-sharegpt-coding-pack\clean-source\messages.jsonl --registry-out .tmp\warm-sharegpt-coding-pack\threads.json --limit 40 --per-thread 1 --trace-window 6 --label-template --json
-python benchmarks\aippocampus\benchmark_warm_ambient_sweep.py --cases-file .tmp\warm-sharegpt-coding.jsonl --registry .tmp\warm-sharegpt-coding-pack\threads.json --live --wait-modes quorum_first,wait_all --max-workers-list 20,50 --timeouts 15,30 --json
+python benchmarks\aippocampus\build_warm_ambient_trace_cases.py --clean-source-dir benchmark_corpus\output\sharegpt_coding_multiturn --dataset-id sharegpt_coding_multiturn --out .tmp\warm-sharegpt-coding-100-source-ref.jsonl --jsonl --subset-messages-out .tmp\warm-sharegpt-coding-100-pack\clean-source\messages.jsonl --registry-out .tmp\warm-sharegpt-coding-100-pack\threads.json --limit 100 --per-thread 1 --trace-window 6 --min-turn-index 2 --label-template --label-policy source_ref_supported --json
+python benchmarks\aippocampus\build_warm_ambient_trace_cases.py --clean-source-dir benchmark_corpus\output\sharegpt_coding_multiturn --dataset-id sharegpt_coding_multiturn --out .tmp\warm-sharegpt-coding-100-echo.jsonl --jsonl --subset-messages-out .tmp\warm-sharegpt-coding-100-pack\clean-source\messages.jsonl --registry-out .tmp\warm-sharegpt-coding-100-pack\threads.json --limit 100 --per-thread 1 --trace-window 6 --min-turn-index 2 --label-template --label-policy echo_guard --json
+python benchmarks\aippocampus\build_warm_ambient_trace_cases.py --clean-source-dir benchmark_corpus\output\sharegpt_coding_multiturn --dataset-id sharegpt_coding_multiturn --out .tmp\warm-sharegpt-coding-100-topic-vote.jsonl --jsonl --subset-messages-out .tmp\warm-sharegpt-coding-100-pack\clean-source\messages.jsonl --registry-out .tmp\warm-sharegpt-coding-100-pack\threads.json --limit 100 --per-thread 1 --trace-window 6 --min-turn-index 2 --label-template --label-policy topic_epoch_vote --json
+python benchmarks\aippocampus\benchmark_warm_ambient_sweep.py --cases-file .tmp\warm-sharegpt-coding-100-source-ref.jsonl --registry .tmp\warm-sharegpt-coding-100-pack\threads.json --live --wait-modes quorum_first,wait_all --max-workers-list 20,50 --timeouts 15,30 --json
 ```
 
 These warm case packs stay private local artifacts. The subset registry is only

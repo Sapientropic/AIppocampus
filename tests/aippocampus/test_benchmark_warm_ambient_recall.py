@@ -421,6 +421,139 @@ class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
         self.assertNotIn("second conversation must not leak", json.dumps(payload["cases"][0], ensure_ascii=False))
         self.assertNotIn(str(root), raw)
 
+    def test_trace_case_builder_can_skip_initial_turns_for_trace_calibration(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            messages = root / "messages.jsonl"
+            messages.write_text(
+                "\n".join(
+                    json.dumps(item, ensure_ascii=False)
+                    for item in [
+                        {
+                            "message_id": "msg-u1",
+                            "source_id": "src-a",
+                            "source_line": 1,
+                            "role": "user",
+                            "turn_index": 1,
+                            "text": "第一轮没有足够前文。",
+                        },
+                        {
+                            "message_id": "msg-a1",
+                            "source_id": "src-a",
+                            "source_line": 2,
+                            "role": "assistant",
+                            "turn_index": 1,
+                            "phase": "final_answer",
+                            "text": "前一轮回答可作为 source-ref 上下文。",
+                        },
+                        {
+                            "message_id": "msg-u2",
+                            "source_id": "src-a",
+                            "source_line": 3,
+                            "role": "user",
+                            "turn_index": 2,
+                            "text": "继续基于上一轮回答校准。",
+                        },
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            payload = trace_builder.build_trace_cases(
+                clean_source_messages=messages,
+                dataset_id="sharegpt_coding_multiturn",
+                limit=1,
+                per_thread=1,
+                trace_window=3,
+                min_turn_index=2,
+            )
+
+        case = payload["cases"][0]
+        self.assertEqual(payload["case_count"], 1)
+        self.assertEqual(case["prompt"], "继续基于上一轮回答校准。")
+        self.assertEqual([row["source_refs"][0]["message_id"] for row in case["prompt_trace"]], ["msg-u1", "msg-a1", "msg-u2"])
+
+    def test_trace_case_builder_can_apply_separate_label_policies(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            messages = root / "messages.jsonl"
+            messages.write_text(
+                "\n".join(
+                    json.dumps(item, ensure_ascii=False)
+                    for item in [
+                        {
+                            "message_id": "msg-u1",
+                            "source_id": "src-a",
+                            "source_line": 1,
+                            "role": "user",
+                            "turn_index": 1,
+                            "text": "怎么设计 recall cache？",
+                        },
+                        {
+                            "message_id": "msg-a1",
+                            "source_id": "src-a",
+                            "source_line": 2,
+                            "role": "assistant",
+                            "turn_index": 1,
+                            "phase": "final_answer",
+                            "text": "recall cache 要避免把当前线程回声当成外部记忆。",
+                        },
+                        {
+                            "message_id": "msg-u2",
+                            "source_id": "src-a",
+                            "source_line": 3,
+                            "role": "user",
+                            "turn_index": 2,
+                            "text": "继续这个 recall cache 方案。",
+                        },
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            source_payload = trace_builder.build_trace_cases(
+                clean_source_messages=messages,
+                dataset_id="policy",
+                limit=1,
+                min_turn_index=2,
+                label_policy="source_ref_supported",
+            )
+            echo_payload = trace_builder.build_trace_cases(
+                clean_source_messages=messages,
+                dataset_id="policy",
+                limit=1,
+                min_turn_index=2,
+                label_policy="echo_guard",
+            )
+            topic_payload = trace_builder.build_trace_cases(
+                clean_source_messages=messages,
+                dataset_id="policy",
+                limit=1,
+                min_turn_index=2,
+                label_policy="topic_epoch_heuristic",
+            )
+            vote_payload = trace_builder.build_trace_cases(
+                clean_source_messages=messages,
+                dataset_id="policy",
+                limit=1,
+                min_turn_index=2,
+                label_policy="topic_epoch_vote",
+            )
+
+        source_case = source_payload["cases"][0]
+        echo_case = echo_payload["cases"][0]
+        topic_case = topic_payload["cases"][0]
+        vote_case = vote_payload["cases"][0]
+        self.assertNotIn("current_thread_key", source_case)
+        self.assertEqual(source_case["expected_min_source_validation_statuses"], {"supported": 1})
+        self.assertEqual(echo_case["expected_min_current_thread_echo_count"], 1)
+        self.assertEqual(echo_case["current_thread_key"], echo_payload["source_subset"]["thread_key"])
+        self.assertEqual(topic_case["expected_topic_epoch_actions"], ["reuse"])
+        self.assertEqual(vote_case["expected_topic_epoch_actions"], ["reuse", "rotate", "suppress"])
+        self.assertIn("auto label", topic_case["label_notes"])
+
     def test_trace_case_builder_writes_clean_source_case_pack_for_validation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

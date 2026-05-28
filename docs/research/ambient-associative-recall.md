@@ -401,12 +401,21 @@ The first slice should stay small but real:
    `--clean-source-dir` or `--clean-source-messages` with `--subset-messages-out`
    and `--registry-out`; the subset registry lets source-ref validation deref
    sampled public-corpus lines without exposing the full generated corpus.
+   Use `--min-turn-index 2` for trace calibration so sampled prompts include
+   real prior user/assistant context instead of mostly first-turn questions.
    `--label-template` adds empty manual labels for source-ref validation status
-   counts, current-thread echo bounds, and allowed topic-epoch actions; the
-   benchmark runner treats those labels as per-case expectation failures without
-   emitting raw prompts or cards. Live mode may call the configured
-   DeepSeek-compatible model but emits only hashes, aggregate metrics,
-   validation status counts, error-kind buckets, and cache metrics.
+   counts, current-thread echo bounds, and allowed topic-epoch actions. For the
+   automated 100-case labeled pack, build separate views with
+   `--label-policy source_ref_supported`, `--label-policy echo_guard`, and
+   `--label-policy topic_epoch_vote`; keep `topic_epoch_heuristic` as a review
+   aid only. Echo calibration expects `current_thread_echo_count >= 1` because
+   the metric counts suppressed current-thread echo attempts, not leaked cards.
+   Topic epoch rotation remains an LLM judgment: the automated gate requires an
+   explicit `reuse|rotate|suppress` vote, not agreement with a local lexical
+   heuristic. The benchmark runner treats labels as per-case expectation
+   failures without emitting raw prompts or cards. Live mode may call the
+   configured DeepSeek-compatible model but emits only hashes, aggregate
+   metrics, validation status counts, error-kind buckets, and cache metrics.
    `benchmark_warm_ambient_sweep.py` now compares quorum-first vs. wait-all,
    worker caps, and timeout values over the same private case pack, ranking
    quality gates and source health before latency. Its sanitized `analysis`
@@ -414,15 +423,18 @@ The first slice should stay small but real:
    error buckets, and source-ref pressure so a wide run can directly inform the
    next tuning pass. Sweep defaults now keep `max_tokens=None` and use 50
    workers to match the 10x5 Flash lane design; lower worker lists are explicit
-   rate-limit diagnostics, not the quality baseline.
+   rate-limit diagnostics, not the quality baseline. Strict labeled evaluation
+   should read the three focused packs separately: source-ref support for
+   evidence grounding, echo-guard activation for current-thread suppression,
+   and topic-epoch vote presence for drift handling.
 9. Source-ref validation, current-thread echo suppression, LLM-directed topic
    epoch rotation, and detached late-result cache warming are now implemented.
    Deep archival recall now has a source-backed visibility mode for original
    wording/detail requests. The foreground enqueue path now passes the current
    `session:<id>` source-ref key and a sanitized current-prompt trace into the
    detached warm job, so background scouts can apply echo and topic-drift
-   judgments against real thread context. Next: fill a private labeled benchmark
-   subset from real traces, run the sweep across a wider live matrix, and tune
+   judgments against real thread context. Next: run the private 100-case
+   source-ref, echo, and topic-vote packs across a wider live matrix and tune
    live-model quality thresholds from the resulting failure distribution.
 
 Success for slice one is not perfect recall. It is that the agent receives

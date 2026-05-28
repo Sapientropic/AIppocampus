@@ -70,11 +70,15 @@ cases from registered clean source or from an explicit clean-source
 `messages.jsonl` / directory. When sampling `benchmark_corpus/output/...`, pass
 `--subset-messages-out` and `--registry-out`, then pass that registry to the
 benchmark; this gives source-ref validation a tiny sampled dereference surface
-without exposing the full generated corpus. Add `--label-template` when
-preparing a private review pack; the emitted labels cover allowed topic-epoch
-actions, minimum source-validation status counts, and current-thread echo
-bounds. Generated exports are private working artifacts and should not be
-committed. The runner also supports optional
+without exposing the full generated corpus. Use `--min-turn-index 2` when the
+calibration target needs real prior context. Add `--label-template` when
+preparing a private review pack; then use focused `--label-policy` values for
+automated gates: `source_ref_supported` requires a supported source-ref card,
+`echo_guard` requires the current-thread echo penalty to fire at least once,
+and `topic_epoch_vote` requires an explicit LLM `reuse|rotate|suppress` topic
+vote. `topic_epoch_heuristic` is a review-only aid because topic epoch rotation
+must not be hard-coded to a lexical rule. Generated exports are private working
+artifacts and should not be committed. The runner also supports optional
 `--max-missing-source-refs-count` for stricter source-ref tuning runs; leave it
 unset when measuring broad candidate/scent recall where unsourced hints are
 expected.
@@ -124,7 +128,7 @@ Useful commands:
 - `python ...\warm_ambient_recall.py --prompt "继续 ambient recall" --cwd "$PWD" --thread-id dry-run --json`
 - `python ...\warm_ambient_recall.py --job-file <redacted-job.json> --json`
 - `python benchmarks\aippocampus\build_warm_ambient_trace_cases.py --out .tmp\warm-traces.jsonl --jsonl --label-template --json`
-- `python benchmarks\aippocampus\build_warm_ambient_trace_cases.py --clean-source-dir benchmark_corpus\output\sharegpt_coding_multiturn --dataset-id sharegpt_coding_multiturn --out .tmp\warm-sharegpt-coding.jsonl --jsonl --subset-messages-out .tmp\warm-sharegpt-coding-pack\clean-source\messages.jsonl --registry-out .tmp\warm-sharegpt-coding-pack\threads.json --limit 40 --per-thread 1 --trace-window 6 --label-template --json`
+- `python benchmarks\aippocampus\build_warm_ambient_trace_cases.py --clean-source-dir benchmark_corpus\output\sharegpt_coding_multiturn --dataset-id sharegpt_coding_multiturn --out .tmp\warm-sharegpt-coding-100-source-ref.jsonl --jsonl --subset-messages-out .tmp\warm-sharegpt-coding-100-pack\clean-source\messages.jsonl --registry-out .tmp\warm-sharegpt-coding-100-pack\threads.json --limit 100 --per-thread 1 --trace-window 6 --min-turn-index 2 --label-template --label-policy source_ref_supported --json`
 - `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --json`
 - `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --cases-file traces.jsonl --json`
 - `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --cases-file traces.jsonl --registry .tmp\warm-sharegpt-coding-pack\threads.json --live --quorum-first --max-workers 50 --timeout 15 --json`

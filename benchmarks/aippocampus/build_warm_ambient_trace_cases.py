@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +23,16 @@ _paths.ensure_paths()
 
 from aippocampuslib import compact_text, sanitize_external_model_text
 from registry import load_registry, registry_paths
+from retrieval import split_query_terms
 from search_clean_source import iter_clean_messages
+
+LABEL_POLICIES = {
+    "none",
+    "source_ref_supported",
+    "echo_guard",
+    "topic_epoch_heuristic",
+    "topic_epoch_vote",
+}
 
 
 def sha1_text(text: str) -> str:
@@ -183,14 +193,81 @@ def append_subset_message(
     target.append(sanitized_subset_message(message))
 
 
+def normalize_label_policy(value: str | None) -> str:
+    policy = str(value or "none").strip().casefold().replace("-", "_")
+    if policy in {"", "none"}:
+        return "none"
+    if policy not in LABEL_POLICIES:
+        raise ValueError(f"unsupported label policy: {value}")
+    return policy
+
+
+FOLLOWUP_CUE_RE = re.compile(
+    r"(继续|上[一轮文次]|刚才|这个|这些|它|其|再|仍然|same|continue|previous|above|this|that|it)",
+    re.IGNORECASE,
+)
+
+
+def infer_topic_epoch_action(prompt: str, trace_messages: list[dict[str, Any]]) -> str:
+    prior_text = " ".join(str(item.get("text") or "") for item in trace_messages[:-1])
+    prompt_terms = set(split_query_terms([prompt])[:20])
+    prior_terms = set(split_query_terms([prior_text])[:40])
+    overlap = len(prompt_terms.intersection(prior_terms))
+    if FOLLOWUP_CUE_RE.search(prompt) or overlap >= 2:
+        return "reuse"
+    return "rotate"
+
+
+def apply_label_policy(
+    case: dict[str, Any],
+    *,
+    label_policy: str,
+    trace_messages: list[dict[str, Any]],
+) -> None:
+    if label_policy == "none":
+        return
+    notes = []
+    if case.get("label_notes"):
+        notes.append(str(case["label_notes"]))
+    if label_policy == "source_ref_supported":
+        # Source-ref calibration intentionally removes the current-thread key:
+        # otherwise valid refs from the sampled prompt trace are suppressed by
+        # the echo guard before the benchmark can count supported evidence.
+        case.pop("current_thread_key", None)
+        case["expected_min_cards"] = max(1, int(case.get("expected_min_cards") or 0))
+        case["expected_min_source_validation_statuses"] = {"supported": 1}
+        notes.append("auto label: require at least one supported source-ref card")
+    elif label_policy == "echo_guard":
+        # `current_thread_echo_count` counts cards suppressed by the echo
+        # filter, not leaked cards. For this calibration view, require the
+        # penalty to actually exercise on source refs from the sampled prompt
+        # trace instead of rewarding scouts that never cite the trace.
+        case["expected_min_current_thread_echo_count"] = 1
+        notes.append("auto label: current-thread echo penalty should trigger")
+    elif label_policy == "topic_epoch_heuristic":
+        action = infer_topic_epoch_action(str(case.get("prompt") or ""), trace_messages)
+        case["expected_topic_epoch_actions"] = [action]
+        notes.append(f"auto label: topic epoch should {action}")
+    elif label_policy == "topic_epoch_vote":
+        # Topic epoch rotation is intentionally an LLM judgment. This policy is
+        # the automated gate: require an explicit scout vote, but do not let a
+        # local lexical heuristic decide whether the right answer is reuse,
+        # rotate, or suppress. Use `topic_epoch_heuristic` only as a review aid.
+        case["expected_topic_epoch_actions"] = ["reuse", "rotate", "suppress"]
+        notes.append("auto label: require explicit LLM topic-epoch vote")
+    case["label_notes"] = " ".join(note for note in notes if note).strip()
+
+
 def build_cases_for_thread(
     entry: dict[str, Any],
     *,
     per_thread: int,
     trace_window: int,
     min_prompt_chars: int,
+    min_turn_index: int,
     include_redacted_prompts: bool,
     label_template: bool,
+    label_policy: str,
     skipped: dict[str, int],
 ) -> list[dict[str, Any]]:
     thread_key = compact_text(str(entry.get("thread_key") or ""), 160)
@@ -209,6 +286,9 @@ def build_cases_for_thread(
         if len(cases) >= max(1, per_thread):
             break
         if str(message.get("role") or "").casefold() != "user":
+            continue
+        if as_int(message.get("turn_index"), 1) < max(1, min_turn_index):
+            skipped["early_turn"] = skipped.get("early_turn", 0) + 1
             continue
         prompt, policy = clean_text(message.get("text"), chars=1200)
         if policy.get("redacted") and not include_redacted_prompts:
@@ -238,6 +318,7 @@ def build_cases_for_thread(
         }
         if label_template:
             case.update(manual_label_template_fields())
+        apply_label_policy(case, label_policy=label_policy, trace_messages=trace_messages)
         cases.append(case)
     return cases
 
@@ -249,8 +330,10 @@ def build_cases_for_message_group(
     per_thread: int,
     trace_window: int,
     min_prompt_chars: int,
+    min_turn_index: int,
     include_redacted_prompts: bool,
     label_template: bool,
+    label_policy: str,
     skipped: dict[str, int],
     subset_messages: list[dict[str, Any]],
     subset_seen: set[str],
@@ -260,6 +343,9 @@ def build_cases_for_message_group(
         if len(cases) >= max(1, per_thread):
             break
         if str(message.get("role") or "").casefold() != "user":
+            continue
+        if as_int(message.get("turn_index"), 1) < max(1, min_turn_index):
+            skipped["early_turn"] = skipped.get("early_turn", 0) + 1
             continue
         prompt, policy = clean_text(message.get("text"), chars=1200)
         if policy.get("redacted") and not include_redacted_prompts:
@@ -291,6 +377,7 @@ def build_cases_for_message_group(
         }
         if label_template:
             case.update(manual_label_template_fields())
+        apply_label_policy(case, label_policy=label_policy, trace_messages=trace_messages)
         cases.append(case)
     return cases
 
@@ -303,15 +390,19 @@ def build_cases_from_clean_source_messages(
     per_thread: int,
     trace_window: int,
     min_prompt_chars: int,
+    min_turn_index: int,
     include_redacted_prompts: bool,
     label_template: bool,
+    label_policy: str,
 ) -> dict[str, Any]:
+    label_policy = normalize_label_policy(label_policy)
     skipped: dict[str, int] = {
         "missing_clean_source": 0,
         "empty_clean_source": 0,
         "redacted_prompt": 0,
         "hard_blocked_prompt": 0,
         "short_prompt": 0,
+        "early_turn": 0,
     }
     if not messages_path.exists():
         skipped["missing_clean_source"] = 1
@@ -332,8 +423,10 @@ def build_cases_from_clean_source_messages(
             per_thread=min(max(1, per_thread), remaining),
             trace_window=trace_window,
             min_prompt_chars=min_prompt_chars,
+            min_turn_index=min_turn_index,
             include_redacted_prompts=include_redacted_prompts,
             label_template=label_template,
+            label_policy=label_policy,
             skipped=skipped,
             subset_messages=subset_messages,
             subset_seen=subset_seen,
@@ -362,6 +455,7 @@ def build_cases_from_clean_source_messages(
         "source_sha1": sha1_text(str(dataset_id or messages_path.name)),
         "case_count": len(cases),
         "label_template": bool(label_template),
+        "label_policy": label_policy,
         "cases": cases,
         "source_subset": {
             "thread_key": thread_key,
@@ -404,9 +498,12 @@ def build_trace_cases(
     per_thread: int = 5,
     trace_window: int = 6,
     min_prompt_chars: int = 8,
+    min_turn_index: int = 1,
     include_redacted_prompts: bool = False,
     label_template: bool = False,
+    label_policy: str = "none",
 ) -> dict[str, Any]:
+    label_policy = normalize_label_policy(label_policy)
     messages_path = resolve_clean_source_messages_path(
         clean_source_messages=clean_source_messages,
         clean_source_dir=clean_source_dir,
@@ -419,8 +516,10 @@ def build_trace_cases(
             per_thread=per_thread,
             trace_window=trace_window,
             min_prompt_chars=min_prompt_chars,
+            min_turn_index=min_turn_index,
             include_redacted_prompts=include_redacted_prompts,
             label_template=label_template,
+            label_policy=label_policy,
         )
 
     path = (
@@ -435,6 +534,7 @@ def build_trace_cases(
         "redacted_prompt": 0,
         "hard_blocked_prompt": 0,
         "short_prompt": 0,
+        "early_turn": 0,
     }
     cases: list[dict[str, Any]] = []
     for entry in iter_thread_entries(registry):
@@ -445,8 +545,10 @@ def build_trace_cases(
             per_thread=per_thread,
             trace_window=trace_window,
             min_prompt_chars=min_prompt_chars,
+            min_turn_index=min_turn_index,
             include_redacted_prompts=include_redacted_prompts,
             label_template=label_template,
+            label_policy=label_policy,
             skipped=skipped,
         )
         remaining = max(0, limit - len(cases))
@@ -459,6 +561,7 @@ def build_trace_cases(
         "registry_sha1": sha1_text(str(path)),
         "case_count": len(cases),
         "label_template": bool(label_template),
+        "label_policy": label_policy,
         "cases": cases,
         "skipped": skipped,
         "privacy_boundary": {
@@ -543,11 +646,23 @@ def main() -> int:
     parser.add_argument("--per-thread", type=int, default=5)
     parser.add_argument("--trace-window", type=int, default=6)
     parser.add_argument("--min-prompt-chars", type=int, default=8)
+    parser.add_argument(
+        "--min-turn-index",
+        type=int,
+        default=1,
+        help="Skip earlier user turns so prompt traces include real prior context.",
+    )
     parser.add_argument("--include-redacted-prompts", action="store_true")
     parser.add_argument(
         "--label-template",
         action="store_true",
         help="Emit empty manual labels for source-ref, echo, and topic-drift calibration.",
+    )
+    parser.add_argument(
+        "--label-policy",
+        default="none",
+        choices=sorted(LABEL_POLICIES),
+        help="Apply a focused auto-label policy after optional label-template fields.",
     )
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
@@ -562,8 +677,10 @@ def main() -> int:
         per_thread=args.per_thread,
         trace_window=args.trace_window,
         min_prompt_chars=args.min_prompt_chars,
+        min_turn_index=args.min_turn_index,
         include_redacted_prompts=args.include_redacted_prompts,
         label_template=args.label_template,
+        label_policy=args.label_policy,
     )
     output = write_cases_file(payload["cases"], args.out, jsonl=args.jsonl)
     pack_outputs: dict[str, Path] = {}
@@ -581,6 +698,7 @@ def main() -> int:
         "source_mode": payload.get("source_mode"),
         "case_count": payload["case_count"],
         "label_template": payload["label_template"],
+        "label_policy": payload.get("label_policy"),
         "skipped": payload["skipped"],
         "output": str(output),
         "source_subset_message_count": (payload.get("source_subset") or {}).get("message_count"),
