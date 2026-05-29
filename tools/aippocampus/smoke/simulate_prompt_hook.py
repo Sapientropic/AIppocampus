@@ -270,7 +270,8 @@ def run_cases(
     associations_path: Path | None,
     concept_graph_path: Path | None,
     use_concept_graph: bool,
-    search_budget: int,
+    use_semantic_gate: bool = False,
+    search_budget: int = 3,
 ) -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
     for case in cases:
@@ -282,6 +283,8 @@ def run_cases(
             associations_path=associations_path,
             concept_graph_path=concept_graph_path,
             use_concept_graph=use_concept_graph,
+            semantic_gate_mode="auto" if use_semantic_gate else "off",
+            use_semantic_gate=use_semantic_gate,
             search_budget=search_budget,
         )
         ok, reason = decision_ok(result, case)
@@ -377,6 +380,11 @@ def main() -> int:
     parser.add_argument("--associations")
     parser.add_argument("--concept-graph")
     parser.add_argument("--no-concept-graph", action="store_true")
+    parser.add_argument(
+        "--semantic-gate",
+        action="store_true",
+        help="Enable the live semantic gate. Off by default so the smoke stays self-contained.",
+    )
     parser.add_argument("--compare-concept-graph", action="store_true")
     parser.add_argument("--search-budget", type=int, default=3)
     parser.add_argument("--json", action="store_true", dest="json_output")
@@ -417,6 +425,7 @@ def main() -> int:
                 else None
             ),
             "search_budget": args.search_budget,
+            "use_semantic_gate": args.semantic_gate,
         }
         if args.compare_concept_graph:
             disabled = run_cases(

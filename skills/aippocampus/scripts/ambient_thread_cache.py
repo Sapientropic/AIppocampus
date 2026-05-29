@@ -52,8 +52,12 @@ def _fingerprint(value: str, *, prefix: str) -> str:
 
 def cache_workspace_identity(workspace: str) -> str:
     text = str(workspace or "")
-    if text.startswith("/"):
-        return str(Path(text).resolve())
+    path = Path(text)
+    # Only canonicalize host-style absolute paths. Plain project labels must not
+    # be resolved against the current process cwd, or identical labels would drift
+    # across machines and unrelated checkouts.
+    if text.startswith("/") or path.is_absolute():
+        return str(path.resolve())
     return text
 
 
