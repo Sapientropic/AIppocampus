@@ -269,6 +269,18 @@ class Stage05SmokeRunnerTests(unittest.TestCase):
 
         self.assertEqual(hits, [])
 
+    def test_secret_scan_does_not_treat_regex_escapes_as_windows_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            (repo_root / "project_triage.py").write_text(
+                'PARENT_RE = re.compile(r"(?im)^\\s*Parent:\\s*#(\\d+)\\b")\n',
+                encoding="utf-8",
+            )
+
+            hits = smoke.scan_secret_like_strings(repo_root)
+
+        self.assertEqual(hits, [])
+
 
 if __name__ == "__main__":
     unittest.main()

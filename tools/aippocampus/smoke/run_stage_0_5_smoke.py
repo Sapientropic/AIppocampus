@@ -47,11 +47,16 @@ SECRET_PATTERNS = (
     ("bearer_token", re.compile(r"Bearer\s+[A-Za-z0-9._~+/=-]{20,}", re.IGNORECASE)),
     # Avoid treating JSON/newline escapes such as "indices:\n" as Windows
     # drive paths while still catching literal or source-escaped drive paths.
+    # The drive-letter candidate must not start in the middle of another word;
+    # otherwise regex literals with colon-plus-backslash escapes can resemble a
+    # one-letter drive path.
     # Public-readiness scans should be conservative, but false positives in
     # benchmark JSON drown out real boundary regressions.
     (
         "windows_path",
-        re.compile(r"(?:[A-Za-z]:\\\\(?![nrtbfvu\"'])|[A-Za-z]:\\(?![\\nrtbfvu\"']))"),
+        re.compile(
+            r"(?<![A-Za-z])(?:[A-Za-z]:\\\\(?![nrtbfvu\"'])|[A-Za-z]:\\(?![\\nrtbfvu\"']))"
+        ),
     ),
 )
 
