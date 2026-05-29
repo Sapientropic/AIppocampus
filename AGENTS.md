@@ -47,6 +47,41 @@ and link to it.
 - Before changing hooks, sync, registry, or search ranking, explain the
   privacy and over-personalization boundary in code or docs.
 
+## Roadmap, Issue, And Project Intake
+
+Agents should help turn sprawling docs into executable GitHub work, but docs
+remain the source of truth for context and evidence. Do not mechanically convert
+every paragraph into an issue.
+
+Use this intake flow when the user asks to organize roadmap/docs/issues/projects,
+when a doc contains unresolved commitments, or when a change reveals stale
+planning material:
+
+- First classify the source document as current contract, readiness evidence,
+  next-slice handoff, exploratory research, or historical archive. If a draft
+  has been superseded by implementation, mark or route it as archive instead of
+  creating fresh work from stale claims.
+- Extract only unfinished commitments, blockers, verification gaps, and
+  decisions that need implementation. Preserve source links back to the exact
+  doc or issue that motivated the work.
+- Prefer one umbrella issue for a broad track, then create focused child issues
+  or checklist items for independently closable slices. Each actionable issue
+  should include goal, source, scope, non-goals, acceptance criteria, and
+  relevant files.
+- Use GitHub Projects as the planning view when available, not as another truth
+  source. Suggested fields are `Status`, `Track`, `Kind`, `Stage`, `Evidence`,
+  `Source`, and `Priority`. Do not claim a Project, fields, or automations exist
+  until verified against GitHub.
+- Keep Project views simple: inbox, roadmap by track/stage, current work, and
+  evidence gaps. Automation is optional and should follow the existing issue
+  labels/filters instead of inventing a parallel workflow.
+- After creating or updating issues, add only short pointers from docs when
+  needed. Do not mirror the full issue body into docs or duplicate long rules
+  across files.
+- During closeout, report which docs became issues, which stayed as background
+  context, which were archived or left for review, and what cannot yet be
+  claimed.
+
 ## Verification
 
 For ordinary repo changes, run the fast deterministic path from the repository

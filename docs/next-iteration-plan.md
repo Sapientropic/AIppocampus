@@ -8,6 +8,12 @@ Keep this file as a task queue and preservation checklist. Detailed Stage 0-5
 evidence belongs in `stage-0-5-readiness.md`; dated command evidence belongs in
 `public-readiness-verification.md`.
 
+Active planning view: the public GitHub Project
+[`AIppocampus Roadmap`](https://github.com/users/Sapientropic/projects/1)
+tracks the issue slices extracted from this file and related roadmap/readiness
+docs. Use the Project for status/filtering; keep this file as the source-backed
+handoff context.
+
 ## Current Baseline To Preserve
 
 - Public repo boundary: no raw rollouts, registry exports, private anchors,
