@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -99,7 +100,7 @@ class EncryptedSyncBundleTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def write_fake_age(self) -> Path:
-        path = self.root / "fake-age"
+        path = self.root / "fake-age.py"
         path.write_text(
             """#!/usr/bin/env python3
 from __future__ import annotations
@@ -140,6 +141,10 @@ output.write_bytes(b"FAKEAGE\\n" + base64.b64encode(data))
 """,
             encoding="utf-8",
         )
+        if os.name == "nt":
+            wrapper = self.root / "fake-age.cmd"
+            wrapper.write_text(f'@echo off\r\n"{sys.executable}" "{path}" %*\r\n', encoding="utf-8")
+            return wrapper
         path.chmod(0o755)
         return path
 
