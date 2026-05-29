@@ -70,3 +70,5 @@ Detailed runtime behavior lives in the skill references:
 - `skills/aippocampus/references/subconscious-jobs.md`
 
 Product direction remains in `docs/roadmap.md`.
+The public-core license, adapter, and schema boundary lives in
+`docs/public-core-boundary.md`.

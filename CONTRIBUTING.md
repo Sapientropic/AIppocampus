@@ -19,6 +19,17 @@ Do not commit private memory artifacts:
 Use the fake fixtures under `tests/aippocampus/` when testing redaction
 or local-path handling.
 
+## Licensing Boundary
+
+Contributions intentionally submitted to this public repository are expected to
+be Apache-2.0 contributions unless explicitly marked otherwise. Do not submit
+third-party code, corpora, generated memory data, or private conversation
+exports unless you have the right to publish them.
+
+The canonical split between Apache-2.0 public core, private user data, and
+commercial/separate-license product surfaces is
+`docs/public-core-boundary.md`.
+
 ## Development Checks
 
 AIppocampus supports Python 3.10 and newer. Before claiming the repository is

@@ -97,7 +97,8 @@ project.
 - Keep `skills/aippocampus/` as the installable skill package.
 - Add root README, architecture overview, privacy model, install guide, and
   demo scenarios.
-- Add license decision and contribution notes.
+- Maintain the Apache-2.0 public-core boundary, commercial extension boundary,
+  adapter contract, and contribution notes.
 - Keep public defaults portable and avoid machine-specific paths.
 - Maintain smoke tests for clean source, search, registry, hooks, sync, and
   docs health.

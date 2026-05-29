@@ -122,7 +122,7 @@ registry-backed tools such as `search_memory`, `latest_reply`,
 python ./skills/aippocampus/scripts/aippocampus_mcp_server.py --list-tools
 ```
 
-The repo also carries a Codex plugin source package under
+The repo also carries an Apache-2.0 Codex plugin source package under
 `plugins/aippocampus/`. Build a local distributable directory with:
 
 ```sh
@@ -218,13 +218,19 @@ AIppocampus/
 
 ## License
 
-AIppocampus is dual-licensed:
+The public AIppocampus repository is licensed under Apache-2.0.
 
-- Open-source use: GNU Affero General Public License v3.0 only
-  (`AGPL-3.0-only`).
-- Commercial or proprietary use: available only under a separate written
-  commercial license from the copyright holder.
+The Apache-2.0 public core covers the code, docs, local tools, schemas, MCP
+surface, plugin packaging, and public examples shipped in this repository unless
+a bundled third-party asset says otherwise. Hosted services, enterprise
+governance, managed graph/semantic layers, support, and other operated product
+surfaces can be offered under separate commercial or product-specific terms.
 
-The intent is still generous personal, research, and self-hosted use, but memory
-infrastructure should not be quietly absorbed into closed commercial services
-without returning source code improvements to the community.
+Private user memory data is not project code. Raw rollouts, clean-source
+exports, registry rows, sync bundles, vault exports, generated indexes, and
+thread anchors remain private user artifacts unless their owner explicitly
+publishes them.
+
+See [docs/public-core-boundary.md](docs/public-core-boundary.md) for the
+canonical licensing, adapter, schema, third-party asset, and relicensing
+boundary.

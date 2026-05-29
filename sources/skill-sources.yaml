@@ -5,7 +5,7 @@ skills:
     path: skills/aippocampus
     origin: local
     public_status: included
-    license: MIT
+    license: Apache-2.0
     optional_env:
       - CODEX_HOME
       - DEEPSEEK_API_KEY

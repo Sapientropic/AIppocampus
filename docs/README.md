@@ -26,6 +26,8 @@ Other docs should link to that place and add only local context.
 - `stage-0-5-readiness.md` - current evidence matrix for completing roadmap
   stages 0 through 5; it is a status snapshot, not the canonical roadmap.
 - `architecture-overview.md` - public map of runtime layers and boundaries.
+- `public-core-boundary.md` - canonical Apache-2.0 public-core license,
+  commercial extension, adapter, schema, and relicensing boundary.
 - `install-guide.md` - public skill, MCP, plugin, hook, and local-sync install
   paths.
 - `demo-scenarios.md` - public-safe demo flows using synthetic memory data.

@@ -25,6 +25,7 @@ class PluginDistributionTests(unittest.TestCase):
         mcp_config = json.loads((PLUGIN_ROOT / ".mcp.json").read_text(encoding="utf-8"))
 
         self.assertEqual(manifest["name"], "aippocampus")
+        self.assertEqual(manifest["license"], "Apache-2.0")
         self.assertEqual(manifest["skills"], "./skills/")
         self.assertEqual(manifest["mcpServers"], "./.mcp.json")
         self.assertNotIn("hooks", manifest)
