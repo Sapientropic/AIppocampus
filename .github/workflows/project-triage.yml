@@ -1,0 +1,62 @@
+name: Project triage
+
+"on":
+  issues:
+    types: [opened, edited, labeled, unlabeled, reopened, closed]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Optional issue number to triage. Leave empty to backfill missing fields."
+        required: false
+      dry_run:
+        description: "Print planned updates without mutating the Project."
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  project-triage:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Fill Project fields
+        env:
+          AIPPOCAMPUS_PROJECTS_TOKEN: ${{ secrets.AIPPOCAMPUS_PROJECTS_TOKEN }}
+          AIPPOCAMPUS_PROJECT_OWNER: Sapientropic
+          AIPPOCAMPUS_PROJECT_NUMBER: "1"
+          ISSUE_NUMBER: ${{ github.event.issue.number || github.event.inputs.issue_number || '' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${AIPPOCAMPUS_PROJECTS_TOKEN:-}" ]]; then
+            echo "::warning::Set repository secret AIPPOCAMPUS_PROJECTS_TOKEN with GitHub Projects write access to enable automatic Project field triage."
+            exit 0
+          fi
+
+          args=(
+            --repo "$GITHUB_REPOSITORY"
+            --project-owner "$AIPPOCAMPUS_PROJECT_OWNER"
+            --project-number "$AIPPOCAMPUS_PROJECT_NUMBER"
+          )
+          if [[ -n "${ISSUE_NUMBER:-}" ]]; then
+            args+=(--issue-number "$ISSUE_NUMBER")
+          else
+            args+=(--all-missing)
+          fi
+          if [[ "$DRY_RUN" == "true" ]]; then
+            args+=(--dry-run)
+          fi
+          python tools/aippocampus/github/project_triage.py "${args[@]}"
