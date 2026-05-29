@@ -117,8 +117,10 @@ handoff context.
      device registries, cross-OS-shaped source paths, bidirectional conflicts,
      and raw opt-in. `sync_object_storage.py` now exercises the same contract
      over HTTP object `PUT`/`GET`, with a local object-store smoke.
-   - Next harden them with physical second-machine smoke, managed
-     cloud/object-storage provider smoke, and release-oriented repair docs.
+   - Current P0 evidence now includes a physical Windows-to-MacBook sync smoke
+     and a managed Cloudflare R2 encrypted object-storage smoke. Next harden
+     them with broader provider/client soak only where a release claim needs it,
+     plus release-oriented repair docs.
 
 6. MCP access layer hardening
    - Source: `roadmap.md`, Stage 4.

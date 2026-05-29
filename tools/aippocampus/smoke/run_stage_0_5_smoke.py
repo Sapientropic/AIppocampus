@@ -29,6 +29,12 @@ EXCLUDED_SCAN_DIRS = {
     ".tmp",
     ".aippocampus",
     "__pycache__",
+    # Third-party/public benchmark fixtures intentionally contain realistic
+    # code, security, URL, and Windows-path examples. The public-readiness scan
+    # protects the shipped product/docs/examples surface; benchmark corpora need
+    # a separate corpus audit before anyone claims the corpora themselves are
+    # secret-like-string-free.
+    "benchmark_corpus",
     "build",
     "dist",
 }
@@ -37,9 +43,16 @@ EXCLUDED_SCAN_PARTS = {
     ("skills", "aippocampus", "scripts", "vault_dashboard_assets"),
 }
 SECRET_PATTERNS = (
-    re.compile(r"sk-[A-Za-z0-9_-]{20,}"),
-    re.compile(r"Bearer\s+[A-Za-z0-9._~+/=-]{20,}", re.IGNORECASE),
-    re.compile(r"[A-Za-z]:\\"),
+    ("openai_key", re.compile(r"sk-[A-Za-z0-9_-]{20,}")),
+    ("bearer_token", re.compile(r"Bearer\s+[A-Za-z0-9._~+/=-]{20,}", re.IGNORECASE)),
+    # Avoid treating JSON/newline escapes such as "indices:\n" as Windows
+    # drive paths while still catching literal or source-escaped drive paths.
+    # Public-readiness scans should be conservative, but false positives in
+    # benchmark JSON drown out real boundary regressions.
+    (
+        "windows_path",
+        re.compile(r"(?:[A-Za-z]:\\\\(?![nrtbfvu\"'])|[A-Za-z]:\\(?![\\nrtbfvu\"']))"),
+    ),
 )
 
 
@@ -634,7 +647,33 @@ def excluded_scan_path(path: Path, repo_root: Path) -> bool:
     return any(parts[: len(excluded)] == excluded for excluded in EXCLUDED_SCAN_PARTS)
 
 
-def allowed_secret_like_line(line: str) -> bool:
+def looks_like_api_key(candidate: str) -> bool:
+    value = candidate.removeprefix("sk-")
+    # URL slugs in public benchmark fixtures often contain words such as
+    # "ask-your-..." or "risk-factors-...". A real OpenAI-style secret is
+    # high-entropy enough to include at least one digit, uppercase character, or
+    # underscore in the body; keep bare lowercase prose out of the alert stream.
+    return any(char.isdigit() or char.isupper() or char == "_" for char in value)
+
+
+def secret_hit_kinds(line: str) -> list[str]:
+    kinds: list[str] = []
+    for kind, pattern in SECRET_PATTERNS:
+        if kind == "openai_key":
+            if any(looks_like_api_key(match.group(0)) for match in pattern.finditer(line)):
+                kinds.append(kind)
+            continue
+        if pattern.search(line):
+            kinds.append(kind)
+    return kinds
+
+
+def public_benchmark_path(rel_path: Path) -> bool:
+    parts = rel_path.parts
+    return bool(parts) and parts[0] == "benchmark_corpus"
+
+
+def allowed_secret_like_line(line: str, *, rel_path: Path, hit_kinds: list[str]) -> bool:
     low = line.casefold()
     if "fake_test" in low and (
         "fake_test_openai_api_key" in low
@@ -643,6 +682,8 @@ def allowed_secret_like_line(line: str) -> bool:
     ):
         return True
     if "api_key" in low and ("if not api_key" in low or "api_key=api_key" in low):
+        return True
+    if set(hit_kinds) == {"windows_path"} and public_benchmark_path(rel_path):
         return True
     return False
 
@@ -656,14 +697,16 @@ def scan_secret_like_strings(repo_root: Path) -> list[dict[str, Any]]:
             text = path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             continue
+        rel_path = path.relative_to(repo_root)
         for line_no, line in enumerate(text.splitlines(), start=1):
-            if not any(pattern.search(line) for pattern in SECRET_PATTERNS):
+            hit_kinds = secret_hit_kinds(line)
+            if not hit_kinds:
                 continue
-            if allowed_secret_like_line(line):
+            if allowed_secret_like_line(line, rel_path=rel_path, hit_kinds=hit_kinds):
                 continue
             hits.append(
                 {
-                    "path": path.relative_to(repo_root).as_posix(),
+                    "path": rel_path.as_posix(),
                     "line_no": line_no,
                     "line": line[:240],
                 }

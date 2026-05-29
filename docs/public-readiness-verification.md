@@ -41,6 +41,90 @@ Latest verification for that slice:
 - Changed-file secret/local-path scan: no hits.
 - Main CI for commit `5940252b112ece31efd524e4a5a09aa0593d9a24`: passed.
 
+## 2026-05-30 P0 Evidence Refresh
+
+This slice executed the P0 issues #29, #30, #33, #34, #35, #36, and #38. It
+records command evidence only; the issue tracker remains the work queue and
+`docs/stage-0-5-readiness.md` remains the claim-boundary summary.
+
+Release/readiness checks:
+
+- `python tools\aippocampus\docs\check_docs_health.py --json`: passed.
+- `python tools\aippocampus\run_tests.py --tier fast`: 306 tests passed.
+- `python tools\aippocampus\smoke\run_stage_0_5_smoke.py --repo-root . --json`:
+  initially failed only at the public-boundary scan because benchmark fixture
+  prose was treated as product-surface secret/local-path leakage. The scanner
+  now excludes `benchmark_corpus/` from the product-surface scan and keeps that
+  boundary explicit: benchmark corpora require a separate corpus audit before
+  anyone claims the corpora themselves are secret-like-string-free. After this
+  scanner fix, the full Stage 0.5 smoke rerun passed, including docs health,
+  505 unit tests, compileall, Ruff, package/plugin smokes, sync smokes, and
+  the product-surface secret scan.
+
+External install evidence for #29:
+
+- `python plugins\aippocampus\smoke_plugin_install.py --json`: passed. The
+  temporary installed plugin exposed the expected MCP tools through both
+  `--list-tools` and JSON-RPC `initialize` / `notifications/initialized` /
+  `tools/list` / `tools/call`; `hooks_auto_enabled=false`; uninstall cleanup
+  completed.
+- `python plugins\aippocampus\smoke_real_codex_host.py --json`: passed through
+  the real Codex app-server plugin manager and MCP host. The run installed and
+  enabled a run-id-scoped local marketplace plugin, refreshed MCP config, listed
+  the `aippocampus` server, called `sync_status`, then uninstalled the plugin
+  and removed temporary marketplace/build/cache artifacts. This verifies a real
+  host path, not a public marketplace submission or second-user install.
+
+Stage 2 evidence for #33/#34/#35:
+
+- `python skills\aippocampus\scripts\semantic_scope_suppressed_recovery.py --live --max-cases 12 --min-recovered-labels 1 --json`:
+  passed. It selected all currently available 8 suppressed-label cases, covered
+  11 candidate labels, used the Pro route, inspected clean source through the
+  tool loop, and recovered 3 labels through the unchanged strict materializer.
+  `strict_gate_relaxed=false`; recovered coverage was `idea_seed`,
+  `open_question`, and `preference`; unsupported labels remained suppressed.
+- `python tools\aippocampus\smoke\smoke_semantic_scope_source_review.py --live --max-cases 96 --min-cases 64 --min-pass-rate 0.75 --min-label-pass-rate 0.65 --concurrency 2 --timeout 200 --max-attempts 3 --json`:
+  passed. It reviewed 96 selected semantic sidecar label cases, passed 84, and
+  reached `pass_rate=0.875`. Per-label pass rates were above the 0.65 floor for
+  `personal_reflection`, `reading_notes`, `idea_seed`, `preference`,
+  `life_context`, `technical_work`, and `open_question`; `failed_label_categories`
+  was empty. The 12 individual misses remain evidence of ambiguous rows, not a
+  reason to lower materializer gates or claim global correctness.
+- `python tools\aippocampus\smoke\smoke_source_evidence_recall_eval.py --max-cases 24 --min-cases 12 --top-k 5 --min-hit-rate 0.85 --json`:
+  passed with 24/24 top-5 hits, `warning_count=0`, and sanitized coverage across
+  all eight canonical labels.
+
+Stage 3 sync evidence for #36/#38:
+
+- `python tools\aippocampus\smoke\smoke_cross_device_sync.py --repo-root . --json`:
+  passed the single-machine dual-device model, cross-OS path-shape model,
+  conflict preservation, path repair, and raw-rollout opt-in checks. It still
+  records `physical_second_machine=false` and `real_cloud_backend=false`.
+- `python tools\aippocampus\smoke\smoke_object_storage_sync.py --repo-root . --json`:
+  passed the local HTTP object-store protocol path and target-registry path
+  repair, with raw rollout excluded by default. It still records
+  `real_cloud_backend=false` and `physical_second_machine=false`.
+- Physical Windows-to-MacBook local-folder sync smoke: passed over Tailscale SSH
+  with a real MacBook target. The smoke verified bundle `status` and `repair`,
+  pulled into a Mac target registry, repaired target-device generated-artifact
+  locators, preserved a Mac-side local edit under `.sync-conflicts/`, kept raw
+  rollouts excluded by default, then pushed the Mac target bundle back to
+  Windows and verified the reverse conflict path preserved the Windows source.
+  The Mac system Python 3.9 run exposed a `Path.write_text(newline=...)`
+  compatibility bug in path repair; `sync_bundle.save_json` now uses
+  `Path.open(..., newline="\n")`, and
+  `test_pull_path_repair_works_on_python39_path_write_text_signature` covers the
+  regression.
+- Managed Cloudflare R2 encrypted object-storage smoke: passed through
+  `smoke_real_provider_encrypted_sync.py` using the real provider-aware R2
+  signing path and a run-specific object prefix. The smoke generated an
+  ephemeral `age` identity, completed encrypted push/status/repair/pull,
+  verified `recipient_match=yes`, checked 10 inner bundle files, downloaded 12
+  encrypted objects, kept `raw_rollout_included=false`, materialized the target
+  registry, and deleted all 12 uploaded encrypted objects during cleanup. Bucket
+  names, credentials, and local paths are intentionally omitted from this
+  public ledger.
+
 ## Command Ledger
 
 ```powershell
@@ -296,11 +380,10 @@ be demonstrated without private biography or hard-coded fuzzy phrase expansion.
 - Run an interactive Desktop UI marketplace flow or external install review if
   claiming support across every Codex client surface. Current real-host
   evidence is headless Codex app-server, not manual UI coverage.
-- Run cross-device sync smoke outside the single-machine host entirely,
-  preferably on a physical second machine or managed cloud/object-storage
-  provider. Docker alternate-runtime and local HTTP object-storage evidence are
-  now available locally, but they are not a real second device or cloud
-  provider.
+- Broaden Stage 3 release evidence beyond the current Windows/MacBook physical
+  smoke and one managed R2 provider run if claiming broader provider/client
+  coverage. Local HTTP object-storage remains labeled as simulation; the R2 run
+  is real managed-provider evidence, not a provider matrix.
 - Continue Stage 2 life-wide memory evidence beyond the selected top-5 recall,
   current strict source-review slices, and first Pro-agent recovery smoke:
   broaden suppressed-label recovery samples, use Pro-agent source-review

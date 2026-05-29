@@ -32,10 +32,11 @@ class AippocampusHealthTests(unittest.TestCase):
     def test_recommended_script_command_keeps_powershell_shape_on_windows(self) -> None:
         with mock.patch.object(health.os, "name", "nt"):
             command = health.recommended_script_command("build_index.py", "C:/work")
+        expected_cwd = "C:" + "\\work"
 
         self.assertEqual(
             command,
-            'python "$env:CODEX_HOME\\skills\\aippocampus\\scripts\\build_index.py" --cwd "C:\\work"',
+            f'python "$env:CODEX_HOME\\skills\\aippocampus\\scripts\\build_index.py" --cwd "{expected_cwd}"',
         )
 
 

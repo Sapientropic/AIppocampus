@@ -38,8 +38,9 @@ circuits, and pipeline-level routing instead of one all-purpose agent.
 - Supports optional DeepSeek-compatible semantic gates, background
   consolidation jobs, and cognitive-map routes for memory wayfinding.
 - Provides local-folder sync, HTTP object-storage sync, MCP access, and plugin
-  packaging surfaces, with managed cloud/second-device release hardening still
-  on the roadmap.
+  packaging surfaces, with selected physical second-device and managed
+  object-storage smoke evidence plus broader release hardening still on the
+  roadmap.
 
 ## Install As A Skill
 

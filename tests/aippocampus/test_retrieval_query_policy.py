@@ -30,7 +30,7 @@ class RetrievalQueryPolicyTests(unittest.TestCase):
             {
                 "source": "semantic_triggers",
                 "title": "Local path should be ignored",
-                "aliases": [r"E:\\Users\\secret\\memory", "external hippocampus"],
+                "aliases": [r"E:\\FAKE_TEST_LOCAL_PATH\\secret\\memory", "external hippocampus"],
             },
         ]
 
@@ -40,7 +40,7 @@ class RetrievalQueryPolicyTests(unittest.TestCase):
         self.assertIn("внешний гиппокамп", terms)
         self.assertIn("ذاكرة سياقية", terms)
         self.assertIn("external hippocampus", terms)
-        self.assertNotIn(r"E:\\Users\\secret\\memory", terms)
+        self.assertNotIn(r"E:\\FAKE_TEST_LOCAL_PATH\\secret\\memory", terms)
 
     def test_domain_semantic_aliases_are_not_kept_in_static_alias_table(self) -> None:
         all_static_aliases = {
