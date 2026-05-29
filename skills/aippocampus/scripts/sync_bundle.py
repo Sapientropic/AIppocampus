@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import shutil
 from pathlib import Path
@@ -267,7 +268,10 @@ def push_sync_bundle(
     sync_dir: str | Path,
     *,
     include_raw: bool = False,
+    allow_plaintext_raw: bool = False,
 ) -> dict:
+    if include_raw and not allow_plaintext_raw:
+        raise ValueError("raw_requires_encryption: use encrypted sync for raw rollout transfer")
     registry_root = (
         Path(registry_dir).resolve() if registry_dir else aippocampus_registry_dir().resolve()
     )
@@ -561,17 +565,77 @@ def main() -> int:
     parser.add_argument("--sync-dir", required=True)
     parser.add_argument("--registry-dir", default=None)
     parser.add_argument("--include-raw", action="store_true")
+    parser.add_argument("--encrypt", action="store_true")
+    parser.add_argument("--require-encrypted", action="store_true")
+    parser.add_argument("--recipient", action="append", default=[])
+    parser.add_argument("--recipient-file", action="append", default=[])
+    parser.add_argument("--identity-file", action="append", default=[])
+    parser.add_argument("--age-bin", default=None)
+    parser.add_argument("--no-decrypt", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
-    if args.command == "status":
-        result = status_sync_bundle(args.sync_dir)
-    elif args.command == "push":
-        result = push_sync_bundle(args.registry_dir, args.sync_dir, include_raw=args.include_raw)
-    elif args.command == "pull":
-        result = pull_sync_bundle(args.sync_dir, args.registry_dir)
-    else:
-        result = repair_sync_bundle(args.sync_dir)
+    try:
+        if args.command == "status":
+            if args.require_encrypted:
+                encrypted_sync_bundle = importlib.import_module("encrypted_sync_bundle")
+
+                result = encrypted_sync_bundle.status_encrypted_sync_bundle(
+                    args.sync_dir,
+                    identity_files=args.identity_file,
+                    age_bin=args.age_bin,
+                    decrypt=bool(args.identity_file),
+                )
+            else:
+                result = status_sync_bundle(args.sync_dir)
+        elif args.command == "push":
+            if args.encrypt:
+                encrypted_sync_bundle = importlib.import_module("encrypted_sync_bundle")
+
+                result = encrypted_sync_bundle.push_encrypted_sync_bundle(
+                    args.registry_dir,
+                    args.sync_dir,
+                    recipients=args.recipient,
+                    recipient_files=args.recipient_file,
+                    include_raw=args.include_raw,
+                    age_bin=args.age_bin,
+                )
+            else:
+                result = push_sync_bundle(
+                    args.registry_dir,
+                    args.sync_dir,
+                    include_raw=args.include_raw,
+                )
+        elif args.command == "pull":
+            if args.require_encrypted:
+                encrypted_sync_bundle = importlib.import_module("encrypted_sync_bundle")
+
+                result = encrypted_sync_bundle.pull_encrypted_sync_bundle(
+                    args.sync_dir,
+                    args.registry_dir,
+                    identity_files=args.identity_file,
+                    age_bin=args.age_bin,
+                )
+            else:
+                result = pull_sync_bundle(args.sync_dir, args.registry_dir)
+        else:
+            if args.require_encrypted:
+                encrypted_sync_bundle = importlib.import_module("encrypted_sync_bundle")
+
+                result = encrypted_sync_bundle.repair_encrypted_sync_bundle(
+                    args.sync_dir,
+                    identity_files=args.identity_file,
+                    age_bin=args.age_bin,
+                    no_decrypt=args.no_decrypt,
+                )
+            else:
+                result = repair_sync_bundle(args.sync_dir)
+    except ValueError as exc:
+        result = {
+            "ok": False,
+            "sync_dir": str(Path(args.sync_dir).resolve()),
+            "issues": [{"code": str(exc).split(":", 1)[0], "message": str(exc)}],
+        }
 
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))

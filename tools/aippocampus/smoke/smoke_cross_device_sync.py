@@ -363,7 +363,12 @@ def run_cross_device_sync_smoke(
 
         raw_sync = root / "raw-opt-in-sync"
         raw_target = root / "device-c-raw-target" / "registry"
-        push_raw = sync_bundle.push_sync_bundle(device_a["registry"], raw_sync, include_raw=True)
+        push_raw = sync_bundle.push_sync_bundle(
+            device_a["registry"],
+            raw_sync,
+            include_raw=True,
+            allow_plaintext_raw=True,
+        )
         raw_pull = sync_bundle.pull_sync_bundle(raw_sync, raw_target)
         raw_registry = read_json(raw_target / "threads.json")
         raw_paths = locator_values(raw_registry)

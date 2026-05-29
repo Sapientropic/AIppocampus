@@ -294,13 +294,24 @@ to the current workspace's anchors.
 `sync_bundle.py` is the first Stage 3 sync backend. It supports explicit
 local-folder `status`, `push`, `pull`, and `repair` commands over clean source,
 registry rows, manifests, semantic triggers, working memory, and cognitive-map
-sidecars. `sync_object_storage.py` reuses that same bundle manifest over an
-HTTP object-storage transport: each manifest file is stored as an object under
+sidecars. `encrypted_sync_bundle.py` adds the age-backed encrypted variant and
+keeps ciphertext under `encrypted-sync/`.
+
+`sync_object_storage.py` reuses that same bundle manifest over an HTTP
+object-storage transport: each manifest file is stored as an object under
 `AIPPOCAMPUS_OBJECT_PREFIX`, the manifest object is written last, and
 `status`/`repair` verify object content by sha256 before `pull` imports it.
-Raw rollout files are excluded by default and copied only with `--include-raw`.
-Pull never overwrites conflicting local files; it writes the incoming copy under
-`.sync-conflicts/` for manual review.
+`encrypted_sync_object_storage.py` uses the same encrypted bundle contract over
+HTTP `PUT`/`GET` and writes the encrypted outer manifest last. The object-store
+client boundary is split into `object_storage_client.py` and
+`object_storage_providers.py`; provider mode covers generic HTTP bearer-token
+endpoints, S3-compatible SigV4, Cloudflare R2 region `auto`, and Google Cloud
+Storage XML HMAC signing. Provider-specific setup notes live in
+`docs/object-storage-providers.md`.
+
+Raw rollout files are excluded from plaintext sync. Normal raw rollout transfer
+requires encrypted sync. Pull never overwrites conflicting local files; it
+writes the incoming copy under `.sync-conflicts/` for manual review.
 
 Push rewrites synced `registry/threads.json` to device-neutral
 bundle-relative locators for generated artifacts and clears source-device

@@ -170,8 +170,9 @@ Expected result: the sync manifest is valid and `raw_rollout_included` remains
 false. The synced registry uses portable bundle-relative locators, and pull
 repairs generated-artifact paths to the target registry.
 
-Cannot claim: that a real second machine, cross-OS path behavior, cloud, or
-object-storage backend has been exercised.
+Cannot claim: that a real second machine, cross-OS path behavior, cloud,
+object-storage backend, or cloud-safe encrypted sync path has been exercised.
+This is a plaintext throwaway demo for local protocol validation.
 
 ## Scenario 9b: Single-Machine Cross-Device Sync Smoke
 
@@ -185,7 +186,8 @@ registry, preserves conflicts in both directions, keeps raw rollouts excluded
 by default, and transfers raw rollout only in the explicit opt-in branch.
 
 Cannot claim: that a physical second machine, real alternate OS runtime, cloud
-folder client, or object-storage backend has been exercised.
+folder client, object-storage backend, or cloud-safe encrypted sync path has
+been exercised.
 
 ## Scenario 9c: Docker/WSL Alternate-Runtime Sync Smoke
 

@@ -138,7 +138,8 @@ privacy and external-model boundary.
 The first sync backend is an explicit local folder. The HTTP object-storage
 adapter reuses the same manifest over object `PUT`/`GET`. Both copy clean
 source, manifests, registry rows, and hook-safe sidecars. Raw rollouts stay
-excluded unless `--include-raw` is passed.
+excluded from plaintext sync; normal raw rollout transfer requires encrypted
+sync.
 
 ```sh
 python ./skills/aippocampus/scripts/sync_bundle.py status --sync-dir <folder> --json
@@ -154,6 +155,22 @@ python ./skills/aippocampus/scripts/sync_object_storage.py pull --object-store-u
 python ./skills/aippocampus/scripts/sync_object_storage.py repair --object-store-url <url> --object-prefix <prefix> --json
 ```
 
+S3-compatible providers can be configured with `AIPPOCAMPUS_OBJECT_PROVIDER`
+(`s3`, `r2`, or `gcs-xml`) plus bucket, region/account id, and HMAC credentials.
+See [object-storage-providers.md](docs/object-storage-providers.md) for the
+provider-specific setup notes.
+
+Encrypted sync uses the external `age` CLI and writes `encrypted-sync/`
+ciphertext objects. Use a new folder or object prefix for the first encrypted
+push:
+
+```sh
+python ./skills/aippocampus/scripts/sync_bundle.py push --sync-dir <folder> --encrypt --recipient <age-recipient> --json
+python ./skills/aippocampus/scripts/sync_bundle.py pull --sync-dir <folder> --require-encrypted --identity-file <age-identity> --json
+python ./skills/aippocampus/scripts/sync_object_storage.py push --object-store-url <url> --object-prefix <prefix> --encrypt --recipient <age-recipient> --json
+python ./skills/aippocampus/scripts/sync_object_storage.py pull --object-store-url <url> --object-prefix <prefix> --require-encrypted --identity-file <age-identity> --json
+```
+
 Pull preserves local conflicting files and writes incoming copies under
 `.sync-conflicts/` instead of overwriting.
 
@@ -165,7 +182,8 @@ AIppocampus is local-first.
 - Raw rollouts, bundles, registry rows, vault notes, and generated archives
   should be treated as private history.
 - External-model routes are optional and should use redaction safeguards.
-- Raw rollout sync should stay explicit and ideally encrypted.
+- Raw rollout sync should stay explicit and must be encrypted before use with
+  untrusted multi-device sync.
 - Do not commit personal rollouts, `.aippocampus/` outputs, registry data, API
   keys, cookies, tokens, or private vault exports.
 

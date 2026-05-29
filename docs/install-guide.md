@@ -134,7 +134,15 @@ python ./skills/aippocampus/scripts/sync_bundle.py pull --sync-dir <folder> --js
 python ./skills/aippocampus/scripts/sync_bundle.py repair --sync-dir <folder> --json
 ```
 
-Raw rollouts are excluded unless `--include-raw` is passed.
+Raw rollouts are excluded from plaintext sync. Normal `--include-raw` usage
+requires encrypted sync:
+
+```sh
+python ./skills/aippocampus/scripts/sync_bundle.py push --sync-dir <folder> --encrypt --recipient <age-recipient> --json
+python ./skills/aippocampus/scripts/sync_bundle.py status --sync-dir <folder> --require-encrypted --json
+python ./skills/aippocampus/scripts/sync_bundle.py pull --sync-dir <folder> --require-encrypted --identity-file <age-identity> --json
+python ./skills/aippocampus/scripts/sync_bundle.py repair --sync-dir <folder> --require-encrypted --identity-file <age-identity> --json
+```
 
 `pull` is conservative. When a target file already exists with different
 content, AIppocampus keeps the local file in place and writes the incoming copy
@@ -161,10 +169,45 @@ python ./skills/aippocampus/scripts/sync_object_storage.py pull --registry-dir <
 python ./skills/aippocampus/scripts/sync_object_storage.py repair --json
 ```
 
-Raw rollouts are still excluded unless `--include-raw` is passed. The local
-object-storage smoke verifies the protocol path without requiring cloud
+For S3-compatible providers, use provider-aware signing instead of bearer
+tokens:
+
+```sh
+export AIPPOCAMPUS_OBJECT_PROVIDER="s3" # or r2, gcs-xml
+export AIPPOCAMPUS_OBJECT_BUCKET="aippocampus-memory"
+export AIPPOCAMPUS_OBJECT_REGION="us-east-1"
+export AIPPOCAMPUS_OBJECT_ACCESS_KEY_ID="<access key id>"
+export AIPPOCAMPUS_OBJECT_SECRET_ACCESS_KEY="<secret access key>"
+python ./skills/aippocampus/scripts/sync_object_storage.py push --encrypt --recipient <age-recipient> --json
+```
+
+For Cloudflare R2, set `AIPPOCAMPUS_OBJECT_PROVIDER=r2` and
+`AIPPOCAMPUS_OBJECT_ACCOUNT_ID=<account id>`; the default region is `auto`.
+For Google Cloud Storage, set `AIPPOCAMPUS_OBJECT_PROVIDER=gcs-xml` and use XML
+API interoperability HMAC keys. See `docs/object-storage-providers.md` for the
+provider-specific pitfalls.
+
+Raw rollouts are still excluded from plaintext object-storage sync. Use
+`--encrypt --include-raw` only when the object prefix is new or already
+encrypted:
+
+```sh
+python ./skills/aippocampus/scripts/sync_object_storage.py push --encrypt --recipient <age-recipient> --json
+python ./skills/aippocampus/scripts/sync_object_storage.py status --require-encrypted --json
+python ./skills/aippocampus/scripts/sync_object_storage.py pull --require-encrypted --identity-file <age-identity> --registry-dir <target-registry> --json
+python ./skills/aippocampus/scripts/sync_object_storage.py repair --require-encrypted --identity-file <age-identity> --json
+```
+
+The local object-storage smoke verifies the protocol path without requiring cloud
 credentials:
 
 ```sh
 python ./tools/aippocampus/smoke/smoke_object_storage_sync.py --repo-root . --json
 ```
+
+Encrypted sync preflights the external `age` CLI before syncing. It looks at
+`AIPPOCAMPUS_AGE_BIN` before `PATH`, because GUI clients on macOS may not
+inherit the same shell path as Terminal. Use a new sync directory or object
+prefix for the first encrypted push; encrypted push refuses known plaintext
+local sync data and plaintext object prefixes, but it does not clean up older
+plaintext copies elsewhere.

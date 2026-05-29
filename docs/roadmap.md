@@ -124,7 +124,11 @@ memory continuity.
 
 - Define a device-neutral sync bundle for clean source, manifests, anchors,
   registry rows, concept graph sidecars, semantic triggers, and working memory.
-- Keep raw rollout sync optional, explicit, and ideally encrypted.
+- Add encrypted sync over the bundle contract before treating object storage or
+  cloud-synced folders as a product-ready backend; see
+  `encrypted-sync-v1.md`.
+- Keep raw rollout sync optional, explicit, and encrypted when it leaves the
+  device.
 - Support backends in increasing order of complexity: local folder, Git repo,
   cloud-synced folder, object storage, and private service.
 - Use content hashes and stable ids for dedup/conflict handling.
