@@ -42,6 +42,15 @@ bundle, demo, release, or plugin package.
 ## Sync And Plugin Distribution
 
 - Raw rollout sync is excluded by default and must be explicitly requested.
+- Once encrypted sync ships, any raw rollout sync must also require encryption,
+  including local-folder sync.
+- Encrypted sync does not automatically remove older plaintext sync copies.
+  Use a new sync directory/object prefix or an explicit migration cleanup.
+- Public recipients are less sensitive than private identities, but real
+  recipient ids and vault ids are stable correlation handles; avoid posting them
+  in public issues unless intentionally sanitized.
+- Never commit or publish `AGE-SECRET-KEY...` identities, SSH private keys,
+  recovery kits, decrypted bundles, or plaintext temporary sync directories.
 - Pull operations must preserve local conflicts instead of overwriting.
 - Plugin installation must not silently enable hooks or external-model routes.
 - The standalone repository remains the source of truth; plugin packaging is a

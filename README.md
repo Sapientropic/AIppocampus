@@ -165,7 +165,8 @@ AIppocampus is local-first.
 - Raw rollouts, bundles, registry rows, vault notes, and generated archives
   should be treated as private history.
 - External-model routes are optional and should use redaction safeguards.
-- Raw rollout sync should stay explicit and ideally encrypted.
+- Raw rollout sync should stay explicit and must be encrypted before use with
+  untrusted multi-device sync.
 - Do not commit personal rollouts, `.aippocampus/` outputs, registry data, API
   keys, cookies, tokens, or private vault exports.
 

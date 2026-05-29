@@ -168,3 +168,12 @@ credentials:
 ```sh
 python ./tools/aippocampus/smoke/smoke_object_storage_sync.py --repo-root . --json
 ```
+
+Encrypted sync is not implemented yet. When it ships, use a new sync directory
+or object prefix for the first encrypted push. An encrypted push must not be
+treated as cleanup for older plaintext bundles that may already exist in a cloud
+folder or object store.
+
+The encrypted sync implementation should preflight the external `age` CLI before
+syncing. It should look at `AIPPOCAMPUS_AGE_BIN` before `PATH`, because GUI
+clients on macOS may not inherit the same shell path as Terminal.
