@@ -207,6 +207,68 @@ class Stage05SmokeRunnerTests(unittest.TestCase):
         self.assertEqual(len(hits), 1)
         self.assertEqual(hits[0]["path"], "leak.py")
 
+    def test_secret_scan_does_not_treat_json_escaped_newline_as_windows_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            (repo_root / "benchmark.jsonl").write_text(
+                '{"content": "Here are the indices:\\n1. first item"}\n',
+                encoding="utf-8",
+            )
+            windows_path = "C:" + "\\\\private\\\\memory"
+            (repo_root / "leak.py").write_text(
+                f'path = "{windows_path}"\n',
+                encoding="utf-8",
+            )
+
+            hits = smoke.scan_secret_like_strings(repo_root)
+
+        self.assertEqual(len(hits), 1)
+        self.assertEqual(hits[0]["path"], "leak.py")
+
+    def test_secret_scan_allows_public_benchmark_windows_path_examples(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            benchmark_dir = repo_root / "benchmark_corpus" / "longmemeval"
+            benchmark_dir.mkdir(parents=True)
+            windows_path = "C:" + "\\\\Users\\\\Offsec\\\\Desktop\\\\check.exe"
+            (benchmark_dir / "fixture.jsonl").write_text(
+                f'{{"content": "Run the binary at {windows_path}"}}\n',
+                encoding="utf-8",
+            )
+
+            hits = smoke.scan_secret_like_strings(repo_root)
+
+        self.assertEqual(hits, [])
+
+    def test_secret_scan_excludes_public_benchmark_corpus_from_product_boundary_scan(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            benchmark_dir = repo_root / "benchmark_corpus" / "longmemeval"
+            benchmark_dir.mkdir(parents=True)
+            leaked = "sk-" + "realSecretValueThatShouldBeRejected123456"
+            (benchmark_dir / "fixture.jsonl").write_text(
+                f'{{"content": "token {leaked}"}}\n',
+                encoding="utf-8",
+            )
+
+            hits = smoke.scan_secret_like_strings(repo_root)
+
+        self.assertEqual(hits, [])
+
+    def test_secret_scan_does_not_treat_lowercase_sk_url_slug_as_api_key(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            (repo_root / "doc.json").write_text(
+                '{"url": "https://example.test/questions-ask-your-cybersecurity-professional"}\n',
+                encoding="utf-8",
+            )
+
+            hits = smoke.scan_secret_like_strings(repo_root)
+
+        self.assertEqual(hits, [])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -53,10 +53,12 @@ python ./tools/aippocampus/smoke/run_stage_0_5_smoke.py --repo-root . --json
 This runs the documented local smoke gates, package-level plugin staging,
 local-folder/object-storage sync smokes, and a best-effort secret-like string
 scan, then cleans the run-id-scoped `dist/` and `.tmp` artifacts it created.
-It is broader than a fresh-clone install check: source-evidence readiness gates
-use the local AIppocampus registry under `$CODEX_HOME`, so a new Mac without
-enough registered clean source may get diagnostic-only coverage rather than an
-overall pass.
+The product-surface secret/local-path scan excludes third-party benchmark
+corpora, which require a separate corpus audit before making claims about the
+corpora themselves. The unified smoke is broader than a fresh-clone install
+check: source-evidence readiness gates use the local AIppocampus registry under
+`$CODEX_HOME`, so a new Mac without enough registered clean source may get
+diagnostic-only coverage rather than an overall pass.
 
 ## First Onboarding
 
@@ -102,6 +104,18 @@ This stages the built plugin in a temporary plugin root, runs the bundled MCP
 tool catalog and a JSON-RPC `initialize` / `notifications/initialized` /
 `tools/list` / `tools/call` smoke from that installed location, then removes
 the staged plugin. It does not modify your real Codex plugin configuration.
+
+When you intentionally want to exercise the real Codex app-server plugin
+manager and host MCP path, run:
+
+```sh
+python ./plugins/aippocampus/smoke_real_codex_host.py --repo-root . --json
+```
+
+This creates a run-id-scoped local marketplace, installs the plugin through the
+real host, reloads MCP config, calls `sync_status`, then uninstalls the plugin
+and removes temporary marketplace/build/cache artifacts. It still is not a
+public marketplace submission or third-party fresh-clone review.
 
 Rollback for this package-level smoke is automatic: the temporary installed
 plugin directory is removed before the command exits. For a manual plugin
@@ -204,6 +218,18 @@ credentials:
 ```sh
 python ./tools/aippocampus/smoke/smoke_object_storage_sync.py --repo-root . --json
 ```
+
+To verify a real managed provider or remote object-store environment, configure
+`AIPPOCAMPUS_OBJECT_STORE_URL` or `AIPPOCAMPUS_OBJECT_PROVIDER` plus the matching
+provider credentials, then run the encrypted real-provider smoke:
+
+```sh
+python ./tools/aippocampus/smoke/smoke_real_provider_encrypted_sync.py --json
+```
+
+If those variables are absent, the command should fail early with a missing
+object-store/provider diagnostic; do not treat the local HTTP smoke as managed
+provider evidence.
 
 Encrypted sync preflights the external `age` CLI before syncing. It looks at
 `AIPPOCAMPUS_AGE_BIN` before `PATH`, because GUI clients on macOS may not

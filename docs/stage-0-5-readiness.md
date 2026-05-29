@@ -21,7 +21,9 @@ handoff belongs in `docs/next-iteration-plan.md`.
 - Stage 1 has public-facing repository docs for architecture, install,
   contribution, Apache-2.0 public-core licensing/adapter boundaries, demo
   scenarios, privacy/security, and dated public-readiness verification, plus a
-  synthetic example memory bundle and a unified Stage 0-5 smoke runner.
+  synthetic example memory bundle and a unified Stage 0-5 smoke runner. The
+  package-level temporary install smoke and the real Codex app-server plugin
+  manager smoke now both pass without silently enabling hooks.
 - Stage 2 now has first-pass deterministic `scope_labels` in clean-source
   messages/turns, scope-label filtering in clean-source search, and a
   bounded source-backed `life_wide` timeline section in
@@ -83,11 +85,12 @@ handoff belongs in `docs/next-iteration-plan.md`.
   slower `suppressed_label_recovery` / `agentic_source_review` work to Pro. A
   live Pro-agent suppressed-label recovery smoke filtered out old
   empty-evidence sidecar candidates, inspected clean source through a tool, and
-  recovered 3 of 5 candidate labels across 3 real cases through the unchanged
-  strict materializer (`strict_gate_relaxed=false`). A stricter Pro-agent
-  source-review diagnostic also found remaining ambiguity in current
-  `personal_reflection` / `reading_notes` cases, so those failures feed the
-  next evidence-selection pass instead of lowering sidecar gates.
+  recovered 3 labels from the currently available 8 suppressed cases / 11
+  candidate labels through the unchanged strict materializer
+  (`strict_gate_relaxed=false`). A broader 96-case live source-review smoke now
+  passes 84 cases (`pass_rate=0.875`) with every covered label category above
+  the 0.65 per-label floor and no failed label category; the remaining
+  individual misses stay as ambiguous row evidence instead of relaxing gates.
   These are navigation layers over original text, not summary replacements.
 - Stage 4 now has a first local MCP server at
   `skills/aippocampus/scripts/aippocampus_mcp_server.py`, including a
@@ -136,14 +139,15 @@ handoff belongs in `docs/next-iteration-plan.md`.
 ## Cannot Claim Yet
 
 - Stage 1 is not fully public-release-ready until the dated local checks are
-  refreshed after every code slice and the install paths are validated outside
-  this single working copy.
-- Stage 2 life-wide memory is not complete until semantic label correctness is
-  reviewed more broadly, especially for currently suppressed high-risk labels
-  such as `relationship_continuity`, `open_question`, `idea_seed`,
-  `technical_work`, `life_context`, and `preference`. The first Pro-agent
-  recovery smoke proves some suppressed labels can be restored through stronger
-  evidence, but it is only a selected slice. Current
+  refreshed after every code slice. Temporary plugin install and real Codex
+  app-server host paths are verified, but public marketplace submission,
+  third-party fresh-clone review, and second-user install are not yet claimed.
+- Stage 2 life-wide memory is not complete until semantic label correctness has
+  broader human/source review beyond selected automated slices. The current
+  Pro-agent recovery and 96-case source-review smokes prove better selected
+  coverage, but high-risk suppressed labels such as
+  `relationship_continuity` and `life_context` still need stronger
+  source-backed model findings before being restored. Current
   labels, timeline groups, semantic sidecars, real-registry aggregate smoke,
   dynamic semantic sidecar smoke, recall eval prompts, source-review samples,
   and ambient scents are navigation hints only.
@@ -164,17 +168,16 @@ handoff belongs in `docs/next-iteration-plan.md`.
 | Stage | Current evidence | Missing proof |
 | --- | --- | --- |
 | 0 | `python tools/aippocampus/run_tests.py --tier fast` covers the default deterministic regression path, with docs health, hook installer tests, Ruff `E9` + full Pyflakes `F`, mypy coverage, retrieval/onboarding/warm recall/registry search/prompt recall/subconscious job behavior tests, and import-coupling guards for script cycles / hook import fan-out. `--tier full` remains the explicit release/readiness suite. | Keep the fast tier green after each slice; run the slow, benchmark, or full tier when claiming the surface they own |
-| 1 | `README.md`, `CONTRIBUTING.md`, `docs/public-core-boundary.md`, architecture/install/demo/privacy docs, synthetic example bundle, docs health guardrails, dated full-suite/scan notes, Apache-2.0 package/plugin/provenance metadata, and `tools/aippocampus/smoke/run_stage_0_5_smoke.py` unified smoke runner | External install review, repeated full-suite/scan evidence after each release slice |
-| 2 | Registry, clean source, cognitive map, semantic triggers, subconscious jobs, deterministic `scope_labels`, mocked DeepSeek `semantic_scope_labeling` job-to-sidecar test, `build_semantic_scope_labels.py` materializer, dynamic `semantic-scope-labels.jsonl` sidecar merging with strict per-label evidence gates for every materialized label, scope-filtered clean-source search, public casual-important metaphor/pivot example, `life_wide` timeline groups with source refs, quiet life-wide ambient scent with anti-over-personalization tests, real-registry aggregate coverage smoke with claim-level/ratio guards, refreshed 949-thread local registry, full-candidate real-history semantic sidecar smoke evaluating 609 selected candidates and expanding to 27 threads/119 rows before strict filtering, v2 fresh DeepSeek probe with 11 findings / 15 accepted labels / complete per-label evidence, current strict sidecars at 2 threads/5 rows/5 timeline turns, selected source-evidence recall eval with 24/24 top-5 hits, selected source-review smoke with 5/5 supported current strict label cases, DeepSeek flash/pro route tests, and live Pro-agent suppressed-label recovery restoring 3/5 candidate labels without relaxing strict gates | Broader human/source review, broader Pro-agent recovery, and better model-side evidence to restore high-confidence coverage for suppressed soft labels |
+| 1 | `README.md`, `CONTRIBUTING.md`, `docs/public-core-boundary.md`, architecture/install/demo/privacy docs, synthetic example bundle, docs health guardrails, dated full-suite/scan notes, Apache-2.0 package/plugin/provenance metadata, `tools/aippocampus/smoke/run_stage_0_5_smoke.py` unified smoke runner, package-level temporary plugin install/MCP/uninstall smoke, and real Codex app-server plugin manager/MCP host smoke | Third-party fresh-clone or second-user install review, public marketplace submission if claimed, and repeated full-suite/scan evidence after each release slice |
+| 2 | Registry, clean source, cognitive map, semantic triggers, subconscious jobs, deterministic `scope_labels`, mocked DeepSeek `semantic_scope_labeling` job-to-sidecar test, `build_semantic_scope_labels.py` materializer, dynamic `semantic-scope-labels.jsonl` sidecar merging with strict per-label evidence gates for every materialized label, scope-filtered clean-source search, public casual-important metaphor/pivot example, `life_wide` timeline groups with source refs, quiet life-wide ambient scent with anti-over-personalization tests, real-registry aggregate coverage smoke with claim-level/ratio guards, refreshed 949-thread local registry, full-candidate real-history semantic sidecar smoke evaluating 609 selected candidates and expanding to 27 threads/119 rows before strict filtering, v2 fresh DeepSeek probe with 11 findings / 15 accepted labels / complete per-label evidence, current strict sidecars at 2 threads/5 rows/5 timeline turns, selected source-evidence recall eval with 24/24 top-5 hits, broader selected source-review smoke with 96 cases / 84 supported / 0 failed label categories, DeepSeek flash/pro route tests, and live Pro-agent suppressed-label recovery restoring 3 labels from 8 suppressed cases / 11 candidate labels without relaxing strict gates | Broader human/source review and stronger model-side evidence to restore high-confidence coverage for still-suppressed soft labels |
 | 3 | `sync_bundle.py`, `sync_object_storage.py`, `export_bundle.py`, `import_bundle.py`, global thread store defaults, semantic scope-label sidecar sync, device-neutral bundle registry locators, target-registry path repair on pull, conflict-preserving pull tests, single-machine dual-device/cross-OS-path-shape smoke, local HTTP object-storage adapter smoke, Docker/WSL alternate-runtime smoke when available, and install docs | Physical second-machine or managed cloud/object-storage provider smoke |
 | 4 | `aippocampus_mcp_server.py`, `.mcp.json`, MCP unit tests, source stdio JSON-RPC process smoke, installed-plugin `.mcp.json` JSON-RPC smoke, real Codex app-server MCP host list and `mcpServer/tool/call sync_status` smoke | Interactive Desktop UI / alternate Codex client verification |
 | 5 | `plugins/aippocampus/`, `build_plugin_package.py`, plugin contract tests, package-level temporary install/MCP JSON-RPC/uninstall smoke, real Codex app-server marketplace/plugin install/uninstall smoke | Public distribution docs and external install review |
 
 ## Next Slice
 
-Continue Stage 2 hardening by broadening Pro-agent suppressed-label recovery
-and using strict source-review failures to improve evidence generation, not
-lexical expansion or looser materializer gates. Then run broader
-recall-quality evaluation and physical
-second-machine/managed cloud sync and external install/public distribution
-smokes for Stages 3 through 5.
+Continue Stage 2 hardening with human/source review and better source-backed
+model findings for still-suppressed soft labels, not lexical expansion or
+looser materializer gates. Then prioritize physical second-machine sync,
+managed cloud/object-storage sync, and third-party/public distribution review
+for Stages 3 through 5.
