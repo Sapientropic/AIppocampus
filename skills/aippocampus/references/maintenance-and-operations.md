@@ -50,6 +50,13 @@ and compaction snapshots.
 Audit routes are also where tool/debug provenance belongs. Default recall should
 not rank tool payloads as memory content.
 
+Use `storage_capacity_report.py` when growth is a registry-level or sync-level
+question. It stats registry files, clean-source canonical files, generated
+indexes, semantic sidecars, current sync-policy files, and SQLite fanout without
+reading clean-source message bodies or raw rollout bodies. This is the right
+first command before deciding whether GB/TB-scale work needs source chunking,
+delta sync, or a query planner.
+
 ## Retention And Cold Archive
 
 Use `retention_report.py --write` before proposing cleanup. The report
@@ -108,6 +115,7 @@ Common health and repair commands:
 Audit and archive commands:
 
 - `python ...\rollout_size_audit.py --cwd "$PWD"`
+- `python ...\storage_capacity_report.py --json`
 - `python ...\retention_report.py --cwd "$PWD" --write`
 - `python ...\cold_archive.py --cwd "$PWD"`
 - `python ...\export_bundle.py --cwd "$PWD"`

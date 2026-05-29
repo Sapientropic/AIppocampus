@@ -77,6 +77,7 @@ files = [
     "skills/aippocampus/scripts/semantic_recall_gate.py",
     "skills/aippocampus/scripts/semantic_scope_labels.py",
     "skills/aippocampus/scripts/semantic_scope_suppressed_recovery.py",
+    "skills/aippocampus/scripts/storage_capacity_report.py",
     "skills/aippocampus/scripts/subconscious_agent.py",
     "skills/aippocampus/scripts/subconscious_job_plan.py",
     "skills/aippocampus/scripts/subconscious_job_validation.py",
