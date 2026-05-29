@@ -372,6 +372,49 @@ Structured status should report:
 
 Wrong-key failures should be structured and non-noisy. They are not corruption.
 
+## Release-Oriented Repair Boundary
+
+Release notes and readiness docs should keep sync evidence in separate buckets:
+
+- **Local simulation:** `smoke_cross_device_sync.py` models two device registries
+  on one machine. It proves portable bundle locators, target-registry path
+  repair, conflict preservation, cross-OS-shaped source path cleanup, and raw
+  rollout opt-in boundaries. It does not prove a real second device.
+- **Alternate runtime:** `smoke_alternate_runtime_sync.py` runs the same bundle
+  through Docker and/or WSL when available. It proves runtime-local repair, not
+  a managed cloud provider.
+- **Physical second machine:** issue
+  [#36](https://github.com/Sapientropic/AIppocampus/issues/36) records the
+  Windows-to-MacBook smoke boundary. It proves one real second-device path, not
+  a full client matrix.
+- **Managed provider:** issue
+  [#38](https://github.com/Sapientropic/AIppocampus/issues/38) records the
+  Cloudflare R2 encrypted object-storage smoke boundary. It proves one managed
+  R2 path, not every S3-compatible, GCS, cloud-folder, or enterprise storage
+  provider.
+
+Do not copy raw smoke JSON into public docs. Summaries may name the command,
+the exercised surface, and aggregate pass/fail claims, but must omit local
+paths, bucket names, credentials, raw rollouts, and registry exports.
+
+For release-oriented repair behavior, keep these expectations stable:
+
+- Run `status` before `repair` or `pull` when choosing a sync source.
+- Treat `repair` failures as stop signs. Missing objects, manifest hash
+  mismatches, unsafe paths, wrong recipient keys, and stale or divergent
+  manifests must be resolved before import.
+- Preserve local target files on conflict. Incoming conflicting files belong
+  under `.sync-conflicts/` inside the target registry until a human or explicit
+  repair flow decides what should win.
+- Repair generated-artifact locators to the target registry on pull; never
+  preserve source-device absolute paths as active target paths.
+- Keep raw rollout sync opt-in. Plaintext sync excludes raw rollouts; raw
+  rollout transfer requires explicit inclusion and, for normal product paths,
+  encryption.
+- Retry only the transport step that failed. A retry should not silently delete
+  old plaintext sync data, local registries, conflict files, or uploaded
+  encrypted objects outside the run-specific cleanup scope.
+
 ## UX And Commands
 
 Initial CLI shape:

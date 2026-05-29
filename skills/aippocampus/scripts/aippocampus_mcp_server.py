@@ -102,6 +102,23 @@ TOOLS: list[dict[str, Any]] = [
     ),
 ]
 
+UNSUPPORTED_MUTATION_TOOLS = {
+    "delete_memory",
+    "enable_hook",
+    "forget_memory",
+    "install_hook",
+    "pull_sync",
+    "push_sync",
+    "repair_sync",
+    "store_memory",
+    "sync_pull",
+    "sync_push",
+    "sync_repair",
+    "uninstall_hook",
+    "update_memory",
+    "write_memory",
+}
+
 
 def cwd_arg(arguments: dict[str, Any]) -> Path:
     return Path(str(arguments.get("cwd") or os.getcwd())).resolve()
@@ -125,6 +142,10 @@ def clean_source_dir_for(arguments: dict[str, Any]) -> Path:
     if (global_dir / "messages.jsonl").exists() or not (legacy_dir / "messages.jsonl").exists():
         return global_dir
     return legacy_dir
+
+
+def missing_files(root: Path, required: list[str]) -> list[str]:
+    return [name for name in required if not (root / name).exists()]
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -154,8 +175,21 @@ def text_result(payload: Any, *, is_error: bool = False) -> dict[str, Any]:
     }
 
 
-def tool_error(code: str, message: str) -> dict[str, Any]:
-    return text_result({"ok": False, "error": {"code": code, "message": message}}, is_error=True)
+def tool_error(code: str, message: str, **details: Any) -> dict[str, Any]:
+    error: dict[str, Any] = {"code": code, "message": message}
+    if details:
+        error["details"] = details
+    return text_result({"ok": False, "error": error}, is_error=True)
+
+
+def clean_source_unavailable(source_dir: Path, required: list[str]) -> dict[str, Any]:
+    return tool_error(
+        "clean_source_unavailable",
+        "Clean-source artifacts are unavailable for the requested workspace or clean_source_dir.",
+        clean_source_dir=str(source_dir),
+        missing_files=missing_files(source_dir, required),
+        required_files=required,
+    )
 
 
 def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -163,10 +197,14 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
     if not query:
         return tool_error("missing_query", "search_memory requires a non-empty query.")
     limit = int_range(arguments.get("max"), default=10, minimum=1, maximum=25)
+    source_dir = clean_source_dir_for(arguments)
+    required = ["messages.jsonl"]
+    if missing_files(source_dir, required):
+        return clean_source_unavailable(source_dir, required)
     result = search_clean_source(
         cwd_arg(arguments),
         [query],
-        clean_source_dir=arguments.get("clean_source_dir"),
+        clean_source_dir=source_dir,
         limit=limit,
     )
     result["limit"] = limit
@@ -198,12 +236,23 @@ def call_latest_reply(arguments: dict[str, Any]) -> dict[str, Any]:
 
 def call_get_turn_context(arguments: dict[str, Any]) -> dict[str, Any]:
     source_dir = clean_source_dir_for(arguments)
-    messages = iter_clean_messages(source_dir / "messages.jsonl")
-    turns = read_jsonl(source_dir / "turns.jsonl")
-
     turn_id = arguments.get("turn_id")
     message_id = arguments.get("message_id")
     turn_index = arguments.get("turn_index")
+    if not turn_id and not message_id and turn_index is None:
+        return tool_error(
+            "missing_turn_selector",
+            "get_turn_context requires turn_id, message_id, or turn_index.",
+            required_any=["turn_id", "message_id", "turn_index"],
+        )
+
+    required = ["messages.jsonl", "turns.jsonl"]
+    if missing_files(source_dir, required):
+        return clean_source_unavailable(source_dir, required)
+
+    messages = iter_clean_messages(source_dir / "messages.jsonl")
+    turns = read_jsonl(source_dir / "turns.jsonl")
+
     if not turn_id and message_id:
         matched = next(
             (
@@ -216,6 +265,13 @@ def call_get_turn_context(arguments: dict[str, Any]) -> dict[str, Any]:
         if matched:
             turn_id = matched.get("turn_id")
             turn_index = matched.get("turn_index")
+        else:
+            return tool_error(
+                "message_not_found",
+                "No clean-source message matched the requested message_id.",
+                message_id=str(message_id),
+                source=str(source_dir / "messages.jsonl"),
+            )
 
     selected_turn = None
     for turn in turns:
@@ -227,7 +283,10 @@ def call_get_turn_context(arguments: dict[str, Any]) -> dict[str, Any]:
             break
     if selected_turn is None:
         return tool_error(
-            "turn_not_found", "No clean-source turn matched the requested identifier."
+            "turn_not_found",
+            "No clean-source turn matched the requested identifier.",
+            turn_id=str(turn_id) if turn_id is not None else None,
+            turn_index=turn_index,
         )
 
     message_ids = set(selected_turn.get("message_ids") or [])
@@ -255,10 +314,26 @@ def call_list_threads(arguments: dict[str, Any]) -> dict[str, Any]:
         Path(str(arguments["registry_dir"])).resolve() if arguments.get("registry_dir") else None
     )
     json_path, _ = registry.registry_paths(registry_dir)
+    if not json_path.exists():
+        return text_result(
+            {
+                "status": "registry_missing",
+                "registry": str(json_path),
+                "threads": [],
+                "count": 0,
+            }
+        )
     payload = registry.load_registry(json_path)
     limit = int(arguments.get("max") or len(payload.get("threads") or []) or 0)
     threads = list(payload.get("threads") or [])[:limit]
-    return text_result({"registry": str(json_path), "threads": threads, "count": len(threads)})
+    return text_result(
+        {
+            "status": "ok",
+            "registry": str(json_path),
+            "threads": threads,
+            "count": len(threads),
+        }
+    )
 
 
 def call_register_thread(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -372,11 +447,52 @@ def handle_request(request: dict[str, Any]) -> dict[str, Any] | None:
     if method == "tools/list":
         return jsonrpc_result(request_id, {"tools": TOOLS})
     if method == "tools/call":
+        if raw_params is not None and not isinstance(raw_params, dict):
+            return jsonrpc_result(
+                request_id,
+                tool_error(
+                    "malformed_params",
+                    "tools/call params must be an object.",
+                    expected="object",
+                    actual=type(raw_params).__name__,
+                ),
+            )
         name = str(params.get("name") or "")
+        if not name:
+            return jsonrpc_result(
+                request_id,
+                tool_error(
+                    "missing_tool_name",
+                    "tools/call requires a tool name.",
+                    required=["name"],
+                ),
+            )
         raw_arguments = params.get("arguments")
-        arguments: dict[str, Any] = raw_arguments if isinstance(raw_arguments, dict) else {}
+        if raw_arguments is None:
+            arguments: dict[str, Any] = {}
+        elif isinstance(raw_arguments, dict):
+            arguments = raw_arguments
+        else:
+            return jsonrpc_result(
+                request_id,
+                tool_error(
+                    "malformed_arguments",
+                    "tools/call arguments must be an object when provided.",
+                    expected="object",
+                    actual=type(raw_arguments).__name__,
+                ),
+            )
         handler = TOOL_CALLS.get(name)
         if handler is None:
+            if name in UNSUPPORTED_MUTATION_TOOLS:
+                return jsonrpc_result(
+                    request_id,
+                    tool_error(
+                        "unsupported_mutation",
+                        "This MCP server is read-mostly; the requested mutating tool is not exposed.",
+                        requested_tool=name,
+                    ),
+                )
             return jsonrpc_result(request_id, tool_error("unknown_tool", f"Unknown tool: {name}"))
         try:
             return jsonrpc_result(request_id, handler(arguments))

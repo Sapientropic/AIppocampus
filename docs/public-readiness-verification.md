@@ -125,6 +125,52 @@ Stage 3 sync evidence for #36/#38:
   names, credentials, and local paths are intentionally omitted from this
   public ledger.
 
+## 2026-05-30 MCP, Plugin, And Sync Boundary Refresh
+
+This slice executed issues #23, #31, #32, and #37, and leaves #22 ready to close
+once its children are closed. It records command evidence only; the current
+claim boundary remains `docs/stage-0-5-readiness.md`.
+
+Latest verification for this slice:
+
+- `python tools\aippocampus\docs\check_docs_health.py --json`: passed.
+- `python -m unittest tests.aippocampus.test_plugin_distribution tests.aippocampus.test_aippocampus_mcp_server`:
+  24 tests passed.
+- `python tools\aippocampus\run_tests.py --tier fast`: 315 tests passed.
+- `python tools\aippocampus\smoke\run_stage_0_5_smoke.py --repo-root . --json`:
+  passed. The unified smoke included docs health, 514 unit tests, compileall,
+  Ruff, public demo/timeline checks, MCP tool-list smoke, package/plugin smokes,
+  local-folder/object-storage/alternate-runtime sync smokes, semantic sidecar
+  checks, product-surface secret scan, and run-id artifact cleanup.
+- `python plugins\aippocampus\smoke_plugin_install.py --repo-root . --json`:
+  passed. The staged plugin exposed the expected MCP tools through `--list-tools`
+  and installed-plugin `.mcp.json` JSON-RPC, including `initialize`,
+  `notifications/initialized`, `tools/list`, and `tools/call:sync_status`.
+  The smoke now reports the alternate client surface as
+  `standalone_mcp_stdio_jsonrpc_client`; it is explicitly not headless Codex
+  app-server evidence and not interactive Desktop UI evidence. Hook auto-enable
+  stayed false and uninstall cleanup completed.
+- `python skills\aippocampus\scripts\aippocampus_mcp_server.py --list-tools`:
+  passed and listed the read-mostly tool surface:
+  `search_memory`, `latest_reply`, `get_turn_context`, `list_threads`,
+  `register_thread`, `sync_status`, and `memory_health`.
+- `git diff --check`: passed.
+
+Scope notes:
+
+- MCP error contracts now distinguish malformed params/arguments, missing tool
+  names, unknown tools, unsupported mutation requests, missing registry state,
+  unavailable clean source, missing turn selectors, missing message ids, missing
+  turns, health-check failures, and generic tool failures.
+- Public distribution docs now separate skill-only install, plugin package,
+  MCP config, hook installers, optional external-model routes, uninstall, and
+  rollback. They point to the existing #29 external install evidence instead of
+  duplicating its ledger.
+- Sync repair docs now separate local simulation, Docker/WSL alternate runtime,
+  physical second-machine evidence from #36, and managed-provider evidence from
+  #38. Local HTTP object-storage remains simulation; the managed R2 run remains
+  one provider path, not a provider matrix.
+
 ## Command Ledger
 
 ```powershell

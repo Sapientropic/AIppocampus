@@ -27,12 +27,16 @@ handoff context.
 - The local MCP server exists at
   `skills/aippocampus/scripts/aippocampus_mcp_server.py` and currently exposes
   read-mostly clean-source/registry tools plus explicit `register_thread`.
+  Common tool failures return stable JSON error codes/details for client use.
 - The plugin source package exists under `plugins/aippocampus/`; build output
   is generated under `dist/` by default and must not be committed.
 - The real Codex app-server smoke exists at
   `plugins/aippocampus/smoke_real_codex_host.py`; it verifies Codex
   marketplace/plugin install, MCP host discovery, `sync_status` tool calls, and
   cleanup through real app-server methods.
+- The package-level plugin install smoke also records an alternate client
+  surface: a standalone MCP stdio JSON-RPC client launched from the installed
+  plugin `.mcp.json`, not the headless Codex app-server.
 - The single-machine dual-device sync smoke exists at
   `tools/aippocampus/smoke/smoke_cross_device_sync.py`; it verifies
   portable locators, target-registry path repair, bidirectional conflict
@@ -119,24 +123,26 @@ handoff context.
      and raw opt-in. `sync_object_storage.py` now exercises the same contract
      over HTTP object `PUT`/`GET`, with a local object-store smoke.
    - Current P0 evidence now includes a physical Windows-to-MacBook sync smoke
-     and a managed Cloudflare R2 encrypted object-storage smoke. Next harden
-     them with broader provider/client soak only where a release claim needs it,
-     plus release-oriented repair docs.
+     and a managed Cloudflare R2 encrypted object-storage smoke. Release-oriented
+     repair boundaries are documented in `encrypted-sync-v1.md`. Next harden
+     them with broader provider/client soak only where a release claim needs it.
 
 6. MCP access layer hardening
    - Source: `roadmap.md`, Stage 4.
    - The first MCP server is present and has both a stdio JSON-RPC process
      smoke and a real Codex app-server MCP host smoke through the plugin path.
-   - Next add stronger error contracts and, if needed for release claims, an
-     interactive Desktop UI or alternate Codex client verification.
+   - Error contracts now cover common client failures. Next run an interactive
+     Desktop UI flow or another named Codex client only if a release claim needs
+     that wrapper.
 
 7. Plugin distribution hardening
    - Source: `roadmap.md`, Stage 5.
    - The built plugin has been validated in a real Codex app-server
      marketplace/plugin install path with reversible cleanup.
-   - Next add public distribution docs, external install review, and
-     uninstall/rollback docs for skill package, MCP config, and hook
-     installers.
+   - Public distribution, uninstall, and rollback docs now cover the skill
+     package, MCP config, plugin package, hook installers, and optional
+     external-model routes. Next pursue marketplace submission or independent
+     third-party install review only if those claims are needed.
 
 8. Question tracking Phase 2
    - Source: `question-tracking-subconscious.md`.
