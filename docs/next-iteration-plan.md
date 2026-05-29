@@ -12,6 +12,9 @@ evidence belongs in `stage-0-5-readiness.md`; dated command evidence belongs in
 
 - Public repo boundary: no raw rollouts, registry exports, private anchors,
   generated indexes, or local paths in Git.
+- Public-core licensing and adapter boundaries live in
+  `docs/public-core-boundary.md`; do not mirror that contract into release
+  notes, package metadata, or roadmap prose beyond a short pointer.
 - Default generated artifacts live under
   `$CODEX_HOME/aippocampus-registry/threads/<thread>/...`.
 - `.aippocampus/` remains explicit compatibility/export/debug output only.

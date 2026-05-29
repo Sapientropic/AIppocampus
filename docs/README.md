@@ -11,6 +11,8 @@ repository smoke/docs-maintenance tools in `tools/aippocampus/`.
 ## Authority Map
 
 - Current product requirements: `roadmap.md`.
+- Current public-core license and adapter boundary:
+  `public-core-boundary.md`.
 - Current Stage 0-5 claim boundary: `stage-0-5-readiness.md`.
 - Dated verification ledger: `public-readiness-verification.md`.
 - Runtime skill contracts: `skills/aippocampus/SKILL.md` and
@@ -53,6 +55,8 @@ Other docs should link to that place and add only local context.
 
 - `cognitive-runtime-architecture.md` - layered runtime architecture and
   cognitive-map direction.
+- `architecture-debt-register.md` - lightweight large-runtime-script debt
+  register and guard budgets.
 - `gb-scale-roadmap.md` - long-thread indexing, segmenting, retention, and
   vector-index planning.
 - `question-tracking-subconscious.md` - Phase 1 question extraction behavior

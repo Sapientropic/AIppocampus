@@ -21,6 +21,26 @@ uses those paths. Ordinary docs-only edits do not require every heavy smoke in
 this ledger; use `stage-0-5-readiness.md` to decide which evidence is needed
 for a specific claim.
 
+## 2026-05-30 Public-Core Boundary Refresh
+
+Issue #7 switched the public repository direction to Apache-2.0 public core
+plus separate commercial/hosted product surfaces. The canonical boundary now
+lives in `docs/public-core-boundary.md`; README, contribution docs, commercial
+extension notes, plugin metadata, pyproject metadata, and provenance catalog
+point to that boundary instead of restating a full license contract.
+
+Latest verification for that slice:
+
+- `python tools/aippocampus/docs/check_docs_health.py --json`: passed.
+- `python tools/aippocampus/run_tests.py --tier fast`: 306 tests passed.
+- `python -m unittest tests.aippocampus.test_plugin_distribution`: 9 tests
+  passed.
+- `python -m ruff check plugins/aippocampus tests/aippocampus/test_plugin_distribution.py`:
+  passed.
+- `git diff --check`: passed.
+- Changed-file secret/local-path scan: no hits.
+- Main CI for commit `5940252b112ece31efd524e4a5a09aa0593d9a24`: passed.
+
 ## Command Ledger
 
 ```powershell

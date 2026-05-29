@@ -40,6 +40,7 @@ REQUIRED_PROJECT_DOCS = [
 REQUIRED_PUBLIC_READINESS_DOCS = [
     "CONTRIBUTING.md",
     "docs/architecture-overview.md",
+    "docs/public-core-boundary.md",
     "docs/install-guide.md",
     "docs/demo-scenarios.md",
     "docs/privacy-security-checklist.md",
