@@ -13,6 +13,7 @@ repository smoke/docs-maintenance tools in `tools/aippocampus/`.
 - Current product requirements: `roadmap.md`.
 - Current public-core license and adapter boundary:
   `public-core-boundary.md`.
+- Current public API and stability boundary: `public-api.md`.
 - Current Stage 0-5 claim boundary: `stage-0-5-readiness.md`.
 - Dated verification ledger: `public-readiness-verification.md`.
 - Runtime skill contracts: `skills/aippocampus/SKILL.md` and
@@ -30,6 +31,8 @@ Other docs should link to that place and add only local context.
 - `architecture-overview.md` - public map of runtime layers and boundaries.
 - `public-core-boundary.md` - canonical Apache-2.0 public-core license,
   commercial extension, adapter, schema, and relicensing boundary.
+- `public-api.md` - supported CLI, MCP, JSON, environment-variable, and Python
+  import stability boundary.
 - `install-guide.md` - public skill, MCP, plugin, hook, and local-sync install
   paths.
 - `demo-scenarios.md` - public-safe demo flows using synthetic memory data.

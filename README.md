@@ -64,6 +64,8 @@ cp -R ./skills/aippocampus "${CODEX_HOME}/skills/aippocampus"
 Then restart Codex or reload skills if your runtime requires it.
 
 The skill entrypoint is [skills/aippocampus/SKILL.md](skills/aippocampus/SKILL.md).
+The public API and stability boundary is
+[docs/public-api.md](docs/public-api.md).
 
 ## First Checks
 
@@ -234,4 +236,5 @@ publishes them.
 
 See [docs/public-core-boundary.md](docs/public-core-boundary.md) for the
 canonical licensing, adapter, schema, third-party asset, and relicensing
-boundary.
+boundary. See [docs/public-api.md](docs/public-api.md) for supported CLI, MCP,
+environment-variable, JSON, and import-stability expectations.

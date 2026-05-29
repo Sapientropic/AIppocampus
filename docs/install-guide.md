@@ -4,6 +4,9 @@ This guide covers the public installation paths for AIppocampus. The canonical
 roadmap remains `docs/roadmap.md`; this file is only the operator-facing install
 surface.
 
+For supported CLI, MCP, JSON, environment-variable, and import-stability
+expectations, see [public-api.md](public-api.md).
+
 ## Skill-Only Install
 
 ### macOS shell setup

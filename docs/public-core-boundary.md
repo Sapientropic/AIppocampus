@@ -5,6 +5,9 @@ adapter architecture, and minimal data-contract scope. It is not legal advice.
 If a release needs formal relicensing diligence, use the checklist below before
 publishing release notes or package metadata.
 
+For supported CLI, MCP, JSON, environment-variable, and Python import stability,
+see [public-api.md](public-api.md).
+
 ## Licensing Decision
 
 The public AIppocampus repository is Apache-2.0 licensed.
