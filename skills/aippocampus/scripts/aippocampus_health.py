@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 from aippocampuslib import (
@@ -41,6 +41,27 @@ def count_messages(rollout: Path) -> tuple[int, int | None]:
 
 def action(action_id: str, severity: str, reason: str, command: str) -> dict[str, str]:
     return {"id": action_id, "severity": severity, "reason": reason, "command": command}
+
+
+def quote_posix_double(value: str | Path) -> str:
+    text = str(value)
+    escaped = (
+        text.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$").replace("`", "\\`")
+    )
+    return f'"{escaped}"'
+
+
+def recommended_script_command(script_name: str, cwd: str | Path) -> str:
+    if os.name == "nt":
+        windows_cwd = str(PureWindowsPath(str(cwd)))
+        return (
+            f'python "$env:CODEX_HOME\\skills\\aippocampus\\scripts\\{script_name}" '
+            f'--cwd "{windows_cwd}"'
+        )
+    return (
+        f'python "$CODEX_HOME/skills/aippocampus/scripts/{script_name}" '
+        f"--cwd {quote_posix_double(cwd)}"
+    )
 
 
 def render_health_text(result: dict[str, Any]) -> None:
@@ -274,7 +295,7 @@ def main() -> int:
                 "build_index",
                 severity,
                 "; ".join(index_reasons),
-                f'python "$env:CODEX_HOME\\skills\\aippocampus\\scripts\\build_index.py" --cwd "{cwd}"',
+                recommended_script_command("build_index.py", cwd),
             )
         )
     if clean_source_stale:
@@ -283,7 +304,7 @@ def main() -> int:
                 "build_clean_source",
                 "warning" if clean_manifest else "critical",
                 "; ".join(clean_reasons),
-                f'python "$env:CODEX_HOME\\skills\\aippocampus\\scripts\\build_clean_source.py" --cwd "{cwd}"',
+                recommended_script_command("build_clean_source.py", cwd),
             )
         )
     if checkpoint_due:
@@ -292,7 +313,7 @@ def main() -> int:
                 "checkpoint",
                 "suggestion",
                 f"{checkpoint_delta} messages since the last captured checkpoint",
-                f'python "$env:CODEX_HOME\\skills\\aippocampus\\scripts\\checkpoint.py" --cwd "{cwd}"',
+                recommended_script_command("checkpoint.py", cwd),
             )
         )
     if graphify_stale:
@@ -301,7 +322,7 @@ def main() -> int:
                 "prepare_graphify_corpus",
                 "info",
                 "; ".join(graphify_reasons),
-                f'python "$env:CODEX_HOME\\skills\\aippocampus\\scripts\\prepare_graphify_corpus.py" --cwd "{cwd}"',
+                recommended_script_command("prepare_graphify_corpus.py", cwd),
             )
         )
     if segments_stale:
@@ -311,7 +332,7 @@ def main() -> int:
                 "build_segments",
                 severity,
                 "; ".join(segments_reasons),
-                f'python "$env:CODEX_HOME\\skills\\aippocampus\\scripts\\build_segments.py" --cwd "{cwd}"',
+                recommended_script_command("build_segments.py", cwd),
             )
         )
     if deep_graph_recommended:

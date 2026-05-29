@@ -160,19 +160,32 @@ class SyncBundleTests(unittest.TestCase):
         repaired = json.loads((target_registry / "threads.json").read_text(encoding="utf-8"))
         paths = repaired["threads"][0]["paths"]
         self.assertEqual(
-            paths["registry_thread_store"], str(target_registry / "threads" / "session-test")
+            Path(paths["registry_thread_store"]).resolve(),
+            (target_registry / "threads" / "session-test").resolve(),
         )
         self.assertEqual(
-            paths["clean_source_messages_jsonl"],
-            str(target_registry / "threads" / "session-test" / "clean-source" / "messages.jsonl"),
+            Path(paths["clean_source_messages_jsonl"]).resolve(),
+            (
+                target_registry
+                / "threads"
+                / "session-test"
+                / "clean-source"
+                / "messages.jsonl"
+            ).resolve(),
         )
         self.assertEqual(
-            paths["clean_source_turns_jsonl"],
-            str(target_registry / "threads" / "session-test" / "clean-source" / "turns.jsonl"),
+            Path(paths["clean_source_turns_jsonl"]).resolve(),
+            (
+                target_registry
+                / "threads"
+                / "session-test"
+                / "clean-source"
+                / "turns.jsonl"
+            ).resolve(),
         )
         self.assertEqual(
-            paths["graph_json"],
-            str(target_registry / "threads" / "session-test" / "index" / "graph.json"),
+            Path(paths["graph_json"]).resolve(),
+            (target_registry / "threads" / "session-test" / "index" / "graph.json").resolve(),
         )
         self.assertIsNone(paths["workspace"])
         self.assertIsNone(paths["rollout"])
@@ -187,7 +200,10 @@ class SyncBundleTests(unittest.TestCase):
         self.assertEqual(result["conflicts"], 0)
         repaired = json.loads((target_registry / "threads.json").read_text(encoding="utf-8"))
         rollout = Path(repaired["threads"][0]["paths"]["rollout"])
-        self.assertEqual(rollout, target_registry / "raw-rollouts" / "session-test.jsonl")
+        self.assertEqual(
+            rollout.resolve(),
+            (target_registry / "raw-rollouts" / "session-test.jsonl").resolve(),
+        )
         self.assertTrue(rollout.exists())
 
     def test_pull_fails_when_registry_path_repair_fails(self) -> None:

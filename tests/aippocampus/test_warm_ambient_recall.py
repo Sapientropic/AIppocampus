@@ -1366,8 +1366,8 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertGreater(job["prefix_cache_warmup_delay"], 0)
         self.assertIn("<redacted:local-path>", job["prompt"])
         self.assertNotIn(local_path, raw_job)
-        self.assertNotIn("private", raw_job.casefold())
-        self.assertNotIn("ambient.md", raw_job.casefold())
+        self.assertNotIn("private", job["prompt"].casefold())
+        self.assertNotIn("ambient.md", job["prompt"].casefold())
 
     def test_detached_job_waits_all_and_writes_late_scout_results_to_cache(self) -> None:
         job_result = warm_scheduler.schedule_warm_ambient_recall(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import time
@@ -53,6 +54,33 @@ class AmbientThreadCacheTests(unittest.TestCase):
         self.assertEqual(loaded["cards"][0]["theme"], "continuity")
         self.assertNotIn("private/workspace", raw.replace("\\", "/"))
         self.assertNotIn("prompt", raw.casefold())
+
+    def test_thread_cache_key_canonicalizes_equivalent_posix_workspace_paths(self) -> None:
+        cache_path = self.root / "ambient-thread-cache.json"
+        workspace = self.root / "workspace"
+        workspace.mkdir()
+        alias = self.root / "workspace-alias"
+        try:
+            os.symlink(workspace, alias)
+        except (AttributeError, NotImplementedError, OSError) as exc:
+            self.skipTest(f"symlink unavailable: {exc}")
+
+        cache.write_thread_cache(
+            cache_path,
+            thread_id="thread-a",
+            workspace=str(alias),
+            topic_epoch="epoch-path",
+            cards=[{"card_id": "arc_path", "theme": "path alias"}],
+        )
+        loaded = cache.read_thread_cache(
+            cache_path,
+            thread_id="thread-a",
+            workspace=str(workspace.resolve()),
+            topic_epoch="epoch-path",
+        )
+
+        self.assertEqual(loaded["status"], "hit")
+        self.assertEqual(loaded["cards"][0]["card_id"], "arc_path")
 
     def test_thread_cache_preserves_validation_and_topic_metadata(self) -> None:
         cache_path = self.root / "ambient-thread-cache.json"

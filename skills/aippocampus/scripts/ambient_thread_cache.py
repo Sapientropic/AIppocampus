@@ -50,8 +50,16 @@ def _fingerprint(value: str, *, prefix: str) -> str:
     return prefix + "_" + hashlib.sha1(str(value or "").casefold().encode("utf-8")).hexdigest()[:16]
 
 
+def cache_workspace_identity(workspace: str) -> str:
+    text = str(workspace or "")
+    if text.startswith("/"):
+        return str(Path(text).resolve())
+    return text
+
+
 def cache_key(*, thread_id: str, workspace: str, topic_epoch: str) -> str:
-    return _fingerprint(f"{thread_id}\n{workspace}\n{topic_epoch}", prefix="atc")
+    workspace_key = cache_workspace_identity(workspace)
+    return _fingerprint(f"{thread_id}\n{workspace_key}\n{topic_epoch}", prefix="atc")
 
 
 def topic_epoch_from_terms(terms: list[str], *, limit: int = 8) -> str:
