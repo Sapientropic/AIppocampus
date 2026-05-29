@@ -108,7 +108,8 @@ def sync_file_entry(sync_root: Path, relative_path: Path) -> dict:
 def save_json(path: Path, data: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
+    with tmp.open("w", encoding="utf-8", newline="\n") as fh:
+        fh.write(json.dumps(data, ensure_ascii=False, indent=2))
     tmp.replace(path)
 
 

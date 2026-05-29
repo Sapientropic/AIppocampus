@@ -190,6 +190,20 @@ class SyncBundleTests(unittest.TestCase):
         self.assertIsNone(paths["rollout"])
         self.assertNotIn(str(self.registry), json.dumps(repaired, ensure_ascii=False))
 
+    def test_pull_path_repair_works_on_python39_path_write_text_signature(self) -> None:
+        sync_bundle.push_sync_bundle(self.registry, self.sync_dir)
+        target_registry = self.root / "python39-target-registry"
+        original_write_text = Path.write_text
+
+        def python39_write_text(path, data, encoding=None, errors=None):  # noqa: ANN001
+            return original_write_text(path, data, encoding=encoding, errors=errors)
+
+        with mock.patch.object(Path, "write_text", python39_write_text):
+            result = sync_bundle.pull_sync_bundle(self.sync_dir, target_registry)
+
+        self.assertTrue(result["ok"], result)
+        self.assertTrue(result["path_repair"]["ok"], result["path_repair"])
+
     def test_pull_repairs_included_raw_rollout_to_target_registry(self) -> None:
         sync_bundle.push_sync_bundle(
             self.registry, self.sync_dir, include_raw=True, allow_plaintext_raw=True

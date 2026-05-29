@@ -117,7 +117,14 @@ handoff belongs in `docs/next-iteration-plan.md`.
   cloud provider. The
   `smoke_alternate_runtime_sync.py` smoke can also run the same bundle through
   a real Docker or WSL runtime and verify that target registry locators are
-  repaired to runtime-local generated artifact paths.
+  repaired to runtime-local generated artifact paths. A dated physical
+  Windows-to-MacBook smoke now verifies the same bundle contract on a real
+  second device, including target path repair, bidirectional conflict
+  preservation, and raw rollout exclusion. A dated managed Cloudflare R2
+  encrypted object-storage smoke now verifies provider-aware signing,
+  encrypted push/status/repair/pull, recipient matching, target-registry
+  materialization, raw rollout exclusion, and cleanup of all uploaded encrypted
+  objects.
 - Stage 5 now has a repo-local plugin source package under
   `plugins/aippocampus/` and a build script that copies the skill package into
   a distributable plugin directory, plus a package-level temporary
@@ -151,11 +158,10 @@ handoff belongs in `docs/next-iteration-plan.md`.
   labels, timeline groups, semantic sidecars, real-registry aggregate smoke,
   dynamic semantic sidecar smoke, recall eval prompts, source-review samples,
   and ambient scents are navigation hints only.
-- Stage 3 is not fully cross-device/product-ready until sync has real
-  cross-machine or managed cloud/object-storage provider evidence beyond the
-  single-machine local-folder and local HTTP object-store models. Docker/WSL
-  alternate-runtime evidence is stronger than two folders on one host, but it
-  still does not prove a second physical device or a real cloud backend.
+- Stage 3 now has selected physical second-device and managed R2 provider
+  evidence, but it is not a broad provider/client matrix. Do not generalize the
+  R2 run into all S3-compatible/GCS/cloud-folder providers, and do not treat
+  local HTTP object-storage as managed-provider evidence.
 - Stage 4 still needs broader client coverage beyond the headless Codex
   app-server path, such as an interactive Desktop UI flow or another Codex
   client surface. Current real-host evidence does not prove every UI wrapper.
@@ -170,7 +176,7 @@ handoff belongs in `docs/next-iteration-plan.md`.
 | 0 | `python tools/aippocampus/run_tests.py --tier fast` covers the default deterministic regression path, with docs health, hook installer tests, Ruff `E9` + full Pyflakes `F`, mypy coverage, retrieval/onboarding/warm recall/registry search/prompt recall/subconscious job behavior tests, and import-coupling guards for script cycles / hook import fan-out. `--tier full` remains the explicit release/readiness suite. | Keep the fast tier green after each slice; run the slow, benchmark, or full tier when claiming the surface they own |
 | 1 | `README.md`, `CONTRIBUTING.md`, `docs/public-core-boundary.md`, architecture/install/demo/privacy docs, synthetic example bundle, docs health guardrails, dated full-suite/scan notes, Apache-2.0 package/plugin/provenance metadata, `tools/aippocampus/smoke/run_stage_0_5_smoke.py` unified smoke runner, package-level temporary plugin install/MCP/uninstall smoke, and real Codex app-server plugin manager/MCP host smoke | Third-party fresh-clone or second-user install review, public marketplace submission if claimed, and repeated full-suite/scan evidence after each release slice |
 | 2 | Registry, clean source, cognitive map, semantic triggers, subconscious jobs, deterministic `scope_labels`, mocked DeepSeek `semantic_scope_labeling` job-to-sidecar test, `build_semantic_scope_labels.py` materializer, dynamic `semantic-scope-labels.jsonl` sidecar merging with strict per-label evidence gates for every materialized label, scope-filtered clean-source search, public casual-important metaphor/pivot example, `life_wide` timeline groups with source refs, quiet life-wide ambient scent with anti-over-personalization tests, real-registry aggregate coverage smoke with claim-level/ratio guards, refreshed 949-thread local registry, full-candidate real-history semantic sidecar smoke evaluating 609 selected candidates and expanding to 27 threads/119 rows before strict filtering, v2 fresh DeepSeek probe with 11 findings / 15 accepted labels / complete per-label evidence, current strict sidecars at 2 threads/5 rows/5 timeline turns, selected source-evidence recall eval with 24/24 top-5 hits, broader selected source-review smoke with 96 cases / 84 supported / 0 failed label categories, DeepSeek flash/pro route tests, and live Pro-agent suppressed-label recovery restoring 3 labels from 8 suppressed cases / 11 candidate labels without relaxing strict gates | Broader human/source review and stronger model-side evidence to restore high-confidence coverage for still-suppressed soft labels |
-| 3 | `sync_bundle.py`, `sync_object_storage.py`, `export_bundle.py`, `import_bundle.py`, global thread store defaults, semantic scope-label sidecar sync, device-neutral bundle registry locators, target-registry path repair on pull, conflict-preserving pull tests, single-machine dual-device/cross-OS-path-shape smoke, local HTTP object-storage adapter smoke, Docker/WSL alternate-runtime smoke when available, and install docs | Physical second-machine or managed cloud/object-storage provider smoke |
+| 3 | `sync_bundle.py`, `sync_object_storage.py`, `export_bundle.py`, `import_bundle.py`, global thread store defaults, semantic scope-label sidecar sync, device-neutral bundle registry locators, target-registry path repair on pull, conflict-preserving pull tests, single-machine dual-device/cross-OS-path-shape smoke, local HTTP object-storage adapter smoke, Docker/WSL alternate-runtime smoke when available, physical Windows-to-MacBook sync smoke, managed Cloudflare R2 encrypted object-storage smoke, Python 3.9 sync path-repair compatibility coverage, and install docs | Broader provider matrix, cloud-folder client evidence if claimed, and longer-running multi-user/device operational soak |
 | 4 | `aippocampus_mcp_server.py`, `.mcp.json`, MCP unit tests, source stdio JSON-RPC process smoke, installed-plugin `.mcp.json` JSON-RPC smoke, real Codex app-server MCP host list and `mcpServer/tool/call sync_status` smoke | Interactive Desktop UI / alternate Codex client verification |
 | 5 | `plugins/aippocampus/`, `build_plugin_package.py`, plugin contract tests, package-level temporary install/MCP JSON-RPC/uninstall smoke, real Codex app-server marketplace/plugin install/uninstall smoke | Public distribution docs and external install review |
 
@@ -178,6 +184,6 @@ handoff belongs in `docs/next-iteration-plan.md`.
 
 Continue Stage 2 hardening with human/source review and better source-backed
 model findings for still-suppressed soft labels, not lexical expansion or
-looser materializer gates. Then prioritize physical second-machine sync,
-managed cloud/object-storage sync, and third-party/public distribution review
-for Stages 3 through 5.
+looser materializer gates. Then prioritize broader Stage 3 provider/client soak
+only where claims require it, plus third-party/public distribution review for
+Stages 3 through 5.

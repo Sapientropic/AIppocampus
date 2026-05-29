@@ -94,7 +94,7 @@ Stage 2 evidence for #33/#34/#35:
   passed with 24/24 top-5 hits, `warning_count=0`, and sanitized coverage across
   all eight canonical labels.
 
-Stage 3 sync evidence and blockers for #36/#38:
+Stage 3 sync evidence for #36/#38:
 
 - `python tools\aippocampus\smoke\smoke_cross_device_sync.py --repo-root . --json`:
   passed the single-machine dual-device model, cross-OS path-shape model,
@@ -104,11 +104,26 @@ Stage 3 sync evidence and blockers for #36/#38:
   passed the local HTTP object-store protocol path and target-registry path
   repair, with raw rollout excluded by default. It still records
   `real_cloud_backend=false` and `physical_second_machine=false`.
-- `python tools\aippocampus\smoke\smoke_real_provider_encrypted_sync.py --json`:
-  blocked before network sync because neither `AIPPOCAMPUS_OBJECT_STORE_URL` nor
-  `AIPPOCAMPUS_OBJECT_PROVIDER` was configured. This preserves #38 as a real
-  environment blocker rather than converting local HTTP evidence into a managed
-  provider claim.
+- Physical Windows-to-MacBook local-folder sync smoke: passed over Tailscale SSH
+  with a real MacBook target. The smoke verified bundle `status` and `repair`,
+  pulled into a Mac target registry, repaired target-device generated-artifact
+  locators, preserved a Mac-side local edit under `.sync-conflicts/`, kept raw
+  rollouts excluded by default, then pushed the Mac target bundle back to
+  Windows and verified the reverse conflict path preserved the Windows source.
+  The Mac system Python 3.9 run exposed a `Path.write_text(newline=...)`
+  compatibility bug in path repair; `sync_bundle.save_json` now uses
+  `Path.open(..., newline="\n")`, and
+  `test_pull_path_repair_works_on_python39_path_write_text_signature` covers the
+  regression.
+- Managed Cloudflare R2 encrypted object-storage smoke: passed through
+  `smoke_real_provider_encrypted_sync.py` using the real provider-aware R2
+  signing path and a run-specific object prefix. The smoke generated an
+  ephemeral `age` identity, completed encrypted push/status/repair/pull,
+  verified `recipient_match=yes`, checked 10 inner bundle files, downloaded 12
+  encrypted objects, kept `raw_rollout_included=false`, materialized the target
+  registry, and deleted all 12 uploaded encrypted objects during cleanup. Bucket
+  names, credentials, and local paths are intentionally omitted from this
+  public ledger.
 
 ## Command Ledger
 
@@ -365,11 +380,10 @@ be demonstrated without private biography or hard-coded fuzzy phrase expansion.
 - Run an interactive Desktop UI marketplace flow or external install review if
   claiming support across every Codex client surface. Current real-host
   evidence is headless Codex app-server, not manual UI coverage.
-- Run cross-device sync smoke outside the single-machine host entirely,
-  preferably on a physical second machine or managed cloud/object-storage
-  provider. Docker alternate-runtime and local HTTP object-storage evidence are
-  now available locally, but they are not a real second device or cloud
-  provider.
+- Broaden Stage 3 release evidence beyond the current Windows/MacBook physical
+  smoke and one managed R2 provider run if claiming broader provider/client
+  coverage. Local HTTP object-storage remains labeled as simulation; the R2 run
+  is real managed-provider evidence, not a provider matrix.
 - Continue Stage 2 life-wide memory evidence beyond the selected top-5 recall,
   current strict source-review slices, and first Pro-agent recovery smoke:
   broaden suppressed-label recovery samples, use Pro-agent source-review
