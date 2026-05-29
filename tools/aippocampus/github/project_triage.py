@@ -53,6 +53,9 @@ PARENT_STAGE: dict[int, str] = {
 PARENT_RE = re.compile(r"(?im)^\s*Parent:\s*#(\d+)\b")
 EXPLICIT_PRIORITY_RE = re.compile(r"\b(P0|P1|P2|Later)\b", re.IGNORECASE)
 STAGE_RE = re.compile(r"\bStage\s+([0-7])\b", re.IGNORECASE)
+SOURCE_PATH_RE = re.compile(
+    r"^(?:\.github|benchmarks|benchmark_corpus|docs|plugins|skills|sources|tests|tools)/"
+)
 
 
 @dataclass(frozen=True)
@@ -212,9 +215,11 @@ def infer_source(issue: IssueContext, parents: list[int]) -> str:
 
     for line in (issue.body or "").splitlines():
         stripped = line.strip()
-        if not stripped.startswith("- `") and not stripped.startswith("- docs/"):
+        if not stripped.startswith("- "):
             continue
         cleaned = stripped[2:].strip().strip("`")
+        if not SOURCE_PATH_RE.match(cleaned):
+            continue
         if cleaned and cleaned not in source_parts:
             source_parts.append(cleaned)
         if len(source_parts) >= 6:

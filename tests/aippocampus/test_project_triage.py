@@ -62,6 +62,26 @@ def test_ambiguous_issue_stays_in_inbox_without_false_track() -> None:
     assert result.source == "GitHub issue #99"
 
 
+def test_source_ignores_backticked_command_bullets() -> None:
+    result = project_triage.infer_triage(
+        issue(
+            53,
+            "Investigate foreground semantic hook timeouts across model alias",
+            "\n".join(
+                [
+                    "- `--semantic-timeout 20` is a runtime flag, not a source file.",
+                    "- `docs/roadmap.md`",
+                    "- tools/aippocampus/smoke/example.py",
+                ]
+            ),
+        )
+    )
+
+    assert result.source == (
+        "GitHub issue #53; docs/roadmap.md; tools/aippocampus/smoke/example.py"
+    )
+
+
 def test_planned_updates_preserve_manual_values_but_promote_inbox() -> None:
     triage = project_triage.infer_triage(
         issue(38, "Run managed cloud or real object-storage sync smoke", "Parent: #21")
