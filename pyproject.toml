@@ -34,6 +34,8 @@ select = ["E9", "F", "I"]
 python_version = "3.10"
 mypy_path = [
     "skills/aippocampus/scripts",
+    "tools/aippocampus/docs",
+    "tools/aippocampus/github",
     "tools/aippocampus/smoke",
     "benchmarks/aippocampus",
 ]
@@ -105,4 +107,7 @@ files = [
     "skills/aippocampus/scripts/warm_ambient_recall.py",
     "skills/aippocampus/scripts/warm_ambient_scout_profiles.py",
     "skills/aippocampus/scripts/warm_ambient_source_validation.py",
+    "tools/aippocampus/docs/check_docs_health.py",
+    "tools/aippocampus/github/project_triage.py",
+    "tools/aippocampus/run_tests.py",
 ]

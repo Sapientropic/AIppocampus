@@ -36,6 +36,31 @@ HIGH_RISK_MYPY_SCRIPTS = {
     "skills/aippocampus/scripts/retrieval.py",
     "skills/aippocampus/scripts/warm_ambient_recall.py",
 }
+DEBT_REGISTER = REPO_ROOT / "docs" / "architecture-debt-register.md"
+
+
+def debt_register_entries() -> dict[str, int]:
+    text = DEBT_REGISTER.read_text(encoding="utf-8")
+    entries: dict[str, int] = {}
+    for match in re.finditer(
+        r"^\|\s*`(?P<path>skills/aippocampus/scripts/[^`]+\.py)`\s*"
+        r"\|\s*(?P<budget>\d+)\s*\|",
+        text,
+        flags=re.MULTILINE,
+    ):
+        entries[match.group("path")] = int(match.group("budget"))
+    return entries
+
+
+def workflow_python_entrypoints() -> set[str]:
+    entrypoints: set[str] = set()
+    for workflow in (REPO_ROOT / ".github" / "workflows").glob("*.yml"):
+        text = workflow.read_text(encoding="utf-8")
+        for match in re.finditer(r"\bpython\s+([^\s\"'`]+\.py)\b", text):
+            path = match.group(1).replace("\\", "/")
+            if (REPO_ROOT / path).is_file():
+                entrypoints.add(path)
+    return entrypoints
 
 
 def source_text(module: object) -> str:
@@ -138,6 +163,35 @@ class ArchitectureBoundaryTests(unittest.TestCase):
         )
 
         self.assertEqual(missing, [])
+
+    def test_github_workflow_python_entrypoints_stay_in_mypy_baseline(self) -> None:
+        typed = mypy_file_entries()
+        missing = sorted(workflow_python_entrypoints() - typed)
+
+        self.assertEqual(missing, [])
+
+    def test_large_runtime_scripts_have_debt_register_budgets(self) -> None:
+        entries = debt_register_entries()
+        large_scripts = {
+            path.relative_to(REPO_ROOT).as_posix(): script_line_count(path)
+            for path in SCRIPTS.glob("*.py")
+            if script_line_count(path) >= 600
+        }
+        missing = sorted(set(large_scripts) - set(entries))
+        runtime_scripts = {
+            path.relative_to(REPO_ROOT).as_posix() for path in SCRIPTS.glob("*.py")
+        }
+        stale = sorted(set(entries) - runtime_scripts)
+        over_budget = {
+            path: {"loc": large_scripts[path], "budget": entries[path]}
+            for path in sorted(set(large_scripts) & set(entries))
+            if large_scripts[path] > entries[path]
+        }
+
+        self.assertEqual(
+            {"missing": missing, "stale": stale, "over_budget": over_budget},
+            {"missing": [], "stale": [], "over_budget": {}},
+        )
 
     def test_prompt_hook_exits_zero_when_split_helper_install_lags(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
