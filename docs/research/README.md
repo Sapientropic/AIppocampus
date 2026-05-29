@@ -16,41 +16,46 @@ strong claims need source-backed evidence.
    - Why AIppocampus exists.
    - Frames the product goal as presence through sustained, source-backed
      acquaintance rather than persona construction.
-2. [Journey Tracking](journey-tracking.md)
+2. [Source as World, Interpretation as Weather](source-as-world.md)
+   - The source-fidelity foundation beneath Pearl-like presence.
+   - Frames language as the agent's body/world, human memory as necessary
+     compression, and clean source as the ground that interpretations must
+     return to.
+3. [Journey Tracking](journey-tracking.md)
    - The product ontology shift.
    - Frames long-running continuity as first-person plural journeys rather
      than third-person user modeling.
-3. [Reflection Space](reflection-space.md)
+4. [Reflection Space](reflection-space.md)
    - The user-facing surface for journeys.
    - Proposes an optional map room where the interaction mode changes from
      task-solving to reflection and review.
-4. [Dream Task Design](dream-task-design.md)
+5. [Dream Task Design](dream-task-design.md)
    - The most direct implementation path.
    - Proposes integrative subconscious jobs: compensatory analysis first, then
      prospective analysis, amplification, and active imagination.
-5. [Ambient Associative Recall](ambient-associative-recall.md)
+6. [Ambient Associative Recall](ambient-associative-recall.md)
    - The user-facing recall behavior.
    - Designs active gentle nudges, private recall cards, thread ambient cache,
      and timeboxed DeepSeek scouts that warm multi-turn agent threads without
      making the foreground hook wait for a full batch.
-6. [Correction Reconsolidation](correction-reconsolidation.md)
+7. [Correction Reconsolidation](correction-reconsolidation.md)
    - The reliability layer for user corrections and failed-route lessons.
    - Designs hook-triggered correction windows, outcome events, detached dream
      adjudication, and anti-nag reminder budgets for compaction continuity.
-7. [Agency From Cognitive Maps](agency-from-cognitive-map.md)
+8. [Agency From Cognitive Maps](agency-from-cognitive-map.md)
    - The next-stage agency hypothesis.
    - Maps source-backed continuity into affordance tickets that a proactive
      host can use for bounded, reversible, anti-nag initiative.
-8. [Agent Coding Context Blueprint](agent-coding-context-analysis.md)
+9. [Agent Coding Context Blueprint](agent-coding-context-analysis.md)
    - The agent-coding market wedge.
    - Positions AIppocampus as a source-backed implicit-knowledge continuity
      layer for rejected paths, tacit constraints, and design-intent evolution,
      with Codeksei as the executive control shell.
-9. [Thread Intuition Layer](affect-side-channel.md)
+10. [Thread Intuition Layer](affect-side-channel.md)
    - The intuition-layer candidate.
    - Explores compact thread mood markers, especially hexagram arcs plus a
      "do not decode" instruction, as a low-token background signal.
-10. [Compact Activation Signals](compact-activation-signals.md)
+11. [Compact Activation Signals](compact-activation-signals.md)
    - The long-shot research frontier.
    - Keeps the question of activation-efficient memory alive, while current
      reviewer consensus points the near-term path back to structured text
@@ -71,7 +76,7 @@ strong claims need source-backed evidence.
 | A. Primary-source confirmed | Backed by official docs, primary papers, or repo source. | Platonic Representation Hypothesis, universal number representations, non-surjective steering, Anthropic Managed Agents memory stores and Dreams. | Safe to cite as background, while preserving the original scope and limitations. |
 | B. Locally validated experiment | Backed by project-local experiments or cross-model review, but not yet reproduced as a public benchmark. | Hexagram/five-tone leakage tests, "do not decode" mitigation, hexagram-only thread mood trials. | Treat as promising design evidence; do not present as general model science. |
 | C. Product hypothesis | A coherent design claim derived from AIppocampus goals and local evidence. | Two-layer memory, ambient associative recall, cognitive portrait as structured text, compensatory dream task. | Good for roadmap and prototype planning; needs evaluation before runtime adoption. |
-| D. Philosophical frame | A conceptual lens that guides product taste and positioning. | Pearl-like presence, relationship continuity, Jung-inspired integration. | Useful for direction and vocabulary; do not convert directly into implementation claims. |
+| D. Philosophical frame | A conceptual lens that guides product taste and positioning. | Pearl-like presence, source as world, relationship continuity, Jung-inspired integration. | Useful for direction and vocabulary; do not convert directly into implementation claims. |
 | E. Long-shot research | Plausible but currently weak, blocked, or dependent on access beyond normal black-box APIs. | Cross-model numerical activation codes for personal memory; token sequences approximating white-box activation steering. | Keep as research backlog, not near-term build priority. |
 
 ## Current Assessment
@@ -94,6 +99,18 @@ source-backed integration first.
 
 ## Confirmed External Anchors
 
+- [Michael Levin's TAME framework](https://arxiv.org/abs/2201.10346)
+  anchors the multi-scale agency lens: agency can be studied as a continuous,
+  empirical question across substrates and scales. For AIppocampus, this is a
+  philosophical frame, not evidence that current LLMs have inner selves.
+- [Bootstrapping Life-Inspired Machine Intelligence](https://arxiv.org/abs/2602.08079)
+  anchors the "cognitive light cone" vocabulary: goals, memory, prediction,
+  and control can expand across time and space. AIppocampus adapts this as
+  relationship-continuity language, not as a direct implementation claim.
+- [Self-Improvising Memory](https://www.mdpi.com/1099-4300/26/6/481)
+  supports the idea that memory can shift through salience and
+  reinterpretation. In AIppocampus this applies only to dream, intuition, and
+  hypothesis layers; clean source remains fidelity-grounded.
 - [The Platonic Representation Hypothesis](https://arxiv.org/abs/2405.07987)
   supports the background idea that model representations can converge across
   domains, with limitations and counterexamples.
