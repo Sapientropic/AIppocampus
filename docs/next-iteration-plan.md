@@ -153,9 +153,11 @@ handoff context.
 
 9. Vector index protocol
    - Source: `gb-scale-roadmap.md` and `wukong-mining-notes.md`.
-   - Define the `QuestionVectorIndex` protocol with a simple local
-     implementation before evaluating TurboVec.
+   - First slice is implemented in
+     `skills/aippocampus/scripts/question_vector_index.py`.
    - Keep vectors optional and join every result back to stable source ids.
+   - Next work is wiring question_tracking to the adapter after Phase 1 has
+     enough source-backed examples; TurboVec evaluation remains deferred.
 
 ## Do Not Start With
 

@@ -112,11 +112,15 @@ Completed foundation:
    - L2: selected token locations for snippets and phrase/proximity scoring.
    - L3: RAG-lite chunks for neighborhood recall.
    - L4: TurboVec compressed vector index for semantic recall.
-     Protocol interface (`QuestionVectorIndex`: add, search, remove, write,
-     load) from Phase 2, allowing numpy → TurboVec migration without pipeline
-     changes. Covers question_tracking vectors, concept graph node embeddings,
-     and clean-source chunk embeddings. TurboVec's data-oblivious quantization
-     (no retraining on incremental adds) and kernel-level filtered search
+     Protocol interface (`QuestionVectorIndex`: add, search, remove, write)
+     starts in `skills/aippocampus/scripts/question_vector_index.py` with a
+     small local JSON-backed implementation. It is an adapter boundary only:
+     vector neighbors carry stable source ids and remain hints until clean-source
+     evidence is re-opened. TurboVec can replace the local implementation when
+     scale warrants, without changing the caller contract. Future coverage can
+     include question_tracking vectors, concept graph node embeddings, and
+     clean-source chunk embeddings. TurboVec's data-oblivious quantization (no
+     retraining on incremental adds) and kernel-level filtered search
      (allowlist-based six-axis routing) match AIppocampus's long-term scale and
      local-first constraints.
 
@@ -168,13 +172,12 @@ Completed foundation:
 5. Add optional compressed raw archive and retention policy. Done:
    `cold_archive.py` plus `retention_report.py`; cleanup remains manual and
    evidence-first.
-6. Add vector index via Protocol interface. Define `QuestionVectorIndex`
-   protocol (add / search / remove / write / load). Phase 2 starts with numpy
-   implementation; TurboVec replaces it when scale warrants. Triggered by
-   question_tracking's cross-thread similarity matching — the fuzzy-query gap
-   that lexical/RAG-lite recall cannot close.
-   Status: protocol defined in `question-tracking-subconscious.md`; implementation
-   pending.
+6. Add vector index via Protocol interface. Done for the first local slice:
+   `question_vector_index.py` defines `QuestionVectorIndex` and
+   `LocalQuestionVectorIndex` with add / search / remove / write / load
+   behavior. It is intentionally non-default and source-id-only; question
+   tracking must still re-open clean source before accepting a link. TurboVec
+   remains a later replacement when scale warrants.
 7. Add source chunking, delta sync, and registry query planning. Done for the
    first executable slice: local-folder/object-storage sync now moves
    clean-source JSONL through content-addressed chunks, and capacity reports now

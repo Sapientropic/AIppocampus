@@ -407,6 +407,18 @@ class ProjectTimelineTests(unittest.TestCase):
         self.assertEqual(result["life_wide"]["label_count"], 0)
         self.assertEqual(result["projects"]["project:Bad Export"]["latest_turns"], [])
 
+    def test_save_project_timeline_uses_unique_temp_handoff(self) -> None:
+        path = self.root / "registry" / "project_timeline.json"
+        shared_tmp = path.with_suffix(path.suffix + ".tmp")
+        shared_tmp.write_text("sentinel", encoding="utf-8")
+
+        timeline.save_project_timeline(path, {"kind": "test", "projects": {}})
+
+        self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["kind"], "test")
+        self.assertEqual(shared_tmp.read_text(encoding="utf-8"), "sentinel")
+        leftovers = sorted(path.parent.glob(f".{path.name}.*.tmp"))
+        self.assertEqual(leftovers, [])
+
 
 if __name__ == "__main__":
     unittest.main()

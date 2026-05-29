@@ -771,8 +771,11 @@ Clean source turns
 
 None. All output goes to existing `subconscious_jobs.jsonl`.
 
-A lightweight sidecar index (`question_index.sqlite`) may be added later for
-fast vector lookup in `question_tracking`, but this is a Phase 2 concern.
+A lightweight vector adapter now exists in
+`skills/aippocampus/scripts/question_vector_index.py` for Phase 2 tests and
+small local smoke runs. It is deliberately not the default retrieval path:
+neighbors carry stable source ids, and `question_tracking` must re-open clean
+source before accepting or promoting a link.
 
 ### Changes to Existing Files
 
