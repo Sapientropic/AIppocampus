@@ -134,7 +134,15 @@ python ./skills/aippocampus/scripts/sync_bundle.py pull --sync-dir <folder> --js
 python ./skills/aippocampus/scripts/sync_bundle.py repair --sync-dir <folder> --json
 ```
 
-Raw rollouts are excluded unless `--include-raw` is passed.
+Raw rollouts are excluded from plaintext sync. Normal `--include-raw` usage
+requires encrypted sync:
+
+```sh
+python ./skills/aippocampus/scripts/sync_bundle.py push --sync-dir <folder> --encrypt --recipient <age-recipient> --json
+python ./skills/aippocampus/scripts/sync_bundle.py status --sync-dir <folder> --require-encrypted --json
+python ./skills/aippocampus/scripts/sync_bundle.py pull --sync-dir <folder> --require-encrypted --identity-file <age-identity> --json
+python ./skills/aippocampus/scripts/sync_bundle.py repair --sync-dir <folder> --require-encrypted --identity-file <age-identity> --json
+```
 
 `pull` is conservative. When a target file already exists with different
 content, AIppocampus keeps the local file in place and writes the incoming copy
@@ -161,19 +169,27 @@ python ./skills/aippocampus/scripts/sync_object_storage.py pull --registry-dir <
 python ./skills/aippocampus/scripts/sync_object_storage.py repair --json
 ```
 
-Raw rollouts are still excluded unless `--include-raw` is passed. The local
-object-storage smoke verifies the protocol path without requiring cloud
+Raw rollouts are still excluded from plaintext object-storage sync. Use
+`--encrypt --include-raw` only when the object prefix is new or already
+encrypted:
+
+```sh
+python ./skills/aippocampus/scripts/sync_object_storage.py push --encrypt --recipient <age-recipient> --json
+python ./skills/aippocampus/scripts/sync_object_storage.py status --require-encrypted --json
+python ./skills/aippocampus/scripts/sync_object_storage.py pull --require-encrypted --identity-file <age-identity> --registry-dir <target-registry> --json
+python ./skills/aippocampus/scripts/sync_object_storage.py repair --require-encrypted --identity-file <age-identity> --json
+```
+
+The local object-storage smoke verifies the protocol path without requiring cloud
 credentials:
 
 ```sh
 python ./tools/aippocampus/smoke/smoke_object_storage_sync.py --repo-root . --json
 ```
 
-Encrypted sync is not implemented yet. When it ships, use a new sync directory
-or object prefix for the first encrypted push. An encrypted push must not be
-treated as cleanup for older plaintext bundles that may already exist in a cloud
-folder or object store.
-
-The encrypted sync implementation should preflight the external `age` CLI before
-syncing. It should look at `AIPPOCAMPUS_AGE_BIN` before `PATH`, because GUI
-clients on macOS may not inherit the same shell path as Terminal.
+Encrypted sync preflights the external `age` CLI before syncing. It looks at
+`AIPPOCAMPUS_AGE_BIN` before `PATH`, because GUI clients on macOS may not
+inherit the same shell path as Terminal. Use a new sync directory or object
+prefix for the first encrypted push; encrypted push refuses known plaintext
+local sync data and plaintext object prefixes, but it does not clean up older
+plaintext copies elsewhere.

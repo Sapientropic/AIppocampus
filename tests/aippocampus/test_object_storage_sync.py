@@ -23,6 +23,7 @@ for _path in (
 import smoke_cross_device_sync  # noqa: E402
 import smoke_object_storage_sync  # noqa: E402
 
+import encrypted_sync_bundle  # noqa: E402
 import sync_bundle  # noqa: E402
 import sync_object_storage  # noqa: E402
 
@@ -87,6 +88,12 @@ class ObjectStorageSyncTests(unittest.TestCase):
         self.thread.start()
         self.endpoint = f"http://127.0.0.1:{self.server.server_port}"
         self.prefix = "stage3/test-object-sync"
+        self.fake_age = self.write_fake_age()
+        self.identity = self.root / "identity.txt"
+        self.identity.write_text("trusted identity\n", encoding="utf-8")
+        self.wrong_identity = self.root / "wrong-identity.txt"
+        self.wrong_identity.write_text("wrong identity\n", encoding="utf-8")
+        self.recipient = "age1testrecipient0000000000000000000000000000000000000000000"
 
     def tearDown(self) -> None:
         self.server.shutdown()
@@ -101,6 +108,51 @@ class ObjectStorageSyncTests(unittest.TestCase):
             workspace_locator=smoke_cross_device_sync.fake_windows_workspace(),
             message_text="Object storage sync source memory.",
         )
+
+    def write_fake_age(self) -> Path:
+        path = self.root / "fake-age"
+        path.write_text(
+            """#!/usr/bin/env python3
+from __future__ import annotations
+
+import base64
+import sys
+from pathlib import Path
+
+args = sys.argv[1:]
+if args == ["--version"]:
+    print("age fake-test")
+    raise SystemExit(0)
+
+if "-o" not in args:
+    raise SystemExit(2)
+output = Path(args[args.index("-o") + 1])
+input_path = Path(args[-1])
+if "-d" in args:
+    if "-i" not in args:
+        raise SystemExit(2)
+    identity = Path(args[args.index("-i") + 1]).read_text(encoding="utf-8")
+    if "wrong" in identity:
+        print("no identity matched", file=sys.stderr)
+        raise SystemExit(1)
+    data = input_path.read_bytes()
+    if not data.startswith(b"FAKEAGE\\n"):
+        print("invalid header", file=sys.stderr)
+        raise SystemExit(1)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_bytes(base64.b64decode(data.split(b"\\n", 1)[1]))
+    raise SystemExit(0)
+
+if "-r" not in args:
+    raise SystemExit(2)
+data = input_path.read_bytes()
+output.parent.mkdir(parents=True, exist_ok=True)
+output.write_bytes(b"FAKEAGE\\n" + base64.b64encode(data))
+""",
+            encoding="utf-8",
+        )
+        path.chmod(0o755)
+        return path
 
     def test_http_object_store_push_status_pull_uses_http_protocol(self) -> None:
         device = self.create_registry()
@@ -160,6 +212,115 @@ class ObjectStorageSyncTests(unittest.TestCase):
         self.assertFalse(repair["ok"])
         self.assertEqual(repair["issues"][0]["code"], "hash_mismatch")
         self.assertEqual(repair["issues"][0]["path"], "registry/threads.json")
+
+    def test_plaintext_object_store_rejects_raw_rollout_sync(self) -> None:
+        device = self.create_registry()
+
+        push = sync_object_storage.push_object_storage_bundle(
+            device["registry"],
+            self.endpoint,
+            prefix=self.prefix,
+            include_raw=True,
+        )
+
+        self.assertFalse(push["ok"])
+        self.assertEqual(push["issues"][0]["code"], "raw_requires_encryption")
+
+    def test_encrypted_object_store_push_status_repair_pull_uses_ciphertext_objects(self) -> None:
+        device = self.create_registry()
+        target_registry = self.root / "encrypted-target" / "registry"
+
+        push = sync_object_storage.push_encrypted_object_storage_bundle(
+            device["registry"],
+            self.endpoint,
+            prefix=self.prefix,
+            recipients=[self.recipient],
+            age_bin=self.fake_age,
+        )
+        status = sync_object_storage.status_encrypted_object_storage_bundle(
+            self.endpoint,
+            prefix=self.prefix,
+        )
+        repair = sync_object_storage.repair_encrypted_object_storage_bundle(
+            self.endpoint,
+            prefix=self.prefix,
+            identity_files=[self.identity],
+            age_bin=self.fake_age,
+        )
+        pull = sync_object_storage.pull_encrypted_object_storage_bundle(
+            self.endpoint,
+            target_registry,
+            prefix=self.prefix,
+            identity_files=[self.identity],
+            age_bin=self.fake_age,
+        )
+
+        self.assertTrue(push["ok"], push)
+        self.assertTrue(status["ok"], status)
+        self.assertEqual(status["recipient_match"], "unknown")
+        self.assertTrue(repair["ok"], repair)
+        self.assertTrue(pull["ok"], pull)
+        self.assertTrue((target_registry / "threads.json").is_file())
+        object_keys = {request["key"] for request in self.server.requests}
+        self.assertIn(
+            f"{self.prefix}/{encrypted_sync_bundle.ENCRYPTED_SYNC_DIR_NAME}/"
+            f"{encrypted_sync_bundle.ENCRYPTED_SYNC_MANIFEST_NAME}",
+            object_keys,
+        )
+        self.assertFalse(any(key.endswith("registry/threads.json") for key in object_keys))
+
+    def test_encrypted_object_store_reports_wrong_key_and_tampered_object(self) -> None:
+        device = self.create_registry()
+        sync_object_storage.push_encrypted_object_storage_bundle(
+            device["registry"],
+            self.endpoint,
+            prefix=self.prefix,
+            recipients=[self.recipient],
+            age_bin=self.fake_age,
+        )
+
+        wrong_key = sync_object_storage.repair_encrypted_object_storage_bundle(
+            self.endpoint,
+            prefix=self.prefix,
+            identity_files=[self.wrong_identity],
+            age_bin=self.fake_age,
+        )
+        self.assertFalse(wrong_key["ok"])
+        self.assertEqual(wrong_key["issues"][0]["code"], "wrong_key")
+
+        object_paths = list(
+            (self.bucket / self.prefix / encrypted_sync_bundle.ENCRYPTED_SYNC_DIR_NAME / "objects")
+            .glob("*.age")
+        )
+        self.assertGreater(len(object_paths), 1)
+        object_paths[0].write_text("tampered\n", encoding="utf-8")
+        tampered = sync_object_storage.repair_encrypted_object_storage_bundle(
+            self.endpoint,
+            prefix=self.prefix,
+            identity_files=[self.identity],
+            age_bin=self.fake_age,
+        )
+        self.assertFalse(tampered["ok"])
+        self.assertIn(tampered["issues"][0]["code"], {"hash_mismatch", "wrong_key"})
+
+    def test_encrypted_object_store_rejects_plaintext_prefix(self) -> None:
+        device = self.create_registry()
+        sync_object_storage.push_object_storage_bundle(
+            device["registry"],
+            self.endpoint,
+            prefix=self.prefix,
+        )
+
+        encrypted_push = sync_object_storage.push_encrypted_object_storage_bundle(
+            device["registry"],
+            self.endpoint,
+            prefix=self.prefix,
+            recipients=[self.recipient],
+            age_bin=self.fake_age,
+        )
+
+        self.assertFalse(encrypted_push["ok"])
+        self.assertEqual(encrypted_push["issues"][0]["code"], "mixed_object_prefix")
 
     def test_object_storage_repair_reports_invalid_manifest(self) -> None:
         manifest_path = self.bucket / self.prefix / sync_bundle.SYNC_MANIFEST_NAME

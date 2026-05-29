@@ -138,7 +138,8 @@ privacy and external-model boundary.
 The first sync backend is an explicit local folder. The HTTP object-storage
 adapter reuses the same manifest over object `PUT`/`GET`. Both copy clean
 source, manifests, registry rows, and hook-safe sidecars. Raw rollouts stay
-excluded unless `--include-raw` is passed.
+excluded from plaintext sync; normal raw rollout transfer requires encrypted
+sync.
 
 ```sh
 python ./skills/aippocampus/scripts/sync_bundle.py status --sync-dir <folder> --json
@@ -152,6 +153,17 @@ python ./skills/aippocampus/scripts/sync_object_storage.py status --object-store
 python ./skills/aippocampus/scripts/sync_object_storage.py push --object-store-url <url> --object-prefix <prefix> --json
 python ./skills/aippocampus/scripts/sync_object_storage.py pull --object-store-url <url> --object-prefix <prefix> --json
 python ./skills/aippocampus/scripts/sync_object_storage.py repair --object-store-url <url> --object-prefix <prefix> --json
+```
+
+Encrypted sync uses the external `age` CLI and writes `encrypted-sync/`
+ciphertext objects. Use a new folder or object prefix for the first encrypted
+push:
+
+```sh
+python ./skills/aippocampus/scripts/sync_bundle.py push --sync-dir <folder> --encrypt --recipient <age-recipient> --json
+python ./skills/aippocampus/scripts/sync_bundle.py pull --sync-dir <folder> --require-encrypted --identity-file <age-identity> --json
+python ./skills/aippocampus/scripts/sync_object_storage.py push --object-store-url <url> --object-prefix <prefix> --encrypt --recipient <age-recipient> --json
+python ./skills/aippocampus/scripts/sync_object_storage.py pull --object-store-url <url> --object-prefix <prefix> --require-encrypted --identity-file <age-identity> --json
 ```
 
 Pull preserves local conflicting files and writes incoming copies under

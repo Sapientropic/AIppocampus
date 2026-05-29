@@ -97,7 +97,6 @@ class SyncBundleTests(unittest.TestCase):
             json.dumps({"nodes": [], "edges": []}, ensure_ascii=False),
             encoding="utf-8",
         )
-
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
@@ -192,7 +191,9 @@ class SyncBundleTests(unittest.TestCase):
         self.assertNotIn(str(self.registry), json.dumps(repaired, ensure_ascii=False))
 
     def test_pull_repairs_included_raw_rollout_to_target_registry(self) -> None:
-        sync_bundle.push_sync_bundle(self.registry, self.sync_dir, include_raw=True)
+        sync_bundle.push_sync_bundle(
+            self.registry, self.sync_dir, include_raw=True, allow_plaintext_raw=True
+        )
         target_registry = self.root / "target-with-raw"
 
         result = sync_bundle.pull_sync_bundle(self.sync_dir, target_registry)
@@ -254,7 +255,9 @@ class SyncBundleTests(unittest.TestCase):
             sync_bundle.pull_sync_bundle(self.sync_dir, self.root / "target-registry")
 
     def test_push_without_include_raw_removes_previous_managed_raw_rollouts(self) -> None:
-        sync_bundle.push_sync_bundle(self.registry, self.sync_dir, include_raw=True)
+        sync_bundle.push_sync_bundle(
+            self.registry, self.sync_dir, include_raw=True, allow_plaintext_raw=True
+        )
         raw_files = list((self.sync_dir / "raw-rollouts").glob("*.jsonl"))
         self.assertEqual(len(raw_files), 1)
 
@@ -305,6 +308,10 @@ class SyncBundleTests(unittest.TestCase):
         self.assertTrue(status["manifest_exists"])
         self.assertEqual(status["issues"][0]["code"], "invalid_manifest")
         self.assertEqual(repair["issues"][0]["code"], "invalid_manifest")
+
+    def test_plaintext_push_rejects_raw_rollout_without_debug_override(self) -> None:
+        with self.assertRaisesRegex(ValueError, "raw_requires_encryption"):
+            sync_bundle.push_sync_bundle(self.registry, self.sync_dir, include_raw=True)
 
     def test_cross_device_sync_smoke_models_device_and_path_boundaries(self) -> None:
         result = smoke_cross_device_sync.run_cross_device_sync_smoke(ROOT)

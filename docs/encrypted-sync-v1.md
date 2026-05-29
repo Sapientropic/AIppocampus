@@ -452,9 +452,9 @@ client lacks a matching identity; it should not describe the bundle as corrupt.
 Raw rollout sync remains explicit:
 
 - `--include-raw` is still required.
-- `--include-raw` must require `--encrypt` for every sync backend once encrypted
-  sync exists, including local-folder sync. There should be no normal product
-  path for plaintext raw rollout sync.
+- `--include-raw` requires `--encrypt` for the normal local-folder and
+  object-storage sync paths. There should be no normal product path for
+  plaintext raw rollout sync.
 - Command output should show `raw_rollout_included`.
 - Status should avoid exposing raw rollout object names before decrypting.
 

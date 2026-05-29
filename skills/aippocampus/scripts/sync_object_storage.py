@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib
 import json
 import os
 import tempfile
@@ -202,7 +203,20 @@ def push_object_storage_bundle(
     client = client_for(object_store_url, prefix=prefix, token=token, timeout=timeout)
     with tempfile.TemporaryDirectory(prefix="aippocampus-object-sync-push-") as tmp:
         sync_root = Path(tmp)
-        local_push = sync_bundle.push_sync_bundle(registry_dir, sync_root, include_raw=include_raw)
+        try:
+            local_push = sync_bundle.push_sync_bundle(
+                registry_dir,
+                sync_root,
+                include_raw=include_raw,
+            )
+        except ValueError as exc:
+            return {
+                "ok": False,
+                "backend": OBJECT_BACKEND,
+                "object_store": safe_endpoint_label(object_store_url),
+                "object_prefix": normalize_object_prefix(prefix),
+                "issues": [{"code": str(exc).split(":", 1)[0], "message": str(exc)}],
+            }
         manifest = local_manifest_for_object_storage(
             sync_root / sync_bundle.SYNC_MANIFEST_NAME, prefix=prefix
         )
@@ -373,6 +387,96 @@ def pull_object_storage_bundle(
         }
 
 
+def push_encrypted_object_storage_bundle(
+    registry_dir: str | Path | None,
+    object_store_url: str,
+    *,
+    prefix: str = DEFAULT_PREFIX,
+    recipients: list[str] | None = None,
+    recipient_files: list[str | Path] | None = None,
+    include_raw: bool = False,
+    age_bin: str | Path | None = None,
+    token: str | None = None,
+    timeout: float = DEFAULT_TIMEOUT_SECONDS,
+) -> dict[str, Any]:
+    encrypted_sync_object_storage = importlib.import_module("encrypted_sync_object_storage")
+
+    return encrypted_sync_object_storage.push_encrypted_object_storage_bundle(
+        registry_dir,
+        object_store_url,
+        prefix=prefix,
+        recipients=recipients,
+        recipient_files=recipient_files,
+        include_raw=include_raw,
+        age_bin=age_bin,
+        token=token,
+        timeout=timeout,
+    )
+
+
+def repair_encrypted_object_storage_bundle(
+    object_store_url: str,
+    *,
+    prefix: str = DEFAULT_PREFIX,
+    identity_files: list[str | Path] | None = None,
+    age_bin: str | Path | None = None,
+    no_decrypt: bool = False,
+    token: str | None = None,
+    timeout: float = DEFAULT_TIMEOUT_SECONDS,
+) -> dict[str, Any]:
+    encrypted_sync_object_storage = importlib.import_module("encrypted_sync_object_storage")
+
+    return encrypted_sync_object_storage.repair_encrypted_object_storage_bundle(
+        object_store_url,
+        prefix=prefix,
+        identity_files=identity_files,
+        age_bin=age_bin,
+        no_decrypt=no_decrypt,
+        token=token,
+        timeout=timeout,
+    )
+
+
+def status_encrypted_object_storage_bundle(
+    object_store_url: str,
+    *,
+    prefix: str = DEFAULT_PREFIX,
+    token: str | None = None,
+    timeout: float = DEFAULT_TIMEOUT_SECONDS,
+) -> dict[str, Any]:
+    encrypted_sync_object_storage = importlib.import_module("encrypted_sync_object_storage")
+
+    return encrypted_sync_object_storage.status_encrypted_object_storage_bundle(
+        object_store_url,
+        prefix=prefix,
+        token=token,
+        timeout=timeout,
+    )
+
+
+def pull_encrypted_object_storage_bundle(
+    object_store_url: str,
+    target_registry_dir: str | Path | None = None,
+    *,
+    prefix: str = DEFAULT_PREFIX,
+    identity_files: list[str | Path] | None = None,
+    age_bin: str | Path | None = None,
+    token: str | None = None,
+    timeout: float = DEFAULT_TIMEOUT_SECONDS,
+) -> dict[str, Any]:
+    encrypted_sync_object_storage = importlib.import_module("encrypted_sync_object_storage")
+
+    return encrypted_sync_object_storage.pull_encrypted_object_storage_bundle(
+        object_store_url,
+        target_registry_dir,
+        prefix=prefix,
+        identity_files=identity_files,
+        age_bin=age_bin,
+        token=token,
+        timeout=timeout,
+    )
+
+
 def token_from_env(env_name: str | None) -> str | None:
     if not env_name:
         return None
@@ -391,6 +495,13 @@ def main() -> int:
     parser.add_argument("--token-env", default="AIPPOCAMPUS_OBJECT_STORE_TOKEN")
     parser.add_argument("--registry-dir", default=None)
     parser.add_argument("--include-raw", action="store_true")
+    parser.add_argument("--encrypt", action="store_true")
+    parser.add_argument("--require-encrypted", action="store_true")
+    parser.add_argument("--recipient", action="append", default=[])
+    parser.add_argument("--recipient-file", action="append", default=[])
+    parser.add_argument("--identity-file", action="append", default=[])
+    parser.add_argument("--age-bin", default=None)
+    parser.add_argument("--no-decrypt", action="store_true")
     parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT_SECONDS)
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
@@ -400,30 +511,73 @@ def main() -> int:
 
     token = token_from_env(args.token_env)
     if args.command == "status":
-        result = status_object_storage_bundle(
-            args.object_store_url, prefix=args.object_prefix, token=token, timeout=args.timeout
-        )
+        if args.require_encrypted:
+            result = status_encrypted_object_storage_bundle(
+                args.object_store_url,
+                prefix=args.object_prefix,
+                token=token,
+                timeout=args.timeout,
+            )
+        else:
+            result = status_object_storage_bundle(
+                args.object_store_url, prefix=args.object_prefix, token=token, timeout=args.timeout
+            )
     elif args.command == "push":
-        result = push_object_storage_bundle(
-            args.registry_dir,
-            args.object_store_url,
-            prefix=args.object_prefix,
-            include_raw=args.include_raw,
-            token=token,
-            timeout=args.timeout,
-        )
+        if args.encrypt:
+            result = push_encrypted_object_storage_bundle(
+                args.registry_dir,
+                args.object_store_url,
+                prefix=args.object_prefix,
+                recipients=args.recipient,
+                recipient_files=args.recipient_file,
+                include_raw=args.include_raw,
+                age_bin=args.age_bin,
+                token=token,
+                timeout=args.timeout,
+            )
+        else:
+            result = push_object_storage_bundle(
+                args.registry_dir,
+                args.object_store_url,
+                prefix=args.object_prefix,
+                include_raw=args.include_raw,
+                token=token,
+                timeout=args.timeout,
+            )
     elif args.command == "pull":
-        result = pull_object_storage_bundle(
-            args.object_store_url,
-            args.registry_dir,
-            prefix=args.object_prefix,
-            token=token,
-            timeout=args.timeout,
-        )
+        if args.require_encrypted:
+            result = pull_encrypted_object_storage_bundle(
+                args.object_store_url,
+                args.registry_dir,
+                prefix=args.object_prefix,
+                identity_files=args.identity_file,
+                age_bin=args.age_bin,
+                token=token,
+                timeout=args.timeout,
+            )
+        else:
+            result = pull_object_storage_bundle(
+                args.object_store_url,
+                args.registry_dir,
+                prefix=args.object_prefix,
+                token=token,
+                timeout=args.timeout,
+            )
     else:
-        result = repair_object_storage_bundle(
-            args.object_store_url, prefix=args.object_prefix, token=token, timeout=args.timeout
-        )
+        if args.require_encrypted:
+            result = repair_encrypted_object_storage_bundle(
+                args.object_store_url,
+                prefix=args.object_prefix,
+                identity_files=args.identity_file,
+                age_bin=args.age_bin,
+                no_decrypt=args.no_decrypt,
+                token=token,
+                timeout=args.timeout,
+            )
+        else:
+            result = repair_object_storage_bundle(
+                args.object_store_url, prefix=args.object_prefix, token=token, timeout=args.timeout
+            )
 
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
