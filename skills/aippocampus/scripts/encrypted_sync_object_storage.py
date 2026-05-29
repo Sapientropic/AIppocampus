@@ -179,7 +179,7 @@ def download_encrypted_object_bundle(
 
 def push_encrypted_object_storage_bundle(
     registry_dir: str | Path | None,
-    object_store_url: str,
+    object_store_url: str | None,
     *,
     prefix: str = sync_object_storage.DEFAULT_PREFIX,
     recipients: Iterable[str] | None = None,
@@ -188,25 +188,39 @@ def push_encrypted_object_storage_bundle(
     age_bin: str | Path | None = None,
     token: str | None = None,
     timeout: float = sync_object_storage.DEFAULT_TIMEOUT_SECONDS,
+    provider: str | None = None,
+    bucket: str | None = None,
+    region: str | None = None,
+    account_id: str | None = None,
+    access_key_id: str | None = None,
+    secret_access_key: str | None = None,
+    session_token: str | None = None,
 ) -> dict[str, Any]:
-    client = sync_object_storage.client_for(
+    client = sync_object_storage.object_storage_client_for(
         object_store_url,
         prefix=prefix,
         token=token,
         timeout=timeout,
+        provider=provider,
+        bucket=bucket,
+        region=region,
+        account_id=account_id,
+        access_key_id=access_key_id,
+        secret_access_key=secret_access_key,
+        session_token=session_token,
     )
     try:
         has_plaintext_manifest = plaintext_manifest_exists(client)
     except RuntimeError as exc:
         return failed_object_result(
-            object_store_url,
+            client.endpoint_url,
             prefix,
             "object_store_unreachable",
             str(exc),
         )
     if has_plaintext_manifest:
         return failed_object_result(
-            object_store_url,
+            client.endpoint_url,
             prefix,
             "mixed_object_prefix",
             "encrypted sync refuses to share an object prefix with plaintext sync data",
@@ -224,7 +238,7 @@ def push_encrypted_object_storage_bundle(
             age_bin=age_bin,
         )
         if not local_push.get("ok"):
-            result = object_result_base(object_store_url, prefix)
+            result = object_result_base(client.endpoint_url, prefix)
             result.update(local_push)
             return result
 
@@ -233,7 +247,7 @@ def push_encrypted_object_storage_bundle(
             relative_path = relative_to_sync_root(sync_root, source)
             uploaded.append(client.put_object(relative_path, source.read_bytes()))
 
-    result = object_result_base(object_store_url, prefix)
+    result = object_result_base(client.endpoint_url, prefix)
     result.update(
         {
             "ok": True,
@@ -253,7 +267,7 @@ def push_encrypted_object_storage_bundle(
 
 
 def repair_encrypted_object_storage_bundle(
-    object_store_url: str,
+    object_store_url: str | None,
     *,
     prefix: str = sync_object_storage.DEFAULT_PREFIX,
     identity_files: Iterable[str | Path] | None = None,
@@ -261,12 +275,26 @@ def repair_encrypted_object_storage_bundle(
     no_decrypt: bool = False,
     token: str | None = None,
     timeout: float = sync_object_storage.DEFAULT_TIMEOUT_SECONDS,
+    provider: str | None = None,
+    bucket: str | None = None,
+    region: str | None = None,
+    account_id: str | None = None,
+    access_key_id: str | None = None,
+    secret_access_key: str | None = None,
+    session_token: str | None = None,
 ) -> dict[str, Any]:
-    client = sync_object_storage.client_for(
+    client = sync_object_storage.object_storage_client_for(
         object_store_url,
         prefix=prefix,
         token=token,
         timeout=timeout,
+        provider=provider,
+        bucket=bucket,
+        region=region,
+        account_id=account_id,
+        access_key_id=access_key_id,
+        secret_access_key=secret_access_key,
+        session_token=session_token,
     )
     with tempfile.TemporaryDirectory(prefix="aippocampus-encrypted-object-sync-repair-") as tmp:
         sync_root = Path(tmp)
@@ -280,7 +308,7 @@ def repair_encrypted_object_storage_bundle(
             )
         except FileNotFoundError as exc:
             return failed_object_result(
-                object_store_url,
+                client.endpoint_url,
                 prefix,
                 "missing_manifest",
                 f"missing encrypted sync object: {exc}",
@@ -288,21 +316,21 @@ def repair_encrypted_object_storage_bundle(
             )
         except (json.JSONDecodeError, UnicodeDecodeError, sync_bundle.SyncManifestError, ValueError) as exc:
             return failed_object_result(
-                object_store_url,
+                client.endpoint_url,
                 prefix,
                 "invalid_manifest",
                 str(exc),
             )
         except RuntimeError as exc:
             return failed_object_result(
-                object_store_url,
+                client.endpoint_url,
                 prefix,
                 "object_store_unreachable",
                 str(exc),
             )
 
         if not downloaded["ok"]:
-            result = object_result_base(object_store_url, prefix)
+            result = object_result_base(client.endpoint_url, prefix)
             result.update(
                 {
                     "ok": False,
@@ -318,18 +346,25 @@ def repair_encrypted_object_storage_bundle(
             age_bin=age_bin,
             no_decrypt=no_decrypt,
         )
-        result = object_result_base(object_store_url, prefix)
+        result = object_result_base(client.endpoint_url, prefix)
         result.update(repair)
         result["downloaded"] = downloaded.get("downloaded", 0)
         return result
 
 
 def status_encrypted_object_storage_bundle(
-    object_store_url: str,
+    object_store_url: str | None,
     *,
     prefix: str = sync_object_storage.DEFAULT_PREFIX,
     token: str | None = None,
     timeout: float = sync_object_storage.DEFAULT_TIMEOUT_SECONDS,
+    provider: str | None = None,
+    bucket: str | None = None,
+    region: str | None = None,
+    account_id: str | None = None,
+    access_key_id: str | None = None,
+    secret_access_key: str | None = None,
+    session_token: str | None = None,
 ) -> dict[str, Any]:
     repair = repair_encrypted_object_storage_bundle(
         object_store_url,
@@ -337,6 +372,13 @@ def status_encrypted_object_storage_bundle(
         no_decrypt=True,
         token=token,
         timeout=timeout,
+        provider=provider,
+        bucket=bucket,
+        region=region,
+        account_id=account_id,
+        access_key_id=access_key_id,
+        secret_access_key=secret_access_key,
+        session_token=session_token,
     )
     return {
         "ok": bool(repair.get("ok")),
@@ -353,7 +395,7 @@ def status_encrypted_object_storage_bundle(
 
 
 def pull_encrypted_object_storage_bundle(
-    object_store_url: str,
+    object_store_url: str | None,
     target_registry_dir: str | Path | None = None,
     *,
     prefix: str = sync_object_storage.DEFAULT_PREFIX,
@@ -361,12 +403,26 @@ def pull_encrypted_object_storage_bundle(
     age_bin: str | Path | None = None,
     token: str | None = None,
     timeout: float = sync_object_storage.DEFAULT_TIMEOUT_SECONDS,
+    provider: str | None = None,
+    bucket: str | None = None,
+    region: str | None = None,
+    account_id: str | None = None,
+    access_key_id: str | None = None,
+    secret_access_key: str | None = None,
+    session_token: str | None = None,
 ) -> dict[str, Any]:
-    client = sync_object_storage.client_for(
+    client = sync_object_storage.object_storage_client_for(
         object_store_url,
         prefix=prefix,
         token=token,
         timeout=timeout,
+        provider=provider,
+        bucket=bucket,
+        region=region,
+        account_id=account_id,
+        access_key_id=access_key_id,
+        secret_access_key=secret_access_key,
+        session_token=session_token,
     )
     with tempfile.TemporaryDirectory(prefix="aippocampus-encrypted-object-sync-pull-") as tmp:
         sync_root = Path(tmp)
@@ -380,7 +436,7 @@ def pull_encrypted_object_storage_bundle(
             )
         except FileNotFoundError as exc:
             return failed_object_result(
-                object_store_url,
+                client.endpoint_url,
                 prefix,
                 "missing_manifest",
                 f"missing encrypted sync object: {exc}",
@@ -388,21 +444,21 @@ def pull_encrypted_object_storage_bundle(
             )
         except (json.JSONDecodeError, UnicodeDecodeError, sync_bundle.SyncManifestError, ValueError) as exc:
             return failed_object_result(
-                object_store_url,
+                client.endpoint_url,
                 prefix,
                 "invalid_manifest",
                 str(exc),
             )
         except RuntimeError as exc:
             return failed_object_result(
-                object_store_url,
+                client.endpoint_url,
                 prefix,
                 "object_store_unreachable",
                 str(exc),
             )
 
         if not downloaded["ok"]:
-            result = object_result_base(object_store_url, prefix)
+            result = object_result_base(client.endpoint_url, prefix)
             result.update(
                 {
                     "ok": False,
@@ -418,7 +474,7 @@ def pull_encrypted_object_storage_bundle(
             identity_files=identity_files,
             age_bin=age_bin,
         )
-        result = object_result_base(object_store_url, prefix)
+        result = object_result_base(client.endpoint_url, prefix)
         result.update(pull)
         result["downloaded"] = downloaded.get("downloaded", 0)
         return result

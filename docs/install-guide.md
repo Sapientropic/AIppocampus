@@ -169,6 +169,24 @@ python ./skills/aippocampus/scripts/sync_object_storage.py pull --registry-dir <
 python ./skills/aippocampus/scripts/sync_object_storage.py repair --json
 ```
 
+For S3-compatible providers, use provider-aware signing instead of bearer
+tokens:
+
+```sh
+export AIPPOCAMPUS_OBJECT_PROVIDER="s3" # or r2, gcs-xml
+export AIPPOCAMPUS_OBJECT_BUCKET="aippocampus-memory"
+export AIPPOCAMPUS_OBJECT_REGION="us-east-1"
+export AIPPOCAMPUS_OBJECT_ACCESS_KEY_ID="<access key id>"
+export AIPPOCAMPUS_OBJECT_SECRET_ACCESS_KEY="<secret access key>"
+python ./skills/aippocampus/scripts/sync_object_storage.py push --encrypt --recipient <age-recipient> --json
+```
+
+For Cloudflare R2, set `AIPPOCAMPUS_OBJECT_PROVIDER=r2` and
+`AIPPOCAMPUS_OBJECT_ACCOUNT_ID=<account id>`; the default region is `auto`.
+For Google Cloud Storage, set `AIPPOCAMPUS_OBJECT_PROVIDER=gcs-xml` and use XML
+API interoperability HMAC keys. See `docs/object-storage-providers.md` for the
+provider-specific pitfalls.
+
 Raw rollouts are still excluded from plaintext object-storage sync. Use
 `--encrypt --include-raw` only when the object prefix is new or already
 encrypted:

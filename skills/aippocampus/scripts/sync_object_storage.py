@@ -10,120 +10,29 @@ source-device locators stay portable, and raw rollouts remain opt-in.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import importlib
 import json
 import os
 import tempfile
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlsplit, urlunsplit
-from urllib.request import Request, urlopen
 
 import sync_bundle
-from aippocampuslib import validate_http_endpoint_url, validate_private_credential_transport
+from object_storage_client import (
+    DEFAULT_PREFIX,
+    DEFAULT_TIMEOUT_SECONDS,
+    OBJECT_BACKEND,
+    HttpObjectStoreClient,
+    client_for,
+    client_for_provider,
+    hash_bytes,
+    normalize_object_prefix,
+    object_key,
+    object_storage_client_for,
+    safe_endpoint_label,
+)
 
-OBJECT_BACKEND = "http_object_store"
-DEFAULT_PREFIX = "aippocampus/sync"
-DEFAULT_TIMEOUT_SECONDS = 20.0
-
-
-def normalize_object_prefix(value: str | None) -> str:
-    text = str(value or "").replace("\\", "/").strip("/")
-    if not text:
-        return ""
-    return sync_bundle.validate_relative_sync_path(text).as_posix()
-
-
-def object_key(prefix: str | None, relative_path: str | Path) -> str:
-    path = sync_bundle.validate_relative_sync_path(relative_path)
-    normalized_prefix = normalize_object_prefix(prefix)
-    if not normalized_prefix:
-        return path.as_posix()
-    return f"{normalized_prefix}/{path.as_posix()}"
-
-
-def safe_endpoint_label(endpoint_url: str) -> str:
-    parsed = urlsplit(endpoint_url)
-    netloc = parsed.hostname or parsed.netloc
-    if parsed.port:
-        netloc = f"{netloc}:{parsed.port}"
-    return urlunsplit((parsed.scheme, netloc, parsed.path.rstrip("/"), "", ""))
-
-
-def hash_bytes(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
-
-
-@dataclass(frozen=True)
-class HttpObjectStoreClient:
-    endpoint_url: str
-    prefix: str = DEFAULT_PREFIX
-    token: str | None = None
-    timeout: float = DEFAULT_TIMEOUT_SECONDS
-
-    def __post_init__(self) -> None:
-        validate_http_endpoint_url(self.endpoint_url, service_name="object store endpoint")
-        if self.token:
-            validate_private_credential_transport(
-                self.endpoint_url,
-                service_name="object store endpoint",
-                credential_label="object store token",
-            )
-        normalize_object_prefix(self.prefix)
-
-    def url_for(self, relative_path: str | Path) -> str:
-        key = object_key(self.prefix, relative_path)
-        quoted = "/".join(quote(part, safe="") for part in key.split("/"))
-        return f"{self.endpoint_url.rstrip('/')}/{quoted}"
-
-    def headers(self, content_type: str | None = None) -> dict[str, str]:
-        headers = {"User-Agent": "AIppocampus-object-sync/0.1"}
-        if content_type:
-            headers["Content-Type"] = content_type
-        if self.token:
-            headers["Authorization"] = f"Bearer {self.token}"
-        return headers
-
-    def request(self, method: str, relative_path: str | Path, data: bytes | None = None) -> bytes:
-        key = object_key(self.prefix, relative_path)
-        request = Request(
-            self.url_for(relative_path),
-            data=data,
-            headers=self.headers("application/octet-stream" if data is not None else None),
-            method=method,
-        )
-        try:
-            with urlopen(request, timeout=self.timeout) as response:
-                return response.read()
-        except HTTPError as exc:
-            if exc.code == 404:
-                raise FileNotFoundError(key) from exc
-            detail = exc.read(512).decode("utf-8", errors="replace")
-            raise RuntimeError(
-                f"object store {method} failed for {key}: HTTP {exc.code} {detail}"
-            ) from exc
-        except URLError as exc:
-            raise RuntimeError(f"object store {method} failed for {key}: {exc.reason}") from exc
-
-    def put_object(self, relative_path: str | Path, data: bytes) -> dict[str, Any]:
-        self.request("PUT", relative_path, data)
-        return {"key": object_key(self.prefix, relative_path), "size": len(data)}
-
-    def get_object(self, relative_path: str | Path) -> bytes:
-        return self.request("GET", relative_path)
-
-
-def client_for(
-    object_store_url: str,
-    *,
-    prefix: str = DEFAULT_PREFIX,
-    token: str | None = None,
-    timeout: float = DEFAULT_TIMEOUT_SECONDS,
-) -> HttpObjectStoreClient:
-    return HttpObjectStoreClient(object_store_url, prefix=prefix, token=token, timeout=timeout)
+__all__ = ["client_for", "client_for_provider"]
 
 
 def load_object_manifest(client: HttpObjectStoreClient) -> dict[str, Any]:
@@ -193,14 +102,33 @@ def verify_manifest_objects(
 
 def push_object_storage_bundle(
     registry_dir: str | Path | None,
-    object_store_url: str,
+    object_store_url: str | None,
     *,
     prefix: str = DEFAULT_PREFIX,
     include_raw: bool = False,
     token: str | None = None,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
+    provider: str | None = None,
+    bucket: str | None = None,
+    region: str | None = None,
+    account_id: str | None = None,
+    access_key_id: str | None = None,
+    secret_access_key: str | None = None,
+    session_token: str | None = None,
 ) -> dict[str, Any]:
-    client = client_for(object_store_url, prefix=prefix, token=token, timeout=timeout)
+    client = object_storage_client_for(
+        object_store_url,
+        prefix=prefix,
+        token=token,
+        timeout=timeout,
+        provider=provider,
+        bucket=bucket,
+        region=region,
+        account_id=account_id,
+        access_key_id=access_key_id,
+        secret_access_key=secret_access_key,
+        session_token=session_token,
+    )
     with tempfile.TemporaryDirectory(prefix="aippocampus-object-sync-push-") as tmp:
         sync_root = Path(tmp)
         try:
@@ -213,7 +141,7 @@ def push_object_storage_bundle(
             return {
                 "ok": False,
                 "backend": OBJECT_BACKEND,
-                "object_store": safe_endpoint_label(object_store_url),
+                "object_store": safe_endpoint_label(client.endpoint_url),
                 "object_prefix": normalize_object_prefix(prefix),
                 "issues": [{"code": str(exc).split(":", 1)[0], "message": str(exc)}],
             }
@@ -230,7 +158,7 @@ def push_object_storage_bundle(
         return {
             "ok": True,
             "backend": OBJECT_BACKEND,
-            "object_store": safe_endpoint_label(object_store_url),
+            "object_store": safe_endpoint_label(client.endpoint_url),
             "object_prefix": normalize_object_prefix(prefix),
             "manifest_key": manifest_upload["key"],
             "file_count": manifest.get("file_count", len(uploaded)),
@@ -241,20 +169,39 @@ def push_object_storage_bundle(
 
 
 def repair_object_storage_bundle(
-    object_store_url: str,
+    object_store_url: str | None,
     *,
     prefix: str = DEFAULT_PREFIX,
     token: str | None = None,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
+    provider: str | None = None,
+    bucket: str | None = None,
+    region: str | None = None,
+    account_id: str | None = None,
+    access_key_id: str | None = None,
+    secret_access_key: str | None = None,
+    session_token: str | None = None,
 ) -> dict[str, Any]:
-    client = client_for(object_store_url, prefix=prefix, token=token, timeout=timeout)
+    client = object_storage_client_for(
+        object_store_url,
+        prefix=prefix,
+        token=token,
+        timeout=timeout,
+        provider=provider,
+        bucket=bucket,
+        region=region,
+        account_id=account_id,
+        access_key_id=access_key_id,
+        secret_access_key=secret_access_key,
+        session_token=session_token,
+    )
     try:
         manifest = load_object_manifest(client)
     except FileNotFoundError:
         return {
             "ok": False,
             "backend": OBJECT_BACKEND,
-            "object_store": safe_endpoint_label(object_store_url),
+            "object_store": safe_endpoint_label(client.endpoint_url),
             "object_prefix": normalize_object_prefix(prefix),
             "manifest_exists": False,
             "issues": [
@@ -268,7 +215,7 @@ def repair_object_storage_bundle(
         return {
             "ok": False,
             "backend": OBJECT_BACKEND,
-            "object_store": safe_endpoint_label(object_store_url),
+            "object_store": safe_endpoint_label(client.endpoint_url),
             "object_prefix": normalize_object_prefix(prefix),
             "manifest_exists": None,
             "issues": [{"code": "object_store_unreachable", "message": str(exc)}],
@@ -277,7 +224,7 @@ def repair_object_storage_bundle(
         return {
             "ok": False,
             "backend": OBJECT_BACKEND,
-            "object_store": safe_endpoint_label(object_store_url),
+            "object_store": safe_endpoint_label(client.endpoint_url),
             "object_prefix": normalize_object_prefix(prefix),
             "manifest_exists": True,
             "issues": [{"code": "invalid_manifest", "message": str(exc)}],
@@ -286,7 +233,7 @@ def repair_object_storage_bundle(
     return {
         "ok": verification["ok"],
         "backend": OBJECT_BACKEND,
-        "object_store": safe_endpoint_label(object_store_url),
+        "object_store": safe_endpoint_label(client.endpoint_url),
         "object_prefix": normalize_object_prefix(prefix),
         "manifest_exists": True,
         "schema_version": manifest.get("schema_version"),
@@ -298,14 +245,31 @@ def repair_object_storage_bundle(
 
 
 def status_object_storage_bundle(
-    object_store_url: str,
+    object_store_url: str | None,
     *,
     prefix: str = DEFAULT_PREFIX,
     token: str | None = None,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
+    provider: str | None = None,
+    bucket: str | None = None,
+    region: str | None = None,
+    account_id: str | None = None,
+    access_key_id: str | None = None,
+    secret_access_key: str | None = None,
+    session_token: str | None = None,
 ) -> dict[str, Any]:
     repair = repair_object_storage_bundle(
-        object_store_url, prefix=prefix, token=token, timeout=timeout
+        object_store_url,
+        prefix=prefix,
+        token=token,
+        timeout=timeout,
+        provider=provider,
+        bucket=bucket,
+        region=region,
+        account_id=account_id,
+        access_key_id=access_key_id,
+        secret_access_key=secret_access_key,
+        session_token=session_token,
     )
     return {
         "ok": bool(repair.get("ok")),
@@ -354,14 +318,33 @@ def download_object_bundle(client: HttpObjectStoreClient, sync_root: Path) -> di
 
 
 def pull_object_storage_bundle(
-    object_store_url: str,
+    object_store_url: str | None,
     target_registry_dir: str | Path | None = None,
     *,
     prefix: str = DEFAULT_PREFIX,
     token: str | None = None,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
+    provider: str | None = None,
+    bucket: str | None = None,
+    region: str | None = None,
+    account_id: str | None = None,
+    access_key_id: str | None = None,
+    secret_access_key: str | None = None,
+    session_token: str | None = None,
 ) -> dict[str, Any]:
-    client = client_for(object_store_url, prefix=prefix, token=token, timeout=timeout)
+    client = object_storage_client_for(
+        object_store_url,
+        prefix=prefix,
+        token=token,
+        timeout=timeout,
+        provider=provider,
+        bucket=bucket,
+        region=region,
+        account_id=account_id,
+        access_key_id=access_key_id,
+        secret_access_key=secret_access_key,
+        session_token=session_token,
+    )
     with tempfile.TemporaryDirectory(prefix="aippocampus-object-sync-pull-") as tmp:
         sync_root = Path(tmp)
         downloaded = download_object_bundle(client, sync_root)
@@ -369,7 +352,7 @@ def pull_object_storage_bundle(
             return {
                 "ok": False,
                 "backend": OBJECT_BACKEND,
-                "object_store": safe_endpoint_label(object_store_url),
+                "object_store": safe_endpoint_label(client.endpoint_url),
                 "object_prefix": normalize_object_prefix(prefix),
                 "downloaded": downloaded["downloaded"],
                 "issues": downloaded["issues"],
@@ -378,7 +361,7 @@ def pull_object_storage_bundle(
         return {
             "ok": bool(pull.get("ok")),
             "backend": OBJECT_BACKEND,
-            "object_store": safe_endpoint_label(object_store_url),
+            "object_store": safe_endpoint_label(client.endpoint_url),
             "object_prefix": normalize_object_prefix(prefix),
             "downloaded": downloaded["downloaded"],
             "file_count": downloaded["manifest"].get("file_count", 0),
@@ -389,7 +372,7 @@ def pull_object_storage_bundle(
 
 def push_encrypted_object_storage_bundle(
     registry_dir: str | Path | None,
-    object_store_url: str,
+    object_store_url: str | None,
     *,
     prefix: str = DEFAULT_PREFIX,
     recipients: list[str] | None = None,
@@ -398,6 +381,13 @@ def push_encrypted_object_storage_bundle(
     age_bin: str | Path | None = None,
     token: str | None = None,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
+    provider: str | None = None,
+    bucket: str | None = None,
+    region: str | None = None,
+    account_id: str | None = None,
+    access_key_id: str | None = None,
+    secret_access_key: str | None = None,
+    session_token: str | None = None,
 ) -> dict[str, Any]:
     encrypted_sync_object_storage = importlib.import_module("encrypted_sync_object_storage")
 
@@ -411,11 +401,18 @@ def push_encrypted_object_storage_bundle(
         age_bin=age_bin,
         token=token,
         timeout=timeout,
+        provider=provider,
+        bucket=bucket,
+        region=region,
+        account_id=account_id,
+        access_key_id=access_key_id,
+        secret_access_key=secret_access_key,
+        session_token=session_token,
     )
 
 
 def repair_encrypted_object_storage_bundle(
-    object_store_url: str,
+    object_store_url: str | None,
     *,
     prefix: str = DEFAULT_PREFIX,
     identity_files: list[str | Path] | None = None,
@@ -423,6 +420,13 @@ def repair_encrypted_object_storage_bundle(
     no_decrypt: bool = False,
     token: str | None = None,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
+    provider: str | None = None,
+    bucket: str | None = None,
+    region: str | None = None,
+    account_id: str | None = None,
+    access_key_id: str | None = None,
+    secret_access_key: str | None = None,
+    session_token: str | None = None,
 ) -> dict[str, Any]:
     encrypted_sync_object_storage = importlib.import_module("encrypted_sync_object_storage")
 
@@ -434,15 +438,29 @@ def repair_encrypted_object_storage_bundle(
         no_decrypt=no_decrypt,
         token=token,
         timeout=timeout,
+        provider=provider,
+        bucket=bucket,
+        region=region,
+        account_id=account_id,
+        access_key_id=access_key_id,
+        secret_access_key=secret_access_key,
+        session_token=session_token,
     )
 
 
 def status_encrypted_object_storage_bundle(
-    object_store_url: str,
+    object_store_url: str | None,
     *,
     prefix: str = DEFAULT_PREFIX,
     token: str | None = None,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
+    provider: str | None = None,
+    bucket: str | None = None,
+    region: str | None = None,
+    account_id: str | None = None,
+    access_key_id: str | None = None,
+    secret_access_key: str | None = None,
+    session_token: str | None = None,
 ) -> dict[str, Any]:
     encrypted_sync_object_storage = importlib.import_module("encrypted_sync_object_storage")
 
@@ -451,11 +469,18 @@ def status_encrypted_object_storage_bundle(
         prefix=prefix,
         token=token,
         timeout=timeout,
+        provider=provider,
+        bucket=bucket,
+        region=region,
+        account_id=account_id,
+        access_key_id=access_key_id,
+        secret_access_key=secret_access_key,
+        session_token=session_token,
     )
 
 
 def pull_encrypted_object_storage_bundle(
-    object_store_url: str,
+    object_store_url: str | None,
     target_registry_dir: str | Path | None = None,
     *,
     prefix: str = DEFAULT_PREFIX,
@@ -463,6 +488,13 @@ def pull_encrypted_object_storage_bundle(
     age_bin: str | Path | None = None,
     token: str | None = None,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
+    provider: str | None = None,
+    bucket: str | None = None,
+    region: str | None = None,
+    account_id: str | None = None,
+    access_key_id: str | None = None,
+    secret_access_key: str | None = None,
+    session_token: str | None = None,
 ) -> dict[str, Any]:
     encrypted_sync_object_storage = importlib.import_module("encrypted_sync_object_storage")
 
@@ -474,6 +506,13 @@ def pull_encrypted_object_storage_bundle(
         age_bin=age_bin,
         token=token,
         timeout=timeout,
+        provider=provider,
+        bucket=bucket,
+        region=region,
+        account_id=account_id,
+        access_key_id=access_key_id,
+        secret_access_key=secret_access_key,
+        session_token=session_token,
     )
 
 
@@ -492,7 +531,18 @@ def main() -> int:
     parser.add_argument(
         "--object-prefix", default=os.environ.get("AIPPOCAMPUS_OBJECT_PREFIX", DEFAULT_PREFIX)
     )
+    parser.add_argument(
+        "--object-provider", default=os.environ.get("AIPPOCAMPUS_OBJECT_PROVIDER")
+    )
+    parser.add_argument("--object-bucket", default=os.environ.get("AIPPOCAMPUS_OBJECT_BUCKET"))
+    parser.add_argument("--object-region", default=os.environ.get("AIPPOCAMPUS_OBJECT_REGION"))
+    parser.add_argument(
+        "--object-account-id", default=os.environ.get("AIPPOCAMPUS_OBJECT_ACCOUNT_ID")
+    )
     parser.add_argument("--token-env", default="AIPPOCAMPUS_OBJECT_STORE_TOKEN")
+    parser.add_argument("--access-key-env", default="AIPPOCAMPUS_OBJECT_ACCESS_KEY_ID")
+    parser.add_argument("--secret-key-env", default="AIPPOCAMPUS_OBJECT_SECRET_ACCESS_KEY")
+    parser.add_argument("--session-token-env", default="AIPPOCAMPUS_OBJECT_SESSION_TOKEN")
     parser.add_argument("--registry-dir", default=None)
     parser.add_argument("--include-raw", action="store_true")
     parser.add_argument("--encrypt", action="store_true")
@@ -506,10 +556,22 @@ def main() -> int:
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
-    if not args.object_store_url:
-        parser.error("--object-store-url or AIPPOCAMPUS_OBJECT_STORE_URL is required")
+    if not args.object_store_url and not args.object_provider:
+        parser.error(
+            "--object-store-url/AIPPOCAMPUS_OBJECT_STORE_URL or "
+            "--object-provider/AIPPOCAMPUS_OBJECT_PROVIDER is required"
+        )
 
     token = token_from_env(args.token_env)
+    provider_kwargs = {
+        "provider": args.object_provider,
+        "bucket": args.object_bucket,
+        "region": args.object_region,
+        "account_id": args.object_account_id,
+        "access_key_id": token_from_env(args.access_key_env),
+        "secret_access_key": token_from_env(args.secret_key_env),
+        "session_token": token_from_env(args.session_token_env),
+    }
     if args.command == "status":
         if args.require_encrypted:
             result = status_encrypted_object_storage_bundle(
@@ -517,10 +579,15 @@ def main() -> int:
                 prefix=args.object_prefix,
                 token=token,
                 timeout=args.timeout,
+                **provider_kwargs,
             )
         else:
             result = status_object_storage_bundle(
-                args.object_store_url, prefix=args.object_prefix, token=token, timeout=args.timeout
+                args.object_store_url,
+                prefix=args.object_prefix,
+                token=token,
+                timeout=args.timeout,
+                **provider_kwargs,
             )
     elif args.command == "push":
         if args.encrypt:
@@ -534,6 +601,7 @@ def main() -> int:
                 age_bin=args.age_bin,
                 token=token,
                 timeout=args.timeout,
+                **provider_kwargs,
             )
         else:
             result = push_object_storage_bundle(
@@ -543,6 +611,7 @@ def main() -> int:
                 include_raw=args.include_raw,
                 token=token,
                 timeout=args.timeout,
+                **provider_kwargs,
             )
     elif args.command == "pull":
         if args.require_encrypted:
@@ -554,6 +623,7 @@ def main() -> int:
                 age_bin=args.age_bin,
                 token=token,
                 timeout=args.timeout,
+                **provider_kwargs,
             )
         else:
             result = pull_object_storage_bundle(
@@ -562,6 +632,7 @@ def main() -> int:
                 prefix=args.object_prefix,
                 token=token,
                 timeout=args.timeout,
+                **provider_kwargs,
             )
     else:
         if args.require_encrypted:
@@ -573,10 +644,15 @@ def main() -> int:
                 no_decrypt=args.no_decrypt,
                 token=token,
                 timeout=args.timeout,
+                **provider_kwargs,
             )
         else:
             result = repair_object_storage_bundle(
-                args.object_store_url, prefix=args.object_prefix, token=token, timeout=args.timeout
+                args.object_store_url,
+                prefix=args.object_prefix,
+                token=token,
+                timeout=args.timeout,
+                **provider_kwargs,
             )
 
     if args.json_output:

@@ -37,6 +37,8 @@ Other docs should link to that place and add only local context.
   recall decisions, source fidelity, and payload privacy.
 - `encrypted-sync-v1.md` - design contract for end-to-end encrypted
   multi-device sync over local folders and object storage.
+- `object-storage-providers.md` - S3/R2/GCS XML provider setup and
+  provider-specific object-storage pitfalls.
 - `next-iteration-plan.md` - short handoff for the next development slices.
 - `未干的地图.md` - canonical Chinese origin essay; do not mirror its full text
   elsewhere.

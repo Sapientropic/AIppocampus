@@ -155,6 +155,11 @@ python ./skills/aippocampus/scripts/sync_object_storage.py pull --object-store-u
 python ./skills/aippocampus/scripts/sync_object_storage.py repair --object-store-url <url> --object-prefix <prefix> --json
 ```
 
+S3-compatible providers can be configured with `AIPPOCAMPUS_OBJECT_PROVIDER`
+(`s3`, `r2`, or `gcs-xml`) plus bucket, region/account id, and HMAC credentials.
+See [object-storage-providers.md](docs/object-storage-providers.md) for the
+provider-specific setup notes.
+
 Encrypted sync uses the external `age` CLI and writes `encrypted-sync/`
 ciphertext objects. Use a new folder or object prefix for the first encrypted
 push:

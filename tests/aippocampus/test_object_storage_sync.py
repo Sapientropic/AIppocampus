@@ -1,6 +1,7 @@
-from __future__ import annotations
-
+import hashlib
 import json
+import os
+import subprocess
 import sys
 import tempfile
 import threading
@@ -48,7 +49,9 @@ class RecordingObjectHandler(BaseHTTPRequestHandler):
         body = self.rfile.read(int(self.headers.get("Content-Length") or "0"))
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(body)
-        self.server.requests.append({"method": "PUT", "key": key, "size": len(body)})
+        self.server.requests.append(
+            {"method": "PUT", "key": key, "size": len(body), "headers": dict(self.headers)}
+        )
         self.send_response(200)
         self.end_headers()
 
@@ -61,7 +64,9 @@ class RecordingObjectHandler(BaseHTTPRequestHandler):
             self.send_error(404)
             return
         body = path.read_bytes()
-        self.server.requests.append({"method": "GET", "key": key, "size": len(body)})
+        self.server.requests.append(
+            {"method": "GET", "key": key, "size": len(body), "headers": dict(self.headers)}
+        )
         self.send_response(200)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -198,6 +203,222 @@ output.write_bytes(b"FAKEAGE\\n" + base64.b64encode(data))
             token="test-token",
         )
         self.assertEqual(local_client.headers()["Authorization"], "Bearer test-token")
+
+    def test_s3_compatible_provider_uses_sigv4_headers(self) -> None:
+        client = sync_object_storage.client_for_provider(
+            provider="s3",
+            bucket="memory-bucket",
+            endpoint_url=self.endpoint,
+            prefix=self.prefix,
+            region="us-west-2",
+            access_key_id="TESTACCESS",
+            secret_access_key="test-secret",
+        )
+
+        client.put_object("probe.txt", b"probe")
+        client.get_object("probe.txt")
+
+        put_request = next(request for request in self.server.requests if request["method"] == "PUT")
+        get_request = next(request for request in self.server.requests if request["method"] == "GET")
+        self.assertEqual(put_request["key"], f"memory-bucket/{self.prefix}/probe.txt")
+        put_headers = {key.casefold(): value for key, value in put_request["headers"].items()}
+        get_headers = {key.casefold(): value for key, value in get_request["headers"].items()}
+        self.assertEqual(
+            put_headers["x-amz-content-sha256"],
+            hashlib.sha256(b"probe").hexdigest(),
+        )
+        self.assertEqual(
+            get_headers["x-amz-content-sha256"],
+            hashlib.sha256(b"").hexdigest(),
+        )
+        self.assertIn("AWS4-HMAC-SHA256 Credential=TESTACCESS/", put_headers["authorization"])
+        self.assertIn("/us-west-2/s3/aws4_request", put_headers["authorization"])
+        self.assertIn(
+            "SignedHeaders=host;x-amz-content-sha256;x-amz-date",
+            put_headers["authorization"],
+        )
+        self.assertNotIn("bearer", put_headers["authorization"].casefold())
+
+    def test_provider_factory_builds_r2_and_gcs_xml_endpoints(self) -> None:
+        r2 = sync_object_storage.client_for_provider(
+            provider="r2",
+            account_id="account123",
+            bucket="memory-bucket",
+            prefix=self.prefix,
+            access_key_id="R2ACCESS",
+            secret_access_key="r2-secret",
+        )
+        self.assertEqual(
+            r2.endpoint_url,
+            "https://account123.r2.cloudflarestorage.com/memory-bucket",
+        )
+        self.assertIn("/memory-bucket/stage3/test-object-sync/probe.txt", r2.url_for("probe.txt"))
+        self.assertIn("/auto/s3/aws4_request", r2.headers()["Authorization"])
+
+        gcs = sync_object_storage.client_for_provider(
+            provider="gcs-xml",
+            bucket="memory-bucket",
+            prefix=self.prefix,
+            access_key_id="GOOGACCESS",
+            secret_access_key="gcs-secret",
+        )
+        self.assertEqual(gcs.endpoint_url, "https://storage.googleapis.com/memory-bucket")
+        self.assertIn("/memory-bucket/stage3/test-object-sync/probe.txt", gcs.url_for("probe.txt"))
+        self.assertIn("GOOG4-HMAC-SHA256 Credential=GOOGACCESS/", gcs.headers()["Authorization"])
+        self.assertIn("/auto/storage/goog4_request", gcs.headers()["Authorization"])
+
+    def test_provider_signing_keys_require_https_unless_endpoint_is_loopback(self) -> None:
+        with self.assertRaisesRegex(ValueError, "secret access key"):
+            sync_object_storage.client_for_provider(
+                provider="s3",
+                bucket="memory-bucket",
+                endpoint_url=self.endpoint,
+                prefix=self.prefix,
+                region="us-east-1",
+                access_key_id="TESTACCESS",
+            )
+
+        with self.assertRaisesRegex(ValueError, "requires HTTPS"):
+            sync_object_storage.client_for_provider(
+                provider="s3",
+                bucket="memory-bucket",
+                endpoint_url="http://object-store.example.invalid",
+                prefix=self.prefix,
+                region="us-east-1",
+                access_key_id="TESTACCESS",
+                secret_access_key="test-secret",
+            )
+
+    def test_object_storage_push_pull_accepts_s3_compatible_provider(self) -> None:
+        device = self.create_registry()
+        target_registry = self.root / "signed-target" / "registry"
+        provider = {
+            "provider": "s3",
+            "bucket": "memory-bucket",
+            "region": "us-west-2",
+            "access_key_id": "TESTACCESS",
+            "secret_access_key": "test-secret",
+        }
+
+        push = sync_object_storage.push_object_storage_bundle(
+            device["registry"],
+            self.endpoint,
+            prefix=self.prefix,
+            **provider,
+        )
+        status = sync_object_storage.status_object_storage_bundle(
+            self.endpoint,
+            prefix=self.prefix,
+            **provider,
+        )
+        pull = sync_object_storage.pull_object_storage_bundle(
+            self.endpoint,
+            target_registry,
+            prefix=self.prefix,
+            **provider,
+        )
+
+        self.assertTrue(push["ok"], push)
+        self.assertTrue(status["ok"], status)
+        self.assertTrue(pull["ok"], pull)
+        self.assertTrue((target_registry / "threads.json").is_file())
+        signed = [
+            request
+            for request in self.server.requests
+            if "Authorization" in request["headers"]
+        ]
+        self.assertGreater(len(signed), 1)
+        self.assertTrue(
+            all(
+                request["headers"]["Authorization"].startswith("AWS4-HMAC-SHA256")
+                for request in signed
+            )
+        )
+
+    def test_encrypted_object_storage_accepts_s3_compatible_provider(self) -> None:
+        device = self.create_registry()
+        target_registry = self.root / "signed-encrypted-target" / "registry"
+        provider = {
+            "provider": "s3",
+            "bucket": "memory-bucket",
+            "region": "us-west-2",
+            "access_key_id": "TESTACCESS",
+            "secret_access_key": "test-secret",
+        }
+
+        push = sync_object_storage.push_encrypted_object_storage_bundle(
+            device["registry"],
+            self.endpoint,
+            prefix=self.prefix,
+            recipients=[self.recipient],
+            age_bin=self.fake_age,
+            **provider,
+        )
+        repair = sync_object_storage.repair_encrypted_object_storage_bundle(
+            self.endpoint,
+            prefix=self.prefix,
+            identity_files=[self.identity],
+            age_bin=self.fake_age,
+            **provider,
+        )
+        pull = sync_object_storage.pull_encrypted_object_storage_bundle(
+            self.endpoint,
+            target_registry,
+            prefix=self.prefix,
+            identity_files=[self.identity],
+            age_bin=self.fake_age,
+            **provider,
+        )
+
+        self.assertTrue(push["ok"], push)
+        self.assertTrue(repair["ok"], repair)
+        self.assertTrue(pull["ok"], pull)
+        self.assertTrue((target_registry / "threads.json").is_file())
+        object_keys = {request["key"] for request in self.server.requests}
+        self.assertIn(
+            f"memory-bucket/{self.prefix}/{encrypted_sync_bundle.ENCRYPTED_SYNC_DIR_NAME}/"
+            f"{encrypted_sync_bundle.ENCRYPTED_SYNC_MANIFEST_NAME}",
+            object_keys,
+        )
+        self.assertFalse(any(key.endswith("registry/threads.json") for key in object_keys))
+
+    def test_cli_reads_provider_env_for_signed_s3_push(self) -> None:
+        device = self.create_registry()
+        env = {
+            **os.environ,
+            "AIPPOCAMPUS_OBJECT_PROVIDER": "s3",
+            "AIPPOCAMPUS_OBJECT_STORE_URL": self.endpoint,
+            "AIPPOCAMPUS_OBJECT_BUCKET": "memory-bucket",
+            "AIPPOCAMPUS_OBJECT_REGION": "us-west-2",
+            "AIPPOCAMPUS_OBJECT_ACCESS_KEY_ID": "TESTACCESS",
+            "AIPPOCAMPUS_OBJECT_SECRET_ACCESS_KEY": "test-secret",
+        }
+
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPTS / "sync_object_storage.py"),
+                "push",
+                "--registry-dir",
+                str(device["registry"]),
+                "--json",
+            ],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=env,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertTrue(payload["ok"], payload)
+        signed = [
+            request
+            for request in self.server.requests
+            if request["headers"].get("Authorization", "").startswith("AWS4-HMAC-SHA256")
+        ]
+        self.assertGreater(len(signed), 1)
 
     def test_object_storage_repair_reports_tampered_object(self) -> None:
         device = self.create_registry()
