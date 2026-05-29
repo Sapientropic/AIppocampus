@@ -201,7 +201,7 @@ class AippocampusMcpServerTests(unittest.TestCase):
 
         payload = self.tool_payload(response)
         self.assertTrue(payload["manifest_exists"])
-        self.assertEqual(payload["file_count"], 2)
+        self.assertEqual(payload["file_count"], 3)
 
     def test_sync_status_can_report_http_object_store_backend(self) -> None:
         with mock.patch.object(

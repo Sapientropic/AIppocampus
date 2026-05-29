@@ -106,6 +106,7 @@ class SyncBundleTests(unittest.TestCase):
         manifest_path = self.sync_dir / sync_bundle.SYNC_MANIFEST_NAME
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         relative_paths = {item["path"] for item in manifest["files"]}
+        delta = manifest["clean_source_delta"]
 
         self.assertTrue(result["ok"])
         self.assertFalse(manifest["raw_rollout_included"])
@@ -113,11 +114,21 @@ class SyncBundleTests(unittest.TestCase):
         self.assertIn("registry/semantic_triggers.jsonl", relative_paths)
         self.assertIn("registry/working_memory.jsonl", relative_paths)
         self.assertIn("registry/cognitive_map.json", relative_paths)
-        self.assertIn("registry/threads/session-test/clean-source/messages.jsonl", relative_paths)
-        self.assertIn(
-            "registry/threads/session-test/clean-source/semantic-scope-labels.jsonl", relative_paths
-        )
+        self.assertNotIn("registry/threads/session-test/clean-source/messages.jsonl", relative_paths)
+        self.assertNotIn("registry/threads/session-test/clean-source/turns.jsonl", relative_paths)
         self.assertIn("registry/threads/session-test/index/manifest.json", relative_paths)
+        self.assertIn("clean-source-chunks/manifest.json", relative_paths)
+        self.assertEqual(delta["kind"], "content_addressed_clean_source_chunks")
+        self.assertEqual(delta["generated_cache_export"], "explicit_only")
+        self.assertEqual(delta["file_count"], 3)
+        self.assertEqual(delta["chunk_count"], 3)
+        logical_paths = {item["path"] for item in delta["files"]}
+        self.assertIn("registry/threads/session-test/clean-source/messages.jsonl", logical_paths)
+        for item in delta["files"]:
+            self.assertTrue(item["chunks"], item)
+            for chunk in item["chunks"]:
+                self.assertTrue(chunk["path"].startswith("clean-source-chunks/sha256/"))
+                self.assertIn(chunk["path"], relative_paths)
         self.assertNotIn("rollout.jsonl", "\n".join(relative_paths))
         portable_registry = json.loads(
             (self.sync_dir / "registry" / "threads.json").read_text(encoding="utf-8")
@@ -129,6 +140,53 @@ class SyncBundleTests(unittest.TestCase):
         )
         self.assertIsNone(portable_paths["workspace"])
         self.assertIsNone(portable_paths["rollout"])
+
+    def test_push_delta_reuses_unchanged_clean_source_chunks(self) -> None:
+        sync_bundle.push_sync_bundle(self.registry, self.sync_dir)
+        first = json.loads(
+            (self.sync_dir / sync_bundle.SYNC_MANIFEST_NAME).read_text(encoding="utf-8")
+        )
+        first_files = {item["path"]: item for item in first["clean_source_delta"]["files"]}
+        first_messages_chunks = [
+            chunk["path"]
+            for chunk in first_files[
+                "registry/threads/session-test/clean-source/messages.jsonl"
+            ]["chunks"]
+        ]
+        first_turns_chunks = [
+            chunk["path"]
+            for chunk in first_files["registry/threads/session-test/clean-source/turns.jsonl"][
+                "chunks"
+            ]
+        ]
+
+        (self.clean_source / "messages.jsonl").write_text(
+            json.dumps({"message_id": "msg_1", "text": "source backed changed"}, ensure_ascii=False)
+            + "\n",
+            encoding="utf-8",
+        )
+        sync_bundle.push_sync_bundle(self.registry, self.sync_dir)
+        second = json.loads(
+            (self.sync_dir / sync_bundle.SYNC_MANIFEST_NAME).read_text(encoding="utf-8")
+        )
+        second_files = {item["path"]: item for item in second["clean_source_delta"]["files"]}
+        second_messages_chunks = [
+            chunk["path"]
+            for chunk in second_files[
+                "registry/threads/session-test/clean-source/messages.jsonl"
+            ]["chunks"]
+        ]
+        second_turns_chunks = [
+            chunk["path"]
+            for chunk in second_files["registry/threads/session-test/clean-source/turns.jsonl"][
+                "chunks"
+            ]
+        ]
+
+        self.assertNotEqual(first_messages_chunks, second_messages_chunks)
+        self.assertEqual(first_turns_chunks, second_turns_chunks)
+        for path in first_messages_chunks + first_turns_chunks:
+            self.assertTrue((self.sync_dir / path).is_file(), path)
 
     def test_pull_copies_missing_files_and_preserves_conflicts(self) -> None:
         sync_bundle.push_sync_bundle(self.registry, self.sync_dir)
@@ -335,8 +393,8 @@ class SyncBundleTests(unittest.TestCase):
         self.assertTrue(result["claims"]["cross_os_path_shape_model"])
         self.assertFalse(result["claims"]["physical_second_machine"])
         self.assertFalse(result["claims"]["real_cloud_backend"])
-        self.assertEqual(result["steps"]["push_device_a"]["file_count"], 10)
-        self.assertEqual(result["steps"]["push_raw_opt_in"]["file_count"], 11)
+        self.assertEqual(result["steps"]["push_device_a"]["file_count"], 11)
+        self.assertEqual(result["steps"]["push_raw_opt_in"]["file_count"], 12)
         self.assertIsNone(result["observed"]["portable_paths"]["workspace"])
         self.assertIsNone(result["observed"]["portable_paths"]["rollout"])
         self.assertIn(

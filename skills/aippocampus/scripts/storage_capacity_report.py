@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any, Iterable
 
 from aippocampuslib import aippocampus_registry_dir, now_utc
-from sync_bundle import iter_registry_sync_files
+from sync_bundle import iter_clean_source_sync_files, iter_registry_sync_files
 
 CANONICAL_CLEAN_FILES = ("manifest.json", "messages.jsonl", "turns.jsonl")
 SEMANTIC_SIDECAR_FILES = ("semantic-scope-labels.jsonl",)
@@ -155,6 +156,11 @@ def current_sync_policy_bytes(registry_dir: Path) -> tuple[int, int]:
         total += size
         if source.name == MAIN_SQLITE_NAME:
             main_sqlite += size
+    # The default bundle now moves clean source through content-addressed
+    # chunks. Capacity reporting estimates that source payload by stat size
+    # instead of hashing or reading private message bodies.
+    for source, _relative in iter_clean_source_sync_files(registry_dir):
+        total += safe_stat_size(source)
     return total, main_sqlite
 
 
@@ -202,11 +208,99 @@ def scan_thread(
     }
 
 
+def sqlite_handle_count(thread: dict[str, Any]) -> int:
+    return int(thread["main_sqlite_count"]) + int(thread["segment_sqlite_count"])
+
+
+def query_terms(query: str | None) -> list[str]:
+    if not query:
+        return []
+    return [
+        item.casefold()
+        for item in re.split(r"[^0-9A-Za-z_\-\u3400-\u9fff]+", query)
+        if item.strip()
+    ]
+
+
+def planner_text(thread: dict[str, Any]) -> str:
+    fields = [
+        str(thread.get("thread_key") or ""),
+        str(thread.get("thread_dir") or ""),
+        str(thread.get("relative_path") or ""),
+    ]
+    return " ".join(fields).casefold()
+
+
+def build_query_plan(
+    scanned: list[dict[str, Any]],
+    *,
+    planner_query: str | None,
+    fanout_budget: int,
+) -> dict[str, Any]:
+    budget = max(1, int(fanout_budget))
+    worst_case = sum(sqlite_handle_count(thread) for thread in scanned)
+    terms = query_terms(planner_query)
+    fallback_used = False
+    fallback_reason = None
+    if terms:
+        candidates = [
+            thread
+            for thread in scanned
+            if all(term in planner_text(thread) for term in terms)
+        ]
+        if not candidates:
+            candidates = list(scanned)
+            fallback_used = True
+            fallback_reason = "no_metadata_match"
+    else:
+        candidates = list(scanned)
+        fallback_used = True
+        fallback_reason = "no_query"
+
+    planned: list[dict[str, Any]] = []
+    planned_handles = 0
+    for thread in candidates:
+        handles = sqlite_handle_count(thread)
+        if handles <= 0:
+            continue
+        if planned and planned_handles + handles > budget:
+            continue
+        planned.append(
+            {
+                "thread_key": thread.get("thread_key"),
+                "thread_dir": thread.get("thread_dir"),
+                "sqlite_handles": handles,
+                "segment_count_declared": thread.get("segment_count_declared"),
+            }
+        )
+        planned_handles += handles
+        if planned_handles >= budget:
+            break
+
+    return {
+        "kind": "registry_metadata_query_plan",
+        "planner_query": planner_query,
+        "terms": terms,
+        "fanout_budget": budget,
+        "worst_case_sqlite_handles": worst_case,
+        "candidate_thread_count": len(candidates),
+        "planned_thread_count": len(planned),
+        "planned_sqlite_handles": planned_handles,
+        "fallback_used": fallback_used,
+        "fallback_reason": fallback_reason,
+        "budget_exhausted": planned_handles >= budget and planned_handles < worst_case,
+        "planned_threads": planned,
+        "boundary": "Planner uses registry metadata and segment manifests; results still join back to stable source ids.",
+    }
+
+
 def build_report(
     registry_dir: str | Path | None = None,
     *,
     top: int = 12,
     include_paths: bool = False,
+    planner_query: str | None = None,
+    fanout_budget: int = 64,
 ) -> dict[str, Any]:
     root = Path(registry_dir or aippocampus_registry_dir()).resolve()
     entries = registry_threads(root)
@@ -247,6 +341,11 @@ def build_report(
 
     sync_bytes, sync_main_sqlite_bytes = current_sync_policy_bytes(root)
     fanout_handles = int(totals["main_sqlite_count"]) + int(totals["segment_sqlite_count"])
+    query_plan = build_query_plan(
+        scanned,
+        planner_query=planner_query,
+        fanout_budget=fanout_budget,
+    )
     top_threads = sorted(
         scanned,
         key=lambda item: (
@@ -276,10 +375,13 @@ def build_report(
         },
         "query_fanout": {
             "worst_case_sqlite_handles": fanout_handles,
+            "planned_sqlite_handles": query_plan["planned_sqlite_handles"],
+            "fanout_budget": query_plan["fanout_budget"],
             "main_sqlite_count": totals["main_sqlite_count"],
             "segment_sqlite_count": totals["segment_sqlite_count"],
             "note": "Counts SQLite files a naive all-thread/all-segment lexical search may need to open.",
         },
+        "query_planner": query_plan,
         "top_threads": top_threads,
         "largest_files": largest_files(root, top=top, include_paths=include_paths),
         "unresolved_threads": unresolved,
@@ -316,6 +418,7 @@ def render_text(report: dict[str, Any]) -> str:
     totals = report["totals"]
     sync = report["sync"]
     fanout = report["query_fanout"]
+    planner = report["query_planner"]
     lines = [
         "AIppocampus storage capacity report",
         f"- Threads: {totals['scanned_thread_count']} scanned / {totals['thread_count']} registered",
@@ -325,6 +428,7 @@ def render_text(report: dict[str, Any]) -> str:
         f"- Registry directory: {totals['total_registry_human']}",
         f"- Current sync policy: {sync['current_policy_human']} ({sync['current_policy_to_clean_source_ratio']}x clean source)",
         f"- Worst-case SQLite fanout: {fanout['worst_case_sqlite_handles']} handles",
+        f"- Planned SQLite fanout: {planner['planned_sqlite_handles']} handles within budget {planner['fanout_budget']}",
         "",
         "Top threads:",
     ]
@@ -347,6 +451,8 @@ def main(argv: list[str] | None = None) -> int:
         help="Defaults to AIPPOCAMPUS_REGISTRY_DIR or CODEX_HOME/aippocampus-registry.",
     )
     parser.add_argument("--top", type=int, default=12)
+    parser.add_argument("--planner-query", default=None)
+    parser.add_argument("--fanout-budget", type=int, default=64)
     parser.add_argument(
         "--include-paths",
         action="store_true",
@@ -355,7 +461,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(argv)
 
-    report = build_report(args.registry_dir, top=args.top, include_paths=args.include_paths)
+    report = build_report(
+        args.registry_dir,
+        top=args.top,
+        include_paths=args.include_paths,
+        planner_query=args.planner_query,
+        fanout_budget=args.fanout_budget,
+    )
     if args.json_output:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
