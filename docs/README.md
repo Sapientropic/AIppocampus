@@ -37,6 +37,8 @@ Other docs should link to that place and add only local context.
   recall decisions, source fidelity, and payload privacy.
 - `encrypted-sync-v1.md` - design contract for end-to-end encrypted
   multi-device sync over local folders and object storage.
+- `encrypted-sync-follow-up-rfc.md` - follow-up issue/RFC for encrypted sync
+  device-key UX and plaintext-to-encrypted migration.
 - `object-storage-providers.md` - S3/R2/GCS XML provider setup and
   provider-specific object-storage pitfalls.
 - `next-iteration-plan.md` - short handoff for the next development slices.

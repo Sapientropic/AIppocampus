@@ -23,6 +23,7 @@ for _path in (
 
 import smoke_cross_device_sync  # noqa: E402
 import smoke_object_storage_sync  # noqa: E402
+import smoke_real_provider_encrypted_sync  # noqa: E402
 
 import encrypted_sync_bundle  # noqa: E402
 import sync_bundle  # noqa: E402
@@ -71,6 +72,21 @@ class RecordingObjectHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def do_DELETE(self) -> None:  # noqa: N802
+        resolved = self.object_path()
+        if resolved is None:
+            return
+        key, path = resolved
+        if not path.is_file():
+            self.send_error(404)
+            return
+        path.unlink()
+        self.server.requests.append(
+            {"method": "DELETE", "key": key, "size": 0, "headers": dict(self.headers)}
+        )
+        self.send_response(204)
+        self.end_headers()
 
     def log_message(self, format: str, *args: object) -> None:
         return
@@ -542,6 +558,59 @@ output.write_bytes(b"FAKEAGE\\n" + base64.b64encode(data))
 
         self.assertFalse(encrypted_push["ok"])
         self.assertEqual(encrypted_push["issues"][0]["code"], "mixed_object_prefix")
+
+    def test_real_provider_smoke_cleanup_paths_include_all_encrypted_objects(self) -> None:
+        inner_manifest = {
+            "outer_manifest": {
+                "encryption": {
+                    "manifest_object": "encrypted-sync/objects/inner-manifest.age",
+                }
+            },
+            "objects": [
+                {"object_path": "encrypted-sync/objects/a.age"},
+                {"object_path": "encrypted-sync/objects/b.age"},
+            ],
+        }
+
+        paths = smoke_real_provider_encrypted_sync.encrypted_cleanup_relative_paths(
+            inner_manifest
+        )
+
+        self.assertEqual(
+            [path.as_posix() for path in paths],
+            [
+                "encrypted-sync/aippocampus-encrypted-sync-manifest.json",
+                "encrypted-sync/objects/a.age",
+                "encrypted-sync/objects/b.age",
+                "encrypted-sync/objects/inner-manifest.age",
+            ],
+        )
+
+    def test_real_provider_smoke_deletes_all_encrypted_objects(self) -> None:
+        result = smoke_real_provider_encrypted_sync.run_real_provider_encrypted_sync_smoke(
+            object_store_url=self.endpoint,
+            prefix=self.prefix,
+            recipient=self.recipient,
+            identity_files=[self.identity],
+            age_bin=self.fake_age,
+            run_id="unit-test",
+        )
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["cleanup"]["errors"], [])
+        self.assertEqual(result["cleanup"]["missing_after_delete"], [])
+        self.assertEqual(
+            result["cleanup"]["attempted"],
+            result["steps"]["push"]["object_count"],
+        )
+        self.assertNotIn("inner_manifest", result["steps"]["repair"])
+        self.assertNotIn("sync_dir", result["steps"]["repair"])
+        self.assertNotIn("sync_dir", result["steps"]["pull"])
+        self.assertNotIn("target_registry_dir", result["steps"]["pull"])
+        self.assertNotIn("object_store", result["steps"]["push"])
+        self.assertGreater(result["cleanup"]["attempted"], 1)
+        self.assertEqual(list((self.bucket / self.prefix).rglob("*.age")), [])
+        self.assertIn("DELETE", {request["method"] for request in self.server.requests})
 
     def test_object_storage_repair_reports_invalid_manifest(self) -> None:
         manifest_path = self.bucket / self.prefix / sync_bundle.SYNC_MANIFEST_NAME

@@ -45,6 +45,22 @@ you need to test a local or proxy endpoint.
 For GCS, set `AIPPOCAMPUS_OBJECT_PROVIDER=gcs-xml` and use Cloud Storage
 interoperability HMAC keys. This does not use the JSON API OAuth flow.
 
+## Real-Provider Smoke
+
+After exporting provider credentials, run the real-provider encrypted smoke:
+
+```sh
+python tools/aippocampus/smoke/smoke_real_provider_encrypted_sync.py --json
+```
+
+The smoke generates an ephemeral `age` identity, pushes an encrypted bundle,
+runs status/repair/pull, then deletes every encrypted object discovered from
+the decrypted inner manifest. Cleanup fails if the discovered object count does
+not match the encrypted push `object_count`; this catches cases where only the
+outer manifest is deleted while ciphertext objects remain.
+
+Use `--keep-objects` only for debugging a temporary test prefix.
+
 ## Provider-Specific Pitfalls
 
 - Signing credentials require HTTPS unless the endpoint is loopback. This keeps
@@ -64,4 +80,3 @@ interoperability HMAC keys. This does not use the JSON API OAuth flow.
   that a cloud bucket has no unrelated old plaintext copies elsewhere.
 - Clock skew can break signed requests. Keep devices close to real UTC before
   debugging object-storage auth failures.
-
