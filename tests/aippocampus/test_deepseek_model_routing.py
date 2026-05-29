@@ -25,9 +25,21 @@ class DeepSeekModelRoutingTests(unittest.TestCase):
             name: os.environ.get(name)
             for name in [
                 "DEEPSEEK_MODEL",
+                "DEEPSEEK_BASE_URL",
                 "AIPPOCAMPUS_DEEPSEEK_FLASH_MODEL",
+                "AIPPOCAMPUS_DEEPSEEK_BASE_URL",
                 "AIPPOCAMPUS_DEEPSEEK_PRO_MODEL",
                 "DEEPSEEK_PRO_MODEL",
+                "AIPPOCAMPUS_OPENAI_COMPAT_ROUTE",
+                "AIPPOCAMPUS_OPENAI_COMPAT_PROVIDER",
+                "AIPPOCAMPUS_OPENAI_COMPAT_MODEL",
+                "AIPPOCAMPUS_OPENAI_COMPAT_BASE_URL",
+                "AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV",
+                "AIPPOCAMPUS_OPENAI_COMPAT_CONCURRENCY",
+                "AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_JSON",
+                "AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_USER_ID",
+                "AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_THINKING",
+                "AIPPOCAMPUS_OPENAI_COMPAT_CACHE_METRICS_KIND",
             ]
         }
         for name in self.old_values:
@@ -41,7 +53,15 @@ class DeepSeekModelRoutingTests(unittest.TestCase):
                 os.environ[name] = value
 
     def test_flash_is_default_and_pro_routes_are_explicit(self) -> None:
-        self.assertEqual(routing.resolve_model_route(None).model, "deepseek-v4-flash")
+        default = routing.resolve_model_route(None)
+        self.assertEqual(default.model, "deepseek-v4-flash")
+        self.assertEqual(default.provider, "deepseek")
+        self.assertEqual(default.base_url, "https://api.deepseek.com")
+        self.assertEqual(default.api_key_env, "DEEPSEEK_API_KEY")
+        self.assertTrue(default.capabilities.supports_user_id)
+        self.assertTrue(default.capabilities.supports_thinking)
+        self.assertEqual(default.capabilities.cache_metrics_kind, "deepseek_prefix")
+        self.assertEqual(default.capabilities.safe_default_concurrency, 4)
         self.assertEqual(routing.resolve_model_route("default").model, "deepseek-v4-flash")
         self.assertEqual(routing.resolve_model_route("fast").model, "deepseek-v4-flash")
 
@@ -54,6 +74,7 @@ class DeepSeekModelRoutingTests(unittest.TestCase):
             resolved = routing.resolve_model_route(route)
             self.assertEqual(resolved.model, "deepseek-v4-pro")
             self.assertEqual(resolved.tier, "pro")
+            self.assertEqual(resolved.capabilities.safe_default_concurrency, 1)
 
     def test_environment_overrides_keep_legacy_default_model_compatible(self) -> None:
         os.environ["DEEPSEEK_MODEL"] = "legacy-flash"
@@ -66,6 +87,82 @@ class DeepSeekModelRoutingTests(unittest.TestCase):
         self.assertEqual(
             routing.resolve_model_route("default", explicit_model="manual").model, "manual"
         )
+
+    def test_aippocampus_deepseek_env_wins_over_legacy_env(self) -> None:
+        os.environ["DEEPSEEK_MODEL"] = "legacy-flash"
+        os.environ["AIPPOCAMPUS_DEEPSEEK_FLASH_MODEL"] = "primary-flash"
+        os.environ["DEEPSEEK_PRO_MODEL"] = "legacy-pro"
+        os.environ["AIPPOCAMPUS_DEEPSEEK_PRO_MODEL"] = "primary-pro"
+        os.environ["DEEPSEEK_BASE_URL"] = "https://legacy.example/v1"
+        os.environ["AIPPOCAMPUS_DEEPSEEK_BASE_URL"] = "https://primary.example/v1"
+
+        flash = routing.resolve_model_route("default")
+        pro = routing.resolve_model_route("pro")
+
+        self.assertEqual(flash.model, "primary-flash")
+        self.assertEqual(pro.model, "primary-pro")
+        self.assertEqual(flash.base_url, "https://primary.example/v1")
+        self.assertEqual(pro.base_url, "https://primary.example/v1")
+
+    def test_configured_openai_compatible_provider_exposes_neutral_capabilities(self) -> None:
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_PROVIDER"] = "local-test-provider"
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_MODEL"] = "local-model"
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_BASE_URL"] = "http://127.0.0.1:9999/v1"
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV"] = "LOCAL_TEST_API_KEY"
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_ROUTE"] = "local_semantic"
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_CONCURRENCY"] = "2"
+
+        resolved = routing.resolve_model_route("local_semantic")
+        payload = resolved.as_dict()
+
+        self.assertEqual(resolved.provider, "local-test-provider")
+        self.assertEqual(resolved.model, "local-model")
+        self.assertEqual(resolved.base_url, "http://127.0.0.1:9999/v1")
+        self.assertEqual(resolved.api_key_env, "LOCAL_TEST_API_KEY")
+        self.assertEqual(resolved.tier, "openai_compatible")
+        self.assertEqual(resolved.capabilities.api_compatibility, "openai_chat_completions")
+        self.assertTrue(resolved.capabilities.supports_json_response)
+        self.assertFalse(resolved.capabilities.supports_user_id)
+        self.assertFalse(resolved.capabilities.supports_thinking)
+        self.assertEqual(resolved.capabilities.cache_metrics_kind, "none")
+        self.assertEqual(resolved.capabilities.safe_default_concurrency, 2)
+        self.assertEqual(payload["capabilities"]["supports_user_id"], False)
+        self.assertNotIn("LOCAL_TEST_SECRET_VALUE", str(payload))
+
+    def test_openai_compatible_provider_can_disable_json_and_enable_known_extensions(self) -> None:
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_PROVIDER"] = "compatible-provider"
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_MODEL"] = "compatible-model"
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_BASE_URL"] = "https://compatible.example/v1"
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV"] = "COMPATIBLE_API_KEY"
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_JSON"] = "false"
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_USER_ID"] = "true"
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_THINKING"] = "true"
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_CACHE_METRICS_KIND"] = "provider_specific"
+
+        resolved = routing.resolve_model_route("openai_compatible")
+
+        self.assertFalse(resolved.capabilities.supports_json_response)
+        self.assertTrue(resolved.capabilities.supports_user_id)
+        self.assertTrue(resolved.capabilities.supports_thinking)
+        self.assertEqual(resolved.capabilities.cache_metrics_kind, "provider_specific")
+
+    def test_openai_compatible_provider_reports_missing_required_config(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError, "AIPPOCAMPUS_OPENAI_COMPAT_PROVIDER.*AIPPOCAMPUS_OPENAI_COMPAT_MODEL"
+        ):
+            routing.resolve_model_route("openai_compatible")
+
+    def test_invalid_and_unknown_routes_are_provider_neutral(self) -> None:
+        with self.assertRaisesRegex(ValueError, "unknown external model route"):
+            routing.resolve_model_route("surprise")
+
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_PROVIDER"] = "compatible-provider"
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_MODEL"] = "compatible-model"
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_BASE_URL"] = "https://compatible.example/v1"
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV"] = "COMPATIBLE_API_KEY"
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_CONCURRENCY"] = "many"
+        with self.assertRaisesRegex(ValueError, "CONCURRENCY must be a positive integer"):
+            routing.resolve_model_route("openai_compatible")
 
 
 if __name__ == "__main__":

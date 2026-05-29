@@ -72,6 +72,7 @@ files = [
     "skills/aippocampus/scripts/prompt_recall_core.py",
     "skills/aippocampus/scripts/prompt_recall_decision.py",
     "skills/aippocampus/scripts/prompt_recall_evidence.py",
+    "skills/aippocampus/scripts/question_vector_index.py",
     "skills/aippocampus/scripts/registry.py",
     "skills/aippocampus/scripts/registry_search.py",
     "skills/aippocampus/scripts/registry_store.py",

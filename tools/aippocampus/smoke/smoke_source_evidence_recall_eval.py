@@ -645,7 +645,9 @@ def eval_status(case_count: int, passed_count: int, *, min_cases: int, min_hit_r
     return "sufficient"
 
 
-def cannot_claim(status: str) -> list[str]:
+def cannot_claim(
+    status: str, *, sample_gate_ok: bool | None = None, quality_gate_ok: bool | None = None
+) -> list[str]:
     claims = [
         "global_recall_quality",
         "semantic_completeness",
@@ -653,6 +655,10 @@ def cannot_claim(status: str) -> list[str]:
     ]
     if status != "sufficient":
         claims.append("selected_semantic_source_evidence")
+    if sample_gate_ok is False:
+        claims.append("semantic_sidecar_sample_coverage")
+    if quality_gate_ok is False:
+        claims.append("selected_semantic_source_evidence_quality")
     return claims
 
 
@@ -717,13 +723,17 @@ def run_source_evidence_recall_eval(
         int(result.get("warning_count") or 0) for _, result in results
     )
     hit_rate = round((passed_count / len(cases)) if cases else 0.0, 4)
+    sample_gate_ok = len(cases) >= min_cases
+    quality_gate_ok = bool(cases) and hit_rate >= min_hit_rate
     return {
         "ok": status == "sufficient",
         "status": status,
         "claim_level": "selected_source_evidence_recall_eval"
         if status == "sufficient"
         else "diagnostic_only",
-        "cannot_claim": cannot_claim(status),
+        "cannot_claim": cannot_claim(
+            status, sample_gate_ok=sample_gate_ok, quality_gate_ok=quality_gate_ok
+        ),
         "prompt_kind": PROMPT_KIND,
         "case_count": len(cases),
         "passed_count": passed_count,
@@ -732,6 +742,21 @@ def run_source_evidence_recall_eval(
         "top_k_hit_rate": hit_rate,
         "min_cases": int(min_cases),
         "min_hit_rate": float(min_hit_rate),
+        "sample_gate_ok": sample_gate_ok,
+        "quality_gate_ok": quality_gate_ok,
+        "gate_diagnostics": {
+            "sample_gate_ok": sample_gate_ok,
+            "quality_gate_ok": quality_gate_ok,
+            "sample_status": "sufficient"
+            if sample_gate_ok
+            else "insufficient_selected_cases",
+            "quality_status": "sufficient" if quality_gate_ok else "insufficient_recall_hits",
+            "sample_gap": max(0, int(min_cases) - len(cases)),
+            "selected_cases": len(cases),
+            "min_cases": int(min_cases),
+            "top_k_hit_rate": hit_rate,
+            "min_hit_rate": float(min_hit_rate),
+        },
         "label_coverage": labels,
         "warning_count": warning_count,
         "ranking": ranking,

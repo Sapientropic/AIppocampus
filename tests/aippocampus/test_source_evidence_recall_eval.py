@@ -189,6 +189,34 @@ class SourceEvidenceRecallEvalTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertEqual(result["status"], "insufficient_selected_cases")
         self.assertIn("selected_semantic_source_evidence", result["cannot_claim"])
+        self.assertFalse(result["sample_gate_ok"])
+        self.assertFalse(result["quality_gate_ok"])
+        self.assertIn("semantic_sidecar_sample_coverage", result["cannot_claim"])
+
+    def test_eval_separates_selected_case_quality_from_sample_size(self) -> None:
+        self._write_fixture(with_sidecar=True)
+
+        result = recall_eval.run_source_evidence_recall_eval(
+            registry_path=self.registry,
+            max_cases=1,
+            min_cases=2,
+            top_k=3,
+            min_hit_rate=1.0,
+            require_semantic_sidecar=True,
+        )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["status"], "insufficient_selected_cases")
+        self.assertEqual(result["case_count"], 1)
+        self.assertEqual(result["passed_count"], 1)
+        self.assertEqual(result["top_k_hit_rate"], 1.0)
+        self.assertFalse(result["sample_gate_ok"])
+        self.assertTrue(result["quality_gate_ok"])
+        self.assertEqual(result["gate_diagnostics"]["sample_gap"], 1)
+        self.assertEqual(result["gate_diagnostics"]["sample_status"], "insufficient_selected_cases")
+        self.assertEqual(result["gate_diagnostics"]["quality_status"], "sufficient")
+        self.assertIn("semantic_sidecar_sample_coverage", result["cannot_claim"])
+        self.assertNotIn("selected_semantic_source_evidence_quality", result["cannot_claim"])
 
     def test_dynamic_source_uses_turn_scope_when_terms_live_on_sibling_message(
         self,
