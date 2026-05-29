@@ -6,6 +6,26 @@ surface.
 
 ## Skill-Only Install
 
+### macOS shell setup
+
+macOS can ship with an older `/usr/bin/python3` and no unversioned `python`
+command. Install Python 3.10 or newer before running repository checks; the
+commands below use Homebrew Python 3.12:
+
+```sh
+brew install python@3.12
+export PATH="/opt/homebrew/opt/python@3.12/libexec/bin:/opt/homebrew/bin:$PATH"
+export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+```
+
+Use a repo-local virtual environment for verification tools:
+
+```sh
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install --upgrade pip ruff mypy
+```
+
 Copy the installable skill package into Codex home:
 
 ```sh
@@ -33,6 +53,10 @@ python ./tools/aippocampus/smoke/run_stage_0_5_smoke.py --repo-root . --json
 This runs the documented local smoke gates, package-level plugin staging,
 local-folder/object-storage sync smokes, and a best-effort secret-like string
 scan, then cleans the run-id-scoped `dist/` and `.tmp` artifacts it created.
+It is broader than a fresh-clone install check: source-evidence readiness gates
+use the local AIppocampus registry under `$CODEX_HOME`, so a new Mac without
+enough registered clean source may get diagnostic-only coverage rather than an
+overall pass.
 
 ## First Onboarding
 

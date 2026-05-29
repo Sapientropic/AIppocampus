@@ -43,6 +43,16 @@ circuits, and pipeline-level routing instead of one all-purpose agent.
 
 ## Install As A Skill
 
+On macOS, the system Python is usually too old for this project and may not
+provide a `python` command. Use Python 3.10 or newer, for example Homebrew
+Python 3.12, and set `CODEX_HOME` when running shell commands:
+
+```sh
+brew install python@3.12
+export PATH="/opt/homebrew/opt/python@3.12/libexec/bin:/opt/homebrew/bin:$PATH"
+export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+```
+
 Copy or link the installable skill folder into your Codex skills directory:
 
 ```sh
@@ -59,6 +69,9 @@ The skill entrypoint is [skills/aippocampus/SKILL.md](skills/aippocampus/SKILL.m
 From this repository:
 
 ```sh
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install --upgrade pip ruff mypy
 python tools/aippocampus/docs/check_docs_health.py --json
 python -m ruff check skills plugins tests tools benchmarks benchmark_corpus
 python -m mypy
@@ -69,6 +82,11 @@ Use `python tools/aippocampus/run_tests.py --tier full` before making a
 repository-health or public-readiness claim. Use `--tier benchmark` or
 `--tier slow` when touching benchmark runners, smoke tools, plugin packaging,
 onboarding, object sync, or prompt-hook integration behavior.
+
+The Stage 0-5 public-readiness smoke is broader than a fresh-clone install
+check. Some gates inspect the local AIppocampus registry under `$CODEX_HOME`;
+on a new machine without enough registered clean source, those gates may report
+diagnostic-only coverage rather than a readiness pass.
 
 For normal use inside a Codex workspace, start with:
 
@@ -192,4 +210,3 @@ AIppocampus is dual-licensed:
 The intent is still generous personal, research, and self-hosted use, but memory
 infrastructure should not be quietly absorbed into closed commercial services
 without returning source code improvements to the community.
-

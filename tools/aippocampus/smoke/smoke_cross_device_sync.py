@@ -153,6 +153,12 @@ def require(condition: bool, code: str, failures: list[dict[str, str]], detail: 
         failures.append({"code": code, "detail": detail})
 
 
+def same_resolved_path(value: Any, expected: Path) -> bool:
+    if not isinstance(value, str) or not value:
+        return False
+    return Path(value).resolve() == expected.resolve()
+
+
 def locator_values(registry: dict[str, Any]) -> dict[str, Any]:
     threads = registry.get("threads") or []
     if not threads:
@@ -204,18 +210,20 @@ def validate_target_registry(
     paths = locator_values(registry)
     expected_root = target_registry / "threads" / THREAD_DIR
     require(
-        paths.get("registry_thread_store") == str(expected_root),
+        same_resolved_path(paths.get("registry_thread_store"), expected_root),
         "target_thread_store_not_repaired",
         failures,
     )
     require(
-        paths.get("clean_source_messages_jsonl")
-        == str(expected_root / "clean-source" / "messages.jsonl"),
+        same_resolved_path(
+            paths.get("clean_source_messages_jsonl"),
+            expected_root / "clean-source" / "messages.jsonl",
+        ),
         "target_messages_not_repaired",
         failures,
     )
     require(
-        paths.get("graph_json") == str(expected_root / "index" / "graph.json"),
+        same_resolved_path(paths.get("graph_json"), expected_root / "index" / "graph.json"),
         "target_graph_not_repaired",
         failures,
     )
@@ -361,7 +369,7 @@ def run_cross_device_sync_smoke(
         raw_paths = locator_values(raw_registry)
         expected_raw = raw_target / "raw-rollouts" / f"{THREAD_DIR}.jsonl"
         require(
-            raw_paths.get("rollout") == str(expected_raw),
+            same_resolved_path(raw_paths.get("rollout"), expected_raw),
             "raw_rollout_not_repaired_to_target",
             failures,
         )

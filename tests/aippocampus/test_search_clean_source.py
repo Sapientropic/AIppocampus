@@ -82,7 +82,10 @@ class SearchCleanSourceTests(unittest.TestCase):
     def test_searches_clean_source_without_raw_rollout(self) -> None:
         result = search.search_clean_source(self.cwd, ["原文记忆库"], limit=5)
 
-        self.assertEqual(result["source"], str(self.source / "messages.jsonl"))
+        self.assertEqual(
+            Path(result["source"]).resolve(),
+            (self.source / "messages.jsonl").resolve(),
+        )
         self.assertEqual(result["matches"][0]["source_line"], 13)
         self.assertEqual(result["matches"][0]["phase"], "final_answer")
         self.assertEqual(result["matches"][0]["scope_labels"], ["technical_work"])
