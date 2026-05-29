@@ -166,12 +166,6 @@ def locator_values(registry: dict[str, Any]) -> dict[str, Any]:
     return dict((threads[0].get("paths") or {}))
 
 
-def same_resolved_path(left: str | Path | None, right: str | Path) -> bool:
-    if left is None:
-        return False
-    return Path(str(left)).resolve() == Path(right).resolve()
-
-
 def validate_portable_registry(
     registry: dict[str, Any],
     *,
