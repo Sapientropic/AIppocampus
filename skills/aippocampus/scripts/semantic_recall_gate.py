@@ -34,6 +34,7 @@ from aippocampuslib import (
 )
 from registry import load_registry, registry_paths, unique_preserve
 from retrieval import split_query_terms
+from semantic_cue_cache import default_semantic_cues_path, semantic_cue_triggers
 from subconscious_runtime import add_usage, call_chat_json, compact_usage
 from subconscious_worker import DEFAULT_BASE_URL, DEFAULT_MODEL, clamp_confidence, parse_model_json
 
@@ -339,12 +340,14 @@ def trigger_from_association(term: str, row: dict[str, Any]) -> dict[str, Any]:
 def trigger_overlap_score(trigger: dict[str, Any], prompt_terms: list[str]) -> int:
     if not prompt_terms:
         return 0
+    # `when_not_to_use` is reviewer guidance, not an activation surface. Treating
+    # it as positive text made prompts such as "fixture 名字太误导" wake the Atlas
+    # trigger only because the trigger warned not to use it for fixture edits.
     blob = " ".join(
         [
             str(trigger.get("title") or ""),
             " ".join(str(x) for x in trigger.get("aliases") or []),
             str(trigger.get("when_to_use") or ""),
-            str(trigger.get("when_not_to_use") or ""),
             str(trigger.get("project_label") or ""),
         ]
     ).casefold()
@@ -354,8 +357,20 @@ def trigger_overlap_score(trigger: dict[str, Any], prompt_terms: list[str]) -> i
         if len(normalized) < 2:
             continue
         if normalized in blob:
-            score += 3 if len(normalized) >= 6 else 1
+            score += trigger_term_weight(normalized)
     return score
+
+
+def trigger_term_weight(term: str) -> int:
+    # Single short Latin entities such as "Atlas" are common project/product
+    # words and should not make a reviewed trigger prompt-relevant on their own.
+    # Longer Latin phrases and compact CJK recall terms are much stronger
+    # signals, so they can activate the trigger path without a live model call.
+    if re.fullmatch(r"[a-z0-9_.-]+", term) and len(term) < 6:
+        return 1
+    if re.search(r"[\u4e00-\u9fff]", term) and len(term) >= 4:
+        return 3
+    return 3 if len(term) >= 6 else 1
 
 
 def load_semantic_triggers(path: Path | None) -> list[dict[str, Any]]:
@@ -371,9 +386,13 @@ def load_semantic_triggers(path: Path | None) -> list[dict[str, Any]]:
             {
                 "source": "semantic_triggers",
                 "title": compact_text(str(row.get("title") or row.get("concept") or ""), 90),
+                # Reviewed trigger rows replace brittle domain word lists. Keep
+                # enough aliases for long multilingual/domain clusters; a short
+                # cap silently drops late aliases such as self-continuity and
+                # makes reviewed triggers look worse than the old hard-coding.
                 "aliases": collect_aliases(
                     [row.get("aliases") or [], row.get("trigger_terms") or [], row.get("concept")],
-                    limit=16,
+                    limit=40,
                 ),
                 "when_to_use": compact_text(
                     str(row.get("when_to_use") or row.get("summary") or ""), 220
@@ -390,8 +409,10 @@ def all_trigger_rows(
     associations: dict[str, Any] | None = None,
     working_memory: list[dict[str, Any]] | None = None,
     semantic_triggers_path: Path | None = None,
+    semantic_cues_path: Path | None = None,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
+    rows.extend(semantic_cue_triggers(semantic_cues_path))
     rows.extend(load_semantic_triggers(semantic_triggers_path))
     for row in working_memory or []:
         if row.get("status") == "active":
@@ -416,12 +437,14 @@ def trigger_catalog(
     associations: dict[str, Any] | None = None,
     working_memory: list[dict[str, Any]] | None = None,
     semantic_triggers_path: Path | None = None,
+    semantic_cues_path: Path | None = None,
     limit: int = DEFAULT_MAX_TRIGGER_ITEMS,
 ) -> list[dict[str, Any]]:
     rows = all_trigger_rows(
         associations=associations,
         working_memory=working_memory,
         semantic_triggers_path=semantic_triggers_path,
+        semantic_cues_path=semantic_cues_path,
     )
     return rows if limit <= 0 else rows[:limit]
 
@@ -432,6 +455,7 @@ def prompt_relevant_triggers(
     associations: dict[str, Any] | None = None,
     working_memory: list[dict[str, Any]] | None = None,
     semantic_triggers_path: Path | None = None,
+    semantic_cues_path: Path | None = None,
     limit: int = DEFAULT_MAX_PROMPT_RELEVANT_TRIGGER_ITEMS,
 ) -> list[dict[str, Any]]:
     prompt_terms = split_query_terms([prompt])[:40] if prompt else []
@@ -440,9 +464,10 @@ def prompt_relevant_triggers(
         associations=associations,
         working_memory=working_memory,
         semantic_triggers_path=semantic_triggers_path,
+        semantic_cues_path=semantic_cues_path,
     ):
         overlap = trigger_overlap_score(row, prompt_terms)
-        if overlap <= 0:
+        if overlap < 3:
             continue
         scored.append(
             (
@@ -462,6 +487,7 @@ def catalog_payload(
     associations: dict[str, Any] | None = None,
     working_memory: list[dict[str, Any]] | None = None,
     semantic_triggers_path: Path | None = None,
+    semantic_cues_path: Path | None = None,
 ) -> dict[str, Any]:
     # DeepSeek KV cache matches complete prompt-prefix units. Keep stable,
     # potentially large catalogs before the per-prompt text so unrelated prompts
@@ -474,6 +500,7 @@ def catalog_payload(
             associations=associations,
             working_memory=working_memory,
             semantic_triggers_path=semantic_triggers_path,
+            semantic_cues_path=semantic_cues_path,
         ),
         "prompt": compact_text(prompt, 1200),
         "prompt_relevant_catalog": prompt_relevant_catalog(
@@ -486,6 +513,7 @@ def catalog_payload(
             associations=associations,
             working_memory=working_memory,
             semantic_triggers_path=semantic_triggers_path,
+            semantic_cues_path=semantic_cues_path,
         ),
     }
 
@@ -636,6 +664,7 @@ def cache_fingerprint(
     cwd: Path,
     registry_path: Path | None = None,
     semantic_triggers_path: Path | None = None,
+    semantic_cues_path: Path | None = None,
     mode: str = "auto",
 ) -> str:
     parts = [
@@ -644,7 +673,7 @@ def cache_fingerprint(
         re.sub(r"\s+", " ", prompt).strip(),
         str(cwd.resolve()).casefold(),
     ]
-    for path in [registry_path, semantic_triggers_path]:
+    for path in [registry_path, semantic_triggers_path, semantic_cues_path]:
         if path and path.exists():
             try:
                 stat = path.stat()
@@ -733,6 +762,7 @@ def run_semantic_gate(
     associations: dict[str, Any] | None = None,
     working_memory: list[dict[str, Any]] | None = None,
     semantic_triggers_path: Path | str | None = None,
+    semantic_cues_path: Path | str | None = None,
     cache_path: Path | str | None = None,
     mode: str | None = None,
     api_key: str | None = None,
@@ -759,6 +789,11 @@ def run_semantic_gate(
             else None
         )
     )
+    cues_path = (
+        Path(semantic_cues_path).resolve()
+        if semantic_cues_path
+        else (default_semantic_cues_path(registry_path=registry_path_obj) if registry_path_obj else None)
+    )
     key_value = api_key or os.environ.get(api_key_env)
     if not semantic_gate_enabled(mode, api_key=key_value, api_key_env=api_key_env):
         return unavailable_result("semantic gate disabled or missing api key")
@@ -781,6 +816,7 @@ def run_semantic_gate(
         cwd=cwd_path,
         registry_path=registry_path_obj,
         semantic_triggers_path=triggers_path,
+        semantic_cues_path=cues_path,
         mode=mode or "auto",
     )
     if use_cache and cache:
@@ -798,6 +834,7 @@ def run_semantic_gate(
         associations=associations,
         working_memory=working_memory,
         semantic_triggers_path=triggers_path,
+        semantic_cues_path=cues_path,
     )
     parsed_workers: list[dict[str, Any]] = []
     errors: list[str] = []
@@ -872,6 +909,7 @@ def main() -> int:
     parser.add_argument("--associations")
     parser.add_argument("--working-memory")
     parser.add_argument("--semantic-triggers")
+    parser.add_argument("--semantic-cues")
     parser.add_argument("--cache")
     parser.add_argument("--mode", choices=["auto", "on", "off"], default=None)
     parser.add_argument("--no-cache", action="store_true")
@@ -892,6 +930,7 @@ def main() -> int:
         semantic_triggers_path=Path(args.semantic_triggers).resolve()
         if args.semantic_triggers
         else None,
+        semantic_cues_path=Path(args.semantic_cues).resolve() if args.semantic_cues else None,
         cache_path=Path(args.cache).resolve() if args.cache else None,
         mode=args.mode,
         timeout=args.timeout,

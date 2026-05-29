@@ -534,6 +534,84 @@ class SemanticScopeRealHistorySmokeTests(unittest.TestCase):
         self.assertNotIn("private life-wide candidate", rendered)
         self.assertNotIn("Private Life Title", rendered)
 
+    def test_semantic_candidate_batch_repairs_missing_label_evidence_before_write(self) -> None:
+        self._write_multi_turn_fixture(count=1)
+        os.environ["FAKE_DEEPSEEK_KEY"] = "present"
+        observed_messages: list[list[dict[str, str]]] = []
+
+        def fake_chat_fn(messages, api_key, model, base_url, max_tokens, timeout, temperature):  # noqa: ANN001
+            del api_key, model, base_url, max_tokens, timeout, temperature
+            observed_messages.append([dict(message) for message in messages])
+            payload = json.loads(messages[1]["content"])
+            message_id = payload["initial_turns"][0]["source_refs"][0]["message_id"]
+            finding = {
+                "kind": "semantic_scope_labels",
+                "title": "semantic candidate label",
+                "summary": "semantic label from full candidate coverage",
+                "confidence": 0.91,
+                "message_id": message_id,
+                "scope_labels": ["idea_seed"],
+                "source_refs": [{"ref": "t0"}],
+            }
+            if len(observed_messages) > 1:
+                finding["label_evidence"] = [
+                    {
+                        "label": "idea_seed",
+                        "reason": "The source records an early idea candidate.",
+                        "confidence": 0.91,
+                    }
+                ]
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {"action": "final", "findings": [finding]},
+                                ensure_ascii=False,
+                            )
+                        }
+                    }
+                ],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+            }
+
+        result = smoke.run_semantic_scope_real_history_smoke(
+            registry_path=self.registry,
+            timeline_path=self.timeline,
+            jobs_output_path=self.jobs,
+            edges_output_path=self.edges,
+            live=True,
+            write_sidecars=True,
+            require_labels=True,
+            api_key_env="FAKE_DEEPSEEK_KEY",
+            max_turns=1,
+            max_steps=2,
+            min_tool_steps=0,
+            full_candidate_coverage=True,
+            candidate_batch_size=1,
+            samples_per_job=1,
+            min_sidecar_rows=1,
+            min_timeline_turns=1,
+            chat_fn=fake_chat_fn,
+        )
+
+        rendered = json.dumps(result, ensure_ascii=False)
+        self.assertTrue(result["ok"], rendered)
+        self.assertEqual(len(observed_messages), 2)
+        feedback = json.loads(observed_messages[1][-1]["content"])
+        self.assertIn("semantic_scope_labeling_requirements", feedback)
+        self.assertIn("label_evidence", feedback["semantic_scope_labeling_requirements"])
+        self.assertEqual(result["materialization"]["row_count"], 1)
+        self.assertTrue(result["job"]["label_evidence"]["label_evidence_complete"])
+        rows = [
+            json.loads(line)
+            for line in self.jobs.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["scope_labels"], ["idea_seed"])
+        self.assertEqual(rows[0]["label_evidence"][0]["label"], "idea_seed")
+
     def test_full_candidate_coverage_warms_each_batch_before_followup_samples(self) -> None:
         self._write_multi_turn_fixture(count=2)
         os.environ["FAKE_DEEPSEEK_KEY"] = "present"

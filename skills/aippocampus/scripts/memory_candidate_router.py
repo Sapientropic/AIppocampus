@@ -491,6 +491,11 @@ def match_working_memory(
     limit: int = 4,
 ) -> list[dict[str, Any]]:
     prompt_low = prompt.casefold()
+    prompt_parts = [
+        part.casefold()
+        for part in split_query_terms([prompt])
+        if len(part) >= 4 and part.casefold() not in GENERIC_TRIGGER_TERMS
+    ]
     matches: list[dict[str, Any]] = []
     for row in rows:
         if row.get("status") != "active" or row.get("route") not in ACTIVE_ROUTES:
@@ -509,12 +514,24 @@ def match_working_memory(
             if broad_match_term(str(term), str(row_project or "")):
                 continue
             low = str(term).casefold()
-            if low and (
-                low in prompt_low
-                or any(
-                    part and part in low for part in split_query_terms([prompt]) if len(part) >= 4
+            term_parts = [
+                part.casefold()
+                for part in split_query_terms([str(term)])
+                if len(part) >= 4 and part.casefold() not in GENERIC_TRIGGER_TERMS
+            ]
+            if not low:
+                continue
+            if " " in low or "-" in low:
+                # Multi-word working-memory triggers are meant to be concrete
+                # phrases ("consent gate", "Review card"). Do not let a single
+                # generic tail word such as "gate" wake unrelated high-risk
+                # review notes.
+                matched_phrase = low in prompt_low or (
+                    bool(term_parts) and all(part in prompt_low for part in term_parts)
                 )
-            ):
+            else:
+                matched_phrase = low in prompt_low or any(part and part in low for part in prompt_parts)
+            if matched_phrase:
                 matched.append(str(term))
         if not matched:
             continue

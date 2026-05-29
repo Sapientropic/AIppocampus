@@ -14,6 +14,12 @@ from aippocampuslib import codex_home
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_HOOK_TIMEOUT_SECONDS = 5
+# Keep the internal Python budget below the host timeout. If a future installer
+# raises the host timeout, this value can be raised deliberately; do not remove
+# it, or slow semantic/API paths will be killed by Codex before they can
+# fail-open and leave a sanitized diagnostic.
+DEFAULT_HOOK_BUDGET_MS = 4300
+DEFAULT_SEMANTIC_TIMEOUT_SECONDS = 2.5
 
 
 def hooks_json_path(codex_home_path: Path | None = None) -> Path:
@@ -42,7 +48,13 @@ def save_hooks(path: Path, data: dict[str, Any]) -> None:
     tmp.replace(path)
 
 
-def command_for(script: Path, *, log: bool = False) -> str:
+def command_for(
+    script: Path,
+    *,
+    log: bool = False,
+    max_elapsed_ms: int = DEFAULT_HOOK_BUDGET_MS,
+    semantic_timeout: float = DEFAULT_SEMANTIC_TIMEOUT_SECONDS,
+) -> str:
     command = f'"{Path(sys.executable).resolve()}" "{script.resolve()}"'
     if os.name == "nt":
         # Codex Desktop executes hook command strings through PowerShell on
@@ -50,15 +62,31 @@ def command_for(script: Path, *, log: bool = False) -> str:
         # string expression and exits with code 1; the call operator keeps
         # paths-with-spaces safe and preserves the hook as fail-open glue.
         command = f"& {command}"
+    if max_elapsed_ms > 0:
+        command += f" --max-elapsed-ms {int(max_elapsed_ms)}"
+    if semantic_timeout > 0:
+        command += f" --semantic-timeout {float(semantic_timeout):g}"
     if log:
         command += " --log"
     return command
 
 
-def ambient_hook(script: Path, *, timeout: int, log: bool = False) -> dict[str, Any]:
+def ambient_hook(
+    script: Path,
+    *,
+    timeout: int,
+    log: bool = False,
+    max_elapsed_ms: int = DEFAULT_HOOK_BUDGET_MS,
+    semantic_timeout: float = DEFAULT_SEMANTIC_TIMEOUT_SECONDS,
+) -> dict[str, Any]:
     return {
         "type": "command",
-        "command": command_for(script, log=log),
+        "command": command_for(
+            script,
+            log=log,
+            max_elapsed_ms=max_elapsed_ms,
+            semantic_timeout=semantic_timeout,
+        ),
         "timeout": timeout,
     }
 
@@ -85,11 +113,23 @@ def user_prompt_groups(data: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def install(
-    path: Path, script: Path, *, timeout: int = DEFAULT_HOOK_TIMEOUT_SECONDS, log: bool = False
+    path: Path,
+    script: Path,
+    *,
+    timeout: int = DEFAULT_HOOK_TIMEOUT_SECONDS,
+    log: bool = False,
+    max_elapsed_ms: int = DEFAULT_HOOK_BUDGET_MS,
+    semantic_timeout: float = DEFAULT_SEMANTIC_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
     data = load_hooks(path)
     groups = user_prompt_groups(data)
-    target = ambient_hook(script, timeout=timeout, log=log)
+    target = ambient_hook(
+        script,
+        timeout=timeout,
+        log=log,
+        max_elapsed_ms=max_elapsed_ms,
+        semantic_timeout=semantic_timeout,
+    )
     changed = False
 
     for group in groups:
@@ -195,6 +235,10 @@ def main() -> int:
     parser.add_argument("--hooks-json")
     parser.add_argument("--script", default=str(SCRIPT_DIR / "aippocampus_prompt_hook.py"))
     parser.add_argument("--timeout", type=int, default=DEFAULT_HOOK_TIMEOUT_SECONDS)
+    parser.add_argument("--max-elapsed-ms", type=int, default=DEFAULT_HOOK_BUDGET_MS)
+    parser.add_argument(
+        "--semantic-timeout", type=float, default=DEFAULT_SEMANTIC_TIMEOUT_SECONDS
+    )
     parser.add_argument(
         "--log",
         action="store_true",
@@ -207,7 +251,14 @@ def main() -> int:
     path = Path(args.hooks_json).resolve() if args.hooks_json else hooks_json_path(root)
     script = Path(args.script).resolve()
     if args.action == "install":
-        result = install(path, script, timeout=args.timeout, log=args.log)
+        result = install(
+            path,
+            script,
+            timeout=args.timeout,
+            log=args.log,
+            max_elapsed_ms=args.max_elapsed_ms,
+            semantic_timeout=args.semantic_timeout,
+        )
     elif args.action == "uninstall":
         result = uninstall(path, script)
     else:

@@ -20,6 +20,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
+import semantic_cue_cache as cues  # noqa: E402
 import semantic_recall_gate as gate  # noqa: E402
 from redaction_fixtures import FAKE_TEST_OPENAI_API_KEY, FAKE_TEST_SECRET_VALUE  # noqa: E402
 
@@ -241,6 +242,104 @@ class SemanticRecallGateTests(unittest.TestCase):
             [item["title"] for item in payload["prompt_relevant_triggers"]],
         )
 
+    def test_prompt_relevant_triggers_ignore_short_single_entity_overlap(self) -> None:
+        triggers_path = self.root / "short_entity_semantic_triggers.jsonl"
+        triggers_path.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_semantic_trigger",
+                    "title": "AIppocampus Atlas recall gate",
+                    "aliases": ["AIppocampus Atlas", "Atlas recall gate"],
+                    "status": "active",
+                    "confidence": 0.9,
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        self.assertEqual(
+            gate.prompt_relevant_triggers(
+                prompt="把 Atlas 这个模块接一下",
+                semantic_triggers_path=triggers_path,
+            ),
+            [],
+        )
+        self.assertTrue(
+            gate.prompt_relevant_triggers(
+                prompt="AIppocampus Atlas recall gate 这条线继续",
+                semantic_triggers_path=triggers_path,
+            )
+        )
+
+    def test_reviewed_trigger_keeps_late_domain_aliases_prompt_relevant(self) -> None:
+        triggers_path = self.root / "semantic_triggers.jsonl"
+        aliases = [f"filler alias {index}" for index in range(18)]
+        aliases.extend(["self-continuity", "生命还能变成什么"])
+        triggers_path.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_semantic_trigger",
+                    "title": "AIppocampus continuity trigger",
+                    "aliases": aliases,
+                    "status": "active",
+                    "confidence": 0.9,
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        relevant = gate.prompt_relevant_triggers(
+            prompt="self-continuity quote 那个方向找回。",
+            semantic_triggers_path=triggers_path,
+        )
+
+        self.assertTrue(relevant)
+        self.assertIn("self-continuity", relevant[0]["aliases"])
+
+    def test_semantic_gate_payload_includes_active_multilingual_cue_cache(self) -> None:
+        cues_path = self.root / "semantic_cues.jsonl"
+        semantic_result = {
+            "available": True,
+            "decision": "scent",
+            "confidence": 0.88,
+            "query_aliases": ["memoria externa", "外置海马体", "внешний гиппокамп"],
+        }
+        source_refs = [{"thread_key": "session:aippocampus", "message_id": "m1"}]
+        for _ in range(2):
+            cues.record_semantic_cue_hits(
+                cues_path,
+                prompt="¿Seguimos con la memoria externa?",
+                semantic_result=semantic_result,
+                source_refs=source_refs,
+                route="semantic_gate",
+            )
+
+        payload = gate.catalog_payload(
+            prompt="¿Seguimos con la memoria externa?",
+            cwd=self.workspace,
+            registry=self.registry,
+            associations={"terms": {}},
+            working_memory=[],
+            semantic_triggers_path=None,
+            semantic_cues_path=cues_path,
+        )
+
+        trigger_aliases = {
+            alias for trigger in payload["trigger_catalog"] for alias in trigger.get("aliases") or []
+        }
+        relevant_aliases = {
+            alias
+            for trigger in payload["prompt_relevant_triggers"]
+            for alias in trigger.get("aliases") or []
+        }
+        self.assertIn("memoria externa", trigger_aliases)
+        self.assertIn("外置海马体", trigger_aliases)
+        self.assertIn("memoria externa", relevant_aliases)
+
     def test_semantic_gate_reports_aggregate_deepseek_cache_metrics(self) -> None:
         def chat_fn(messages, api_key, model, base_url, max_tokens, timeout, temperature):
             del messages, api_key, model, base_url, max_tokens, timeout, temperature
@@ -350,6 +449,32 @@ class SemanticRecallGateTests(unittest.TestCase):
         self.assertFalse(result["available"])
         self.assertEqual(result["decision"], "skip")
         self.assertTrue(result["secret_policy"]["hard_block"])
+
+    def test_prompt_relevant_triggers_do_not_match_when_not_to_use_only_terms(self) -> None:
+        trigger_path = self.root / "semantic_triggers.jsonl"
+        trigger_path.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_semantic_trigger",
+                    "status": "active",
+                    "title": "Atlas dashboard same-name project context",
+                    "aliases": ["Atlas dashboard", "same-name entity trap"],
+                    "when_to_use": "Use when continuing the Atlas dashboard context.",
+                    "when_not_to_use": "Do not use for ordinary fixture edits.",
+                    "confidence": 0.9,
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        matches = gate.prompt_relevant_triggers(
+            prompt="Bearer header placeholder 的 fixture 名字太误导。",
+            semantic_triggers_path=trigger_path,
+        )
+
+        self.assertEqual(matches, [])
 
     def test_cache_reuses_prior_semantic_decision(self) -> None:
         calls = {"count": 0}

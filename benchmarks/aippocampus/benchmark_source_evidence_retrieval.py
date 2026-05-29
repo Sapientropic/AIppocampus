@@ -18,7 +18,7 @@ import re
 import sqlite3
 import tempfile
 import time
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -30,16 +30,24 @@ import smoke_source_evidence_recall_eval as source_evidence_eval
 
 import benchmark_fts5_recall as fts5_benchmark
 from aippocampuslib import compact_text
+from build_clean_source import SCOPE_LABEL_ORDER
 from build_index import make_sqlite
 from retrieval import split_query_terms
+from semantic_scope_labels import (
+    SEMANTIC_SCOPE_LABELS_FILENAME,
+    clean_messages_by_id,
+    load_semantic_scope_labels,
+    semantic_scope_label_rows_from_findings,
+    write_semantic_scope_label_sidecar,
+)
 from subconscious_runtime import add_usage, call_chat_json, compact_usage
 from subconscious_worker import DEFAULT_BASE_URL, DEFAULT_MODEL, clamp_confidence, parse_model_json
 
 SCHEMA_VERSION = 1
 DEFAULT_FTS5_CASES = 100
 DEFAULT_FTS5_MIN_CASES = 50
-DEFAULT_SOURCE_MAX_CASES = 24
-DEFAULT_SOURCE_MIN_CASES = 12
+DEFAULT_SOURCE_MAX_CASES = 100
+DEFAULT_SOURCE_MIN_CASES = 50
 DEFAULT_SOURCE_MIN_HIT_RATE = 0.85
 DEFAULT_SHAREGPT_PUBLIC_CORPUS_DIR = (
     _paths.REPO_ROOT
@@ -53,6 +61,16 @@ DEFAULT_SHAREGPT_PUBLIC_MIN_CASES = 50
 DEFAULT_SHAREGPT_PUBLIC_TOP_K = 10
 DEFAULT_SHAREGPT_PUBLIC_MIN_MESSAGE_HIT_RATE = 0.85
 DEFAULT_SHAREGPT_PUBLIC_MIN_TURN_HIT_RATE = 0.9
+DEFAULT_PUBLIC_SEMANTIC_CONVERSATIONS = 40
+DEFAULT_PUBLIC_SEMANTIC_MAX_MESSAGES = 80
+DEFAULT_PUBLIC_SEMANTIC_MAX_CANDIDATES = 48
+DEFAULT_PUBLIC_SEMANTIC_MAX_CASES = 24
+DEFAULT_PUBLIC_SEMANTIC_MIN_CASES = 3
+DEFAULT_PUBLIC_SEMANTIC_TOP_K = 5
+DEFAULT_PUBLIC_SEMANTIC_MIN_HIT_RATE = 0.75
+DEFAULT_PUBLIC_SEMANTIC_MIN_CONFIDENCE = 0.45
+DEFAULT_PUBLIC_SEMANTIC_TIMEOUT = 60
+DEFAULT_PUBLIC_SEMANTIC_MAX_TOKENS = 8192
 DEFAULT_STANDARD_CORPUS_ROOT = (_paths.REPO_ROOT / "benchmark_corpus").resolve()
 DEFAULT_STANDARD_DATASET = "locomo"
 DEFAULT_STANDARD_QA_CASES = 100
@@ -81,6 +99,7 @@ STANDARD_DATASET_PATHS = {
     "longmemeval-v2": DEFAULT_STANDARD_CORPUS_ROOT / "longmemeval" / "v2_questions.jsonl",
 }
 LineRerankerFn = Callable[..., dict[str, Any]]
+PublicSemanticLabelerFn = Callable[..., dict[str, Any]]
 PUBLIC_SOURCE_TERM_STOPWORDS = {
     "about",
     "after",
@@ -148,7 +167,7 @@ CONTINUATION_RE = re.compile(
 
 
 def now_utc() -> str:
-    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def safe_rate(numerator: int, denominator: int) -> float:
@@ -187,7 +206,9 @@ def rank_metrics(cases: list[dict[str, Any]], key: str, thresholds: list[int]) -
 
 
 def sanitize_fts5_case(case: dict[str, Any], *, top_k: int) -> dict[str, Any]:
-    fts5 = case.get("fts5") if isinstance(case.get("fts5"), dict) else {}
+    raw_fts5 = case.get("fts5")
+    fts5: dict[str, Any] = raw_fts5 if isinstance(raw_fts5, dict) else {}
+    fts5_rank = fts5.get("rank")
     production = (
         case.get("production_hybrid")
         if isinstance(case.get("production_hybrid"), dict)
@@ -200,8 +221,8 @@ def sanitize_fts5_case(case: dict[str, Any], *, top_k: int) -> dict[str, Any]:
         "clean_source_sha1": case.get("clean_source_sha1"),
         "query_sha1": case.get("query_sha1"),
         "query_terms_count": case.get("query_terms_count"),
-        "fts5_rank": fts5.get("rank"),
-        f"fts5_hit_top{top_k}": bool(fts5.get("rank") and int(fts5.get("rank")) <= top_k),
+        "fts5_rank": fts5_rank,
+        f"fts5_hit_top{top_k}": bool(fts5_rank and int(fts5_rank) <= top_k),
         "expected_line_present": fts5.get("expected_line_present"),
     }
     if production is not None:
@@ -590,8 +611,11 @@ def build_sharegpt_public_cases(
 
 def rank_line(hits: list[dict[str, Any]], expected_line: int) -> int | None:
     for idx, hit in enumerate(hits, start=1):
+        raw_line = hit.get("line")
+        if raw_line is None:
+            continue
         try:
-            line = int(hit.get("line"))
+            line = int(raw_line)
         except (TypeError, ValueError):
             continue
         if line == expected_line:
@@ -603,8 +627,11 @@ def rank_turn(hits: list[dict[str, Any]], start: int, end: int) -> int | None:
     if start <= 0 or end <= 0:
         return None
     for idx, hit in enumerate(hits, start=1):
+        raw_line = hit.get("line")
+        if raw_line is None:
+            continue
         try:
-            line = int(hit.get("line"))
+            line = int(raw_line)
         except (TypeError, ValueError):
             continue
         if start <= line <= end:
@@ -832,6 +859,552 @@ def run_sharegpt_public_source_evidence_benchmark(
     }
 
 
+def public_semantic_source_ref(message: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "message_id": message.get("message_id") or message.get("id"),
+        "turn_id": message.get("turn_id"),
+        "source_line": message.get("source_line"),
+        "role": message.get("role"),
+        "phase": message.get("phase") or "",
+    }
+
+
+def public_semantic_turn_rows(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_turn: dict[str, list[dict[str, Any]]] = {}
+    for message in messages:
+        turn_id = str(message.get("turn_id") or "")
+        if not turn_id:
+            continue
+        by_turn.setdefault(turn_id, []).append(message)
+    turns: list[dict[str, Any]] = []
+    for turn_id, rows in by_turn.items():
+        lines = [normalize_source_line(row, idx + 1) for idx, row in enumerate(rows)]
+        turn_indices = [int(row.get("turn_index") or 0) for row in rows]
+        turns.append(
+            {
+                "turn_id": turn_id,
+                "turn_index": min(turn_indices) if turn_indices else 0,
+                "message_ids": [
+                    str(row.get("message_id") or row.get("id") or "")
+                    for row in rows
+                    if row.get("message_id") or row.get("id")
+                ],
+                "start_line": min(lines) if lines else None,
+                "end_line": max(lines) if lines else None,
+            }
+        )
+    turns.sort(key=lambda item: (int(item.get("turn_index") or 0), str(item.get("turn_id") or "")))
+    return turns
+
+
+def public_semantic_subset_messages(
+    conversations: list[list[dict[str, Any]]], *, max_messages: int
+) -> list[dict[str, Any]]:
+    selected: list[dict[str, Any]] = []
+    source_line = 1
+    for rows in conversations:
+        for row in rows:
+            if len(selected) >= max(1, int(max_messages)):
+                return selected
+            text = str(row.get("text") or "").strip()
+            message_id = str(row.get("message_id") or "").strip()
+            turn_id = str(row.get("turn_id") or "").strip()
+            if not text or not message_id or not turn_id:
+                continue
+            selected.append(
+                {
+                    **row,
+                    "source_line": source_line,
+                    "clean_ordinal": source_line - 1,
+                    "text": text,
+                }
+            )
+            source_line += 1
+    return selected
+
+
+def write_public_semantic_subset_pack(
+    *,
+    output_dir: Path,
+    corpus_dir: Path,
+    conversations: list[list[dict[str, Any]]],
+    max_messages: int,
+) -> dict[str, Any]:
+    clean_source_dir = output_dir / "clean-source"
+    registry_dir = output_dir / "registry"
+    messages_path = clean_source_dir / "messages.jsonl"
+    turns_path = clean_source_dir / "turns.jsonl"
+    registry_path = registry_dir / "threads.json"
+    messages = public_semantic_subset_messages(conversations, max_messages=max_messages)
+    turns = public_semantic_turn_rows(messages)
+    clean_source_dir.mkdir(parents=True, exist_ok=True)
+    registry_dir.mkdir(parents=True, exist_ok=True)
+    messages_path.write_text(
+        "".join(json.dumps(message, ensure_ascii=False) + "\n" for message in messages),
+        encoding="utf-8",
+    )
+    turns_path.write_text(
+        "".join(json.dumps(turn, ensure_ascii=False) + "\n" for turn in turns),
+        encoding="utf-8",
+    )
+    thread_key = f"public-semantic-sidecar:{sha1_text(str(corpus_dir))[:12]}"
+    registry_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "threads": [
+                    {
+                        "thread_key": thread_key,
+                        "title": "Public semantic sidecar benchmark subset",
+                        "workspace_name": "benchmark_corpus",
+                        "project_key": "project:public_semantic_sidecar",
+                        "project_label": "public_semantic_sidecar",
+                        "project_tags": ["benchmark", "public", "semantic-sidecar"],
+                        "paths": {
+                            "clean_source_messages_jsonl": "clean-source/messages.jsonl",
+                            "clean_source_turns_jsonl": "clean-source/turns.jsonl",
+                        },
+                    }
+                ],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return {
+        "output_dir": output_dir,
+        "clean_source_dir": clean_source_dir,
+        "messages_path": messages_path,
+        "turns_path": turns_path,
+        "registry_path": registry_path,
+        "messages": messages,
+        "turns": turns,
+        "thread_key": thread_key,
+    }
+
+
+def public_semantic_candidate_messages(
+    messages: list[dict[str, Any]], *, max_candidates: int
+) -> list[dict[str, Any]]:
+    candidates = []
+    for message in messages:
+        text = str(message.get("text") or "").strip()
+        if not text or not message.get("message_id"):
+            continue
+        role = str(message.get("role") or "")
+        score = min(len(text), 800) / 100.0
+        if role == "user":
+            score += 3.0
+        if "?" in text or "？" in text:
+            score += 0.4
+        candidates.append((score, message))
+    candidates.sort(
+        key=lambda item: (
+            -item[0],
+            normalize_source_line(item[1], 1),
+            str(item[1].get("message_id") or ""),
+        )
+    )
+    return [
+        {
+            "message_id": message.get("message_id") or message.get("id"),
+            "turn_id": message.get("turn_id"),
+            "source_line": message.get("source_line"),
+            "role": message.get("role"),
+            "phase": message.get("phase") or "",
+            "text": compact_text(str(message.get("text") or ""), 900),
+        }
+        for _, message in candidates[: max(1, int(max_candidates))]
+    ]
+
+
+def public_semantic_labeler_messages(candidates: list[dict[str, Any]]) -> list[dict[str, str]]:
+    system = """You are labeling public benchmark clean-source messages for AIppocampus.
+Return JSON only. Labels are navigation hints, not source truth."""
+    user = json.dumps(
+        {
+            "canonical_scope_labels": list(SCOPE_LABEL_ORDER),
+            "task": (
+                "For each candidate that genuinely needs a fuzzy semantic scope label, "
+                "return one source-backed semantic_scope_labels finding. Omit candidates "
+                "that only have keyword matches or ordinary one-off assistant requests."
+            ),
+            "label_rules": {
+                "personal_reflection": "self, feelings, doubts, identity, or meaning",
+                "relationship_continuity": "explicit shared history or ongoing relationship arc",
+                "reading_notes": "explicit books, papers, essays, articles, or notes",
+                "idea_seed": "new direction, metaphor, possibility, or spark to revisit",
+                "preference": "stable or situational way something should be done",
+                "life_context": "concrete lived circumstance, body, schedule, mood, or day-to-day situation",
+                "technical_work": "implementation, tools, architecture, tests, or technical decisions",
+                "open_question": "explicit unresolved question, uncertainty, or inquiry to pursue later",
+            },
+            "required_finding_shape": {
+                "finding_kind": "semantic_scope_labels",
+                "job": "semantic_scope_labeling",
+                "message_id": "candidate message_id",
+                "turn_id": "candidate turn_id",
+                "scope_labels": ["canonical labels only"],
+                "confidence": "0.0-1.0",
+                "summary": "short source-grounded summary",
+                "source_refs": [
+                    {
+                        "message_id": "same message_id",
+                        "turn_id": "same turn_id",
+                        "source_line": "candidate source_line",
+                        "role": "candidate role",
+                        "phase": "candidate phase",
+                    }
+                ],
+                "label_evidence": [
+                    {
+                        "label": "canonical label",
+                        "reason": "one short reason grounded in this exact message",
+                        "confidence": "0.0-1.0",
+                    }
+                ],
+            },
+            "candidate_messages": candidates,
+        },
+        ensure_ascii=False,
+    )
+    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
+
+def normalize_public_semantic_findings(
+    findings: list[dict[str, Any]], candidates: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    candidate_by_id = {
+        str(candidate.get("message_id") or ""): candidate
+        for candidate in candidates
+        if candidate.get("message_id")
+    }
+    normalized: list[dict[str, Any]] = []
+    for finding in findings:
+        if not isinstance(finding, dict):
+            continue
+        message_id = str(finding.get("message_id") or finding.get("id") or "").strip()
+        candidate = candidate_by_id.get(message_id)
+        if not candidate:
+            continue
+        item = dict(finding)
+        item["message_id"] = message_id
+        item["turn_id"] = item.get("turn_id") or candidate.get("turn_id")
+        item["job"] = "semantic_scope_labeling"
+        item["finding_kind"] = "semantic_scope_labels"
+        item["source"] = item.get("source") or "public_semantic_sidecar_labeler"
+        exact_refs = [
+            ref
+            for ref in item.get("source_refs") or []
+            if isinstance(ref, dict)
+            and str(ref.get("message_id") or "").strip() == message_id
+        ]
+        if not exact_refs:
+            exact_refs = [public_semantic_source_ref(candidate)]
+        item["source_refs"] = exact_refs
+        normalized.append(item)
+    return normalized
+
+
+def run_public_semantic_labeler(
+    candidates: list[dict[str, Any]],
+    *,
+    api_key_env: str = "DEEPSEEK_API_KEY",
+    model: str | None = None,
+    base_url: str | None = None,
+    timeout: int = DEFAULT_PUBLIC_SEMANTIC_TIMEOUT,
+    max_tokens: int = DEFAULT_PUBLIC_SEMANTIC_MAX_TOKENS,
+) -> dict[str, Any]:
+    api_key = os.environ.get(api_key_env)
+    if not api_key:
+        return {
+            "available": False,
+            "findings": [],
+            "errors": ["missing semantic labeler api key"],
+        }
+    if not candidates:
+        return {"available": False, "findings": [], "errors": ["empty candidate set"]}
+    response = call_chat_json(
+        public_semantic_labeler_messages(candidates),
+        api_key,
+        model or os.environ.get("AIPPOCAMPUS_PUBLIC_SEMANTIC_MODEL") or DEFAULT_MODEL,
+        base_url or os.environ.get("AIPPOCAMPUS_PUBLIC_SEMANTIC_BASE_URL") or DEFAULT_BASE_URL,
+        None if int(max_tokens) <= 0 else int(max_tokens),
+        int(timeout),
+        0.0,
+    )
+    parsed = parse_model_json(response)
+    raw_findings = parsed.get("findings") if isinstance(parsed, dict) else []
+    findings = [item for item in raw_findings or [] if isinstance(item, dict)]
+    return {
+        "available": True,
+        "findings": normalize_public_semantic_findings(findings, candidates),
+        "usage": compact_usage(response.get("usage") or {}),
+    }
+
+
+def summarize_public_semantic_source_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "kind": payload.get("kind") or "public_semantic_sidecar_source_evidence",
+        "status": payload.get("status"),
+        "ok": bool(payload.get("ok")),
+        "config": payload.get("config") or {},
+        "corpus": payload.get("corpus") or {},
+        "artifacts": payload.get("artifacts") or {},
+        "metrics": payload.get("metrics") or {},
+        "privacy_boundary": payload.get("privacy_boundary") or {},
+        "cannot_claim": payload.get("cannot_claim") or [],
+        "skip_reason": payload.get("skip_reason"),
+        "elapsed_ms": payload.get("elapsed_ms"),
+    }
+
+
+def public_semantic_status(source_payload: dict[str, Any], *, sidecar_rows: int) -> str:
+    if int(sidecar_rows) <= 0:
+        return "insufficient_sidecar_rows"
+    if str(source_payload.get("status") or "").startswith("insufficient_selected_cases"):
+        return "insufficient_selected_cases"
+    if not source_payload.get("ok"):
+        return str(source_payload.get("status") or "diagnostic_only")
+    return "sufficient"
+
+
+def skipped_public_semantic_sidecar_payload(
+    *,
+    started: float,
+    reason: str,
+    status: str,
+    config: dict[str, Any],
+    corpus_dir: Path,
+    include_private_text: bool = False,
+) -> dict[str, Any]:
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": "public_semantic_sidecar_source_evidence",
+        "generated_at": now_utc(),
+        "status": status,
+        "ok": True,
+        "config": config,
+        "corpus": {
+            "corpus_dir_sha1": sha1_text(str(corpus_dir))[:16],
+            "conversation_count": 0,
+            "subset_message_count": 0,
+            "candidate_message_count": 0,
+        },
+        "artifacts": {
+            "sidecar_row_count": 0,
+            "reviewed_sidecar_row_count": 0,
+            "absolute_paths_emitted": bool(include_private_text),
+        },
+        "metrics": {"case_count": 0, "passed_count": 0, "failed_count": 0},
+        "cases": [],
+        "skip_reason": reason,
+        "privacy_boundary": {
+            "raw_text_emitted": bool(include_private_text),
+            "snippets_emitted": False,
+            "absolute_paths_emitted": bool(include_private_text),
+            "case_ids_are_hashed": True,
+            "output_shape": "sanitized_public_semantic_sidecar",
+        },
+        "cannot_claim": [
+            "private_real_history_source_evidence_quality",
+            "human_reviewed_semantic_labels",
+            "unbounded_public_semantic_sidecar_quality",
+        ],
+        "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
+    }
+
+
+def run_public_semantic_sidecar_benchmark(
+    *,
+    corpus_dir: Path | str | None = None,
+    output_dir: Path | str | None = None,
+    conversations: int = DEFAULT_PUBLIC_SEMANTIC_CONVERSATIONS,
+    max_messages: int = DEFAULT_PUBLIC_SEMANTIC_MAX_MESSAGES,
+    max_candidates: int = DEFAULT_PUBLIC_SEMANTIC_MAX_CANDIDATES,
+    max_cases: int = DEFAULT_PUBLIC_SEMANTIC_MAX_CASES,
+    min_cases: int = DEFAULT_PUBLIC_SEMANTIC_MIN_CASES,
+    top_k: int = DEFAULT_PUBLIC_SEMANTIC_TOP_K,
+    min_hit_rate: float = DEFAULT_PUBLIC_SEMANTIC_MIN_HIT_RATE,
+    min_confidence: float = DEFAULT_PUBLIC_SEMANTIC_MIN_CONFIDENCE,
+    timeout: int = DEFAULT_PUBLIC_SEMANTIC_TIMEOUT,
+    max_tokens: int = DEFAULT_PUBLIC_SEMANTIC_MAX_TOKENS,
+    include_private_text: bool = False,
+    labeler_fn: PublicSemanticLabelerFn | None = None,
+) -> dict[str, Any]:
+    started = time.perf_counter()
+    resolved_corpus_dir = Path(corpus_dir or DEFAULT_SHAREGPT_PUBLIC_CORPUS_DIR).resolve()
+    resolved_output_dir = (
+        Path(output_dir).resolve()
+        if output_dir
+        else Path(tempfile.mkdtemp(prefix="aippocampus-public-semantic-sidecar-")).resolve()
+    )
+    config = {
+        "corpus": "sharegpt_public_clean_source",
+        "corpus_dir_sha1": sha1_text(str(resolved_corpus_dir))[:16],
+        "artifact_dir_sha1": sha1_text(str(resolved_output_dir))[:16],
+        "conversations": int(conversations),
+        "max_messages": int(max_messages),
+        "max_candidates": int(max_candidates),
+        "max_cases": int(max_cases),
+        "min_cases": int(min_cases),
+        "top_k": int(top_k),
+        "min_hit_rate": float(min_hit_rate),
+        "min_confidence": float(min_confidence),
+        "timeout": int(timeout),
+        "max_tokens": int(max_tokens),
+        "include_private_text": bool(include_private_text),
+    }
+    try:
+        conversations_payload = load_sharegpt_conversations(
+            resolved_corpus_dir,
+            max_conversations=conversations,
+        )
+    except FileNotFoundError as exc:
+        return skipped_public_semantic_sidecar_payload(
+            started=started,
+            reason=str(exc),
+            status="skipped_missing_public_corpus",
+            config=config,
+            corpus_dir=resolved_corpus_dir,
+            include_private_text=include_private_text,
+        )
+    subset = write_public_semantic_subset_pack(
+        output_dir=resolved_output_dir,
+        corpus_dir=resolved_corpus_dir,
+        conversations=conversations_payload,
+        max_messages=max_messages,
+    )
+    candidates = public_semantic_candidate_messages(
+        list(subset["messages"]),
+        max_candidates=max_candidates,
+    )
+    try:
+        if labeler_fn:
+            labeler_payload = labeler_fn(candidates)
+        else:
+            labeler_payload = run_public_semantic_labeler(
+                candidates,
+                timeout=timeout,
+                max_tokens=max_tokens,
+            )
+    except Exception as exc:
+        return skipped_public_semantic_sidecar_payload(
+            started=started,
+            reason=f"{type(exc).__name__}: {compact_text(str(exc), 360)}",
+            status="skipped_semantic_labeler_error",
+            config=config,
+            corpus_dir=resolved_corpus_dir,
+            include_private_text=include_private_text,
+        )
+    if not labeler_payload.get("available", True):
+        return skipped_public_semantic_sidecar_payload(
+            started=started,
+            reason="; ".join(str(item) for item in labeler_payload.get("errors") or []),
+            status="skipped_missing_semantic_backend",
+            config=config,
+            corpus_dir=resolved_corpus_dir,
+            include_private_text=include_private_text,
+        )
+    messages_by_id = clean_messages_by_id(subset["clean_source_dir"])
+    findings = normalize_public_semantic_findings(
+        [item for item in labeler_payload.get("findings") or [] if isinstance(item, dict)],
+        candidates,
+    )
+    sidecar_rows = semantic_scope_label_rows_from_findings(
+        findings,
+        messages_by_id,
+        min_confidence=min_confidence,
+    )
+    write_semantic_scope_label_sidecar(subset["clean_source_dir"], sidecar_rows)
+    reviewed_sidecar = load_semantic_scope_labels(subset["clean_source_dir"])
+    source_payload = source_evidence_eval.run_source_evidence_recall_eval(
+        registry_path=subset["registry_path"],
+        max_cases=max_cases,
+        min_cases=min_cases,
+        top_k=top_k,
+        min_hit_rate=min_hit_rate,
+        require_semantic_sidecar=True,
+        ranking="dynamic_source",
+    )
+    status = public_semantic_status(source_payload, sidecar_rows=len(sidecar_rows))
+    metrics = {
+        "case_count": int(source_payload.get("case_count") or 0),
+        "passed_count": int(source_payload.get("passed_count") or 0),
+        "failed_count": int(source_payload.get("failed_count") or 0),
+        "top_k_hit_rate": float(source_payload.get("top_k_hit_rate") or 0.0),
+        "warning_count": int(source_payload.get("warning_count") or 0),
+        "label_coverage": source_payload.get("label_coverage") or [],
+    }
+    artifacts = {
+        "sidecar_filename": SEMANTIC_SCOPE_LABELS_FILENAME,
+        "sidecar_row_count": len(sidecar_rows),
+        "reviewed_sidecar_row_count": len(reviewed_sidecar),
+        "artifact_dir_sha1": sha1_text(str(resolved_output_dir))[:16],
+        "registry_sha1": sha1_text((subset["registry_path"]).read_text(encoding="utf-8"))[:16],
+        "messages_sha1": sha1_text((subset["messages_path"]).read_text(encoding="utf-8"))[:16],
+        "sidecar_sha1": sha1_text(
+            (subset["clean_source_dir"] / SEMANTIC_SCOPE_LABELS_FILENAME).read_text(
+                encoding="utf-8"
+            )
+        )[:16],
+        "absolute_paths_emitted": bool(include_private_text),
+    }
+    if include_private_text:
+        artifacts.update(
+            {
+                "artifact_dir": str(resolved_output_dir),
+                "registry_path": str(subset["registry_path"]),
+                "sidecar_path": str(subset["clean_source_dir"] / SEMANTIC_SCOPE_LABELS_FILENAME),
+            }
+        )
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": "public_semantic_sidecar_source_evidence",
+        "generated_at": now_utc(),
+        "status": status,
+        "ok": status == "sufficient",
+        "config": config,
+        "corpus": {
+            "corpus_dir_sha1": sha1_text(str(resolved_corpus_dir))[:16],
+            "conversation_count": len(conversations_payload),
+            "subset_message_count": len(subset["messages"]),
+            "subset_turn_count": len(subset["turns"]),
+            "candidate_message_count": len(candidates),
+            "thread_count": 1,
+        },
+        "artifacts": artifacts,
+        "metrics": metrics,
+        "cases": [
+            dict(case)
+            for case in source_payload.get("cases") or []
+            if isinstance(case, dict)
+        ],
+        "labeler": {
+            "available": bool(labeler_payload.get("available", True)),
+            "finding_count": len(findings),
+            "usage": compact_usage(labeler_payload.get("usage") or {}),
+            "error_count": len(labeler_payload.get("errors") or []),
+        },
+        "source_evidence": summarize_source_payload(source_payload),
+        "privacy_boundary": {
+            "raw_text_emitted": bool(include_private_text),
+            "snippets_emitted": bool(include_private_text),
+            "absolute_paths_emitted": bool(include_private_text),
+            "case_ids_are_hashed": True,
+            "output_shape": "sanitized_public_semantic_sidecar",
+        },
+        "cannot_claim": [
+            "private_real_history_source_evidence_quality",
+            "human_reviewed_semantic_labels",
+            "unbounded_public_semantic_sidecar_quality",
+        ],
+        "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
+    }
+
+
 def iter_json_array_items(path: Path, *, max_items: int | None = None) -> Any:
     """Stream top-level JSON-array objects without loading multi-GB corpora."""
 
@@ -906,7 +1479,10 @@ def locomo_session_sort_key(key: str) -> int:
 
 
 def build_locomo_messages(sample: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, int], dict[int, str]]:
-    conversation = sample.get("conversation") if isinstance(sample.get("conversation"), dict) else {}
+    raw_conversation = sample.get("conversation")
+    conversation: dict[str, Any] = (
+        raw_conversation if isinstance(raw_conversation, dict) else {}
+    )
     source_id = str(sample.get("sample_id") or "locomo-sample")
     messages: list[dict[str, Any]] = []
     dialogue_to_line: dict[str, int] = {}
@@ -987,7 +1563,7 @@ def build_locomo_standard_cases(
     max_questions: int,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     cases: list[dict[str, Any]] = []
-    corpus = {
+    corpus: dict[str, Any] = {
         "dataset": "locomo",
         "samples_scanned": 0,
         "messages_scanned": 0,
@@ -1086,7 +1662,7 @@ def build_longmemeval_v1_standard_cases(
     max_questions: int,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     cases: list[dict[str, Any]] = []
-    corpus = {
+    corpus: dict[str, Any] = {
         "dataset": dataset,
         "questions_scanned": 0,
         "eligible_questions": 0,
@@ -1133,8 +1709,11 @@ def rank_expected_line(hits: list[dict[str, Any]], expected_lines: set[int]) -> 
     if not expected_lines:
         return None
     for idx, hit in enumerate(hits, start=1):
+        raw_line = hit.get("line")
+        if raw_line is None:
+            continue
         try:
-            line = int(hit.get("line"))
+            line = int(raw_line)
         except (TypeError, ValueError):
             continue
         if line in expected_lines:
@@ -1151,8 +1730,11 @@ def rank_expected_session(
     if not expected_sessions:
         return None
     for idx, hit in enumerate(hits, start=1):
+        raw_line = hit.get("line")
+        if raw_line is None:
+            continue
         try:
-            line = str(int(hit.get("line")))
+            line = str(int(raw_line))
         except (TypeError, ValueError):
             continue
         if line_to_session.get(line) in expected_sessions:
@@ -1171,8 +1753,11 @@ def rank_expected_line_context(
         return None
     bounded_radius = max(0, int(radius))
     for idx, hit in enumerate(hits, start=1):
+        raw_line = hit.get("line")
+        if raw_line is None:
+            continue
         try:
-            hit_line = int(hit.get("line"))
+            hit_line = int(raw_line)
         except (TypeError, ValueError):
             continue
         hit_session = line_to_session.get(str(hit_line))
@@ -1270,14 +1855,17 @@ def build_standard_line_reranker_candidates(
                 line = int(hit["line"])
             except (TypeError, ValueError, KeyError):
                 continue
-            previous = hit_rank_by_line.get(line)
-            if previous is None or rank < previous:
+            previous_rank = hit_rank_by_line.get(line)
+            if previous_rank is None or rank < previous_rank:
                 hit_rank_by_line[line] = rank
     candidate_meta: dict[int, dict[str, Any]] = {}
     for channel, channel_hits in hit_lists:
         for hit_rank, hit in enumerate(channel_hits[:top_k], start=1):
+            raw_line = hit.get("line")
+            if raw_line is None:
+                continue
             try:
-                hit_line = int(hit.get("line"))
+                hit_line = int(raw_line)
             except (TypeError, ValueError):
                 continue
             session_id = line_to_session.get(str(hit_line))
@@ -1296,10 +1884,10 @@ def build_standard_line_reranker_candidates(
                     distance,
                     line,
                 )
-                previous = candidate_meta.get(line)
-                if previous:
-                    previous.setdefault("query_channels", set()).add(channel)
-                    if tuple(previous["rank_tuple"]) <= rank_tuple:
+                previous_meta = candidate_meta.get(line)
+                if previous_meta:
+                    previous_meta.setdefault("query_channels", set()).add(channel)
+                    if tuple(previous_meta["rank_tuple"]) <= rank_tuple:
                         continue
                 candidate_meta[line] = {
                     "nearest_hit_rank": hit_rank,
@@ -1957,6 +2545,7 @@ def cannot_claim(
     source_payload: dict[str, Any],
     sharegpt_public_payload: dict[str, Any] | None = None,
     standard_public_payload: dict[str, Any] | None = None,
+    public_semantic_sidecar_payload: dict[str, Any] | None = None,
 ) -> list[str]:
     claims = [
         "real_history_gate_quality",
@@ -1981,6 +2570,12 @@ def cannot_claim(
             standard_public_payload.get("status") or ""
         ).startswith("skipped_"):
             claims.append("standard_public_retrieval_qa_source_evidence")
+    if public_semantic_sidecar_payload:
+        claims.extend(str(item) for item in public_semantic_sidecar_payload.get("cannot_claim") or [])
+        if not public_semantic_sidecar_payload.get("ok") and not str(
+            public_semantic_sidecar_payload.get("status") or ""
+        ).startswith("skipped_"):
+            claims.append("public_semantic_sidecar_source_evidence")
     return sorted(set(claims))
 
 
@@ -2024,6 +2619,19 @@ def run_source_evidence_retrieval_benchmark(
     standard_line_reranker_timeout: int = DEFAULT_STANDARD_LINE_RERANKER_TIMEOUT,
     standard_line_reranker_max_tokens: int = DEFAULT_STANDARD_LINE_RERANKER_MAX_TOKENS,
     standard_line_reranker_workers: int = DEFAULT_STANDARD_LINE_RERANKER_WORKERS,
+    include_public_semantic_sidecar: bool = False,
+    public_semantic_corpus_dir: Path | str | None = None,
+    public_semantic_output_dir: Path | str | None = None,
+    public_semantic_conversations: int = DEFAULT_PUBLIC_SEMANTIC_CONVERSATIONS,
+    public_semantic_max_messages: int = DEFAULT_PUBLIC_SEMANTIC_MAX_MESSAGES,
+    public_semantic_max_candidates: int = DEFAULT_PUBLIC_SEMANTIC_MAX_CANDIDATES,
+    public_semantic_max_cases: int = DEFAULT_PUBLIC_SEMANTIC_MAX_CASES,
+    public_semantic_min_cases: int = DEFAULT_PUBLIC_SEMANTIC_MIN_CASES,
+    public_semantic_top_k: int = DEFAULT_PUBLIC_SEMANTIC_TOP_K,
+    public_semantic_min_hit_rate: float = DEFAULT_PUBLIC_SEMANTIC_MIN_HIT_RATE,
+    public_semantic_min_confidence: float = DEFAULT_PUBLIC_SEMANTIC_MIN_CONFIDENCE,
+    public_semantic_timeout: int = DEFAULT_PUBLIC_SEMANTIC_TIMEOUT,
+    public_semantic_max_tokens: int = DEFAULT_PUBLIC_SEMANTIC_MAX_TOKENS,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     fts5_payload = fts5_benchmark.run_benchmark(
@@ -2078,6 +2686,23 @@ def run_source_evidence_retrieval_benchmark(
             line_reranker_max_tokens=standard_line_reranker_max_tokens,
             line_reranker_workers=standard_line_reranker_workers,
         )
+    public_semantic_sidecar_payload = None
+    if include_public_semantic_sidecar:
+        public_semantic_sidecar_payload = run_public_semantic_sidecar_benchmark(
+            corpus_dir=public_semantic_corpus_dir,
+            output_dir=public_semantic_output_dir,
+            conversations=public_semantic_conversations,
+            max_messages=public_semantic_max_messages,
+            max_candidates=public_semantic_max_candidates,
+            max_cases=public_semantic_max_cases,
+            min_cases=public_semantic_min_cases,
+            top_k=public_semantic_top_k,
+            min_hit_rate=public_semantic_min_hit_rate,
+            min_confidence=public_semantic_min_confidence,
+            timeout=public_semantic_timeout,
+            max_tokens=public_semantic_max_tokens,
+            include_private_text=include_private_text,
+        )
     sharegpt_public_ok = (
         True
         if not sharegpt_public_payload
@@ -2090,11 +2715,18 @@ def run_source_evidence_retrieval_benchmark(
         else bool(standard_public_payload.get("ok"))
         or str(standard_public_payload.get("status") or "").startswith("skipped_")
     )
+    public_semantic_ok = (
+        True
+        if not public_semantic_sidecar_payload
+        else bool(public_semantic_sidecar_payload.get("ok"))
+        or str(public_semantic_sidecar_payload.get("status") or "").startswith("skipped_")
+    )
     ok = (
         bool(fts5_payload.get("ok"))
         and bool(source_payload.get("ok"))
         and sharegpt_public_ok
         and standard_public_ok
+        and public_semantic_ok
     )
     status = "sufficient" if ok else "diagnostic_only"
     fts5_cases_payload = [
@@ -2142,6 +2774,17 @@ def run_source_evidence_retrieval_benchmark(
             "standard_line_reranker_timeout": int(standard_line_reranker_timeout),
             "standard_line_reranker_max_tokens": int(standard_line_reranker_max_tokens),
             "standard_line_reranker_workers": int(standard_line_reranker_workers),
+            "include_public_semantic_sidecar": bool(include_public_semantic_sidecar),
+            "public_semantic_conversations": int(public_semantic_conversations),
+            "public_semantic_max_messages": int(public_semantic_max_messages),
+            "public_semantic_max_candidates": int(public_semantic_max_candidates),
+            "public_semantic_max_cases": int(public_semantic_max_cases),
+            "public_semantic_min_cases": int(public_semantic_min_cases),
+            "public_semantic_top_k": int(public_semantic_top_k),
+            "public_semantic_min_hit_rate": float(public_semantic_min_hit_rate),
+            "public_semantic_min_confidence": float(public_semantic_min_confidence),
+            "public_semantic_timeout": int(public_semantic_timeout),
+            "public_semantic_max_tokens": int(public_semantic_max_tokens),
         },
         "tracks": {
             "fts5_source_line": summarize_fts5_payload(fts5_payload, top_k=fts5_top_k),
@@ -2165,6 +2808,7 @@ def run_source_evidence_retrieval_benchmark(
             source_payload=source_payload,
             sharegpt_public_payload=sharegpt_public_payload,
             standard_public_payload=standard_public_payload,
+            public_semantic_sidecar_payload=public_semantic_sidecar_payload,
         ),
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
     }
@@ -2186,6 +2830,15 @@ def run_source_evidence_retrieval_benchmark(
             for case in standard_public_payload.get("cases") or []
             if isinstance(case, dict)
         ]
+    if public_semantic_sidecar_payload:
+        payload["tracks"]["public_semantic_sidecar"] = (
+            summarize_public_semantic_source_payload(public_semantic_sidecar_payload)
+        )
+        payload["cases"]["public_semantic_sidecar"] = [
+            dict(case)
+            for case in public_semantic_sidecar_payload.get("cases") or []
+            if isinstance(case, dict)
+        ]
     if include_private_text:
         payload["private_debug_payloads"] = {
             "fts5": fts5_payload,
@@ -2196,6 +2849,10 @@ def run_source_evidence_retrieval_benchmark(
         if standard_public_payload:
             payload["private_debug_payloads"]["standard_public_retrieval_qa"] = (
                 standard_public_payload
+            )
+        if public_semantic_sidecar_payload:
+            payload["private_debug_payloads"]["public_semantic_sidecar"] = (
+                public_semantic_sidecar_payload
             )
     return payload
 
@@ -2254,6 +2911,17 @@ def print_human_summary(payload: dict[str, Any]) -> None:
                 f"{metrics.get('reranked_evidence_mrr', 0.0):.4f}, "
                 f"top-{top_k} {metrics.get(f'reranked_evidence_hit_rate_top{top_k}', 0.0):.2%}"
             )
+    public_semantic = payload["tracks"].get("public_semantic_sidecar")
+    if public_semantic:
+        metrics = public_semantic.get("metrics") or {}
+        artifacts = public_semantic.get("artifacts") or {}
+        config = public_semantic.get("config") or {}
+        print(
+            f"- public semantic sidecar top-{int(config.get('top_k') or 0)}: "
+            f"{metrics.get('passed_count', 0)} hit / {metrics.get('failed_count', 0)} miss "
+            f"({metrics.get('top_k_hit_rate', 0.0):.2%}); "
+            f"sidecar rows {artifacts.get('reviewed_sidecar_row_count', 0)}"
+        )
 
 
 def main() -> int:
@@ -2347,6 +3015,59 @@ def main() -> int:
         type=int,
         default=DEFAULT_STANDARD_LINE_RERANKER_WORKERS,
     )
+    parser.add_argument("--include-public-semantic-sidecar", action="store_true")
+    parser.add_argument("--public-semantic-corpus-dir", type=Path, default=None)
+    parser.add_argument("--public-semantic-output-dir", type=Path, default=None)
+    parser.add_argument(
+        "--public-semantic-conversations",
+        type=int,
+        default=DEFAULT_PUBLIC_SEMANTIC_CONVERSATIONS,
+    )
+    parser.add_argument(
+        "--public-semantic-max-messages",
+        type=int,
+        default=DEFAULT_PUBLIC_SEMANTIC_MAX_MESSAGES,
+    )
+    parser.add_argument(
+        "--public-semantic-max-candidates",
+        type=int,
+        default=DEFAULT_PUBLIC_SEMANTIC_MAX_CANDIDATES,
+    )
+    parser.add_argument(
+        "--public-semantic-cases",
+        type=int,
+        default=DEFAULT_PUBLIC_SEMANTIC_MAX_CASES,
+    )
+    parser.add_argument(
+        "--public-semantic-min-cases",
+        type=int,
+        default=DEFAULT_PUBLIC_SEMANTIC_MIN_CASES,
+    )
+    parser.add_argument(
+        "--public-semantic-top-k",
+        type=int,
+        default=DEFAULT_PUBLIC_SEMANTIC_TOP_K,
+    )
+    parser.add_argument(
+        "--public-semantic-min-hit-rate",
+        type=float,
+        default=DEFAULT_PUBLIC_SEMANTIC_MIN_HIT_RATE,
+    )
+    parser.add_argument(
+        "--public-semantic-min-confidence",
+        type=float,
+        default=DEFAULT_PUBLIC_SEMANTIC_MIN_CONFIDENCE,
+    )
+    parser.add_argument(
+        "--public-semantic-timeout",
+        type=int,
+        default=DEFAULT_PUBLIC_SEMANTIC_TIMEOUT,
+    )
+    parser.add_argument(
+        "--public-semantic-max-tokens",
+        type=int,
+        default=DEFAULT_PUBLIC_SEMANTIC_MAX_TOKENS,
+    )
     parser.add_argument("--include-private-text", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--output", type=Path, default=None)
@@ -2387,6 +3108,19 @@ def main() -> int:
         standard_line_reranker_timeout=args.standard_line_reranker_timeout,
         standard_line_reranker_max_tokens=args.standard_line_reranker_max_tokens,
         standard_line_reranker_workers=args.standard_line_reranker_workers,
+        include_public_semantic_sidecar=args.include_public_semantic_sidecar,
+        public_semantic_corpus_dir=args.public_semantic_corpus_dir,
+        public_semantic_output_dir=args.public_semantic_output_dir,
+        public_semantic_conversations=args.public_semantic_conversations,
+        public_semantic_max_messages=args.public_semantic_max_messages,
+        public_semantic_max_candidates=args.public_semantic_max_candidates,
+        public_semantic_max_cases=args.public_semantic_cases,
+        public_semantic_min_cases=args.public_semantic_min_cases,
+        public_semantic_top_k=args.public_semantic_top_k,
+        public_semantic_min_hit_rate=args.public_semantic_min_hit_rate,
+        public_semantic_min_confidence=args.public_semantic_min_confidence,
+        public_semantic_timeout=args.public_semantic_timeout,
+        public_semantic_max_tokens=args.public_semantic_max_tokens,
     )
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -23,9 +23,12 @@
       "message_count": 1408912,
       "approx_size": "1.4G",
       "intended_tracks": [
-        "Track B semantic retrieval",
+        "Track B public source-evidence retrieval",
+        "Track B public semantic-sidecar pilot after reviewed sidecar materialization",
+        "Track B semantic line-reranker input after source-visible candidate selection",
         "general recall tests"
-      ]
+      ],
+      "claim_boundary": "Generated clean-source rows are not semantic-sidecar-required samples unless a reviewed semantic-scope-labels.jsonl sidecar is materialized for the sampled registry subset."
     },
     {
       "id": "sharegpt_coding_multiturn",
@@ -63,6 +66,24 @@
       "command": "cd skills/aippocampus && python scripts/benchmark_source_evidence_retrieval.py --include-sharegpt-public --sharegpt-public-conversations 100 --sharegpt-public-cases 200 --sharegpt-public-min-cases 50 --output ../../benchmark_corpus/reports/sharegpt-track-b-public-100.json",
       "report_policy": "reports/ is ignored by default",
       "claim_boundary": "public-corpus source-evidence retrieval baseline; does not replace private real-history source-evidence quality"
+    },
+    {
+      "track": "Track B public semantic-sidecar pilot",
+      "command": "python benchmarks/aippocampus/benchmark_source_evidence_retrieval.py --allow-deterministic-labels --include-public-semantic-sidecar --public-semantic-output-dir .tmp/public-semantic-sidecar-20260529-wide --public-semantic-conversations 80 --public-semantic-max-messages 160 --public-semantic-max-candidates 48 --public-semantic-cases 40 --public-semantic-min-cases 3 --public-semantic-top-k 5 --public-semantic-max-tokens 16384 --public-semantic-timeout 90 --output .tmp/track-b-public-semantic-sidecar-wide-20260529.json",
+      "report_policy": ".tmp/ is ignored by default; keep generated subset, sidecar, registry, and live report local unless a future curated subset is deliberately promoted",
+      "latest_local_result": {
+        "date": "2026-05-29",
+        "status": "sufficient",
+        "bounded_subset": {
+          "conversation_count": 80,
+          "message_count": 160,
+          "candidate_message_count": 48
+        },
+        "reviewed_sidecar_row_count": 3,
+        "selected_case_count": 3,
+        "top5_hit_rate": 1.0
+      },
+      "claim_boundary": "public semantic-sidecar pilot only; does not claim human-reviewed labels, unbounded public semantic-sidecar quality, or private real-history source-evidence quality"
     }
   ]
 }

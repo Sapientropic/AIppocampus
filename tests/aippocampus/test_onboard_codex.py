@@ -116,11 +116,15 @@ class OnboardCodexTests(unittest.TestCase):
         self.assertEqual(stats["graph_json_count"], 1)
         self.assertEqual(result["data"]["actions"]["scan_sessions"]["registered_count"], 1)
         self.assertEqual(result["data"]["actions"]["cognitive_map"]["route_count"], 0)
+        self.assertGreaterEqual(
+            result["data"]["actions"]["semantic_triggers"]["trigger_count"], 1
+        )
         self.assertEqual(result["data"]["boundary"]["frontier"]["status"], "not_run")
         self.assertGreaterEqual(
             result["data"]["actions"]["project_timeline"]["life_label_count"], 1
         )
         self.assertTrue((self.registry_dir / "project_timeline.json").exists())
+        self.assertTrue((self.registry_dir / "semantic_triggers.jsonl").exists())
 
     def test_repair_detects_and_rebuilds_sqlite_stale_against_clean_source(self) -> None:
         initial = registry.register_rollout_thread(

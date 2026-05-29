@@ -194,6 +194,39 @@ def run_one_job(
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": initial_payload},
     ]
+
+    def invalid_final_feedback() -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "error": "No valid source-backed findings survived validation.",
+            "instruction": "Use refs from available_refs. Return action=final with findings, or empty findings only when no durable finding exists.",
+            "available_refs": list(state.source_bank.keys())[:32],
+        }
+        if job == "semantic_scope_labeling":
+            payload["semantic_scope_labeling_requirements"] = {
+                "message_id": "Target exactly one clean-source message_id from a source_ref.",
+                "scope_labels": "Use only canonical labels and omit weak labels.",
+                "label_evidence": "Required for every scope_label, with a short source-grounded reason and confidence.",
+                "source_refs": "Must include a ref that resolves to the same message_id.",
+            }
+        return payload
+
+    def repair_feedback() -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "repair": "final_only",
+            "instruction": "Use existing tool observations and available refs to produce source-backed findings. Do not call tools. Return action=final.",
+            "available_refs": list(state.source_bank.keys())[:40],
+        }
+        if job == "semantic_scope_labeling":
+            # Semantic sidecars are source-review-sensitive. Keep the repair path
+            # strict so old no-evidence model habits cannot refill staging with
+            # labels that the materializer must later reject.
+            payload["semantic_scope_labeling_requirements"] = {
+                "message_id": "Target exactly one clean-source message_id from a source_ref.",
+                "label_evidence": "Every applied label needs its own source-grounded reason and confidence.",
+                "omit_if_uncertain": "If a label cannot be defended from the source message itself, omit it.",
+            }
+        return payload
+
     loop = run_tool_using_loop(
         messages=messages,
         step_budget=step_budget,
@@ -217,16 +250,8 @@ def run_one_job(
             state=state,
         ),
         min_tool_feedback=lambda: {"error": "Call at least one read-only tool before finalizing."},
-        invalid_final_feedback=lambda: {
-            "error": "No valid source-backed findings survived validation.",
-            "instruction": "Use refs from available_refs. Return action=final with findings, or empty findings only when no durable finding exists.",
-            "available_refs": list(state.source_bank.keys())[:32],
-        },
-        repair_feedback=lambda: {
-            "repair": "final_only",
-            "instruction": "Use existing tool observations and available refs to produce source-backed findings. Do not call tools. Return action=final.",
-            "available_refs": list(state.source_bank.keys())[:40],
-        },
+        invalid_final_feedback=invalid_final_feedback,
+        repair_feedback=repair_feedback,
         parse_error_feedback=lambda action: {
             "error": "Previous response was not valid JSON.",
             "details": action.get("error"),

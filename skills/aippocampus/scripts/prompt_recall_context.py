@@ -36,6 +36,9 @@ from prompt_cues import (
     association_term_is_generic,
     explicit_recall_terms,
     matched_terms,
+    prompt_is_code_surface,
+    semantic_trigger_context_intent,
+    unique_preserve,
 )
 from prompt_recall_core import (
     current_project_label,
@@ -43,7 +46,9 @@ from prompt_recall_core import (
 )
 from registry import load_registry
 from retrieval import CONCEPT_TRIGGERS
-from semantic_recall_gate import default_semantic_triggers_path
+from retrieval_query_policy import semantic_trigger_terms
+from semantic_cue_cache import default_semantic_cues_path
+from semantic_recall_gate import default_semantic_triggers_path, prompt_relevant_triggers
 
 
 @dataclass(frozen=True)
@@ -56,6 +61,7 @@ class RecallDecisionContext:
     concept_graph_path: Path
     working_memory_path: Path
     semantic_triggers_path: Path
+    semantic_cues_path: Path
     is_noise: bool
     registry: dict[str, Any]
     project_label: str | None
@@ -68,6 +74,7 @@ class RecallDecisionContext:
     pre_explicit: list[str]
     pre_associative: list[str]
     pre_important: list[str]
+    semantic_trigger_matches: list[dict[str, Any]]
 
     def hook_path_fields(self) -> dict[str, str]:
         return {
@@ -78,6 +85,7 @@ class RecallDecisionContext:
             "concept_graph": str(self.concept_graph_path),
             "working_memory_path": str(self.working_memory_path),
             "semantic_triggers_path": str(self.semantic_triggers_path),
+            "semantic_cues_path": str(self.semantic_cues_path),
         }
 
 
@@ -91,7 +99,8 @@ def _resolve_context_paths(
     concept_graph_path: Path | str | None,
     working_memory_path: Path | str | None,
     semantic_triggers_path: Path | str | None,
-) -> tuple[Path, Path, Path, Path, Path, Path, Path]:
+    semantic_cues_path: Path | str | None,
+) -> tuple[Path, Path, Path, Path, Path, Path, Path, Path]:
     cwd_path = Path(cwd).resolve()
     path = registry_json_path(
         Path(registry_path).resolve() if registry_path else None,
@@ -122,6 +131,11 @@ def _resolve_context_paths(
         if semantic_triggers_path
         else default_semantic_triggers_path(registry_path=path)
     )
+    semantic_cues_file = (
+        Path(semantic_cues_path).resolve()
+        if semantic_cues_path
+        else default_semantic_cues_path(registry_path=path)
+    )
     return (
         cwd_path,
         path,
@@ -130,6 +144,7 @@ def _resolve_context_paths(
         concept_file,
         working_memory_file,
         semantic_triggers_file,
+        semantic_cues_file,
     )
 
 
@@ -144,6 +159,7 @@ def build_recall_decision_context(
     concept_graph_path: Path | str | None = None,
     working_memory_path: Path | str | None = None,
     semantic_triggers_path: Path | str | None = None,
+    semantic_cues_path: Path | str | None = None,
     use_cognitive_map: bool = True,
 ) -> RecallDecisionContext:
     prompt = str(prompt or "").strip()
@@ -155,6 +171,7 @@ def build_recall_decision_context(
         concept_file,
         working_memory_file,
         semantic_triggers_file,
+        semantic_cues_file,
     ) = _resolve_context_paths(
         cwd=cwd,
         registry_path=registry_path,
@@ -164,6 +181,7 @@ def build_recall_decision_context(
         concept_graph_path=concept_graph_path,
         working_memory_path=working_memory_path,
         semantic_triggers_path=semantic_triggers_path,
+        semantic_cues_path=semantic_cues_path,
     )
     is_noise = source_text_is_noise(prompt)
     registry: dict[str, Any] = {}
@@ -177,6 +195,7 @@ def build_recall_decision_context(
     pre_explicit: list[str] = []
     pre_associative: list[str] = []
     pre_important: list[str] = []
+    semantic_trigger_matches: list[dict[str, Any]] = []
 
     if not is_noise:
         registry = load_registry(path)
@@ -209,9 +228,39 @@ def build_recall_decision_context(
             for match in (match_associations(prompt, associations) if prompt else [])
             if not association_term_is_generic(match)
         ]
+        semantic_trigger_matches = (
+            prompt_relevant_triggers(
+                prompt=prompt,
+                semantic_triggers_path=semantic_triggers_file,
+                semantic_cues_path=semantic_cues_file,
+                limit=8,
+            )
+            if prompt
+            else []
+        )
         pre_explicit = explicit_recall_terms(prompt)
-        pre_associative = matched_terms(prompt, set(CONCEPT_TRIGGERS) | ASSOCIATIVE_CUES)
         pre_important = matched_terms(prompt, IMPORTANCE_CUES)
+        dynamic_associative: list[str] = []
+        if (
+            not prompt_is_code_surface(prompt)
+            or pre_explicit
+            or pre_important
+            or working_memory_matches
+            or cognitive_map_matches
+            or semantic_trigger_context_intent(prompt)
+        ):
+            # Reviewed triggers and learned semantic cues are the migration path
+            # for multilingual/domain aliases. Fold them into the existing
+            # associative pre-gate so foreground recall can stay local after a
+            # cue has proved useful, instead of expanding hard-coded Python word
+            # lists. Do not let a broad sidecar term such as "dashboard" turn a
+            # plain code task into recall unless another memory cue is present.
+            dynamic_associative = semantic_trigger_terms(semantic_trigger_matches, limit=16)
+        pre_associative = unique_preserve(
+            matched_terms(prompt, set(CONCEPT_TRIGGERS) | ASSOCIATIVE_CUES)
+            + dynamic_associative,
+            limit=24,
+        )
 
     return RecallDecisionContext(
         prompt=prompt,
@@ -222,6 +271,7 @@ def build_recall_decision_context(
         concept_graph_path=concept_file,
         working_memory_path=working_memory_file,
         semantic_triggers_path=semantic_triggers_file,
+        semantic_cues_path=semantic_cues_file,
         is_noise=is_noise,
         registry=registry,
         project_label=project_label,
@@ -234,4 +284,5 @@ def build_recall_decision_context(
         pre_explicit=pre_explicit,
         pre_associative=pre_associative,
         pre_important=pre_important,
+        semantic_trigger_matches=semantic_trigger_matches,
     )

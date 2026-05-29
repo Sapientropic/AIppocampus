@@ -9,6 +9,7 @@ import os
 import sqlite3
 import time
 from pathlib import Path
+from typing import Any
 
 from aippocampuslib import (
     build_anchor_graph,
@@ -39,7 +40,7 @@ def make_sqlite(
     if tmp_path.exists():
         tmp_path.unlink()
     con = sqlite3.connect(tmp_path)
-    rag_status = {
+    rag_status: dict[str, Any] = {
         "enabled": False,
         "chunk_count": 0,
         "chunk_chars": rag_chunk_chars,

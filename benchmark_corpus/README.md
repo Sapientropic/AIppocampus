@@ -62,6 +62,27 @@ This Track B slice reports message-level and turn-level source hits. It is a
 public-corpus retrieval baseline, not a private real-history source-evidence
 quality claim.
 
+Do not count the generated ShareGPT clean-source output as
+`semantic-sidecar-required` by itself. The public corpus currently contains
+`messages.jsonl` and `turns.jsonl`; it does not ship reviewed
+`semantic-scope-labels.jsonl` sidecars. To use a public corpus for a semantic
+sidecar slice, first materialize source-backed semantic sidecars for a bounded
+registry subset and report that as a separate public semantic-sidecar benchmark,
+not as the private real-history semantic-sidecar quality claim.
+
+Run the bounded public semantic-sidecar Track B pilot:
+
+```powershell
+python benchmarks\aippocampus\benchmark_source_evidence_retrieval.py --allow-deterministic-labels --include-public-semantic-sidecar --public-semantic-output-dir .tmp\public-semantic-sidecar-20260529-wide --public-semantic-conversations 80 --public-semantic-max-messages 160 --public-semantic-max-candidates 48 --public-semantic-cases 40 --public-semantic-min-cases 3 --public-semantic-top-k 5 --public-semantic-max-tokens 16384 --public-semantic-timeout 90 --output .tmp\track-b-public-semantic-sidecar-wide-20260529.json
+```
+
+Latest local pilot (2026-05-29): `status=sufficient`, bounded subset 80
+conversations / 160 messages / 48 label candidates, 3 reviewed
+`semantic-scope-labels.jsonl` rows, 3 selected public semantic-sidecar cases,
+3/3 top-5 hits. This is a public semantic-sidecar pilot only; it does not claim
+human-reviewed labels, unbounded public quality, or private real-history
+semantic-sidecar quality.
+
 Run the optional standard retrieval-QA Track B adapter:
 
 ```powershell

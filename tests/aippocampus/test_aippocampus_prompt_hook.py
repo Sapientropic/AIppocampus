@@ -25,6 +25,7 @@ import aippocampus_prompt_hook as hook  # noqa: E402
 import ambient_thread_cache as thread_cache  # noqa: E402
 import build_concept_graph as concept_graph  # noqa: E402
 import prompt_cues as recall_cues  # noqa: E402
+import semantic_cue_cache as cue_cache  # noqa: E402
 
 
 class AmbientRecallHookTests(unittest.TestCase):
@@ -652,6 +653,305 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertIn("AIppocampus", result["query_terms"])
         self.assertIn("semantic gate", " ".join(result["reasons"]))
 
+    def test_semantic_gate_alias_hits_are_recorded_as_reusable_cues(self) -> None:
+        registry_path = self.root / "semantic-cue-registry" / "threads.json"
+        registry_path.parent.mkdir()
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:aippocampus",
+                            "title": "AIppocampus work",
+                            "project_label": "AIppocampus",
+                            "anchor_titles": ["External hippocampus recall"],
+                            "keywords": ["memoria externa", "внешний гиппокамп"],
+                            "summary": "Source-backed continuity work for external memory.",
+                            "paths": {"workspace": str(self.workspace)},
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        cues_path = self.root / "semantic_cues.jsonl"
+
+        def fake_semantic_gate(prompt: str, **kwargs) -> dict:
+            return {
+                "available": True,
+                "decision": "scent",
+                "confidence": 0.9,
+                "intent": "continuation",
+                "query_aliases": ["memoria externa", "внешний гиппокамп"],
+                "memory_scope": ["registered_threads"],
+                "anti_personalization_risk": "low",
+                "reasons": ["multilingual paraphrase of the memory-system thread"],
+                "workers": [],
+                "errors": [],
+                "cached": False,
+            }
+
+        for prompt in (
+            "¿Podemos seguir con la memoria externa de la que hablamos?",
+            "¿Podemos continuar esa memoria externa para mantener la continuidad?",
+        ):
+            result = hook.assess_prompt(
+                prompt,
+                cwd=self.workspace,
+                registry_path=registry_path,
+                semantic_gate_fn=fake_semantic_gate,
+                semantic_cues_path=cues_path,
+                search_budget=0,
+            )
+            self.assertEqual(result["decision"], "scent")
+
+        triggers = cue_cache.semantic_cue_triggers(cues_path)
+        aliases = {alias for trigger in triggers for alias in trigger.get("aliases") or []}
+        self.assertIn("memoria externa", aliases)
+        self.assertIn("внешний гиппокамп", aliases)
+
+    def test_active_semantic_cue_cache_can_emit_scent_without_semantic_gate(self) -> None:
+        registry_path = self.root / "active-semantic-cue-registry" / "threads.json"
+        registry_path.parent.mkdir()
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:aippocampus",
+                            "title": "AIppocampus work",
+                            "project_label": "AIppocampus",
+                            "anchor_titles": ["External hippocampus recall"],
+                            "keywords": ["memoria externa"],
+                            "summary": "Source-backed continuity work for external memory.",
+                            "paths": {"workspace": str(self.workspace)},
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        cues_path = self.root / "active_semantic_cues.jsonl"
+        semantic_result = {
+            "available": True,
+            "decision": "scent",
+            "confidence": 0.9,
+            "query_aliases": ["memoria externa"],
+        }
+        for prompt in (
+            "¿Podemos seguir con la memoria externa de la que hablamos?",
+            "¿Podemos continuar esa memoria externa para mantener la continuidad?",
+        ):
+            cue_cache.record_semantic_cue_hits(
+                cues_path,
+                prompt=prompt,
+                semantic_result=semantic_result,
+                source_refs=[{"thread_key": "session:aippocampus", "message_id": "m1"}],
+                route="semantic_gate",
+            )
+
+        def fail_semantic_gate(*args, **kwargs) -> dict:
+            raise AssertionError("active semantic cue cache should avoid live semantic spend")
+
+        result = hook.assess_prompt(
+            "¿Podemos seguir con la memoria externa de la que hablamos?",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            semantic_cues_path=cues_path,
+            semantic_gate_fn=fail_semantic_gate,
+            use_semantic_gate=False,
+            search_budget=0,
+        )
+
+        self.assertEqual(result["decision"], "scent")
+        self.assertIsNone(result["semantic_gate"])
+        self.assertIn("memoria externa", result["query_terms"])
+        self.assertIn("associative cue", " ".join(result["reasons"]))
+
+    def test_reviewed_semantic_trigger_can_emit_scent_without_hardcoded_cue(self) -> None:
+        registry_path = self.root / "reviewed-semantic-trigger-registry" / "threads.json"
+        registry_path.parent.mkdir()
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:aippocampus",
+                            "title": "AIppocampus work",
+                            "project_label": "AIppocampus",
+                            "anchor_titles": ["External hippocampus recall"],
+                            "keywords": ["memoria externa"],
+                            "summary": "Source-backed continuity work for external memory.",
+                            "paths": {"workspace": str(self.workspace)},
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        triggers_path = self.root / "reviewed_semantic_triggers.jsonl"
+        triggers_path.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_semantic_trigger",
+                    "status": "active",
+                    "title": "External memory continuation",
+                    "aliases": ["memoria externa"],
+                    "confidence": 0.91,
+                    "when_to_use": "Use when the user asks in Spanish about the external memory thread.",
+                    "source_refs": [{"thread_key": "session:aippocampus", "message_id": "m1"}],
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        def fail_semantic_gate(*args, **kwargs) -> dict:
+            raise AssertionError("reviewed semantic trigger should avoid live semantic spend")
+
+        result = hook.assess_prompt(
+            "¿Podemos seguir con la memoria externa de la que hablamos?",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            semantic_triggers_path=triggers_path,
+            semantic_gate_fn=fail_semantic_gate,
+            use_semantic_gate=False,
+            search_budget=0,
+        )
+
+        self.assertEqual(result["decision"], "scent")
+        self.assertIsNone(result["semantic_gate"])
+        self.assertIn("memoria externa", result["query_terms"])
+        self.assertIn("associative cue", " ".join(result["reasons"]))
+
+    def test_reviewed_semantic_trigger_does_not_turn_plain_code_task_into_recall(self) -> None:
+        registry_path = self.root / "code-surface-semantic-trigger-registry" / "threads.json"
+        registry_path.parent.mkdir()
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:dashboard",
+                            "title": "Dashboard design memory",
+                            "project_label": "Product UI",
+                            "anchor_titles": ["Dashboard hover behavior"],
+                            "keywords": ["dashboard", "hover"],
+                            "summary": "Prior source-backed dashboard decisions.",
+                            "paths": {"workspace": str(self.workspace)},
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        triggers_path = self.root / "code_surface_semantic_triggers.jsonl"
+        triggers_path.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_semantic_trigger",
+                    "status": "active",
+                    "title": "Dashboard memory",
+                    "aliases": ["dashboard"],
+                    "confidence": 0.91,
+                    "when_to_use": "Use when the user asks to recall the dashboard decision.",
+                    "source_refs": [{"thread_key": "session:dashboard", "message_id": "m1"}],
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        def fail_semantic_gate(*args, **kwargs) -> dict:
+            raise AssertionError("plain code-surface tasks should stay local and quiet")
+
+        result = hook.assess_prompt(
+            "Fix the dashboard hover test and update the CSS.",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            semantic_triggers_path=triggers_path,
+            semantic_gate_fn=fail_semantic_gate,
+            use_semantic_gate=False,
+            search_budget=0,
+        )
+
+        self.assertEqual(result["decision"], "skip")
+        self.assertEqual(result["semantic_gate"], None)
+
+    def test_reviewed_semantic_trigger_can_scent_code_surface_continuation(self) -> None:
+        registry_path = self.root / "code-surface-continuation-trigger-registry" / "threads.json"
+        registry_path.parent.mkdir()
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:atlas",
+                            "title": "Atlas dashboard memory",
+                            "project_label": "Atlas dashboard",
+                            "anchor_titles": ["Atlas dashboard layout sprint"],
+                            "keywords": ["Atlas dashboard", "layout", "sprint"],
+                            "summary": "Prior source-backed dashboard layout context.",
+                            "paths": {"workspace": str(self.workspace)},
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        triggers_path = self.root / "code_surface_continuation_semantic_triggers.jsonl"
+        triggers_path.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_semantic_trigger",
+                    "status": "active",
+                    "title": "Atlas dashboard continuation",
+                    "aliases": ["Atlas dashboard", "layout sprint"],
+                    "confidence": 0.91,
+                    "when_to_use": "Use when the user asks to continue the Atlas dashboard context.",
+                    "when_not_to_use": "Do not use for plain implementation tasks.",
+                    "source_refs": [{"thread_key": "session:atlas", "message_id": "m1"}],
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        def fail_semantic_gate(*args, **kwargs) -> dict:
+            raise AssertionError("reviewed trigger should provide local continuation scent")
+
+        result = hook.assess_prompt(
+            "Fix Atlas dashboard layout, but only continue that context; do not implement.",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            semantic_triggers_path=triggers_path,
+            semantic_gate_fn=fail_semantic_gate,
+            use_semantic_gate=False,
+            search_budget=0,
+        )
+
+        self.assertEqual(result["decision"], "scent")
+        self.assertTrue(
+            any(
+                "atlas" in str(term).casefold() and "dashboard" in str(term).casefold()
+                for term in result["query_terms"]
+            )
+        )
+        self.assertIn("associative cue", " ".join(result["reasons"]))
+
     def test_foreground_budget_caps_semantic_gate_timeout(self) -> None:
         registry_path = self.root / "semantic-budget-registry" / "threads.json"
         registry_path.parent.mkdir()
@@ -920,6 +1220,165 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertEqual(result["decision"], "evidence")
         self.assertTrue(result["evidence"])
         self.assertIn("semantic-context evidence upgrade", " ".join(result["reasons"]))
+
+    def test_negative_evidence_intent_keeps_semantic_evidence_as_scent(self) -> None:
+        def fake_semantic_gate(prompt: str, **kwargs) -> dict:
+            return {
+                "available": True,
+                "decision": "evidence",
+                "confidence": 0.95,
+                "intent": "continuation",
+                "query_aliases": ["raw history", "external hippocampus"],
+                "memory_scope": ["registered_threads"],
+                "anti_personalization_risk": "low",
+                "reasons": ["model wants evidence"],
+                "workers": [],
+                "errors": [],
+                "cached": False,
+            }
+
+        result = hook.assess_prompt(
+            "raw history 明明在本地这条线继续，但先只给 scent，不要引用原话。",
+            cwd=self.workspace,
+            registry_path=self.registry,
+            semantic_gate_fn=fake_semantic_gate,
+            search_budget=3,
+        )
+
+        self.assertEqual(result["decision"], "scent")
+        self.assertFalse(result["evidence"])
+        self.assertIn("evidence withheld", " ".join(result["reasons"]))
+
+    def test_semantic_continuation_does_not_upgrade_to_evidence_without_source_intent(self) -> None:
+        def fake_semantic_gate(prompt: str, **kwargs) -> dict:
+            return {
+                "available": True,
+                "decision": "evidence",
+                "confidence": 0.95,
+                "intent": "continuation",
+                "query_aliases": ["raw history", "external hippocampus"],
+                "memory_scope": ["registered_threads"],
+                "anti_personalization_risk": "low",
+                "reasons": ["model over-eagerly wants evidence"],
+                "workers": [],
+                "errors": [],
+                "cached": False,
+            }
+
+        result = hook.assess_prompt(
+            "external hippocampus hook 那条线先继续推进。",
+            cwd=self.workspace,
+            registry_path=self.registry,
+            semantic_gate_fn=fake_semantic_gate,
+            search_budget=3,
+        )
+
+        self.assertEqual(result["decision"], "scent")
+        self.assertFalse(result["evidence"])
+
+    def test_exact_wording_topic_continuation_stays_scent(self) -> None:
+        def fake_semantic_gate(prompt: str, **kwargs) -> dict:
+            return {
+                "available": True,
+                "decision": "scent",
+                "confidence": 0.85,
+                "intent": "continuation",
+                "query_aliases": ["self-continuity", "生命还能变成什么"],
+                "memory_scope": ["registered_threads"],
+                "anti_personalization_risk": "low",
+                "reasons": ["continue the theme only"],
+                "workers": [],
+                "errors": [],
+                "cached": False,
+            }
+
+        result = hook.assess_prompt(
+            "self-continuity 那句 quote 还要怎么处理?",
+            cwd=self.workspace,
+            registry_path=self.registry,
+            semantic_gate_fn=fake_semantic_gate,
+            search_budget=2,
+        )
+
+        self.assertEqual(result["decision"], "scent")
+        self.assertFalse(result["evidence"])
+
+    def test_english_cite_prompt_requests_source_evidence(self) -> None:
+        messages = self._write_clean_thread_rows(
+            "session:atlas-evidence",
+            [
+                {
+                    "source_line": 41,
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": (
+                        "AIppocampus Atlas recall gate should stay project-scoped "
+                        "and only scent ambiguous continuation."
+                    ),
+                }
+            ],
+        )
+        registry_path = self._write_clean_registry(
+            thread_key="session:atlas-evidence",
+            title="AIppocampus Atlas recall gate",
+            keywords=["AIppocampus", "Atlas", "recall gate", "project-scoped"],
+            summary="Atlas recall gate should stay project-scoped.",
+            messages_path=messages,
+        )
+
+        result = hook.assess_prompt(
+            "Can you cite AIppocampus Atlas recall gate should stay project-scoped?",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            search_budget=2,
+        )
+
+        self.assertEqual(result["decision"], "evidence")
+        self.assertEqual(result["evidence"][0]["thread_key"], "session:atlas-evidence")
+
+    def test_source_backed_evidence_prompt_requests_source_evidence(self) -> None:
+        result = hook.assess_prompt(
+            "请给 source-backed evidence：raw history 明明在本地。",
+            cwd=self.workspace,
+            registry_path=self.registry,
+            search_budget=2,
+        )
+
+        self.assertEqual(result["decision"], "evidence")
+        self.assertTrue(result["evidence"])
+
+    def test_scent_only_topic_can_be_explicitly_retrieved(self) -> None:
+        messages = self._write_clean_thread_rows(
+            "session:scent-boundary",
+            [
+                {
+                    "source_line": 41,
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": (
+                        "AIppocampus Atlas recall gate should stay project-scoped "
+                        "and only scent ambiguous continuation."
+                    ),
+                }
+            ],
+        )
+        registry_path = self._write_clean_registry(
+            thread_key="session:scent-boundary",
+            title="AIppocampus Atlas recall gate",
+            keywords=["recall gate", "scent-only", "project-scoped"],
+            summary="Prior work discussed the recall gate scent-only boundary.",
+            messages_path=messages,
+        )
+
+        result = hook.assess_prompt(
+            "recall gate 的 scent-only 边界找回。",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            search_budget=2,
+        )
+
+        self.assertEqual(result["decision"], "evidence")
+        self.assertFalse(recall_cues.negative_evidence_intent("recall gate 的 scent-only 边界找回。"))
 
     def test_natural_evidence_intent_upgrades_strong_scent_to_evidence(self) -> None:
         messages = self._write_clean_thread_rows(
@@ -1565,11 +2024,28 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertIn("Go runtime", with_graph["query_terms"])
         self.assertIn("concept graph expansion", " ".join(with_graph["reasons"]))
 
-    def test_weak_deictic_cue_does_not_force_evidence(self) -> None:
+    def test_weak_deictic_reviewed_trigger_does_not_force_evidence(self) -> None:
+        triggers_path = self.root / "weak_deictic_semantic_triggers.jsonl"
+        triggers_path.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_semantic_trigger",
+                    "status": "active",
+                    "title": "External hippocampus recall continuity",
+                    "aliases": ["外置海马体", "external hippocampus"],
+                    "confidence": 0.9,
+                    "when_to_use": "Use for AIppocampus external hippocampus continuation.",
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
         result = hook.assess_prompt(
             "这个外置海马体还要再收一下",
             cwd=self.workspace,
             registry_path=self.registry,
+            semantic_triggers_path=triggers_path,
             search_budget=2,
         )
 

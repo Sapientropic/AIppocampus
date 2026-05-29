@@ -44,12 +44,16 @@ CUE_COMPAT_EXPORTS = (
     "matched_life_wide_cue_terms",
     "matched_life_wide_timeline_cues",
     "matched_terms",
+    "memory_boundary_context_intent",
     "natural_evidence_intent",
+    "negative_evidence_intent",
     "prompt_is_code_surface",
+    "prompt_is_secret_surface",
     "semantic_gate_can_request_evidence",
     "semantic_gate_is_memory_cue",
     "semantic_gate_terms",
     "should_run_semantic_gate",
+    "source_evidence_intent",
     "working_memory_terms",
 )
 ASSOCIATIVE_CUES = prompt_cues.ASSOCIATIVE_CUES
@@ -72,12 +76,16 @@ is_decision_continuation = prompt_cues.is_decision_continuation
 matched_life_wide_cue_terms = prompt_cues.matched_life_wide_cue_terms
 matched_life_wide_timeline_cues = prompt_cues.matched_life_wide_timeline_cues
 matched_terms = prompt_cues.matched_terms
+memory_boundary_context_intent = prompt_cues.memory_boundary_context_intent
 natural_evidence_intent = prompt_cues.natural_evidence_intent
+negative_evidence_intent = prompt_cues.negative_evidence_intent
 prompt_is_code_surface = prompt_cues.prompt_is_code_surface
+prompt_is_secret_surface = prompt_cues.prompt_is_secret_surface
 semantic_gate_can_request_evidence = prompt_cues.semantic_gate_can_request_evidence
 semantic_gate_is_memory_cue = prompt_cues.semantic_gate_is_memory_cue
 semantic_gate_terms = prompt_cues.semantic_gate_terms
 should_run_semantic_gate = prompt_cues.should_run_semantic_gate
+source_evidence_intent = prompt_cues.source_evidence_intent
 working_memory_terms = prompt_cues.working_memory_terms
 
 PROMPT_HOOK_SEMANTIC_TIMEOUT = int(os.environ.get("AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT", "12"))
@@ -540,8 +548,21 @@ def should_suppress(
     *,
     cognitive_map_cue: bool = False,
     semantic_memory_cue: bool = False,
+    source_evidence_cue: bool = False,
 ) -> bool:
+    if prompt_is_secret_surface(prompt) and not memory_boundary_context_intent(prompt):
+        # Secret-adjacent surfaces are intentionally stricter than ordinary
+        # code prompts. They often contain harmless placeholders in tests, but
+        # the next paste can contain a real cookie/header/key; do not let
+        # semantic aliases or registry overlap turn that into foreground recall.
+        return True
     if explicit:
+        return False
+    if source_evidence_cue and candidates:
+        # Source-backed requests such as "Can you cite..." may mention codey
+        # nouns (dashboard/project/API) because the old source itself is about
+        # software. Once the user has asked for evidence and local search found
+        # candidates, do not let the generic code-surface brake hide it.
         return False
     if associative and candidates:
         return False

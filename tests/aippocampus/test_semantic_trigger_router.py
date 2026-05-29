@@ -63,6 +63,41 @@ class SemanticTriggerRouterTests(unittest.TestCase):
         self.assertIn("AIppocampus semantic recall gate", rows[0]["aliases"])
         self.assertEqual(rows[0]["source_refs"][0]["line"], 42)
 
+    def test_reviewed_seed_triggers_are_written_to_semantic_trigger_sidecar(self) -> None:
+        seed = self.root / "reviewed-seed.jsonl"
+        seed.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "kind": "aippocampus_semantic_trigger",
+                    "trigger_id": "seed_external_hippocampus",
+                    "status": "active",
+                    "source": "reviewed_seed",
+                    "title": "External hippocampus recall continuity",
+                    "aliases": ["external hippocampus", "外置海马体"],
+                    "when_to_use": "Use when the user asks to continue AIppocampus memory work.",
+                    "when_not_to_use": "Do not use for plain implementation tasks.",
+                    "confidence": 0.88,
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        self.write_candidates([])
+
+        result = router.build_semantic_triggers(
+            candidates_path=self.candidates,
+            output_path=self.output,
+            seed_triggers_path=seed,
+        )
+        rows = [json.loads(line) for line in self.output.read_text(encoding="utf-8").splitlines()]
+
+        self.assertEqual(result["seed_trigger_count"], 1)
+        self.assertEqual(result["trigger_count"], 1)
+        self.assertEqual(rows[0]["source"], "reviewed_seed")
+        self.assertIn("external hippocampus", rows[0]["aliases"])
+
     def test_low_confidence_or_unsourced_candidate_is_not_foreground_trigger(self) -> None:
         self.write_candidates(
             [

@@ -68,6 +68,16 @@ or `AIPPOCAMPUS_WARM_RECALL_BACKGROUND=0|false|off` to disable this on shared
 machines or during provider-budget debugging; `--warm-background` remains an
 explicit enable override.
 
+Foreground `UserPromptSubmit` must remain below the host hook timeout. The
+installer keeps the Codex hook timeout at 5s and installs
+`--max-elapsed-ms 4300 --semantic-timeout 2.5` by default so the Python process
+can fail open before Codex hard-kills it. If the app reports
+`hook timed out after 5s`, first run `diagnose_hooks.py --events
+UserPromptSubmit --json` and check whether the installed command still carries
+those budget flags. A missing prompt-hook debug log is not proof that nothing
+happened: when the host kills the process at 5s, the hook may never reach its
+sanitized logging path.
+
 Use `benchmarks/aippocampus/benchmark_warm_ambient_recall.py` for calibration.
 Deterministic mode is CI-safe and now runs 13 synthetic trace cases behind
 quality gates, including a source-backed deep archival recall case;
@@ -225,10 +235,29 @@ runs small parallel workers:
 The semantic gate only proposes queries and scope. Evidence still has to come
 from local source search.
 
+When semantic-gate aliases repeatedly lead to local source-backed candidates,
+the hook may record them in `$CODEX_HOME/aippocampus-registry/semantic_cues.jsonl`.
+This is a multilingual cue cache, not a fact store: cues are promoted only after
+repeated hits with source refs, demoted when false positives accumulate, and fed
+back into the semantic gate's trigger catalog as search hints.
+Active `semantic_cues.jsonl` rows and reviewed `semantic_triggers.jsonl` rows
+also feed the hook's local pre-gate and query seed terms. This is the intended
+replacement path for semantic proxy word lists in `prompt_cues.py` and
+`retrieval_query_policy.py`: static cues stay as a compact bootstrap/fallback,
+while repeated or reviewed multilingual paraphrases live in sidecar data.
+`semantic_trigger_router.py` also ships a small reviewed seed sidecar for
+AIppocampus-specific memory architecture terms, and onboarding refreshes it
+into the private registry's `semantic_triggers.jsonl`. Keep future
+domain-semantic additions there or in reviewed promotion candidates, not in
+Python phrase lists.
+
 The local pre-gate avoids unnecessary external calls. Obvious code-surface
 prompts such as "fix dashboard hover and run tests" should not call the semantic
 model just because registry associations contain broad terms. Explicit recall,
 working-memory matches, and strong source-backed triggers bypass this brake.
+For code-surface prompts, reviewed triggers may still provide scent when the
+user explicitly asks to continue prior context, but short single-entity overlap
+such as `Atlas` alone is not enough.
 
 Multilingual behavior should be semantic, not a pile of hard-coded words.
 Non-English natural-language prompts in Russian, Arabic, Japanese, Korean, Thai,

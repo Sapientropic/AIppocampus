@@ -43,6 +43,8 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         else:
             self.assertFalse(command.startswith("& "), command)
         self.assertIn(str(self.script.resolve()), command)
+        self.assertIn("--max-elapsed-ms 4300", command)
+        self.assertIn("--semantic-timeout 2.5", command)
 
     def test_install_preserves_existing_hooks_and_is_idempotent(self) -> None:
         self.hooks_json.write_text(
@@ -76,9 +78,27 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         self.assertFalse(second["changed"])
         self.assertEqual(len(prompt_hooks), 1)
         self.assertIn(str(self.script), prompt_hooks[0]["command"])
+        self.assertIn("--max-elapsed-ms 4300", prompt_hooks[0]["command"])
+        self.assertIn("--semantic-timeout 2.5", prompt_hooks[0]["command"])
         self.assertEqual(
             data["hooks"]["PostToolUse"][0]["hooks"][0]["command"], "python existing.py"
         )
+
+    def test_install_allows_explicit_foreground_budget_override(self) -> None:
+        result = installer.install(
+            self.hooks_json,
+            self.script,
+            timeout=7,
+            max_elapsed_ms=6200,
+            semantic_timeout=1.25,
+        )
+
+        data = self.read_hooks()
+        hook = data["hooks"]["UserPromptSubmit"][0]["hooks"][0]
+        self.assertTrue(result["changed"])
+        self.assertEqual(hook["timeout"], 7)
+        self.assertIn("--max-elapsed-ms 6200", hook["command"])
+        self.assertIn("--semantic-timeout 1.25", hook["command"])
 
     def test_uninstall_removes_only_ambient_hook(self) -> None:
         installer.install(self.hooks_json, self.script, timeout=5)

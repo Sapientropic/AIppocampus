@@ -18,10 +18,10 @@ from aippocampuslib import codex_home, now_utc
 
 DEFAULT_SEARCH_BUDGET_FALLBACK = 3
 PROMPT_HOOK_SEMANTIC_TIMEOUT_FALLBACK = float(
-    os.environ.get("AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT", "12")
+    os.environ.get("AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT", "2.5")
 )
 PROMPT_HOOK_MAX_ELAPSED_MS_FALLBACK = int(
-    os.environ.get("AIPPOCAMPUS_PROMPT_HOOK_BUDGET_MS", "0")
+    os.environ.get("AIPPOCAMPUS_PROMPT_HOOK_BUDGET_MS", "4300")
 )
 _RUNTIME_EXPORTS = {
     "DEFAULT_SEARCH_BUDGET",
@@ -167,6 +167,7 @@ def main() -> int:
     parser.add_argument("--concept-graph")
     parser.add_argument("--working-memory")
     parser.add_argument("--semantic-triggers")
+    parser.add_argument("--semantic-cues")
     parser.add_argument("--semantic-cache")
     parser.add_argument("--ambient-cache")
     warm_group = parser.add_mutually_exclusive_group()
@@ -184,7 +185,7 @@ def main() -> int:
         "--max-elapsed-ms",
         type=int,
         default=PROMPT_HOOK_MAX_ELAPSED_MS_FALLBACK,
-        help="Optional fail-open budget for the whole prompt hook. Default 0 disables it.",
+        help="Fail-open budget for the whole prompt hook. Set 0 to disable.",
     )
     parser.add_argument("--no-semantic-gate", action="store_true")
     parser.add_argument("--no-thread-cache", action="store_true")
@@ -217,6 +218,7 @@ def main() -> int:
             concept_graph_path=Path(args.concept_graph) if args.concept_graph else None,
             working_memory_path=Path(args.working_memory) if args.working_memory else None,
             semantic_triggers_path=Path(args.semantic_triggers) if args.semantic_triggers else None,
+            semantic_cues_path=Path(args.semantic_cues) if args.semantic_cues else None,
             semantic_cache_path=Path(args.semantic_cache) if args.semantic_cache else None,
             ambient_cache_path=Path(args.ambient_cache) if args.ambient_cache else None,
             semantic_gate_mode="off" if args.no_semantic_gate else args.semantic_gate,

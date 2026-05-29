@@ -36,7 +36,9 @@ but they must not rewrite source, delete source, or directly write formal memory
 - `semantic_trigger_router.py`: deterministic router that turns source-backed
   `hook_trigger`/project candidates into `semantic_triggers.jsonl`, so the
   prompt hook can use data-driven semantic cues instead of expanding hard-coded
-  phrase lists.
+  phrase lists. It also merges the reviewed seed triggers in
+  `references/reviewed-semantic-triggers.seed.jsonl`; keep that seed compact and
+  AIppocampus-specific.
 - `build_cognitive_map.py`: deterministic materializer for DeepSeek-proposed
   landmarks, regions, and routes. It never creates routes from registry
   keywords alone.
@@ -53,7 +55,11 @@ but they must not rewrite source, delete source, or directly write formal memory
 - `$CODEX_HOME/aippocampus-registry/working_memory.jsonl`: soft working memory
   consumed by the prompt hook as source-backed staging, not formal truth.
 - `$CODEX_HOME/aippocampus-registry/semantic_triggers.jsonl`: dynamic trigger
-  rows consumed by `semantic_recall_gate.py`.
+  rows consumed by `semantic_recall_gate.py` and the prompt hook's local
+  pre-gate/query seed path.
+- `$CODEX_HOME/aippocampus-registry/semantic_cues.jsonl`: learned multilingual
+  semantic aliases from repeated prompt-hook hits. It is consumed as trigger
+  context/query hints only and must not be treated as source truth.
 - `$CODEX_HOME/aippocampus-registry/cognitive_map.json`: hook-safe mental-map
   sidecar consumed by the prompt hook as scent, not evidence.
 - `<clean-source>/semantic-scope-labels.jsonl`: optional per-clean-source

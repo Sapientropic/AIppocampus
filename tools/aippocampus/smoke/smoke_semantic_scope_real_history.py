@@ -23,7 +23,7 @@ import _paths
 
 _paths.ensure_paths()
 
-from smoke_life_wide_registry import coverage_ratios, run_life_wide_registry_smoke
+from smoke_life_wide_registry import coverage_ratios, dict_value, run_life_wide_registry_smoke
 
 from aippocampuslib import aippocampus_registry_dir, compact_text, deepseek_cache_metrics_from_usage
 from build_concept_graph import default_concept_graph_path
@@ -56,16 +56,8 @@ SEMANTIC_CANDIDATE_PROJECT_LABEL = "Stage 2 life-wide semantic candidates"
 
 
 def dynamic_counts(life_smoke: dict[str, Any]) -> dict[str, int]:
-    artifacts = (
-        life_smoke.get("artifact_counts")
-        if isinstance(life_smoke.get("artifact_counts"), dict)
-        else {}
-    )
-    timeline = (
-        life_smoke.get("timeline_coverage")
-        if isinstance(life_smoke.get("timeline_coverage"), dict)
-        else {}
-    )
+    artifacts = dict_value(life_smoke.get("artifact_counts"))
+    timeline = dict_value(life_smoke.get("timeline_coverage"))
     return {
         "semantic_sidecar_threads": int(artifacts.get("semantic_sidecar_threads") or 0),
         "semantic_sidecar_rows": int(artifacts.get("semantic_sidecar_rows") or 0),
@@ -103,7 +95,7 @@ def refresh_timeline(
         max_per_life_label=max_per_life_label,
     )
     save_project_timeline(timeline_path, timeline)
-    life_wide = timeline.get("life_wide") if isinstance(timeline.get("life_wide"), dict) else {}
+    life_wide = dict_value(timeline.get("life_wide"))
     return {
         "project_count": int(timeline.get("project_count") or 0),
         "life_label_count": int(life_wide.get("label_count") or 0),
@@ -240,8 +232,8 @@ def turn_identity(turn: dict[str, Any]) -> str:
 def semantic_candidate_timeline_from_life_wide(
     timeline: dict[str, Any], *, max_turns: int | None
 ) -> dict[str, Any]:
-    life_wide = timeline.get("life_wide") if isinstance(timeline.get("life_wide"), dict) else {}
-    label_groups = life_wide.get("labels") if isinstance(life_wide.get("labels"), dict) else {}
+    life_wide = dict_value(timeline.get("life_wide"))
+    label_groups = dict_value(life_wide.get("labels"))
     candidates: list[dict[str, Any]] = []
     seen: set[str] = set()
     skipped_already_semantic = 0
@@ -715,6 +707,7 @@ def run_semantic_scope_real_history_smoke(
             project is None and candidate_timeline and full_candidate_coverage
         )
         if use_candidate_batches:
+            assert candidate_timeline is not None
             job_result = run_candidate_batches(
                 registry_path=registry,
                 concept_graph_path=concept_graph,

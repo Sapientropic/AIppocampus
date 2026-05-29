@@ -40,33 +40,24 @@ RECALL_TRIGGERS = [
     "compaction",
 ]
 
+# Keep these static concept and alias tables as a small bootstrap/fallback
+# surface only. Multilingual or domain-specific semantic paraphrases should be
+# learned into `semantic_cues.jsonl` or reviewed into `semantic_triggers.jsonl`
+# and consumed through `semantic_trigger_terms()`; adding them here recreates
+# the phrase-list sprawl this layer is meant to retire.
 CONCEPT_TRIGGERS = {
-    "外置海马体",
-    "小海马体",
     "钩子",
-    "触发式联想",
-    "被动触发",
-    "联想机制",
     "graphify",
     "rag",
-    "semantic retrieval",
-    "active recall",
     "context compaction",
     "compaction",
 }
 
 ALIASES = {
-    "外置海马体": ["external hippocampus", "小海马体"],
-    "小海马体": ["external hippocampus", "外置海马体"],
     "压缩": ["compaction", "context compaction"],
     "上下文压缩": ["context compaction", "compaction"],
-    "主动召回": ["active recall"],
-    "语义检索": ["semantic retrieval", "RAG"],
     "图谱": ["graph", "Graphify"],
     "钩子": ["hook", "hooks", "UserPromptSubmit"],
-    "触发式联想": ["ambient recall", "active recall", "hook"],
-    "被动触发": ["ambient recall", "UserPromptSubmit"],
-    "联想机制": ["ambient recall", "active recall"],
 }
 
 STOP_TERMS = {
@@ -174,6 +165,47 @@ def split_query_terms(patterns: list[str]) -> list[str]:
             if 2 <= len(chunk) <= 12 and chunk.casefold() not in STOP_TERMS:
                 terms.append(chunk)
     return unique_preserve(terms)
+
+
+def semantic_trigger_terms(rows: list[dict], limit: int = 24) -> list[str]:
+    """Return query terms from dynamic semantic cue/trigger rows.
+
+    Reviewed triggers and learned semantic cues are the replacement path for
+    multilingual/domain-specific alias growth. Keep extraction here instead of
+    adding those aliases back to `ALIASES`, so future tuning can inspect a data
+    sidecar rather than editing a Python phrase table.
+    """
+
+    def iter_values(value: object) -> list[str]:
+        if isinstance(value, list):
+            out: list[str] = []
+            for item in value:
+                out.extend(iter_values(item))
+            return out
+        if isinstance(value, tuple):
+            out = []
+            for item in value:
+                out.extend(iter_values(item))
+            return out
+        if isinstance(value, str):
+            return [value]
+        return []
+
+    terms: list[str] = []
+    for row in rows:
+        values = [
+            row.get("title"),
+            row.get("matched_terms") or [],
+            row.get("aliases") or [],
+        ]
+        for value in iter_values(values):
+            term = normalize_term(str(value or ""))
+            if not term or len(term) > 96:
+                continue
+            if re.search(r"[A-Za-z]:\\|/(Users|home|tmp|var)/", term):
+                continue
+            terms.append(term)
+    return unique_preserve(terms, limit=limit)
 
 
 def anchor_text(anchor: dict) -> str:

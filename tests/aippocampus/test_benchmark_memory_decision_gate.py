@@ -44,6 +44,10 @@ class MemoryDecisionGateBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_memory_decision_gate_benchmark")
         self.assertGreaterEqual(payload["metrics"]["total_cases"], 5)
         self.assertIn("macro_f1", payload["metrics"])
+        self.assertGreaterEqual(payload["metrics"]["scent_or_evidence_recall"], 0.9)
+        self.assertGreaterEqual(payload["metrics"]["evidence_recall"], 0.85)
+        self.assertLessEqual(payload["metrics"]["evidence_false_positive_count"], 1)
+        self.assertLessEqual(payload["metrics"]["weighted_false_positive_cost"], 20.0)
         self.assertEqual(payload["privacy_boundary"]["raw_prompt_emitted"], False)
         self.assertEqual(payload["privacy_boundary"]["absolute_paths_emitted"], False)
         for case in payload["cases"]:
@@ -181,6 +185,67 @@ class MemoryDecisionGateBenchmarkTests(unittest.TestCase):
                 or {"should_scent", "should_evidence"} <= labels
             ),
             20,
+        )
+
+    def test_scent_no_source_twins_strip_source_request_wording(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = benchmark.build_synthetic_fixture(Path(tmp))
+
+        scent_twins = [
+            case.prompt.casefold()
+            for case in fixture.cases
+            if case.case_id.endswith("__scent_no_source_twin")
+        ]
+
+        self.assertTrue(scent_twins)
+        self.assertFalse(any("can you cite" in prompt for prompt in scent_twins))
+        self.assertFalse(any("那句原话" in prompt for prompt in scent_twins))
+        self.assertFalse(any("source-backed evidence" in prompt for prompt in scent_twins))
+
+    def test_multilingual_evidence_twins_include_source_request_wording(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = benchmark.build_synthetic_fixture(Path(tmp))
+
+        evidence_twins = [
+            case.prompt.casefold()
+            for case in fixture.cases
+            if case.case_id.endswith("__evidence_multilingual")
+        ]
+
+        self.assertTrue(evidence_twins)
+        self.assertTrue(all("source-backed evidence" in prompt for prompt in evidence_twins))
+
+    def test_secret_like_suppression_cases_skip_without_semantic_calls(self) -> None:
+        payload = benchmark.run_benchmark(case_set="synthetic", include_private_text=False)
+        secret_cases = [
+            case
+            for case in payload["cases"]
+            if case["case_type"] == "hard_bank_secret_like_suppression"
+        ]
+
+        self.assertTrue(secret_cases)
+        self.assertEqual(
+            [case["case_id"] for case in secret_cases if case["actual"] != "skip"],
+            [],
+        )
+        self.assertEqual(
+            [case["case_id"] for case in secret_cases if case["semantic_gate_called"]],
+            [],
+        )
+
+    def test_plain_implementation_twins_do_not_use_negative_evidence_as_scent(self) -> None:
+        payload = benchmark.run_benchmark(case_set="synthetic", include_private_text=False)
+        plain_tasks = [
+            case
+            for case in payload["cases"]
+            if case["case_type"] == "hard_bank_budget_timeout_degrade"
+            and case["case_id"].endswith("__skip_timeout_plain_task")
+        ]
+
+        self.assertTrue(plain_tasks)
+        self.assertEqual(
+            [case["case_id"] for case in plain_tasks if case["actual"] != "skip"],
+            [],
         )
 
     def test_sharegpt_coding_fixture_runs_real_gate_cases_without_leaking_prompts(self) -> None:

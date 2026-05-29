@@ -27,6 +27,10 @@ from registry import load_registry
 NON_TECHNICAL_LIFE_LABELS = tuple(label for label in SCOPE_LABEL_ORDER if label != "technical_work")
 
 
+def dict_value(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
 def iter_jsonl_safely(path: Path) -> tuple[list[dict[str, Any]], int]:
     rows: list[dict[str, Any]] = []
     bad_rows = 0
@@ -71,7 +75,7 @@ def summarize_scope_coverage(registry: dict[str, Any]) -> dict[str, Any]:
             warnings["non_dict_registry_entry"] += 1
             continue
         thread_id = str(entry.get("thread_key") or f"entry:{index}")
-        paths = entry.get("paths") if isinstance(entry.get("paths"), dict) else {}
+        paths = dict_value(entry.get("paths"))
         messages_value = paths.get("clean_source_messages_jsonl")
         turns_value = paths.get("clean_source_turns_jsonl")
         sqlite_value = paths.get("sqlite")
@@ -113,7 +117,7 @@ def summarize_scope_coverage(registry: dict[str, Any]) -> dict[str, Any]:
         counts["clean_source_messages"] += len(message_rows)
         thread_seen_labels: set[str] = set()
         for message in message_rows:
-            labels = [
+            message_labels = [
                 str(label)
                 for label in message.get("scope_labels") or []
                 if isinstance(label, str) and label in SCOPE_LABEL_ORDER
@@ -123,11 +127,11 @@ def summarize_scope_coverage(registry: dict[str, Any]) -> dict[str, Any]:
                 for label in message.get("semantic_scope_labels") or []
                 if isinstance(label, str) and label in SCOPE_LABEL_ORDER
             ]
-            if labels:
+            if message_labels:
                 counts["messages_with_scope_labels"] += 1
             if semantic_labels:
                 counts["messages_with_semantic_scope_labels"] += 1
-            for label in set(labels + semantic_labels):
+            for label in set(message_labels + semantic_labels):
                 label_message_counts[label] += 1
                 label_thread_counts[label].add(thread_id)
                 thread_seen_labels.add(label)
@@ -136,7 +140,7 @@ def summarize_scope_coverage(registry: dict[str, Any]) -> dict[str, Any]:
         if any(label in NON_TECHNICAL_LIFE_LABELS for label in thread_seen_labels):
             counts["threads_with_non_technical_life_labels"] += 1
 
-    labels = {
+    label_summary = {
         label: {
             "message_count": int(label_message_counts.get(label, 0)),
             "thread_count": len(label_thread_counts[label]),
@@ -148,11 +152,11 @@ def summarize_scope_coverage(registry: dict[str, Any]) -> dict[str, Any]:
         "artifact_counts": dict(sorted(counts.items())),
         "clean_source_schema_versions": dict(sorted(schema_versions.items())),
         "scope_label_coverage": {
-            "canonical_label_count": len(labels),
+            "canonical_label_count": len(label_summary),
             "non_technical_life_label_count": len(
-                [label for label in labels if label in NON_TECHNICAL_LIFE_LABELS]
+                [label for label in label_summary if label in NON_TECHNICAL_LIFE_LABELS]
             ),
-            "labels": labels,
+            "labels": label_summary,
         },
         "warnings": dict(sorted(warnings.items())),
     }
@@ -166,8 +170,8 @@ def summarize_timeline(
         max_turns_per_thread=max_turns_per_thread,
         max_per_life_label=max_per_life_label,
     )
-    life_wide = timeline.get("life_wide") if isinstance(timeline.get("life_wide"), dict) else {}
-    label_groups = life_wide.get("labels") if isinstance(life_wide.get("labels"), dict) else {}
+    life_wide = dict_value(timeline.get("life_wide"))
+    label_groups = dict_value(life_wide.get("labels"))
     labels: dict[str, Any] = {}
     source_backed_turns = 0
     semantic_turns = 0
@@ -210,16 +214,10 @@ def determine_evidence_status(
     min_life_labels: int,
     min_life_threads: int,
 ) -> str:
-    artifact_counts = (
-        coverage.get("artifact_counts") if isinstance(coverage.get("artifact_counts"), dict) else {}
-    )
+    artifact_counts = dict_value(coverage.get("artifact_counts"))
     if int(artifact_counts.get("threads") or 0) <= 0:
         return "skipped_empty_registry"
-    scope = (
-        coverage.get("scope_label_coverage")
-        if isinstance(coverage.get("scope_label_coverage"), dict)
-        else {}
-    )
+    scope = dict_value(coverage.get("scope_label_coverage"))
     non_technical_count = int(scope.get("non_technical_life_label_count") or 0)
     threads_with_life = int(artifact_counts.get("threads_with_non_technical_life_labels") or 0)
     if non_technical_count < min_life_labels or threads_with_life < min_life_threads:
@@ -247,13 +245,11 @@ def coverage_ratios(coverage: dict[str, Any], timeline: dict[str, Any] | None) -
     slice-level diagnostic into a full-history claim.
     """
 
-    artifact_counts = (
-        coverage.get("artifact_counts") if isinstance(coverage.get("artifact_counts"), dict) else {}
-    )
-    timeline = timeline if isinstance(timeline, dict) else {}
+    artifact_counts = dict_value(coverage.get("artifact_counts"))
+    timeline_counts = dict_value(timeline)
     thread_count = int(artifact_counts.get("threads") or 0)
     message_count = int(artifact_counts.get("clean_source_messages") or 0)
-    timeline_turns = int(timeline.get("latest_turn_count") or 0)
+    timeline_turns = int(timeline_counts.get("latest_turn_count") or 0)
     semantic_sidecar_rows = int(artifact_counts.get("semantic_sidecar_rows") or 0)
     return {
         "labeled_message_ratio": ratio(
@@ -270,10 +266,11 @@ def coverage_ratios(coverage: dict[str, Any], timeline: dict[str, Any] | None) -
         ),
         "semantic_sidecar_row_count": semantic_sidecar_rows,
         "source_backed_timeline_turn_ratio": ratio(
-            int(timeline.get("latest_turns_source_backed") or 0), timeline_turns
+            int(timeline_counts.get("latest_turns_source_backed") or 0), timeline_turns
         ),
         "semantic_timeline_turn_ratio": ratio(
-            int(timeline.get("latest_turns_with_semantic_scope_labels") or 0), timeline_turns
+            int(timeline_counts.get("latest_turns_with_semantic_scope_labels") or 0),
+            timeline_turns,
         ),
     }
 

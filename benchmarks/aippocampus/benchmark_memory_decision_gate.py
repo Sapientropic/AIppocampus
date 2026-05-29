@@ -107,6 +107,30 @@ class SyntheticFixture:
     other_workspace: Path | None = None
 
 
+def source_free_scent_twin_prompt(prompt: str) -> str:
+    """Convert an evidence prompt into a same-topic scent-only twin.
+
+    These twins test support-level routing, so they must remove source-request
+    wording. Leaving "cite" or "那句原话" in a should_scent case makes the
+    benchmark punish correct evidence behavior rather than over-escalation.
+    """
+
+    text = prompt.strip()
+    cite_match = re.match(r"Can you cite\s+(.+?)\??$", text, flags=re.IGNORECASE)
+    if cite_match:
+        return f"{cite_match.group(1)} 这条线继续想。"
+    text = text.replace("找回", "继续想")
+    text = text.replace("请给 source-backed evidence：", "")
+    text = text.replace("请给 source evidence：", "")
+    text = text.replace("source-backed evidence", "source-backed memory")
+    text = text.replace("source evidence", "source context")
+    text = text.replace("那句原话", "这个方向")
+    text = text.replace("这句原话", "这个方向")
+    text = text.replace("原话", "线索")
+    text = text.replace("原文", "线索")
+    return text
+
+
 def build_harder_synthetic_case_bank() -> list[GateCase]:
     """Build deterministic adversarial Track A cases.
 
@@ -375,9 +399,7 @@ def build_harder_synthetic_case_bank() -> list[GateCase]:
             "scent_no_source_twin",
             "semantic_overevidence_trap",
             "should_scent",
-            prompt.replace("找回", "继续想").replace("请给 source-backed evidence：", "").replace(
-                "请给 source evidence：", ""
-            ),
+            source_free_scent_twin_prompt(prompt),
             search_budget=3,
             use_semantic_gate=True,
             semantic_gate_fixture="overeager_evidence",
@@ -409,7 +431,8 @@ def build_harder_synthetic_case_bank() -> list[GateCase]:
             "evidence_multilingual",
             "multilingual_paraphrase",
             "should_evidence",
-            prompt.replace("继续", "找回").replace("不要原话", "给原话")
+            "请给 source-backed evidence："
+            + prompt.replace("继续", "找回").replace("先只给 scent, 不要原话", "给原话")
             + " raw history 明明在本地",
             search_budget=2,
             expected_evidence_thread_key="session:synthetic-memory",
@@ -461,6 +484,77 @@ def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
     path.write_text(
         "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
         encoding="utf-8",
+    )
+
+
+def write_synthetic_reviewed_semantic_triggers(registry_path: Path) -> None:
+    write_jsonl(
+        registry_path.parent / "semantic_triggers.jsonl",
+        [
+            {
+                "schema_version": 1,
+                "kind": "aippocampus_semantic_trigger",
+                "trigger_id": "synthetic_reviewed_aippocampus_memory",
+                "status": "active",
+                "source": "synthetic_reviewed_trigger_fixture",
+                "title": "AIppocampus external hippocampus and recall gate",
+                "aliases": [
+                    "external hippocampus",
+                    "外置海马体",
+                    "小海马体",
+                    "active recall",
+                    "ambient recall",
+                    "source-backed",
+                    "source-backed memory",
+                    "raw history",
+                    "self-continuity",
+                    "生命还能变成什么",
+                    "prompt hook",
+                    "recall gate",
+                    "project-scoped",
+                    "scent-only",
+                    "AIppocampus Atlas",
+                    "Atlas recall gate",
+                    "same-name entity trap",
+                    "cwd",
+                    "project scope",
+                ],
+                "when_to_use": (
+                    "Use when the benchmark prompt asks to continue AIppocampus "
+                    "memory architecture, recall-gate, source-backed, or project-scope context."
+                ),
+                "when_not_to_use": (
+                    "Do not use for plain implementation tasks; keep it as scent unless "
+                    "source evidence is explicitly requested."
+                ),
+                "confidence": 0.9,
+                "source_refs": [{"thread_key": "session:synthetic-memory", "line": 356}],
+            },
+            {
+                "schema_version": 1,
+                "kind": "aippocampus_semantic_trigger",
+                "trigger_id": "synthetic_reviewed_atlas_dashboard",
+                "status": "active",
+                "source": "synthetic_reviewed_trigger_fixture",
+                "title": "Atlas dashboard same-name project context",
+                "aliases": [
+                    "Atlas dashboard",
+                    "Atlas dashboard layout",
+                    "layout sprint",
+                    "charts",
+                    "same-name entity trap",
+                ],
+                "when_to_use": (
+                    "Use only when the prompt asks to continue the Atlas dashboard context "
+                    "instead of implementing the dashboard task."
+                ),
+                "when_not_to_use": (
+                    "Do not use for ordinary dashboard CSS, test, layout, or fixture edits."
+                ),
+                "confidence": 0.86,
+                "source_refs": [{"thread_key": "session:atlas-other-project", "line": 17}],
+            },
+        ],
     )
 
 
@@ -863,6 +957,7 @@ def build_synthetic_fixture(root: Path) -> SyntheticFixture:
         ),
         encoding="utf-8",
     )
+    write_synthetic_reviewed_semantic_triggers(registry_path)
     working_memory_path = registry_path.parent / "working_memory.jsonl"
     write_jsonl(
         working_memory_path,

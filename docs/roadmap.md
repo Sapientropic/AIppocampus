@@ -14,6 +14,11 @@ continue.
 AIppocampus preserves source-backed continuity for long-running relationships
 with AI agents.
 
+It is the agent's little hippocampus, not the whole agent: AIppocampus owns
+memory activation, scope selection, and source-backed evidence retrieval. The
+foreground agent owns task reasoning and answer generation after those memory
+signals are surfaced.
+
 It should remember more than task outcomes:
 
 - what the person kept circling back to

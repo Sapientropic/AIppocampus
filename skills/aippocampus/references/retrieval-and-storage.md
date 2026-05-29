@@ -149,6 +149,7 @@ Default registry files under `$CODEX_HOME/aippocampus-registry/` include:
 - `associations.json`
 - `cognitive_map.json`
 - `concept_index.sqlite`
+- `semantic_cues.jsonl`
 - `semantic_triggers.jsonl`
 - `semantic_recall_cache.json`
 - `working_memory.jsonl`
@@ -167,6 +168,16 @@ Common commands:
 - `python ...\registry.py search --metadata-only "terms"`
 
 In a new thread, check the registry before saying old memory is unavailable.
+
+`semantic_cues.jsonl` and `semantic_triggers.jsonl` are search-hint sidecars.
+They can provide multilingual/domain aliases to the foreground hook and
+semantic gate, but they are never source truth. Retrieval policy should extract
+query terms from these rows through `retrieval_query_policy.semantic_trigger_terms`
+instead of growing `ALIASES` or `ASSOCIATIVE_CUES` with semantic proxy phrases.
+`semantic_trigger_router.py` writes reviewed seed triggers plus source-backed
+promotion candidates into `semantic_triggers.jsonl`; `onboard_codex.py` refreshes
+that sidecar during onboarding so a fresh registry has the data path before the
+foreground hook needs it.
 
 `build_project_timeline.py` writes `project_timeline.json`. The `projects`
 section keeps the older project-scoped recent-turn view used by hooks and

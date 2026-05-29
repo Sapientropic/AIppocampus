@@ -23,7 +23,7 @@ _paths.ensure_paths()
 
 from aippocampuslib import aippocampus_registry_dir
 from build_clean_source import SCOPE_LABEL_ORDER
-from build_project_timeline import build_project_timeline
+from build_project_timeline import build_project_timeline, resolve_registry_member_path
 from registry import deep_search_entry_result, entry_search_score, load_registry
 from retrieval import GENERIC_ANCHOR_TERMS, split_query_terms, unique_preserve
 from search_clean_source import iter_clean_messages, score_message
@@ -121,9 +121,13 @@ def turn_has_required_semantic_label(
     return bool(turn.get("semantic_scope_labels"))
 
 
+def dict_value(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
 def topic_term_counts(timeline: dict[str, Any]) -> dict[str, int]:
-    life_wide = timeline.get("life_wide") if isinstance(timeline.get("life_wide"), dict) else {}
-    labels = life_wide.get("labels") if isinstance(life_wide.get("labels"), dict) else {}
+    life_wide = dict_value(timeline.get("life_wide"))
+    labels = dict_value(life_wide.get("labels"))
     counts: dict[str, int] = {}
     seen_turn_terms: set[tuple[str, str]] = set()
     for group in labels.values():
@@ -165,8 +169,8 @@ def select_eval_cases(
     require_semantic_sidecar: bool,
     max_term_frequency: int = 8,
 ) -> list[dict[str, Any]]:
-    life_wide = timeline.get("life_wide") if isinstance(timeline.get("life_wide"), dict) else {}
-    labels = life_wide.get("labels") if isinstance(life_wide.get("labels"), dict) else {}
+    life_wide = dict_value(timeline.get("life_wide"))
+    labels = dict_value(life_wide.get("labels"))
     term_counts = topic_term_counts(timeline)
     candidates: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -256,7 +260,7 @@ def hit_scope_matches(hit: dict[str, Any], labels: list[str]) -> bool:
 
 
 def turn_key_for_row(row: dict[str, Any]) -> tuple[str, str] | None:
-    message = row.get("message") if isinstance(row.get("message"), dict) else {}
+    message = dict_value(row.get("message"))
     thread_key = str(row.get("thread_key") or "")
     turn_id = str(message.get("turn_id") or "")
     if not thread_key or not turn_id:
@@ -270,7 +274,7 @@ def turn_scope_label_index(corpus: list[dict[str, Any]]) -> dict[tuple[str, str]
         key = turn_key_for_row(row)
         if key is None:
             continue
-        message = row.get("message") if isinstance(row.get("message"), dict) else {}
+        message = dict_value(row.get("message"))
         labels = index.setdefault(key, set())
         labels.update(str(label) for label in message.get("scope_labels") or [])
         labels.update(str(label) for label in message.get("semantic_scope_labels") or [])
@@ -284,7 +288,7 @@ def row_or_turn_scope_matches(
 ) -> bool:
     if not labels:
         return True
-    message = row.get("message") if isinstance(row.get("message"), dict) else {}
+    message = dict_value(row.get("message"))
     if hit_scope_matches(message, labels):
         return True
     key = turn_key_for_row(row)
@@ -293,7 +297,9 @@ def row_or_turn_scope_matches(
     return bool(turn_scope_labels.get(key, set()).intersection(labels))
 
 
-def clean_source_corpus(registry: dict[str, Any]) -> tuple[list[dict[str, Any]], int]:
+def clean_source_corpus(
+    registry: dict[str, Any], *, registry_path: Path | None = None
+) -> tuple[list[dict[str, Any]], int]:
     rows: list[dict[str, Any]] = []
     warning_count = 0
     for entry in registry.get("threads") or []:
@@ -302,8 +308,11 @@ def clean_source_corpus(registry: dict[str, Any]) -> tuple[list[dict[str, Any]],
         messages_path_value = (entry.get("paths") or {}).get("clean_source_messages_jsonl")
         if not messages_path_value:
             continue
+        messages_path = resolve_registry_member_path(str(messages_path_value), registry_path)
+        if messages_path is None:
+            warning_count += 1
+            continue
         try:
-            messages_path = Path(messages_path_value)
             semantic_sidecar = load_semantic_scope_labels(messages_path.parent)
             for message in iter_clean_messages(messages_path):
                 semantic_scope_labels = semantic_labels_for_message(message, semantic_sidecar)
@@ -417,7 +426,7 @@ def search_expected_evidence_dynamic_source(
     turn_scope_labels = turn_scope_label_index(corpus)
     scored_hits: list[dict[str, Any]] = []
     for row in corpus:
-        message = row.get("message") if isinstance(row.get("message"), dict) else {}
+        message = dict_value(row.get("message"))
         # Clean-source can split one turn across multiple rows: a user row may
         # carry the scope label while the sibling assistant row carries the
         # source-derived query terms. Share scope only within the exact
@@ -429,7 +438,7 @@ def search_expected_evidence_dynamic_source(
         idf_score = dynamic_source_score(str(row.get("text_low") or ""), terms, idf)
         if base_score <= 0 and idf_score <= 0:
             continue
-        entry = row.get("entry") if isinstance(row.get("entry"), dict) else {}
+        entry = dict_value(row.get("entry"))
         score = float(base_score) + idf_score * 5.0 + entry_search_score(entry, terms) * 0.02
         scored_hits.append(
             {
@@ -479,7 +488,7 @@ def expected_rows_for_case(
     expected = case.get("expected") or {}
     rows: list[dict[str, Any]] = []
     for row in corpus:
-        message = row.get("message") if isinstance(row.get("message"), dict) else {}
+        message = dict_value(row.get("message"))
         if str(row.get("thread_key") or "") != str(expected.get("thread_key") or ""):
             continue
         if hit_matches_expected(
@@ -573,7 +582,7 @@ def source_evidence_failure_diagnostics(
         expected_rows = expected_rows_for_case(corpus, case)
         row_stats = []
         for row in expected_rows:
-            message = row.get("message") if isinstance(row.get("message"), dict) else {}
+            message = dict_value(row.get("message"))
             overlap = query_overlap_count(row, query_terms)
             row_stats.append(
                 {
@@ -691,7 +700,10 @@ def run_source_evidence_recall_eval(
             for case in cases
         ]
     elif ranking == "dynamic_source":
-        corpus, corpus_warning_count = clean_source_corpus(registry)
+        corpus, corpus_warning_count = clean_source_corpus(
+            registry,
+            registry_path=registry_file,
+        )
         results = [
             (case, search_expected_evidence_dynamic_source(corpus, case, top_k=top_k))
             for case in cases

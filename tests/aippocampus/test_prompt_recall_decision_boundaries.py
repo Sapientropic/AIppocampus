@@ -123,6 +123,8 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
         concept_graph_path = self.root / "custom-concept.sqlite"
         semantic_triggers_path = self.root / "custom-semantic-triggers.jsonl"
         semantic_triggers_path.write_text("", encoding="utf-8")
+        semantic_cues_path = self.root / "custom-semantic-cues.jsonl"
+        semantic_cues_path.write_text("", encoding="utf-8")
 
         context = context_mod.build_recall_decision_context(
             "NeonMemory route-cue consent gate",
@@ -133,6 +135,7 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
             concept_graph_path=concept_graph_path,
             working_memory_path=working_memory_path,
             semantic_triggers_path=semantic_triggers_path,
+            semantic_cues_path=semantic_cues_path,
         )
 
         self.assertEqual(context.cwd_path, self.workspace.resolve())
@@ -142,6 +145,7 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
         self.assertEqual(context.concept_graph_path, concept_graph_path.resolve())
         self.assertEqual(context.working_memory_path, working_memory_path.resolve())
         self.assertEqual(context.semantic_triggers_path, semantic_triggers_path.resolve())
+        self.assertEqual(context.semantic_cues_path, semantic_cues_path.resolve())
         self.assertEqual(context.registry["threads"][0]["thread_key"], "session:boundary")
         self.assertEqual(context.associations["terms"]["NeonMemory"]["status"], "verified")
         self.assertEqual(context.cognitive_map["routes"][0]["route_id"], "route-boundary")
@@ -176,6 +180,10 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
             context.semantic_triggers_path,
             (self.registry_dir / "semantic_triggers.jsonl").resolve(),
         )
+        self.assertEqual(
+            context.semantic_cues_path,
+            (self.registry_dir / "semantic_cues.jsonl").resolve(),
+        )
         self.assertEqual(context.registry["threads"][0]["thread_key"], "session:boundary")
         self.assertEqual(context.association_matches, [])
         self.assertEqual(context.cognitive_map_matches, [])
@@ -202,6 +210,7 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
             "semantic_triggers_path": str(
                 (self.registry_dir / "semantic_triggers.jsonl").resolve()
             ),
+            "semantic_cues_path": str((self.registry_dir / "semantic_cues.jsonl").resolve()),
             "query_terms": [],
             "cognitive_map": [],
             "concept_expansions": [],

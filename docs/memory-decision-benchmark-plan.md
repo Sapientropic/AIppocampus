@@ -57,12 +57,13 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
   Track B real-history retrieval wrapper, reusing the existing FTS5 source-line
   benchmark and selected source-evidence recall evaluation. It also has an
   opt-in ShareGPT public-corpus source-evidence slice with message-level and
-  turn-level hit metrics, plus an opt-in standard retrieval-QA adapter for
-  LoCoMo and LongMemEval V1 source/session recall metrics.
+  turn-level hit metrics, an opt-in bounded public semantic-sidecar pilot, and
+  an opt-in standard retrieval-QA adapter for LoCoMo and LongMemEval V1
+  source/session recall metrics.
 - `tests/aippocampus/test_benchmark_source_evidence_retrieval.py` checks
   Track B report shape, diagnostic status, ShareGPT public-corpus case
-  generation, LoCoMo/LongMemEval source ref handling, and default privacy
-  boundaries.
+  generation, public semantic-sidecar materialization, LoCoMo/LongMemEval source
+  ref handling, and default privacy boundaries.
 - `benchmarks/aippocampus/benchmark_suite.py` runs the repeatable baseline
   suite across Track A, Track B, Track C, and the broader deterministic
   source-label diagnostic slice, with opt-in ShareGPT public Track B, standard
@@ -134,6 +135,29 @@ Boundary:
   claim
 - cases bind expected evidence to clean-source `source_id`, `message_id`,
   `turn_id`, and line metadata; model summaries are not grading truth
+
+### Optional Public Semantic Sidecar Track B
+
+The public semantic-sidecar pilot first builds a bounded ShareGPT clean-source
+registry subset, runs the live semantic labeler over a limited candidate set,
+materializes reviewed `semantic-scope-labels.jsonl` rows with the existing
+sidecar validator, then runs the selected source-evidence evaluator against that
+subset. It is a separate `public_semantic_sidecar` track.
+
+Run from the repository root:
+
+```powershell
+python benchmarks\aippocampus\benchmark_source_evidence_retrieval.py --allow-deterministic-labels --include-public-semantic-sidecar --public-semantic-output-dir .tmp\public-semantic-sidecar-20260529-wide --public-semantic-conversations 80 --public-semantic-max-messages 160 --public-semantic-max-candidates 48 --public-semantic-cases 40 --public-semantic-min-cases 3 --public-semantic-top-k 5 --public-semantic-max-tokens 16384 --public-semantic-timeout 90 --output .tmp\track-b-public-semantic-sidecar-wide-20260529.json
+```
+
+Boundary:
+
+- this is a public semantic-sidecar pilot, not the private real-history
+  `semantic-sidecar-required` metric
+- reviewed means accepted by the source-ref/label-evidence sidecar validator;
+  it does not mean human-reviewed
+- generated subset, registry, sidecar, and live report stay local under `.tmp/`
+  unless a curated public fixture is deliberately promoted later
 - metrics include message-level hit and turn-level hit so sibling rows in the
   same user/assistant turn do not become false hard failures
 - default reports hash ids and queries and do not emit raw public conversation
@@ -184,7 +208,7 @@ Report boundary:
   runs. Non-zero env limits are debug/performance overrides, not product
   defaults.
 
-Current smoke and diagnostic results from 2026-05-28:
+Current smoke and diagnostic results from 2026-05-29:
 
 - synthetic Track A gate benchmark now includes the original 13 synthetic
   boundary cases plus a 132-case harder bank. The original harder/adversarial
@@ -204,6 +228,30 @@ Current smoke and diagnostic results from 2026-05-28:
   top-10 hit rate 1.0, message MRR 0.9052, turn MRR 0.9613, 0 warnings, wall
   time 23.1 seconds. This is a public-corpus baseline and does not replace the
   private real-history semantic-sidecar source-evidence slice.
+- Public semantic-sidecar Track B pilot over `sharegpt_all_multiturn`,
+  bounded to 80 conversations / 160 clean-source messages / 48 label candidates:
+  `status=sufficient`, 3 reviewed `semantic-scope-labels.jsonl` rows, 3
+  selected public semantic-sidecar cases, 3/3 top-5 hits. The generated subset
+  lives under `.tmp/public-semantic-sidecar-20260529-wide/` and the sanitized
+  report is `.tmp/track-b-public-semantic-sidecar-wide-20260529.json`. This is
+  deliberately reported as `public_semantic_sidecar`; it does not upgrade or
+  replace the private real-history `semantic-sidecar-required` claim.
+- Private real-history semantic-sidecar refresh:
+  `smoke_semantic_scope_real_history.py --live --write-sidecars
+  --full-candidate-coverage --full-candidate-source-turn-cap 160
+  --candidate-batch-size 16 --samples-per-job 1` evaluated 414 selected
+  candidate turns in 26 successful batches. Reviewed sidecar coverage grew from
+  2 threads / 5 rows to 45 threads / 243 rows, with 108 timeline latest turns
+  carrying semantic sidecar labels. The live jobs accepted 238 findings and 269
+  labels with `weak_or_missing_evidence_label_count=0`. This is a bounded
+  private slice, not a full-history semantic completeness claim.
+- Private real-history Track B wrapper after that refresh:
+  `.tmp/track-b-private-semantic-after-live-20260529.json` reports
+  `status=sufficient`. The `semantic-sidecar-required` source-evidence track now
+  has 100 selected cases, 97/100 top-5 hits, 0.97 hit rate, and 3 failures, all
+  `rank_below_top_k` with extended ranks 6, 8, and 10. The same wrapper reports
+  959 registry threads, 810 eligible threads, 9,699 messages scanned, 97/100
+  FTS5 top-10 hits, and 98/100 production-hybrid top-10 hits.
 - Standard retrieval-QA Track B smoke:
   LoCoMo first 100 QA from the local `locomo10.json` produced session R@10
   0.89, session MRR 0.6271, exact evidence-line R@10 0.56, exact evidence-line
@@ -347,23 +395,38 @@ Current smoke and diagnostic results from 2026-05-27:
   first 100 converted conversations, which came from `common_en_70k.jsonl` in
   this run. It is reproducible, but not yet a stratified sample of the full
   coding corpus.
-- existing real-history FTS5/source baseline: 950 registry threads, 801
-  eligible threads, 9,432 messages scanned, 99/100 FTS5 top-10 hits, and
-  98/100 production-hybrid top-10 hits
+- existing real-history FTS5/source baseline after the 2026-05-29 rerun: 959
+  registry threads, 810 eligible threads, 9,699 messages scanned, 97/100 FTS5
+  top-10 hits, and 98/100 production-hybrid top-10 hits
 - synthetic Track C payload benchmark: first run caught a false positive where a
   parked-memory trap prompt woke an unrelated active working-memory row via the
   generic action term `mutation`; after tightening working-memory trigger noise,
   rerun result was 8 cases, 8 payload-correct, source fidelity 1.0, privacy
   breaches 0, parked-memory injections 0, evidence-without-source 0
 - Track B unified retrieval wrapper, FTS5 source-line track: 100 real-history
-  cases, FTS5 R@1 0.86, R@3 0.98, R@5 0.99, R@10 0.99, MRR 0.9192; production
-  hybrid R@10 0.98, MRR 0.9106
-- Track B selected source-evidence track, semantic-sidecar-required slice:
-  diagnostic-only, 5 selected cases below the 12-case minimum, 4/5 top-5 hits;
-  the remaining miss is `rank_below_top_k`
+  cases, FTS5 R@1 0.86, R@3 0.96, R@5 0.97, R@10 0.97, MRR 0.9073; production
+  hybrid R@10 0.98, MRR 0.8898
+- Track B selected source-evidence track, semantic-sidecar-required slice after
+  the bounded 2026-05-29 private sidecar refresh:
+  sufficient, 100 selected cases, 97/100 top-5 hits, 0.97 hit rate. The 3 misses
+  are all `rank_below_top_k` with extended ranks 6, 8, and 10. This fixes the
+  earlier sparse-pool problem without weakening the sidecar validator: accepted
+  semantic labels still require exact message refs and per-label evidence.
+  `benchmark_corpus/` can feed public Track B retrieval baselines, but it should
+  not be counted into this private real-history slice unless it is reported as a
+  separate bounded public semantic-sidecar track.
+- Track B public semantic-sidecar track:
+  implemented as a separate optional wrapper track. Current 2026-05-29 pilot
+  uses a bounded ShareGPT public registry subset with generated/reviewed
+  `semantic-scope-labels.jsonl`; result is 3 reviewed sidecar rows, 3 selected
+  cases, 3/3 top-5 hits. Keep this as a public pilot until the sidecar-reviewed
+  public sample is materially larger; do not merge it into the private
+  `semantic-sidecar-required` metric.
 - Track B selected source-evidence track, deterministic source-label slice:
-  sufficient, 24 selected cases, 23/24 top-5 hits, 0.9583 hit rate; the
-  remaining miss is `rank_below_top_k`
+  sufficient, 100 selected cases, 97/100 top-5 hits, 0.97 hit rate. The
+  remaining misses are 2 `rank_below_top_k` cases and 1
+  `scope_term_split_across_expected_turn` case. The default selected-source
+  sample is now 100 max / 50 min cases for this deterministic slice.
 
 These results show the first deterministic gate slice is stable and the exact
 source-line retrieval layer is strong but not perfect. The ShareGPT P1 slice is
@@ -371,12 +434,12 @@ a baseline, not a repair target: it exposes the current product shape on public
 coding conversations before AIppocampus finishes its next upgrades. The first B
 fixes removed two evaluator weaknesses: source labels and query terms split
 across sibling clean-source rows in the same turn, and generic fuzzy-prompt
-frame terms dominating the source-derived cue terms. The remaining B weakness is
-narrower: some expected sources have lexical/scope signal but still rank below
-top-5, and semantic-sidecar-backed case selection is too sparse to be a
-sufficient benchmark by itself. These results do not yet prove real-history
-gate quality, live semantic-model quality, or end-to-end payload fidelity on
-private real-history prompts.
+frame terms dominating the source-derived cue terms. The latest private
+semantic-sidecar refresh removed the sparse-pool blocker; the remaining B
+weakness is narrower: a few expected sources have lexical/scope signal but still
+rank below top-5. These results do not yet prove real-history gate quality, live
+semantic-model quality, full semantic completeness, or end-to-end payload
+fidelity on private real-history prompts.
 
 ## Non-Goals
 
@@ -393,6 +456,10 @@ private real-history prompts.
 
 AIppocampus benchmarks measure retrieval and decision quality, not end-to-end
 question-answering accuracy. This is an intentional design choice, not a gap.
+AIppocampus is the agent's little hippocampus: it decides when old memory should
+surface, selects the relevant scope, and retrieves source-backed evidence. The
+main agent still owns reading that evidence, reasoning with the current task,
+and generating the final answer.
 
 The dominant industry benchmarks (LoCoMo LLM-as-Judge, LongMemEval aggregate
 accuracy) score the product of two independent capabilities:
@@ -908,9 +975,11 @@ deterministic and privacy-focused.
 
 P3: Track B unification, reusing existing FTS5 and source-evidence evaluation
 logic so retrieval regressions sit beside decision regressions. Initial wrapper
-is implemented. The broader deterministic source-label slice now clears the
-target, while the semantic-sidecar-required slice remains diagnostic because it
-does not yet have enough selected cases.
+is implemented. The broader deterministic source-label slice now uses a 100
+case max / 50 case min default and clears the target. After the bounded
+2026-05-29 private semantic-sidecar refresh, the semantic-sidecar-required slice
+also clears the selected-source target at 100 cases / 97 top-5 hits; remaining
+misses are ranking misses, not selected-case scarcity.
 
 P4: one-command baseline suite. Implemented as `benchmark_suite.py`; current
 status records known gaps rather than treating them as failures to run the

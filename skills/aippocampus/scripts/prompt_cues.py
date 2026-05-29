@@ -21,6 +21,14 @@ SEMANTIC_EVIDENCE_TERMS = {
     "source",
     "evidence",
     "citation",
+    "cite",
+    "source-backed",
+    "source-backed evidence",
+    "source evidence",
+    "clean source",
+    "verbatim",
+    "exact wording",
+    "original wording",
     "原文",
     "原话",
     "证据",
@@ -28,6 +36,25 @@ SEMANTIC_EVIDENCE_TERMS = {
     "行号",
     "你之前说过",
     "我之前说过",
+}
+
+SOURCE_EVIDENCE_REQUEST_TERMS = {
+    "cite",
+    "cites",
+    "cited",
+    "citation",
+    "source-backed",
+    "source-backed evidence",
+    "source evidence",
+    "clean source",
+    "verbatim",
+    "exact wording",
+    "original wording",
+    "原文",
+    "原话",
+    "证据",
+    "引用",
+    "行号",
 }
 
 NATURAL_EVIDENCE_PATTERNS = [
@@ -38,6 +65,27 @@ NATURAL_EVIDENCE_PATTERNS = [
         r"(继续).{0,36}(那个|这个|那条|这条).{0,18}(结论|判断|说法|决定)",
         r"(that|the|this).{0,24}(conclusion|decision|part|bit|quote|wording)",
         r"(last time|previously|earlier).{0,48}(conclusion|decision|said|quote|wording)",
+    ]
+]
+
+NEGATIVE_EVIDENCE_PATTERNS = [
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in [
+        r"(不要|别|先别).{0,12}(引用|原话|原文|证据|source|evidence)",
+        r"(只|先只).{0,8}(给|要)?\s*(scent|味道|线索)",
+        r"(scent[- ]only).{0,12}(mode|context|output|please|即可|就行)",
+        r"(no source|no evidence|no quote|no citation)",
+        r"(do not|don't).{0,20}(cite|quote|give evidence|retrieve evidence)",
+    ]
+]
+
+SOURCE_EVIDENCE_REQUEST_PATTERNS = [
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in [
+        r"\b(can you|could you|please)\s+(cite|quote)\b",
+        r"\bcite\s+.+\?",
+        r"(请给|给|找回|找一下|查一下).{0,18}(source-backed|source evidence|clean source|证据|引用|原话|原文)",
+        r"(source-backed|source evidence|clean source).{0,18}(evidence|quote|citation|原话|原文|证据|引用)?",
     ]
 ]
 
@@ -54,6 +102,24 @@ EXPLICIT_RECALL_TERMS = {
     "之前说过",
     "你说过",
     "我说过",
+}
+
+RECALL_ACTION_TERMS = {
+    "找回",
+    "想起来",
+    "想起",
+    "最后回复",
+    "最后的消息",
+    "之前说过",
+    "你说过",
+    "我说过",
+}
+
+EXACT_WORDING_TOPIC_TERMS = {
+    "原文",
+    "原话",
+    "那句",
+    "这句",
 }
 
 WEAK_DEICTIC_TERMS = {
@@ -78,6 +144,10 @@ WEAK_DEICTIC_TERMS = {
     "compaction",
 }
 
+# Bootstrap/fallback cues for foreground spend and scent gating. Keep this
+# compact and language-light: new semantic paraphrases belong in
+# `semantic_triggers.jsonl` or the learned `semantic_cues.jsonl` cache, which
+# `prompt_recall_context.py` folds into the same pre-gate path.
 ASSOCIATIVE_CUES = {
     "联想",
     "触发",
@@ -85,25 +155,8 @@ ASSOCIATIVE_CUES = {
     "hook机制",
     "prompt hook",
     "UserPromptSubmit",
-    "海马体",
-    "小海马体",
-    "外置海马体",
-    "被动触发",
-    "触发式联想",
-    "联想机制",
-    "被动召回",
-    "主动召回",
-    "ambient recall",
-    "active recall",
-    "scent",
-    "source evidence",
-    "source-backed evidence",
     "记忆",
     "召回",
-    "世界线",
-    "自我连续性",
-    "生命还能变成什么",
-    "我还是我",
 }
 
 IMPORTANCE_CUES = {
@@ -125,6 +178,26 @@ CODE_SURFACE_CUES = {
     "css",
     "组件",
     "dashboard",
+    "panel",
+    "filter",
+    "filters",
+    "chart",
+    "charts",
+    "figma",
+    "layout",
+    "grid",
+    "table",
+    "route",
+    "fixture",
+    "modal",
+    "navigation",
+    "loading",
+    "mobile",
+    "断点",
+    "视觉稿",
+    "还原",
+    "对齐",
+    "接上",
     "测试",
     "test",
     "修 bug",
@@ -136,6 +209,23 @@ CODE_SURFACE_CUES = {
     "实现",
     "改一下",
 }
+
+SECRET_SURFACE_PATTERNS = [
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in [
+        r"\b(authorization|bearer|cookie|set-cookie|api[_ -]?key|api\s+token|access[_ -]?token|private\s+key|oauth\s+secret|database\s+password|db\s+password|webhook\s+signature)\b.{0,36}\b(placeholder|mock|fixture|header|label|sample|env\.?sample|validation|ui)\b",
+        r"\b(placeholder|mock|fixture|header|label|sample|validation)\b.{0,36}\b(cookie|bearer|api[_ -]?key|api\s+token|access[_ -]?token|private\s+key|oauth\s+secret|password|secret)\b",
+        r"\b(authorization\s*:\s*bearer|bearer\s+[a-z0-9._~+/=-]{8,}|cookie\s*[:=]|set-cookie\b|api[_ -]?key\s*[:=]|secret\s*[:=]|password\s*[:=]|token\s*[:=])",
+    ]
+]
+
+MEMORY_BOUNDARY_CONTEXT_PATTERNS = [
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in [
+        r"(只|先只).{0,12}(看|处理|保留|要).{0,30}(外置海马体|小海马体|external hippocampus|memory boundary|recall gate|project[- ]scoped|上下文|边界)",
+        r"(外置海马体|小海马体|external hippocampus|memory boundary|recall gate|project[- ]scoped).{0,20}(边界|上下文|context|scope)",
+    ]
+]
 
 DECISION_CONTINUATION_CUES = {
     "该不该",
@@ -150,6 +240,21 @@ DECISION_CONTINUATION_CUES = {
     "现在怎么看",
     "怎么做比较好",
 }
+
+SEMANTIC_TRIGGER_CONTEXT_PATTERNS = [
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in [
+        r"(只|先)?继续.{0,24}(上下文|那条线|这条线|那条|这条|线索)",
+        r"(那条线|这条线|上下文|线索).{0,24}(继续|接着|推进|收口)",
+        r"(那条线|这条线|上下文|线索).{0,16}(继续想|想一下|想想|想清楚|想明白)",
+        r"(继续|接着)(看|想|推进|收口|处理)",
+        r"(继续|接着).{0,16}(不给|不要|别|先别).{0,10}(source|evidence|原话|原文|引用|证据)",
+        r"(不要|先别).{0,12}(展开实现|实现|改代码|写代码)",
+        r"(only|just).{0,24}(continue|resume).{0,48}(context|thread|line)",
+        r"(continue|resume).{0,48}(that context|the context|where we left off|thread|line)",
+        r"(do not|don't).{0,24}(implement|code|change)",
+    ]
+]
 
 RECENCY_CUES = {
     "最近",
@@ -330,13 +435,41 @@ def prompt_is_code_surface(prompt: str) -> bool:
     return bool(matched_terms(prompt, CODE_SURFACE_CUES))
 
 
+def prompt_is_secret_surface(prompt: str) -> bool:
+    text = str(prompt or "").strip()
+    if not text:
+        return False
+    return any(pattern.search(text) for pattern in SECRET_SURFACE_PATTERNS)
+
+
+def memory_boundary_context_intent(prompt: str) -> bool:
+    text = str(prompt or "").strip()
+    if not text:
+        return False
+    return any(pattern.search(text) for pattern in MEMORY_BOUNDARY_CONTEXT_PATTERNS)
+
+
 def explicit_recall_terms(prompt: str) -> list[str]:
     # Retrieval-level triggers include useful weak deixis such as "这个/那个".
     # Those should help search phrasing, but they must not escalate a prompt to
     # evidence retrieval by themselves; otherwise ordinary continuation text can
     # summon exact snippets too eagerly.
     strong = (set(RECALL_TRIGGERS) | EXPLICIT_RECALL_TERMS) - WEAK_DEICTIC_TERMS
-    return matched_terms(prompt, strong)
+    matches = matched_terms(prompt, strong)
+    if not matches:
+        return []
+    has_recall_action = bool(set(matches) & RECALL_ACTION_TERMS)
+    if has_recall_action:
+        return matches
+    if matched_terms(prompt, DECISION_CONTINUATION_CUES) or re.search(
+        r"(继续|还要怎么|怎么处理|怎么收|怎么推进|怎么接)", prompt, flags=re.IGNORECASE
+    ):
+        # Exact-wording nouns are often the topic being discussed ("那句 quote
+        # 怎么处理"), not a request to surface source snippets. Keep them as
+        # evidence cues when paired with a recall action, but do not let them
+        # override a continuation/decision prompt by themselves.
+        matches = [term for term in matches if term not in EXACT_WORDING_TOPIC_TERMS]
+    return matches
 
 
 def expand_query_terms(prompt: str) -> list[str]:
@@ -396,6 +529,39 @@ def natural_evidence_intent(prompt: str) -> list[str]:
     return unique_preserve(matches, limit=4)
 
 
+def source_evidence_intent(prompt: str) -> list[str]:
+    """Return explicit source/evidence request cues across common languages.
+
+    Unlike ``SEMANTIC_EVIDENCE_TERMS``, this deliberately excludes bare
+    ``quote``/``evidence`` as standalone topic words. Prompts such as
+    "self-continuity quote 继续" are continuation about a theme; prompts such
+    as "Can you cite..." or "请给 source-backed evidence" are requests for
+    foreground source snippets.
+    """
+
+    text = str(prompt or "").strip()
+    if not text:
+        return []
+    matches = matched_terms(text, SOURCE_EVIDENCE_REQUEST_TERMS)
+    for pattern in SOURCE_EVIDENCE_REQUEST_PATTERNS:
+        found = pattern.search(text)
+        if found:
+            matches.append(found.group(0))
+    return unique_preserve(matches, limit=6)
+
+
+def negative_evidence_intent(prompt: str) -> list[str]:
+    text = str(prompt or "").strip()
+    if not text:
+        return []
+    matches: list[str] = []
+    for pattern in NEGATIVE_EVIDENCE_PATTERNS:
+        found = pattern.search(text)
+        if found:
+            matches.append(found.group(0))
+    return unique_preserve(matches, limit=4)
+
+
 def association_term_is_generic(match: dict[str, Any]) -> bool:
     term = str(match.get("term") or "").casefold().strip()
     if term in {value.casefold() for value in GENERIC_ASSOCIATION_TERMS}:
@@ -448,6 +614,15 @@ def is_decision_continuation(prompt: str) -> bool:
     return bool(matched_terms(prompt, DECISION_CONTINUATION_CUES))
 
 
+def semantic_trigger_context_intent(prompt: str) -> bool:
+    text = str(prompt or "").strip()
+    if not text:
+        return False
+    if memory_boundary_context_intent(text):
+        return True
+    return any(pattern.search(text) for pattern in SEMANTIC_TRIGGER_CONTEXT_PATTERNS)
+
+
 def concept_expansion_terms(expansions: list[dict[str, Any]]) -> list[str]:
     return unique_preserve(
         [str(item.get("term") or "") for item in expansions], limit=CONCEPT_EXPANSION_MAX_TERMS
@@ -487,6 +662,8 @@ def semantic_gate_is_memory_cue(result: dict[str, Any] | None) -> bool:
 def semantic_gate_can_request_evidence(prompt: str, result: dict[str, Any] | None) -> bool:
     if not result or not result.get("available") or result.get("decision") != "evidence":
         return False
+    if negative_evidence_intent(prompt):
+        return False
     if float(result.get("confidence") or 0.0) < 0.5:
         return False
     # DeepSeek may understand vague status prompts semantically, but the hook
@@ -496,7 +673,7 @@ def semantic_gate_can_request_evidence(prompt: str, result: dict[str, Any] | Non
     # gentle scent for the foreground model to decide on.
     if (
         explicit_recall_terms(prompt)
-        or matched_terms(prompt, SEMANTIC_EVIDENCE_TERMS)
+        or source_evidence_intent(prompt)
         or natural_evidence_intent(prompt)
     ):
         return True
@@ -505,7 +682,7 @@ def semantic_gate_can_request_evidence(prompt: str, result: dict[str, Any] | Non
     if risk == "high":
         return False
     intent = str(result.get("intent") or "").strip().casefold()
-    if intent not in {"recall", "continuation", "source_recall", "exact_recall"}:
+    if intent not in {"recall", "source_recall", "exact_recall"}:
         return False
     if float(result.get("confidence") or 0.0) < 0.82:
         return False
@@ -571,6 +748,12 @@ def should_run_semantic_gate(
     if cognitive_map_matches:
         # A materialized cognitive route is already the result of detached
         # DeepSeek work. Do not spend foreground hook time asking DeepSeek again.
+        return False
+    if prompt_is_secret_surface(prompt):
+        # Placeholder/header/cookie prompts are common places for real secrets
+        # to get pasted by accident. Keep them on the deterministic local path:
+        # a safe memory-boundary prompt may still surface scent locally, but it
+        # must not be sent to an external semantic model.
         return False
     if prompt_is_code_surface(prompt) and not (
         explicit or associative or important or working_memory_matches

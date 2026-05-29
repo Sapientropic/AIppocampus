@@ -218,6 +218,8 @@ def normalized_recall_query(query: str) -> str | None:
 def message_line_range(message: dict[str, Any]) -> tuple[int, int] | None:
     start = message.get("raw_start_line") or message.get("source_line")
     end = message.get("raw_end_line") or message.get("source_line") or start
+    if start is None or end is None:
+        return None
     try:
         start_int = int(start)
         end_int = int(end)
@@ -363,10 +365,10 @@ def build_eval_cases(
     rng.shuffle(thread_cases)
     selected: list[EvalCase] = []
     for depth in range(max_cases_per_thread):
-        for candidates in thread_cases:
-            if depth >= len(candidates):
+        for per_thread_cases in thread_cases:
+            if depth >= len(per_thread_cases):
                 continue
-            selected.append(candidates[depth])
+            selected.append(per_thread_cases[depth])
             if len(selected) >= sample_size:
                 return selected, corpus
     return selected, corpus
@@ -420,8 +422,11 @@ def search_fts5_only(
 def expected_rank(hits: list[dict[str, Any]], expected: tuple[int, int]) -> int | None:
     start, end = expected
     for idx, hit in enumerate(hits, start=1):
+        raw_line = hit.get("line")
+        if raw_line is None:
+            continue
         try:
-            line = int(hit.get("line"))
+            line = int(raw_line)
         except (TypeError, ValueError):
             continue
         if start <= line <= end:

@@ -20,10 +20,12 @@ from prompt_cues import (
     expand_query_terms,
     is_decision_continuation,
     natural_evidence_intent,
+    negative_evidence_intent,
     semantic_gate_can_request_evidence,
     semantic_gate_is_memory_cue,
     semantic_gate_terms,
     should_run_semantic_gate,
+    source_evidence_intent,
     working_memory_terms,
 )
 from prompt_recall_ambient import attach_ambient_recall
@@ -54,6 +56,8 @@ from prompt_recall_core import (
 )
 from prompt_recall_evidence import collect_evidence, strip_private_fields, strip_semantic_gate
 from registry import unique_preserve
+from retrieval_query_policy import semantic_trigger_terms
+from semantic_cue_cache import default_semantic_cues_path, record_semantic_cue_hits
 from semantic_recall_gate import run_semantic_gate
 
 
@@ -76,6 +80,10 @@ def _association_seed_terms(association_matches: list[dict[str, Any]]) -> list[s
     return association_terms
 
 
+def _semantic_trigger_seed_terms(matches: list[dict[str, Any]]) -> list[str]:
+    return semantic_trigger_terms(matches, limit=24)
+
+
 def _decision_reasons(
     *,
     explicit: list[str],
@@ -88,6 +96,7 @@ def _decision_reasons(
     working_memory_matches: list[dict[str, Any]],
     semantic_result: dict[str, Any] | None,
     natural_evidence: list[str],
+    source_evidence: list[str],
     suppressed: bool,
 ) -> list[str]:
     reasons: list[str] = []
@@ -117,6 +126,8 @@ def _decision_reasons(
         reasons.append("importance cue: " + ", ".join(important[:3]))
     if natural_evidence:
         reasons.append("natural evidence intent: " + ", ".join(natural_evidence[:2]))
+    if source_evidence:
+        reasons.append("source evidence intent: " + ", ".join(source_evidence[:2]))
     if candidates:
         reasons.append(
             "registry overlap: " + ", ".join(str(item["title"]) for item in candidates[:2])
@@ -307,13 +318,17 @@ def _source_intent_evidence(
     important: list[str],
     semantic_result: dict[str, Any] | None,
     natural_evidence: list[str],
+    source_evidence: list[str],
     ambiguous_evidence_request: bool,
     start: float,
     max_elapsed_ms: int | None,
     reasons: list[str],
 ) -> list[dict[str, Any]]:
     semantic_wants_evidence = bool(semantic_gate_can_request_evidence(prompt, semantic_result))
-    natural_wants_evidence = bool(natural_evidence)
+    natural_wants_evidence = bool(natural_evidence or source_evidence)
+    if negative_evidence_intent(prompt):
+        reasons.append("evidence withheld: user requested scent-only context")
+        return []
     if not (
         candidates
         and search_budget > 0
@@ -363,6 +378,83 @@ def _evidence_lite_continuation(
     return []
 
 
+def _semantic_cue_source_refs(
+    *,
+    evidence: list[dict[str, Any]],
+    candidates: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    refs: list[dict[str, Any]] = []
+    for hit in evidence:
+        refs.append(
+            {
+                "thread_key": hit.get("thread_key"),
+                "title": hit.get("title"),
+                "line": hit.get("line"),
+                "source_line": hit.get("line"),
+                "source": hit.get("source"),
+                "turn_index": hit.get("turn_index"),
+            }
+        )
+    if refs:
+        return refs
+    for candidate in candidates[:3]:
+        refs.append(
+            {
+                "thread_key": candidate.get("thread_key"),
+                "title": candidate.get("title"),
+                "project_label": candidate.get("project_label"),
+                "source": "registry_candidate",
+            }
+        )
+    return refs
+
+
+def _record_semantic_cue_hits(
+    *,
+    prompt: str,
+    semantic_result: dict[str, Any] | None,
+    semantic_cues_path: Path | str | None,
+    registry_path: Path,
+    evidence: list[dict[str, Any]],
+    candidates: list[dict[str, Any]],
+    suppressed: bool,
+) -> dict[str, Any] | None:
+    if (
+        suppressed
+        or not semantic_result
+        or not semantic_gate_is_memory_cue(semantic_result)
+        or not candidates
+    ):
+        return None
+    path = (
+        Path(semantic_cues_path).resolve()
+        if semantic_cues_path
+        else default_semantic_cues_path(registry_path=registry_path)
+    )
+    refs = _semantic_cue_source_refs(evidence=evidence, candidates=candidates)
+    try:
+        return record_semantic_cue_hits(
+            path,
+            prompt=prompt,
+            semantic_result=semantic_result,
+            source_refs=refs,
+            route="semantic_gate",
+        )
+    except Exception as exc:
+        # Cue cache writes are learning hints. The foreground hook must keep
+        # recall behavior intact even when the local cache is read-only or stale.
+        return {
+            "path": str(path),
+            "updated_count": 0,
+            "active_count": 0,
+            "warning": {
+                "stage": "semantic_cue_cache_write",
+                "error_type": type(exc).__name__,
+                "message": str(exc),
+            },
+        }
+
+
 def assess_prompt(
     prompt: str,
     *,
@@ -374,6 +466,7 @@ def assess_prompt(
     concept_graph_path: Path | str | None = None,
     working_memory_path: Path | str | None = None,
     semantic_triggers_path: Path | str | None = None,
+    semantic_cues_path: Path | str | None = None,
     semantic_cache_path: Path | str | None = None,
     semantic_gate_mode: str | None = None,
     semantic_timeout: float = PROMPT_HOOK_SEMANTIC_TIMEOUT,
@@ -399,6 +492,7 @@ def assess_prompt(
         concept_graph_path=concept_graph_path,
         working_memory_path=working_memory_path,
         semantic_triggers_path=semantic_triggers_path,
+        semantic_cues_path=semantic_cues_path,
         use_cognitive_map=use_cognitive_map,
     )
     prompt = context.prompt
@@ -418,6 +512,8 @@ def assess_prompt(
     pre_associative = context.pre_associative
     pre_important = context.pre_important
     natural_evidence = natural_evidence_intent(prompt)
+    source_evidence = source_evidence_intent(prompt)
+    negative_evidence = negative_evidence_intent(prompt)
     semantic_result = _run_semantic_gate_for_prompt(
         prompt=prompt,
         cwd_path=cwd_path,
@@ -444,6 +540,7 @@ def assess_prompt(
         (expand_query_terms(prompt) if prompt else [])
         + cognitive_map_terms(cognitive_map_matches)
         + _association_seed_terms(association_matches)
+        + _semantic_trigger_seed_terms(context.semantic_trigger_matches)
         + working_memory_terms(working_memory_matches)
         + semantic_gate_terms(semantic_result),
         limit=36,
@@ -491,13 +588,14 @@ def assess_prompt(
                 cognitive_map_matches=cognitive_map_matches,
                 association_matches=association_matches,
             )
-    if not candidates and (explicit or associative):
+    if not candidates and (explicit or associative or natural_evidence or source_evidence):
         # Metadata can miss memorable wording that only exists inside the
         # SQLite message index. When the user explicitly asks to recover prior
         # speech, try a tiny recent-thread fallback before staying silent.
         candidates = fallback_search_candidates(registry, query_terms)
     semantic_memory_cue = semantic_gate_is_memory_cue(semantic_result)
     timeline_memory_cue = any(item.get("life_wide_timeline_source") for item in candidates)
+    positive_evidence_intent = bool((natural_evidence or source_evidence) and not negative_evidence)
     has_memory_cue = bool(
         explicit
         or associative
@@ -508,13 +606,9 @@ def assess_prompt(
         or working_memory_matches
         or semantic_memory_cue
         or timeline_memory_cue
-        or natural_evidence
+        or positive_evidence_intent
     )
-    if (
-        candidates
-        and has_memory_cue
-        and budget_allows(start, max_elapsed_ms, PROBE_MIN_REMAINING_MS)
-    ):
+    if candidates and has_memory_cue and budget_allows(start, max_elapsed_ms, PROBE_MIN_REMAINING_MS):
         candidates = rerank_candidates_with_probe(candidates, query_terms)
     suppressed = should_suppress(
         prompt,
@@ -524,11 +618,10 @@ def assess_prompt(
         working_memory_matches,
         cognitive_map_cue=bool(cognitive_map_matches),
         semantic_memory_cue=semantic_memory_cue,
+        source_evidence_cue=bool(source_evidence and not negative_evidence),
     )
     top_score = float(candidates[0]["score"]) if candidates else 0.0
-    working_score = max(
-        [float(item.get("score") or 0.0) for item in working_memory_matches] or [0.0]
-    )
+    working_score = max([float(item.get("score") or 0.0) for item in working_memory_matches] or [0.0])
     reasons = _decision_reasons(
         explicit=explicit,
         associative=associative,
@@ -540,11 +633,10 @@ def assess_prompt(
         working_memory_matches=working_memory_matches,
         semantic_result=semantic_result,
         natural_evidence=natural_evidence,
+        source_evidence=source_evidence,
         suppressed=suppressed,
     )
-    ambiguous_evidence_request = bool(
-        explicit and _explicit_evidence_request_is_ambiguous(prompt, candidates)
-    )
+    ambiguous_evidence_request = bool(explicit and _explicit_evidence_request_is_ambiguous(prompt, candidates))
     if ambiguous_evidence_request:
         reasons.append("source evidence withheld: ambiguous cross-project entity")
 
@@ -573,6 +665,7 @@ def assess_prompt(
             important=important,
             semantic_result=semantic_result,
             natural_evidence=natural_evidence,
+            source_evidence=source_evidence,
             ambiguous_evidence_request=ambiguous_evidence_request,
             start=start,
             max_elapsed_ms=max_elapsed_ms,
@@ -589,6 +682,10 @@ def assess_prompt(
             if evidence:
                 decision = "evidence"
 
+    semantic_cue_cache = _record_semantic_cue_hits(
+        prompt=prompt, semantic_result=semantic_result, semantic_cues_path=semantic_cues_path,
+        registry_path=path, evidence=evidence, candidates=candidates, suppressed=suppressed,
+    )
     elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
     result = {
         "decision": decision,
@@ -603,6 +700,7 @@ def assess_prompt(
         "evidence": evidence[:search_budget],
         "working_memory": strip_for_hook(working_memory_matches[:3]),
         "semantic_gate": strip_semantic_gate(semantic_result),
+        "semantic_cue_cache": semantic_cue_cache,
         "elapsed_ms": elapsed_ms, "deep_archival_requested": _deep_archival_requested(prompt),
     }
     return attach_ambient_recall(

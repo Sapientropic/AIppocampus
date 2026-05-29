@@ -205,6 +205,45 @@ def fake_standard_public_payload(*, ok: bool = True) -> dict:
     }
 
 
+def fake_public_semantic_sidecar_payload(*, ok: bool = True) -> dict:
+    status = "sufficient" if ok else "insufficient_recall_hits"
+    return {
+        "ok": ok,
+        "status": status,
+        "kind": "public_semantic_sidecar_source_evidence",
+        "config": {
+            "conversations": 2,
+            "max_messages": 4,
+            "min_cases": 1,
+            "top_k": 5,
+            "include_private_text": False,
+        },
+        "corpus": {
+            "conversation_count": 2,
+            "subset_message_count": 4,
+            "candidate_message_count": 2,
+        },
+        "artifacts": {
+            "sidecar_row_count": 2,
+            "reviewed_sidecar_row_count": 2,
+            "artifact_dir_sha1": "abc123",
+            "absolute_paths_emitted": False,
+        },
+        "metrics": {
+            "case_count": 2,
+            "passed_count": 2,
+            "failed_count": 0,
+            "top_k_hit_rate": 1.0,
+        },
+        "cases": [{"case_id": "public-semantic-a", "passed": True, "rank": 1}],
+        "privacy_boundary": {
+            "raw_text_emitted": False,
+            "absolute_paths_emitted": False,
+        },
+        "cannot_claim": ["private_real_history_source_evidence_quality"],
+    }
+
+
 class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
     def write_jsonl(self, path: Path, rows: list[dict]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -212,6 +251,10 @@ class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
             "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
             encoding="utf-8",
         )
+
+    def test_selected_source_evidence_defaults_use_100_case_slice(self) -> None:
+        self.assertEqual(benchmark.DEFAULT_SOURCE_MAX_CASES, 100)
+        self.assertEqual(benchmark.DEFAULT_SOURCE_MIN_CASES, 50)
 
     def test_track_b_report_wraps_existing_real_history_evals_without_private_text(self) -> None:
         with (
@@ -360,6 +403,42 @@ class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
         self.assertEqual(standard_run.call_args.kwargs["dataset"], "locomo")
         self.assertEqual(standard_run.call_args.kwargs["max_questions"], 2)
 
+    def test_track_b_wrapper_can_include_public_semantic_sidecar_track(self) -> None:
+        with (
+            patch.object(benchmark.fts5_benchmark, "run_benchmark", return_value=fake_fts5_payload()),
+            patch.object(
+                benchmark.source_evidence_eval,
+                "run_source_evidence_recall_eval",
+                return_value=fake_source_payload(),
+            ),
+            patch.object(
+                benchmark,
+                "run_public_semantic_sidecar_benchmark",
+                return_value=fake_public_semantic_sidecar_payload(),
+            ) as public_semantic_run,
+        ):
+            payload = benchmark.run_source_evidence_retrieval_benchmark(
+                fts5_cases=2,
+                fts5_min_cases=1,
+                source_max_cases=2,
+                source_min_cases=1,
+                include_public_semantic_sidecar=True,
+                public_semantic_conversations=2,
+                public_semantic_max_messages=4,
+                public_semantic_min_cases=1,
+                public_semantic_top_k=5,
+            )
+
+        self.assertTrue(payload["ok"])
+        self.assertTrue(payload["config"]["include_public_semantic_sidecar"])
+        self.assertIn("public_semantic_sidecar", payload["tracks"])
+        self.assertEqual(payload["tracks"]["public_semantic_sidecar"]["metrics"]["top_k_hit_rate"], 1.0)
+        self.assertIn("public_semantic_sidecar", payload["cases"])
+        self.assertEqual(payload["cases"]["public_semantic_sidecar"][0]["case_id"], "public-semantic-a")
+        public_semantic_run.assert_called_once()
+        self.assertEqual(public_semantic_run.call_args.kwargs["conversations"], 2)
+        self.assertEqual(public_semantic_run.call_args.kwargs["max_messages"], 4)
+
     def test_sharegpt_public_source_evidence_uses_message_and_turn_ground_truth(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -456,6 +535,100 @@ class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
         dumped = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn("Rust lifetime error", dumped)
         self.assertNotIn("dropna=False", dumped)
+
+    def test_public_semantic_sidecar_builds_reviewed_bounded_subset(self) -> None:
+        def fake_labeler(candidates: list[dict], **_: object) -> dict:
+            target = next(item for item in candidates if item["message_id"] == "m1")
+            return {
+                "available": True,
+                "findings": [
+                    {
+                        "finding_kind": "semantic_scope_labels",
+                        "job": "semantic_scope_labeling",
+                        "message_id": target["message_id"],
+                        "turn_id": target["turn_id"],
+                        "scope_labels": ["preference"],
+                        "confidence": 0.95,
+                        "summary": "The user states a stable preference about examples.",
+                        "source_refs": [
+                            {
+                                "message_id": target["message_id"],
+                                "turn_id": target["turn_id"],
+                                "source_line": target["source_line"],
+                                "role": target["role"],
+                                "phase": target.get("phase") or "",
+                            }
+                        ],
+                        "label_evidence": [
+                            {
+                                "label": "preference",
+                                "reason": "The source says precise TypeScript examples are preferred.",
+                                "confidence": 0.95,
+                            }
+                        ],
+                    }
+                ],
+                "usage": {"total_tokens": 11},
+            }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            corpus_dir = root / "sharegpt_clean"
+            output_dir = root / "public_semantic_sidecar"
+            self.write_jsonl(
+                corpus_dir / "messages.jsonl",
+                [
+                    {
+                        "message_id": "m1",
+                        "turn_id": "t1",
+                        "source_id": "conv-a",
+                        "clean_ordinal": 0,
+                        "source_line": 1,
+                        "role": "user",
+                        "phase": "",
+                        "turn_index": 1,
+                        "is_final": False,
+                        "text": "I prefer precise TypeScript examples because terse advice loses context.",
+                    },
+                    {
+                        "message_id": "m2",
+                        "turn_id": "t1",
+                        "source_id": "conv-a",
+                        "clean_ordinal": 1,
+                        "source_line": 2,
+                        "role": "assistant",
+                        "phase": "final_answer",
+                        "turn_index": 1,
+                        "is_final": True,
+                        "text": "Understood; I will include precise TypeScript examples.",
+                    },
+                ],
+            )
+
+            payload = benchmark.run_public_semantic_sidecar_benchmark(
+                corpus_dir=corpus_dir,
+                output_dir=output_dir,
+                conversations=1,
+                max_messages=2,
+                min_cases=1,
+                top_k=5,
+                labeler_fn=fake_labeler,
+            )
+
+            sidecar_path = output_dir / "clean-source" / "semantic-scope-labels.jsonl"
+            self.assertTrue(sidecar_path.exists())
+
+        self.assertEqual(payload["kind"], "public_semantic_sidecar_source_evidence")
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["status"], "sufficient")
+        self.assertEqual(payload["artifacts"]["sidecar_row_count"], 1)
+        self.assertEqual(payload["artifacts"]["reviewed_sidecar_row_count"], 1)
+        self.assertEqual(payload["metrics"]["case_count"], 1)
+        self.assertEqual(payload["metrics"]["top_k_hit_rate"], 1.0)
+        self.assertEqual(payload["privacy_boundary"]["raw_text_emitted"], False)
+        dumped = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn("precise TypeScript examples", dumped)
+        self.assertNotIn(str(output_dir), dumped)
 
     def test_standard_locomo_retrieval_qa_uses_evidence_dialogue_ids(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

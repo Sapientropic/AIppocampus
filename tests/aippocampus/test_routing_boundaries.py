@@ -121,6 +121,27 @@ class RoutingBoundaryTests(unittest.TestCase):
             [],
         )
 
+    def test_working_memory_match_rejects_partial_multiword_phrase(self) -> None:
+        row = {
+            "status": "active",
+            "route": router.CONFIRM_WHEN_RELEVANT,
+            "candidate_type": "contradiction_review",
+            "title": "Jackie mutation consent gate",
+            "summary": "Jackie mutations require explicit consent before writes.",
+            "confidence": 0.7,
+            "project_label": "AIppocampus",
+            "trigger_terms": ["Jackie", "mutation", "consent gate", "Review card"],
+        }
+
+        self.assertEqual(
+            router.match_working_memory(
+                "这个 recall gate 能不能 stay project-scoped?",
+                [row],
+                project_label="AIppocampus",
+            ),
+            [],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

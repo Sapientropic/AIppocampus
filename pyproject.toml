@@ -29,7 +29,11 @@ select = ["E9", "F", "I"]
 
 [tool.mypy]
 python_version = "3.10"
-mypy_path = "skills/aippocampus/scripts"
+mypy_path = [
+    "skills/aippocampus/scripts",
+    "tools/aippocampus/smoke",
+    "benchmarks/aippocampus",
+]
 check_untyped_defs = true
 warn_unused_ignores = true
 warn_redundant_casts = true
@@ -69,6 +73,7 @@ files = [
     "skills/aippocampus/scripts/search_clean_source.py",
     "skills/aippocampus/scripts/search_rollout.py",
     "skills/aippocampus/scripts/search_segments.py",
+    "skills/aippocampus/scripts/semantic_cue_cache.py",
     "skills/aippocampus/scripts/semantic_recall_gate.py",
     "skills/aippocampus/scripts/semantic_scope_labels.py",
     "skills/aippocampus/scripts/semantic_scope_suppressed_recovery.py",

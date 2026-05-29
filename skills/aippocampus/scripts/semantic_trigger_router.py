@@ -24,6 +24,9 @@ from semantic_recall_gate import default_semantic_triggers_path
 TRIGGER_SCHEMA_VERSION = 1
 TRIGGER_TYPES = {"hook_trigger", "project_memory", "concept_edge"}
 MIN_CONFIDENCE = 0.62
+DEFAULT_SEED_TRIGGERS_PATH = (
+    Path(__file__).resolve().parents[1] / "references" / "reviewed-semantic-triggers.seed.jsonl"
+)
 GENERIC_ALIASES = {
     "memory",
     "project",
@@ -39,6 +42,10 @@ GENERIC_ALIASES = {
     "来源",
     "决策",
 }
+
+
+def default_seed_triggers_path() -> Path:
+    return DEFAULT_SEED_TRIGGERS_PATH
 
 
 def trigger_key(candidate: dict[str, Any]) -> str:
@@ -107,6 +114,36 @@ def alias_candidates(candidate: dict[str, Any]) -> list[str]:
     return unique_preserve(clean, limit=16)
 
 
+def iter_seed_triggers(path: Path | None) -> list[dict[str, Any]]:
+    if not path or not path.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    for row in iter_jsonl(path):
+        if row.get("kind") != "aippocampus_semantic_trigger":
+            continue
+        if row.get("status") != "active":
+            continue
+        aliases = [
+            normalize_term(str(alias or ""))
+            for alias in (row.get("aliases") or [])
+            if normalize_term(str(alias or ""))
+        ]
+        if not aliases:
+            continue
+        trigger = dict(row)
+        trigger.setdefault("schema_version", TRIGGER_SCHEMA_VERSION)
+        trigger.setdefault("source", "reviewed_seed")
+        trigger.setdefault("trigger_id", "seed_" + hashlib.sha1(
+            (str(trigger.get("title") or "") + "\n" + "|".join(aliases))
+            .casefold()
+            .encode("utf-8")
+        ).hexdigest()[:18])
+        trigger["aliases"] = unique_preserve(aliases, limit=24)
+        trigger["confidence"] = round(float(trigger.get("confidence") or 0.8), 4)
+        rows.append(trigger)
+    return rows
+
+
 def route_candidate(candidate: dict[str, Any]) -> dict[str, Any] | None:
     if candidate.get("kind") != "aippocampus_promotion_candidate":
         return None
@@ -144,20 +181,24 @@ def build_semantic_triggers(
     *,
     candidates_path: Path,
     output_path: Path,
+    seed_triggers_path: Path | None = None,
 ) -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
     by_key: dict[str, dict[str, Any]] = {}
+    seed_triggers = iter_seed_triggers(seed_triggers_path)
+    for trigger in seed_triggers:
+        by_key[str(trigger.get("trigger_id"))] = trigger
     for candidate in iter_jsonl(candidates_path):
-        trigger = route_candidate(candidate)
-        if not trigger:
+        routed = route_candidate(candidate)
+        if not routed:
             continue
-        key = str(trigger.get("trigger_id"))
+        key = str(routed.get("trigger_id"))
         existing = by_key.get(key)
         if existing and float(existing.get("confidence") or 0.0) >= float(
-            trigger.get("confidence") or 0.0
+            routed.get("confidence") or 0.0
         ):
             continue
-        by_key[key] = trigger
+        by_key[key] = routed
     rows = sorted(
         by_key.values(),
         key=lambda row: (float(row.get("confidence") or 0.0), str(row.get("title") or "")),
@@ -169,6 +210,8 @@ def build_semantic_triggers(
         "kind": "aippocampus_semantic_trigger_routing",
         "created_at": now_utc(),
         "source_candidates": str(candidates_path),
+        "seed_triggers": str(seed_triggers_path) if seed_triggers_path else None,
+        "seed_trigger_count": len(seed_triggers),
         "trigger_count": len(rows),
         "output": str(output_path),
     }
@@ -181,6 +224,8 @@ def main() -> int:
     parser.add_argument("--registry-dir")
     parser.add_argument("--candidates")
     parser.add_argument("--output")
+    parser.add_argument("--seed-triggers")
+    parser.add_argument("--no-seed-triggers", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
@@ -199,7 +244,16 @@ def main() -> int:
         if args.output
         else default_semantic_triggers_path(registry_path=registry_path)
     )
-    result = build_semantic_triggers(candidates_path=candidates, output_path=output)
+    seed_triggers_path = (
+        None
+        if args.no_seed_triggers
+        else Path(args.seed_triggers).resolve()
+        if args.seed_triggers
+        else default_seed_triggers_path()
+    )
+    result = build_semantic_triggers(
+        candidates_path=candidates, output_path=output, seed_triggers_path=seed_triggers_path
+    )
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:

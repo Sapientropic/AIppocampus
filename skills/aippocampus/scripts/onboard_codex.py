@@ -31,6 +31,7 @@ from build_project_timeline import (
     default_timeline_path,
     save_project_timeline,
 )
+from memory_candidate_router import default_candidates_path
 from onboard_frontier import (
     filter_frontier_result_for_current_state as filter_frontier_result_for_current_state,
 )
@@ -58,6 +59,11 @@ from registry import (
     register_rollout_thread,
     registry_paths,
     scan_session_rollouts,
+)
+from semantic_recall_gate import default_semantic_triggers_path
+from semantic_trigger_router import (
+    build_semantic_triggers,
+    default_seed_triggers_path,
 )
 from subconscious_jobs import (
     JOB_SPECS,
@@ -305,6 +311,11 @@ def run_onboarding(
             jobs_path=jobs_path,
             output_path=output_path,
         )
+    actions["semantic_triggers"] = build_semantic_triggers(
+        candidates_path=default_candidates_path(registry_path=registry_path),
+        output_path=default_semantic_triggers_path(registry_path=registry_path),
+        seed_triggers_path=default_seed_triggers_path(),
+    )
 
     stats_after = registry_stats(registry_dir=registry_dir)
     ok: bool | str = True
