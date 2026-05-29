@@ -44,10 +44,12 @@ remaining work is visible instead of hidden behind one broad issue:
   fanout.
 - [#13](https://github.com/Sapientropic/AIppocampus/issues/13): synthetic
   multi-GB scale smoke, thresholds, and amplification reporting without private
-  data.
+  data. First CI-safe simulator lives at
+  `tools/aippocampus/smoke/smoke_synthetic_scale_capacity.py`.
 - [#14](https://github.com/Sapientropic/AIppocampus/issues/14): Windows writer
   discipline, interrupted rebuild recovery, and last-known-good index
-  preservation.
+  preservation. Segment rebuilds now use a same-directory single-writer lease
+  plus stale-lock recovery before publishing new SQLite shards.
 
 Completed foundation:
 
@@ -152,8 +154,9 @@ Completed foundation:
    - Status: first content-addressed clean-source chunk/delta sync is
      implemented in `sync_bundle.py`; first registry-metadata query planner and
      fanout budget reporting are implemented in `storage_capacity_report.py`.
-     Multi-GB threshold smokes and Windows interrupted-index recovery remain
-     separate slices.
+     Synthetic multi-GB threshold smoke is implemented in
+     `tools/aippocampus/smoke/smoke_synthetic_scale_capacity.py`; segmented
+     index rebuilds now have a single-writer lease and last-known-good recovery.
 
 ## Near-term implementation order
 
@@ -181,8 +184,11 @@ Completed foundation:
 7. Add source chunking, delta sync, and registry query planning. Done for the
    first executable slice: local-folder/object-storage sync now moves
    clean-source JSONL through content-addressed chunks, and capacity reports now
-   include planned fanout under a budget. Next: synthetic multi-GB scale smoke
-   and Windows interrupted-index recovery across #13 and #14.
+   include planned fanout under a budget. The synthetic multi-GB capacity smoke
+   models warning/blocker thresholds without creating large files. Segmented
+   index rebuilds now use `.rebuild.lock` single-writer discipline, staged
+   publish, and last-known-good restoration; broader physical Windows sync
+   stress remains a release-readiness exercise, not a fast-tier claim.
 
 ## Cross-references
 

@@ -32,9 +32,45 @@ REQUIRED_PROJECT_DOCS = [
     "docs/roadmap.md",
     "docs/stage-0-5-readiness.md",
     "docs/next-iteration-plan.md",
+    "docs/runtime-script-map.md",
     "docs/gb-scale-roadmap.md",
     "docs/wukong-mining-notes.md",
     "docs/technical-differentiation-analysis.md",
+]
+
+REQUIRED_RUNTIME_MAP_SCRIPTS = [
+    "aippocampus_prompt_hook.py",
+    "aippocampus_lifecycle_hook.py",
+    "aippocampus_mcp_server.py",
+    "aippocampus_health.py",
+    "build_clean_source.py",
+    "build_index.py",
+    "build_segments.py",
+    "build_project_timeline.py",
+    "registry.py",
+    "registry_search.py",
+    "retrieval.py",
+    "search_clean_source.py",
+    "search_segments.py",
+    "sync_bundle.py",
+    "sync_object_storage.py",
+    "encrypted_sync_bundle.py",
+    "encrypted_sync_object_storage.py",
+    "vault_sync_utils.py",
+    "sync_vault.py",
+    "subconscious_jobs.py",
+    "subconscious_scheduler.py",
+    "subconscious_worker.py",
+    "subconscious_review.py",
+    "memory_candidate_router.py",
+    "model_client.py",
+    "deepseek_model_routing.py",
+    "semantic_recall_gate.py",
+    "semantic_cue_cache.py",
+    "warm_ambient_recall.py",
+    "ambient_warm_scheduler.py",
+    "ambient_thread_cache.py",
+    "question_vector_index.py",
 ]
 
 REQUIRED_PUBLIC_READINESS_DOCS = [
@@ -155,6 +191,18 @@ def research_index_issues(repo_root: Path) -> list[str]:
     return issues
 
 
+def runtime_script_map_issues(repo_root: Path) -> list[str]:
+    issues: list[str] = []
+    runtime_map = repo_root / "docs" / "runtime-script-map.md"
+    if not runtime_map.exists():
+        return ["missing runtime script map: docs/runtime-script-map.md"]
+    text = runtime_map.read_text(encoding="utf-8")
+    for script in REQUIRED_RUNTIME_MAP_SCRIPTS:
+        if script not in text:
+            issues.append(f"runtime script map missing high-risk script: {script}")
+    return issues
+
+
 def windows_context_from_recent_lines(lines: list[str], fence_start_line: int) -> bool:
     recent = "\n".join(lines[max(0, fence_start_line - 5) : fence_start_line - 1]).casefold()
     return "windows" in recent or "powershell" in recent
@@ -213,6 +261,8 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
     origin_stub = repo_root / "docs" / "origin.md"
     if origin_stub.exists():
         issues.append("docs/origin.md duplicates the origin essay; link docs/未干的地图.md instead")
+
+    issues.extend(runtime_script_map_issues(repo_root))
 
     gitignore = repo_root / ".gitignore"
     if not gitignore.exists():

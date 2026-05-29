@@ -961,6 +961,14 @@ Reusable existing pieces:
   `test_memory_candidate_router.py`
 - prompt-hook boundary fixtures from `test_aippocampus_prompt_hook.py`
 
+Public memory-pain fixture source map:
+
+- `docs/research/memory-system-pain-taxonomy.md` is now the checked source map
+  for Mem0-style pollution, Graphiti/Zep-style scale/cost, Letta-style
+  compaction, and HN pattern-learning pain points.
+- #27 should implement fixtures from that taxonomy. Until those fixtures exist,
+  the taxonomy is planning evidence only, not benchmark evidence.
+
 ## Rollout Plan
 
 P0: deterministic boundary tests and shared case schema.

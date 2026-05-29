@@ -57,6 +57,19 @@ reading clean-source message bodies or raw rollout bodies. This is the right
 first command before deciding whether GB/TB-scale work needs source chunking,
 delta sync, or a query planner.
 
+Use `tools/aippocampus/smoke/smoke_synthetic_scale_capacity.py --json` when you
+need a CI-safe multi-GB threshold model without creating large files. Its output
+is synthetic aggregate capacity evidence only; it cannot prove real GB/TB
+runtime, Windows interrupted rebuild recovery, or physical sync behavior.
+
+Segmented index rebuilds use a same-directory `.rebuild.lock` lease before
+building or publishing segment SQLite shards. This is the single-writer
+discipline for Windows rebuilds: do not run two `build_segments.py` writers
+against the same output directory. If a process dies, the next run may recover a
+stale lease after the configured age, but operators should first verify no live
+writer is still using the directory. New segments are staged before publish, and
+failed publish restores last-known-good `seg-*` dirs and manifest metadata.
+
 ## Retention And Cold Archive
 
 Use `retention_report.py --write` before proposing cleanup. The report
@@ -116,6 +129,7 @@ Audit and archive commands:
 
 - `python ...\rollout_size_audit.py --cwd "$PWD"`
 - `python ...\storage_capacity_report.py --json`
+- `python tools\aippocampus\smoke\smoke_synthetic_scale_capacity.py --json`
 - `python ...\retention_report.py --cwd "$PWD" --write`
 - `python ...\cold_archive.py --cwd "$PWD"`
 - `python ...\export_bundle.py --cwd "$PWD"`

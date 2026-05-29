@@ -60,6 +60,11 @@ strong claims need source-backed evidence.
    - Keeps the question of activation-efficient memory alive, while current
      reviewer consensus points the near-term path back to structured text
      cognitive portraits.
+12. [Memory-System Pain Taxonomy](memory-system-pain-taxonomy.md)
+   - Public issue/user-feedback taxonomy for Mem0, Graphiti/Zep, Letta, and HN
+     memory pain points.
+   - Feeds public-safe benchmark fixtures without turning competitor reports
+     into broad marketing claims.
 
 ## Study Packs
 
