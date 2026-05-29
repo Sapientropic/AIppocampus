@@ -96,11 +96,15 @@ handoff belongs in `docs/next-iteration-plan.md`.
   `skills/aippocampus/scripts/aippocampus_mcp_server.py`, including a
   process-level stdio JSON-RPC smoke for `initialize`, `tools/list`, and
   `tools/call`. The package-level plugin smoke also exercises the installed
-  plugin `.mcp.json` as a JSON-RPC client path, including the initialized
-  notification commonly sent by MCP hosts. A real Codex app-server smoke now
-  installs the plugin, reloads Codex MCP config, lists the `aippocampus` server
-  through the Codex MCP host, starts a real app-server thread, and calls
-  `mcpServer/tool/call` for `sync_status`.
+  plugin `.mcp.json` as a standalone MCP stdio JSON-RPC client path, including
+  the initialized notification commonly sent by MCP hosts and a `sync_status`
+  tool call. A real Codex app-server smoke now installs the plugin, reloads
+  Codex MCP config, lists the `aippocampus` server through the Codex MCP host,
+  starts a real app-server thread, and calls `mcpServer/tool/call` for
+  `sync_status`. MCP tool failures now have structured error contracts for
+  malformed arguments, missing registry state, missing clean source, missing
+  turn selectors, unknown ids, unsupported mutation requests, and generic tool
+  failures.
 - Stage 3 now has a first local-folder sync backend at
   `skills/aippocampus/scripts/sync_bundle.py`, with `status`, `push`, `pull`,
   and `repair`. The local-folder sync path includes the clean-source semantic
@@ -132,7 +136,10 @@ handoff belongs in `docs/next-iteration-plan.md`.
   config. The heavier `plugins/aippocampus/smoke_real_codex_host.py` smoke also
   uses real Codex `marketplace/add`, `plugin/read`, `plugin/install`,
   `plugin/uninstall`, and `marketplace/remove` app-server methods against a
-  run-id-scoped local marketplace, then verifies cleanup.
+  run-id-scoped local marketplace, then verifies cleanup. Public distribution,
+  uninstall, and rollback docs now distinguish skill-only install, plugin
+  package install, MCP config, hook installers, and optional external-model
+  routes.
 - Plugin packaging does not silently enable prompt or lifecycle hooks. Hook
   installers remain explicit action surfaces after privacy review.
 - Hook-time subconscious work now has a clearer SLA boundary: foreground hooks
@@ -163,11 +170,12 @@ handoff belongs in `docs/next-iteration-plan.md`.
   R2 run into all S3-compatible/GCS/cloud-folder providers, and do not treat
   local HTTP object-storage as managed-provider evidence.
 - Stage 4 still needs broader client coverage beyond the headless Codex
-  app-server path, such as an interactive Desktop UI flow or another Codex
-  client surface. Current real-host evidence does not prove every UI wrapper.
-- Stage 5 still needs public distribution docs and external install review.
-  The real Codex app-server plugin manager path is verified locally, but a
-  public marketplace submission or third-party install has not been exercised.
+  app-server path and the standalone stdio JSON-RPC client if claiming every
+  Codex UI wrapper. Current real-host evidence does not prove an interactive
+  Desktop UI marketplace flow.
+- Stage 5 still needs public marketplace submission or independent third-party
+  install review if those are claimed. The real Codex app-server plugin manager
+  path and package-level installed-plugin MCP path are verified locally.
 
 ## Evidence Matrix
 
@@ -177,13 +185,13 @@ handoff belongs in `docs/next-iteration-plan.md`.
 | 1 | `README.md`, `CONTRIBUTING.md`, `docs/public-core-boundary.md`, architecture/install/demo/privacy docs, synthetic example bundle, docs health guardrails, dated full-suite/scan notes, Apache-2.0 package/plugin/provenance metadata, `tools/aippocampus/smoke/run_stage_0_5_smoke.py` unified smoke runner, package-level temporary plugin install/MCP/uninstall smoke, and real Codex app-server plugin manager/MCP host smoke | Third-party fresh-clone or second-user install review, public marketplace submission if claimed, and repeated full-suite/scan evidence after each release slice |
 | 2 | Registry, clean source, cognitive map, semantic triggers, subconscious jobs, deterministic `scope_labels`, mocked DeepSeek `semantic_scope_labeling` job-to-sidecar test, `build_semantic_scope_labels.py` materializer, dynamic `semantic-scope-labels.jsonl` sidecar merging with strict per-label evidence gates for every materialized label, scope-filtered clean-source search, public casual-important metaphor/pivot example, `life_wide` timeline groups with source refs, quiet life-wide ambient scent with anti-over-personalization tests, real-registry aggregate coverage smoke with claim-level/ratio guards, refreshed 949-thread local registry, full-candidate real-history semantic sidecar smoke evaluating 609 selected candidates and expanding to 27 threads/119 rows before strict filtering, v2 fresh DeepSeek probe with 11 findings / 15 accepted labels / complete per-label evidence, current strict sidecars at 2 threads/5 rows/5 timeline turns, selected source-evidence recall eval with 24/24 top-5 hits, broader selected source-review smoke with 96 cases / 84 supported / 0 failed label categories, DeepSeek flash/pro route tests, and live Pro-agent suppressed-label recovery restoring 3 labels from 8 suppressed cases / 11 candidate labels without relaxing strict gates | Broader human/source review and stronger model-side evidence to restore high-confidence coverage for still-suppressed soft labels |
 | 3 | `sync_bundle.py`, `sync_object_storage.py`, `export_bundle.py`, `import_bundle.py`, global thread store defaults, semantic scope-label sidecar sync, device-neutral bundle registry locators, target-registry path repair on pull, conflict-preserving pull tests, single-machine dual-device/cross-OS-path-shape smoke, local HTTP object-storage adapter smoke, Docker/WSL alternate-runtime smoke when available, physical Windows-to-MacBook sync smoke, managed Cloudflare R2 encrypted object-storage smoke, Python 3.9 sync path-repair compatibility coverage, and install docs | Broader provider matrix, cloud-folder client evidence if claimed, and longer-running multi-user/device operational soak |
-| 4 | `aippocampus_mcp_server.py`, `.mcp.json`, MCP unit tests, source stdio JSON-RPC process smoke, installed-plugin `.mcp.json` JSON-RPC smoke, real Codex app-server MCP host list and `mcpServer/tool/call sync_status` smoke | Interactive Desktop UI / alternate Codex client verification |
-| 5 | `plugins/aippocampus/`, `build_plugin_package.py`, plugin contract tests, package-level temporary install/MCP JSON-RPC/uninstall smoke, real Codex app-server marketplace/plugin install/uninstall smoke | Public distribution docs and external install review |
+| 4 | `aippocampus_mcp_server.py`, `.mcp.json`, MCP unit tests, structured MCP error-contract tests, source stdio JSON-RPC process smoke, installed-plugin `.mcp.json` standalone MCP JSON-RPC client smoke, real Codex app-server MCP host list and `mcpServer/tool/call sync_status` smoke | Interactive Desktop UI verification or additional Codex client surfaces only if claiming those wrappers |
+| 5 | `plugins/aippocampus/`, `build_plugin_package.py`, plugin contract tests, public distribution/uninstall/rollback docs, package-level temporary install/MCP JSON-RPC/uninstall smoke, real Codex app-server marketplace/plugin install/uninstall smoke | Public marketplace submission or independent third-party install review if claimed |
 
 ## Next Slice
 
 Continue Stage 2 hardening with human/source review and better source-backed
 model findings for still-suppressed soft labels, not lexical expansion or
 looser materializer gates. Then prioritize broader Stage 3 provider/client soak
-only where claims require it, plus third-party/public distribution review for
-Stages 3 through 5.
+only where claims require it, plus interactive UI, marketplace, or independent
+distribution review only when those surfaces become explicit release claims.

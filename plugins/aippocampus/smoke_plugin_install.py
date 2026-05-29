@@ -17,6 +17,19 @@ import build_plugin_package
 
 PLUGIN_NAME = "aippocampus"
 
+ALTERNATE_CLIENT_SURFACE = {
+    "kind": "standalone_mcp_stdio_jsonrpc_client",
+    "config_source": "installed_plugin_mcp_json",
+    "headless_codex_app_server": False,
+    "interactive_desktop_ui": False,
+    "operations": [
+        "initialize",
+        "notifications/initialized",
+        "tools/list",
+        "tools/call:sync_status",
+    ],
+}
+
 
 def default_build_output(repo_root: Path) -> Path:
     return repo_root / "dist" / f"aippocampus-plugin-smoke-{uuid.uuid4().hex[:10]}"
@@ -116,6 +129,7 @@ def run_mcp_jsonrpc_smoke(plugin_dir: Path) -> dict[str, Any]:
     )
     return {
         "ok": ok,
+        "alternate_client_surface": ALTERNATE_CLIENT_SURFACE,
         "response_ids": [item.get("id") for item in responses],
         "request_methods": [str(item.get("method") or "") for item in requests],
         "tools": tool_names,
@@ -144,6 +158,7 @@ def smoke_plugin_install(
     mcp_smoke_ok = False
     mcp_jsonrpc: dict[str, Any] = {
         "ok": False,
+        "alternate_client_surface": ALTERNATE_CLIENT_SURFACE,
         "response_ids": [],
         "tools": [],
         "tool_payload": {},
@@ -162,6 +177,7 @@ def smoke_plugin_install(
         "mcp_jsonrpc_tools": [],
         "mcp_jsonrpc_tool_payload": {},
         "mcp_jsonrpc_tool_is_error": True,
+        "alternate_client_surface": ALTERNATE_CLIENT_SURFACE,
         "hooks_auto_enabled": False,
         "uninstalled": False,
     }
@@ -209,6 +225,9 @@ def smoke_plugin_install(
                 "mcp_jsonrpc_tools": mcp_jsonrpc.get("tools", []),
                 "mcp_jsonrpc_tool_payload": mcp_jsonrpc.get("tool_payload", {}),
                 "mcp_jsonrpc_tool_is_error": bool(mcp_jsonrpc.get("tool_is_error", True)),
+                "alternate_client_surface": mcp_jsonrpc.get(
+                    "alternate_client_surface", ALTERNATE_CLIENT_SURFACE
+                ),
                 "hooks_auto_enabled": hooks_auto_enabled,
                 "uninstalled": False,
             }

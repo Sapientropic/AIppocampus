@@ -116,6 +116,15 @@ class PluginDistributionTests(unittest.TestCase):
                 result["mcp_jsonrpc_tool_payload"]["status"], "available_requires_sync_dir"
             )
             self.assertFalse(result["mcp_jsonrpc_tool_is_error"])
+            self.assertEqual(
+                result["alternate_client_surface"]["kind"],
+                "standalone_mcp_stdio_jsonrpc_client",
+            )
+            self.assertFalse(result["alternate_client_surface"]["headless_codex_app_server"])
+            self.assertFalse(result["alternate_client_surface"]["interactive_desktop_ui"])
+            self.assertIn(
+                "tools/call:sync_status", result["alternate_client_surface"]["operations"]
+            )
 
     def test_install_smoke_does_not_cleanup_unsafe_build_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -158,6 +158,63 @@ class AippocampusMcpServerTests(unittest.TestCase):
             [item["message_id"] for item in payload["messages"]], ["msg_user", "msg_final"]
         )
 
+    def test_get_turn_context_requires_explicit_selector(self) -> None:
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 41,
+                "method": "tools/call",
+                "params": {"name": "get_turn_context", "arguments": {"cwd": str(self.cwd)}},
+            }
+        )
+
+        self.assertTrue(response["result"]["isError"])
+        payload = self.tool_payload(response)
+        self.assertEqual(payload["error"]["code"], "missing_turn_selector")
+        self.assertIn("turn_id", payload["error"]["details"]["required_any"])
+
+    def test_get_turn_context_reports_missing_message_id(self) -> None:
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 42,
+                "method": "tools/call",
+                "params": {
+                    "name": "get_turn_context",
+                    "arguments": {"cwd": str(self.cwd), "message_id": "msg_missing"},
+                },
+            }
+        )
+
+        self.assertTrue(response["result"]["isError"])
+        payload = self.tool_payload(response)
+        self.assertEqual(payload["error"]["code"], "message_not_found")
+        self.assertEqual(payload["error"]["details"]["message_id"], "msg_missing")
+
+    def test_get_turn_context_reports_unavailable_clean_source(self) -> None:
+        missing_clean = self.cwd / "missing-clean-source"
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 43,
+                "method": "tools/call",
+                "params": {
+                    "name": "get_turn_context",
+                    "arguments": {
+                        "cwd": str(self.cwd),
+                        "clean_source_dir": str(missing_clean),
+                        "turn_id": "turn_1",
+                    },
+                },
+            }
+        )
+
+        self.assertTrue(response["result"]["isError"])
+        payload = self.tool_payload(response)
+        self.assertEqual(payload["error"]["code"], "clean_source_unavailable")
+        self.assertEqual(payload["error"]["details"]["clean_source_dir"], str(missing_clean))
+        self.assertIn("messages.jsonl", payload["error"]["details"]["missing_files"])
+
     def test_latest_reply_uses_clean_source_before_raw_rollout(self) -> None:
         response = mcp.handle_request(
             {
@@ -233,6 +290,26 @@ class AippocampusMcpServerTests(unittest.TestCase):
             token=None,
         )
 
+    def test_list_threads_reports_missing_registry_status(self) -> None:
+        missing_registry = self.cwd / "missing-registry"
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 67,
+                "method": "tools/call",
+                "params": {
+                    "name": "list_threads",
+                    "arguments": {"registry_dir": str(missing_registry)},
+                },
+            }
+        )
+
+        self.assertFalse(response["result"].get("isError", False))
+        payload = self.tool_payload(response)
+        self.assertEqual(payload["status"], "registry_missing")
+        self.assertEqual(payload["threads"], [])
+        self.assertEqual(payload["count"], 0)
+
     def test_unknown_tool_is_tool_error_not_protocol_crash(self) -> None:
         response = mcp.handle_request(
             {
@@ -246,6 +323,36 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertTrue(response["result"]["isError"])
         payload = self.tool_payload(response)
         self.assertEqual(payload["error"]["code"], "unknown_tool")
+
+    def test_unsupported_mutation_tool_is_explicit_tool_error(self) -> None:
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 55,
+                "method": "tools/call",
+                "params": {"name": "delete_memory", "arguments": {}},
+            }
+        )
+
+        self.assertTrue(response["result"]["isError"])
+        payload = self.tool_payload(response)
+        self.assertEqual(payload["error"]["code"], "unsupported_mutation")
+        self.assertEqual(payload["error"]["details"]["requested_tool"], "delete_memory")
+
+    def test_tools_call_rejects_malformed_arguments(self) -> None:
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 56,
+                "method": "tools/call",
+                "params": {"name": "search_memory", "arguments": "query=source"},
+            }
+        )
+
+        self.assertTrue(response["result"]["isError"])
+        payload = self.tool_payload(response)
+        self.assertEqual(payload["error"]["code"], "malformed_arguments")
+        self.assertEqual(payload["error"]["details"]["expected"], "object")
 
     def test_stdio_jsonrpc_smoke_exercises_client_entrypoint(self) -> None:
         requests = [

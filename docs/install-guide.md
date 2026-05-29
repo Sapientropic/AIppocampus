@@ -35,6 +35,12 @@ cp -R ./skills/aippocampus "${CODEX_HOME}/skills/aippocampus"
 
 Restart Codex or reload skills if your runtime requires it.
 
+To uninstall or roll back a skill-only preview, remove or replace only
+`${CODEX_HOME}/skills/aippocampus`. Generated registries under
+`$CODEX_HOME/aippocampus-registry/` are user data, not package files; do not
+delete them as part of package rollback unless you are intentionally discarding
+local memory artifacts.
+
 Verify the package from the repository:
 
 ```sh
@@ -83,6 +89,32 @@ python ./skills/aippocampus/scripts/aippocampus_mcp_server.py --list-tools
 The initial MCP layer is read-mostly. It exposes clean-source and registry
 tools plus explicit `register_thread` and `sync_status`.
 
+Tool errors use stable JSON payloads inside MCP `content` text:
+
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "clean_source_unavailable",
+    "message": "Clean-source artifacts are unavailable for the requested workspace or clean_source_dir.",
+    "details": {
+      "missing_files": ["messages.jsonl"]
+    }
+  }
+}
+```
+
+Common client-facing codes include `missing_query`, `malformed_params`,
+`malformed_arguments`, `missing_tool_name`, `unknown_tool`,
+`unsupported_mutation`, `clean_source_unavailable`, `missing_turn_selector`,
+`message_not_found`, `turn_not_found`, `health_check_failed`, and
+`tool_failed`. `unsupported_mutation` is intentional: the plugin should not add
+broad write APIs merely to prove MCP integration.
+
+`list_threads` reports a missing registry as a non-error
+`status: "registry_missing"` with an empty `threads` list. That distinguishes a
+fresh install from an existing registry that simply has no matching threads.
+
 ## Plugin Preview
 
 Build the repo-local Codex plugin package:
@@ -93,6 +125,21 @@ python ./plugins/aippocampus/build_plugin_package.py --repo-root . --json
 
 Build output is restricted to `dist/`. The plugin bundles the skill and MCP
 config, but it does not silently enable prompt or lifecycle hooks.
+
+### Distribution status
+
+Current verified package surfaces are:
+
+- repo-local plugin build output under `dist/`
+- package-level temporary install/MCP JSON-RPC/uninstall smoke
+- real Codex app-server local-marketplace install/MCP/uninstall smoke
+- external install validation recorded by issue #29 and summarized in
+  `docs/public-readiness-verification.md`
+
+These checks do not claim a public marketplace submission, every Codex client UI
+wrapper, or independent third-party review. If you publish through a marketplace
+or another distribution channel, keep that evidence separate from the local
+smokes and record the exact client/runtime used.
 
 Run the package-level install/uninstall smoke:
 
@@ -117,12 +164,20 @@ real host, reloads MCP config, calls `sync_status`, then uninstalls the plugin
 and removes temporary marketplace/build/cache artifacts. It still is not a
 public marketplace submission or third-party fresh-clone review.
 
-Rollback for this package-level smoke is automatic: the temporary installed
-plugin directory is removed before the command exits. For a manual plugin
-preview, remove the copied `aippocampus` plugin directory from the temporary
-plugin root you chose. Hook installers are separate, so uninstalling the plugin
-package does not need to repair prompt or lifecycle hooks unless you explicitly
-installed those hooks afterward.
+### Uninstall and rollback
+
+Rollback for the package-level smoke is automatic: the temporary installed plugin
+directory is removed before the command exits. For a manual plugin preview,
+remove the copied `aippocampus` plugin directory from the plugin root you chose
+or use the host client's plugin uninstall action if you installed through a
+plugin manager.
+
+Plugin uninstall removes the packaged skill/MCP surface only. Hook installers
+are separate consent surfaces, so uninstalling the plugin package does not need
+to repair prompt or lifecycle hooks unless you explicitly installed those hooks
+afterward. External-model routes are also separate: remove the relevant
+environment configuration if you no longer want any optional model-backed
+background jobs to run.
 
 ## Hook Install
 
