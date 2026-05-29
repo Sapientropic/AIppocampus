@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -22,6 +24,29 @@ import build_segments  # noqa: E402
 
 
 class BuildSegmentsTests(unittest.TestCase):
+    def test_rebuild_lease_rejects_concurrent_writer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output_dir = Path(tmp) / "segments"
+            with build_segments.rebuild_lease(output_dir):
+                with self.assertRaisesRegex(RuntimeError, "lease already held"):
+                    with build_segments.rebuild_lease(output_dir):
+                        pass
+
+    def test_rebuild_lease_recovers_stale_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output_dir = Path(tmp) / "segments"
+            output_dir.mkdir()
+            lease = output_dir / build_segments.REBUILD_LEASE_NAME
+            lease.write_text('{"pid": 123}', encoding="utf-8")
+            stale_time = time.time() - 60
+            os.utime(lease, (stale_time, stale_time))
+
+            with build_segments.rebuild_lease(output_dir, stale_after_seconds=1) as acquired:
+                self.assertEqual(acquired, lease)
+                self.assertTrue(lease.exists())
+
+            self.assertFalse(lease.exists())
+
     def test_failed_rebuild_preserves_existing_segments_and_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

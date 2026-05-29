@@ -74,6 +74,27 @@ class DocsHealthTests(unittest.TestCase):
 
         self.assertFalse(any("research index" in issue for issue in result), result)
 
+    def test_runtime_script_map_covers_high_risk_current_scripts(self) -> None:
+        repo_root = docs_health.find_repo_root(ROOT)
+        self.assertIsNotNone(repo_root)
+
+        result = docs_health.runtime_script_map_issues(repo_root)
+
+        self.assertEqual(result, [])
+
+    def test_runtime_script_map_reports_missing_required_script(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            docs = repo / "docs"
+            docs.mkdir(parents=True)
+            (docs / "runtime-script-map.md").write_text(
+                "aippocampus_prompt_hook.py\n", encoding="utf-8"
+            )
+
+            issues = docs_health.runtime_script_map_issues(repo)
+
+        self.assertIn("runtime script map missing high-risk script: sync_bundle.py", issues)
+
     def test_research_index_reports_unlinked_top_level_notes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)

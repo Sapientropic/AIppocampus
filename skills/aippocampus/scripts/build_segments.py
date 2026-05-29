@@ -10,6 +10,7 @@ incrementally.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import shutil
@@ -32,6 +33,8 @@ from build_index import make_sqlite
 
 DEFAULT_SEGMENT_BYTES = 64 * 1024 * 1024
 DEFAULT_MAX_MESSAGES = 1200
+DEFAULT_REBUILD_LEASE_STALE_SECONDS = 6 * 60 * 60
+REBUILD_LEASE_NAME = ".rebuild.lock"
 
 
 def line_offsets(path: Path) -> tuple[dict[int, tuple[int, int]], int]:
@@ -111,6 +114,58 @@ def new_rebuild_dir(output_dir: Path) -> Path:
     rebuild_dir = output_dir / f".rebuild-{os.getpid()}-{int(time.time() * 1000)}"
     rebuild_dir.mkdir(parents=True, exist_ok=False)
     return rebuild_dir
+
+
+@contextlib.contextmanager
+def rebuild_lease(
+    output_dir: Path, *, stale_after_seconds: int = DEFAULT_REBUILD_LEASE_STALE_SECONDS
+):
+    """Allow only one segment rebuild publisher per output directory.
+
+    Windows can keep SQLite files locked while another process is still
+    replacing segment dirs. The lease is deliberately a plain same-directory
+    create-exclusive file so interrupted rebuilds are visible and stale locks
+    can be recovered without relying on platform-specific file locking.
+    """
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    lease_path = output_dir / REBUILD_LEASE_NAME
+    payload = {
+        "schema_version": 1,
+        "kind": "aippocampus_segment_rebuild_lease",
+        "pid": os.getpid(),
+        "created_at": now_utc(),
+        "stale_after_seconds": int(stale_after_seconds),
+    }
+    while True:
+        try:
+            fd = os.open(str(lease_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            try:
+                age = time.time() - lease_path.stat().st_mtime
+            except OSError:
+                continue
+            if age > stale_after_seconds:
+                try:
+                    lease_path.unlink()
+                except OSError:
+                    pass
+                continue
+            raise RuntimeError(
+                f"segment rebuild lease already held: {lease_path}. "
+                "Wait for the current rebuild or remove the stale lock after verification."
+            )
+        else:
+            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+            break
+    try:
+        yield lease_path
+    finally:
+        try:
+            lease_path.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def install_staged_segments(staging_dir: Path, output_dir: Path, manifest: dict) -> Path:
@@ -202,99 +257,100 @@ def main() -> int:
     if args.max_messages < 50:
         raise SystemExit("--max-messages must be at least 50")
 
-    staging_dir = new_rebuild_dir(output_dir)
-    try:
-        raw_meta = read_session_meta(rollout) or {}
-        meta = public_session_meta(raw_meta)
-        messages, turns = normalize_rollout(rollout, include_tools=args.include_tools)
-        turns_by_id = {turn["id"]: turn for turn in turns}
-        offsets, rollout_bytes = line_offsets(rollout)
-        anchors = parse_anchor_file(anchor_path)
-        groups = segment_groups(
-            messages,
-            offsets,
-            segment_bytes=args.segment_bytes,
-            max_messages=args.max_messages,
-        )
-
-        segment_entries: list[dict] = []
-        for idx, group in enumerate(groups, start=1):
-            segment_id = f"seg-{idx:04d}"
-            build_segment_dir = staging_dir / segment_id
-            final_segment_dir = output_dir / segment_id
-            build_segment_dir.mkdir(parents=True, exist_ok=True)
-            build_messages_path = build_segment_dir / "messages.jsonl"
-            build_sqlite_path = build_segment_dir / "source_index.sqlite"
-            final_messages_path = final_segment_dir / "messages.jsonl"
-            final_sqlite_path = final_segment_dir / "source_index.sqlite"
-            with build_messages_path.open("w", encoding="utf-8", newline="\n") as f:
-                for message in group["messages"]:
-                    f.write(json.dumps(message, ensure_ascii=False) + "\n")
-            segment_turn_ids = {
-                int(message["turn_index"])
-                for message in group["messages"]
-                if message.get("turn_index") is not None
-            }
-            segment_turns = [
-                turns_by_id[turn_id]
-                for turn_id in sorted(segment_turn_ids)
-                if turn_id in turns_by_id
-            ]
-            sqlite_status = make_sqlite(
-                build_sqlite_path,
-                group["messages"],
-                anchors,
-                segment_turns,
-                rag_cache=not args.no_rag_cache,
-                rag_chunk_chars=args.rag_chunk_chars,
+    with rebuild_lease(output_dir):
+        staging_dir = new_rebuild_dir(output_dir)
+        try:
+            raw_meta = read_session_meta(rollout) or {}
+            meta = public_session_meta(raw_meta)
+            messages, turns = normalize_rollout(rollout, include_tools=args.include_tools)
+            turns_by_id = {turn["id"]: turn for turn in turns}
+            offsets, rollout_bytes = line_offsets(rollout)
+            anchors = parse_anchor_file(anchor_path)
+            groups = segment_groups(
+                messages,
+                offsets,
+                segment_bytes=args.segment_bytes,
+                max_messages=args.max_messages,
             )
-            segment_entries.append(
-                {
-                    "id": segment_id,
-                    "dir": str(final_segment_dir),
-                    "messages_jsonl": str(final_messages_path),
-                    "sqlite": str(final_sqlite_path),
-                    "start_global_id": group["start_global_id"],
-                    "end_global_id": group["end_global_id"],
-                    "start_line": group["start_line"],
-                    "end_line": group["end_line"],
-                    "start_offset": group["start_offset"],
-                    "end_offset": group["end_offset"],
-                    "raw_span_bytes": group["raw_span_bytes"],
-                    "message_count": len(group["messages"]),
-                    "sqlite_status": sqlite_status,
+
+            segment_entries: list[dict] = []
+            for idx, group in enumerate(groups, start=1):
+                segment_id = f"seg-{idx:04d}"
+                build_segment_dir = staging_dir / segment_id
+                final_segment_dir = output_dir / segment_id
+                build_segment_dir.mkdir(parents=True, exist_ok=True)
+                build_messages_path = build_segment_dir / "messages.jsonl"
+                build_sqlite_path = build_segment_dir / "source_index.sqlite"
+                final_messages_path = final_segment_dir / "messages.jsonl"
+                final_sqlite_path = final_segment_dir / "source_index.sqlite"
+                with build_messages_path.open("w", encoding="utf-8", newline="\n") as f:
+                    for message in group["messages"]:
+                        f.write(json.dumps(message, ensure_ascii=False) + "\n")
+                segment_turn_ids = {
+                    int(message["turn_index"])
+                    for message in group["messages"]
+                    if message.get("turn_index") is not None
                 }
-            )
+                segment_turns = [
+                    turns_by_id[turn_id]
+                    for turn_id in sorted(segment_turn_ids)
+                    if turn_id in turns_by_id
+                ]
+                sqlite_status = make_sqlite(
+                    build_sqlite_path,
+                    group["messages"],
+                    anchors,
+                    segment_turns,
+                    rag_cache=not args.no_rag_cache,
+                    rag_chunk_chars=args.rag_chunk_chars,
+                )
+                segment_entries.append(
+                    {
+                        "id": segment_id,
+                        "dir": str(final_segment_dir),
+                        "messages_jsonl": str(final_messages_path),
+                        "sqlite": str(final_sqlite_path),
+                        "start_global_id": group["start_global_id"],
+                        "end_global_id": group["end_global_id"],
+                        "start_line": group["start_line"],
+                        "end_line": group["end_line"],
+                        "start_offset": group["start_offset"],
+                        "end_offset": group["end_offset"],
+                        "raw_span_bytes": group["raw_span_bytes"],
+                        "message_count": len(group["messages"]),
+                        "sqlite_status": sqlite_status,
+                    }
+                )
 
-        rollout_stat = rollout.stat()
-        manifest = {
-            "schema_version": 1,
-            "created_at": now_utc(),
-            "cwd": str(cwd),
-            "artifact_scope": "global_thread_store"
-            if args.output_dir is None
-            else "explicit_output_dir",
-            "source_rollout": str(rollout),
-            "source_rollout_size": rollout_stat.st_size,
-            "source_rollout_mtime": rollout_stat.st_mtime,
-            "source_rollout_bytes_scanned": rollout_bytes,
-            "anchor_file": str(anchor_path) if anchor_path.exists() else None,
-            "anchor_mtime": anchor_path.stat().st_mtime if anchor_path.exists() else None,
-            "anchor_sha256": file_sha256(anchor_path) if anchor_path.exists() else None,
-            "include_tools": args.include_tools,
-            "segment_bytes": args.segment_bytes,
-            "max_messages": args.max_messages,
-            "message_count": len(messages),
-            "first_message_line": messages[0]["line"] if messages else None,
-            "last_message_line": messages[-1]["line"] if messages else None,
-            "turn_count": len(turns),
-            "segment_count": len(segment_entries),
-            "session_meta": meta,
-            "segments": segment_entries,
-        }
-        manifest_path = install_staged_segments(staging_dir, output_dir, manifest)
-    finally:
-        shutil.rmtree(staging_dir, ignore_errors=True)
+            rollout_stat = rollout.stat()
+            manifest = {
+                "schema_version": 1,
+                "created_at": now_utc(),
+                "cwd": str(cwd),
+                "artifact_scope": "global_thread_store"
+                if args.output_dir is None
+                else "explicit_output_dir",
+                "source_rollout": str(rollout),
+                "source_rollout_size": rollout_stat.st_size,
+                "source_rollout_mtime": rollout_stat.st_mtime,
+                "source_rollout_bytes_scanned": rollout_bytes,
+                "anchor_file": str(anchor_path) if anchor_path.exists() else None,
+                "anchor_mtime": anchor_path.stat().st_mtime if anchor_path.exists() else None,
+                "anchor_sha256": file_sha256(anchor_path) if anchor_path.exists() else None,
+                "include_tools": args.include_tools,
+                "segment_bytes": args.segment_bytes,
+                "max_messages": args.max_messages,
+                "message_count": len(messages),
+                "first_message_line": messages[0]["line"] if messages else None,
+                "last_message_line": messages[-1]["line"] if messages else None,
+                "turn_count": len(turns),
+                "segment_count": len(segment_entries),
+                "session_meta": meta,
+                "segments": segment_entries,
+            }
+            manifest_path = install_staged_segments(staging_dir, output_dir, manifest)
+        finally:
+            shutil.rmtree(staging_dir, ignore_errors=True)
 
     if args.json_output:
         print(json.dumps(manifest, ensure_ascii=False, indent=2))
