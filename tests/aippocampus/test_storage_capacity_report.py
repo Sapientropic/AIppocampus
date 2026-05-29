@@ -123,6 +123,44 @@ class StorageCapacityReportTests(unittest.TestCase):
         self.assertEqual(report["sync"]["current_policy_main_sqlite_bytes"], 0)
         self.assertLess(current_sync_bytes, report["totals"]["total_registry_bytes"])
 
+    def test_report_exposes_planned_query_fanout_budget(self) -> None:
+        extra_threads = []
+        for key, label in (
+            ("session-alpha", "alpha research notes"),
+            ("session-beta", "beta operations notes"),
+        ):
+            thread = self.registry / "threads" / key
+            clean = thread / "clean-source"
+            index = thread / "index"
+            clean.mkdir(parents=True)
+            index.mkdir(parents=True)
+            (clean / "manifest.json").write_text(
+                json.dumps({"kind": "aippocampus_clean_source"}), encoding="utf-8"
+            )
+            (clean / "messages.jsonl").write_text("{}\n", encoding="utf-8")
+            (clean / "turns.jsonl").write_text("{}\n", encoding="utf-8")
+            (index / "source_index.sqlite").write_bytes(b"sqlite")
+            extra_threads.append({"thread_key": key, "project_label": label})
+
+        registry = json.loads((self.registry / "threads.json").read_text(encoding="utf-8"))
+        registry["threads"].extend(extra_threads)
+        (self.registry / "threads.json").write_text(
+            json.dumps(registry, ensure_ascii=False), encoding="utf-8"
+        )
+
+        report = storage_capacity_report.build_report(
+            self.registry, top=5, planner_query="alpha", fanout_budget=1
+        )
+        planner = report["query_planner"]
+
+        self.assertEqual(planner["worst_case_sqlite_handles"], 4)
+        self.assertEqual(planner["candidate_thread_count"], 1)
+        self.assertEqual(planner["planned_sqlite_handles"], 1)
+        self.assertLess(
+            planner["planned_sqlite_handles"], planner["worst_case_sqlite_handles"]
+        )
+        self.assertFalse(planner["fallback_used"])
+
     def test_report_does_not_include_clean_source_text_or_absolute_paths_by_default(self) -> None:
         report = storage_capacity_report.build_report(self.registry, top=5)
         payload = json.dumps(report, ensure_ascii=False)

@@ -26,9 +26,9 @@ agents do not mistake desired layers for finished behavior.
 - The global registry discovers old thread memories from new threads.
 - `storage_capacity_report.py` reports aggregate clean-source bytes, generated
   index bytes, semantic sidecar bytes, current sync-policy bytes, index
-  amplification, and worst-case SQLite fanout without reading clean-source
-  message bodies. This is the first registry-scale observability layer for
-  issue #4.
+  amplification, worst-case SQLite fanout, and planned registry-metadata query
+  fanout without reading clean-source message bodies. This is the first
+  registry-scale observability layer for issue #4.
 
 ## Active track
 
@@ -52,10 +52,28 @@ remaining work is visible instead of hidden behind one broad issue:
 Completed foundation:
 
 - `storage_capacity_report.py` measures aggregate source/cache/sync size and
-  worst-case fanout without reading private message bodies.
+  worst-case and planned fanout without reading private message bodies.
 - The default sync bundle policy does not copy generated SQLite indexes as
   mandatory portable source; SQLite, FTS, graph, and semantic/vector sidecars
   remain rebuildable local caches unless a command explicitly exports them.
+- `sync_bundle.py` now writes clean-source JSONL through a top-level
+  content-addressed chunk store. The sync manifest carries
+  `clean_source_delta.kind=content_addressed_clean_source_chunks`; each logical
+  clean-source file records size, whole-file SHA-256, and ordered chunk entries
+  with `clean-source-chunks/sha256/<prefix>/<sha256>.chunk` paths. Pull
+  rehydrates the logical clean-source files before target-device path repair.
+  Raw rollout transfer remains opt-in, and generated cache export remains an
+  explicit separate mode.
+- Repeated pushes reuse unchanged chunk objects because chunk paths are
+  content-addressed and live outside the cleared managed `registry/` and
+  `raw-rollouts/` bundle directories. Stale unreferenced chunks may remain in a
+  local sync folder, but only files named in the current manifest are uploaded,
+  verified, or pulled.
+- `storage_capacity_report.py --planner-query ... --fanout-budget ...` exposes
+  a first registry-metadata query plan: worst-case SQLite handles, candidate
+  thread count, planned thread count, planned handles, fallback reason, and
+  budget exhaustion. It narrows using registry/thread metadata first, then still
+  joins results back to stable source ids.
 
 ## Target architecture
 
@@ -127,8 +145,11 @@ Completed foundation:
      large generated indexes or whole clean-source files by default.
    - Add a registry-level query planner that narrows candidate threads, days,
      and segments before opening SQLite files.
-   - Status: observability started in `storage_capacity_report.py`; chunked
-     source, delta sync, and planner implementation are pending.
+   - Status: first content-addressed clean-source chunk/delta sync is
+     implemented in `sync_bundle.py`; first registry-metadata query planner and
+     fanout budget reporting are implemented in `storage_capacity_report.py`.
+     Multi-GB threshold smokes and Windows interrupted-index recovery remain
+     separate slices.
 
 ## Near-term implementation order
 
@@ -154,10 +175,11 @@ Completed foundation:
    that lexical/RAG-lite recall cannot close.
    Status: protocol defined in `question-tracking-subconscious.md`; implementation
    pending.
-7. Add source chunking, delta sync, and registry query planning. This becomes
-   urgent once aggregate clean source reaches GB scale, even if no single
-   SQLite file is near its theoretical maximum. Status: active track split
-   across #11, #12, #13, and #14.
+7. Add source chunking, delta sync, and registry query planning. Done for the
+   first executable slice: local-folder/object-storage sync now moves
+   clean-source JSONL through content-addressed chunks, and capacity reports now
+   include planned fanout under a budget. Next: synthetic multi-GB scale smoke
+   and Windows interrupted-index recovery across #13 and #14.
 
 ## Cross-references
 

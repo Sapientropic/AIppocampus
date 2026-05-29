@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib
 import json
 import shutil
@@ -14,6 +15,14 @@ from aippocampuslib import aippocampus_registry_dir, file_sha256, now_utc, safe_
 
 SYNC_SCHEMA_VERSION = 1
 SYNC_MANIFEST_NAME = "aippocampus-sync-manifest.json"
+CLEAN_SOURCE_CHUNK_BYTES = 1024 * 1024
+CLEAN_SOURCE_CHUNK_STORE = "clean-source-chunks"
+CLEAN_SOURCE_CHUNK_MANIFEST = Path(CLEAN_SOURCE_CHUNK_STORE) / "manifest.json"
+CLEAN_SOURCE_CHUNKED_FILES = (
+    "messages.jsonl",
+    "turns.jsonl",
+    "semantic-scope-labels.jsonl",
+)
 ROOT_SIDECARS = (
     "threads.json",
     "threads.md",
@@ -26,9 +35,6 @@ ROOT_SIDECARS = (
 MANAGED_SYNC_DIRS = ("registry", "raw-rollouts")
 THREAD_FILES = (
     ("clean-source", "manifest.json"),
-    ("clean-source", "messages.jsonl"),
-    ("clean-source", "turns.jsonl"),
-    ("clean-source", "semantic-scope-labels.jsonl"),
     ("index", "manifest.json"),
     ("index", "graph.json"),
 )
@@ -105,6 +111,10 @@ def sync_file_entry(sync_root: Path, relative_path: Path) -> dict:
     }
 
 
+def bytes_sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
 def save_json(path: Path, data: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
@@ -128,6 +138,19 @@ def iter_registry_sync_files(registry_dir: Path) -> Iterable[tuple[Path, Path]]:
             source = thread_dir.joinpath(*parts)
             if source.is_file():
                 yield source, Path("registry") / "threads" / thread_dir.name / Path(*parts)
+
+
+def iter_clean_source_sync_files(registry_dir: Path) -> Iterable[tuple[Path, Path]]:
+    registry_dir = registry_dir.resolve()
+    threads_dir = registry_dir / "threads"
+    if not threads_dir.exists():
+        return
+    for thread_dir in sorted(item for item in threads_dir.iterdir() if item.is_dir()):
+        clean_root = thread_dir / "clean-source"
+        for name in CLEAN_SOURCE_CHUNKED_FILES:
+            source = clean_root / name
+            if source.is_file():
+                yield source, Path("registry") / "threads" / thread_dir.name / "clean-source" / name
 
 
 def iter_raw_rollout_files(registry_dir: Path) -> Iterable[tuple[Path, Path]]:
@@ -234,6 +257,76 @@ def write_sync_file(
     copy_file(source, destination)
 
 
+def clean_source_chunk_path(chunk_hash: str) -> Path:
+    return Path(CLEAN_SOURCE_CHUNK_STORE) / "sha256" / chunk_hash[:2] / f"{chunk_hash}.chunk"
+
+
+def write_clean_source_chunks(source: Path, sync_root: Path, logical_path: Path) -> dict[str, Any]:
+    chunks: list[dict[str, Any]] = []
+    file_hash = hashlib.sha256()
+    total = 0
+    ordinal = 0
+    with source.open("rb") as handle:
+        while True:
+            data = handle.read(CLEAN_SOURCE_CHUNK_BYTES)
+            if not data:
+                break
+            chunk_hash = bytes_sha256(data)
+            chunk_path = clean_source_chunk_path(chunk_hash)
+            destination = ensure_within(sync_root, sync_root / chunk_path)
+            if not destination.is_file() or file_sha256(destination) != chunk_hash:
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(data)
+            chunks.append(
+                {
+                    "ordinal": ordinal,
+                    "offset": total,
+                    "path": chunk_path.as_posix(),
+                    "size": len(data),
+                    "sha256": chunk_hash,
+                }
+            )
+            file_hash.update(data)
+            total += len(data)
+            ordinal += 1
+    return {
+        "path": logical_path.as_posix(),
+        "size": total,
+        "sha256": file_hash.hexdigest(),
+        "chunks": chunks,
+    }
+
+
+def write_clean_source_delta(sync_root: Path, registry_root: Path) -> tuple[dict[str, Any], list[dict]]:
+    files = [
+        write_clean_source_chunks(source, sync_root, relative_path)
+        for source, relative_path in iter_clean_source_sync_files(registry_root)
+    ]
+    chunk_paths = sorted(
+        {chunk["path"] for item in files for chunk in item.get("chunks", [])}
+    )
+    delta = {
+        "kind": "content_addressed_clean_source_chunks",
+        "schema_version": 1,
+        "chunk_bytes": CLEAN_SOURCE_CHUNK_BYTES,
+        "generated_cache_export": "explicit_only",
+        "file_count": len(files),
+        "chunk_count": len(chunk_paths),
+        "files": files,
+        "privacy_boundary": {
+            "contains_private_clean_source_text": True,
+            "chunk_ids_are_content_hashes": True,
+            "generated_caches": "excluded_unless_explicit_export_mode",
+        },
+    }
+    if not files:
+        return delta, []
+    save_json(sync_root / CLEAN_SOURCE_CHUNK_MANIFEST, delta)
+    entries = [sync_file_entry(sync_root, CLEAN_SOURCE_CHUNK_MANIFEST)]
+    entries.extend(sync_file_entry(sync_root, Path(path)) for path in chunk_paths)
+    return delta, entries
+
+
 def clear_managed_sync_dirs(sync_root: Path) -> None:
     for name in MANAGED_SYNC_DIRS:
         target = sync_root / name
@@ -291,6 +384,8 @@ def push_sync_bundle(
             include_raw=include_raw,
         )
         copied.append(sync_file_entry(sync_root, relative_path))
+    clean_source_delta, clean_source_entries = write_clean_source_delta(sync_root, registry_root)
+    copied.extend(clean_source_entries)
     if include_raw:
         for source, relative_path in iter_raw_rollout_files(registry_root):
             copy_file(source, sync_root / relative_path)
@@ -303,6 +398,7 @@ def push_sync_bundle(
         "created_at": now_utc(),
         "backend": "local_folder",
         "raw_rollout_included": include_raw,
+        "clean_source_delta": clean_source_delta,
         "files": copied,
         "file_count": len(copied),
         "privacy_boundary": {
@@ -340,6 +436,69 @@ def resolve_pulled_locator(target_registry: Path, value: str | None) -> str | No
     else:
         candidate = target_registry / path
     return str(ensure_within(target_registry, candidate)) if candidate.exists() else None
+
+
+def is_clean_source_chunk_store_path(relative_path: Path) -> bool:
+    return bool(relative_path.parts) and relative_path.parts[0] == CLEAN_SOURCE_CHUNK_STORE
+
+
+def clean_source_delta_files(manifest: dict[str, Any]) -> list[dict[str, Any]]:
+    delta = manifest.get("clean_source_delta") or {}
+    files = delta.get("files") or []
+    return [item for item in files if isinstance(item, dict)]
+
+
+def materialize_clean_source_delta_file(
+    sync_root: Path, file_manifest: dict[str, Any], destination: Path
+) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    tmp = destination.with_suffix(destination.suffix + ".tmp")
+    total = 0
+    file_hash = hashlib.sha256()
+    with tmp.open("wb") as out:
+        for chunk in file_manifest.get("chunks") or []:
+            relative_path = validate_relative_sync_path(str(chunk.get("path") or ""))
+            if not is_clean_source_chunk_store_path(relative_path):
+                raise ValueError(f"unexpected clean-source chunk path: {relative_path}")
+            source = ensure_within(sync_root, sync_root / relative_path)
+            data = source.read_bytes()
+            expected_hash = str(chunk.get("sha256") or "")
+            if bytes_sha256(data) != expected_hash:
+                raise ValueError(f"clean_source_chunk_hash_mismatch: {relative_path.as_posix()}")
+            if len(data) != int(chunk.get("size") or 0):
+                raise ValueError(f"clean_source_chunk_size_mismatch: {relative_path.as_posix()}")
+            out.write(data)
+            file_hash.update(data)
+            total += len(data)
+    if total != int(file_manifest.get("size") or 0):
+        tmp.unlink(missing_ok=True)
+        raise ValueError(f"clean_source_file_size_mismatch: {file_manifest.get('path')}")
+    if file_hash.hexdigest() != str(file_manifest.get("sha256") or ""):
+        tmp.unlink(missing_ok=True)
+        raise ValueError(f"clean_source_file_hash_mismatch: {file_manifest.get('path')}")
+    tmp.replace(destination)
+
+
+def verify_clean_source_delta_file(sync_root: Path, file_manifest: dict[str, Any]) -> None:
+    total = 0
+    file_hash = hashlib.sha256()
+    for chunk in file_manifest.get("chunks") or []:
+        relative_path = validate_relative_sync_path(str(chunk.get("path") or ""))
+        if not is_clean_source_chunk_store_path(relative_path):
+            raise ValueError(f"unexpected clean-source chunk path: {relative_path}")
+        source = ensure_within(sync_root, sync_root / relative_path)
+        data = source.read_bytes()
+        expected_hash = str(chunk.get("sha256") or "")
+        if bytes_sha256(data) != expected_hash:
+            raise ValueError(f"clean_source_chunk_hash_mismatch: {relative_path.as_posix()}")
+        if len(data) != int(chunk.get("size") or 0):
+            raise ValueError(f"clean_source_chunk_size_mismatch: {relative_path.as_posix()}")
+        file_hash.update(data)
+        total += len(data)
+    if total != int(file_manifest.get("size") or 0):
+        raise ValueError(f"clean_source_file_size_mismatch: {file_manifest.get('path')}")
+    if file_hash.hexdigest() != str(file_manifest.get("sha256") or ""):
+        raise ValueError(f"clean_source_file_hash_mismatch: {file_manifest.get('path')}")
 
 
 def repair_registry_locators(target_registry: Path) -> dict[str, Any]:
@@ -434,6 +593,10 @@ def pull_sync_bundle(sync_dir: str | Path, target_registry_dir: str | Path | Non
         else aippocampus_registry_dir().resolve()
     )
     manifest = load_sync_manifest(sync_root / SYNC_MANIFEST_NAME)
+    delta_file_paths = {
+        validate_relative_sync_path(str(item.get("path") or "")).as_posix()
+        for item in clean_source_delta_files(manifest)
+    }
 
     copied = 0
     skipped = 0
@@ -443,6 +606,10 @@ def pull_sync_bundle(sync_dir: str | Path, target_registry_dir: str | Path | Non
         relative_path = validate_relative_sync_path(str(item.get("path") or ""))
         source = ensure_within(sync_root, sync_root / relative_path)
         if not source.is_file():
+            continue
+        if is_clean_source_chunk_store_path(relative_path):
+            continue
+        if relative_path.as_posix() in delta_file_paths:
             continue
         destination = ensure_within(
             target_registry, destination_for(target_registry, relative_path.as_posix())
@@ -458,6 +625,24 @@ def pull_sync_bundle(sync_dir: str | Path, target_registry_dir: str | Path | Non
             conflict_root, destination_for(conflict_root, relative_path.as_posix())
         )
         copy_file(source, conflict_path)
+        conflicts += 1
+
+    for item in clean_source_delta_files(manifest):
+        relative_path = validate_relative_sync_path(str(item.get("path") or ""))
+        destination = ensure_within(
+            target_registry, destination_for(target_registry, relative_path.as_posix())
+        )
+        if not destination.exists():
+            materialize_clean_source_delta_file(sync_root, item, destination)
+            copied += 1
+            continue
+        if file_sha256(destination) == item.get("sha256"):
+            skipped += 1
+            continue
+        conflict_path = ensure_within(
+            conflict_root, destination_for(conflict_root, relative_path.as_posix())
+        )
+        materialize_clean_source_delta_file(sync_root, item, conflict_path)
         conflicts += 1
 
     path_repair = repair_registry_locators(target_registry)
@@ -517,6 +702,19 @@ def repair_sync_bundle(sync_dir: str | Path) -> dict:
                     "path": relative_path.as_posix(),
                     "expected": item.get("sha256"),
                     "actual": actual,
+                }
+            )
+    for item in clean_source_delta_files(manifest):
+        logical_path = str(item.get("path") or "")
+        try:
+            validate_relative_sync_path(logical_path)
+            verify_clean_source_delta_file(sync_root, item)
+        except (ValueError, OSError) as exc:
+            issues.append(
+                {
+                    "code": "clean_source_delta_invalid",
+                    "path": logical_path,
+                    "message": str(exc),
                 }
             )
     return {

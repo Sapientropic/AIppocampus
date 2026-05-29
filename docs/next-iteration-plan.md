@@ -82,10 +82,11 @@ handoff context.
      first foundation exists in `storage_capacity_report.py`, and the default
      sync policy no longer treats generated SQLite indexes as mandatory portable
      source.
-   - Next execute the split child issues: content-addressed clean-source chunks
-     and delta sync (#11), registry query planning and fanout budgets (#12),
-     synthetic multi-GB scale smoke and thresholds (#13), and Windows rebuild
-     reliability (#14).
+   - Current executable evidence covers content-addressed clean-source chunk
+     delta sync (#11) and registry-metadata query planning with fanout budgets
+     (#12).
+   - Next execute the remaining split child issues: synthetic multi-GB scale
+     smoke and thresholds (#13), and Windows rebuild reliability (#14).
 
 4. Life-wide memory scope labels
    - Source: `roadmap.md`, Stage 2.
