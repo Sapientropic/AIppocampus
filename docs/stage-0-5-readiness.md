@@ -177,6 +177,26 @@ handoff belongs in `docs/next-iteration-plan.md`.
   install review if those are claimed. The real Codex app-server plugin manager
   path and package-level installed-plugin MCP path are verified locally.
 
+## 2026-05-30 Closeout Addendum
+
+The #55/#56 closeout refreshes evidence without changing the claim boundary
+above. The canonical command details live in
+`docs/public-readiness-verification.md`.
+
+- #55 adds a 24-case live source-review pass for the current strict semantic
+  sidecar slice and records a broader 96-case diagnostic live run with strong
+  semantic pass-rate but one live model partial failure. Treat the broader run
+  as diagnostic, not as a green gate.
+- #55 also refreshes selected retrieval evidence across all eight canonical
+  labels. That is selected retrieval/ranking quality evidence, not proof of
+  full-history semantic completeness or global label correctness.
+- #56 refreshes the package-level temporary plugin install, installed-plugin
+  standalone MCP stdio JSON-RPC client, and headless Codex Desktop app-server
+  local-marketplace host path. Public marketplace submission, independent
+  third-party install review, second-user install, and human interactive
+  Desktop UI marketplace click-through remain unclaimed unless separately
+  verified.
+
 ## Evidence Matrix
 
 | Stage | Current evidence | Missing proof |

@@ -171,6 +171,124 @@ Scope notes:
   #38. Local HTTP object-storage remains simulation; the managed R2 run remains
   one provider path, not a provider matrix.
 
+## 2026-05-30 Issues #55/#56 Evidence Closeout
+
+This slice refreshes the Stage 2 soft-label evidence for #55 and the
+release-gate/client-surface evidence for #56. It does not relax source-backed
+materializer gates, claim human review, claim a public marketplace submission,
+or claim every Codex UI wrapper.
+
+Latest verification for this slice:
+
+- `python tools\aippocampus\docs\check_docs_health.py --json`: passed.
+- `python tools\aippocampus\run_tests.py --tier fast`: 333 tests passed.
+- `python tools\aippocampus\smoke\run_stage_0_5_smoke.py --repo-root . --json`:
+  passed after tightening the product-surface secret/local-path scanner so it
+  does not treat a regex literal such as an issue-parent matcher as a Windows
+  drive path. The unified smoke included docs health, 533 unit tests,
+  compileall, Ruff, public demo/timeline checks, MCP tool-list smoke,
+  package/plugin smokes, local-folder/object-storage/alternate-runtime sync
+  smokes, semantic sidecar checks, product-surface secret scan with no hits,
+  and run-id artifact cleanup.
+- `python -m unittest tests.aippocampus.test_stage_0_5_smoke.Stage05SmokeRunnerTests.test_secret_scan_does_not_treat_regex_escapes_as_windows_paths tests.aippocampus.test_stage_0_5_smoke.Stage05SmokeRunnerTests.test_secret_scan_does_not_treat_json_escaped_newline_as_windows_path tests.aippocampus.test_stage_0_5_smoke.Stage05SmokeRunnerTests.test_secret_scan_allows_fake_fixtures_but_flags_real_secret_shape`:
+  passed, covering the scanner false-positive regression and preserving the
+  existing real-secret checks.
+
+Stage 2 soft-label evidence for #55:
+
+- `python .\tools\aippocampus\smoke\smoke_life_wide_registry.py --require-evidence --json`:
+  passed against the local real-history registry. The aggregate slice observed
+  964 clean-source/index/graph-backed threads, 110 scope-labeled threads, 88
+  non-technical life-wide threads, 244 semantic sidecar rows across 46 threads,
+  and all eight canonical labels. The smoke still reports
+  `claim_level=first_pass_real_history_slice` and keeps `cannot_claim` entries
+  for full-history refresh, semantic completeness, and label correctness
+  without clean-source review.
+- `python .\tools\aippocampus\smoke\smoke_semantic_scope_real_history.py --require-labels --min-sidecar-rows 1 --min-sidecar-threads 1 --min-timeline-turns 1 --json`:
+  passed in observe-only mode. This confirmed the currently materialized
+  dynamic semantic sidecar slice without making a fresh external-model write.
+- `python .\tools\aippocampus\smoke\smoke_source_evidence_recall_eval.py --max-cases 24 --min-cases 12 --top-k 5 --min-hit-rate 0.85 --json`:
+  passed with 24 selected cases, 24/24 top-5 hits, `top_k_hit_rate=1.0`,
+  `warning_count=0`, dynamic-source ranking, and coverage across
+  `idea_seed`, `life_context`, `open_question`, `personal_reflection`,
+  `preference`, `reading_notes`, `relationship_continuity`, and
+  `technical_work`. This is a selected retrieval-quality check, not a global
+  recall-quality claim.
+- `python .\skills\aippocampus\scripts\semantic_scope_suppressed_recovery.py --max-cases 12 --json`:
+  passed in observe-only mode with 8 currently available suppressed-label cases
+  / 11 candidate labels and `strict_gate_relaxed=false`. No new labels were
+  restored in this closeout; live Pro recovery evidence remains the earlier
+  dated evidence above.
+- `python .\tools\aippocampus\smoke\smoke_semantic_scope_source_review.py --live --max-cases 24 --min-cases 12 --min-pass-rate 0.75 --min-label-pass-rate 0.65 --concurrency 2 --timeout 200 --max-attempts 3 --json`:
+  passed. It reviewed 24 selected current semantic sidecar label cases through
+  the DeepSeek-compatible live source-review path, passed 24/24, reached
+  `pass_rate=1.0`, and had no failed label categories or live model failures.
+  Reviewed live label families were `idea_seed`, `life_context`,
+  `open_question`, `personal_reflection`, `preference`, `reading_notes`, and
+  `technical_work`.
+- `python .\tools\aippocampus\smoke\smoke_semantic_scope_source_review.py --live --max-cases 96 --min-cases 64 --min-pass-rate 0.75 --min-label-pass-rate 0.65 --concurrency 2 --timeout 200 --max-attempts 3 --json`:
+  returned nonzero and is recorded as diagnostic evidence, not a green gate. It
+  reviewed 96 selected cases, passed 88, reached `pass_rate=0.9167`, and kept
+  every reviewed label category above the 0.65 floor, with
+  `failed_label_categories=[]`. The command still reported
+  `status=live_model_partial_failure`, `claim_level=diagnostic_only`, and
+  `failure_count=1`; that operational partial failure is the residual blocker
+  for treating the 96-case run itself as passed.
+- `python .\tools\aippocampus\smoke\smoke_semantic_scope_source_review.py --max-cases 96 --min-cases 64 --json`:
+  passed in observe-only mode and confirmed 96 selectable source-review cases
+  across the current strict semantic sidecar slice.
+
+Closeout interpretation for #55:
+
+- Reviewed families now include selected source-review evidence for
+  `idea_seed`, `life_context`, `open_question`, `personal_reflection`,
+  `preference`, `reading_notes`, and `technical_work`; selected retrieval
+  evidence also covers `relationship_continuity`.
+- Accepted current strict sidecar labels are only the labels that survived
+  per-label evidence gates and live source review. No new high-risk
+  suppressed label was restored by this closeout.
+- Still-suppressed or not-broadly-claimed cases include generic
+  `relationship_continuity`, broad `life_context` beyond the single selected
+  strict sidecar case, ordinary immediate `open_question`, media-like
+  `reading_notes`, and adjacent-context `idea_seed` / `technical_work` /
+  `preference` guesses when the model evidence does not bind the specific
+  label to the clean-source message.
+- Source-review failures are treated as evidence-selection and model-finding
+  feedback. In the 96-case diagnostic run, semantic misses were concentrated in
+  `technical_work`, `preference`, `reading_notes`, and
+  `personal_reflection`, while the only gate-level failure was the one live
+  model partial failure. None of that authorizes lexical expansion or lower
+  materializer gates.
+
+Release-gate and client-surface evidence for #56:
+
+- `python .\plugins\aippocampus\smoke_plugin_install.py --repo-root . --json`:
+  passed. This is a package-level temporary install-root smoke plus standalone
+  MCP stdio JSON-RPC client check from the installed plugin `.mcp.json`.
+  Operations covered `initialize`, `notifications/initialized`, `tools/list`,
+  and `tools/call:sync_status`; `hooks_auto_enabled=false`; uninstall cleanup
+  completed. This is not headless Codex app-server evidence and not
+  interactive Desktop UI evidence.
+- `python .\plugins\aippocampus\smoke_real_codex_host.py --repo-root . --json`:
+  passed through the real Codex Desktop app-server `0.130.0` on a local
+  Windows x86_64 developer workstation. The install path class was a
+  run-id-scoped local marketplace plus Codex plugin cache, both cleaned up by
+  the smoke; no public marketplace was involved. The host path exercised
+  `marketplace/add`, `plugin/read`, `plugin/install`,
+  `config/mcpServer/reload`, `mcpServerStatus/list`, `thread/start`,
+  `mcpServer/tool/call sync_status`, `plugin/uninstall`, and
+  `marketplace/remove`. The plugin was not installed before the smoke, was
+  installed/enabled after `plugin/install`, and cleanup removed the plugin,
+  marketplace, build output, marketplace root, and Codex plugin-cache root. The
+  thread archive cleanup reported a benign "no rollout found" error for the
+  temporary host thread; plugin and marketplace cleanup still succeeded.
+- Exact evidence boundary: verified surfaces are the package-level temporary
+  plugin install root, installed-plugin standalone MCP stdio JSON-RPC client,
+  and headless Codex Desktop app-server local-marketplace host path. Untested
+  surfaces remain unclaimed: public marketplace submission, independent
+  third-party fresh-clone or second-user install review, and human interactive
+  Desktop UI marketplace/plugin click-through.
+
 ## Command Ledger
 
 ```powershell
