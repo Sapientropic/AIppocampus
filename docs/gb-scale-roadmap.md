@@ -1,9 +1,10 @@
-# GB-scale long-thread roadmap
+# GB/TB-scale storage and long-thread roadmap
 
-This roadmap keeps aippocampus useful when a Codex Desktop thread grows
-from hundreds of MB to multi-GB. It is a planning contract; implementation
-status is called out explicitly so future agents do not mistake desired layers
-for finished behavior.
+This roadmap keeps aippocampus useful when a Codex Desktop thread grows from
+hundreds of MB to multi-GB, and when the whole registry grows from GB to TB
+through many threads, other agent runtime imports, and multi-device sync. It is
+a planning contract; implementation status is called out explicitly so future
+agents do not mistake desired layers for finished behavior.
 
 ## Current baseline
 
@@ -23,6 +24,11 @@ for finished behavior.
   merges top-k hits with source diversity.
 - `graph.json` is a lightweight anchor graph.
 - The global registry discovers old thread memories from new threads.
+- `storage_capacity_report.py` reports aggregate clean-source bytes, generated
+  index bytes, semantic sidecar bytes, current sync-policy bytes, index
+  amplification, and worst-case SQLite fanout without reading clean-source
+  message bodies. This is the first registry-scale observability layer for
+  issue #4.
 
 ## Target architecture
 
@@ -86,10 +92,24 @@ for finished behavior.
    - Refresh Graphify corpus from sealed segment manifests, not raw ad hoc scans.
    - Run full Graphify only when concept navigation is worth the cost.
 
+7. Registry-scale storage and sync policy
+   - Treat raw/audit source and clean source as canonical source surfaces.
+   - Treat SQLite, FTS, vector, graph, and semantic sidecars as rebuildable
+     local caches unless a command explicitly exports them.
+   - Sync source by content-addressed chunks and manifests instead of copying
+     large generated indexes or whole clean-source files by default.
+   - Add a registry-level query planner that narrows candidate threads, days,
+     and segments before opening SQLite files.
+   - Status: observability started in `storage_capacity_report.py`; chunked
+     source, delta sync, and planner implementation are pending.
+
 ## Near-term implementation order
 
 1. Add byte-source diagnostics so growth is measurable before optimizing. Done:
    `rollout_size_audit.py`.
+   Registry-scale diagnostics are now started with `storage_capacity_report.py`,
+   which measures aggregate clean source, generated indexes, sync footprint, and
+   SQLite fanout without reading private message bodies.
 2. Add segment manifest format while still writing the current monolithic index.
    Done: global `index/segments/manifest.json`, with project-local
    `.aippocampus/segments/` only when explicitly requested.
@@ -107,6 +127,9 @@ for finished behavior.
    that lexical/RAG-lite recall cannot close.
    Status: protocol defined in `question-tracking-subconscious.md`; implementation
    pending.
+7. Add source chunking, delta sync, and registry query planning. This becomes
+   urgent once aggregate clean source reaches GB scale, even if no single
+   SQLite file is near its theoretical maximum. Status: tracked in #4; pending.
 
 ## Cross-references
 
