@@ -66,4 +66,3 @@ Non-goals for this follow-up:
 - Transparent background sync daemon.
 - Provider-specific lifecycle policies beyond documenting recommended cleanup
   settings.
-
