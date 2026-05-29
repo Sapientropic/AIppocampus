@@ -30,6 +30,33 @@ agents do not mistake desired layers for finished behavior.
   message bodies. This is the first registry-scale observability layer for
   issue #4.
 
+## Active track
+
+Issue #4 is accepted as a near-term architecture track, not a far-future
+optimization note. The umbrella is now split into implementation slices so the
+remaining work is visible instead of hidden behind one broad issue:
+
+- [#11](https://github.com/Sapientropic/AIppocampus/issues/11):
+  content-addressed clean-source chunks, delta sync, and explicit generated
+  cache export policy.
+- [#12](https://github.com/Sapientropic/AIppocampus/issues/12): registry query
+  planner, fanout budget, and fallback behavior before segment-level SQLite
+  fanout.
+- [#13](https://github.com/Sapientropic/AIppocampus/issues/13): synthetic
+  multi-GB scale smoke, thresholds, and amplification reporting without private
+  data.
+- [#14](https://github.com/Sapientropic/AIppocampus/issues/14): Windows writer
+  discipline, interrupted rebuild recovery, and last-known-good index
+  preservation.
+
+Completed foundation:
+
+- `storage_capacity_report.py` measures aggregate source/cache/sync size and
+  worst-case fanout without reading private message bodies.
+- The default sync bundle policy does not copy generated SQLite indexes as
+  mandatory portable source; SQLite, FTS, graph, and semantic/vector sidecars
+  remain rebuildable local caches unless a command explicitly exports them.
+
 ## Target architecture
 
 1. Raw archive layer
@@ -129,7 +156,8 @@ agents do not mistake desired layers for finished behavior.
    pending.
 7. Add source chunking, delta sync, and registry query planning. This becomes
    urgent once aggregate clean source reaches GB scale, even if no single
-   SQLite file is near its theoretical maximum. Status: tracked in #4; pending.
+   SQLite file is near its theoretical maximum. Status: active track split
+   across #11, #12, #13, and #14.
 
 ## Cross-references
 

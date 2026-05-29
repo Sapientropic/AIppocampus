@@ -70,7 +70,18 @@ evidence belongs in `stage-0-5-readiness.md`; dated command evidence belongs in
    - Next keep the dated verification fresh after every release slice and
      validate install paths outside this single working copy.
 
-3. Life-wide memory scope labels
+3. GB/TB-scale storage, search, and sync track
+   - Source: `gb-scale-roadmap.md` and issue #4.
+   - This is now an active near-term track, not a distant optimization. The
+     first foundation exists in `storage_capacity_report.py`, and the default
+     sync policy no longer treats generated SQLite indexes as mandatory portable
+     source.
+   - Next execute the split child issues: content-addressed clean-source chunks
+     and delta sync (#11), registry query planning and fanout budgets (#12),
+     synthetic multi-GB scale smoke and thresholds (#13), and Windows rebuild
+     reliability (#14).
+
+4. Life-wide memory scope labels
    - Source: `roadmap.md`, Stage 2.
    - Clean-source messages and turns now carry deterministic `scope_labels`
      for personal reflection, relationship continuity, reading notes, idea
@@ -91,7 +102,7 @@ evidence belongs in `stage-0-5-readiness.md`; dated command evidence belongs in
      evidence and selected source-review, not lexical expansion, and keep
      over-personalization boundaries tight for ordinary work prompts.
 
-4. Cross-device sync bundle and commands
+5. Cross-device sync bundle and commands
    - Source: `roadmap.md`, Stage 3.
    - The local-folder `sync status`, `sync push`, `sync pull`, and
      `sync repair` flows now exist in `sync_bundle.py`; pushed registry rows
@@ -103,14 +114,14 @@ evidence belongs in `stage-0-5-readiness.md`; dated command evidence belongs in
    - Next harden them with physical second-machine smoke, managed
      cloud/object-storage provider smoke, and release-oriented repair docs.
 
-5. MCP access layer hardening
+6. MCP access layer hardening
    - Source: `roadmap.md`, Stage 4.
    - The first MCP server is present and has both a stdio JSON-RPC process
      smoke and a real Codex app-server MCP host smoke through the plugin path.
    - Next add stronger error contracts and, if needed for release claims, an
      interactive Desktop UI or alternate Codex client verification.
 
-6. Plugin distribution hardening
+7. Plugin distribution hardening
    - Source: `roadmap.md`, Stage 5.
    - The built plugin has been validated in a real Codex app-server
      marketplace/plugin install path with reversible cleanup.
@@ -118,14 +129,14 @@ evidence belongs in `stage-0-5-readiness.md`; dated command evidence belongs in
      uninstall/rollback docs for skill package, MCP config, and hook
      installers.
 
-7. Question tracking Phase 2
+8. Question tracking Phase 2
    - Source: `question-tracking-subconscious.md`.
    - Implement `question_tracking` only after Phase 1 `question_extraction`
      output has enough source-backed examples.
    - Start deterministic: group existing `question_candidate` findings, add
      dependency ordering, then add model confirmation for borderline links.
 
-8. Vector index protocol
+9. Vector index protocol
    - Source: `gb-scale-roadmap.md` and `wukong-mining-notes.md`.
    - Define the `QuestionVectorIndex` protocol with a simple local
      implementation before evaluating TurboVec.
