@@ -82,6 +82,33 @@ class AmbientThreadCacheTests(unittest.TestCase):
         self.assertEqual(loaded["status"], "hit")
         self.assertEqual(loaded["cards"][0]["card_id"], "arc_path")
 
+    def test_thread_cache_normalizes_workspace_before_keying(self) -> None:
+        cache_path = self.root / "ambient-thread-cache.json"
+        workspace = self.root / "workspace"
+        workspace.mkdir()
+        card = {
+            "card_id": "arc_normalized",
+            "theme": "normalized workspace",
+            "support_level": "candidate",
+        }
+
+        cache.write_thread_cache(
+            cache_path,
+            thread_id="thread-a",
+            workspace=str(workspace),
+            topic_epoch="epoch-normalized",
+            cards=[card],
+        )
+        loaded = cache.read_thread_cache(
+            cache_path,
+            thread_id="thread-a",
+            workspace=str(workspace / ".." / "workspace"),
+            topic_epoch="epoch-normalized",
+        )
+
+        self.assertEqual(loaded["status"], "hit")
+        self.assertEqual(loaded["cards"][0]["card_id"], "arc_normalized")
+
     def test_thread_cache_preserves_validation_and_topic_metadata(self) -> None:
         cache_path = self.root / "ambient-thread-cache.json"
         card = {
