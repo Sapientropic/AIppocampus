@@ -257,9 +257,20 @@ def _run_semantic_gate_for_prompt(
             start, max_elapsed_ms, float(semantic_timeout)
         )
         if budgeted_timeout is None:
-            return semantic_budget_result("semantic gate skipped by prompt hook foreground budget")
+            return semantic_budget_result(
+                "semantic gate skipped by prompt hook foreground budget",
+                requested_timeout=float(semantic_timeout),
+                effective_timeout=None,
+                max_elapsed_ms=max_elapsed_ms,
+            )
+        budget = {
+            "requested_timeout": float(semantic_timeout),
+            "effective_timeout": float(budgeted_timeout),
+            "max_elapsed_ms": max_elapsed_ms,
+            "budget_clipped": float(budgeted_timeout) != float(semantic_timeout),
+        }
         try:
-            return gate(
+            result = gate(
                 prompt,
                 cwd=cwd_path,
                 registry=registry,
@@ -271,6 +282,8 @@ def _run_semantic_gate_for_prompt(
                 mode=semantic_gate_mode,
                 timeout=budgeted_timeout,
             )
+            result.setdefault("budget", budget)
+            return result
         except Exception as exc:
             return {
                 "available": False,
@@ -279,13 +292,19 @@ def _run_semantic_gate_for_prompt(
                 "query_aliases": [],
                 "reasons": [f"semantic gate error: {exc}"],
                 "errors": [str(exc)],
+                "budget": budget,
             }
     if (
         use_semantic_gate
         and max_elapsed_ms
         and not budget_allows(start, max_elapsed_ms, POST_SEMANTIC_RESERVE_MS)
     ):
-        return semantic_budget_result("semantic gate skipped by prompt hook foreground budget")
+        return semantic_budget_result(
+            "semantic gate skipped by prompt hook foreground budget",
+            requested_timeout=float(semantic_timeout),
+            effective_timeout=None,
+            max_elapsed_ms=max_elapsed_ms,
+        )
     return None
 
 

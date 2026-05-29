@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import json
+import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -155,6 +159,166 @@ class SubconsciousWorkerTests(unittest.TestCase):
             )
 
         self.assertNotIn("max_tokens", captured["body"])
+
+    def test_openai_compatible_route_omits_json_response_format_when_disabled(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            timeline_path = root / "project_timeline.json"
+            output_path = root / "subconscious_edges.jsonl"
+            timeline_path.write_text(
+                json.dumps(
+                    {
+                        "projects": {
+                            "project:ai": {
+                                "project_label": "AIppocampus",
+                                "latest_turns": [
+                                    {
+                                        "thread_key": "session:one",
+                                        "title": "AIppocampus",
+                                        "timestamp": "2026-05-25T00:00:00Z",
+                                        "turn_index": 1,
+                                        "user": "继续清理 provider 路由。",
+                                        "assistant": "用 capability gate 防止 DeepSeek 字段外泄。",
+                                    }
+                                ],
+                            }
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            captured: dict[str, object] = {}
+
+            class FakeResponse:
+                def __enter__(self) -> "FakeResponse":
+                    return self
+
+                def __exit__(self, *_: object) -> None:
+                    return None
+
+                def read(self) -> bytes:
+                    content = {
+                        "concepts": [
+                            {"label": "provider capability gate", "kind": "workflow", "confidence": 0.9}
+                        ],
+                        "edges": [
+                            {
+                                "src": "provider route",
+                                "dst": "capability gate",
+                                "edge_type": "depends_on",
+                                "confidence": 0.9,
+                                "source_refs": [{"turn_ref": "t0"}],
+                            }
+                        ],
+                    }
+                    return json.dumps(
+                        {"choices": [{"message": {"content": json.dumps(content, ensure_ascii=False)}}]},
+                        ensure_ascii=False,
+                    ).encode("utf-8")
+
+            def fake_urlopen(req: object, timeout: int) -> FakeResponse:
+                del timeout
+                captured["body"] = json.loads(getattr(req, "data").decode("utf-8"))
+                return FakeResponse()
+
+            with patch("urllib.request.urlopen", fake_urlopen), patch.dict(
+                os.environ,
+                {
+                    "AIPPOCAMPUS_OPENAI_COMPAT_ROUTE": "local_worker",
+                    "AIPPOCAMPUS_OPENAI_COMPAT_PROVIDER": "local-test",
+                    "AIPPOCAMPUS_OPENAI_COMPAT_MODEL": "local-worker-model",
+                    "AIPPOCAMPUS_OPENAI_COMPAT_BASE_URL": "http://127.0.0.1:11434/v1",
+                    "AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV": "LOCAL_WORKER_KEY",
+                    "AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_JSON": "false",
+                    "LOCAL_WORKER_KEY": "present",
+                },
+                clear=False,
+            ):
+                result = worker.run_worker(
+                    timeline_path=timeline_path,
+                    output_path=output_path,
+                    project="AIppocampus",
+                    max_turns=1,
+                    model=worker.DEFAULT_MODEL,
+                    base_url=worker.DEFAULT_BASE_URL,
+                    api_key=None,
+                    model_route="local_worker",
+                )
+
+            self.assertNotIn("response_format", captured["body"])
+            self.assertEqual(result["model"], "local-worker-model")
+            self.assertEqual(result["model_route"]["provider"], "local-test")
+            self.assertEqual(result["cache"], {"available": False, "kind": "none"})
+            staged = json.loads(output_path.read_text(encoding="utf-8").splitlines()[0])
+            self.assertEqual(staged["source"], "external_model_subconscious")
+            self.assertEqual(staged["model_route"]["provider"], "local-test")
+
+    def test_cli_model_route_uses_route_api_key_env_before_default_deepseek_key(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            timeline_path = root / "project_timeline.json"
+            timeline_path.write_text(
+                json.dumps({"projects": {}}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            captured: dict[str, object] = {}
+
+            class FakeResponse:
+                def __enter__(self) -> "FakeResponse":
+                    return self
+
+                def __exit__(self, *_: object) -> None:
+                    return None
+
+                def read(self) -> bytes:
+                    return json.dumps(
+                        {"choices": [{"message": {"content": json.dumps({"edges": []})}}]},
+                        ensure_ascii=False,
+                    ).encode("utf-8")
+
+            def fake_urlopen(req: object, timeout: int) -> FakeResponse:
+                del timeout
+                captured["authorization"] = req.get_header("Authorization")
+                return FakeResponse()
+
+            stdout = io.StringIO()
+            with (
+                patch("urllib.request.urlopen", fake_urlopen),
+                patch.object(
+                    sys,
+                    "argv",
+                    [
+                        "subconscious_worker.py",
+                        "--timeline",
+                        str(timeline_path),
+                        "--output",
+                        str(root / "edges.jsonl"),
+                        "--model-route",
+                        "local_worker_cli",
+                        "--no-write",
+                        "--json",
+                    ],
+                ),
+                patch.dict(
+                    os.environ,
+                    {
+                        "DEEPSEEK_API_KEY": "wrong-deepseek-key",
+                        "AIPPOCAMPUS_OPENAI_COMPAT_ROUTE": "local_worker_cli",
+                        "AIPPOCAMPUS_OPENAI_COMPAT_PROVIDER": "local-test",
+                        "AIPPOCAMPUS_OPENAI_COMPAT_MODEL": "local-worker-model",
+                        "AIPPOCAMPUS_OPENAI_COMPAT_BASE_URL": "http://127.0.0.1:11434/v1",
+                        "AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV": "LOCAL_WORKER_CLI_KEY",
+                        "LOCAL_WORKER_CLI_KEY": "right-local-key",
+                    },
+                    clear=False,
+                ),
+                contextlib.redirect_stdout(stdout),
+            ):
+                code = worker.main()
+
+        self.assertEqual(code, 0, stdout.getvalue())
+        self.assertEqual(captured["authorization"], "Bearer right-local-key")
 
 
 if __name__ == "__main__":

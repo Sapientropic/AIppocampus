@@ -323,6 +323,138 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(seen_thinking, ["disabled"])
         self.assertEqual(seen_temperatures, [0.2])
 
+    def test_openai_compatible_route_does_not_send_deepseek_extensions_by_default(self) -> None:
+        seen_user_ids: list[str | None] = []
+        seen_thinking: list[str | None] = []
+        seen_models: list[str] = []
+        seen_base_urls: list[str] = []
+
+        def chat_fn(
+            messages,
+            api_key,
+            model,
+            base_url,
+            max_tokens,
+            timeout,
+            temperature,
+            *,
+            user_id=None,
+            thinking=None,
+        ):
+            del messages, api_key, max_tokens, timeout, temperature
+            seen_user_ids.append(user_id)
+            seen_thinking.append(thinking)
+            seen_models.append(model)
+            seen_base_urls.append(base_url)
+            return {"choices": [{"message": {"content": json.dumps({"decision": "skip", "confidence": 0.1})}}]}
+
+        with patch.dict(
+            os.environ,
+            {
+                "AIPPOCAMPUS_OPENAI_COMPAT_ROUTE": "local_warm",
+                "AIPPOCAMPUS_OPENAI_COMPAT_PROVIDER": "local-test",
+                "AIPPOCAMPUS_OPENAI_COMPAT_MODEL": "local-warm-model",
+                "AIPPOCAMPUS_OPENAI_COMPAT_BASE_URL": "http://127.0.0.1:11434/v1",
+                "AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV": "LOCAL_WARM_KEY",
+                "LOCAL_WARM_KEY": "present",
+            },
+            clear=False,
+        ):
+            result = warm.run_warm_ambient_recall(
+                "继续 ambient recall",
+                cwd=self.workspace,
+                thread_id="thread-a",
+                cache_path=self.cache_path,
+                model_route="local_warm",
+                chat_fn=chat_fn,
+                scouts=("semantic_expander",),
+                wait_all=True,
+                no_write=True,
+            )
+
+        self.assertEqual(seen_user_ids, [None])
+        self.assertEqual(seen_thinking, [None])
+        self.assertEqual(seen_models, ["local-warm-model"])
+        self.assertEqual(seen_base_urls, ["http://127.0.0.1:11434/v1"])
+        self.assertIsNone(result["user_id"])
+        self.assertEqual(result["model_route"]["provider"], "local-test")
+        self.assertEqual(result["cache"], {"available": False, "kind": "none"})
+
+    def test_legacy_explicit_base_url_uses_conservative_compatible_capabilities(self) -> None:
+        seen_user_ids: list[str | None] = []
+        seen_thinking: list[str | None] = []
+        seen_models: list[str] = []
+        seen_base_urls: list[str] = []
+
+        def chat_fn(
+            messages,
+            api_key,
+            model,
+            base_url,
+            max_tokens,
+            timeout,
+            temperature,
+            *,
+            user_id=None,
+            thinking=None,
+        ):
+            del messages, api_key, max_tokens, timeout, temperature
+            seen_user_ids.append(user_id)
+            seen_thinking.append(thinking)
+            seen_models.append(model)
+            seen_base_urls.append(base_url)
+            return {"choices": [{"message": {"content": json.dumps({"decision": "skip", "confidence": 0.1})}}]}
+
+        with patch.dict(os.environ, {"LOCAL_EXPLICIT_KEY": "present"}, clear=False):
+            result = warm.run_warm_ambient_recall(
+                "继续 ambient recall",
+                cwd=self.workspace,
+                thread_id="thread-a",
+                cache_path=self.cache_path,
+                api_key_env="LOCAL_EXPLICIT_KEY",
+                model="local-explicit-model",
+                base_url="http://127.0.0.1:11434/v1",
+                chat_fn=chat_fn,
+                scouts=("semantic_expander",),
+                wait_all=True,
+                no_write=True,
+            )
+
+        self.assertEqual(seen_user_ids, [None])
+        self.assertEqual(seen_thinking, [None])
+        self.assertEqual(seen_models, ["local-explicit-model"])
+        self.assertEqual(seen_base_urls, ["http://127.0.0.1:11434/v1"])
+        self.assertEqual(result["model_route"]["route"], "explicit_openai_compatible")
+        self.assertEqual(result["cache"], {"available": False, "kind": "none"})
+
+    def test_unavailable_and_job_summary_keep_route_metadata(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "AIPPOCAMPUS_OPENAI_COMPAT_ROUTE": "local_warm_missing",
+                "AIPPOCAMPUS_OPENAI_COMPAT_PROVIDER": "local-test",
+                "AIPPOCAMPUS_OPENAI_COMPAT_MODEL": "local-warm-model",
+                "AIPPOCAMPUS_OPENAI_COMPAT_BASE_URL": "http://127.0.0.1:11434/v1",
+                "AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV": "LOCAL_WARM_MISSING_KEY",
+            },
+            clear=False,
+        ):
+            result = warm.run_warm_ambient_recall(
+                "继续 ambient recall",
+                cwd=self.workspace,
+                thread_id="thread-a",
+                cache_path=self.cache_path,
+                model_route="local_warm_missing",
+                no_write=True,
+            )
+        summary = warm.warm_job_result_summary({"job_id": "job", "prompt_sha1": "abc"}, result)
+
+        self.assertFalse(result["available"])
+        self.assertEqual(result["model_route"]["provider"], "local-test")
+        self.assertEqual(result["cache"], {"available": False, "kind": "none"})
+        self.assertEqual(summary["model_route"]["provider"], "local-test")
+        self.assertEqual(summary["cache"], {"available": False, "kind": "none"})
+
     def test_quorum_returns_without_waiting_for_all_scouts(self) -> None:
         calls: list[str] = []
 

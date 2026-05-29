@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import os
 import sys
 import tempfile
 import threading
@@ -9,6 +10,7 @@ import time
 import unittest
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
@@ -851,6 +853,110 @@ class SubconsciousJobsTests(unittest.TestCase):
             lines = jobs_output.read_text(encoding="utf-8").splitlines()
             self.assertEqual(len(lines), 4)
             self.assertTrue(all("aippocampus_subconscious_job_finding" in line for line in lines))
+
+    def test_openai_compatible_route_caps_subconscious_job_concurrency_and_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            timeline_path = root / "project_timeline.json"
+            timeline_path.write_text(
+                json.dumps(
+                    {
+                        "projects": {
+                            "project:ai": {
+                                "project_label": "AIppocampus",
+                                "latest_turns": [
+                                    {
+                                        "thread_key": "session:map",
+                                        "title": "AIppocampus",
+                                        "project_label": "AIppocampus",
+                                        "turn_index": 1,
+                                        "user": "provider route 怎么收口？",
+                                        "assistant": "用 local/offline capability 做保守 fallback。",
+                                    }
+                                ],
+                            }
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            registry_path = root / "threads.json"
+            registry_path.write_text(json.dumps({"threads": []}), encoding="utf-8")
+
+            def fake_chat(
+                messages: list[dict[str, str]],
+                api_key: str,
+                model: str,
+                base_url: str,
+                max_tokens: int | None,
+                timeout: int,
+                temperature: float,
+            ) -> dict[str, Any]:
+                del messages, api_key, base_url, max_tokens, timeout, temperature
+                self.assertEqual(model, "local-jobs-model")
+                content = {
+                    "action": "final",
+                    "findings": [
+                        {
+                            "kind": "project_drift",
+                            "title": "Provider boundary",
+                            "summary": "Local provider route keeps conservative defaults.",
+                            "confidence": 0.82,
+                            "source_refs": ["t0"],
+                        }
+                    ],
+                }
+                return {
+                    "choices": [{"message": {"content": json.dumps(content, ensure_ascii=False)}}],
+                    "usage": {"total_tokens": 1},
+                }
+
+            with patch.dict(
+                os.environ,
+                {
+                    "AIPPOCAMPUS_OPENAI_COMPAT_ROUTE": "local_jobs",
+                    "AIPPOCAMPUS_OPENAI_COMPAT_PROVIDER": "local-test",
+                    "AIPPOCAMPUS_OPENAI_COMPAT_MODEL": "local-jobs-model",
+                    "AIPPOCAMPUS_OPENAI_COMPAT_BASE_URL": "http://127.0.0.1:11434/v1",
+                    "AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV": "LOCAL_JOBS_KEY",
+                    "LOCAL_JOBS_KEY": "present",
+                },
+                clear=False,
+            ):
+                result = jobs.run_jobs(
+                    jobs=["project_drift", "trigger_mining"],
+                    registry_path=registry_path,
+                    timeline_path=timeline_path,
+                    concept_graph_path=root / "missing.sqlite",
+                    jobs_output_path=root / "subconscious_jobs.jsonl",
+                    edges_output_path=root / "subconscious_edges.jsonl",
+                    project="AIppocampus",
+                    objective="test local provider boundary",
+                    max_turns=4,
+                    max_steps=1,
+                    min_tool_steps=0,
+                    model=jobs.DEFAULT_MODEL,
+                    base_url=jobs.DEFAULT_BASE_URL,
+                    api_key=None,
+                    max_tokens=None,
+                    timeout=1,
+                    temperature=0.2,
+                    concurrency=4,
+                    samples_per_job=1,
+                    model_route="local_jobs",
+                    chat_fn=fake_chat,
+                )
+
+            self.assertEqual(result["concurrency"], 1)
+            self.assertEqual(result["model_route"]["provider"], "local-test")
+            self.assertEqual(result["cache"], {"available": False, "kind": "none"})
+            self.assertEqual(result["jobs"][0]["model"], "local-jobs-model")
+            staged = json.loads(
+                (root / "subconscious_jobs.jsonl").read_text(encoding="utf-8").splitlines()[0]
+            )
+            self.assertEqual(staged["source"], "external_model_subconscious_jobs")
+            self.assertEqual(staged["model_route"]["provider"], "local-test")
 
     def test_run_jobs_warms_first_sample_before_same_prefix_followups(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

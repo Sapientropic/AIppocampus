@@ -20,18 +20,26 @@ from aippocampuslib import (
     cli_error_payload,
     cli_exit_code_for_error_code,
     compact_text,
-    deepseek_cache_metrics_from_usage,
     now_utc,
     sanitize_external_model_payload,
 )
 from build_concept_graph import concept_is_noise
-from deepseek_model_routing import flash_model
+from deepseek_model_routing import (
+    DEFAULT_DEEPSEEK_API_KEY_ENV,
+    deepseek_base_url,
+    flash_model,
+    resolve_model_route,
+    route_artifact_source,
+    route_cache_metrics,
+    route_payload_with_effective_values,
+    route_service_name,
+)
 from model_client import ChatClientConfig, chat_json
 from registry import registry_paths, unique_preserve
 
 PROMPT_VERSION = "aippocampus-subconscious-v0"
 DEFAULT_MODEL = flash_model()
-DEFAULT_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+DEFAULT_BASE_URL = deepseek_base_url()
 DEFAULT_MAX_TURNS = 48
 
 ALLOWED_EDGE_TYPES = {
@@ -186,6 +194,8 @@ def call_deepseek(
     turns: list[dict[str, Any]],
     max_tokens: int | None,
     timeout: int,
+    service_name: str = "DeepSeek API",
+    response_format_json: bool = True,
 ) -> dict[str, Any]:
     return chat_json(
         [
@@ -199,7 +209,8 @@ def call_deepseek(
             max_tokens=max_tokens,
             timeout=timeout,
             temperature=0,
-            service_name="DeepSeek API",
+            service_name=service_name,
+            response_format_json=response_format_json,
         ),
     )
 
@@ -292,6 +303,7 @@ def append_staging_edges(
     usage: dict[str, Any] | None = None,
     prompt_version: str = PROMPT_VERSION,
     source: str = "deepseek_subconscious",
+    model_route: dict[str, Any] | None = None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8", newline="\n") as fh:
@@ -305,6 +317,7 @@ def append_staging_edges(
                 "batch_id": batch_id,
                 "status": "staging",
                 "source": source,
+                "model_route": model_route or {},
                 "usage": usage or {},
                 **edge,
             }
@@ -320,8 +333,10 @@ def run_worker(
     model: str,
     base_url: str,
     api_key: str | None,
-    max_tokens: int | None,
-    timeout: int,
+    api_key_env: str = DEFAULT_DEEPSEEK_API_KEY_ENV,
+    model_route: str | None = None,
+    max_tokens: int | None = None,
+    timeout: int = 60,
     dry_run: bool = False,
     no_write: bool = False,
 ) -> dict[str, Any]:
@@ -337,32 +352,73 @@ def run_worker(
             "turn_count": len(turns),
             "prompt_preview": compact_text(user_prompt_for_turns(turns), 1800),
         }
-    if not api_key:
-        raise RuntimeError("missing DeepSeek API key; set DEEPSEEK_API_KEY or pass --api-key-env")
+    route = resolve_model_route(
+        model_route,
+        explicit_model=model if model != DEFAULT_MODEL and not model_route else None,
+        explicit_base_url=base_url if base_url != DEFAULT_BASE_URL and not model_route else None,
+        explicit_api_key_env=(
+            api_key_env
+            if api_key_env != DEFAULT_DEEPSEEK_API_KEY_ENV and not model_route
+            else None
+        ),
+    )
+    capabilities = route.capabilities
+    resolved_model = route.model if model == DEFAULT_MODEL else model
+    resolved_base_url = route.base_url if base_url == DEFAULT_BASE_URL else base_url
+    resolved_api_key_env = (
+        route.api_key_env
+        if api_key_env == DEFAULT_DEEPSEEK_API_KEY_ENV
+        else api_key_env
+    )
+    route_payload = route_payload_with_effective_values(
+        route,
+        model=resolved_model,
+        base_url=resolved_base_url,
+        api_key_env=resolved_api_key_env,
+    )
+    artifact_source = route_artifact_source(route, "subconscious")
+    key_value = api_key or os.environ.get(resolved_api_key_env)
+    if not key_value:
+        raise RuntimeError(
+            f"missing {route_service_name(route)} key; "
+            f"set {resolved_api_key_env} or pass --api-key-env"
+        )
     response = call_deepseek(
-        api_key=api_key,
-        model=model,
-        base_url=base_url,
+        api_key=str(key_value),
+        model=resolved_model,
+        base_url=resolved_base_url,
         turns=turns,
         max_tokens=max_tokens,
         timeout=timeout,
+        service_name=route_service_name(route),
+        response_format_json=bool(capabilities.supports_json_response if capabilities else True),
     )
     parsed = parse_model_json(response)
     edges = validate_edges(parsed, turns)
     usage = response.get("usage") or {}
     if not no_write:
-        append_staging_edges(output_path, edges, model=model, batch_id=batch_id, usage=usage)
+        append_staging_edges(
+            output_path,
+            edges,
+            model=resolved_model,
+            batch_id=batch_id,
+            usage=usage,
+            source=artifact_source,
+            model_route=route_payload,
+        )
     return {
         "ok": True,
         "dry_run": False,
-        "model": model,
+        "model": resolved_model,
+        "model_route": route_payload,
         "timeline": str(timeline_path),
         "output": str(output_path),
         "turn_count": len(turns),
         "edge_count": len(edges),
         "edges": edges,
+        "timeout": timeout,
         "usage": usage,
-        "cache": deepseek_cache_metrics_from_usage(usage),
+        "cache": route_cache_metrics(route, usage),
         "wrote": False if no_write else True,
         "batch_id": batch_id,
     }
@@ -376,9 +432,10 @@ def main() -> int:
     parser.add_argument("--output")
     parser.add_argument("--project")
     parser.add_argument("--max-turns", type=int, default=DEFAULT_MAX_TURNS)
+    parser.add_argument("--model-route")
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
-    parser.add_argument("--api-key-env", default="DEEPSEEK_API_KEY")
+    parser.add_argument("--api-key-env", default=DEFAULT_DEEPSEEK_API_KEY_ENV)
     parser.add_argument(
         "--max-tokens",
         type=int,
@@ -414,7 +471,9 @@ def main() -> int:
             max_turns=args.max_turns,
             model=args.model,
             base_url=args.base_url,
-            api_key=os.environ.get(args.api_key_env),
+            api_key=None,
+            api_key_env=args.api_key_env,
+            model_route=args.model_route,
             max_tokens=args.max_tokens,
             timeout=args.timeout,
             dry_run=args.dry_run,

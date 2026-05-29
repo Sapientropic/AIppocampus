@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -63,8 +64,30 @@ class SemanticRecallGateTests(unittest.TestCase):
         self.registry_path.write_text(
             json.dumps(self.registry, ensure_ascii=False), encoding="utf-8"
         )
+        self.old_route_env = {
+            name: os.environ.get(name)
+            for name in [
+                "AIPPOCAMPUS_OPENAI_COMPAT_ROUTE",
+                "AIPPOCAMPUS_OPENAI_COMPAT_PROVIDER",
+                "AIPPOCAMPUS_OPENAI_COMPAT_MODEL",
+                "AIPPOCAMPUS_OPENAI_COMPAT_BASE_URL",
+                "AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV",
+                "AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_JSON",
+                "AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_USER_ID",
+                "AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_THINKING",
+                "AIPPOCAMPUS_OPENAI_COMPAT_CACHE_METRICS_KIND",
+                "LOCAL_SEMANTIC_TEST_KEY",
+            ]
+        }
+        for name in self.old_route_env:
+            os.environ.pop(name, None)
 
     def tearDown(self) -> None:
+        for name, value in self.old_route_env.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
         self.tmp.cleanup()
 
     def test_parallel_workers_merge_multilingual_aliases(self) -> None:
@@ -514,6 +537,9 @@ class SemanticRecallGateTests(unittest.TestCase):
         self.assertEqual(first["decision"], "scent")
         self.assertEqual(second["decision"], "scent")
         self.assertTrue(second["cached"])
+        self.assertEqual(first["cache_diagnostics"]["lookup"], "miss")
+        self.assertEqual(second["cache_diagnostics"]["lookup"], "hit")
+        self.assertFalse(second["cache_diagnostics"]["semantic_cues_in_cache_key"])
         self.assertEqual(calls["count"], 3)
 
     def test_cache_write_error_is_reported_without_blocking_gate(self) -> None:
@@ -543,6 +569,100 @@ class SemanticRecallGateTests(unittest.TestCase):
         self.assertEqual(result["decision"], "scent")
         self.assertEqual(result["warnings"][0]["stage"], "cache_write")
         self.assertIn("readonly cache", result["warnings"][0]["message"])
+
+    def test_worker_errors_are_bucketed_for_live_diagnostics(self) -> None:
+        def chat_fn(messages, api_key, model, base_url, max_tokens, timeout, temperature):
+            del messages, api_key, model, base_url, max_tokens, timeout, temperature
+            raise TimeoutError("The read operation timed out")
+
+        result = gate.run_semantic_gate(
+            "脑内续接器",
+            cwd=self.workspace,
+            registry=self.registry,
+            registry_path=self.registry_path,
+            api_key="test-key",
+            use_cache=False,
+            chat_fn=chat_fn,
+        )
+
+        self.assertFalse(result["available"])
+        self.assertEqual(result["error_buckets"], {"read_timeout": 3})
+
+    def test_openai_compatible_route_metadata_and_cache_metrics_are_neutral(self) -> None:
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_ROUTE"] = "local_semantic"
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_PROVIDER"] = "local-test"
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_MODEL"] = "local-model"
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_BASE_URL"] = "http://127.0.0.1:11434/v1"
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV"] = "LOCAL_SEMANTIC_TEST_KEY"
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_JSON"] = "false"
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_CACHE_METRICS_KIND"] = "none"
+        os.environ["LOCAL_SEMANTIC_TEST_KEY"] = "present"
+        seen: dict[str, object] = {}
+
+        def chat_fn(messages, api_key, model, base_url, max_tokens, timeout, temperature, **kwargs):
+            del messages, max_tokens, timeout, temperature, kwargs
+            seen["api_key"] = api_key
+            seen["model"] = model
+            seen["base_url"] = base_url
+            return fake_response(
+                {
+                    "decision": "background_only",
+                    "confidence": 0.7,
+                    "anti_personalization_risk": "low",
+                    "reason": "local provider route",
+                },
+                usage={
+                    "prompt_tokens": 10,
+                    "completion_tokens": 1,
+                    "total_tokens": 11,
+                    "prompt_cache_hit_tokens": 8,
+                    "prompt_cache_miss_tokens": 2,
+                },
+            )
+
+        result = gate.run_semantic_gate(
+            "那个海马体继续一下",
+            cwd=self.workspace,
+            registry=self.registry,
+            registry_path=self.registry_path,
+            model_route="local_semantic",
+            use_cache=False,
+            chat_fn=chat_fn,
+        )
+
+        self.assertTrue(result["available"])
+        self.assertEqual(seen["api_key"], "present")
+        self.assertEqual(seen["model"], "local-model")
+        self.assertEqual(seen["base_url"], "http://127.0.0.1:11434/v1")
+        self.assertEqual(result["model_route"]["provider"], "local-test")
+        self.assertFalse(result["model_route"]["capabilities"]["supports_json_response"])
+        self.assertEqual(result["worker_count"], 1)
+        self.assertEqual(len(result["workers"]), 1)
+        self.assertEqual(result["cache"], {"available": False, "kind": "none"})
+        self.assertEqual(result["cache_diagnostics"]["lookup"], "disabled")
+        self.assertIn("cache_key", result["cache_diagnostics"])
+
+    def test_missing_openai_compatible_key_still_reports_route_metadata(self) -> None:
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_ROUTE"] = "local_semantic_missing"
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_PROVIDER"] = "local-test"
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_MODEL"] = "local-model"
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_BASE_URL"] = "http://127.0.0.1:11434/v1"
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV"] = "LOCAL_SEMANTIC_MISSING_KEY"
+
+        result = gate.run_semantic_gate(
+            "脑内续接器",
+            cwd=self.workspace,
+            registry=self.registry,
+            registry_path=self.registry_path,
+            model_route="local_semantic_missing",
+            mode="on",
+            use_cache=False,
+        )
+
+        self.assertFalse(result["available"])
+        self.assertEqual(result["model_route"]["provider"], "local-test")
+        self.assertEqual(result["cache"], {"available": False, "kind": "none"})
+        self.assertEqual(result["cache_diagnostics"]["lookup"], "disabled")
 
 
 if __name__ == "__main__":

@@ -15,9 +15,16 @@ from aippocampuslib import (
     cli_error_payload,
     cli_exit_code_for_error_code,
     compact_text,
-    deepseek_cache_metrics_from_usage,
     now_utc,
     sanitize_external_model_payload,
+)
+from deepseek_model_routing import (
+    DEFAULT_DEEPSEEK_API_KEY_ENV,
+    resolve_model_route,
+    route_artifact_source,
+    route_cache_metrics,
+    route_payload_with_effective_values,
+    route_service_name,
 )
 from registry import registry_paths, unique_preserve
 from retrieval import split_query_terms
@@ -321,7 +328,14 @@ def apply_focus_filter(review: dict[str, Any], focus: str) -> dict[str, Any]:
 
 
 def append_review_output(
-    path: Path, review: dict[str, Any], *, model: str, batch_id: str, usage: dict[str, Any]
+    path: Path,
+    review: dict[str, Any],
+    *,
+    model: str,
+    batch_id: str,
+    usage: dict[str, Any],
+    source: str = "deepseek_subconscious_review",
+    model_route: dict[str, Any] | None = None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8", newline="\n") as fh:
@@ -334,7 +348,8 @@ def append_review_output(
                 "model": model,
                 "batch_id": batch_id,
                 "status": "staging",
-                "source": "deepseek_subconscious_review",
+                "source": source,
+                "model_route": model_route or {},
                 "usage": usage or {},
                 **candidate,
             }
@@ -348,7 +363,8 @@ def append_review_output(
                 "model": model,
                 "batch_id": batch_id,
                 "status": "staging",
-                "source": "deepseek_subconscious_review",
+                "source": source,
+                "model_route": model_route or {},
                 **group,
             }
             fh.write(json.dumps(event, ensure_ascii=False) + "\n")
@@ -361,7 +377,8 @@ def append_review_output(
                 "model": model,
                 "batch_id": batch_id,
                 "status": "staging",
-                "source": "deepseek_subconscious_review",
+                "source": source,
+                "model_route": model_route or {},
                 **weak,
             }
             fh.write(json.dumps(event, ensure_ascii=False) + "\n")
@@ -377,9 +394,12 @@ def run_review(
     model: str,
     base_url: str,
     api_key: str | None,
-    max_tokens: int | None,
-    timeout: int,
-    temperature: float,
+    api_key_env: str = DEFAULT_DEEPSEEK_API_KEY_ENV,
+    model_route: str | None = None,
+    max_tokens: int | None = None,
+    timeout: int = 180,
+    temperature: float = DEFAULT_TEMPERATURE,
+    chat_fn=call_chat_json,
     no_write: bool = False,
 ) -> dict[str, Any]:
     findings = recent_findings(jobs_path, max_findings=max_findings, jobs=jobs)
@@ -390,8 +410,36 @@ def run_review(
         if finding.get("fingerprint")
     }
     batch_id = f"subconscious-review-{int(time.time())}"
-    if not api_key:
-        raise RuntimeError("missing DeepSeek API key; set DEEPSEEK_API_KEY or pass --api-key-env")
+    route = resolve_model_route(
+        model_route,
+        explicit_model=model if model != DEFAULT_MODEL and not model_route else None,
+        explicit_base_url=base_url if base_url != DEFAULT_BASE_URL and not model_route else None,
+        explicit_api_key_env=(
+            api_key_env
+            if api_key_env != DEFAULT_DEEPSEEK_API_KEY_ENV and not model_route
+            else None
+        ),
+    )
+    capabilities = route.capabilities
+    resolved_model = route.model if model == DEFAULT_MODEL else model
+    resolved_base_url = route.base_url if base_url == DEFAULT_BASE_URL else base_url
+    resolved_api_key_env = (
+        route.api_key_env
+        if api_key_env == DEFAULT_DEEPSEEK_API_KEY_ENV
+        else api_key_env
+    )
+    route_payload = route_payload_with_effective_values(
+        route,
+        model=resolved_model,
+        base_url=resolved_base_url,
+        api_key_env=resolved_api_key_env,
+    )
+    key_value = api_key or os.environ.get(resolved_api_key_env)
+    if not key_value:
+        raise RuntimeError(
+            f"missing {route_service_name(route)} key; "
+            f"set {resolved_api_key_env} or pass --api-key-env"
+        )
     messages = [
         {"role": "system", "content": REVIEW_SYSTEM_PROMPT},
         {
@@ -403,7 +451,26 @@ def run_review(
             ),
         },
     ]
-    response = call_chat_json(messages, api_key, model, base_url, max_tokens, timeout, temperature)
+    chat_kwargs = (
+        {
+            "service_name": route_service_name(route),
+            "response_format_json": bool(
+                capabilities.supports_json_response if capabilities else True
+            ),
+        }
+        if chat_fn is call_chat_json
+        else {}
+    )
+    response = chat_fn(
+        messages,
+        str(key_value),
+        resolved_model,
+        resolved_base_url,
+        max_tokens,
+        timeout,
+        temperature,
+        **chat_kwargs,
+    )
     usage = compact_usage(response.get("usage") or {})
     parsed = parse_action(response)
     if parsed.get("action") != "final":
@@ -417,7 +484,15 @@ def run_review(
     if not review["duplicate_groups"]:
         review["duplicate_groups"] = duplicate_groups
     if not no_write:
-        append_review_output(output_path, review, model=model, batch_id=batch_id, usage=usage)
+        append_review_output(
+            output_path,
+            review,
+            model=resolved_model,
+            batch_id=batch_id,
+            usage=usage,
+            source=route_artifact_source(route, "subconscious_review"),
+            model_route=route_payload,
+        )
     return {
         "ok": True,
         "jobs_path": str(jobs_path),
@@ -429,7 +504,11 @@ def run_review(
         "focus": focus,
         "review": review,
         "usage": usage,
-        "cache": deepseek_cache_metrics_from_usage(usage),
+        "cache": route_cache_metrics(route, usage),
+        "model": resolved_model,
+        "model_route": route_payload,
+        "timeout": timeout,
+        "temperature": temperature,
         "wrote": False if no_write else True,
         "batch_id": batch_id,
     }
@@ -444,9 +523,10 @@ def main() -> int:
     parser.add_argument("--max-findings", type=int, default=80)
     parser.add_argument("--job", action="append", default=[])
     parser.add_argument("--focus", default="")
+    parser.add_argument("--model-route")
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
-    parser.add_argument("--api-key-env", default="DEEPSEEK_API_KEY")
+    parser.add_argument("--api-key-env", default=DEFAULT_DEEPSEEK_API_KEY_ENV)
     parser.add_argument("--max-tokens", type=int, default=None)
     parser.add_argument("--timeout", type=int, default=180)
     parser.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE)
@@ -478,7 +558,9 @@ def main() -> int:
             focus=args.focus,
             model=args.model,
             base_url=args.base_url,
-            api_key=os.environ.get(args.api_key_env),
+            api_key=None,
+            api_key_env=args.api_key_env,
+            model_route=args.model_route,
             max_tokens=args.max_tokens,
             timeout=args.timeout,
             temperature=args.temperature,

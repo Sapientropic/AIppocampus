@@ -28,15 +28,21 @@ from typing import Any, Callable
 
 from aippocampuslib import (
     compact_text,
-    deepseek_cache_metrics_from_usage,
     now_utc,
     sanitize_external_model_text,
+)
+from deepseek_model_routing import (
+    DEFAULT_DEEPSEEK_API_KEY_ENV,
+    resolve_model_route,
+    route_cache_metrics,
+    route_payload_with_effective_values,
+    route_service_name,
 )
 from registry import load_registry, registry_paths, unique_preserve
 from retrieval import split_query_terms
 from semantic_cue_cache import default_semantic_cues_path, semantic_cue_triggers
 from subconscious_runtime import add_usage, call_chat_json, compact_usage
-from subconscious_worker import DEFAULT_BASE_URL, DEFAULT_MODEL, clamp_confidence, parse_model_json
+from subconscious_worker import clamp_confidence, parse_model_json
 
 PROMPT_VERSION = "aippocampus-semantic-recall-gate-v0"
 SCHEMA_VERSION = 1
@@ -59,7 +65,7 @@ VALID_DECISIONS = {"skip", "background_only", "scent", "evidence"}
 DECISION_RANK = {"skip": 0, "background_only": 1, "scent": 2, "evidence": 3}
 
 
-ChatFn = Callable[[list[dict[str, str]], str, str, str, int | None, float, float], dict[str, Any]]
+ChatFn = Callable[..., dict[str, Any]]
 
 
 SYSTEM_PROMPT = """You are AIppocampus semantic recall gate.
@@ -593,8 +599,10 @@ def run_worker(
     timeout: float,
     temperature: float,
     chat_fn: ChatFn,
+    service_name: str = "DeepSeek API",
+    response_format_json: bool = True,
 ) -> dict[str, Any]:
-    response = chat_fn(
+    args = (
         [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": worker_prompt(worker, payload)},
@@ -606,6 +614,14 @@ def run_worker(
         timeout,
         temperature,
     )
+    if chat_fn is call_chat_json:
+        response = chat_fn(
+            *args,
+            service_name=service_name,
+            response_format_json=response_format_json,
+        )
+    else:
+        response = chat_fn(*args)
     parsed = parse_worker_response(response, worker)
     parsed["usage"] = response.get("usage") or {}
     return parsed
@@ -664,16 +680,23 @@ def cache_fingerprint(
     cwd: Path,
     registry_path: Path | None = None,
     semantic_triggers_path: Path | None = None,
-    semantic_cues_path: Path | None = None,
     mode: str = "auto",
+    model: str = "",
+    base_url: str = "",
+    workers: tuple[str, ...] = DEFAULT_WORKERS,
+    temperature: float = DEFAULT_TEMPERATURE,
 ) -> str:
     parts = [
         PROMPT_VERSION,
         semantic_gate_mode(mode),
+        model,
+        base_url,
+        ",".join(workers),
+        str(float(temperature)),
         re.sub(r"\s+", " ", prompt).strip(),
         str(cwd.resolve()).casefold(),
     ]
-    for path in [registry_path, semantic_triggers_path, semantic_cues_path]:
+    for path in [registry_path, semantic_triggers_path]:
         if path and path.exists():
             try:
                 stat = path.stat()
@@ -732,7 +755,38 @@ def write_cache(
     tmp.replace(path)
 
 
-def unavailable_result(reason: str, *, elapsed_ms: float = 0.0) -> dict[str, Any]:
+def error_bucket(message: str) -> str:
+    text = str(message or "").casefold()
+    if "timeout" in text or "timed out" in text:
+        return "read_timeout"
+    if "json" in text or "parse" in text or "decode" in text:
+        return "invalid_json"
+    if "401" in text or "403" in text or "auth" in text or "api key" in text:
+        return "auth_error"
+    if "connect" in text or "connection" in text or "urlerror" in text:
+        return "connection_error"
+    return "semantic_worker_error"
+
+
+def error_buckets(errors: list[str]) -> dict[str, int]:
+    buckets: dict[str, int] = {}
+    for error in errors:
+        kind = error_bucket(error)
+        buckets[kind] = buckets.get(kind, 0) + 1
+    return buckets
+
+
+def unavailable_result(
+    reason: str,
+    *,
+    elapsed_ms: float = 0.0,
+    model_route: dict[str, Any] | None = None,
+    cache: dict[str, Any] | None = None,
+    cache_diagnostics: dict[str, Any] | None = None,
+    timeout: float | None = None,
+    temperature: float | None = None,
+    worker_count: int | None = None,
+) -> dict[str, Any]:
     return {
         "kind": "aippocampus_semantic_recall_gate",
         "schema_version": SCHEMA_VERSION,
@@ -747,6 +801,13 @@ def unavailable_result(reason: str, *, elapsed_ms: float = 0.0) -> dict[str, Any
         "reasons": [reason],
         "workers": [],
         "errors": [reason],
+        "error_buckets": error_buckets([reason]),
+        "timeout": timeout,
+        "temperature": temperature,
+        "worker_count": worker_count,
+        "cache": cache or {},
+        "model_route": model_route or {},
+        "cache_diagnostics": cache_diagnostics or {},
         "secret_policy": None,
         "cached": False,
         "elapsed_ms": round(elapsed_ms, 2),
@@ -766,9 +827,10 @@ def run_semantic_gate(
     cache_path: Path | str | None = None,
     mode: str | None = None,
     api_key: str | None = None,
-    api_key_env: str = "DEEPSEEK_API_KEY",
-    model: str = DEFAULT_MODEL,
-    base_url: str = DEFAULT_BASE_URL,
+    api_key_env: str | None = None,
+    model: str | None = None,
+    base_url: str | None = None,
+    model_route: str | None = None,
     timeout: float = DEFAULT_TIMEOUT,
     temperature: float = DEFAULT_TEMPERATURE,
     workers: tuple[str, ...] = DEFAULT_WORKERS,
@@ -794,14 +856,46 @@ def run_semantic_gate(
         if semantic_cues_path
         else (default_semantic_cues_path(registry_path=registry_path_obj) if registry_path_obj else None)
     )
-    key_value = api_key or os.environ.get(api_key_env)
-    if not semantic_gate_enabled(mode, api_key=key_value, api_key_env=api_key_env):
-        return unavailable_result("semantic gate disabled or missing api key")
+    route = resolve_model_route(
+        model_route,
+        explicit_model=model if not model_route else None,
+        explicit_base_url=base_url if not model_route else None,
+        explicit_api_key_env=api_key_env if not model_route else None,
+    )
+    resolved_model = model or route.model
+    resolved_base_url = base_url or route.base_url
+    resolved_api_key_env = api_key_env or route.api_key_env or DEFAULT_DEEPSEEK_API_KEY_ENV
+    capabilities = route.capabilities
+    route_payload = route_payload_with_effective_values(
+        route,
+        model=resolved_model,
+        base_url=resolved_base_url,
+        api_key_env=resolved_api_key_env,
+    )
+    key_value = api_key or os.environ.get(resolved_api_key_env)
+    unavailable_metadata: dict[str, Any] = {
+        "model_route": route_payload,
+        "cache": route_cache_metrics(route, {}),
+        "cache_diagnostics": {
+            "lookup": "disabled",
+            "cache_key": None,
+            "semantic_cues_in_cache_key": False,
+        },
+        "timeout": timeout,
+        "temperature": temperature,
+        "worker_count": len(tuple(worker for worker in workers if worker in set(DEFAULT_WORKERS))),
+    }
+    if not semantic_gate_enabled(mode, api_key=key_value, api_key_env=resolved_api_key_env):
+        return unavailable_result(
+            "semantic gate disabled or missing api key",
+            **unavailable_metadata,
+        )
     if not prompt:
-        return unavailable_result("empty prompt")
+        return unavailable_result("empty prompt", **unavailable_metadata)
     if secret_policy.get("hard_block"):
         result = unavailable_result(
-            str(secret_policy.get("reason") or "sensitive prompt hard-blocked")
+            str(secret_policy.get("reason") or "sensitive prompt hard-blocked"),
+            **unavailable_metadata,
         )
         result["secret_policy"] = secret_policy
         return result
@@ -816,14 +910,26 @@ def run_semantic_gate(
         cwd=cwd_path,
         registry_path=registry_path_obj,
         semantic_triggers_path=triggers_path,
-        semantic_cues_path=cues_path,
         mode=mode or "auto",
+        model=resolved_model,
+        base_url=resolved_base_url,
+        workers=tuple(worker for worker in workers if worker in set(DEFAULT_WORKERS)),
+        temperature=temperature,
     )
+    cache_lookup = "disabled"
     if use_cache and cache:
         cached = read_cache(cache, cache_key)
         if cached:
+            cached.setdefault("model_route", route_payload)
+            cached["cache_diagnostics"] = {
+                **(cached.get("cache_diagnostics") or {}),
+                "lookup": "hit",
+                "cache_key": cache_key,
+                "semantic_cues_in_cache_key": False,
+            }
             cached["elapsed_ms"] = round((time.perf_counter() - start) * 1000, 2)
             return cached
+        cache_lookup = "miss"
 
     if registry is None:
         registry = load_registry(registry_path_obj) if registry_path_obj else {"threads": []}
@@ -839,6 +945,8 @@ def run_semantic_gate(
     parsed_workers: list[dict[str, Any]] = []
     errors: list[str] = []
     worker_names = tuple(worker for worker in workers if worker in set(DEFAULT_WORKERS))
+    if route.provider != "deepseek" and capabilities:
+        worker_names = worker_names[: max(1, int(capabilities.safe_default_concurrency or 1))]
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(worker_names))) as executor:
         futures = {
             executor.submit(
@@ -846,11 +954,15 @@ def run_semantic_gate(
                 worker,
                 payload=payload,
                 api_key=str(key_value),
-                model=model,
-                base_url=base_url,
+                model=resolved_model,
+                base_url=resolved_base_url,
                 timeout=timeout,
                 temperature=temperature,
                 chat_fn=chat_fn,
+                service_name=route_service_name(route),
+                response_format_json=bool(
+                    capabilities.supports_json_response if capabilities else True
+                ),
             ): worker
             for worker in worker_names
         }
@@ -874,9 +986,19 @@ def run_semantic_gate(
         **merged,
         "workers": parsed_workers,
         "errors": errors,
+        "error_buckets": error_buckets(errors),
         "warnings": [],
         "usage": usage_total,
-        "cache": deepseek_cache_metrics_from_usage(usage_total),
+        "timeout": timeout,
+        "temperature": temperature,
+        "worker_count": len(worker_names),
+        "cache": route_cache_metrics(route, usage_total),
+        "model_route": route_payload,
+        "cache_diagnostics": {
+            "lookup": cache_lookup,
+            "cache_key": cache_key,
+            "semantic_cues_in_cache_key": False,
+        },
         "secret_policy": secret_policy,
         "cached": False,
         "elapsed_ms": elapsed_ms,
@@ -912,6 +1034,10 @@ def main() -> int:
     parser.add_argument("--semantic-cues")
     parser.add_argument("--cache")
     parser.add_argument("--mode", choices=["auto", "on", "off"], default=None)
+    parser.add_argument("--model-route")
+    parser.add_argument("--model")
+    parser.add_argument("--base-url")
+    parser.add_argument("--api-key-env")
     parser.add_argument("--no-cache", action="store_true")
     parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT)
     parser.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE)
@@ -933,6 +1059,10 @@ def main() -> int:
         semantic_cues_path=Path(args.semantic_cues).resolve() if args.semantic_cues else None,
         cache_path=Path(args.cache).resolve() if args.cache else None,
         mode=args.mode,
+        model_route=args.model_route,
+        model=args.model,
+        base_url=args.base_url,
+        api_key_env=args.api_key_env,
         timeout=args.timeout,
         temperature=args.temperature,
         use_cache=not args.no_cache,

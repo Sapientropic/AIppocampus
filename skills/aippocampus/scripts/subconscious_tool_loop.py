@@ -71,6 +71,7 @@ def run_tool_using_loop(
     tool_result_instruction: str,
     invalid_action_feedback: FeedbackFn | None = None,
     parse_error_feedback: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+    chat_kwargs: dict[str, Any] | None = None,
 ) -> ToolLoopResult:
     """Drive the shared tool/final loop while callers own validation semantics.
 
@@ -84,6 +85,7 @@ def run_tool_using_loop(
     final_action: dict[str, Any] | None = None
     final_items: list[dict[str, Any]] | None = None
     tool_count = 0
+    chat_kwargs = chat_kwargs or {}
     fallback_invalid_action = invalid_action_feedback or (
         lambda: {"error": "Return action=tool or action=final only."}
     )
@@ -97,6 +99,7 @@ def run_tool_using_loop(
             max_tokens,
             timeout,
             temperature,
+            **chat_kwargs,
         )
         add_usage(usage_total, compact_usage(response.get("usage") or {}))
         action = parse_response(response)
@@ -160,6 +163,7 @@ def run_tool_using_loop(
             max_tokens,
             timeout,
             temperature,
+            **chat_kwargs,
         )
         add_usage(usage_total, compact_usage(response.get("usage") or {}))
         repair_action = parse_response(response)

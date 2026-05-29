@@ -88,6 +88,24 @@ class DeepSeekModelRoutingTests(unittest.TestCase):
             routing.resolve_model_route("default", explicit_model="manual").model, "manual"
         )
 
+    def test_legacy_explicit_base_or_api_env_uses_conservative_compatible_capabilities(self) -> None:
+        resolved = routing.resolve_model_route(
+            None,
+            explicit_model="local-model",
+            explicit_base_url="http://127.0.0.1:11434/v1",
+            explicit_api_key_env="LOCAL_KEY",
+        )
+
+        self.assertEqual(resolved.route, "explicit_openai_compatible")
+        self.assertEqual(resolved.provider, "openai-compatible")
+        self.assertEqual(resolved.model, "local-model")
+        self.assertEqual(resolved.base_url, "http://127.0.0.1:11434/v1")
+        self.assertEqual(resolved.api_key_env, "LOCAL_KEY")
+        self.assertFalse(resolved.capabilities.supports_user_id)
+        self.assertFalse(resolved.capabilities.supports_thinking)
+        self.assertEqual(resolved.capabilities.cache_metrics_kind, "none")
+        self.assertEqual(resolved.capabilities.safe_default_concurrency, 1)
+
     def test_aippocampus_deepseek_env_wins_over_legacy_env(self) -> None:
         os.environ["DEEPSEEK_MODEL"] = "legacy-flash"
         os.environ["AIPPOCAMPUS_DEEPSEEK_FLASH_MODEL"] = "primary-flash"

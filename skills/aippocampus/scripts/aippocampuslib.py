@@ -585,7 +585,9 @@ def deepseek_cache_metrics_from_usage(usage: dict[str, Any] | None) -> dict[str,
 
 def cli_error_code_from_message(message: str) -> str:
     low = str(message or "").casefold()
-    if "missing deepseek api key" in low or "missing api key" in low:
+    if "missing deepseek api key" in low or "missing api key" in low or (
+        "missing" in low and "api key" in low
+    ):
         return "missing_api_key"
     if "no such file" in low or "cannot find the file" in low or "filenotfounderror" in low:
         return "missing_file"

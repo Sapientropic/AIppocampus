@@ -101,6 +101,8 @@ def call_chat_json(
     *,
     user_id: str | None = None,
     thinking: str | None = None,
+    service_name: str = "DeepSeek API",
+    response_format_json: bool = True,
 ) -> dict[str, Any]:
     return chat_json(
         messages,
@@ -111,9 +113,10 @@ def call_chat_json(
             max_tokens=max_tokens,
             timeout=timeout,
             temperature=temperature,
-            service_name="DeepSeek API",
+            service_name=service_name,
             user_id=user_id,
             thinking=thinking,
+            response_format_json=response_format_json,
         ),
     )
 

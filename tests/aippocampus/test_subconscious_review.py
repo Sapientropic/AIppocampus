@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
@@ -128,6 +130,109 @@ class SubconsciousReviewTests(unittest.TestCase):
             findings = review.recent_findings(path)
 
         self.assertEqual([finding["job"] for finding in findings], ["project_drift"])
+
+    def test_openai_compatible_route_reports_provider_neutral_review_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jobs_path = root / "subconscious_jobs.jsonl"
+            jobs_path.write_text(
+                json.dumps(
+                    {
+                        "kind": "aippocampus_subconscious_job_finding",
+                        "job": "project_drift",
+                        "finding_kind": "project_drift",
+                        "title": "Provider drift",
+                        "summary": "Local route should not inherit DeepSeek cache assumptions.",
+                        "confidence": 0.9,
+                        "source_refs": [{"thread_key": "session:one", "assistant_line": 12}],
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            def fake_chat(
+                messages,
+                api_key,
+                model,
+                base_url,
+                max_tokens,
+                timeout,
+                temperature,
+            ):
+                del messages, api_key, base_url, max_tokens, timeout, temperature
+                self.assertEqual(model, "local-review-model")
+                content = {
+                    "action": "final",
+                    "promotion_candidates": [],
+                    "duplicate_groups": [],
+                    "weak_findings": [],
+                }
+                return {
+                    "choices": [{"message": {"content": json.dumps(content, ensure_ascii=False)}}],
+                    "usage": {"total_tokens": 1},
+                }
+
+            with patch.dict(
+                os.environ,
+                {
+                    "AIPPOCAMPUS_OPENAI_COMPAT_ROUTE": "local_review",
+                    "AIPPOCAMPUS_OPENAI_COMPAT_PROVIDER": "local-test",
+                    "AIPPOCAMPUS_OPENAI_COMPAT_MODEL": "local-review-model",
+                    "AIPPOCAMPUS_OPENAI_COMPAT_BASE_URL": "http://127.0.0.1:11434/v1",
+                    "AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV": "LOCAL_REVIEW_KEY",
+                    "LOCAL_REVIEW_KEY": "present",
+                },
+                clear=False,
+            ):
+                result = review.run_review(
+                    jobs_path=jobs_path,
+                    output_path=root / "promotion_candidates.jsonl",
+                    max_findings=10,
+                    jobs=None,
+                    focus="",
+                    model=review.DEFAULT_MODEL,
+                    base_url=review.DEFAULT_BASE_URL,
+                    api_key=None,
+                    model_route="local_review",
+                    no_write=True,
+                    chat_fn=fake_chat,
+                )
+
+        self.assertEqual(result["model"], "local-review-model")
+        self.assertEqual(result["model_route"]["provider"], "local-test")
+        self.assertEqual(result["cache"], {"available": False, "kind": "none"})
+
+    def test_review_output_can_record_external_model_source_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "promotion_candidates.jsonl"
+            review.append_review_output(
+                output,
+                {
+                    "promotion_candidates": [
+                        {
+                            "candidate_type": "project_memory",
+                            "title": "Provider boundary",
+                            "summary": "External route provenance is explicit.",
+                            "recommendation": "Review before promotion.",
+                            "confidence": 0.8,
+                            "source_finding_ids": ["sf_one"],
+                        }
+                    ],
+                    "duplicate_groups": [],
+                    "weak_findings": [],
+                },
+                model="local-review-model",
+                batch_id="batch",
+                usage={},
+                source="external_model_subconscious_review",
+                model_route={"provider": "local-test"},
+            )
+            row = json.loads(output.read_text(encoding="utf-8").splitlines()[0])
+
+        self.assertEqual(row["source"], "external_model_subconscious_review")
+        self.assertEqual(row["model_route"]["provider"], "local-test")
 
     def test_validate_review_requires_existing_source_findings(self) -> None:
         findings_by_id = {

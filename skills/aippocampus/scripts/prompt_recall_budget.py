@@ -39,7 +39,17 @@ def semantic_timeout_for_budget(
     return min(requested_timeout, max(SEMANTIC_MIN_TIMEOUT_SECONDS, available / 1000.0))
 
 
-def semantic_budget_result(reason: str) -> dict[str, Any]:
+def semantic_budget_result(
+    reason: str,
+    *,
+    requested_timeout: float | None = None,
+    effective_timeout: float | None = None,
+    max_elapsed_ms: int | None = None,
+) -> dict[str, Any]:
+    budget_clipped = (
+        requested_timeout is not None
+        and (effective_timeout is None or float(effective_timeout) != float(requested_timeout))
+    )
     return {
         "available": False,
         "decision": "skip",
@@ -48,4 +58,10 @@ def semantic_budget_result(reason: str) -> dict[str, Any]:
         "memory_scope": [],
         "reasons": [reason],
         "errors": [reason],
+        "budget": {
+            "requested_timeout": requested_timeout,
+            "effective_timeout": effective_timeout,
+            "max_elapsed_ms": max_elapsed_ms,
+            "budget_clipped": budget_clipped,
+        },
     }
