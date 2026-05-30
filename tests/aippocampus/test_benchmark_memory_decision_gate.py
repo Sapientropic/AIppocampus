@@ -233,6 +233,54 @@ class MemoryDecisionGateBenchmarkTests(unittest.TestCase):
             [],
         )
 
+    def test_synthetic_gate_benchmark_exposes_public_memory_pain_fixtures(self) -> None:
+        payload = benchmark.run_benchmark(case_set="synthetic", include_private_text=False)
+
+        fixture_summary = payload["memory_pain_fixtures"]
+        required_families = {
+            "write_time_pollution",
+            "recalled_context_feedback_loop",
+            "fabricated_profile_no_source",
+            "transient_task_state",
+            "deterministic_vs_fuzzy_memory",
+            "metadata_round_trip",
+            "large_document_no_foreground_llm",
+            "invalid_structured_extraction",
+            "compaction_continuity",
+        }
+        self.assertLessEqual(required_families, set(fixture_summary["families"]))
+        self.assertEqual(
+            fixture_summary["unsupported_evidence_false_positive_count"],
+            0,
+        )
+        self.assertFalse(fixture_summary["raw_private_text_emitted"])
+        self.assertEqual(fixture_summary["live_llm_required"], False)
+        self.assertIn("competitor_superiority", payload["cannot_claim"])
+
+        fixture_cases = [
+            case
+            for case in payload["cases"]
+            if case.get("memory_pain_family") in required_families
+        ]
+        self.assertGreaterEqual(len(fixture_cases), len(required_families))
+        self.assertFalse(any("prompt" in case for case in fixture_cases))
+        self.assertFalse(any("raw_source" in case for case in fixture_cases))
+        for row in fixture_cases:
+            self.assertIn("public_sources", row)
+            self.assertIn("memory_pain_track", row)
+            self.assertIn(
+                row["memory_pain_expectation"],
+                {"unsupported_not_evidence", "source_backed_or_scent_only"},
+            )
+        self.assertFalse(
+            [
+                row["case_id"]
+                for row in fixture_cases
+                if row["memory_pain_expectation"] == "unsupported_not_evidence"
+                and row["actual"] == "evidence"
+            ]
+        )
+
     def test_plain_implementation_twins_do_not_use_negative_evidence_as_scent(self) -> None:
         payload = benchmark.run_benchmark(case_set="synthetic", include_private_text=False)
         plain_tasks = [

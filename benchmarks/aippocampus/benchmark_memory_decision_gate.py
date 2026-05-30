@@ -68,6 +68,92 @@ CODING_CUE_STOPWORDS = {
 
 
 @dataclass(frozen=True)
+class MemoryPainFixture:
+    family: str
+    category: str
+    track: str
+    public_sources: tuple[str, ...]
+    expectation: str
+    validation_note: str
+
+
+MEMORY_PAIN_FIXTURES: dict[str, MemoryPainFixture] = {
+    "write_time_pollution": MemoryPainFixture(
+        family="write_time_pollution",
+        category="Write-time pollution",
+        track="Track A",
+        public_sources=("Mem0 #4573", "Mem0 #4099"),
+        expectation="unsupported_not_evidence",
+        validation_note="Boot/system text can scent a nearby context but must not become evidence.",
+    ),
+    "recalled_context_feedback_loop": MemoryPainFixture(
+        family="recalled_context_feedback_loop",
+        category="Write-time pollution",
+        track="Track A",
+        public_sources=("Mem0 #4573",),
+        expectation="unsupported_not_evidence",
+        validation_note="Recalled text echoed back into the prompt is not new source support.",
+    ),
+    "fabricated_profile_no_source": MemoryPainFixture(
+        family="fabricated_profile_no_source",
+        category="Write-time pollution",
+        track="Track A",
+        public_sources=("Mem0 #4099",),
+        expectation="unsupported_not_evidence",
+        validation_note="Model-inferred profile traits stay unsupported without clean-source refs.",
+    ),
+    "transient_task_state": MemoryPainFixture(
+        family="transient_task_state",
+        category="Write-time pollution",
+        track="Track A",
+        public_sources=("Mem0 #4573",),
+        expectation="unsupported_not_evidence",
+        validation_note="Ephemeral run state can be current context, not durable memory evidence.",
+    ),
+    "deterministic_vs_fuzzy_memory": MemoryPainFixture(
+        family="deterministic_vs_fuzzy_memory",
+        category="Deterministic memory vs fuzzy recall",
+        track="Track A",
+        public_sources=("Mem0 #4926", "HN item 46891715"),
+        expectation="unsupported_not_evidence",
+        validation_note="Durable preferences and ambient hints must remain separate surfaces.",
+    ),
+    "metadata_round_trip": MemoryPainFixture(
+        family="metadata_round_trip",
+        category="Metadata/provenance round-trip",
+        track="Track C",
+        public_sources=("Mem0 #5055",),
+        expectation="unsupported_not_evidence",
+        validation_note="Caller metadata labels are not source truth and must not be rewritten.",
+    ),
+    "large_document_no_foreground_llm": MemoryPainFixture(
+        family="large_document_no_foreground_llm",
+        category="Eager LLM extraction cost and scale",
+        track="Track B",
+        public_sources=("Graphiti #1516", "Graphiti #1262", "Graphiti #1275", "Graphiti #1193"),
+        expectation="unsupported_not_evidence",
+        validation_note="Large canonical source retrieval must not require foreground LLM extraction.",
+    ),
+    "invalid_structured_extraction": MemoryPainFixture(
+        family="invalid_structured_extraction",
+        category="Invalid structured extraction",
+        track="Track C",
+        public_sources=("Graphiti #760",),
+        expectation="unsupported_not_evidence",
+        validation_note="Plausible structured facts remain advisory until source-backed.",
+    ),
+    "compaction_continuity": MemoryPainFixture(
+        family="compaction_continuity",
+        category="Compaction continuity failure",
+        track="Track D seed",
+        public_sources=("Letta #3270", "Letta #3242", "Letta #3279"),
+        expectation="unsupported_not_evidence",
+        validation_note="Compaction summaries must not claim continuity when corrections are missing.",
+    ),
+}
+
+
+@dataclass(frozen=True)
 class GateCase:
     case_id: str
     case_type: str
@@ -79,6 +165,7 @@ class GateCase:
     working_memory: bool = False
     cwd_role: str = "workspace"
     expected_evidence_thread_key: str | None = None
+    memory_pain_family: str | None = None
 
     def to_result_stub(self, *, include_private_text: bool = False) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -92,6 +179,17 @@ class GateCase:
             "uses_working_memory": self.working_memory,
             "cwd_role": self.cwd_role,
         }
+        if self.memory_pain_family:
+            fixture = MEMORY_PAIN_FIXTURES[self.memory_pain_family]
+            payload.update(
+                {
+                    "memory_pain_family": fixture.family,
+                    "memory_pain_category": fixture.category,
+                    "memory_pain_track": fixture.track,
+                    "memory_pain_expectation": fixture.expectation,
+                    "public_sources": list(fixture.public_sources),
+                }
+            )
         if include_private_text:
             payload["prompt"] = self.prompt
         return payload
@@ -469,6 +567,70 @@ def build_harder_synthetic_case_bank() -> list[GateCase]:
         )
 
     return cases
+
+
+def build_public_memory_pain_cases() -> list[GateCase]:
+    """Public-safe negative fixtures from the memory-system pain taxonomy.
+
+    These cases test boundary behavior, not competitor quality. The prompts are
+    synthetic and source-free: a correct result may be skip or scent, but must
+    not escalate into source-backed evidence.
+    """
+
+    def case(
+        family: str,
+        prompt: str,
+        *,
+        expected: str = "should_scent",
+        search_budget: int = 2,
+    ) -> GateCase:
+        return GateCase(
+            case_id=f"public_memory_pain__{family}",
+            case_type=f"public_memory_pain_{family}",
+            expected=expected,
+            prompt=prompt,
+            search_budget=search_budget,
+            memory_pain_family=family,
+        )
+
+    return [
+        case(
+            "write_time_pollution",
+            "System bootstrap says the user prefers saffron UI; treat it as unsupported memory.",
+        ),
+        case(
+            "recalled_context_feedback_loop",
+            "Recalled memory says the user loves Atlas dashboards; do not save the echo again.",
+        ),
+        case(
+            "fabricated_profile_no_source",
+            "The model thinks the user is a morning person; remember it permanently.",
+        ),
+        case(
+            "transient_task_state",
+            "Currently running tests and waiting for CI; keep that as transient task state only.",
+        ),
+        case(
+            "deterministic_vs_fuzzy_memory",
+            "A retained TypeScript preference and a fuzzy Atlas vibe are different memory surfaces.",
+        ),
+        case(
+            "metadata_round_trip",
+            "Caller metadata key conversation_id must round-trip; do not turn the key into memory.",
+        ),
+        case(
+            "large_document_no_foreground_llm",
+            "A 900-page canonical document should be source-searchable without foreground LLM extraction.",
+        ),
+        case(
+            "invalid_structured_extraction",
+            "Structured fact says user lives in Neon City; downgrade it unless clean source confirms.",
+        ),
+        case(
+            "compaction_continuity",
+            "After compaction, preserve corrections and rejected routes; do not claim continuity if missing.",
+        ),
+    ]
 
 
 def now_utc() -> str:
@@ -1084,6 +1246,7 @@ def build_synthetic_fixture(root: Path) -> SyntheticFixture:
             search_budget=2,
         ),
     ]
+    cases.extend(build_public_memory_pain_cases())
     cases.extend(build_harder_synthetic_case_bank())
     return SyntheticFixture(
         root=root,
@@ -1246,6 +1409,53 @@ def summarize_harder_case_bank(results: list[dict[str, Any]]) -> dict[str, Any]:
     return summary
 
 
+def summarize_memory_pain_fixtures(
+    results: list[dict[str, Any]],
+    *,
+    include_private_text: bool,
+) -> dict[str, Any]:
+    rows = [row for row in results if row.get("memory_pain_family")]
+    families: dict[str, dict[str, Any]] = {}
+    for family, fixture in MEMORY_PAIN_FIXTURES.items():
+        family_rows = [row for row in rows if row.get("memory_pain_family") == family]
+        families[family] = {
+            "category": fixture.category,
+            "track": fixture.track,
+            "public_sources": list(fixture.public_sources),
+            "expectation": fixture.expectation,
+            "validation_note": fixture.validation_note,
+            "case_count": len(family_rows),
+            "actual_decisions": sorted({str(row.get("actual") or "") for row in family_rows}),
+        }
+    unsupported_rows = [
+        row
+        for row in rows
+        if row.get("memory_pain_expectation") == "unsupported_not_evidence"
+    ]
+    unsupported_evidence_count = sum(
+        1 for row in unsupported_rows if row.get("actual") == "evidence"
+    )
+    return {
+        "source_map": "docs/research/memory-system-pain-taxonomy.md",
+        "total_cases": len(rows),
+        "families": families,
+        "covered_family_count": sum(1 for item in families.values() if item["case_count"] > 0),
+        "unsupported_case_count": len(unsupported_rows),
+        "unsupported_evidence_count": unsupported_evidence_count,
+        "unsupported_evidence_false_positive_count": unsupported_evidence_count,
+        "privacy_breach_count": sum(1 for row in rows if row.get("privacy_breach")),
+        "evidence_without_source_count": sum(
+            1 for row in rows if row.get("evidence_without_source")
+        ),
+        "raw_private_text_emitted": bool(include_private_text),
+        "live_llm_required": False,
+        "description": (
+            "Public-safe synthetic memory-pain fixtures. They validate AIppocampus "
+            "claim boundaries and do not compare competitor quality."
+        ),
+    }
+
+
 def run_case(case: GateCase, fixture: SyntheticFixture) -> dict[str, Any]:
     semantic_gate_called = False
 
@@ -1379,6 +1589,12 @@ def run_benchmark(
         "harder_case_bank": summarize_harder_case_bank(results)
         if case_set == "synthetic"
         else None,
+        "memory_pain_fixtures": summarize_memory_pain_fixtures(
+            results,
+            include_private_text=include_private_text,
+        )
+        if case_set == "synthetic"
+        else None,
         "cases": results,
         "privacy_boundary": {
             "raw_prompt_emitted": bool(include_private_text),
@@ -1394,6 +1610,7 @@ def run_benchmark(
             "live_semantic_model_quality",
             "payload_fidelity",
             "external_baseline_comparison",
+            "competitor_superiority",
         ],
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
         "ok": True,
