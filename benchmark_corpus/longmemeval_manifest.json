@@ -8,7 +8,7 @@
     "cleaned_dataset": "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned"
   },
   "runner": "benchmarks/aippocampus/benchmark_longmemeval.py",
-  "evidence_page": "docs/evidence/longmemeval.md",
+  "evidence_page": "docs/evidence/benchmarks/longmemeval.md",
   "checksum_note": "sha256 values are Hugging Face LFS content oids and should match the downloaded file hash; the resolved download URL ETag may differ.",
   "splits": [
     {

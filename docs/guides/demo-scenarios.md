@@ -155,7 +155,7 @@ python ./benchmarks/aippocampus/benchmark_payload_fidelity.py --json --output ./
 Expected result: the report includes a `memory_pain_fixtures` summary with
 public-safe negative cases and no unsupported-evidence false positives for the
 memory-pain fixture family. The public report is
-[`memory-pain-fixture-report.md`](../evidence/memory-pain-fixture-report.md).
+[`memory-pain-fixture-report.md`](../evidence/benchmarks/memory-pain-fixture-report.md).
 
 Cannot claim: competitor superiority, live semantic-model quality, real-history
 coverage, or real Track D runtime compaction-continuity behavior. Use the

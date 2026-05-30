@@ -196,7 +196,7 @@ handoff context.
 
 11. Correction reconsolidation events
    - Source: `docs/research/correction-reconsolidation.md` and
-     `docs/evidence/memory-decision-benchmark-plan.md`.
+     `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`.
    - First runtime helper is implemented in
      `skills/aippocampus/scripts/correction_reconsolidation.py`: it builds and
      appends source-backed `correction_activation_event` /
@@ -208,7 +208,7 @@ handoff context.
 
 12. Coding decision events
    - Source: `docs/research/agent-coding-context-analysis.md` and
-     `docs/evidence/memory-decision-benchmark-plan.md`.
+     `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`.
    - First deterministic extractor is implemented in
      `skills/aippocampus/scripts/coding_decision_events.py`: it reads clean
      source messages, emits staging `decision_event` candidates with source

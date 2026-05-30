@@ -36,7 +36,7 @@ python skills\aippocampus\scripts\dream_live_shadow_ab.py --replay-clean-source-
 
 The large generated corpora are ignored local artifacts. The checked-in
 evidence file stores only aggregate counts:
-`docs/evidence/dream-live-shadow-benchmark-corpus-2026-05-31.json`.
+`docs/evidence/dream/dream-live-shadow-benchmark-corpus-2026-05-31.json`.
 
 ## Results
 

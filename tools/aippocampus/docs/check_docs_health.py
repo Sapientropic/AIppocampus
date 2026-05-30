@@ -32,7 +32,7 @@ REQUIRED_PROJECT_DOCS = [
     "docs/README.md",
     "docs/roadmap.md",
     "docs/evidence/benchmark-evidence-map.md",
-    "docs/evidence/stage-0-5-readiness.md",
+    "docs/evidence/readiness/stage-0-5-readiness.md",
     "docs/planning/next-iteration-plan.md",
     "docs/architecture/runtime-script-map.md",
     "docs/architecture/gb-scale-roadmap.md",
@@ -139,20 +139,20 @@ REQUIRED_DREAM_PHASE1_CONTRACT_TERMS = {
 }
 
 REQUIRED_BENCHMARK_EVIDENCE_MAP_TERMS = {
-    "docs/evidence/stage-0-5-readiness.md": (
+    "docs/evidence/readiness/stage-0-5-readiness.md": (
         "benchmark evidence map missing current claim-boundary pointer"
     ),
-    "docs/evidence/public-readiness-verification.md": (
+    "docs/evidence/readiness/public-readiness-verification.md": (
         "benchmark evidence map missing dated verification ledger pointer"
     ),
-    "docs/evidence/memory-decision-benchmark-plan.md": (
+    "docs/evidence/benchmarks/memory-decision-benchmark-plan.md": (
         "benchmark evidence map missing benchmark methodology pointer"
     ),
     "benchmark_corpus/README.md": "benchmark evidence map missing corpus README pointer",
     "benchmark_corpus/sharegpt_manifest.json": (
         "benchmark evidence map missing corpus manifest pointer"
     ),
-    "docs/evidence/memory-pain-fixture-report.md": (
+    "docs/evidence/benchmarks/memory-pain-fixture-report.md": (
         "benchmark evidence map missing memory-pain fixture report pointer"
     ),
 }
@@ -167,7 +167,7 @@ REQUIRED_PUBLIC_READINESS_DOCS = [
     "docs/guides/install-guide.md",
     "docs/guides/demo-scenarios.md",
     "docs/guides/privacy-security-checklist.md",
-    "docs/evidence/public-readiness-verification.md",
+    "docs/evidence/readiness/public-readiness-verification.md",
 ]
 
 PUBLIC_DOC_COMMAND_LINT_FILES = {

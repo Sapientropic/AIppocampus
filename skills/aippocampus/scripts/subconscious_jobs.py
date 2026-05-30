@@ -48,11 +48,6 @@ from subconscious_job_validation import (
     QUESTION_TEXT_MAX_CHARS,
     validate_findings,
 )
-from subconscious_question_diagnostics import (
-    question_axis_repair_feedback,
-    question_extraction_quality_diagnostics,
-    should_request_question_axis_repair,
-)
 from subconscious_jobs_config import (
     DEFAULT_CONCURRENCY,
     DEFAULT_JOBS_OUTPUT_NAME,
@@ -60,6 +55,11 @@ from subconscious_jobs_config import (
     JobsRunConfig,
     default_jobs_output_path,
     jobs_run_config_from_args,
+)
+from subconscious_question_diagnostics import (
+    question_axis_repair_feedback,
+    question_extraction_quality_diagnostics,
+    should_request_question_axis_repair,
 )
 from subconscious_runtime import (
     AGENT_SYSTEM_PROMPT,

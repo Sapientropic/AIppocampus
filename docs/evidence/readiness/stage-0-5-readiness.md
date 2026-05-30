@@ -9,7 +9,7 @@ Repository-layout command paths refreshed: 2026-05-29.
 Public-core license and adapter boundary refreshed: 2026-05-30.
 
 Keep this page focused on claim boundaries and missing proof. Dated command
-evidence belongs in `docs/evidence/public-readiness-verification.md`; next-slice task
+evidence belongs in `docs/evidence/readiness/public-readiness-verification.md`; next-slice task
 handoff belongs in `docs/planning/next-iteration-plan.md`. The benchmark and smoke
 navigation map lives in `docs/evidence/benchmark-evidence-map.md`.
 
@@ -182,7 +182,7 @@ navigation map lives in `docs/evidence/benchmark-evidence-map.md`.
 
 The #55/#56 closeout refreshes evidence without changing the claim boundary
 above. The canonical command details live in
-`docs/evidence/public-readiness-verification.md`.
+`docs/evidence/readiness/public-readiness-verification.md`.
 
 - #55 adds a 24-case live source-review pass for the current strict semantic
   sidecar slice and records a broader 96-case diagnostic live run with strong
@@ -198,7 +198,7 @@ above. The canonical command details live in
   Desktop UI marketplace click-through remain unclaimed unless separately
   verified.
 - #27/#28 add public-safe memory pain fixture evidence and a short report in
-  `docs/evidence/memory-pain-fixture-report.md`. This is Stage 2 boundary evidence for
+  `docs/evidence/benchmarks/memory-pain-fixture-report.md`. This is Stage 2 boundary evidence for
   source-backed recall and unsupported-memory suppression, not competitor
   superiority, live semantic-model quality, real-history pain coverage, or a
   real Track D runtime compaction-continuity proof.

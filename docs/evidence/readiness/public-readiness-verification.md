@@ -5,7 +5,7 @@ Repository-layout command paths refreshed: 2026-05-29.
 
 This file is a dated verification ledger. It preserves summarized command
 evidence for release-readiness work, but the current Stage 0-5 claim boundary
-lives in `docs/evidence/stage-0-5-readiness.md` and the canonical product requirements
+lives in `docs/evidence/readiness/stage-0-5-readiness.md` and the canonical product requirements
 remain in `docs/roadmap.md`.
 
 For the navigation map that connects benchmark runners, smoke scripts, corpus
@@ -48,7 +48,7 @@ Latest verification for that slice:
 
 Issues #27/#28 added public-safe memory-system pain fixtures and a short report
 without turning public competitor issue references into a leaderboard. The
-canonical report is `docs/evidence/memory-pain-fixture-report.md`.
+canonical report is `docs/evidence/benchmarks/memory-pain-fixture-report.md`.
 
 Verification for that slice:
 
@@ -193,7 +193,7 @@ Codex client surface.
 
 This slice executed the P0 issues #29, #30, #33, #34, #35, #36, and #38. It
 records command evidence only; the issue tracker remains the work queue and
-`docs/evidence/stage-0-5-readiness.md` remains the claim-boundary summary.
+`docs/evidence/readiness/stage-0-5-readiness.md` remains the claim-boundary summary.
 
 Release/readiness checks:
 
@@ -277,7 +277,7 @@ Stage 3 sync evidence for #36/#38:
 
 This slice executed issues #23, #31, #32, and #37, and leaves #22 ready to close
 once its children are closed. It records command evidence only; the current
-claim boundary remains `docs/evidence/stage-0-5-readiness.md`.
+claim boundary remains `docs/evidence/readiness/stage-0-5-readiness.md`.
 
 Latest verification for this slice:
 

@@ -2,7 +2,7 @@
 
 Use this checklist before creating a public AIppocampus tag, GitHub release,
 plugin package, or broad public-readiness claim. The detailed evidence ledger
-lives in `docs/evidence/public-readiness-verification.md`; this page is the
+lives in `docs/evidence/readiness/public-readiness-verification.md`; this page is the
 repeatable gate list.
 
 ## Version And Scope

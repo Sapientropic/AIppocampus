@@ -27,7 +27,7 @@ intended benchmark use for the locally generated ShareGPT outputs.
 `longmemeval_manifest.json` records the official LongMemEval cleaned V1 split
 files, Hugging Face LFS content hashes, runner entrypoint, and claim boundary.
 The corresponding evidence page is
-[`docs/evidence/longmemeval.md`](../docs/evidence/longmemeval.md).
+[`docs/evidence/benchmarks/longmemeval.md`](../docs/evidence/benchmarks/longmemeval.md).
 
 ## Usage
 
@@ -164,7 +164,7 @@ deterministic mode is a structural ablation only. Treat public-corpus dream-only
 eligible exposure as an over-personalization negative-control signal, not as
 private real-history behavior lift or delivered treatment evidence. Dated
 aggregate evidence lives in
-`docs/evidence/dream-live-shadow-benchmark-corpus-2026-05-31.md`.
+`docs/evidence/dream/dream-live-shadow-benchmark-corpus-2026-05-31.md`.
 
 Build a private warm ambient recall case pack from the generated coding
 clean-source corpus. Use separate labeled views so source-ref support,

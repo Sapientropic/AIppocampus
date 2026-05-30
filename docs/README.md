@@ -10,9 +10,9 @@ Start here instead of scanning every Markdown file in the tree.
 ## First Stops
 
 - Product requirements: [`roadmap.md`](roadmap.md).
-- Current claim boundary: [`evidence/stage-0-5-readiness.md`](evidence/stage-0-5-readiness.md).
+- Current claim boundary: [`evidence/readiness/stage-0-5-readiness.md`](evidence/readiness/stage-0-5-readiness.md).
 - Benchmark and smoke evidence map: [`evidence/benchmark-evidence-map.md`](evidence/benchmark-evidence-map.md).
-- Dated verification ledger: [`evidence/public-readiness-verification.md`](evidence/public-readiness-verification.md).
+- Dated verification ledger: [`evidence/readiness/public-readiness-verification.md`](evidence/readiness/public-readiness-verification.md).
 - Public API and install surface: [`guides/public-api.md`](guides/public-api.md) and [`guides/install-guide.md`](guides/install-guide.md).
 - Public-core license and adapter boundary: [`guides/public-core-boundary.md`](guides/public-core-boundary.md).
 - Architecture overview: [`architecture/architecture-overview.md`](architecture/architecture-overview.md).
@@ -55,14 +55,18 @@ material.
 ### Evidence
 
 `evidence/` is for benchmark design, smoke maps, dated verification, and claim
-boundaries. Keep raw JSON reports and private case packs out of git.
+boundaries. Keep raw JSON reports and private case packs out of git. The root
+keeps only the navigation map; evidence pages are grouped by purpose:
+`readiness/`, `benchmarks/`, `dream/`, and `question/`.
 
 - [`benchmark-evidence-map.md`](evidence/benchmark-evidence-map.md) - first-stop map for benchmark runners, smoke evidence surfaces, corpus records, and dated-result owners.
-- [`stage-0-5-readiness.md`](evidence/stage-0-5-readiness.md) - current evidence matrix for roadmap stages 0 through 5; it is a status snapshot, not the canonical roadmap.
-- [`public-readiness-verification.md`](evidence/public-readiness-verification.md) - dated verification ledger. It preserves command evidence but is not the canonical status page.
-- [`longmemeval.md`](evidence/longmemeval.md) - LongMemEval sources, dataset checksums, dedicated runner commands, retrieval-only results, and claim boundaries.
-- [`memory-decision-benchmark-plan.md`](evidence/memory-decision-benchmark-plan.md) - benchmark design for quiet-by-default recall decisions, source fidelity, and payload privacy.
-- [`memory-pain-fixture-report.md`](evidence/memory-pain-fixture-report.md) - public-safe demo/report for memory-system pain fixtures and explicit claim boundaries.
+- [`stage-0-5-readiness.md`](evidence/readiness/stage-0-5-readiness.md) - current evidence matrix for roadmap stages 0 through 5; it is a status snapshot, not the canonical roadmap.
+- [`public-readiness-verification.md`](evidence/readiness/public-readiness-verification.md) - dated verification ledger. It preserves command evidence but is not the canonical status page.
+- [`longmemeval.md`](evidence/benchmarks/longmemeval.md) - LongMemEval sources, dataset checksums, dedicated runner commands, retrieval-only results, and claim boundaries.
+- [`memory-decision-benchmark-plan.md`](evidence/benchmarks/memory-decision-benchmark-plan.md) - benchmark design for quiet-by-default recall decisions, source fidelity, and payload privacy.
+- [`memory-pain-fixture-report.md`](evidence/benchmarks/memory-pain-fixture-report.md) - public-safe demo/report for memory-system pain fixtures and explicit claim boundaries.
+- [`dream-live-shadow-ab-2026-05-30.md`](evidence/dream/dream-live-shadow-ab-2026-05-30.md) - live shadow A/B dream-worker reminder evidence.
+- [`question-extraction-axis-coverage-2026-05-31.md`](evidence/question/question-extraction-axis-coverage-2026-05-31.md) - #153 question extraction axis coverage evidence.
 
 ### Planning
 

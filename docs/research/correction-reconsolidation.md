@@ -6,7 +6,7 @@ Origin: user/product discussion, 2026-05-28.
 Related: [Ambient Associative Recall](ambient-associative-recall.md),
 [Dream Task Design](dream-task-design.md),
 [Technical Differentiation Analysis](../planning/technical-differentiation-analysis.md),
-[Memory Decision Benchmark Plan](../evidence/memory-decision-benchmark-plan.md).
+[Memory Decision Benchmark Plan](../evidence/benchmarks/memory-decision-benchmark-plan.md).
 
 ## Problem
 

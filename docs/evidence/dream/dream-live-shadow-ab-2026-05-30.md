@@ -19,7 +19,7 @@ python skills\aippocampus\scripts\dream_live_shadow_ab.py --replay-clean-source 
 
 ## Evidence File
 
-- `docs/evidence/dream-live-shadow-ab-2026-05-30.json`
+- `docs/evidence/dream/dream-live-shadow-ab-2026-05-30.json`
 
 ## Results
 

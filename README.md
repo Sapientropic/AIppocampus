@@ -101,7 +101,7 @@ recognizable again.
 - Runtime shape:
   [Cognitive Runtime Architecture](docs/architecture/cognitive-runtime-architecture.md).
 - Current claim boundary:
-  [Stage 0-5 readiness](docs/evidence/stage-0-5-readiness.md).
+  [Stage 0-5 readiness](docs/evidence/readiness/stage-0-5-readiness.md).
 - Benchmark and smoke evidence:
   [Benchmark And Evidence Map](docs/evidence/benchmark-evidence-map.md).
 - Supported public surface:

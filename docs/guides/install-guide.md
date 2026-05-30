@@ -155,7 +155,7 @@ Current verified package surfaces are:
 - package-level temporary install/MCP JSON-RPC/uninstall smoke
 - real Codex app-server local-marketplace install/MCP/uninstall smoke
 - external install validation recorded by issue #29 and summarized in
-  `docs/evidence/public-readiness-verification.md`
+  `docs/evidence/readiness/public-readiness-verification.md`
 
 These checks do not claim a public marketplace submission, every Codex client UI
 wrapper, or independent third-party review. If you publish through a marketplace

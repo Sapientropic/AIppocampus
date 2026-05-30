@@ -778,7 +778,7 @@ or evidence-based review may mark valid, refuted, superseded, local-only, or
 uncertain.
 
 Track D depends on the Hook Timing Matrix in
-[`docs/research/correction-reconsolidation.md`](../research/correction-reconsolidation.md).
+[`docs/research/correction-reconsolidation.md`](../../research/correction-reconsolidation.md).
 The benchmark should measure event-stage behavior without turning every hook
 into a semantic judge. In particular, `PreToolUse` is a contextual preview hook
 only; security, approval, and permission policy remain outside the memory

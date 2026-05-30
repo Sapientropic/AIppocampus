@@ -60,7 +60,9 @@ class DocsHealthTests(unittest.TestCase):
         self.assertNotIn("missing public-readiness doc: docs/guides/demo-scenarios.md", result)
         self.assertNotIn("missing public-readiness doc: docs/guides/privacy-security-checklist.md", result)
         self.assertNotIn(
-            "missing public-readiness doc: docs/evidence/public-readiness-verification.md", result
+            "missing public-readiness doc: "
+            "docs/evidence/readiness/public-readiness-verification.md",
+            result,
         )
         self.assertNotIn("missing public example memory bundle", result)
         self.assertFalse(any("scope_label_policy" in issue for issue in result), result)
@@ -329,7 +331,11 @@ class DocsHealthTests(unittest.TestCase):
         self.assertIn("missing public-readiness doc: docs/guides/install-guide.md", issues)
         self.assertIn("missing public-readiness doc: docs/guides/demo-scenarios.md", issues)
         self.assertIn("missing public-readiness doc: docs/guides/privacy-security-checklist.md", issues)
-        self.assertIn("missing public-readiness doc: docs/evidence/public-readiness-verification.md", issues)
+        self.assertIn(
+            "missing public-readiness doc: "
+            "docs/evidence/readiness/public-readiness-verification.md",
+            issues,
+        )
         self.assertIn("missing public example memory bundle", issues)
 
     def test_public_example_guard_requires_scope_label_metadata(self) -> None:

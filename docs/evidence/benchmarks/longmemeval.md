@@ -27,7 +27,7 @@ quality, or broad memory superiority from one retrieval run.
 - Paper: <https://arxiv.org/abs/2410.10813>
 - Repository: <https://github.com/xiaowu0162/LongMemEval>
 - Cleaned dataset: <https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned>
-- Local manifest: [`benchmark_corpus/longmemeval_manifest.json`](../../benchmark_corpus/longmemeval_manifest.json)
+- Local manifest: [`benchmark_corpus/longmemeval_manifest.json`](../../../benchmark_corpus/longmemeval_manifest.json)
 
 The runner pins Hugging Face LFS content SHA-256 values, not the HTTP `ETag`
 header shown by the resolved download URL. The LFS `oid` is the value that
@@ -123,6 +123,6 @@ Reports have `kind: aippocampus_longmemeval_benchmark` and include:
 - `cannot_claim`: QA, judge-model, V2, SOTA, and broad-comparison boundaries.
 
 When a future run changes what the project can claim, update
-[`stage-0-5-readiness.md`](stage-0-5-readiness.md). If it only records a dated
+[`stage-0-5-readiness.md`](../readiness/stage-0-5-readiness.md). If it only records a dated
 run, update this page and keep
-[`benchmark-evidence-map.md`](benchmark-evidence-map.md) as a pointer map.
+[`benchmark-evidence-map.md`](../benchmark-evidence-map.md) as a pointer map.
