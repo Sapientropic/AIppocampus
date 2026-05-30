@@ -31,7 +31,7 @@ class CompactionContinuityBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["privacy_boundary"]["raw_correction_text_emitted"], False)
         self.assertEqual(payload["privacy_boundary"]["absolute_paths_emitted"], False)
         self.assertIn("live_codex_host_behavior", payload["cannot_claim"])
-        self.assertIn("runtime_correction_event_capture", payload["cannot_claim"])
+        self.assertIn("live_hook_capture", payload["cannot_claim"])
 
         required_stages = {
             "UserPromptSubmit",

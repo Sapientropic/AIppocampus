@@ -23,26 +23,12 @@ import _paths
 
 _paths.ensure_paths()
 
-SCHEMA_VERSION = 1
-HOOK_STAGES = (
-    "UserPromptSubmit",
-    "PreToolUse",
-    "PostToolUse",
-    "SubagentStart",
-    "SubagentStop",
-    "Stop",
-    "PreCompact",
-    "PostCompact",
-)
-COMPACTION_STATES = ("visible", "post_compaction", "horizon_lost")
-ADJUDICATION_STATUSES = (
-    "valid_adopted",
-    "valid_ignored",
-    "refuted",
-    "superseded",
-    "local_only",
-    "uncertain",
-)
+import correction_reconsolidation as corr
+
+SCHEMA_VERSION = corr.SCHEMA_VERSION
+HOOK_STAGES = corr.HOOK_STAGES
+COMPACTION_STATES = corr.COMPACTION_STATES
+ADJUDICATION_STATUSES = corr.ADJUDICATION_STATUSES
 SECRET_OR_PATH_RE = re.compile(
     r"(?i)(api[_-]?key|authorization|bearer\s+[a-z0-9._-]{8,}|password|secret|token)"
     r"|([a-z]:\\[^ \n\r\t]+)"
@@ -409,15 +395,25 @@ def fixture_cases() -> list[TrackDCase]:
 
 
 def should_emit_anchor(case: TrackDCase) -> bool:
-    if case.visible_context_has_source:
+    # Track D adds benchmark-only stage/actionability expectations around the
+    # production anchor gate. PreCompact should flush events, not surface a
+    # prompt anchor, and irrelevant corrections should remain quiet at any
+    # stage even when their adjudication status is otherwise valid.
+    if case.hook_stage == "PreCompact" or not case.anchor_relevant:
         return False
-    if case.anchor_already_injected:
-        return False
-    if case.hook_stage == "PreToolUse" and not case.anchor_relevant:
-        return False
-    if case.adjudication_status in {"refuted", "superseded", "local_only", "uncertain"}:
-        return False
-    return case.expected_emit
+    candidate = {
+        "kind": corr.ADJUDICATION_KIND,
+        "activation_event_id": case.correction_event_id,
+        "adjudication_status": case.adjudication_status,
+        "route": corr.route_for_adjudication(case.adjudication_status),
+    }
+    already_injected = {case.correction_event_id} if case.anchor_already_injected else None
+    return corr.should_surface_candidate(
+        candidate,
+        context_state=case.compaction_state,
+        visible_context_has_source=case.visible_context_has_source,
+        already_injected_event_ids=already_injected,
+    )
 
 
 def evaluate_case(case: TrackDCase, *, include_private_text: bool) -> dict[str, Any]:
@@ -712,7 +708,7 @@ def run_benchmark(
         },
         "cannot_claim": [
             "live_codex_host_behavior",
-            "runtime_correction_event_capture",
+            "live_hook_capture",
             "live_semantic_adjudication_quality",
             "real_history_compaction_survival",
         ],

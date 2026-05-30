@@ -1,6 +1,7 @@
 # Correction Reconsolidation
 
-Status: research design, not implemented.
+Status: first deterministic runtime prototype implemented; live hook capture and
+private real-history adjudication remain future work.
 Origin: user/product discussion, 2026-05-28.
 Related: [Ambient Associative Recall](ambient-associative-recall.md),
 [Dream Task Design](dream-task-design.md),
@@ -153,6 +154,14 @@ The hook set should grow in tiers.
 The deterministic layer should record compact append-only events, not final
 truth.
 
+The first runtime prototype lives in
+`skills/aippocampus/scripts/correction_reconsolidation.py`. It can build and
+append source-backed `correction_activation_event` and
+`correction_outcome_event` JSONL rows, sanitize correction surfaces, changed-file
+hints, and verification/tool evidence, and emit detached
+`correction_adjudication_candidate` rows. These rows remain staging evidence and
+candidate hypotheses; they are not formal memory.
+
 `correction_activation_event` should include:
 
 - `event_id`, `thread_id`, `workspace`, `topic_epoch`, and timestamp
@@ -229,9 +238,9 @@ They must not:
 
 ## First Slice
 
-The first implementable slice should be deliberately narrow:
+The first implemented slice is deliberately narrow:
 
-1. Add append-only activation/outcome events for correction-like turns and
+1. Add append-only activation/outcome event builders for correction-like turns and
    post-work closeouts.
 2. Add a small deterministic fixture set for accepted, ignored, refuted,
    superseded, and uncertain corrections.
@@ -242,7 +251,13 @@ The first implementable slice should be deliberately narrow:
 5. Add Track D in the benchmark plan so regressions are visible before this is
    treated as a product-quality path.
 
-Success is not "every correction becomes memory." Success is that the system no
-longer forgets important task corrections merely because the visible context
-was compressed, while still being able to say "that correction was later
-refuted."
+The shipped helper covers append-only rows, source refs, privacy scanning,
+deterministic six-status adjudication candidates, and active-task anchor
+rendering after compaction or horizon loss. Foreground hooks are intentionally
+unchanged in this slice, so this does not yet prove live Codex hook capture or
+private real-history compaction survival.
+
+Success is not "every correction becomes memory." Success is that the system has
+a source-backed event and candidate layer that can preserve important task
+corrections across compression while still being able to say "that correction
+was later refuted."
