@@ -5,12 +5,20 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 SMOKE = REPO_ROOT / "tools" / "aippocampus" / "smoke"
+BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
+sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(SMOKE))
+sys.path.insert(0, str(BENCHMARKS))
 
 import smoke_memory_pain_prompt_hook as smoke  # noqa: E402
+
+import aippocampus_prompt_hook as hook  # noqa: E402
+from build_index import make_sqlite  # noqa: E402
 
 
 class MemoryPainPromptHookSmokeTests(unittest.TestCase):
@@ -45,6 +53,102 @@ class MemoryPainPromptHookSmokeTests(unittest.TestCase):
         self.assertNotIn("private case name", rendered)
         self.assertIn("case_hash", result["rows"][0])
         self.assertNotIn("prompt", result["rows"][0])
+
+    def test_positive_misses_fail_smoke_ok(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry = root / "registry" / "threads.json"
+            registry.parent.mkdir()
+            registry.write_text(
+                json.dumps({"schema_version": 1, "threads": []}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            with patch.object(
+                smoke,
+                "assess_prompt",
+                return_value={
+                    "decision": "scent",
+                    "confidence": "medium",
+                    "score": 1.0,
+                    "candidates": [],
+                    "evidence": [],
+                    "semantic_gate": {},
+                    "elapsed_ms": 1.0,
+                },
+            ):
+                result = smoke.run_memory_pain_smoke(
+                    [{"name": "positive", "kind": "positive", "prompt": "找一下旧证据"}],
+                    cwd=root,
+                    registry_path=registry,
+                )
+
+        self.assertEqual(result["positive_miss_count"], 1)
+        self.assertFalse(result["ok"])
+
+    def test_vague_cross_project_natural_evidence_stays_scent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            registry = root / "registry" / "threads.json"
+            registry.parent.mkdir()
+            entries = []
+            for name, label, line in (
+                ("alpha", "Alpha project", "Alpha 方案的结论是保留本地优先。"),
+                ("beta", "Beta project", "Beta 方案的结论是先做远端验证。"),
+            ):
+                sqlite_path = root / name / "index" / "source_index.sqlite"
+                sqlite_path.parent.mkdir(parents=True)
+                make_sqlite(
+                    sqlite_path,
+                    [
+                        {
+                            "line": 1,
+                            "timestamp": "2026-05-30T00:00:00Z",
+                            "role": "assistant",
+                            "kind": "message",
+                            "phase": "final_answer",
+                            "turn_index": 1,
+                            "is_final": True,
+                            "sha1": name,
+                            "text": line,
+                        }
+                    ],
+                    anchors=[],
+                    turns=[],
+                )
+                entries.append(
+                    {
+                        "thread_key": f"session:{name}",
+                        "title": f"{label} planning",
+                        "workspace_name": label,
+                        "project_label": label,
+                        "updated_at": "2026-05-30T00:00:00Z",
+                        "anchor_titles": ["方案结论"],
+                        "keywords": ["方案", "结论", "上次"],
+                        "summary": f"{label} 方案结论",
+                        "paths": {"workspace": str(workspace), "sqlite": str(sqlite_path)},
+                    }
+                )
+            registry.write_text(
+                json.dumps({"schema_version": 1, "threads": entries}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            result = hook.assess_prompt(
+                "上次我们讨论的那个方案怎么说来着？",
+                cwd=workspace,
+                registry_path=registry,
+                search_budget=3,
+                use_semantic_gate=False,
+            )
+
+        self.assertEqual(result["decision"], "scent")
+        self.assertEqual(result["evidence"], [])
+        self.assertIn(
+            "source evidence withheld: vague cross-project referent",
+            result["reasons"],
+        )
 
 
 if __name__ == "__main__":

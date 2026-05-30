@@ -14,8 +14,8 @@ def collect_evidence(
 ) -> list[dict[str, Any]]:
     limit = max(0, budget)
     content_terms = evidence_content_terms(query_terms)
-    pool: list[tuple[float, int, dict[str, Any]]] = []
-    for candidate in candidates[:3]:
+    pool: list[tuple[float, int, int, dict[str, Any]]] = []
+    for candidate_index, candidate in enumerate(candidates[:3]):
         if limit <= 0:
             break
         entry = candidate.get("_entry") or {}
@@ -47,14 +47,20 @@ def collect_evidence(
                 "noise_reason": hit.get("noise_reason"),
                 "snippet": hit.get("snippet"),
             }
-            pool.append((_evidence_hit_quality(item), hit_index, item))
+            pool.append((_evidence_hit_quality(item), candidate_index, hit_index, item))
 
     if not pool:
         return []
-    has_non_process_hit = any(not _evidence_hit_is_process_noise(item) for _, _, item in pool)
+    best_thread_key = _best_evidence_thread_key(pool)
+    coherent_pool = [
+        row for row in pool if str(row[3].get("thread_key") or "") == best_thread_key
+    ]
+    has_non_process_hit = any(
+        not _evidence_hit_is_process_noise(item) for _, _, _, item in coherent_pool
+    )
     selected: list[dict[str, Any]] = []
     seen: set[tuple[str, Any]] = set()
-    for _, _, item in sorted(pool, key=lambda row: (-row[0], row[1])):
+    for _, _, _, item in sorted(coherent_pool, key=lambda row: (-row[0], row[1], row[2])):
         if has_non_process_hit and _evidence_hit_is_process_noise(item):
             continue
         key = (str(item.get("thread_key") or ""), item.get("line"))
@@ -65,6 +71,26 @@ def collect_evidence(
         if len(selected) >= limit:
             break
     return selected
+
+
+def _best_evidence_thread_key(pool: list[tuple[float, int, int, dict[str, Any]]]) -> str:
+    thread_rank: dict[str, tuple[float, int, int]] = {}
+    for quality, candidate_index, hit_index, item in pool:
+        thread_key = str(item.get("thread_key") or "")
+        current = thread_rank.get(thread_key)
+        if current is None or (quality, -candidate_index, -hit_index) > (
+            current[0],
+            -current[1],
+            -current[2],
+        ):
+            thread_rank[thread_key] = (quality, candidate_index, hit_index)
+    # Source-backed snippets need one stable provenance anchor. If competing
+    # threads both produce hits, keep only the best-supported thread and leave
+    # broader cross-thread context in the candidate/scent surface.
+    return min(
+        thread_rank.items(),
+        key=lambda item: (-item[1][0], item[1][1], item[1][2], item[0]),
+    )[0]
 
 
 def _evidence_hit_is_process_noise(hit: dict[str, Any]) -> bool:
