@@ -1,0 +1,730 @@
+{
+  "schema_version": 1,
+  "kind": "aippocampus_react_real_vcs_100_gold_measurement",
+  "report_date": "2026-05-31",
+  "repository": "facebook/react",
+  "repository_url": "https://github.com/facebook/react",
+  "repository_license_spdx": "MIT",
+  "dataset_id": "react_real_vcs_100_gold_2026_05_31",
+  "counterfactual_dataset_id": "react_real_vcs_100_gold_counterfactual_2026_05_31",
+  "source_family": "real_public_react_vcs_100_gold_curated",
+  "counterfactual_source_family": "real_public_react_vcs_100_gold_counterfactual_perturbation",
+  "local_fixture_policy": "fixture and predictions are local .tmp artifacts; raw PR bodies/search payloads are not committed",
+  "local_artifacts": {
+    "base_links_jsonl_sha1": "18ca75f8b9d76224",
+    "base_fixture_jsonl_sha1": "7a22e9dbde78a786",
+    "base_source_window_predictions_sha1": "9c605d8edd508321",
+    "base_closed_book_predictions_sha1": "b91481c31fa152c1",
+    "base_overactive_predictions_sha1": "0d5f9335df660093",
+    "counterfactual_links_jsonl_sha1": "b903353ed3897e7c",
+    "counterfactual_fixture_jsonl_sha1": "8ef7e19ec958be3c",
+    "counterfactual_source_predictions_sha1": "d63ae27f23b09a92",
+    "counterfactual_parametric_predictions_sha1": "d7b7fa5b716a8931",
+    "counterfactual_overactive_predictions_sha1": "89879c681253535d"
+  },
+  "query_counts": {
+    "repo:facebook/react is:pr is:merged in:title revert": 169,
+    "repo:facebook/react is:pr is:merged workaround": 143,
+    "repo:facebook/react is:pr is:merged reland": 10,
+    "repo:facebook/react is:pr is:merged \"again\" \"revert\"": 112
+  },
+  "build": {
+    "gold_event_count": 105,
+    "anti_drift_negative_count": 105,
+    "total_future_event_count": 210,
+    "counterfactual_gold_event_count": 105,
+    "counterfactual_anti_drift_negative_count": 105,
+    "by_family_gold": {
+      "rejected_route": 45,
+      "reopen_condition": 25,
+      "workaround_rationale": 35
+    },
+    "by_family_anti_drift": {
+      "rejected_route": 45,
+      "reopen_condition": 25,
+      "workaround_rationale": 35
+    }
+  },
+  "arms": {
+    "source_window": {
+      "ok": true,
+      "predicted_flag_count": 105,
+      "recall": 1.0,
+      "precision": 1.0,
+      "f1": 1.0,
+      "false_negative_count": 0,
+      "false_positive_count": 0,
+      "anti_drift_negative_count": 105,
+      "anti_drift_violation_count": 0,
+      "anti_drift_pass_rate": 1.0,
+      "source_support_failure_count": 0
+    },
+    "empty": {
+      "ok": false,
+      "predicted_flag_count": 0,
+      "recall": 0.0,
+      "precision": 0.0,
+      "f1": 0.0,
+      "false_negative_count": 105,
+      "false_positive_count": 0,
+      "anti_drift_negative_count": 105,
+      "anti_drift_violation_count": 0,
+      "anti_drift_pass_rate": 1.0,
+      "source_support_failure_count": 0
+    },
+    "closed_book_source_stripped": {
+      "ok": false,
+      "predicted_flag_count": 105,
+      "recall": 0.0,
+      "precision": 0.0,
+      "f1": 0.0,
+      "false_negative_count": 105,
+      "false_positive_count": 0,
+      "anti_drift_negative_count": 105,
+      "anti_drift_violation_count": 0,
+      "anti_drift_pass_rate": 1.0,
+      "source_support_failure_count": 105
+    },
+    "overactive_all_flags_sanity": {
+      "ok": false,
+      "predicted_flag_count": 210,
+      "recall": 1.0,
+      "precision": 0.5,
+      "f1": 0.6667,
+      "false_negative_count": 0,
+      "false_positive_count": 105,
+      "anti_drift_negative_count": 105,
+      "anti_drift_violation_count": 105,
+      "anti_drift_pass_rate": 0.0,
+      "source_support_failure_count": 0
+    },
+    "counterfactual_source_backed": {
+      "ok": true,
+      "predicted_flag_count": 105,
+      "recall": 1.0,
+      "precision": 1.0,
+      "f1": 1.0,
+      "false_negative_count": 0,
+      "false_positive_count": 0,
+      "anti_drift_negative_count": 105,
+      "anti_drift_violation_count": 0,
+      "anti_drift_pass_rate": 1.0,
+      "source_support_failure_count": 0
+    },
+    "counterfactual_empty": {
+      "ok": false,
+      "predicted_flag_count": 0,
+      "recall": 0.0,
+      "precision": 0.0,
+      "f1": 0.0,
+      "false_negative_count": 105,
+      "false_positive_count": 0,
+      "anti_drift_negative_count": 105,
+      "anti_drift_violation_count": 0,
+      "anti_drift_pass_rate": 1.0,
+      "source_support_failure_count": 0
+    },
+    "counterfactual_parametric_public_memory": {
+      "ok": false,
+      "predicted_flag_count": 105,
+      "recall": 0.0,
+      "precision": 0.0,
+      "f1": 0.0,
+      "false_negative_count": 105,
+      "false_positive_count": 0,
+      "anti_drift_negative_count": 105,
+      "anti_drift_violation_count": 0,
+      "anti_drift_pass_rate": 1.0,
+      "source_support_failure_count": 105
+    },
+    "counterfactual_overactive_all_flags_sanity": {
+      "ok": false,
+      "predicted_flag_count": 210,
+      "recall": 1.0,
+      "precision": 0.5,
+      "f1": 0.6667,
+      "false_negative_count": 0,
+      "false_positive_count": 105,
+      "anti_drift_negative_count": 105,
+      "anti_drift_violation_count": 105,
+      "anti_drift_pass_rate": 0.0,
+      "source_support_failure_count": 0
+    }
+  },
+  "source_over_closed_book_lift": {
+    "recall": 1.0,
+    "precision": 1.0,
+    "f1": 1.0,
+    "false_negative_reduction": 105
+  },
+  "counterfactual_source_over_parametric_lift": {
+    "recall": 1.0,
+    "precision": 1.0,
+    "f1": 1.0,
+    "false_negative_reduction": 105
+  },
+  "family_summary": {
+    "source_window": {
+      "rejected_route": {
+        "gold_event_count": 45,
+        "anti_drift_negative_count": 45,
+        "recall": 1.0,
+        "false_negative_count": 0,
+        "anti_drift_violation_count": 0,
+        "anti_drift_pass_rate": 1.0
+      },
+      "reopen_condition": {
+        "gold_event_count": 25,
+        "anti_drift_negative_count": 25,
+        "recall": 1.0,
+        "false_negative_count": 0,
+        "anti_drift_violation_count": 0,
+        "anti_drift_pass_rate": 1.0
+      },
+      "workaround_rationale": {
+        "gold_event_count": 35,
+        "anti_drift_negative_count": 35,
+        "recall": 1.0,
+        "false_negative_count": 0,
+        "anti_drift_violation_count": 0,
+        "anti_drift_pass_rate": 1.0
+      }
+    },
+    "empty": {
+      "rejected_route": {
+        "gold_event_count": 45,
+        "anti_drift_negative_count": 45,
+        "recall": 0.0,
+        "false_negative_count": 45,
+        "anti_drift_violation_count": 0,
+        "anti_drift_pass_rate": 1.0
+      },
+      "reopen_condition": {
+        "gold_event_count": 25,
+        "anti_drift_negative_count": 25,
+        "recall": 0.0,
+        "false_negative_count": 25,
+        "anti_drift_violation_count": 0,
+        "anti_drift_pass_rate": 1.0
+      },
+      "workaround_rationale": {
+        "gold_event_count": 35,
+        "anti_drift_negative_count": 35,
+        "recall": 0.0,
+        "false_negative_count": 35,
+        "anti_drift_violation_count": 0,
+        "anti_drift_pass_rate": 1.0
+      }
+    },
+    "closed_book_source_stripped": {
+      "rejected_route": {
+        "gold_event_count": 45,
+        "anti_drift_negative_count": 45,
+        "recall": 0.0,
+        "false_negative_count": 45,
+        "anti_drift_violation_count": 0,
+        "anti_drift_pass_rate": 1.0
+      },
+      "reopen_condition": {
+        "gold_event_count": 25,
+        "anti_drift_negative_count": 25,
+        "recall": 0.0,
+        "false_negative_count": 25,
+        "anti_drift_violation_count": 0,
+        "anti_drift_pass_rate": 1.0
+      },
+      "workaround_rationale": {
+        "gold_event_count": 35,
+        "anti_drift_negative_count": 35,
+        "recall": 0.0,
+        "false_negative_count": 35,
+        "anti_drift_violation_count": 0,
+        "anti_drift_pass_rate": 1.0
+      }
+    },
+    "overactive_all_flags_sanity": {
+      "rejected_route": {
+        "gold_event_count": 45,
+        "anti_drift_negative_count": 45,
+        "recall": 1.0,
+        "false_negative_count": 0,
+        "anti_drift_violation_count": 45,
+        "anti_drift_pass_rate": 0.0
+      },
+      "reopen_condition": {
+        "gold_event_count": 25,
+        "anti_drift_negative_count": 25,
+        "recall": 1.0,
+        "false_negative_count": 0,
+        "anti_drift_violation_count": 25,
+        "anti_drift_pass_rate": 0.0
+      },
+      "workaround_rationale": {
+        "gold_event_count": 35,
+        "anti_drift_negative_count": 35,
+        "recall": 1.0,
+        "false_negative_count": 0,
+        "anti_drift_violation_count": 35,
+        "anti_drift_pass_rate": 0.0
+      }
+    },
+    "counterfactual_source_backed": {
+      "rejected_route": {
+        "gold_event_count": 45,
+        "anti_drift_negative_count": 45,
+        "recall": 1.0,
+        "false_negative_count": 0,
+        "anti_drift_violation_count": 0,
+        "anti_drift_pass_rate": 1.0
+      },
+      "reopen_condition": {
+        "gold_event_count": 25,
+        "anti_drift_negative_count": 25,
+        "recall": 1.0,
+        "false_negative_count": 0,
+        "anti_drift_violation_count": 0,
+        "anti_drift_pass_rate": 1.0
+      },
+      "workaround_rationale": {
+        "gold_event_count": 35,
+        "anti_drift_negative_count": 35,
+        "recall": 1.0,
+        "false_negative_count": 0,
+        "anti_drift_violation_count": 0,
+        "anti_drift_pass_rate": 1.0
+      }
+    },
+    "counterfactual_empty": {
+      "rejected_route": {
+        "gold_event_count": 45,
+        "anti_drift_negative_count": 45,
+        "recall": 0.0,
+        "false_negative_count": 45,
+        "anti_drift_violation_count": 0,
+        "anti_drift_pass_rate": 1.0
+      },
+      "reopen_condition": {
+        "gold_event_count": 25,
+        "anti_drift_negative_count": 25,
+        "recall": 0.0,
+        "false_negative_count": 25,
+        "anti_drift_violation_count": 0,
+        "anti_drift_pass_rate": 1.0
+      },
+      "workaround_rationale": {
+        "gold_event_count": 35,
+        "anti_drift_negative_count": 35,
+        "recall": 0.0,
+        "false_negative_count": 35,
+        "anti_drift_violation_count": 0,
+        "anti_drift_pass_rate": 1.0
+      }
+    },
+    "counterfactual_parametric_public_memory": {
+      "rejected_route": {
+        "gold_event_count": 45,
+        "anti_drift_negative_count": 45,
+        "recall": 0.0,
+        "false_negative_count": 45,
+        "anti_drift_violation_count": 0,
+        "anti_drift_pass_rate": 1.0
+      },
+      "reopen_condition": {
+        "gold_event_count": 25,
+        "anti_drift_negative_count": 25,
+        "recall": 0.0,
+        "false_negative_count": 25,
+        "anti_drift_violation_count": 0,
+        "anti_drift_pass_rate": 1.0
+      },
+      "workaround_rationale": {
+        "gold_event_count": 35,
+        "anti_drift_negative_count": 35,
+        "recall": 0.0,
+        "false_negative_count": 35,
+        "anti_drift_violation_count": 0,
+        "anti_drift_pass_rate": 1.0
+      }
+    },
+    "counterfactual_overactive_all_flags_sanity": {
+      "rejected_route": {
+        "gold_event_count": 45,
+        "anti_drift_negative_count": 45,
+        "recall": 1.0,
+        "false_negative_count": 0,
+        "anti_drift_violation_count": 45,
+        "anti_drift_pass_rate": 0.0
+      },
+      "reopen_condition": {
+        "gold_event_count": 25,
+        "anti_drift_negative_count": 25,
+        "recall": 1.0,
+        "false_negative_count": 0,
+        "anti_drift_violation_count": 25,
+        "anti_drift_pass_rate": 0.0
+      },
+      "workaround_rationale": {
+        "gold_event_count": 35,
+        "anti_drift_negative_count": 35,
+        "recall": 1.0,
+        "false_negative_count": 0,
+        "anti_drift_violation_count": 35,
+        "anti_drift_pass_rate": 0.0
+      }
+    }
+  },
+  "samples": {
+    "gold_events": [
+      {
+        "project_id": "react-pr-17799",
+        "event_id": "react-pr-17799-reopen_condition-event",
+        "family": "reopen_condition",
+        "hard_event_kind": "pull_request_merged",
+        "timestamp": "2020-01-08T00:47:20Z",
+        "public_url": "https://github.com/facebook/react/pull/17799",
+        "required_past_source_ids": [
+          "react-pr-17799-reopen_condition-source"
+        ],
+        "past_source_ids": [
+          "react-pr-17799-reopen_condition-source"
+        ]
+      },
+      {
+        "project_id": "react-pr-18388",
+        "event_id": "react-pr-18388-reopen_condition-event",
+        "family": "reopen_condition",
+        "hard_event_kind": "pull_request_merged",
+        "timestamp": "2020-03-30T19:42:42Z",
+        "public_url": "https://github.com/facebook/react/pull/18388",
+        "required_past_source_ids": [
+          "react-pr-18388-reopen_condition-source"
+        ],
+        "past_source_ids": [
+          "react-pr-18388-reopen_condition-source"
+        ]
+      },
+      {
+        "project_id": "react-pr-18459",
+        "event_id": "react-pr-18459-workaround_rationale-event",
+        "family": "workaround_rationale",
+        "hard_event_kind": "pull_request_merged",
+        "timestamp": "2020-04-01T21:45:00Z",
+        "public_url": "https://github.com/facebook/react/pull/18459",
+        "required_past_source_ids": [
+          "react-pr-18459-workaround_rationale-source"
+        ],
+        "past_source_ids": [
+          "react-pr-18459-workaround_rationale-source"
+        ]
+      },
+      {
+        "project_id": "react-pr-18671",
+        "event_id": "react-pr-18671-rejected_route-event",
+        "family": "rejected_route",
+        "hard_event_kind": "commit_reverted",
+        "timestamp": "2020-04-20T15:00:34Z",
+        "public_url": "https://github.com/facebook/react/pull/18671",
+        "required_past_source_ids": [
+          "react-pr-18671-rejected_route-source"
+        ],
+        "past_source_ids": [
+          "react-pr-18671-rejected_route-source"
+        ]
+      },
+      {
+        "project_id": "react-pr-18796",
+        "event_id": "react-pr-18796-workaround_rationale-event",
+        "family": "workaround_rationale",
+        "hard_event_kind": "pull_request_merged",
+        "timestamp": "2020-05-03T00:09:32Z",
+        "public_url": "https://github.com/facebook/react/pull/18796",
+        "required_past_source_ids": [
+          "react-pr-18796-workaround_rationale-source"
+        ],
+        "past_source_ids": [
+          "react-pr-18796-workaround_rationale-source"
+        ]
+      },
+      {
+        "project_id": "react-pr-18890",
+        "event_id": "react-pr-18890-rejected_route-event",
+        "family": "rejected_route",
+        "hard_event_kind": "commit_reverted",
+        "timestamp": "2020-05-11T22:29:25Z",
+        "public_url": "https://github.com/facebook/react/pull/18890",
+        "required_past_source_ids": [
+          "react-pr-18890-rejected_route-source"
+        ],
+        "past_source_ids": [
+          "react-pr-18890-rejected_route-source"
+        ]
+      },
+      {
+        "project_id": "react-pr-18899",
+        "event_id": "react-pr-18899-rejected_route-event",
+        "family": "rejected_route",
+        "hard_event_kind": "commit_reverted",
+        "timestamp": "2020-05-12T19:06:15Z",
+        "public_url": "https://github.com/facebook/react/pull/18899",
+        "required_past_source_ids": [
+          "react-pr-18899-rejected_route-source"
+        ],
+        "past_source_ids": [
+          "react-pr-18899-rejected_route-source"
+        ]
+      },
+      {
+        "project_id": "react-pr-19018",
+        "event_id": "react-pr-19018-rejected_route-event",
+        "family": "rejected_route",
+        "hard_event_kind": "commit_reverted",
+        "timestamp": "2020-05-27T16:37:28Z",
+        "public_url": "https://github.com/facebook/react/pull/19018",
+        "required_past_source_ids": [
+          "react-pr-19018-rejected_route-source"
+        ],
+        "past_source_ids": [
+          "react-pr-19018-rejected_route-source"
+        ]
+      },
+      {
+        "project_id": "react-pr-19161",
+        "event_id": "react-pr-19161-reopen_condition-event",
+        "family": "reopen_condition",
+        "hard_event_kind": "pull_request_merged",
+        "timestamp": "2020-06-23T16:16:23Z",
+        "public_url": "https://github.com/facebook/react/pull/19161",
+        "required_past_source_ids": [
+          "react-pr-19161-reopen_condition-source"
+        ],
+        "past_source_ids": [
+          "react-pr-19161-reopen_condition-source"
+        ]
+      },
+      {
+        "project_id": "react-pr-19215",
+        "event_id": "react-pr-19215-rejected_route-event",
+        "family": "rejected_route",
+        "hard_event_kind": "commit_reverted",
+        "timestamp": "2020-06-30T12:38:32Z",
+        "public_url": "https://github.com/facebook/react/pull/19215",
+        "required_past_source_ids": [
+          "react-pr-19215-rejected_route-source"
+        ],
+        "past_source_ids": [
+          "react-pr-19215-rejected_route-source"
+        ]
+      },
+      {
+        "project_id": "react-pr-19365",
+        "event_id": "react-pr-19365-rejected_route-event",
+        "family": "rejected_route",
+        "hard_event_kind": "commit_reverted",
+        "timestamp": "2020-07-15T11:35:47Z",
+        "public_url": "https://github.com/facebook/react/pull/19365",
+        "required_past_source_ids": [
+          "react-pr-19365-rejected_route-source"
+        ],
+        "past_source_ids": [
+          "react-pr-19365-rejected_route-source"
+        ]
+      },
+      {
+        "project_id": "react-pr-19366",
+        "event_id": "react-pr-19366-rejected_route-event",
+        "family": "rejected_route",
+        "hard_event_kind": "commit_reverted",
+        "timestamp": "2020-07-15T11:36:41Z",
+        "public_url": "https://github.com/facebook/react/pull/19366",
+        "required_past_source_ids": [
+          "react-pr-19366-rejected_route-source"
+        ],
+        "past_source_ids": [
+          "react-pr-19366-rejected_route-source"
+        ]
+      }
+    ],
+    "anti_drift_negatives": [
+      {
+        "project_id": "react-pr-17799",
+        "event_id": "react-pr-17799-reopen_condition-event-anti-drift-vs-pr-18890",
+        "family": "reopen_condition",
+        "hard_event_kind": "commit_reverted",
+        "timestamp": "2020-05-11T22:29:25Z",
+        "public_url": "https://github.com/facebook/react/pull/18890",
+        "required_past_source_ids": [],
+        "past_source_ids": [
+          "react-pr-17799-reopen_condition-source"
+        ]
+      },
+      {
+        "project_id": "react-pr-18388",
+        "event_id": "react-pr-18388-reopen_condition-event-anti-drift-vs-pr-18899",
+        "family": "reopen_condition",
+        "hard_event_kind": "commit_reverted",
+        "timestamp": "2020-05-12T19:06:15Z",
+        "public_url": "https://github.com/facebook/react/pull/18899",
+        "required_past_source_ids": [],
+        "past_source_ids": [
+          "react-pr-18388-reopen_condition-source"
+        ]
+      },
+      {
+        "project_id": "react-pr-18459",
+        "event_id": "react-pr-18459-workaround_rationale-event-anti-drift-vs-pr-30832",
+        "family": "workaround_rationale",
+        "hard_event_kind": "pull_request_merged",
+        "timestamp": "2024-09-10T04:09:42Z",
+        "public_url": "https://github.com/facebook/react/pull/30832",
+        "required_past_source_ids": [],
+        "past_source_ids": [
+          "react-pr-18459-workaround_rationale-source"
+        ]
+      },
+      {
+        "project_id": "react-pr-18671",
+        "event_id": "react-pr-18671-rejected_route-event-anti-drift-vs-pr-18459",
+        "family": "rejected_route",
+        "hard_event_kind": "pull_request_merged",
+        "timestamp": "2020-04-01T21:45:00Z",
+        "public_url": "https://github.com/facebook/react/pull/18459",
+        "required_past_source_ids": [],
+        "past_source_ids": [
+          "react-pr-18671-rejected_route-source"
+        ]
+      },
+      {
+        "project_id": "react-pr-18796",
+        "event_id": "react-pr-18796-workaround_rationale-event-anti-drift-vs-pr-31238",
+        "family": "workaround_rationale",
+        "hard_event_kind": "pull_request_merged",
+        "timestamp": "2024-10-14T18:12:23Z",
+        "public_url": "https://github.com/facebook/react/pull/31238",
+        "required_past_source_ids": [],
+        "past_source_ids": [
+          "react-pr-18796-workaround_rationale-source"
+        ]
+      },
+      {
+        "project_id": "react-pr-18890",
+        "event_id": "react-pr-18890-rejected_route-event-anti-drift-vs-pr-18796",
+        "family": "rejected_route",
+        "hard_event_kind": "pull_request_merged",
+        "timestamp": "2020-05-03T00:09:32Z",
+        "public_url": "https://github.com/facebook/react/pull/18796",
+        "required_past_source_ids": [],
+        "past_source_ids": [
+          "react-pr-18890-rejected_route-source"
+        ]
+      },
+      {
+        "project_id": "react-pr-18899",
+        "event_id": "react-pr-18899-rejected_route-event-anti-drift-vs-pr-21516",
+        "family": "rejected_route",
+        "hard_event_kind": "pull_request_merged",
+        "timestamp": "2021-05-18T15:42:08Z",
+        "public_url": "https://github.com/facebook/react/pull/21516",
+        "required_past_source_ids": [],
+        "past_source_ids": [
+          "react-pr-18899-rejected_route-source"
+        ]
+      },
+      {
+        "project_id": "react-pr-19018",
+        "event_id": "react-pr-19018-rejected_route-event-anti-drift-vs-pr-20468",
+        "family": "rejected_route",
+        "hard_event_kind": "pull_request_merged",
+        "timestamp": "2021-06-29T20:53:31Z",
+        "public_url": "https://github.com/facebook/react/pull/20468",
+        "required_past_source_ids": [],
+        "past_source_ids": [
+          "react-pr-19018-rejected_route-source"
+        ]
+      },
+      {
+        "project_id": "react-pr-19161",
+        "event_id": "react-pr-19161-reopen_condition-event-anti-drift-vs-pr-19018",
+        "family": "reopen_condition",
+        "hard_event_kind": "commit_reverted",
+        "timestamp": "2020-05-27T16:37:28Z",
+        "public_url": "https://github.com/facebook/react/pull/19018",
+        "required_past_source_ids": [],
+        "past_source_ids": [
+          "react-pr-19161-reopen_condition-source"
+        ]
+      }
+    ],
+    "counterfactual_gold_events": [
+      {
+        "event_id": "react-pr-18671-rejected_route-event",
+        "family": "rejected_route",
+        "public_url": "https://github.com/facebook/react/pull/18671",
+        "counterfactual_required_source_id": "cf-react-pr-18671-rejected_route-source-local-perturbation",
+        "parametric_original_source_id": "react-pr-18671-rejected_route-source"
+      },
+      {
+        "event_id": "react-pr-18890-rejected_route-event",
+        "family": "rejected_route",
+        "public_url": "https://github.com/facebook/react/pull/18890",
+        "counterfactual_required_source_id": "cf-react-pr-18890-rejected_route-source-local-perturbation",
+        "parametric_original_source_id": "react-pr-18890-rejected_route-source"
+      },
+      {
+        "event_id": "react-pr-18899-rejected_route-event",
+        "family": "rejected_route",
+        "public_url": "https://github.com/facebook/react/pull/18899",
+        "counterfactual_required_source_id": "cf-react-pr-18899-rejected_route-source-local-perturbation",
+        "parametric_original_source_id": "react-pr-18899-rejected_route-source"
+      },
+      {
+        "event_id": "react-pr-19018-rejected_route-event",
+        "family": "rejected_route",
+        "public_url": "https://github.com/facebook/react/pull/19018",
+        "counterfactual_required_source_id": "cf-react-pr-19018-rejected_route-source-local-perturbation",
+        "parametric_original_source_id": "react-pr-19018-rejected_route-source"
+      },
+      {
+        "event_id": "react-pr-19215-rejected_route-event",
+        "family": "rejected_route",
+        "public_url": "https://github.com/facebook/react/pull/19215",
+        "counterfactual_required_source_id": "cf-react-pr-19215-rejected_route-source-local-perturbation",
+        "parametric_original_source_id": "react-pr-19215-rejected_route-source"
+      },
+      {
+        "event_id": "react-pr-19365-rejected_route-event",
+        "family": "rejected_route",
+        "public_url": "https://github.com/facebook/react/pull/19365",
+        "counterfactual_required_source_id": "cf-react-pr-19365-rejected_route-source-local-perturbation",
+        "parametric_original_source_id": "react-pr-19365-rejected_route-source"
+      },
+      {
+        "event_id": "react-pr-19366-rejected_route-event",
+        "family": "rejected_route",
+        "public_url": "https://github.com/facebook/react/pull/19366",
+        "counterfactual_required_source_id": "cf-react-pr-19366-rejected_route-source-local-perturbation",
+        "parametric_original_source_id": "react-pr-19366-rejected_route-source"
+      },
+      {
+        "event_id": "react-pr-19508-rejected_route-event",
+        "family": "rejected_route",
+        "public_url": "https://github.com/facebook/react/pull/19508",
+        "counterfactual_required_source_id": "cf-react-pr-19508-rejected_route-source-local-perturbation",
+        "parametric_original_source_id": "react-pr-19508-rejected_route-source"
+      },
+      {
+        "event_id": "react-pr-23239-rejected_route-event",
+        "family": "rejected_route",
+        "public_url": "https://github.com/facebook/react/pull/23239",
+        "counterfactual_required_source_id": "cf-react-pr-23239-rejected_route-source-local-perturbation",
+        "parametric_original_source_id": "react-pr-23239-rejected_route-source"
+      }
+    ]
+  },
+  "cannot_claim": [
+    "wild_vcs_corpus_quality",
+    "license_safe_redistributable_fixture_corpus",
+    "live_model_quality",
+    "private_real_history_continuity_quality",
+    "soft_semantic_reopen_support_without_hard_events"
+  ]
+}

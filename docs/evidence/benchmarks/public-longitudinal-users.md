@@ -11,6 +11,9 @@ Latest dated measurement:
 Latest real public VCS smoke:
 [`react-real-vcs-smoke-2026-05-31.md`](react-real-vcs-smoke-2026-05-31.md).
 
+Latest 100+ gold real public VCS measurement:
+[`react-real-vcs-100-gold-2026-05-31.md`](react-real-vcs-100-gold-2026-05-31.md).
+
 ## Purpose
 
 AIppocampus should help agents remember hidden engineering context across
@@ -209,6 +212,13 @@ The first real public VCS smoke is now
 It runs this scaffold on three curated `facebook/react` event clusters and
 separate source-window, empty, source-stripped closed-book, and counterfactual
 perturbation arms.
+
+The first 100+ gold real public VCS measurement is now
+[`react-real-vcs-100-gold-2026-05-31.md`](react-real-vcs-100-gold-2026-05-31.md).
+It runs the builder on 105 curated `facebook/react` gold events plus 105
+anti-drift negatives, keeps source-window / empty / closed-book arms separate,
+adds a 105-event counterfactual perturbation control, and reports
+`rejected_route`, `reopen_condition`, and `workaround_rationale` separately.
 
 ## Runner
 
