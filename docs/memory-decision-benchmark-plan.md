@@ -1022,10 +1022,18 @@ correction-reconsolidation helper now owns append-only event rows, adjudication
 candidates, and active-anchor rendering; live hook wiring and private
 real-history packs remain future work.
 
-P6: local private real-history case generation. Reports must stay sanitized and
+P6: coding decision-event extraction. The first deterministic slice is
+implemented in `skills/aippocampus/scripts/coding_decision_events.py`: it reads
+clean-source messages, emits source-backed staging `decision_event` candidates,
+keeps broad/branch-local decisions as `needs_confirmation` or `local_only`, and
+uses the correction-reconsolidation anti-nag gate before rendering at most one
+compact `coding_continuity_ticket`. Broader real-history review and host-agent
+intervention timing remain future work.
+
+P7: local private real-history case generation. Reports must stay sanitized and
 aggregate-only by default.
 
-P7: optional live semantic-model slices for release verification. The first
+P8: optional live semantic-model slices for release verification. The first
 opt-in live semantic-gate runner is implemented; broader scheduled runs remain
 manual verification jobs, not required CI gates.
 

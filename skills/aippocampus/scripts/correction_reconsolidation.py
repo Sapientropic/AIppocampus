@@ -560,9 +560,12 @@ def should_surface_candidate(
     candidate: Mapping[str, Any],
     *,
     context_state: str,
+    action_relevant: bool = True,
     visible_context_has_source: bool = False,
     already_injected_event_ids: set[str] | None = None,
 ) -> bool:
+    if not action_relevant:
+        return False
     if context_state not in {"post_compaction", "horizon_lost"}:
         return False
     if visible_context_has_source:
@@ -583,6 +586,7 @@ def render_active_task_anchors(
     candidates: Sequence[Mapping[str, Any]],
     *,
     context_state: str,
+    action_relevant: bool = True,
     visible_context_has_source: bool = False,
     already_injected_event_ids: set[str] | None = None,
     limit: int = 3,
@@ -592,6 +596,7 @@ def render_active_task_anchors(
         if not should_surface_candidate(
             candidate,
             context_state=context_state,
+            action_relevant=action_relevant,
             visible_context_has_source=visible_context_has_source,
             already_injected_event_ids=already_injected_event_ids,
         ):

@@ -177,6 +177,19 @@ handoff context.
    - Next hardening: wire live hook capture in a fail-open way, then add private
      real-history correction packs before making compaction-survival claims.
 
+11. Coding decision events
+   - Source: `docs/research/agent-coding-context-analysis.md` and
+     `docs/memory-decision-benchmark-plan.md`.
+   - First deterministic extractor is implemented in
+     `skills/aippocampus/scripts/coding_decision_events.py`: it reads clean
+     source messages, emits staging `decision_event` candidates with source
+     refs, flags accepted decisions / rejected routes / scope narrowing /
+     do-not-repeat notes / user corrections, and renders at most one compact
+     `coding_continuity_ticket` after the shared anti-nag gate.
+   - Next hardening: review private real-history decision packs and measure
+     whether host agents use tickets correctly before claiming intervention
+     timing quality.
+
 ## Do Not Start With
 
 - A generic vector database rewrite.

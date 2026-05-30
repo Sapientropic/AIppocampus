@@ -190,6 +190,11 @@ class CorrectionReconsolidationTests(unittest.TestCase):
             context_state="horizon_lost",
             already_injected_event_ids={"act_valid_adopted", "act_valid_ignored"},
         )
+        irrelevant_anchors = corr.render_active_task_anchors(
+            candidates,
+            context_state="horizon_lost",
+            action_relevant=False,
+        )
 
         self.assertLessEqual(statuses, candidate_statuses)
         self.assertEqual(
@@ -198,6 +203,7 @@ class CorrectionReconsolidationTests(unittest.TestCase):
         )
         self.assertEqual(visible_anchors, [])
         self.assertEqual(repeated_anchors, [])
+        self.assertEqual(irrelevant_anchors, [])
         self.assertTrue(corr.SUPPRESS_ANCHOR_STATUSES.isdisjoint({a["adjudication_status"] for a in anchors}))
 
     def test_run_adjudication_writes_candidate_hypotheses_without_promoting_memory(self) -> None:

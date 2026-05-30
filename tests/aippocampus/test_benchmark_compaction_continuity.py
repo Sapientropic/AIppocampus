@@ -32,6 +32,9 @@ class CompactionContinuityBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["privacy_boundary"]["absolute_paths_emitted"], False)
         self.assertIn("live_codex_host_behavior", payload["cannot_claim"])
         self.assertIn("live_hook_capture", payload["cannot_claim"])
+        case_types = {row["case_type"] for row in payload["cases"]}
+        self.assertIn("rejected_route_after_compaction_warning", case_types)
+        self.assertIn("rejected_route_visible_silent", case_types)
 
         required_stages = {
             "UserPromptSubmit",
@@ -77,6 +80,18 @@ class CompactionContinuityBenchmarkTests(unittest.TestCase):
         self.assertEqual(metrics["visible_context_echo_noise_count"], 0)
         self.assertGreater(metrics["stale_anchor_guard_case_count"], 0)
         self.assertEqual(metrics["stale_route_retry_count"], 0)
+        rejected_warning = [
+            row
+            for row in payload["cases"]
+            if row["case_type"] == "rejected_route_after_compaction_warning"
+        ][0]
+        rejected_visible = [
+            row
+            for row in payload["cases"]
+            if row["case_type"] == "rejected_route_visible_silent"
+        ][0]
+        self.assertTrue(rejected_warning["anchor_surface_actual"])
+        self.assertFalse(rejected_visible["anchor_surface_actual"])
         self.assertGreater(metrics["unrelated_pre_tool_use_case_count"], 0)
         self.assertEqual(metrics["false_anchor_count"], 0)
         self.assertGreater(metrics["repeated_anchor_case_count"], 0)

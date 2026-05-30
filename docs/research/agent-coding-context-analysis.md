@@ -1,6 +1,7 @@
 # Agent Coding Context Blueprint
 
-Status: research blueprint, not a runtime contract.
+Status: research blueprint; first deterministic decision-event extraction slice
+implemented.
 Date: 2026-05-28.
 Related: [Agency From Cognitive Maps](agency-from-cognitive-map.md),
 [Correction Reconsolidation](correction-reconsolidation.md),
@@ -337,7 +338,7 @@ pattern match.
 | Ambient recall scent | Partial | False positive rate, anti-nag behavior, source-backed expansion |
 | Correction reconsolidation | Designed | User-correction validity, compaction continuity, refuted-correction handling |
 | Journey tracking | Research design | Whether state labels improve task outcomes over ordinary summaries |
-| Decision-event extraction | Proposed | Can it capture chosen/rejected paths without overfitting? |
+| Decision-event extraction | First deterministic slice implemented | Broader real-history review and host-agent outcome validation |
 | Affordance / coding tickets | Blueprint | Whether host agents use tickets correctly and quietly |
 | Codeksei executive integration | Blueprint | Whether intervention timing reduces drift without annoyance |
 
@@ -386,6 +387,24 @@ The first useful coding slice should be small:
 
 This avoids building a broad agent platform while directly testing the central
 claim: source-backed decision memory can prevent repeated coding mistakes.
+
+Current implementation:
+
+- `skills/aippocampus/scripts/coding_decision_events.py` extracts staging
+  `decision_event` candidates from clean-source user turns and assistant final
+  answers. It preserves `thread_key`, `message_id`, `turn_id`, `source_id`,
+  `clean_ordinal`, `source_line`, `role`, and `phase` source refs.
+- The extractor detects accepted decisions, rejected routes, scope narrowing,
+  "do not repeat" notes, and user-correction language. It writes candidate
+  hypotheses only: `status=staging`, `truth_status=candidate_hypothesis_until_reviewed`,
+  and `formal_memory_promoted=false`.
+- Branch-local or broad ambiguous decisions stay `local_only` or
+  `needs_confirmation`. A compact `coding_continuity_ticket` is rendered only
+  when the current prompt is relevant, the source is not visible, and the shared
+  correction-reconsolidation anti-nag gate allows surfacing.
+
+This does not yet claim complete design-intent extraction, global validity for
+old branch-local decisions, or host-agent intervention timing.
 
 ## Risks
 
