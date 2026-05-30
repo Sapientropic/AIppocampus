@@ -468,6 +468,10 @@ def scan_session_rollouts(
     # CLI/onboarding call sites pass a provider explicitly. This fallback is
     # kept only for legacy in-process callers during the provider migration.
     active_provider = provider or codex_provider(codex_home())
+    if active_provider.name != "codex" and not dry_run:
+        raise NotImplementedError(
+            "non-Codex session registration requires a provider-specific clean-source parser"
+        )
     for source in active_provider.discover_sessions():
         rollout = source.path
         meta = dict(source.metadata or {})

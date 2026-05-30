@@ -64,6 +64,7 @@ files = [
     "skills/aippocampus/scripts/compensatory_dream.py",
     "skills/aippocampus/scripts/conversation_sources/__init__.py",
     "skills/aippocampus/scripts/conversation_sources/base.py",
+    "skills/aippocampus/scripts/conversation_sources/claude_code.py",
     "skills/aippocampus/scripts/conversation_sources/codex.py",
     "skills/aippocampus/scripts/correction_reconsolidation.py",
     "skills/aippocampus/scripts/deepseek_model_routing.py",

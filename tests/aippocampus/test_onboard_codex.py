@@ -83,6 +83,36 @@ class OnboardCodexTests(unittest.TestCase):
             }
         )
 
+    def _write_claude_transcript(self, path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        rows = [
+            {
+                "type": "user",
+                "sessionId": "claude-onboard",
+                "uuid": "claude-user",
+                "parentUuid": None,
+                "timestamp": "2026-05-30T03:00:00Z",
+                "cwd": str(self.cwd),
+                "message": {"role": "user", "content": "synthetic claude user turn"},
+            },
+            {
+                "type": "assistant",
+                "sessionId": "claude-onboard",
+                "uuid": "claude-assistant",
+                "parentUuid": "claude-user",
+                "timestamp": "2026-05-30T03:00:01Z",
+                "cwd": str(self.cwd),
+                "message": {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "synthetic claude assistant turn"}],
+                },
+            },
+        ]
+        path.write_text(
+            "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
+            encoding="utf-8",
+        )
+
     def test_dry_run_returns_agent_native_plan_without_writing(self) -> None:
         result = onboard.run_onboarding(
             cwd=self.cwd,
@@ -138,7 +168,13 @@ class OnboardCodexTests(unittest.TestCase):
         self.assertEqual(data["meta"]["provider"], "codex")
         self.assertEqual(data["data"]["plan"]["would_register_count"], 1)
 
-    def test_onboard_facade_rejects_unimplemented_provider_without_claiming_support(self) -> None:
+    def test_onboard_facade_provider_claude_code_dry_run_reports_real_provider_plan(
+        self,
+    ) -> None:
+        self._write_claude_transcript(
+            self.root / "claude-home" / "projects" / "-project" / "claude-session.jsonl"
+        )
+
         proc = self._run_onboard_facade(
             "--provider",
             "claude-code",
@@ -149,18 +185,42 @@ class OnboardCodexTests(unittest.TestCase):
             "--dry-run",
             "--format",
             "json",
+            env_extra={"CLAUDE_HOME": str(self.root / "claude-home")},
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        data = json.loads(proc.stdout)
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["meta"]["provider"], "claude-code")
+        self.assertEqual(data["data"]["plan"]["would_register_count"], 1)
+
+    def test_onboard_facade_provider_claude_code_blocks_write_until_parser_exists(
+        self,
+    ) -> None:
+        self._write_claude_transcript(
+            self.root / "claude-home" / "projects" / "-project" / "claude-session.jsonl"
+        )
+
+        proc = self._run_onboard_facade(
+            "--provider",
+            "claude-code",
+            "--cwd",
+            str(self.cwd),
+            "--registry-dir",
+            str(self.registry_dir),
+            "--format",
+            "json",
+            env_extra={"CLAUDE_HOME": str(self.root / "claude-home")},
         )
 
         self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
         data = json.loads(proc.stdout)
-        self.assertFalse(data["ok"])
-        self.assertEqual(data["error"]["code"], "provider_not_available")
-        self.assertEqual(data["error"]["provider"], "claude-code")
+        self.assertEqual(data["error"]["code"], "provider_registration_not_available")
 
-    def _run_onboard_facade(self, *args: str) -> Any:
+    def _run_onboard_facade(self, *args: str, env_extra: dict[str, str] | None = None) -> Any:
         import subprocess
 
-        env = {**os.environ, "CODEX_HOME": str(self.root)}
+        env = {**os.environ, "CODEX_HOME": str(self.root), **(env_extra or {})}
         return subprocess.run(
             [sys.executable, str(ONBOARD), *args],
             text=True,

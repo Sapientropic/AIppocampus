@@ -102,11 +102,13 @@ conversation-provider homes.
 |---|---|---|---|---|
 | `conversation_sources/base.py` | Shared `ConversationProvider` protocol and `ConversationSourceRef` data shape. | Imported by registry/onboarding/source builders. | Standard library typing/dataclasses only. | Runtime internal |
 | `conversation_sources/codex.py` | Codex Desktop provider for live `sessions/` and `archived_sessions/` rollout JSONL discovery, current-cwd lookup, metadata extraction, and thread identity. | Legacy wrappers in `aippocampuslib.py`, registry scan, current-thread registration. | Codex rollout JSONL first-line `session_meta`; no registry writes. | Runtime internal |
+| `conversation_sources/claude_code.py` | Claude Code provider for local `projects/**/*.jsonl` transcript discovery, current-cwd lookup, public metadata extraction, and provider-prefixed thread identity. | `onboard.py --provider claude-code --dry-run`, registry dry-run scan, provider smoke tests. | Claude Code JSONL top-level `sessionId` / `cwd` / `timestamp`; no generated registry storage decisions. | Runtime internal |
 
-Do not add a Claude Code provider until transcript schema is verified from real
-samples or official SDK/session APIs. Claude Code MCP/hook/skill installers are
-host integrations and should live in their own issue/slice rather than inside
-the provider contract.
+Claude Code support is currently discovery-only: local real-session schema has
+been verified enough for dry-run scan and current-session lookup, but
+clean-source conversion/registration remains a separate parser slice. Claude
+Code MCP/hook/skill installers are host integrations and should live in their
+own issue/slice rather than inside the provider contract.
 
 ## Hook Paths
 

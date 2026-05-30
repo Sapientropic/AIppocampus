@@ -36,6 +36,25 @@ def _provider_error(provider: str) -> dict:
     }
 
 
+def _provider_registration_error(provider: str) -> dict:
+    return {
+        "ok": False,
+        "error": {
+            "code": "provider_registration_not_available",
+            "provider": provider,
+            "message": (
+                "This provider can be discovered in dry-run mode, but clean-source "
+                "registration is not enabled until its transcript parser is wired."
+            ),
+        },
+        "meta": {"facade": "onboard.py", "provider": provider},
+    }
+
+
+def _is_dry_run(argv: Sequence[str]) -> bool:
+    return "--dry-run" in argv or "--preview" in argv
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     raw_args = list(sys.argv[1:] if argv is None else argv)
     parser = argparse.ArgumentParser(add_help=False)
@@ -49,7 +68,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("Providers:")
         print("  auto         Use the default implemented provider for this install.")
         print("  codex        Onboard local Codex rollout JSONL sessions.")
-        print("  claude-code  Reserved; transcript parser is not implemented yet.")
+        print("  claude-code  Discover local Claude Code transcripts in dry-run mode.")
         print()
         print("Run onboard_codex.py --help for the current Codex onboarding options.")
         return 0
@@ -61,6 +80,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             remaining,
             provider_name="codex",
             provider=create_conversation_provider("codex", codex_home_dir=codex_home()),
+        )
+    if resolved == "claude-code":
+        if not _is_dry_run(raw_args):
+            error = _provider_registration_error(provider)
+            if _wants_json(raw_args) or not sys.stdout.isatty():
+                print(json.dumps(error, ensure_ascii=False, indent=2))
+            else:
+                print(error["error"]["message"], file=sys.stderr)
+            return 2
+        return onboard_codex.main(
+            remaining,
+            provider_name="claude-code",
+            provider=create_conversation_provider("claude-code"),
         )
 
     error = _provider_error(provider)

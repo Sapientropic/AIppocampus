@@ -20,7 +20,11 @@ for _path in (
 
 import aippocampuslib  # noqa: E402
 import registry  # noqa: E402
-from conversation_sources import CodexConversationProvider  # noqa: E402
+from conversation_sources import (  # noqa: E402
+    ClaudeCodeConversationProvider,
+    CodexConversationProvider,
+    create_conversation_provider,
+)
 
 LOCATE_ROLLOUT = SCRIPTS / "locate_rollout.py"
 
@@ -42,6 +46,45 @@ def write_rollout(path: Path, cwd: Path, session_id: str = "archived-session") -
             "timestamp": "2026-05-26T03:00:01Z",
             "payload": {"type": "user_message", "message": "归档线程也要能被定位。"},
         },
+    ]
+    path.write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
+        encoding="utf-8",
+    )
+
+
+def write_claude_transcript(
+    path: Path,
+    cwd: Path,
+    session_id: str = "claude-session",
+    timestamp: str = "2026-05-30T03:00:00Z",
+    first_cwd: Path | None = None,
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    first_cwd = first_cwd or cwd
+    rows = [
+        {
+            "type": "user",
+            "sessionId": session_id,
+            "uuid": "user-uuid",
+            "parentUuid": None,
+            "timestamp": timestamp,
+            "cwd": str(first_cwd),
+            "message": {"role": "user", "content": "synthetic user turn"},
+        },
+        {
+            "type": "assistant",
+            "sessionId": session_id,
+            "uuid": "assistant-uuid",
+            "parentUuid": "user-uuid",
+            "timestamp": "2026-05-30T03:00:01Z",
+            "cwd": str(cwd),
+            "message": {
+                "role": "assistant",
+                "content": [{"type": "text", "text": "synthetic assistant turn"}],
+            },
+        },
+        {"type": "ai-title", "sessionId": session_id, "aiTitle": "Synthetic Claude title"},
     ]
     path.write_text(
         "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
@@ -173,6 +216,70 @@ class AippocampusLibTests(unittest.TestCase):
             self.assertEqual(result["count"], 1)
             self.assertEqual(result["planned"][0]["thread_key"], "session:provider-session")
             self.assertEqual(Path(result["planned"][0]["rollout"]), rollout)
+
+    def test_claude_code_provider_discovers_and_locates_project_transcripts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            home = root / "claude-home"
+            cwd = root / "Project Claude"
+            cwd.mkdir()
+            transcript = home / "projects" / "-project-claude" / "session.jsonl"
+            write_claude_transcript(transcript, cwd)
+
+            provider = ClaudeCodeConversationProvider(home)
+            sessions = list(provider.discover_sessions())
+
+            self.assertEqual(len(sessions), 1)
+            self.assertEqual(sessions[0].provider, "claude-code")
+            self.assertEqual(sessions[0].path, transcript)
+            self.assertEqual(sessions[0].session_id, "claude-session")
+            self.assertEqual(sessions[0].cwd, cwd)
+            self.assertEqual(provider.locate_current(cwd).path, transcript)
+            self.assertEqual(provider.thread_key(transcript), "claude-code:session:claude-session")
+            self.assertEqual(provider.read_metadata(transcript)["originator"], "Claude Code")
+
+    def test_claude_code_provider_locates_cwd_after_first_metadata_cwd(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            home = root / "claude-home"
+            first_cwd = root / "Other Project"
+            target_cwd = root / "Target Project"
+            first_cwd.mkdir()
+            target_cwd.mkdir()
+            transcript = home / "projects" / "-mixed" / "session.jsonl"
+            write_claude_transcript(transcript, target_cwd, first_cwd=first_cwd)
+
+            source = ClaudeCodeConversationProvider(home).locate_current(target_cwd)
+
+            self.assertEqual(source.path, transcript)
+            self.assertEqual(source.cwd, target_cwd)
+
+    def test_registry_scan_accepts_claude_code_provider_for_dry_run(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            home = root / "claude-home"
+            cwd = root / "Project Claude"
+            cwd.mkdir()
+            transcript = home / "projects" / "-project-claude" / "session.jsonl"
+            write_claude_transcript(transcript, cwd)
+
+            result = registry.scan_session_rollouts(
+                registry_dir=root / "registry",
+                provider=ClaudeCodeConversationProvider(home),
+                dry_run=True,
+            )
+
+            self.assertEqual(result["count"], 1)
+            self.assertEqual(
+                result["planned"][0]["thread_key"], "claude-code:session:claude-session"
+            )
+            self.assertEqual(Path(result["planned"][0]["rollout"]), transcript)
+
+    def test_conversation_provider_factory_creates_claude_code_provider(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            provider = create_conversation_provider("claude_code", claude_home_dir=Path(tmp))
+
+            self.assertEqual(provider.name, "claude-code")
 
 
 if __name__ == "__main__":

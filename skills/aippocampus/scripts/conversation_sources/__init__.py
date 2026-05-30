@@ -5,13 +5,16 @@ from __future__ import annotations
 from pathlib import Path
 
 from .base import ConversationProvider, ConversationSourceRef
+from .claude_code import ClaudeCodeConversationProvider, claude_home
 from .codex import CodexConversationProvider
 
 PROVIDER_ALIASES = {
     "auto": "codex",
+    "claude": "claude-code",
+    "claude-code": "claude-code",
     "codex": "codex",
 }
-PROVIDER_CHOICES = tuple(PROVIDER_ALIASES)
+PROVIDER_CHOICES = ("auto", "codex", "claude-code")
 
 
 class ConversationProviderUnavailable(ValueError):
@@ -30,20 +33,25 @@ def normalize_provider_name(provider: str | None) -> str:
 def create_conversation_provider(
     provider: str | None = "auto",
     *,
+    claude_home_dir: str | Path | None = None,
     codex_home_dir: str | Path | None = None,
 ) -> ConversationProvider:
     resolved = normalize_provider_name(provider)
     if resolved == "codex" and codex_home_dir is not None:
         return CodexConversationProvider(codex_home_dir)
+    if resolved == "claude-code":
+        return ClaudeCodeConversationProvider(claude_home_dir or claude_home())
     raise ConversationProviderUnavailable(resolved)
 
 
 __all__ = [
+    "ClaudeCodeConversationProvider",
     "CodexConversationProvider",
     "ConversationProvider",
     "ConversationProviderUnavailable",
     "ConversationSourceRef",
     "PROVIDER_CHOICES",
+    "claude_home",
     "create_conversation_provider",
     "normalize_provider_name",
 ]
