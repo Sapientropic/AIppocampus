@@ -18,10 +18,20 @@ from typing import Any, Callable, Iterable, Mapping
 from aippocampuslib import compact_text, now_utc
 
 DEFAULT_CONFIRMATION_MAX_AGE_DAYS = 14
+DEFAULT_CONFIRMATION_REQUESTS_NAME = "question_pair_confirmation_requests.jsonl"
+DEFAULT_CONFIRMATION_ARTIFACTS_NAME = "question_pair_confirmation_artifacts.jsonl"
 CONFIRMATION_ACCEPT_DECISIONS = {"accept", "same", "link", "confirmed"}
 CONFIRMATION_REJECT_DECISIONS = {"reject", "deny", "different", "separate", "dismiss"}
 
 ConfirmationFn = Callable[[dict[str, Any]], Mapping[str, Any] | None]
+
+
+def default_confirmation_requests_path(jobs_output_path: Path) -> Path:
+    return jobs_output_path.resolve().parent / DEFAULT_CONFIRMATION_REQUESTS_NAME
+
+
+def default_confirmation_artifacts_path(jobs_output_path: Path) -> Path:
+    return jobs_output_path.resolve().parent / DEFAULT_CONFIRMATION_ARTIFACTS_NAME
 
 
 def iter_confirmation_jsonl(path: Path) -> Iterable[dict[str, Any]]:

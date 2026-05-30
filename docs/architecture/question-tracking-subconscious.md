@@ -1115,6 +1115,13 @@ noisy ones. Frontier markers must feel like saved trail markers, not guilt.
   `smoke_question_confirmation_live.py` no-write smoke exercises request
   generation, optional live artifact generation, and tracking round trip without
   persisting formal jobs or emitting source refs/raw question text.
+- Shipped materialization bridge: the deterministic `question_tracking` job now
+  writes compact pending requests to the registry sibling
+  `question_pair_confirmation_requests.jsonl` and consumes explicit sibling
+  artifacts from `question_pair_confirmation_artifacts.jsonl` on later runs
+  before appending formal `question_link` rows. It still does not call a live
+  model by default; the artifact only confirms a borderline pair and never
+  becomes source truth.
 - Shipped first salience/threshold slice: every parsed candidate gets a
   deterministic `salience` profile with score, tags, reasons, and `trackable`.
   Low-information source-backed rows are kept as candidates but skipped as

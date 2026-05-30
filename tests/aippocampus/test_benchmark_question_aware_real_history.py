@@ -142,6 +142,63 @@ class QuestionAwareRealHistoryBenchmarkTests(unittest.TestCase):
         self.assertNotIn("session:private", rendered)
         self.assertNotIn(str(REPO_ROOT), rendered)
 
+    def test_frontier_concepts_counted_by_baseline_are_preserved_by_scaffold(self) -> None:
+        payload = benchmark.run_question_aware_real_history_benchmark(
+            job_rows=[
+                {
+                    "finding_kind": "question_candidate",
+                    "fingerprint": "sf_context_question",
+                    "question_short": "context continuity",
+                    "question_text": "How should continuity survive handoff?",
+                    "source_refs": [source_ref("1")],
+                    "concepts": ["context continuity"],
+                },
+                {
+                    "finding_kind": "frontier_marker",
+                    "fingerprint": "sf_context_frontier",
+                    "frontier_type": "blocked",
+                    "linked_question_short": "context continuity",
+                    "boundary_reason": "Resume only after source refs survive.",
+                    "source_refs": [source_ref("2")],
+                    "concepts": [
+                        "source refs",
+                        "handoff",
+                        "calibration",
+                    ],
+                },
+            ],
+        )
+
+        self.assertEqual(payload["metrics"]["plain_term_coverage"], 1.0)
+        self.assertEqual(payload["metrics"]["question_aware_term_coverage"], 1.0)
+        self.assertEqual(payload["metrics"]["term_coverage_delta"], 0.0)
+        self.assertNotIn(
+            "question_aware_term_coverage_regressed",
+            {item["code"] for item in payload["known_failure_modes"]},
+        )
+
+    def test_theme_terms_counted_by_baseline_are_preserved_by_scaffold(self) -> None:
+        payload = benchmark.run_question_aware_real_history_benchmark(
+            job_rows=[
+                {
+                    "finding_kind": "theme_candidate",
+                    "theme_cluster_id": "th_context_theme",
+                    "theme_short": "handoff calibration",
+                    "theme_label": "Recurring theme: handoff calibration",
+                    "shared_concepts": [
+                        "source refs",
+                        "handoff calibration",
+                    ],
+                    "source_refs": [source_ref("1"), source_ref("2")],
+                }
+            ],
+        )
+
+        self.assertEqual(payload["metrics"]["plain_term_coverage"], 1.0)
+        self.assertEqual(payload["metrics"]["question_aware_term_coverage"], 1.0)
+        self.assertEqual(payload["metrics"]["term_coverage_delta"], 0.0)
+        self.assertFalse(payload["pack_selection"]["selected_lacks_link_or_theme_context"])
+
     def test_benchmark_records_claim_boundaries(self) -> None:
         payload = benchmark.run_question_aware_real_history_benchmark(
             job_rows=fixture_rows(),

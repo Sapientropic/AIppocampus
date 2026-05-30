@@ -152,6 +152,9 @@ class ThemeEmergenceTests(unittest.TestCase):
 
         self.assertEqual(result["theme_count"], 0)
         self.assertEqual(result["question_link_count"], 2)
+        self.assertEqual(result["materialization_blockers"][0]["code"], "not_enough_question_links")
+        self.assertEqual(result["materialization_blockers"][0]["question_link_count"], 2)
+        self.assertEqual(result["materialization_blockers"][0]["min_links"], 3)
 
     def test_no_cluster_without_shared_concept_neighbors(self) -> None:
         self.build_graph()
@@ -170,6 +173,7 @@ class ThemeEmergenceTests(unittest.TestCase):
         )
 
         self.assertEqual(result["theme_count"], 0)
+        self.assertEqual(result["materialization_blockers"][0]["code"], "no_shared_concept_cluster")
 
     def test_requires_concept_graph_before_theme_claim(self) -> None:
         self.write_rows([self.question_link("1"), self.question_link("2"), self.question_link("3")])
@@ -182,6 +186,7 @@ class ThemeEmergenceTests(unittest.TestCase):
 
         self.assertFalse(result["concept_graph_available"])
         self.assertEqual(result["theme_count"], 0)
+        self.assertEqual(result["materialization_blockers"][0]["code"], "concept_graph_missing")
 
     def test_builds_supported_theme_candidate_with_boundary_map(self) -> None:
         self.build_graph()

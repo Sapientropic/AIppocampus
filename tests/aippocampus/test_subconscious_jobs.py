@@ -411,6 +411,128 @@ class SubconsciousJobsTests(unittest.TestCase):
         self.assertEqual(rows[-1]["source"], "deterministic_question_tracking")
         self.assertEqual(rows[-1]["question_count"], 2)
 
+    def test_question_tracking_job_materializes_confirmed_borderline_artifacts(self) -> None:
+        deterministic_jobs = importlib.import_module("subconscious_deterministic_jobs")
+        confirmation = importlib.import_module("question_confirmation")
+
+        def question_row(suffix: str, **overrides: Any) -> dict[str, Any]:
+            row = {
+                "schema_version": 1,
+                "kind": "aippocampus_subconscious_job_finding",
+                "created_at": f"2026-05-2{suffix}T00:00:00Z",
+                "job": "question_extraction",
+                "finding_kind": "question_candidate",
+                "fingerprint": f"sf_question_{suffix}",
+                "title": "Agent context continuity",
+                "summary": "The user is asking about source-backed continuity.",
+                "confidence": 0.86,
+                "source_refs": [
+                    {
+                        "thread_key": f"session:{suffix}",
+                        "message_id": f"msg_{suffix}",
+                        "source_line": int(suffix) * 10,
+                        "timestamp": f"2026-05-2{suffix}T00:00:00Z",
+                    }
+                ],
+                "question_text": "How do I keep agent context across compaction?",
+                "question_short": "agent context continuity",
+                "intent_orientation": "implementation",
+                "what_features": ["agent memory", "context continuity", "compaction"],
+                "where_context": ["AIppocampus"],
+                "phase_context": "post_compaction",
+                "collaboration_context": ["Codex"],
+                "concepts": ["AIppocampus", "context continuity"],
+            }
+            row.update(overrides)
+            return row
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jobs_output = root / "subconscious_jobs.jsonl"
+            jobs_output.write_text(
+                "\n".join(
+                    json.dumps(row, ensure_ascii=False)
+                    for row in [
+                        question_row("1"),
+                        question_row(
+                            "2",
+                            question_text="What should the memory router do when context is missing?",
+                            question_short="memory router missing context",
+                            what_features=["memory router", "context continuity"],
+                        ),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            requests_path = confirmation.default_confirmation_requests_path(jobs_output)
+            artifacts_path = confirmation.default_confirmation_artifacts_path(jobs_output)
+
+            first = deterministic_jobs.run_question_tracking_job(
+                registry_path=None,
+                jobs_output_path=jobs_output,
+                edges_output_path=root / "subconscious_edges.jsonl",
+                no_write=False,
+                dry_run=False,
+            )
+
+            requests = [
+                json.loads(line)
+                for line in requests_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            self.assertEqual(first["finding_count"], 0)
+            self.assertEqual(first["tracking"]["pending_confirmation_wrote_count"], 1)
+            self.assertEqual(first["confirmation_requests_path"], str(requests_path))
+            self.assertEqual(first["confirmation_artifacts_path"], str(artifacts_path))
+            self.assertEqual(len(requests), 1)
+            self.assertEqual(requests[0]["kind"], "question_pair_confirmation_request")
+
+            artifacts_path.write_text(
+                json.dumps(
+                    {
+                        "artifact_kind": "question_pair_confirmation_artifact",
+                        "pair_id": requests[0]["pair_id"],
+                        "source_finding_ids": requests[0]["source_finding_ids"],
+                        "decision": "accept",
+                        "link_type": "recurring",
+                        "confidence": 0.86,
+                        "model": "offline-fixture-reviewer",
+                        "source": "offline_fixture_question_confirmation",
+                        "prompt_version": "test-question-confirmation-v1",
+                        "rationale": "The compact request shows both questions concern context continuity.",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            second = deterministic_jobs.run_question_tracking_job(
+                registry_path=None,
+                jobs_output_path=jobs_output,
+                edges_output_path=root / "subconscious_edges.jsonl",
+                no_write=False,
+                dry_run=False,
+            )
+            rows = [
+                json.loads(line)
+                for line in jobs_output.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            links = [row for row in rows if row.get("finding_kind") == "question_link"]
+
+        self.assertEqual(second["finding_count"], 1)
+        self.assertEqual(second["tracking"]["borderline_confirmation_accepted_pair_count"], 1)
+        self.assertEqual(len(links), 1)
+        self.assertEqual(links[0]["source"], "deterministic_question_tracking")
+        self.assertEqual(
+            links[0]["match_evidence"]["accepted_pairs"][0]["confirmation"]["artifact_audit"][
+                "prompt_version"
+            ],
+            "test-question-confirmation-v1",
+        )
+
     def test_run_jobs_runs_theme_emergence_after_question_tracking(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
