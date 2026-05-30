@@ -168,6 +168,8 @@ python ./tools/aippocampus/smoke/smoke_memory_pain_prompt_hook.py --cwd . --sema
 python ./tools/aippocampus/smoke/smoke_memory_pain_prompt_hook.py --cwd . --semantic-gate on --semantic-timeout 20 --max-elapsed-ms 4300 --json --strict
 ```
 
+Use `--case-family russian` to run the small sanitized Russian boundary family.
+
 Expected result: output is `aggregate_hash_only`, with no raw prompts, snippets,
 thread ids, source refs, or candidate titles. The smoke reports negative
 over-escalations, vague evidence upgrades, positive misses, semantic timeout

@@ -67,6 +67,9 @@ NATURAL_EVIDENCE_PATTERNS = [
         r"(继续).{0,36}(那个|这个|那条|这条).{0,18}(结论|判断|说法|决定)",
         r"(that|the|this).{0,24}(conclusion|decision|part|bit|quote|wording)",
         r"(last time|previously|earlier).{0,48}(conclusion|decision|said|quote|wording)",
+        r"(найди|найти|вспомни|верни|достань|покажи).{0,64}(раньше|ранее|до этого|прошлый раз|предыдущий|говорили|говорил|сказал|формулировали|формулировка|цитата|фраза|как звучал[ао]?)",
+        r"(раньше|ранее|до этого|прошлый раз|предыдущий).{0,64}(формулировали|говорили|сказали|как звучал[ао]?|какая формулировка|цитата|фраза)",
+        r"(как).{0,24}(мы|ты|я).{0,32}(раньше|ранее|прошлый раз).{0,32}(формулировали|говорили|сказали|называли)",
     ]
 ]
 
@@ -80,6 +83,9 @@ NEGATIVE_EVIDENCE_PATTERNS = [
         r"(do not|don't).{0,20}(cite|quote|give evidence|retrieve evidence)",
         r"(without|with no|lacking).{0,24}(source|evidence|citation|cite|cited|quote|clean source|source-backed)",
         r"(unsupported|downgrade|keep it unsupported).{0,36}(without|unless).{0,24}(source|evidence|citation|cite|cited|quote|clean source|source-backed)",
+        r"(без|нет|не надо|не нужно).{0,24}(источник[а-я]*|доказательств[а-я]*|цитат[а-я]*|ссылк[а-я]*|строк[аи]? источника|source|evidence|citation|quote)",
+        r"(оставь|считай|пометь|держи).{0,36}(неподтвержд[а-я]*|не подтвержд[а-я]*|unsupported).{0,36}(без|если нет|пока нет|unless).{0,24}(источник[а-я]*|доказательств[а-я]*|цитат[а-я]*|ссылк[а-я]*|source|evidence|citation|quote)",
+        r"(неподтвержд[а-я]*|не подтвержд[а-я]*|неподкрепл[а-я]*|не подкрепл[а-я]*|unsupported).{0,36}(без|если нет|пока нет|unless).{0,24}(источник[а-я]*|доказательств[а-я]*|цитат[а-я]*|ссылк[а-я]*|source|evidence|citation|quote)",
     ]
 ]
 
@@ -90,6 +96,8 @@ SOURCE_EVIDENCE_REQUEST_PATTERNS = [
         r"\bcite\s+.+\?",
         r"(请给|给|找回|找一下|查一下).{0,18}(source-backed|source evidence|clean source|证据|引用|原话|原文)",
         r"(source-backed|source evidence|clean source).{0,18}(evidence|quote|citation|原话|原文|证据|引用)?",
+        r"(можешь|можно|дай|дайте|покажи|покажите|приведи|приведите).{0,24}(источник[а-я]*|доказательств[а-я]*|цитат[а-я]*|ссылк[а-я]*|source|evidence|citation|quote)",
+        r"(с источником|со ссылкой|с цитатой|source-backed).{0,24}(доказательств[а-я]*|evidence|цитат[а-я]*|ссылк[а-я]*)?",
     ]
 ]
 

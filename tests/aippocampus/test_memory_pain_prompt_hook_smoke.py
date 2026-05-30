@@ -85,6 +85,59 @@ class MemoryPainPromptHookSmokeTests(unittest.TestCase):
         self.assertEqual(result["positive_miss_count"], 1)
         self.assertFalse(result["ok"])
 
+    def test_russian_case_family_is_hash_only_and_tracks_expected_boundaries(self) -> None:
+        cases = smoke.load_cases(None, case_family="russian")
+        kinds = {str(case.get("kind") or "") for case in cases}
+        self.assertIn("negative", kinds)
+        self.assertIn("positive", kinds)
+
+        by_prompt = {str(case.get("prompt") or ""): str(case.get("kind") or "") for case in cases}
+
+        def fake_assess_prompt(prompt: str, **kwargs) -> dict:
+            kind = by_prompt[prompt]
+            if kind == "positive":
+                return {
+                    "decision": "evidence",
+                    "confidence": "high",
+                    "score": 8.0,
+                    "candidates": [{"thread_key": "redacted"}],
+                    "evidence": [{"line": 1, "snippet": "redacted"}],
+                    "semantic_gate": {},
+                    "elapsed_ms": 1.0,
+                }
+            return {
+                "decision": "scent",
+                "confidence": "medium",
+                "score": 2.0,
+                "candidates": [],
+                "evidence": [],
+                "semantic_gate": {},
+                "elapsed_ms": 1.0,
+            }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry = root / "registry" / "threads.json"
+            registry.parent.mkdir()
+            registry.write_text(
+                json.dumps({"schema_version": 1, "threads": []}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            with patch.object(smoke, "assess_prompt", side_effect=fake_assess_prompt):
+                result = smoke.run_memory_pain_smoke(
+                    cases,
+                    cwd=root,
+                    registry_path=registry,
+                    show_names=False,
+                )
+
+        rendered = json.dumps(result, ensure_ascii=False)
+        self.assertTrue(result["ok"])
+        self.assertNotIn("внешний гиппокамп", rendered)
+        self.assertNotIn("Neon City", rendered)
+        self.assertNotIn("ru_pos_external_hippocampus_wording", rendered)
+        self.assertEqual(result["privacy"], "aggregate_hash_only")
+
     def test_vague_cross_project_natural_evidence_stays_scent(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

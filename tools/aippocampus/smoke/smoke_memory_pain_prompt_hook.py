@@ -77,14 +77,57 @@ DEFAULT_CASES: list[dict[str, Any]] = [
     },
 ]
 
+RUSSIAN_CASES: list[dict[str, Any]] = [
+    {
+        "name": "ru_neg_unsupported_without_source_row",
+        "kind": "negative",
+        "prompt": (
+            "Оставь структурированное извлечение про Neon City неподтвержденным "
+            "без строки источника."
+        ),
+    },
+    {
+        "name": "ru_neg_claim_without_clean_source",
+        "kind": "negative",
+        "prompt": (
+            "Считай утверждение о Neon City неподтвержденным, пока нет clean "
+            "source evidence."
+        ),
+    },
+    {
+        "name": "ru_pos_external_hippocampus_wording",
+        "kind": "positive",
+        "prompt": "Найди, как мы раньше формулировали внешний гиппокамп и trigger recall.",
+    },
+    {
+        "name": "ru_pos_raw_history_wording",
+        "kind": "positive",
+        "prompt": (
+            "Вспомни, как звучала фраза про raw history, которая уже была "
+            "локально, но терялась после сжатия."
+        ),
+    },
+    {
+        "name": "ru_vague_cross_project_last_solution",
+        "kind": "vague",
+        "prompt": "Как мы в прошлый раз описывали тот план?",
+    },
+]
+
+CASE_FAMILIES = {
+    "default": DEFAULT_CASES,
+    "russian": RUSSIAN_CASES,
+    "all": DEFAULT_CASES + RUSSIAN_CASES,
+}
+
 
 def stable_hash(value: str, *, length: int = 12) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()[:length]
 
 
-def load_cases(path: Path | None) -> list[dict[str, Any]]:
+def load_cases(path: Path | None, *, case_family: str = "default") -> list[dict[str, Any]]:
     if path is None:
-        return DEFAULT_CASES
+        return list(CASE_FAMILIES.get(case_family, DEFAULT_CASES))
     raw = path.read_text(encoding="utf-8")
     if path.suffix.lower() == ".jsonl":
         cases: list[dict[str, Any]] = []
@@ -269,6 +312,12 @@ def print_table(result: dict[str, Any]) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--fixture", help="JSON or JSONL cases; output remains hash-only.")
+    parser.add_argument(
+        "--case-family",
+        choices=tuple(CASE_FAMILIES),
+        default="default",
+        help="Built-in sanitized probe family to use when --fixture is omitted.",
+    )
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument("--registry")
     parser.add_argument("--registry-dir")
@@ -288,7 +337,10 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    cases = load_cases(Path(args.fixture).resolve() if args.fixture else None)
+    cases = load_cases(
+        Path(args.fixture).resolve() if args.fixture else None,
+        case_family=args.case_family,
+    )
     result = run_memory_pain_smoke(
         cases,
         cwd=Path(args.cwd).resolve(),
