@@ -813,6 +813,83 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertIn("memoria externa", aliases)
         self.assertIn("внешний гиппокамп", aliases)
 
+    def test_background_only_semantic_alias_hits_can_warm_reusable_cues(self) -> None:
+        registry_path = self.root / "semantic-background-cue-registry" / "threads.json"
+        registry_path.parent.mkdir()
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:aippocampus",
+                            "title": "AIppocampus work",
+                            "project_label": "AIppocampus",
+                            "anchor_titles": ["External hippocampus recall"],
+                            "keywords": ["memoria externa", "внешний гиппокамп"],
+                            "summary": "Source-backed continuity work for external memory.",
+                            "paths": {"workspace": str(self.workspace)},
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        cues_path = self.root / "background_semantic_cues.jsonl"
+
+        def background_semantic_gate(prompt: str, **kwargs) -> dict:
+            return {
+                "available": True,
+                "decision": "background_only",
+                "confidence": 0.9,
+                "intent": "continuation",
+                "query_aliases": ["memoria externa", "внешний гиппокамп"],
+                "memory_scope": ["registered_threads"],
+                "anti_personalization_risk": "low",
+                "reasons": ["high-confidence aliases, but scent not needed for this run"],
+                "workers": [],
+                "errors": [],
+                "cached": False,
+            }
+
+        cue_updates = []
+        for prompt in (
+            "¿Podemos seguir con la memoria externa de la que hablamos?",
+            "¿Puedes continuar esa memoria externa para mantener la continuidad?",
+        ):
+            result = hook.assess_prompt(
+                prompt,
+                cwd=self.workspace,
+                registry_path=registry_path,
+                semantic_gate_fn=background_semantic_gate,
+                semantic_cues_path=cues_path,
+                search_budget=0,
+            )
+            self.assertEqual(result["semantic_gate"]["decision"], "background_only")
+            cue_updates.append(result["semantic_cue_cache"])
+
+        self.assertEqual(cue_updates[0]["active_count"], 0)
+        self.assertGreater(cue_updates[1]["active_count"], 0)
+
+        def fail_semantic_gate(*args, **kwargs) -> dict:
+            raise AssertionError("active background semantic cues should avoid live semantic spend")
+
+        result = hook.assess_prompt(
+            "¿Seguimos con esa memoria externa de continuidad?",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            semantic_gate_fn=fail_semantic_gate,
+            semantic_cues_path=cues_path,
+            use_semantic_gate=False,
+            search_budget=0,
+        )
+
+        self.assertEqual(result["decision"], "scent")
+        self.assertIsNone(result["semantic_gate"])
+        self.assertIn("memoria externa", result["query_terms"])
+        self.assertIn("associative cue", " ".join(result["reasons"]))
+
     def test_active_semantic_cue_cache_can_emit_scent_without_semantic_gate(self) -> None:
         registry_path = self.root / "active-semantic-cue-registry" / "threads.json"
         registry_path.parent.mkdir()

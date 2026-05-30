@@ -671,6 +671,18 @@ def semantic_gate_is_memory_cue(result: dict[str, Any] | None) -> bool:
     )
 
 
+def semantic_gate_can_warm_cue_cache(result: dict[str, Any] | None) -> bool:
+    if not result or not result.get("available"):
+        return False
+    decision, confidence = str(result.get("decision") or ""), float(result.get("confidence") or 0.0)
+    # `background_only` can warm reusable aliases, but it stays below the
+    # foreground memory-cue/evidence line and still needs local candidates plus
+    # repeated source-backed hits before `semantic_cue_cache` promotes it.
+    return (decision in SEMANTIC_GATE_CUE_DECISIONS and confidence >= 0.35) or (
+        decision == "background_only" and confidence >= 0.55
+    )
+
+
 def semantic_gate_can_request_evidence(prompt: str, result: dict[str, Any] | None) -> bool:
     if not result or not result.get("available") or result.get("decision") != "evidence":
         return False

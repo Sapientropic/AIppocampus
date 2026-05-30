@@ -4,6 +4,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -650,6 +651,40 @@ class SemanticRecallGateTests(unittest.TestCase):
 
         self.assertFalse(result["available"])
         self.assertEqual(result["error_buckets"], {"read_timeout": 3})
+
+    def test_overall_deadline_returns_before_slow_workers_finish(self) -> None:
+        def chat_fn(messages, api_key, model, base_url, max_tokens, timeout, temperature):
+            del messages, api_key, model, base_url, max_tokens, timeout, temperature
+            time.sleep(0.35)
+            return fake_response(
+                {
+                    "decision": "scent",
+                    "confidence": 0.8,
+                    "query_aliases": ["AIppocampus"],
+                    "anti_personalization_risk": "low",
+                    "reason": "too slow for foreground",
+                }
+            )
+
+        started = time.perf_counter()
+        result = gate.run_semantic_gate(
+            "脑内续接器",
+            cwd=self.workspace,
+            registry=self.registry,
+            registry_path=self.registry_path,
+            api_key="test-key",
+            use_cache=False,
+            timeout=5,
+            deadline_seconds=0.05,
+            chat_fn=chat_fn,
+        )
+        elapsed = time.perf_counter() - started
+
+        self.assertLess(elapsed, 0.25)
+        self.assertFalse(result["available"])
+        self.assertEqual(result["availability_reason"], "semantic_worker_timeout")
+        self.assertEqual(result["diagnostic"], "semantic_overall_deadline_exceeded")
+        self.assertEqual(result["error_buckets"], {"overall_deadline": 3})
 
     def test_openai_compatible_route_metadata_and_cache_metrics_are_neutral(self) -> None:
         os.environ["AIPPOCAMPUS_OPENAI_COMPAT_ROUTE"] = "local_semantic"

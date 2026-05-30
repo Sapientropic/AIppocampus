@@ -255,6 +255,7 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
         for function_name in (
             "budget_allows",
             "semantic_timeout_for_budget",
+            "semantic_worker_timeout_for_deadline",
             "semantic_budget_result",
         ):
             self.assertNotIn(f"def {function_name}(", decision_source)

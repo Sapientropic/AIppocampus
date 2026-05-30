@@ -23,6 +23,7 @@ from prompt_cues import (
     natural_evidence_intent,
     negative_evidence_intent,
     semantic_gate_can_request_evidence,
+    semantic_gate_can_warm_cue_cache,
     semantic_gate_is_memory_cue,
     semantic_gate_terms,
     source_evidence_intent,
@@ -528,7 +529,7 @@ def _record_semantic_cue_hits(
     if (
         suppressed
         or not semantic_result
-        or not semantic_gate_is_memory_cue(semantic_result)
+        or not semantic_gate_can_warm_cue_cache(semantic_result)
         or not candidates
     ):
         return None

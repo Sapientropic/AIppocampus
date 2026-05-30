@@ -39,6 +39,16 @@ def semantic_timeout_for_budget(
     return min(requested_timeout, max(SEMANTIC_MIN_TIMEOUT_SECONDS, available / 1000.0))
 
 
+def semantic_worker_timeout_for_deadline(deadline_seconds: float) -> float:
+    if deadline_seconds <= SEMANTIC_MIN_TIMEOUT_SECONDS:
+        return max(SEMANTIC_MIN_TIMEOUT_SECONDS, deadline_seconds)
+    # `urllib` timeouts are socket-operation limits rather than strict total
+    # request deadlines, so a connect+read path can outlive the foreground hook
+    # budget. Keep the per-worker socket timeout below the semantic wall-clock
+    # deadline; the gate still receives the full deadline separately.
+    return max(SEMANTIC_MIN_TIMEOUT_SECONDS, deadline_seconds / 2.0)
+
+
 def semantic_budget_result(
     reason: str,
     *,

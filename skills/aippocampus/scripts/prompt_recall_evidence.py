@@ -160,6 +160,7 @@ def strip_semantic_gate(result: dict[str, Any] | None) -> dict[str, Any] | None:
         "cached": bool(result.get("cached")),
         "elapsed_ms": result.get("elapsed_ms"),
         "timeout": result.get("timeout"),
+        "deadline": result.get("deadline") or {},
         "worker_count": result.get("worker_count"),
         "usage": result.get("usage") or {},
         "cache": result.get("cache") or {},

@@ -773,6 +773,8 @@ def write_cache(
 
 def error_bucket(message: str) -> str:
     text = str(message or "").casefold()
+    if "overall deadline" in text:
+        return "overall_deadline"
     if "timeout" in text or "timed out" in text:
         return "read_timeout"
     if "json" in text or "parse" in text or "decode" in text:
@@ -862,6 +864,7 @@ def run_semantic_gate(
     timeout: float = DEFAULT_TIMEOUT,
     temperature: float = DEFAULT_TEMPERATURE,
     workers: tuple[str, ...] = DEFAULT_WORKERS,
+    deadline_seconds: float | None = None,
     use_cache: bool = True,
     chat_fn: ChatFn = call_chat_json,
 ) -> dict[str, Any]:
@@ -976,31 +979,42 @@ def run_semantic_gate(
     worker_names = tuple(worker for worker in workers if worker in set(DEFAULT_WORKERS))
     if route.provider != "deepseek" and capabilities:
         worker_names = worker_names[: max(1, int(capabilities.safe_default_concurrency or 1))]
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(worker_names))) as executor:
-        futures = {
-            executor.submit(
-                run_worker,
-                worker,
-                payload=payload,
-                api_key=str(key_value),
-                model=resolved_model,
-                base_url=resolved_base_url,
-                timeout=timeout,
-                temperature=temperature,
-                chat_fn=chat_fn,
-                service_name=route_service_name(route),
-                response_format_json=bool(
-                    capabilities.supports_json_response if capabilities else True
-                ),
-            ): worker
-            for worker in worker_names
-        }
-        for future in concurrent.futures.as_completed(futures):
-            worker = futures[future]
-            try:
-                parsed_workers.append(future.result())
-            except Exception as exc:
-                errors.append(f"{worker}: {exc}")
+    deadline = float(deadline_seconds) if deadline_seconds and deadline_seconds > 0 else None
+    worker_kwargs = {
+        "payload": payload,
+        "api_key": str(key_value),
+        "model": resolved_model,
+        "base_url": resolved_base_url,
+        "timeout": timeout,
+        "temperature": temperature,
+        "chat_fn": chat_fn,
+        "service_name": route_service_name(route),
+        "response_format_json": bool(capabilities.supports_json_response if capabilities else True),
+    }
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(worker_names)))
+    futures = {executor.submit(run_worker, worker, **worker_kwargs): worker for worker in worker_names}
+    done, not_done = concurrent.futures.wait(
+        futures, timeout=deadline, return_when=concurrent.futures.ALL_COMPLETED
+    )
+    deadline_exceeded = bool(not_done)
+    unfinished_workers = [worker for future, worker in futures.items() if future in not_done]
+    for future in done:
+        worker = futures[future]
+        try:
+            parsed_workers.append(future.result())
+        except Exception as exc:
+            errors.append(f"{worker}: {exc}")
+    for future in not_done:
+        future.cancel()
+    errors.extend(
+        f"{worker}: semantic overall deadline exceeded after {deadline:.3g}s"
+        for worker in unfinished_workers
+    )
+    # Foreground hook deadlines are fail-open boundaries. `cancel_futures`
+    # prevents queued work from starting; already-running HTTP calls cannot be
+    # killed from a thread, so foreground callers pass a sub-deadline socket
+    # timeout to keep those calls bounded too.
+    executor.shutdown(wait=not deadline_exceeded, cancel_futures=deadline_exceeded)
 
     merged = merge_workers(parsed_workers, errors)
     usage_total: dict[str, Any] = {}
@@ -1019,6 +1033,7 @@ def run_semantic_gate(
         "warnings": [],
         "usage": usage_total,
         "timeout": timeout,
+        "deadline": {"seconds": deadline, "exceeded": deadline_exceeded, "unfinished_workers": unfinished_workers},
         "temperature": temperature,
         "worker_count": len(worker_names),
         "cache": route_cache_metrics(route, usage_total),
@@ -1035,13 +1050,16 @@ def run_semantic_gate(
     if not parsed_workers and errors:
         result["available"] = False
         result["decision"] = "skip"
-        if result["error_buckets"].get("read_timeout"):
+        if result["error_buckets"].get("overall_deadline"):
+            result["availability_reason"] = "semantic_worker_timeout"
+            result["diagnostic"] = "semantic_overall_deadline_exceeded"
+        elif result["error_buckets"].get("read_timeout"):
             result["availability_reason"] = "semantic_worker_timeout"
             result["diagnostic"] = "semantic_provider_read_timeout"
         else:
             result["availability_reason"] = "semantic_worker_error"
             result["diagnostic"] = "semantic_worker_error"
-    if use_cache and cache and result.get("available"):
+    if use_cache and cache and result.get("available") and not deadline_exceeded:
         try:
             write_cache(cache, cache_key, result)
         except Exception as exc:

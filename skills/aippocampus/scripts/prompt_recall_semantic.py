@@ -12,6 +12,7 @@ from prompt_recall_budget import (
     budget_allows,
     semantic_budget_result,
     semantic_timeout_for_budget,
+    semantic_worker_timeout_for_deadline,
 )
 from semantic_recall_gate import run_semantic_gate
 
@@ -65,7 +66,10 @@ def run_semantic_gate_for_prompt(
             )
         budget = {
             "requested_timeout": float(semantic_timeout),
-            "effective_timeout": float(budgeted_timeout),
+            "effective_timeout": float(
+                semantic_worker_timeout_for_deadline(budgeted_timeout)
+            ),
+            "overall_deadline_seconds": float(budgeted_timeout),
             "max_elapsed_ms": max_elapsed_ms,
             "budget_clipped": float(budgeted_timeout) != float(semantic_timeout),
         }
@@ -80,7 +84,8 @@ def run_semantic_gate_for_prompt(
                 semantic_triggers_path=semantic_triggers_file,
                 cache_path=Path(semantic_cache_path).resolve() if semantic_cache_path else None,
                 mode=semantic_gate_mode,
-                timeout=budgeted_timeout,
+                timeout=budget["effective_timeout"],
+                deadline_seconds=budgeted_timeout,
             )
             result.setdefault("budget", budget)
             if not result.get("available"):
