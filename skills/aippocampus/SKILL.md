@@ -50,6 +50,8 @@ Use `$CODEX_HOME/skills/aippocampus/scripts` as the script root.
   `python .../sync_bundle.py status --sync-dir "<folder>" --json`.
 - Check an HTTP object-storage sync bundle:
   `python .../sync_object_storage.py status --object-store-url "<url>" --object-prefix "<prefix>" --json`.
+- Manage encrypted sync device keys or plaintext migration:
+  `python .../encrypted_sync_admin.py key list --registry-dir "<registry>" --json`.
 - First-install / full-machine onboarding:
   `python .../onboard_codex.py --all --format json`. This is the preferred
   agent entrypoint for registering local Codex sessions, repairing missing

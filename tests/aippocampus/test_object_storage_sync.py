@@ -26,6 +26,7 @@ import smoke_object_storage_sync  # noqa: E402
 import smoke_real_provider_encrypted_sync  # noqa: E402
 
 import encrypted_sync_bundle  # noqa: E402
+import encrypted_sync_migration  # noqa: E402
 import sync_bundle  # noqa: E402
 import sync_contract  # noqa: E402
 import sync_object_storage  # noqa: E402
@@ -580,6 +581,131 @@ output.write_bytes(b"FAKEAGE\\n" + base64.b64encode(data))
 
         self.assertFalse(encrypted_push["ok"])
         self.assertEqual(encrypted_push["issues"][0]["code"], "mixed_object_prefix")
+
+    def test_plaintext_object_store_migration_and_cleanup(self) -> None:
+        device = self.create_registry()
+        target_prefix = f"{self.prefix}-encrypted"
+        sync_object_storage.push_object_storage_bundle(
+            device["registry"],
+            self.endpoint,
+            prefix=self.prefix,
+        )
+        wrong_registry = self.root / "wrong-object-registry"
+        sync_object_storage.pull_object_storage_bundle(
+            self.endpoint,
+            wrong_registry,
+            prefix=self.prefix,
+        )
+        wrong_messages = next(wrong_registry.glob("threads/*/clean-source/messages.jsonl"))
+        wrong_messages.write_text(
+            json.dumps({"message_id": "wrong", "text": "wrong registry"}, ensure_ascii=False)
+            + "\n",
+            encoding="utf-8",
+        )
+
+        inventory = encrypted_sync_migration.inventory_plaintext_object_storage_bundle(
+            self.endpoint,
+            prefix=self.prefix,
+        )
+        dry_migration = encrypted_sync_migration.migrate_plaintext_object_storage_to_encrypted(
+            wrong_registry,
+            self.endpoint,
+            prefix=self.prefix,
+            target_prefix=target_prefix,
+            recipients=[self.recipient],
+            age_bin=self.fake_age,
+            dry_run=True,
+        )
+        self.assertTrue(dry_migration["ok"], dry_migration)
+        self.assertTrue(dry_migration["dry_run"])
+        self.assertFalse(
+            (
+                self.bucket
+                / target_prefix
+                / encrypted_sync_bundle.ENCRYPTED_SYNC_DIR_NAME
+                / encrypted_sync_bundle.ENCRYPTED_SYNC_MANIFEST_NAME
+            ).exists()
+        )
+
+        migration = encrypted_sync_migration.migrate_plaintext_object_storage_to_encrypted(
+            wrong_registry,
+            self.endpoint,
+            prefix=self.prefix,
+            target_prefix=target_prefix,
+            recipients=[self.recipient],
+            age_bin=self.fake_age,
+        )
+        migrated_encrypted_target = self.root / "migrated-encrypted-object-target" / "registry"
+        migrated_pull = sync_object_storage.pull_encrypted_object_storage_bundle(
+            self.endpoint,
+            migrated_encrypted_target,
+            prefix=target_prefix,
+            identity_files=[self.identity],
+            age_bin=self.fake_age,
+        )
+        mixed_target = encrypted_sync_migration.migrate_plaintext_object_storage_to_encrypted(
+            device["registry"],
+            self.endpoint,
+            prefix=self.prefix,
+            target_prefix=target_prefix,
+            recipients=[self.recipient],
+            age_bin=self.fake_age,
+        )
+        cleanup_plan = encrypted_sync_migration.cleanup_plaintext_object_storage_bundle(
+            self.endpoint,
+            prefix=self.prefix,
+            dry_run=True,
+        )
+        cleanup_without_confirm = encrypted_sync_migration.cleanup_plaintext_object_storage_bundle(
+            self.endpoint,
+            prefix=self.prefix,
+            dry_run=False,
+        )
+        cleanup_without_verified = encrypted_sync_migration.cleanup_plaintext_object_storage_bundle(
+            self.endpoint,
+            prefix=self.prefix,
+            dry_run=False,
+            confirm=True,
+        )
+        cleanup = encrypted_sync_migration.cleanup_plaintext_object_storage_bundle(
+            self.endpoint,
+            prefix=self.prefix,
+            dry_run=False,
+            confirm=True,
+            verified_encrypted_target=True,
+        )
+
+        self.assertTrue(inventory["ok"], inventory)
+        self.assertTrue(inventory["plaintext_exposure"])
+        self.assertGreater(inventory["plaintext_object_count"], 1)
+        self.assertTrue(migration["ok"], migration)
+        self.assertTrue(migrated_pull["ok"], migrated_pull)
+        migrated_messages = next(
+            migrated_encrypted_target.glob("threads/*/clean-source/messages.jsonl")
+        ).read_text(encoding="utf-8")
+        self.assertIn("Object storage sync source memory.", migrated_messages)
+        self.assertNotIn("wrong registry", migrated_messages)
+        self.assertFalse(mixed_target["ok"])
+        self.assertEqual(mixed_target["issues"][0]["code"], "target_not_fresh")
+        self.assertTrue(cleanup_plan["ok"], cleanup_plan)
+        self.assertGreater(cleanup_plan["would_delete_count"], 1)
+        self.assertFalse(cleanup_without_confirm["ok"])
+        self.assertEqual(cleanup_without_confirm["issues"][0]["code"], "cleanup_confirmation_required")
+        self.assertFalse(cleanup_without_verified["ok"])
+        self.assertEqual(
+            cleanup_without_verified["issues"][0]["code"],
+            "encrypted_target_verification_required",
+        )
+        self.assertTrue(cleanup["ok"], cleanup)
+        self.assertFalse((self.bucket / self.prefix / sync_bundle.SYNC_MANIFEST_NAME).exists())
+        self.assertTrue(
+            (
+                self.bucket
+                / target_prefix
+                / encrypted_sync_bundle.ENCRYPTED_SYNC_DIR_NAME
+                / encrypted_sync_bundle.ENCRYPTED_SYNC_MANIFEST_NAME
+            ).is_file()
+        )
 
     def test_real_provider_smoke_cleanup_paths_include_all_encrypted_objects(self) -> None:
         inner_manifest = {

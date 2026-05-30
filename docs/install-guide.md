@@ -216,6 +216,40 @@ python ./skills/aippocampus/scripts/sync_bundle.py pull --sync-dir <folder> --re
 python ./skills/aippocampus/scripts/sync_bundle.py repair --sync-dir <folder> --require-encrypted --identity-file <age-identity> --json
 ```
 
+Device-key helpers keep local private identity material under the registry's
+encrypted sync state and store only public trusted recipients for future pushes:
+
+```sh
+python ./skills/aippocampus/scripts/encrypted_sync_admin.py key init --registry-dir <registry> --device-name <name> --json
+python ./skills/aippocampus/scripts/encrypted_sync_admin.py key recipient --registry-dir <registry>
+python ./skills/aippocampus/scripts/encrypted_sync_admin.py key trust --registry-dir <registry> --recipient <second-device-recipient> --device-name <name> --json
+python ./skills/aippocampus/scripts/encrypted_sync_admin.py key list --registry-dir <registry> --json
+python ./skills/aippocampus/scripts/encrypted_sync_admin.py key revoke --registry-dir <registry> --recipient <old-recipient> --dry-run --json
+```
+
+After `key init` or `key trust`, encrypted local-folder pushes can use the
+trusted-recipient list without repeating `--recipient`. `key recipient` prints
+only the public recipient; it must never be used to exchange or publish the
+`AGE-SECRET-KEY...` identity file.
+
+To migrate an existing plaintext sync folder, first inventory it, write a fresh
+encrypted target, run encrypted repair or pull, then explicitly clean up the old
+plaintext files:
+
+```sh
+python ./skills/aippocampus/scripts/encrypted_sync_admin.py migrate-to-encrypted --sync-dir <old-plaintext-folder> --target-sync-dir <new-encrypted-folder> --registry-dir <registry> --dry-run --json
+python ./skills/aippocampus/scripts/encrypted_sync_admin.py migrate-to-encrypted --sync-dir <old-plaintext-folder> --target-sync-dir <new-encrypted-folder> --registry-dir <registry> --json
+python ./skills/aippocampus/scripts/sync_bundle.py repair --sync-dir <new-encrypted-folder> --require-encrypted --identity-file <age-identity> --json
+python ./skills/aippocampus/scripts/encrypted_sync_admin.py cleanup-plaintext --sync-dir <old-plaintext-folder> --dry-run --json
+python ./skills/aippocampus/scripts/encrypted_sync_admin.py cleanup-plaintext --sync-dir <old-plaintext-folder> --confirm --verified-encrypted-target --json
+```
+
+Cleanup reports and deletes only plaintext files managed by the plaintext sync
+manifest, and non-dry-run cleanup requires both confirmation and an explicit
+acknowledgement that the encrypted target already passed repair or pull. It is
+not a cloud-provider lifecycle rule and it does not claim to erase unrelated
+objects or forensic SSD remnants.
+
 `pull` is conservative. When a target file already exists with different
 content, AIppocampus keeps the local file in place and writes the incoming copy
 under `.sync-conflicts/` inside the target registry. Review those files
@@ -229,7 +263,8 @@ before using the folder as a cross-device source of truth.
 
 The HTTP object-storage adapter uses the same sync manifest and privacy
 contract, but stores each bundle file as an object under a prefix. The endpoint
-must support HTTP `PUT` and `GET` for object keys:
+must support HTTP `PUT` and `GET` for sync, plus `DELETE` when using plaintext
+cleanup:
 
 ```sh
 export AIPPOCAMPUS_OBJECT_STORE_URL="https://object-store.example/bucket"
@@ -269,6 +304,23 @@ python ./skills/aippocampus/scripts/sync_object_storage.py status --require-encr
 python ./skills/aippocampus/scripts/sync_object_storage.py pull --require-encrypted --identity-file <age-identity> --registry-dir <target-registry> --json
 python ./skills/aippocampus/scripts/sync_object_storage.py repair --require-encrypted --identity-file <age-identity> --json
 ```
+
+Object-storage plaintext migration uses the same admin CLI. The target prefix
+must be fresh; dry-run reads the plaintext manifest and reports managed objects
+without uploading or deleting:
+
+```sh
+python ./skills/aippocampus/scripts/encrypted_sync_admin.py migrate-object-to-encrypted --object-prefix <old-plaintext-prefix> --target-object-prefix <new-encrypted-prefix> --registry-dir <registry> --dry-run --json
+python ./skills/aippocampus/scripts/encrypted_sync_admin.py migrate-object-to-encrypted --object-prefix <old-plaintext-prefix> --target-object-prefix <new-encrypted-prefix> --registry-dir <registry> --json
+python ./skills/aippocampus/scripts/sync_object_storage.py repair --require-encrypted --object-prefix <new-encrypted-prefix> --identity-file <age-identity> --json
+python ./skills/aippocampus/scripts/encrypted_sync_admin.py cleanup-object-plaintext --object-prefix <old-plaintext-prefix> --dry-run --json
+python ./skills/aippocampus/scripts/encrypted_sync_admin.py cleanup-object-plaintext --object-prefix <old-plaintext-prefix> --confirm --verified-encrypted-target --json
+```
+
+Object cleanup deletes only objects listed in the plaintext sync manifest,
+with the manifest object deleted last, and requires the same verified-target
+acknowledgement for non-dry-run cleanup. If old plaintext objects exist without
+a manifest, inspect and remove them through the provider's own tools.
 
 The local object-storage smoke verifies the protocol path without requiring cloud
 credentials:

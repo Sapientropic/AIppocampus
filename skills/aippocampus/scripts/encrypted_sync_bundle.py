@@ -12,6 +12,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Iterable
 
+import encrypted_sync_keys
 import sync_bundle
 from aippocampuslib import aippocampus_registry_dir, file_sha256, now_utc, safe_path_name
 from encrypted_sync_crypto import (
@@ -176,6 +177,7 @@ def build_encrypted_inner_manifest(
     revision = int(previous_state.get("manifest_revision") or 0) + 1
     parent_hash = previous_state.get("manifest_hash")
     recipient_set_hash = sha256_bytes("\n".join(sorted(recipients)).encode("utf-8"))
+    device_metadata = encrypted_sync_keys.device_sync_metadata(registry_root, recipients)
     objects: list[dict[str, Any]] = []
 
     for item in plain_manifest.get("files") or []:
@@ -205,10 +207,12 @@ def build_encrypted_inner_manifest(
         "schema_version": ENCRYPTED_SYNC_SCHEMA_VERSION,
         "encrypted_schema_version": ENCRYPTED_SYNC_SCHEMA_VERSION,
         "vault_id_hash": vault_id_hash,
-        "source_device_id": "local-device",
+        "source_device_id": device_metadata["source_device_id"],
+        "source_device_name": device_metadata.get("source_device_name"),
         "manifest_revision": revision,
-        "key_epoch": 1,
+        "key_epoch": device_metadata["key_epoch"],
         "recipient_set_hash": recipient_set_hash,
+        "recipient_count": device_metadata["recipient_count"],
         "encrypted_manifest_object_id": outer_manifest_object.name,
         "outer_manifest": outer,
         "parent_manifest_hash": parent_hash,
@@ -254,7 +258,12 @@ def push_encrypted_sync_bundle(
     file_recipients, file_issue = recipients_from_files(recipient_files)
     if file_issue and recipient_files:
         return failed_result(sync_root, file_issue["code"], file_issue["message"])
-    all_recipients = explicit_recipients + file_recipients
+    trusted_recipients = (
+        encrypted_sync_keys.trusted_recipients_for_registry(registry_root)
+        if not explicit_recipients and not file_recipients
+        else []
+    )
+    all_recipients = explicit_recipients + file_recipients + trusted_recipients
     all_recipients, recipient_issue = validate_recipients(all_recipients)
     if recipient_issue:
         return failed_result(sync_root, recipient_issue["code"], recipient_issue["message"])

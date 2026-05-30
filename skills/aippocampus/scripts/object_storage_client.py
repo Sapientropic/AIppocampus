@@ -135,6 +135,10 @@ class HttpObjectStoreClient:
     def get_object(self, relative_path: str | Path) -> bytes:
         return self.request("GET", relative_path)
 
+    def delete_object(self, relative_path: str | Path) -> dict[str, Any]:
+        self.request("DELETE", relative_path)
+        return {"key": object_key(self.prefix, relative_path)}
+
 
 def client_for(
     object_store_url: str,
