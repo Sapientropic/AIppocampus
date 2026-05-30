@@ -2,10 +2,10 @@
 """Compensatory dream Phase 1 over source-backed extraction output.
 
 This helper is deliberately conservative: it emits dream-synthesized candidates
-for review, not facts, formal memories, or foreground hook payloads. Every
-substantive bridge claim must carry thread-scoped source refs so a human or
-later semantic worker can re-open clean source before discarding, correcting,
-or promoting the candidate.
+for background adjudication, not facts, formal memories, or foreground hook
+payloads. Every substantive bridge claim must carry thread-scoped source refs
+so a later worker or operator can re-open clean source before discarding,
+correcting, or routing the candidate.
 """
 
 from __future__ import annotations
@@ -21,6 +21,10 @@ from pathlib import Path
 from typing import Any, Literal
 
 from aippocampuslib import compact_text, now_utc
+from dream_working_memory import (
+    adjudicated_dream_findings_to_working_memory,
+    reviewed_dream_findings_to_working_memory,
+)
 
 SCHEMA_VERSION = 1
 REPORT_KIND = "aippocampus_compensatory_dream_report"
@@ -334,7 +338,7 @@ def build_compensatory_findings(thread_key: str, rows: Iterable[DreamInputRow]) 
                 rows=frontier_rows,
                 bridge_claims=[
                     "A technical unresolved frontier is present in the source-backed extraction output.",
-                    "The compensatory candidate should stay review-only until verification evidence is attached.",
+                    "The compensatory candidate should stay adjudication-only until verification evidence is attached.",
                 ],
             )
         )

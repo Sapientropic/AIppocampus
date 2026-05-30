@@ -316,9 +316,14 @@ job-circuit-adjacent helper over already extracted, source-backed single-thread
 rows: deterministic cells validate source refs, suppress unsourced or prior
 dream rows, suppress refs that belong to another thread, and emit only
 `dream_synthesized` candidates whose bridge claims carry source refs. Its output
-is candidate weather over source, not source truth; registry/clean-source
-resolution remains a later validation step, and it is not eligible for
-foreground hooks until a review/routing layer accepts it.
+is candidate weather over source, not source truth. The live question-extraction
+chain now preserves source-derived `scope_labels` / `semantic_scope_labels`
+into validated findings, which keeps life-wide dream branches fed without
+trusting model-invented labels. Reviewed dream hypotheses can project onto the
+existing working-memory substrate for recall, ambient, and reflection
+consumers; unadjudicated dream candidates remain in a background holding queue
+and are not eligible for foreground hooks. User confirmation is a high-risk
+escape hatch, not the default dream workflow.
 
 ## Anti-Patterns
 
@@ -332,8 +337,8 @@ Avoid these:
 - treating a semantic label as evidence without source refs
 - adding separate staging files when the existing subconscious pipeline can
   carry the candidate type
-- letting dream candidates influence foreground recall before review or source
-  re-opening
+- letting unadjudicated dream candidates influence foreground recall before
+  adjudication or source re-opening
 
 ## Summary
 

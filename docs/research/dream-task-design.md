@@ -1,13 +1,13 @@
 # Dream Task Design: From Jung's Dream Theory to Subconscious Consolidation
 
 Status: research memo with a first deterministic Phase 1 prototype; awaiting
-cross-model validation and reviewed real-history evidence.
+cross-model validation and adjudicated real-history evidence.
 Anthropic Managed Agents Dreams are confirmed as an adjacent official Research
 Preview, but this memo's Jung-inspired dream tasks are an AIppocampus-specific
 design proposal.
 Origin: conversation between user and Claude Code, 2026-05-27.
 Implemented first slice: `skills/aippocampus/scripts/compensatory_dream.py`
-emits review-only compensatory candidates from source-backed single-thread
+emits adjudication-only compensatory candidates from source-backed single-thread
 extraction rows.
 Related: [affect-side-channel.md](affect-side-channel.md),
 [compact-activation-signals.md](compact-activation-signals.md),
@@ -212,8 +212,11 @@ Phase 1 helper with this concrete contract:
 
 - Input: source-backed extraction rows for a single `thread_key`. Rows may come
   from question/frontier/concept extraction, but they must carry thread-scoped
-  `source_refs` or they are ignored.
-- Output: review-only `finding_kind="dream_synthesized"` candidates with
+  `source_refs` or they are ignored. In the live `question_extraction` path,
+  canonical `scope_labels` / `semantic_scope_labels` from the selected
+  timeline source refs are preserved into validated findings so life-wide
+  dream branches are not starved by validator field loss.
+- Output: adjudication-only `finding_kind="dream_synthesized"` candidates with
   `dream_function="compensatory"`, `support_level="candidate"`,
   `review_state="needs_review"`, and `foreground_eligible=false`.
 - Filtering: unsourced rows, rows whose refs belong to another thread, and
@@ -223,7 +226,12 @@ Phase 1 helper with this concrete contract:
   supplied.
 - Write boundary: Phase 1 writes no clean-source or formal-memory updates. The
   default trigger policy is lower-frequency than extraction
-  (`run_after_extraction_passes=3`) and not allowed in foreground hooks.
+  (`run_after_extraction_passes=3`) and not allowed in foreground hooks. A
+  separate post-adjudication projection can turn `agent_adjudicated`,
+  `auto_adjudicated`, `source_adjudicated`, or compatible accepted states into
+  existing `working_memory` rows for recall/ambient/reflection use. This is not
+  a default user approval loop; raw candidates stay in the holding queue until a
+  background worker or operator adjudicates them.
 
 The executable contract lives in
 `tests/aippocampus/test_compensatory_dream.py`. Keep changes to this schema
@@ -255,13 +263,25 @@ reusable `source-backed hypothesis` records:
   the hypothesis
 - `confidence`, `counter_evidence`, `updated_at`, and `expires_or_review_after`
 - `downstream_use`: whether the finding may feed a cognitive portrait,
-  ambient recall card, thread ambient cache, or explicit user-facing review
+  ambient recall card, thread ambient cache, or an explicit user-facing check
+  when the hypothesis is high-risk or would be stated directly to the user
 
 The contract stays conservative: a dream finding is not a fact and must not
 rewrite clean source. It is a prepared interpretive layer over source. When the
 user asks a high-level continuity question, or when ambient recall detects a
 matching theme, the agent can retrieve these records as a starting map, then
 follow `source_refs` back to clean source before making strong claims.
+
+The first runtime bridge reuses the existing soft working-memory substrate
+instead of creating a dream-specific foreground channel. Only adjudicated dream
+findings with source refs can be projected as `candidate_type="dream_hypothesis"`
+working-memory rows. Most adjudication should be background/system work:
+source-ref checks, counter-evidence checks, confidence/risk routing, expiry, and
+parking. User intervention is reserved for hypotheses that would affect a
+sensitive personal interpretation, a durable preference/profile claim, or a
+direct user-facing assertion. The boundary remains:
+`adjudicated_dream_hypothesis_not_fact`, no clean-source mutation, and no formal
+memory promotion.
 
 ### Ambient Residue As Dream Seed
 
@@ -368,10 +388,14 @@ user's ongoing journey, then can retrieve the specifics on demand.
    impose them. It may observe that a thread follows a quest structure, but it
    should not force threads into narrative templates.
 
-7. **Review or discard before influence.** Phase 1 dream output can enter a
-   review queue only. It must be accepted, corrected, merged, or discarded
-   before it influences recall, reflection space, cognitive portraits, or
-   ambient cards.
+7. **Adjudicate or discard before influence.** Raw Phase 1 dream output can
+   enter a holding queue only. A background worker should accept, correct, park,
+   expire, or discard it before it influences recall, reflection space,
+   cognitive portraits, or ambient cards. User confirmation is not the default
+   path; ask only when a current answer would depend on a sensitive or uncertain
+   hypothesis. Accepted hypotheses may use the existing working-memory
+   substrate; do not add a parallel dream foreground channel unless that route
+   proves inadequate.
 
 ## Implementation Priority
 

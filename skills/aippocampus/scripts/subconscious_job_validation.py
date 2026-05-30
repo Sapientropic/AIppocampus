@@ -146,6 +146,12 @@ def refs_for_finding(
             "message_id": source.get("message_id"),
             "timestamp": source.get("timestamp"),
         }
+        scope_labels = canonical_scope_labels(source.get("scope_labels"))
+        semantic_scope_labels = canonical_scope_labels(source.get("semantic_scope_labels"))
+        if scope_labels:
+            ref["scope_labels"] = scope_labels
+        if semantic_scope_labels:
+            ref["semantic_scope_labels"] = semantic_scope_labels
         message_refs = compact_source_message_refs(source.get("source_refs"), source)
         if message_refs:
             ref["message_refs"] = message_refs
@@ -306,6 +312,22 @@ def canonical_scope_labels(values: Any) -> list[str]:
     return [label for label in SCOPE_LABEL_ORDER if label in present]
 
 
+def scope_label_fields_from_source_refs(refs: list[dict[str, Any]]) -> dict[str, Any]:
+    base_labels: list[str] = []
+    semantic_labels: list[str] = []
+    for ref in refs:
+        base_labels.extend(str(label) for label in ref.get("scope_labels") or [])
+        semantic_labels.extend(str(label) for label in ref.get("semantic_scope_labels") or [])
+    semantic_scope_labels = canonical_scope_labels(semantic_labels)
+    scope_labels = canonical_scope_labels([*base_labels, *semantic_scope_labels])
+    out: dict[str, Any] = {}
+    if scope_labels:
+        out["scope_labels"] = scope_labels
+    if semantic_scope_labels:
+        out["semantic_scope_labels"] = semantic_scope_labels
+    return out
+
+
 def exact_message_refs_for_semantic_label(
     message_id: str, refs: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
@@ -419,6 +441,11 @@ def validate_findings(
             if not question_fields:
                 continue
             finding.update(question_fields)
+            # Question extraction may receive weak or invented labels from the
+            # model. Preserve only labels already attached to the selected
+            # source turns/messages, so downstream dream work can use life-wide
+            # signals without turning the extractor into a second labeler.
+            finding.update(scope_label_fields_from_source_refs(refs))
         if job == "cognitive_map":
             route_fields = validate_cognitive_map_fields(item, refs)
             if not route_fields:

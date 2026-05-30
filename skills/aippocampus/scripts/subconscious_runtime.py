@@ -160,6 +160,14 @@ def source_bank_from_turns(turns: list[dict[str, Any]]) -> dict[str, dict[str, A
             "turn_index": turn.get("turn_index"),
             "user_line": turn.get("user_line"),
             "assistant_line": turn.get("assistant_line"),
+            "scope_labels": [
+                str(label) for label in turn.get("scope_labels") or [] if str(label).strip()
+            ][:12],
+            "semantic_scope_labels": [
+                str(label)
+                for label in turn.get("semantic_scope_labels") or []
+                if str(label).strip()
+            ][:12],
             "source_refs": [ref for ref in turn.get("source_refs") or [] if isinstance(ref, dict)][
                 :8
             ],

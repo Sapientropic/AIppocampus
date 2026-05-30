@@ -16,6 +16,7 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 import compensatory_dream as dream  # noqa: E402
+import memory_candidate_router as router  # noqa: E402
 
 
 class CompensatoryDreamTests(unittest.TestCase):
@@ -185,6 +186,42 @@ class CompensatoryDreamTests(unittest.TestCase):
         self.assertEqual(payload["findings"][0]["compensatory_kind"], "silently_recurring")
         self.assertEqual(len(payload["findings"][0]["source_refs"]), 2)
         self.assert_findings_are_audited(payload)
+
+    def test_unadjudicated_dream_findings_do_not_project_to_working_memory(self) -> None:
+        thread_key, rows = dream.fixture_rows("personal")
+        payload = dream.run_compensatory_dream(thread_key=thread_key, extraction_rows=rows)
+
+        working_rows = dream.adjudicated_dream_findings_to_working_memory(payload["findings"])
+
+        self.assertEqual(working_rows, [])
+
+    def test_background_adjudicated_dream_findings_project_without_user_review(self) -> None:
+        thread_key, rows = dream.fixture_rows("personal")
+        payload = dream.run_compensatory_dream(thread_key=thread_key, extraction_rows=rows)
+        adjudicated = {
+            **payload["findings"][0],
+            "review_state": "agent_adjudicated",
+            "adjudication_source": "detached_dream_worker",
+            "confidence": 0.74,
+            "downstream_use": ["review_queue", "working_memory", "ambient_recall_card", "reflection_space"],
+        }
+
+        working_rows = dream.adjudicated_dream_findings_to_working_memory([adjudicated])
+
+        self.assertEqual(len(working_rows), 1)
+        row = working_rows[0]
+        self.assertEqual(row["kind"], "aippocampus_working_memory")
+        self.assertEqual(row["candidate_type"], "dream_hypothesis")
+        self.assertEqual(row["status"], "active")
+        self.assertEqual(row["route"], router.USE_WITH_SOURCE)
+        self.assertEqual(row["truth_boundary"], "adjudicated_dream_hypothesis_not_fact")
+        self.assertEqual(row["adjudication_source"], "detached_dream_worker")
+        self.assertFalse(row["human_review_required"])
+        self.assertTrue(row["source_refs"])
+        self.assertIn("reflection_space", row["downstream_use"])
+        matches = router.match_working_memory("continuity 和 recurring anxiety 这条线索还在吗？", working_rows)
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]["candidate_type"], "dream_hypothesis")
 
 
 if __name__ == "__main__":

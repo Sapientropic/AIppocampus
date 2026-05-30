@@ -246,6 +246,7 @@ class SubconsciousJobsTests(unittest.TestCase):
                     "where_context": ["AIppocampus thread"],
                     "phase_context": "new-project startup",
                     "collaboration_context": ["Codex"],
+                    "scope_labels": ["preference"],
                 },
                 {
                     "kind": "frontier_marker",
@@ -256,6 +257,7 @@ class SubconsciousJobsTests(unittest.TestCase):
                     "frontier_type": "scope_boundary",
                     "boundary_reason": "Search ranking treated injected instruction blocks as normal source evidence.",
                     "linked_question_short": "global memory placement",
+                    "semantic_scope_labels": ["relationship_continuity"],
                 },
             ]
         }
@@ -267,6 +269,8 @@ class SubconsciousJobsTests(unittest.TestCase):
                 "project_label": "AIppocampus",
                 "turn_index": 4,
                 "assistant_line": 88,
+                "scope_labels": ["personal_reflection", "idea_seed", "open_question"],
+                "semantic_scope_labels": ["personal_reflection", "idea_seed"],
             }
         }
 
@@ -276,9 +280,23 @@ class SubconsciousJobsTests(unittest.TestCase):
         self.assertEqual(findings[0]["kind"], "question_candidate")
         self.assertEqual(findings[0]["intent_orientation"], "architecture_decision")
         self.assertIn("cross-project recall", findings[0]["what_features"])
+        self.assertEqual(
+            findings[0]["scope_labels"],
+            ["personal_reflection", "idea_seed", "open_question"],
+        )
+        self.assertEqual(
+            findings[0]["semantic_scope_labels"],
+            ["personal_reflection", "idea_seed"],
+        )
+        self.assertNotIn("preference", findings[0]["scope_labels"])
         self.assertEqual(findings[1]["kind"], "frontier_marker")
         self.assertEqual(findings[1]["frontier_type"], "scope_boundary")
         self.assertIn("injected instruction", findings[1]["boundary_reason"])
+        self.assertEqual(
+            findings[1]["scope_labels"],
+            ["personal_reflection", "idea_seed", "open_question"],
+        )
+        self.assertNotIn("relationship_continuity", findings[1]["scope_labels"])
 
     def test_run_jobs_runs_question_tracking_after_extraction_writes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -273,17 +273,18 @@ handoff context.
      source-backed single-thread extraction rows, discards unsourced or prior
      dream rows, suppresses refs from other threads, emits
      `dream_synthesized` compensatory candidates whose bridge claims carry
-     thread-scoped source refs, and keeps trigger defaults lower than
-     extraction and out of foreground hooks.
+     thread-scoped source refs, preserves source-derived scope labels from live
+     `question_extraction`, and keeps trigger defaults lower than extraction
+     and out of foreground hooks.
    - The helper covers empty/no-pattern, technical unresolved-edge, life-wide
      silently-recurring, unsourced-row, cross-thread-ref, ordinary-no-pattern,
-     and self-reingestion fixtures. It is a review-queue substrate, not proof
-     of registry-resolved clean-source refs, live dream quality, prospective
-     analysis, amplification, active imagination, or recall/reflection-space
-     benefit.
-   - Next hardening: connect reviewed dream candidates to the existing
-     subconscious review/router path, then evaluate selected real-history packs
-     before allowing dream output to influence recall or reflection space.
+     self-reingestion, and background-adjudicated working-memory projection
+     fixtures. It is a holding-queue plus post-adjudication working-memory
+     substrate, not proof of live dream quality, prospective analysis,
+     amplification, or active imagination.
+   - Next hardening: run selected real-history packs through the adjudicated
+     dream-hypothesis projection and measure whether recall/reflection improves
+     over plain question/link/working-memory rows.
 
 18. Reflection-space topology and feedback MVP
    - Source: `docs/research/reflection-space.md`,
@@ -310,7 +311,7 @@ handoff context.
 - A cloud service dependency.
 - Phase 3 `theme_emergence` or predictive replay before Phase 2 produces stable
   links.
-- Prospective, amplification, or active-imagination dream work before reviewed
-  Phase 1 compensatory candidates show source-backed value.
+- Prospective, amplification, or active-imagination dream work before
+  adjudicated Phase 1 compensatory candidates show source-backed value.
 - Any change that treats summaries, findings, or vector neighbors as truth
   without clean-source refs.
