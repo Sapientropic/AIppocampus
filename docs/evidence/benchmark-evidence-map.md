@@ -16,14 +16,16 @@ benchmark design details in
    [`public-readiness-verification.md`](public-readiness-verification.md).
 3. Need benchmark methodology, track boundaries, and current diagnostic notes:
    [`memory-decision-benchmark-plan.md`](memory-decision-benchmark-plan.md).
-4. Need public corpus commands and local report boundaries:
+4. Need LongMemEval source, commands, and published retrieval-only results:
+   [`longmemeval.md`](longmemeval.md).
+5. Need public corpus commands and local report boundaries:
    [`benchmark_corpus/README.md`](../../benchmark_corpus/README.md) and
    [`benchmark_corpus/sharegpt_manifest.json`](../../benchmark_corpus/sharegpt_manifest.json).
-5. Need public-safe memory-pain fixture evidence:
+6. Need public-safe memory-pain fixture evidence:
    [`memory-pain-fixture-report.md`](memory-pain-fixture-report.md).
-6. Need dream natural-prompt route/noise evidence:
+7. Need dream natural-prompt route/noise evidence:
    [`dream-natural-prompt-large-sample-2026-05-30.md`](dream-natural-prompt-large-sample-2026-05-30.md).
-7. Need explicit recall-reminder shadow A/B evidence:
+8. Need explicit recall-reminder shadow A/B evidence:
    [`dream-live-shadow-ab-2026-05-30.md`](dream-live-shadow-ab-2026-05-30.md).
 8. Need public-corpus negative-control dream shadow evidence:
    [`dream-live-shadow-benchmark-corpus-2026-05-31.md`](dream-live-shadow-benchmark-corpus-2026-05-31.md).
@@ -39,6 +41,7 @@ snapshot or dated verification ledger.
 | Current claim boundary | `docs/evidence/stage-0-5-readiness.md` | Can-claim / cannot-claim status and missing proof. |
 | Dated command ledger | `docs/evidence/public-readiness-verification.md` | Summarized commands, dates, pass/fail interpretation, and scope notes. |
 | Benchmark design | `docs/evidence/memory-decision-benchmark-plan.md` | Track definitions, report shape, non-goals, and diagnostic interpretation. |
+| LongMemEval evidence | `docs/evidence/longmemeval.md` and `benchmark_corpus/longmemeval_manifest.json` | Official sources, dataset checksums, dedicated runner commands, dated retrieval-only results, and claim boundaries. |
 | Corpus setup | `benchmark_corpus/README.md` and `benchmark_corpus/sharegpt_manifest.json` | Public corpus conversion commands, ignored local outputs, and corpus-specific claim boundaries. |
 | Demo fixture report | `docs/evidence/memory-pain-fixture-report.md` | Public-safe fixture families and their narrow claim boundary. |
 | Dream natural-prompt route/noise evidence | `docs/evidence/dream-natural-prompt-large-sample-2026-05-30.md` | Dated aggregate run for manual-reminder reduction, negative prompt noise, overbroad fanout, and strong-claim source-reopen gates. |
@@ -56,6 +59,7 @@ benchmark runner should be added here and linked to its dated evidence owner.
 | One-command baseline suite | `benchmarks/aippocampus/benchmark_suite.py` | `docs/evidence/memory-decision-benchmark-plan.md`, `docs/evidence/public-readiness-verification.md` |
 | Track A memory decision gate | `benchmarks/aippocampus/benchmark_memory_decision_gate.py` | `docs/evidence/memory-decision-benchmark-plan.md`, `docs/evidence/memory-pain-fixture-report.md` |
 | Track B source-evidence retrieval wrapper | `benchmarks/aippocampus/benchmark_source_evidence_retrieval.py` | `docs/evidence/memory-decision-benchmark-plan.md`, `benchmark_corpus/README.md` |
+| LongMemEval retrieval-only benchmark | `benchmarks/aippocampus/benchmark_longmemeval.py` | `docs/evidence/longmemeval.md`, `benchmark_corpus/longmemeval_manifest.json` |
 | FTS5 real-history recall | `benchmarks/aippocampus/benchmark_fts5_recall.py` | `docs/evidence/public-readiness-verification.md`, `docs/planning/next-iteration-plan.md` |
 | Track C payload fidelity | `benchmarks/aippocampus/benchmark_payload_fidelity.py` | `docs/evidence/memory-decision-benchmark-plan.md`, `docs/evidence/memory-pain-fixture-report.md` |
 | Track D synthetic compaction continuity | `benchmarks/aippocampus/benchmark_compaction_continuity.py` | `docs/evidence/memory-decision-benchmark-plan.md`, `docs/evidence/public-readiness-verification.md` |
