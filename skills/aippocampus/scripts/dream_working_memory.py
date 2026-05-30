@@ -424,6 +424,7 @@ def adjudicated_dream_findings_to_working_memory(
             ],
             limit=18,
         )
+        activation_cues = unique_preserve(finding.get("activation_cues") or [], limit=12)
         candidate = {
             "candidate_type": DREAM_HYPOTHESIS_TYPE,
             "title": title,
@@ -450,7 +451,12 @@ def adjudicated_dream_findings_to_working_memory(
                 "recommendation": candidate["recommendation"],
                 "confidence": round(float(finding.get("confidence") or 0.62), 4),
                 "project_label": project_label,
-                "trigger_terms": trigger_terms_for(candidate, concepts, project_label),
+                # Model-backed dream workers now own semantic activation. The
+                # fallback keeps deterministic structural eval rows usable, but
+                # live model-backed rows should arrive with activation_cues so
+                # summary/scaffold prose cannot widen the trigger surface.
+                "trigger_terms": activation_cues or trigger_terms_for(candidate, concepts, project_label),
+                "activation_cues": activation_cues,
                 "concepts": concepts,
                 "source_finding_ids": [source_finding_id],
                 "source_refs": refs,

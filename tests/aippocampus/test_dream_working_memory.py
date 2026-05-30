@@ -110,6 +110,27 @@ class DreamWorkingMemoryTests(unittest.TestCase):
         self.assertEqual(plan["action"], "stay_silent")
         self.assertEqual(plan["reason"], "no_route_relevance")
 
+    def test_model_backed_dream_projection_uses_llm_activation_cues_not_summary_terms(self) -> None:
+        row = wm.adjudicated_dream_findings_to_working_memory(
+            [
+                adjudicated_finding(
+                    summary=(
+                        "This summary mentions checklist, examples, state, and completeness, "
+                        "but those words are explanatory background rather than activation cues."
+                    ),
+                    activation_cues=[
+                        "continuity source review",
+                        "source-ref continuity",
+                    ],
+                )
+            ]
+        )[0]
+
+        self.assertEqual(row["trigger_terms"], ["continuity source review", "source-ref continuity"])
+        self.assertNotIn("checklist", row["trigger_terms"])
+        self.assertNotIn("examples", row["trigger_terms"])
+        self.assertNotIn("completeness", row["trigger_terms"])
+
     def test_sensitive_gate_ignores_negative_profile_boundary_copy(self) -> None:
         adjudicated = wm.background_adjudicate_dream_finding(
             adjudicated_finding(

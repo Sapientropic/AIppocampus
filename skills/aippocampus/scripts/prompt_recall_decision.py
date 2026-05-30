@@ -516,6 +516,23 @@ def _semantic_cue_source_refs(
     return refs
 
 
+def _limit_dream_matches(matches: list[dict[str, Any]], limit: int | None) -> list[dict[str, Any]]:
+    if limit is None:
+        return matches
+    allowed = max(0, int(limit))
+    kept_dreams = 0
+    out: list[dict[str, Any]] = []
+    for item in matches:
+        if item.get("candidate_type") != "dream_hypothesis":
+            out.append(item)
+            continue
+        if kept_dreams >= allowed:
+            continue
+        kept_dreams += 1
+        out.append(item)
+    return out
+
+
 def _record_semantic_cue_hits(
     *,
     prompt: str,
@@ -588,6 +605,7 @@ def assess_prompt(
     topic_epoch: str | None = None, use_thread_cache: bool = True,
     warm_background: bool | None = None, warm_job_dir: Path | str | None = None,
     warm_max_workers: int | None = None, warm_timeout: float | None = None, warm_quorum: int | None = None,
+    dream_hypothesis_limit: int | None = None,
 ) -> dict[str, Any]:
     start = time.perf_counter()
     context = build_recall_decision_context(
@@ -626,7 +644,7 @@ def assess_prompt(
     registry = context.registry
     cognitive_map_matches = context.cognitive_map_matches
     working_memory_rows = context.working_memory_rows
-    working_memory_matches = context.working_memory_matches
+    working_memory_matches = _limit_dream_matches(context.working_memory_matches, dream_hypothesis_limit)
     associations = context.associations
     association_matches = context.association_matches
     pre_explicit = context.pre_explicit

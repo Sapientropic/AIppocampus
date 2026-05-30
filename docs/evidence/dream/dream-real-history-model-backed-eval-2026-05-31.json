@@ -1,0 +1,187 @@
+{
+  "schema_version": 1,
+  "kind": "aippocampus_dream_real_history_model_backed_eval_evidence",
+  "created_at": "2026-05-30T20:41:09Z",
+  "local_evidence_date": "2026-05-31",
+  "status": "analyzed",
+  "claim_level": "selected_real_history_offline_model_backed_visibility_ablation",
+  "private_text_emitted": false,
+  "checked_in_payload": "aggregate_only",
+  "commands": [
+    "python skills\\aippocampus\\scripts\\dream_real_history_eval.py --max-packs 100 --min-packs 1 --json --output .tmp\\dream-real-history-eval-deterministic-max100-postcli-2026-05-31.json",
+    "python skills\\aippocampus\\scripts\\dream_real_history_eval.py --dream-worker-mode model-backed --model-route default --max-packs 100 --min-packs 1 --max-samples 1 --max-tokens 1200 --dream-model-timeout 120 --json --output .tmp\\dream-real-history-eval-model-backed-max18-2026-05-31.json",
+    "python skills\\aippocampus\\scripts\\dream_live_shadow_ab.py --replay-clean-source --generate-dream-rows 100 --dream-worker-mode model-backed --model-route default --max-threads 1200 --max-user-messages 12000 --window-user-turns 6 --dream-max-samples 1 --max-tokens 1200 --dream-model-timeout 120 --output .tmp\\dream-live-shadow-private-model-backed-diagnostic-2026-05-31.json --json",
+    "python skills\\aippocampus\\scripts\\dream_live_shadow_ab.py --replay-clean-source --generate-dream-rows 4 --dream-worker-mode model-backed --semantic-relevance-gate --model-route default --max-threads 100 --max-user-messages 100 --window-user-turns 6 --dream-max-samples 1 --max-tokens 900 --dream-model-timeout 120 --semantic-relevance-min-confidence 0.65 --semantic-relevance-max-candidates 16 --output .tmp\\dream-live-shadow-private-semantic-gate-smoke-2026-05-31.json --json",
+    "python -m pytest tests/aippocampus/test_dream_live_shadow_ab.py tests/aippocampus/test_aippocampus_prompt_hook.py -q"
+  ],
+  "input_surface": {
+    "job_row_count": 698,
+    "working_memory_row_count": 63,
+    "selected_pack_count": 18,
+    "source_seed_kind_counts": {
+      "frontier_marker": 6,
+      "question_candidate": 8,
+      "question_link": 1,
+      "working_memory": 15
+    },
+    "selection_boundary": "source_backed_cross_thread_ready_packs",
+    "full_history_coverage": false
+  },
+  "deterministic_all_selected_baseline": {
+    "status": "lift_observed",
+    "dream_worker_mode": "deterministic",
+    "pack_count": 18,
+    "dream_finding_count": 36,
+    "dream_working_memory_count": 36,
+    "structural_lift": {
+      "prompt_hit_rate_delta": 0.0,
+      "source_thread_coverage_delta": 3.5,
+      "reflection_ready_delta": 1296,
+      "bridge_claim_coverage_delta": 1.0
+    },
+    "user_visible_ablation": {
+      "recall_hit_delta": 0,
+      "plain_recall_hit_rate": 1.0,
+      "augmented_visible_recall_hit_rate": 1.0,
+      "reflection_ready_delta": 648,
+      "unsupported_suppression_rate": 1.0,
+      "source_support_rate": 1.0,
+      "manual_reviewed_count": 0
+    }
+  },
+  "model_backed_all_selected_run": {
+    "status": "lift_observed",
+    "dream_worker_mode": "model_backed",
+    "model_route": {
+      "route": "default",
+      "tier": "flash",
+      "model": "deepseek-v4-flash",
+      "provider": "deepseek"
+    },
+    "pack_count": 18,
+    "dream_finding_count": 34,
+    "dream_working_memory_count": 32,
+    "model_call_count": 36,
+    "deepseek_prefix_cache": {
+      "available": true,
+      "hit_tokens": 25344,
+      "miss_tokens": 27488,
+      "hit_rate": 0.4797
+    },
+    "structural_lift": {
+      "prompt_hit_rate_delta": 0.0,
+      "source_thread_coverage_delta": 1.6111,
+      "reflection_ready_delta": 720,
+      "bridge_claim_coverage_delta": 1.0
+    },
+    "user_visible_ablation": {
+      "recall_hit_delta": 0,
+      "plain_recall_hit_rate": 1.0,
+      "augmented_visible_recall_hit_rate": 1.0,
+      "reflection_ready_delta": 110,
+      "unsupported_suppression_rate": 1.0,
+      "source_support_rate": 1.0,
+      "manual_reviewed_count": 0
+    }
+  },
+  "historical_shadow_replay_model_backed": {
+    "status": "analyzed",
+    "claim_level": "historical_shadow_replay_reminder_frequency",
+    "dream_worker_mode": "model_backed",
+    "generated_dream_max_packs": 100,
+    "event_count": 5461,
+    "thread_count": 990,
+    "live_delivery_event_count": 0,
+    "overall_reminder_rate": 0.0049,
+    "eligible_exposure_rate": 0.0,
+    "control_eligible_exposures": 0,
+    "control_reminder_outcomes": 0,
+    "control_reminder_rate": 0.0,
+    "dream_eligible_exposures": 0,
+    "dream_reminder_outcomes": 0,
+    "dream_reminder_rate": 0.0,
+    "rate_delta_dream_minus_control": 0.0,
+    "attribution": {
+      "window_user_turns": 6,
+      "total_reminder_count": 27,
+      "attributed_reminder_count": 0,
+      "unattributed_reminder_count": 27
+    },
+    "match_diagnostics": {
+      "baseline_match_event_count": 3203,
+      "dream_match_event_count": 2,
+      "both_match_event_count": 2,
+      "dream_only_non_reminder_event_count": 0,
+      "dream_only_reminder_event_count": 0
+    },
+    "reminder_family_counts": {
+      "explicit_recall_en": 3,
+      "explicit_recall_zh": 22,
+      "forgotten_constraint": 2
+    }
+  },
+  "semantic_relevance_gate_smoke": {
+    "status": "analyzed",
+    "claim_level": "historical_shadow_replay_reminder_frequency",
+    "dream_worker_mode": "model_backed",
+    "semantic_relevance_gate_enabled": true,
+    "generated_dream_max_packs": 4,
+    "event_count": 100,
+    "thread_count": 9,
+    "live_delivery_event_count": 0,
+    "overall_reminder_rate": 0.02,
+    "eligible_exposure_rate": 0.0,
+    "control_eligible_exposures": 0,
+    "dream_eligible_exposures": 0,
+    "attribution": {
+      "window_user_turns": 6,
+      "total_reminder_count": 2,
+      "attributed_reminder_count": 0,
+      "unattributed_reminder_count": 2
+    },
+    "match_diagnostics": {
+      "baseline_match_event_count": 79,
+      "dream_match_event_count": 0,
+      "both_match_event_count": 0,
+      "dream_only_non_reminder_event_count": 0,
+      "dream_only_reminder_event_count": 0,
+      "semantic_relevance_model_call_count": 20,
+      "semantic_relevance_match_event_count": 0
+    },
+    "model_route": {
+      "route": "default",
+      "tier": "flash",
+      "model": "deepseek-v4-flash",
+      "provider": "deepseek"
+    }
+  },
+  "delivered_ab_contract_smoke": {
+    "status": "implemented_contract_tested",
+    "private_text_emitted": false,
+    "default_filters_dream_foreground": true,
+    "dry_run_sets_would_deliver_arm_only": true,
+    "delivered_control_is_holdback": true,
+    "delivered_dream_inserts_private_context_max_count": 1,
+    "assignment_unit_for_delivered_ab": "thread_topic_epoch",
+    "legacy_shadow_assignment_preserved": true,
+    "semantic_relevance_error_delivery_behavior": "fail_closed",
+    "live_user_outcome_events_collected": false
+  },
+  "can_claim": [
+    "selected real-history source-backed packs can be evaluated offline without emitting private text",
+    "bounded model-backed dream hypotheses showed structural lift over the plain selected real-history surface",
+    "the visibility-ablation harness reported no recall hit-rate lift because the plain selected prompts were already at 1.0 hit rate",
+    "the visibility-ablation harness reported reflection-ready lift and unsupported strong-claim suppression for the selected real-history slice",
+    "model-backed historical clean-source shadow replay counted real reminder language but observed zero eligible exposures because all dream matches were also baseline matches",
+    "the opt-in semantic relevance gate can run model-backed shadow replay end to end and reports semantic model-call/match counts without checked-in raw prompts",
+    "the prompt hook now has an opt-in delivered A/B contract with default filtering, dry-run would-deliver logging, control holdback, and bounded dream treatment insertion"
+  ],
+  "cannot_claim": [
+    "causal real-user behavior lift",
+    "full private-history coverage",
+    "general dream quality without manual/source review",
+    "safe delivered treatment outcomes or user-behavior lift without live opt-in delivered treatment/control events",
+    "semantic relevance lift from the 100-turn smoke",
+    "formal memory promotion"
+  ]
+}

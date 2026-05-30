@@ -14,7 +14,8 @@ Important correction: the first large run below is a deterministic structural
 ablation, not the primary dream-quality result. A second run uses the bounded
 model-backed background dream worker (`dream_worker.py`) through DeepSeek Flash
 over a smaller source-pack budget, then replays the same 120,000 public-corpus
-user turns as the negative-control distribution.
+user turns as the negative-control distribution. A post-fix replay uses the
+same public negative-control slice to verify the activation-cues contract.
 
 ## Commands
 
@@ -32,6 +33,8 @@ python skills\aippocampus\scripts\dream_live_shadow_ab.py --replay-clean-source-
 python skills\aippocampus\scripts\dream_live_shadow_ab.py --replay-clean-source-dir benchmark_corpus\output\sharegpt_all_multiturn --dataset-id sharegpt_all_multiturn --generate-dream-rows 64 --dream-worker-mode deterministic --max-threads 10000 --max-user-messages 60000 --window-user-turns 6 --output .tmp\dream-shadow-benchmark-sharegpt-all-10000.json --json
 python skills\aippocampus\scripts\dream_live_shadow_ab.py --replay-clean-source-dir benchmark_corpus\output\sharegpt_coding_multiturn --dataset-id sharegpt_coding_multiturn_model_backed --generate-dream-rows 4 --dream-worker-mode model-backed --max-threads 10000 --max-user-messages 60000 --window-user-turns 6 --output .tmp\dream-shadow-benchmark-sharegpt-coding-10000-model.json --json
 python skills\aippocampus\scripts\dream_live_shadow_ab.py --replay-clean-source-dir benchmark_corpus\output\sharegpt_all_multiturn --dataset-id sharegpt_all_multiturn_model_backed --generate-dream-rows 4 --dream-worker-mode model-backed --max-threads 10000 --max-user-messages 60000 --window-user-turns 6 --output .tmp\dream-shadow-benchmark-sharegpt-all-10000-model.json --json
+python skills\aippocampus\scripts\dream_live_shadow_ab.py --replay-clean-source-dir benchmark_corpus\output\sharegpt_coding_multiturn --dataset-id sharegpt_coding_multiturn_model_backed_postfix --generate-dream-rows 4 --dream-worker-mode model-backed --max-threads 10000 --max-user-messages 60000 --window-user-turns 6 --output .tmp\dream-shadow-benchmark-sharegpt-coding-10000-model-postfix.json --json
+python skills\aippocampus\scripts\dream_live_shadow_ab.py --replay-clean-source-dir benchmark_corpus\output\sharegpt_all_multiturn --dataset-id sharegpt_all_multiturn_model_backed_postfix --generate-dream-rows 4 --dream-worker-mode model-backed --max-threads 10000 --max-user-messages 60000 --window-user-turns 6 --output .tmp\dream-shadow-benchmark-sharegpt-all-10000-model-postfix.json --json
 ```
 
 The large generated corpora are ignored local artifacts. The checked-in
@@ -69,6 +72,21 @@ Combined model-backed background dream worker:
 - Dream-minus-control reminder-rate delta: -0.0014
 - Live delivered treatment events: 0
 
+Combined post-fix model-backed activation-cues replay:
+
+- User turns replayed: 120,000
+- Conversations sampled: 18,512
+- Explicit recall-reminder prompts detected: 190
+- Overall reminder rate: 0.0016
+- Potential public false activations: 0
+- Potential public false activation rate: 0.0
+- Control eligible exposures: 0
+- Dream eligible exposures: 0
+- Attributed reminders within the next 6 user turns: 0
+- Unattributed reminders: 190
+- Dream-minus-control reminder-rate delta: 0.0
+- Live delivered treatment events: 0
+
 Per deterministic corpus:
 
 - ShareGPT coding multiturn: 60,000 user turns, 8,794 conversations, 104
@@ -83,6 +101,13 @@ Per model-backed corpus:
 - ShareGPT all multiturn: 60,000 user turns, 9,718 conversations, 86
   reminders, 1,454 potential dream-only activations, 10 attributed reminders.
 
+Per post-fix model-backed corpus:
+
+- ShareGPT coding multiturn: 60,000 user turns, 8,794 conversations, 104
+  reminders, 0 potential dream-only activations, 0 attributed reminders.
+- ShareGPT all multiturn: 60,000 user turns, 9,718 conversations, 86
+  reminders, 0 potential dream-only activations, 0 attributed reminders.
+
 Reminder families in the large sample:
 
 - `as_said_before`: 110
@@ -90,20 +115,29 @@ Reminder families in the large sample:
 
 ## Interpretation
 
-This is not positive lift evidence. The useful signal is sharper:
-AIppocampus dream hypotheses did not explode on unrelated public prompts, but
-they also did not stay at zero. Deterministic structural dream rows activated
-on about 0.67% of public prompts. The model-backed background dream rows
-activated on about 2.08% of public prompts. That is still bounded, but it is a
-real over-personalization watch item and argues against loosening
-source-reopen, sensitive-use, and fanout gates.
+This is still not positive lift evidence. The post-fix signal is narrower and
+more useful: before the activation-cues fix, the bounded model-backed background
+dream rows produced 2,501 potential public false activations over this
+120,000-turn public negative-control slice, or about 2.08% of user turns. After
+the fix, the same slice produced 0 potential public false activations, or 0.0%.
+That supports the fix for this failure mode on the benchmark-corpus public
+negative-control distribution.
 
-The reminder outcome signal is tiny. In deterministic mode, 3 later explicit
-reminders were attributed across 809 eligible exposures. In model-backed mode,
-15 later explicit reminders were attributed across 2,501 eligible exposures,
-with a combined dream-minus-control reminder-rate delta of -0.0014. That delta
-is directionally favorable but too small and too shadow-only to call user-visible
-lift.
+The fixed path keeps semantic judgment on the LLM-owned cue surface. The
+activation decision is based on LLM-authored activation cues from the dream
+contract, not on hard-coded recall words or summary-derived trigger extraction.
+This matters because the old failure mode came from letting broad summary
+phrases behave like triggers.
+
+The deterministic structural ablation remains useful as a cheap regression
+sentinel, but it is not the primary dream-quality path. The pre-fix model-backed
+run remains in this evidence file as the failure baseline, not as the current
+expected behavior.
+
+The reminder outcome signal remains tiny. In the post-fix run there were no
+eligible exposures, no attributed reminders, no dream-minus-control reminder-rate
+movement, and no live delivered treatment events. This cannot be used to claim
+user-visible lift or safe delivered dream treatment.
 
 ## Can Claim
 
@@ -112,9 +146,13 @@ lift.
 - The deterministic and model-backed 120,000-turn public-corpus runs measured
   explicit reminder language and potential dream-only public false activation
   without emitting raw prompts, source ids, or local paths.
-- Public-corpus negative controls now expose two over-personalization budgets:
-  roughly 0.6%-0.7% for deterministic structural rows, and roughly 2.1% for the
-  bounded model-backed background dream worker over this source-pack budget.
+- The post-fix model-backed activation-cues replay ran over the same
+  120,000-turn public-corpus negative-control slice with zero potential
+  dream-only public false activations.
+- Public-corpus negative controls now expose three over-personalization budgets:
+  roughly 0.6%-0.7% for deterministic structural rows, roughly 2.1% for the
+  pre-fix bounded model-backed background dream worker, and 0.0% for the
+  post-fix model-backed activation-cues path over this source-pack budget.
 
 ## Cannot Claim
 

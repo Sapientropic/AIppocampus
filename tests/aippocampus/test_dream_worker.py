@@ -79,6 +79,7 @@ class DreamWorkerTests(unittest.TestCase):
                                             "candidate_kind": "blind_spot",
                                             "title": "Continuity may be too route-centric",
                                             "summary": "The pack suggests checking whether continuity is over-tied to routing.",
+                                            "activation_cues": ["continuity route coupling", "source-ref continuity routing"],
                                             "confidence": 0.72,
                                             "source_ref_ids": ["sr0", "sr1"],
                                             "bridge_claims": [
@@ -122,6 +123,52 @@ class DreamWorkerTests(unittest.TestCase):
         self.assertEqual(payload["dream_working_memory_rows"], [])
         self.assertTrue(payload["no_write"])
 
+    def test_model_worker_requires_llm_activation_cues_before_accepting_candidate(self) -> None:
+        def fake_model_call(messages: list[dict[str, str]], call_config: ChatClientConfig) -> dict[str, object]:
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "findings": [
+                                        {
+                                            "candidate_kind": "blind_spot",
+                                            "title": "Continuity may be too route-centric",
+                                            "summary": "The pack suggests checking whether continuity is over-tied to routing.",
+                                            "confidence": 0.72,
+                                            "source_ref_ids": ["sr0", "sr1"],
+                                            "bridge_claims": [
+                                                {
+                                                    "claim": "Both source handles point at continuity work.",
+                                                    "source_ref_ids": ["sr0", "sr1"],
+                                                }
+                                            ],
+                                        }
+                                    ]
+                                }
+                            )
+                        }
+                    }
+                ],
+                "usage": {},
+            }
+
+        payload = dream_worker.run_model_backed_dream_worker(
+            ready_pack(),
+            dream_function="compensatory",
+            config=config(),
+            model_call=fake_model_call,
+            no_write=False,
+        )
+
+        self.assertEqual(payload["status"], "candidate_parked")
+        self.assertIn(
+            "missing_activation_cues",
+            payload["findings"][0]["worker_validation"]["failed_checks"],
+        )
+        self.assertEqual(payload["dream_working_memory_rows"], [])
+
     def test_amplification_model_worker_accepts_cross_thread_resonance_candidate(self) -> None:
         def fake_model_call(messages: list[dict[str, str]], call_config: ChatClientConfig) -> dict[str, object]:
             return {
@@ -135,6 +182,7 @@ class DreamWorkerTests(unittest.TestCase):
                                             "candidate_kind": "cross_thread_resonance",
                                             "title": "Continuity resonates across selected source handles",
                                             "summary": "The source pack can seed reflection on continuity across threads.",
+                                            "activation_cues": ["continuity across source handles", "cross-thread continuity reflection"],
                                             "confidence": 0.69,
                                             "source_ref_ids": ["sr0", "sr1"],
                                             "bridge_claims": [
@@ -185,6 +233,7 @@ class DreamWorkerTests(unittest.TestCase):
                                             "emergence_signal": "source-review need forming around continuity",
                                             "trajectory_hint": "if the thread continues, source-review wording may matter next",
                                             "counter_evidence": ["no explicit user request yet"],
+                                            "activation_cues": ["continuity source review need", "source-review wording around continuity"],
                                             "confidence": 0.64,
                                             "source_ref_ids": ["sr0", "sr1"],
                                             "bridge_claims": [
@@ -240,6 +289,7 @@ class DreamWorkerTests(unittest.TestCase):
                                             "summary": "A sandbox bridge concept between continuity and source review.",
                                             "why_this_is_not_fact": "It is a synthesis lens over selected sources, not a source claim.",
                                             "counter_evidence": ["the user may only need implementation details"],
+                                            "activation_cues": ["continuity source stewardship", "source review bridge concept"],
                                             "confidence": 0.61,
                                             "source_ref_ids": ["sr0", "sr1"],
                                             "bridge_claims": [

@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 from collections import Counter
 from collections.abc import Iterable, Mapping
@@ -22,6 +23,12 @@ from typing import Any
 
 import dream_worker
 from aippocampuslib import compact_text, deepseek_cache_metrics_from_usage, now_utc
+from deepseek_model_routing import (
+    DEFAULT_DEEPSEEK_API_KEY_ENV,
+    resolve_model_route,
+    route_payload_with_effective_values,
+    route_service_name,
+)
 from dream_working_memory import (
     adjudicated_dream_findings_to_working_memory,
     background_adjudicate_dream_findings,
@@ -38,6 +45,7 @@ from model_client import (
     DEEPSEEK_KV_CACHE_GUIDE_URL,
     DEEPSEEK_PREFIX_CACHE_CONTRACT,
     ChatClientConfig,
+    NO_PROVIDER_CACHE_CONTRACT,
 )
 from registry_store import registry_paths
 
@@ -46,6 +54,8 @@ EVAL_KIND = "aippocampus_dream_real_history_eval"
 PACK_KIND = "aippocampus_dream_input_pack"
 READY_STATUS = "ready_for_dream_worker"
 CLAIM_LEVEL = "selected_real_history_structural_eval"
+DEFAULT_DREAM_WORKER_MODE = "deterministic"
+MODEL_BACKED_DREAM_WORKER_MODE = "model_backed"
 
 SEED_FINDING_KINDS = {"question_candidate", "frontier_marker", "question_link"}
 LOW_SIGNAL_TERMS = {
@@ -481,6 +491,81 @@ def aggregate_usage(worker_runs: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     return dict(totals)
 
 
+def normalized_worker_mode(value: str | None) -> str:
+    mode = str(value or DEFAULT_DREAM_WORKER_MODE).strip().replace("-", "_")
+    if mode not in {DEFAULT_DREAM_WORKER_MODE, MODEL_BACKED_DREAM_WORKER_MODE}:
+        raise ValueError("dream worker mode must be deterministic or model_backed")
+    return mode
+
+
+def cache_contract_for_route(route: Any) -> str:
+    if getattr(route, "provider", "") == "deepseek":
+        return DEEPSEEK_PREFIX_CACHE_CONTRACT
+    capabilities = getattr(route, "capabilities", None)
+    if getattr(capabilities, "cache_metrics_kind", "") == "deepseek_prefix":
+        return DEEPSEEK_PREFIX_CACHE_CONTRACT
+    return NO_PROVIDER_CACHE_CONTRACT
+
+
+def dream_model_config_from_args(args: Any) -> tuple[ChatClientConfig, dict[str, Any]]:
+    route_name = getattr(args, "model_route", None)
+    model = str(getattr(args, "model", "") or "")
+    base_url = str(getattr(args, "base_url", "") or "")
+    api_key_env_arg = str(
+        getattr(args, "api_key_env", DEFAULT_DEEPSEEK_API_KEY_ENV)
+        or DEFAULT_DEEPSEEK_API_KEY_ENV
+    )
+    explicit_model = model if model and not route_name else None
+    explicit_base_url = base_url if base_url and not route_name else None
+    explicit_api_key_env = (
+        api_key_env_arg
+        if api_key_env_arg != DEFAULT_DEEPSEEK_API_KEY_ENV and not route_name
+        else None
+    )
+    route = resolve_model_route(
+        route_name,
+        explicit_model=explicit_model,
+        explicit_base_url=explicit_base_url,
+        explicit_api_key_env=explicit_api_key_env,
+    )
+    resolved_model = route.model if not model else model
+    resolved_base_url = route.base_url if not base_url else base_url
+    resolved_api_key_env = (
+        route.api_key_env if api_key_env_arg == DEFAULT_DEEPSEEK_API_KEY_ENV else api_key_env_arg
+    )
+    key_value = os.environ.get(resolved_api_key_env)
+    if not key_value:
+        raise RuntimeError(
+            f"missing {route_service_name(route)} key; set {resolved_api_key_env} or pass --api-key-env"
+        )
+    capabilities = route.capabilities
+    thinking = str(getattr(args, "dream_model_thinking", "auto") or "auto").strip().casefold()
+    if thinking == "auto":
+        thinking_value = "enabled" if getattr(capabilities, "supports_thinking", False) else None
+    elif thinking in {"enabled", "disabled"}:
+        thinking_value = thinking
+    else:
+        raise ValueError("dream model thinking must be auto, enabled, or disabled")
+    config = ChatClientConfig(
+        api_key=str(key_value),
+        model=resolved_model,
+        base_url=resolved_base_url,
+        max_tokens=getattr(args, "max_tokens", None),
+        timeout=float(getattr(args, "dream_model_timeout", 60.0) or 60.0),
+        temperature=float(getattr(args, "dream_model_temperature", 0.0) or 0.0),
+        service_name=route_service_name(route),
+        thinking=thinking_value,
+        response_format_json=bool(getattr(capabilities, "supports_json_response", True)),
+        cache_contract=cache_contract_for_route(route),
+    )
+    return config, route_payload_with_effective_values(
+        route,
+        model=resolved_model,
+        base_url=resolved_base_url,
+        api_key_env=resolved_api_key_env,
+    )
+
+
 def run_pack_dream_worker(
     pack: Mapping[str, Any],
     *,
@@ -747,6 +832,19 @@ def manual_source_review_metrics(rows: Iterable[Mapping[str, Any]]) -> dict[str,
     }
 
 
+def count_model_backed_calls(worker_runs: Iterable[Mapping[str, Any]]) -> int:
+    total = 0
+    for run in worker_runs:
+        if run.get("worker_mode") != MODEL_BACKED_DREAM_WORKER_MODE:
+            continue
+        nested = run.get("worker_runs")
+        if isinstance(nested, list):
+            total += len(nested)
+        else:
+            total += 1
+    return total
+
+
 def source_support_correct(row: Mapping[str, Any]) -> bool:
     source_strength_value = row.get("source_strength")
     source_strength: Mapping[str, Any] = (
@@ -850,7 +948,7 @@ def evaluate_user_visible_dream_lift(
             "cost_cache": {
                 "usage": usage,
                 "cache": cache,
-                "model_call_count": sum(1 for run in worker_runs or [] if run.get("worker_mode") == "model_backed"),
+                "model_call_count": count_model_backed_calls(worker_runs or []),
             },
         },
         "can_claim": [
@@ -902,12 +1000,20 @@ def run_dream_real_history_eval(
     job_rows: Iterable[Mapping[str, Any]] | None = None,
     working_memory_rows: Iterable[Mapping[str, Any]] | None = None,
     manual_source_review_rows: Iterable[Mapping[str, Any]] | None = None,
+    model_config: ChatClientConfig | None = None,
+    model_call: dream_worker.ModelCall | None = None,
+    dream_worker_mode: str = DEFAULT_DREAM_WORKER_MODE,
+    model_route_payload: Mapping[str, Any] | None = None,
     registry_dir: Path | None = None,
     jobs_path: Path | None = None,
     working_memory_path: Path | None = None,
     max_packs: int = 4,
     min_packs: int = 1,
+    max_samples: int = 1,
 ) -> dict[str, Any]:
+    worker_mode = normalized_worker_mode(dream_worker_mode)
+    if worker_mode == MODEL_BACKED_DREAM_WORKER_MODE and model_config is None:
+        raise ValueError("model_config is required when dream_worker_mode='model_backed'")
     registry_path, _ = registry_paths(registry_dir)
     jobs = list(job_rows) if job_rows is not None else iter_jsonl(jobs_path or default_jobs_path(registry_path))
     working_rows = (
@@ -920,7 +1026,16 @@ def run_dream_real_history_eval(
         working_memory_rows=working_rows,
         max_packs=max_packs,
     )
-    worker_runs: list[Mapping[str, Any]] = [run_pack_dream_worker(pack) for pack in packs]
+    worker_runs: list[Mapping[str, Any]] = [
+        run_pack_dream_worker(
+            pack,
+            model_config=model_config if worker_mode == MODEL_BACKED_DREAM_WORKER_MODE else None,
+            model_call=model_call,
+            no_write=False,
+            max_samples=max(1, int(max_samples)),
+        )
+        for pack in packs
+    ]
     dream_working_rows = [
         row
         for run in worker_runs
@@ -941,6 +1056,19 @@ def run_dream_real_history_eval(
         kind for pack in packs for kind in (pack.get("source_seed_kinds") or [])
     )
     status = eval_status(len(packs), min_packs, comparison["lift"])
+    metrics: dict[str, Any] = {
+        "job_row_count": len(jobs),
+        "working_memory_row_count": len(working_rows),
+        "pack_count": len(packs),
+        "dream_worker_mode": worker_mode,
+        "dream_finding_count": sum(len(run.get("findings") or []) for run in worker_runs),
+        "dream_working_memory_count": len(dream_working_rows),
+        "source_seed_kind_counts": dict(sorted(seed_kind_counts.items())),
+        "user_visible": user_visible,
+        **comparison,
+    }
+    if model_route_payload:
+        metrics["dream_model_route"] = dict(model_route_payload)
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": EVAL_KIND,
@@ -948,21 +1076,17 @@ def run_dream_real_history_eval(
         "status": status,
         "claim_level": CLAIM_LEVEL,
         "private_text_emitted": False,
-        "metrics": {
-            "job_row_count": len(jobs),
-            "working_memory_row_count": len(working_rows),
-            "pack_count": len(packs),
-            "dream_finding_count": sum(len(run.get("findings") or []) for run in worker_runs),
-            "dream_working_memory_count": len(dream_working_rows),
-            "source_seed_kind_counts": dict(sorted(seed_kind_counts.items())),
-            "user_visible": user_visible,
-            **comparison,
-        },
+        "metrics": metrics,
         "packs": [sanitized_pack(pack) for pack in packs],
         "live_worker_contract": dream_live_worker_cache_contract(),
         "can_claim": [
             "selected_real_history_packs_have_structural_cross_thread_source_refs",
-            "deterministic_dream_hypotheses_can_be_compared_against_plain_rows",
+            (
+                "bounded_model_backed_dream_hypotheses_can_be_compared_against_plain_rows"
+                if worker_mode == MODEL_BACKED_DREAM_WORKER_MODE
+                else "deterministic_dream_hypotheses_can_be_compared_against_plain_rows"
+            ),
+            "visibility_ablation_harness_ran_on_selected_real_history_packs",
         ],
         "cannot_claim": [
             "private_real_history_dream_quality",
@@ -982,6 +1106,24 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--working-memory", type=Path)
     parser.add_argument("--max-packs", type=int, default=4)
     parser.add_argument("--min-packs", type=int, default=1)
+    parser.add_argument(
+        "--dream-worker-mode",
+        default=DEFAULT_DREAM_WORKER_MODE,
+        choices=("deterministic", "model-backed", "model_backed"),
+    )
+    parser.add_argument("--model-route", default=None)
+    parser.add_argument("--model", default="")
+    parser.add_argument("--base-url", default="")
+    parser.add_argument("--api-key-env", default=DEFAULT_DEEPSEEK_API_KEY_ENV)
+    parser.add_argument("--max-tokens", type=int, default=None)
+    parser.add_argument("--max-samples", type=int, default=1)
+    parser.add_argument("--dream-model-timeout", type=float, default=60.0)
+    parser.add_argument("--dream-model-temperature", type=float, default=0.0)
+    parser.add_argument(
+        "--dream-model-thinking",
+        default="auto",
+        choices=("auto", "enabled", "disabled"),
+    )
     parser.add_argument("--json", action="store_true", help="Emit compact JSON.")
     parser.add_argument("--output", type=Path)
     return parser
@@ -989,12 +1131,21 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
+    worker_mode = normalized_worker_mode(args.dream_worker_mode)
+    model_config = None
+    model_route_payload = None
+    if worker_mode == MODEL_BACKED_DREAM_WORKER_MODE:
+        model_config, model_route_payload = dream_model_config_from_args(args)
     payload = run_dream_real_history_eval(
         registry_dir=args.registry_dir,
         jobs_path=args.jobs,
         working_memory_path=args.working_memory,
         max_packs=args.max_packs,
         min_packs=args.min_packs,
+        dream_worker_mode=worker_mode,
+        model_config=model_config,
+        model_route_payload=model_route_payload,
+        max_samples=args.max_samples,
     )
     text = json.dumps(payload, ensure_ascii=False, indent=None if args.json else 2)
     if args.output:

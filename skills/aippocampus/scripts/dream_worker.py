@@ -22,8 +22,12 @@ from dream_working_memory import (
     adjudicated_dream_findings_to_working_memory,
     background_adjudicate_dream_findings,
 )
+from dream_worker_contract import (
+    PROMPT_ORDER,
+    stable_worker_contract,
+    variable_run_directive,
+)
 from model_client import (
-    DEEPSEEK_PREFIX_CACHE_CONTRACT,
     ChatClientConfig,
     cache_metrics_from_response,
     chat_json,
@@ -35,8 +39,6 @@ SUMMARY_KIND = "aippocampus_dream_worker_summary"
 FINDING_KIND = "dream_synthesized"
 PACK_KIND = "aippocampus_dream_input_pack"
 READY_STATUS = "ready_for_dream_worker"
-PROMPT_VERSION = "dream_worker_v1"
-PROMPT_ORDER = ["stable_dream_worker_contract", "source_pack_payload", "variable_run_directive"]
 MODEL_PHASE = "phase4_model_backed_pack_worker"
 EXECUTION_MODE = "detached_background"
 MAX_MODEL_CONFIDENCE = 0.86
@@ -217,49 +219,6 @@ def safe_pack_payload(pack: Mapping[str, Any]) -> dict[str, Any]:
     return sanitize_external_model_payload(payload)
 
 
-def stable_worker_contract() -> dict[str, Any]:
-    return {
-        "prompt_part": "stable_dream_worker_contract",
-        "prompt_version": PROMPT_VERSION,
-        "worker": "aippocampus_bounded_model_backed_dream_worker",
-        "cache_contract": DEEPSEEK_PREFIX_CACHE_CONTRACT,
-        "execution_mode": EXECUTION_MODE,
-        "allowed_dream_functions": sorted(CANDIDATE_KINDS_BY_FUNCTION),
-        "output_schema": {
-            "findings": [
-                {
-                    "candidate_kind": "allowed kind for the requested dream_function",
-                    "title": "short non-factual hypothesis title",
-                    "summary": "tentative source-backed synthesis",
-                    "confidence": "0.0-0.86; dream workers must stay tentative",
-                    "source_ref_ids": ["sr0"],
-                    "bridge_claims": [
-                        {"claim": "why these source handles support the bridge", "source_ref_ids": ["sr0"]}
-                    ],
-                }
-            ]
-        },
-        "hard_rules": [
-            "Return JSON only.",
-            "Use only source_ref_ids from the source_ref_inventory.",
-            "Every candidate and every bridge_claim must cite source_ref_ids.",
-            "Do not state private or factual claims beyond the selected source pack.",
-            "Do not request foreground execution, clean-source mutation, or formal memory promotion.",
-        ],
-    }
-
-
-def variable_run_directive(dream_function: str, *, max_samples: int) -> dict[str, Any]:
-    return {
-        "prompt_part": "variable_run_directive",
-        "dream_function": dream_function,
-        "max_samples": max(1, int(max_samples)),
-        "allowed_candidate_kinds": sorted(CANDIDATE_KINDS_BY_FUNCTION[dream_function]),
-        "source_ref_id_rule": "source_ref_ids must come from the immediately preceding source_pack_payload",
-        "truth_boundary": "dream_synthesized_candidate_not_fact",
-    }
-
-
 def build_worker_messages(
     pack: Mapping[str, Any],
     *,
@@ -269,7 +228,11 @@ def build_worker_messages(
     return [
         {
             "role": "system",
-            "content": json.dumps(stable_worker_contract(), ensure_ascii=False, sort_keys=False),
+            "content": json.dumps(
+                stable_worker_contract(CANDIDATE_KINDS_BY_FUNCTION),
+                ensure_ascii=False,
+                sort_keys=False,
+            ),
         },
         {
             "role": "user",
@@ -282,7 +245,11 @@ def build_worker_messages(
         {
             "role": "user",
             "content": json.dumps(
-                variable_run_directive(dream_function, max_samples=max_samples),
+                variable_run_directive(
+                    dream_function,
+                    max_samples=max_samples,
+                    candidate_kinds_by_function=CANDIDATE_KINDS_BY_FUNCTION,
+                ),
                 ensure_ascii=False,
                 sort_keys=False,
             ),
@@ -363,8 +330,15 @@ def finding_from_candidate(
         return None, {"reason": "missing_title_or_summary", "candidate_kind": candidate_kind}
 
     confidence = safe_float(candidate.get("confidence"), 0.0)
+    activation_cues = string_list(
+        candidate.get("activation_cues") or candidate.get("route_cues"),
+        limit=8,
+        max_chars=120,
+    )
     refs = resolve_refs(candidate.get("source_ref_ids"), by_id)
     failures: list[str] = []
+    if not activation_cues:
+        failures.append("missing_activation_cues")
     if not refs:
         failures.append("missing_or_unknown_source_ref_ids")
     if confidence > MAX_MODEL_CONFIDENCE:
@@ -441,6 +415,7 @@ def finding_from_candidate(
         "fingerprint": stable_digest(pack_id, dream_function, candidate_index, candidate_kind, title, prefix="dream_model"),
         "title": title,
         "summary": summary,
+        "activation_cues": activation_cues,
         "confidence": round(confidence, 4),
         "source_refs": refs,
         "source_ref_audit": {

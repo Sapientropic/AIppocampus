@@ -164,6 +164,8 @@ def _working_memory_card(item: dict[str, Any]) -> dict[str, Any]:
             else "Search clean source before presenting exact claims as facts."
         ),
     }
+    if item.get("candidate_type"):
+        card["candidate_type"] = item.get("candidate_type")
     policy = policy_payload_for_working_memory(item)
     if policy:
         card["ambient_policy"] = policy

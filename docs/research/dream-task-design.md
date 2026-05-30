@@ -3,9 +3,10 @@
 Status: research memo with deterministic Phase 1 compensatory output, a Phase 2
 source-pack/adjudication substrate, a selected real-history Phase 3 structural
 eval, bounded model-backed compensatory/amplification/prospective worker paths,
-an active-imagination sandbox, and a retrospective prospective-validation
-harness covered by mocked tests; awaiting live smoke, cross-model validation,
-and measured user-visible recall/reflection impact.
+an active-imagination sandbox, a detached sleep-cycle Dream Dialogue design, and
+a retrospective prospective-validation harness covered by mocked tests;
+awaiting live smoke, cross-model validation, and measured user-visible
+recall/reflection impact.
 Anthropic Managed Agents Dreams are confirmed as an adjacent official Research
 Preview, but this memo's Jung-inspired dream tasks are an AIppocampus-specific
 design proposal.
@@ -556,6 +557,141 @@ hypothesis inputs as backstage-only and drops rows blocked by the sensitive-use
 gate, so a dream cannot become a foreground action ticket merely by bypassing
 ambient recall.
 
+### Sleep-Cycle Dream Dialogue
+
+Phase 4 active imagination should not be a foreground pattern where the main
+agent summons workers while the user is waiting. It should be a detached sleep
+cycle over dream queue items. The main user-facing agent can later consume only
+the residue that has passed source, risk, review, expiry, and visibility gates.
+
+The sleep cycle is a dialogue among source-anchored unresolved structures, not a
+simulation of the user. Workers must not roleplay "the user" or claim privileged
+access to user intent. They may voice the journey itself: active questions,
+current frontiers, bridge tensions, ignored counter-evidence, and compensatory
+opposite structures. Their natural voice is first-person plural -- "where this
+route seems blocked" or "what this journey has not yet looked at" -- not a
+third-person profile such as "the user probably wants X."
+
+The first candidate voices are:
+
+- `active_question_voice`: speaks from unresolved question candidates and linked
+  question chains.
+- `current_frontier_voice`: speaks from Journey frontier rows, boundary reasons,
+  and recent stopping points.
+- `opposite_hexagram_voice`: speaks from the deterministic opposite / 错卦
+  structure, but only after a one-sidedness gate fires.
+- `resonance_voice`: speaks from cross-thread source packs, concept edges,
+  ambient residue fingerprints, and previously parked dream hypotheses.
+
+The cycle may generate creative language, but its legal product is only an
+append-only probe:
+
+```json
+{
+  "finding_kind": "dream_synthesized",
+  "dream_function": "active_imagination",
+  "probe_kind": "user_probe | source_reopen_check | retrospective_support_check",
+  "review_state": "needs_review",
+  "foreground_eligible": false,
+  "formal_memory_eligible": false,
+  "source_refs": ["thread:example#turn:12", "thread:example#turn:27"],
+  "why_this_is_not_fact": "A dream probe names a possible route, not a source fact.",
+  "counter_evidence": ["thread:example#turn:31"]
+}
+```
+
+Dream Dialogue must never emit conclusions, profile facts, or automatic recall
+instructions. It emits candidate questions and hypotheses for later
+adjudication. The foreground can wake them only through the same working-memory,
+ambient-card, reflection-topology, and agency-affordance gates described above.
+
+### Precision Policies And Gates
+
+Do not collapse dream scoring into a single confidence value. A dream probe does
+not become "more true" because it feels coherent. Its scores are attention and
+lifecycle controls, not factual posterior probabilities.
+
+Separate the policy into three stages:
+
+| Policy | When it runs | Question it answers |
+|---|---|---|
+| `retention_policy` | During the detached sleep cycle | Is this probe worth keeping in the review queue? |
+| `activation_policy` | When a later thread becomes relevant | Should this residue surface as silent tuning, a gentle nudge, or source-backed recall? |
+| `retrospective_policy` | After future source appears | Did later source support, refute, stale out, or leave this prospective probe unknown? |
+
+`source_anchor_strength` is the common spine across all three policies, but it
+is not enough by itself. Use deterministic gates for anything that protects the
+source boundary:
+
+- source refs must resolve before a probe can be retained
+- active imagination needs at least two independent source anchors
+- bridge claims must cite the source refs on both sides of the bridge
+- sensitive/profile-style interpretations remain parked by default
+- unadjudicated probes stay `foreground_eligible=false`
+- the opposite / 错卦 voice may run only when `one_sidedness_gate=true`
+
+Floating weights are allowed only after those gates. They should tune attention,
+not truth:
+
+- `retention_pressure`: source anchor strength, structural divergence,
+  counterweight value, novelty, and expiry horizon.
+- `activation_pressure`: current topic fit, visibility budget, source visibility,
+  annoyance risk, and whether the probe changes the present answer or route.
+- `retrospective_pressure`: later source support, later source refutation,
+  unresolved recurrence, and whether the original probe still names a live
+  frontier.
+
+The most important non-deterministic signal is not a model self-rating of
+"expected information gain." A model should not generate a probe, score its own
+probe, and decide that the probe should surface. The safer proxy is structural
+divergence: ask multiple structure voices to respond to the same frontier and
+measure where their proposed probes disagree. High disagreement marks a likely
+uncertainty pocket; deterministic aggregation then ranks the resulting probes.
+
+### One-Sidedness Gate For Compensation
+
+The opposite / 错卦 voice is useful because its symbolic structure is
+deterministic. That does not mean it should run all the time. Compensation is
+only warranted when the observed journey has become one-sided enough to need a
+counterweight.
+
+`one_sidedness_gate` should be deterministic and conservative. Candidate inputs
+include:
+
+- waypoint or frontier hexagram arcs staying in the same trigram family for too
+  long
+- repeated active questions that never receive a counter-perspective
+- a recurring theme that appears as residue but is repeatedly absent from the
+  foreground route
+- source-backed user corrections that point at the same avoided angle
+
+If the gate does not fire, the opposite voice is not "balanced"; it is noise. It
+should not create a blind-spot probe merely because a complementary symbol can
+be computed.
+
+### Three Ways To Wake
+
+Validation in the dream loop must not mean "the dream confirmed itself." A
+closed internal loop that never touches source, future behavior, or the real
+user is useful for hypothesis generation and dangerous for confirmation.
+
+There are three legal waking paths:
+
+| Path | What judges the probe | Use case |
+|---|---|---|
+| `source_reopen_check` | Past clean source | Reopen cited source refs before making any strong claim about what already happened. |
+| `user_probe` | The current user | Ask the smallest high-information question when the current answer would depend on an uncertain or sensitive dream hypothesis. |
+| `retrospective_support_check` | Future source | Revisit parked prospective probes after later threads, Journey moves, or correction outcomes add explicit source-backed evidence. |
+
+The third path is the home lifecycle for prospective and active-imagination
+residue. Some probes point beyond the source that created them; the right
+adjudicator may be a later thread rather than the current one. Do not expire
+those probes merely because the past cannot confirm them. Park them with a
+review horizon, then let future source sort them into `supported`, `refuted`,
+`stale`, or `unknown`. Similar vocabulary alone is not support; later evidence
+must connect back to the finding, frontier, question, or source-backed route it
+claimed to illuminate.
+
 ### Ambient Residue As Dream Seed
 
 Thread ambient cache can also feed dream work, but only through an intermediate
@@ -677,7 +813,7 @@ user's ongoing journey, then can retrieve the specifics on demand.
 | 1 | Compensatory analysis | Single thread extraction | Low; first deterministic helper implemented |
 | 2 | Prospective analysis | Multiple thread extraction + theme emergence | Medium |
 | 3 | Amplification | Cross-thread registration + concept edges | Medium |
-| 4 | Active imagination | All above + explicit dream flag + audit trail | High |
+| 4 | Sleep-cycle Dream Dialogue / active imagination | All above + dream queue lifecycle + precision policies + audit trail | High |
 
 Phase 1 is implemented as a conservative local helper, not as proof that dream
 output improves live recall. Phase 4 remains a research target that depends on
@@ -686,17 +822,21 @@ everything else being stable.
 ## Open Questions
 
 1. How does dream output interact with the intuition layer (hexagram arcs)?
-   Should dream insights also be compressible into thread mood markers?
+   Should some dream residues compress into low-salience mood markers, or stay
+   only as reviewable hypotheses?
 2. What is the right trigger for dream tasks? After N threads? On user request?
-   Time-based? When the compensatory function detects a significant blind spot?
+   Time-based? When retention pressure crosses a threshold? When a Journey
+   frontier changes?
 3. How to prevent the dream task from becoming a "storytelling engine" that
    imposes narrative on non-narrative threads?
-4. Does compensatory analysis work for technical threads, or is it primarily
-   valuable for life-wide/personal threads?
-5. How to evaluate dream output quality? Extraction quality is measurable
-   (precision/recall against source). Dream quality is harder to ground-truth.
-6. Can the prospective function be validated retroactively — i.e., do emergence
-   signals actually predict future threads?
+4. Which deterministic `one_sidedness_gate` signals are reliable enough to
+   justify the opposite / 错卦 voice, especially for technical threads?
+5. How should floating retention, activation, and retrospective policies be
+   calibrated from Journey feedback, ignored nudges, user corrections, and
+   later source support without turning scores into truth claims?
+6. Can the prospective function be validated retroactively -- i.e., do
+   emergence signals actually predict future threads when tested through
+   time-sliced replay and later source-backed evidence?
 
 ## Related Work
 
@@ -732,3 +872,12 @@ subconscious reconsolidation loop. The key addition is that work-task
 continuity needs semantic adjudication: a user's correction should be captured
 and preserved across compaction, but later dream work must still be able to
 mark it valid, refuted, superseded, local-only, or uncertain.
+
+**User insight (2026-05-31):**
+Reframed active imagination as detached sleep-cycle Dream Dialogue rather than
+foreground worker invocation. The dream voices should represent source-anchored
+unresolved journey structures, not simulated user personas. Dream output should
+remain append-only probes with source refs and review gates; waking requires
+source reopen, a real user probe, or retrospective support from future source.
+The same discussion split dream scoring into deterministic gates plus floating
+retention, activation, and retrospective precision policies.

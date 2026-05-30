@@ -151,6 +151,10 @@ class DreamRealHistoryEvalTests(unittest.TestCase):
                                             "candidate_kind": candidate_kind,
                                             "title": f"{dream_function} candidate",
                                             "summary": "A tentative model-backed dream hypothesis over selected source refs.",
+                                            "activation_cues": [
+                                                f"{dream_function} continuity source bridge",
+                                                "selected source-ref dream hypothesis",
+                                            ],
                                             "confidence": 0.68,
                                             "source_ref_ids": ["sr0", "sr1"],
                                             "bridge_claims": [
@@ -222,6 +226,73 @@ class DreamRealHistoryEvalTests(unittest.TestCase):
         self.assertEqual(payload["packs"][0]["themes"], ["continuity"])
         self.assertEqual(payload["metrics"]["user_visible"]["claim_level"], "visibility_ablation_harness")
         self.assertIn("real_user_behavior", payload["metrics"]["user_visible"]["cannot_claim"])
+
+    def test_eval_can_run_model_backed_worker_through_visibility_ablation(self) -> None:
+        job_rows, working_rows = fixture_rows()
+        calls: list[list[dict[str, str]]] = []
+
+        def fake_model_call(messages: list[dict[str, str]], call_config: ChatClientConfig) -> dict[str, object]:
+            calls.append(messages)
+            directive = json.loads(messages[-1]["content"])
+            dream_function = directive["dream_function"]
+            candidate_kind = "blind_spot" if dream_function == "compensatory" else "cross_thread_resonance"
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "findings": [
+                                        {
+                                            "candidate_kind": candidate_kind,
+                                            "title": f"{dream_function} candidate",
+                                            "summary": "A tentative model-backed dream hypothesis over selected source refs.",
+                                            "activation_cues": [
+                                                f"{dream_function} continuity source bridge",
+                                                "selected source-ref dream hypothesis",
+                                            ],
+                                            "confidence": 0.68,
+                                            "source_ref_ids": ["sr0", "sr1"],
+                                            "bridge_claims": [
+                                                {
+                                                    "claim": "The bridge cites selected source handles.",
+                                                    "source_ref_ids": ["sr0", "sr1"],
+                                                }
+                                            ],
+                                        }
+                                    ]
+                                }
+                            )
+                        }
+                    }
+                ],
+                "usage": {"prompt_cache_hit_tokens": 4, "prompt_cache_miss_tokens": 2},
+            }
+
+        payload = dream_eval.run_dream_real_history_eval(
+            job_rows=job_rows,
+            working_memory_rows=working_rows,
+            max_packs=2,
+            min_packs=1,
+            dream_worker_mode="model_backed",
+            model_config=ChatClientConfig(
+                api_key="test",
+                model="deepseek-v4-flash",
+                base_url="https://example.invalid",
+                cache_contract=DEEPSEEK_PREFIX_CACHE_CONTRACT,
+            ),
+            model_call=fake_model_call,
+        )
+
+        self.assertEqual(payload["status"], "lift_observed")
+        self.assertEqual(payload["metrics"]["dream_worker_mode"], "model_backed")
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(payload["metrics"]["dream_working_memory_count"], 2)
+        self.assertEqual(payload["metrics"]["user_visible"]["metrics"]["cost_cache"]["model_call_count"], 2)
+        self.assertIn(
+            "bounded_model_backed_dream_hypotheses_can_be_compared_against_plain_rows",
+            payload["can_claim"],
+        )
 
     def test_user_visible_lift_eval_reports_separate_sanitized_metrics(self) -> None:
         job_rows, working_rows = fixture_rows()

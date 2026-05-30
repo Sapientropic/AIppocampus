@@ -14,35 +14,41 @@ from aippocampuslib import codex_home, now_utc
 DEFAULT_SEARCH_BUDGET_FALLBACK = 3
 PROMPT_HOOK_SEMANTIC_TIMEOUT_FALLBACK = float(os.environ.get("AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT", "2.5"))
 PROMPT_HOOK_MAX_ELAPSED_MS_FALLBACK = int(os.environ.get("AIPPOCAMPUS_PROMPT_HOOK_BUDGET_MS", "4300"))
-_RUNTIME_EXPORTS = {
-    "DEFAULT_SEARCH_BUDGET",
-    "PROMPT_HOOK_SEMANTIC_TIMEOUT",
-    "SCENT_THRESHOLD",
-    "association_boost",
-    "ambient_debug_summary",
-    "assess_prompt",
-    "context_for_hook",
-    "hook_input_from_stdin",
-    "hook_stdout_payload",
-    "merge_association_candidates",
-}
+_RUNTIME_EXPORTS = set(
+    "DEFAULT_SEARCH_BUDGET PROMPT_HOOK_SEMANTIC_TIMEOUT SCENT_THRESHOLD association_boost "
+    "ambient_debug_summary apply_dream_delivery_boundary assess_prompt context_for_hook "
+    "hook_input_from_stdin hook_stdout_payload merge_association_candidates".split()
+)
 _RUNTIME_CACHE: dict[str, Any] | None = None
 
+def _add_dream_delivery_arguments(parser: argparse.ArgumentParser) -> None:
+    try:
+        from dream_delivery_policy import add_dream_delivery_arguments as add_args  # noqa: PLC0415
+    except Exception:
+        parser.add_argument("--dream-shadow-ab", action="store_true")
+        parser.add_argument("--dream-shadow-log")
+        parser.add_argument("--dream-shadow-salt", default=os.environ.get("AIPPOCAMPUS_DREAM_SHADOW_AB_SALT"))
+        parser.add_argument("--dream-delivery-mode")
+        parser.add_argument("--dream-rollout-rate", type=float, default=None)
+    else:
+        add_args(parser)
+
+def _prepare_dream_delivery(*, prompt: str, hook_input: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
+    try:
+        from dream_delivery_policy import prepare_dream_delivery as prepare  # noqa: PLC0415
+    except Exception:
+        return {"mode": "off", "event": None, "allow_dream": False, "dream_hypothesis_limit": 0, "reason": "policy_unavailable"}
+    return prepare(prompt=prompt, hook_input=hook_input, args=args)
 
 def _load_runtime() -> dict[str, Any]:
-    """Load split recall modules lazily so partial installs cannot break hooks.
-
-    Codex runs UserPromptSubmit in the foreground. During local development or
-    install sync, the entrypoint may be copied before newly split helper modules.
-    Importing helpers inside the protected runtime path keeps that transient
-    mismatch as a quiet skip instead of a hook process crash.
-    """
+    """Load split recall modules lazily so partial installs quietly skip."""
     global _RUNTIME_CACHE
     if _RUNTIME_CACHE is not None:
         return _RUNTIME_CACHE
 
     from prompt_context_render import (  # noqa: PLC0415
         ambient_debug_summary,
+        apply_dream_delivery_boundary,
         context_for_hook,
         hook_stdout_payload,
     )
@@ -62,6 +68,7 @@ def _load_runtime() -> dict[str, Any]:
         "SCENT_THRESHOLD": SCENT_THRESHOLD,
         "association_boost": association_boost,
         "ambient_debug_summary": ambient_debug_summary,
+        "apply_dream_delivery_boundary": apply_dream_delivery_boundary,
         "assess_prompt": assess_prompt,
         "context_for_hook": context_for_hook,
         "hook_input_from_stdin": hook_input_from_stdin,
@@ -76,7 +83,6 @@ def __getattr__(name: str) -> Any:
         return _load_runtime()[name]
     raise AttributeError(name)
 
-
 def write_debug_log(
     result: dict[str, Any],
     *,
@@ -90,10 +96,7 @@ def write_debug_log(
     path.parent.mkdir(parents=True, exist_ok=True)
     ambient_summary = _load_runtime()["ambient_debug_summary"](result)
     semantic_gate = result.get("semantic_gate") or {}
-    semantic_debug_keys = (
-        "available", "decision", "confidence", "cached", "query_aliases",
-        "availability_reason", "diagnostic", "elapsed_ms", "timeout", "budget", "error_buckets",
-    )
+    semantic_debug_keys = ("available", "decision", "confidence", "cached", "query_aliases", "availability_reason", "diagnostic", "elapsed_ms", "timeout", "budget", "error_buckets")
     event = {
         "timestamp": now_utc(),
         "session_id": (hook_input or {}).get("session_id"),
@@ -145,7 +148,6 @@ def write_debug_log(
     with path.open("a", encoding="utf-8", newline="\n") as fh:
         fh.write(json.dumps(event, ensure_ascii=False) + "\n")
 
-
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--prompt", help="Dry-run prompt text. If omitted, read Codex hook JSON from stdin.")
@@ -185,9 +187,7 @@ def main() -> int:
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--log", action="store_true")
     parser.add_argument("--log-skip", action="store_true")
-    parser.add_argument("--dream-shadow-ab", action="store_true")
-    parser.add_argument("--dream-shadow-log")
-    parser.add_argument("--dream-shadow-salt", default=os.environ.get("AIPPOCAMPUS_DREAM_SHADOW_AB_SALT"))
+    _add_dream_delivery_arguments(parser)
     parser.add_argument("--strict", action="store_true")
     args = parser.parse_args()
 
@@ -202,6 +202,7 @@ def main() -> int:
             prompt = args.prompt
             cwd = Path(args.cwd or os.getcwd())
         thread_id = str(args.session_id or hook_input.get("session_id") or "").strip() or None
+        dream_delivery = _prepare_dream_delivery(prompt=prompt, hook_input=hook_input, args=args)
         result = runtime["assess_prompt"](
             prompt,
             cwd=cwd,
@@ -230,15 +231,16 @@ def main() -> int:
             warm_max_workers=args.warm_max_workers,
             warm_timeout=args.warm_timeout,
             warm_quorum=args.warm_quorum,
+            dream_hypothesis_limit=dream_delivery["dream_hypothesis_limit"],
+        )
+        result = runtime["apply_dream_delivery_boundary"](
+            result,
+            allow_dream=bool(dream_delivery["allow_dream"]),
+            max_dream_hypotheses=1,
+            reason=str(dream_delivery["reason"]),
         )
         if args.log or args.log_skip:
             write_debug_log(result, hook_input=hook_input, include_skip=args.log_skip)
-        shadow_env = str(os.environ.get("AIPPOCAMPUS_DREAM_SHADOW_AB") or "").casefold()
-        shadow_enabled = args.dream_shadow_ab or shadow_env in {"1", "true", "yes", "on"}
-        if shadow_enabled:
-            from dream_live_shadow_ab import record_prompt_shadow_from_hook_args  # noqa: PLC0415
-
-            record_prompt_shadow_from_hook_args(prompt=prompt, hook_input=hook_input, args=args)
         if args.json_output:
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0

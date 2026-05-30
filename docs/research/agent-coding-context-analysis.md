@@ -118,8 +118,8 @@ integrate with them through source refs and compact memory tickets.
 The differentiated product claim is:
 
 > AIppocampus preserves the decision shadow of a codebase: not just what was
-> chosen, but what was rejected, why it was rejected, and whether that judgment
-> is still current.
+> chosen, but what was rejected, why it was rejected, and what must be checked
+> before an agent repeats or reopens that route.
 
 This sits between ordinary code indexing and project management:
 
@@ -164,6 +164,7 @@ Needed memory objects:
 ```yaml
 decision_event:
   id: "decision:..."
+  kind: "accepted_decision | rejected_path | constraint | correction"
   source_refs:
     - "clean-source:..."
   affected_scope:
@@ -174,26 +175,61 @@ decision_event:
   rejected_paths:
     - path: "..."
       why_rejected: "..."
-      still_rejected: "yes | no | unknown"
   constraints:
     - "..."
   evidence_status: "source_backed | inferred | disputed"
-  freshness: "fresh | aging | stale | superseded"
+  status: "staging"
+  truth_status: "candidate_hypothesis_until_reviewed"
+  formal_memory_promoted: false
   supersedes: []
   superseded_by: []
-  confidence: 0.0
   journey_context:
-    waypoint_arc: "..."          # hexagram arc at the moment of decision
-    line_text: "..."             # 爻辞: fine-grained semantic anchor
-    dynamics_label: "..."        # 五行: generating / controlling sequence
-    wen_neighbors: []            # 序卦: culturally weighted next states
+    waypoint_arc: null           # optional hexagram arc at decision time
+    line_text: null              # optional 爻辞: fine-grained semantic anchor
+    dynamics_label: null         # optional 五行: generating / controlling sequence
+    wen_neighbors: []            # optional 序卦: culturally weighted next states
+
+decision_state_assessment:
+  id: "decision-state:..."
+  decision_event_id: "decision:..."
+  as_of: "..."
+  assessment_kind: "read_time | reviewer | dream_retrospective"
+  basis_refs:
+    - "clean-source:..."
+    - "repo-state:..."
+  repo_state_fingerprint: "..."
+  source_thickness: "thin | usable | strong"
+  still_rejected: "yes | no | unknown"
+  freshness: "fresh | aging | stale | superseded"
+  confidence: 0.0
+  proposed_use: "refresh_sources | ask | remind | warn"
+  truth_boundary: "derived_weather_not_source_fact"
 ```
 
-#### Journey Tracking's Role in Layer 2
+`decision_event` is terrain: append-only, source-backed facts about what was
+said, chosen, rejected, corrected, or constrained at the time. It should not
+store current-validity weather such as `still_rejected`, `freshness`, or a
+generic confidence score.
 
-Without Journey Tracking, `decision_event` is a flat, timestamped record —
-functionally equivalent to what EntireContext or Cairn already produce. The
-differentiation comes from the hexagram-based temporal structure:
+`decision_state_assessment` is weather: a read-time or reviewer-produced
+judgment about whether an old reason still appears to hold under present source
+and repo state. Old source can prove that a route was rejected then. It cannot,
+by itself, prove that the route should still be rejected now.
+
+Hard rule: when `source_thickness="thin"`, the only safe `proposed_use` values
+are `refresh_sources` or `ask`. Thin evidence must not warn, block, or assert
+`still_rejected=yes`.
+
+#### Journey Tracking's Optional Role in Layer 2
+
+Journey Tracking can enrich decision events, but it is not the commercial
+wedge's load-bearing mechanism. A flat `decision_event` is already
+differentiated from ordinary extracted-memory records when it follows the
+AIppocampus discipline: source refs, candidate status until reviewed,
+append-only terrain, no automatic formal promotion, and current-validity
+weather derived on read.
+
+The hexagram-based temporal structure is useful as an optional route signal:
 
 - **Waypoint arcs** give each decision a semantic phase label (64 states),
   enabling path resonance: two projects that traversed similar arcs can be
@@ -208,9 +244,16 @@ differentiation comes from the hexagram-based temporal structure:
 - **序卦 forward lookahead** constrains proactive suggestions to culturally
   weighted next states rather than enumerating all possibilities.
 
-All four dimensions are deterministic (查表), no LLM needed. The LLM only
-selects the hexagram (64-way choice, cross-model consistency validated) and
-provides semantic interpretation of transitions.
+Once a waypoint arc exists, these dimensions are deterministic lookup tables.
+They should help search, reflection, and low-leakage resonance; they should not
+turn a candidate decision event into truth or decide whether a rejected route is
+still rejected.
+
+The safest high-value use is cross-project resonance under privacy constraints.
+A source-free arc such as `屯 -> 蒙 -> 需` can say "this journey shape resembles
+another one" without carrying private source text across project boundaries.
+Only after that low-leakage scent should the agent decide whether to reopen
+source inside the appropriate project.
 
 See [Journey Tracking](journey-tracking.md) and
 [hexagram validation results](hexagram-validation/results_v1.md).
@@ -245,11 +288,20 @@ coding_continuity_ticket:
   evidence_refs:
     - "clean-source:..."
   source_thickness: "thin | usable | strong"
+  derived_assessment:
+    still_rejected: "yes | no | unknown"
+    freshness: "fresh | aging | stale | superseded"
+    basis_refs: []
   expires_at: "..."
 ```
 
 Codeksei or another host can decide whether the ticket becomes a visible
 message, a backstage refresh, a blocked route, or no action.
+
+The ticket must preserve the terrain/weather boundary. Thin evidence can ask
+the host to refresh sources or ask the user; usable or strong evidence can
+support a nudge or warning. A ticket should never smuggle a decayed
+`still_rejected` value from storage into authority.
 
 Status: blueprint. This should align with
 [Agency From Cognitive Maps](agency-from-cognitive-map.md), not duplicate it.
@@ -302,8 +354,12 @@ not merely recall "there was a discussion"; it should surface:
 
 - the rejected path
 - the reason it was rejected
-- whether the reason still holds
+- that current validity must be reassessed against present source and code
 - what evidence would justify reopening it
+
+That last bullet is a Dream probe: it is not an answer generated inside the
+sleep loop, but a source-anchored question that can later be resolved by source
+reopen, user confirmation, or retrospective evidence.
 
 ### Scenario C: Tacit Constraint Protection
 
@@ -328,6 +384,12 @@ backed comparison:
 
 This should be phrased as a hypothesis with evidence refs, not as a mystical
 pattern match.
+
+This scenario is also the privacy boundary test. Cross-project resonance should
+start from content-light structure cues, such as waypoint arcs or dynamics
+labels, before any source text crosses a project boundary. The cue can say
+"there may be a relevant old shape"; source-backed comparison still has to
+happen inside the appropriate project and permission context.
 
 ## Maturity Matrix
 
@@ -371,6 +433,15 @@ selection of relevant historical decisions without duplicating code search?
 Does the system stay silent when the model already has the relevant source in
 visible context or when the memory would not change the next action?
 
+### Track F: Dream Retrospective Probes
+
+Can a Dream job produce a source-anchored probe such as "what evidence would
+justify reopening this rejected route," then later score whether future source
+supported, refuted, stale-dated, or left the probe unknown? This makes coding
+decisions a concrete test fixture for the Dream layer: prospective hints are
+valuable only if later threads can adjudicate them without turning the original
+dream output into truth.
+
 ## First Implementation Slice
 
 The first useful coding slice should be small:
@@ -378,8 +449,8 @@ The first useful coding slice should be small:
 1. Extract `decision_event` candidates from clean source and final answers.
 2. Detect rejected-path language, user corrections, and "do not repeat" notes.
 3. Store candidates in staging with source refs, not as formal memory.
-4. Add a reviewer or dream job that marks them as adopted, refuted, stale, or
-   needs confirmation.
+4. Add a reviewer or dream job that emits read-time assessments or retrospective
+   probe results: adopted, refuted, stale, needs confirmation, or unknown.
 5. Emit one compact coding continuity ticket at session start, compaction loss,
    or pre-patch moments when the evidence is strong.
 6. Let Codeksei own whether the ticket becomes silent tuning, backstage prep,
@@ -401,7 +472,9 @@ Current implementation:
 - Branch-local or broad ambiguous decisions stay `local_only` or
   `needs_confirmation`. A compact `coding_continuity_ticket` is rendered only
   when the current prompt is relevant, the source is not visible, and the shared
-  correction-reconsolidation anti-nag gate allows surfacing.
+  correction-reconsolidation anti-nag gate allows surfacing. Current-validity
+  weather should be recomputed or reviewed before the ticket warns that an old
+  rejection still applies.
 
 This does not yet claim complete design-intent extraction, global validity for
 old branch-local decisions, or host-agent intervention timing.
@@ -412,9 +485,11 @@ old branch-local decisions, or host-agent intervention timing.
   continuity.
 - Over-symbolization: journey labels and hexagram-style arcs are useful only if
   they improve recall, timing, or reflection over plain structured summaries.
-- Stale authority: old decisions must be easy to supersede.
+- Stale authority: old decisions must be easy to supersede, and
+  current-validity judgments must not be stored as durable terrain.
 - Privacy leakage: life-wide memory must not bleed private material into public
-  repos or unrelated projects.
+  repos or unrelated projects. Cross-project resonance should start from
+  content-light structure cues before reopening source.
 - Noise: if every old decision becomes a reminder, the system fails.
 - Tool confusion: AIppocampus should not replace code graph tools, test
   runners, permission systems, or host-agent planning.

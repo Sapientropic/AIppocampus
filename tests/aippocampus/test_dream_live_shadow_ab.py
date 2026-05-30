@@ -80,6 +80,223 @@ class DreamLiveShadowABTests(unittest.TestCase):
         self.assertNotIn("session-secret", encoded)
         self.assertNotIn("turn-secret", encoded)
 
+    def test_semantic_relevance_gate_can_create_dream_only_exposure(self) -> None:
+        calls: list[list[dict[str, str]]] = []
+
+        def fake_model_call(messages: list[dict[str, str]], call_config: ChatClientConfig) -> dict[str, object]:
+            calls.append(messages)
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "matches": [
+                                        {
+                                            "candidate_key": "wm_dream_delivery_gate",
+                                            "relevant": True,
+                                            "confidence": 0.82,
+                                            "reason": "same delivery-control concern",
+                                        }
+                                    ]
+                                }
+                            )
+                        }
+                    }
+                ],
+                "usage": {"prompt_tokens": 11, "completion_tokens": 7},
+            }
+
+        event = shadow.build_shadow_prompt_event(
+            prompt="怎么避免重蹈旧 rollout 失控的问题？",
+            session_id="session-secret",
+            turn_id="turn-secret",
+            baseline_rows=[],
+            dream_rows=[
+                {
+                    "kind": "aippocampus_working_memory",
+                    "status": "active",
+                    "route": "use_with_source",
+                    "candidate_type": "dream_hypothesis",
+                    "candidate_key": "wm_dream_delivery_gate",
+                    "title": "Opt-in treatment-control delivery gate",
+                    "summary": "Use only when the current prompt is about controlled rollout safety.",
+                    "trigger_terms": ["opt-in treatment control arms"],
+                    "activation_cues": ["foreground delivery A/B requires explicit opt-in"],
+                    "source_finding_ids": ["dreamfinding_delivery"],
+                    "confidence": 0.7,
+                    "project_label": "AIppocampus",
+                    "review_state": "agent_adjudicated",
+                    "sensitive_use_gate": {"state": "allowed"},
+                    "foreground_use": {"strong_claim_requires_source_reopen": True},
+                }
+            ],
+            semantic_relevance_config=ChatClientConfig(
+                api_key="test",
+                model="deepseek-v4-flash",
+                base_url="https://example.invalid",
+                cache_contract="deepseek_prefix_v1",
+            ),
+            semantic_relevance_model_call=fake_model_call,
+            project_label="AIppocampus",
+            salt="unit-test",
+        )
+        encoded = json.dumps(event, ensure_ascii=False)
+
+        self.assertTrue(event["eligible_exposure"])
+        self.assertEqual(event["dream"]["match_count"], 1)
+        self.assertEqual(event["dream"]["semantic_match_count"], 1)
+        self.assertEqual(event["semantic_relevance"]["model_call_count"], 1)
+        self.assertEqual(len(calls), 1)
+        self.assertNotIn("怎么避免", encoded)
+        self.assertNotIn("session-secret", encoded)
+        metrics = shadow.analyze_shadow_events([event])
+        self.assertEqual(metrics["match_diagnostics"]["semantic_relevance_model_call_count"], 1)
+        self.assertEqual(metrics["match_diagnostics"]["semantic_relevance_match_event_count"], 1)
+        self.assertEqual(metrics["match_diagnostics"]["dream_only_non_reminder_event_count"], 1)
+
+    def test_dry_run_records_would_deliver_without_live_delivery(self) -> None:
+        event = shadow.build_shadow_prompt_event(
+            prompt="continuity 这条线下一步怎么收？",
+            session_id="session-secret",
+            turn_id="turn-secret",
+            topic_epoch="epoch-dream",
+            baseline_rows=[],
+            dream_rows=[
+                {
+                    "kind": "aippocampus_working_memory",
+                    "status": "active",
+                    "route": "use_with_source",
+                    "candidate_type": "dream_hypothesis",
+                    "candidate_key": "wm_dream_continuity",
+                    "title": "Continuity source-ref bridge",
+                    "summary": "Use only as a route hint.",
+                    "trigger_terms": ["continuity"],
+                    "source_finding_ids": ["dreamfinding_continuity"],
+                    "confidence": 0.7,
+                    "project_label": "AIppocampus",
+                    "review_state": "agent_adjudicated",
+                    "sensitive_use_gate": {"state": "allowed"},
+                }
+            ],
+            delivery_mode="dry_run",
+            assignment_unit="thread_topic_epoch",
+            rollout_rate=1.0,
+            project_label="AIppocampus",
+            salt="unit-test",
+        )
+        metrics = shadow.analyze_shadow_events([event])
+
+        self.assertTrue(event["eligible_exposure"])
+        self.assertEqual(event["assignment_unit"], "thread_topic_epoch")
+        self.assertIn(event["would_deliver_arm"], {"control", "dream"})
+        self.assertIsNone(event["delivered_arm"])
+        self.assertIn("dry_run", event["delivery_decision"])
+        self.assertEqual(event["delivery_block_reasons"], [])
+        self.assertEqual(metrics["live_delivery_event_count"], 0)
+        self.assertEqual(metrics["would_delivery_event_count"], 1)
+
+    def test_delivered_assignment_is_stable_per_thread_topic_epoch(self) -> None:
+        dream_rows = [
+            {
+                "kind": "aippocampus_working_memory",
+                "status": "active",
+                "route": "use_with_source",
+                "candidate_type": "dream_hypothesis",
+                "candidate_key": "wm_dream_continuity",
+                "title": "Continuity source-ref bridge",
+                "summary": "Use only as a route hint.",
+                "trigger_terms": ["continuity"],
+                "source_finding_ids": ["dreamfinding_continuity"],
+                "confidence": 0.7,
+                "project_label": "AIppocampus",
+                "review_state": "agent_adjudicated",
+                "sensitive_use_gate": {"state": "allowed"},
+            }
+        ]
+        first = shadow.build_shadow_prompt_event(
+            prompt="continuity 这条线下一步怎么收？",
+            session_id="session-secret",
+            turn_id="turn-a",
+            topic_epoch="epoch-dream",
+            baseline_rows=[],
+            dream_rows=dream_rows,
+            delivery_mode="delivered",
+            assignment_unit="thread_topic_epoch",
+            rollout_rate=1.0,
+            project_label="AIppocampus",
+            salt="unit-test",
+        )
+        second = shadow.build_shadow_prompt_event(
+            prompt="continuity source refs 还在吗？",
+            session_id="session-secret",
+            turn_id="turn-b",
+            topic_epoch="epoch-dream",
+            baseline_rows=[],
+            dream_rows=dream_rows,
+            delivery_mode="delivered",
+            assignment_unit="thread_topic_epoch",
+            rollout_rate=1.0,
+            project_label="AIppocampus",
+            salt="unit-test",
+        )
+        metrics = shadow.analyze_shadow_events([first, second])
+
+        self.assertEqual(first["assignment_unit"], "thread_topic_epoch")
+        self.assertEqual(first["assigned_arm"], second["assigned_arm"])
+        self.assertEqual(first["delivered_arm"], first["assigned_arm"])
+        self.assertEqual(second["delivered_arm"], second["assigned_arm"])
+        self.assertEqual(metrics["live_delivery_event_count"], 2)
+
+    def test_semantic_relevance_error_fails_closed_for_delivery(self) -> None:
+        def failing_model_call(
+            messages: list[dict[str, str]], call_config: ChatClientConfig
+        ) -> dict[str, object]:
+            raise TimeoutError("semantic gate timed out")
+
+        event = shadow.build_shadow_prompt_event(
+            prompt="怎么避免重蹈旧 rollout 失控的问题？",
+            session_id="session-secret",
+            turn_id="turn-secret",
+            baseline_rows=[],
+            dream_rows=[
+                {
+                    "kind": "aippocampus_working_memory",
+                    "status": "active",
+                    "route": "use_with_source",
+                    "candidate_type": "dream_hypothesis",
+                    "candidate_key": "wm_dream_delivery_gate",
+                    "title": "Opt-in treatment-control delivery gate",
+                    "summary": "Use only when the current prompt is about controlled rollout safety.",
+                    "trigger_terms": ["foreground delivery A/B requires explicit opt-in"],
+                    "activation_cues": ["foreground delivery A/B requires explicit opt-in"],
+                    "source_finding_ids": ["dreamfinding_delivery"],
+                    "confidence": 0.7,
+                    "project_label": "AIppocampus",
+                    "review_state": "agent_adjudicated",
+                    "sensitive_use_gate": {"state": "allowed"},
+                }
+            ],
+            semantic_relevance_config=ChatClientConfig(
+                api_key="test",
+                model="deepseek-v4-flash",
+                base_url="https://example.invalid",
+                cache_contract="deepseek_prefix_v1",
+            ),
+            semantic_relevance_model_call=failing_model_call,
+            delivery_mode="dry_run",
+            assignment_unit="thread_topic_epoch",
+            rollout_rate=1.0,
+            project_label="AIppocampus",
+            salt="unit-test",
+        )
+
+        self.assertFalse(event["eligible_exposure"])
+        self.assertIsNone(event["would_deliver_arm"])
+        self.assertIsNone(event["delivered_arm"])
+        self.assertIn("dream_miss", event["delivery_block_reasons"])
+        self.assertEqual(event["semantic_relevance"]["error_type"], "TimeoutError")
+
     def test_outcome_attribution_uses_nearest_prior_eligible_exposure_once(self) -> None:
         rows = [
             shadow.test_event(
@@ -129,6 +346,18 @@ class DreamLiveShadowABTests(unittest.TestCase):
         self.assertEqual(metrics["attribution"]["unattributed_reminder_count"], 0)
         self.assertEqual(metrics["reminder_family_counts"], {"unit": 1})
         self.assertEqual(metrics["reminder_strength_counts"], {"high": 1})
+        self.assertEqual(
+            metrics["match_diagnostics"],
+            {
+                "baseline_match_event_count": 0,
+                "dream_match_event_count": 3,
+                "both_match_event_count": 0,
+                "dream_only_non_reminder_event_count": 3,
+                "dream_only_reminder_event_count": 0,
+                "semantic_relevance_model_call_count": 0,
+                "semantic_relevance_match_event_count": 0,
+            },
+        )
 
     def test_append_and_analyze_event_log_keeps_report_sanitized(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -228,6 +457,9 @@ class DreamLiveShadowABTests(unittest.TestCase):
         self.assertEqual(payload["metrics"]["thread_count"], 2)
         self.assertEqual(payload["metrics"]["arms"]["dream"]["eligible_exposures"], 1)
         self.assertEqual(payload["metrics"]["attribution"]["attributed_reminder_count"], 1)
+        self.assertEqual(payload["metrics"]["match_diagnostics"]["dream_match_event_count"], 2)
+        self.assertEqual(payload["metrics"]["match_diagnostics"]["dream_only_non_reminder_event_count"], 1)
+        self.assertEqual(payload["metrics"]["match_diagnostics"]["dream_only_reminder_event_count"], 1)
         self.assertFalse(payload["private_text_emitted"])
         self.assertNotIn("continuity 这条线", encoded)
         self.assertNotIn("source-a", encoded)

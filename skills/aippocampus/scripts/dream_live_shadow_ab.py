@@ -21,7 +21,7 @@ import re
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import dream_real_history_eval as dream_eval
 from aippocampuslib import now_utc
@@ -43,6 +43,7 @@ from model_client import (
     DEEPSEEK_PREFIX_CACHE_CONTRACT,
     NO_PROVIDER_CACHE_CONTRACT,
     ChatClientConfig,
+    chat_json,
 )
 from registry_store import load_registry, registry_paths, registry_root, thread_store_dir
 
@@ -54,6 +55,13 @@ DEFAULT_EVENT_LOG_NAME = "dream_shadow_ab_events.jsonl"
 DEFAULT_SALT = "aippocampus_dream_shadow_ab_v1"
 DEFAULT_DREAM_WORKER_MODE = "deterministic"
 MODEL_BACKED_DREAM_WORKER_MODE = "model_backed"
+DELIVERY_OFF = "off"
+DELIVERY_SHADOW = "shadow"
+DELIVERY_DRY_RUN = "dry_run"
+DELIVERY_DELIVERED = "delivered"
+ASSIGNMENT_PROMPT = "prompt"
+ASSIGNMENT_THREAD_TOPIC_EPOCH = "thread_topic_epoch"
+SemanticRelevanceModelCall = Callable[[list[dict[str, str]], ChatClientConfig], dict[str, Any]]
 
 POSITIVE_PATTERNS = (
     ("forgotten_constraint", re.compile(r"(你忘了|你没记住|忘记了|漏了我们之前)", re.IGNORECASE)),
@@ -81,6 +89,44 @@ def prompt_sha1(prompt: str) -> str:
 
 def ratio(numerator: int | float, denominator: int | float) -> float:
     return round(float(numerator) / float(denominator), 4) if denominator else 0.0
+
+
+def normalize_delivery_mode(value: object) -> str:
+    text = str(value or "").strip().casefold().replace("-", "_")
+    if text in {"", "none", "disabled", "false", "0"}:
+        return DELIVERY_OFF
+    if text in {"shadow", "shadow_only", "prompt_hook_shadow", "historical_shadow_replay", "benchmark_historical_shadow_replay", "true", "1", "on", "yes"}:
+        return DELIVERY_SHADOW
+    if text in {"dry_run", "dryrun", "would_deliver"}:
+        return DELIVERY_DRY_RUN
+    if text in {"delivered", "delivery", "treatment"}:
+        return DELIVERY_DELIVERED
+    return DELIVERY_OFF
+
+
+def normalize_assignment_unit(value: object) -> str:
+    text = str(value or "").strip().casefold().replace("-", "_")
+    if text == ASSIGNMENT_THREAD_TOPIC_EPOCH:
+        return ASSIGNMENT_THREAD_TOPIC_EPOCH
+    return ASSIGNMENT_PROMPT
+
+
+def clamped_rollout_rate(value: object) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return 1.0
+    if number != number:
+        return 1.0
+    return max(0.0, min(1.0, number))
+
+
+def rollout_bucket_for(*parts: object, salt: str = DEFAULT_SALT) -> float:
+    digest = hashlib.sha1(
+        json.dumps(parts, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
+        + salt.encode("utf-8")
+    ).hexdigest()
+    return round(int(digest[:8], 16) / 0xFFFFFFFF, 6)
 
 
 def classify_recall_reminder(text: str) -> dict[str, Any]:
@@ -182,6 +228,123 @@ def dream_route_matches(
     ]
 
 
+def semantic_relevance_candidate(row: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "candidate_key": row.get("candidate_key"),
+        "title": row.get("title"),
+        "summary": row.get("summary"),
+        "activation_cues": list(row.get("activation_cues") or row.get("trigger_terms") or [])[:8],
+        "concepts": list(row.get("concepts") or [])[:8],
+        "truth_boundary": row.get("truth_boundary"),
+    }
+
+
+def semantic_relevance_messages(
+    *,
+    prompt: str,
+    candidates: list[dict[str, Any]],
+) -> list[dict[str, str]]:
+    payload = {
+        "task": "Select dream hypotheses that are semantically relevant to the user prompt.",
+        "rules": [
+            "Be strict: only match if the dream hypothesis would change recall, reflection, or safety handling.",
+            "Do not match merely because of generic words or broad project context.",
+            "Return JSON only with matches: [{candidate_key, relevant, confidence, reason}].",
+            "Use relevant=false or omit candidates when unsure.",
+        ],
+        "user_prompt": prompt,
+        "dream_candidates": candidates,
+    }
+    return [
+        {
+            "role": "system",
+            "content": "You are a strict semantic relevance gate for AIppocampus dream shadow A/B replay.",
+        },
+        {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+    ]
+
+
+def model_response_payload(response: Mapping[str, Any]) -> dict[str, Any]:
+    choices = response.get("choices")
+    if not isinstance(choices, list) or not choices:
+        return {}
+    message = choices[0].get("message") if isinstance(choices[0], Mapping) else None
+    content = message.get("content") if isinstance(message, Mapping) else None
+    if not isinstance(content, str):
+        return {}
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def semantic_relevance_dream_matches(
+    *,
+    prompt: str,
+    dream_rows: list[dict[str, Any]],
+    config: ChatClientConfig,
+    model_call: SemanticRelevanceModelCall = chat_json,
+    project_label: str | None,
+    min_confidence: float = 0.65,
+    max_candidates: int = 32,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    candidates = [
+        row
+        for row in dream_rows
+        if row.get("status") == "active"
+        and row.get("candidate_type") == DREAM_HYPOTHESIS_TYPE
+        and (not row.get("project_label") or not project_label or str(row.get("project_label")).casefold() == project_label.casefold())
+    ][: max(1, int(max_candidates))]
+    diagnostic = {
+        "enabled": True,
+        "model_call_count": 0,
+        "candidate_count": len(candidates),
+        "match_count": 0,
+        "min_confidence": min_confidence,
+        "raw_prompt_emitted": False,
+        "external_prompt_sent": False,
+    }
+    if not candidates:
+        return [], diagnostic
+    messages = semantic_relevance_messages(
+        prompt=prompt,
+        candidates=[semantic_relevance_candidate(row) for row in candidates],
+    )
+    diagnostic["model_call_count"] = 1
+    diagnostic["external_prompt_sent"] = True
+    try:
+        response = model_call(messages, config)
+    except Exception as exc:
+        diagnostic["match_count"] = 0
+        diagnostic["error_type"] = type(exc).__name__
+        diagnostic["error"] = str(exc)[:160]
+        return [], diagnostic
+    by_key = {str(row.get("candidate_key") or ""): row for row in candidates}
+    matches: list[dict[str, Any]] = []
+    payload = model_response_payload(response)
+    for item in payload.get("matches") or []:
+        if not isinstance(item, Mapping) or not item.get("relevant"):
+            continue
+        try:
+            confidence = float(item.get("confidence") or 0.0)
+        except (TypeError, ValueError):
+            confidence = 0.0
+        if confidence < min_confidence:
+            continue
+        row = by_key.get(str(item.get("candidate_key") or ""))
+        if not row:
+            continue
+        copy = dict(row)
+        copy["semantic_relevance"] = {
+            "confidence": round(confidence, 4),
+            "reason": str(item.get("reason") or "")[:160],
+        }
+        matches.append(copy)
+    diagnostic["match_count"] = len(matches)
+    return matches, diagnostic
+
+
 def assigned_arm_for(*parts: object, salt: str = DEFAULT_SALT) -> str:
     digest = hashlib.sha1(
         json.dumps(parts, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
@@ -190,11 +353,94 @@ def assigned_arm_for(*parts: object, salt: str = DEFAULT_SALT) -> str:
     return "dream" if int(digest[:2], 16) % 2 else "control"
 
 
+def assignment_parts(
+    *,
+    assignment_unit: str,
+    session_id: str,
+    topic_epoch: str | None,
+    turn_id: str,
+    prompt_hash: str,
+) -> tuple[object, ...]:
+    unit = normalize_assignment_unit(assignment_unit)
+    if unit == ASSIGNMENT_THREAD_TOPIC_EPOCH:
+        return (unit, session_id or "unknown", topic_epoch or "default")
+    return (session_id or "unknown", turn_id or "", prompt_hash)
+
+
+def delivery_block_reasons(
+    *,
+    reminder: Mapping[str, Any],
+    baseline_matches: list[dict[str, Any]],
+    dream_matches: list[dict[str, Any]],
+) -> list[str]:
+    reasons: list[str] = []
+    if reminder.get("is_reminder"):
+        reasons.append("recall_reminder_prompt")
+    if baseline_matches:
+        reasons.append("baseline_match")
+    if not dream_matches:
+        reasons.append("dream_miss")
+    return reasons
+
+
+def delivery_decision_fields(
+    *,
+    delivery_mode: str,
+    eligible: bool,
+    assigned_arm: str,
+    rollout_rate: float,
+    rollout_bucket: float,
+) -> dict[str, Any]:
+    if delivery_mode == DELIVERY_OFF:
+        return {
+            "would_deliver_arm": None,
+            "delivered_arm": None,
+            "delivery_decision": "delivery_disabled",
+        }
+    if delivery_mode == DELIVERY_SHADOW:
+        return {
+            "would_deliver_arm": None,
+            "delivered_arm": None,
+            "delivery_decision": "shadow_only",
+        }
+    if not eligible:
+        return {
+            "would_deliver_arm": None,
+            "delivered_arm": None,
+            "delivery_decision": "not_eligible",
+        }
+    if rollout_bucket >= rollout_rate:
+        return {
+            "would_deliver_arm": None,
+            "delivered_arm": None,
+            "delivery_decision": "rollout_excluded",
+        }
+    treatment = "dream_treatment" if assigned_arm == "dream" else "control_holdback"
+    if delivery_mode == DELIVERY_DRY_RUN:
+        return {
+            "would_deliver_arm": assigned_arm,
+            "delivered_arm": None,
+            "delivery_decision": f"dry_run_{treatment}",
+        }
+    if delivery_mode == DELIVERY_DELIVERED:
+        return {
+            "would_deliver_arm": assigned_arm,
+            "delivered_arm": assigned_arm,
+            "delivery_decision": f"delivered_{treatment}",
+        }
+    return {
+        "would_deliver_arm": None,
+        "delivered_arm": None,
+        "delivery_decision": "delivery_disabled",
+    }
+
+
 def build_shadow_prompt_event(
     *,
     prompt: str,
     session_id: str,
     turn_id: str = "",
+    topic_epoch: str | None = None,
     user_turn_index: int | None = None,
     baseline_rows: Iterable[Mapping[str, Any]],
     dream_rows: Iterable[Mapping[str, Any]],
@@ -204,32 +450,92 @@ def build_shadow_prompt_event(
     source: str = "prompt_hook_shadow",
     delivery_mode: str = "shadow_only",
     delivered_arm: str | None = None,
+    assignment_unit: str = ASSIGNMENT_PROMPT,
+    rollout_rate: float = 1.0,
+    semantic_relevance_config: ChatClientConfig | None = None,
+    semantic_relevance_model_call: SemanticRelevanceModelCall | None = None,
+    semantic_relevance_min_confidence: float = 0.65,
+    semantic_relevance_max_candidates: int = 32,
 ) -> dict[str, Any]:
     baseline_list = [dict(row) for row in baseline_rows]
     dream_list = [dict(row) for row in dream_rows]
     baseline_matches = match_working_memory(prompt, baseline_list, project_label=project_label, limit=12)
     dream_matches = dream_route_matches(prompt, dream_list, project_label=project_label)
     reminder = classify_recall_reminder(prompt)
-    prompt_hash = prompt_sha1(prompt)
-    assigned_arm = assigned_arm_for(session_id, turn_id, prompt_hash, salt=salt)
-    eligible = (
-        not reminder["is_reminder"]
+    semantic_diagnostic = {
+        "enabled": semantic_relevance_config is not None,
+        "model_call_count": 0,
+        "candidate_count": 0,
+        "match_count": 0,
+        "raw_prompt_emitted": False,
+        "external_prompt_sent": False,
+    }
+    if (
+        semantic_relevance_config is not None
+        and not reminder["is_reminder"]
         and not baseline_matches
-        and bool(dream_matches)
+        and not dream_matches
+    ):
+        semantic_matches, semantic_diagnostic = semantic_relevance_dream_matches(
+            prompt=prompt,
+            dream_rows=dream_list,
+            config=semantic_relevance_config,
+            model_call=semantic_relevance_model_call or chat_json,
+            project_label=project_label,
+            min_confidence=semantic_relevance_min_confidence,
+            max_candidates=semantic_relevance_max_candidates,
+        )
+        dream_matches = semantic_matches
+    prompt_hash = prompt_sha1(prompt)
+    unit = normalize_assignment_unit(assignment_unit)
+    assignment_key_parts = assignment_parts(
+        assignment_unit=unit,
+        session_id=session_id,
+        topic_epoch=topic_epoch,
+        turn_id=turn_id,
+        prompt_hash=prompt_hash,
     )
+    assigned_arm = assigned_arm_for(*assignment_key_parts, salt=salt)
+    bucket = rollout_bucket_for(*assignment_key_parts, salt=salt)
+    rate = clamped_rollout_rate(rollout_rate)
+    block_reasons = delivery_block_reasons(
+        reminder=reminder,
+        baseline_matches=baseline_matches,
+        dream_matches=dream_matches,
+    )
+    eligible = not block_reasons
+    mode = normalize_delivery_mode(delivery_mode)
+    delivery_fields = delivery_decision_fields(
+        delivery_mode=mode,
+        eligible=eligible,
+        assigned_arm=assigned_arm,
+        rollout_rate=rate,
+        rollout_bucket=bucket,
+    )
+    explicit_delivered_arm = delivered_arm if delivered_arm in {"control", "dream"} else None
+    if explicit_delivered_arm and mode == DELIVERY_DELIVERED:
+        delivery_fields["delivered_arm"] = explicit_delivered_arm
     event = {
         "schema_version": SCHEMA_VERSION,
         "kind": EVENT_KIND,
         "created_at": timestamp or now_utc(),
         "source": source,
-        "delivery_mode": delivery_mode,
+        "delivery_mode": mode,
+        "delivery_decision": delivery_fields["delivery_decision"],
+        "delivery_block_reasons": block_reasons
+        + (["rollout_excluded"] if delivery_fields["delivery_decision"] == "rollout_excluded" else []),
         "event_id": stable_hash([session_id, turn_id, prompt_hash], prefix="shadowevt", salt=salt),
         "thread_fingerprint": stable_hash(session_id or "unknown", prefix="threadfp", salt=salt, length=12),
         "turn_fingerprint": stable_hash(turn_id or user_turn_index or prompt_hash, prefix="turnfp", salt=salt, length=12),
         "user_turn_index": user_turn_index,
         "prompt_sha1": prompt_hash,
+        "assignment_unit": unit,
+        "assignment_key_hash": stable_hash(assignment_key_parts, prefix="assign", salt=salt, length=12),
+        "rollout_rate": rate,
+        "rollout_bucket": bucket,
         "assigned_arm": assigned_arm,
-        "delivered_arm": delivered_arm if delivered_arm in {"control", "dream"} else None,
+        "would_deliver_arm": delivery_fields["would_deliver_arm"],
+        "delivered_arm": delivery_fields["delivered_arm"],
         "eligible_exposure": eligible,
         "reminder": reminder,
         "baseline": {
@@ -239,8 +545,10 @@ def build_shadow_prompt_event(
         "dream": {
             "match_count": len(dream_matches),
             "decision": "match" if dream_matches else "miss",
+            "semantic_match_count": int(semantic_diagnostic.get("match_count") or 0),
             "source_finding_fanout": source_finding_fanout(dream_matches),
         },
+        "semantic_relevance": semantic_diagnostic,
         "privacy_boundary": {
             "raw_prompt_emitted": False,
             "raw_thread_id_emitted": False,
@@ -296,6 +604,7 @@ def analyze_shadow_events(
     window_user_turns: int = 4,
 ) -> dict[str, Any]:
     rows = [dict(row) for row in events if row.get("kind") == EVENT_KIND]
+    has_live_delivery = any(row.get("delivered_arm") in {"control", "dream"} for row in rows)
     by_thread: dict[str, list[tuple[int, dict[str, Any]]]] = defaultdict(list)
     for index, row in enumerate(rows):
         thread = str(row.get("thread_fingerprint") or "thread_unknown")
@@ -309,13 +618,55 @@ def analyze_shadow_events(
     live_delivery_events = 0
     reminder_family_counts: dict[str, int] = defaultdict(int)
     reminder_strength_counts: dict[str, int] = defaultdict(int)
+    baseline_match_events = 0
+    dream_match_events = 0
+    both_match_events = 0
+    dream_only_non_reminder_events = 0
+    dream_only_reminder_events = 0
+    semantic_relevance_model_calls = 0
+    semantic_relevance_match_events = 0
+    would_delivery_events = 0
+    delivery_mode_counts: dict[str, int] = defaultdict(int)
+    delivery_decision_counts: dict[str, int] = defaultdict(int)
 
     for items in by_thread.values():
         items.sort(key=lambda item: item[0])
         for _, row in items:
             if row.get("delivered_arm") in {"control", "dream"}:
                 live_delivery_events += 1
-            if row.get("eligible_exposure"):
+            if row.get("would_deliver_arm") in {"control", "dream"}:
+                would_delivery_events += 1
+            mode = str(row.get("delivery_mode") or "unknown")
+            decision = str(row.get("delivery_decision") or "unknown")
+            delivery_mode_counts[mode] += 1
+            delivery_decision_counts[decision] += 1
+            baseline_value = row.get("baseline")
+            baseline = baseline_value if isinstance(baseline_value, Mapping) else {}
+            dream_value = row.get("dream")
+            dream = dream_value if isinstance(dream_value, Mapping) else {}
+            reminder_value = row.get("reminder")
+            reminder = reminder_value if isinstance(reminder_value, Mapping) else {}
+            semantic_value = row.get("semantic_relevance")
+            semantic = semantic_value if isinstance(semantic_value, Mapping) else {}
+            baseline_matched = int(baseline.get("match_count") or 0) > 0
+            dream_matched = int(dream.get("match_count") or 0) > 0
+            semantic_relevance_model_calls += int(semantic.get("model_call_count") or 0)
+            if int(semantic.get("match_count") or 0) > 0:
+                semantic_relevance_match_events += 1
+            if baseline_matched:
+                baseline_match_events += 1
+            if dream_matched:
+                dream_match_events += 1
+            if baseline_matched and dream_matched:
+                both_match_events += 1
+            if dream_matched and not baseline_matched:
+                if reminder.get("is_reminder"):
+                    dream_only_reminder_events += 1
+                else:
+                    dream_only_non_reminder_events += 1
+            if row.get("eligible_exposure") and (
+                not has_live_delivery or row.get("delivered_arm") in {"control", "dream"}
+            ):
                 arms[effective_arm(row)]["eligible_exposures"] += 1
 
         for position, (order, row) in enumerate(items):
@@ -335,6 +686,8 @@ def analyze_shadow_events(
                 event_id = str(candidate.get("event_id") or "")
                 if not candidate.get("eligible_exposure") or event_id in attributed_event_ids:
                     continue
+                if has_live_delivery and candidate.get("delivered_arm") not in {"control", "dream"}:
+                    continue
                 winner = candidate
                 break
             if winner is None:
@@ -351,6 +704,7 @@ def analyze_shadow_events(
         "event_count": len(rows),
         "thread_count": len(by_thread),
         "live_delivery_event_count": live_delivery_events,
+        "would_delivery_event_count": would_delivery_events,
         "overall_reminder_rate": ratio(total_reminders, len(rows)),
         "eligible_exposure_rate": ratio(
             arms["control"]["eligible_exposures"] + arms["dream"]["eligible_exposures"],
@@ -371,6 +725,17 @@ def analyze_shadow_events(
         },
         "reminder_family_counts": dict(sorted(reminder_family_counts.items())),
         "reminder_strength_counts": dict(sorted(reminder_strength_counts.items())),
+        "delivery_mode_counts": dict(sorted(delivery_mode_counts.items())),
+        "delivery_decision_counts": dict(sorted(delivery_decision_counts.items())),
+        "match_diagnostics": {
+            "baseline_match_event_count": baseline_match_events,
+            "dream_match_event_count": dream_match_events,
+            "both_match_event_count": both_match_events,
+            "dream_only_non_reminder_event_count": dream_only_non_reminder_events,
+            "dream_only_reminder_event_count": dream_only_reminder_events,
+            "semantic_relevance_model_call_count": semantic_relevance_model_calls,
+            "semantic_relevance_match_event_count": semantic_relevance_match_events,
+        },
     }
 
 
@@ -417,6 +782,10 @@ def record_prompt_shadow_from_hook(
     event_log: Path | None = None,
     salt: str = DEFAULT_SALT,
     project_label: str | None = "AIppocampus",
+    delivery_mode: str = DELIVERY_SHADOW,
+    assignment_unit: str = ASSIGNMENT_PROMPT,
+    topic_epoch: str | None = None,
+    rollout_rate: float = 1.0,
 ) -> dict[str, Any]:
     resolved_registry_path = registry_path or registry_paths(registry_dir)[0]
     rows = load_working_memory(working_memory_path or default_working_memory_path(resolved_registry_path))
@@ -425,11 +794,15 @@ def record_prompt_shadow_from_hook(
         prompt=prompt,
         session_id=str(hook_input.get("session_id") or hook_input.get("thread_id") or ""),
         turn_id=str(hook_input.get("turn_id") or ""),
+        topic_epoch=topic_epoch or str(hook_input.get("topic_epoch") or ""),
         baseline_rows=baseline_rows,
         dream_rows=dream_rows,
         project_label=project_label,
         salt=salt,
         source="prompt_hook_shadow",
+        delivery_mode=delivery_mode,
+        assignment_unit=assignment_unit,
+        rollout_rate=rollout_rate,
     )
     append_event(event_log or default_event_log(registry_dir), event)
     return event
@@ -448,12 +821,20 @@ def record_prompt_shadow_from_hook_args(
     return record_prompt_shadow_from_hook(
         prompt=prompt,
         hook_input=hook_input
-        or {"session_id": getattr(args, "session_id", "") or "", "turn_id": getattr(args, "topic_epoch", "") or ""},
+        or {
+            "session_id": getattr(args, "session_id", "") or "",
+            "turn_id": getattr(args, "topic_epoch", "") or "",
+            "topic_epoch": getattr(args, "topic_epoch", "") or "",
+        },
         registry_dir=optional_path(getattr(args, "registry_dir", None)),
         registry_path=optional_path(getattr(args, "registry", None)),
         working_memory_path=optional_path(getattr(args, "working_memory", None)),
         event_log=optional_path(getattr(args, "dream_shadow_log", None)),
         salt=getattr(args, "dream_shadow_salt", None) or DEFAULT_SALT,
+        delivery_mode=getattr(args, "dream_delivery_mode", DELIVERY_SHADOW),
+        assignment_unit=getattr(args, "dream_assignment_unit", ASSIGNMENT_PROMPT),
+        topic_epoch=getattr(args, "topic_epoch", None),
+        rollout_rate=getattr(args, "dream_rollout_rate", 1.0),
     )
 
 
@@ -513,6 +894,9 @@ def replay_clean_source_dir_events(
     dream_worker_mode: str = DEFAULT_DREAM_WORKER_MODE,
     model_config: ChatClientConfig | None = None,
     max_samples: int = 1,
+    semantic_relevance_config: ChatClientConfig | None = None,
+    semantic_relevance_min_confidence: float = 0.65,
+    semantic_relevance_max_candidates: int = 32,
 ) -> list[dict[str, Any]]:
     rows = load_shadow_working_memory_rows(
         registry_dir=registry_dir,
@@ -556,6 +940,9 @@ def replay_clean_source_dir_events(
                 timestamp=str(message.get("timestamp") or now_utc()),
                 source="benchmark_clean_source_shadow_replay",
                 delivery_mode="benchmark_historical_shadow_replay",
+                semantic_relevance_config=semantic_relevance_config,
+                semantic_relevance_min_confidence=semantic_relevance_min_confidence,
+                semantic_relevance_max_candidates=semantic_relevance_max_candidates,
             )
         )
     return events
@@ -573,6 +960,9 @@ def replay_clean_source_events(
     dream_worker_mode: str = DEFAULT_DREAM_WORKER_MODE,
     model_config: ChatClientConfig | None = None,
     max_samples: int = 1,
+    semantic_relevance_config: ChatClientConfig | None = None,
+    semantic_relevance_min_confidence: float = 0.65,
+    semantic_relevance_max_candidates: int = 32,
 ) -> list[dict[str, Any]]:
     registry_path, _ = registry_paths(registry_dir)
     registry = load_registry(registry_path)
@@ -613,6 +1003,9 @@ def replay_clean_source_events(
                     timestamp=str(message.get("timestamp") or now_utc()),
                     source="clean_source_shadow_replay",
                     delivery_mode="historical_shadow_replay",
+                    semantic_relevance_config=semantic_relevance_config,
+                    semantic_relevance_min_confidence=semantic_relevance_min_confidence,
+                    semantic_relevance_max_candidates=semantic_relevance_max_candidates,
                 )
             )
     return events
@@ -630,6 +1023,9 @@ def run_clean_source_replay_analysis(
     dream_worker_mode: str = DEFAULT_DREAM_WORKER_MODE,
     model_config: ChatClientConfig | None = None,
     max_samples: int = 1,
+    semantic_relevance_config: ChatClientConfig | None = None,
+    semantic_relevance_min_confidence: float = 0.65,
+    semantic_relevance_max_candidates: int = 32,
 ) -> dict[str, Any]:
     events = replay_clean_source_events(
         registry_dir=registry_dir,
@@ -641,10 +1037,14 @@ def run_clean_source_replay_analysis(
         dream_worker_mode=dream_worker_mode,
         model_config=model_config,
         max_samples=max_samples,
+        semantic_relevance_config=semantic_relevance_config,
+        semantic_relevance_min_confidence=semantic_relevance_min_confidence,
+        semantic_relevance_max_candidates=semantic_relevance_max_candidates,
     )
     metrics = analyze_shadow_events(events, window_user_turns=window_user_turns)
     metrics["generated_dream_max_packs"] = generated_dream_max_packs
     metrics["dream_worker_mode"] = dream_worker_mode
+    metrics["semantic_relevance_gate_enabled"] = semantic_relevance_config is not None
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": ANALYSIS_KIND,
@@ -680,6 +1080,9 @@ def run_clean_source_dir_replay_analysis(
     dream_worker_mode: str = DEFAULT_DREAM_WORKER_MODE,
     model_config: ChatClientConfig | None = None,
     max_samples: int = 1,
+    semantic_relevance_config: ChatClientConfig | None = None,
+    semantic_relevance_min_confidence: float = 0.65,
+    semantic_relevance_max_candidates: int = 32,
 ) -> dict[str, Any]:
     events = replay_clean_source_dir_events(
         clean_source_dir=clean_source_dir,
@@ -693,10 +1096,14 @@ def run_clean_source_dir_replay_analysis(
         dream_worker_mode=dream_worker_mode,
         model_config=model_config,
         max_samples=max_samples,
+        semantic_relevance_config=semantic_relevance_config,
+        semantic_relevance_min_confidence=semantic_relevance_min_confidence,
+        semantic_relevance_max_candidates=semantic_relevance_max_candidates,
     )
     metrics = analyze_shadow_events(events, window_user_turns=window_user_turns)
     metrics["generated_dream_max_packs"] = generated_dream_max_packs
     metrics["dream_worker_mode"] = dream_worker_mode
+    metrics["semantic_relevance_gate_enabled"] = semantic_relevance_config is not None
     metrics["benchmark_corpus"] = {
         "dataset_id": dataset_id,
         "clean_source_dir_name": clean_source_dir.name,
@@ -857,6 +1264,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dream-model-temperature", type=float, default=0.0)
     parser.add_argument("--dream-model-thinking", choices=["auto", "enabled", "disabled"], default="auto")
     parser.add_argument("--dream-max-samples", type=int, default=1)
+    parser.add_argument(
+        "--semantic-relevance-gate",
+        action="store_true",
+        help="Opt-in model semantic relevance gate for shadow replay; sends replay prompts to the configured model.",
+    )
+    parser.add_argument("--semantic-relevance-min-confidence", type=float, default=0.65)
+    parser.add_argument("--semantic-relevance-max-candidates", type=int, default=32)
     parser.add_argument("--json", action="store_true")
     return parser
 
@@ -867,8 +1281,12 @@ def main(argv: list[str] | None = None) -> int:
     dream_worker_mode = normalized_worker_mode(args.dream_worker_mode)
     model_config = None
     model_route_payload = None
-    if dream_worker_mode == MODEL_BACKED_DREAM_WORKER_MODE and args.generate_dream_rows > 0:
+    if (
+        dream_worker_mode == MODEL_BACKED_DREAM_WORKER_MODE
+        and args.generate_dream_rows > 0
+    ) or args.semantic_relevance_gate:
         model_config, model_route_payload = dream_model_config_from_args(args)
+    semantic_relevance_config = model_config if args.semantic_relevance_gate else None
     if args.replay_clean_source_dir:
         payload = run_clean_source_dir_replay_analysis(
             clean_source_dir=args.replay_clean_source_dir,
@@ -883,6 +1301,9 @@ def main(argv: list[str] | None = None) -> int:
             dream_worker_mode=dream_worker_mode,
             model_config=model_config,
             max_samples=args.dream_max_samples,
+            semantic_relevance_config=semantic_relevance_config,
+            semantic_relevance_min_confidence=args.semantic_relevance_min_confidence,
+            semantic_relevance_max_candidates=args.semantic_relevance_max_candidates,
         )
     elif args.replay_clean_source:
         payload = run_clean_source_replay_analysis(
@@ -896,11 +1317,17 @@ def main(argv: list[str] | None = None) -> int:
             dream_worker_mode=dream_worker_mode,
             model_config=model_config,
             max_samples=args.dream_max_samples,
+            semantic_relevance_config=semantic_relevance_config,
+            semantic_relevance_min_confidence=args.semantic_relevance_min_confidence,
+            semantic_relevance_max_candidates=args.semantic_relevance_max_candidates,
         )
     else:
         payload = run_shadow_ab_analysis(event_log=event_log, window_user_turns=args.window_user_turns)
     if model_route_payload and isinstance(payload.get("metrics"), dict):
-        payload["metrics"]["dream_model_route"] = model_route_payload
+        if dream_worker_mode == MODEL_BACKED_DREAM_WORKER_MODE and args.generate_dream_rows > 0:
+            payload["metrics"]["dream_model_route"] = model_route_payload
+        if args.semantic_relevance_gate:
+            payload["metrics"]["semantic_relevance_model_route"] = model_route_payload
     text = json.dumps(payload, ensure_ascii=False, indent=None if args.json else 2)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
