@@ -267,6 +267,15 @@ class SubconsciousReviewTests(unittest.TestCase):
         self.assertEqual(result["promotion_candidates"][0]["source_finding_ids"], ["sf_one"])
         self.assertEqual(result["promotion_candidates"][0]["source_refs"][0]["line"], 12)
 
+    def test_review_prompt_admits_question_tracking_candidate_types(self) -> None:
+        for candidate_type in [
+            "question_candidate",
+            "frontier_marker",
+            "question_link",
+            "theme_candidate",
+        ]:
+            self.assertIn(candidate_type, review.REVIEW_SYSTEM_PROMPT)
+
     def test_validate_review_blocks_navigation_only_semantic_label_promotion(self) -> None:
         findings_by_id = {
             "sf_semantic": {

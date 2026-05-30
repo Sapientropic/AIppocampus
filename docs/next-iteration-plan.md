@@ -146,18 +146,24 @@ handoff context.
 
 8. Question tracking Phase 2
    - Source: `question-tracking-subconscious.md`.
-   - Implement `question_tracking` only after Phase 1 `question_extraction`
-     output has enough source-backed examples.
-   - Start deterministic: group existing `question_candidate` findings, add
-     dependency ordering, then add model confirmation for borderline links.
+   - First deterministic slice is implemented in
+     `skills/aippocampus/scripts/question_tracking.py`: it groups existing
+     `question_candidate` findings, writes `question_link` rows to
+     `subconscious_jobs.jsonl`, records auditable ordering edges, skips stale
+     refs when registry clean-source resolution is available, and requires
+     explicit confirmation artifacts for borderline pairs.
+   - Next hardening: add live model-confirmation plumbing only for borderline
+     pairs, tune thresholds on more real clean-source examples, and decide
+     whether dormancy detection belongs in Phase 2 or a later hook-facing slice.
 
 9. Vector index protocol
    - Source: `gb-scale-roadmap.md` and `wukong-mining-notes.md`.
    - First slice is implemented in
      `skills/aippocampus/scripts/question_vector_index.py`.
    - Keep vectors optional and join every result back to stable source ids.
-   - Next work is wiring question_tracking to the adapter after Phase 1 has
-     enough source-backed examples; TurboVec evaluation remains deferred.
+   - `question_tracking` now has a deterministic local hash-vector baseline;
+     TurboVec or sqlite vector evaluation remains deferred until the current
+     source-backed baseline shows a scale bottleneck.
 
 ## Do Not Start With
 

@@ -235,6 +235,24 @@ question mattered. `frontier_marker` is stricter: emit it only when the source
 explicitly shows a block, deferral, missing evidence, dissatisfaction, or scope
 boundary.
 
+### `question_tracking`
+
+Purpose: group existing source-backed `question_candidate` findings into
+append-only `question_link` findings.
+
+The Phase 2 runner is deterministic and lives in `question_tracking.py`.
+`subconscious_jobs.py --job question_tracking` invokes it after semantic
+extraction jobs have serialized their writes, so tracking reads completed
+`question_candidate` rows instead of racing the concurrent worker pool.
+
+Output: `question_link` findings in the same `subconscious_jobs.jsonl` stream,
+with `question_cluster_id`, `linked_questions`, `dependency_edges`,
+`match_evidence`, and merged `source_refs`.
+
+Borderline pairs are not accepted by score alone. They remain skipped unless an
+explicit confirmation artifact accepts the pair; the accepted link still cites
+the original question source refs, not the confirmation as truth.
+
 ### `concept_edges`
 
 Purpose: propose concept graph edges for ambient recall.
@@ -371,6 +389,18 @@ Run no-write question/frontier extraction smoke:
 
 ```powershell
 python "$env:CODEX_HOME\skills\aippocampus\scripts\subconscious_jobs.py" --job question_extraction --project "AIppocampus" --no-write --json
+```
+
+Run deterministic Phase 2 tracking over staged question candidates:
+
+```powershell
+python "$env:CODEX_HOME\skills\aippocampus\scripts\subconscious_jobs.py" --job question_tracking --json
+```
+
+Run extraction and tracking in dependency order:
+
+```powershell
+python "$env:CODEX_HOME\skills\aippocampus\scripts\subconscious_jobs.py" --job all --project "AIppocampus" --json
 ```
 
 For the higher-level onboarding wrapper, prefer:

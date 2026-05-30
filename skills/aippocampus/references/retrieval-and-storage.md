@@ -248,6 +248,15 @@ boundary; do not infer one merely because a question was asked. A
 raw monologues are compressed to `question_short`/title when available or
 rejected before staging.
 
+Phase 2 `question_tracking` reads those staged candidates and writes
+`question_link` findings back to the same stream. The deterministic runner uses
+local question text/features/context scoring as a shortlist mechanism, keeps
+auditable ordering edges among linked questions, and, when registry clean
+source is available, skips stale candidates whose refs no longer resolve to a
+concrete thread/message/line anchor. Borderline links require an explicit
+confirmation artifact and still inherit truth only from the original question
+source refs.
+
 ## Associations And Concept Graph
 
 `build_associations.py` reads registry rows and indexes to create prompt-hook

@@ -58,9 +58,9 @@ delete anything. Return only JSON.
 Final schema:
 {
   "action": "final",
-  "promotion_candidates": [
+    "promotion_candidates": [
     {
-      "candidate_type": "concept_edge|hook_trigger|project_memory|preference_review|contradiction_review|dedup_review|archive",
+      "candidate_type": "concept_edge|hook_trigger|project_memory|preference_review|contradiction_review|dedup_review|question_candidate|frontier_marker|question_link|theme_candidate|archive",
       "title": "short title",
       "summary": "why this candidate matters",
       "recommendation": "what should consume or review it next",
@@ -174,6 +174,10 @@ def compact_review_payload(
                 "src": finding.get("src"),
                 "dst": finding.get("dst"),
                 "edge_type": finding.get("edge_type"),
+                "question_cluster_id": finding.get("question_cluster_id"),
+                "linked_question_short": finding.get("linked_question_short"),
+                "question_count": finding.get("question_count"),
+                "link_type": finding.get("link_type"),
                 "source_refs": [
                     {
                         "thread_key": ref.get("thread_key"),
