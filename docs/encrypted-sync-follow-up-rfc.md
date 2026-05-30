@@ -5,10 +5,12 @@ encrypted-sync-v1 provider bring-up.
 
 ## Summary
 
-Encrypted sync v1 now has local-folder, object-storage, real `age`, Cloudflare
-R2, and GCS XML HMAC smoke coverage. The next slice should turn the working
-protocol into a usable multi-device workflow: device-key UX and explicit
-plaintext-to-encrypted migration.
+Encrypted sync v1 now has local-folder, object-storage, real `age`, and
+documented Cloudflare R2 readiness evidence. GCS XML HMAC signing support and
+smoke history are not part of the current broader provider/client claim
+boundary unless they are rerun, dated, and recorded in the readiness ledger.
+The next slice should turn the working protocol into a usable multi-device
+workflow: device-key UX and explicit plaintext-to-encrypted migration.
 
 ## Follow-Up Issue
 
@@ -63,8 +65,10 @@ Acceptance criteria:
   encrypted prefixes by default.
 - Plaintext cleanup requires explicit confirmation and reports every object it
   will delete.
-- Real-provider smoke remains green for R2 and GCS XML HMAC after migration
-  helpers are added.
+- Real-provider smoke remains green for every provider path explicitly claimed
+  by the readiness ledger. Broader GCS XML HMAC, S3-compatible, cloud-folder,
+  or long-running provider/client soak claims belong to issue #57 and require
+  fresh dated evidence before they are claimed.
 
 Non-goals for this follow-up:
 
