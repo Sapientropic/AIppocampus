@@ -48,40 +48,6 @@ LOW_SIGNAL_TERMS = {
     "work",
     "project",
 }
-DREAM_TRIGGER_LOW_SIGNAL_TERMS = LOW_SIGNAL_TERMS | {
-    "across",
-    "adjudicated",
-    "amplification",
-    "background",
-    "before",
-    "bridge",
-    "carrying",
-    "check",
-    "claims",
-    "clean",
-    "compensatory",
-    "current",
-    "dream",
-    "edge",
-    "factual",
-    "finding",
-    "history",
-    "hypothesis",
-    "missing",
-    "pack",
-    "real",
-    "real-history",
-    "re-open",
-    "reopen",
-    "selected",
-    "shows",
-    "synthesized",
-    "the",
-    "threads",
-    "treat",
-    "unresolved",
-    "use",
-}
 SENSITIVE_DREAM_TERMS = {
     "diagnosis",
     "identity",
@@ -323,24 +289,6 @@ def adjudicated_dream_downstream_use(finding: Mapping[str, Any]) -> list[str]:
     return unique_preserve(requested or ["working_memory"], limit=3)
 
 
-def dream_trigger_terms_for(
-    candidate: dict[str, Any], concepts: list[str], project_label: str | None
-) -> list[str]:
-    """Keep dream foreground wakeups tied to source-derived themes.
-
-    Dream rows have templated safety copy ("unresolved edge", "not factual",
-    "re-open source") that should explain the boundary, not become a global
-    recall trigger. Filtering those words here prevents one generic natural
-    prompt from waking every compensatory hypothesis.
-    """
-
-    return [
-        term
-        for term in trigger_terms_for(candidate, concepts, project_label)
-        if term.casefold() not in DREAM_TRIGGER_LOW_SIGNAL_TERMS
-    ]
-
-
 def adjudicated_dream_is_eligible(finding: Mapping[str, Any]) -> bool:
     if finding.get("finding_kind") != DREAM_FINDING_KIND:
         return False
@@ -502,7 +450,7 @@ def adjudicated_dream_findings_to_working_memory(
                 "recommendation": candidate["recommendation"],
                 "confidence": round(float(finding.get("confidence") or 0.62), 4),
                 "project_label": project_label,
-                "trigger_terms": dream_trigger_terms_for(candidate, concepts, project_label),
+                "trigger_terms": trigger_terms_for(candidate, concepts, project_label),
                 "concepts": concepts,
                 "source_finding_ids": [source_finding_id],
                 "source_refs": refs,
@@ -580,10 +528,14 @@ def plan_dream_hypothesis_use(
             "truth_boundary": row.get("truth_boundary"),
         }
     if route_relevance is None:
-        # Route relevance must use curated trigger terms, not the templated
-        # dream title/summary. Otherwise boundary words such as "unresolved"
-        # can wake unrelated hypotheses and look like over-personalization.
-        haystack = " ".join(string_values(row.get("trigger_terms"))).casefold()
+        haystack = " ".join(
+            [
+                str(row.get("title") or ""),
+                str(row.get("summary") or ""),
+                " ".join(string_values(row.get("trigger_terms"))),
+                " ".join(string_values(row.get("concepts"))),
+            ]
+        ).casefold()
         prompt_terms = [term for term in text_terms(prompt) if len(term) >= 4]
         route_relevance = bool(prompt_terms and any(term in haystack for term in prompt_terms))
     if not route_relevance:

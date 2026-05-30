@@ -16,7 +16,6 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 import dream_working_memory as wm  # noqa: E402
-from memory_candidate_router import match_working_memory  # noqa: E402
 
 
 def source_ref(thread_key: str, message_id: str, line: int) -> dict[str, object]:
@@ -138,34 +137,6 @@ class DreamWorkingMemoryTests(unittest.TestCase):
         self.assertEqual(adjudicated["adjudication_result"]["status"], "parked")
         self.assertIn("sensitive_use_gate", adjudicated["adjudication_result"]["failed_checks"])
         self.assertEqual(wm.adjudicated_dream_findings_to_working_memory([adjudicated]), [])
-
-    def test_template_words_do_not_wake_unrelated_dream_hypotheses(self) -> None:
-        telegram = adjudicated_finding(
-            title="Compensatory check: telegram may be carrying an unresolved edge",
-            summary="The selected real-history pack shows telegram across source threads.",
-        )
-        documentation = adjudicated_finding(
-            title="Compensatory check: documentation may be carrying an unresolved edge",
-            summary="The selected real-history pack shows documentation across source threads.",
-        )
-        rows = wm.adjudicated_dream_findings_to_working_memory([telegram, documentation])
-
-        generic = match_working_memory(
-            "unresolved 这条线下一步怎么收？",
-            rows,
-            project_label="AIppocampus",
-            limit=8,
-        )
-        concrete = match_working_memory(
-            "telegram 这条线下一步怎么收？",
-            rows,
-            project_label="AIppocampus",
-            limit=8,
-        )
-
-        self.assertEqual(generic, [])
-        self.assertEqual(len(concrete), 1)
-        self.assertIn("telegram", concrete[0]["matched_terms"])
 
 
 if __name__ == "__main__":

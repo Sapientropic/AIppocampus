@@ -341,12 +341,6 @@ reflection-ready rows, and bridge-claim coverage. Its output is sanitized
 aggregate evidence; it does not prove private-history dream quality or live
 model/user-visible lift.
 
-`dream_natural_prompt_eval.py` adds a route-level stress eval for the foreground
-side of those hypotheses. It compares ordinary topic prompts against explicit
-manual-reminder prompts, checks unrelated and over-personalizing negative
-prompts, and verifies strong dream claims require source reopen. The output is
-aggregate and sanitized; it is not a live user-behavior A/B test.
-
 Background-adjudicated dream hypotheses can project onto the existing
 working-memory substrate for recall, ambient, and reflection consumers, but
 only after structural adjudication in `dream_working_memory.py`: the finding
