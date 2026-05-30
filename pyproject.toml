@@ -37,6 +37,7 @@ mypy_path = [
     "tools/aippocampus/docs",
     "tools/aippocampus/github",
     "tools/aippocampus/smoke",
+    "plugins/aippocampus",
     "benchmarks/aippocampus",
 ]
 check_untyped_defs = true
@@ -124,4 +125,5 @@ files = [
     "tools/aippocampus/github/project_triage.py",
     "tools/aippocampus/repo_paths.py",
     "tools/aippocampus/run_tests.py",
+    "tools/aippocampus/smoke/smoke_codex_long_session_continuity.py",
 ]

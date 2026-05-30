@@ -32,6 +32,12 @@ and benchmark folders are compatibility wrappers around that single helper, not
 new public APIs. New repo maintenance tools should reuse that helper instead of
 adding fresh ad hoc `sys.path` insertion rules.
 
+## Repo Smoke And Readiness Tools
+
+| Tool or group | Purpose | Invocation route | Key dependencies | Status |
+|---|---|---|---|---|
+| `tools/aippocampus/smoke/smoke_codex_long_session_continuity.py` | Slow/live real Codex app-server long-session smoke for synthetic correction survival across host compaction, plus clean-source rebuild verification. | Manual public-readiness command; not part of the fast deterministic tier. | Codex app-server, `build_clean_source.py`, existing real-host smoke client. | Repo maintenance |
+
 ## Public Entrypoints And Install Flow
 
 | Script or group | Purpose | Invocation route | Key dependencies | Status |
