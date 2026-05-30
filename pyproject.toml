@@ -58,6 +58,7 @@ files = [
     "skills/aippocampus/scripts/build_project_timeline.py",
     "skills/aippocampus/scripts/build_segments.py",
     "skills/aippocampus/scripts/coding_decision_events.py",
+    "skills/aippocampus/scripts/compensatory_dream.py",
     "skills/aippocampus/scripts/correction_reconsolidation.py",
     "skills/aippocampus/scripts/deepseek_model_routing.py",
     "skills/aippocampus/scripts/encrypted_sync_bundle.py",

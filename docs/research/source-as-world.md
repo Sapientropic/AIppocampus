@@ -169,6 +169,12 @@ produce navigation, hypotheses, salience, and next questions. Their output
 should be visibly downstream from source and should carry source refs for every
 substantive claim.
 
+The first compensatory dream helper follows this boundary: it emits
+`dream_synthesized` candidates with thread-scoped source refs on every bridge
+claim and `review_state=needs_review`; it does not promote formal memory, alter
+clean source, verify registry resolution without an index, or become foreground
+recall input until reviewed.
+
 This keeps Levin-style dynamic memory compatible with AIppocampus's source
 fidelity requirement: salience may shift, but the event remains.
 

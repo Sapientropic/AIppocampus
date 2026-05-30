@@ -63,6 +63,7 @@ REQUIRED_RUNTIME_MAP_SCRIPTS = [
     "subconscious_scheduler.py",
     "subconscious_worker.py",
     "subconscious_review.py",
+    "compensatory_dream.py",
     "journey_tracking.py",
     "memory_candidate_router.py",
     "agency_affordance.py",

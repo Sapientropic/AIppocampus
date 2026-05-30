@@ -140,6 +140,7 @@ Examples:
 - `question_tracking`
 - `theme_emergence`
 - `journey_tracking`
+- `compensatory_dream`
 - `trigger_mining`
 - `decision_evolution`
 
@@ -308,6 +309,17 @@ comparison, and each pair gets an adaptive threshold policy from compatible or
 conflicting six-axis evidence. This remains a staging/navigation layer; it does
 not turn salience scores or thresholds into memory truth.
 
+## Relationship To Dream Tasks
+
+`compensatory_dream.py` is the first implemented integrative worker. It is a
+job-circuit-adjacent helper over already extracted, source-backed single-thread
+rows: deterministic cells validate source refs, suppress unsourced or prior
+dream rows, suppress refs that belong to another thread, and emit only
+`dream_synthesized` candidates whose bridge claims carry source refs. Its output
+is candidate weather over source, not source truth; registry/clean-source
+resolution remains a later validation step, and it is not eligible for
+foreground hooks until a review/routing layer accepts it.
+
 ## Anti-Patterns
 
 Avoid these:
@@ -320,6 +332,8 @@ Avoid these:
 - treating a semantic label as evidence without source refs
 - adding separate staging files when the existing subconscious pipeline can
   carry the candidate type
+- letting dream candidates influence foreground recall before review or source
+  re-opening
 
 ## Summary
 
