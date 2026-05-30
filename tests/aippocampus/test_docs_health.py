@@ -95,6 +95,36 @@ class DocsHealthTests(unittest.TestCase):
 
         self.assertIn("runtime script map missing high-risk script: sync_bundle.py", issues)
 
+    def test_runtime_script_map_reports_missing_navigation_sections(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            docs = repo / "docs"
+            docs.mkdir(parents=True)
+            (docs / "runtime-script-map.md").write_text(
+                "\n".join(docs_health.REQUIRED_RUNTIME_MAP_SCRIPTS) + "\n",
+                encoding="utf-8",
+            )
+
+            issues = docs_health.runtime_script_map_issues(repo)
+
+        self.assertIn("runtime script map missing high-level runtime flow", issues)
+        self.assertIn("runtime script map missing recall decision test map", issues)
+
+    def test_dream_phase1_contract_reports_missing_schema_pointer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            research = repo / "docs" / "research"
+            research.mkdir(parents=True)
+            (research / "dream-task-design.md").write_text(
+                "# Dream Task Design\n\ncompensatory_dream.py\n",
+                encoding="utf-8",
+            )
+
+            issues = docs_health.dream_phase1_contract_issues(repo)
+
+        self.assertIn("dream task design missing implemented Phase 1 contract", issues)
+        self.assertIn("dream task design missing executable contract test pointer", issues)
+
     def test_research_index_reports_unlinked_top_level_notes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)

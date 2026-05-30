@@ -6,6 +6,10 @@ only to keep large-file debt visible: every `skills/aippocampus/scripts/*.py`
 file at or above 600 non-comment LOC must be listed here with a guard budget
 and a next plausible boundary.
 
+For contributor onboarding, dependency flow, maintenance/core-recall separation,
+and recall test visibility, use `runtime-script-map.md`. This register only
+answers "which large scripts need an explicit split boundary next?"
+
 The enforcing test is
 `tests/aippocampus/test_architecture_boundaries.py::ArchitectureBoundaryTests.test_large_runtime_scripts_have_debt_register_budgets`.
 If a file grows past its budget, either split a real responsibility out or raise

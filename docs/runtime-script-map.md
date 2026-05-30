@@ -10,6 +10,39 @@ registry/retrieval component, warm ambient component, or subconscious job
 component, update this map and the cheap guard in
 `tools/aippocampus/docs/check_docs_health.py`.
 
+## High-Level Runtime Flow
+
+This graph is the contributor-facing dependency map. It shows ownership and
+call direction at the layer level; it is not a generated import graph.
+
+```mermaid
+flowchart TD
+    User["Codex / user prompt"] --> Hook["Prompt hook entrypoint"]
+    Hook --> Decision["prompt_recall_* decision layer"]
+    Decision --> Registry["registry + clean-source lookup"]
+    Decision --> Retrieval["retrieval/query/scoring policy"]
+    Decision --> Semantic["optional semantic gate"]
+    Decision --> Ambient["ambient cache/cards"]
+    Registry --> Source["clean source + source refs"]
+    Retrieval --> Source
+    Semantic --> Model["optional external model route"]
+    Ambient --> Source
+    Lifecycle["lifecycle / maintenance hooks"] --> Source
+    Lifecycle --> Cache["rebuildable indexes and sidecars"]
+    Subconscious["subconscious jobs"] --> Source
+    Subconscious --> Model
+    Subconscious --> Findings["review-only findings / working memory candidates"]
+    Sync["sync / export / MCP surfaces"] --> Source
+    Ops["storage, retention, cold archive reports"] -. manual diagnostics .-> Source
+```
+
+Core recall is the `Hook -> Decision -> Registry/Retrieval/Semantic/Ambient`
+path. Maintenance and storage tools may inspect the same generated artifacts,
+but they must not become foreground recall dependencies. If a future deployment
+split moves storage, retention, or cold archive work into another process, the
+core recall path should still be able to run from registry, clean source, and
+its rebuildable lookup sidecars.
+
 ## Status Legend
 
 - Public entrypoint: documented or user-facing CLI / hook / MCP command.
@@ -69,6 +102,12 @@ adding fresh ad hoc `sys.path` insertion rules.
 | `build_project_timeline.py`, `build_semantic_scope_labels.py`, `build_associations.py` | Timeline, semantic sidecars, and source-derived associations. | Onboarding, prompt recall, semantic smokes. | Registry rows, clean source, optional model sidecars. | Rebuildable cache |
 | `build_concept_graph.py`, `build_cognitive_map.py`, `question_vector_index.py` | Advisory graph/map/vector navigation layers. | Maintenance, research smokes, future question tracking. | Clean-source ids and source refs; never truth replacement. | Rebuildable cache |
 | `storage_capacity_report.py`, `rollout_size_audit.py`, `retention_report.py`, `cold_archive.py` | Storage, retention, and capacity diagnostics. | Manual readiness / GB-scale work. | Registry and generated-artifact accounting. | Repo maintenance |
+
+These diagnostics are deliberately outside the core recall path. They can read
+registry, clean-source manifests, raw rollout audit paths, and generated
+sidecars to answer operator questions, but foreground prompt recall should not
+import them or wait on them. The user-facing cleanup sequence remains
+`retention_report.py --write` before `cold_archive.py`.
 
 ## MCP Surface
 
@@ -134,6 +173,24 @@ back to clean source. External-model features must stay optional.
 
 Warm ambient output should remain quiet and advisory unless a prompt explicitly
 needs source-backed evidence. Do not let scout summaries replace clean source.
+
+## Recall Decision Test Map
+
+The recall tests are intentionally split by responsibility rather than gathered
+into one giant fixture file. Use this map when changing core recall behavior:
+
+| Surface | Primary tests | What they protect |
+|---|---|---|
+| Prompt hook glue and budgets | `tests/aippocampus/test_aippocampus_prompt_hook.py`, `tests/aippocampus/test_prompt_recall_decision_boundaries.py` | Hook output shape, quiet/default behavior, budget boundaries, ambient attach rules, and decision-module ownership. |
+| Deterministic cue and semantic gate | `tests/aippocampus/test_semantic_recall_gate.py`, `tests/aippocampus/test_semantic_trigger_router.py`, `tests/aippocampus/test_semantic_cue_cache.py` | Vague-continuation gating, semantic trigger review, cache behavior, and unavailable-model diagnostics. |
+| Source-backed retrieval | `tests/aippocampus/test_search_clean_source.py`, `tests/aippocampus/test_retrieval_query_policy.py`, `tests/aippocampus/test_retrieval_score_fusion.py` | Query expansion, scoring hints, clean-source search, and source-ref-preserving result ranking. |
+| Warm ambient recall | `tests/aippocampus/test_warm_ambient_recall.py`, `tests/aippocampus/test_benchmark_warm_ambient_recall.py`, `tests/aippocampus/test_benchmark_warm_ambient_sweep.py` | Scout merge behavior, source validation, privacy guards, cache write policy, and benchmark payload contracts. |
+| Architecture and coupling guardrails | `tests/aippocampus/test_import_coupling.py`, `tests/aippocampus/test_architecture_boundaries.py` | Import boundaries, hook/core separation, large-script debt registration, and high-risk mypy coverage. |
+
+For ordinary documentation-only changes, the fast deterministic command remains
+`python tools/aippocampus/run_tests.py --tier fast`. For targeted recall-policy
+work, run the relevant tests above in addition to the tier command when the
+change touches that surface.
 
 ## Maintenance Rule
 

@@ -30,7 +30,8 @@ Other docs should link to that place and add only local context.
   stages 0 through 5; it is a status snapshot, not the canonical roadmap.
 - `architecture-overview.md` - public map of runtime layers and boundaries.
 - `runtime-script-map.md` - maintainer map for high-risk runtime scripts,
-  entrypoints, callers, dependencies, and public/internal status.
+  top-level runtime flow, core recall test surfaces, entrypoints, callers,
+  dependencies, and public/internal status.
 - `public-core-boundary.md` - canonical Apache-2.0 public-core license,
   commercial extension, adapter, schema, and relicensing boundary.
 - `public-api.md` - supported CLI, MCP, JSON, environment-variable, and Python
@@ -63,7 +64,7 @@ Other docs should link to that place and add only local context.
 - `cognitive-runtime-architecture.md` - layered runtime architecture and
   cognitive-map direction.
 - `runtime-script-map.md` - current ownership/dependency map for installable
-  runtime scripts.
+  runtime scripts, including the high-level recall flow and test map.
 - `architecture-debt-register.md` - lightweight large-runtime-script debt
   register and guard budgets.
 - `gb-scale-roadmap.md` - long-thread indexing, segmenting, retention, and

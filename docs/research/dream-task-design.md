@@ -204,17 +204,30 @@ Extractive tasks are deterministic-first (rules + semantic gates).
 Integrative tasks are semantic-first (require model reasoning) and must always
 be clearly flagged as dream output, not source-grounded fact.
 
+### Implemented Phase 1 Contract
+
 The first implemented slice is intentionally narrower than the full dream
-design. `compensatory_dream.py` is a deterministic Phase 1 helper that consumes
-existing source-backed extraction rows for one thread and emits
-`finding_kind="dream_synthesized"` candidates with
-`support_level="candidate"`, `review_state="needs_review"`, and
-`foreground_eligible=false`. It discards unsourced rows, rows whose refs belong
-to another thread, and existing dream rows; attaches thread-scoped `source_refs`
-to every bridge claim; and writes no clean-source or formal-memory updates. Its
-source-ref audit is structural unless a later registry/clean-source index is
-provided. The default trigger policy is lower-frequency than extraction
-(`run_after_extraction_passes=3`) and not allowed in foreground hooks.
+design. `skills/aippocampus/scripts/compensatory_dream.py` is a deterministic
+Phase 1 helper with this concrete contract:
+
+- Input: source-backed extraction rows for a single `thread_key`. Rows may come
+  from question/frontier/concept extraction, but they must carry thread-scoped
+  `source_refs` or they are ignored.
+- Output: review-only `finding_kind="dream_synthesized"` candidates with
+  `dream_function="compensatory"`, `support_level="candidate"`,
+  `review_state="needs_review"`, and `foreground_eligible=false`.
+- Filtering: unsourced rows, rows whose refs belong to another thread, and
+  existing dream rows are discarded before synthesis.
+- Audit boundary: every bridge claim carries `source_refs`; source-ref
+  resolution is structural unless a later registry/clean-source index is
+  supplied.
+- Write boundary: Phase 1 writes no clean-source or formal-memory updates. The
+  default trigger policy is lower-frequency than extraction
+  (`run_after_extraction_passes=3`) and not allowed in foreground hooks.
+
+The executable contract lives in
+`tests/aippocampus/test_compensatory_dream.py`. Keep changes to this schema
+paired with that test file and the runtime map in `docs/runtime-script-map.md`.
 
 ## Dream Outputs As Reusable Inference Substrate
 

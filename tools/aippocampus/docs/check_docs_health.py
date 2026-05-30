@@ -80,6 +80,32 @@ REQUIRED_RUNTIME_MAP_SCRIPTS = [
     "question_vector_index.py",
 ]
 
+REQUIRED_RUNTIME_MAP_TERMS = {
+    "## High-Level Runtime Flow": "runtime script map missing high-level runtime flow",
+    "Core recall is the": "runtime script map missing core recall path boundary",
+    "outside the core recall path": "runtime script map missing maintenance/core-recall boundary",
+    "## Recall Decision Test Map": "runtime script map missing recall decision test map",
+    "test_prompt_recall_decision_boundaries.py": (
+        "runtime script map missing prompt recall decision test pointer"
+    ),
+    "test_retrieval_query_policy.py": "runtime script map missing retrieval query test pointer",
+    "test_warm_ambient_recall.py": "runtime script map missing warm ambient test pointer",
+}
+
+REQUIRED_DREAM_PHASE1_CONTRACT_TERMS = {
+    "### Implemented Phase 1 Contract": "dream task design missing implemented Phase 1 contract",
+    "skills/aippocampus/scripts/compensatory_dream.py": (
+        "dream task design missing compensatory_dream implementation pointer"
+    ),
+    'finding_kind="dream_synthesized"': (
+        "dream task design missing dream_synthesized output contract"
+    ),
+    'foreground_eligible=false': "dream task design missing foreground eligibility boundary",
+    "tests/aippocampus/test_compensatory_dream.py": (
+        "dream task design missing executable contract test pointer"
+    ),
+}
+
 REQUIRED_PUBLIC_READINESS_DOCS = [
     "CONTRIBUTING.md",
     "docs/architecture-overview.md",
@@ -207,6 +233,21 @@ def runtime_script_map_issues(repo_root: Path) -> list[str]:
     for script in REQUIRED_RUNTIME_MAP_SCRIPTS:
         if script not in text:
             issues.append(f"runtime script map missing high-risk script: {script}")
+    for term, issue in REQUIRED_RUNTIME_MAP_TERMS.items():
+        if term not in text:
+            issues.append(issue)
+    return issues
+
+
+def dream_phase1_contract_issues(repo_root: Path) -> list[str]:
+    issues: list[str] = []
+    dream_doc = repo_root / "docs" / "research" / "dream-task-design.md"
+    if not dream_doc.exists():
+        return ["missing dream task design doc: docs/research/dream-task-design.md"]
+    text = dream_doc.read_text(encoding="utf-8")
+    for term, issue in REQUIRED_DREAM_PHASE1_CONTRACT_TERMS.items():
+        if term not in text:
+            issues.append(issue)
     return issues
 
 
@@ -270,6 +311,7 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
         issues.append("docs/origin.md duplicates the origin essay; link docs/未干的地图.md instead")
 
     issues.extend(runtime_script_map_issues(repo_root))
+    issues.extend(dream_phase1_contract_issues(repo_root))
 
     gitignore = repo_root / ".gitignore"
     if not gitignore.exists():
