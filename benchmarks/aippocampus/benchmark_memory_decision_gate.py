@@ -566,6 +566,60 @@ def build_harder_synthetic_case_bank() -> list[GateCase]:
             semantic_gate_fixture="timeout",
         )
 
+    natural_oral_prompts = [
+        ("plain_button", "skip_plain_task", "should_skip", "这个按钮又歪了，先帮我修一下。"),
+        ("plain_bug_pause", "skip_plain_task", "should_skip", "上次那个 bug 先别管，先把 failing test 跑通。"),
+        ("remember_var", "skip_plain_task", "should_skip", "我说记住这个变量名，不是让你写记忆。"),
+        ("atlas_modal", "skip_plain_task", "should_skip", "Atlas 那个 modal close button 先改一下。"),
+        ("list_sort_copy", "skip_plain_task", "should_skip", "帮我把 list.sort 这个 demo 里的 copy 改顺。"),
+        ("no_history_copy", "skip_plain_task", "should_skip", "别查历史，直接把 dashboard 空状态文案换掉。"),
+        ("timeout_test", "skip_plain_task", "should_skip", "这个 timeout test 太慢了，先调 fixture。"),
+        ("cookie_placeholder", "skip_plain_task", "should_skip", "cookie placeholder 名字换一下，不要碰真实值。"),
+        ("bug_card_spacing", "skip_plain_task", "should_skip", "把 bugReportCard 的间距收一下。"),
+        ("source_map_compile", "skip_plain_task", "should_skip", "这段 source map 错不是历史问题，直接修编译。"),
+        ("atlas_direction", "scent_oral_continuation", "should_scent", "上次那个 Atlas 方向先接着想，不用翻原文。"),
+        ("hippocampus_continue", "scent_oral_continuation", "should_scent", "我们前面聊的外置海马体那块，继续推进就行。"),
+        ("hook_active", "scent_oral_continuation", "should_scent", "刚才说的 hook 主动一点，这条线继续。"),
+        ("continuity_feel", "scent_oral_continuation", "should_scent", "那个 self-continuity 的感觉还在，先接着想。"),
+        ("gate_boundary", "scent_oral_continuation", "should_scent", "AIppocampus 这个 recall gate 边界再收一下。"),
+        ("atlas_not_dashboard", "scent_oral_continuation", "should_scent", "Atlas 不是 dashboard 那个，是记忆这边，继续看。"),
+        ("zh_continuation", "scent_oral_continuation", "should_scent", "上次那个中文 continuation miss 先继续复盘，不要找证据。"),
+        ("scope_boundary", "scent_oral_continuation", "should_scent", "project-scoped memory boundary 这块我们继续。"),
+        ("bug_wording", "evidence_oral_recall", "should_evidence", "上次那个 bug 怎么说的来着？"),
+        ("top28_bug", "evidence_oral_recall", "should_evidence", "之前说 top 28 registry entries 那个问题，是怎么定性的？"),
+        ("zh_template_bug", "evidence_oral_recall", "should_evidence", "中文 continuation miss 那次到底是哪句模板的问题？"),
+        ("raw_history", "evidence_oral_recall", "should_evidence", "raw history 明明在本地那段怎么说来着？"),
+        ("external_hippocampus", "evidence_oral_recall", "should_evidence", "外置海马体那句是怎么说的来着？"),
+        ("life_quote", "evidence_oral_recall", "should_evidence", "生命还能变成什么那句你帮我找一下。"),
+        ("atlas_project_scoped", "evidence_oral_recall", "should_evidence", "AIppocampus Atlas project-scoped 那句怎么说来着？"),
+        ("atlas_other_entity", "evidence_oral_recall", "should_evidence", "Atlas dashboard different entity 那句怎么说来着？"),
+        ("scent_boundary", "evidence_oral_recall", "should_evidence", "上次我们说 ambiguous continuation 和 evidence 的边界怎么表述？"),
+        ("hook_budget", "evidence_oral_recall", "should_evidence", "prompt hook 预算放开后的那个结论怎么说来着？"),
+        ("source_vs_scent", "evidence_oral_recall", "should_evidence", "source-backed memory 和 scent 的区别我们怎么说的？"),
+        ("fixture_boundary", "evidence_oral_recall", "should_evidence", "semantic fixture 不是 live quality 那句怎么说？"),
+    ]
+    natural_source_threads = {
+        "atlas_project_scoped": "session:atlas-current-project",
+        "atlas_other_entity": "session:atlas-other-project",
+    }
+    for twin, role, expected, prompt in natural_oral_prompts:
+        add(
+            twin,
+            role,
+            "natural_oral_prompt",
+            expected,
+            prompt,
+            search_budget=3 if expected == "should_evidence" else 2 if expected == "should_scent" else 0,
+            use_semantic_gate=expected == "should_scent",
+            semantic_gate_fixture="positive_scent" if expected == "should_scent" else "disabled",
+            expected_evidence_thread_key=natural_source_threads.get(
+                twin,
+                "session:synthetic-memory",
+            )
+            if expected == "should_evidence"
+            else None,
+        )
+
     return cases
 
 
@@ -624,7 +678,7 @@ def build_public_memory_pain_cases() -> list[GateCase]:
         ),
         case(
             "invalid_structured_extraction",
-            "Structured fact says user lives in Neon City; downgrade it unless clean source confirms.",
+            "Structured fact says user lives in Neon City; keep it unsupported without a cited row.",
         ),
         case(
             "compaction_continuity",
@@ -984,6 +1038,80 @@ def build_synthetic_fixture(root: Path) -> SyntheticFixture:
             "sha1": "synthetic-hippocampus-line",
             "text": "raw history 明明在本地，但压缩后的我不知道该找什么，所以需要外置海马体和触发式召回。",
         },
+        {
+            "line": 480,
+            "timestamp": "2026-05-25T02:30:00Z",
+            "role": "assistant",
+            "kind": "message",
+            "phase": "final_answer",
+            "turn_index": 28,
+            "is_final": True,
+            "sha1": "synthetic-semantic-top28-bug",
+            "text": (
+                "The live semantic miss was a benchmark bug: the registry catalog exposed "
+                "only the stable top 28 registry entries, so out-of-catalog continuation "
+                "prompts could not be matched."
+            ),
+        },
+        {
+            "line": 501,
+            "timestamp": "2026-05-25T02:40:00Z",
+            "role": "assistant",
+            "kind": "message",
+            "phase": "final_answer",
+            "turn_index": 31,
+            "is_final": True,
+            "sha1": "synthetic-zh-template-bug",
+            "text": (
+                "The Chinese continuation miss came from the weak template "
+                "这个问题后面怎么接，重点是 X; changing it to 能接着我们之前关于 X 的那段对话继续吗 "
+                "recovered the misses."
+            ),
+        },
+        {
+            "line": 522,
+            "timestamp": "2026-05-25T02:50:00Z",
+            "role": "assistant",
+            "kind": "message",
+            "phase": "final_answer",
+            "turn_index": 34,
+            "is_final": True,
+            "sha1": "synthetic-hook-budget-line",
+            "text": (
+                "After the prompt hook budget repair, prompt-relevant catalog and trigger "
+                "slices should emphasize the current cue while the full compact catalog "
+                "remains the quality-first default."
+            ),
+        },
+        {
+            "line": 544,
+            "timestamp": "2026-05-25T03:00:00Z",
+            "role": "assistant",
+            "kind": "message",
+            "phase": "final_answer",
+            "turn_index": 37,
+            "is_final": True,
+            "sha1": "synthetic-source-vs-scent-line",
+            "text": (
+                "Scent is only a quiet hint that old memory may exist; source-backed "
+                "memory needs concrete clean-source, SQLite, or raw-rollout references "
+                "before the assistant can treat it as evidence."
+            ),
+        },
+        {
+            "line": 566,
+            "timestamp": "2026-05-25T03:10:00Z",
+            "role": "assistant",
+            "kind": "message",
+            "phase": "final_answer",
+            "turn_index": 40,
+            "is_final": True,
+            "sha1": "synthetic-fixture-boundary-line",
+            "text": (
+                "The deterministic semantic fixture bank validates routing after a mocked "
+                "semantic decision; it is not live semantic model quality evidence."
+            ),
+        },
     ]
     make_sqlite(sqlite_path, messages, anchors=[], turns=[])
     atlas_current = root / "atlas-current" / "index" / "source_index.sqlite"
@@ -1057,6 +1185,14 @@ def build_synthetic_fixture(root: Path) -> SyntheticFixture:
                             "raw history",
                             "明明在本地",
                             "source-backed",
+                            "bug",
+                            "top 28 registry entries",
+                            "Chinese continuation miss",
+                            "中文 continuation miss",
+                            "prompt hook budget",
+                            "semantic fixture",
+                            "live semantic model quality",
+                            "source-backed memory",
                         ],
                         "summary": (
                             "Synthetic thread about UserPromptSubmit hook, ambient recall, "
@@ -1347,10 +1483,16 @@ def summarize_results(results: list[dict[str, Any]]) -> dict[str, Any]:
         for row in results
         if row.get("expected") != "should_evidence" and row.get("actual") == "evidence"
     )
+    evidence_fn = sum(
+        1
+        for row in results
+        if row.get("expected") == "should_evidence" and row.get("actual") != "evidence"
+    )
     should_surface = [
         row for row in results if row.get("expected") in {"should_scent", "should_evidence"}
     ]
     surface_hits = sum(1 for row in should_surface if row.get("actual") in {"scent", "evidence"})
+    surface_fn = sum(1 for row in should_surface if row.get("actual") == "skip")
     should_evidence = [row for row in results if row.get("expected") == "should_evidence"]
     evidence_hits = sum(1 for row in should_evidence if row.get("actual") == "evidence")
     per_decision = {
@@ -1376,6 +1518,10 @@ def summarize_results(results: list[dict[str, Any]]) -> dict[str, Any]:
         "over_escalation_rate": safe_rate(over_escalation, total),
         "evidence_false_positive_count": evidence_fp,
         "evidence_false_positive_rate": safe_rate(evidence_fp, total),
+        "evidence_false_negative_count": evidence_fn,
+        "evidence_false_negative_rate": safe_rate(evidence_fn, total),
+        "surface_false_negative_count": surface_fn,
+        "surface_false_negative_rate": safe_rate(surface_fn, total),
         "weighted_false_positive_cost": round(sum(false_positive_cost(row) for row in results), 4),
         "semantic_model_call_count": semantic_calls,
         "semantic_model_call_rate": safe_rate(semantic_calls, total),
@@ -1401,6 +1547,17 @@ def summarize_harder_case_bank(results: list[dict[str, Any]]) -> dict[str, Any]:
         1
         for row in bank
         if row.get("semantic_gate_fixture") in {"overeager_evidence", "timeout"}
+    )
+    natural_rows = [
+        row for row in bank if row.get("case_type") == "hard_bank_natural_oral_prompt"
+    ]
+    natural_expected_evidence = [
+        row for row in natural_rows if row.get("expected") == "should_evidence"
+    ]
+    summary["natural_oral_prompt_cases"] = len(natural_rows)
+    summary["natural_oral_expected_evidence_cases"] = len(natural_expected_evidence)
+    summary["natural_oral_evidence_false_negative_count"] = sum(
+        1 for row in natural_expected_evidence if row.get("actual") != "evidence"
     )
     summary["description"] = (
         "100+ synthetic adversarial Track A cases; failures are baseline signal, "
@@ -1595,6 +1752,14 @@ def run_benchmark(
         )
         if case_set == "synthetic"
         else None,
+        "semantic_gate_boundary": {
+            "mode": "deterministic_fixture" if case_set == "synthetic" else "fixture_public_corpus",
+            "live_llm_required": False,
+            "fixture_decisions": ["positive_scent", "overeager_evidence", "timeout"],
+            "validates": "hook routing and evidence guards after a semantic decision",
+            "does_not_validate": "whether the live semantic model would choose that decision",
+            "live_track": "benchmarks/aippocampus/benchmark_live_semantic_gate.py",
+        },
         "cases": results,
         "privacy_boundary": {
             "raw_prompt_emitted": bool(include_private_text),

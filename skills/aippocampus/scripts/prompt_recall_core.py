@@ -559,10 +559,10 @@ def should_suppress(
     if explicit:
         return False
     if source_evidence_cue and candidates:
-        # Source-backed requests such as "Can you cite..." may mention codey
-        # nouns (dashboard/project/API) because the old source itself is about
-        # software. Once the user has asked for evidence and local search found
-        # candidates, do not let the generic code-surface brake hide it.
+        # Evidence requests, including natural phrasing like "上次那个 bug
+        # 怎么说", may mention codey nouns because the old source itself is
+        # about software. Only lift the generic code-surface brake after local
+        # search found candidates, so plain implementation prompts stay quiet.
         return False
     if associative and candidates:
         return False

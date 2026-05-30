@@ -61,7 +61,9 @@ NATURAL_EVIDENCE_PATTERNS = [
     re.compile(pattern, re.IGNORECASE)
     for pattern in [
         r"(找一下|查一下|找找|查查|看看).{0,24}(之前|前面|刚才|上次|说过|那段|那句|结论|判断|原话|原文)",
-        r"(之前|前面|刚才|上次).{0,36}(那段|那句|结论|判断|说法|怎么说|是什么|讲过|说过)",
+        r"(之前|前面|刚才|上次).{0,64}(那段|那句|结论|判断|说法|怎么说|怎么表述|怎么定性|是什么|哪句|讲过|说过)",
+        r"(那段|那句|那个|这个|那次|这次).{0,36}(结论|判断|说法|决定|怎么说|怎么表述|怎么定性|是什么|哪句)",
+        r"(那个|这个|那条|这条).{0,24}(结论|判断|说法|决定).{0,12}(怎么说|怎么表述|是什么)",
         r"(继续).{0,36}(那个|这个|那条|这条).{0,18}(结论|判断|说法|决定)",
         r"(that|the|this).{0,24}(conclusion|decision|part|bit|quote|wording)",
         r"(last time|previously|earlier).{0,48}(conclusion|decision|said|quote|wording)",
@@ -76,6 +78,8 @@ NEGATIVE_EVIDENCE_PATTERNS = [
         r"(scent[- ]only).{0,12}(mode|context|output|please|即可|就行)",
         r"(no source|no evidence|no quote|no citation)",
         r"(do not|don't).{0,20}(cite|quote|give evidence|retrieve evidence)",
+        r"(without|with no|lacking).{0,24}(source|evidence|citation|cite|cited|quote|clean source|source-backed)",
+        r"(unsupported|downgrade|keep it unsupported).{0,36}(without|unless).{0,24}(source|evidence|citation|cite|cited|quote|clean source|source-backed)",
     ]
 ]
 

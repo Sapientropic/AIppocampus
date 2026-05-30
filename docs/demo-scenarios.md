@@ -161,6 +161,22 @@ Cannot claim: competitor superiority, live semantic-model quality, real-history
 coverage, or real Track D runtime compaction-continuity behavior. Use the
 separate Track D synthetic runner when demonstrating that measurement surface.
 
+## Scenario 6c: Private Memory Pain Prompt Smoke
+
+```sh
+python ./tools/aippocampus/smoke/smoke_memory_pain_prompt_hook.py --cwd . --semantic-gate off --json --strict
+python ./tools/aippocampus/smoke/smoke_memory_pain_prompt_hook.py --cwd . --semantic-gate on --semantic-timeout 20 --max-elapsed-ms 4300 --json --strict
+```
+
+Expected result: output is `aggregate_hash_only`, with no raw prompts, snippets,
+thread ids, source refs, or candidate titles. The smoke reports negative
+over-escalations, vague evidence upgrades, positive misses, semantic timeout
+buckets, and semantic-evidence bridge diagnostics separately.
+
+Cannot claim: full private-history coverage or live semantic-model quality. A
+relaxed live run with `--max-elapsed-ms 0` is useful for diagnosis, but it is not
+part of the fast deterministic path.
+
 ## Scenario 7: Inspect MCP Tools
 
 ```sh

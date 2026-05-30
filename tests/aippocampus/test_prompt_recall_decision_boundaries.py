@@ -219,6 +219,7 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
             "evidence": [],
             "working_memory": [],
             "semantic_gate": None,
+            "semantic_bridge_diagnostic": None,
         }
 
         self.assertEqual(

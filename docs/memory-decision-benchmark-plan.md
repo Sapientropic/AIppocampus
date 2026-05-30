@@ -216,19 +216,37 @@ Report boundary:
   runs. Non-zero env limits are debug/performance overrides, not product
   defaults.
 
-Current smoke and diagnostic results from 2026-05-29:
+Current smoke and diagnostic results from 2026-05-30:
 
 - synthetic Track A gate benchmark now includes the original 13 synthetic
-  boundary cases plus a 132-case harder bank. The original harder/adversarial
-  family still passes 13/13, but the full harder bank is deliberately sharper:
-  78/132 correct, accuracy 0.5909, macro F1 0.5804, over-escalation 9,
-  evidence false positives 9, and expected-evidence source match 11/24. This is
-  a baseline diagnostic, not a product-quality failure gate. The harder bank
-  covers hard negatives with high registry overlap, false memory cues inside
-  code-surface prompts, cross-project same-name entity traps, semantic
-  over-evidence traps, competing-source evidence requests, mixed-language
-  paraphrase, timeout/degradation behavior, and secret-like suppression.
-  Current misses are useful signal for future Track A upgrades.
+  boundary cases plus public memory-pain fixtures and a 162-case harder bank.
+  The harder bank currently reports 160/162 correct, accuracy 0.9877, macro F1
+  0.989, over-escalation 0, evidence false positives 0, evidence false
+  negatives 0, and expected-evidence source match 34/36. This remains a
+  deterministic routing contract, not a live semantic-model quality claim: the
+  mocked `positive_scent`, `overeager_evidence`, and `timeout` fixtures validate
+  hook routing and evidence guards after a semantic decision. The optional live
+  semantic-gate benchmark owns whether the configured model would make that
+  decision on real prompts. The harder bank now covers hard negatives with high
+  registry overlap, false memory cues inside code-surface prompts,
+  cross-project same-name entity traps, semantic over-evidence traps,
+  competing-source evidence requests, mixed-language paraphrase,
+  timeout/degradation behavior, secret-like suppression, and 30 natural oral
+  prompts, including 12 should-evidence cases that catch under-recall on weak
+  user wording such as "上次那个 bug 怎么说的来着".
+- Private real-history memory-pain prompt smoke now has a hash-only runner:
+  `tools/aippocampus/smoke/smoke_memory_pain_prompt_hook.py`. On 2026-05-30,
+  local deterministic mode over the installed real registry reported 8 cases,
+  decisions `{evidence: 2, scent: 5, skip: 1}`, 6 evidence rows, 0 unsafe
+  issues, and 0 positive misses. Foreground semantic-budget mode
+  (`--semantic-gate on --semantic-timeout 20 --max-elapsed-ms 4300`) kept the
+  same decisions and evidence count while surfacing 9 `read_timeout` buckets.
+  Relaxed live semantic mode (`--max-elapsed-ms 0`) reported decisions
+  `{evidence: 2, scent: 6}`, 6 evidence rows, 0 unsafe issues, 0 positive
+  misses, and one `semantic_evidence_without_source_bridge` diagnostic for a
+  deliberately vague cross-project prompt. The output is aggregate/hash-only and
+  is a bounded real-history regression smoke, not a full private-history quality
+  claim.
 - ShareGPT public Track B source-evidence slice over
   `sharegpt_all_multiturn`, first 100 conversations, max 200 cases:
   `status=sufficient`, 200 cases, 194 answer source-evidence cases and 6

@@ -6,6 +6,7 @@ import os
 import sqlite3
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -1420,6 +1421,159 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertEqual(result["decision"], "scent")
         self.assertFalse(result["evidence"])
         self.assertIn("evidence withheld", " ".join(result["reasons"]))
+
+    def test_without_cited_row_keeps_unsupported_memory_pain_prompt_as_scent(self) -> None:
+        messages = self._write_clean_thread_rows(
+            "session:memory-pain-negative",
+            [
+                {
+                    "source_line": 51,
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": (
+                        "Structured extraction discussed Neon City as a deliberately fake "
+                        "memory-pain example, not a source-backed user fact."
+                    ),
+                }
+            ],
+        )
+        registry_path = self._write_clean_registry(
+            thread_key="session:memory-pain-negative",
+            title="Memory pain structured extraction",
+            keywords=["structured extraction", "Neon City", "memory-pain"],
+            summary="Neon City was only a fake memory-pain example.",
+            messages_path=messages,
+        )
+
+        def fake_semantic_gate(prompt: str, **kwargs) -> dict:
+            return {
+                "available": True,
+                "decision": "evidence",
+                "confidence": 0.95,
+                "intent": "recall",
+                "query_aliases": ["structured extraction", "Neon City"],
+                "memory_scope": ["registered_threads"],
+                "anti_personalization_risk": "low",
+                "reasons": ["model sees a source word but misses the negation"],
+                "workers": [],
+                "errors": [],
+                "cached": False,
+            }
+
+        prompt = (
+            "Could you keep the structured extraction about Neon City unsupported "
+            "without a cited row?"
+        )
+        result = hook.assess_prompt(
+            prompt,
+            cwd=self.workspace,
+            registry_path=registry_path,
+            semantic_gate_fn=fake_semantic_gate,
+            search_budget=2,
+        )
+
+        self.assertTrue(recall_cues.negative_evidence_intent(prompt))
+        self.assertEqual(result["decision"], "scent")
+        self.assertFalse(result["evidence"])
+        self.assertIn("evidence withheld", " ".join(result["reasons"]))
+
+    def test_semantic_evidence_bridge_survives_semantic_budget_spend(self) -> None:
+        def slow_semantic_gate(prompt: str, **kwargs) -> dict:
+            time.sleep(1.05)
+            return {
+                "available": True,
+                "decision": "evidence",
+                "confidence": 0.95,
+                "intent": "recall",
+                "query_aliases": ["外置海马体", "触发式召回"],
+                "memory_scope": ["registered_threads"],
+                "anti_personalization_risk": "low",
+                "reasons": ["bounded recall request"],
+                "workers": [],
+                "errors": [],
+                "cached": False,
+            }
+
+        result = hook.assess_prompt(
+            "那个脑内续接器现在怎么样了？",
+            cwd=self.workspace,
+            registry_path=self.registry,
+            semantic_gate_fn=slow_semantic_gate,
+            semantic_timeout=3,
+            max_elapsed_ms=1900,
+            search_budget=1,
+        )
+
+        self.assertEqual(result["decision"], "evidence")
+        self.assertTrue(result["evidence"])
+        self.assertIn("semantic-context evidence upgrade", " ".join(result["reasons"]))
+        self.assertIn("semantic budget spend", " ".join(result["reasons"]))
+
+    def test_semantic_evidence_without_source_bridge_gets_diagnostic(self) -> None:
+        registry_path = self.root / "semantic-bridge-miss-registry" / "threads.json"
+        registry_path.parent.mkdir()
+        registry_path.write_text(
+            json.dumps({"schema_version": 1, "threads": []}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        def fake_semantic_gate(prompt: str, **kwargs) -> dict:
+            return {
+                "available": True,
+                "decision": "evidence",
+                "confidence": 0.95,
+                "intent": "recall",
+                "query_aliases": ["missing clean-source topic"],
+                "memory_scope": ["registered_threads"],
+                "anti_personalization_risk": "low",
+                "reasons": ["semantic evidence but no local source rows"],
+                "workers": [],
+                "errors": [],
+                "cached": False,
+            }
+
+        result = hook.assess_prompt(
+            "那个脑内续接器现在怎么样了？",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            semantic_gate_fn=fake_semantic_gate,
+            search_budget=1,
+        )
+
+        self.assertFalse(result["evidence"])
+        self.assertEqual(
+            result["semantic_bridge_diagnostic"],
+            "semantic_evidence_without_source_bridge",
+        )
+        self.assertIn("semantic evidence did not bridge", " ".join(result["reasons"]))
+
+    def test_vague_cross_project_semantic_evidence_stays_scent(self) -> None:
+        def fake_semantic_gate(prompt: str, **kwargs) -> dict:
+            return {
+                "available": True,
+                "decision": "evidence",
+                "confidence": 0.95,
+                "intent": "recall",
+                "query_aliases": ["外置海马体", "触发式召回"],
+                "memory_scope": ["registered_threads"],
+                "anti_personalization_risk": "low",
+                "reasons": ["model picked a source for a vague referent"],
+                "workers": [],
+                "errors": [],
+                "cached": False,
+            }
+
+        result = hook.assess_prompt(
+            "上次我们讨论的那个方案怎么说来着？",
+            cwd=self.workspace,
+            registry_path=self.registry,
+            semantic_gate_fn=fake_semantic_gate,
+            search_budget=3,
+        )
+
+        self.assertEqual(result["decision"], "scent")
+        self.assertFalse(result["evidence"])
+        self.assertIn("vague cross-project referent", " ".join(result["reasons"]))
 
     def test_semantic_continuation_does_not_upgrade_to_evidence_without_source_intent(self) -> None:
         def fake_semantic_gate(prompt: str, **kwargs) -> dict:

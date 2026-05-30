@@ -296,6 +296,73 @@ class MemoryDecisionGateBenchmarkTests(unittest.TestCase):
             [],
         )
 
+    def test_summarize_results_counts_evidence_false_negatives(self) -> None:
+        results = [
+            {"expected": "should_evidence", "actual": "skip", "case_type": "natural_oral"},
+            {"expected": "should_evidence", "actual": "scent", "case_type": "natural_oral"},
+            {"expected": "should_scent", "actual": "skip", "case_type": "weak_deictic"},
+            {"expected": "should_skip", "actual": "evidence", "case_type": "ordinary_code"},
+        ]
+
+        metrics = benchmark.summarize_results(results)
+
+        self.assertEqual(metrics["evidence_false_negative_count"], 2)
+        self.assertEqual(metrics["surface_false_negative_count"], 2)
+        self.assertEqual(metrics["evidence_false_negative_rate"], 0.5)
+
+    def test_synthetic_gate_benchmark_includes_natural_oral_case_bank(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = benchmark.build_synthetic_fixture(Path(tmp))
+
+        natural_cases = [
+            case
+            for case in fixture.cases
+            if case.case_type == "hard_bank_natural_oral_prompt"
+        ]
+        labels = Counter(case.expected for case in natural_cases)
+
+        self.assertGreaterEqual(len(natural_cases), 30)
+        self.assertGreaterEqual(labels["should_skip"], 8)
+        self.assertGreaterEqual(labels["should_scent"], 8)
+        self.assertGreaterEqual(labels["should_evidence"], 10)
+        self.assertTrue(
+            any("上次那个 bug 怎么说" in case.prompt for case in natural_cases)
+        )
+        self.assertTrue(
+            any(
+                case.expected == "should_evidence"
+                and "source-backed evidence" not in case.prompt.casefold()
+                and "原话" not in case.prompt
+                for case in natural_cases
+            )
+        )
+
+        payload = benchmark.run_benchmark(case_set="synthetic", include_private_text=False)
+
+        self.assertGreaterEqual(payload["harder_case_bank"]["natural_oral_prompt_cases"], 30)
+        self.assertGreaterEqual(
+            payload["harder_case_bank"]["natural_oral_expected_evidence_cases"],
+            10,
+        )
+        self.assertEqual(
+            payload["harder_case_bank"]["natural_oral_evidence_false_negative_count"],
+            0,
+        )
+
+    def test_synthetic_gate_benchmark_declares_fixture_live_boundary(self) -> None:
+        payload = benchmark.run_benchmark(case_set="synthetic", include_private_text=False)
+
+        boundary = payload["semantic_gate_boundary"]
+
+        self.assertEqual(boundary["mode"], "deterministic_fixture")
+        self.assertFalse(boundary["live_llm_required"])
+        self.assertEqual(
+            set(boundary["fixture_decisions"]),
+            {"positive_scent", "overeager_evidence", "timeout"},
+        )
+        self.assertIn("benchmark_live_semantic_gate.py", boundary["live_track"])
+        self.assertIn("live_semantic_model_quality", payload["cannot_claim"])
+
     def test_sharegpt_coding_fixture_runs_real_gate_cases_without_leaking_prompts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             corpus = Path(tmp) / "sharegpt"
