@@ -95,6 +95,34 @@ This is a deterministic measurement surface, not product proof that #65's real
 correction activation/outcome event pipeline, live hook capture, live semantic
 adjudication, or private real-history compaction survival has shipped.
 
+## 2026-05-30 Real Codex Long-Session Continuity Smoke
+
+Issue #45 added a slow/live Codex app-server smoke for the missing runtime
+intersection: real Codex turns, real host compaction, correction survival, and
+clean-source verification.
+
+Documented command:
+
+- `python tools/aippocampus/smoke/smoke_codex_long_session_continuity.py --turn-count 50 --json`
+
+Primary 50-turn live verification for this slice:
+
+- `python tools/aippocampus/smoke/smoke_codex_long_session_continuity.py --turn-count 50 --run-id issue45live50 --output .tmp/issue45-long-session-smoke.json --json`:
+  passed with `status=passed`, 50 completed pre-compaction Codex turns, 52
+  completed total turns, a real `thread/compact/start` boundary, observed
+  `contextCompaction`, completed `preCompact` and `postCompact` host hooks,
+  correction-event observation, post-compaction recall of the corrected
+  synthetic state, no obsolete-state revival in the recall answer, and rebuilt
+  clean source from the real rollout with 102 clean messages / 51 clean turns.
+  The public payload reported `public_payload_sensitive_string_count=0`.
+- `python -m unittest tests.aippocampus.test_codex_long_session_smoke`: passed.
+- `python -m ruff check tools/aippocampus/smoke/smoke_codex_long_session_continuity.py tests/aippocampus/test_codex_long_session_smoke.py`: passed.
+
+This is slow/live evidence, not fast deterministic coverage. It uses synthetic
+public-safe tokens and does not claim private real-history compaction survival,
+live semantic adjudication quality, interactive Desktop UI behavior, or every
+Codex client surface.
+
 ## 2026-05-30 P0 Evidence Refresh
 
 This slice executed the P0 issues #29, #30, #33, #34, #35, #36, and #38. It

@@ -83,6 +83,26 @@ unless the model supplied strong per-label evidence.
 Cannot claim: that semantic labels are source truth, or that all historical
 threads have been semantically labeled or perfectly ranked.
 
+## Scenario 3b: Slow Real Codex Long-Session Continuity Smoke
+
+Run this only when a real Codex app-server host is available and slow/live
+evidence is intentional:
+
+```sh
+python ./tools/aippocampus/smoke/smoke_codex_long_session_continuity.py --turn-count 50 --json
+```
+
+Expected result: the smoke reports `status=passed` only after real Codex turns,
+a real `thread/compact/start` boundary, completed `preCompact` / `postCompact`
+host hooks, post-compaction recall of the corrected synthetic state, and a
+clean-source rebuild from the real rollout. If the host is unavailable, it
+reports `status=skipped_host_unavailable`; if the host is available but
+compaction or correction survival fails, it reports `status=failed`.
+
+Cannot claim: private real-history compaction survival, live semantic
+adjudication quality, interactive Desktop UI behavior, or every Codex client
+surface. This smoke is not part of the fast deterministic tier.
+
 ## Scenario 4: Project Timeline
 
 Build a source-backed project and life-wide timeline from the public example

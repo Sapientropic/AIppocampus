@@ -75,7 +75,7 @@ def mcp_command_from_config(plugin_dir: Path) -> list[str]:
 
 
 def run_mcp_jsonrpc_smoke(plugin_dir: Path) -> dict[str, Any]:
-    requests = [
+    requests: list[dict[str, Any]] = [
         {
             "jsonrpc": "2.0",
             "id": 1,
@@ -103,7 +103,7 @@ def run_mcp_jsonrpc_smoke(plugin_dir: Path) -> dict[str, Any]:
         timeout=10,
         check=False,
     )
-    responses = (
+    responses: list[dict[str, Any]] = (
         [json.loads(line) for line in proc.stdout.splitlines() if line.strip()]
         if proc.returncode == 0
         else []

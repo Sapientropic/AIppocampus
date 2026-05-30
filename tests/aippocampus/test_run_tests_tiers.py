@@ -26,6 +26,7 @@ SLOW_REVIEW_CUES = (
 # service dependency, broad registry scan, plugin install, or long-running smoke.
 FAST_REVIEWED_SENSITIVE_MODULES = {
     "tests.aippocampus.test_aippocampus_lifecycle_hook",
+    "tests.aippocampus.test_codex_long_session_smoke",
     "tests.aippocampus.test_diagnose_hooks",
     "tests.aippocampus.test_install_lifecycle_hook",
     "tests.aippocampus.test_install_prompt_hook",
