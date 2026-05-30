@@ -966,8 +966,16 @@ Public memory-pain fixture source map:
 - `docs/research/memory-system-pain-taxonomy.md` is now the checked source map
   for Mem0-style pollution, Graphiti/Zep-style scale/cost, Letta-style
   compaction, and HN pattern-learning pain points.
-- #27 should implement fixtures from that taxonomy. Until those fixtures exist,
-  the taxonomy is planning evidence only, not benchmark evidence.
+- #27 fixtures are implemented in the synthetic Track A/C benchmark surface via
+  `memory_pain_fixtures` output from `benchmark_memory_decision_gate.py` and
+  `benchmark_payload_fidelity.py`. They cover public-safe negative families for
+  write-time pollution, recalled-context echo loops, fabricated profiles,
+  transient task state, deterministic-vs-fuzzy memory separation, metadata
+  round-trip boundaries, large-document no-foreground-LLM scale pressure,
+  invalid structured extraction, and a Track D seed for compaction continuity.
+- These fixtures are boundary evidence, not competitor-comparison evidence. They
+  prove unsupported synthetic prompts are skipped or downgraded to scent-only
+  rather than emitted as source-backed evidence.
 
 ## Rollout Plan
 

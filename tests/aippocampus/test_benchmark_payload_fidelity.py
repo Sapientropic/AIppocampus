@@ -84,6 +84,27 @@ class PayloadFidelityBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["privacy_boundary"]["raw_context_emitted"], True)
         self.assertTrue(any("context" in case for case in payload["cases"]))
 
+    def test_payload_benchmark_includes_public_memory_pain_boundaries(self) -> None:
+        payload = benchmark.run_benchmark(include_private_text=False)
+
+        summary = payload["memory_pain_fixtures"]
+        self.assertIn("write_time_pollution", summary["families"])
+        self.assertIn("compaction_continuity", summary["families"])
+        self.assertEqual(summary["privacy_breach_count"], 0)
+        self.assertEqual(summary["evidence_without_source_count"], 0)
+        self.assertEqual(summary["unsupported_evidence_count"], 0)
+        self.assertIn("competitor_superiority", payload["cannot_claim"])
+
+        rows = [
+            row
+            for row in payload["cases"]
+            if row.get("memory_pain_family")
+        ]
+        self.assertGreaterEqual(len(rows), 5)
+        self.assertFalse(any("prompt" in row for row in rows))
+        self.assertFalse(any("context" in row for row in rows))
+        self.assertTrue(all(row.get("public_sources") for row in rows))
+
 
 if __name__ == "__main__":
     unittest.main()

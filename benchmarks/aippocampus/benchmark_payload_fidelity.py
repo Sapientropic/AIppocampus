@@ -26,6 +26,7 @@ from benchmark_memory_decision_gate import (
     normalize_actual_decision,
     safe_rate,
     sha1_text,
+    summarize_memory_pain_fixtures,
 )
 
 SCHEMA_VERSION = 1
@@ -216,6 +217,8 @@ def evaluate_payload_case(
         "expected_source_line_present": source_ok if payload_case.expected_source_line else None,
         "elapsed_ms": result.get("elapsed_ms"),
     }
+    if case.memory_pain_family:
+        row.update(case.to_result_stub(include_private_text=False))
     if include_private_text:
         row["prompt"] = case.prompt
         row["context"] = context
@@ -276,6 +279,10 @@ def run_benchmark(
             "live_llm": False,
         },
         "metrics": summarize_results(rows),
+        "memory_pain_fixtures": summarize_memory_pain_fixtures(
+            rows,
+            include_private_text=include_private_text,
+        ),
         "cases": rows,
         "privacy_boundary": {
             "raw_prompt_emitted": bool(include_private_text),
@@ -288,6 +295,7 @@ def run_benchmark(
             "real_history_payload_fidelity",
             "live_semantic_model_quality",
             "external_baseline_comparison",
+            "competitor_superiority",
         ],
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
         "ok": True,
