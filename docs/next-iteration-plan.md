@@ -217,6 +217,19 @@ handoff context.
      policy, then measure real dismissal/acceptance patterns before claiming
      timing quality or annoyance-risk calibration.
 
+14. Question salience and adaptive separation/completion thresholds
+   - Source: `docs/technical-differentiation-analysis.md`,
+     `docs/question-tracking-subconscious.md`, and
+     `docs/cognitive-runtime-architecture.md`.
+   - First deterministic slice is implemented in
+     `skills/aippocampus/scripts/question_tracking.py`: parsed
+     `question_candidate` rows receive salience profiles, low-information
+     candidates are skipped as link inputs, and pair thresholds adapt from
+     compatible or conflicting six-axis evidence.
+   - Next hardening: calibrate salience and threshold weights against more real
+     clean-source samples and explicit user feedback before treating them as
+     live timing or quality claims.
+
 ## Do Not Start With
 
 - A generic vector database rewrite.

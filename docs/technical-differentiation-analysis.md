@@ -58,9 +58,9 @@
 | clean source / registry / global onboarding | implemented | 860 条本机 Codex thread 已完成全局 clean-source、SQLite、graph sidecar 注册。 |
 | `question_extraction` / `question_candidate` / `frontier_marker` | implemented | 已进入 `subconscious_jobs.py`，但仍是候选结构，不是正式长期记忆。 |
 | cognitive map sidecar | implemented | `build_cognitive_map.py` 可以 materialize source-backed routes；当前路线数量仍取决于 DeepSeek job 质量。 |
-| six-axis question map | partial implementation | `question_tracking.py` 已有确定性 Phase 2 baseline；live model confirmation、dormancy 和向量 sidecar 仍未实现。 |
+| six-axis question map | partial implementation | `question_tracking.py` 已有确定性 Phase 2 baseline，并开始把六轴用于 salience 与 adaptive threshold；live model confirmation、dormancy 和向量 sidecar 仍未实现。 |
 | `question_link` / `theme_emergence` | partial / designed | `question_link` 可由 Phase 2 runner 写入 `subconscious_jobs.jsonl`；`theme_emergence` 仍是设计阶段。 |
-| dynamic separation/completion threshold | partial implementation | strong/borderline 阈值已用于 deterministic tracking；真实语义阈值调参仍需要更多 clean-source 样本。 |
+| dynamic separation/completion threshold | first deterministic prototype | `question_tracking.py` 会按六轴兼容/冲突调整 strong/borderline 阈值，并跳过低信息 salience 候选；真实语义阈值调参仍需要更多 clean-source 样本。 |
 | reconsolidation queue / retrieval-count update | proposed | `working_memory.jsonl` 和 router 提供骨架，但 hook 侧还未记录 retrieval lifecycle。 |
 | preplay / state-dependent routing | research | 适合 Phase 3+，必须保持 ambient scent，不直接推送用户。 |
 
@@ -110,6 +110,12 @@ AIppocampus 已经拥有实现这一机制的关键前置层：
    - 计算节省：sleep-time 处理的 token 量下降百分比
    - 噪音抑制：被标记但最终被 review 判定为 noise 的比例
 
+**当前已实现的最小片（2026-05-30）：** `question_tracking.py` 已在
+`question_candidate` 输入上生成 deterministic `salience` profile（score /
+tags / reasons / trackable）。这还不是 clean-source turn 级的在线队列，
+但已经能在 Phase 2 tracking 中减少低信息候选参与链接，避免把
+“How should it work?” 这类泛问题合并成伪 continuity。
+
 ---
 
 ## 方向二：动态模式分离-完成阈值（Adaptive Pattern Separation / Completion）
@@ -155,6 +161,13 @@ AIppocampus 的**六轴问题地图**（what / where / heading / boundary / when
    - 跨线程链接的用户确认率（用户通过 recall scent 确认链接有效的比例）
    - 同一问题被拆分的重复提取率（越低越好）
    - 不同问题被错误合并后通过 escape hatch 修正的频率（越低越好）
+
+**当前已实现的最小片（2026-05-30）：** `question_tracking.py` 现在为每个
+candidate pair 计算 `threshold_policy`：兼容的 `what_features`、
+`where_context`、`intent_orientation`、`phase_context` 和
+`collaboration_context` 增加 completion pressure；orientation / context 冲突
+和低 salience 候选增加 separation pressure。输出仍是 staging
+`question_link`，不是正式长期记忆，也不代表真实用户确认率已经被证明。
 
 ---
 

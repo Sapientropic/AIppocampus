@@ -301,6 +301,12 @@ defined in
 then decides whether the relation is same-question, evolving-question,
 related-but-distinct, or frontier-boundary.
 
+The first deterministic salience/threshold slice now lives inside
+`question_tracking.py`: candidates get source-backed salience tags before pair
+comparison, and each pair gets an adaptive threshold policy from compatible or
+conflicting six-axis evidence. This remains a staging/navigation layer; it does
+not turn salience scores or thresholds into memory truth.
+
 ## Anti-Patterns
 
 Avoid these:
