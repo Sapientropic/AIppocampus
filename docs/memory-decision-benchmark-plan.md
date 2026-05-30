@@ -957,9 +957,11 @@ python benchmarks\aippocampus\benchmark_suite.py
 The implemented Track D runner is deterministic and synthetic. It covers the
 planned hook-stage expectations, simulated `visible`, `post_compaction`, and
 `horizon_lost` states, synthetic correction/outcome event chains, same-epoch
-repeated-anchor suppression, and mocked adjudication statuses. It does not
-prove the runtime #65 correction-event pipeline, live semantic adjudication
-quality, or private real-history compaction survival.
+repeated-anchor suppression, and mocked adjudication statuses. The runner now
+reuses the `correction_reconsolidation.py` status and active-anchor gate so the
+benchmark does not drift from the runtime prototype. It still does not prove
+live Codex hook capture, live semantic adjudication quality, or private
+real-history compaction survival.
 
 Reusable existing pieces:
 
@@ -1015,8 +1017,10 @@ baseline.
 P5: Track D compaction-continuity runner. Implemented as the deterministic
 synthetic `benchmark_compaction_continuity.py` runner with correction/outcome
 fixtures, mocked semantic adjudication, and simulated
-visible/post-compaction/horizon-lost states. The real hook/event pipeline and
-private real-history packs remain future work.
+visible/post-compaction/horizon-lost states. The #65 deterministic
+correction-reconsolidation helper now owns append-only event rows, adjudication
+candidates, and active-anchor rendering; live hook wiring and private
+real-history packs remain future work.
 
 P6: local private real-history case generation. Reports must stay sanitized and
 aggregate-only by default.

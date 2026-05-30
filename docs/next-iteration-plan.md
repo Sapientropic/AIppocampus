@@ -165,6 +165,18 @@ handoff context.
      TurboVec or sqlite vector evaluation remains deferred until the current
      source-backed baseline shows a scale bottleneck.
 
+10. Correction reconsolidation events
+   - Source: `docs/research/correction-reconsolidation.md` and
+     `docs/memory-decision-benchmark-plan.md`.
+   - First runtime helper is implemented in
+     `skills/aippocampus/scripts/correction_reconsolidation.py`: it builds and
+     appends source-backed `correction_activation_event` /
+     `correction_outcome_event` rows, privacy-scans correction/evidence
+     surfaces, emits detached `correction_adjudication_candidate` hypotheses,
+     and renders active anchors only after compaction or horizon loss.
+   - Next hardening: wire live hook capture in a fail-open way, then add private
+     real-history correction packs before making compaction-survival claims.
+
 ## Do Not Start With
 
 - A generic vector database rewrite.
