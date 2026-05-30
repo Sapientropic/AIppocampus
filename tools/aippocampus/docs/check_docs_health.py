@@ -63,6 +63,7 @@ REQUIRED_RUNTIME_MAP_SCRIPTS = [
     "subconscious_worker.py",
     "subconscious_review.py",
     "memory_candidate_router.py",
+    "coding_decision_events.py",
     "correction_reconsolidation.py",
     "model_client.py",
     "deepseek_model_routing.py",
