@@ -1,14 +1,30 @@
 from __future__ import annotations
 
-import sys
+import importlib.util
 from pathlib import Path
+from types import ModuleType
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-SKILL_ROOT = REPO_ROOT / "skills" / "aippocampus"
-SKILL_SCRIPTS = SKILL_ROOT / "scripts"
+
+def _load_repo_paths() -> ModuleType:
+    helper_path = Path(__file__).resolve().parents[1] / "repo_paths.py"
+    spec = importlib.util.spec_from_file_location(
+        "_aippocampus_repo_paths",
+        helper_path,
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"could not load repo import helper: {helper_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_repo_paths = _load_repo_paths()
+_paths = _repo_paths.ensure_repo_imports(Path(__file__).resolve())
+
+REPO_ROOT = _paths.repo_root
+SKILL_ROOT = _paths.skill_root
+SKILL_SCRIPTS = _paths.skill_scripts
 
 
 def ensure_paths() -> None:
-    value = str(SKILL_SCRIPTS)
-    if value not in sys.path:
-        sys.path.insert(0, value)
+    _repo_paths.ensure_repo_imports(Path(__file__).resolve())

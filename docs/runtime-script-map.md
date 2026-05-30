@@ -20,6 +20,18 @@ component, update this map and the cheap guard in
 - Rebuildable cache: may write generated indexes or sidecars, never canonical
   source truth.
 
+## Repo Import Boundary
+
+The installable runtime is still script-first: public and internal runtime code
+lives under `skills/aippocampus/scripts/` and must keep direct script invocation
+working after the skill is copied into Codex home.
+
+Repo-owned docs, smoke, and benchmark tools may import runtime helpers through
+`tools/aippocampus/repo_paths.py`. The local `_paths.py` files in docs, smoke,
+and benchmark folders are compatibility wrappers around that single helper, not
+new public APIs. New repo maintenance tools should reuse that helper instead of
+adding fresh ad hoc `sys.path` insertion rules.
+
 ## Public Entrypoints And Install Flow
 
 | Script or group | Purpose | Invocation route | Key dependencies | Status |

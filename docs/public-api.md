@@ -171,16 +171,22 @@ Downstream callers should prefer:
 - documented public schemas, or
 - adapter/import-manifest files.
 
+Repo-owned docs, smoke, and benchmark tools use a transitional checkout-only
+bootstrap in `tools/aippocampus/repo_paths.py`. The small `_paths.py` files under
+`tools/aippocampus/docs/`, `tools/aippocampus/smoke/`, and
+`benchmarks/aippocampus/` are compatibility wrappers around that single helper.
+They keep direct script execution working from an uninstalled checkout; they are
+not downstream APIs.
+
 Direct imports from helper modules may keep working in this repository, but they
-are not a compatibility promise. Issue #44 tracks making the import/package
-boundary clearer.
+are not a compatibility promise.
 
 ## Internal Or Unstable Surfaces
 
 These are internal, experimental, or best-effort unless promoted elsewhere:
 
 - Undocumented helper functions and modules.
-- Repo-local `_paths.py` import shims.
+- Repo-local `repo_paths.py` / `_paths.py` checkout import shims.
 - Raw rollout envelopes and host-specific JSONL fields.
 - Generated SQLite, FTS, graph, semantic, cognitive-map, and benchmark cache
   files.
