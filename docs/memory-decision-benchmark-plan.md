@@ -77,6 +77,14 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
   `quality_gate_ok` separate from baseline capture.
 - `tests/aippocampus/test_benchmark_live_semantic_gate.py` checks missing
   backend handling, sanitized report boundaries, and live semantic diagnostics.
+- `benchmarks/aippocampus/benchmark_cognitive_portrait.py` runs the #70
+  structured-text cognitive portrait benchmark. It builds a compact prompt from
+  source-backed question/frontier/link findings, compares it with fuller
+  clean-source injection, and reports compression, source fidelity,
+  over-personalization risk, and fixture-level cue equivalence.
+- `tests/aippocampus/test_benchmark_cognitive_portrait.py` checks that the
+  reusable portrait artifact keeps source refs/back-pointers, records quote
+  fidelity loss, and keeps private debug text opt-in.
 
 This slice is a smoke gate, not a real-history quality claim. It proves the
 benchmark runner can catch skip/scent/evidence mistakes and can report sanitized
@@ -935,6 +943,7 @@ Scripts:
 - `benchmarks/aippocampus/benchmark_payload_fidelity.py`
 - `benchmarks/aippocampus/benchmark_compaction_continuity.py`
 - `benchmarks/aippocampus/benchmark_live_semantic_gate.py`
+- `benchmarks/aippocampus/benchmark_cognitive_portrait.py`
 - `benchmarks/aippocampus/benchmark_suite.py`
 - `skills/aippocampus/scripts/agency_affordance.py`
 
@@ -946,8 +955,15 @@ Tests:
 - `tests/aippocampus/test_benchmark_payload_fidelity.py`
 - `tests/aippocampus/test_benchmark_compaction_continuity.py`
 - `tests/aippocampus/test_benchmark_live_semantic_gate.py`
+- `tests/aippocampus/test_benchmark_cognitive_portrait.py`
 - `tests/aippocampus/test_benchmark_suite.py`
 - `tests/aippocampus/test_agency_affordance.py`
+
+Structured portrait command:
+
+```powershell
+python benchmarks\aippocampus\benchmark_cognitive_portrait.py
+```
 
 Track D command:
 

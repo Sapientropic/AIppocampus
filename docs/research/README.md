@@ -59,7 +59,8 @@ strong claims need source-backed evidence.
    - The long-shot research frontier.
    - Keeps the question of activation-efficient memory alive, while current
      reviewer consensus points the near-term path back to structured text
-     cognitive portraits.
+     cognitive portraits. The first deterministic benchmark for that near-term
+     slice is `benchmarks/aippocampus/benchmark_cognitive_portrait.py`.
 12. [Memory-System Pain Taxonomy](memory-system-pain-taxonomy.md)
    - Public issue/user-feedback taxonomy for Mem0, Graphiti/Zep, Letta, and HN
      memory pain points.
@@ -79,7 +80,7 @@ strong claims need source-backed evidence.
 | Level | Meaning | Examples in this folder | How to use |
 |---|---|---|---|
 | A. Primary-source confirmed | Backed by official docs, primary papers, or repo source. | Platonic Representation Hypothesis, universal number representations, non-surjective steering, Anthropic Managed Agents memory stores and Dreams. | Safe to cite as background, while preserving the original scope and limitations. |
-| B. Locally validated experiment | Backed by project-local experiments or cross-model review, but not yet reproduced as a public benchmark. | Hexagram/five-tone leakage tests, "do not decode" mitigation, hexagram-only thread mood trials. | Treat as promising design evidence; do not present as general model science. |
+| B. Locally validated experiment | Backed by project-local experiments or cross-model review, but not yet reproduced as a public benchmark. | Hexagram/five-tone leakage tests, "do not decode" mitigation, hexagram-only thread mood trials, deterministic structured-text cognitive portrait benchmark. | Treat as promising design evidence; do not present as general model science. |
 | C. Product hypothesis | A coherent design claim derived from AIppocampus goals and local evidence. | Two-layer memory, ambient associative recall, cognitive portrait as structured text, compensatory dream task. | Good for roadmap and prototype planning; needs evaluation before runtime adoption. |
 | D. Philosophical frame | A conceptual lens that guides product taste and positioning. | Pearl-like presence, source as world, relationship continuity, Jung-inspired integration. | Useful for direction and vocabulary; do not convert directly into implementation claims. |
 | E. Long-shot research | Plausible but currently weak, blocked, or dependent on access beyond normal black-box APIs. | Cross-model numerical activation codes for personal memory; token sequences approximating white-box activation steering. | Keep as research backlog, not near-term build priority. |
@@ -92,6 +93,7 @@ The strongest near-term path is:
 clean source
   -> existing extractive metadata
   -> journey tracking / structured cognitive portrait
+     (benchmark compactness and source-fidelity before runtime promotion)
   -> ambient associative recall
   -> compensatory dream task / reflection space
   -> optional intuition marker

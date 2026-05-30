@@ -1,7 +1,9 @@
 # Compact Activation Signals as Memory Surface
 
-Status: research memo, not implementation. Reviewed; near-term priority narrowed
-to structured text cognitive portraits.
+Status: research memo, not runtime contract. Reviewed; near-term priority
+narrowed to structured text cognitive portraits. The first deterministic
+structured-text benchmark now lives at
+`benchmarks/aippocampus/benchmark_cognitive_portrait.py`.
 Origin: conversation between user and Claude Code, 2026-05-27.
 Reviewed by: gemini-researcher, kimi-reviewer (2026-05-27). See Review Credits below.
 Purpose: lay out a research thread connecting several recent findings toward a
@@ -138,6 +140,24 @@ source injection.
 
 If the cognitive portrait activates equivalent behavior with far fewer tokens,
 that validates the "user profile as activation signal" hypothesis.
+
+**Implemented near-term slice (2026-05-30):**
+`benchmark_cognitive_portrait.py` runs this as a structured-text fixture, not
+as activation steering. It builds a compact portrait from source-backed
+`question_candidate`, `frontier_marker`, and `question_link` rows, compares the
+rendered portrait prompt with fuller clean-source injection, and reports:
+
+- approximate token count and savings;
+- whether every reusable portrait item carries source refs / source-finding
+  back-pointers;
+- whether selected action/guardrail prompts preserve expected cues;
+- where compact portraits lose fidelity, currently exact quote recovery;
+- where naive trait summaries over-personalize.
+
+This supports a modest implementation claim: structured portraits can be a
+source-backed navigation layer worth benchmarking. It does not support a claim
+that token prompts reproduce white-box activation states or cross-model
+activation steering.
 
 ## Relationship to Existing AIppocampus Architecture
 
