@@ -10,6 +10,10 @@ records, start with [`docs/evidence/benchmark-evidence-map.md`](../docs/evidence
 
 - `convert_to_aippocampus.py` converts public conversation datasets into
   AIppocampus clean-source `messages.jsonl` and `turns.jsonl`.
+- `public_longitudinal_users/` contains the checked-in public pseudo-user
+  scoring-contract smoke for coding implicit-knowledge continuity. It keeps
+  the report and prediction contract public-safe while the flagship track moves
+  toward VCS-derived hard future events for recall measurement.
 - `testdata_wildchat.jsonl` is a tiny checked-in fixture in WildChat-like JSONL
   shape, useful for smoke-testing the converter without network access.
 
@@ -28,6 +32,10 @@ intended benchmark use for the locally generated ShareGPT outputs.
 files, Hugging Face LFS content hashes, runner entrypoint, and claim boundary.
 The corresponding evidence page is
 [`docs/evidence/benchmarks/longmemeval.md`](../docs/evidence/benchmarks/longmemeval.md).
+
+`locomo_manifest.json` records the LoCoMo public long-conversation control,
+its local-file policy, and the evidence-retrieval runner that treats each
+LoCoMo sample as one longitudinal public user.
 
 ## Usage
 
@@ -55,6 +63,108 @@ Run the Track A P1 gate-decision baseline over the coding corpus:
 
 ```powershell
 python benchmarks\aippocampus\benchmark_memory_decision_gate.py --case-set sharegpt-coding --sharegpt-conversations 100 --output benchmark_corpus\reports\sharegpt-p1-gate-100.json
+```
+
+Run the public longitudinal pseudo-user contract smoke for coding implicit
+knowledge:
+
+```powershell
+python benchmarks\aippocampus\benchmark_public_longitudinal_users.py --json
+python benchmarks\aippocampus\benchmark_public_longitudinal_users.py --predictions .tmp\public-longitudinal-predictions.jsonl --json
+```
+
+This is the public scoring-contract smoke for rejected routes, tacit
+constraints, workaround rationale, stale-assumption corrections, reopen
+conditions, and anti-drift negatives. The fixture is synthetic, source-labeled,
+and public-safe; it does not claim private real-history quality, real same-user
+identity, or recall over a complete future window. The flagship next slice
+should use VCS-derived hard events such as PR merge/reject, issue reopen,
+commit revert, patchset supersession, and SATD/workaround removal. See
+[`docs/evidence/benchmarks/public-longitudinal-users.md`](../docs/evidence/benchmarks/public-longitudinal-users.md)
+for the methodology and claim boundary.
+
+Run the LoCoMo public longitudinal-users control:
+
+```powershell
+New-Item -ItemType Directory -Force benchmark_corpus\locomo | Out-Null
+Invoke-WebRequest https://raw.githubusercontent.com/snap-research/locomo/main/data/locomo10.json -OutFile benchmark_corpus\locomo\locomo10.json
+python benchmarks\aippocampus\benchmark_locomo_public_users.py --max-samples 2 --max-cases 20 --json
+python benchmarks\aippocampus\benchmark_locomo_public_users.py --predictions .tmp\locomo-evidence-predictions.jsonl --json
+```
+
+For an external system run, first export a local case pack and a prediction
+template:
+
+```powershell
+python benchmarks\aippocampus\benchmark_locomo_public_users.py --case-pack-output .tmp\locomo-case-pack.json --prediction-template-output .tmp\locomo-predictions.jsonl --json
+```
+
+The case pack contains LoCoMo dialogue and question text, but no answers or
+gold evidence ids. Keep it local under `.tmp/` or another ignored directory.
+Fill the prediction template with retrieved dialogue ids, then score it with
+`--predictions`.
+
+Prediction rows can use either `evidence_ids` or `source_event_ids`:
+
+```json
+{"case_id":"locomo:conv-26:qa:0001","evidence_ids":["D1:3"]}
+```
+
+This runner scores source-turn retrieval against LoCoMo QA evidence dialogue
+ids. The raw LoCoMo file remains local/ignored under the upstream CC BY-NC 4.0
+license; reports are sanitized by default and do not emit dialogue, question,
+or answer text. Use it as the first real public longitudinal conversation
+control, while keeping coding tacit-constraint and rejected-route claims on
+the VCS / rollout hard-event track.
+
+Run the VCS future-event recall scaffold:
+
+```powershell
+python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --json
+python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --baseline empty --json
+```
+
+This runner scores over every hard event in the future window. Missing a
+flag-worthy PR/revert/patchset/SATD event is a false negative, so silent Dream
+systems cannot pass by avoiding false activations.
+
+The same runner can score agent-rollout behavior traces, where the hard events
+are failed tool calls, failed tests, reverted edits, or abandoned routes rather
+than PR outcomes:
+
+```powershell
+python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset benchmark_corpus\public_longitudinal_users\rollout_behavior_events_v1.jsonl --json
+```
+
+In that fixture, assistant narration is not accepted as gold support for a
+rejected route unless there is deterministic behavior evidence behind it.
+
+For public VCS reports, also score a closed-book ablation:
+
+```powershell
+python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --predictions .tmp\vcs-source-window.jsonl --closed-book-predictions .tmp\vcs-closed-book.jsonl --json
+```
+
+The source-over-closed-book lift is the first contamination check. If closed
+book matches the source-window run, the score is likely public-outcome memory,
+not source-backed recovery.
+
+Build a local fixture from already-curated public event-link rows:
+
+```powershell
+python benchmarks\aippocampus\build_vcs_future_event_fixture.py --input .tmp\public-vcs-links.jsonl --output .tmp\vcs-future-events-built.jsonl --json
+python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset .tmp\vcs-future-events-built.jsonl --allow-non-cc0-dataset --json
+```
+
+The builder is intentionally only an adapter. It does not download raw public
+datasets or license them for redistribution.
+
+For agent-rollout traces, use clean-source `events.jsonl` as the past behavior
+source and provide a separate curated link file:
+
+```powershell
+python skills\aippocampus\scripts\build_clean_source.py --cwd . --output-dir .tmp\clean-source --json
+python benchmarks\aippocampus\build_vcs_future_event_fixture.py --clean-source-events .tmp\clean-source\events.jsonl --links .tmp\rollout-event-links.jsonl --output .tmp\rollout-future-events.jsonl --allow-non-cc0-output --json
 ```
 
 Run the optional public-corpus Track B source-evidence baseline over the broad

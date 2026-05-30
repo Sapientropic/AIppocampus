@@ -263,6 +263,7 @@ def register_current_thread(
                 "messages_jsonl"
             ),
             "clean_source_turns_jsonl": (clean_manifest.get("outputs") or {}).get("turns_jsonl"),
+            "clean_source_events_jsonl": (clean_manifest.get("outputs") or {}).get("events_jsonl"),
             "vault": str(vault.resolve()) if vault else None,
             "dashboard_note": str(dashboard_note.resolve()) if dashboard_note else None,
             "dashboard_html": str(dashboard_html.resolve()) if dashboard_html else None,

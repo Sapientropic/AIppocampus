@@ -17,6 +17,7 @@ Clean source keeps:
 - user messages
 - assistant `final_answer` messages
 - the last assistant commentary only when a turn has no final answer
+- structured tool/test behavior events in `events.jsonl`
 - source session id, line spans, turn index, phase, timestamps, and hashes
 - stable join keys such as `source_id`, `turn_id`, `message_id`, and
   `content_sha256`
@@ -27,7 +28,9 @@ Clean source keeps:
 
 Clean source drops:
 
-- tool calls and tool outputs
+- raw tool calls and raw tool outputs from `messages.jsonl`
+- raw stdout, full shell commands, full tool arguments, local paths, and secret-
+  shaped payloads from `events.jsonl`
 - app/event envelopes
 - injected instructions
 - duplicate visible messages
@@ -37,6 +40,16 @@ Clean source drops:
 This layer may omit noise, but it must not rewrite expression. Use
 `search_clean_source.py` first for normal recall. Return to raw rollout for
 forensic audit, missing tool output, storage accounting, or source repair.
+
+`events.jsonl` is a behavior lane, not a second message stream. It stores
+deterministic traces such as tool call requested/observed, coarse
+`command_class`, exit code when visible, `tool_call_failed` /
+`tool_call_succeeded`, source refs, and hashes of inputs or observations. This
+lets benchmark and Dream-adjacent code cite behavior-backed rejected routes
+without putting terminal output or private command text into daily recall.
+Assistant narration may provide context in `messages.jsonl`, but a rejected
+route only becomes source-backed when the behavior lane has a matching
+tool/test/edit trace or a later curated event sidecar.
 
 `scope_labels` are conservative lexical hints over clean visible text. They
 support filtering and future timeline sidecars, but they are not summaries and
@@ -72,8 +85,8 @@ selected prompt or label samples passed their configured thresholds; they are
 not global semantic correctness claims or human review.
 
 Schema upgrades should be rebuildable. Do not put embeddings, DWM state, or
-debug provenance into `messages.jsonl`; use sidecars joined by `message_id` or
-`turn_id`.
+debug provenance into `messages.jsonl`; use sidecars joined by `message_id`,
+`turn_id`, or `event_id`.
 
 ## Raw Rollout Discovery
 

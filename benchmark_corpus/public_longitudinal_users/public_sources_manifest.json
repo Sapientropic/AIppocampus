@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "kind": "aippocampus_public_longitudinal_sources_manifest",
+  "track": "public_longitudinal_users",
+  "claim_boundary": "This manifest records candidate public sources and their intended benchmark roles. It is not proof that raw records can be redistributed in this repository.",
+  "sources": [
+    {
+      "source_id": "msr_2020_pull_request_acceptance",
+      "role": "positive_vcs_future_event_source",
+      "public_url": "https://2020.msrconf.org/details/msr-2020-Data-showcase/6/A-New-Dataset-for-Pull-Request-Acceptance",
+      "adapter_use": [
+        "pull_request_merged",
+        "pull_request_rejected",
+        "future_window_gold"
+      ],
+      "license_boundary": "verify before redistributing raw or derived records",
+      "notes": "Use hard PR outcomes and timestamps as future-window labels, not as semantic support judges."
+    },
+    {
+      "source_id": "pull_request_decisions_explained",
+      "role": "decision_factor_taxonomy",
+      "public_url": "https://research.tudelft.nl/en/publications/pull-request-decisions-explained-an-empirical-overview",
+      "adapter_use": [
+        "rejected_route_taxonomy",
+        "decision_factor_features"
+      ],
+      "license_boundary": "use as paper/taxonomy reference unless dataset redistribution is separately verified",
+      "notes": "Helpful for structuring PR decision factors; not a replacement for source-backed past-window rationale."
+    },
+    {
+      "source_id": "code_review_as_decision_making",
+      "role": "gerrit_labeling_pattern",
+      "public_url": "https://link.springer.com/article/10.1007/s10664-025-10791-2",
+      "adapter_use": [
+        "patchset_superseded",
+        "review_rationale_arcs",
+        "tacit_constraint_patterns"
+      ],
+      "license_boundary": "use as labeling-method reference unless replication package redistribution is separately verified",
+      "notes": "Use deterministic Gerrit patchset/change events for labels; discard soft semantic support cases."
+    },
+    {
+      "source_id": "cppsatd",
+      "role": "workaround_rationale_source",
+      "public_url": "https://zenodo.org/records/15284981",
+      "adapter_use": [
+        "satd_comment_removed",
+        "workaround_rationale",
+        "tacit_constraint_patterns"
+      ],
+      "license_boundary": "verify Zenodo record license before redistributing derived rows",
+      "notes": "SATD comments are strong past-window rationale sources; future removal/revert events provide hard labels."
+    },
+    {
+      "source_id": "agent_rollout_behavior_traces",
+      "role": "positive_rollout_future_event_source",
+      "public_url": "",
+      "adapter_use": [
+        "tool_call_failed",
+        "test_failed",
+        "edit_reverted",
+        "route_abandoned",
+        "behavior_trace_rejected_route"
+      ],
+      "license_boundary": "only redistribute sanitized traces whose project and tool-output licenses allow it",
+      "notes": "Use deterministic tool/test/edit outcomes as support. Assistant narrative without behavior evidence is context, not gold."
+    },
+    {
+      "source_id": "locomo",
+      "role": "public_longitudinal_conversation_control",
+      "public_url": "https://github.com/snap-research/locomo",
+      "adapter_use": [
+        "longitudinal_public_users",
+        "source_turn_evidence_retrieval",
+        "qa_evidence_dialogue_ids"
+      ],
+      "license_boundary": "CC BY-NC 4.0; keep raw locomo10.json local/ignored unless redistribution is separately reviewed",
+      "notes": "Best first real public conversation-control corpus: each sample is a long-term conversation with chronological sessions and QA evidence ids. Not a coding decision-shadow source."
+    },
+    {
+      "source_id": "longmemeval_v2",
+      "role": "control_memory_dataset",
+      "public_url": "https://huggingface.co/datasets/xiaowu0162/longmemeval-v2",
+      "adapter_use": [
+        "longitudinal_memory_control",
+        "agent_environment_experience_control"
+      ],
+      "license_boundary": "respect Hugging Face dataset terms",
+      "notes": "Use as a near-neighbor control, not as the flagship coding decision-shadow source."
+    },
+    {
+      "source_id": "swe_hero_openhands_trajectories",
+      "role": "coding_agent_trajectory_control",
+      "public_url": "https://huggingface.co/datasets/nvidia/SWE-Hero-openhands-trajectories",
+      "adapter_use": [
+        "single_issue_agent_trajectory_control",
+        "compaction_continuity_negative_control"
+      ],
+      "license_boundary": "respect Hugging Face dataset terms",
+      "notes": "Useful for task-trajectory replay; do not treat it as months-long team decision history."
+    }
+  ],
+  "required_public_report_controls": [
+    "family_separate_metrics",
+    "future_event_recall",
+    "closed_book_ablation",
+    "source_over_closed_book_lift",
+    "time_split_when_making_public_contamination_claims",
+    "counterfactual_perturbation_before_claiming_contamination_resistance",
+    "private_real_history_reported_separately"
+  ]
+}

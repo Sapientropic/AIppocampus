@@ -27,6 +27,7 @@ CLEAN_SOURCE_CHUNK_MANIFEST = Path(CLEAN_SOURCE_CHUNK_STORE) / "manifest.json"
 CLEAN_SOURCE_CHUNKED_FILES = (
     "messages.jsonl",
     "turns.jsonl",
+    "events.jsonl",
     "semantic-scope-labels.jsonl",
 )
 ROOT_SIDECARS = (
@@ -215,6 +216,11 @@ def portable_registry_for_sync(registry_dir: Path, *, include_raw: bool) -> dict
         paths["clean_source_turns_jsonl"] = (
             (thread_root / "clean-source" / "turns.jsonl").as_posix()
             if (clean_root / "turns.jsonl").is_file()
+            else None
+        )
+        paths["clean_source_events_jsonl"] = (
+            (thread_root / "clean-source" / "events.jsonl").as_posix()
+            if (clean_root / "events.jsonl").is_file()
             else None
         )
         index_root = local_thread_root / "index"
@@ -529,6 +535,11 @@ def repair_registry_locators(target_registry: Path) -> dict[str, Any]:
             )
             paths["clean_source_turns_jsonl"] = (
                 str(clean_root / "turns.jsonl") if (clean_root / "turns.jsonl").is_file() else None
+            )
+            paths["clean_source_events_jsonl"] = (
+                str(clean_root / "events.jsonl")
+                if (clean_root / "events.jsonl").is_file()
+                else None
             )
             index_root = thread_root / "index"
             paths["index_dir"] = str(index_root) if index_root.exists() else None

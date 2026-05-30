@@ -26,6 +26,8 @@ from aippocampuslib import (
     resolve_artifact_path,
 )
 from conversation_sources import ConversationProvider, create_conversation_provider
+from conversation_sources.normalized import stable_source_ref
+from rollout_behavior_events import extract_rollout_behavior_events
 
 LEGACY_OUTPUT_DIR = ".aippocampus/clean-source"
 CLEAN_SOURCE_SCHEMA_VERSION = 2
@@ -226,6 +228,65 @@ def _merge_scope_labels(items: list[dict]) -> list[str]:
     return [label for label in SCOPE_LABEL_ORDER if label in present]
 
 
+def _clean_behavior_events(
+    events: list[dict[str, Any]],
+    *,
+    source_id: str,
+    source_provider: str,
+    session_id: str | None,
+) -> list[dict[str, Any]]:
+    clean_events: list[dict[str, Any]] = []
+    for event in events:
+        line_no = event.get("line")
+        event_kind = str(event.get("event_kind") or "")
+        hard_event_kind = str(event.get("hard_event_kind") or event_kind)
+        event_id = _stable_id(
+            "evt",
+            source_id,
+            line_no,
+            event_kind,
+            event.get("call_ref"),
+            event.get("observation_sha256") or event.get("input_sha256"),
+            length=20,
+        )
+        status = str(event.get("status") or "observed")
+        command_class = str(event.get("command_class") or "tool")
+        tool_name = str(event.get("tool_name") or "tool")
+        text = f"{tool_name} {status}; command_class={command_class}; event={hard_event_kind}"
+        if event.get("exit_code") is not None:
+            text += f"; exit_code={event.get('exit_code')}"
+        row = {
+            "id": event_id,
+            "event_id": event_id,
+            "source_id": source_id,
+            "source_ref": stable_source_ref(source_provider, session_id, int(line_no))
+            if isinstance(line_no, int)
+            else None,
+            "source_line": line_no,
+            "raw_start_line": line_no,
+            "raw_end_line": line_no,
+            "timestamp": event.get("timestamp"),
+            "turn_index": event.get("turn_index"),
+            "event_kind": event_kind,
+            "hard_event_kind": hard_event_kind,
+            "tool_payload_kind": event.get("tool_payload_kind"),
+            "tool_name": tool_name,
+            "call_ref": event.get("call_ref"),
+            "command_class": command_class,
+            "exit_code": event.get("exit_code"),
+            "status": status,
+            "behavior_backed": bool(event.get("behavior_backed")),
+            "input_sha256": event.get("input_sha256"),
+            "observation_sha256": event.get("observation_sha256"),
+            "input_field_names": event.get("input_field_names") or [],
+            "text": text,
+        }
+        clean_events.append(
+            {key: value for key, value in row.items() if value not in (None, "", [])}
+        )
+    return clean_events
+
+
 def _clean_messages(
     messages: list[dict], turns: list[dict], source_id: str
 ) -> tuple[list[dict], list[dict]]:
@@ -357,7 +418,20 @@ def build_clean_source(
     source_key = source_thread_key or meta.get("id") or str(source_path.resolve())
     source_id = _stable_id("src", source_key, length=20)
     clean_messages, clean_turns = _clean_messages(messages, turns, source_id)
+    clean_events = (
+        _clean_behavior_events(
+            extract_rollout_behavior_events(source_path),
+            source_id=source_id,
+            source_provider=active_provider.name,
+            session_id=meta.get("id"),
+        )
+        if active_provider.name == "codex"
+        else []
+    )
     for ordinal, item in enumerate(clean_messages):
+        item["clean_ordinal"] = ordinal
+        item["source_session_id"] = meta.get("id")
+    for ordinal, item in enumerate(clean_events):
         item["clean_ordinal"] = ordinal
         item["source_session_id"] = meta.get("id")
 
@@ -369,6 +443,11 @@ def build_clean_source(
     turns_path = out / "turns.jsonl"
     with turns_path.open("w", encoding="utf-8", newline="\n") as f:
         for item in clean_turns:
+            f.write(json.dumps(item, ensure_ascii=False) + "\n")
+
+    events_path = out / "events.jsonl"
+    with events_path.open("w", encoding="utf-8", newline="\n") as f:
+        for item in clean_events:
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
 
     stat = source_path.stat()
@@ -394,9 +473,11 @@ def build_clean_source(
         "session_meta": meta,
         "message_count": len(clean_messages),
         "turn_count": len(clean_turns),
+        "event_count": len(clean_events),
         "outputs": {
             "messages_jsonl": str(messages_path),
             "turns_jsonl": str(turns_path),
+            "events_jsonl": str(events_path),
         },
         "identity_policy": {
             "stable_join_keys": [
@@ -404,6 +485,7 @@ def build_clean_source(
                 "source_ref",
                 "turn_id",
                 "message_id",
+                "event_id",
                 "content_sha256",
             ],
             "message_id": "Stable over rebuilds for the same source, raw line, role, phase, and exact text.",
@@ -411,6 +493,7 @@ def build_clean_source(
             "source_ref": "Provider-neutral audit pointer using provider/session/line, without relying on local absolute paths as identity.",
             "semantic_key": "Deterministic normalized-text key for lightweight sidecars; it is not a semantic embedding.",
             "source_id": "Opaque hash of the provider thread key or session id when available, otherwise the resolved private source path.",
+            "event_id": "Stable over rebuilds for the same source, raw line, tool event kind, call ref, and payload hash.",
         },
         "upgrade_contract": {
             "principle": "approximate_locate_then_exact_reconstruct",
@@ -433,14 +516,24 @@ def build_clean_source(
                 "user_message",
                 "assistant final_answer",
                 "last assistant commentary only when no final_answer exists",
+                "structured tool/test behavior events in events.jsonl",
             ],
             "drops": [
-                "tool payload text",
+                "tool payload text from messages.jsonl",
+                "raw tool stdout, full command text, and full tool arguments from events.jsonl",
                 "duplicate visible messages",
                 "injected AGENTS instructions",
                 "routine commentary when final_answer exists",
             ],
             "rewrites_text": False,
+        },
+        "event_lane_policy": {
+            "status": "enabled_for_codex_rollouts",
+            "default_file": "events.jsonl",
+            "purpose": "source-backed behavior traces for tool/test failures and rollout decision shadows",
+            "raw_payload_policy": "hash_only",
+            "join_keys": ["source_id", "source_ref", "event_id", "turn_index", "call_ref"],
+            "boundary": "events.jsonl is structured provenance; messages.jsonl remains visible conversational source.",
         },
         "scope_label_policy": {
             "version": SCOPE_LABEL_POLICY_VERSION,

@@ -1,0 +1,312 @@
+# Public Longitudinal Pseudo-Users Benchmark
+
+This page records the first public, deterministic benchmark slice for the
+coding implicit-knowledge scenario in
+[`docs/research/agent-coding-context-analysis.md`](../../research/agent-coding-context-analysis.md).
+It is the evidence companion for GitHub issue #172.
+
+## Purpose
+
+AIppocampus should help agents remember hidden engineering context without
+pretending the base model has innate memory. The hard case is not "find a
+string from yesterday." It is whether the system preserves source-backed
+project intent:
+
+- rejected routes;
+- tacit constraints;
+- workaround rationale;
+- stale assumptions corrected by the user;
+- conditions that justify reopening an old decision;
+- anti-drift negatives where similar future wording should not activate memory.
+
+## Data Decision
+
+The v1 public fixture is
+[`benchmark_corpus/public_longitudinal_users/coding_implicit_v1.jsonl`](../../../benchmark_corpus/public_longitudinal_users/coding_implicit_v1.jsonl).
+It uses checked-in synthetic pseudo-users under `CC0-1.0`. Treat it as a
+scoring-contract smoke, not the flagship Dream-recall benchmark.
+
+This is deliberate but limited. The synthetic fixture proves the report shape:
+given explicit source events, gold claims, probes, and external predictions,
+the runner can score source attribution, forbidden drift, and anti-drift
+negatives without private data. It cannot prove that a system will notice every
+future event that should have been flagged.
+
+The first real public conversation control is LoCoMo. The official repository
+describes ten very long-term conversations, chronological sessions, dialogue
+ids, and annotated QA evidence ids. AIppocampus treats each LoCoMo sample as a
+`longitudinal_public_user` and scores source-turn evidence retrieval with:
+
+```powershell
+New-Item -ItemType Directory -Force benchmark_corpus\locomo | Out-Null
+Invoke-WebRequest https://raw.githubusercontent.com/snap-research/locomo/main/data/locomo10.json -OutFile benchmark_corpus\locomo\locomo10.json
+python benchmarks\aippocampus\benchmark_locomo_public_users.py --json
+python benchmarks\aippocampus\benchmark_locomo_public_users.py --predictions .tmp\locomo-evidence-predictions.jsonl --json
+```
+
+For public replication, generate the model-facing local inputs first:
+
+```powershell
+python benchmarks\aippocampus\benchmark_locomo_public_users.py --case-pack-output .tmp\locomo-case-pack.json --prediction-template-output .tmp\locomo-predictions.jsonl --json
+```
+
+`locomo-case-pack.json` includes source dialogue and question text, but does
+not include answers or gold evidence ids. `locomo-predictions.jsonl` contains
+one row per case with empty `evidence_ids`. A system under test should read the
+case pack, fill the prediction template with retrieved dialogue ids, and then
+call the scorer with `--predictions`.
+
+The raw `locomo10.json` file stays local/ignored under the upstream CC BY-NC
+4.0 license. Default reports are sanitized: they include case ids, evidence
+ids, and question/answer hashes, but no dialogue text, question text, or answer
+text. The current local snapshot has 10 users, 272 sessions, 5,882 dialogue
+turns, 1,986 QA cases, and 1,973 evidence-linked cases.
+
+Public conversation corpora remain valuable, but they should not be the
+positive coding source:
+
+- [LongMemEval-V2](https://huggingface.co/datasets/xiaowu0162/longmemeval-v2)
+  is the closest public long-term agent-memory control: its dataset card says
+  it covers web and enterprise agents, 451 curated questions, and 1,870 task
+  trajectories, with abilities including workflow knowledge, environment
+  gotchas, and premise awareness. It is a near-neighbor, not a coding project
+  decision-shadow source.
+- [SWE-Hero OpenHands trajectories](https://huggingface.co/datasets/nvidia/SWE-Hero-openhands-trajectories)
+  are a useful coding-agent replay source: the dataset card describes 34k
+  OpenHands trajectories for SWE-style tasks. They are task trajectories, not
+  months-long decision histories.
+- [LoCoMo](https://github.com/snap-research/locomo) is useful for traditional
+  longitudinal memory control; its repository describes ten long-term
+  conversations with annotated QA and event summaries.
+- [WildChat](https://huggingface.co/datasets/allenai/WildChat-4.8M) is useful
+  for broad chat-distribution replay and false-activation checks, but its card
+  describes per-conversation metadata such as hashed IP and headers. AIppocampus
+  should not use that to construct public "same-user" identities.
+
+The flagship positive track should move to VCS-derived future-event gold:
+
+- [MSR 2020 pull-request dataset](https://2020.msrconf.org/details/msr-2020-Data-showcase/6/A-New-Dataset-for-Pull-Request-Acceptance):
+  the official MSR page describes 96 features over 11,230 projects and
+  3,347,937 pull requests. PR acceptance/rejection is a hard future event.
+- [Pull Request Decisions Explained](https://research.tudelft.nl/en/publications/pull-request-decisions-explained-an-empirical-overview):
+  the later empirical overview reports 95 factors over the same 3,347,937 PR
+  corpus. Use it for feature/decision-factor taxonomy, not as a semantic judge.
+- [Code review as decision-making](https://link.springer.com/article/10.1007/s10664-025-10791-2):
+  use the Gerrit changeset/patchset reasoning model as a labeling pattern for
+  patch supersession and review-rationale arcs.
+- [CppSATD](https://zenodo.org/records/15284981):
+  the Zenodo record describes 531,367 comments with 13,069 SATD comments
+  identified and manually classified into SATD types. These comments are a
+  direct source for workaround-rationale gold.
+- Repository-native events such as issue reopen, commit revert, patchset
+  supersession, and removal of a SATD/workaround comment should become the
+  future-window labels.
+
+The future-event track must score recall. The holdout window must enumerate all
+flag-worthy hard events, so a system that stays silent can receive clean
+false-negative penalties. For `reopen_condition` and other forward-looking
+families, only brittle events count: literal merge/reject/reopen/revert/
+supersede/removal. Soft "seems related" cases should be discarded rather than
+sent to an LLM judge.
+
+Hard public outcomes also create a contamination risk: a pretrained model may
+already know a famous PR was later reverted or merged. The benchmark should
+measure that risk instead of pretending it is absent. Every public VCS report
+should include a closed-book arm that gets the question/event setup without the
+past source window. If closed-book performance is close to source-window
+performance, the score is not evidence that source-backed recovery did the
+work.
+
+Contamination controls, in descending reliability:
+
+- Time split: prefer holdout events created after the evaluated model's
+  training cutoff. This must be refreshed over time.
+- Private real history: valid for private behavior lift, but report separately
+  from public reproducible scores.
+- Counterfactual perturbation: flip the public trajectory's decision/constraint
+  so memorized public outcomes become confident wrong answers.
+
+The same hard-event discipline should move inside agent rollouts. When agents
+write code, PR text, review notes, and issues, the decision shadow no longer
+lives only in human VCS commentary. It often appears first as behavior:
+
+- a tool call failed;
+- a test failed;
+- an edit was reverted;
+- a route was abandoned after an observation;
+- a later run repeated the same failed route.
+
+For benchmark purposes, distinguish behavior-trace rejection from narrative
+rejection. A behavior-trace rejection has deterministic evidence in the rollout.
+A narrative rejection is only an assistant message claiming that something was
+bad. Only the first kind can support `rejected_route`, `tacit_constraint`, or
+`workaround_rationale` gold. The second is weather unless it is linked to a
+behavior-backed source event.
+
+This is also now reflected in clean source: `build_clean_source.py` writes a
+structured `events.jsonl` lane for Codex rollouts. Public-safe rollout source
+records carry bounded fields such as `tool_name`, `command_class`, exit status,
+timestamp, source refs, and input/observation hashes. Raw stdout, full diffs,
+screenshots, local paths, full shell commands, and secrets remain audit/source
+material, not default recall payload.
+
+## Runner
+
+Entrypoint:
+
+```powershell
+python benchmarks\aippocampus\benchmark_public_longitudinal_users.py --json
+```
+
+Score an external system by providing predictions:
+
+```powershell
+python benchmarks\aippocampus\benchmark_public_longitudinal_users.py --predictions .tmp\public-longitudinal-predictions.jsonl --json
+```
+
+Prediction rows can be JSON or JSONL:
+
+```json
+{"case_id":"plu-cache-001","decision":"surface","claim_ids":["cache-redis-rejected-no-daemon"],"source_event_ids":["cache-e001"]}
+```
+
+LoCoMo evidence predictions use source dialogue ids:
+
+```json
+{"case_id":"locomo:conv-26:qa:0001","evidence_ids":["D1:3"]}
+```
+
+## Metrics
+
+- `overall_score`: contract-smoke score only. Do not use it as a headline
+  wedge metric.
+- `decision_accuracy`: exact expected decision match.
+- `required_claim_full_recall_rate`: whether required hidden context was
+  recovered for surface/reopen cases.
+- `source_event_full_recall_rate`: whether required claims were backed by the
+  right source event ids.
+- `forbidden_claim_violation_count`: unsupported or forbidden drift.
+- `source_event_false_positive_count`: source ids attached to the wrong case.
+- `anti_drift_pass_rate`: suppression behavior for unrelated same-token future
+  tasks.
+- `reopen_decision_accuracy`: whether valid reopen-condition probes are
+  recognized without turning old rejections into permanent bans.
+
+LoCoMo control metrics:
+
+- `full_evidence_recall_rate`: whether every required QA evidence dialogue id
+  was recovered.
+- `exact_evidence_match_rate`: whether the retrieved evidence ids match the
+  gold ids without extras.
+- `mean_evidence_recall` / `mean_evidence_precision`: partial evidence quality.
+- `false_positive_evidence_id_count`: extra source ids attached to cases.
+- `by_category`: LoCoMo QA category slices. Keep these separate from coding
+  implicit-knowledge families.
+
+Interpret family metrics separately. Do not average easy explicit-correction
+cases with tacit/workaround/reopen cases and report the aggregate as the
+AIppocampus moat. A public report should foreground at least:
+
+- rejected-route recall / precision;
+- tacit-constraint recall / precision;
+- workaround-rationale recall / precision;
+- reopen-condition recall / precision;
+- anti-drift negative pass rate;
+- false-positive source-event rate.
+
+The future-event track additionally needs:
+
+- `future_event_gold_count`;
+- `future_event_flag_recall_rate`;
+- `missed_reopen_event_count`;
+- `missed_constraint_violation_count`;
+- `hard_event_false_activation_count`;
+- `closed_book_recall_rate`;
+- `source_over_closed_book_recall_lift`;
+- structural-disagreement-vs-self-rated-uncertainty predictive comparison.
+
+The last metric is the core Dream wager: compare a deterministic structural
+disagreement arm against a model self-reported `uncertainty_reduction` arm, and
+measure which better predicts hard holdout support. If disagreement predicts
+future support better than self-assessment, the Dream scoring philosophy has a
+public, falsifiable foundation.
+
+## Claim Boundary
+
+This benchmark can claim:
+
+- public, reproducible pseudo-user scoring for coding implicit knowledge;
+- public LoCoMo same-conversation longitudinal-user evidence retrieval;
+- deterministic source-event attribution checks;
+- a public contract other memory systems can implement against;
+- a smoke-tested report shape for later VCS-derived future-event recall.
+
+It cannot claim:
+
+- private real-history coding continuity quality;
+- real same-user longitudinal identity;
+- live Dream worker quality;
+- answer generation quality;
+- external baseline superiority;
+- recall over a complete future window;
+- tacit/workaround/reopen performance on wild VCS histories;
+- LoCoMo performance as evidence for coding tacit-constraint recall;
+- a single headline score that validates the AIppocampus wedge.
+
+## Current Implementation Slice
+
+The current benchmark slice adds `vcs_future_event_*` and rollout-behavior
+fixtures with this contract:
+
+- Past window: rejected PR/review rationale, SATD/workaround comments, or
+  earlier patchset reasoning.
+- Dream candidate: predicted future risk, reopen condition, or constraint
+  violation, emitted before the future event.
+- Future window: hard events only, such as PR accepted/rejected, issue reopened,
+  commit reverted, patchset superseded, or SATD/workaround comment removed.
+- Scoring: count both supported flags and missed hard events. No soft semantic
+  judge for forward-looking labels.
+- Reporting: no single aggregate headline; family tables are the public result.
+
+The next version should replace the synthetic rows with curated public
+MSR/Gerrit/SATD/agent-rollout rows while keeping this same scoring boundary.
+
+The first scaffold for this contract is now:
+
+```powershell
+python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --json
+python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --baseline empty --json
+python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --predictions .tmp\vcs-source-window.jsonl --closed-book-predictions .tmp\vcs-closed-book.jsonl --json
+python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset benchmark_corpus\public_longitudinal_users\rollout_behavior_events_v1.jsonl --json
+python benchmarks\aippocampus\build_vcs_future_event_fixture.py --input .tmp\public-vcs-links.jsonl --output .tmp\vcs-future-events-built.jsonl --json
+python benchmarks\aippocampus\build_vcs_future_event_fixture.py --clean-source-events .tmp\clean-source\events.jsonl --links .tmp\rollout-event-links.jsonl --output .tmp\rollout-future-events.jsonl --allow-non-cc0-output --json
+```
+
+Fixture:
+[`benchmark_corpus/public_longitudinal_users/vcs_future_events_v1.jsonl`](../../../benchmark_corpus/public_longitudinal_users/vcs_future_events_v1.jsonl).
+It is still synthetic and only proves recall-aware scoring semantics, but it
+already has the critical property missing from the pseudo-user contract smoke:
+the future window enumerates all flag-worthy hard events, so silence produces
+false negatives.
+
+Rollout behavior fixture:
+[`benchmark_corpus/public_longitudinal_users/rollout_behavior_events_v1.jsonl`](../../../benchmark_corpus/public_longitudinal_users/rollout_behavior_events_v1.jsonl).
+It is also synthetic, but it encodes the new boundary: assistant narrative
+sources can appear in the past window, yet they cannot be required gold support
+for a flag-worthy future event unless the row also has behavior evidence.
+
+Builder:
+[`benchmarks/aippocampus/build_vcs_future_event_fixture.py`](../../../benchmarks/aippocampus/build_vcs_future_event_fixture.py).
+It converts already-curated public VCS or rollout event-link rows into the
+scoring schema. It can also join clean-source `events.jsonl` behavior rows with
+a curated link file. It deliberately does not scrape public datasets or infer
+soft labels.
+
+The runner now exposes `contamination_control.closed_book` when
+`--closed-book-predictions` is provided. Public claims should report the
+source-over-closed-book lift; without that lift, public VCS scores are
+contamination diagnostics rather than source-backed memory evidence.
+
+Raw outputs, external predictions, and large follow-up reports belong in
+`.tmp/` or `benchmark_corpus/reports/` unless a future change deliberately
+promotes a curated public report.

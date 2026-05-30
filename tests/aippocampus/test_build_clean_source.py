@@ -129,8 +129,10 @@ class BuildCleanSourceTests(unittest.TestCase):
         self.assertEqual(result["turn_count"], 2)
         messages_path = Path(result["outputs"]["messages_jsonl"])
         turns_path = Path(result["outputs"]["turns_jsonl"])
+        events_path = Path(result["outputs"]["events_jsonl"])
         self.assertTrue(messages_path.exists())
         self.assertTrue(turns_path.exists())
+        self.assertTrue(events_path.exists())
         self.assertIn("aippocampus-registry", str(messages_path))
         self.assertFalse((self.cwd / ".aippocampus").exists())
 
@@ -145,6 +147,13 @@ class BuildCleanSourceTests(unittest.TestCase):
         self.assertNotIn("very large tool output", text)
         self.assertNotIn("AGENTS.md instructions", text)
         self.assertNotIn("我先查一下旧线程。", text)
+        events_text = events_path.read_text(encoding="utf-8")
+        self.assertNotIn("very large tool output", events_text)
+        events = [json.loads(line) for line in events_text.splitlines()]
+        self.assertEqual(result["event_count"], 1)
+        self.assertEqual(events[0]["event_kind"], "tool_call_observed")
+        self.assertEqual(events[0]["behavior_backed"], True)
+        self.assertIn("observation_sha256", events[0])
 
         first = messages[0]
         self.assertTrue(first["source_id"].startswith("src_"))
@@ -383,6 +392,59 @@ class BuildCleanSourceTests(unittest.TestCase):
             .splitlines()[0]
         )
         self.assertEqual(first_message["source_id"], second_message["source_id"])
+
+    def test_clean_source_events_record_tool_failure_without_raw_payload(self) -> None:
+        self._append(
+            {
+                "type": "event_msg",
+                "timestamp": "2026-05-26T02:00:00Z",
+                "payload": {"type": "user_message", "message": "跑一下测试。"},
+            }
+        )
+        self._append(
+            {
+                "type": "response_item",
+                "timestamp": "2026-05-26T02:00:01Z",
+                "payload": {
+                    "type": "function_call",
+                    "name": "functions.shell_command",
+                    "call_id": "call-test-fail",
+                    "arguments": json.dumps(
+                        {"command": "python tests\\aippocampus\\test_secret.py"},
+                        ensure_ascii=False,
+                    ),
+                },
+            }
+        )
+        self._append(
+            {
+                "type": "response_item",
+                "timestamp": "2026-05-26T02:00:02Z",
+                "payload": {
+                    "type": "function_call_output",
+                    "call_id": "call-test-fail",
+                    "output": "Exit code: 1\nWall time: 0.1s\nSECRET_PATH\\test_secret.py failed",
+                },
+            }
+        )
+
+        result = clean_source.build_clean_source(self.cwd, rollout=self.rollout)
+        events = [
+            json.loads(line)
+            for line in Path(result["outputs"]["events_jsonl"])
+            .read_text(encoding="utf-8")
+            .splitlines()
+        ]
+
+        failed = next(item for item in events if item.get("status") == "failed")
+        self.assertEqual(failed["hard_event_kind"], "tool_call_failed")
+        self.assertEqual(failed["command_class"], "test")
+        self.assertEqual(failed["exit_code"], 1)
+        self.assertEqual(failed["tool_name"], "functions.shell_command")
+        serialized = json.dumps(events, ensure_ascii=False)
+        self.assertNotIn("test_secret.py", serialized)
+        self.assertNotIn("SECRET_PATH", serialized)
+        self.assertNotIn("python tests", serialized)
 
 
 if __name__ == "__main__":

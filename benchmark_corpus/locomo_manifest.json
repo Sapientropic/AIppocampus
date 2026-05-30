@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "benchmark": "LoCoMo",
+  "scope": "public longitudinal conversation-control users for evidence-retrieval benchmark runs",
+  "official_sources": {
+    "repository": "https://github.com/snap-research/locomo",
+    "license": "https://raw.githubusercontent.com/snap-research/locomo/main/LICENSE.txt",
+    "dataset_file": "https://github.com/snap-research/locomo/blob/main/data/locomo10.json"
+  },
+  "license": "CC BY-NC 4.0",
+  "runner": "benchmarks/aippocampus/benchmark_locomo_public_users.py",
+  "evidence_page": "docs/evidence/benchmarks/public-longitudinal-users.md",
+  "replication_artifacts": {
+    "case_pack": {
+      "command": "python benchmarks/aippocampus/benchmark_locomo_public_users.py --case-pack-output .tmp/locomo-case-pack.json --prediction-template-output .tmp/locomo-predictions.jsonl --json",
+      "git_policy": "ignored local output",
+      "contains_raw_locomo_text": true,
+      "contains_gold_evidence_ids": false,
+      "contains_answer_text": false
+    },
+    "prediction_rows": {
+      "format": "JSONL rows with case_id and evidence_ids",
+      "example": {
+        "case_id": "locomo:conv-26:qa:0001",
+        "evidence_ids": [
+          "D1:3"
+        ]
+      }
+    }
+  },
+  "local_inputs": {
+    "path": "benchmark_corpus/locomo/locomo10.json",
+    "git_policy": "ignored",
+    "format": "JSON array. Each sample is one long-term conversation with chronological sessions, dialogue ids, and QA evidence ids."
+  },
+  "local_snapshot": {
+    "sample_count": 10,
+    "session_count": 272,
+    "source_turn_count": 5882,
+    "qa_case_count": 1986,
+    "evidence_linked_case_count": 1973,
+    "category_counts": {
+      "1": 282,
+      "2": 321,
+      "3": 96,
+      "4": 841,
+      "5": 446
+    }
+  },
+  "claim_boundary": [
+    "public same-conversation longitudinal-user evidence retrieval",
+    "source-turn recall against LoCoMo QA evidence ids",
+    "no answer generation score",
+    "no LLM judge score",
+    "no coding decision-shadow or tacit-constraint claim",
+    "no private real-history claim"
+  ]
+}

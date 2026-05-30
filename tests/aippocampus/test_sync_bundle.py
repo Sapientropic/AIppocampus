@@ -78,6 +78,18 @@ class SyncBundleTests(unittest.TestCase):
             json.dumps({"turn_id": "turn_1"}, ensure_ascii=False) + "\n",
             encoding="utf-8",
         )
+        (self.clean_source / "events.jsonl").write_text(
+            json.dumps(
+                {
+                    "event_id": "evt_1",
+                    "hard_event_kind": "tool_call_failed",
+                    "behavior_backed": True,
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
         (self.clean_source / "semantic-scope-labels.jsonl").write_text(
             json.dumps(
                 {
@@ -123,14 +135,16 @@ class SyncBundleTests(unittest.TestCase):
         self.assertIn("registry/cognitive_map.json", relative_paths)
         self.assertNotIn("registry/threads/session-test/clean-source/messages.jsonl", relative_paths)
         self.assertNotIn("registry/threads/session-test/clean-source/turns.jsonl", relative_paths)
+        self.assertNotIn("registry/threads/session-test/clean-source/events.jsonl", relative_paths)
         self.assertIn("registry/threads/session-test/index/manifest.json", relative_paths)
         self.assertIn("clean-source-chunks/manifest.json", relative_paths)
         self.assertEqual(delta["kind"], "content_addressed_clean_source_chunks")
         self.assertEqual(delta["generated_cache_export"], "explicit_only")
-        self.assertEqual(delta["file_count"], 3)
-        self.assertEqual(delta["chunk_count"], 3)
+        self.assertEqual(delta["file_count"], 4)
+        self.assertEqual(delta["chunk_count"], 4)
         logical_paths = {item["path"] for item in delta["files"]}
         self.assertIn("registry/threads/session-test/clean-source/messages.jsonl", logical_paths)
+        self.assertIn("registry/threads/session-test/clean-source/events.jsonl", logical_paths)
         for item in delta["files"]:
             self.assertTrue(item["chunks"], item)
             for chunk in item["chunks"]:
@@ -144,6 +158,10 @@ class SyncBundleTests(unittest.TestCase):
         self.assertEqual(
             portable_paths["clean_source_messages_jsonl"],
             "registry/threads/session-test/clean-source/messages.jsonl",
+        )
+        self.assertEqual(
+            portable_paths["clean_source_events_jsonl"],
+            "registry/threads/session-test/clean-source/events.jsonl",
         )
         self.assertIsNone(portable_paths["workspace"])
         self.assertIsNone(portable_paths["rollout"])

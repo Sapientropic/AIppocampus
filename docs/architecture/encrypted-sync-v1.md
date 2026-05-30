@@ -62,7 +62,7 @@ All synced AIppocampus artifacts are private by default.
 
 | Class | Examples | V1 policy |
 | --- | --- | --- |
-| Clean source | `messages.jsonl`, `turns.jsonl`, clean-source manifests | Always encrypt |
+| Clean source | `messages.jsonl`, `turns.jsonl`, `events.jsonl`, clean-source manifests | Always encrypt |
 | Registry | `threads.json`, `threads.md`, generated-artifact locators | Always encrypt |
 | Sidecars | semantic triggers, working memory, cognitive map, concept graph | Always encrypt |
 | Indexes | SQLite/source indexes, graph metadata | Always encrypt if synced |
