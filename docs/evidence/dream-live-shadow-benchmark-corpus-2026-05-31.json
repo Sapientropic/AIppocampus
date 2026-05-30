@@ -1,0 +1,240 @@
+{
+  "schema_version": 1,
+  "kind": "aippocampus_dream_live_shadow_benchmark_corpus_evidence",
+  "created_at": "2026-05-31T00:31:51+08:00",
+  "claim_level": "benchmark_corpus_shadow_replay_reminder_frequency",
+  "private_text_emitted": false,
+  "raw_prompt_emitted": false,
+  "raw_source_keys_emitted": false,
+  "raw_clean_source_path_emitted": false,
+  "window_user_turns": 6,
+  "generated_dream_max_packs": 64,
+  "model_backed_generated_dream_max_packs": 4,
+  "input_boundary": {
+    "corpus_family": "benchmark_corpus clean-source messages",
+    "large_corpora_git_policy": "ignored",
+    "large_input_paths_emitted": false,
+    "public_corpus_is_negative_control": true,
+    "causal_treatment_delivered": false,
+    "deterministic_runs_are_structural_ablation": true,
+    "model_backed_runs_use_bounded_background_dream_worker": true
+  },
+  "runs": [
+    {
+      "dataset_id": "wildchat_fixture",
+      "input": "benchmark_corpus/testdata_wildchat.jsonl converted to a temporary clean-source smoke directory",
+      "command_template": "python skills\\aippocampus\\scripts\\dream_live_shadow_ab.py --replay-clean-source-dir .tmp\\dream-benchmark-corpus-smoke --dataset-id wildchat_fixture --generate-dream-rows 64 --max-threads 20 --max-user-messages 100 --window-user-turns 6 --output .tmp\\dream-shadow-benchmark-fixture.json --json",
+      "event_count": 8,
+      "thread_count": 4,
+      "overall_reminder_rate": 0.0,
+      "eligible_exposure_rate": 0.0,
+      "arms": {
+        "control": {
+          "eligible_exposures": 0,
+          "reminder_outcomes": 0,
+          "reminder_rate": 0.0
+        },
+        "dream": {
+          "eligible_exposures": 0,
+          "reminder_outcomes": 0,
+          "reminder_rate": 0.0
+        }
+      },
+      "attribution": {
+        "total_reminder_count": 0,
+        "attributed_reminder_count": 0,
+        "unattributed_reminder_count": 0
+      }
+    },
+    {
+      "dataset_id": "sharegpt_coding_multiturn",
+      "input": "ignored benchmark_corpus/output/sharegpt_coding_multiturn clean-source corpus",
+      "command_template": "python skills\\aippocampus\\scripts\\dream_live_shadow_ab.py --replay-clean-source-dir benchmark_corpus\\output\\sharegpt_coding_multiturn --dataset-id sharegpt_coding_multiturn --generate-dream-rows 64 --max-threads 10000 --max-user-messages 60000 --window-user-turns 6 --output .tmp\\dream-shadow-benchmark-sharegpt-coding-10000.json --json",
+      "event_count": 60000,
+      "thread_count": 8794,
+      "overall_reminder_rate": 0.0017,
+      "eligible_exposure_rate": 0.0066,
+      "arms": {
+        "control": {
+          "eligible_exposures": 203,
+          "reminder_outcomes": 0,
+          "reminder_rate": 0.0
+        },
+        "dream": {
+          "eligible_exposures": 196,
+          "reminder_outcomes": 0,
+          "reminder_rate": 0.0
+        }
+      },
+      "attribution": {
+        "total_reminder_count": 104,
+        "attributed_reminder_count": 0,
+        "unattributed_reminder_count": 104
+      },
+      "reminder_family_counts": {
+        "as_said_before": 65,
+        "explicit_recall_en": 39
+      }
+    },
+    {
+      "dataset_id": "sharegpt_all_multiturn",
+      "input": "ignored benchmark_corpus/output/sharegpt_all_multiturn clean-source corpus",
+      "command_template": "python skills\\aippocampus\\scripts\\dream_live_shadow_ab.py --replay-clean-source-dir benchmark_corpus\\output\\sharegpt_all_multiturn --dataset-id sharegpt_all_multiturn --generate-dream-rows 64 --max-threads 10000 --max-user-messages 60000 --window-user-turns 6 --output .tmp\\dream-shadow-benchmark-sharegpt-all-10000.json --json",
+      "event_count": 60000,
+      "thread_count": 9718,
+      "overall_reminder_rate": 0.0014,
+      "eligible_exposure_rate": 0.0068,
+      "arms": {
+        "control": {
+          "eligible_exposures": 202,
+          "reminder_outcomes": 1,
+          "reminder_rate": 0.005
+        },
+        "dream": {
+          "eligible_exposures": 208,
+          "reminder_outcomes": 2,
+          "reminder_rate": 0.0096
+        }
+      },
+      "attribution": {
+        "total_reminder_count": 86,
+        "attributed_reminder_count": 3,
+        "unattributed_reminder_count": 83
+      },
+      "reminder_family_counts": {
+        "as_said_before": 45,
+        "explicit_recall_en": 41
+      }
+    }
+    ,
+    {
+      "dataset_id": "sharegpt_coding_multiturn_model_backed",
+      "input": "ignored benchmark_corpus/output/sharegpt_coding_multiturn clean-source corpus",
+      "dream_worker_mode": "model_backed",
+      "model_route": {
+        "route": "default",
+        "tier": "flash",
+        "model": "deepseek-v4-flash",
+        "provider": "deepseek"
+      },
+      "command_template": "python skills\\aippocampus\\scripts\\dream_live_shadow_ab.py --replay-clean-source-dir benchmark_corpus\\output\\sharegpt_coding_multiturn --dataset-id sharegpt_coding_multiturn_model_backed --generate-dream-rows 4 --dream-worker-mode model-backed --max-threads 10000 --max-user-messages 60000 --window-user-turns 6 --output .tmp\\dream-shadow-benchmark-sharegpt-coding-10000-model.json --json",
+      "event_count": 60000,
+      "thread_count": 8794,
+      "overall_reminder_rate": 0.0017,
+      "eligible_exposure_rate": 0.0175,
+      "arms": {
+        "control": {
+          "eligible_exposures": 508,
+          "reminder_outcomes": 1,
+          "reminder_rate": 0.002
+        },
+        "dream": {
+          "eligible_exposures": 539,
+          "reminder_outcomes": 4,
+          "reminder_rate": 0.0074
+        }
+      },
+      "attribution": {
+        "total_reminder_count": 104,
+        "attributed_reminder_count": 5,
+        "unattributed_reminder_count": 99
+      },
+      "reminder_family_counts": {
+        "as_said_before": 65,
+        "explicit_recall_en": 39
+      }
+    },
+    {
+      "dataset_id": "sharegpt_all_multiturn_model_backed",
+      "input": "ignored benchmark_corpus/output/sharegpt_all_multiturn clean-source corpus",
+      "dream_worker_mode": "model_backed",
+      "model_route": {
+        "route": "default",
+        "tier": "flash",
+        "model": "deepseek-v4-flash",
+        "provider": "deepseek"
+      },
+      "command_template": "python skills\\aippocampus\\scripts\\dream_live_shadow_ab.py --replay-clean-source-dir benchmark_corpus\\output\\sharegpt_all_multiturn --dataset-id sharegpt_all_multiturn_model_backed --generate-dream-rows 4 --dream-worker-mode model-backed --max-threads 10000 --max-user-messages 60000 --window-user-turns 6 --output .tmp\\dream-shadow-benchmark-sharegpt-all-10000-model.json --json",
+      "event_count": 60000,
+      "thread_count": 9718,
+      "overall_reminder_rate": 0.0014,
+      "eligible_exposure_rate": 0.0242,
+      "arms": {
+        "control": {
+          "eligible_exposures": 684,
+          "reminder_outcomes": 7,
+          "reminder_rate": 0.0102
+        },
+        "dream": {
+          "eligible_exposures": 770,
+          "reminder_outcomes": 3,
+          "reminder_rate": 0.0039
+        }
+      },
+      "attribution": {
+        "total_reminder_count": 86,
+        "attributed_reminder_count": 10,
+        "unattributed_reminder_count": 76
+      },
+      "reminder_family_counts": {
+        "as_said_before": 45,
+        "explicit_recall_en": 41
+      }
+    }
+  ],
+  "combined_deterministic_structural_ablation": {
+    "event_count": 120000,
+    "thread_count": 18512,
+    "total_reminder_count": 190,
+    "overall_reminder_rate": 0.0016,
+    "potential_public_false_activation_count": 809,
+    "potential_public_false_activation_rate": 0.0067,
+    "control_eligible_exposures": 405,
+    "control_reminder_outcomes": 1,
+    "control_reminder_rate": 0.0025,
+    "dream_eligible_exposures": 404,
+    "dream_reminder_outcomes": 2,
+    "dream_reminder_rate": 0.005,
+    "rate_delta_dream_minus_control": 0.0025,
+    "attributed_reminder_count": 3,
+    "unattributed_reminder_count": 187,
+    "reminder_family_counts": {
+      "as_said_before": 110,
+      "explicit_recall_en": 80
+    }
+  },
+  "combined_model_backed_large_sample": {
+    "event_count": 120000,
+    "thread_count": 18512,
+    "total_reminder_count": 190,
+    "overall_reminder_rate": 0.0016,
+    "potential_public_false_activation_count": 2501,
+    "potential_public_false_activation_rate": 0.0208,
+    "control_eligible_exposures": 1192,
+    "control_reminder_outcomes": 8,
+    "control_reminder_rate": 0.0067,
+    "dream_eligible_exposures": 1309,
+    "dream_reminder_outcomes": 7,
+    "dream_reminder_rate": 0.0053,
+    "rate_delta_dream_minus_control": -0.0014,
+    "attributed_reminder_count": 15,
+    "unattributed_reminder_count": 175,
+    "reminder_family_counts": {
+      "as_said_before": 110,
+      "explicit_recall_en": 80
+    }
+  },
+  "can_claim": [
+    "benchmark_corpus clean-source replay can count explicit recall-reminder language without emitting raw prompts",
+    "public-corpus potential dream-only activation rate was measured as a negative-control over-personalization signal",
+    "nearest-prior eligible-exposure attribution ran over 120000 public-corpus user turns",
+    "model-backed bounded background dream worker replay ran over the same 120000-turn public-corpus negative-control slice"
+  ],
+  "cannot_claim": [
+    "causal user-visible reduction in manual recall reminders",
+    "private real-history behavior lift",
+    "full benchmark corpus coverage",
+    "general dream-hypothesis quality",
+    "safe delivered treatment without live opt-in A/B events"
+  ]
+}

@@ -25,6 +25,8 @@ benchmark design details in
    [`dream-natural-prompt-large-sample-2026-05-30.md`](dream-natural-prompt-large-sample-2026-05-30.md).
 7. Need explicit recall-reminder shadow A/B evidence:
    [`dream-live-shadow-ab-2026-05-30.md`](dream-live-shadow-ab-2026-05-30.md).
+8. Need public-corpus negative-control dream shadow evidence:
+   [`dream-live-shadow-benchmark-corpus-2026-05-31.md`](dream-live-shadow-benchmark-corpus-2026-05-31.md).
 
 Research notes may include calibration context, but they are not claim ledgers.
 Use them for background only until a result is linked back to the readiness
@@ -41,6 +43,7 @@ snapshot or dated verification ledger.
 | Demo fixture report | `docs/evidence/memory-pain-fixture-report.md` | Public-safe fixture families and their narrow claim boundary. |
 | Dream natural-prompt route/noise evidence | `docs/evidence/dream-natural-prompt-large-sample-2026-05-30.md` | Dated aggregate run for manual-reminder reduction, negative prompt noise, overbroad fanout, and strong-claim source-reopen gates. |
 | Dream live shadow A/B reminder evidence | `docs/evidence/dream-live-shadow-ab-2026-05-30.md` | Dated aggregate run for explicit recall-reminder frequency, shadow assignment, nearest-prior exposure attribution, and delivered-vs-shadow claim boundaries. |
+| Dream benchmark-corpus shadow evidence | `docs/evidence/dream-live-shadow-benchmark-corpus-2026-05-31.md` | Dated public-corpus negative-control run for explicit reminder frequency and potential dream-only over-personalization activation. |
 | Raw / generated artifacts | `.tmp/` or `benchmark_corpus/reports/` | Local JSON outputs and case packs. Keep them gitignored unless a small public subset is deliberately promoted. |
 
 ## Benchmark Runners

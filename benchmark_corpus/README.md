@@ -135,6 +135,24 @@ say otherwise: `--case-workers 0` resolves to
 Parallel runs disable the local JSON semantic result cache while still
 reporting provider-side prefix-cache usage.
 
+Run the optional dream live-shadow negative-control replay over generated
+clean-source corpus directories:
+
+```powershell
+python skills\aippocampus\scripts\dream_live_shadow_ab.py --replay-clean-source-dir benchmark_corpus\output\sharegpt_coding_multiturn --dataset-id sharegpt_coding_multiturn --generate-dream-rows 64 --dream-worker-mode deterministic --max-threads 10000 --max-user-messages 60000 --window-user-turns 6 --output .tmp\dream-shadow-benchmark-sharegpt-coding-10000.json --json
+python skills\aippocampus\scripts\dream_live_shadow_ab.py --replay-clean-source-dir benchmark_corpus\output\sharegpt_all_multiturn --dataset-id sharegpt_all_multiturn --generate-dream-rows 64 --dream-worker-mode deterministic --max-threads 10000 --max-user-messages 60000 --window-user-turns 6 --output .tmp\dream-shadow-benchmark-sharegpt-all-10000.json --json
+python skills\aippocampus\scripts\dream_live_shadow_ab.py --replay-clean-source-dir benchmark_corpus\output\sharegpt_coding_multiturn --dataset-id sharegpt_coding_multiturn_model_backed --generate-dream-rows 4 --dream-worker-mode model-backed --max-threads 10000 --max-user-messages 60000 --window-user-turns 6 --output .tmp\dream-shadow-benchmark-sharegpt-coding-10000-model.json --json
+python skills\aippocampus\scripts\dream_live_shadow_ab.py --replay-clean-source-dir benchmark_corpus\output\sharegpt_all_multiturn --dataset-id sharegpt_all_multiturn_model_backed --generate-dream-rows 4 --dream-worker-mode model-backed --max-threads 10000 --max-user-messages 60000 --window-user-turns 6 --output .tmp\dream-shadow-benchmark-sharegpt-all-10000-model.json --json
+```
+
+This replay is shadow-only and sanitized. Use `--dream-worker-mode
+model-backed` when testing the actual bounded background dream worker; the
+deterministic mode is a structural ablation only. Treat public-corpus dream-only
+eligible exposure as an over-personalization negative-control signal, not as
+private real-history behavior lift or delivered treatment evidence. Dated
+aggregate evidence lives in
+`docs/evidence/dream-live-shadow-benchmark-corpus-2026-05-31.md`.
+
 Build a private warm ambient recall case pack from the generated coding
 clean-source corpus. Use separate labeled views so source-ref support,
 current-thread echo activation, and topic epoch voting can be tightened without

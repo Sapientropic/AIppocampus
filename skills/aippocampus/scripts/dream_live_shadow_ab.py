@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
@@ -24,6 +25,12 @@ from typing import Any
 
 import dream_real_history_eval as dream_eval
 from aippocampuslib import now_utc
+from deepseek_model_routing import (
+    DEFAULT_DEEPSEEK_API_KEY_ENV,
+    resolve_model_route,
+    route_payload_with_effective_values,
+    route_service_name,
+)
 from memory_candidate_router import (
     DREAM_HYPOTHESIS_TYPE,
     default_jobs_path,
@@ -31,6 +38,11 @@ from memory_candidate_router import (
     iter_jsonl,
     load_working_memory,
     match_working_memory,
+)
+from model_client import (
+    DEEPSEEK_PREFIX_CACHE_CONTRACT,
+    NO_PROVIDER_CACHE_CONTRACT,
+    ChatClientConfig,
 )
 from registry_store import load_registry, registry_paths, registry_root, thread_store_dir
 
@@ -40,6 +52,8 @@ ANALYSIS_KIND = "aippocampus_dream_live_shadow_ab_analysis"
 CLAIM_LEVEL = "live_shadow_ab_reminder_frequency"
 DEFAULT_EVENT_LOG_NAME = "dream_shadow_ab_events.jsonl"
 DEFAULT_SALT = "aippocampus_dream_shadow_ab_v1"
+DEFAULT_DREAM_WORKER_MODE = "deterministic"
+MODEL_BACKED_DREAM_WORKER_MODE = "model_backed"
 
 POSITIVE_PATTERNS = (
     ("forgotten_constraint", re.compile(r"(你忘了|你没记住|忘记了|漏了我们之前)", re.IGNORECASE)),
@@ -92,6 +106,57 @@ def split_working_memory_rows(rows: Iterable[Mapping[str, Any]]) -> tuple[list[d
         else:
             baseline.append(copy)
     return baseline, dream
+
+
+def load_shadow_working_memory_rows(
+    *,
+    registry_dir: Path | None = None,
+    working_memory_path: Path | None = None,
+    generated_dream_max_packs: int = 0,
+    dream_worker_mode: str = DEFAULT_DREAM_WORKER_MODE,
+    model_config: ChatClientConfig | None = None,
+    model_call: dream_eval.dream_worker.ModelCall | None = None,
+    max_samples: int = 1,
+) -> list[dict[str, Any]]:
+    registry_path: Path | None = None
+    if working_memory_path is None:
+        registry_path, _ = registry_paths(registry_dir)
+        rows = load_working_memory(default_working_memory_path(registry_path))
+    else:
+        rows = load_working_memory(working_memory_path)
+    if generated_dream_max_packs > 0:
+        if registry_path is None:
+            registry_path, _ = registry_paths(registry_dir)
+        jobs = iter_jsonl(default_jobs_path(registry_path))
+        packs = dream_eval.select_real_history_packs(
+            job_rows=jobs,
+            working_memory_rows=rows,
+            max_packs=generated_dream_max_packs,
+        )
+        worker_mode = str(dream_worker_mode or DEFAULT_DREAM_WORKER_MODE).strip().replace("-", "_")
+        if worker_mode not in {DEFAULT_DREAM_WORKER_MODE, MODEL_BACKED_DREAM_WORKER_MODE}:
+            raise ValueError("dream_worker_mode must be 'deterministic' or 'model_backed'")
+        if worker_mode == MODEL_BACKED_DREAM_WORKER_MODE and model_config is None:
+            raise ValueError("model_config is required when dream_worker_mode='model_backed'")
+        rows = [
+            *rows,
+            *[
+                row
+                for pack in packs
+                for row in (
+                    dream_eval.run_pack_dream_worker(
+                        pack,
+                        model_config=model_config if worker_mode == MODEL_BACKED_DREAM_WORKER_MODE else None,
+                        model_call=model_call,
+                        no_write=False,
+                        max_samples=max(1, int(max_samples)),
+                    ).get("dream_working_memory_rows")
+                    or []
+                )
+                if isinstance(row, dict)
+            ],
+        ]
+    return rows
 
 
 def source_finding_fanout(rows: Iterable[Mapping[str, Any]]) -> int:
@@ -242,6 +307,8 @@ def analyze_shadow_events(
     unattributed = 0
     attributed_event_ids: set[str] = set()
     live_delivery_events = 0
+    reminder_family_counts: dict[str, int] = defaultdict(int)
+    reminder_strength_counts: dict[str, int] = defaultdict(int)
 
     for items in by_thread.values():
         items.sort(key=lambda item: item[0])
@@ -257,6 +324,10 @@ def analyze_shadow_events(
             if not reminder.get("is_reminder"):
                 continue
             total_reminders += 1
+            family = str(reminder.get("family") or "unknown")
+            strength = str(reminder.get("strength") or "unknown")
+            reminder_family_counts[family] += 1
+            reminder_strength_counts[strength] += 1
             winner: dict[str, Any] | None = None
             for prior_order, candidate in reversed(items[:position]):
                 if order - prior_order > window_user_turns:
@@ -298,6 +369,8 @@ def analyze_shadow_events(
             "unattributed_reminder_count": unattributed,
             "nearest_prior_eligible_exposure_only": True,
         },
+        "reminder_family_counts": dict(sorted(reminder_family_counts.items())),
+        "reminder_strength_counts": dict(sorted(reminder_strength_counts.items())),
     }
 
 
@@ -392,6 +465,102 @@ def clean_source_messages_path(entry: Mapping[str, Any], thread_key: str, regist
     return thread_store_dir(thread_key, registry_dir) / "clean-source" / "messages.jsonl"
 
 
+def clean_source_dir_messages_path(clean_source_dir: Path) -> Path:
+    path = clean_source_dir / "messages.jsonl"
+    if not path.exists():
+        raise FileNotFoundError(f"clean-source messages not found: {path}")
+    return path
+
+
+def clean_source_message_thread_key(message: Mapping[str, Any], *, dataset_id: str) -> str:
+    source_id = str(
+        message.get("source_id")
+        or message.get("conversation_id")
+        or message.get("thread_key")
+        or message.get("session_id")
+        or ""
+    )
+    if not source_id:
+        source_id = stable_hash(
+            [message.get("message_id"), message.get("turn_id"), message.get("source_line")],
+            prefix="source",
+            length=12,
+        )
+    return f"{dataset_id}:{source_id}"
+
+
+def clean_source_message_order(message: Mapping[str, Any], fallback: int) -> int:
+    for key in ("clean_ordinal", "source_line", "turn_index"):
+        value = message.get(key)
+        try:
+            return int(str(value))
+        except (TypeError, ValueError):
+            continue
+    return fallback
+
+
+def replay_clean_source_dir_events(
+    *,
+    clean_source_dir: Path,
+    dataset_id: str,
+    registry_dir: Path | None = None,
+    working_memory_path: Path | None = None,
+    max_threads: int = 200,
+    max_user_messages: int = 2000,
+    salt: str = DEFAULT_SALT,
+    project_label: str | None = "AIppocampus",
+    generated_dream_max_packs: int = 0,
+    dream_worker_mode: str = DEFAULT_DREAM_WORKER_MODE,
+    model_config: ChatClientConfig | None = None,
+    max_samples: int = 1,
+) -> list[dict[str, Any]]:
+    rows = load_shadow_working_memory_rows(
+        registry_dir=registry_dir,
+        working_memory_path=working_memory_path,
+        generated_dream_max_packs=generated_dream_max_packs,
+        dream_worker_mode=dream_worker_mode,
+        model_config=model_config,
+        max_samples=max_samples,
+    )
+    baseline_rows, dream_rows = split_working_memory_rows(rows)
+    events: list[dict[str, Any]] = []
+    seen_threads: set[str] = set()
+    per_thread_user_counts: dict[str, int] = defaultdict(int)
+    messages_path = clean_source_dir_messages_path(clean_source_dir)
+    target_thread_count = max(1, int(max_threads))
+    target_message_count = max(1, int(max_user_messages))
+    for message in iter_jsonl(messages_path):
+        if len(events) >= target_message_count:
+            break
+        if str(message.get("role") or "") != "user":
+            continue
+        thread_key = clean_source_message_thread_key(message, dataset_id=dataset_id)
+        if thread_key not in seen_threads:
+            if len(seen_threads) >= target_thread_count:
+                break
+            seen_threads.add(thread_key)
+        per_thread_user_counts[thread_key] += 1
+        events.append(
+            build_shadow_prompt_event(
+                prompt=str(message.get("text") or ""),
+                session_id=thread_key,
+                turn_id=str(message.get("turn_id") or message.get("message_id") or ""),
+                user_turn_index=clean_source_message_order(
+                    message,
+                    per_thread_user_counts[thread_key],
+                ),
+                baseline_rows=baseline_rows,
+                dream_rows=dream_rows,
+                project_label=project_label,
+                salt=salt,
+                timestamp=str(message.get("timestamp") or now_utc()),
+                source="benchmark_clean_source_shadow_replay",
+                delivery_mode="benchmark_historical_shadow_replay",
+            )
+        )
+    return events
+
+
 def replay_clean_source_events(
     *,
     registry_dir: Path | None = None,
@@ -401,26 +570,20 @@ def replay_clean_source_events(
     salt: str = DEFAULT_SALT,
     project_label: str | None = "AIppocampus",
     generated_dream_max_packs: int = 0,
+    dream_worker_mode: str = DEFAULT_DREAM_WORKER_MODE,
+    model_config: ChatClientConfig | None = None,
+    max_samples: int = 1,
 ) -> list[dict[str, Any]]:
     registry_path, _ = registry_paths(registry_dir)
     registry = load_registry(registry_path)
-    rows = load_working_memory(working_memory_path or default_working_memory_path(registry_path))
-    if generated_dream_max_packs > 0:
-        jobs = iter_jsonl(default_jobs_path(registry_path))
-        packs = dream_eval.select_real_history_packs(
-            job_rows=jobs,
-            working_memory_rows=rows,
-            max_packs=generated_dream_max_packs,
-        )
-        rows = [
-            *rows,
-            *[
-                row
-                for pack in packs
-                for row in (dream_eval.run_pack_dream_worker(pack).get("dream_working_memory_rows") or [])
-                if isinstance(row, dict)
-            ],
-        ]
+    rows = load_shadow_working_memory_rows(
+        registry_dir=registry_dir,
+        working_memory_path=working_memory_path,
+        generated_dream_max_packs=generated_dream_max_packs,
+        dream_worker_mode=dream_worker_mode,
+        model_config=model_config,
+        max_samples=max_samples,
+    )
     baseline_rows, dream_rows = split_working_memory_rows(rows)
     events: list[dict[str, Any]] = []
     for entry in registry.get("threads") or []:
@@ -464,6 +627,9 @@ def run_clean_source_replay_analysis(
     window_user_turns: int = 4,
     salt: str = DEFAULT_SALT,
     generated_dream_max_packs: int = 0,
+    dream_worker_mode: str = DEFAULT_DREAM_WORKER_MODE,
+    model_config: ChatClientConfig | None = None,
+    max_samples: int = 1,
 ) -> dict[str, Any]:
     events = replay_clean_source_events(
         registry_dir=registry_dir,
@@ -472,9 +638,13 @@ def run_clean_source_replay_analysis(
         max_user_messages=max_user_messages,
         salt=salt,
         generated_dream_max_packs=generated_dream_max_packs,
+        dream_worker_mode=dream_worker_mode,
+        model_config=model_config,
+        max_samples=max_samples,
     )
     metrics = analyze_shadow_events(events, window_user_turns=window_user_turns)
     metrics["generated_dream_max_packs"] = generated_dream_max_packs
+    metrics["dream_worker_mode"] = dream_worker_mode
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": ANALYSIS_KIND,
@@ -494,6 +664,136 @@ def run_clean_source_replay_analysis(
             "full_history_coverage",
         ],
     }
+
+
+def run_clean_source_dir_replay_analysis(
+    *,
+    clean_source_dir: Path,
+    dataset_id: str,
+    registry_dir: Path | None = None,
+    working_memory_path: Path | None = None,
+    max_threads: int = 200,
+    max_user_messages: int = 2000,
+    window_user_turns: int = 4,
+    salt: str = DEFAULT_SALT,
+    generated_dream_max_packs: int = 0,
+    dream_worker_mode: str = DEFAULT_DREAM_WORKER_MODE,
+    model_config: ChatClientConfig | None = None,
+    max_samples: int = 1,
+) -> dict[str, Any]:
+    events = replay_clean_source_dir_events(
+        clean_source_dir=clean_source_dir,
+        dataset_id=dataset_id,
+        registry_dir=registry_dir,
+        working_memory_path=working_memory_path,
+        max_threads=max_threads,
+        max_user_messages=max_user_messages,
+        salt=salt,
+        generated_dream_max_packs=generated_dream_max_packs,
+        dream_worker_mode=dream_worker_mode,
+        model_config=model_config,
+        max_samples=max_samples,
+    )
+    metrics = analyze_shadow_events(events, window_user_turns=window_user_turns)
+    metrics["generated_dream_max_packs"] = generated_dream_max_packs
+    metrics["dream_worker_mode"] = dream_worker_mode
+    metrics["benchmark_corpus"] = {
+        "dataset_id": dataset_id,
+        "clean_source_dir_name": clean_source_dir.name,
+        "raw_clean_source_path_emitted": False,
+        "source": "benchmark_corpus_clean_source_messages",
+    }
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": ANALYSIS_KIND,
+        "created_at": now_utc(),
+        "status": "analyzed" if events else "no_events",
+        "claim_level": "benchmark_corpus_shadow_replay_reminder_frequency",
+        "private_text_emitted": False,
+        "metrics": metrics,
+        "can_claim": [
+            "benchmark_corpus_clean_source_replay_counted_explicit_recall_reminders",
+            "benchmark_corpus_shadow_false_activation_rate_measured",
+            "shadow_assignment_and_nearest_prior_attribution_ran",
+        ],
+        "cannot_claim": [
+            "causal_real_user_behavior_lift_without_delivered_treatment",
+            "private_real_history_behavior_lift",
+            "time_causal_dream_availability_without_live_event_log",
+            "general_dream_quality",
+            "full_public_corpus_coverage_unless_limits_cover_manifest_counts",
+        ],
+    }
+
+
+def normalized_worker_mode(value: str) -> str:
+    mode = str(value or DEFAULT_DREAM_WORKER_MODE).strip().replace("-", "_")
+    if mode not in {DEFAULT_DREAM_WORKER_MODE, MODEL_BACKED_DREAM_WORKER_MODE}:
+        raise ValueError("dream worker mode must be deterministic or model_backed")
+    return mode
+
+
+def cache_contract_for_route(route: Any) -> str:
+    if getattr(route, "provider", "") == "deepseek":
+        return DEEPSEEK_PREFIX_CACHE_CONTRACT
+    capabilities = getattr(route, "capabilities", None)
+    if getattr(capabilities, "cache_metrics_kind", "") == "deepseek_prefix":
+        return DEEPSEEK_PREFIX_CACHE_CONTRACT
+    return NO_PROVIDER_CACHE_CONTRACT
+
+
+def dream_model_config_from_args(args: Any) -> tuple[ChatClientConfig, dict[str, Any]]:
+    route_name = getattr(args, "model_route", None)
+    model = str(getattr(args, "model", "") or "")
+    base_url = str(getattr(args, "base_url", "") or "")
+    api_key_env_arg = str(getattr(args, "api_key_env", DEFAULT_DEEPSEEK_API_KEY_ENV) or DEFAULT_DEEPSEEK_API_KEY_ENV)
+    explicit_model = model if model and not route_name else None
+    explicit_base_url = base_url if base_url and not route_name else None
+    explicit_api_key_env = (
+        api_key_env_arg
+        if api_key_env_arg != DEFAULT_DEEPSEEK_API_KEY_ENV and not route_name
+        else None
+    )
+    route = resolve_model_route(
+        route_name,
+        explicit_model=explicit_model,
+        explicit_base_url=explicit_base_url,
+        explicit_api_key_env=explicit_api_key_env,
+    )
+    resolved_model = route.model if not model else model
+    resolved_base_url = route.base_url if not base_url else base_url
+    resolved_api_key_env = route.api_key_env if api_key_env_arg == DEFAULT_DEEPSEEK_API_KEY_ENV else api_key_env_arg
+    key_value = os.environ.get(resolved_api_key_env)
+    if not key_value:
+        raise RuntimeError(
+            f"missing {route_service_name(route)} key; set {resolved_api_key_env} or pass --api-key-env"
+        )
+    capabilities = route.capabilities
+    thinking = str(getattr(args, "dream_model_thinking", "auto") or "auto").strip().casefold()
+    if thinking == "auto":
+        thinking_value = "enabled" if getattr(capabilities, "supports_thinking", False) else None
+    elif thinking in {"enabled", "disabled"}:
+        thinking_value = thinking
+    else:
+        raise ValueError("dream model thinking must be auto, enabled, or disabled")
+    config = ChatClientConfig(
+        api_key=str(key_value),
+        model=resolved_model,
+        base_url=resolved_base_url,
+        max_tokens=getattr(args, "max_tokens", None),
+        timeout=float(getattr(args, "dream_model_timeout", 60.0) or 60.0),
+        temperature=float(getattr(args, "dream_model_temperature", 0.0) or 0.0),
+        service_name=route_service_name(route),
+        thinking=thinking_value,
+        response_format_json=bool(getattr(capabilities, "supports_json_response", True)),
+        cache_contract=cache_contract_for_route(route),
+    )
+    return config, route_payload_with_effective_values(
+        route,
+        model=resolved_model,
+        base_url=resolved_base_url,
+        api_key_env=resolved_api_key_env,
+    )
 
 
 def test_event(
@@ -532,6 +832,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     sub = parser.add_mutually_exclusive_group()
     sub.add_argument("--analyze-log", action="store_true")
     sub.add_argument("--replay-clean-source", action="store_true")
+    sub.add_argument("--replay-clean-source-dir", type=Path)
+    parser.add_argument("--dataset-id", default="benchmark_corpus")
     parser.add_argument("--max-threads", type=int, default=200)
     parser.add_argument("--max-user-messages", type=int, default=2000)
     parser.add_argument(
@@ -540,6 +842,21 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=0,
         help="For clean-source replay only, generate this many selected dream packs in memory.",
     )
+    parser.add_argument(
+        "--dream-worker-mode",
+        choices=["deterministic", "model-backed", "model_backed"],
+        default=DEFAULT_DREAM_WORKER_MODE,
+        help="Dream row generation mode for --generate-dream-rows.",
+    )
+    parser.add_argument("--model-route", default=None)
+    parser.add_argument("--model", default="")
+    parser.add_argument("--base-url", default="")
+    parser.add_argument("--api-key-env", default=DEFAULT_DEEPSEEK_API_KEY_ENV)
+    parser.add_argument("--max-tokens", type=int, default=None)
+    parser.add_argument("--dream-model-timeout", type=float, default=60.0)
+    parser.add_argument("--dream-model-temperature", type=float, default=0.0)
+    parser.add_argument("--dream-model-thinking", choices=["auto", "enabled", "disabled"], default="auto")
+    parser.add_argument("--dream-max-samples", type=int, default=1)
     parser.add_argument("--json", action="store_true")
     return parser
 
@@ -547,7 +864,27 @@ def build_arg_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
     event_log = args.event_log or default_event_log(args.registry_dir)
-    if args.replay_clean_source:
+    dream_worker_mode = normalized_worker_mode(args.dream_worker_mode)
+    model_config = None
+    model_route_payload = None
+    if dream_worker_mode == MODEL_BACKED_DREAM_WORKER_MODE and args.generate_dream_rows > 0:
+        model_config, model_route_payload = dream_model_config_from_args(args)
+    if args.replay_clean_source_dir:
+        payload = run_clean_source_dir_replay_analysis(
+            clean_source_dir=args.replay_clean_source_dir,
+            dataset_id=args.dataset_id,
+            registry_dir=args.registry_dir,
+            working_memory_path=args.working_memory,
+            max_threads=args.max_threads,
+            max_user_messages=args.max_user_messages,
+            window_user_turns=args.window_user_turns,
+            salt=args.salt,
+            generated_dream_max_packs=args.generate_dream_rows,
+            dream_worker_mode=dream_worker_mode,
+            model_config=model_config,
+            max_samples=args.dream_max_samples,
+        )
+    elif args.replay_clean_source:
         payload = run_clean_source_replay_analysis(
             registry_dir=args.registry_dir,
             working_memory_path=args.working_memory,
@@ -556,9 +893,14 @@ def main(argv: list[str] | None = None) -> int:
             window_user_turns=args.window_user_turns,
             salt=args.salt,
             generated_dream_max_packs=args.generate_dream_rows,
+            dream_worker_mode=dream_worker_mode,
+            model_config=model_config,
+            max_samples=args.dream_max_samples,
         )
     else:
         payload = run_shadow_ab_analysis(event_log=event_log, window_user_turns=args.window_user_turns)
+    if model_route_payload and isinstance(payload.get("metrics"), dict):
+        payload["metrics"]["dream_model_route"] = model_route_payload
     text = json.dumps(payload, ensure_ascii=False, indent=None if args.json else 2)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

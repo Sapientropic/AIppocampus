@@ -7,7 +7,9 @@ agent to recall prior context with wording such as "回忆", "之前说过", or 
 The prompt hook integration is opt-in. By default it records hash-only shadow
 events and does not change foreground recall. The historical replay below uses
 real local clean-source user turns plus generated in-memory dream rows; it is a
-smoke of the measurement design, not causal treatment evidence.
+smoke of the measurement design, not causal treatment evidence. This dated run
+used the deterministic structural dream-worker mode; use the later
+benchmark-corpus evidence for a model-backed background-worker replay.
 
 ## Command
 

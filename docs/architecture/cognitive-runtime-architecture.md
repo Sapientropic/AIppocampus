@@ -351,8 +351,10 @@ aggregate and sanitized; it is not a live user-behavior A/B test.
 boundary. Prompt hooks can record hash-only shadow events for baseline and
 dream arms without changing foreground recall; later analysis counts explicit
 user reminder language and attributes each reminder to only the nearest prior
-eligible exposure. Historical clean-source replay is diagnostic only. Causal
-user-behavior lift requires delivered treatment/control arms.
+eligible exposure. Historical clean-source replay and public benchmark-corpus
+directory replay are diagnostic only; the latter is useful as a negative-control
+over-personalization stress test. Causal user-behavior lift requires delivered
+treatment/control arms.
 
 Background-adjudicated dream hypotheses can project onto the existing
 working-memory substrate for recall, ambient, and reflection consumers, but
