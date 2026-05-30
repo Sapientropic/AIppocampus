@@ -27,6 +27,7 @@ import smoke_real_provider_encrypted_sync  # noqa: E402
 
 import encrypted_sync_bundle  # noqa: E402
 import sync_bundle  # noqa: E402
+import sync_contract  # noqa: E402
 import sync_object_storage  # noqa: E402
 
 
@@ -198,6 +199,23 @@ output.write_bytes(b"FAKEAGE\\n" + base64.b64encode(data))
         self.assertTrue(push["ok"], push)
         self.assertEqual(push["backend"], "http_object_store")
         self.assertGreater(push["object_count"], 1)
+        uploaded_manifest = json.loads(
+            (self.bucket / self.prefix / sync_bundle.SYNC_MANIFEST_NAME).read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(uploaded_manifest["bundle_format"], sync_contract.SYNC_BUNDLE_KIND)
+        self.assertEqual(
+            uploaded_manifest["privacy_boundary"],
+            sync_contract.sync_privacy_boundary(include_raw=False),
+        )
+        self.assertEqual(
+            uploaded_manifest["transport"],
+            sync_contract.sync_transport_metadata(
+                kind="http_object_store",
+                manifest_object=f"{self.prefix}/{sync_bundle.SYNC_MANIFEST_NAME}",
+            ),
+        )
         self.assertTrue(status["ok"], status)
         self.assertEqual(status["backend"], "http_object_store")
         self.assertTrue(pull["ok"], pull)

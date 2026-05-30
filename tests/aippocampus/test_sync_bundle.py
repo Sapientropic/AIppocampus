@@ -22,6 +22,7 @@ import smoke_alternate_runtime_sync  # noqa: E402
 import smoke_cross_device_sync  # noqa: E402
 
 import sync_bundle  # noqa: E402
+import sync_contract  # noqa: E402
 
 
 class SyncBundleTests(unittest.TestCase):
@@ -109,6 +110,12 @@ class SyncBundleTests(unittest.TestCase):
         delta = manifest["clean_source_delta"]
 
         self.assertTrue(result["ok"])
+        self.assertEqual(manifest["kind"], sync_bundle.SYNC_BUNDLE_KIND)
+        self.assertEqual(manifest["backend"], sync_bundle.LOCAL_FOLDER_BACKEND)
+        self.assertEqual(
+            manifest["privacy_boundary"],
+            sync_contract.sync_privacy_boundary(include_raw=False),
+        )
         self.assertFalse(manifest["raw_rollout_included"])
         self.assertIn("registry/threads.json", relative_paths)
         self.assertIn("registry/semantic_triggers.jsonl", relative_paths)

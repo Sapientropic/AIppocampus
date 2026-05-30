@@ -12,9 +12,14 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from aippocampuslib import aippocampus_registry_dir, file_sha256, now_utc, safe_path_name
+from sync_contract import (
+    LOCAL_FOLDER_BACKEND,
+    SYNC_BUNDLE_KIND,
+    SYNC_MANIFEST_NAME,
+    SYNC_SCHEMA_VERSION,
+    build_sync_manifest,
+)
 
-SYNC_SCHEMA_VERSION = 1
-SYNC_MANIFEST_NAME = "aippocampus-sync-manifest.json"
 CLEAN_SOURCE_CHUNK_BYTES = 1024 * 1024
 CLEAN_SOURCE_CHUNK_STORE = "clean-source-chunks"
 CLEAN_SOURCE_CHUNK_MANIFEST = Path(CLEAN_SOURCE_CHUNK_STORE) / "manifest.json"
@@ -70,7 +75,7 @@ def load_sync_manifest(path: Path, *, missing_ok: bool = False) -> dict[str, Any
 def validate_existing_sync_manifest(path: Path) -> dict[str, Any]:
     manifest = load_sync_manifest(path)
     if (
-        manifest.get("kind") != "aippocampus_sync_bundle"
+        manifest.get("kind") != SYNC_BUNDLE_KIND
         or manifest.get("schema_version") != SYNC_SCHEMA_VERSION
     ):
         raise SyncManifestError(f"unrecognized sync manifest: {path}")
@@ -392,21 +397,12 @@ def push_sync_bundle(
             copied.append(sync_file_entry(sync_root, relative_path))
 
     copied.sort(key=lambda item: item["path"])
-    manifest = {
-        "schema_version": SYNC_SCHEMA_VERSION,
-        "kind": "aippocampus_sync_bundle",
-        "created_at": now_utc(),
-        "backend": "local_folder",
-        "raw_rollout_included": include_raw,
-        "clean_source_delta": clean_source_delta,
-        "files": copied,
-        "file_count": len(copied),
-        "privacy_boundary": {
-            "clean_source_is_private": True,
-            "raw_rollout_default": "excluded",
-            "raw_rollout_included_only_with": "--include-raw",
-        },
-    }
+    manifest = build_sync_manifest(
+        backend=LOCAL_FOLDER_BACKEND,
+        clean_source_delta=clean_source_delta,
+        files=copied,
+        include_raw=include_raw,
+    )
     manifest_path = sync_root / SYNC_MANIFEST_NAME
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     return {

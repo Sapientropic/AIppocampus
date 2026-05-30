@@ -64,16 +64,35 @@ sync, or retention policy.
 
 ## Sync And Vault Projection
 
+This section is the canonical sync responsibility map. Keep README and install
+docs focused on commands; put sync ownership changes here instead of mirroring
+the contract across multiple docs.
+
+`sync_contract.py` owns reusable manifest, transport, and privacy metadata
+helpers. `sync_bundle.py` owns the local bundle CLI plus portable registry
+locators, clean-source chunk selection, relative-path validation,
+managed-directory safety, and conflict-preserving pull behavior. Transport
+modules must reuse those contracts rather than inventing their own manifest,
+file-selection, path, conflict, or raw-rollout defaults.
+
 | Script or group | Purpose | Invocation route | Key dependencies | Status |
 |---|---|---|---|---|
-| `sync_bundle.py` | Local-folder clean-source bundle sync and manifest semantics. | CLI/sync docs. | Content-addressed chunks, path repair, conflict policy. | Public entrypoint |
+| `sync_contract.py`, `sync_bundle.py` | Shared manifest/privacy contract plus local-folder clean-source bundle sync. | CLI/sync docs. | Content-addressed chunks, path repair, conflict policy. | Public entrypoint |
 | `sync_object_storage.py`, `object_storage_client.py`, `object_storage_providers.py` | HTTP/S3/R2/GCS-compatible object transport. | CLI/sync docs. | Shared bundle semantics, provider config, no secret logging. | Public entrypoint |
 | `encrypted_sync_bundle.py`, `encrypted_sync_object_storage.py`, `encrypted_sync_crypto.py` | Age-backed encrypted sync overlay. | CLI/encrypted sync docs. | Sync bundle/object transport plus key handling. | Public entrypoint |
 | `vault_sync_utils.py`, `sync_vault.py`, `vault_notes.py`, `vault_dashboard.py` | Human-readable vault projection and dashboard. | CLI/manual projection. | Clean source and registry rows; not a transport backend. | Public entrypoint |
 
+The local-folder route writes the bundle directly. The object-storage route is
+only a PUT/GET adapter over the same bundle. The encrypted route wraps a
+temporary plaintext bundle with `age`, refuses mixed plaintext/encrypted roots
+or object prefixes, and imports through the same repair/pull semantics after
+decryption. `sync_vault.py` is a projection surface, not a third transport
+implementation.
+
 Sync code must preserve raw-rollout opt-in, path traversal checks, conflict
-preservation, and encrypted-sync requirements. `sync_vault.py` is a projection
-surface, not a third transport implementation.
+preservation, and encrypted-sync requirements. If a future refactor touches
+transport or encryption, add tests that prove the shared manifest privacy
+boundary still reaches local-folder, object-storage, and encrypted paths.
 
 ## Subconscious Jobs And External Models
 
