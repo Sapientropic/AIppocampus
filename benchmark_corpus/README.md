@@ -81,7 +81,9 @@ identity, or recall over a complete future window. The flagship next slice
 should use VCS-derived hard events such as PR merge/reject, issue reopen,
 commit revert, patchset supersession, and SATD/workaround removal. See
 [`docs/evidence/benchmarks/public-longitudinal-users.md`](../docs/evidence/benchmarks/public-longitudinal-users.md)
-for the methodology and claim boundary.
+for the methodology and claim boundary. The latest dated local measurement is
+recorded in
+[`docs/evidence/benchmarks/public-longitudinal-users-measurement-2026-05-31.md`](../docs/evidence/benchmarks/public-longitudinal-users-measurement-2026-05-31.md).
 
 Run the LoCoMo public longitudinal-users control:
 

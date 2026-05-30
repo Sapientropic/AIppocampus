@@ -5,6 +5,9 @@ coding implicit-knowledge scenario in
 [`docs/research/agent-coding-context-analysis.md`](../../research/agent-coding-context-analysis.md).
 It is the evidence companion for GitHub issue #172.
 
+Latest dated measurement:
+[`public-longitudinal-users-measurement-2026-05-31.md`](public-longitudinal-users-measurement-2026-05-31.md).
+
 ## Purpose
 
 AIppocampus should help agents remember hidden engineering context without

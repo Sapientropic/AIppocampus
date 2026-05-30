@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "kind": "aippocampus_public_longitudinal_users_measurement_report",
+  "report_date": "2026-05-31",
+  "source_pr": "https://github.com/Sapientropic/AIppocampus/pull/173",
+  "tracks": {
+    "locomo_public_users_control": {
+      "role": "real public longitudinal conversation-control users",
+      "gold": {
+        "ok": true,
+        "user_count": 10,
+        "session_count": 272,
+        "source_event_count": 5882,
+        "scored_case_count": 1973,
+        "full_evidence_recall_rate": 1.0,
+        "exact_evidence_match_rate": 1.0,
+        "missing_evidence_id_count": 0,
+        "false_positive_evidence_id_count": 0
+      },
+      "empty": {
+        "ok": false,
+        "full_evidence_recall_rate": 0.0,
+        "exact_evidence_match_rate": 0.0,
+        "missing_evidence_id_count": 2789
+      },
+      "artifact_smoke": {
+        "ok": true,
+        "case_pack_written": true,
+        "prediction_template_written": true,
+        "case_pack_raw_text_emitted": true,
+        "prediction_template_raw_text_emitted": false,
+        "scored_case_count": 3
+      },
+      "claim_boundary": "LoCoMo supplies public same-conversation longitudinal users with QA evidence dialogue ids. This runner scores evidence retrieval only; it is a control for long-term conversation source recovery, not coding tacit-constraint recall."
+    },
+    "public_pseudo_user_contract_smoke": {
+      "role": "checked-in synthetic coding implicit-knowledge scoring contract",
+      "gold": {
+        "ok": true,
+        "pseudo_user_count": 3,
+        "total_cases": 15,
+        "overall_score": 1.0,
+        "decision_accuracy": 1.0,
+        "anti_drift_pass_rate": 1.0,
+        "reopen_decision_accuracy": 1.0
+      },
+      "empty": {
+        "ok": false,
+        "overall_score": 0.3,
+        "decision_accuracy": 0.0,
+        "anti_drift_pass_rate": 1.0,
+        "missing_prediction_count": 0
+      },
+      "claim_boundary": "checked-in public synthetic pseudo-users with explicit source events and gold labels. This is a scoring-contract smoke; the flagship recall track should use VCS-derived hard future events such as merge/reject/reopen/revert/supersede/removal."
+    },
+    "vcs_future_event_recall_scaffold": {
+      "role": "recall-aware hard future-event scaffold",
+      "gold": {
+        "ok": true,
+        "future_event_gold_count": 6,
+        "future_event_flag_recall_rate": 1.0,
+        "future_event_flag_precision": 1.0,
+        "false_negative_count": 0,
+        "false_positive_count": 0
+      },
+      "empty": {
+        "ok": false,
+        "future_event_flag_recall_rate": 0.0,
+        "false_negative_count": 6,
+        "false_positive_count": 0
+      },
+      "claim_boundary": "V1 is a VCS-shaped public contract fixture. It proves recall-aware scoring semantics, not wild MSR/Gerrit/SATD corpus performance."
+    },
+    "rollout_behavior_event_recall_scaffold": {
+      "role": "behavior-backed rollout hard-event scaffold",
+      "gold": {
+        "ok": true,
+        "future_event_gold_count": 3,
+        "future_event_flag_recall_rate": 1.0,
+        "future_event_flag_precision": 1.0,
+        "false_negative_count": 0,
+        "false_positive_count": 0
+      },
+      "empty": {
+        "ok": false,
+        "future_event_flag_recall_rate": 0.0,
+        "false_negative_count": 3,
+        "false_positive_count": 0
+      },
+      "claim_boundary": "V1 is a hard-event public contract fixture. It proves recall-aware scoring semantics over deterministic rollout behavior traces, not live agent quality or private real-history continuity."
+    }
+  },
+  "privacy_boundary": {
+    "committed_report_contains_raw_locomo_text": false,
+    "committed_report_contains_private_user_data": false,
+    "locomo_case_pack_is_local_only": true
+  },
+  "cannot_claim": [
+    "external_baseline_superiority",
+    "answer_generation_quality",
+    "private_real_history_quality",
+    "coding_tacit_constraint_quality_from_locomo",
+    "wild_vcs_corpus_quality"
+  ]
+}

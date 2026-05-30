@@ -980,7 +980,7 @@ def run_semantic_gate(
     if route.provider != "deepseek" and capabilities:
         worker_names = worker_names[: max(1, int(capabilities.safe_default_concurrency or 1))]
     deadline = float(deadline_seconds) if deadline_seconds and deadline_seconds > 0 else None
-    worker_kwargs = {
+    worker_kwargs: dict[str, Any] = {
         "payload": payload,
         "api_key": str(key_value),
         "model": resolved_model,

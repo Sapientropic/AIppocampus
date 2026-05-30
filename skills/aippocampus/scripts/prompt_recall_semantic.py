@@ -64,11 +64,10 @@ def run_semantic_gate_for_prompt(
                 effective_timeout=None,
                 max_elapsed_ms=max_elapsed_ms,
             )
+        effective_timeout = float(semantic_worker_timeout_for_deadline(budgeted_timeout))
         budget = {
             "requested_timeout": float(semantic_timeout),
-            "effective_timeout": float(
-                semantic_worker_timeout_for_deadline(budgeted_timeout)
-            ),
+            "effective_timeout": effective_timeout,
             "overall_deadline_seconds": float(budgeted_timeout),
             "max_elapsed_ms": max_elapsed_ms,
             "budget_clipped": float(budgeted_timeout) != float(semantic_timeout),
@@ -84,7 +83,7 @@ def run_semantic_gate_for_prompt(
                 semantic_triggers_path=semantic_triggers_file,
                 cache_path=Path(semantic_cache_path).resolve() if semantic_cache_path else None,
                 mode=semantic_gate_mode,
-                timeout=budget["effective_timeout"],
+                timeout=effective_timeout,
                 deadline_seconds=budgeted_timeout,
             )
             result.setdefault("budget", budget)
