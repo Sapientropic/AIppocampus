@@ -148,6 +148,72 @@ class SyncBundleTests(unittest.TestCase):
         self.assertIsNone(portable_paths["workspace"])
         self.assertIsNone(portable_paths["rollout"])
 
+    def test_push_excludes_generated_sqlite_pointer_from_default_sync(self) -> None:
+        (self.index_dir / "source_index.sqlite").write_bytes(b"stable sqlite cache")
+        versions = self.index_dir / "versions"
+        versions.mkdir()
+        (versions / "source_index-current.sqlite").write_bytes(b"versioned sqlite cache")
+        (self.index_dir / "source_index.pointer.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "kind": "aippocampus_sqlite_index_pointer",
+                    "stable": "source_index.sqlite",
+                    "current": "versions/source_index-current.sqlite",
+                    "last_known_good": "source_index.sqlite",
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        sync_bundle.push_sync_bundle(self.registry, self.sync_dir)
+
+        manifest = json.loads(
+            (self.sync_dir / sync_bundle.SYNC_MANIFEST_NAME).read_text(encoding="utf-8")
+        )
+        relative_paths = {item["path"] for item in manifest["files"]}
+        self.assertFalse(any(path.endswith(".sqlite") for path in relative_paths))
+        self.assertFalse(any(path.endswith("source_index.pointer.json") for path in relative_paths))
+        portable_registry = json.loads(
+            (self.sync_dir / "registry" / "threads.json").read_text(encoding="utf-8")
+        )
+        self.assertIsNone(portable_registry["threads"][0]["paths"]["sqlite"])
+
+        target_registry = self.root / "target-no-generated-cache"
+        sync_bundle.pull_sync_bundle(self.sync_dir, target_registry)
+        repaired = json.loads((target_registry / "threads.json").read_text(encoding="utf-8"))
+        self.assertIsNone(repaired["threads"][0]["paths"]["sqlite"])
+
+    def test_path_repair_resolves_target_local_sqlite_pointer(self) -> None:
+        sync_bundle.push_sync_bundle(self.registry, self.sync_dir)
+        target_registry = self.root / "target-with-local-cache"
+        sync_bundle.pull_sync_bundle(self.sync_dir, target_registry)
+        target_index = target_registry / "threads" / "session-test" / "index"
+        target_versions = target_index / "versions"
+        target_versions.mkdir()
+        current = target_versions / "source_index-current.sqlite"
+        current.write_bytes(b"locally rebuilt sqlite cache")
+        (target_index / "source_index.pointer.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "kind": "aippocampus_sqlite_index_pointer",
+                    "stable": "source_index.sqlite",
+                    "current": "versions/source_index-current.sqlite",
+                    "last_known_good": "source_index.sqlite",
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        repair = sync_bundle.repair_registry_locators(target_registry)
+
+        self.assertTrue(repair["ok"], repair)
+        repaired = json.loads((target_registry / "threads.json").read_text(encoding="utf-8"))
+        self.assertEqual(Path(repaired["threads"][0]["paths"]["sqlite"]).resolve(), current.resolve())
+
     def test_push_delta_reuses_unchanged_clean_source_chunks(self) -> None:
         sync_bundle.push_sync_bundle(self.registry, self.sync_dir)
         first = json.loads(

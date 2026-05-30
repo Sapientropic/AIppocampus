@@ -57,7 +57,10 @@ remaining work is visible instead of hidden behind one broad issue:
   cross-platform operation. Main index publishing now uses a shared
   same-directory writer lease, versioned index pointer, last-known-good
   fallback, and SQLite backup/WAL stable refresh instead of replacing a live
-  `source_index.sqlite` file.
+  `source_index.sqlite` file. Sync/import/export now have explicit generated
+  cache rules: default sync excludes SQLite/pointer/versioned caches, target
+  repair resolves only target-local generated caches, and portable export/import
+  reports pointer-resolved current SQLite when a bundle carries one.
 
 Completed foundation:
 
@@ -171,7 +174,9 @@ Completed foundation:
      `tools/aippocampus/smoke/smoke_synthetic_scale_capacity.py`; segmented
      index rebuilds now have a single-writer lease and last-known-good recovery.
      Main indexes now have versioned pointer publishing for Windows locked-file
-     fallback while preserving `source_index.sqlite` compatibility.
+     fallback while preserving `source_index.sqlite` compatibility. Default
+     sync keeps generated SQLite and pointer files out of the portable source
+     set while still repairing target-local rebuilt cache locators.
 
 ## Near-term implementation order
 
@@ -204,8 +209,10 @@ Completed foundation:
    index rebuilds now use `.rebuild.lock` single-writer discipline, staged
    publish, and last-known-good restoration. Main indexes now use a
    `source_index.pointer.json` current/LKG pointer and stable SQLite backup
-   refresh; broader physical Windows sync stress remains a release-readiness
-   exercise, not a fast-tier claim.
+   refresh. Default sync excludes generated SQLite caches and pointer files;
+   import/export reports pointer-resolved current SQLite for explicit bundles.
+   Broader physical multi-device stress remains a release-readiness exercise,
+   not a fast-tier claim.
 
 ## Cross-references
 

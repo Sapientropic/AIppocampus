@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from aippocampuslib import aippocampus_registry_dir, file_sha256, now_utc, safe_path_name
+from artifact_publish import resolve_sqlite_index_path
 from sync_contract import (
     LOCAL_FOLDER_BACKEND,
     SYNC_BUNDLE_KIND,
@@ -228,11 +229,10 @@ def portable_registry_for_sync(registry_dir: Path, *, include_raw: bool) -> dict
             if (index_root / "messages.jsonl").is_file()
             else None
         )
-        paths["sqlite"] = (
-            (thread_root / "index" / "source_index.sqlite").as_posix()
-            if (index_root / "source_index.sqlite").is_file()
-            else None
-        )
+        # Generated SQLite caches, including versioned pointer targets, are not
+        # a portable source surface. Target devices repair this locator only
+        # after a local rebuild creates a cache in the target registry.
+        paths["sqlite"] = None
         raw_name = Path("raw-rollouts") / f"{thread_dir_name(key)}.jsonl"
         raw_source = paths.get("rollout")
         paths["rollout"] = (
@@ -540,11 +540,8 @@ def repair_registry_locators(target_registry: Path) -> dict[str, Any]:
                 if (index_root / "messages.jsonl").is_file()
                 else None
             )
-            paths["sqlite"] = (
-                str(index_root / "source_index.sqlite")
-                if (index_root / "source_index.sqlite").is_file()
-                else None
-            )
+            sqlite_path = resolve_sqlite_index_path(index_root / "source_index.sqlite")
+            paths["sqlite"] = str(sqlite_path) if sqlite_path.is_file() else None
         else:
             unresolved.append(
                 {"thread_key": key, "path": str(thread_root), "code": "missing_thread_store"}

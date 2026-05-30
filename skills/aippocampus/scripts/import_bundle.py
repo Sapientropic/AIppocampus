@@ -10,6 +10,8 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+from artifact_publish import index_pointer_path, resolve_sqlite_index_path
+
 
 def timestamp_slug() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -85,12 +87,18 @@ def main() -> int:
     if not args.no_anchor:
         append_import_anchor(dest / "thread-anchors.md", bundle, extract_dir, manifest)
 
+    sqlite_index = extract_dir / "index" / "source_index.sqlite"
+    sqlite_current = resolve_sqlite_index_path(sqlite_index)
+    sqlite_pointer = index_pointer_path(sqlite_index)
+
     print(
         json.dumps(
             {
                 "extracted_to": str(extract_dir),
                 "manifest": str(manifest_path) if manifest_path.exists() else None,
-                "sqlite_index": str(extract_dir / "index" / "source_index.sqlite"),
+                "sqlite_index": str(sqlite_index),
+                "sqlite_current": str(sqlite_current) if sqlite_current.is_file() else None,
+                "sqlite_pointer": str(sqlite_pointer) if sqlite_pointer.is_file() else None,
                 "messages_jsonl": str(extract_dir / "index" / "messages.jsonl"),
                 "graph_json": str(extract_dir / "index" / "graph.json"),
             },

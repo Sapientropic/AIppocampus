@@ -42,6 +42,26 @@ future entrypoint writes generated SQLite directly, it must reuse
 `scripts/artifact_publish.py` rather than creating a parallel lock or retry
 scheme.
 
+Writer coordination entrypoints:
+
+- `build_index.py`: owns main index publish; uses `.index-publish.lock`,
+  versioned SQLite pointer, last-known-good fallback, and stable SQLite backup.
+- `build_segments.py`: owns segment shard publish; uses `.rebuild.lock`, staged
+  segment dirs, and the shared lease helper.
+- `aippocampus_lifecycle_hook.py`: orchestrates `build_index.py`,
+  `build_segments.py`, and registry commands; it must not write generated
+  SQLite directly.
+- `aippocampus_maintenance.py`: threshold-style operator command; it delegates
+  main and segment SQLite writes to the builders.
+- `sync_vault.py`: runs maintenance first unless `--no-hook`, then reads health,
+  messages JSONL, anchors, and registry metadata for vault/dashboard output.
+- `sync_bundle.py`: syncs manifests, graph metadata, and content-addressed clean
+  source by default; generated SQLite, pointer files, and versioned caches are
+  not portable source files.
+- `export_bundle.py` / `import_bundle.py`: explicit portable bundle path; export
+  may include generated index files inside the bundle, and import reports both
+  the stable search path and the pointer-resolved current SQLite path.
+
 ## Checkpoints And Anchors
 
 Use `checkpoint.py` for hippocampus-like consolidation. By default it suggests a
@@ -90,9 +110,11 @@ segments are staged before publish, and failed publish restores last-known-good
 Cross-device sync treats SQLite as a rebuildable generated cache, not durable
 truth. `sync_bundle.py` syncs registry manifests, graph metadata, and
 content-addressed clean source by default; it does not require generated SQLite
-files to move between devices. Target devices repair registry locators to local
-artifacts when present and should rebuild missing SQLite from clean source or raw
-rollout rather than trusting a stale source-device lock state.
+files, pointer files, or versioned SQLite caches to move between devices. Target
+devices repair registry locators to local generated caches only when those caches
+already exist locally; otherwise `paths.sqlite` stays unresolved and the target
+should rebuild from clean source or raw rollout rather than trusting a stale
+source-device lock state.
 
 ## Retention And Cold Archive
 

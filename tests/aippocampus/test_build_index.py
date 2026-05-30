@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -125,6 +127,25 @@ class BuildIndexTests(unittest.TestCase):
                     [TURN],
                     rag_cache=False,
                 )
+
+    def test_artifact_lease_recovers_stale_lease_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            lease = root / ".index-publish.lock"
+            lease.write_text("interrupted writer\n", encoding="utf-8")
+            stale_time = time.time() - 10
+            os.utime(lease, (stale_time, stale_time))
+
+            with artifact_publish.artifact_lease(
+                root,
+                ".index-publish.lock",
+                stale_after_seconds=1,
+            ) as active:
+                self.assertEqual(active, lease)
+                payload = json.loads(lease.read_text(encoding="utf-8"))
+                self.assertEqual(payload["kind"], "aippocampus_artifact_writer_lease")
+
+            self.assertFalse(lease.exists())
 
     def test_locked_legacy_destination_publishes_versioned_current(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

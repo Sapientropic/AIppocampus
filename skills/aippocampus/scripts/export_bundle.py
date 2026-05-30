@@ -71,8 +71,11 @@ def write_handoff(path: Path, manifest: dict, include_raw: bool) -> None:
         "",
         "```powershell",
         'python "$env:CODEX_HOME\\skills\\aippocampus\\scripts\\import_bundle.py" "<this zip>"',
-        'python "$env:CODEX_HOME\\skills\\aippocampus\\scripts\\search_rollout.py" "keyword" --index "<extracted>\\source_index.sqlite"',
+        'python "$env:CODEX_HOME\\skills\\aippocampus\\scripts\\search_rollout.py" "keyword" --index "<extracted>\\index\\source_index.sqlite"',
         "```",
+        "",
+        "`search_rollout.py` resolves the version pointer when the bundle carries",
+        "`index/source_index.pointer.json` and `index/versions/source_index-*.sqlite`.",
         "",
     ]
     path.write_text("\n".join(lines), encoding="utf-8")
