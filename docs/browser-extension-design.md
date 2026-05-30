@@ -6,6 +6,55 @@
 > browser DOM/API details, and third-party project status are research leads
 > until re-verified from primary sources before implementation or publication.
 
+## 0. 平台复核快照（2026-05-30）
+
+本节是 #60 的 source-linked verification note。它只确认官方平台边界和
+MVP 方向，不证明任何当前 Claude.ai / ChatGPT DOM selector 或内部端点
+仍然可用。
+
+### 可作为 MVP 的路线
+
+当前最稳的本地 MVP 仍是 Claude.ai 上的 prompt 层虚拟
+`memory_search`：扩展或用户脚本只做本地捕获、搜索、脱敏、截断和显式
+结果交接，不注入官方 tool schema，不依赖内部 REST 端点作为稳定合同。
+内部 API、DOM selector、cookie 名称、SSE 格式只能作为 dated local
+observations；每次进入实现前都要重新实测。
+
+### 官方路线边界
+
+- Claude 自定义 connectors 已支持 remote MCP，但 Claude 从 Anthropic 云
+  基础设施连接到公开可达的 MCP server；本地 `claude_desktop_config.json`
+  里的 local MCP 不适用于 claude.ai。见 Anthropic Help Center:
+  <https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp>。
+- Anthropic API 也有 MCP connector，但它面向 Messages API、remote MCP
+  server 和 beta header，不等于 claude.ai 页面扩展能稳定注入本地工具。
+  见 Anthropic API docs:
+  <https://platform.claude.com/docs/en/agents-and-tools/mcp-connector>。
+- OpenAI Apps SDK / ChatGPT apps 是官方 ChatGPT 平台路线，基于 MCP，
+  仍处 preview / beta 流程，需要 developer mode、MCP endpoint、测试和
+  发布审核；它不是内部 `/backend-api/*` 端点的稳定开发合同。见
+  <https://help.openai.com/en/articles/12515353-build-with-the-apps-sdk> 和
+  <https://help.openai.com/en/articles/12584461-developer-mode-and-mcp-apps-in-chatgpt>。
+- OpenAI API 的 remote MCP / connectors 默认会在向 MCP server 分享数据前
+  请求审批，并把 remote MCP / connector 视为会带来敏感数据和第三方服务
+  风险的 powerful feature。见
+  <https://developers.openai.com/api/docs/guides/tools-connectors-mcp>。
+- Chrome MV3 应按最小权限设计：优先 `activeTab`、用户触发和
+  optional host permissions，而不是默认全站 host access。见 Chrome
+  extension permissions docs:
+  <https://developer.chrome.com/docs/extensions/reference/api/permissions>。
+
+### Consent / privacy boundary
+
+- Capture 默认关闭；用户必须对具体站点或会话显式开启。
+- Injection 默认关闭或逐次确认；返回结果必须可见、可撤回、可停止。
+- 本地 IndexedDB / storage 只保存用户明确允许的对话片段；不要默认抓取
+  所有 Claude.ai / ChatGPT 页面。
+- 搜索结果交给模型前必须经过脱敏、prompt-injection 检测、长度截断和
+  source-boundary 标注。
+- `memory_save`、自动加权、跨设备同步、remote MCP、ChatGPT Apps SDK、
+  API 层 tool injection 都不属于第一版 Claude.ai local MVP。
+
 ## 1. 缘起
 
 知乎用户「一只狗kenny」描述了一个精确的痛：
@@ -225,21 +274,27 @@ MVP 只做 Claude.ai。理由：
 
 ## 8. MVP 范围
 
-**目标**：用 Tampermonkey 脚本验证完整链路。
+**目标（经 2026-05-30 复核后收窄）**：用 Claude.ai Tampermonkey /
+browser-extension local MVP 验证 prompt 层虚拟 `memory_search`，不把
+内部 API 或官方 remote MCP 当成第一版稳定路线。
 
-1. **对话自动捕获**：轮询 Claude.ai 内部 API，新消息存入 IndexedDB
+1. **显式开启捕获**：用户对当前站点 / 当前会话开启后，才把消息片段存入
+   IndexedDB
 2. **Prompt 层虚拟工具**：在对话开头注入 memory_search 工具定义
 3. **Tool call 解析**：从 Claude 流式响应中提取 `<memory_search>` 标签
 4. **本地搜索**：MiniSearch 索引 + CJK 分词（移植自 retrieval.py）
 5. **脱敏管线**：返回结果前强制脱敏（移植自 aippocampuslib.py）
-6. **结果注入**：构造 tool_result 通过 DOM 注入回对话
+6. **结果交接**：先用可见、可确认的文本/DOM handoff；只有实测后再探索
+   更自动的 DOM 注入
 
 **不在 MVP 中**：
-- memory_save 工具（先用自动保存）
+- memory_save 工具（第一版只做用户显式开启后的被动捕获）
 - Side Panel UI
 - 概念图谱
 - 跨设备同步
 - 多平台支持
+- Claude remote MCP connector
+- ChatGPT Apps SDK / 内部 `/backend-api/*` 适配
 
 ## 9. 多 Agent 架构评审（Kimi + Gemini 讨论记录）
 
@@ -304,6 +359,10 @@ Phase 3（扩展）
 ## 10. ChatGPT 拦截可行性修正（调研假设，待源核验）
 
 > §9 中 Kimi 判断「ChatGPT 网页端 API 拦截极难」——本节记录一个待验证的反向假设：该判断可能不适用于浏览器扩展场景。
+>
+> 2026-05-30 复核更新：本节保留为历史调研线索。ChatGPT 的官方路线应
+> 优先看 Apps SDK / developer mode / MCP apps；内部 `backend-api` 端点不
+> 作为 AIppocampus 实现或发布声明的稳定依据。
 
 ### 待核验事实
 
