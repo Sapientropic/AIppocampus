@@ -285,6 +285,25 @@ handoff context.
      subconscious review/router path, then evaluate selected real-history packs
      before allowing dream output to influence recall or reflection space.
 
+18. Reflection-space topology and feedback MVP
+   - Source: `docs/research/reflection-space.md`,
+     `docs/research/journey-tracking.md`,
+     `docs/research/dream-task-design.md`, and
+     `docs/research/affect-side-channel.md`.
+   - First deterministic helper is implemented in
+     `skills/aippocampus/scripts/reflection_space.py`: it builds a small
+     inspectable Journey/Waypoint/current-frontier topology, exposes
+     `expand`/`merge`/`revive`/`abandon` actions, and converts recall effects,
+     turning points, user corrections, and map feedback into source-ref-carried
+     ranking/confidence/visibility adjustments.
+   - The helper can feed AAR/reflection strategy surfaces only. It explicitly
+     does not mutate clean source, rewrite Journey history, enforce scheduler
+     behavior, prove live user behavior change, or provide a polished visual
+     interface.
+   - Next hardening: connect reviewed adjustment rows to the actual AAR
+     strategy reader and run a small human/UI review before any star-map or
+     constellation visual upgrade.
+
 ## Do Not Start With
 
 - A generic vector database rewrite.

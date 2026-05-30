@@ -30,9 +30,12 @@ Current code implements the source-backed P1-P3 Journey core in
   terms.
 
 Still designed/deferred: live `theme_emergence` instantiation, foreground hook
-journey hints, question-tracking P4 integration, Dream/reflection-space
-consumers, HexArc structural matching, graph random walks, predictive replay,
-and private real-history journey quality claims.
+journey hints, question-tracking P4 integration, HexArc structural matching,
+graph random walks, predictive replay, and private real-history journey quality
+claims. The first reflection-space consumer now exists in
+`skills/aippocampus/scripts/reflection_space.py`, but it is an inspectable
+topology/feedback helper only, not a polished UI or foreground Journey hint
+runtime.
 
 ## TL;DR
 
