@@ -29,7 +29,8 @@ vector cells, and social place cells as phase-anchored design constraints.
 
 ## Implementation Status
 
-Current code ships Phase 1 and the first deterministic Phase 2 baseline:
+Current code does **not** fully implement this whole design. It ships Phase 1
+and the first deterministic Phase 2 baseline:
 
 - Implemented: `question_extraction` inside `JOB_SPECS`, including
   `question_candidate` and explicit `frontier_marker` output.
@@ -48,9 +49,12 @@ Current code ships Phase 1 and the first deterministic Phase 2 baseline:
   compares the compact portrait with fuller clean-source injection. It is a
   benchmark/report surface only; full clean source remains required for quotes
   and final evidence.
-- Designed/deferred: live model confirmation calls, `question_index.sqlite`,
-  dormancy detection, `theme_emergence`, theme maps, and predictive/generative
-  replay.
+- Open cleanup queue: umbrella #133, with focused follow-ups #134 through #139.
+- Designed/deferred: live model confirmation calls (#134),
+  `question_index.sqlite` / scale sidecar (#138), dormancy/resolution reporting
+  (#135), `theme_emergence` and theme maps (#136), ambient recall caps and user
+  escape hatch (#137), private real-history question-aware recall validation
+  (#139), and predictive/generative replay (#127).
 
 Do not read later architecture sections as current behavior until matching
 `JOB_SPECS`, tests, and scheduler support exist in code.
@@ -499,7 +503,9 @@ kind of work the subconscious layer is designed for:
 
 **All question/theme jobs, plus explicit frontier markers, should output to the
 existing `subconscious_jobs.jsonl`.** No new staging files. In current code,
-only Phase 1 `question_extraction` is implemented.
+Phase 1 `question_extraction` and the first deterministic Phase 2
+`question_tracking` runner are implemented; Phase 3 `theme_emergence` remains
+deferred to #136.
 
 This is the most critical design decision. The existing subconscious pipeline
 already provides:
@@ -528,13 +534,16 @@ output:
 Today, every extracted question and frontier marker from `question_extraction`
 gets quality scoring, review, and routing through the same pipeline that
 already handles `concept_edges`, `decision_evolution`, `trigger_mining`, etc.
-The Phase 2/3 rows remain design targets until implemented.
+The deterministic Phase 2 runner can also append `question_link` rows back to
+the same stream. Phase 3 `theme_candidate` rows remain design targets until
+#136 lands.
 
 ## What It Adds
 
-Phase 1 adds one job type in `subconscious_jobs.py`, one cross-cutting
-`frontier_marker` finding kind, and zero new staging files. Phase 2/3 add the
-remaining job types after the Phase 1 output proves stable.
+Phase 1 added one semantic job circuit, one cross-cutting `frontier_marker`
+finding kind, and zero new staging files. Phase 2 now has a deterministic
+follow-up runner for `question_link` rows. Phase 3 should add `theme_emergence`
+only after source-backed question links are stable enough to cluster.
 
 ### Job 1: `question_extraction`
 
@@ -801,19 +810,19 @@ are skipped, not treated as evidence.
 
 ### Changes to Existing Files
 
-**`subconscious_jobs.py`:** Register three new `JOB_SPECS` entries
-(`question_extraction`, `question_tracking`, `theme_emergence`) with their
-system prompts and output schemas. Phase 1 does not need runner-loop changes,
-but Phase 2 must honor dependency groups so tracking does not race ahead of
-fresh extraction in the high-concurrency worker pool.
+**`subconscious_jobs.py` / `subconscious_job_circuits.py`:** Current code
+registers `question_extraction` and deterministic `question_tracking`.
+`question_tracking` is not an LLM job; it runs after semantic jobs write their
+rows so it does not race fresh extraction in the high-concurrency worker pool.
+`theme_emergence` is not registered yet and is tracked by #136.
 
-**`subconscious_review.py`:** Add `question_candidate`, `question_link`, and
-`theme_candidate`, plus `frontier_marker`, to the `candidate_type` prompt string
-(currently a hardcoded pipe-delimited string in `REVIEW_SYSTEM_PROMPT`). The
-review model's output schema gains these types. Review logic stays the same.
+**`subconscious_review.py`:** The review prompt currently admits
+`question_candidate`, `question_link`, `theme_candidate`, and `frontier_marker`
+candidate types. This is only review/router readiness; it does not mean
+`theme_emergence` already writes `theme_candidate` rows.
 
-**`memory_candidate_router.py`:** Add routing rules for the three new finding
-kinds and the frontier marker:
+**`memory_candidate_router.py`:** Current code has routing rules for the
+question/theme finding kinds and the frontier marker:
 
 - `question_candidate` → default `use_silently`
 - `frontier_marker` → default `use_silently`, promote only when the current
@@ -821,6 +830,9 @@ kinds and the frontier marker:
 - `question_link` (recurring) → `use_with_source` when the hook detects
   semantic relevance to the current prompt
 - `theme_candidate` → `use_silently` (ambient scent only, never pushed)
+
+Hook-level frequency caps, dismissal/archive behavior, and source-backed
+question-aware scent are still deferred to #137.
 
 **`build_concept_graph.py`:** Do **not** add `question` or `母题` as concept
 node kinds. Instead, question, theme, and frontier findings are stored as
@@ -830,8 +842,10 @@ ephemeral questions.
 
 ### No Changes To
 
-- `subconscious_scheduler.py` for Phase 1. Phase 2 must add dependency grouping
-  or sequential job groups for extraction → tracking → emergence.
+- `subconscious_scheduler.py` for Phase 1. Current scheduler runs
+  `subconscious_jobs.py --job all`, and `question_tracking` runs after semantic
+  job writes. Phase 3 should still add explicit sequencing for extraction →
+  tracking → emergence when `theme_emergence` lands.
 - `subconscious_worker.py` — concept-edge extraction is unaffected.
 - Clean source format — questions are derived, never stored in source.
 - SKILL.md — new jobs are referenced in `references/subconscious-jobs.md`.
@@ -840,12 +854,12 @@ ephemeral questions.
 
 ### Ambient Recall Hook
 
-The existing prompt hook (`aippocampus_prompt_hook.py`) can use working memory
-entries with `finding_kind` of `question_link`, `theme_candidate`, or
-`frontier_marker` the same way it uses concept edges: as scent. By default this
-is model-facing scent, not user-facing notification. When the user's new prompt
-is semantically related to a tracked question, the hook can add compact recall
-context:
+Current code can route reviewed question/theme/frontier candidates into soft
+working memory, and the prompt hook can consume working-memory rows generically.
+The question-specific hook policy below is still a design target, tracked by
+#137. By default this should remain model-facing scent, not user-facing
+notification. When the user's new prompt is semantically related to a tracked
+question, the hook can eventually add compact recall context:
 
 ```
 [recall scent] related question: "memory continuity across agent restarts";
@@ -855,22 +869,24 @@ seen across 5 threads since April. Related old turns: t012, t047, t083.
 This is a hint, not a claim. It does not force the question into the foreground,
 and it should not phrase the hint as a judgment about the user.
 
-**Frequency control:** Each recurring question's ambient hint appears at most
-once per 7 days. Frontier hints are even more conservative: they surface only
-when the current prompt asks to resume, diagnose, or plan around unresolved
-edges. This prevents the same scent from becoming background noise.
+**Frequency control:** Target behavior for #137: each recurring question's
+ambient hint appears at most once per 7 days. Frontier hints should be even more
+conservative: they surface only when the current prompt asks to resume,
+diagnose, or plan around unresolved edges. This prevents the same scent from
+becoming background noise.
 
 ### User escape hatch
 
-If the hook surfaces a question the user does not want tracked, the user can
-say "stop tracking this" or "ignore question about X". The prompt hook
-recognizes this pattern and marks the corresponding finding as `archived` in
-working memory. It will not surface again unless the user explicitly re-opens
-the topic.
+Target behavior for #137: if the hook surfaces a question the user does not
+want tracked, the user can say "stop tracking this" or "ignore question about
+X". The prompt hook should recognize this pattern and mark the corresponding
+working-memory entry as archived or dismissed. It should not surface again
+unless the user explicitly re-opens the topic.
 
 ### Health Report
 
-`aippocampus_health.py` can report question statistics:
+Target behavior for #135: `aippocampus_health.py` or a focused health helper
+can report question statistics:
 
 - Total tracked questions.
 - Questions recurring across threads.
@@ -887,6 +903,7 @@ Note: no `stalled` metric. Dormant is neutral, not a failure signal.
 When the user asks "what was I working on last week", the recall system can
 answer from questions, not just from keywords. This is the bridge between
 AIppocampus's source-backed recall and Metaflow's question-continuity vision.
+Private real-history validation for this claim is tracked by #139.
 
 ## ADHD Design Principles
 
@@ -962,9 +979,9 @@ noisy ones. Frontier markers must feel like saved trail markers, not guilt.
   compatible `what_features`, `where_context`, `intent_orientation`,
   `phase_context`, and collaboration context lower completion thresholds,
   while orientation/context conflicts raise separation pressure.
-- Deferred: live model confirmation calls, optional `question_index.sqlite`
-  sidecar for fast lookup, dormancy detection, real-user salience calibration,
-  and live acceptance/dismissal feedback.
+- Deferred: live model confirmation calls and real-user calibration (#134),
+  optional `question_index.sqlite` sidecar for fast lookup (#138), dormancy /
+  resolution detection (#135), and live acceptance/dismissal feedback (#137).
 
 **Validation criterion:** Does the system correctly identify that "how do I
 keep agent context" and "why does Codex forget everything after compaction" are

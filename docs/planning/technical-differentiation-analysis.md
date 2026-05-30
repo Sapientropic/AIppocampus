@@ -239,7 +239,9 @@ AIppocampus 的 `working_memory.jsonl` + `subconscious_review.py` + `memory_cand
 
 ### AIppocampus 怎么做
 
-AIppocampus 的 `theme_emergence`、`question_link` 和六轴地图目前是设计骨架，不是已完成实现。预激活应建立在 Phase 1-3 产出稳定 source-backed signals 之后：
+AIppocampus 的 `question_link` 和六轴地图已有 deterministic Phase 2
+baseline，但 `theme_emergence` 仍是设计骨架，不是已完成实现。预激活应建立在
+Phase 1-3 产出稳定 source-backed signals 之后：
 
 **具体工程路径**：
 
@@ -290,7 +292,9 @@ AIppocampus 的 `theme_emergence`、`question_link` 和六轴地图目前是设�
 
 - 外部竞品判断必须保持可反驳：优先写“公开资料中尚未看到一等机制”，不要写“没有任何系统”。
 - 技术相邻能力不等于机制等价。一个系统有 importance score、sleep worker 或 memory update，不代表它实现了 SWR-inspired online tagging、reconsolidation lifecycle 或 state-dependent routing。
-- AIppocampus 自身也必须区分已实现和已设计。`question_extraction` 已实现；`question_link`、`theme_emergence`、动态阈值、preplay 仍是后续阶段。
+- AIppocampus 自身也必须区分已实现和已设计。`question_extraction` 已实现；
+  `question_link` 与动态阈值已有 deterministic baseline；`theme_emergence`、
+  preplay、真实用户确认/否认闭环仍是后续阶段。
 - 公开发布前应给竞品表补一列 source link / checked date。没有逐项验证来源时，保留为内部战略假设。
 
 External anchors checked during this revision:
