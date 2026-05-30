@@ -20,6 +20,66 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
+from aippocampus_runtime.warm_ambient.prompting import OUTPUT_BUDGET_RULES as OUTPUT_BUDGET_RULES
+from aippocampus_runtime.warm_ambient.prompting import SYSTEM_PROMPT, scout_prompt
+from aippocampus_runtime.warm_ambient.scout_profiles import (
+    DEFAULT_SCOUTS,
+    SCOUT_CANDIDATE_LIMITS,
+    SUPPORT_RANK,
+    TOPIC_EPOCH_FAMILIES,
+    VALID_DECISIONS,
+    VALID_SUPPORT_LEVELS,
+    VALID_TOPIC_EPOCH_ACTIONS,
+    VALID_VISIBILITIES,
+    expand_scout_lanes,
+    output_profile_for_family,
+    scout_lane_parts,
+)
+from aippocampus_runtime.warm_ambient.scout_profiles import (
+    FAMILY_LENS_TASKS as FAMILY_LENS_TASKS,
+)
+from aippocampus_runtime.warm_ambient.scout_profiles import (
+    FAMILY_TASKS as FAMILY_TASKS,
+)
+from aippocampus_runtime.warm_ambient.scout_profiles import (
+    FAMILY_VARIANT_LENS_TASKS as FAMILY_VARIANT_LENS_TASKS,
+)
+from aippocampus_runtime.warm_ambient.scout_profiles import (
+    LEGACY_SCOUT_ALIASES as LEGACY_SCOUT_ALIASES,
+)
+from aippocampus_runtime.warm_ambient.scout_profiles import (
+    SCOUT_FAMILIES as SCOUT_FAMILIES,
+)
+from aippocampus_runtime.warm_ambient.scout_profiles import (
+    SCOUT_OUTPUT_PROFILES as SCOUT_OUTPUT_PROFILES,
+)
+from aippocampus_runtime.warm_ambient.scout_profiles import (
+    SCOUT_PRIORITY as SCOUT_PRIORITY,
+)
+from aippocampus_runtime.warm_ambient.scout_profiles import (
+    SCOUT_VARIANTS as SCOUT_VARIANTS,
+)
+from aippocampus_runtime.warm_ambient.scout_profiles import (
+    VARIANT_LENS_TASKS as VARIANT_LENS_TASKS,
+)
+from aippocampus_runtime.warm_ambient.scout_profiles import (
+    VARIANT_TASKS as VARIANT_TASKS,
+)
+from aippocampus_runtime.warm_ambient.scout_profiles import (
+    lens_task_for as lens_task_for,
+)
+from aippocampus_runtime.warm_ambient.source_validation import (
+    _clean_source_ref,
+    _stable_id,
+    calibrate_cards,
+    prompt_trace_fallback_cards,
+    referenced_thread_keys,
+    referenced_thread_keys_from_cards,
+    source_index_from_registry,
+)
+from aippocampus_runtime.warm_ambient.source_validation import (
+    validate_card_source_refs as validate_card_source_refs,
+)
 from aippocampuslib import (
     compact_text,
     now_utc,
@@ -52,66 +112,6 @@ from registry import load_registry, registry_paths, unique_preserve
 from retrieval import split_query_terms
 from subconscious_runtime import add_usage, call_chat_json, compact_usage
 from subconscious_worker import DEFAULT_BASE_URL, DEFAULT_MODEL, clamp_confidence, parse_model_json
-from warm_ambient_prompting import OUTPUT_BUDGET_RULES as OUTPUT_BUDGET_RULES
-from warm_ambient_prompting import SYSTEM_PROMPT, scout_prompt
-from warm_ambient_scout_profiles import (
-    DEFAULT_SCOUTS,
-    SCOUT_CANDIDATE_LIMITS,
-    SUPPORT_RANK,
-    TOPIC_EPOCH_FAMILIES,
-    VALID_DECISIONS,
-    VALID_SUPPORT_LEVELS,
-    VALID_TOPIC_EPOCH_ACTIONS,
-    VALID_VISIBILITIES,
-    expand_scout_lanes,
-    output_profile_for_family,
-    scout_lane_parts,
-)
-from warm_ambient_scout_profiles import (
-    FAMILY_LENS_TASKS as FAMILY_LENS_TASKS,
-)
-from warm_ambient_scout_profiles import (
-    FAMILY_TASKS as FAMILY_TASKS,
-)
-from warm_ambient_scout_profiles import (
-    FAMILY_VARIANT_LENS_TASKS as FAMILY_VARIANT_LENS_TASKS,
-)
-from warm_ambient_scout_profiles import (
-    LEGACY_SCOUT_ALIASES as LEGACY_SCOUT_ALIASES,
-)
-from warm_ambient_scout_profiles import (
-    SCOUT_FAMILIES as SCOUT_FAMILIES,
-)
-from warm_ambient_scout_profiles import (
-    SCOUT_OUTPUT_PROFILES as SCOUT_OUTPUT_PROFILES,
-)
-from warm_ambient_scout_profiles import (
-    SCOUT_PRIORITY as SCOUT_PRIORITY,
-)
-from warm_ambient_scout_profiles import (
-    SCOUT_VARIANTS as SCOUT_VARIANTS,
-)
-from warm_ambient_scout_profiles import (
-    VARIANT_LENS_TASKS as VARIANT_LENS_TASKS,
-)
-from warm_ambient_scout_profiles import (
-    VARIANT_TASKS as VARIANT_TASKS,
-)
-from warm_ambient_scout_profiles import (
-    lens_task_for as lens_task_for,
-)
-from warm_ambient_source_validation import (
-    _clean_source_ref,
-    _stable_id,
-    calibrate_cards,
-    prompt_trace_fallback_cards,
-    referenced_thread_keys,
-    referenced_thread_keys_from_cards,
-    source_index_from_registry,
-)
-from warm_ambient_source_validation import (
-    validate_card_source_refs as validate_card_source_refs,
-)
 
 PROMPT_VERSION = "aippocampus-warm-ambient-recall-v0"
 SCHEMA_VERSION = 1

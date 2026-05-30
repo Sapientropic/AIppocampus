@@ -79,6 +79,14 @@ def script_line_count(path: Path) -> int:
     )
 
 
+def runtime_python_files() -> list[Path]:
+    return sorted(
+        path
+        for path in SCRIPTS.rglob("*.py")
+        if "__pycache__" not in path.parts
+    )
+
+
 def mypy_file_entries() -> set[str]:
     text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     match = re.search(r"(?ms)^\[tool\.mypy\].*?^files\s*=\s*\[(.*?)^\]", text)
@@ -92,8 +100,8 @@ class ArchitectureBoundaryTests(unittest.TestCase):
         forbidden_prefixes = ("benchmark_", "smoke_", "simulate_")
         forbidden_names = {"check_docs_health.py", "run_stage_0_5_smoke.py"}
         offenders = sorted(
-            path.name
-            for path in SCRIPTS.glob("*.py")
+            path.relative_to(SCRIPTS).as_posix()
+            for path in runtime_python_files()
             if path.name.startswith(forbidden_prefixes) or path.name in forbidden_names
         )
 
@@ -157,7 +165,7 @@ class ArchitectureBoundaryTests(unittest.TestCase):
         typed = mypy_file_entries()
         missing = sorted(
             path.relative_to(REPO_ROOT).as_posix()
-            for path in SCRIPTS.glob("*.py")
+            for path in runtime_python_files()
             if script_line_count(path) >= 300
             and path.relative_to(REPO_ROOT).as_posix() not in typed
         )
@@ -174,12 +182,12 @@ class ArchitectureBoundaryTests(unittest.TestCase):
         entries = debt_register_entries()
         large_scripts = {
             path.relative_to(REPO_ROOT).as_posix(): script_line_count(path)
-            for path in SCRIPTS.glob("*.py")
+            for path in runtime_python_files()
             if script_line_count(path) >= 600
         }
         missing = sorted(set(large_scripts) - set(entries))
         runtime_scripts = {
-            path.relative_to(REPO_ROOT).as_posix() for path in SCRIPTS.glob("*.py")
+            path.relative_to(REPO_ROOT).as_posix() for path in runtime_python_files()
         }
         stale = sorted(set(entries) - runtime_scripts)
         over_budget = {

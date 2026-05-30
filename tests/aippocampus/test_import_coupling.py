@@ -24,7 +24,49 @@ def load_module_from_path(name: str, path: Path):
 
 
 def script_modules() -> dict[str, Path]:
-    return {path.stem: path for path in SCRIPTS.glob("*.py")}
+    modules: dict[str, Path] = {}
+    for path in SCRIPTS.rglob("*.py"):
+        if "__pycache__" in path.parts:
+            continue
+        rel = path.relative_to(SCRIPTS).with_suffix("")
+        parts = rel.parts[:-1] if rel.name == "__init__" else rel.parts
+        if parts:
+            modules[".".join(parts)] = path
+    return modules
+
+
+def import_targets_for_node(
+    node: ast.AST,
+    *,
+    current_module: str,
+    modules: dict[str, Path],
+) -> set[str]:
+    targets: set[str] = set()
+
+    def add_if_known(name: str) -> None:
+        if name in modules:
+            targets.add(name)
+        top_level = name.split(".", maxsplit=1)[0]
+        if top_level in modules:
+            targets.add(top_level)
+
+    if isinstance(node, ast.Import):
+        for alias in node.names:
+            add_if_known(alias.name)
+    elif isinstance(node, ast.ImportFrom) and node.module:
+        if node.level:
+            parent = current_module.split(".")[:-node.level]
+            base = ".".join([*parent, node.module]) if parent else node.module
+        else:
+            base = node.module
+        add_if_known(base)
+        for alias in node.names:
+            add_if_known(f"{base}.{alias.name}")
+    elif isinstance(node, ast.ImportFrom) and node.level:
+        parent = current_module.split(".")[:-node.level]
+        for alias in node.names:
+            add_if_known(".".join([*parent, alias.name]))
+    return targets
 
 
 def same_dir_import_edges(*, top_level_only: bool = False) -> dict[str, set[str]]:
@@ -34,15 +76,9 @@ def same_dir_import_edges(*, top_level_only: bool = False) -> dict[str, set[str]
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         nodes = tree.body if top_level_only else ast.walk(tree)
         for node in nodes:
-            if isinstance(node, ast.Import):
-                for alias in node.names:
-                    imported = alias.name.split(".", maxsplit=1)[0]
-                    if imported in modules:
-                        edges[name].add(imported)
-            elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
-                imported = node.module.split(".", maxsplit=1)[0]
-                if imported in modules:
-                    edges[name].add(imported)
+            edges[name].update(
+                import_targets_for_node(node, current_module=name, modules=modules)
+            )
     return edges
 
 
@@ -199,6 +235,42 @@ class ImportCouplingTests(unittest.TestCase):
         offenders = {source: targets for source, targets in offenders.items() if targets}
 
         self.assertEqual(offenders, {})
+
+    def test_warm_ambient_helpers_have_package_owner_and_compat_shims(self) -> None:
+        import warm_ambient_prompting
+        import warm_ambient_scout_profiles
+        import warm_ambient_source_validation
+        from aippocampus_runtime.warm_ambient import prompting, scout_profiles, source_validation
+
+        package_files = [
+            SCRIPTS / "aippocampus_runtime" / "warm_ambient" / "prompting.py",
+            SCRIPTS / "aippocampus_runtime" / "warm_ambient" / "scout_profiles.py",
+            SCRIPTS / "aippocampus_runtime" / "warm_ambient" / "source_validation.py",
+        ]
+        shim_files = [
+            SCRIPTS / "warm_ambient_prompting.py",
+            SCRIPTS / "warm_ambient_scout_profiles.py",
+            SCRIPTS / "warm_ambient_source_validation.py",
+        ]
+
+        for path in package_files + shim_files:
+            self.assertTrue(path.exists(), path)
+        for path in shim_files:
+            self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+
+        self.assertIs(warm_ambient_prompting.scout_prompt, prompting.scout_prompt)
+        self.assertIs(
+            warm_ambient_scout_profiles.expand_scout_lanes,
+            scout_profiles.expand_scout_lanes,
+        )
+        self.assertIs(
+            warm_ambient_source_validation.calibrate_cards,
+            source_validation.calibrate_cards,
+        )
+        self.assertIs(
+            warm_ambient_source_validation._stable_id,
+            source_validation._stable_id,
+        )
 
     def test_repo_import_shims_delegate_to_single_helper(self) -> None:
         helper_path = REPO_ROOT / "tools" / "aippocampus" / "repo_paths.py"
