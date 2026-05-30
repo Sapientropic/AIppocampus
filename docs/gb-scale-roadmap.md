@@ -106,7 +106,12 @@ Completed foundation:
    - This merge layer is the same scoring fusion contract described in
      `wukong-mining-notes.md` — a single `blend()` function with explicit
      policy, not scattered search logic.
-   - Status: first implementation in `search_segments.py`.
+   - Status: `search_segments.py` owns the first segment merge. The first
+     cross-signal contract now lives in
+     `skills/aippocampus/scripts/retrieval_score_fusion.py`; it keeps exact
+     text recall text-heavy, allows vector-heavy question-tracking contexts and
+     graph-heavy theme contexts, and refuses candidates that cannot join back to
+     stable source ids or source refs.
 
 4. Tiered lexical depth
    - L0: document ids / line ranges only.
@@ -192,7 +197,8 @@ Completed foundation:
 
 ## Cross-references
 
-- Scoring fusion contract: `wukong-mining-notes.md`
+- Scoring fusion contract: `wukong-mining-notes.md` and
+  `skills/aippocampus/scripts/retrieval_score_fusion.py`
 - Cognitive runtime layers: `cognitive-runtime-architecture.md`
 - Question tracking design: `question-tracking-subconscious.md`
 - TurboVec evaluation: planned note, no standalone file yet. Current rationale

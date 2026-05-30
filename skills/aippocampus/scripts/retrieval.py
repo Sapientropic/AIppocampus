@@ -34,6 +34,7 @@ from retrieval_query_policy import anchor_text as anchor_text
 from retrieval_query_policy import expanded_terms_from_anchors as expanded_terms_from_anchors
 from retrieval_query_policy import match_anchors as match_anchors
 from retrieval_query_policy import split_query_terms as split_query_terms
+from retrieval_score_fusion import rag_chunk_text_score, retrieval_text_score
 
 
 def sqlite_has_table(con: sqlite3.Connection, name: str) -> bool:
@@ -393,12 +394,11 @@ def search_rag_chunks_connection(
         except Exception:
             anchor_titles = []
         signals = item["signals"]
-        score = (
-            float(signals.get("chunk_fts", 0.0))
-            + float(signals.get("chunk_literal_scan", 0.0))
-            + literal * 16.0
-            + max(0, expanded - literal) * 2.0
-            + anchor_hits * 3.0
+        score = rag_chunk_text_score(
+            signals,
+            literal_hits=literal,
+            expanded_hits=expanded,
+            anchor_hits=anchor_hits,
         )
         out.append(
             {
@@ -656,18 +656,15 @@ def search_hybrid_index(
             literal = literal_hit_count(text, query_terms)
             expanded = literal_hit_count(text, expanded_terms)
             anchor_hits = anchor_hit_count(text, anchor_matches)
-            score = 0.0
             signals = item["signals"]
-            score += float(signals.get("fts", 0.0))
-            score += float(signals.get("rag_chunk", 0.0))
-            score += literal * 14.0
-            # Expanded anchor terms are a recall aid, not permission for broad
-            # anchors like "Codex" or "vault" to drown the user's actual clue.
-            # Keep exact query terms dominant, then use anchors as a tie-breaker.
-            score += max(0, expanded - literal) * 1.5
-            score += anchor_hits * 2.0
             weight = phase_weight(row)
-            score += weight
+            score = retrieval_text_score(
+                signals,
+                literal_hits=literal,
+                expanded_hits=expanded,
+                anchor_hits=anchor_hits,
+                phase_weight=weight,
+            )
             result = {
                 "id": row["id"],
                 "line": row["line"],
