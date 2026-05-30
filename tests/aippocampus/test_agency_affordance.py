@@ -229,6 +229,39 @@ class AgencyAffordanceTests(unittest.TestCase):
         self.assertEqual(len(selection["backstage_tickets"]), 1)
         self.assertGreaterEqual(selection["suppressed_count"], 1)
 
+    def test_dream_hypotheses_remain_backstage_and_respect_sensitive_gate(self) -> None:
+        allowed = {
+            "candidate_type": "dream_hypothesis",
+            "truth_boundary": "adjudicated_dream_hypothesis_not_fact",
+            "title": "Continuity dream bridge",
+            "summary": "Use this hypothesis only as route context.",
+            "intervention_level": "warning",
+            "source_refs": [source_ref(45)],
+            "sensitive_use_gate": {"state": "allowed"},
+        }
+        blocked = {
+            **allowed,
+            "title": "Sensitive dream bridge",
+            "source_refs": [source_ref(46)],
+            "sensitive_use_gate": {"state": "blocked"},
+        }
+        affordance_map = agency.build_agency_affordance_map(
+            dream_outputs=[allowed, blocked],
+            topic_epoch="epoch-dream-agency",
+        )
+
+        selection = agency.select_agency_tickets(
+            affordance_map,
+            trigger="compaction_loss",
+            topic_epoch="epoch-dream-agency",
+        )
+
+        self.assertEqual(len(affordance_map["affordances"]), 1)
+        self.assertEqual(selection["foreground_tickets"], [])
+        self.assertEqual(len(selection["backstage_tickets"]), 1)
+        self.assertEqual(selection["backstage_tickets"][0]["intervention_level"], "backstage_only")
+        self.assertFalse(selection["backstage_tickets"][0]["foreground"])
+
     def test_feedback_events_cover_expected_outcomes(self) -> None:
         affordance_map = agency.build_agency_affordance_map(
             ambient_recall_cards=[

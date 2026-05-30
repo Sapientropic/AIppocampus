@@ -20,6 +20,7 @@ import argparse
 import hashlib
 import json
 from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -44,6 +45,7 @@ USE_WITH_SOURCE = "use_with_source"
 CONFIRM_WHEN_RELEVANT = "confirm_when_relevant"
 PARK = "park"
 ACTIVE_ROUTES = {USE_SILENTLY, USE_WITH_SOURCE, CONFIRM_WHEN_RELEVANT}
+DREAM_HYPOTHESIS_TYPE = "dream_hypothesis"
 
 LOW_RISK_TYPES = {"concept_edge", "hook_trigger"}
 PROJECT_FACT_TYPES = {"project_memory"}
@@ -516,6 +518,36 @@ def broad_match_term(term: str, project_label: str | None) -> bool:
     return bool(project_label and low == project_label.casefold())
 
 
+def parse_utc(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        text = value[:-1] + "+00:00" if value.endswith("Z") else value
+        return datetime.fromisoformat(text).astimezone(timezone.utc)
+    except ValueError:
+        return None
+
+
+def dream_hypothesis_block_reason(row: dict[str, Any]) -> str:
+    if row.get("candidate_type") != DREAM_HYPOTHESIS_TYPE:
+        return ""
+    if str(row.get("review_state") or "") not in {
+        "accepted",
+        "approved",
+        "reviewed",
+        "agent_adjudicated",
+        "auto_adjudicated",
+        "source_adjudicated",
+    }:
+        return "not_adjudicated"
+    if (row.get("sensitive_use_gate") or {}).get("state") == "blocked" or row.get("human_review_required"):
+        return "sensitive_review_required"
+    expires_at = parse_utc(str(row.get("expires_at") or ""))
+    if expires_at and expires_at <= datetime.now(timezone.utc):
+        return "dream_hypothesis_expired"
+    return ""
+
+
 def match_working_memory(
     prompt: str,
     rows: list[dict[str, Any]],
@@ -568,6 +600,10 @@ def match_working_memory(
                 matched.append(str(term))
         if not matched:
             continue
+        if row.get("candidate_type") == DREAM_HYPOTHESIS_TYPE:
+            block_reason = dream_hypothesis_block_reason(row)
+            if block_reason:
+                continue
         route_bonus = {USE_SILENTLY: 0.5, USE_WITH_SOURCE: 1.5, CONFIRM_WHEN_RELEVANT: 1.0}.get(
             str(row.get("route")), 0.0
         )
@@ -577,6 +613,16 @@ def match_working_memory(
         copy = dict(row)
         copy["matched_terms"] = unique_preserve(matched, limit=8)
         copy["score"] = round(score, 3)
+        if copy.get("candidate_type") == DREAM_HYPOTHESIS_TYPE:
+            copy["dream_hypothesis_use"] = {
+                "action": "use_quietly",
+                "reason": "matched_working_memory_terms",
+                "truth_boundary": copy.get("truth_boundary"),
+                "strong_claim_requires_source_reopen": bool(
+                    (copy.get("foreground_use") or {}).get("strong_claim_requires_source_reopen")
+                ),
+                "render_boundary": "dream_hypothesis_not_source_fact",
+            }
         matches.append(copy)
     matches.sort(
         key=lambda item: (
@@ -606,6 +652,11 @@ def strip_for_hook(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "matched_terms": row.get("matched_terms") or [],
                 "source_refs": row.get("source_refs") or [],
                 "score": row.get("score"),
+                "truth_boundary": row.get("truth_boundary"),
+                "dream_function": row.get("dream_function"),
+                "foreground_use": row.get("foreground_use"),
+                "sensitive_use_gate": row.get("sensitive_use_gate"),
+                "dream_hypothesis_use": row.get("dream_hypothesis_use"),
             }
         )
     return out

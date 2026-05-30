@@ -14,6 +14,7 @@ import hashlib
 import json
 import re
 from collections.abc import Iterable, Mapping
+from datetime import datetime, timezone
 from typing import Any
 
 from aippocampuslib import compact_text, now_utc
@@ -47,6 +48,30 @@ LOW_SIGNAL_TERMS = {
     "work",
     "project",
 }
+SENSITIVE_DREAM_TERMS = {
+    "diagnosis",
+    "identity",
+    "mental health",
+    "personality",
+    "preference",
+    "prefers",
+    "profile",
+    "relationship",
+    "secretly",
+    "trauma",
+    "人格",
+    "关系",
+    "创伤",
+    "偏好",
+    "诊断",
+}
+HIGH_CONFIDENCE_DREAM_THRESHOLD = 0.88
+SENSITIVE_BOUNDARY_COPY = (
+    "not as a user-profile fact",
+    "not as user-profile fact",
+    "not a user-profile fact",
+    "do not treat this as a user-profile fact",
+)
 
 
 def stable_digest(*parts: object, prefix: str, length: int = 16) -> str:
@@ -88,6 +113,23 @@ def text_terms(text: str) -> list[str]:
         if len(token) >= 3
     ]
     return [term for term in terms if term not in LOW_SIGNAL_TERMS]
+
+
+def parse_utc(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        text = value[:-1] + "+00:00" if value.endswith("Z") else value
+        return datetime.fromisoformat(text).astimezone(timezone.utc)
+    except ValueError:
+        return None
+
+
+def normalize_now(now: str | datetime | None) -> datetime:
+    if isinstance(now, datetime):
+        return now.astimezone(timezone.utc)
+    parsed = parse_utc(str(now)) if now else parse_utc(now_utc())
+    return parsed or datetime.now(timezone.utc)
 
 
 def source_ref_key(ref: Mapping[str, Any]) -> tuple[str, str, str, str]:
@@ -175,6 +217,25 @@ def safe_float(value: Any, default: float = 0.0) -> float:
     if number != number or number in {float("inf"), float("-inf")}:
         return default
     return number
+
+
+def sensitive_dream_hypothesis(finding: Mapping[str, Any]) -> bool:
+    text = " ".join(
+        [
+            str(finding.get("title") or ""),
+            str(finding.get("summary") or ""),
+            str(finding.get("recommendation") or ""),
+            " ".join(string_values(finding.get("counter_evidence"))),
+        ]
+    ).casefold()
+    # Dream candidates often carry negative safety copy such as "not as a
+    # user-profile fact". That phrase should protect against profile claims,
+    # not become the reason a harmless hypothesis is parked.
+    for phrase in SENSITIVE_BOUNDARY_COPY:
+        text = text.replace(phrase, " ")
+    if any(term in text for term in SENSITIVE_DREAM_TERMS):
+        return True
+    return safe_float(finding.get("confidence"), 0.0) > HIGH_CONFIDENCE_DREAM_THRESHOLD
 
 
 def project_label_from_refs(refs: Iterable[Mapping[str, Any]]) -> str | None:
@@ -265,6 +326,7 @@ def background_adjudicate_dream_finding(
         "source_ref_audit": not audit_failed(finding),
         "bridge_claims_source_refs": bridge_claims_have_source_refs(finding),
         "confidence_floor": safe_float(finding.get("confidence"), 0.62) >= confidence_floor,
+        "sensitive_use_gate": not sensitive_dream_hypothesis(finding),
     }
     if source_pack is not None:
         checks["source_pack_ready"] = source_pack_is_ready(source_pack)
@@ -409,12 +471,91 @@ def adjudicated_dream_findings_to_working_memory(
                 "compensatory_kind": finding.get("compensatory_kind"),
                 "downstream_use": adjudicated_dream_downstream_use(finding),
                 "truth_boundary": "adjudicated_dream_hypothesis_not_fact",
+                "expires_at": finding.get("expires_at"),
+                "foreground_use": {
+                    "default_action": "quiet_substrate",
+                    "use_only_when_it_changes_current_answer": True,
+                    "strong_claim_requires_source_reopen": True,
+                    "stay_silent_when_source_visible": True,
+                    "stay_silent_when_annoyance_risk_high": True,
+                    "render_boundary": "dream_hypothesis_not_source_fact",
+                },
+                "sensitive_use_gate": {
+                    "state": "blocked" if sensitive_dream_hypothesis(finding) else "allowed",
+                    "human_or_user_intervention_required_for_direct_assertion": True,
+                    "formal_memory_promotion_allowed": False,
+                },
                 "human_review_required": bool(finding.get("human_review_required") or False),
                 "formal_memory_eligible": False,
                 "clean_source_mutation": False,
             }
         )
     return rows
+
+
+def dream_hypothesis_expired(row: Mapping[str, Any], *, now: str | datetime | None = None) -> bool:
+    expires_at = parse_utc(str(row.get("expires_at") or ""))
+    return bool(expires_at and expires_at <= normalize_now(now))
+
+
+def plan_dream_hypothesis_use(
+    row: Mapping[str, Any],
+    *,
+    prompt: str = "",
+    route_relevance: bool | None = None,
+    source_visible: bool = False,
+    annoyance_risk: str = "low",
+    strong_user_facing_claim: bool = False,
+    now: str | datetime | None = None,
+) -> dict[str, Any]:
+    if row.get("candidate_type") != DREAM_HYPOTHESIS_TYPE:
+        return {"action": "stay_silent", "reason": "not_dream_hypothesis"}
+    if row.get("review_state") not in ADJUDICATED_REVIEW_STATES:
+        return {"action": "stay_silent", "reason": "not_adjudicated"}
+    if (row.get("sensitive_use_gate") or {}).get("state") == "blocked" or row.get("human_review_required"):
+        return {"action": "stay_silent", "reason": "sensitive_review_required"}
+    if dream_hypothesis_expired(row, now=now):
+        return {"action": "stay_silent", "reason": "dream_hypothesis_expired"}
+    if source_visible:
+        return {"action": "stay_silent", "reason": "source_already_visible"}
+    if str(annoyance_risk or "").casefold() in {"high", "annoying", "noisy"}:
+        return {"action": "stay_silent", "reason": "annoyance_risk_high"}
+    if strong_user_facing_claim:
+        return {
+            "action": "reopen_source",
+            "reason": "strong_claim_requires_source_reopen",
+            "requires_source_reopen": True,
+            "truth_boundary": row.get("truth_boundary"),
+        }
+    if route_relevance is None:
+        haystack = " ".join(
+            [
+                str(row.get("title") or ""),
+                str(row.get("summary") or ""),
+                " ".join(string_values(row.get("trigger_terms"))),
+                " ".join(string_values(row.get("concepts"))),
+            ]
+        ).casefold()
+        prompt_terms = [term for term in text_terms(prompt) if len(term) >= 4]
+        route_relevance = bool(prompt_terms and any(term in haystack for term in prompt_terms))
+    if not route_relevance:
+        return {"action": "stay_silent", "reason": "no_route_relevance"}
+    return {
+        "action": "use_quietly",
+        "reason": "dream_hypothesis_changes_route_or_answer",
+        "route": "working_memory",
+        "requires_source_reopen": False,
+        "truth_boundary": row.get("truth_boundary"),
+        "matched_prompt_terms": text_terms(prompt)[:6],
+    }
+
+
+def render_dream_hypothesis_preview(row: Mapping[str, Any]) -> str:
+    title = compact_text(str(row.get("title") or "Adjudicated dream hypothesis"), 160)
+    return (
+        f"Dream hypothesis, not source fact: {title}. "
+        "Use quietly as route context; reopen source before making a strong claim."
+    )
 
 
 def reviewed_dream_findings_to_working_memory(

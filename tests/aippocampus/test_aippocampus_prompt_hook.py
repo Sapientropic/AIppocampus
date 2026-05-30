@@ -2270,6 +2270,77 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertIn("Soft working memory", context)
         self.assertIn("Ask the user only if", context)
 
+    def test_dream_hypothesis_working_memory_renders_uncertainty_boundary(self) -> None:
+        registry_path = self.root / "dream-registry" / "threads.json"
+        registry_path.parent.mkdir()
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:dream",
+                            "title": "Dream bridge",
+                            "project_label": "AIppocampus",
+                            "paths": {"workspace": str(self.workspace)},
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        working = registry_path.parent / "working_memory.jsonl"
+        working.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_working_memory",
+                    "status": "active",
+                    "route": "use_with_source",
+                    "ask_policy": "do_not_ask_unless_contradicted_or_action_depends_on_uncertain_scope",
+                    "risk": "medium",
+                    "candidate_type": "dream_hypothesis",
+                    "title": "Continuity dream bridge",
+                    "summary": "A dream hypothesis about continuity and source refs.",
+                    "recommendation": "Use quietly; reopen source before strong claims.",
+                    "confidence": 0.66,
+                    "project_label": "AIppocampus",
+                    "trigger_terms": ["continuity", "source refs"],
+                    "source_refs": [
+                        {
+                            "thread_key": "session:dream",
+                            "title": "Dream bridge",
+                            "message_id": "msg-dream",
+                            "line": 12,
+                        }
+                    ],
+                    "truth_boundary": "adjudicated_dream_hypothesis_not_fact",
+                    "review_state": "agent_adjudicated",
+                    "foreground_use": {
+                        "default_action": "quiet_substrate",
+                        "strong_claim_requires_source_reopen": True,
+                    },
+                    "sensitive_use_gate": {"state": "allowed"},
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        result = hook.assess_prompt(
+            "AIppocampus continuity source refs 这条线索还在吗？",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            working_memory_path=working,
+            search_budget=0,
+        )
+
+        context = hook.context_for_hook(result)
+        self.assertIn("Dream hypothesis, not source fact", context)
+        self.assertIn("reopen source", context)
+        self.assertIn("Use quietly", context)
+
     def test_concept_graph_expansion_can_surface_indirect_memory_scent(self) -> None:
         messages = self._write_clean_thread(
             "session:runtime-memory",

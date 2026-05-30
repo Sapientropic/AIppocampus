@@ -93,6 +93,17 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
                 source = (
                     f" | source: {ref.get('title') or ref.get('thread_key')} line {ref.get('line')}"
                 )
+            if item.get("candidate_type") == "dream_hypothesis":
+                lines.append(
+                    f"- Dream hypothesis, not source fact: {item.get('title')} "
+                    f"(confidence {item.get('confidence')}, terms: {terms}): "
+                    f"{compact_text(str(item.get('summary') or ''), 220)}"
+                    f"{source}"
+                )
+                lines.append(
+                    "  Use quietly only if this changes the route; reopen source before any strong claim."
+                )
+                continue
             lines.append(
                 f"- [{item.get('route')}] {item.get('title')} "
                 f"(confidence {item.get('confidence')}, terms: {terms}): "

@@ -139,6 +139,7 @@ def _working_memory_card(item: dict[str, Any]) -> dict[str, Any]:
         if isinstance(ref, dict)
     ]
     refs = [ref for ref in refs if ref]
+    is_dream = item.get("candidate_type") == "dream_hypothesis"
     return {
         "card_id": _stable_id([CANDIDATE, theme, item.get("route"), refs[0] if refs else ""]),
         "theme": theme,
@@ -147,12 +148,20 @@ def _working_memory_card(item: dict[str, Any]) -> dict[str, Any]:
         "visibility": ACTIVE_GENTLE_NUDGE
         if item.get("route") != "use_silently"
         else SILENT_TUNING,
-        "suggested_use": _safe_text(item.get("recommendation") or item.get("summary"), 220),
+        "suggested_use": (
+            "Dream hypothesis only; use quietly and reopen source before strong claims."
+            if is_dream
+            else _safe_text(item.get("recommendation") or item.get("summary"), 220)
+        ),
         "nudge": "",
         "key_line": _safe_text(item.get("summary"), 180),
         "matched_terms": _clean_terms(item.get("matched_terms") or []),
         "source_refs": refs[:3],
-        "expand_if": "Search clean source before presenting exact claims as facts.",
+        "expand_if": (
+            "Reopen clean source before presenting this dream hypothesis as a claim."
+            if is_dream
+            else "Search clean source before presenting exact claims as facts."
+        ),
     }
 
 

@@ -264,10 +264,31 @@ above. The canonical command details live in
   63 working-memory rows, 4 selected packs, 8 adjudicated dream working-memory
   rows, unchanged prompt hit-rate at 1.0, `source_thread_coverage_delta=2.5`,
   `reflection_ready_delta=64`, and `bridge_claim_coverage_delta=1.0` while
-  emitting only sanitized aggregate output. It still does not claim prospective
-  analysis, validated live/model amplification quality, active imagination,
-  private real-history dream quality, user-visible reflection value, or any
-  unadjudicated dream influence on recall/reflection space.
+  emitting only sanitized aggregate output. Follow-up #132 broadens source pack
+  inputs and makes the dream input-pack CLI public-summary by default, keeping
+  full source-ref packs behind an internal flag. #126 adds bounded mocked
+  model-backed compensatory/amplification worker paths with DeepSeek
+  prefix-cache prompt ordering, source-ref-id citation gates, no-write default,
+  provider usage/cache telemetry, and background adjudication before projection.
+  #127 adds the prospective worker contract plus retrospective
+  prospective-validation buckets that require explicit later source evidence.
+  #128 adds the active-imagination sandbox gates for two source anchors,
+  non-fact explanation, counter-evidence, and sensitive/profile-claim parking.
+  #130 adds foreground
+  use gates on projected dream-hypothesis working-memory rows: quiet substrate
+  by default, silence when source is visible/expired/annoying, source reopen for
+  strong claims, and sensitive-use parking before projection. The wired surface
+  now covers recall route matching, hook rendering, ambient recall cards,
+  reflection-space interpretive nodes, and agency affordance safeguards that
+  keep direct dream inputs backstage-only while dropping sensitive-blocked
+  rows. #131 adds a
+  sanitized visibility-ablation harness that reports recall, reflection,
+  unsupported-claim suppression, source-support correctness, manual
+  source-review coverage, and cost/cache behavior separately from structural
+  lift. It still does not claim live provider amplification quality, predictive
+  validity, active-imagination usefulness, private real-history dream quality,
+  real user-visible reflection value, or any unadjudicated dream influence on
+  recall/reflection space.
 - #69 adds the first deterministic reflection-space topology/feedback MVP. It
   renders Journey/Waypoint/current-frontier topology data with
   expand/merge/revive/abandon actions and converts source-ref-carried recall

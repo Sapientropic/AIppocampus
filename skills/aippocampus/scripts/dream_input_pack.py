@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+from collections import Counter
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,6 +25,27 @@ PACK_KIND = "aippocampus_dream_input_pack"
 READY_STATUS = "ready_for_dream_worker"
 PACK_KIND_CROSS_THREAD = "cross_thread_resonance_seed"
 TRUTH_BOUNDARY = "dream_input_pack_seed_not_fact"
+SAFE_SOURCE_REF_KEYS = {
+    "ref",
+    "turn_ref",
+    "thread_key",
+    "thread_id",
+    "message_id",
+    "turn_id",
+    "source_id",
+    "source_ref",
+    "clean_ordinal",
+    "source_line",
+    "line",
+    "user_line",
+    "assistant_line",
+    "turn_index",
+    "title",
+    "project_label",
+    "role",
+    "phase",
+    "timestamp",
+}
 
 
 @dataclass(frozen=True)
@@ -111,7 +133,7 @@ def normalize_source_refs(value: object) -> tuple[dict[str, Any], ...]:
         if not any(key) or key in seen:
             continue
         seen.add(key)
-        refs.append({k: v for k, v in ref.items() if is_present(v)})
+        refs.append({k: v for k, v in ref.items() if k in SAFE_SOURCE_REF_KEYS and is_present(v)})
     return tuple(refs)
 
 
@@ -143,6 +165,37 @@ def row_id(row: Mapping[str, Any], *, prefix: str) -> str:
         if value:
             return str(value)
     return stable_digest(row, prefix=prefix, length=18)
+
+
+def row_types(row: Mapping[str, Any]) -> set[str]:
+    return {
+        str(value)
+        for value in (row.get("kind"), row.get("finding_kind"), row.get("candidate_type"))
+        if value
+    }
+
+
+def refs_from_row(row: Mapping[str, Any]) -> tuple[dict[str, Any], ...]:
+    return tuple(
+        [
+            *normalize_source_refs(row.get("source_refs")),
+            *normalize_source_refs(row.get("evidence_refs")),
+            *normalize_source_refs(row.get("clean_source_refs")),
+        ]
+    )
+
+
+def weak_handles_from_row(row: Mapping[str, Any]) -> tuple[str, ...]:
+    return tuple(
+        unique_preserve(
+            [
+                *string_values(row.get("source_ref_fingerprints")),
+                *string_values(row.get("source_ref_handles")),
+                *string_values(row.get("weak_source_handles")),
+            ],
+            limit=24,
+        )
+    )
 
 
 def question_link_seed(row: Mapping[str, Any]) -> DreamSeed | None:
@@ -254,8 +307,218 @@ def ambient_residue_seed(row: Mapping[str, Any]) -> DreamSeed | None:
     )
 
 
+def concept_edge_seed(row: Mapping[str, Any]) -> DreamSeed | None:
+    if "concept_edge" not in row_types(row):
+        return None
+    refs = refs_from_row(row)
+    if not refs:
+        return None
+    concepts = unique_preserve(
+        [row.get("src"), row.get("dst"), *string_values(row.get("concepts"))],
+        limit=14,
+    )
+    edge_type = compact_text(str(row.get("edge_type") or "related"), 80)
+    return DreamSeed(
+        seed_id=row_id(row, prefix="cedge"),
+        seed_kind="concept_edge",
+        title=compact_text(
+            str(row.get("title") or f"{row.get('src') or 'concept'} -> {row.get('dst') or 'concept'}"),
+            160,
+        ),
+        summary=compact_text(str(row.get("why") or row.get("summary") or ""), 420),
+        source_refs=refs,
+        source_finding_ids=(row_id(row, prefix="cedge"),),
+        themes=tuple(unique_preserve([edge_type, *concepts], limit=12)),
+        concepts=tuple(concepts),
+    )
+
+
+def theme_candidate_seed(row: Mapping[str, Any]) -> DreamSeed | None:
+    kinds = row_types(row)
+    if not (kinds & {"theme_candidate", "ambient_theme_candidate"}):
+        return None
+    refs = refs_from_row(row)
+    weak_handles = weak_handles_from_row(row)
+    if not refs and not weak_handles:
+        return None
+    themes = unique_preserve(
+        [
+            row.get("theme"),
+            row.get("theme_label"),
+            row.get("title"),
+            *string_values(row.get("themes")),
+        ],
+        limit=12,
+        max_chars=160,
+    )
+    concepts = unique_preserve(
+        [
+            *themes,
+            *string_values(row.get("matched_terms")),
+            *string_values(row.get("concepts")),
+        ],
+        limit=16,
+    )
+    return DreamSeed(
+        seed_id=row_id(row, prefix="theme"),
+        seed_kind="theme_candidate",
+        title=compact_text(", ".join(themes) or "Theme candidate seed", 160),
+        summary=compact_text(
+            str(row.get("summary") or row.get("nudge") or row.get("key_line") or row.get("reason") or ""),
+            360,
+        ),
+        source_refs=refs,
+        source_ref_fingerprints=weak_handles,
+        source_finding_ids=(row_id(row, prefix="theme"),),
+        themes=tuple(themes),
+        concepts=tuple(concepts),
+        negative_contexts=tuple(unique_preserve(string_values(row.get("negative_contexts")), limit=8)),
+    )
+
+
+def correction_seed(row: Mapping[str, Any]) -> DreamSeed | None:
+    if not (row_types(row) & {
+        "correction_activation_event",
+        "correction_outcome_event",
+        "correction_adjudication_candidate",
+        "correction_active_task_anchor",
+    }):
+        return None
+    refs = refs_from_row(row)
+    if not refs:
+        return None
+    themes = unique_preserve(
+        [
+            "correction",
+            row.get("target_type"),
+            row.get("adoption_signal"),
+            row.get("adjudication_status"),
+            row.get("route"),
+        ],
+        limit=10,
+    )
+    return DreamSeed(
+        seed_id=row_id(row, prefix="corr"),
+        seed_kind="correction",
+        title=compact_text(str(row.get("title") or "Correction seed"), 160),
+        summary=compact_text(
+            str(
+                row.get("summary")
+                or row.get("correction_surface")
+                or row.get("outcome_summary")
+                or row.get("instruction")
+                or ""
+            ),
+            420,
+        ),
+        source_refs=refs,
+        source_finding_ids=tuple(
+            unique_preserve(
+                [
+                    row.get("event_id"),
+                    row.get("candidate_id"),
+                    row.get("activation_event_id"),
+                    row.get("outcome_event_id"),
+                ],
+                limit=8,
+            )
+        ),
+        themes=tuple(themes),
+        concepts=tuple(themes),
+        negative_contexts=("correction rows are adjudication triggers, not dream facts",),
+    )
+
+
+def reflection_seed(row: Mapping[str, Any]) -> DreamSeed | None:
+    kinds = row_types(row)
+    if not (kinds & {"aippocampus_reflection_adjustment", "aippocampus_reflection_feedback"}):
+        return None
+    refs = refs_from_row(row)
+    if not refs:
+        return None
+    action = compact_text(
+        str(row.get("feedback_action") or row.get("recall_effect") or row.get("action") or ""),
+        80,
+    )
+    themes = unique_preserve(["reflection", action, row.get("surface"), row.get("journey_id")], limit=10)
+    return DreamSeed(
+        seed_id=row_id(row, prefix="refl"),
+        seed_kind="reflection_feedback",
+        title=compact_text(str(row.get("title") or f"Reflection feedback: {action or 'adjustment'}"), 160),
+        summary=compact_text(str(row.get("reason") or row.get("note") or row.get("summary") or ""), 420),
+        source_refs=refs,
+        source_finding_ids=(row_id(row, prefix="refl"),),
+        themes=tuple(themes),
+        concepts=tuple(themes),
+    )
+
+
+def agency_or_coding_seed(row: Mapping[str, Any]) -> DreamSeed | None:
+    kinds = row_types(row)
+    if not (kinds & {
+        "aippocampus_agency_ticket",
+        "aippocampus_agency_affordance",
+        "aippocampus_coding_continuity_ticket",
+        "coding_decision_event",
+        "decision_event",
+    }):
+        return None
+    refs = refs_from_row(row)
+    if not refs:
+        return None
+    scope = row.get("scope") if isinstance(row.get("scope"), Mapping) else {}
+    themes = unique_preserve(
+        [
+            "agency" if "aippocampus_agency_ticket" in kinds or "aippocampus_agency_affordance" in kinds else "coding",
+            row.get("intervention_level"),
+            row.get("trigger"),
+            (row.get("why_now") or {}).get("trigger") if isinstance(row.get("why_now"), Mapping) else None,
+            row.get("event_type"),
+            scope.get("label") if isinstance(scope, Mapping) else None,
+        ],
+        limit=12,
+    )
+    concepts = unique_preserve(
+        [
+            *themes,
+            *string_values(row.get("trigger_terms")),
+            *string_values(row.get("do_not_repeat")),
+            *string_values(row.get("do_not_do")),
+        ],
+        limit=18,
+    )
+    return DreamSeed(
+        seed_id=row_id(row, prefix="agency"),
+        seed_kind="agency_ticket" if "aippocampus_agency_ticket" in kinds or "aippocampus_agency_affordance" in kinds else "coding_ticket",
+        title=compact_text(str(row.get("title") or "Agency/coding ticket seed"), 160),
+        summary=compact_text(
+            str(row.get("summary") or row.get("recommendation") or row.get("instruction") or ""),
+            420,
+        ),
+        source_refs=refs,
+        source_finding_ids=tuple(
+            unique_preserve(
+                [row.get("ticket_id"), row.get("affordance_id"), row.get("decision_id")],
+                limit=8,
+            )
+        ),
+        themes=tuple(themes),
+        concepts=tuple(concepts),
+        negative_contexts=tuple(unique_preserve(string_values(row.get("do_not_do")), limit=8)),
+    )
+
+
 def seed_from_row(row: Mapping[str, Any]) -> DreamSeed | None:
-    return question_link_seed(row) or journey_seed(row) or ambient_residue_seed(row)
+    return (
+        question_link_seed(row)
+        or journey_seed(row)
+        or ambient_residue_seed(row)
+        or concept_edge_seed(row)
+        or theme_candidate_seed(row)
+        or correction_seed(row)
+        or reflection_seed(row)
+        or agency_or_coding_seed(row)
+    )
 
 
 def audit_status(refs: list[dict[str, Any]], *, min_source_threads: int) -> dict[str, Any]:
@@ -285,6 +548,29 @@ def eligible_dream_functions(*, refs: list[dict[str, Any]], min_source_threads: 
     if not refs or thread_count < min_source_threads:
         return []
     return ["compensatory", "amplification"]
+
+
+def source_contributions(seeds: Iterable[DreamSeed]) -> list[dict[str, Any]]:
+    contributions: list[dict[str, Any]] = []
+    for seed in seeds:
+        thread_count = len(
+            {source_ref_thread(ref) for ref in seed.source_refs if source_ref_thread(ref)}
+        )
+        contributions.append(
+            {
+                "seed_id": seed.seed_id,
+                "seed_kind": seed.seed_kind,
+                "source_ref_count": len(seed.source_refs),
+                "source_thread_count": thread_count,
+                "source_ref_fingerprint_count": len(seed.source_ref_fingerprints),
+                "readiness_role": "clean_anchor" if seed.source_refs else "weak_context",
+                "question_count": len(seed.questions),
+                "frontier_count": len(seed.frontiers),
+                "theme_count": len(seed.themes),
+                "concept_count": len(seed.concepts),
+            }
+        )
+    return contributions
 
 
 def build_dream_input_pack(
@@ -325,10 +611,12 @@ def build_dream_input_pack(
         limit=10,
         max_chars=160,
     )
+    contributions = source_contributions(seeds)
     pack_seed = {
         "objective": compact_text(objective, 240),
         "source_seed_ids": seed_ids,
         "source_finding_ids": source_finding_ids,
+        "source_contributions": contributions,
         "source_refs": refs,
         "weak_source_handles": weak_handles,
         "questions": questions,
@@ -351,6 +639,7 @@ def build_dream_input_pack(
         "source_seed_ids": seed_ids,
         "source_seed_kinds": seed_kinds,
         "source_finding_ids": source_finding_ids,
+        "source_contributions": contributions,
         "source_refs": refs,
         "source_ref_audit": audit,
         "source_ref_fingerprints": weak_handles,
@@ -394,19 +683,66 @@ def iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
                 yield item
 
 
+def public_pack_summary(payload: Mapping[str, Any]) -> dict[str, Any]:
+    audit = payload.get("source_ref_audit") if isinstance(payload.get("source_ref_audit"), Mapping) else {}
+    contributions = [
+        {
+            "seed_kind": item.get("seed_kind"),
+            "source_ref_count": item.get("source_ref_count"),
+            "source_thread_count": item.get("source_thread_count"),
+            "readiness_role": item.get("readiness_role"),
+            "question_count": item.get("question_count"),
+            "frontier_count": item.get("frontier_count"),
+            "theme_count": item.get("theme_count"),
+            "concept_count": item.get("concept_count"),
+        }
+        for item in payload.get("source_contributions") or []
+        if isinstance(item, Mapping)
+    ]
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": "aippocampus_dream_input_pack_summary",
+        "pack_id": payload.get("pack_id"),
+        "status": payload.get("status"),
+        "pack_kind": payload.get("pack_kind"),
+        "source_seed_kind_counts": dict(Counter(str(kind) for kind in payload.get("source_seed_kinds") or [])),
+        "source_ref_audit": {
+            "status": audit.get("status"),
+            "source_ref_count": audit.get("source_ref_count"),
+            "source_thread_count": audit.get("source_thread_count"),
+            "clean_source_resolution": audit.get("clean_source_resolution"),
+        },
+        "weak_source_handle_count": payload.get("weak_source_handle_count"),
+        "source_contributions": contributions,
+        "eligible_dream_functions": payload.get("eligible_dream_functions") or [],
+        "downstream_use": payload.get("downstream_use") or [],
+        "foreground_eligible": False,
+        "formal_memory_eligible": False,
+        "clean_source_mutation": False,
+        "truth_boundary": payload.get("truth_boundary"),
+        "cannot_claim": payload.get("cannot_claim") or [],
+    }
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Build a source-backed dream input pack.")
     parser.add_argument("input", type=Path, help="JSONL rows from question/journey/ambient outputs.")
     parser.add_argument("--objective", default="", help="Optional dream worker objective.")
     parser.add_argument("--json", action="store_true", help="Emit compact JSON.")
     parser.add_argument("--output", type=Path, help="Optional output path.")
+    parser.add_argument(
+        "--internal-full",
+        action="store_true",
+        help="Emit full internal pack with source refs. Do not use for public logs or issues.",
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
     payload = build_dream_input_pack(iter_jsonl(args.input), objective=args.objective)
-    text = json.dumps(payload, ensure_ascii=False, indent=None if args.json else 2)
+    output_payload = payload if args.internal_full else public_pack_summary(payload)
+    text = json.dumps(output_payload, ensure_ascii=False, indent=None if args.json else 2)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(text + "\n", encoding="utf-8")

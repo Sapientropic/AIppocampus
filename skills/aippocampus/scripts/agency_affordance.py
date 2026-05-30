@@ -25,6 +25,8 @@ MAP_KIND = "aippocampus_agency_affordance_map"
 AFFORDANCE_KIND = "aippocampus_agency_affordance"
 TICKET_KIND = "aippocampus_agency_ticket"
 FEEDBACK_KIND = "aippocampus_agency_ticket_feedback"
+DREAM_HYPOTHESIS_TYPE = "dream_hypothesis"
+DREAM_TRUTH_BOUNDARY = "adjudicated_dream_hypothesis_not_fact"
 
 TRIGGERS = (
     "user_correction",
@@ -240,6 +242,16 @@ def affordance_from_row(
     source_kind: str,
     default_trigger: str,
 ) -> dict[str, Any] | None:
+    is_dream_hypothesis = (
+        row.get("candidate_type") == DREAM_HYPOTHESIS_TYPE
+        or row.get("truth_boundary") == DREAM_TRUTH_BOUNDARY
+    )
+    if is_dream_hypothesis:
+        gate = row.get("sensitive_use_gate") or {}
+        if row.get("human_review_required") or (
+            isinstance(gate, Mapping) and gate.get("state") == "blocked"
+        ):
+            return None
     refs = merge_source_refs(
         row.get("source_refs") or [],
         row.get("evidence_refs") or [],
@@ -260,6 +272,11 @@ def affordance_from_row(
         level = normalize_level(row.get("intervention_level"), "state_check")
     if source_kind == "scheduled_revisit":
         level = normalize_level(row.get("intervention_level"), "offer_next_step")
+    if is_dream_hypothesis:
+        # Dream hypotheses may shape backstage route choice, but the agency
+        # layer must not turn them into direct nudges without source reopen and
+        # host-side safety review.
+        level = "backstage_only"
 
     summary = compact_text(str(row.get("summary") or row.get("title") or row.get("instruction") or ""), 520)
     if not summary and not refs:

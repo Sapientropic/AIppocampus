@@ -20,10 +20,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from aippocampuslib import compact_text, now_utc
+from aippocampuslib import compact_text, deepseek_cache_metrics_from_usage, now_utc
+import dream_worker
 from dream_working_memory import (
     adjudicated_dream_findings_to_working_memory,
     background_adjudicate_dream_findings,
+    plan_dream_hypothesis_use,
+    render_dream_hypothesis_preview,
 )
 from memory_candidate_router import (
     default_jobs_path,
@@ -31,7 +34,7 @@ from memory_candidate_router import (
     iter_jsonl,
     load_working_memory,
 )
-from model_client import DEEPSEEK_KV_CACHE_GUIDE_URL, DEEPSEEK_PREFIX_CACHE_CONTRACT
+from model_client import DEEPSEEK_KV_CACHE_GUIDE_URL, DEEPSEEK_PREFIX_CACHE_CONTRACT, ChatClientConfig
 from registry_store import registry_paths
 
 SCHEMA_VERSION = 1
@@ -463,7 +466,24 @@ def dream_finding(
     }
 
 
-def run_pack_dream_worker(pack: Mapping[str, Any]) -> dict[str, Any]:
+def aggregate_usage(worker_runs: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+    totals: Counter[str] = Counter()
+    for run in worker_runs:
+        usage = run.get("usage") if isinstance(run.get("usage"), Mapping) else {}
+        for key, value in usage.items():
+            if isinstance(value, (int, float)):
+                totals[str(key)] += value
+    return dict(totals)
+
+
+def run_pack_dream_worker(
+    pack: Mapping[str, Any],
+    *,
+    model_config: ChatClientConfig | None = None,
+    model_call: dream_worker.ModelCall | None = None,
+    no_write: bool = False,
+    max_samples: int = 1,
+) -> dict[str, Any]:
     if pack.get("status") != READY_STATUS:
         return {
             "schema_version": SCHEMA_VERSION,
@@ -472,6 +492,68 @@ def run_pack_dream_worker(pack: Mapping[str, Any]) -> dict[str, Any]:
             "findings": [],
             "adjudicated_findings": [],
             "dream_working_memory_rows": [],
+        }
+    if model_config is not None:
+        functions = [
+            function
+            for function in ("compensatory", "amplification")
+            if function in (pack.get("eligible_dream_functions") or [])
+        ]
+        runs = [
+            dream_worker.run_model_backed_dream_worker(
+                pack,
+                dream_function=function,
+                config=model_config,
+                model_call=model_call or dream_worker.chat_json,
+                no_write=no_write,
+                max_samples=max_samples,
+            )
+            for function in functions
+        ]
+        findings = [
+            finding
+            for run in runs
+            for finding in run.get("findings") or []
+            if isinstance(finding, dict)
+        ]
+        adjudicated = [
+            finding
+            for run in runs
+            for finding in run.get("adjudicated_findings") or []
+            if isinstance(finding, dict)
+        ]
+        working_rows = [
+            row
+            for run in runs
+            for row in run.get("dream_working_memory_rows") or []
+            if isinstance(row, dict)
+        ]
+        usage = aggregate_usage(runs)
+        cache = deepseek_cache_metrics_from_usage(usage)
+        cache["kind"] = "deepseek_prefix"
+        statuses = {str(run.get("status") or "") for run in runs}
+        if "candidate_emitted" in statuses:
+            status = "candidate_emitted"
+        elif "candidate_parked" in statuses:
+            status = "candidate_parked"
+        elif "model_output_rejected" in statuses:
+            status = "model_output_rejected"
+        else:
+            status = "no_candidate"
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "kind": "aippocampus_pack_dream_worker",
+            "status": status,
+            "pack_id": pack.get("pack_id"),
+            "worker_mode": "model_backed",
+            "findings": findings,
+            "adjudicated_findings": adjudicated,
+            "dream_working_memory_rows": working_rows,
+            "worker_runs": [dream_worker.public_worker_summary(run) for run in runs],
+            "usage": usage,
+            "cache": cache,
+            "no_write": bool(no_write),
+            "prompt_order": list(dream_worker.PROMPT_ORDER),
         }
     term = str((pack.get("selection") or {}).get("resonance_term") or "selected resonance")
     source_thread_count = int((pack.get("source_ref_audit") or {}).get("source_thread_count") or 0)
@@ -595,6 +677,182 @@ def compare_plain_and_augmented(
     }
 
 
+def ratio(numerator: int | float, denominator: int | float) -> float:
+    return round(float(numerator) / float(denominator), 4) if denominator else 0.0
+
+
+def prompt_groups(packs: list[dict[str, Any]]) -> dict[str, list[str]]:
+    recall: list[str] = []
+    reflection: list[str] = []
+    unsupported: list[str] = []
+    for pack in packs:
+        prompts = [str(prompt) for prompt in pack.get("eval_prompts") or [] if str(prompt)]
+        if prompts:
+            recall.append(prompts[0])
+        if len(prompts) > 1:
+            reflection.append(prompts[1])
+        term = str((pack.get("selection") or {}).get("resonance_term") or "selected resonance")
+        unsupported.append(f"State a source fact about {term} without reopening evidence.")
+    return {"recall": recall, "reflection": reflection, "unsupported": unsupported}
+
+
+def matching_rows(prompt: str, rows: Iterable[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    return [row for row in rows if prompt_matches(prompt, row)]
+
+
+def visible_dream_rows_for_prompt(prompt: str, rows: Iterable[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    out: list[Mapping[str, Any]] = []
+    for row in matching_rows(prompt, rows):
+        plan = plan_dream_hypothesis_use(row, prompt=prompt)
+        if plan.get("action") == "use_quietly":
+            out.append(row)
+    return out
+
+
+def unique_rows(rows: Iterable[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    seen: set[str] = set()
+    out: list[Mapping[str, Any]] = []
+    for row in rows:
+        key = str(row.get("candidate_key") or row.get("row_id") or row.get("title") or "")
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(row)
+    return out
+
+
+def manual_source_review_metrics(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+    status_counts: Counter[str] = Counter()
+    reviewed = 0
+    source_backed = 0
+    for row in rows:
+        if not isinstance(row, Mapping):
+            continue
+        status = str(row.get("review_status") or row.get("status") or "unknown").casefold()
+        if status not in {"supported", "refuted", "unknown"}:
+            status = "unknown"
+        reviewed += 1
+        status_counts[status] += 1
+        if row.get("source_refs"):
+            source_backed += 1
+    return {
+        "reviewed_count": reviewed,
+        "source_backed_review_count": source_backed,
+        "status_counts": dict(sorted(status_counts.items())),
+    }
+
+
+def source_support_correct(row: Mapping[str, Any]) -> bool:
+    source_strength = row.get("source_strength") if isinstance(row.get("source_strength"), Mapping) else {}
+    preview = render_dream_hypothesis_preview(row)
+    return (
+        int(source_strength.get("source_ref_count") or 0) > 0
+        and row.get("truth_boundary") == "adjudicated_dream_hypothesis_not_fact"
+        and "not source fact" in preview
+        and "reopen source" in preview
+    )
+
+
+def evaluate_user_visible_dream_lift(
+    *,
+    packs: list[dict[str, Any]],
+    dream_working_memory_rows: list[dict[str, Any]],
+    worker_runs: list[Mapping[str, Any]] | None = None,
+    manual_source_review_rows: Iterable[Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
+    groups = prompt_groups(packs)
+    plain_rows = [row for pack in packs for row in pack.get("eval_surface_rows") or []]
+    dream_rows = list(dream_working_memory_rows)
+
+    recall_total = len(groups["recall"])
+    plain_recall_hits = sum(1 for prompt in groups["recall"] if matching_rows(prompt, plain_rows))
+    visible_recall_hits = sum(
+        1
+        for prompt in groups["recall"]
+        if matching_rows(prompt, plain_rows) or visible_dream_rows_for_prompt(prompt, dream_rows)
+    )
+
+    plain_reflection = sum(
+        1
+        for prompt in groups["reflection"]
+        for row in matching_rows(prompt, plain_rows)
+        if row.get("reflection_ready")
+    )
+    augmented_reflection = plain_reflection + sum(
+        1
+        for prompt in groups["reflection"]
+        for row in visible_dream_rows_for_prompt(prompt, dream_rows)
+        if "reflection_space" in (row.get("downstream_use") or [])
+    )
+
+    unsupported_total = len(groups["unsupported"])
+    suppressed = 0
+    for prompt in groups["unsupported"]:
+        rows = matching_rows(prompt, dream_rows)
+        plans = [
+            plan_dream_hypothesis_use(row, prompt=prompt, strong_user_facing_claim=True)
+            for row in rows
+        ]
+        if not plans or all(plan.get("action") != "use_quietly" for plan in plans):
+            suppressed += 1
+
+    visible_rows = unique_rows(
+        row
+        for prompt in [*groups["recall"], *groups["reflection"]]
+        for row in visible_dream_rows_for_prompt(prompt, dream_rows)
+    )
+    source_correct = sum(1 for row in visible_rows if source_support_correct(row))
+    usage = aggregate_usage(worker_runs or [])
+    cache = deepseek_cache_metrics_from_usage(usage)
+    cache["kind"] = "deepseek_prefix" if cache.get("available") else "none"
+    manual = manual_source_review_metrics(manual_source_review_rows or [])
+    cannot_claim = ["real_user_behavior", "general_dream_quality"]
+    if not manual["reviewed_count"]:
+        cannot_claim.append("manual_source_review_support")
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": "aippocampus_dream_user_visible_lift_eval",
+        "claim_level": "visibility_ablation_harness",
+        "private_text_emitted": False,
+        "metrics": {
+            "recall_lift": {
+                "prompt_count": recall_total,
+                "plain_hit_count": plain_recall_hits,
+                "augmented_visible_hit_count": visible_recall_hits,
+                "hit_delta": visible_recall_hits - plain_recall_hits,
+                "plain_hit_rate": ratio(plain_recall_hits, recall_total),
+                "augmented_visible_hit_rate": ratio(visible_recall_hits, recall_total),
+            },
+            "reflection_lift": {
+                "plain_reflection_ready_count": plain_reflection,
+                "augmented_visible_reflection_count": augmented_reflection,
+                "reflection_ready_delta": augmented_reflection - plain_reflection,
+            },
+            "unsupported_evidence_suppression": {
+                "prompt_count": unsupported_total,
+                "suppressed_count": suppressed,
+                "suppression_rate": ratio(suppressed, unsupported_total),
+            },
+            "source_support_correctness": {
+                "visible_dream_row_count": len(visible_rows),
+                "supported_visible_row_count": source_correct,
+                "support_rate": ratio(source_correct, len(visible_rows)),
+            },
+            "manual_source_review": manual,
+            "cost_cache": {
+                "usage": usage,
+                "cache": cache,
+                "model_call_count": sum(1 for run in worker_runs or [] if run.get("worker_mode") == "model_backed"),
+            },
+        },
+        "can_claim": [
+            "ablation_harness_separates_plain_and_dream_augmented_surfaces",
+            "unsupported_strong_claims_require_source_reopen_in_eval",
+        ],
+        "cannot_claim": cannot_claim,
+    }
+
+
 def sanitized_pack(pack: Mapping[str, Any]) -> dict[str, Any]:
     audit = pack.get("source_ref_audit") or {}
     return {
@@ -635,6 +893,7 @@ def run_dream_real_history_eval(
     *,
     job_rows: Iterable[Mapping[str, Any]] | None = None,
     working_memory_rows: Iterable[Mapping[str, Any]] | None = None,
+    manual_source_review_rows: Iterable[Mapping[str, Any]] | None = None,
     registry_dir: Path | None = None,
     jobs_path: Path | None = None,
     working_memory_path: Path | None = None,
@@ -664,6 +923,12 @@ def run_dream_real_history_eval(
         packs=packs,
         dream_working_memory_rows=dream_working_rows,
     )
+    user_visible = evaluate_user_visible_dream_lift(
+        packs=packs,
+        dream_working_memory_rows=dream_working_rows,
+        worker_runs=worker_runs,
+        manual_source_review_rows=manual_source_review_rows or [],
+    )
     seed_kind_counts = Counter(
         kind for pack in packs for kind in (pack.get("source_seed_kinds") or [])
     )
@@ -682,6 +947,7 @@ def run_dream_real_history_eval(
             "dream_finding_count": sum(len(run.get("findings") or []) for run in worker_runs),
             "dream_working_memory_count": len(dream_working_rows),
             "source_seed_kind_counts": dict(sorted(seed_kind_counts.items())),
+            "user_visible": user_visible,
             **comparison,
         },
         "packs": [sanitized_pack(pack) for pack in packs],

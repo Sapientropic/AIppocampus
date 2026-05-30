@@ -1,9 +1,11 @@
 # Dream Task Design: From Jung's Dream Theory to Subconscious Consolidation
 
 Status: research memo with deterministic Phase 1 compensatory output, a Phase 2
-source-pack/adjudication substrate, and a selected real-history Phase 3
-structural eval; awaiting cross-model validation, live model-backed dream
-workers, and measured user-visible recall/reflection impact.
+source-pack/adjudication substrate, a selected real-history Phase 3 structural
+eval, bounded model-backed compensatory/amplification/prospective worker paths,
+an active-imagination sandbox, and a retrospective prospective-validation
+harness covered by mocked tests; awaiting live smoke, cross-model validation,
+and measured user-visible recall/reflection impact.
 Anthropic Managed Agents Dreams are confirmed as an adjacent official Research
 Preview, but this memo's Jung-inspired dream tasks are an AIppocampus-specific
 design proposal.
@@ -14,9 +16,14 @@ extraction rows; `skills/aippocampus/scripts/dream_input_pack.py` builds
 cross-thread source packs from question links, Journey rows, and ambient
 residue; `skills/aippocampus/scripts/dream_working_memory.py` provides the
 background adjudication guard before dream hypotheses can feed working memory;
-`skills/aippocampus/scripts/dream_real_history_eval.py` runs a selected
-real-history structural eval against plain question/frontier/Journey/working
-memory surfaces.
+`skills/aippocampus/scripts/dream_worker.py` runs bounded model-backed
+compensatory/amplification/prospective workers plus active-imagination sandbox
+candidates over ready packs and validates prospective hypotheses
+retrospectively against explicit later evidence; and
+`skills/aippocampus/scripts/dream_real_history_eval.py` runs selected
+real-history structural and user-visible ablation evals against plain
+question/frontier/Journey/working-memory surfaces with deterministic fallback
+or optional model-backed workers.
 Related: [affect-side-channel.md](affect-side-channel.md),
 [compact-activation-signals.md](compact-activation-signals.md),
 [correction-reconsolidation.md](correction-reconsolidation.md).
@@ -177,6 +184,12 @@ This is the most experimental function. It risks hallucination (the model
 generating plausible but ungrounded connections). Mitigation: every active
 imagination output must carry `source_refs` pointing to the threads that
 inspired it, and must be flagged as dream-synthesized, not source-extracted.
+The implemented sandbox tightens this further: active-imagination candidates
+must cite at least two independent source anchors, explain
+`why_this_is_not_fact`, include `counter_evidence`, and keep
+`foreground_eligible=false` / `formal_memory_eligible=false`. Sensitive
+personal interpretations, durable profile/preference claims, and direct
+user-facing assertions stay parked even when they cite source handles.
 
 ## Relationship to Existing Architecture
 
@@ -255,14 +268,24 @@ navigation artifacts:
 - `question_link` rows from `question_tracking.py`
 - `aippocampus_journey` rows from `journey_tracking.py`
 - `aippocampus_ambient_residue` rows from `ambient_thread_cache.py`
+- `concept_edge` rows from subconscious concept extraction
+- source-backed `theme_candidate` rows from warm/ambient recall scouts
+- correction activation/outcome/adjudication rows from
+  `correction_reconsolidation.py`
+- reflection feedback/adjustment rows from `reflection_space.py`
+- agency/coding tickets and decision events when they carry clean source refs
 
 The pack only becomes `status="ready_for_dream_worker"` when it has clean
 source refs from at least two distinct source threads. Ambient residue is
-allowed to add themes, weak `source_ref_fingerprints`, and negative contexts,
-but it cannot make a clean source pack by itself. The ready pack may advertise
+allowed to add themes, weak `source_ref_fingerprints`, and negative contexts.
+Theme candidates with only fingerprints follow the same weak-context rule.
+Weak handles can enrich a pack, but they cannot make a clean source pack by
+themselves. Each seed is also summarized in `source_contributions` so later
+workers can explain which inputs supplied clean anchors and which supplied weak
+context. The ready pack may advertise
 `eligible_dream_functions=["compensatory", "amplification"]`; this only means
-the source substrate is fit for those background workers, not that
-amplification output quality has been proven.
+the source substrate is fit for those background workers, not that amplification
+output quality has been proven.
 
 The pack stays out of foreground hooks and formal memory:
 
@@ -282,7 +305,46 @@ memory projection also refuses forced adjudicated rows whose bridge claims lack
 source refs.
 
 The executable contract lives in
-`tests/aippocampus/test_dream_input_pack.py`.
+`tests/aippocampus/test_dream_input_pack.py`. The CLI defaults to a public
+summary (`kind="aippocampus_dream_input_pack_summary"`) that reports aggregate
+readiness and source-count diagnostics without raw `source_refs`, message ids,
+thread ids, questions, or frontier text. Full internal packs require
+`--internal-full` and are not suitable for public logs, docs, or issue comments.
+
+### Implemented Phase 2.5 Queue Lifecycle
+
+`skills/aippocampus/scripts/dream_queue.py` is the deterministic handoff layer
+between ready packs and future detached dream workers. It does not call a model
+or promote dream output. It creates `kind="aippocampus_dream_queue_item"` rows
+only for `status="ready_for_dream_worker"` packs, one bounded item per eligible
+dream function.
+
+Queue items carry lifecycle and cost metadata:
+
+- `pack_id`, `dream_function`, `trigger_family`, `priority`, and `dedup_key`
+- `review_after` and `expires_at`
+- `cost_budget` with one model call / one sample per item by default
+- `execution_mode="detached_background"`
+- `foreground_eligible=false` and `live_model_allowed_in_foreground=false`
+- `cache_contract="deepseek_prefix_v1"` with stable
+  `prompt_order=["stable_dream_worker_contract", "source_pack_payload",
+  "variable_run_directive"]`
+
+Default trigger frequency is low-frequency background work: ready source packs,
+topic-epoch residue, correction/outcome events, Journey frontier changes,
+explicit operator requests, and periodic maintenance may enqueue items, but
+dream work must not run after every extraction and must not run in foreground
+hooks. Human/operator intervention is reserved for explicit requests and
+sensitive review; ordinary accepted/parked decisions use background
+adjudication.
+
+The queue also keeps dream work from regenerating the same hypothesis by
+suppressing items whose `dedup_key` already appears in active previous queue
+state or adjudicated dream findings. Expired queued items and parked findings
+are reported as aggregate diagnostics. Public summaries report counts and
+trigger-family totals only, not raw source refs, message ids, or thread ids.
+
+The executable contract lives in `tests/aippocampus/test_dream_queue.py`.
 
 ### Implemented Phase 3 Structural Eval
 
@@ -299,7 +361,7 @@ quality benchmark. It does three narrow things:
 - Compares plain source rows against the augmented surface that includes
   adjudicated `candidate_type="dream_hypothesis"` working-memory rows.
 
-The current metric is structural lift, not user-visible usefulness:
+The first metric layer is structural lift, not user-visible usefulness:
 
 - prompt hit-rate delta
 - source-thread coverage delta
@@ -321,10 +383,72 @@ behavioral lift, private real-history dream quality, user-visible reflection
 value, full-history coverage, or clean-source factual resolution without
 reopening source.
 
+The #131 visibility-ablation harness adds a second, still conservative layer:
+`metrics.user_visible` reports recall lift, reflection lift, unsupported
+strong-claim suppression, source-support correctness, manual source-review
+coverage, and cost/cache behavior separately. This distinguishes "the substrate
+has more bridge structure" from "a visible answer would improve." The harness
+can ingest selected manual source-review rows, but when no reviewed sample is
+provided it explicitly lists `manual_source_review_support` and
+`real_user_behavior` under `cannot_claim`. Public output remains sanitized and
+does not include raw source refs, message ids, thread ids, local paths, or
+private text.
+
+### Implemented Phase 3.5 Bounded Model-Backed Workers
+
+`skills/aippocampus/scripts/dream_worker.py` adds the first bounded
+model-backed path for `dream_function="compensatory"` and
+`dream_function="amplification"` over `status="ready_for_dream_worker"` packs,
+then extends the same contract to `dream_function="prospective"` and a
+high-risk `dream_function="active_imagination"` sandbox. The selected source
+pack remains the source boundary: the worker prompt exposes sanitized pack
+metadata plus a `source_ref_inventory`, and model outputs must cite those
+source-ref ids before they can become `finding_kind="dream_synthesized"`
+candidates.
+
+The worker keeps the Phase 1/Phase 3 deterministic paths as fallback. In
+`dream_real_history_eval.py`, `run_pack_dream_worker()` only uses the
+model-backed path when a `model_client.ChatClientConfig` is supplied; otherwise
+the deterministic compensatory/amplification fixture remains the conservative
+baseline.
+
+The model-backed worker is bounded by design:
+
+- prompt order is always `stable_dream_worker_contract`, then
+  `source_pack_payload`, then `variable_run_directive`
+- DeepSeek-flavored configs must use `cache_contract="deepseek_prefix_v1"`
+- `max_samples` limits accepted candidate shaping per dream function
+- `no_write=True` is the default, so accepted candidates do not project to
+  working memory unless the caller explicitly asks for projection
+- malformed candidates, unsupported candidate kinds, missing source refs,
+  bridge claims without source refs, and overconfident dream claims are rejected
+  or parked by `background_adjudicate_dream_findings()`
+- prospective candidates carry `emergence_signal`, `trajectory_hint`,
+  `counter_evidence`, `review_after`, `expires_at`, and
+  `language_boundary="hypothesis_not_prediction"`
+- retrospective prospective validation reports `supported`, `refuted`,
+  `stale`, and `unknown` buckets, but only when later evidence explicitly
+  targets the finding id and carries source refs; similar terms alone do not
+  count as support
+- active-imagination sandbox candidates carry `sandbox_boundary`, require
+  `why_this_is_not_fact` and `counter_evidence`, require two independent source
+  anchors, and park sensitive/profile-style interpretations even when
+  source-backed
+- public summaries report aggregate counts, provider usage, and cache metrics
+  without source refs, message ids, thread ids, or private text
+
+This can claim mocked evidence for the runtime contract: all four worker functions
+preserve prompt ordering, pass DeepSeek cache usage through sanitized telemetry,
+route every candidate through background adjudication, and keep prospective
+language framed as possibility rather than prediction. It still cannot claim
+private real-history dream quality, live provider quality, predictive validity,
+active-imagination usefulness, or user-visible recall/reflection lift until
+selected real-history smokes and human/source review exist.
+
 ### Live Dream Worker DeepSeek KV Cache Contract
 
-Current P1-P3 dream workers are deterministic, so they must not claim provider
-cache hits. The next live/model-backed dream worker must use the shared
+The default P1-P3 fallback remains deterministic, so it must not claim provider
+cache hits. The model-backed worker path must use the shared
 `model_client.ChatClientConfig(cache_contract="deepseek_prefix_v1")` path before
 it can call DeepSeek. This is a runtime contract, not an optional optimization.
 
@@ -353,9 +477,10 @@ The executable guard has three layers:
 - `tools/aippocampus/docs/check_docs_health.py` scans production script
   `ChatClientConfig(...)` call sites and fails docs health if a new LLM caller
   omits an explicit `cache_contract`.
+- `dream_worker.py` builds the stable-prefix message order and reports provider
+  `usage` plus DeepSeek cache metrics when a model call is used.
 - `dream_real_history_eval.py` returns a `live_worker_contract` block so the
-  dream layer carries this boundary even while the current worker remains
-  deterministic.
+  dream layer carries this boundary even when using the deterministic fallback.
 
 DeepSeek cache telemetry can be reported only from provider `usage` fields. Do
 not invent hit rates for deterministic dream evals, OpenAI-compatible fallback
@@ -408,6 +533,28 @@ direct user-facing assertion. The boundary remains:
 memory promotion. As of the P2 substrate, projection also requires
 source-ref-backed bridge claims; a forced accepted state without those refs must
 still be ignored.
+
+As of the #130 gate, projected rows also carry `foreground_use` and
+`sensitive_use_gate` metadata. The default action is `quiet_substrate`: the
+foreground can let a dream hypothesis change routing, recall selection, or
+reflection topology only when it changes the current answer. It should stay
+silent when the relevant source is already visible, the hypothesis is expired,
+or annoyance risk is high. Any strong user-facing claim must reopen source
+first; rendered previews must say "Dream hypothesis, not source fact" and keep
+uncertainty/source-reopen wording. Sensitive personal interpretations,
+relationship-continuity stories, durable profile/preference claims, and
+overconfident dream language are parked before working-memory projection.
+The actual foreground path enforces this through working-memory matching and
+hook rendering: blocked/expired/sensitive dream rows are not matched, matched
+dream rows carry a `dream_hypothesis_use` plan, and hook context renders the
+dream boundary instead of the generic working-memory wording. Ambient recall
+cards generated from dream rows likewise say to use the hint quietly and reopen
+source before strong claims. Reflection topology may include only adjudicated,
+source-ref-carried dream hypotheses as collapsed interpretive nodes with a
+source-reopen boundary. Agency affordance mapping treats direct dream
+hypothesis inputs as backstage-only and drops rows blocked by the sensitive-use
+gate, so a dream cannot become a foreground action ticket merely by bypassing
+ambient recall.
 
 ### Ambient Residue As Dream Seed
 

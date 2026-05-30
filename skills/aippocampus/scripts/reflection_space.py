@@ -13,6 +13,7 @@ import argparse
 import hashlib
 import json
 from collections.abc import Iterable, Mapping, Sequence
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
@@ -26,6 +27,15 @@ EDGE_KIND = "reflection_topology_edge"
 FEEDBACK_KIND = "aippocampus_reflection_feedback"
 ADJUSTMENT_KIND = "aippocampus_reflection_adjustment"
 FIXTURE_SMOKE_KIND = "aippocampus_reflection_space_fixture_smoke"
+DREAM_HYPOTHESIS_TYPE = "dream_hypothesis"
+ADJUDICATED_DREAM_STATES = {
+    "accepted",
+    "approved",
+    "reviewed",
+    "agent_adjudicated",
+    "auto_adjudicated",
+    "source_adjudicated",
+}
 
 ReflectionAction = Literal[
     "merge",
@@ -91,6 +101,20 @@ def merge_refs(*groups: object, limit: int = 12) -> tuple[dict[str, Any], ...]:
             if len(refs) >= limit:
                 return tuple(refs)
     return tuple(refs)
+
+
+def parse_utc(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        text = value[:-1] + "+00:00" if value.endswith("Z") else value
+        return datetime.fromisoformat(text).astimezone(timezone.utc)
+    except ValueError:
+        return None
+
+
+def source_ref_keys(refs: Iterable[Mapping[str, Any]]) -> set[tuple[str, str, str, str]]:
+    return {source_ref_key(ref) for ref in refs if any(source_ref_key(ref))}
 
 
 def journey_id_of(row: Mapping[str, Any]) -> str:
@@ -444,10 +468,93 @@ def waypoint_nodes_and_edges(journey: Mapping[str, Any]) -> tuple[list[dict[str,
     return nodes, edges
 
 
+def dream_hypothesis_block_reason(row: Mapping[str, Any], *, now: datetime | None = None) -> str:
+    if row.get("candidate_type") != DREAM_HYPOTHESIS_TYPE:
+        return "not_dream_hypothesis"
+    if str(row.get("review_state") or "") not in ADJUDICATED_DREAM_STATES:
+        return "not_adjudicated"
+    if "reflection_space" not in {str(item) for item in row.get("downstream_use") or []}:
+        return "reflection_not_allowed"
+    if not normalize_source_refs(row.get("source_refs") or []):
+        return "missing_source_refs"
+    gate = row.get("sensitive_use_gate") or {}
+    if isinstance(gate, Mapping) and gate.get("state") == "blocked":
+        return "sensitive_use_blocked"
+    if row.get("human_review_required"):
+        return "human_review_required"
+    expires_at = parse_utc(str(row.get("expires_at") or ""))
+    if expires_at and expires_at <= (now or datetime.now(timezone.utc)):
+        return "dream_hypothesis_expired"
+    return ""
+
+
+def dream_hypothesis_nodes_and_edges(
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    journeys: Sequence[Mapping[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], int]:
+    nodes: list[dict[str, Any]] = []
+    edges: list[dict[str, Any]] = []
+    ignored = 0
+    now = datetime.now(timezone.utc)
+    journey_ref_keys = {
+        f"journey:{journey_id_of(journey)}": source_ref_keys(journey_refs(journey))
+        for journey in journeys
+    }
+    for row in rows:
+        reason = dream_hypothesis_block_reason(row, now=now)
+        if reason:
+            ignored += 1
+            continue
+        refs = normalize_source_refs(row.get("source_refs") or [])
+        node_id = "dream_hypothesis:" + str(
+            row.get("candidate_key")
+            or (row.get("source_finding_ids") or [""])[0]
+            or stable_id("dream", row.get("title") or "", refs, length=18)
+        )
+        nodes.append(
+            {
+                "kind": NODE_KIND,
+                "node_type": "dream_hypothesis",
+                "node_id": node_id,
+                "label": compact_text(str(row.get("title") or row.get("summary") or ""), 160),
+                "summary": compact_text(str(row.get("summary") or ""), 360),
+                "truth_boundary": str(row.get("truth_boundary") or "adjudicated_dream_hypothesis_not_fact"),
+                "dream_function": row.get("dream_function"),
+                "metrics": {
+                    "confidence": round(float(row.get("confidence") or 0.62), 4),
+                    "ranking_weight": 0.18,
+                    "visibility_score": 0.18,
+                    "visibility": "collapsed",
+                },
+                "available_actions": ["inspect_source_refs", "compare_counter_evidence", "collapse"],
+                "source_refs": list(refs),
+                "source_reopen_required_for_strong_claims": True,
+                "clean_source_mutation": False,
+            }
+        )
+        keys = source_ref_keys(refs)
+        for journey_node_id, journey_keys in journey_ref_keys.items():
+            overlap = keys & journey_keys
+            if not overlap:
+                continue
+            edges.append(
+                {
+                    "kind": EDGE_KIND,
+                    "edge_type": "dream_hypothesis_source_overlap",
+                    "from": journey_node_id,
+                    "to": node_id,
+                    "source_refs": list(refs),
+                }
+            )
+    return nodes, edges, ignored
+
+
 def build_reflection_topology(
     journeys: Iterable[Mapping[str, Any]],
     *,
     feedback_rows: Iterable[Mapping[str, Any]] = (),
+    dream_hypotheses: Iterable[Mapping[str, Any]] = (),
     topic_epoch: str = "default",
 ) -> dict[str, Any]:
     journey_items = tuple(dict(row) for row in journeys if journey_id_of(row))
@@ -463,6 +570,12 @@ def build_reflection_topology(
         waypoint_nodes, waypoint_edges = waypoint_nodes_and_edges(row)
         nodes.extend(waypoint_nodes)
         edges.extend(waypoint_edges)
+    dream_nodes, dream_edges, ignored_dream_hypothesis_count = dream_hypothesis_nodes_and_edges(
+        dream_hypotheses,
+        journeys=journey_items,
+    )
+    nodes.extend(dream_nodes)
+    edges.extend(dream_edges)
     aar_adjustments = [
         adjustment
         for adjustment in adjustments
@@ -478,11 +591,14 @@ def build_reflection_topology(
         "feedback_adjustments": adjustments,
         "aar_strategy_adjustments": aar_adjustments,
         "ignored_feedback_count": ignored_feedback_count,
+        "ignored_dream_hypothesis_count": ignored_dream_hypothesis_count,
         "interaction_contract": {
             "visual_form": "inspectable_topology",
             "supported_user_actions": ["expand", "merge", "revive", "abandon"],
             "feedback_mutates_only": ["ranking", "confidence", "visibility"],
             "aar_or_host_must_apply_visibility_guard": True,
+            "dream_hypotheses_are_interpretive_not_facts": True,
+            "dream_hypothesis_strong_claim_requires_source_reopen": True,
             "clean_source_mutation": False,
             "journey_history_mutation": False,
             "foreground_delivery_decided_elsewhere": True,
@@ -490,10 +606,12 @@ def build_reflection_topology(
         "can_claim": [
             "small_journey_topology_with_merge_revive_abandon_feedback_adjustments",
             "feedback_adjustments_are_source_ref_carried_and_surface_only",
+            "adjudicated_dream_hypotheses_can_be_reflection_nodes_with_source_reopen_boundary",
         ],
         "cannot_claim": [
             "decorative_or_polished_visualization",
             "live_user_behavior_change",
+            "dream_hypothesis_is_fact",
             "scheduler_or_aar_runtime_enforcement",
             "foreground_ticket_selection_or_visible_context_suppression",
             "clean_source_rewrite",

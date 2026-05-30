@@ -171,6 +171,49 @@ DeepSeek can be used aggressively, but hooks must stay cheap. The split is:
   accepted labels into per-thread `semantic-scope-labels.jsonl` sidecars and
   rebuilds `project_timeline.json` so search and timeline consumers see the
   same navigation metadata
+- dream queue planning is deterministic and detached-only:
+  `dream_queue.py` turns ready dream input packs into bounded queue items with
+  trigger family, priority, dedup key, review/expiry horizon, cost budget, and
+  `deepseek_prefix_v1` prompt-order metadata. It does not make model calls and
+  must not be run as a foreground hook worker.
+- queued dream worker samples keep stable prompt-prefix groups together:
+  stable worker contract first, source-pack payload second, and variable run
+  directive last. This preserves the same-prefix ordering needed for DeepSeek
+  KV cache warm-up when a later live worker consumes the queue.
+- bounded model-backed dream workers live in `dream_worker.py`. They consume
+  only `status="ready_for_dream_worker"` packs for compensatory,
+  amplification, prospective, and active-imagination functions, require cited
+  source-ref ids for every candidate/bridge claim, default to `no_write=True`,
+  and pass accepted or parked candidates through
+  `background_adjudicate_dream_findings()` before any working-memory projection
+  is possible. Active-imagination candidates additionally require two
+  independent source anchors, `why_this_is_not_fact`, and `counter_evidence`;
+  sensitive/profile-style interpretations stay parked. Prospective
+  retrospective validation only counts later rows that explicitly target the
+  finding id and carry source refs; similar terms alone stay `unknown`.
+- adjudicated dream hypotheses project through `dream_working_memory.py` into
+  ordinary working-memory rows, not a parallel dream channel. Those rows carry
+  `foreground_use` / `sensitive_use_gate` metadata: use quietly only when it
+  changes the current answer or route, stay silent when source is already
+  visible, expired, or high-annoyance, and reopen source before any strong
+  user-facing claim. The live consumers enforce the same boundary:
+  working-memory matching skips blocked/expired rows, hook rendering labels the
+  row as a dream hypothesis, ambient cards require source reopen for strong
+  claims, reflection topology only accepts audited collapsed nodes, and agency
+  affordances downgrade direct dream inputs to backstage-only.
+- `dream_real_history_eval.py` reports dream impact in two layers: structural
+  substrate lift and a sanitized user-visible ablation harness. The latter
+  separates recall, reflection, unsupported-claim suppression, source-support,
+  manual source-review, and cost/cache metrics; it must not be treated as real
+  user-value proof without reviewed samples and live/behavioral evidence.
+- `dream_input_pack.py` CLI output is public-summary by default. Use
+  `--internal-full` only for local worker handoff paths that are allowed to
+  carry source refs; do not paste full pack output into public logs, docs, or
+  GitHub issues.
+- human/operator intervention is explicit: ordinary queue items go to detached
+  background adjudication; sensitive direct assertions or operator-requested
+  dream runs may require review, but the queue itself is not a user approval
+  ritual.
 - one failed or malformed sample must be isolated as `ok=false`; successful
   samples continue, and the batch reports `failure_count` / `partial_failure`
 - reducers and materializers still own promotion, route filtering, semantic

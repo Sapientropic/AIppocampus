@@ -116,6 +116,43 @@ class ReflectionSpaceTests(unittest.TestCase):
         self.assertIn("confidence", surfaces)
         self.assertIn("visibility", surfaces)
 
+    def test_adjudicated_dream_hypotheses_enter_reflection_as_audited_nodes(self) -> None:
+        first, _ = self.make_journeys()
+        dream_row = {
+            "candidate_type": "dream_hypothesis",
+            "candidate_key": "wm_dream_continuity",
+            "review_state": "agent_adjudicated",
+            "downstream_use": ["working_memory", "reflection_space"],
+            "title": "Continuity dream bridge",
+            "summary": "A quiet hypothesis about continuity and source reopen behavior.",
+            "confidence": 0.67,
+            "source_refs": first["source_refs"][:1],
+            "truth_boundary": "adjudicated_dream_hypothesis_not_fact",
+            "dream_function": "amplification",
+            "sensitive_use_gate": {"state": "allowed"},
+        }
+        blocked = {
+            **dream_row,
+            "candidate_key": "wm_dream_blocked",
+            "sensitive_use_gate": {"state": "blocked"},
+        }
+
+        topology = reflection.build_reflection_topology(
+            [first],
+            dream_hypotheses=[dream_row, blocked],
+            topic_epoch="epoch-dream-reflection",
+        )
+
+        dream_nodes = [node for node in topology["nodes"] if node["node_type"] == "dream_hypothesis"]
+        dream_edges = [edge for edge in topology["edges"] if edge["edge_type"] == "dream_hypothesis_source_overlap"]
+
+        self.assertEqual(len(dream_nodes), 1)
+        self.assertEqual(dream_nodes[0]["truth_boundary"], "adjudicated_dream_hypothesis_not_fact")
+        self.assertTrue(dream_nodes[0]["source_reopen_required_for_strong_claims"])
+        self.assertEqual(len(dream_edges), 1)
+        self.assertEqual(topology["ignored_dream_hypothesis_count"], 1)
+        self.assertTrue(topology["interaction_contract"]["dream_hypotheses_are_interpretive_not_facts"])
+
     def test_unsourced_unknown_feedback_is_ignored(self) -> None:
         first, _ = self.make_journeys()
 
