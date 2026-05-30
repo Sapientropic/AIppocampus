@@ -41,6 +41,33 @@ Latest verification for that slice:
 - Changed-file secret/local-path scan: no hits.
 - Main CI for commit `5940252b112ece31efd524e4a5a09aa0593d9a24`: passed.
 
+## 2026-05-30 Memory Pain Fixture Evidence
+
+Issues #27/#28 added public-safe memory-system pain fixtures and a short report
+without turning public competitor issue references into a leaderboard. The
+canonical report is `docs/memory-pain-fixture-report.md`.
+
+Verification for that slice:
+
+- `python -m unittest tests.aippocampus.test_benchmark_memory_decision_gate tests.aippocampus.test_benchmark_payload_fidelity`:
+  17 tests passed.
+- `ruff check benchmarks/aippocampus/benchmark_memory_decision_gate.py benchmarks/aippocampus/benchmark_payload_fidelity.py tests/aippocampus/test_benchmark_memory_decision_gate.py tests/aippocampus/test_benchmark_payload_fidelity.py`:
+  passed.
+- `python benchmarks\aippocampus\benchmark_memory_decision_gate.py --json --output .tmp\memory-pain-gate-report.json`:
+  passed; 9 memory-pain fixture families, 0 unsupported-evidence false
+  positives, `live_llm_required=false`.
+- `python benchmarks\aippocampus\benchmark_payload_fidelity.py --json --output .tmp\memory-pain-payload-report.json`:
+  passed; 9 memory-pain fixture families, 0 privacy breaches,
+  0 evidence-without-source cases, and 0 unsupported-evidence cases for that
+  fixture family.
+- `python tools\aippocampus\docs\check_docs_health.py --json`: passed.
+- `python tools\aippocampus\run_tests.py --tier fast`: 354 tests passed.
+- `python tools\aippocampus\run_tests.py --tier benchmark`: 87 tests passed.
+
+This is boundary evidence only. It does not claim competitor superiority,
+real-history memory-pain quality, live semantic-model quality, or a complete
+Track D compaction-continuity runner.
+
 ## 2026-05-30 P0 Evidence Refresh
 
 This slice executed the P0 issues #29, #30, #33, #34, #35, #36, and #38. It

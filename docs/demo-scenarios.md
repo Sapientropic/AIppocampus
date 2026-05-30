@@ -120,6 +120,21 @@ cases.
 
 Cannot claim: that optional external semantic gates are enabled.
 
+## Scenario 6b: Memory Pain Boundary Fixtures
+
+```sh
+python ./benchmarks/aippocampus/benchmark_memory_decision_gate.py --json --output ./.tmp/memory-pain-gate-report.json
+python ./benchmarks/aippocampus/benchmark_payload_fidelity.py --json --output ./.tmp/memory-pain-payload-report.json
+```
+
+Expected result: the report includes a `memory_pain_fixtures` summary with
+public-safe negative cases and no unsupported-evidence false positives for the
+memory-pain fixture family. The public report is
+[`memory-pain-fixture-report.md`](memory-pain-fixture-report.md).
+
+Cannot claim: competitor superiority, live semantic-model quality, real-history
+coverage, or a complete Track D compaction-continuity runner.
+
 ## Scenario 7: Inspect MCP Tools
 
 ```sh

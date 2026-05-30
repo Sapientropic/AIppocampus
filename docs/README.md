@@ -44,6 +44,8 @@ Other docs should link to that place and add only local context.
   command evidence but is not the canonical status page.
 - `memory-decision-benchmark-plan.md` - benchmark design for quiet-by-default
   recall decisions, source fidelity, and payload privacy.
+- `memory-pain-fixture-report.md` - public-safe demo/report for memory-system
+  pain fixtures and explicit claim boundaries.
 - `encrypted-sync-v1.md` - design contract for end-to-end encrypted
   multi-device sync over local folders and object storage.
 - `encrypted-sync-follow-up-rfc.md` - follow-up issue/RFC for encrypted sync
