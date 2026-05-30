@@ -29,12 +29,20 @@ vector cells, and social place cells as phase-anchored design constraints.
 
 ## Implementation Status
 
-Current code ships Phase 1 only:
+Current code ships Phase 1 and the first deterministic Phase 2 baseline:
 
 - Implemented: `question_extraction` inside `JOB_SPECS`, including
   `question_candidate` and explicit `frontier_marker` output.
-- Designed only: `question_tracking`, `theme_emergence`, dependency groups,
-  vector similarity, theme maps, and predictive/generative replay.
+- Implemented: `question_tracking` as a deterministic runner in
+  `skills/aippocampus/scripts/question_tracking.py`, registered as a
+  dependency-ordered `JOB_SPECS` entry. It groups existing source-backed
+  candidates, writes append-only `question_link` findings back to
+  `subconscious_jobs.jsonl`, records auditable ordering edges, skips stale refs
+  when registry clean-source resolution is available, and accepts borderline
+  pairs only when an explicit confirmation artifact is supplied.
+- Designed/deferred: live model confirmation calls, `question_index.sqlite`,
+  dormancy detection, `theme_emergence`, theme maps, and predictive/generative
+  replay.
 
 Do not read later architecture sections as current behavior until matching
 `JOB_SPECS`, tests, and scheduler support exist in code.
@@ -919,14 +927,22 @@ noisy ones. Frontier markers must feel like saved trail markers, not guilt.
 
 ### Phase 2: `question_tracking`
 
-- Lightweight embedding computation for `question_short` fields.
-- Vector similarity matching across threads, adjusted by the six-axis question
-  map.
-- LLM confirmation for cluster classification.
-- Optional `question_index.sqlite` sidecar for fast lookup.
-- Dormancy detection.
-- Dependency groups in the worker/scheduler so tracking reads completed
-  extraction output rather than racing the concurrent runner.
+- Shipped first slice (2026-05-30): deterministic local scoring over
+  `question_text`, `question_short`, `what_features`, `where_context`,
+  `intent_orientation`, `phase_context`, and `collaboration_context`.
+- Shipped first slice: append-only `question_link` findings in
+  `subconscious_jobs.jsonl`, including `linked_questions`, auditable ordering
+  edges, merged `source_refs`, and `match_evidence`.
+- Shipped first slice: `subconscious_jobs.py` runs deterministic tracking after
+  semantic extraction writes, so tracking does not race the concurrent runner.
+- Shipped first slice: stale candidates without concrete source anchors are
+  skipped rather than linked; when a registry clean-source index is available,
+  well-shaped refs are rechecked against it.
+- Shipped first slice: borderline pairs are accepted only when an explicit
+  confirmation artifact accepts the pair; the link still derives truth from the
+  original question source refs.
+- Deferred: live model confirmation calls, optional `question_index.sqlite`
+  sidecar for fast lookup, and dormancy detection.
 
 **Validation criterion:** Does the system correctly identify that "how do I
 keep agent context" and "why does Codex forget everything after compaction" are

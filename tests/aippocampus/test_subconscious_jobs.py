@@ -280,6 +280,118 @@ class SubconsciousJobsTests(unittest.TestCase):
         self.assertEqual(findings[1]["frontier_type"], "scope_boundary")
         self.assertIn("injected instruction", findings[1]["boundary_reason"])
 
+    def test_run_jobs_runs_question_tracking_after_extraction_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            timeline_path = root / "project_timeline.json"
+            timeline_path.write_text(
+                json.dumps(
+                    {
+                        "projects": {
+                            "project:ai": {
+                                "project_label": "AIppocampus",
+                                "latest_turns": [
+                                    {
+                                        "thread_key": "session:map",
+                                        "title": "AIppocampus",
+                                        "project_label": "AIppocampus",
+                                        "turn_index": 1,
+                                        "assistant_line": 10,
+                                        "user": "Codex compaction 后怎么保持上下文？",
+                                        "assistant": "用 source-backed continuity。",
+                                    }
+                                ],
+                            }
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            registry_path = root / "threads.json"
+            registry_path.write_text(json.dumps({"threads": []}), encoding="utf-8")
+            jobs_output = root / "subconscious_jobs.jsonl"
+
+            def fake_chat(
+                messages: list[dict[str, str]],
+                api_key: str,
+                model: str,
+                base_url: str,
+                max_tokens: int | None,
+                timeout: int,
+                temperature: float,
+            ) -> dict[str, Any]:
+                del messages, api_key, model, base_url, max_tokens, timeout, temperature
+                content = {
+                    "action": "final",
+                    "findings": [
+                        {
+                            "kind": "question_candidate",
+                            "title": "Agent context continuity",
+                            "summary": "The user asks how agent context survives compaction.",
+                            "confidence": 0.88,
+                            "source_refs": ["t0"],
+                            "question_text": "How do I keep agent context across compaction?",
+                            "question_short": "agent context continuity",
+                            "intent_orientation": "implementation",
+                            "what_features": ["agent memory", "context continuity", "compaction"],
+                            "where_context": ["AIppocampus"],
+                            "phase_context": "post_compaction",
+                        },
+                        {
+                            "kind": "question_candidate",
+                            "title": "Codex context loss",
+                            "summary": "The user asks why Codex loses context after compaction.",
+                            "confidence": 0.88,
+                            "source_refs": ["t0"],
+                            "question_text": "Why does Codex forget context after compaction?",
+                            "question_short": "Codex context loss after compaction",
+                            "intent_orientation": "implementation",
+                            "what_features": ["agent memory", "context continuity", "compaction"],
+                            "where_context": ["AIppocampus"],
+                            "phase_context": "post_compaction",
+                        },
+                    ],
+                }
+                return {
+                    "choices": [{"message": {"content": json.dumps(content, ensure_ascii=False)}}],
+                    "usage": {"total_tokens": 1},
+                }
+
+            result = jobs.run_jobs(
+                jobs=["question_extraction", "question_tracking"],
+                registry_path=registry_path,
+                timeline_path=timeline_path,
+                concept_graph_path=root / "missing.sqlite",
+                jobs_output_path=jobs_output,
+                edges_output_path=root / "subconscious_edges.jsonl",
+                project="AIppocampus",
+                objective="extract then track questions",
+                max_turns=4,
+                max_steps=1,
+                min_tool_steps=0,
+                model="deepseek-v4-flash",
+                base_url="https://example.invalid",
+                api_key="test",
+                max_tokens=None,
+                timeout=1,
+                temperature=0.2,
+                concurrency=2,
+                samples_per_job=1,
+                chat_fn=fake_chat,
+            )
+            rows = [
+                json.loads(line)
+                for line in jobs_output.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual([item["job"] for item in result["jobs"]], ["question_extraction", "question_tracking"])
+        self.assertEqual(rows[-1]["finding_kind"], "question_link")
+        self.assertEqual(rows[-1]["source"], "deterministic_question_tracking")
+        self.assertEqual(rows[-1]["question_count"], 2)
+
     def test_semantic_scope_labeling_validates_exact_message_refs_and_labels(self) -> None:
         parsed = {
             "findings": [

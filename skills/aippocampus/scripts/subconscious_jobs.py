@@ -32,6 +32,10 @@ from deepseek_model_routing import (
     route_payload_with_effective_values,
     route_service_name,
 )
+from subconscious_deterministic_jobs import (
+    DETERMINISTIC_QUESTION_TRACKING_RUNNER,
+    run_question_tracking_job,
+)
 from subconscious_job_circuits import JOB_SPECS, PROMPT_VERSION, job_names, jobs_initial_payload
 from subconscious_job_plan import JobRunTask, plan_job_run_tasks, sample_count, worker_count
 from subconscious_job_validation import (
@@ -177,6 +181,8 @@ def run_one_job(
     sample_index: int = 1,
     sample_count: int = 1,
 ) -> dict[str, Any]:
+    if JOB_SPECS.get(job, {}).get("runner") == DETERMINISTIC_QUESTION_TRACKING_RUNNER:
+        raise ValueError("question_tracking is a deterministic follow-up; run it through run_jobs")
     timeline = load_json(timeline_path)
     turns = select_timeline_turns(timeline, project=project, max_turns=max_turns)
     state = AgentState(source_bank=source_bank_from_turns(turns))
@@ -460,7 +466,17 @@ def run_jobs(
     results: list[dict[str, Any]] = []
     usage_total: dict[str, Any] = {}
     sample_total = sample_count(samples_per_job)
-    task_specs = plan_job_run_tasks(jobs, samples_per_job=sample_total)
+    deterministic_jobs = [
+        job
+        for job in jobs
+        if JOB_SPECS.get(job, {}).get("runner") == DETERMINISTIC_QUESTION_TRACKING_RUNNER
+    ]
+    semantic_jobs = [
+        job
+        for job in jobs
+        if JOB_SPECS.get(job, {}).get("runner") != DETERMINISTIC_QUESTION_TRACKING_RUNNER
+    ]
+    task_specs = plan_job_run_tasks(semantic_jobs, samples_per_job=sample_total)
     route = resolve_model_route(
         model_route,
         explicit_model=model if model != DEFAULT_MODEL and not model_route else None,
@@ -582,12 +598,36 @@ def run_jobs(
                 )
             result["wrote"] = True
             result["deferred_write"] = False
+    if "question_tracking" in deterministic_jobs:
+        try:
+            results.append(
+                run_question_tracking_job(
+                    registry_path=registry_path,
+                    jobs_output_path=jobs_output_path,
+                    edges_output_path=edges_output_path,
+                    no_write=no_write,
+                    dry_run=dry_run,
+                )
+            )
+        except Exception as exc:
+            results.append(failed_result("question_tracking", 1, exc))
     for result in results:
         add_usage(usage_total, result.get("usage") or {})
     successful_count = sum(1 for result in results if result.get("ok") is not False)
     failure_count = sum(1 for result in results if result.get("ok") is False)
+    semantic_job_set = set(semantic_jobs)
+    semantic_successful_count = sum(
+        1
+        for result in results
+        if result.get("ok") is not False and str(result.get("job") or "") in semantic_job_set
+    )
+    overall_ok = (
+        semantic_successful_count > 0
+        if semantic_jobs
+        else successful_count > 0 or (not task_specs and not deterministic_jobs)
+    )
     return {
-        "ok": successful_count > 0 or not task_specs,
+        "ok": overall_ok,
         "jobs": results,
         "job_count": len(results),
         "successful_job_count": successful_count,
@@ -605,7 +645,7 @@ def run_jobs(
         "cache": route_cache_metrics(route, usage_total),
         "jobs_output": str(jobs_output_path),
         "edges_output": str(edges_output_path),
-        "wrote": False if no_write or dry_run else successful_count > 0,
+        "wrote": False if no_write or dry_run else any(bool(result.get("wrote")) for result in results),
     }
 
 

@@ -58,9 +58,9 @@
 | clean source / registry / global onboarding | implemented | 860 条本机 Codex thread 已完成全局 clean-source、SQLite、graph sidecar 注册。 |
 | `question_extraction` / `question_candidate` / `frontier_marker` | implemented | 已进入 `subconscious_jobs.py`，但仍是候选结构，不是正式长期记忆。 |
 | cognitive map sidecar | implemented | `build_cognitive_map.py` 可以 materialize source-backed routes；当前路线数量仍取决于 DeepSeek job 质量。 |
-| six-axis question map | designed | 设计见 `question-tracking-subconscious.md`，完整 tracking 尚未实现。 |
-| `question_link` / `theme_emergence` | designed | 文档中已有协议和阶段安排，但不能写成现有基础设施。 |
-| dynamic separation/completion threshold | proposed | 是 Phase 2 的高价值实现切片。 |
+| six-axis question map | partial implementation | `question_tracking.py` 已有确定性 Phase 2 baseline；live model confirmation、dormancy 和向量 sidecar 仍未实现。 |
+| `question_link` / `theme_emergence` | partial / designed | `question_link` 可由 Phase 2 runner 写入 `subconscious_jobs.jsonl`；`theme_emergence` 仍是设计阶段。 |
+| dynamic separation/completion threshold | partial implementation | strong/borderline 阈值已用于 deterministic tracking；真实语义阈值调参仍需要更多 clean-source 样本。 |
 | reconsolidation queue / retrieval-count update | proposed | `working_memory.jsonl` 和 router 提供骨架，但 hook 侧还未记录 retrieval lifecycle。 |
 | preplay / state-dependent routing | research | 适合 Phase 3+，必须保持 ambient scent，不直接推送用户。 |
 

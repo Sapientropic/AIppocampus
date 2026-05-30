@@ -110,7 +110,7 @@ boundary still reaches local-folder, object-storage, and encrypted paths.
 
 | Script or group | Purpose | Invocation route | Key dependencies | Status |
 |---|---|---|---|---|
-| `subconscious_jobs.py`, `subconscious_jobs_config.py`, `subconscious_scheduler.py`, `subconscious_worker.py` | Schedule and run background semantic/subconscious jobs. | CLI, scheduler, opt-in maintenance. | Registry, model client, route metadata, job validation. | Public entrypoint |
+| `subconscious_jobs.py`, `subconscious_jobs_config.py`, `subconscious_scheduler.py`, `subconscious_worker.py`, `question_tracking.py` | Schedule and run background semantic/subconscious jobs, including deterministic Phase 2 question-link tracking. | CLI, scheduler, opt-in maintenance. | Registry, model client, route metadata, job validation, source-backed question candidates. | Public entrypoint |
 | `subconscious_runtime.py`, `subconscious_agent.py`, `subconscious_tool_loop.py` | Runtime loops and tool execution for background agents. | Scheduler/worker internals. | Job config, external model client, registry outputs. | Runtime internal |
 | `subconscious_review.py`, `memory_candidate_router.py`, `subconscious_job_plan.py`, `subconscious_job_validation.py`, `subconscious_job_circuits.py` | Review, route, plan, and validate findings before promotion. | Worker and tests. | Working-memory rules, source refs, candidate schemas. | Runtime internal |
 | `model_client.py`, `deepseek_model_routing.py` | External-model request helper and provider route/capability metadata. | Semantic gates and subconscious jobs. | Env config, redaction, provider-specific capability gates. | Runtime internal |

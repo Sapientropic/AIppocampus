@@ -49,6 +49,9 @@ LOW_RISK_TYPES = {"concept_edge", "hook_trigger"}
 PROJECT_FACT_TYPES = {"project_memory"}
 PREFERENCE_TYPES = {"preference_review"}
 REVIEW_TYPES = {"contradiction_review"}
+QUESTION_SILENT_TYPES = {"question_candidate", "theme_candidate"}
+QUESTION_LINK_TYPES = {"question_link"}
+FRONTIER_TYPES = {"frontier_marker"}
 PARK_TYPES = {"archive", "dedup_review"}
 
 GENERIC_TRIGGER_TERMS = {
@@ -264,6 +267,13 @@ def concepts_from_findings(
         for key in ("src", "dst"):
             if finding.get(key):
                 values.append(str(finding.get(key)))
+        for key in ("question_text", "question_short", "linked_question_short", "theme_label"):
+            if finding.get(key):
+                values.append(str(finding.get(key)))
+        for question in finding.get("linked_questions") or []:
+            if isinstance(question, dict):
+                values.append(str(question.get("question_short") or ""))
+                values.append(str(question.get("question_text") or ""))
     return unique_preserve(
         [normalize_term(value) for value in values if normalize_term(value)], limit=18
     )
@@ -297,6 +307,28 @@ def route_candidate(candidate: dict[str, Any], strength: dict[str, Any]) -> tupl
         return PARK, "high", "insufficient source support or low confidence"
     if candidate_type in PARK_TYPES:
         return PARK, "medium", f"{candidate_type} is not foreground recall material"
+    if candidate_type in QUESTION_LINK_TYPES:
+        if confidence >= 0.65 and ref_count >= 2:
+            return (
+                USE_WITH_SOURCE,
+                "medium",
+                "recurring question scent is useful with source refs when the prompt is relevant",
+            )
+        if confidence >= 0.55:
+            return USE_SILENTLY, "low", "weak question link can help recall/rerank silently"
+        return PARK, "low", "question link candidate too weak"
+    if candidate_type in QUESTION_SILENT_TYPES:
+        if confidence >= 0.55:
+            return USE_SILENTLY, "low", "question/theme candidates are ambient navigation scent"
+        return PARK, "low", f"{candidate_type} candidate too weak"
+    if candidate_type in FRONTIER_TYPES:
+        if confidence >= 0.60:
+            return (
+                USE_SILENTLY,
+                "medium",
+                "frontier markers stay quiet unless current prompt matches unresolved edges",
+            )
+        return PARK, "medium", "frontier marker candidate too weak"
     if candidate_type in REVIEW_TYPES:
         if confidence >= 0.55:
             return (

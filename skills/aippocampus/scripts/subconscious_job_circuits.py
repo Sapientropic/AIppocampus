@@ -36,6 +36,26 @@ JOB_SPECS: dict[str, dict[str, Any]] = {
             "monologue into the question field. Use question_short as the stable label when the source wording is long."
         ),
     },
+    "question_tracking": {
+        "purpose": "Group source-backed question candidates into append-only cross-thread question links.",
+        "finding_kind": "question_link",
+        "runner": "deterministic_question_tracking",
+        "depends_on": ["question_extraction"],
+        "must_include": [
+            "question_cluster_id",
+            "linked_question_short",
+            "question_count",
+            "link_type",
+            "source_refs",
+            "dependency_edges",
+        ],
+        "notes": (
+            "Deterministic Phase 2 runner over existing question_candidate and frontier_marker findings. "
+            "It uses local multi-field scoring and only accepts borderline links when an explicit confirmation artifact "
+            "is provided. It writes question_link findings back to subconscious_jobs.jsonl and never treats "
+            "vector or model output as truth without source_refs."
+        ),
+    },
     "concept_edges": {
         "purpose": "Propose source-backed concept graph edges for ambient recall.",
         "finding_kind": "concept_edge",
@@ -204,6 +224,11 @@ def jobs_initial_payload(
                     "frontier_type": "required for frontier_marker only: unresolved|blocked|deferred|unsatisfied|needs_external_evidence|scope_boundary",
                     "boundary_reason": "required for frontier_marker only; why this is a stopping point, not merely a question",
                     "linked_question_short": "optional for frontier_marker; short label of related question",
+                    "question_cluster_id": "required for question_link only; stable id for linked source-backed candidates",
+                    "question_count": "required for question_link only; number of linked candidates",
+                    "link_type": "required for question_link only: recurring|evolving|parent_of|child_of|related",
+                    "dependency_edges": "required for question_link only; auditable ordering hints between linked questions",
+                    "match_evidence": "required for question_link only; deterministic scores and optional confirmation audit",
                 }
             ],
         },
