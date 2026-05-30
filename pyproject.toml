@@ -90,6 +90,7 @@ files = [
     "skills/aippocampus/scripts/retention_report.py",
     "skills/aippocampus/scripts/retrieval.py",
     "skills/aippocampus/scripts/retrieval_query_policy.py",
+    "skills/aippocampus/scripts/retrieval_score_fusion.py",
     "skills/aippocampus/scripts/search_clean_source.py",
     "skills/aippocampus/scripts/search_rollout.py",
     "skills/aippocampus/scripts/search_segments.py",

@@ -15,8 +15,9 @@ ground without a custom engine.
 | Semantic vector | TurboVec (Phase 2 target) | Compressed vector search, filtered allowlists |
 | Relational graph | concept graph (already in use) | Shared-neighbor traversal, theme clustering |
 
-No custom search engine needed. What IS needed is a scoring fusion layer
-that blends signals from all three.
+No custom search engine needed. The first scoring fusion layer now exists in
+`skills/aippocampus/scripts/retrieval_score_fusion.py`: it blends signals from
+all three after candidates join back to stable source ids or source refs.
 
 ## Concepts still worth mining
 
@@ -26,13 +27,17 @@ that blends signals from all three.
    - Not all clean source needs token-level location indexing. Use the
      cheapest depth that supports the current recall requirement.
 
-2. Scoring contract (most valuable concept)
-   - Define a `blend()` function that combines FTS5 BM25, TurboVec vector
-     scores, and concept graph proximity into a single ranked result.
+2. Scoring contract (first slice implemented)
+   - `retrieval_score_fusion.py` defines a `blend()` function that combines
+     FTS5/BM25-like text scores, optional vector scores, and concept graph
+     proximity into a single ranked result.
    - Weights should be context-dependent: text-heavy for exact recall,
      vector-heavy for question tracking, graph-heavy for theme emergence.
    - Keep ranking policy explicit in one place, not scattered across search
      code.
+   - Scores are ranking hints only. Candidates without stable source ids,
+     message/turn ids, or source refs are skipped instead of becoming ranked
+     memory evidence.
 
 3. Incremental indexing
    - Batch new messages in hook/heartbeat and seal old segments after
@@ -53,7 +58,7 @@ that blends signals from all three.
 - Token proximity scoring: concept graph edges and embedding similarity
   provide a more robust proximity signal than token positions.
 
-## Scoring fusion layer (design target)
+## Scoring fusion layer
 
 ```python
 def score(query: str, candidates: list[FindingId],
@@ -66,13 +71,14 @@ def score(query: str, candidates: list[FindingId],
 ```
 
 This is the wukong "custom scoring interface" adapted for AIppocampus's
-three-layer search. One function, explicit policy, no custom engine.
+three-layer search. One function, explicit policy, no custom engine. The first
+implementation is internal policy, not a public Python API: callers should
+continue to tolerate additive fields and must re-open clean source before
+treating a ranked hit as evidence.
 
 ## Follow-up questions
 
-- When should exact text search take priority over vector search?
-  (Hypothesis: when the user quotes their own earlier words verbatim.)
-- Which scoring blend weights work best for question_tracking vs
-  theme_emergence vs ambient recall?
+- Which scoring blend weights work best for real question_tracking vs
+  theme_emergence vs ambient recall traffic?
 - Should TurboVec filtered allowlists replace SQL WHERE for candidate
   pre-filtering, or should both coexist?

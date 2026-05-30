@@ -165,7 +165,19 @@ handoff context.
      TurboVec or sqlite vector evaluation remains deferred until the current
      source-backed baseline shows a scale bottleneck.
 
-10. Correction reconsolidation events
+10. Retrieval score fusion contract
+   - Source: `docs/wukong-mining-notes.md`, `docs/gb-scale-roadmap.md`,
+     `docs/question-tracking-subconscious.md`, and `docs/public-api.md`.
+   - First internal policy is implemented in
+     `skills/aippocampus/scripts/retrieval_score_fusion.py`: it preserves the
+     existing text score formula, blends optional vector and graph scores with
+     context-dependent weights, and skips candidates that cannot join back to
+     stable source ids, message/turn ids, or source refs.
+   - Next hardening: connect real vector/graph consumers only after measuring
+     recall behavior against source-evidence benchmarks; do not promote the
+     policy output to a public schema.
+
+11. Correction reconsolidation events
    - Source: `docs/research/correction-reconsolidation.md` and
      `docs/memory-decision-benchmark-plan.md`.
    - First runtime helper is implemented in
@@ -177,7 +189,7 @@ handoff context.
    - Next hardening: wire live hook capture in a fail-open way, then add private
      real-history correction packs before making compaction-survival claims.
 
-11. Coding decision events
+12. Coding decision events
    - Source: `docs/research/agent-coding-context-analysis.md` and
      `docs/memory-decision-benchmark-plan.md`.
    - First deterministic extractor is implemented in
@@ -190,7 +202,7 @@ handoff context.
      whether host agents use tickets correctly before claiming intervention
      timing quality.
 
-12. Agency affordance map and ticket selector
+13. Agency affordance map and ticket selector
    - Source: `docs/research/agency-from-cognitive-map.md`,
      `docs/research/agent-coding-context-analysis.md`, and
      `docs/research/correction-reconsolidation.md`.

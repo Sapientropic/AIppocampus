@@ -52,6 +52,7 @@ REQUIRED_RUNTIME_MAP_SCRIPTS = [
     "retrieval.py",
     "search_clean_source.py",
     "search_segments.py",
+    "retrieval_score_fusion.py",
     "sync_bundle.py",
     "sync_object_storage.py",
     "encrypted_sync_bundle.py",

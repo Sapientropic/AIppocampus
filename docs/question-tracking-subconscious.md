@@ -785,6 +785,12 @@ small local smoke runs. It is deliberately not the default retrieval path:
 neighbors carry stable source ids, and `question_tracking` must re-open clean
 source before accepting or promoting a link.
 
+The first score-fusion policy now exists in
+`skills/aippocampus/scripts/retrieval_score_fusion.py`. Its `question_tracking`
+context is vector-heavy, but only after candidate rows join back to stable
+source ids, message/turn ids, or source refs. Missing-source vector neighbors
+are skipped, not treated as evidence.
+
 ### Changes to Existing Files
 
 **`subconscious_jobs.py`:** Register three new `JOB_SPECS` entries
