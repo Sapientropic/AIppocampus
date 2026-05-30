@@ -68,6 +68,33 @@ This is boundary evidence only. It does not claim competitor superiority,
 real-history memory-pain quality, live semantic-model quality, or a complete
 Track D compaction-continuity runner.
 
+## 2026-05-30 Track D Synthetic Runner Evidence
+
+Issue #66 added the deterministic synthetic Track D compaction-continuity
+runner. It covers fixture hook envelopes for `UserPromptSubmit`, `PreToolUse`,
+`PostToolUse`, `SubagentStart`, `SubagentStop`, `Stop`, `PreCompact`, and
+`PostCompact`; simulated `visible`, `post_compaction`, and `horizon_lost`
+states; synthetic correction/outcome event chains; and mocked adjudication
+statuses for `valid_adopted`,
+`valid_ignored`, `refuted`, `superseded`, `local_only`, and `uncertain`.
+
+Verification for that slice:
+
+- `python -m unittest tests.aippocampus.test_benchmark_compaction_continuity`:
+  6 tests passed.
+- `python -m unittest tests.aippocampus.test_benchmark_suite`: passed with the
+  default suite including `compaction_continuity` and `--skip-track-d` coverage.
+- `python benchmarks\aippocampus\benchmark_compaction_continuity.py --json --output .tmp\track-d-compaction-continuity.json`:
+  passed with 14 synthetic Track D cases, 0 privacy breaches, 0 false anchors,
+  0 stale-route retries, full event-chain source fidelity, full
+  correction-anchor recall, full same-epoch repeated-anchor suppression, and
+  full anti-nag precision.
+- `python tools\aippocampus\run_tests.py --tier benchmark`: passed.
+
+This is a deterministic measurement surface, not product proof that #65's real
+correction activation/outcome event pipeline, live hook capture, live semantic
+adjudication, or private real-history compaction survival has shipped.
+
 ## 2026-05-30 P0 Evidence Refresh
 
 This slice executed the P0 issues #29, #30, #33, #34, #35, #36, and #38. It

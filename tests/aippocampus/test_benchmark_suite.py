@@ -98,17 +98,36 @@ def fake_live_semantic_payload() -> dict:
     }
 
 
+def fake_compaction_payload() -> dict:
+    return {
+        "kind": "aippocampus_compaction_continuity_benchmark",
+        "ok": True,
+        "quality_gate_ok": True,
+        "status": "sufficient",
+        "metrics": {"total_cases": 8, "correction_anchor_recall": 1.0},
+        "cases": [{"case_id_sha1": "trackd-a"}],
+        "privacy_boundary": {
+            "raw_correction_text_emitted": False,
+            "absolute_paths_emitted": False,
+        },
+        "cannot_claim": ["runtime_correction_event_capture"],
+    }
+
+
 class BenchmarkSuiteTests(unittest.TestCase):
     def test_suite_config_factory_maps_parser_args(self) -> None:
         parser = suite.build_arg_parser()
         args = parser.parse_args(
             [
                 "--skip-track-b",
+                "--skip-track-d",
                 "--include-live-semantic",
                 "--live-semantic-workers",
                 "deepseek,openai",
                 "--source-max-cases",
                 "7",
+                "--track-d-cases",
+                "4",
                 "--standard-dataset",
                 "locomo",
             ]
@@ -117,10 +136,95 @@ class BenchmarkSuiteTests(unittest.TestCase):
         config = suite.benchmark_suite_config_from_args(args)
 
         self.assertFalse(config.include_track_b)
+        self.assertFalse(config.include_track_d)
         self.assertTrue(config.include_live_semantic)
         self.assertEqual(config.live_semantic_workers, ("deepseek", "openai"))
         self.assertEqual(config.source_max_cases, 7)
+        self.assertEqual(config.track_d_case_limit, 4)
         self.assertEqual(config.standard_dataset, "locomo")
+
+    def test_suite_includes_track_d_by_default(self) -> None:
+        with (
+            patch.object(
+                suite.gate_benchmark,
+                "run_benchmark",
+                return_value=fake_gate_payload(),
+            ),
+            patch.object(
+                suite.payload_benchmark,
+                "run_benchmark",
+                return_value=fake_payload_payload(),
+            ),
+            patch.object(
+                suite.compaction_benchmark,
+                "run_benchmark",
+                return_value=fake_compaction_payload(),
+            ) as compaction_run,
+        ):
+            payload = suite.run_benchmark_suite(
+                include_track_b=False,
+                track_d_case_limit=4,
+            )
+
+        self.assertIn("compaction_continuity", payload["tracks"])
+        self.assertEqual(payload["track_statuses"]["compaction_continuity"], "sufficient")
+        self.assertIn("runtime_correction_event_capture", payload["cannot_claim"])
+        compaction_run.assert_called_once_with(
+            include_private_text=False,
+            case_limit=4,
+        )
+
+    def test_suite_can_skip_track_d(self) -> None:
+        with (
+            patch.object(
+                suite.gate_benchmark,
+                "run_benchmark",
+                return_value=fake_gate_payload(),
+            ),
+            patch.object(
+                suite.payload_benchmark,
+                "run_benchmark",
+                return_value=fake_payload_payload(),
+            ),
+            patch.object(
+                suite.compaction_benchmark,
+                "run_benchmark",
+                return_value=fake_compaction_payload(),
+            ) as compaction_run,
+        ):
+            payload = suite.run_benchmark_suite(
+                include_track_b=False,
+                include_track_d=False,
+            )
+
+        self.assertNotIn("compaction_continuity", payload["tracks"])
+        compaction_run.assert_not_called()
+
+    def test_suite_track_d_case_limit_is_diagnostic_not_capture_failure(self) -> None:
+        with (
+            patch.object(
+                suite.gate_benchmark,
+                "run_benchmark",
+                return_value=fake_gate_payload(),
+            ),
+            patch.object(
+                suite.payload_benchmark,
+                "run_benchmark",
+                return_value=fake_payload_payload(),
+            ),
+        ):
+            payload = suite.run_benchmark_suite(
+                include_track_b=False,
+                track_d_case_limit=4,
+            )
+
+        self.assertTrue(payload["ok"])
+        self.assertFalse(payload["quality_gate_ok"])
+        self.assertEqual(payload["status"], "baseline_captured_with_known_gaps")
+        self.assertEqual(
+            payload["track_statuses"]["compaction_continuity"],
+            "diagnostic_subset",
+        )
 
     def test_suite_captures_baseline_even_when_track_b_is_diagnostic(self) -> None:
         with (
