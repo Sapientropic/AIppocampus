@@ -267,6 +267,17 @@ def push_encrypted_sync_bundle(
     all_recipients, recipient_issue = validate_recipients(all_recipients)
     if recipient_issue:
         return failed_result(sync_root, recipient_issue["code"], recipient_issue["message"])
+    revoked_issue = encrypted_sync_keys.revoked_recipient_issue_for_registry(
+        registry_root, all_recipients
+    )
+    if revoked_issue:
+        extra = {key: value for key, value in revoked_issue.items() if key not in {"code", "message"}}
+        return failed_result(
+            sync_root,
+            revoked_issue["code"],
+            revoked_issue["message"],
+            **extra,
+        )
 
     resolved_age, age_issue = resolve_age_binary(age_bin)
     if age_issue or not resolved_age:
@@ -316,6 +327,9 @@ def push_encrypted_sync_bundle(
             shutil.rmtree(target_root)
         shutil.copytree(encrypted_tmp_root, target_root)
         save_encrypted_state(registry_root, inner_manifest)
+        reencryption = encrypted_sync_keys.mark_reencrypted_after_push(
+            registry_root, inner_manifest, recipients=all_recipients
+        )
 
     return {
         "ok": True,
@@ -327,6 +341,7 @@ def push_encrypted_sync_bundle(
         "raw_rollout_included": bool(plain_manifest.get("raw_rollout_included")),
         "manifest_hash": inner_manifest.get("manifest_hash"),
         "manifest_revision": inner_manifest.get("manifest_revision"),
+        "reencryption": reencryption,
         "local_bundle_file_count": local_push.get("file_count"),
     }
 
