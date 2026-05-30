@@ -1,12 +1,26 @@
 from __future__ import annotations
 
 import ast
+import importlib.util
+import shutil
+import sys
 import unittest
 from pathlib import Path
+from subprocess import run
+from tempfile import TemporaryDirectory
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
+
+
+def load_module_from_path(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"could not load module from {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def script_modules() -> dict[str, Path]:
@@ -185,6 +199,68 @@ class ImportCouplingTests(unittest.TestCase):
         offenders = {source: targets for source, targets in offenders.items() if targets}
 
         self.assertEqual(offenders, {})
+
+    def test_repo_import_shims_delegate_to_single_helper(self) -> None:
+        helper_path = REPO_ROOT / "tools" / "aippocampus" / "repo_paths.py"
+        wrapper_paths = [
+            REPO_ROOT / "tools" / "aippocampus" / "docs" / "_paths.py",
+            REPO_ROOT / "tools" / "aippocampus" / "smoke" / "_paths.py",
+            REPO_ROOT / "benchmarks" / "aippocampus" / "_paths.py",
+        ]
+
+        self.assertTrue(helper_path.exists())
+        self.assertIn(
+            "def ensure_repo_imports",
+            helper_path.read_text(encoding="utf-8"),
+        )
+        for path in wrapper_paths:
+            source = path.read_text(encoding="utf-8")
+            self.assertIn("repo_paths.py", source)
+            self.assertNotIn("sys.path.insert", source)
+
+    def test_repo_import_helper_supports_compat_wrappers(self) -> None:
+        helper = load_module_from_path(
+            "aippocampus_repo_paths_test",
+            REPO_ROOT / "tools" / "aippocampus" / "repo_paths.py",
+        )
+        paths = helper.ensure_repo_imports(
+            REPO_ROOT / "benchmarks" / "aippocampus" / "_paths.py",
+            include_smoke_tools=True,
+        )
+
+        self.assertEqual(paths.repo_root, REPO_ROOT)
+        self.assertIn(str(paths.skill_scripts), sys.path)
+        self.assertIn(str(paths.smoke_tools), sys.path)
+
+        for name, path in {
+            "docs_paths_test": REPO_ROOT / "tools" / "aippocampus" / "docs" / "_paths.py",
+            "smoke_paths_test": REPO_ROOT / "tools" / "aippocampus" / "smoke" / "_paths.py",
+            "benchmark_paths_test": REPO_ROOT / "benchmarks" / "aippocampus" / "_paths.py",
+        }.items():
+            wrapper = load_module_from_path(name, path)
+            self.assertEqual(wrapper.REPO_ROOT, REPO_ROOT)
+            self.assertEqual(wrapper.SKILL_SCRIPTS, SCRIPTS)
+            wrapper.ensure_paths()
+
+    def test_installed_skill_direct_script_help_does_not_need_repo_bootstrap(self) -> None:
+        with TemporaryDirectory() as tmp:
+            installed_scripts = Path(tmp) / "skills" / "aippocampus" / "scripts"
+            shutil.copytree(SCRIPTS, installed_scripts)
+
+            result = run(
+                [
+                    sys.executable,
+                    str(installed_scripts / "aippocampus_health.py"),
+                    "--help",
+                ],
+                cwd=tmp,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("usage: aippocampus_health.py", result.stdout)
 
 
 if __name__ == "__main__":
