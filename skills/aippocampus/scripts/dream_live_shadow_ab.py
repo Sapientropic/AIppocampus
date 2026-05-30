@@ -112,8 +112,10 @@ def normalize_assignment_unit(value: object) -> str:
 
 
 def clamped_rollout_rate(value: object) -> float:
+    if value is None:
+        return 1.0
     try:
-        number = float(value)
+        number = float(str(value))
     except (TypeError, ValueError):
         return 1.0
     if number != number:
@@ -296,7 +298,7 @@ def semantic_relevance_dream_matches(
         and row.get("candidate_type") == DREAM_HYPOTHESIS_TYPE
         and (not row.get("project_label") or not project_label or str(row.get("project_label")).casefold() == project_label.casefold())
     ][: max(1, int(max_candidates))]
-    diagnostic = {
+    diagnostic: dict[str, Any] = {
         "enabled": True,
         "model_call_count": 0,
         "candidate_count": len(candidates),
