@@ -272,6 +272,20 @@ class ImportCouplingTests(unittest.TestCase):
             source_validation._stable_id,
         )
 
+    def test_sync_contract_has_package_owner_and_compat_shim(self) -> None:
+        import sync_contract
+        from aippocampus_runtime.sync import contract
+
+        package_file = SCRIPTS / "aippocampus_runtime" / "sync" / "contract.py"
+        shim_file = SCRIPTS / "sync_contract.py"
+
+        self.assertTrue(package_file.exists())
+        self.assertTrue(shim_file.exists())
+        self.assertIn("Compatibility shim", shim_file.read_text(encoding="utf-8"))
+        self.assertIs(sync_contract.build_sync_manifest, contract.build_sync_manifest)
+        self.assertIs(sync_contract.sync_privacy_boundary, contract.sync_privacy_boundary)
+        self.assertEqual(sync_contract.SYNC_BUNDLE_KIND, contract.SYNC_BUNDLE_KIND)
+
     def test_repo_import_shims_delegate_to_single_helper(self) -> None:
         helper_path = REPO_ROOT / "tools" / "aippocampus" / "repo_paths.py"
         wrapper_paths = [

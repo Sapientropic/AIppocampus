@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 import sync_bundle
-import sync_contract
+from aippocampus_runtime.sync import contract as sync_contract
 from object_storage_client import (
     DEFAULT_PREFIX,
     DEFAULT_TIMEOUT_SECONDS,

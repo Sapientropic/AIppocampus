@@ -20,6 +20,7 @@ aippocampus = "aippocampus_cli:main"
 package-dir = {"" = "skills/aippocampus/scripts"}
 packages = [
     "aippocampus_runtime",
+    "aippocampus_runtime.sync",
     "aippocampus_runtime.warm_ambient",
     "conversation_sources",
 ]
@@ -271,6 +272,8 @@ files = [
     "skills/aippocampus/scripts/subconscious_tool_loop.py",
     "skills/aippocampus/scripts/subconscious_worker.py",
     "skills/aippocampus/scripts/sync_bundle.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/sync/__init__.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/sync/contract.py",
     "skills/aippocampus/scripts/sync_object_storage.py",
     "skills/aippocampus/scripts/theme_emergence.py",
     "skills/aippocampus/scripts/vault_dashboard.py",
