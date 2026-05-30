@@ -30,8 +30,11 @@ from model_client import (
 )
 from question_confirmation import (
     append_confirmation_artifacts,
+    default_confirmation_artifacts_path,
+    default_confirmation_requests_path,
     iter_confirmation_jsonl,
 )
+from question_tracking import default_jobs_path
 
 SCHEMA_VERSION = 1
 PROMPT_VERSION = "aippocampus-question-confirmation-live-v1"
@@ -266,8 +269,11 @@ def run_question_confirmation_live(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--requests", required=True)
-    parser.add_argument("--output", required=True)
+    parser.add_argument("--registry")
+    parser.add_argument("--registry-dir")
+    parser.add_argument("--jobs-input")
+    parser.add_argument("--requests")
+    parser.add_argument("--output")
     parser.add_argument("--route")
     parser.add_argument("--model")
     parser.add_argument("--base-url")
@@ -278,9 +284,24 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--timeout", type=float, default=60.0)
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(argv)
+    jobs_path = (
+        Path(args.jobs_input).resolve()
+        if args.jobs_input
+        else default_jobs_path(args.registry, args.registry_dir)
+    )
+    requests_path = (
+        Path(args.requests).resolve()
+        if args.requests
+        else default_confirmation_requests_path(jobs_path)
+    )
+    output_path = (
+        Path(args.output).resolve()
+        if args.output
+        else default_confirmation_artifacts_path(jobs_path)
+    )
     payload = run_question_confirmation_live(
-        requests_path=Path(args.requests),
-        output_path=Path(args.output),
+        requests_path=requests_path,
+        output_path=output_path,
         route_name=args.route,
         model=args.model,
         base_url=args.base_url,

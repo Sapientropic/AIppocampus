@@ -3,9 +3,9 @@
 
 This near-term #70 runner intentionally stays in the black-box, source-backed
 surface: it builds a compact portrait from question candidates, frontier
-markers, and question links, then checks what that compact prompt preserves or
-loses compared with fuller clean-source injection. It does not test numerical
-activation codes, white-box steering, or live model behavior.
+markers, question links, and theme candidates, then checks what that compact
+prompt preserves or loses compared with fuller clean-source injection. It does
+not test numerical activation codes, white-box steering, or live model behavior.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ import math
 import re
 import time
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
@@ -32,6 +32,7 @@ SOURCE_BACKED_FINDING_KINDS = {
     "question_candidate",
     "frontier_marker",
     "question_link",
+    "theme_candidate",
 }
 SECRET_OR_PATH_RE = re.compile(
     r"(?i)(api[_-]?key|authorization|bearer\s+[a-z0-9._-]{8,}|password|secret|token)"
@@ -62,7 +63,7 @@ class PortraitFixture:
 
 
 def now_utc() -> str:
-    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def sha1_text(value: str) -> str:
@@ -121,7 +122,7 @@ def source_refs(row: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 
 def row_id(row: Mapping[str, Any]) -> str:
-    for key in ("fingerprint", "source_finding_id", "question_cluster_id", "id"):
+    for key in ("fingerprint", "source_finding_id", "question_cluster_id", "theme_cluster_id", "id"):
         value = row.get(key)
         if value:
             return str(value)
@@ -164,9 +165,11 @@ def build_cognitive_portrait(findings: Iterable[Mapping[str, Any]]) -> dict[str,
     candidates = [row for row in backed_rows if row.get("finding_kind") == "question_candidate"]
     frontiers = [row for row in backed_rows if row.get("finding_kind") == "frontier_marker"]
     links = [row for row in backed_rows if row.get("finding_kind") == "question_link"]
+    themes = [row for row in backed_rows if row.get("finding_kind") == "theme_candidate"]
     candidate_by_finding_id = {row_id(row): row for row in candidates}
 
     recurring_questions: list[dict[str, Any]] = []
+    linked_candidate_ids: set[str] = set()
     for link in links:
         linked_questions = [
             item
@@ -179,6 +182,7 @@ def build_cognitive_portrait(findings: Iterable[Mapping[str, Any]]) -> dict[str,
             for item in linked_questions
             if item.get("source_finding_id")
         ]
+        linked_candidate_ids.update(linked_source_finding_ids)
         candidate_rows = [
             candidate_by_finding_id[finding_id]
             for finding_id in linked_source_finding_ids
@@ -223,40 +227,92 @@ def build_cognitive_portrait(findings: Iterable[Mapping[str, Any]]) -> dict[str,
             }
         )
 
-    if not recurring_questions:
-        for row in candidates:
-            refs = dedupe_refs(source_refs(row))
-            recurring_questions.append(
-                {
-                    "cluster_id": row_id(row),
-                    "label": compact_text(row.get("question_short") or row.get("question_text"), 90),
-                    "link_type": "single_observation",
-                    "question_count": 1,
-                    "source_thread_count": len({ref.get("thread_key") for ref in refs}),
-                    "dimensions": unique_preserve(
-                        [*(row.get("what_features") or []), *(row.get("concepts") or [])],
-                        limit=10,
-                    ),
-                    "phase_contexts": unique_preserve([row.get("phase_context")]),
-                    "intent_orientations": unique_preserve([row.get("intent_orientation")]),
-                    "source_finding_ids": [row_id(row)],
-                    "source_refs": refs,
-                    "source_ref_tokens": source_ref_tokens(refs),
-                    "evidence_note": compact_text(row.get("summary") or "", 220),
-                }
-            )
-
-    frontier_items: list[dict[str, Any]] = []
-    for row in frontiers:
-        refs = dedupe_refs(source_refs(row))
-        frontier_items.append(
+    for candidate_row in candidates:
+        candidate_id = row_id(candidate_row)
+        if candidate_id in linked_candidate_ids:
+            continue
+        refs = dedupe_refs(source_refs(candidate_row))
+        recurring_questions.append(
             {
-                "source_finding_id": row_id(row),
-                "frontier_type": compact_text(row.get("frontier_type") or "unresolved", 60),
-                "linked_question_short": compact_text(row.get("linked_question_short") or "", 90),
-                "boundary_reason": compact_text(row.get("boundary_reason") or row.get("summary"), 240),
+                "cluster_id": candidate_id,
+                "label": compact_text(
+                    candidate_row.get("question_short") or candidate_row.get("question_text"),
+                    90,
+                ),
+                "link_type": "single_observation",
+                "question_count": 1,
+                "source_thread_count": len({ref.get("thread_key") for ref in refs}),
+                "dimensions": unique_preserve(
+                    [
+                        *(candidate_row.get("what_features") or []),
+                        *(candidate_row.get("concepts") or []),
+                    ],
+                    limit=10,
+                ),
+                "phase_contexts": unique_preserve([candidate_row.get("phase_context")]),
+                "intent_orientations": unique_preserve([candidate_row.get("intent_orientation")]),
+                "source_finding_ids": [candidate_id],
                 "source_refs": refs,
                 "source_ref_tokens": source_ref_tokens(refs),
+                "evidence_note": compact_text(candidate_row.get("summary") or "", 220),
+            }
+        )
+
+    frontier_items: list[dict[str, Any]] = []
+    for frontier_row in frontiers:
+        refs = dedupe_refs(source_refs(frontier_row))
+        frontier_items.append(
+            {
+                "source_finding_id": row_id(frontier_row),
+                "frontier_type": compact_text(frontier_row.get("frontier_type") or "unresolved", 60),
+                "linked_question_short": compact_text(
+                    frontier_row.get("linked_question_short") or "",
+                    90,
+                ),
+                "boundary_reason": compact_text(
+                    frontier_row.get("boundary_reason") or frontier_row.get("summary"),
+                    240,
+                ),
+                "dimensions": unique_preserve(
+                    [
+                        *(frontier_row.get("concepts") or []),
+                        *(frontier_row.get("shared_concepts") or []),
+                    ],
+                    limit=10,
+                ),
+                "source_refs": refs,
+                "source_ref_tokens": source_ref_tokens(refs),
+            }
+        )
+
+    theme_items: list[dict[str, Any]] = []
+    for theme_row in themes:
+        refs = dedupe_refs(source_refs(theme_row))
+        dimensions = unique_preserve(
+            [
+                *(theme_row.get("shared_concepts") or []),
+                *(theme_row.get("concepts") or []),
+                theme_row.get("theme_short"),
+            ],
+            limit=12,
+        )
+        theme_items.append(
+            {
+                "theme_id": row_id(theme_row),
+                "label": compact_text(
+                    theme_row.get("theme_short")
+                    or theme_row.get("theme_label")
+                    or theme_row.get("title")
+                    or "theme candidate",
+                    90,
+                ),
+                "dimensions": dimensions,
+                "source_refs": refs,
+                "source_ref_tokens": source_ref_tokens(refs),
+                "evidence_note": compact_text(
+                    theme_row.get("summary") or theme_row.get("theme_label") or "",
+                    220,
+                ),
             }
         )
 
@@ -264,13 +320,14 @@ def build_cognitive_portrait(findings: Iterable[Mapping[str, Any]]) -> dict[str,
         "schema_version": SCHEMA_VERSION,
         "kind": PORTRAIT_KIND,
         "surface": "structured_text_question_portrait",
-        "source_surface": "question_candidate_frontier_marker_question_link",
+        "source_surface": "question_candidate_frontier_marker_question_link_theme_candidate",
         "source_policy": (
             "navigation_layer_only: every portrait item must carry source refs; "
             "full clean source is still required for quotes and final evidence"
         ),
         "recurring_questions": recurring_questions,
         "frontiers": frontier_items,
+        "themes": theme_items,
         "diagnostics": {
             "input_finding_count": len(finding_rows),
             "source_backed_finding_count": len(backed_rows),
@@ -278,14 +335,14 @@ def build_cognitive_portrait(findings: Iterable[Mapping[str, Any]]) -> dict[str,
             "question_candidate_count": len(candidates),
             "frontier_marker_count": len(frontiers),
             "question_link_count": len(links),
+            "theme_candidate_count": len(themes),
         },
     }
 
 
 def render_structured_portrait(portrait: Mapping[str, Any]) -> str:
     lines = [
-        "Cognitive portrait (structured text; source-backed navigation, not source truth).",
-        "Full source required for quotes/evidence; do not turn this into a personality model beyond refs.",
+        "Cognitive portrait: source-backed navigation only; full source required for quotes/evidence; avoid personality model claims beyond refs.",
         "",
         "Recurring:",
     ]
@@ -297,9 +354,8 @@ def render_structured_portrait(portrait: Mapping[str, Any]) -> str:
         lines.extend(
             [
                 f"- {item.get('label')} [{refs}]",
-                f"  type={item.get('link_type')}; observations={item.get('question_count')}; threads={item.get('source_thread_count')}",
+                f"  type={item.get('link_type')}; obs={item.get('question_count')}; threads={item.get('source_thread_count')}",
                 f"  dimensions={dimensions or 'unspecified'}; phase={phases or 'unspecified'}; orientation={orientations or 'unspecified'}",
-                "  cue: verify source refs and boundary before continuity claims after compaction.",
             ]
         )
     if portrait.get("frontiers"):
@@ -307,10 +363,23 @@ def render_structured_portrait(portrait: Mapping[str, Any]) -> str:
         lines.append("Frontiers:")
         for frontier in portrait.get("frontiers") or []:
             refs = ", ".join(frontier.get("source_ref_tokens") or [])
+            dimensions = ", ".join(frontier.get("dimensions") or [])
             lines.extend(
                 [
                     f"- {frontier.get('frontier_type')} {frontier.get('linked_question_short')} [{refs}]",
-                    f"  boundary={frontier.get('boundary_reason')}; resume point, not resolved preference.",
+                    f"  boundary={frontier.get('boundary_reason')}; dimensions={dimensions or 'unspecified'}.",
+                ]
+            )
+    if portrait.get("themes"):
+        lines.append("")
+        lines.append("Themes:")
+        for theme in portrait.get("themes") or []:
+            refs = ", ".join(theme.get("source_ref_tokens") or [])
+            dimensions = ", ".join(theme.get("dimensions") or [])
+            lines.extend(
+                [
+                    f"- {theme.get('label')} [{refs}]",
+                    f"  dimensions={dimensions or 'unspecified'}; theme candidate, not a profile claim.",
                 ]
             )
     return "\n".join(lines).strip()
@@ -389,6 +458,7 @@ def source_fidelity_metrics(portrait: Mapping[str, Any]) -> dict[str, Any]:
     items: list[Mapping[str, Any]] = []
     items.extend(item for item in portrait.get("recurring_questions") or [] if isinstance(item, Mapping))
     items.extend(item for item in portrait.get("frontiers") or [] if isinstance(item, Mapping))
+    items.extend(item for item in portrait.get("themes") or [] if isinstance(item, Mapping))
     missing = [
         str(item.get("cluster_id") or item.get("source_finding_id") or item.get("label"))
         for item in items
@@ -510,6 +580,7 @@ def build_fixture() -> PortraitFixture:
         "linked_question_short": "agent context continuity",
         "summary": "The next agent must resume from a source-carrying boundary after compaction.",
         "boundary_reason": "Continuity claims were blocked until source refs and the current boundary survived handoff.",
+        "concepts": ["source refs", "resume boundary", "handoff"],
         "source_refs": [ref_2],
     }
     findings = (candidate_1, candidate_2, candidate_3, link, frontier)
@@ -581,9 +652,19 @@ def sanitized_portrait(portrait: Mapping[str, Any]) -> dict[str, Any]:
                 "source_finding_id": item.get("source_finding_id"),
                 "frontier_type": item.get("frontier_type"),
                 "linked_question_short": item.get("linked_question_short"),
+                "dimensions": item.get("dimensions"),
                 "source_ref_tokens": item.get("source_ref_tokens"),
             }
             for item in portrait.get("frontiers") or []
+        ],
+        "themes": [
+            {
+                "theme_id": item.get("theme_id"),
+                "label": item.get("label"),
+                "dimensions": item.get("dimensions"),
+                "source_ref_tokens": item.get("source_ref_tokens"),
+            }
+            for item in portrait.get("themes") or []
         ],
         "diagnostics": portrait.get("diagnostics"),
     }

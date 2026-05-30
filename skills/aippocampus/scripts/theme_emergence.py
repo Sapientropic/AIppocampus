@@ -548,6 +548,43 @@ def build_theme_candidates(
     return themes
 
 
+def theme_materialization_blockers(
+    links: list[QuestionLink],
+    themes: list[dict[str, Any]],
+    *,
+    concept_graph_path: Path | None,
+    min_links: int,
+) -> list[dict[str, Any]]:
+    if themes:
+        return []
+    graph_available = bool(concept_graph_path and concept_graph_path.exists())
+    if not graph_available:
+        return [
+            {
+                "code": "concept_graph_missing",
+                "question_link_count": len(links),
+                "min_links": min_links,
+                "concept_graph": str(concept_graph_path) if concept_graph_path else None,
+            }
+        ]
+    if len(links) < min_links:
+        return [
+            {
+                "code": "not_enough_question_links",
+                "question_link_count": len(links),
+                "min_links": min_links,
+            }
+        ]
+    return [
+        {
+            "code": "no_shared_concept_cluster",
+            "question_link_count": len(links),
+            "min_links": min_links,
+            "reason": "Recurring links exist, but no cluster met the shared source-derived concept/neighbor requirement.",
+        }
+    ]
+
+
 def append_theme_candidates(
     path: Path,
     themes: Iterable[dict[str, Any]],
@@ -597,6 +634,12 @@ def run_theme_emergence(
         concept_graph_path=concept_graph_path,
         min_links=min_links,
     )
+    blockers = theme_materialization_blockers(
+        links,
+        themes,
+        concept_graph_path=concept_graph_path,
+        min_links=min_links,
+    )
     existing_ids = existing_theme_ids(rows if output == jobs_path else iter_jsonl(output))
     fresh_themes = [
         theme for theme in themes if str(theme.get("theme_cluster_id") or "") not in existing_ids
@@ -618,6 +661,7 @@ def run_theme_emergence(
         "theme_count": len(themes),
         "fresh_theme_count": len(fresh_themes),
         "duplicate_theme_count": duplicate_count,
+        "materialization_blockers": blockers,
         "wrote_count": wrote_count,
         "wrote": bool(wrote_count),
         "no_write": no_write,

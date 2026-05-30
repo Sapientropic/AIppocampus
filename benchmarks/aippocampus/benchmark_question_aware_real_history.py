@@ -12,7 +12,7 @@ import argparse
 import json
 from collections import Counter
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping, Sequence
 
 import _paths
 
@@ -30,7 +30,12 @@ SOURCE_FINDING_KINDS = {
     "question_link",
     "theme_candidate",
 }
-PORTRAIT_FINDING_KINDS = {"question_candidate", "frontier_marker", "question_link"}
+PORTRAIT_FINDING_KINDS = {
+    "question_candidate",
+    "frontier_marker",
+    "question_link",
+    "theme_candidate",
+}
 DEFAULT_ROWS_PER_PACK = 32
 
 
@@ -118,7 +123,7 @@ def expected_terms_for_rows(rows: Iterable[Mapping[str, Any]]) -> list[str]:
 
 def structural_case_metrics(
     *,
-    rows: list[Mapping[str, Any]],
+    rows: Sequence[Mapping[str, Any]],
     plain_context: str,
     portrait_context: str,
 ) -> dict[str, Any]:
@@ -145,7 +150,7 @@ def structural_case_metrics(
 
 
 def build_question_aware_pack(
-    rows: list[Mapping[str, Any]],
+    rows: Sequence[Mapping[str, Any]],
     *,
     pack_index: int,
     include_private_text: bool = False,
@@ -241,8 +246,8 @@ def select_question_aware_packs(
 
 def pack_selection_report(
     *,
-    rows: list[Mapping[str, Any]],
-    packs: list[Mapping[str, Any]],
+    rows: Sequence[Mapping[str, Any]],
+    packs: Sequence[Mapping[str, Any]],
     max_packs: int,
     min_packs: int,
     rows_per_pack: int,
@@ -286,7 +291,7 @@ def pack_selection_report(
     }
 
 
-def aggregate_metrics(packs: list[Mapping[str, Any]]) -> dict[str, Any]:
+def aggregate_metrics(packs: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     source_seed_kind_counts: Counter[str] = Counter()
     for pack in packs:
         source_seed_kind_counts.update(pack.get("source_seed_kind_counts") or {})
@@ -359,7 +364,7 @@ def scaffold_vs_evidence_report(metrics: Mapping[str, Any]) -> dict[str, Any]:
 
 def benchmark_status(
     *,
-    packs: list[Mapping[str, Any]],
+    packs: Sequence[Mapping[str, Any]],
     metrics: Mapping[str, Any],
     selection: Mapping[str, Any],
     min_packs: int,
