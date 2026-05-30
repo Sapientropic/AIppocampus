@@ -9,6 +9,8 @@ import sys
 from typing import Sequence
 
 import onboard_codex
+from aippocampuslib import codex_home
+from conversation_sources import CodexConversationProvider
 
 PROVIDER_ALIASES = {
     "auto": "codex",
@@ -60,7 +62,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     provider = str(known.provider or "auto").strip().replace("_", "-").casefold()
     resolved = PROVIDER_ALIASES.get(provider)
     if resolved == "codex":
-        return onboard_codex.main(remaining, provider_name="codex")
+        return onboard_codex.main(
+            remaining,
+            provider_name="codex",
+            provider=CodexConversationProvider(codex_home()),
+        )
 
     error = _provider_error(provider)
     if _wants_json(raw_args) or not sys.stdout.isatty():

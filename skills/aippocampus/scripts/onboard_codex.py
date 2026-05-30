@@ -31,6 +31,7 @@ from build_project_timeline import (
     default_timeline_path,
     save_project_timeline,
 )
+from conversation_sources import ConversationProvider
 from memory_candidate_router import default_candidates_path
 from onboard_frontier import (
     filter_frontier_result_for_current_state as filter_frontier_result_for_current_state,
@@ -135,6 +136,7 @@ def run_onboarding(
     cwd: Path,
     registry_dir: Path | None = None,
     provider_name: str = "codex",
+    provider: ConversationProvider | None = None,
     dry_run: bool = False,
     build_index: bool = True,
     repair_indexes: bool = True,
@@ -172,6 +174,7 @@ def run_onboarding(
         project=project,
         tags=tags,
         dry_run=True,
+        provider=provider,
     )
     repair_plan = (
         repair_missing_artifacts(registry_dir=registry_dir, build_index=build_index, max_repair=0)
@@ -237,6 +240,7 @@ def run_onboarding(
         project=project,
         tags=tags,
         dry_run=False,
+        provider=provider,
     )
     actions["scan_sessions"] = {
         "registered_count": scan_result.get("count", 0),
@@ -249,7 +253,7 @@ def run_onboarding(
     if refresh_current:
         try:
             current = register_current_thread(
-                cwd, registry_dir=registry_dir, build_index=build_index
+                cwd, registry_dir=registry_dir, build_index=build_index, provider=provider
             )
             actions["refresh_current"] = {
                 "ok": True,
@@ -364,7 +368,12 @@ def print_text(result: dict[str, Any]) -> None:
     print(f"frontier: {frontier.get('status')}")
 
 
-def main(argv: Sequence[str] | None = None, *, provider_name: str = "codex") -> int:
+def main(
+    argv: Sequence[str] | None = None,
+    *,
+    provider_name: str = "codex",
+    provider: ConversationProvider | None = None,
+) -> int:
     parser = argparse.ArgumentParser(
         description="Onboard local Codex sessions into the AIppocampus global registry."
     )
@@ -448,6 +457,7 @@ def main(argv: Sequence[str] | None = None, *, provider_name: str = "codex") -> 
         cwd=Path(args.cwd),
         registry_dir=registry_dir,
         provider_name=provider_name,
+        provider=provider,
         dry_run=args.dry_run,
         build_index=not args.no_build_index,
         repair_indexes=not args.no_repair,

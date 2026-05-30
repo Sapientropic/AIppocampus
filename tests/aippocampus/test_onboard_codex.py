@@ -22,6 +22,7 @@ for _path in (
 import onboard_codex as onboard  # noqa: E402
 import onboard_frontier  # noqa: E402
 import registry  # noqa: E402
+from conversation_sources import CodexConversationProvider  # noqa: E402
 
 ONBOARD = SCRIPTS / "onboard.py"
 
@@ -98,6 +99,25 @@ class OnboardCodexTests(unittest.TestCase):
         self.assertEqual(result["data"]["plan"]["would_register_count"], 1)
         self.assertFalse((self.registry_dir / "threads.json").exists())
         self.assertIn("next", result)
+
+    def test_run_onboarding_accepts_explicit_provider_without_global_codex_home_patch(
+        self,
+    ) -> None:
+        registry.codex_home = self.original_home
+        result = onboard.run_onboarding(
+            cwd=self.cwd,
+            registry_dir=self.registry_dir,
+            provider=CodexConversationProvider(self.root),
+            dry_run=True,
+            build_index=True,
+            refresh_current=False,
+            build_timeline=True,
+            build_cognitive_map=True,
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["meta"]["provider"], "codex")
+        self.assertEqual(result["data"]["plan"]["would_register_count"], 1)
 
     def test_onboard_facade_provider_codex_delegates_to_existing_onboarding(self) -> None:
         proc = self._run_onboard_facade(
