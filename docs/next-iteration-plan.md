@@ -264,11 +264,34 @@ handoff context.
      `journey_waypoint` outputs when the job circuit exists, then evaluate on
      time-sliced private history before surfacing Journey hints in AAR.
 
+17. Compensatory dream Phase 1
+   - Source: `docs/research/dream-task-design.md`,
+     `docs/research/source-as-world.md`, and
+     `docs/cognitive-runtime-architecture.md`.
+   - First deterministic helper is implemented in
+     `skills/aippocampus/scripts/compensatory_dream.py`: it consumes
+     source-backed single-thread extraction rows, discards unsourced or prior
+     dream rows, suppresses refs from other threads, emits
+     `dream_synthesized` compensatory candidates whose bridge claims carry
+     thread-scoped source refs, and keeps trigger defaults lower than
+     extraction and out of foreground hooks.
+   - The helper covers empty/no-pattern, technical unresolved-edge, life-wide
+     silently-recurring, unsourced-row, cross-thread-ref, ordinary-no-pattern,
+     and self-reingestion fixtures. It is a review-queue substrate, not proof
+     of registry-resolved clean-source refs, live dream quality, prospective
+     analysis, amplification, active imagination, or recall/reflection-space
+     benefit.
+   - Next hardening: connect reviewed dream candidates to the existing
+     subconscious review/router path, then evaluate selected real-history packs
+     before allowing dream output to influence recall or reflection space.
+
 ## Do Not Start With
 
 - A generic vector database rewrite.
 - A cloud service dependency.
 - Phase 3 `theme_emergence` or predictive replay before Phase 2 produces stable
   links.
+- Prospective, amplification, or active-imagination dream work before reviewed
+  Phase 1 compensatory candidates show source-backed value.
 - Any change that treats summaries, findings, or vector neighbors as truth
   without clean-source refs.

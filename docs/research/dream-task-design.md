@@ -1,10 +1,14 @@
 # Dream Task Design: From Jung's Dream Theory to Subconscious Consolidation
 
-Status: research memo, awaiting implementation and cross-model validation.
+Status: research memo with a first deterministic Phase 1 prototype; awaiting
+cross-model validation and reviewed real-history evidence.
 Anthropic Managed Agents Dreams are confirmed as an adjacent official Research
 Preview, but this memo's Jung-inspired dream tasks are an AIppocampus-specific
 design proposal.
 Origin: conversation between user and Claude Code, 2026-05-27.
+Implemented first slice: `skills/aippocampus/scripts/compensatory_dream.py`
+emits review-only compensatory candidates from source-backed single-thread
+extraction rows.
 Related: [affect-side-channel.md](affect-side-channel.md),
 [compact-activation-signals.md](compact-activation-signals.md),
 [correction-reconsolidation.md](correction-reconsolidation.md).
@@ -200,6 +204,18 @@ Extractive tasks are deterministic-first (rules + semantic gates).
 Integrative tasks are semantic-first (require model reasoning) and must always
 be clearly flagged as dream output, not source-grounded fact.
 
+The first implemented slice is intentionally narrower than the full dream
+design. `compensatory_dream.py` is a deterministic Phase 1 helper that consumes
+existing source-backed extraction rows for one thread and emits
+`finding_kind="dream_synthesized"` candidates with
+`support_level="candidate"`, `review_state="needs_review"`, and
+`foreground_eligible=false`. It discards unsourced rows, rows whose refs belong
+to another thread, and existing dream rows; attaches thread-scoped `source_refs`
+to every bridge claim; and writes no clean-source or formal-memory updates. Its
+source-ref audit is structural unless a later registry/clean-source index is
+provided. The default trigger policy is lower-frequency than extraction
+(`run_after_extraction_passes=3`) and not allowed in foreground hooks.
+
 ## Dream Outputs As Reusable Inference Substrate
 
 Dream tasks should not be treated as a foreground answerer. Their job is to
@@ -339,17 +355,23 @@ user's ongoing journey, then can retrieve the specifics on demand.
    impose them. It may observe that a thread follows a quest structure, but it
    should not force threads into narrative templates.
 
+7. **Review or discard before influence.** Phase 1 dream output can enter a
+   review queue only. It must be accepted, corrected, merged, or discarded
+   before it influences recall, reflection space, cognitive portraits, or
+   ambient cards.
+
 ## Implementation Priority
 
 | Phase | Function | Depends on | Risk |
 |-------|----------|------------|------|
-| 1 | Compensatory analysis | Single thread extraction | Low |
+| 1 | Compensatory analysis | Single thread extraction | Low; first deterministic helper implemented |
 | 2 | Prospective analysis | Multiple thread extraction + theme emergence | Medium |
 | 3 | Amplification | Cross-thread registration + concept edges | Medium |
 | 4 | Active imagination | All above + explicit dream flag + audit trail | High |
 
-Phase 1 is implementable now — it only needs single-thread extraction output as
-input. Phase 4 is a research target that depends on everything else being stable.
+Phase 1 is implemented as a conservative local helper, not as proof that dream
+output improves live recall. Phase 4 remains a research target that depends on
+everything else being stable.
 
 ## Open Questions
 
