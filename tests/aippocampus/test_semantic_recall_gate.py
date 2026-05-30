@@ -539,8 +539,71 @@ class SemanticRecallGateTests(unittest.TestCase):
         self.assertTrue(second["cached"])
         self.assertEqual(first["cache_diagnostics"]["lookup"], "miss")
         self.assertEqual(second["cache_diagnostics"]["lookup"], "hit")
-        self.assertFalse(second["cache_diagnostics"]["semantic_cues_in_cache_key"])
+        self.assertTrue(second["cache_diagnostics"]["semantic_cues_in_cache_key"])
         self.assertEqual(calls["count"], 3)
+
+    def test_semantic_cue_cache_changes_invalidate_gate_result_cache(self) -> None:
+        calls = {"count": 0}
+
+        def chat_fn(messages, api_key, model, base_url, max_tokens, timeout, temperature):
+            calls["count"] += 1
+            return fake_response(
+                {
+                    "decision": "scent",
+                    "confidence": 0.8,
+                    "query_aliases": ["AIppocampus"],
+                    "anti_personalization_risk": "low",
+                    "reason": "cue cache key test",
+                }
+            )
+
+        cache = self.root / "semantic_recall_cache.json"
+        cues_path = self.root / "semantic_cues.jsonl"
+        first = gate.run_semantic_gate(
+            "脑内续接器",
+            cwd=self.workspace,
+            registry=self.registry,
+            registry_path=self.registry_path,
+            semantic_cues_path=cues_path,
+            cache_path=cache,
+            api_key="test-key",
+            chat_fn=chat_fn,
+        )
+        cues_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "kind": "aippocampus_semantic_cue",
+                    "status": "active",
+                    "cue_id": "sc_test",
+                    "cue": "внешний гиппокамп",
+                    "route": "semantic_gate",
+                    "confidence": 0.9,
+                    "hit_count": 2,
+                    "false_positive_count": 0,
+                    "source_refs": [{"thread_key": "session:aippocampus"}],
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        second = gate.run_semantic_gate(
+            "脑内续接器",
+            cwd=self.workspace,
+            registry=self.registry,
+            registry_path=self.registry_path,
+            semantic_cues_path=cues_path,
+            cache_path=cache,
+            api_key="test-key",
+            chat_fn=chat_fn,
+        )
+
+        self.assertFalse(first["cached"])
+        self.assertFalse(second["cached"])
+        self.assertEqual(second["cache_diagnostics"]["lookup"], "miss")
+        self.assertTrue(second["cache_diagnostics"]["semantic_cues_in_cache_key"])
+        self.assertEqual(calls["count"], 6)
 
     def test_cache_write_error_is_reported_without_blocking_gate(self) -> None:
         def chat_fn(messages, api_key, model, base_url, max_tokens, timeout, temperature):

@@ -63,6 +63,7 @@ GENERIC_TRIGGER_TERMS = {
     "review",
     "source",
     "agent",
+    "app",
     "系统",
     "项目",
     "记忆",

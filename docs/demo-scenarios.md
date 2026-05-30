@@ -133,12 +133,17 @@ Cannot claim: that every project thread has already been onboarded.
 
 ```sh
 python ./tools/aippocampus/smoke/simulate_multilingual_prompt_hook.py --cwd .
+python ./tools/aippocampus/smoke/simulate_multilingual_prompt_hook.py --cwd . --semantic-gate off --seed-semantic-cues --json
 ```
 
 Expected result: multilingual hook smoke cases pass or report concrete failing
-cases.
+cases with semantic availability, budget, and error-bucket diagnostics. Cached
+or reviewed semantic cues should be able to warm repeated multilingual recall;
+the seeded command is the public-safe deterministic proof that this works
+without forcing a live semantic call in the foreground hook.
 
-Cannot claim: that optional external semantic gates are enabled.
+Cannot claim: that optional external semantic gates are enabled, or that every
+private multilingual prompt already has warmed semantic cue coverage.
 
 ## Scenario 6b: Memory Pain Boundary Fixtures
 

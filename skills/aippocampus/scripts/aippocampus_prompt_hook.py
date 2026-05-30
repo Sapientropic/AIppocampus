@@ -98,6 +98,11 @@ def write_debug_log(
     path = log_path or (codex_home() / "aippocampus-registry" / "aippocampus_prompt_hook.jsonl")
     path.parent.mkdir(parents=True, exist_ok=True)
     ambient_summary = _load_runtime()["ambient_debug_summary"](result)
+    semantic_gate = result.get("semantic_gate") or {}
+    semantic_debug_keys = (
+        "available", "decision", "confidence", "cached", "query_aliases",
+        "availability_reason", "diagnostic", "elapsed_ms", "timeout", "budget", "error_buckets",
+    )
     event = {
         "timestamp": now_utc(),
         "session_id": (hook_input or {}).get("session_id"),
@@ -132,13 +137,8 @@ def write_debug_log(
             {"title": item.get("title"), "route": item.get("route"), "score": item.get("score")}
             for item in result.get("working_memory", [])[:3]
         ],
-        "semantic_gate": {
-            "decision": (result.get("semantic_gate") or {}).get("decision"),
-            "confidence": (result.get("semantic_gate") or {}).get("confidence"),
-            "cached": (result.get("semantic_gate") or {}).get("cached"),
-            "aliases": (result.get("semantic_gate") or {}).get("query_aliases"),
-        }
-        if result.get("semantic_gate")
+        "semantic_gate": {**{key: semantic_gate.get(key) for key in semantic_debug_keys}, "aliases": semantic_gate.get("query_aliases")}
+        if semantic_gate
         else None,
         "evidence": [
             {

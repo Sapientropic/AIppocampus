@@ -141,6 +141,28 @@ class MemoryCandidateRouterTests(unittest.TestCase):
         self.assertEqual(wrong_project, [])
         self.assertEqual(broad_only, [])
 
+    def test_working_memory_ignores_generic_app_term(self) -> None:
+        self.write_finding()
+        self.write_jsonl(
+            self.candidates,
+            [
+                self.base_candidate(
+                    title="Mini App tunnel persistence",
+                    summary="Cloudflare tunnel auto-restart for a production Mini App.",
+                    recommendation="Use health-check auto-restart.",
+                )
+            ],
+        )
+        row = router.route_candidates(self.candidates, self.jobs)["rows"][0]
+
+        matched = router.match_working_memory(
+            "Rappelle-moi d'acheter du lait demain.",
+            [row],
+            project_label="T-Sense",
+        )
+
+        self.assertEqual(matched, [])
+
 
 if __name__ == "__main__":
     unittest.main()

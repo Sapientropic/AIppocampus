@@ -54,10 +54,13 @@ def semantic_budget_result(
         "available": False,
         "decision": "skip",
         "confidence": 0.0,
+        "availability_reason": "foreground_budget_skipped",
+        "diagnostic": "semantic_skipped_under_foreground_budget",
         "query_aliases": [],
         "memory_scope": [],
         "reasons": [reason],
         "errors": [reason],
+        "error_buckets": {"foreground_budget": 1},
         "budget": {
             "requested_timeout": requested_timeout,
             "effective_timeout": effective_timeout,
