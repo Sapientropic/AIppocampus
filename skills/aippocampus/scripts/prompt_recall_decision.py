@@ -297,6 +297,7 @@ def _ambiguous_evidence_request(
     candidates: list[dict[str, Any]],
     explicit: list[str],
     source_evidence: list[str],
+    natural_evidence: list[str],
     semantic_result: dict[str, Any] | None,
     reasons: list[str],
 ) -> bool:
@@ -313,6 +314,7 @@ def _ambiguous_evidence_request(
         candidates=candidates,
         explicit=explicit,
         source_evidence=source_evidence,
+        natural_evidence=natural_evidence,
         semantic_result=semantic_result,
     ):
         ambiguous = True
@@ -698,6 +700,7 @@ def assess_prompt(
         candidates=candidates,
         explicit=explicit,
         source_evidence=source_evidence,
+        natural_evidence=natural_evidence,
         semantic_result=semantic_result,
         reasons=reasons,
     )

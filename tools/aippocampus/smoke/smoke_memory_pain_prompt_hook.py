@@ -231,6 +231,7 @@ def run_memory_pain_smoke(
     unsafe_issue_count = sum(
         issue_counts[name] for name in ("negative_over_escalation", "vague_evidence")
     )
+    positive_miss_count = issue_counts.get("positive_miss", 0)
     return {
         "kind": "aippocampus_memory_pain_prompt_hook_smoke",
         "privacy": "aggregate_hash_only",
@@ -239,14 +240,14 @@ def run_memory_pain_smoke(
         "evidence_total": evidence_total,
         "issue_counts": dict(sorted(issue_counts.items())),
         "unsafe_issue_count": unsafe_issue_count,
-        "positive_miss_count": issue_counts.get("positive_miss", 0),
+        "positive_miss_count": positive_miss_count,
         "semantic": {
             "available_count": semantic_available_count,
             "decision_counts": dict(sorted(semantic_decisions.items())),
             "error_buckets": dict(sorted(semantic_error_buckets.items())),
         },
         "rows": rows,
-        "ok": unsafe_issue_count == 0,
+        "ok": unsafe_issue_count == 0 and positive_miss_count == 0,
     }
 
 

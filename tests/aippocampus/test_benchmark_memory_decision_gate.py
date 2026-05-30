@@ -310,6 +310,59 @@ class MemoryDecisionGateBenchmarkTests(unittest.TestCase):
         self.assertEqual(metrics["surface_false_negative_count"], 2)
         self.assertEqual(metrics["evidence_false_negative_rate"], 0.5)
 
+    def test_expected_source_mismatch_counts_as_incorrect(self) -> None:
+        case = benchmark.GateCase(
+            case_id="source_mismatch",
+            case_type="source_quality",
+            expected="should_evidence",
+            prompt="找回那句原话",
+            search_budget=1,
+            expected_evidence_thread_key="session:expected",
+        )
+
+        row = benchmark.grade_case(
+            case,
+            {
+                "decision": "evidence",
+                "evidence": [{"thread_key": "session:wrong", "line": 12}],
+            },
+            semantic_gate_called=False,
+        )
+        metrics = benchmark.summarize_results([row])
+
+        self.assertFalse(row["correct"])
+        self.assertTrue(row["evidence_source_mismatch"])
+        self.assertEqual(metrics["evidence_source_mismatch_count"], 1)
+
+    def test_mixed_wrong_source_evidence_counts_as_incorrect(self) -> None:
+        case = benchmark.GateCase(
+            case_id="mixed_source_mismatch",
+            case_type="source_quality",
+            expected="should_evidence",
+            prompt="找回那句原话",
+            search_budget=2,
+            expected_evidence_thread_key="session:expected",
+        )
+
+        row = benchmark.grade_case(
+            case,
+            {
+                "decision": "evidence",
+                "evidence": [
+                    {"thread_key": "session:expected", "line": 12},
+                    {"thread_key": "session:wrong", "line": 34},
+                ],
+            },
+            semantic_gate_called=False,
+        )
+        metrics = benchmark.summarize_results([row])
+
+        self.assertFalse(row["correct"])
+        self.assertFalse(row["evidence_source_match"])
+        self.assertTrue(row["evidence_source_mismatch"])
+        self.assertEqual(row["unexpected_evidence_source_count"], 1)
+        self.assertEqual(metrics["evidence_source_mismatch_count"], 1)
+
     def test_synthetic_gate_benchmark_includes_natural_oral_case_bank(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             fixture = benchmark.build_synthetic_fixture(Path(tmp))
@@ -348,6 +401,12 @@ class MemoryDecisionGateBenchmarkTests(unittest.TestCase):
             payload["harder_case_bank"]["natural_oral_evidence_false_negative_count"],
             0,
         )
+        self.assertEqual(
+            payload["harder_case_bank"]["expected_evidence_source_match_count"],
+            payload["harder_case_bank"]["expected_evidence_source_cases"],
+        )
+        self.assertEqual(payload["metrics"]["evidence_source_mismatch_count"], 0)
+        self.assertTrue(payload["ok"])
 
     def test_synthetic_gate_benchmark_declares_fixture_live_boundary(self) -> None:
         payload = benchmark.run_benchmark(case_set="synthetic", include_private_text=False)

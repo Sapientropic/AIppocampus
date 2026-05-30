@@ -70,11 +70,15 @@ def semantic_evidence_request_is_vague_cross_project(
     candidates: list[dict[str, Any]],
     explicit: list[str],
     source_evidence: list[str],
+    natural_evidence: list[str] | None = None,
     semantic_result: dict[str, Any] | None,
 ) -> bool:
-    if explicit or source_evidence:
+    has_semantic_evidence = semantic_gate_can_request_evidence(prompt, semantic_result)
+    has_natural_evidence = bool(natural_evidence)
+    has_source_evidence = bool(source_evidence)
+    if explicit and not (has_natural_evidence or has_source_evidence or has_semantic_evidence):
         return False
-    if not semantic_gate_can_request_evidence(prompt, semantic_result):
+    if not (has_natural_evidence or has_source_evidence or has_semantic_evidence):
         return False
     if not any(pattern.search(prompt) for pattern in _VAGUE_CROSS_PROJECT_REFERENT_PATTERNS):
         return False
@@ -89,8 +93,31 @@ def semantic_evidence_request_is_vague_cross_project(
     )
     if any(label and label.casefold() in prompt_low for label in labels):
         return False
-    # Semantic can help route vague "that plan" prompts to a scent, but source
-    # snippets need a stable local anchor. Without a named project/entity in the
-    # user wording, a high-confidence semantic evidence answer can grab the
-    # current or wrong thread when an older clean-source row is the real target.
+    if has_semantic_evidence and not (explicit or has_source_evidence):
+        # A semantic model can recognize vague recall intent, but without a
+        # named source anchor the clean-source snippet selection is still a
+        # guess. Keep the old semantic-only guard even when only one local
+        # candidate survives deterministic ranking.
+        return True
+    strong = [
+        candidate
+        for candidate in candidates[:3]
+        if float(candidate.get("score") or 0.0) > 0.0
+    ]
+    if len(strong) < 2:
+        return False
+    thread_keys = unique_preserve(
+        [
+            str(candidate.get("thread_key") or "")
+            for candidate in strong
+            if candidate.get("thread_key")
+        ],
+        limit=4,
+    )
+    if len(labels) < 2 and len(thread_keys) < 2:
+        return False
+    # Semantic and natural phrasing can both identify "this is recall", but a
+    # vague "that plan/that decision" prompt still lacks a stable source anchor.
+    # Keep it as scent when multiple plausible threads compete, rather than
+    # turning the current or wrong thread into source-backed evidence.
     return True

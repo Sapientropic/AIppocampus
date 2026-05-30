@@ -434,8 +434,10 @@ def build_harder_synthetic_case_bank() -> list[GateCase]:
             if twin
             in {
                 "hippocampus_line",
+                "source_backed_line",
                 "raw_history_line",
                 "continuity_line",
+                "prompt_hook_line",
             }
             else "session:atlas-current-project",
         )
@@ -1025,7 +1027,10 @@ def build_synthetic_fixture(root: Path) -> SyntheticFixture:
             "turn_index": 7,
             "is_final": True,
             "sha1": "synthetic-memory-line",
-            "text": "生命还能变成什么，而我能不能在变化后仍然是我。",
+            "text": (
+                "The self-continuity quote was: 生命还能变成什么，"
+                "而我能不能在变化后仍然是我。"
+            ),
         },
         {
             "line": 356,
@@ -1093,7 +1098,7 @@ def build_synthetic_fixture(root: Path) -> SyntheticFixture:
             "is_final": True,
             "sha1": "synthetic-source-vs-scent-line",
             "text": (
-                "Scent is only a quiet hint that old memory may exist; source-backed "
+                "Ambiguous continuation should stay scent; source-backed "
                 "memory needs concrete clean-source, SQLite, or raw-rollout references "
                 "before the assistant can treat it as evidence."
             ),
@@ -1404,21 +1409,28 @@ def grade_case(case: GateCase, result: dict[str, Any], *, semantic_gate_called: 
     expected_actual = EXPECTED_TO_ACTUAL[case.expected]
     evidence = result.get("evidence") or []
     evidence_source_match = None
+    unexpected_evidence_source_count = 0
     if case.expected_evidence_thread_key:
-        evidence_source_match = any(
-            str(item.get("thread_key") or "") == case.expected_evidence_thread_key
-            for item in evidence
+        evidence_thread_keys = [str(item.get("thread_key") or "") for item in evidence]
+        unexpected_evidence_source_count = sum(
+            1
+            for thread_key in evidence_thread_keys
+            if thread_key != case.expected_evidence_thread_key
         )
+        evidence_source_match = bool(evidence_thread_keys) and unexpected_evidence_source_count == 0
+    source_match_ok = evidence_source_match is not False
     return {
         **case.to_result_stub(include_private_text=False),
         "actual": actual,
-        "correct": actual == expected_actual,
+        "correct": actual == expected_actual and source_match_ok,
         "score": result.get("score"),
         "confidence": result.get("confidence"),
         "elapsed_ms": result.get("elapsed_ms"),
         "candidate_count": len(result.get("candidates") or []),
         "evidence_count": len(evidence),
         "evidence_source_match": evidence_source_match,
+        "evidence_source_mismatch": unexpected_evidence_source_count > 0,
+        "unexpected_evidence_source_count": unexpected_evidence_source_count,
         "working_memory_count": len(result.get("working_memory") or []),
         "semantic_gate_called": semantic_gate_called,
         "semantic_gate_available": bool((result.get("semantic_gate") or {}).get("available")),
@@ -1488,6 +1500,7 @@ def summarize_results(results: list[dict[str, Any]]) -> dict[str, Any]:
         for row in results
         if row.get("expected") == "should_evidence" and row.get("actual") != "evidence"
     )
+    evidence_source_mismatch = sum(1 for row in results if row.get("evidence_source_mismatch"))
     should_surface = [
         row for row in results if row.get("expected") in {"should_scent", "should_evidence"}
     ]
@@ -1520,6 +1533,8 @@ def summarize_results(results: list[dict[str, Any]]) -> dict[str, Any]:
         "evidence_false_positive_rate": safe_rate(evidence_fp, total),
         "evidence_false_negative_count": evidence_fn,
         "evidence_false_negative_rate": safe_rate(evidence_fn, total),
+        "evidence_source_mismatch_count": evidence_source_mismatch,
+        "evidence_source_mismatch_rate": safe_rate(evidence_source_mismatch, total),
         "surface_false_negative_count": surface_fn,
         "surface_false_negative_rate": safe_rate(surface_fn, total),
         "weighted_false_positive_cost": round(sum(false_positive_cost(row) for row in results), 4),
@@ -1537,6 +1552,9 @@ def summarize_harder_case_bank(results: list[dict[str, Any]]) -> dict[str, Any]:
     summary["expected_evidence_source_cases"] = len(evidence_with_expected_source)
     summary["expected_evidence_source_match_count"] = sum(
         1 for row in evidence_with_expected_source if row.get("evidence_source_match")
+    )
+    summary["expected_evidence_source_mismatch_count"] = sum(
+        1 for row in evidence_with_expected_source if row.get("evidence_source_mismatch")
     )
     summary["search_budgeted_scent_cases"] = sum(
         1
@@ -1728,6 +1746,9 @@ def run_benchmark(
             by_id = {case.case_id: case for case in cases}
             for row in results:
                 row.update(by_id[str(row["case_id"])].to_result_stub(include_private_text=True))
+    metrics = summarize_results(results)
+    harder_case_bank = summarize_harder_case_bank(results) if case_set == "synthetic" else None
+    source_mismatch_count = int(metrics.get("evidence_source_mismatch_count") or 0)
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_memory_decision_gate_benchmark",
@@ -1742,10 +1763,8 @@ def run_benchmark(
             "include_private_text": include_private_text,
             "live_llm": False,
         },
-        "metrics": summarize_results(results),
-        "harder_case_bank": summarize_harder_case_bank(results)
-        if case_set == "synthetic"
-        else None,
+        "metrics": metrics,
+        "harder_case_bank": harder_case_bank,
         "memory_pain_fixtures": summarize_memory_pain_fixtures(
             results,
             include_private_text=include_private_text,
@@ -1778,7 +1797,7 @@ def run_benchmark(
             "competitor_superiority",
         ],
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
-        "ok": True,
+        "ok": source_mismatch_count == 0,
     }
 
 
