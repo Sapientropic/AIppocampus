@@ -1,6 +1,7 @@
 # Agency From Cognitive Maps
 
-Status: research memo, not implemented.
+Status: first deterministic affordance-map and ticket-selector slice implemented;
+host integration and live timing quality are not yet proven.
 Origin: user/product discussion, 2026-05-28.
 Related: [Ambient Associative Recall](ambient-associative-recall.md),
 [Correction Reconsolidation](correction-reconsolidation.md),
@@ -201,8 +202,8 @@ A realistic first slice:
    unfinished task reentry, and scheduled revisit.
 4. Require `source_thickness != thin` for any foreground ticket except
    `state_check`.
-5. Record outcome feedback: accepted, ignored, dismissed, corrected, or
-   completed.
+5. Record outcome feedback: accepted, ignored, dismissed, corrected,
+   `tool_success`, or `tool_failure`.
 6. Evaluate with a Compaction Continuity Benchmark plus agency-specific cases:
    "should stay silent", "should remind", "should warn", and "should offer a
    next step".
@@ -211,6 +212,47 @@ This integrates naturally with a proactive shell like Codeksei: Codeksei can
 own leases, wake timing, context-board refresh, intervention tiers, and host
 delivery; AIppocampus can provide source-backed tickets and reconsolidated
 feedback.
+
+## Implemented First Slice
+
+The first deterministic runtime helper is
+`skills/aippocampus/scripts/agency_affordance.py`.
+
+It builds an `aippocampus_agency_affordance_map` from existing sidecar-like
+inputs: cognitive-map rows, correction windows, ambient recall cards, dream
+outputs, coding continuity tickets, unfinished tasks, and scheduled revisits.
+The selector emits at most one foreground `aippocampus_agency_ticket` and a
+small bounded backstage set per topic epoch.
+
+Implemented trigger families are deliberately narrow:
+
+- `user_correction`
+- `compaction_loss`
+- `unfinished_task_reentry`
+- `scheduled_revisit`
+
+Foreground tickets require `source_thickness != thin`, except for tiny
+`state_check` tickets that only ask whether an old task should resume. Tickets
+with visible source refs, same-topic repeated source refs, or
+`matched_terms_only` cues are suppressed rather than turned into reminders.
+`push_forward` source rows are downgraded to `offer_next_step`, because
+AIppocampus does not own permission, sequencing, priority, or safety policy.
+
+The helper also creates append-only `aippocampus_agency_ticket_feedback` rows
+for `accepted`, `ignored`, `dismissed`, `corrected`, `tool_success`, and
+`tool_failure` outcomes.
+
+Current tests live in `tests/aippocampus/test_agency_affordance.py` and cover
+the first four evaluation cases: should stay silent, should remind, should
+warn, and should offer next step.
+
+Still not proven:
+
+- live host hook timing
+- whether a host agent uses tickets well
+- annoyance-risk calibration from real dismissals
+- multi-host duplicate suppression
+- any autonomous `push_forward` behavior
 
 ## Open Questions
 
