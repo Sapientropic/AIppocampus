@@ -36,6 +36,7 @@ ADJUDICATED_DREAM_DOWNSTREAM_USES = {
     "ambient_recall_card",
     "reflection_space",
 }
+DEFAULT_BACKGROUND_ADJUDICATION_SOURCE = "background_dream_adjudication"
 LOW_SIGNAL_TERMS = {
     "question",
     "candidate",
@@ -55,6 +56,14 @@ def stable_digest(*parts: object, prefix: str, length: int = 16) -> str:
 
 def is_present(value: object) -> bool:
     return value is not None and value != ""
+
+
+def string_values(value: object) -> tuple[str, ...]:
+    if isinstance(value, str):
+        return (value,)
+    if isinstance(value, Iterable):
+        return tuple(str(item) for item in value if is_present(item))
+    return ()
 
 
 def unique_preserve(values: Iterable[object], *, limit: int = 12) -> list[str]:
@@ -96,6 +105,10 @@ def source_ref_key(ref: Mapping[str, Any]) -> tuple[str, str, str, str]:
     )
 
 
+def source_ref_keys(refs: Iterable[Mapping[str, Any]]) -> set[tuple[str, str, str, str]]:
+    return {source_ref_key(ref) for ref in refs if any(source_ref_key(ref))}
+
+
 def normalize_source_refs(value: object) -> tuple[dict[str, Any], ...]:
     if isinstance(value, Mapping):
         raw_items: Iterable[object] = [value]
@@ -116,6 +129,52 @@ def normalize_source_refs(value: object) -> tuple[dict[str, Any], ...]:
         seen.add(key)
         refs.append({k: v for k, v in ref.items() if is_present(v)})
     return tuple(refs)
+
+
+def bridge_claims_have_source_refs(finding: Mapping[str, Any]) -> bool:
+    claims = [item for item in finding.get("bridge_claims") or [] if isinstance(item, Mapping)]
+    if not claims:
+        return False
+    return all(normalize_source_refs(claim.get("source_refs")) for claim in claims)
+
+
+def audit_failed(finding: Mapping[str, Any]) -> bool:
+    audit = finding.get("source_ref_audit") or {}
+    return isinstance(audit, Mapping) and str(audit.get("status") or "") == "failed"
+
+
+def source_pack_is_ready(source_pack: Mapping[str, Any]) -> bool:
+    if source_pack.get("kind") != "aippocampus_dream_input_pack":
+        return False
+    if source_pack.get("status") != "ready_for_dream_worker":
+        return False
+    audit = source_pack.get("source_ref_audit") or {}
+    if isinstance(audit, Mapping) and audit.get("status") in {
+        "missing_clean_source_refs",
+        "insufficient_source_threads",
+        "failed",
+    }:
+        return False
+    return bool(normalize_source_refs(source_pack.get("source_refs")))
+
+
+def source_pack_overlaps_finding(
+    finding: Mapping[str, Any],
+    source_pack: Mapping[str, Any],
+) -> bool:
+    finding_keys = source_ref_keys(normalize_source_refs(finding.get("source_refs")))
+    pack_keys = source_ref_keys(normalize_source_refs(source_pack.get("source_refs")))
+    return bool(finding_keys and pack_keys and finding_keys & pack_keys)
+
+
+def safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    if number != number or number in {float("inf"), float("-inf")}:
+        return default
+    return number
 
 
 def project_label_from_refs(refs: Iterable[Mapping[str, Any]]) -> str | None:
@@ -177,10 +236,95 @@ def adjudicated_dream_is_eligible(finding: Mapping[str, Any]) -> bool:
     refs = normalize_source_refs(finding.get("source_refs"))
     if not refs:
         return False
-    audit = finding.get("source_ref_audit") or {}
-    if isinstance(audit, Mapping) and audit.get("status") == "failed":
+    if audit_failed(finding):
+        return False
+    if not bridge_claims_have_source_refs(finding):
         return False
     return True
+
+
+def background_adjudicate_dream_finding(
+    finding: Mapping[str, Any],
+    *,
+    source_pack: Mapping[str, Any] | None = None,
+    confidence_floor: float = 0.55,
+    adjudication_source: str = DEFAULT_BACKGROUND_ADJUDICATION_SOURCE,
+) -> dict[str, Any]:
+    """Accept or park a dream finding using structural source-ref checks.
+
+    This is intentionally not a user-review step. It is a deterministic guard
+    for the background route: every projected hypothesis must keep clean-source
+    handles on the finding and on each bridge claim, and pack-backed P2
+    candidates must overlap the source pack that triggered them.
+    """
+
+    result = dict(finding)
+    checks = {
+        "dream_finding_kind": finding.get("finding_kind") == DREAM_FINDING_KIND,
+        "source_refs_present": bool(normalize_source_refs(finding.get("source_refs"))),
+        "source_ref_audit": not audit_failed(finding),
+        "bridge_claims_source_refs": bridge_claims_have_source_refs(finding),
+        "confidence_floor": safe_float(finding.get("confidence"), 0.62) >= confidence_floor,
+    }
+    if source_pack is not None:
+        checks["source_pack_ready"] = source_pack_is_ready(source_pack)
+        checks["source_pack_overlap"] = source_pack_overlaps_finding(finding, source_pack)
+
+    failed = [key for key, passed in checks.items() if not passed]
+    passed = [key for key, passed in checks.items() if passed]
+    result["adjudication_source"] = adjudication_source
+    result["foreground_eligible"] = False
+    result["formal_memory_eligible"] = False
+    result["clean_source_mutation"] = False
+    if failed:
+        result["review_state"] = "needs_review"
+        result["human_review_required"] = bool(result.get("human_review_required") or False)
+        result["adjudication_result"] = {
+            "status": "parked",
+            "passed_checks": passed,
+            "failed_checks": failed,
+            "policy": "background_source_guard_v1",
+        }
+        return result
+
+    requested_uses = [
+        *string_values(result.get("downstream_use")),
+        "working_memory",
+        "ambient_recall_card",
+        "reflection_space",
+    ]
+    result["review_state"] = "agent_adjudicated"
+    result["human_review_required"] = False
+    result["downstream_use"] = [
+        item
+        for item in unique_preserve(requested_uses, limit=6)
+        if item in ADJUDICATED_DREAM_DOWNSTREAM_USES
+    ]
+    result["adjudication_result"] = {
+        "status": "accepted",
+        "passed_checks": passed,
+        "failed_checks": [],
+        "policy": "background_source_guard_v1",
+    }
+    return result
+
+
+def background_adjudicate_dream_findings(
+    findings: Iterable[Mapping[str, Any]],
+    *,
+    source_pack: Mapping[str, Any] | None = None,
+    confidence_floor: float = 0.55,
+    adjudication_source: str = DEFAULT_BACKGROUND_ADJUDICATION_SOURCE,
+) -> list[dict[str, Any]]:
+    return [
+        background_adjudicate_dream_finding(
+            finding,
+            source_pack=source_pack,
+            confidence_floor=confidence_floor,
+            adjudication_source=adjudication_source,
+        )
+        for finding in findings
+    ]
 
 
 def adjudicated_dream_findings_to_working_memory(

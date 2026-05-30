@@ -151,6 +151,7 @@ class CompensatoryDreamTests(unittest.TestCase):
         self.assertIn("formal_memory_promotion_without_review", payload["cannot_claim"])
         self.assertIn("clean_source_ref_resolution_without_registry_index", payload["cannot_claim"])
         self.assertIn("foreground_hook_eligibility", payload["cannot_claim"])
+        self.assertTrue(payload["trigger_policy"]["requires_adjudication_before_recall_or_reflection"])
         self.assertTrue(payload["trigger_policy"]["requires_review_before_recall_or_reflection"])
 
     def test_generator_input_and_string_fields_remain_source_audited(self) -> None:

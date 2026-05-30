@@ -264,7 +264,7 @@ handoff context.
      `journey_waypoint` outputs when the job circuit exists, then evaluate on
      time-sliced private history before surfacing Journey hints in AAR.
 
-17. Compensatory dream Phase 1
+17. Compensatory dream Phase 1 plus P2 source-pack substrate
    - Source: `docs/research/dream-task-design.md`,
      `docs/research/source-as-world.md`, and
      `docs/architecture/cognitive-runtime-architecture.md`.
@@ -279,12 +279,21 @@ handoff context.
    - The helper covers empty/no-pattern, technical unresolved-edge, life-wide
      silently-recurring, unsourced-row, cross-thread-ref, ordinary-no-pattern,
      self-reingestion, and background-adjudicated working-memory projection
-     fixtures. It is a holding-queue plus post-adjudication working-memory
-     substrate, not proof of live dream quality, prospective analysis,
-     amplification, or active imagination.
-   - Next hardening: run selected real-history packs through the adjudicated
-     dream-hypothesis projection and measure whether recall/reflection improves
-     over plain question/link/working-memory rows.
+     fixtures.
+   - The P2 substrate is implemented in
+     `skills/aippocampus/scripts/dream_input_pack.py` and
+     `skills/aippocampus/scripts/dream_working_memory.py`: it builds
+     `aippocampus_dream_input_pack` rows from source-backed question links and
+     Journey rows, allows ambient residue only as weak source-ref fingerprints,
+     requires at least two clean source threads for a ready pack, and parks
+     dream hypotheses whose bridge claims lack source refs. It is still a
+     holding-queue plus background-adjudication substrate, not proof of live
+     dream quality, prospective analysis, validated amplification output, or
+     active imagination.
+   - Next hardening: run selected real-history packs through a small
+     compensatory/amplification worker, then measure whether adjudicated
+     dream-hypothesis rows improve recall/reflection over plain
+     question/link/Journey/working-memory rows.
 
 18. Reflection-space topology and feedback MVP
    - Source: `docs/research/reflection-space.md`,
@@ -311,7 +320,9 @@ handoff context.
 - A cloud service dependency.
 - Phase 3 `theme_emergence` or predictive replay before Phase 2 produces stable
   links.
-- Prospective, amplification, or active-imagination dream work before
-  adjudicated Phase 1 compensatory candidates show source-backed value.
+- Prospective or active-imagination dream work before P2 source packs show
+  source-backed value. Amplification may proceed only as a pack-backed
+  background worker with structural adjudication and measured recall/reflection
+  impact.
 - Any change that treats summaries, findings, or vector neighbors as truth
   without clean-source refs.

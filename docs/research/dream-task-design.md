@@ -1,14 +1,18 @@
 # Dream Task Design: From Jung's Dream Theory to Subconscious Consolidation
 
-Status: research memo with a first deterministic Phase 1 prototype; awaiting
-cross-model validation and adjudicated real-history evidence.
+Status: research memo with deterministic Phase 1 compensatory output plus a
+Phase 2 source-pack/adjudication substrate; awaiting cross-model validation,
+selected real-history packs, and measured recall/reflection impact.
 Anthropic Managed Agents Dreams are confirmed as an adjacent official Research
 Preview, but this memo's Jung-inspired dream tasks are an AIppocampus-specific
 design proposal.
 Origin: conversation between user and Claude Code, 2026-05-27.
-Implemented first slice: `skills/aippocampus/scripts/compensatory_dream.py`
-emits adjudication-only compensatory candidates from source-backed single-thread
-extraction rows.
+Implemented slices: `skills/aippocampus/scripts/compensatory_dream.py` emits
+adjudication-only compensatory candidates from source-backed single-thread
+extraction rows; `skills/aippocampus/scripts/dream_input_pack.py` builds
+cross-thread source packs from question links, Journey rows, and ambient
+residue; `skills/aippocampus/scripts/dream_working_memory.py` provides the
+background adjudication guard before dream hypotheses can feed working memory.
 Related: [affect-side-channel.md](affect-side-channel.md),
 [compact-activation-signals.md](compact-activation-signals.md),
 [correction-reconsolidation.md](correction-reconsolidation.md).
@@ -237,6 +241,45 @@ The executable contract lives in
 `tests/aippocampus/test_compensatory_dream.py`. Keep changes to this schema
 paired with that test file and the runtime map in `docs/architecture/runtime-script-map.md`.
 
+### Implemented Phase 2 Source-Pack Contract
+
+The second implemented slice is still infrastructure, not a full dream worker.
+`skills/aippocampus/scripts/dream_input_pack.py` creates a deterministic
+`kind="aippocampus_dream_input_pack"` object from existing source-backed
+navigation artifacts:
+
+- `question_link` rows from `question_tracking.py`
+- `aippocampus_journey` rows from `journey_tracking.py`
+- `aippocampus_ambient_residue` rows from `ambient_thread_cache.py`
+
+The pack only becomes `status="ready_for_dream_worker"` when it has clean
+source refs from at least two distinct source threads. Ambient residue is
+allowed to add themes, weak `source_ref_fingerprints`, and negative contexts,
+but it cannot make a clean source pack by itself. The ready pack may advertise
+`eligible_dream_functions=["compensatory", "amplification"]`; this only means
+the source substrate is fit for those background workers, not that
+amplification output quality has been proven.
+
+The pack stays out of foreground hooks and formal memory:
+
+- `foreground_eligible=false`
+- `formal_memory_eligible=false`
+- `clean_source_mutation=false`
+- `truth_boundary="dream_input_pack_seed_not_fact"`
+
+Background adjudication lives in `dream_working_memory.py` as structural guard
+code, not a user approval ritual. `background_adjudicate_dream_finding()` only
+sets `review_state="agent_adjudicated"` when the finding is a dream-synthesized
+candidate, carries source refs, passes its source-ref audit, has source refs on
+every bridge claim, meets the confidence floor, and, when a P2 pack is supplied,
+overlaps that pack's clean source refs. Parked findings remain
+`review_state="needs_review"` and do not project to working memory. The working
+memory projection also refuses forced adjudicated rows whose bridge claims lack
+source refs.
+
+The executable contract lives in
+`tests/aippocampus/test_dream_input_pack.py`.
+
 ## Dream Outputs As Reusable Inference Substrate
 
 Dream tasks should not be treated as a foreground answerer. Their job is to
@@ -281,7 +324,9 @@ parking. User intervention is reserved for hypotheses that would affect a
 sensitive personal interpretation, a durable preference/profile claim, or a
 direct user-facing assertion. The boundary remains:
 `adjudicated_dream_hypothesis_not_fact`, no clean-source mutation, and no formal
-memory promotion.
+memory promotion. As of the P2 substrate, projection also requires
+source-ref-backed bridge claims; a forced accepted state without those refs must
+still be ignored.
 
 ### Ambient Residue As Dream Seed
 

@@ -22,8 +22,8 @@ from typing import Any, Literal
 
 from aippocampuslib import compact_text, now_utc
 from dream_working_memory import (
-    adjudicated_dream_findings_to_working_memory,
-    reviewed_dream_findings_to_working_memory,
+    adjudicated_dream_findings_to_working_memory,  # noqa: F401
+    reviewed_dream_findings_to_working_memory,  # noqa: F401
 )
 
 SCHEMA_VERSION = 1
@@ -389,6 +389,9 @@ def trigger_policy() -> dict[str, Any]:
         "min_source_backed_rows": 1,
         "foreground_hooks": False,
         "default_destination": "review_queue",
+        "requires_adjudication_before_recall_or_reflection": True,
+        # Compatibility key for older tests/callers; this means background
+        # adjudication, not default human review.
         "requires_review_before_recall_or_reflection": True,
     }
 
