@@ -39,7 +39,7 @@ from model_client import (
     DEEPSEEK_PREFIX_CACHE_CONTRACT,
     ChatClientConfig,
 )
-from registry_store import registry_paths
+from registry_store import load_registry, registry_paths, thread_store_dir
 
 SCHEMA_VERSION = 1
 EVAL_KIND = "aippocampus_dream_real_history_eval"
@@ -179,6 +179,10 @@ def normalize_source_refs(value: object) -> tuple[dict[str, Any], ...]:
         seen.add(key)
         refs.append({k: v for k, v in ref.items() if is_present(v)})
     return tuple(refs)
+
+
+def source_ref_fingerprint(ref: Mapping[str, Any]) -> str:
+    return stable_digest(source_ref_key(ref), prefix="srcfp", length=14)
 
 
 def safe_float(value: object, default: float = 0.0) -> float:
@@ -614,6 +618,14 @@ def source_thread_count(row: Mapping[str, Any]) -> int:
     return len(source_threads(ref for ref in row.get("source_refs") or [] if isinstance(ref, Mapping)))
 
 
+def bridge_claim_count(row: Mapping[str, Any]) -> int:
+    return max(
+        len(row.get("source_finding_ids") or []),
+        len(row.get("bridge_claims") or []),
+        int(row.get("bridge_claim_count") or 0),
+    )
+
+
 def dream_surface_row(row: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "surface": "dream_working_memory",
@@ -622,7 +634,7 @@ def dream_surface_row(row: Mapping[str, Any]) -> dict[str, Any]:
         "terms": row_terms(row),
         "source_refs": row.get("source_refs") or [],
         "reflection_ready": "reflection_space" in (row.get("downstream_use") or []),
-        "bridge_claim_count": len(row.get("source_finding_ids") or []),
+        "bridge_claim_count": bridge_claim_count(row),
     }
 
 
@@ -644,7 +656,7 @@ def surface_metrics(prompts: Iterable[str], rows: Iterable[Mapping[str, Any]]) -
             hit_count += 1
         source_thread_total += max([source_thread_count(row) for row in matches] or [0])
         reflection_ready_total += sum(1 for row in matches if row.get("reflection_ready"))
-        bridge_claim_total += max([int(row.get("bridge_claim_count") or 0) for row in matches] or [0])
+        bridge_claim_total += max([bridge_claim_count(row) for row in matches] or [0])
     denominator = max(1, len(prompt_list))
     return {
         "prompt_count": len(prompt_list),
@@ -714,6 +726,57 @@ def visible_dream_rows_for_prompt(prompt: str, rows: Iterable[Mapping[str, Any]]
     return out
 
 
+def visible_recall_surface_metrics(
+    prompts: Iterable[str],
+    *,
+    plain_rows: Iterable[Mapping[str, Any]],
+    dream_rows: Iterable[Mapping[str, Any]],
+) -> dict[str, Any]:
+    prompt_list = list(prompts)
+    plain_list = list(plain_rows)
+    dream_list = list(dream_rows)
+    plain_hits = 0
+    augmented_hits = 0
+    plain_source_thread_total = 0
+    augmented_source_thread_total = 0
+    plain_bridge_claim_total = 0
+    augmented_bridge_claim_total = 0
+    visible_dream_total = 0
+    for prompt in prompt_list:
+        plain_matches = matching_rows(prompt, plain_list)
+        visible_dream = visible_dream_rows_for_prompt(prompt, dream_list)
+        augmented_matches = [*plain_matches, *visible_dream]
+        if plain_matches:
+            plain_hits += 1
+        if augmented_matches:
+            augmented_hits += 1
+        plain_source_thread_total += max([source_thread_count(row) for row in plain_matches] or [0])
+        augmented_source_thread_total += max([source_thread_count(row) for row in augmented_matches] or [0])
+        plain_bridge_claim_total += max([bridge_claim_count(row) for row in plain_matches] or [0])
+        augmented_bridge_claim_total += max([bridge_claim_count(row) for row in augmented_matches] or [0])
+        visible_dream_total += len(visible_dream)
+    denominator = max(1, len(prompt_list))
+    plain_source_coverage = round(plain_source_thread_total / denominator, 4)
+    augmented_source_coverage = round(augmented_source_thread_total / denominator, 4)
+    plain_bridge_coverage = round(plain_bridge_claim_total / denominator, 4)
+    augmented_bridge_coverage = round(augmented_bridge_claim_total / denominator, 4)
+    return {
+        "prompt_count": len(prompt_list),
+        "plain_hit_count": plain_hits,
+        "augmented_visible_hit_count": augmented_hits,
+        "hit_delta": augmented_hits - plain_hits,
+        "plain_hit_rate": ratio(plain_hits, len(prompt_list)),
+        "augmented_visible_hit_rate": ratio(augmented_hits, len(prompt_list)),
+        "plain_source_thread_coverage": plain_source_coverage,
+        "augmented_visible_source_thread_coverage": augmented_source_coverage,
+        "source_thread_coverage_delta": round(augmented_source_coverage - plain_source_coverage, 4),
+        "plain_bridge_claim_coverage": plain_bridge_coverage,
+        "augmented_visible_bridge_claim_coverage": augmented_bridge_coverage,
+        "bridge_claim_coverage_delta": round(augmented_bridge_coverage - plain_bridge_coverage, 4),
+        "visible_dream_row_count": visible_dream_total,
+    }
+
+
 def unique_rows(rows: Iterable[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
     seen: set[str] = set()
     out: list[Mapping[str, Any]] = []
@@ -724,6 +787,205 @@ def unique_rows(rows: Iterable[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
         seen.add(key)
         out.append(row)
     return out
+
+
+def registry_entry_by_thread(registry_dir: Path | None = None) -> dict[str, dict[str, Any]]:
+    registry_path, _ = registry_paths(registry_dir)
+    registry = load_registry(registry_path)
+    return {
+        str(entry.get("thread_key")): entry
+        for entry in registry.get("threads") or []
+        if isinstance(entry, Mapping) and entry.get("thread_key")
+    }
+
+
+def clean_source_messages_path(
+    thread_key: str,
+    *,
+    registry_dir: Path | None = None,
+    entries: Mapping[str, Mapping[str, Any]] | None = None,
+) -> Path:
+    entry = (entries or {}).get(thread_key) or {}
+    paths = entry.get("paths") if isinstance(entry.get("paths"), Mapping) else {}
+    explicit = paths.get("clean_source_messages_jsonl") if isinstance(paths, Mapping) else None
+    if explicit:
+        return Path(str(explicit))
+    return thread_store_dir(thread_key, registry_dir) / "clean-source" / "messages.jsonl"
+
+
+def ref_matches_message(ref: Mapping[str, Any], message: Mapping[str, Any]) -> bool:
+    message_id = str(ref.get("message_id") or "")
+    if message_id and message_id == str(message.get("message_id") or message.get("id") or ""):
+        return True
+    line = str(ref.get("source_line") or ref.get("line") or "")
+    if line and line == str(message.get("source_line") or message.get("line") or ""):
+        return True
+    clean_ordinal = str(ref.get("clean_ordinal") or "")
+    return bool(clean_ordinal and clean_ordinal == str(message.get("clean_ordinal") or ""))
+
+
+def reopened_clean_source_messages(
+    refs: Iterable[Mapping[str, Any]],
+    *,
+    registry_dir: Path | None = None,
+    max_refs: int = 12,
+) -> list[dict[str, Any]]:
+    entries = registry_entry_by_thread(registry_dir)
+    opened: list[dict[str, Any]] = []
+    cache: dict[Path, list[dict[str, Any]]] = {}
+    seen: set[tuple[str, str, str, str]] = set()
+    for ref in refs:
+        key = source_ref_key(ref)
+        if not any(key) or key in seen:
+            continue
+        seen.add(key)
+        thread_key = source_ref_thread(ref)
+        if not thread_key:
+            continue
+        path = clean_source_messages_path(thread_key, registry_dir=registry_dir, entries=entries)
+        if path not in cache:
+            cache[path] = iter_jsonl(path) if path.exists() else []
+        for message in cache[path]:
+            if ref_matches_message(ref, message):
+                opened.append(
+                    {
+                        "source_ref_fingerprint": source_ref_fingerprint(ref),
+                        "thread_fingerprint": stable_digest(thread_key, prefix="threadfp", length=12),
+                        "source_line": message.get("source_line"),
+                        "text": str(message.get("text") or ""),
+                    }
+                )
+                break
+        if len(opened) >= max_refs:
+            break
+    return opened
+
+
+def source_review_support_terms(row: Mapping[str, Any]) -> list[str]:
+    return [
+        term
+        for term in row_terms(row)
+        if term
+        and term not in LOW_SIGNAL_TERMS
+        and term
+        not in {
+            "adjudicated",
+            "amplification",
+            "background",
+            "candidate",
+            "carrying",
+            "check",
+            "compensatory",
+            "current",
+            "dream",
+            "factual",
+            "history",
+            "hypothesis",
+            "missing",
+            "multiple",
+            "real-history",
+            "recall",
+            "reopen",
+            "re-opening",
+            "reopening",
+            "selected",
+            "source-backed",
+            "surfaces",
+            "synthesized",
+            "threads",
+            "treat",
+            "using",
+        }
+    ][:8]
+
+
+def manual_source_review_rows_from_clean_source(
+    dream_working_memory_rows: Iterable[Mapping[str, Any]],
+    *,
+    registry_dir: Path | None = None,
+    max_reviews: int = 8,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for row in dream_working_memory_rows:
+        if len(rows) >= max_reviews:
+            break
+        if row.get("candidate_type") != "dream_hypothesis":
+            continue
+        refs = [ref for ref in row.get("source_refs") or [] if isinstance(ref, Mapping)]
+        opened = reopened_clean_source_messages(refs, registry_dir=registry_dir)
+        support_terms = source_review_support_terms(row)
+        opened_text = "\n".join(item["text"].casefold() for item in opened)
+        matched_terms = [term for term in support_terms if term.casefold() in opened_text]
+        opened_threads = {
+            str(item.get("thread_fingerprint") or "")
+            for item in opened
+            if item.get("thread_fingerprint")
+        }
+        status = (
+            "supported"
+            if len(opened) >= 2 and len(opened_threads) >= 2 and matched_terms
+            else "unknown"
+        )
+        rows.append(
+            {
+                "schema_version": SCHEMA_VERSION,
+                "kind": "dream_manual_source_review",
+                "review_id": stable_digest(
+                    row.get("candidate_key"),
+                    [item.get("source_ref_fingerprint") for item in opened],
+                    prefix="dream_review",
+                    length=18,
+                ),
+                "review_status": status,
+                "reviewer": "codex_agent_source_review",
+                "review_method": "clean_source_reopen_term_audit_v1",
+                "dream_row_id": row.get("candidate_key"),
+                "dream_function": row.get("dream_function"),
+                "source_ref_fingerprints": [
+                    item["source_ref_fingerprint"] for item in opened if item.get("source_ref_fingerprint")
+                ],
+                "reviewed_source_ref_count": len(refs),
+                "reopened_source_ref_count": len(opened),
+                "source_thread_count": len(opened_threads),
+                "support_signal_count": len(matched_terms),
+                "source_backed": bool(opened),
+                "private_text_emitted": False,
+                "notes": (
+                    "Clean source was reopened and checked for concrete support terms; "
+                    "raw text, thread ids, and message ids are intentionally omitted."
+                ),
+            }
+        )
+    return rows
+
+
+def sanitized_manual_source_review_payload(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+    review_rows = []
+    for row in rows:
+        review_rows.append(
+            {
+                "kind": row.get("kind"),
+                "review_id": row.get("review_id"),
+                "review_status": row.get("review_status"),
+                "reviewer": row.get("reviewer"),
+                "review_method": row.get("review_method"),
+                "dream_function": row.get("dream_function"),
+                "reviewed_source_ref_count": row.get("reviewed_source_ref_count"),
+                "reopened_source_ref_count": row.get("reopened_source_ref_count"),
+                "source_thread_count": row.get("source_thread_count"),
+                "support_signal_count": row.get("support_signal_count"),
+                "source_backed": bool(row.get("source_backed")),
+                "private_text_emitted": False,
+            }
+        )
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": "aippocampus_dream_manual_source_review_batch",
+        "created_at": now_utc(),
+        "private_text_emitted": False,
+        "rows": review_rows,
+        "metrics": manual_source_review_metrics(review_rows),
+    }
 
 
 def manual_source_review_metrics(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
@@ -738,7 +1000,12 @@ def manual_source_review_metrics(rows: Iterable[Mapping[str, Any]]) -> dict[str,
             status = "unknown"
         reviewed += 1
         status_counts[status] += 1
-        if row.get("source_refs"):
+        if (
+            row.get("source_refs")
+            or row.get("source_ref_fingerprints")
+            or int(row.get("reopened_source_ref_count") or 0) > 0
+            or row.get("source_backed")
+        ):
             source_backed += 1
     return {
         "reviewed_count": reviewed,
@@ -771,13 +1038,10 @@ def evaluate_user_visible_dream_lift(
     groups = prompt_groups(packs)
     plain_rows = [row for pack in packs for row in pack.get("eval_surface_rows") or []]
     dream_rows = list(dream_working_memory_rows)
-
-    recall_total = len(groups["recall"])
-    plain_recall_hits = sum(1 for prompt in groups["recall"] if matching_rows(prompt, plain_rows))
-    visible_recall_hits = sum(
-        1
-        for prompt in groups["recall"]
-        if matching_rows(prompt, plain_rows) or visible_dream_rows_for_prompt(prompt, dream_rows)
+    recall_lift = visible_recall_surface_metrics(
+        groups["recall"],
+        plain_rows=plain_rows,
+        dream_rows=dream_rows,
     )
 
     plain_reflection = sum(
@@ -815,22 +1079,27 @@ def evaluate_user_visible_dream_lift(
     cache["kind"] = "deepseek_prefix" if cache.get("available") else "none"
     manual = manual_source_review_metrics(manual_source_review_rows or [])
     cannot_claim = ["real_user_behavior", "general_dream_quality"]
+    can_claim = [
+        "ablation_harness_separates_plain_and_dream_augmented_surfaces",
+        "unsupported_strong_claims_require_source_reopen_in_eval",
+    ]
     if not manual["reviewed_count"]:
         cannot_claim.append("manual_source_review_support")
+    else:
+        can_claim.append("manual_source_review_support_exists")
+    if (
+        float(recall_lift.get("source_thread_coverage_delta") or 0.0) > 0
+        or float(recall_lift.get("bridge_claim_coverage_delta") or 0.0) > 0
+        or int(recall_lift.get("hit_delta") or 0) > 0
+    ) and augmented_reflection > plain_reflection:
+        can_claim.append("selected_prompt_user_visible_lift_measured")
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_dream_user_visible_lift_eval",
         "claim_level": "visibility_ablation_harness",
         "private_text_emitted": False,
         "metrics": {
-            "recall_lift": {
-                "prompt_count": recall_total,
-                "plain_hit_count": plain_recall_hits,
-                "augmented_visible_hit_count": visible_recall_hits,
-                "hit_delta": visible_recall_hits - plain_recall_hits,
-                "plain_hit_rate": ratio(plain_recall_hits, recall_total),
-                "augmented_visible_hit_rate": ratio(visible_recall_hits, recall_total),
-            },
+            "recall_lift": recall_lift,
             "reflection_lift": {
                 "plain_reflection_ready_count": plain_reflection,
                 "augmented_visible_reflection_count": augmented_reflection,
@@ -853,10 +1122,7 @@ def evaluate_user_visible_dream_lift(
                 "model_call_count": sum(1 for run in worker_runs or [] if run.get("worker_mode") == "model_backed"),
             },
         },
-        "can_claim": [
-            "ablation_harness_separates_plain_and_dream_augmented_surfaces",
-            "unsupported_strong_claims_require_source_reopen_in_eval",
-        ],
+        "can_claim": can_claim,
         "cannot_claim": cannot_claim,
     }
 
@@ -897,11 +1163,28 @@ def eval_status(pack_count: int, min_packs: int, lift: Mapping[str, Any]) -> str
     return "no_lift_observed"
 
 
+def load_manual_source_review_rows(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    if path.suffix.lower() == ".jsonl":
+        return iter_jsonl(path)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(data, list):
+        return [dict(item) for item in data if isinstance(item, Mapping)]
+    if isinstance(data, Mapping):
+        rows = data.get("rows") or data.get("manual_source_review_rows") or []
+        if isinstance(rows, list):
+            return [dict(item) for item in rows if isinstance(item, Mapping)]
+    return []
+
+
 def run_dream_real_history_eval(
     *,
     job_rows: Iterable[Mapping[str, Any]] | None = None,
     working_memory_rows: Iterable[Mapping[str, Any]] | None = None,
     manual_source_review_rows: Iterable[Mapping[str, Any]] | None = None,
+    generate_manual_source_review: bool = False,
+    source_review_output: Path | None = None,
     registry_dir: Path | None = None,
     jobs_path: Path | None = None,
     working_memory_path: Path | None = None,
@@ -927,6 +1210,23 @@ def run_dream_real_history_eval(
         for row in run.get("dream_working_memory_rows") or []
         if isinstance(row, dict)
     ]
+    review_rows = list(manual_source_review_rows or [])
+    if generate_manual_source_review:
+        review_rows = manual_source_review_rows_from_clean_source(
+            dream_working_rows,
+            registry_dir=registry_dir,
+        )
+    if source_review_output is not None:
+        source_review_output.parent.mkdir(parents=True, exist_ok=True)
+        source_review_output.write_text(
+            json.dumps(
+                sanitized_manual_source_review_payload(review_rows),
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
     comparison = compare_plain_and_augmented(
         packs=packs,
         dream_working_memory_rows=dream_working_rows,
@@ -935,12 +1235,23 @@ def run_dream_real_history_eval(
         packs=packs,
         dream_working_memory_rows=dream_working_rows,
         worker_runs=worker_runs,
-        manual_source_review_rows=manual_source_review_rows or [],
+        manual_source_review_rows=review_rows,
     )
     seed_kind_counts = Counter(
         kind for pack in packs for kind in (pack.get("source_seed_kinds") or [])
     )
     status = eval_status(len(packs), min_packs, comparison["lift"])
+    cannot_claim = [
+        "private_real_history_dream_quality",
+        "live_model_behavioral_lift",
+        "full_history_coverage",
+        "clean_source_resolution_without_reopen",
+        "formal_memory_promotion",
+    ]
+    if "selected_prompt_user_visible_lift_measured" not in (user_visible.get("can_claim") or []):
+        cannot_claim.append("selected_prompt_user_visible_lift")
+    if "manual_source_review_support_exists" not in (user_visible.get("can_claim") or []):
+        cannot_claim.append("manual_source_review_support")
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": EVAL_KIND,
@@ -963,15 +1274,16 @@ def run_dream_real_history_eval(
         "can_claim": [
             "selected_real_history_packs_have_structural_cross_thread_source_refs",
             "deterministic_dream_hypotheses_can_be_compared_against_plain_rows",
+            *[
+                claim
+                for claim in (
+                    "manual_source_review_support_exists",
+                    "selected_prompt_user_visible_lift_measured",
+                )
+                if claim in (user_visible.get("can_claim") or [])
+            ],
         ],
-        "cannot_claim": [
-            "private_real_history_dream_quality",
-            "live_model_behavioral_lift",
-            "full_history_coverage",
-            "user_visible_reflection_value",
-            "clean_source_resolution_without_reopen",
-            "formal_memory_promotion",
-        ],
+        "cannot_claim": cannot_claim,
     }
 
 
@@ -980,6 +1292,21 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--registry-dir", type=Path)
     parser.add_argument("--jobs", type=Path)
     parser.add_argument("--working-memory", type=Path)
+    parser.add_argument(
+        "--manual-source-review",
+        type=Path,
+        help="Optional sanitized JSON/JSONL manual source-review rows to include in #131 metrics.",
+    )
+    parser.add_argument(
+        "--generate-manual-source-review",
+        action="store_true",
+        help="Reopen clean source for selected dream rows and generate sanitized source-review rows.",
+    )
+    parser.add_argument(
+        "--source-review-output",
+        type=Path,
+        help="Write generated or loaded source-review evidence as sanitized JSON.",
+    )
     parser.add_argument("--max-packs", type=int, default=4)
     parser.add_argument("--min-packs", type=int, default=1)
     parser.add_argument("--json", action="store_true", help="Emit compact JSON.")
@@ -989,10 +1316,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
+    manual_rows = (
+        load_manual_source_review_rows(args.manual_source_review)
+        if args.manual_source_review
+        else None
+    )
     payload = run_dream_real_history_eval(
         registry_dir=args.registry_dir,
         jobs_path=args.jobs,
         working_memory_path=args.working_memory,
+        manual_source_review_rows=manual_rows,
+        generate_manual_source_review=args.generate_manual_source_review,
+        source_review_output=args.source_review_output,
         max_packs=args.max_packs,
         min_packs=args.min_packs,
     )

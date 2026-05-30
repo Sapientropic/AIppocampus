@@ -4,8 +4,9 @@ Status: research memo with deterministic Phase 1 compensatory output, a Phase 2
 source-pack/adjudication substrate, a selected real-history Phase 3 structural
 eval, bounded model-backed compensatory/amplification/prospective worker paths,
 an active-imagination sandbox, and a retrospective prospective-validation
-harness covered by mocked tests; awaiting live smoke, cross-model validation,
-and measured user-visible recall/reflection impact.
+harness covered by mocked tests; selected-prompt user-visible lift now has
+source-review evidence, while live smoke, cross-model validation, real user
+behavior, and general dream-quality evidence remain unclaimed.
 Anthropic Managed Agents Dreams are confirmed as an adjacent official Research
 Preview, but this memo's Jung-inspired dream tasks are an AIppocampus-specific
 design proposal.
@@ -388,11 +389,25 @@ The #131 visibility-ablation harness adds a second, still conservative layer:
 strong-claim suppression, source-support correctness, manual source-review
 coverage, and cost/cache behavior separately. This distinguishes "the substrate
 has more bridge structure" from "a visible answer would improve." The harness
-can ingest selected manual source-review rows, but when no reviewed sample is
-provided it explicitly lists `manual_source_review_support` and
-`real_user_behavior` under `cannot_claim`. Public output remains sanitized and
-does not include raw source refs, message ids, thread ids, local paths, or
+can ingest selected manual source-review rows, or generate an agent-assisted
+clean-source reopen review with
+`--generate-manual-source-review --source-review-output <file>`. When no
+reviewed sample is provided it explicitly lists `manual_source_review_support`
+and `real_user_behavior` under `cannot_claim`. Public output remains sanitized
+and does not include raw source refs, message ids, thread ids, local paths, or
 private text.
+
+The 2026-05-30 #131 evidence run is recorded in
+`docs/evidence/dream-user-visible-lift-2026-05-30.md` with sanitized JSON
+sidecars. It reviewed 8 dream hypotheses by reopening clean source and marked
+8/8 source-backed rows as supported. The plain baseline already hit every
+selected recall prompt, so binary recall hit-rate did not rise; the visible
+recall surface did improve source-thread coverage by 2.5 and bridge-claim
+coverage by 1.0. Reflection-ready visible rows rose by 32 in the visibility
+harness, unsupported strong claims were suppressed for 4/4 prompts, and
+source-support correctness was 8/8. This supports selected-prompt
+user-visible lift and manual/source-review support, but still does not claim
+real user behavior or general dream quality.
 
 ### Implemented Phase 3.5 Bounded Model-Backed Workers
 

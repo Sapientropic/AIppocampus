@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "kind": "aippocampus_dream_manual_source_review_batch",
+  "created_at": "2026-05-30T15:10:46Z",
+  "private_text_emitted": false,
+  "rows": [
+    {
+      "kind": "dream_manual_source_review",
+      "review_id": "dream_review_57e924ec2b638fb32a",
+      "review_status": "supported",
+      "reviewer": "codex_agent_source_review",
+      "review_method": "clean_source_reopen_term_audit_v1",
+      "dream_function": "compensatory",
+      "reviewed_source_ref_count": 8,
+      "reopened_source_ref_count": 8,
+      "source_thread_count": 7,
+      "support_signal_count": 2,
+      "source_backed": true,
+      "private_text_emitted": false
+    },
+    {
+      "kind": "dream_manual_source_review",
+      "review_id": "dream_review_78e9c04ddfff661212",
+      "review_status": "supported",
+      "reviewer": "codex_agent_source_review",
+      "review_method": "clean_source_reopen_term_audit_v1",
+      "dream_function": "amplification",
+      "reviewed_source_ref_count": 8,
+      "reopened_source_ref_count": 8,
+      "source_thread_count": 7,
+      "support_signal_count": 3,
+      "source_backed": true,
+      "private_text_emitted": false
+    },
+    {
+      "kind": "dream_manual_source_review",
+      "review_id": "dream_review_379de4b9f29fa1d968",
+      "review_status": "supported",
+      "reviewer": "codex_agent_source_review",
+      "review_method": "clean_source_reopen_term_audit_v1",
+      "dream_function": "compensatory",
+      "reviewed_source_ref_count": 8,
+      "reopened_source_ref_count": 8,
+      "source_thread_count": 5,
+      "support_signal_count": 2,
+      "source_backed": true,
+      "private_text_emitted": false
+    },
+    {
+      "kind": "dream_manual_source_review",
+      "review_id": "dream_review_520cc31006b5dab27e",
+      "review_status": "supported",
+      "reviewer": "codex_agent_source_review",
+      "review_method": "clean_source_reopen_term_audit_v1",
+      "dream_function": "amplification",
+      "reviewed_source_ref_count": 8,
+      "reopened_source_ref_count": 8,
+      "source_thread_count": 5,
+      "support_signal_count": 4,
+      "source_backed": true,
+      "private_text_emitted": false
+    },
+    {
+      "kind": "dream_manual_source_review",
+      "review_id": "dream_review_4631e5f3747a51cae8",
+      "review_status": "supported",
+      "reviewer": "codex_agent_source_review",
+      "review_method": "clean_source_reopen_term_audit_v1",
+      "dream_function": "compensatory",
+      "reviewed_source_ref_count": 7,
+      "reopened_source_ref_count": 7,
+      "source_thread_count": 7,
+      "support_signal_count": 2,
+      "source_backed": true,
+      "private_text_emitted": false
+    },
+    {
+      "kind": "dream_manual_source_review",
+      "review_id": "dream_review_15a7e75582da68568a",
+      "review_status": "supported",
+      "reviewer": "codex_agent_source_review",
+      "review_method": "clean_source_reopen_term_audit_v1",
+      "dream_function": "amplification",
+      "reviewed_source_ref_count": 7,
+      "reopened_source_ref_count": 7,
+      "source_thread_count": 7,
+      "support_signal_count": 3,
+      "source_backed": true,
+      "private_text_emitted": false
+    },
+    {
+      "kind": "dream_manual_source_review",
+      "review_id": "dream_review_a61a03b1917860d7ba",
+      "review_status": "supported",
+      "reviewer": "codex_agent_source_review",
+      "review_method": "clean_source_reopen_term_audit_v1",
+      "dream_function": "compensatory",
+      "reviewed_source_ref_count": 8,
+      "reopened_source_ref_count": 8,
+      "source_thread_count": 6,
+      "support_signal_count": 1,
+      "source_backed": true,
+      "private_text_emitted": false
+    },
+    {
+      "kind": "dream_manual_source_review",
+      "review_id": "dream_review_472ea16dde063c6122",
+      "review_status": "supported",
+      "reviewer": "codex_agent_source_review",
+      "review_method": "clean_source_reopen_term_audit_v1",
+      "dream_function": "amplification",
+      "reviewed_source_ref_count": 8,
+      "reopened_source_ref_count": 8,
+      "source_thread_count": 6,
+      "support_signal_count": 2,
+      "source_backed": true,
+      "private_text_emitted": false
+    }
+  ],
+  "metrics": {
+    "reviewed_count": 8,
+    "source_backed_review_count": 8,
+    "status_counts": {
+      "supported": 8
+    }
+  }
+}
