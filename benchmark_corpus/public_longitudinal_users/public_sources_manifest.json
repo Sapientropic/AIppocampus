@@ -67,15 +67,15 @@
     },
     {
       "source_id": "locomo",
-      "role": "public_longitudinal_conversation_control",
+      "role": "public_same_dialogue_long_conversation_control",
       "public_url": "https://github.com/snap-research/locomo",
       "adapter_use": [
-        "longitudinal_public_users",
+        "same_dialogue_long_conversation_control",
         "source_turn_evidence_retrieval",
         "qa_evidence_dialogue_ids"
       ],
       "license_boundary": "CC BY-NC 4.0; keep raw locomo10.json local/ignored unless redistribution is separately reviewed",
-      "notes": "Best first real public conversation-control corpus: each sample is a long-term conversation with chronological sessions and QA evidence ids. Not a coding decision-shadow source."
+      "notes": "Useful long-dialogue retrieval control: each sample is one conversation with chronological sessions and QA evidence ids. It is not a cross-conversation longitudinal-user memory score or coding decision-shadow source."
     },
     {
       "source_id": "longmemeval_v2",
@@ -108,5 +108,13 @@
     "time_split_when_making_public_contamination_claims",
     "counterfactual_perturbation_before_claiming_contamination_resistance",
     "private_real_history_reported_separately"
+  ],
+  "flagship_longitudinal_tracks": [
+    "temporal_override",
+    "implicit_constraint_drift",
+    "cross_project_contamination",
+    "intentional_forget_compliance",
+    "post_compaction_gap",
+    "dream_semantic_quality"
   ]
 }

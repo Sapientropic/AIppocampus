@@ -31,10 +31,10 @@ This fixture therefore makes the benchmark truth explicit:
 Larger public corpora remain useful as secondary tracks, but not as the positive
 coding decision-shadow source:
 
-- LoCoMo: first real public longitudinal conversation control. Treat each
-  sample as one public user and score evidence dialogue-id retrieval with
-  `benchmark_locomo_public_users.py`; do not read it as coding tacit-constraint
-  evidence.
+- LoCoMo: real public long-conversation evidence control. Treat each sample as
+  one same-dialogue retrieval task and score evidence dialogue-id retrieval
+  with `benchmark_locomo_public_users.py`; do not read it as cross-conversation
+  user memory or coding tacit-constraint evidence.
 - LongMemEval-V2: closest public memory benchmark for agent environment
   experience, workflow knowledge, environment gotchas, and premise awareness.
 - SWE-Hero OpenHands trajectories: promising coding-agent trajectory corpus for
@@ -204,5 +204,5 @@ reject it as required support for a flag-worthy hard event.
 Candidate public sources and redistribution caveats live in
 [`public_sources_manifest.json`](public_sources_manifest.json).
 
-The real public conversation-control runner and raw-data policy live one level
-up in [`../locomo_manifest.json`](../locomo_manifest.json).
+The real public same-conversation control runner and raw-data policy live one
+level up in [`../locomo_manifest.json`](../locomo_manifest.json).

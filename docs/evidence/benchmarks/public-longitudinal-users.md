@@ -1,4 +1,4 @@
-# Public Longitudinal Pseudo-Users Benchmark
+# Public Longitudinal Memory Benchmark
 
 This page records the first public, deterministic benchmark slice for the
 coding implicit-knowledge scenario in
@@ -10,10 +10,10 @@ Latest dated measurement:
 
 ## Purpose
 
-AIppocampus should help agents remember hidden engineering context without
-pretending the base model has innate memory. The hard case is not "find a
-string from yesterday." It is whether the system preserves source-backed
-project intent:
+AIppocampus should help agents remember hidden engineering context across
+months, projects, and context compactions without pretending the base model has
+innate memory. The hard case is not "find a string from yesterday." It is
+whether the system preserves the currently valid, source-backed project intent:
 
 - rejected routes;
 - tacit constraints;
@@ -35,10 +35,13 @@ the runner can score source attribution, forbidden drift, and anti-drift
 negatives without private data. It cannot prove that a system will notice every
 future event that should have been flagged.
 
-The first real public conversation control is LoCoMo. The official repository
-describes ten very long-term conversations, chronological sessions, dialogue
-ids, and annotated QA evidence ids. AIppocampus treats each LoCoMo sample as a
-`longitudinal_public_user` and scores source-turn evidence retrieval with:
+LoCoMo is a real public long-conversation control, not a true cross-conversation
+or cross-month user-memory proof. The official repository describes ten
+very long-term conversations, chronological sessions, dialogue ids, and
+annotated QA evidence ids, but the scorer asks for evidence from within the
+same conversation sample. AIppocampus treats each LoCoMo sample as a
+`long_conversation_public_control` and scores source-turn evidence retrieval
+with:
 
 ```powershell
 New-Item -ItemType Directory -Force benchmark_corpus\locomo | Out-Null
@@ -78,9 +81,10 @@ positive coding source:
   are a useful coding-agent replay source: the dataset card describes 34k
   OpenHands trajectories for SWE-style tasks. They are task trajectories, not
   months-long decision histories.
-- [LoCoMo](https://github.com/snap-research/locomo) is useful for traditional
-  longitudinal memory control; its repository describes ten long-term
-  conversations with annotated QA and event summaries.
+- [LoCoMo](https://github.com/snap-research/locomo) is useful for same-dialogue
+  long-conversation evidence retrieval; its repository describes ten long-term
+  conversations with annotated QA and event summaries. Do not use it as proof
+  that AIppocampus handles cross-thread or cross-project longitudinal memory.
 - [WildChat](https://huggingface.co/datasets/allenai/WildChat-4.8M) is useful
   for broad chat-distribution replay and false-activation checks, but its card
   describes per-conversation metadata such as hashed IP and headers. AIppocampus
@@ -153,6 +157,50 @@ timestamp, source refs, and input/observation hashes. Raw stdout, full diffs,
 screenshots, local paths, full shell commands, and secrets remain audit/source
 material, not default recall payload.
 
+## Flagship Longitudinal Tracks
+
+The real public longitudinal benchmark should target the places where ordinary
+R@K and gate-decision tests are weakest. These tracks should be reported
+separately; a single aggregate score would hide the hard failures.
+
+1. Temporal override: a user changes a preference over time, sometimes
+   implicitly and sometimes only within a project scope. Score
+   `current_preference_accuracy`, `override_latency`, and
+   `scope_specificity`. The runner must distinguish the latest effective
+   source from older contradictory sources, not merely retrieve both.
+2. Implicit constraint drift: a repeated behavior pattern implies a constraint,
+   then the behavior shifts. Score `implicit_constraint_precision`,
+   `drift_sensitivity`, and `over_generalization_rate`. Behavior must be
+   source-backed: tool choice, edits, tests, or repeated user corrections count;
+   a model-inferred habit without source support does not.
+3. Cross-project contamination: two similar repositories or subprojects use
+   different conventions. Score `cross_project_leak_rate`,
+   `context_switch_latency`, and `same_library_version_precision`. Same-library
+   version differences such as React 18 vs 19 must remain scoped.
+4. Intentional forget compliance: the user asks the system to forget content,
+   a full turn, or one part of a mixed source. Score `forget_compliance_rate`,
+   `selective_preservation`, and `forget_depth` across clean source, semantic
+   labels, dream candidates, and derived indexes. Mentioning that something was
+   forgotten can itself violate the request.
+5. Post-compaction gap: a long discussion is compacted after only the final
+   decision survives in the summary. Score `post_compaction_detail_recall`,
+   `compaction_summary_fidelity`, and `audit_trail_preservation`, especially
+   for rejected alternatives and decision rationales.
+6. Dream semantic quality: measure the content of generated dream hypotheses,
+   not only activation frequency. Score `dream_amplification_precision`,
+   `dream_fabrication_rate`, and `dream_relevance_ranking`. The key failure is
+   inventing associations or merging unrelated decisions while still looking
+   confident.
+
+The VCS future-event runner is the right scaffold for the public hard-event
+half of these tracks, but the next data slice should be real public repository
+history, not synthetic rows. Curated Linux kernel, React, or similarly active
+repositories should contribute merge/revert/reopen/supersede/removal events
+with source URLs, timestamps, repository scope, and closed-book predictions.
+Keep raw code and large raw review text out of the public fixture unless the
+license and redistribution boundary are explicit; use local ignored reports for
+large curated rows.
+
 ## Runner
 
 Entrypoint:
@@ -206,6 +254,10 @@ LoCoMo control metrics:
 - `by_category`: LoCoMo QA category slices. Keep these separate from coding
   implicit-knowledge families.
 
+LoCoMo is a same-conversation control. It does not measure cross-conversation
+preference override, cross-project contamination, intentional forgetting, or
+post-compaction detail recovery.
+
 Interpret family metrics separately. Do not average easy explicit-correction
 cases with tacit/workaround/reopen cases and report the aggregate as the
 AIppocampus moat. A public report should foreground at least:
@@ -239,7 +291,7 @@ public, falsifiable foundation.
 This benchmark can claim:
 
 - public, reproducible pseudo-user scoring for coding implicit knowledge;
-- public LoCoMo same-conversation longitudinal-user evidence retrieval;
+- public LoCoMo same-conversation long-dialogue evidence retrieval;
 - deterministic source-event attribution checks;
 - a public contract other memory systems can implement against;
 - a smoke-tested report shape for later VCS-derived future-event recall.
@@ -253,7 +305,8 @@ It cannot claim:
 - external baseline superiority;
 - recall over a complete future window;
 - tacit/workaround/reopen performance on wild VCS histories;
-- LoCoMo performance as evidence for coding tacit-constraint recall;
+- LoCoMo performance as evidence for cross-conversation user memory or coding
+  tacit-constraint recall;
 - a single headline score that validates the AIppocampus wedge.
 
 ## Current Implementation Slice

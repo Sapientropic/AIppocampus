@@ -33,9 +33,9 @@ files, Hugging Face LFS content hashes, runner entrypoint, and claim boundary.
 The corresponding evidence page is
 [`docs/evidence/benchmarks/longmemeval.md`](../docs/evidence/benchmarks/longmemeval.md).
 
-`locomo_manifest.json` records the LoCoMo public long-conversation control,
-its local-file policy, and the evidence-retrieval runner that treats each
-LoCoMo sample as one longitudinal public user.
+`locomo_manifest.json` records the LoCoMo public long-conversation
+same-dialogue control, its local-file policy, and the evidence-retrieval
+runner that treats each LoCoMo sample as one within-sample retrieval task.
 
 ## Usage
 
@@ -85,7 +85,7 @@ for the methodology and claim boundary. The latest dated local measurement is
 recorded in
 [`docs/evidence/benchmarks/public-longitudinal-users-measurement-2026-05-31.md`](../docs/evidence/benchmarks/public-longitudinal-users-measurement-2026-05-31.md).
 
-Run the LoCoMo public longitudinal-users control:
+Run the LoCoMo same-conversation evidence control:
 
 ```powershell
 New-Item -ItemType Directory -Force benchmark_corpus\locomo | Out-Null
@@ -113,11 +113,12 @@ Prediction rows can use either `evidence_ids` or `source_event_ids`:
 ```
 
 This runner scores source-turn retrieval against LoCoMo QA evidence dialogue
-ids. The raw LoCoMo file remains local/ignored under the upstream CC BY-NC 4.0
-license; reports are sanitized by default and do not emit dialogue, question,
-or answer text. Use it as the first real public longitudinal conversation
-control, while keeping coding tacit-constraint and rejected-route claims on
-the VCS / rollout hard-event track.
+ids inside the same conversation sample. The raw LoCoMo file remains
+local/ignored under the upstream CC BY-NC 4.0 license; reports are sanitized by
+default and do not emit dialogue, question, or answer text. Use it as a
+long-dialogue retrieval control, not as proof of cross-conversation user memory;
+keep temporal override, project contamination, coding tacit-constraint, and
+rejected-route claims on the VCS / rollout hard-event track.
 
 Run the VCS future-event recall scaffold:
 

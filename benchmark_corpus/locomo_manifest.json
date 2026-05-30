@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "benchmark": "LoCoMo",
-  "scope": "public longitudinal conversation-control users for evidence-retrieval benchmark runs",
+  "scope": "public long-conversation same-dialogue control for evidence-retrieval benchmark runs",
   "official_sources": {
     "repository": "https://github.com/snap-research/locomo",
     "license": "https://raw.githubusercontent.com/snap-research/locomo/main/LICENSE.txt",
@@ -48,8 +48,9 @@
     }
   },
   "claim_boundary": [
-    "public same-conversation longitudinal-user evidence retrieval",
+    "public same-conversation long-dialogue evidence retrieval",
     "source-turn recall against LoCoMo QA evidence ids",
+    "not a cross-conversation longitudinal-user memory score",
     "no answer generation score",
     "no LLM judge score",
     "no coding decision-shadow or tacit-constraint claim",

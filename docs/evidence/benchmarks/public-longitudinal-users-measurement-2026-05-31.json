@@ -4,8 +4,8 @@
   "report_date": "2026-05-31",
   "source_pr": "https://github.com/Sapientropic/AIppocampus/pull/173",
   "tracks": {
-    "locomo_public_users_control": {
-      "role": "real public longitudinal conversation-control users",
+    "locomo_same_conversation_control": {
+      "role": "real public long-conversation same-dialogue evidence control",
       "gold": {
         "ok": true,
         "user_count": 10,
@@ -31,7 +31,7 @@
         "prediction_template_raw_text_emitted": false,
         "scored_case_count": 3
       },
-      "claim_boundary": "LoCoMo supplies public same-conversation longitudinal users with QA evidence dialogue ids. This runner scores evidence retrieval only; it is a control for long-term conversation source recovery, not coding tacit-constraint recall."
+      "claim_boundary": "LoCoMo supplies public long conversations with QA evidence dialogue ids, but the task stays inside one conversation sample. This runner scores evidence retrieval only; it is not evidence for cross-conversation longitudinal-user memory or coding tacit-constraint recall."
     },
     "public_pseudo_user_contract_smoke": {
       "role": "checked-in synthetic coding implicit-knowledge scoring contract",
@@ -99,6 +99,7 @@
     "external_baseline_superiority",
     "answer_generation_quality",
     "private_real_history_quality",
+    "cross_conversation_longitudinal_memory_from_locomo",
     "coding_tacit_constraint_quality_from_locomo",
     "wild_vcs_corpus_quality"
   ]
