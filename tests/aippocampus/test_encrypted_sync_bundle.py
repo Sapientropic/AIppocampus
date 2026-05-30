@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -13,6 +14,8 @@ SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import encrypted_sync_bundle  # noqa: E402
+import encrypted_sync_keys  # noqa: E402
+import encrypted_sync_migration  # noqa: E402
 import sync_bundle  # noqa: E402
 import sync_contract  # noqa: E402
 
@@ -91,6 +94,7 @@ class EncryptedSyncBundleTests(unittest.TestCase):
             encoding="utf-8",
         )
         self.fake_age = self.write_fake_age()
+        self.fake_age_keygen = self.write_fake_age_keygen()
         self.identity = self.root / "identity.txt"
         self.identity.write_text("trusted identity\n", encoding="utf-8")
         self.wrong_identity = self.root / "wrong-identity.txt"
@@ -148,6 +152,164 @@ output.write_bytes(b"FAKEAGE\\n" + base64.b64encode(data))
             return wrapper
         path.chmod(0o755)
         return path
+
+    def write_fake_age_keygen(self) -> Path:
+        path = self.root / "fake-age-keygen.py"
+        path.write_text(
+            """#!/usr/bin/env python3
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+args = sys.argv[1:]
+if "--version" in args:
+    print("age-keygen fake-test")
+    raise SystemExit(0)
+
+if "-y" in args:
+    identity = Path(args[-1]).read_text(encoding="utf-8")
+    if "device-b" in identity:
+        print("age1deviceb00000000000000000000000000000000000000000000000")
+    else:
+        print("age1devicea00000000000000000000000000000000000000000000000")
+    raise SystemExit(0)
+
+if "-o" not in args:
+    raise SystemExit(2)
+output = Path(args[args.index("-o") + 1])
+output.parent.mkdir(parents=True, exist_ok=True)
+output.write_text("AGE-SECRET-KEY-1FAKE-DEVICE-A\\n", encoding="utf-8")
+raise SystemExit(0)
+""",
+            encoding="utf-8",
+        )
+        if os.name == "nt":
+            wrapper = self.root / "fake-age-keygen.cmd"
+            wrapper.write_text(f'@echo off\r\n"{sys.executable}" "{path}" %*\r\n', encoding="utf-8")
+            return wrapper
+        path.chmod(0o755)
+        return path
+
+    def test_device_key_init_trust_revoke_and_trusted_push(self) -> None:
+        init = encrypted_sync_keys.init_device_key(
+            self.registry,
+            device_name="device-a",
+            age_keygen_bin=self.fake_age_keygen,
+        )
+        trusted = encrypted_sync_keys.trust_recipient(
+            self.registry,
+            recipient="age1deviceb00000000000000000000000000000000000000000000000",
+            device_name="device-b",
+        )
+        listing = encrypted_sync_keys.list_device_keys(self.registry)
+
+        self.assertTrue(init["ok"], init)
+        self.assertTrue(init["identity_available"])
+        self.assertEqual(init["identity_location"], "local_registry_state")
+        self.assertNotIn("AGE-SECRET-KEY", json.dumps(init, ensure_ascii=False))
+        stored_keys = encrypted_sync_keys.load_device_keys(self.registry)
+        self.assertNotIn("identity_file", stored_keys["local_device"])
+        self.assertTrue(trusted["ok"], trusted)
+        self.assertEqual(listing["trusted_recipient_count"], 2)
+
+        trusted_sync_dir = self.root / "trusted-sync"
+        trusted_push = encrypted_sync_bundle.push_encrypted_sync_bundle(
+            self.registry,
+            trusted_sync_dir,
+            age_bin=self.fake_age,
+        )
+        trusted_repair = encrypted_sync_bundle.repair_encrypted_sync_bundle(
+            trusted_sync_dir,
+            identity_files=[self.identity],
+            age_bin=self.fake_age,
+        )
+        self.assertTrue(trusted_push["ok"], trusted_push)
+        self.assertTrue(trusted_repair["ok"], trusted_repair)
+        self.assertEqual(trusted_repair["inner_manifest"]["recipient_count"], 2)
+
+        revoke_plan = encrypted_sync_keys.revoke_recipient(
+            self.registry,
+            "age1deviceb00000000000000000000000000000000000000000000000",
+            dry_run=True,
+        )
+        revoked = encrypted_sync_keys.revoke_recipient(
+            self.registry,
+            "age1deviceb00000000000000000000000000000000000000000000000",
+            confirm=True,
+        )
+        retrust = encrypted_sync_keys.trust_recipient(
+            self.registry,
+            recipient="age1deviceb00000000000000000000000000000000000000000000000",
+            device_name="device-b",
+        )
+        self.assertTrue(revoke_plan["ok"], revoke_plan)
+        self.assertTrue(revoke_plan["dry_run"])
+        self.assertTrue(revoked["ok"], revoked)
+        self.assertEqual(retrust["issues"][0]["code"], "revoked_recipient")
+
+        push = encrypted_sync_bundle.push_encrypted_sync_bundle(
+            self.registry,
+            self.sync_dir,
+            age_bin=self.fake_age,
+        )
+
+        self.assertTrue(push["ok"], push)
+        sync_text = "\n".join(
+            path.read_text(encoding="utf-8", errors="ignore")
+            for path in self.sync_dir.rglob("*")
+            if path.is_file()
+        )
+        self.assertNotIn("AGE-SECRET-KEY", sync_text)
+        repair = encrypted_sync_bundle.repair_encrypted_sync_bundle(
+            self.sync_dir,
+            identity_files=[self.identity],
+            age_bin=self.fake_age,
+        )
+        self.assertTrue(repair["ok"], repair)
+        self.assertEqual(repair["inner_manifest"]["recipient_count"], 1)
+
+    def test_encrypted_sync_admin_cli_key_recipient_redacts_identity(self) -> None:
+        init_proc = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPTS / "encrypted_sync_admin.py"),
+                "key",
+                "init",
+                "--registry-dir",
+                str(self.registry),
+                "--device-name",
+                "device-a",
+                "--age-keygen-bin",
+                str(self.fake_age_keygen),
+                "--json",
+            ],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        recipient_proc = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPTS / "encrypted_sync_admin.py"),
+                "key",
+                "recipient",
+                "--registry-dir",
+                str(self.registry),
+                "--age-keygen-bin",
+                str(self.fake_age_keygen),
+            ],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+        self.assertEqual(init_proc.returncode, 0, init_proc.stderr)
+        self.assertNotIn("AGE-SECRET-KEY", init_proc.stdout)
+        self.assertEqual(recipient_proc.returncode, 0, recipient_proc.stderr)
+        self.assertTrue(recipient_proc.stdout.strip().startswith("age1devicea"))
 
     def test_encrypted_local_push_status_repair_pull_round_trip(self) -> None:
         push = encrypted_sync_bundle.push_encrypted_sync_bundle(
@@ -221,6 +383,14 @@ output.write_bytes(b"FAKEAGE\\n" + base64.b64encode(data))
             recipients=[self.recipient],
             age_bin=self.fake_age,
         )
+
+        missing_identity = encrypted_sync_bundle.repair_encrypted_sync_bundle(
+            self.sync_dir,
+            identity_files=[],
+            age_bin=self.fake_age,
+        )
+        self.assertFalse(missing_identity["ok"])
+        self.assertEqual(missing_identity["issues"][0]["code"], "identity_missing")
 
         wrong_key = encrypted_sync_bundle.repair_encrypted_sync_bundle(
             self.sync_dir,
@@ -355,6 +525,102 @@ output.write_bytes(b"FAKEAGE\\n" + base64.b64encode(data))
 
         self.assertFalse(result["ok"])
         self.assertEqual(result["issues"][0]["code"], "recipient_secret_rejected")
+
+    def test_plaintext_migration_inventory_migrate_and_cleanup(self) -> None:
+        sync_bundle.push_sync_bundle(self.registry, self.sync_dir)
+        encrypted_target = self.root / "encrypted-target-sync"
+        wrong_registry = self.root / "wrong-registry"
+        sync_bundle.pull_sync_bundle(self.sync_dir, wrong_registry)
+        (wrong_registry / "threads" / "session-test" / "clean-source" / "messages.jsonl").write_text(
+            json.dumps({"message_id": "wrong", "text": "wrong registry"}, ensure_ascii=False)
+            + "\n",
+            encoding="utf-8",
+        )
+
+        inventory = encrypted_sync_migration.inventory_plaintext_sync_dir(
+            self.sync_dir,
+            target_sync_dir=encrypted_target,
+        )
+        dry_migration = encrypted_sync_migration.migrate_plaintext_sync_dir_to_encrypted(
+            self.sync_dir,
+            encrypted_target,
+            registry_dir=self.registry,
+            recipients=[self.recipient],
+            age_bin=self.fake_age,
+            dry_run=True,
+        )
+        self.assertTrue(dry_migration["ok"], dry_migration)
+        self.assertTrue(dry_migration["dry_run"])
+        self.assertFalse((encrypted_target / encrypted_sync_bundle.ENCRYPTED_SYNC_DIR_NAME).exists())
+
+        migration = encrypted_sync_migration.migrate_plaintext_sync_dir_to_encrypted(
+            self.sync_dir,
+            encrypted_target,
+            registry_dir=wrong_registry,
+            recipients=[self.recipient],
+            age_bin=self.fake_age,
+        )
+        migrated_target = self.root / "migrated-target-registry"
+        migrated_pull = encrypted_sync_bundle.pull_encrypted_sync_bundle(
+            encrypted_target,
+            migrated_target,
+            identity_files=[self.identity],
+            age_bin=self.fake_age,
+        )
+        mixed_target = encrypted_sync_migration.migrate_plaintext_sync_dir_to_encrypted(
+            self.sync_dir,
+            encrypted_target,
+            registry_dir=self.registry,
+            recipients=[self.recipient],
+            age_bin=self.fake_age,
+        )
+        cleanup_plan = encrypted_sync_migration.cleanup_plaintext_sync_dir(
+            self.sync_dir,
+            dry_run=True,
+        )
+        cleanup_without_confirm = encrypted_sync_migration.cleanup_plaintext_sync_dir(
+            self.sync_dir,
+            dry_run=False,
+        )
+        cleanup_without_verified = encrypted_sync_migration.cleanup_plaintext_sync_dir(
+            self.sync_dir,
+            dry_run=False,
+            confirm=True,
+        )
+        cleanup = encrypted_sync_migration.cleanup_plaintext_sync_dir(
+            self.sync_dir,
+            dry_run=False,
+            confirm=True,
+            verified_encrypted_target=True,
+        )
+
+        self.assertTrue(inventory["ok"], inventory)
+        self.assertTrue(inventory["plaintext_exposure"])
+        self.assertGreater(inventory["plaintext_object_count"], 1)
+        self.assertTrue(migration["ok"], migration)
+        self.assertTrue(
+            (encrypted_target / encrypted_sync_bundle.ENCRYPTED_SYNC_DIR_NAME).is_dir()
+        )
+        self.assertTrue(migrated_pull["ok"], migrated_pull)
+        migrated_messages = (
+            migrated_target / "threads" / "session-test" / "clean-source" / "messages.jsonl"
+        ).read_text(encoding="utf-8")
+        self.assertIn("source backed", migrated_messages)
+        self.assertNotIn("wrong registry", migrated_messages)
+        self.assertFalse(mixed_target["ok"])
+        self.assertEqual(mixed_target["issues"][0]["code"], "target_not_fresh")
+        self.assertTrue(cleanup_plan["ok"], cleanup_plan)
+        self.assertTrue(cleanup_plan["dry_run"])
+        self.assertGreater(cleanup_plan["would_delete_count"], 1)
+        self.assertFalse(cleanup_without_confirm["ok"])
+        self.assertEqual(cleanup_without_confirm["issues"][0]["code"], "cleanup_confirmation_required")
+        self.assertFalse(cleanup_without_verified["ok"])
+        self.assertEqual(
+            cleanup_without_verified["issues"][0]["code"],
+            "encrypted_target_verification_required",
+        )
+        self.assertTrue(cleanup["ok"], cleanup)
+        self.assertFalse((self.sync_dir / sync_bundle.SYNC_MANIFEST_NAME).exists())
 
 
 if __name__ == "__main__":

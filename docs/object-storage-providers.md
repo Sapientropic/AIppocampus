@@ -61,6 +61,12 @@ outer manifest is deleted while ciphertext objects remain.
 
 Use `--keep-objects` only for debugging a temporary test prefix.
 
+Plaintext migration cleanup uses HTTP `DELETE` for objects listed in the
+plaintext sync manifest and deletes the manifest object last. Providers that do
+not expose delete permissions can still use migration dry-run and encrypted
+push, but old plaintext cleanup must then be performed in the provider console
+or lifecycle tooling.
+
 ## Provider-Specific Pitfalls
 
 - Signing credentials require HTTPS unless the endpoint is loopback. This keeps

@@ -1,6 +1,7 @@
 # Encrypted Sync Follow-Up RFC
 
-Status: follow-up issue/RFC draft after encrypted-sync-v1 provider bring-up.
+Status: implemented as the device-key and plaintext migration slice after
+encrypted-sync-v1 provider bring-up.
 
 ## Summary
 
@@ -23,7 +24,7 @@ Problem:
 - Without a first-class flow, users can either leak old plaintext objects by
   mistake or lose access by misplacing identity material.
 
-Recommendation:
+Implemented command shape:
 
 1. Add device-key commands:
    - `key init`: create or register a local device identity.
@@ -45,6 +46,12 @@ Recommendation:
    - Never delete plaintext objects as a side effect of encrypted push.
    - Require a successful encrypted repair or pull before offering cleanup.
    - Keep raw rollout sync encrypted-only and explicit.
+
+The concrete CLI entrypoint is `encrypted_sync_admin.py`; see
+`docs/install-guide.md` for local-folder and object-storage examples. Cleanup
+is scoped to manifest-managed plaintext files/objects, requires an explicit
+verified-target acknowledgement after encrypted repair or pull, and does not
+claim to erase unrelated provider objects.
 
 Acceptance criteria:
 

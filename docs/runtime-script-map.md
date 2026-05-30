@@ -91,7 +91,7 @@ file-selection, path, conflict, or raw-rollout defaults.
 |---|---|---|---|---|
 | `sync_contract.py`, `sync_bundle.py` | Shared manifest/privacy contract plus local-folder clean-source bundle sync. | CLI/sync docs. | Content-addressed chunks, path repair, conflict policy. | Public entrypoint |
 | `sync_object_storage.py`, `object_storage_client.py`, `object_storage_providers.py` | HTTP/S3/R2/GCS-compatible object transport. | CLI/sync docs. | Shared bundle semantics, provider config, no secret logging. | Public entrypoint |
-| `encrypted_sync_bundle.py`, `encrypted_sync_object_storage.py`, `encrypted_sync_crypto.py` | Age-backed encrypted sync overlay. | CLI/encrypted sync docs. | Sync bundle/object transport plus key handling. | Public entrypoint |
+| `encrypted_sync_bundle.py`, `encrypted_sync_object_storage.py`, `encrypted_sync_crypto.py`, `encrypted_sync_keys.py`, `encrypted_sync_migration.py`, `encrypted_sync_admin.py` | Age-backed encrypted sync overlay, device-key UX, and plaintext migration helpers. | CLI/encrypted sync docs. | Sync bundle/object transport plus key handling. | Public entrypoint |
 | `vault_sync_utils.py`, `sync_vault.py`, `vault_notes.py`, `vault_dashboard.py` | Human-readable vault projection and dashboard. | CLI/manual projection. | Clean source and registry rows; not a transport backend. | Public entrypoint |
 
 The local-folder route writes the bundle directly. The object-storage route is

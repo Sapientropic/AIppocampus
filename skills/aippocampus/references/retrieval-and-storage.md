@@ -302,8 +302,10 @@ object-storage transport: each manifest file is stored as an object under
 `AIPPOCAMPUS_OBJECT_PREFIX`, the manifest object is written last, and
 `status`/`repair` verify object content by sha256 before `pull` imports it.
 `encrypted_sync_object_storage.py` uses the same encrypted bundle contract over
-HTTP `PUT`/`GET` and writes the encrypted outer manifest last. The object-store
-client boundary is split into `object_storage_client.py` and
+HTTP `PUT`/`GET` and writes the encrypted outer manifest last.
+`encrypted_sync_admin.py` owns device-key UX and plaintext-to-encrypted
+migration/cleanup so the core sync entrypoints stay focused on transport. The
+object-store client boundary is split into `object_storage_client.py` and
 `object_storage_providers.py`; provider mode covers generic HTTP bearer-token
 endpoints, S3-compatible SigV4, Cloudflare R2 region `auto`, and Google Cloud
 Storage XML HMAC signing. Provider-specific setup notes live in
