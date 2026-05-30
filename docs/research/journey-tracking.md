@@ -1,11 +1,38 @@
 # Journey Tracking: AIppocampus 的旅程追踪
 
-Status: research memo, v4 after 3 rounds of review.
+Status: research memo plus first deterministic P1-P3 core implementation.
 Origin: user observation + Claude research, 2026-05-28.
 Related: [dream-task-design.md](dream-task-design.md) — 不 impose 叙事结构，但 recognize 旅程模式,
 [affect-side-channel.md](affect-side-channel.md) — hexagram arc 作为直觉编码,
 [ambient-associative-recall.md](ambient-associative-recall.md) — AAR 管线,
 [compact-activation-signals.md](compact-activation-signals.md) — cognitive portrait 概念.
+
+## Implementation Status
+
+Current code implements the source-backed P1-P3 Journey core in
+`skills/aippocampus/scripts/journey_tracking.py`:
+
+- P1: `Waypoint`, `Journey`, and `JourneyFeedback` structures; append-only
+  waypoint history; `traveling` / `camped` / `arrived` / `abandoned` states;
+  TTL extension from waypoint count; explicit `confirm`, `correct`, `merge`,
+  `abandon`, and `revive` feedback actions.
+- P2: conservative instantiation gate over source-backed waypoint candidates.
+  It requires at least three source-backed waypoints across three distinct
+  threads and a specific `core_inquiry`. This is the issue #63
+  fixture-backed equivalent for the future `theme_emergence` dependency.
+- P3: deterministic `current_frontier` generation from the latest waypoints.
+  The frontier is marked as a navigation candidate, not source truth; exact
+  claims still require the attached clean-source refs.
+- Validation: `tests/aippocampus/test_journey_tracking.py` covers creation,
+  state transitions, expiry/dormancy, append-only waypoint behavior,
+  feedback actions, source-ref preservation, and a replay fixture smoke where
+  Journey frontier/state beats a plain-summary baseline on expected continuation
+  terms.
+
+Still designed/deferred: live `theme_emergence` instantiation, foreground hook
+journey hints, question-tracking P4 integration, Dream/reflection-space
+consumers, HexArc structural matching, graph random walks, predictive replay,
+and private real-history journey quality claims.
 
 ## TL;DR
 
@@ -46,8 +73,10 @@ v3 → v4 的转折来自用户的纠正：
 | 静态层 | 事实、偏好、习惯 | MEMORY.md / question_tracking / frontier_markers | "用户偏好简洁沟通"、"这个函数怎么写" |
 | 动态层 | 连贯的多线程探索 | Journey（本文） | "我们一起在摸变化之后连续性还在不在" |
 
-Journey **不是默认容器**。只有 `theme_emergence` 检测到连贯的多线程线索时才实例化。
-单次工具性交互（"帮我调这段代码"）不产生 Journey。
+Journey **不是默认容器**。目标形态是只有 `theme_emergence` 检测到连贯
+的多线程线索时才实例化；当前实现先用 `journey_tracking.py` 的
+fixture-backed 等价输入验证同一条边界。单次工具性交互（"帮我调这段代码"）
+不产生 Journey。
 
 ## 数据结构
 
@@ -92,8 +121,9 @@ class Journey:
 
 `camped` 替代了 v3 的 `fading`——语义更诚实："不是在消退，是停下来扎营了"。
 
-**current_frontier**：由 LLM 从最新的 1-3 个 waypoint 推断，描述"现在停在哪"。
-不是整个旅程的总结，只是当前位置。
+**current_frontier**：当前实现由确定性 helper 从最新的 1-3 个 waypoint
+生成 compact frontier；未来可由 LLM 在同一 source-ref 边界下改写。
+它不是整个旅程的总结，也不是 source truth，只是当前位置的导航候选。
 
 ### 过期机制
 
@@ -121,7 +151,8 @@ traveling ──→ camped ──→ abandoned
 
 Journey 不自动创建。触发条件：
 
-1. `theme_emergence` 检测到一个 theme 跨 ≥3 个 thread 出现
+1. `theme_emergence` 检测到一个 theme 跨 ≥3 个 thread 出现；当前 P1-P3
+   core 用 fixture-backed waypoint candidates 代替尚未上线的 live job
 2. 且这个 theme 有明确的 core_inquiry（不是泛泛的"编程"或"写作"）
 3. 由 LLM 判断：这些 thread 是否在追同一个问题？
 
@@ -407,16 +438,17 @@ class JourneyFeedback:
 
 | 阶段 | 内容 | 依赖 | 工时 |
 |------|------|------|------|
-| P1 | Waypoint + Journey dataclass + 状态转移 + 过期 | theme_emergence | 2 天 |
+| P1 | Waypoint + Journey dataclass + 状态转移 + 过期 | fixture-backed waypoint candidates | implemented in `journey_tracking.py` |
 | P1a | 卦象深层结构验证（八卦分解 / 爻变语义 / 互错综一致性） | affect-side-channel 验证方法 | 0.5 天 |
-| P2 | Journey 实例化逻辑（≥3 thread + LLM 连贯性检查） | P1 | 1 天 |
-| P3 | current_frontier 生成（从最新 waypoint 推断） | P1 | 0.5 天 |
+| P2 | Journey 实例化逻辑（≥3 thread + source-backed coherence gate） | P1 | implemented as fixture-backed equivalent |
+| P3 | current_frontier 生成（从最新 waypoint 推断） | P1 | implemented as deterministic navigation candidate |
 | P4 | 与 question_tracking 关联 | P1 | 0.5 天 |
 | P5 | 用户反馈通道 | P1 | 1 天 |
 | P6 | 图随机游走（prospective scouting + path resonance） | concept_edge_mining | 1 天 |
 | P6a | path resonance 升级：基于八卦结构匹配（如 P1a 验证通过） | P1a + P6 | 0.5 天 |
 
-先做 P1-P3（Journey 核心），P4-P6 按需。
+P1-P3 core is now implemented. P4-P6 remain future integration / research
+work and should not be claimed from the current deterministic helper.
 
 ## 评估：时间切分回放
 
@@ -427,6 +459,10 @@ class JourneyFeedback:
 5. Day T 标记为 camped 的 Journey，两周后是否被 revive 或 abandon？
 
 这是离线评估，不需要金标注。测试的是 Journey 对"路在往哪走"的追踪精度。
+The current fixture smoke implements a small deterministic version of this idea:
+it checks that Journey `current_frontier` and state preserve later-continuation
+terms better than a plain summary baseline. This is not yet private real-history
+or live model evidence.
 
 ## Review Credits
 

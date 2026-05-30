@@ -246,6 +246,24 @@ handoff context.
      equivalence. Keep numerical activation codes and white-box steering out of
      this slice.
 
+16. Journey Tracking P1-P3 core
+   - Source: `docs/research/journey-tracking.md`,
+     `docs/question-tracking-subconscious.md`, and the hexagram validation
+     study pack.
+   - First deterministic core is implemented in
+     `skills/aippocampus/scripts/journey_tracking.py`: it defines source-backed
+     `Waypoint` / `Journey` / `JourneyFeedback` structures, append-only waypoint
+     history, `traveling` / `camped` / `arrived` / `abandoned` transitions,
+     expiry/TTL refresh, conservative multi-thread instantiation gates,
+     deterministic `current_frontier`, and explicit feedback actions.
+   - The fixture smoke compares Journey frontier/state against a plain summary
+     baseline for later-continuation terms. It is a fixture-backed equivalent,
+     not proof of live `theme_emergence`, private real-history journey quality,
+     predictive replay, or foreground hook timing.
+   - Next hardening: connect only source-backed `theme_candidate` /
+     `journey_waypoint` outputs when the job circuit exists, then evaluate on
+     time-sliced private history before surfacing Journey hints in AAR.
+
 ## Do Not Start With
 
 - A generic vector database rewrite.

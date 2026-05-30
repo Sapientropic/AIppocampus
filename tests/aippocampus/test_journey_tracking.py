@@ -1,0 +1,178 @@
+from __future__ import annotations
+
+import sys
+import unittest
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+ROOT = REPO_ROOT / "skills" / "aippocampus"
+SCRIPTS = ROOT / "scripts"
+for _path in (
+    SCRIPTS,
+    REPO_ROOT / "benchmarks" / "aippocampus",
+    REPO_ROOT / "tools" / "aippocampus" / "smoke",
+    REPO_ROOT / "tools" / "aippocampus" / "docs",
+):
+    sys.path.insert(0, str(_path))
+
+import journey_tracking as journey  # noqa: E402
+
+
+class JourneyTrackingTests(unittest.TestCase):
+    def make_journey(self) -> journey.Journey:
+        result = journey.create_journey(
+            path_label="continuity after change",
+            core_inquiry="How can continuity survive compaction without false memory claims?",
+            waypoint_rows=journey.fixture_waypoints(),
+            active_questions=["what survives compaction?"],
+        )
+        self.assertTrue(result.created, result.reason)
+        self.assertIsNotNone(result.journey)
+        return result.journey  # type: ignore[return-value]
+
+    def test_creates_source_backed_journey_with_waypoint_boundaries(self) -> None:
+        item = self.make_journey()
+        payload = journey.journey_to_dict(item)
+
+        self.assertEqual(payload["kind"], "aippocampus_journey")
+        self.assertEqual(payload["status"], "traveling")
+        self.assertEqual(len(payload["waypoints"]), 3)
+        self.assertEqual(len({wp["thread_id"] for wp in payload["waypoints"]}), 3)
+        self.assertTrue(payload["source_refs"])
+        self.assertTrue(payload["current_frontier_source_refs"])
+        self.assertEqual(payload["current_frontier_kind"], "journey_current_frontier")
+        self.assertIn("navigation candidates", payload["truth_boundary"])
+
+    def test_conservative_instantiation_gate_rejects_thin_or_unbacked_inputs(self) -> None:
+        rows = journey.fixture_waypoints()
+
+        too_few_threads = journey.create_journey(
+            path_label="thin",
+            core_inquiry="How can this source-backed question keep evolving across contexts?",
+            waypoint_rows=[{**row, "thread_id": "session:one"} for row in rows],
+        )
+        self.assertFalse(too_few_threads.created)
+        self.assertEqual(too_few_threads.reason, "not_enough_distinct_threads")
+
+        unbacked = journey.create_journey(
+            path_label="thin",
+            core_inquiry="How can this source-backed question keep evolving across contexts?",
+            waypoint_rows=[{**row, "source_refs": []} for row in rows],
+        )
+        self.assertFalse(unbacked.created)
+        self.assertEqual(unbacked.reason, "not_enough_source_backed_waypoints")
+
+        generic = journey.create_journey(
+            path_label="generic",
+            core_inquiry="coding",
+            waypoint_rows=rows,
+        )
+        self.assertFalse(generic.created)
+        self.assertEqual(generic.reason, "core_inquiry_not_specific")
+
+    def test_expiration_and_dormancy_state_transitions(self) -> None:
+        item = self.make_journey()
+
+        camped = journey.refresh_journey_state(item, now="2026-07-10T00:00:00Z")
+        self.assertEqual(camped.status, "camped")
+
+        abandoned = journey.refresh_journey_state(item, now="2026-12-01T00:00:00Z")
+        self.assertEqual(abandoned.status, "abandoned")
+
+        arrived = journey.mark_arrived(item, timestamp="2026-05-21T00:00:00Z", note="Answered.")
+        self.assertEqual(journey.refresh_journey_state(arrived, now="2026-12-01T00:00:00Z").status, "arrived")
+
+    def test_appending_waypoint_is_append_only_and_extends_expiry(self) -> None:
+        item = self.make_journey()
+        old_ids = [waypoint.waypoint_id for waypoint in item.waypoints]
+        old_expiry = item.expires_at
+
+        updated = journey.append_waypoint(
+            item,
+            {
+                "moment": "A later continuation tested the same source-ref boundary again.",
+                "thread_id": "session:journey-d",
+                "timestamp": "2026-06-01T00:00:00Z",
+                "source_refs": [{"thread_key": "session:journey-d", "message_id": "msg-d"}],
+                "frontier_hint": "Continue from the new boundary with source refs still attached.",
+            },
+        )
+
+        self.assertEqual([waypoint.waypoint_id for waypoint in updated.waypoints[:3]], old_ids)
+        self.assertEqual(len(updated.waypoints), 4)
+        self.assertGreater(journey.parse_time(updated.expires_at), journey.parse_time(old_expiry))
+        self.assertEqual(updated.status, "traveling")
+        self.assertIn("new boundary", updated.current_frontier)
+
+    def test_feedback_actions_confirm_correct_merge_abandon_and_revive(self) -> None:
+        item = self.make_journey()
+        confirmed = journey.apply_feedback(
+            item,
+            journey.JourneyFeedback(
+                journey_id=item.journey_id,
+                action="confirm",
+                timestamp="2026-05-21T00:00:00Z",
+            ),
+        )
+        self.assertEqual(confirmed.status, "traveling")
+        self.assertEqual(confirmed.feedback_history[-1]["action"], "confirm")
+
+        corrected = journey.apply_feedback(
+            confirmed,
+            journey.JourneyFeedback(
+                journey_id=item.journey_id,
+                action="correct",
+                timestamp="2026-05-22T00:00:00Z",
+                correction="The frontier is source survival, not generic memory anxiety.",
+            ),
+        )
+        self.assertIn("source survival", corrected.current_frontier)
+
+        merged = journey.apply_feedback(
+            corrected,
+            journey.JourneyFeedback(
+                journey_id=item.journey_id,
+                action="merge",
+                timestamp="2026-05-23T00:00:00Z",
+                merge_target="jr_target",
+            ),
+        )
+        self.assertEqual(merged.status, "abandoned")
+        self.assertEqual(merged.merged_into, "jr_target")
+
+        abandoned = journey.apply_feedback(
+            corrected,
+            journey.JourneyFeedback(
+                journey_id=item.journey_id,
+                action="abandon",
+                timestamp="2026-05-24T00:00:00Z",
+            ),
+        )
+        self.assertEqual(abandoned.status, "abandoned")
+
+        revived = journey.apply_feedback(
+            abandoned,
+            journey.JourneyFeedback(
+                journey_id=item.journey_id,
+                action="revive",
+                timestamp="2026-05-25T00:00:00Z",
+            ),
+        )
+        self.assertEqual(revived.status, "traveling")
+        self.assertGreater(journey.parse_time(revived.expires_at), journey.parse_time(abandoned.expires_at))
+
+    def test_replay_fixture_smoke_beats_plain_summary_baseline(self) -> None:
+        payload = journey.run_replay_fixture_smoke()
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["status"], "sufficient")
+        self.assertGreater(
+            payload["metrics"]["journey_frontier_hits"],
+            payload["metrics"]["plain_summary_hits"],
+        )
+        self.assertEqual(payload["journey"]["current_frontier_kind"], "journey_current_frontier")
+        self.assertIn("live_model_behavioral_equivalence", payload["cannot_claim"])
+
+
+if __name__ == "__main__":
+    unittest.main()

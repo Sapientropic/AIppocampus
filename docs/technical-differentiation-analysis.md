@@ -60,6 +60,7 @@
 | cognitive map sidecar | implemented | `build_cognitive_map.py` 可以 materialize source-backed routes；当前路线数量仍取决于 DeepSeek job 质量。 |
 | six-axis question map | partial implementation | `question_tracking.py` 已有确定性 Phase 2 baseline，并开始把六轴用于 salience 与 adaptive threshold；live model confirmation、dormancy 和向量 sidecar 仍未实现。 |
 | `question_link` / `theme_emergence` | partial / designed | `question_link` 可由 Phase 2 runner 写入 `subconscious_jobs.jsonl`；`theme_emergence` 仍是设计阶段。 |
+| `journey_tracking` P1-P3 core | first deterministic prototype | `journey_tracking.py` 已有 source-backed Waypoint/Journey 结构、保守多线程实例化 gate、状态/过期/反馈动作、`current_frontier` 导航候选和 fixture replay smoke；live `theme_emergence` 和真实历史 Journey 质量仍未实现。 |
 | dynamic separation/completion threshold | first deterministic prototype | `question_tracking.py` 会按六轴兼容/冲突调整 strong/borderline 阈值，并跳过低信息 salience 候选；真实语义阈值调参仍需要更多 clean-source 样本。 |
 | reconsolidation queue / retrieval-count update | proposed | `working_memory.jsonl` 和 router 提供骨架，但 hook 侧还未记录 retrieval lifecycle。 |
 | preplay / state-dependent routing | research | 适合 Phase 3+，必须保持 ambient scent，不直接推送用户。 |

@@ -66,6 +66,7 @@ files = [
     "skills/aippocampus/scripts/encrypted_sync_keys.py",
     "skills/aippocampus/scripts/encrypted_sync_migration.py",
     "skills/aippocampus/scripts/encrypted_sync_object_storage.py",
+    "skills/aippocampus/scripts/journey_tracking.py",
     "skills/aippocampus/scripts/memory_candidate_router.py",
     "skills/aippocampus/scripts/model_client.py",
     "skills/aippocampus/scripts/object_storage_client.py",
