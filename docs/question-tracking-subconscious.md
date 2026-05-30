@@ -42,6 +42,12 @@ Current code ships Phase 1 and the first deterministic Phase 2 baseline:
   salience tags, adapts strong/borderline thresholds from six-axis evidence,
   and accepts borderline pairs only when an explicit confirmation artifact is
   supplied.
+- Implemented benchmark: `benchmarks/aippocampus/benchmark_cognitive_portrait.py`
+  builds a structured-text cognitive portrait from existing
+  `question_candidate`, `frontier_marker`, and `question_link` shapes, then
+  compares the compact portrait with fuller clean-source injection. It is a
+  benchmark/report surface only; full clean source remains required for quotes
+  and final evidence.
 - Designed/deferred: live model confirmation calls, `question_index.sqlite`,
   dormancy detection, `theme_emergence`, theme maps, and predictive/generative
   replay.

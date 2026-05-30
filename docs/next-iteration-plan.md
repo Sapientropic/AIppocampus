@@ -230,6 +230,22 @@ handoff context.
      clean-source samples and explicit user feedback before treating them as
      live timing or quality claims.
 
+15. Cognitive portrait structured-text benchmark
+   - Source: `docs/research/compact-activation-signals.md`,
+     `docs/research/README.md`, and
+     `docs/question-tracking-subconscious.md`.
+   - First deterministic benchmark is implemented in
+     `benchmarks/aippocampus/benchmark_cognitive_portrait.py`: it builds a
+     compact structured-text portrait from source-backed
+     `question_candidate`, `frontier_marker`, and `question_link` shapes,
+     compares it with fuller clean-source injection on selected fixture prompts,
+     and reports token savings, source-fidelity back-pointers,
+     over-personalization risk, and expected quote-fidelity loss.
+   - Next hardening: run the same artifact shape over private real-history
+     packs and optional live model probes before claiming behavioral
+     equivalence. Keep numerical activation codes and white-box steering out of
+     this slice.
+
 ## Do Not Start With
 
 - A generic vector database rewrite.
