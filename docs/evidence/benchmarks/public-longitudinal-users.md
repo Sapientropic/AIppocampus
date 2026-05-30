@@ -207,7 +207,8 @@ large curated rows.
 The first real public VCS smoke is now
 [`react-real-vcs-smoke-2026-05-31.md`](react-real-vcs-smoke-2026-05-31.md).
 It runs this scaffold on three curated `facebook/react` event clusters and
-separate source-window, empty, and source-stripped closed-book arms.
+separate source-window, empty, source-stripped closed-book, and counterfactual
+perturbation arms.
 
 ## Runner
 

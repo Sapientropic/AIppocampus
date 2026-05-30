@@ -18,9 +18,13 @@ python benchmarks\aippocampus\build_vcs_future_event_fixture.py --input .tmp\rea
 python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset .tmp\react-real-vcs-smoke\react-real-vcs-fixture.jsonl --predictions .tmp\react-real-vcs-smoke\react-source-window-predictions.jsonl --closed-book-predictions .tmp\react-real-vcs-smoke\react-closed-book-predictions.jsonl --allow-non-cc0-dataset --output .tmp\react-real-vcs-smoke\react-source-window-report.json
 python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset .tmp\react-real-vcs-smoke\react-real-vcs-fixture.jsonl --baseline empty --allow-non-cc0-dataset --output .tmp\react-real-vcs-smoke\react-empty-report.json
 python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset .tmp\react-real-vcs-smoke\react-real-vcs-fixture.jsonl --predictions .tmp\react-real-vcs-smoke\react-closed-book-predictions.jsonl --allow-non-cc0-dataset --output .tmp\react-real-vcs-smoke\react-closed-book-report.json
+python benchmarks\aippocampus\build_vcs_future_event_fixture.py --input .tmp\react-real-vcs-smoke\react-counterfactual-links.jsonl --output .tmp\react-real-vcs-smoke\react-counterfactual-fixture.jsonl --dataset-id react_real_vcs_counterfactual_smoke_2026_05_31 --license GitHub-public-metadata-local-report-only --source-family real_public_react_vcs_counterfactual_perturbation --allow-non-cc0-output --json
+python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset .tmp\react-real-vcs-smoke\react-counterfactual-fixture.jsonl --predictions .tmp\react-real-vcs-smoke\react-counterfactual-source-predictions.jsonl --closed-book-predictions .tmp\react-real-vcs-smoke\react-counterfactual-parametric-predictions.jsonl --allow-non-cc0-dataset --output .tmp\react-real-vcs-smoke\react-counterfactual-source-report.json
+python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset .tmp\react-real-vcs-smoke\react-counterfactual-fixture.jsonl --predictions .tmp\react-real-vcs-smoke\react-counterfactual-parametric-predictions.jsonl --allow-non-cc0-dataset --output .tmp\react-real-vcs-smoke\react-counterfactual-parametric-report.json
+python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset .tmp\react-real-vcs-smoke\react-counterfactual-fixture.jsonl --baseline empty --allow-non-cc0-dataset --output .tmp\react-real-vcs-smoke\react-counterfactual-empty-report.json
 ```
 
-The empty baseline and source-stripped closed-book control are expected to exit non-zero. They are negative controls.
+The empty baseline, source-stripped closed-book control, and parametric public-memory counterfactual control are expected to exit non-zero. They are negative controls.
 
 ## Results
 
@@ -31,6 +35,24 @@ The empty baseline and source-stripped closed-book control are expected to exit 
 | Closed-book source-stripped control | 0.00% | 0.00% | 0.00% | 3 | 0 | 100.00% |
 
 Source-over-closed-book lift: recall `1.00`, precision `1.00`, F1 `1.00`, false-negative reduction `3`.
+
+## Counterfactual Perturbation
+
+The counterfactual arm keeps the same public event ids but replaces the required local source ids/rationales. A source-backed system should follow those counterfactual source ids. A parametric-public-memory control that keeps pointing to the original public source ids should fail source support.
+
+| Arm | Recall | Precision | False negatives | Source-support failures |
+| --- | ---: | ---: | ---: | ---: |
+| Counterfactual source-backed | 100.00% | 100.00% | 0 | 0 |
+| Parametric public-memory control | 0.00% | 0.00% | 3 | 3 |
+| Empty baseline | 0.00% | 0.00% | 3 | 0 |
+
+Source-over-parametric lift: recall `1.00`, precision `1.00`, F1 `1.00`, false-negative reduction `3`.
+
+| Public event | Family | Counterfactual required source | Original public-memory source |
+| --- | --- | --- | --- |
+| [react-pr-35348-reland-merged](https://github.com/facebook/react/pull/35348) | `reopen_condition` | `cf-react-pr-35346-revert-memory-leak` | `react-pr-35346-revert` |
+| [react-pr-34747-hermes-revert-merged](https://github.com/facebook/react/pull/34747) | `workaround_rationale` | `cf-react-pr-34747-hermes-windows-paths` | `react-pr-34747-hermes-rationale` |
+| [react-pr-35825-feature-cleanup-merged](https://github.com/facebook/react/pull/35825) | `rejected_route` | `cf-react-pr-35825-cleanup-rn-memory` | `react-pr-35825-cleanup-rationale` |
 
 ## Family Slices
 
@@ -50,10 +72,11 @@ Source-over-closed-book lift: recall `1.00`, precision `1.00`, F1 `1.00`, false-
 
 ## Interpretation
 
-This is the first real public VCS smoke for the hard-event runner. It covers a tiny React sample with `reopen_condition`, `workaround_rationale`, `rejected_route`, and same-token anti-drift negatives. It confirms two things the synthetic scaffold could not by itself show:
+This is the first real public VCS smoke for the hard-event runner. It covers a tiny React sample with `reopen_condition`, `workaround_rationale`, `rejected_route`, and same-token anti-drift negatives. It confirms three things the synthetic scaffold could not by itself show:
 
 - the runner can score non-CC0 local public GitHub metadata without committing raw PR text;
-- a silent system and a source-stripped closed-book control both fail recall, so source-backed support is actually part of the score.
+- a silent system and a source-stripped closed-book control both fail recall, so source-backed support is actually part of the score;
+- a counterfactual perturbation catches the public-memory failure mode: predictions that keep citing original public source ids score `0.00%` recall with `3` source-support failures.
 
 It still does not measure the harder longitudinal tracks directly: temporal override beyond this small reland example, implicit constraint drift, cross-project contamination, intentional forget compliance, post-compaction detail recall, or dream semantic quality. Those need dedicated real-history or rollout-derived case packs.
 

@@ -176,12 +176,69 @@
     "intentional_forget_compliance",
     "post_compaction_detail_recall",
     "dream_semantic_quality",
-    "private_real_history_quality"
+    "private_real_history_quality",
+    "counterfactual_resistance_against_model_generated_answers"
   ],
   "privacy_boundary": {
     "committed_report_contains_raw_pr_body": false,
     "committed_report_contains_private_user_data": false,
     "committed_report_contains_local_absolute_paths": false,
     "committed_report_contains_credential_like_strings": false
+  },
+  "counterfactual_perturbation": {
+    "dataset_id": "react_real_vcs_counterfactual_smoke_2026_05_31",
+    "role": "counterfactual source-support control: same public event ids, perturbed local source ids and rationales",
+    "flag_worthy_event_count": 3,
+    "anti_drift_negative_count": 3,
+    "source_backed_arm": {
+      "ok": true,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_negative_count": 0,
+      "source_support_failure_count": 0
+    },
+    "parametric_public_memory_control": {
+      "ok": false,
+      "recall": 0.0,
+      "precision": 0.0,
+      "false_negative_count": 3,
+      "source_support_failure_count": 3
+    },
+    "empty_baseline": {
+      "ok": false,
+      "recall": 0.0,
+      "precision": 0.0,
+      "false_negative_count": 3
+    },
+    "source_over_parametric_lift": {
+      "recall": 1.0,
+      "precision": 1.0,
+      "f1": 1.0,
+      "false_negative_reduction": 3
+    },
+    "pairs": [
+      {
+        "event_id": "react-pr-35348-reland-merged",
+        "family": "reopen_condition",
+        "public_url": "https://github.com/facebook/react/pull/35348",
+        "counterfactual_required_source_id": "cf-react-pr-35346-revert-memory-leak",
+        "original_public_source_id": "react-pr-35346-revert"
+      },
+      {
+        "event_id": "react-pr-34747-hermes-revert-merged",
+        "family": "workaround_rationale",
+        "public_url": "https://github.com/facebook/react/pull/34747",
+        "counterfactual_required_source_id": "cf-react-pr-34747-hermes-windows-paths",
+        "original_public_source_id": "react-pr-34747-hermes-rationale"
+      },
+      {
+        "event_id": "react-pr-35825-feature-cleanup-merged",
+        "family": "rejected_route",
+        "public_url": "https://github.com/facebook/react/pull/35825",
+        "counterfactual_required_source_id": "cf-react-pr-35825-cleanup-rn-memory",
+        "original_public_source_id": "react-pr-35825-cleanup-rationale"
+      }
+    ],
+    "interpretation": "A system that follows the counterfactual local source points to counterfactual source ids and passes. A system that falls back to original public-memory source ids flags the right public events but fails source support."
   }
 }
