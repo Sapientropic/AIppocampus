@@ -341,12 +341,6 @@ reflection-ready rows, and bridge-claim coverage. Its output is sanitized
 aggregate evidence; it does not prove private-history dream quality or live
 model/user-visible lift.
 
-`dream_natural_prompt_eval.py` adds a route-level stress eval for the foreground
-side of those hypotheses. It compares ordinary topic prompts against explicit
-manual-reminder prompts, checks unrelated and over-personalizing negative
-prompts, and verifies strong dream claims require source reopen. The output is
-aggregate and sanitized; it is not a live user-behavior A/B test.
-
 `dream_live_shadow_ab.py` adds the opt-in live measurement ledger for that last
 boundary. Prompt hooks can record hash-only shadow events for baseline and
 dream arms without changing foreground recall; later analysis counts explicit

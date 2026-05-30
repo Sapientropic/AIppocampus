@@ -23,9 +23,7 @@ benchmark design details in
    [`benchmark_corpus/sharegpt_manifest.json`](../../benchmark_corpus/sharegpt_manifest.json).
 6. Need public-safe memory-pain fixture evidence:
    [`memory-pain-fixture-report.md`](memory-pain-fixture-report.md).
-7. Need dream natural-prompt route/noise evidence:
-   [`dream-natural-prompt-large-sample-2026-05-30.md`](dream-natural-prompt-large-sample-2026-05-30.md).
-8. Need explicit recall-reminder shadow A/B evidence:
+7. Need explicit recall-reminder shadow A/B evidence:
    [`dream-live-shadow-ab-2026-05-30.md`](dream-live-shadow-ab-2026-05-30.md).
 8. Need public-corpus negative-control dream shadow evidence:
    [`dream-live-shadow-benchmark-corpus-2026-05-31.md`](dream-live-shadow-benchmark-corpus-2026-05-31.md).
@@ -46,7 +44,6 @@ snapshot or dated verification ledger.
 | LongMemEval evidence | `docs/evidence/longmemeval.md` and `benchmark_corpus/longmemeval_manifest.json` | Official sources, dataset checksums, dedicated runner commands, dated retrieval-only results, and claim boundaries. |
 | Corpus setup | `benchmark_corpus/README.md` and `benchmark_corpus/sharegpt_manifest.json` | Public corpus conversion commands, ignored local outputs, and corpus-specific claim boundaries. |
 | Demo fixture report | `docs/evidence/memory-pain-fixture-report.md` | Public-safe fixture families and their narrow claim boundary. |
-| Dream natural-prompt route/noise evidence | `docs/evidence/dream-natural-prompt-large-sample-2026-05-30.md` | Dated aggregate run for manual-reminder reduction, negative prompt noise, overbroad fanout, and strong-claim source-reopen gates. |
 | Dream live shadow A/B reminder evidence | `docs/evidence/dream-live-shadow-ab-2026-05-30.md` | Dated aggregate run for explicit recall-reminder frequency, shadow assignment, nearest-prior exposure attribution, and delivered-vs-shadow claim boundaries. |
 | Dream benchmark-corpus shadow evidence | `docs/evidence/dream-live-shadow-benchmark-corpus-2026-05-31.md` | Dated public-corpus negative-control run for explicit reminder frequency and potential dream-only over-personalization activation. |
 | Question extraction axis coverage evidence | `docs/evidence/question-extraction-axis-coverage-2026-05-31.md` | Dated live no-write aggregate field-presence run for GitHub #153 and its prompt/repair/telemetry fix boundary. |

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -255,92 +254,6 @@ class DreamRealHistoryEvalTests(unittest.TestCase):
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("message_id", encoded)
         self.assertNotIn("thread_key", encoded)
-
-    def test_generated_manual_source_review_reopens_clean_source_without_public_refs(self) -> None:
-        job_rows, working_rows = fixture_rows()
-        pack = dream_eval.select_real_history_packs(job_rows=job_rows, working_memory_rows=working_rows)[0]
-        worker = dream_eval.run_pack_dream_worker(pack)
-
-        with tempfile.TemporaryDirectory() as tmp:
-            registry_dir = Path(tmp)
-            for ref in pack["source_refs"]:
-                thread_key = str(ref["thread_key"])
-                clean_dir = dream_eval.thread_store_dir(thread_key, registry_dir) / "clean-source"
-                clean_dir.mkdir(parents=True, exist_ok=True)
-                (clean_dir / "messages.jsonl").write_text(
-                    json.dumps(
-                        {
-                            "message_id": ref["message_id"],
-                            "source_line": ref["line"],
-                            "text": "continuity source refs support this selected review sample",
-                        },
-                        ensure_ascii=False,
-                    )
-                    + "\n",
-                    encoding="utf-8",
-                )
-
-            reviews = dream_eval.manual_source_review_rows_from_clean_source(
-                worker["dream_working_memory_rows"],
-                registry_dir=registry_dir,
-            )
-            payload = dream_eval.sanitized_manual_source_review_payload(reviews)
-            encoded = json.dumps(payload, ensure_ascii=False)
-
-        self.assertGreaterEqual(payload["metrics"]["reviewed_count"], 1)
-        self.assertEqual(payload["metrics"]["status_counts"]["supported"], len(reviews))
-        self.assertEqual(payload["metrics"]["source_backed_review_count"], len(reviews))
-        self.assertNotIn("source_refs", encoded)
-        self.assertNotIn("message_id", encoded)
-        self.assertNotIn("thread_key", encoded)
-        self.assertNotIn("continuity source refs support", encoded)
-
-    def test_run_eval_can_include_generated_source_review_for_selected_lift_claim(self) -> None:
-        job_rows, working_rows = fixture_rows()
-        with tempfile.TemporaryDirectory() as tmp:
-            registry_dir = Path(tmp)
-            for ref in [
-                source_ref("session:a", "msg-a", 10),
-                source_ref("session:b", "msg-b", 20),
-                source_ref("session:d", "msg-d", 40),
-            ]:
-                thread_key = str(ref["thread_key"])
-                clean_dir = dream_eval.thread_store_dir(thread_key, registry_dir) / "clean-source"
-                clean_dir.mkdir(parents=True, exist_ok=True)
-                (clean_dir / "messages.jsonl").write_text(
-                    json.dumps(
-                        {
-                            "message_id": ref["message_id"],
-                            "source_line": ref["line"],
-                            "text": "continuity survives source refs and supports reflection review",
-                        },
-                        ensure_ascii=False,
-                    )
-                    + "\n",
-                    encoding="utf-8",
-                )
-            review_output = registry_dir / "dream-review.json"
-            payload = dream_eval.run_dream_real_history_eval(
-                job_rows=job_rows,
-                working_memory_rows=working_rows,
-                registry_dir=registry_dir,
-                generate_manual_source_review=True,
-                source_review_output=review_output,
-            )
-            review_written = review_output.exists()
-
-        self.assertTrue(review_written)
-        self.assertIn("manual_source_review_support_exists", payload["can_claim"])
-        self.assertIn("selected_prompt_user_visible_lift_measured", payload["can_claim"])
-        self.assertNotIn("manual_source_review_support", payload["cannot_claim"])
-        self.assertGreater(
-            payload["metrics"]["user_visible"]["metrics"]["recall_lift"]["source_thread_coverage_delta"],
-            0,
-        )
-        self.assertGreater(
-            payload["metrics"]["user_visible"]["metrics"]["recall_lift"]["bridge_claim_coverage_delta"],
-            0,
-        )
 
     def test_eval_exposes_deepseek_cache_contract_for_future_live_worker(self) -> None:
         job_rows, working_rows = fixture_rows()

@@ -306,15 +306,9 @@ above. The canonical command details live in
   sanitized visibility-ablation harness that reports recall, reflection,
   unsupported-claim suppression, source-support correctness, manual
   source-review coverage, and cost/cache behavior separately from structural
-  lift. The 2026-05-30 #131 evidence run generated sanitized source-review
-  sidecars over 4 selected packs and 8 dream hypotheses: 8/8 reviewed rows were
-  source-backed and supported after clean-source reopen, selected-prompt
-  recall source-thread coverage improved by 2.5, bridge-claim coverage by 1.0,
-  reflection-ready visible rows by 32, unsupported strong claims were
-  suppressed for 4/4 prompts, and visible source-support correctness was 8/8.
-  It still does not claim live provider amplification quality, predictive
-  validity, active-imagination usefulness, general/private real-history dream
-  quality, real user behavior lift, or any unadjudicated dream influence on
+  lift. It still does not claim live provider amplification quality, predictive
+  validity, active-imagination usefulness, private real-history dream quality,
+  real user-visible reflection value, or any unadjudicated dream influence on
   recall/reflection space.
 - #69 adds the first deterministic reflection-space topology/feedback MVP. It
   renders Journey/Waypoint/current-frontier topology data with
