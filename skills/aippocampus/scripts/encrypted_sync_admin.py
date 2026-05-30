@@ -111,6 +111,11 @@ def build_parser() -> argparse.ArgumentParser:
     key_trust.add_argument("--registry-dir", default=None)
     key_trust.add_argument("--recipient", required=True)
     key_trust.add_argument("--device-name", default=None)
+    key_trust.add_argument(
+        "--recovery",
+        action="store_true",
+        help="Trust this public recipient as an offline recovery identity.",
+    )
     add_json_flag(key_trust)
 
     key_revoke = key_subcommands.add_parser("revoke")
@@ -190,6 +195,7 @@ def main() -> int:
                     registry_dir,
                     recipient=args.recipient,
                     device_name=args.device_name,
+                    role="recovery" if args.recovery else "device",
                 )
                 return emit_result(result, json_output=args.json_output)
             result = encrypted_sync_keys.revoke_recipient(

@@ -185,6 +185,13 @@ V1 should support no-recovery plus optional offline recovery recipient first.
 Losing all trusted device identities and recovery identities means losing access
 to encrypted sync data.
 
+The current CLI models this by storing trusted recipients with a role:
+`device` for normal enrolled devices and `recovery` for an offline recovery
+recipient. Both roles are public recipients only. The private device identity is
+currently a local registry-state file with owner-only permissions as a
+best-effort fallback; OS credential-store integration remains a later hardening
+step and must not be implied by release claims until implemented and tested.
+
 ## Sync Format
 
 V1 should add an encrypted sync schema alongside the existing plaintext schema:
@@ -489,6 +496,13 @@ The first recovery path should be plain and strict:
 If the user has no remaining trusted device identity and no offline recovery
 recipient, encrypted sync data is unrecoverable. `wrong_key` should say that the
 client lacks a matching identity; it should not describe the bundle as corrupt.
+
+Revocation is a future-access boundary, not retroactive erasure. After
+`key revoke`, status should carry `reencryption_required` until a fresh
+encrypted bundle is pushed for the remaining trusted recipients. Commands must
+reject future pushes that explicitly include a revoked recipient, but older
+ciphertexts remain readable by any device that already had the matching private
+identity.
 
 ## Raw Rollout Policy
 

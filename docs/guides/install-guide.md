@@ -241,6 +241,7 @@ encrypted sync state and store only public trusted recipients for future pushes:
 python ./skills/aippocampus/scripts/encrypted_sync_admin.py key init --registry-dir <registry> --device-name <name> --json
 python ./skills/aippocampus/scripts/encrypted_sync_admin.py key recipient --registry-dir <registry>
 python ./skills/aippocampus/scripts/encrypted_sync_admin.py key trust --registry-dir <registry> --recipient <second-device-recipient> --device-name <name> --json
+python ./skills/aippocampus/scripts/encrypted_sync_admin.py key trust --registry-dir <registry> --recipient <offline-recovery-recipient> --device-name paper-recovery-kit --recovery --json
 python ./skills/aippocampus/scripts/encrypted_sync_admin.py key list --registry-dir <registry> --json
 python ./skills/aippocampus/scripts/encrypted_sync_admin.py key revoke --registry-dir <registry> --recipient <old-recipient> --dry-run --json
 ```
@@ -249,6 +250,18 @@ After `key init` or `key trust`, encrypted local-folder pushes can use the
 trusted-recipient list without repeating `--recipient`. `key recipient` prints
 only the public recipient; it must never be used to exchange or publish the
 `AGE-SECRET-KEY...` identity file.
+
+Recovery is explicit. `key trust --recovery` stores only the public recovery
+recipient and includes it in future encrypted pushes; the matching private
+recovery identity must stay offline and must not be copied into a sync folder,
+object prefix, issue, or demo bundle. If all trusted device identities and all
+recovery identities are lost, encrypted sync data is unrecoverable.
+
+`key revoke --dry-run` reports the re-encryption plan. A revoked recipient is
+removed from future trusted-recipient pushes only after a fresh encrypted bundle
+is pushed for the remaining recipients and repaired or pulled with a remaining
+identity. Older encrypted bundles should be treated as still decryptable by the
+revoked identity.
 
 To migrate an existing plaintext sync folder, first inventory it, write a fresh
 encrypted target, run encrypted repair or pull, then explicitly clean up the old

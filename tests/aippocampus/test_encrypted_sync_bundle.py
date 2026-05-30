@@ -311,6 +311,96 @@ raise SystemExit(0)
         self.assertEqual(recipient_proc.returncode, 0, recipient_proc.stderr)
         self.assertTrue(recipient_proc.stdout.strip().startswith("age1devicea"))
 
+    def test_recovery_recipient_and_revocation_reencrypt_boundary(self) -> None:
+        init = encrypted_sync_keys.init_device_key(
+            self.registry,
+            device_name="device-a",
+            age_keygen_bin=self.fake_age_keygen,
+        )
+        device_b = "age1deviceb00000000000000000000000000000000000000000000000"
+        recovery_recipient = "age1recovery00000000000000000000000000000000000000000000"
+        trusted = encrypted_sync_keys.trust_recipient(
+            self.registry,
+            recipient=device_b,
+            device_name="device-b",
+        )
+        recovery = encrypted_sync_keys.trust_recipient(
+            self.registry,
+            recipient=recovery_recipient,
+            device_name="paper-recovery-kit",
+            role=encrypted_sync_keys.RECIPIENT_ROLE_RECOVERY,
+        )
+        listing = encrypted_sync_keys.list_device_keys(self.registry)
+
+        self.assertTrue(init["ok"], init)
+        self.assertTrue(trusted["ok"], trusted)
+        self.assertTrue(recovery["ok"], recovery)
+        self.assertEqual(recovery["role"], "recovery")
+        self.assertTrue(listing["recovery_configured"])
+        self.assertEqual(listing["recovery_state"]["recovery_recipient_count"], 1)
+        self.assertIsNone(listing["reencryption_required"])
+
+        first_push = encrypted_sync_bundle.push_encrypted_sync_bundle(
+            self.registry,
+            self.sync_dir,
+            age_bin=self.fake_age,
+        )
+        first_repair = encrypted_sync_bundle.repair_encrypted_sync_bundle(
+            self.sync_dir,
+            identity_files=[self.identity],
+            age_bin=self.fake_age,
+        )
+        self.assertTrue(first_push["ok"], first_push)
+        self.assertEqual(first_repair["inner_manifest"]["recipient_count"], 3)
+
+        revoked = encrypted_sync_keys.revoke_recipient(self.registry, device_b, confirm=True)
+        pending = encrypted_sync_keys.list_device_keys(self.registry)
+        self.assertTrue(revoked["ok"], revoked)
+        self.assertTrue(revoked["reencryption_required"]["old_ciphertexts_remain_decryptable"])
+        self.assertEqual(
+            revoked["reencryption_required"]["remaining_recovery_recipient_count"],
+            1,
+        )
+        self.assertEqual(pending["reencryption_required"]["status"], "pending_after_revoke")
+
+        revoked_push = encrypted_sync_bundle.push_encrypted_sync_bundle(
+            self.registry,
+            self.root / "revoked-sync",
+            recipients=[device_b],
+            age_bin=self.fake_age,
+        )
+        self.assertFalse(revoked_push["ok"])
+        self.assertEqual(revoked_push["issues"][0]["code"], "revoked_recipient")
+
+        partial_push = encrypted_sync_bundle.push_encrypted_sync_bundle(
+            self.registry,
+            self.root / "partial-sync",
+            recipients=[init["recipient"]],
+            age_bin=self.fake_age,
+        )
+        self.assertTrue(partial_push["ok"], partial_push)
+        self.assertFalse(partial_push["reencryption"]["cleared"])
+        self.assertEqual(
+            partial_push["reencryption"]["reason"],
+            "remaining_trusted_recipients_missing",
+        )
+
+        fresh_push = encrypted_sync_bundle.push_encrypted_sync_bundle(
+            self.registry,
+            self.sync_dir,
+            age_bin=self.fake_age,
+        )
+        fresh_repair = encrypted_sync_bundle.repair_encrypted_sync_bundle(
+            self.sync_dir,
+            identity_files=[self.identity],
+            age_bin=self.fake_age,
+        )
+        cleared = encrypted_sync_keys.list_device_keys(self.registry)
+        self.assertTrue(fresh_push["ok"], fresh_push)
+        self.assertTrue(fresh_push["reencryption"]["cleared"])
+        self.assertIsNone(cleared["reencryption_required"])
+        self.assertEqual(fresh_repair["inner_manifest"]["recipient_count"], 2)
+
     def test_encrypted_local_push_status_repair_pull_round_trip(self) -> None:
         push = encrypted_sync_bundle.push_encrypted_sync_bundle(
             self.registry,
