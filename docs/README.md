@@ -60,6 +60,7 @@ boundaries. Keep raw JSON reports and private case packs out of git.
 - [`benchmark-evidence-map.md`](evidence/benchmark-evidence-map.md) - first-stop map for benchmark runners, smoke evidence surfaces, corpus records, and dated-result owners.
 - [`stage-0-5-readiness.md`](evidence/stage-0-5-readiness.md) - current evidence matrix for roadmap stages 0 through 5; it is a status snapshot, not the canonical roadmap.
 - [`public-readiness-verification.md`](evidence/public-readiness-verification.md) - dated verification ledger. It preserves command evidence but is not the canonical status page.
+- [`longmemeval.md`](evidence/longmemeval.md) - LongMemEval sources, dataset checksums, dedicated runner commands, retrieval-only results, and claim boundaries.
 - [`memory-decision-benchmark-plan.md`](evidence/memory-decision-benchmark-plan.md) - benchmark design for quiet-by-default recall decisions, source fidelity, and payload privacy.
 - [`memory-pain-fixture-report.md`](evidence/memory-pain-fixture-report.md) - public-safe demo/report for memory-system pain fixtures and explicit claim boundaries.
 

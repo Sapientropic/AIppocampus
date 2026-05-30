@@ -24,6 +24,11 @@ Supported converter sources:
 `sharegpt_manifest.json` records the current clean-source dataset sizes and the
 intended benchmark use for the locally generated ShareGPT outputs.
 
+`longmemeval_manifest.json` records the official LongMemEval cleaned V1 split
+files, Hugging Face LFS content hashes, runner entrypoint, and claim boundary.
+The corresponding evidence page is
+[`docs/evidence/longmemeval.md`](../docs/evidence/longmemeval.md).
+
 ## Usage
 
 Run a local smoke conversion:
@@ -88,7 +93,6 @@ Run the optional standard retrieval-QA Track B adapter:
 
 ```powershell
 python benchmarks\aippocampus\benchmark_source_evidence_retrieval.py --include-standard-public --standard-dataset locomo --standard-questions 100 --standard-min-questions 20 --standard-top-k 10 --output benchmark_corpus\reports\locomo-track-b-standard-100.json
-python benchmarks\aippocampus\benchmark_source_evidence_retrieval.py --include-standard-public --standard-dataset longmemeval-v1-oracle --standard-questions 50 --standard-min-questions 20 --standard-top-k 10 --output benchmark_corpus\reports\longmemeval-oracle-track-b-standard-50.json
 ```
 
 The standard adapter reports retrieval-only session/source R@K and MRR. LoCoMo
@@ -100,6 +104,15 @@ AIppocampus source payloads normally carry a small bounded neighboring context
 window. It does not score answer generation or Track A gate decisions.
 LongMemEval V2 currently lacks explicit source-evidence refs in this adapter
 and is reported as skipped rather than assigned a fake R@K.
+
+For published LongMemEval runs, prefer the dedicated runner so the split,
+checksum, report shape, and evidence page stay independent from the broader
+Track B adapter:
+
+```powershell
+python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-oracle --download --questions 50 --min-questions 20 --top-k 10 --output benchmark_corpus\reports\longmemeval-v1-oracle-retrieval-50.json
+python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 50 --min-questions 20 --top-k 10 --output benchmark_corpus\reports\longmemeval-v1-small-retrieval-50.json
+```
 
 Run the optional semantic second-stage line reranker over the same source
 boundary:
