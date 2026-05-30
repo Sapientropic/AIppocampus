@@ -723,9 +723,17 @@ Negative examples are embedded in the prompt:
   hash matching.
 - Assign `evidence_strength` based on how explicitly the user stated the
   question versus how much the model inferred it.
-- Assign `intent_orientation`, `what_features`, `where_context`,
-  `phase_context`, and `collaboration_context` only when source evidence is
-  present; otherwise omit or use low confidence.
+- Assign `intent_orientation`, `what_features`, `where_context`, and
+  `phase_context` whenever source evidence supports them; omit rather than
+  invent only when the axis is genuinely unavailable.
+- Treat `collaboration_context` as optional and source-backed. It should not be
+  filled from generic assumptions about the current agent.
+- Live/no-write runs expose aggregate `question_extraction_field_presence`
+  diagnostics so missing-axis failures are visible without leaking raw source
+  text.
+- They also expose validation-retention diagnostics by accepted final versus
+  all final attempts, so a model output that is sourceful but dropped by
+  confidence/ref/summary gates is not misread as model semantic failure.
 
 **Frontier extraction in Phase 1:** The same job may also emit
 `finding_kind="frontier_marker"` when the source clearly shows an unresolved

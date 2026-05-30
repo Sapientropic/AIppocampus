@@ -13,6 +13,7 @@ import json
 from typing import Any
 
 from aippocampuslib import sanitize_external_model_payload
+from subconscious_question_diagnostics import QUESTION_EXTRACTION_FIELD_CONTRACT
 
 PROMPT_VERSION = "aippocampus-subconscious-jobs-v2"
 
@@ -31,9 +32,11 @@ JOB_SPECS: dict[str, dict[str, Any]] = {
         "notes": (
             "Use question_candidate for a real question the user was pursuing, not every interrogative sentence. "
             "Use frontier_marker only when the source explicitly shows a stopping point, unresolved boundary, missing evidence, "
-            "scope boundary, or dissatisfaction. Include intent_orientation, what_features, where_context, phase_context, "
-            "and collaboration_context when available. Keep question_text short and normalized; do not paste a long "
-            "monologue into the question field. Use question_short as the stable label when the source wording is long."
+            "scope boundary, or dissatisfaction. For question_candidate, include intent_orientation, what_features, "
+            "where_context, and phase_context whenever the source supports them; omit rather than invent only when the "
+            "axis is genuinely unavailable. Include collaboration_context only when source-backed. Keep question_text "
+            "short and normalized; do not paste a long monologue into the question field. Use question_short as the "
+            "stable label when the source wording is long."
         ),
     },
     "question_tracking": {
@@ -235,7 +238,7 @@ def jobs_initial_payload(
                     "confidence": 0.0,
                     "source_refs": [{"ref": "t0"}],
                     "concepts": ["optional short concepts"],
-                    "recommendation": "optional next action",
+                    "recommendation": "job-specific next action; for question_extraction expected when a safe source-backed next consumer or follow-up exists",
                     "src": "required for concept_edges only",
                     "dst": "required for concept_edges only",
                     "edge_type": "required for concept_edges only",
@@ -253,11 +256,11 @@ def jobs_initial_payload(
                         '"reason":"short source-grounded reason", "confidence":0.0}'
                     ),
                     "question_text": "required for question_candidate only; exact or lightly normalized user question",
-                    "question_short": "optional for question_candidate; stable short label",
-                    "intent_orientation": "optional for question_candidate; angle of approach such as debugging, architecture, philosophy, writing",
-                    "what_features": "optional for question_candidate; content features independent of where it appeared",
-                    "where_context": "optional for question_candidate; thread/project/source context",
-                    "phase_context": "optional for question_candidate; work stage such as new-project start, post-compaction, pre-closeout",
+                    "question_short": "expected for question_candidate; stable short label",
+                    "intent_orientation": "expected for question_candidate unless source unavailable; angle of approach such as debugging, architecture, philosophy, writing",
+                    "what_features": "expected for question_candidate unless source unavailable; content features independent of where it appeared",
+                    "where_context": "expected for question_candidate unless source unavailable; thread/project/source context",
+                    "phase_context": "expected for question_candidate unless source unavailable; work stage such as new-project start, post-compaction, pre-closeout",
                     "collaboration_context": "optional for question_candidate; agent/profile/collaborator context when source-backed",
                     "frontier_type": "required for frontier_marker only: unresolved|blocked|deferred|unsatisfied|needs_external_evidence|scope_boundary",
                     "boundary_reason": "required for frontier_marker only; why this is a stopping point, not merely a question",
@@ -287,5 +290,7 @@ def jobs_initial_payload(
         "initial_turns": turns,
         "objective": objective or spec["purpose"],
     }
+    if job == "question_extraction":
+        payload["job_field_contract"] = QUESTION_EXTRACTION_FIELD_CONTRACT
     payload = sanitize_external_model_payload(payload)
     return json.dumps(payload, ensure_ascii=False, indent=2)

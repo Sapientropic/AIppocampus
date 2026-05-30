@@ -29,6 +29,8 @@ benchmark design details in
    [`dream-live-shadow-ab-2026-05-30.md`](dream-live-shadow-ab-2026-05-30.md).
 8. Need public-corpus negative-control dream shadow evidence:
    [`dream-live-shadow-benchmark-corpus-2026-05-31.md`](dream-live-shadow-benchmark-corpus-2026-05-31.md).
+9. Need live question-extraction axis-coverage evidence for GitHub #153:
+   [`question-extraction-axis-coverage-2026-05-31.md`](question-extraction-axis-coverage-2026-05-31.md).
 
 Research notes may include calibration context, but they are not claim ledgers.
 Use them for background only until a result is linked back to the readiness
@@ -47,6 +49,7 @@ snapshot or dated verification ledger.
 | Dream natural-prompt route/noise evidence | `docs/evidence/dream-natural-prompt-large-sample-2026-05-30.md` | Dated aggregate run for manual-reminder reduction, negative prompt noise, overbroad fanout, and strong-claim source-reopen gates. |
 | Dream live shadow A/B reminder evidence | `docs/evidence/dream-live-shadow-ab-2026-05-30.md` | Dated aggregate run for explicit recall-reminder frequency, shadow assignment, nearest-prior exposure attribution, and delivered-vs-shadow claim boundaries. |
 | Dream benchmark-corpus shadow evidence | `docs/evidence/dream-live-shadow-benchmark-corpus-2026-05-31.md` | Dated public-corpus negative-control run for explicit reminder frequency and potential dream-only over-personalization activation. |
+| Question extraction axis coverage evidence | `docs/evidence/question-extraction-axis-coverage-2026-05-31.md` | Dated live no-write aggregate field-presence run for GitHub #153 and its prompt/repair/telemetry fix boundary. |
 | Raw / generated artifacts | `.tmp/` or `benchmark_corpus/reports/` | Local JSON outputs and case packs. Keep them gitignored unless a small public subset is deliberately promoted. |
 
 ## Benchmark Runners

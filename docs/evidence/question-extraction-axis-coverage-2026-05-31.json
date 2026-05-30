@@ -1,0 +1,130 @@
+{
+  "date": "2026-05-31",
+  "issue": 153,
+  "surface": "subconscious_jobs question_extraction live no-write",
+  "route": "fast",
+  "model_family": "deepseek-v4-flash",
+  "temperature": 0.2,
+  "shape": {
+    "max_turns": 80,
+    "max_steps": 4,
+    "min_tool_steps": 1,
+    "samples_per_job": 1,
+    "concurrency": 1,
+    "no_write": true
+  },
+  "privacy": "Aggregate field-presence counts only. Raw prompts, source text, local paths, session ids, and credentials are intentionally omitted.",
+  "baseline_before_patch": {
+    "head": "16c1f90",
+    "tool_steps": 1,
+    "final_attempts": 2,
+    "raw_final_attempts": {
+      "finding_count": 28,
+      "question_candidate_count": 18,
+      "frontier_marker_count": 10,
+      "question_candidate_fields": {
+        "question_text": "18/18",
+        "question_short": "0/18",
+        "intent_orientation": "18/18",
+        "what_features": "0/18",
+        "where_context": "0/18",
+        "phase_context": "18/18",
+        "collaboration_context": "2/18"
+      },
+      "recommendation": "0/28"
+    },
+    "validated": {
+      "finding_count": 14,
+      "question_candidate_count": 9,
+      "frontier_marker_count": 5,
+      "question_candidate_fields": {
+        "question_text": "9/9",
+        "question_short": "9/9",
+        "intent_orientation": "9/9",
+        "what_features": "0/9",
+        "where_context": "0/9",
+        "phase_context": "9/9",
+        "collaboration_context": "1/9"
+      },
+      "complete_core_axes": "0/9",
+      "recommendation": "0/14"
+    }
+  },
+  "after_patch": {
+    "tool_steps": 1,
+    "final_attempts": 2,
+    "raw_final_attempts": {
+      "question_candidate_count": 12,
+      "question_candidate_fields": {
+        "what_features": "12/12",
+        "where_context": "12/12",
+        "phase_context": "12/12"
+      }
+    },
+    "validated": {
+      "finding_count": 8,
+      "question_candidate_count": 6,
+      "frontier_marker_count": 2,
+      "question_candidate_fields": {
+        "question_text": "6/6",
+        "question_short": "6/6",
+        "intent_orientation": "6/6",
+        "what_features": "6/6",
+        "where_context": "6/6",
+        "phase_context": "6/6",
+        "collaboration_context": "0/6"
+      },
+      "complete_core_axes": "6/6",
+      "missing_core_axis_rate": 0.0,
+      "recommendation": "6/8"
+    },
+    "warnings": []
+  },
+  "after_refactor_verification": {
+    "tool_steps": 1,
+    "final_attempts": 2,
+    "validated": {
+      "finding_count": 12,
+      "question_candidate_count": 7,
+      "frontier_marker_count": 5,
+      "question_candidate_fields": {
+        "what_features": "7/7",
+        "where_context": "7/7",
+        "phase_context": "7/7"
+      },
+      "complete_core_axes": "7/7",
+      "missing_core_axis_rate": 0.0,
+      "recommendation_aggregate_legacy": "7/12",
+      "recommendation_note": "Mixed question_candidate + frontier_marker denominator; superseded by per-kind diagnostics below."
+    },
+    "warnings": []
+  },
+  "after_validation_audit_fix": {
+    "tool_steps": 1,
+    "final_attempts": 2,
+    "validated": {
+      "finding_count": 9,
+      "question_candidate_count": 7,
+      "frontier_marker_count": 2,
+      "question_candidate_core_axes": "7/7",
+      "question_candidate_recommendation": "7/7",
+      "frontier_context": "2/2",
+      "frontier_marker_recommendation": "2/2"
+    },
+    "accepted_final_to_validated_retention": {
+      "question_candidate": "7/7",
+      "frontier_marker": "2/2"
+    },
+    "all_final_attempts_to_validated_retention": {
+      "question_candidate": "7/14",
+      "frontier_marker": "2/4",
+      "interpretation": "All-attempts includes earlier/duplicate model finals and is diagnostic history, not final accepted quality."
+    },
+    "accepted_final_required_field_presence": {
+      "frontier_marker_confidence_rate": 1.0
+    },
+    "accepted_final_validation_rejections": {},
+    "warnings": []
+  },
+  "claim_boundary": "Single live no-write regression check. It verifies the issue reproduction and the immediate prompt/repair/telemetry fix on one private registry slice; it is not a broad route benchmark."
+}

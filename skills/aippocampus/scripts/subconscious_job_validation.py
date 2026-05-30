@@ -201,6 +201,25 @@ def compact_string_list(values: Any, *, limit: int = 12, chars: int = 90) -> lis
     return list(dict.fromkeys(out))[:limit]
 
 
+def where_context_from_source_refs(refs: list[dict[str, Any]] | None) -> list[str]:
+    """Derive only non-semantic location labels that already exist in refs.
+
+    Keep semantic axes such as what_features and phase_context model/source
+    driven. This fallback only prevents an otherwise useful question from losing
+    its auditable project/source location when the model omits where_context.
+    """
+    labels: list[str] = []
+    for ref in refs or []:
+        if not isinstance(ref, dict):
+            continue
+        labels.extend(
+            str(value or "")
+            for value in (ref.get("project_label"), ref.get("title"))
+            if str(value or "").strip()
+        )
+    return compact_string_list(labels, limit=4, chars=90)
+
+
 def validate_cognitive_map_fields(
     item: dict[str, Any], refs: list[dict[str, Any]]
 ) -> dict[str, Any] | None:
@@ -249,7 +268,9 @@ def short_question_fallback(item: dict[str, Any]) -> str:
     return ""
 
 
-def validate_question_fields(item: dict[str, Any]) -> dict[str, Any] | None:
+def validate_question_fields(
+    item: dict[str, Any], refs: list[dict[str, Any]] | None = None
+) -> dict[str, Any] | None:
     kind = str(item.get("kind") or "").strip()
     if kind not in ALLOWED_QUESTION_FINDING_KINDS:
         kind = "question_candidate"
@@ -265,6 +286,9 @@ def validate_question_fields(item: dict[str, Any]) -> dict[str, Any] | None:
             question_text_compressed = True
         if not question_text:
             return None
+        where_context = compact_string_list(item.get("where_context"), limit=8)
+        if not where_context:
+            where_context = where_context_from_source_refs(refs)
         return {
             "kind": kind,
             "question_text": question_text,
@@ -276,7 +300,7 @@ def validate_question_fields(item: dict[str, Any]) -> dict[str, Any] | None:
             "what_features": compact_string_list(
                 item.get("what_features") or item.get("concepts"), limit=10
             ),
-            "where_context": compact_string_list(item.get("where_context"), limit=8),
+            "where_context": where_context,
             "phase_context": compact_text(str(item.get("phase_context") or ""), 80),
             "collaboration_context": compact_string_list(
                 item.get("collaboration_context"), limit=8
@@ -291,6 +315,9 @@ def validate_question_fields(item: dict[str, Any]) -> dict[str, Any] | None:
     )
     if not boundary_reason:
         return None
+    where_context = compact_string_list(item.get("where_context"), limit=8)
+    if not where_context:
+        where_context = where_context_from_source_refs(refs)
     return {
         "kind": kind,
         "frontier_type": frontier_type,
@@ -299,7 +326,7 @@ def validate_question_fields(item: dict[str, Any]) -> dict[str, Any] | None:
             str(item.get("linked_question_short") or item.get("question_short") or ""), 90
         ),
         "intent_orientation": compact_text(str(item.get("intent_orientation") or ""), 80),
-        "where_context": compact_string_list(item.get("where_context"), limit=8),
+        "where_context": where_context,
         "phase_context": compact_text(str(item.get("phase_context") or ""), 80),
         "collaboration_context": compact_string_list(item.get("collaboration_context"), limit=8),
     }
@@ -477,7 +504,7 @@ def validate_findings(
                 }
             )
         if job == "question_extraction":
-            question_fields = validate_question_fields(item)
+            question_fields = validate_question_fields(item, refs)
             if not question_fields:
                 continue
             finding.update(question_fields)

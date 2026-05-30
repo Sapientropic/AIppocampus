@@ -117,11 +117,14 @@ class SubconsciousJobsTests(unittest.TestCase):
 
     def test_job_validation_is_separate_from_runner(self) -> None:
         validation = importlib.import_module("subconscious_job_validation")
+        validation_audit = importlib.import_module("subconscious_validation_audit")
         runner_source = (SCRIPTS / "subconscious_jobs.py").read_text(encoding="utf-8")
 
         self.assertIs(jobs.validate_findings, validation.validate_findings)
+        self.assertIs(jobs.validation_audit, validation_audit.validation_audit)
         self.assertEqual(jobs.QUESTION_TEXT_MAX_CHARS, validation.QUESTION_TEXT_MAX_CHARS)
         self.assertNotIn("def validate_findings", runner_source)
+        self.assertNotIn("def validation_audit", runner_source)
         self.assertNotIn("def estimate_finding_quality", runner_source)
 
     def test_jobs_initial_payload_keeps_static_contract_before_turns_and_variable_objective_after_turns(
@@ -194,6 +197,61 @@ class SubconsciousJobsTests(unittest.TestCase):
         self.assertEqual(len(findings), 1)
         self.assertEqual(findings[0]["source_refs"][0]["ref"], "t0")
         self.assertEqual(findings[0]["concepts"], ["T-Sense", "Go runtime"])
+
+    def test_validation_audit_reports_drop_reasons_without_raw_text(self) -> None:
+        parsed = {
+            "findings": [
+                {
+                    "kind": "project_drift",
+                    "title": "Missing confidence",
+                    "summary": "Would be useful but has no confidence.",
+                    "source_refs": ["t0"],
+                },
+                {
+                    "kind": "project_drift",
+                    "title": "Missing ref",
+                    "summary": "Would be useful but points nowhere.",
+                    "confidence": 0.86,
+                    "source_refs": ["missing"],
+                },
+                {
+                    "kind": "project_drift",
+                    "title": "Missing summary",
+                    "confidence": 0.86,
+                    "source_refs": ["t0"],
+                },
+                {
+                    "kind": "project_drift",
+                    "title": "Accepted",
+                    "summary": "A source-backed project drift finding survives.",
+                    "confidence": 0.86,
+                    "source_refs": ["t0"],
+                },
+            ]
+        }
+        source_bank = {
+            "t0": {
+                "turn_ref": "t0",
+                "thread_key": "session:one",
+                "title": "T-Sense",
+                "turn_index": 40,
+                "assistant_line": 1202,
+            }
+        }
+
+        audit = jobs.validation_audit("project_drift", parsed, source_bank)
+
+        self.assertEqual(audit["raw_finding_count"], 4)
+        self.assertEqual(audit["accepted_count"], 1)
+        self.assertEqual(
+            audit["rejection_reasons"],
+            {
+                "missing_or_low_confidence": 1,
+                "missing_or_unresolved_source_refs": 1,
+                "missing_summary": 1,
+            },
+        )
+        self.assertNotIn("Would be useful", json.dumps(audit, ensure_ascii=False))
 
     def test_cognitive_map_job_preserves_route_fields(self) -> None:
         parsed = {
@@ -298,6 +356,443 @@ class SubconsciousJobsTests(unittest.TestCase):
             ["personal_reflection", "idea_seed", "open_question"],
         )
         self.assertNotIn("relationship_continuity", findings[1]["scope_labels"])
+        self.assertEqual(findings[1]["where_context"], ["AIppocampus"])
+
+    def test_question_extraction_payload_marks_axes_expected(self) -> None:
+        payload = json.loads(
+            jobs.jobs_initial_payload(
+                "question_extraction",
+                "extract questions",
+                [],
+                max_steps=4,
+                min_tool_steps=1,
+            )
+        )
+
+        contract = payload["job_field_contract"]["question_candidate"]
+        self.assertIn("what_features", contract["expected_unless_unavailable"])
+        self.assertIn("where_context", contract["expected_unless_unavailable"])
+        self.assertIn("phase_context", contract["expected_unless_unavailable"])
+        self.assertIn("generic filler", payload["job_field_contract"]["quality_gate"])
+        frontier_contract = payload["job_field_contract"]["frontier_marker"]
+        self.assertIn("recommendation", frontier_contract["expected_unless_unavailable"])
+        schema = payload["final_schema"]["findings"][0]
+        self.assertIn("expected", schema["what_features"])
+        self.assertIn("expected", schema["where_context"])
+
+    def test_question_extraction_diagnostics_split_frontier_recommendations(self) -> None:
+        diagnostics_module = importlib.import_module("subconscious_question_diagnostics")
+        findings = [
+            {
+                "kind": "question_candidate",
+                "question_text": "How should question extraction expose frontiers?",
+                "question_short": "frontier recommendations",
+                "intent_orientation": "architecture",
+                "what_features": ["frontier markers"],
+                "where_context": ["AIppocampus"],
+                "phase_context": "source_review",
+                "recommendation": "Feed question_tracking.",
+            },
+            {
+                "kind": "frontier_marker",
+                "frontier_type": "blocked",
+                "where_context": ["AIppocampus"],
+                "phase_context": "source_review",
+            },
+            {
+                "kind": "frontier_marker",
+                "frontier_type": "needs_external_evidence",
+                "where_context": ["AIppocampus"],
+                "phase_context": "source_review",
+            },
+        ]
+
+        diagnostics = diagnostics_module.question_extraction_quality_diagnostics(
+            [{"action": "final", "findings": findings}],
+            findings,
+        )
+        presence = diagnostics["question_extraction_field_presence"]["validated"]
+
+        self.assertEqual(presence["recommendation"]["count"], 1)
+        self.assertEqual(
+            presence["recommendation_by_kind"]["question_candidate"],
+            {"count": 1, "rate": 1.0},
+        )
+        self.assertEqual(
+            presence["recommendation_by_kind"]["frontier_marker"],
+            {"count": 0, "rate": 0.0},
+        )
+        self.assertIn(
+            "question_extraction_missing_frontier_recommendations",
+            [warning["code"] for warning in diagnostics["warnings"]],
+        )
+        self.assertTrue(diagnostics_module.should_request_question_axis_repair(diagnostics))
+
+    def test_question_extraction_repairs_raw_frontiers_dropped_by_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            timeline_path = root / "project_timeline.json"
+            timeline_path.write_text(
+                json.dumps(
+                    {
+                        "projects": {
+                            "project:ai": {
+                                "project_label": "AIppocampus",
+                                "latest_turns": [
+                                    {
+                                        "thread_key": "session:frontier",
+                                        "title": "Frontier map",
+                                        "project_label": "AIppocampus",
+                                        "turn_index": 1,
+                                        "assistant_line": 10,
+                                        "user": "We need external evidence before claiming this is solved.",
+                                        "assistant": "Treat it as a frontier marker.",
+                                    }
+                                ],
+                            }
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            registry_path = root / "threads.json"
+            registry_path.write_text(json.dumps({"threads": []}), encoding="utf-8")
+            call_count = 0
+
+            def frontier(index: int, *, with_confidence: bool) -> dict[str, Any]:
+                row: dict[str, Any] = {
+                    "kind": "frontier_marker",
+                    "title": f"External evidence frontier {index}",
+                    "summary": "The user says external evidence is needed before a claim is solved.",
+                    "source_refs": ["t0"],
+                    "frontier_type": "needs_external_evidence",
+                    "boundary_reason": "The source requires external evidence before closing the claim.",
+                    "where_context": ["AIppocampus"],
+                    "phase_context": "source_review",
+                    "recommendation": "Keep as frontier until source review or external evidence is available.",
+                }
+                if with_confidence:
+                    row["confidence"] = 0.86
+                return row
+
+            def fake_chat(
+                messages: list[dict[str, str]],
+                api_key: str,
+                model: str,
+                base_url: str,
+                max_tokens: int | None,
+                timeout: int,
+                temperature: float,
+            ) -> dict[str, Any]:
+                nonlocal call_count
+                del messages, api_key, model, base_url, max_tokens, timeout, temperature
+                call_count += 1
+                content = {
+                    "action": "final",
+                    "findings": [
+                        frontier(index, with_confidence=call_count >= 2)
+                        for index in range(2)
+                    ],
+                }
+                return {
+                    "choices": [{"message": {"content": json.dumps(content, ensure_ascii=False)}}],
+                    "usage": {"total_tokens": 1},
+                }
+
+            result = jobs.run_jobs(
+                jobs=["question_extraction"],
+                registry_path=registry_path,
+                timeline_path=timeline_path,
+                concept_graph_path=root / "missing.sqlite",
+                jobs_output_path=root / "subconscious_jobs.jsonl",
+                edges_output_path=root / "subconscious_edges.jsonl",
+                project="AIppocampus",
+                objective="extract external evidence frontiers",
+                max_turns=4,
+                max_steps=3,
+                min_tool_steps=0,
+                model="deepseek-v4-flash",
+                base_url="https://example.invalid",
+                api_key="test",
+                max_tokens=None,
+                timeout=1,
+                temperature=0.2,
+                concurrency=1,
+                samples_per_job=1,
+                chat_fn=fake_chat,
+                no_write=True,
+            )
+
+        job = result["jobs"][0]
+        retention = job["quality_diagnostics"]["accepted_final_to_validated_retention"][
+            "frontier_marker"
+        ]
+        required_presence = job["quality_diagnostics"]["raw_required_field_presence"]
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(call_count, 2)
+        self.assertEqual(job["finding_count"], 2)
+        self.assertEqual(retention["validated_count"], 2)
+        self.assertEqual(required_presence["frontier_marker"]["confidence"]["rate"], 0.5)
+        self.assertEqual(
+            job["validation_diagnostics"]["final_attempts"][0]["rejection_reasons"],
+            {"missing_or_low_confidence": 2},
+        )
+        self.assertEqual(job["validation_diagnostics"]["accepted_final"]["accepted_count"], 2)
+        self.assertEqual(
+            job["quality_diagnostics"]["question_extraction_field_presence"]["validated"][
+                "recommendation_by_kind"
+            ]["frontier_marker"]["rate"],
+            1.0,
+        )
+
+    def test_question_extraction_repairs_partial_final_with_dropped_frontiers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            timeline_path = root / "project_timeline.json"
+            timeline_path.write_text(
+                json.dumps(
+                    {
+                        "projects": {
+                            "project:ai": {
+                                "project_label": "AIppocampus",
+                                "latest_turns": [
+                                    {
+                                        "thread_key": "session:partial-frontier",
+                                        "title": "Partial frontier",
+                                        "project_label": "AIppocampus",
+                                        "turn_index": 1,
+                                        "assistant_line": 10,
+                                        "user": "How do we notice unresolved external-evidence gaps?",
+                                        "assistant": "Track them as frontier markers.",
+                                    }
+                                ],
+                            }
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            registry_path = root / "threads.json"
+            registry_path.write_text(json.dumps({"threads": []}), encoding="utf-8")
+            call_count = 0
+
+            def question() -> dict[str, Any]:
+                return {
+                    "kind": "question_candidate",
+                    "title": "Unresolved evidence gaps",
+                    "summary": "The user asks how unresolved evidence gaps are noticed.",
+                    "confidence": 0.88,
+                    "source_refs": ["t0"],
+                    "question_text": "How do we notice unresolved external-evidence gaps?",
+                    "question_short": "notice evidence gaps",
+                    "intent_orientation": "architecture",
+                    "what_features": ["frontier markers", "external evidence"],
+                    "where_context": ["AIppocampus"],
+                    "phase_context": "architecture_review",
+                    "recommendation": "Feed question tracking and frontier review.",
+                }
+
+            def frontier(index: int, *, with_confidence: bool) -> dict[str, Any]:
+                row: dict[str, Any] = {
+                    "kind": "frontier_marker",
+                    "title": f"Evidence gap frontier {index}",
+                    "summary": "The source marks an unresolved evidence gap.",
+                    "source_refs": ["t0"],
+                    "frontier_type": "needs_external_evidence",
+                    "boundary_reason": "The source says evidence is still needed.",
+                    "where_context": ["AIppocampus"],
+                    "phase_context": "architecture_review",
+                    "recommendation": "Keep as frontier until evidence is available.",
+                }
+                if with_confidence:
+                    row["confidence"] = 0.86
+                return row
+
+            def fake_chat(
+                messages: list[dict[str, str]],
+                api_key: str,
+                model: str,
+                base_url: str,
+                max_tokens: int | None,
+                timeout: int,
+                temperature: float,
+            ) -> dict[str, Any]:
+                nonlocal call_count
+                del messages, api_key, model, base_url, max_tokens, timeout, temperature
+                call_count += 1
+                content = {
+                    "action": "final",
+                    "findings": [
+                        question(),
+                        frontier(0, with_confidence=call_count >= 2),
+                        frontier(1, with_confidence=call_count >= 2),
+                    ],
+                }
+                return {
+                    "choices": [{"message": {"content": json.dumps(content, ensure_ascii=False)}}],
+                    "usage": {"total_tokens": 1},
+                }
+
+            result = jobs.run_jobs(
+                jobs=["question_extraction"],
+                registry_path=registry_path,
+                timeline_path=timeline_path,
+                concept_graph_path=root / "missing.sqlite",
+                jobs_output_path=root / "subconscious_jobs.jsonl",
+                edges_output_path=root / "subconscious_edges.jsonl",
+                project="AIppocampus",
+                objective="extract partial frontier final",
+                max_turns=4,
+                max_steps=3,
+                min_tool_steps=0,
+                model="deepseek-v4-flash",
+                base_url="https://example.invalid",
+                api_key="test",
+                max_tokens=None,
+                timeout=1,
+                temperature=0.2,
+                concurrency=1,
+                samples_per_job=1,
+                chat_fn=fake_chat,
+                no_write=True,
+            )
+
+        job = result["jobs"][0]
+        retention = job["quality_diagnostics"]["accepted_final_to_validated_retention"]
+        all_attempt_required = job["quality_diagnostics"][
+            "raw_required_field_presence_all_attempts"
+        ]
+        accepted_required = job["quality_diagnostics"][
+            "accepted_final_required_field_presence"
+        ]
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(call_count, 2)
+        self.assertEqual(job["finding_count"], 3)
+        self.assertEqual(retention["frontier_marker"]["validated_count"], 2)
+        self.assertEqual(all_attempt_required["frontier_marker"]["confidence"]["rate"], 0.5)
+        self.assertEqual(accepted_required["frontier_marker"]["confidence"]["rate"], 1.0)
+
+    def test_question_extraction_repairs_sparse_axis_final_once(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            timeline_path = root / "project_timeline.json"
+            timeline_path.write_text(
+                json.dumps(
+                    {
+                        "projects": {
+                            "project:ai": {
+                                "project_label": "AIppocampus",
+                                "latest_turns": [
+                                    {
+                                        "thread_key": "session:map",
+                                        "title": "Question map",
+                                        "project_label": "AIppocampus",
+                                        "turn_index": 1,
+                                        "assistant_line": 10,
+                                        "user": "How do we keep question tracking semantic instead of lexical?",
+                                        "assistant": "Use source-backed axes.",
+                                    }
+                                ],
+                            }
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            registry_path = root / "threads.json"
+            registry_path.write_text(json.dumps({"threads": []}), encoding="utf-8")
+            call_count = 0
+
+            def candidate(index: int, *, rich: bool) -> dict[str, Any]:
+                row: dict[str, Any] = {
+                    "kind": "question_candidate",
+                    "title": f"Question map {index}",
+                    "summary": "The user asks how question tracking can stay semantic.",
+                    "confidence": 0.88,
+                    "source_refs": ["t0"],
+                    "question_text": f"How can question tracking stay semantic {index}?",
+                    "question_short": f"semantic question tracking {index}",
+                    "intent_orientation": "architecture",
+                }
+                if rich:
+                    row.update(
+                        {
+                            "what_features": ["question tracking", "semantic axes"],
+                            "where_context": ["AIppocampus"],
+                            "phase_context": "architecture_review",
+                            "recommendation": "Feed question_tracking with axis-rich candidates.",
+                        }
+                    )
+                return row
+
+            def fake_chat(
+                messages: list[dict[str, str]],
+                api_key: str,
+                model: str,
+                base_url: str,
+                max_tokens: int | None,
+                timeout: int,
+                temperature: float,
+            ) -> dict[str, Any]:
+                nonlocal call_count
+                del messages, api_key, model, base_url, max_tokens, timeout, temperature
+                call_count += 1
+                rich = call_count >= 2
+                content = {
+                    "action": "final",
+                    "findings": [candidate(index, rich=rich) for index in range(4)],
+                }
+                return {
+                    "choices": [{"message": {"content": json.dumps(content, ensure_ascii=False)}}],
+                    "usage": {"total_tokens": 1},
+                }
+
+            result = jobs.run_jobs(
+                jobs=["question_extraction"],
+                registry_path=registry_path,
+                timeline_path=timeline_path,
+                concept_graph_path=root / "missing.sqlite",
+                jobs_output_path=root / "subconscious_jobs.jsonl",
+                edges_output_path=root / "subconscious_edges.jsonl",
+                project="AIppocampus",
+                objective="extract semantic question axes",
+                max_turns=4,
+                max_steps=3,
+                min_tool_steps=0,
+                model="deepseek-v4-flash",
+                base_url="https://example.invalid",
+                api_key="test",
+                max_tokens=None,
+                timeout=1,
+                temperature=0.2,
+                concurrency=1,
+                samples_per_job=1,
+                chat_fn=fake_chat,
+                no_write=True,
+            )
+
+        job = result["jobs"][0]
+        diagnostics = job["quality_diagnostics"]["question_extraction_field_presence"]
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(call_count, 2)
+        self.assertEqual(len(job["final_attempts"]), 2)
+        self.assertEqual(job["finding_count"], 4)
+        self.assertEqual(diagnostics["validated"]["complete_core_axes"]["rate"], 1.0)
+        self.assertEqual(
+            diagnostics["validated"]["recommendation_by_kind"]["question_candidate"]["rate"],
+            1.0,
+        )
+        self.assertEqual(
+            diagnostics["validated"]["recommendation_by_kind"]["frontier_marker"]["rate"],
+            0.0,
+        )
+        self.assertEqual(result["quality_diagnostics"][0], job["quality_diagnostics"])
 
     def test_run_jobs_runs_question_tracking_after_extraction_writes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

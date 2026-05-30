@@ -12,7 +12,6 @@ import argparse
 import json
 import os
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -21,7 +20,6 @@ from aippocampuslib import (
     cli_error_payload_from_message,
     cli_exit_code_for_error_code,
     compact_text,
-    now_utc,
 )
 from deepseek_model_routing import (
     DEFAULT_DEEPSEEK_API_KEY_ENV,
@@ -38,10 +36,22 @@ from subconscious_deterministic_jobs import (
     run_deterministic_job,
 )
 from subconscious_job_circuits import JOB_SPECS, PROMPT_VERSION, job_names, jobs_initial_payload
-from subconscious_job_plan import JobRunTask, plan_job_run_tasks, sample_count, worker_count
+from subconscious_job_plan import (
+    JobRunTask,
+    plan_job_run_tasks,
+    run_tasks_in_sample_waves,
+    sample_count,
+    worker_count,
+)
+from subconscious_job_storage import append_job_findings, concept_findings_to_edges
 from subconscious_job_validation import (
     QUESTION_TEXT_MAX_CHARS,
     validate_findings,
+)
+from subconscious_question_diagnostics import (
+    question_axis_repair_feedback,
+    question_extraction_quality_diagnostics,
+    should_request_question_axis_repair,
 )
 from subconscious_jobs_config import (
     DEFAULT_CONCURRENCY,
@@ -66,6 +76,7 @@ from subconscious_runtime import (
     source_bank_from_turns,
 )
 from subconscious_tool_loop import run_tool_using_loop
+from subconscious_validation_audit import validation_audit
 from subconscious_worker import (
     DEFAULT_BASE_URL,
     DEFAULT_MAX_TURNS,
@@ -82,6 +93,7 @@ __all__ = [
     "default_jobs_output_path",
     "job_names",
     "jobs_run_config_from_args",
+    "validation_audit",
     "validate_findings",
 ]
 
@@ -102,55 +114,6 @@ def parse_action_for_job(response: dict[str, Any]) -> dict[str, Any]:
             "error": compact_text(f"{type(exc).__name__}: {exc}", 260),
             "raw_preview": compact_text(response_content(response), 1000),
         }
-
-
-def append_job_findings(
-    path: Path,
-    findings: list[dict[str, Any]],
-    *,
-    model: str,
-    batch_id: str,
-    usage: dict[str, Any],
-    source: str = "deepseek_subconscious_jobs",
-    model_route: dict[str, Any] | None = None,
-) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8", newline="\n") as fh:
-        for finding in findings:
-            payload = dict(finding)
-            payload["finding_kind"] = payload.pop("kind", "")
-            event = {
-                "schema_version": 1,
-                "kind": "aippocampus_subconscious_job_finding",
-                "created_at": now_utc(),
-                "prompt_version": PROMPT_VERSION,
-                "model": model,
-                "batch_id": batch_id,
-                "status": "staging",
-                "source": source,
-                "model_route": model_route or {},
-                "usage": usage or {},
-                **payload,
-            }
-            fh.write(json.dumps(event, ensure_ascii=False) + "\n")
-
-
-def concept_findings_to_edges(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    edges: list[dict[str, Any]] = []
-    for finding in findings:
-        if finding.get("job") != "concept_edges":
-            continue
-        edges.append(
-            {
-                "src": finding.get("src"),
-                "dst": finding.get("dst"),
-                "edge_type": finding.get("edge_type") or "related",
-                "confidence": finding.get("confidence"),
-                "why": finding.get("why") or finding.get("summary") or finding.get("title"),
-                "source_refs": finding.get("source_refs") or [],
-            }
-        )
-    return edges
 
 
 def run_one_job(
@@ -249,8 +212,12 @@ def run_one_job(
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": initial_payload},
     ]
+    axis_repair_feedback: dict[str, Any] | None = None
+    axis_repair_requested = False
 
     def invalid_final_feedback() -> dict[str, Any]:
+        if axis_repair_feedback:
+            return axis_repair_feedback
         payload: dict[str, Any] = {
             "error": "No valid source-backed findings survived validation.",
             "instruction": "Use refs from available_refs. Return action=final with findings, or empty findings only when no durable finding exists.",
@@ -282,6 +249,18 @@ def run_one_job(
             }
         return payload
 
+    def validate_final_for_job(action: dict[str, Any]) -> list[dict[str, Any]]:
+        nonlocal axis_repair_feedback, axis_repair_requested
+        axis_repair_feedback = None
+        candidate_items = validate_findings(job, action, state.source_bank)
+        if job == "question_extraction" and not axis_repair_requested:
+            diagnostics = question_extraction_quality_diagnostics([action], candidate_items, action)
+            if should_request_question_axis_repair(diagnostics):
+                axis_repair_requested = True
+                axis_repair_feedback = question_axis_repair_feedback(diagnostics)
+                return []
+        return candidate_items
+
     loop = run_tool_using_loop(
         messages=messages,
         step_budget=step_budget,
@@ -294,7 +273,7 @@ def run_one_job(
         timeout=timeout,
         temperature=temperature,
         parse_response=parse_action_for_job,
-        validate_final=lambda action: validate_findings(job, action, state.source_bank),
+        validate_final=validate_final_for_job,
         run_tool_action=lambda tool_name, tool_args: run_tool(
             tool_name,
             tool_args,
@@ -332,6 +311,18 @@ def run_one_job(
         else None,
     )
     findings = loop.final_items
+    validation_diagnostics = {
+        "accepted_final": validation_audit(job, loop.final_action, state.source_bank),
+        "final_attempts": [
+            validation_audit(job, attempt, state.source_bank)
+            for attempt in loop.final_attempts
+        ],
+    }
+    quality_diagnostics = (
+        question_extraction_quality_diagnostics(loop.final_attempts, findings, loop.final_action)
+        if job == "question_extraction"
+        else {}
+    )
 
     edges = concept_findings_to_edges(findings)
     edge_count = 0
@@ -357,7 +348,7 @@ def run_one_job(
                 model_route=route_payload,
             )
             edge_count = len(edges)
-    return {
+    result = {
         "ok": True,
         "dry_run": False,
         "job": job,
@@ -381,65 +372,11 @@ def run_one_job(
         "effective_step_budget": step_budget,
         "timeout": timeout,
         "temperature": temperature,
+        "validation_diagnostics": validation_diagnostics,
     }
-
-
-def task_sample_index(task: Any) -> int:
-    if isinstance(task, dict):
-        return int(task.get("sample_index") or 1)
-    return int(getattr(task, "sample_index", 1) or 1)
-
-
-def run_tasks_in_sample_waves(
-    task_specs: list[Any],
-    *,
-    max_workers: int,
-    run_task,
-    failed_task,
-) -> list[tuple[int, dict[str, Any]]]:
-    """Run sample 1 before same-prefix follow-up samples.
-
-    DeepSeek's KV cache is populated by completed requests. Launching sample 1
-    and sample 2 for the same prompt prefix at the exact same time often makes
-    both requests cold. Wave scheduling preserves concurrency across distinct
-    jobs/batches while giving each prefix one completed warm-up before its
-    diversity follow-ups start.
-    """
-
-    indexed_results: list[tuple[int, dict[str, Any]]] = []
-    if not task_specs:
-        return indexed_results
-    sample_waves = sorted({task_sample_index(task) for task in task_specs})
-    for sample_index in sample_waves:
-        wave = [task for task in task_specs if task_sample_index(task) == sample_index]
-        wave_workers = min(max(1, int(max_workers)), max(1, len(wave)))
-        if wave_workers == 1:
-            for task in wave:
-                try:
-                    indexed_results.append(
-                        (
-                            int(task["index"] if isinstance(task, dict) else task.index),
-                            run_task(task),
-                        )
-                    )
-                except Exception as exc:
-                    indexed_results.append(
-                        (
-                            int(task["index"] if isinstance(task, dict) else task.index),
-                            failed_task(task, exc),
-                        )
-                    )
-            continue
-        with ThreadPoolExecutor(max_workers=wave_workers) as executor:
-            futures = {executor.submit(run_task, task): task for task in wave}
-            for future in as_completed(futures):
-                task = futures[future]
-                task_index = int(task["index"] if isinstance(task, dict) else task.index)
-                try:
-                    indexed_results.append((task_index, future.result()))
-                except Exception as exc:
-                    indexed_results.append((task_index, failed_task(task, exc)))
-    return indexed_results
+    if quality_diagnostics:
+        result["quality_diagnostics"] = quality_diagnostics
+    return result
 
 
 def run_jobs(
@@ -653,6 +590,12 @@ def run_jobs(
         "cache": route_cache_metrics(route, usage_total),
         "jobs_output": str(jobs_output_path),
         "edges_output": str(edges_output_path),
+        "quality_diagnostics": [
+            result["quality_diagnostics"]
+            for result in results
+            if isinstance(result.get("quality_diagnostics"), dict)
+            and result.get("quality_diagnostics")
+        ],
         "wrote": False if no_write or dry_run else any(bool(result.get("wrote")) for result in results),
     }
 
