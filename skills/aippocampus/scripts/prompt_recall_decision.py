@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
+from ambient_recall_policy import policy_update_for_prompt
 from build_concept_graph import expand_concepts
 from memory_candidate_router import strip_for_hook
 from prompt_cues import (
@@ -27,7 +28,7 @@ from prompt_cues import (
     source_evidence_intent,
     working_memory_terms,
 )
-from prompt_recall_ambient import attach_ambient_recall
+from prompt_recall_ambient import attach_ambient_recall, cached_cards_for_policy
 from prompt_recall_ambiguity import (
     explicit_evidence_request_is_ambiguous,
     semantic_evidence_request_is_vague_cross_project,
@@ -240,6 +241,54 @@ def _noise_prompt_result(context: Any, start: float) -> dict[str, Any]:
         "semantic_bridge_diagnostic": None,
         "elapsed_ms": elapsed_ms,
     }
+
+
+def _policy_update_result(context: Any, start: float, update: dict[str, Any]) -> dict[str, Any]:
+    elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
+    return {
+        "decision": "skip",
+        "score": 0.0,
+        "confidence": "low",
+        **context.hook_path_fields(),
+        "query_terms": [],
+        "cognitive_map": [],
+        "concept_expansions": [],
+        "reasons": [f"ambient policy {update.get('action')} {update.get('status')}"],
+        "candidates": [],
+        "evidence": [],
+        "working_memory": [],
+        "semantic_gate": None,
+        "semantic_bridge_diagnostic": None,
+        "semantic_cue_cache": None,
+        "ambient_policy_update": update,
+        "elapsed_ms": elapsed_ms,
+    }
+
+
+def _maybe_policy_update_result(
+    *,
+    context: Any,
+    prompt: str,
+    registry_path: Path,
+    ambient_cache_path: Path | str | None,
+    thread_id: str | None,
+    workspace: str,
+    start: float,
+) -> dict[str, Any] | None:
+    update = policy_update_for_prompt(
+        prompt=prompt,
+        rows=context.working_memory_all_rows,
+        cached_cards=cached_cards_for_policy(
+            registry_path=registry_path,
+            ambient_cache_path=ambient_cache_path,
+            thread_id=thread_id,
+            workspace=workspace,
+        ),
+        policy_path=context.ambient_policy_path,
+        thread_id=thread_id,
+        workspace=workspace,
+    )
+    return _policy_update_result(context, start, update) if update is not None else None
 
 
 def _source_intent_evidence(
@@ -524,6 +573,7 @@ def assess_prompt(
     working_memory_path: Path | str | None = None,
     semantic_triggers_path: Path | str | None = None,
     semantic_cues_path: Path | str | None = None,
+    ambient_policy_path: Path | str | None = None,
     semantic_cache_path: Path | str | None = None,
     semantic_gate_mode: str | None = None,
     semantic_timeout: float = PROMPT_HOOK_SEMANTIC_TIMEOUT,
@@ -550,6 +600,7 @@ def assess_prompt(
         working_memory_path=working_memory_path,
         semantic_triggers_path=semantic_triggers_path,
         semantic_cues_path=semantic_cues_path,
+        ambient_policy_path=ambient_policy_path,
         use_cognitive_map=use_cognitive_map,
     )
     prompt = context.prompt
@@ -557,8 +608,20 @@ def assess_prompt(
     path = context.registry_path
     concept_file = context.concept_graph_path
     semantic_triggers_file = context.semantic_triggers_path
+    ambient_policy_file = context.ambient_policy_path
     if context.is_noise:
         return _noise_prompt_result(context, start)
+    policy_result = _maybe_policy_update_result(
+        context=context,
+        prompt=prompt,
+        registry_path=path,
+        ambient_cache_path=ambient_cache_path,
+        thread_id=thread_id,
+        workspace=str(cwd_path),
+        start=start,
+    )
+    if policy_result is not None:
+        return policy_result
     registry = context.registry
     cognitive_map_matches = context.cognitive_map_matches
     working_memory_rows = context.working_memory_rows
@@ -741,6 +804,7 @@ def assess_prompt(
         "candidates": strip_private_fields(candidates[:3]),
         "evidence": evidence[:search_budget],
         "working_memory": strip_for_hook(working_memory_matches[:3]),
+        "ambient_policy": context.ambient_policy_diagnostics,
         "semantic_gate": strip_semantic_gate(semantic_result),
         "semantic_bridge_diagnostic": semantic_bridge_diagnostic,
         "semantic_cue_cache": semantic_cue_cache,
@@ -748,6 +812,6 @@ def assess_prompt(
     }
     return attach_ambient_recall(
         result, prompt=prompt, thread_id=thread_id, workspace=str(cwd_path), registry_path=path,
-        ambient_cache_path=ambient_cache_path, topic_epoch=topic_epoch, use_thread_cache=use_thread_cache, warm_background=warm_background, warm_job_dir=warm_job_dir,
+        ambient_cache_path=ambient_cache_path, ambient_policy_path=ambient_policy_file, topic_epoch=topic_epoch, use_thread_cache=use_thread_cache, warm_background=warm_background, warm_job_dir=warm_job_dir,
         warm_max_workers=warm_max_workers, warm_timeout=warm_timeout, warm_quorum=warm_quorum,
     )

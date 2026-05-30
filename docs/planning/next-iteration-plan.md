@@ -152,9 +152,26 @@ handoff context.
      `subconscious_jobs.jsonl`, records auditable ordering edges, skips stale
      refs when registry clean-source resolution is available, and requires
      explicit confirmation artifacts for borderline pairs.
-   - Next hardening: add live model-confirmation plumbing only for borderline
-     pairs, tune thresholds on more real clean-source examples, and decide
-     whether dormancy detection belongs in Phase 2 or a later hook-facing slice.
+   - First offline #134 slice is implemented: `question_tracking.py` can export
+     compact pending confirmation requests for borderline pairs, and
+     `benchmark_question_tracking_calibration.py` checks selected fixtures for
+     obvious recurring retention, generic merge rejection, and pending request
+     formation. The report now compares the static strong-threshold baseline
+     with the current adaptive-threshold path and exposes missed-positive /
+     merged-negative deltas.
+   - First optional live/model adapter slice is implemented:
+     `question_confirmation_live.py` converts pending requests into confirmation
+     artifacts for `question_tracking.py --borderline-confirmations`, but defaults
+     to dry-run unless `--call-model` and an API key route are supplied.
+   - First #134 live smoke is implemented:
+     `tools/aippocampus/smoke/smoke_question_confirmation_live.py` exercises the
+     pending-request -> optional live artifact -> tracking round trip in a temp
+     no-write path. A 2026-05-31 local DeepSeek run produced one accepted
+     no-write round-trip link from one pending request, without emitting source
+     refs or raw question text.
+   - Next hardening: tune thresholds on broader private clean-source examples
+     and add user-calibrated acceptance/rejection evidence before claiming live
+     semantic quality or recall improvement.
 
 9. Vector index protocol
    - Source: `gb-scale-roadmap.md` and `wukong-mining-notes.md`.
@@ -226,9 +243,18 @@ handoff context.
      `question_candidate` rows receive salience profiles, low-information
      candidates are skipped as link inputs, and pair thresholds adapt from
      compatible or conflicting six-axis evidence.
+   - First #137 feedback-pressure slice is implemented:
+     `question_feedback_policy.py` lets `question_tracking.py` treat
+     source-id-backed ambient dismiss/reopen events as conservative separation
+     pressure for the same source-backed `question_link` pair; theme/frontier
+     dismissals stay ambient-surface policy only.
+   - First #137 theme/cap hardening is implemented: `theme_candidate` scent uses
+     the same frequency cap and dismiss/reopen overlay as question scent, and
+     oversized ambient policy overlays fail open instead of blocking foreground
+     prompt recall.
    - Next hardening: calibrate salience and threshold weights against more real
-     clean-source samples and explicit user feedback before treating them as
-     live timing or quality claims.
+     clean-source samples and broader explicit user feedback before treating
+     them as live timing or quality claims.
 
 15. Cognitive portrait structured-text benchmark
    - Source: `docs/research/compact-activation-signals.md`,
@@ -241,10 +267,22 @@ handoff context.
      compares it with fuller clean-source injection on selected fixture prompts,
      and reports token savings, source-fidelity back-pointers,
      over-personalization risk, and expected quote-fidelity loss.
-   - Next hardening: run the same artifact shape over private real-history
-     packs and optional live model probes before claiming behavioral
-     equivalence. Keep numerical activation codes and white-box steering out of
-     this slice.
+   - First #139 structural real-history proxy is implemented in
+     `benchmarks/aippocampus/benchmark_question_aware_real_history.py`: it
+     selects private question/frontier/link/theme rows when present, emits
+     sanitized packs with hashed source refs only, and records pack-selection
+     strategy, source-fidelity, term-coverage delta, token-ratio,
+     quote-required count, known failure modes, and cannot-claim boundaries.
+     The 2026-05-30 current-registry run selected 2 packs from 42 eligible rows
+     and kept source-ref fidelity at 1.0 with no private text emitted, but it
+     also reported `structural_proxy_ready_but_scaffold_regressed`,
+     `portrait_token_ratio=3.7005`, `term_coverage_delta=-0.4412`, and missing
+     selected `question_link` / `theme_candidate` context. This supports
+     source-backed scaffold formation only, not helpfulness or token-savings
+     claims.
+   - Next hardening: add opt-in answer comparison / live model probes before
+     claiming behavioral equivalence or user-visible recall improvement. Keep
+     numerical activation codes and white-box steering out of this slice.
 
 16. Journey Tracking P1-P3 core
    - Source: `docs/research/journey-tracking.md`,
@@ -258,8 +296,8 @@ handoff context.
      deterministic `current_frontier`, and explicit feedback actions.
    - The fixture smoke compares Journey frontier/state against a plain summary
      baseline for later-continuation terms. It is a fixture-backed equivalent,
-     not proof of live `theme_emergence`, private real-history journey quality,
-     predictive replay, or foreground hook timing.
+     not proof of user-calibrated `theme_emergence`, Journey integration with
+     live `theme_candidate` rows, predictive replay, or foreground hook timing.
    - Next hardening: connect only source-backed `theme_candidate` /
      `journey_waypoint` outputs when the job circuit exists, then evaluate on
      time-sliced private history before surfacing Journey hints in AAR.
@@ -327,8 +365,9 @@ handoff context.
 
 - A generic vector database rewrite.
 - A cloud service dependency.
-- Phase 3 `theme_emergence` or predictive replay before Phase 2 produces stable
-  links.
+- Predictive replay or richer Phase 3 behavior beyond the deterministic
+  `theme_emergence` first slice before Phase 2/3 source-backed signals are
+  stable on real history.
 - Prospective or active-imagination dream work before selected pack-backed
   amplification has source-review evidence. Amplification may proceed only as a
   pack-backed background worker with structural adjudication and measured

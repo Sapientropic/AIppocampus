@@ -19,6 +19,7 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 import question_tracking as tracking  # noqa: E402
+from question_confirmation import load_confirmation_decisions  # noqa: E402
 
 
 class QuestionTrackingTests(unittest.TestCase):
@@ -168,9 +169,21 @@ class QuestionTrackingTests(unittest.TestCase):
         )
         self.assertEqual(skipped["link_count"], 0)
         self.assertEqual(skipped["borderline_skipped_pair_count"], 1)
+        self.assertEqual(skipped["pending_confirmation_request_count"], 1)
+        request = skipped["pending_confirmation_requests"][0]
+        self.assertEqual(request["kind"], "question_pair_confirmation_request")
+        self.assertEqual(len(request["source_finding_ids"]), 2)
+        self.assertEqual(request["privacy_contract"]["full_history_included"], False)
+        self.assertEqual(request["privacy_contract"]["source_refs_included"], False)
+        self.assertIn("threshold_policy", request)
+        rendered_request = json.dumps(request, ensure_ascii=False)
+        self.assertNotIn('"source_refs":', rendered_request)
+        self.assertNotIn("message_id", rendered_request)
+        self.assertNotIn("source_line", rendered_request)
 
         def confirm(payload: dict[str, Any]) -> dict[str, Any]:
             self.assertEqual(len(payload["source_finding_ids"]), 2)
+            self.assertFalse(payload["privacy_contract"]["full_history_included"])
             return {
                 "decision": "accept",
                 "link_type": "evolving",
@@ -196,6 +209,79 @@ class QuestionTrackingTests(unittest.TestCase):
             "test-reviewer",
         )
         self.assertGreaterEqual(len(link["source_refs"]), 2)
+
+    def test_pending_confirmation_request_file_round_trips_to_decision_file(self) -> None:
+        self.write_rows(
+            [
+                self.question_row("1"),
+                self.question_row(
+                    "2",
+                    question_text="Where should continuity clues appear in recall?",
+                    question_short="continuity clues in recall",
+                    what_features=["recall continuity"],
+                    phase_context="architecture_review",
+                ),
+            ]
+        )
+        request_path = self.root / "pending-confirmations.jsonl"
+        request_result = tracking.run_question_tracking(
+            jobs_path=self.jobs_path,
+            no_write=True,
+            strong_threshold=0.99,
+            borderline_threshold=0.10,
+            pending_confirmations_output_path=request_path,
+        )
+        requests = list(tracking.iter_jsonl(request_path))
+        self.assertEqual(request_result["pending_confirmation_wrote_count"], 1)
+        self.assertEqual(len(requests), 1)
+        self.assertEqual(requests[0]["kind"], "question_pair_confirmation_request")
+
+        decisions_path = self.root / "confirmed.jsonl"
+        decisions_path.write_text(
+            json.dumps(
+                {
+                    "artifact_kind": "question_pair_confirmation_artifact",
+                    "pair_id": requests[0]["pair_id"],
+                    "source_finding_ids": requests[0]["source_finding_ids"],
+                    "decision": "accept",
+                    "link_type": "related",
+                    "confidence": 0.83,
+                    "model": "offline-fixture-reviewer",
+                    "source": "offline_fixture_question_confirmation",
+                    "prompt_version": "test-question-confirmation-v1",
+                    "created_at": "2026-05-30T00:00:00Z",
+                    "rationale": "The compact request shows both questions concern recall continuity.",
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        accepted = tracking.run_question_tracking(
+            jobs_path=self.jobs_path,
+            no_write=True,
+            strong_threshold=0.99,
+            borderline_threshold=0.10,
+            confirmation_fn=load_confirmation_decisions(decisions_path),
+        )
+
+        self.assertEqual(accepted["link_count"], 1)
+        confirmation = accepted["links"][0]["match_evidence"]["accepted_pairs"][0]["confirmation"]
+        self.assertEqual(confirmation["model"], "offline-fixture-reviewer")
+        self.assertEqual(
+            confirmation["artifact_audit"]["source_finding_ids"],
+            requests[0]["source_finding_ids"],
+        )
+        self.assertEqual(
+            confirmation["artifact_audit"]["prompt_version"],
+            "test-question-confirmation-v1",
+        )
+        self.assertEqual(
+            confirmation["artifact_audit"]["artifact_kind"],
+            "question_pair_confirmation_artifact",
+        )
+        self.assertNotIn("source_refs", confirmation["artifact_audit"])
 
     def test_malformed_borderline_confirmations_are_ignored(self) -> None:
         self.write_rows(
@@ -224,6 +310,166 @@ class QuestionTrackingTests(unittest.TestCase):
 
         self.assertEqual(result["link_count"], 0)
         self.assertEqual(result["borderline_skipped_pair_count"], 1)
+        self.assertEqual(result["borderline_confirmation_malformed_pair_count"], 1)
+
+    def test_rejected_borderline_confirmation_is_audited_without_linking(self) -> None:
+        self.write_rows(
+            [
+                self.question_row("1"),
+                self.question_row(
+                    "2",
+                    question_text="Where should continuity clues appear in recall?",
+                    question_short="continuity clues in recall",
+                    what_features=["recall continuity"],
+                    phase_context="architecture_review",
+                ),
+            ]
+        )
+
+        def reject(payload: dict[str, Any]) -> dict[str, Any]:
+            return {
+                "decision": "reject",
+                "confidence": 0.88,
+                "source_finding_ids": payload["source_finding_ids"],
+                "model": "test-reviewer",
+                "rationale": "The second question is about UI placement, not persistence.",
+            }
+
+        result = tracking.run_question_tracking(
+            jobs_path=self.jobs_path,
+            no_write=True,
+            strong_threshold=0.99,
+            borderline_threshold=0.10,
+            confirmation_fn=reject,
+        )
+
+        self.assertEqual(result["link_count"], 0)
+        self.assertEqual(result["borderline_skipped_pair_count"], 1)
+        self.assertEqual(result["borderline_confirmation_rejected_pair_count"], 1)
+        self.assertEqual(result["borderline_confirmation_audit"][0]["decision"], "confirmation_rejected")
+        self.assertEqual(
+            result["borderline_confirmation_audit"][0]["confirmation"]["decision"],
+            "reject",
+        )
+
+    def test_ambient_dismissal_feedback_separates_same_source_backed_pair(self) -> None:
+        self.write_rows(
+            [
+                self.question_row("1"),
+                self.question_row(
+                    "2",
+                    question_text="Why does Codex forget context after compaction?",
+                    question_short="Codex context loss after compaction",
+                ),
+            ]
+        )
+        policy_path = self.root / "ambient_policy.jsonl"
+        policy_path.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_ambient_policy_event",
+                    "created_at": "2026-05-30T00:00:00Z",
+                    "action": "dismiss",
+                    "target_key": "wm_context_question",
+                    "target_kind": "question_link",
+                    "source_finding_ids": ["sf_question_1", "sf_question_2"],
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        result = tracking.run_question_tracking(
+            jobs_path=self.jobs_path,
+            ambient_policy_path=policy_path,
+            no_write=True,
+        )
+
+        self.assertEqual(result["question_pair_feedback_count"], 1)
+        self.assertEqual(result["link_count"], 0)
+        self.assertEqual(result["feedback_separated_pair_count"], 1)
+        self.assertIn(
+            "dismissal_feedback_separation",
+            result["feedback_separation_audit"][0]["threshold_policy"]["reasons"],
+        )
+
+    def test_stale_borderline_confirmation_is_audited_without_linking(self) -> None:
+        self.write_rows(
+            [
+                self.question_row("1"),
+                self.question_row(
+                    "2",
+                    question_text="Where should continuity clues appear in recall?",
+                    question_short="continuity clues in recall",
+                    what_features=["recall continuity"],
+                    phase_context="architecture_review",
+                ),
+            ]
+        )
+
+        def stale(payload: dict[str, Any]) -> dict[str, Any]:
+            return {
+                "decision": "accept",
+                "confidence": 0.91,
+                "source_finding_ids": payload["source_finding_ids"],
+                "created_at": "2000-01-01T00:00:00Z",
+                "model": "test-reviewer",
+                "rationale": "Old confirmation should not be trusted.",
+            }
+
+        result = tracking.run_question_tracking(
+            jobs_path=self.jobs_path,
+            no_write=True,
+            strong_threshold=0.99,
+            borderline_threshold=0.10,
+            confirmation_fn=stale,
+        )
+
+        self.assertEqual(result["link_count"], 0)
+        self.assertEqual(result["borderline_confirmation_stale_pair_count"], 1)
+        self.assertEqual(
+            result["borderline_confirmation_audit"][0]["confirmation"]["invalid_reason"],
+            "stale_artifact",
+        )
+
+    def test_source_id_mismatch_confirmation_is_audited_without_linking(self) -> None:
+        self.write_rows(
+            [
+                self.question_row("1"),
+                self.question_row(
+                    "2",
+                    question_text="Where should continuity clues appear in recall?",
+                    question_short="continuity clues in recall",
+                    what_features=["recall continuity"],
+                    phase_context="architecture_review",
+                ),
+            ]
+        )
+
+        def mismatch(_payload: dict[str, Any]) -> dict[str, Any]:
+            return {
+                "decision": "accept",
+                "confidence": 0.91,
+                "source_finding_ids": ["sf_question_1", "sf_wrong"],
+                "model": "test-reviewer",
+                "rationale": "Wrong source ids must not accept the pair.",
+            }
+
+        result = tracking.run_question_tracking(
+            jobs_path=self.jobs_path,
+            no_write=True,
+            strong_threshold=0.99,
+            borderline_threshold=0.10,
+            confirmation_fn=mismatch,
+        )
+
+        self.assertEqual(result["link_count"], 0)
+        self.assertEqual(result["borderline_confirmation_source_mismatch_pair_count"], 1)
+        self.assertEqual(
+            result["borderline_confirmation_audit"][0]["confirmation"]["invalid_reason"],
+            "source_finding_id_mismatch",
+        )
 
     def test_skips_stale_candidates_without_source_refs(self) -> None:
         self.write_rows(

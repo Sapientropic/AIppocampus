@@ -19,7 +19,8 @@ Current code implements the source-backed P1-P3 Journey core in
 - P2: conservative instantiation gate over source-backed waypoint candidates.
   It requires at least three source-backed waypoints across three distinct
   threads and a specific `core_inquiry`. This is the issue #63
-  fixture-backed equivalent for the future `theme_emergence` dependency.
+  fixture-backed equivalent that should later be wired to live source-backed
+  `theme_candidate` rows.
 - P3: deterministic `current_frontier` generation from the latest waypoints.
   The frontier is marked as a navigation candidate, not source truth; exact
   claims still require the attached clean-source refs.
@@ -29,10 +30,10 @@ Current code implements the source-backed P1-P3 Journey core in
   Journey frontier/state beats a plain-summary baseline on expected continuation
   terms.
 
-Still designed/deferred: live `theme_emergence` instantiation, foreground hook
-journey hints, question-tracking P4 integration, HexArc structural matching,
-graph random walks, predictive replay, and private real-history journey quality
-claims. The first reflection-space consumer now exists in
+Still designed/deferred: Journey instantiation from live `theme_candidate` rows,
+foreground hook journey hints, question-tracking P4 integration, HexArc
+structural matching, graph random walks, predictive replay, and private
+real-history journey quality claims. The first reflection-space consumer now exists in
 `skills/aippocampus/scripts/reflection_space.py`, but it is an inspectable
 topology/feedback helper only, not a polished UI or foreground Journey hint
 runtime.

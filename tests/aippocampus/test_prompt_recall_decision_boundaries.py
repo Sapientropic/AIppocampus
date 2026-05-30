@@ -211,6 +211,7 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
                 (self.registry_dir / "semantic_triggers.jsonl").resolve()
             ),
             "semantic_cues_path": str((self.registry_dir / "semantic_cues.jsonl").resolve()),
+            "ambient_policy_path": str((self.registry_dir / "ambient_recall_policy.jsonl").resolve()),
             "query_terms": [],
             "cognitive_map": [],
             "concept_expansions": [],

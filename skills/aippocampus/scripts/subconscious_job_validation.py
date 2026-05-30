@@ -34,6 +34,8 @@ def finding_fingerprint(finding: dict[str, Any]) -> str:
         normalize_for_fingerprint(str(finding.get("edge_type") or "")),
         normalize_for_fingerprint(str(finding.get("question_text") or "")),
         normalize_for_fingerprint(str(finding.get("frontier_type") or "")),
+        normalize_for_fingerprint(str(finding.get("theme_cluster_id") or "")),
+        normalize_for_fingerprint(str(finding.get("theme_label") or "")),
         normalize_for_fingerprint(str(finding.get("message_id") or "")),
         normalize_for_fingerprint(
             " ".join(str(label) for label in finding.get("scope_labels") or [])
@@ -392,6 +394,44 @@ def validate_semantic_scope_label_fields(
     }
 
 
+def validate_theme_candidate_fields(item: dict[str, Any]) -> dict[str, Any] | None:
+    shared_concepts = compact_string_list(item.get("shared_concepts") or item.get("concepts"), limit=12)
+    source_link_ids = compact_string_list(
+        item.get("source_question_link_ids") or item.get("question_link_ids"),
+        limit=12,
+        chars=120,
+    )
+    theme_label = compact_text(str(item.get("theme_label") or item.get("title") or ""), 140)
+    theme_short = compact_text(str(item.get("theme_short") or (shared_concepts[0] if shared_concepts else "")), 90)
+    cluster_method = compact_text(str(item.get("cluster_method") or ""), 80)
+    if not (theme_label and theme_short and cluster_method and shared_concepts and source_link_ids):
+        return None
+    if "llm" in cluster_method.casefold():
+        return None
+    shared_short_keys = {compact_text(concept, 90).casefold() for concept in shared_concepts}
+    if theme_short.casefold() not in shared_short_keys:
+        return None
+    return {
+        "kind": "theme_candidate",
+        "theme_cluster_id": compact_text(str(item.get("theme_cluster_id") or ""), 100),
+        "theme_label": theme_label,
+        "theme_short": theme_short,
+        "cluster_method": cluster_method,
+        "shared_concepts": shared_concepts,
+        "source_question_link_ids": source_link_ids,
+        "linked_question_count": safe_nonnegative_int(item.get("linked_question_count")),
+        "thread_span": safe_nonnegative_int(item.get("thread_span")),
+        "boundary_map": item.get("boundary_map") if isinstance(item.get("boundary_map"), dict) else {},
+    }
+
+
+def safe_nonnegative_int(value: Any) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
 def validate_findings(
     job: str, parsed: dict[str, Any], source_bank: dict[str, dict[str, Any]]
 ) -> list[dict[str, Any]]:
@@ -456,6 +496,11 @@ def validate_findings(
             if not semantic_scope_fields:
                 continue
             finding.update(semantic_scope_fields)
+        if job == "theme_emergence":
+            theme_fields = validate_theme_candidate_fields(item)
+            if not theme_fields:
+                continue
+            finding.update(theme_fields)
         if not finding["title"]:
             if job == "concept_edges":
                 finding["title"] = f"{finding.get('src')} -> {finding.get('dst')}"

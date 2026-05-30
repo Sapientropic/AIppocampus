@@ -23,6 +23,14 @@ from aippocampuslib import (
     resolve_artifact_path,
 )
 from artifact_publish import resolve_sqlite_index_path
+from question_health import (
+    DEFAULT_DORMANT_AFTER_DAYS,
+    aggregate_question_health_stats,
+    question_health_stats,
+)
+from registry import registry_paths
+
+DEFAULT_JOBS_OUTPUT_NAME = "subconscious_jobs.jsonl"
 
 
 def load_json(path: Path) -> dict:
@@ -73,6 +81,7 @@ def render_health_text(result: dict[str, Any]) -> None:
     segments = result["segments"]
     checkpoint = result["checkpoint"]
     graphify = result["graphify"]
+    question_stats = result.get("question_stats") or {}
     actions = result["recommended_actions"]
 
     print(f"thread memory health: {status}")
@@ -100,10 +109,53 @@ def render_health_text(result: dict[str, Any]) -> None:
         print("segments: not needed yet")
     print(f"checkpoint: {'due' if checkpoint['due'] else 'not due'}")
     print(f"graphify corpus: {'stale' if graphify['stale'] else 'fresh'}")
+    if question_stats.get("available"):
+        print(
+            "question health: "
+            f"{question_stats.get('question_group_count', 0)} groups, "
+            f"{question_stats.get('recurring_link_count', 0)} recurring links, "
+            f"{question_stats.get('dormant_question_count', 0)} dormant, "
+            f"{question_stats.get('resolved_question_count', 0)} resolved"
+        )
     if actions:
         print("\nrecommended actions:")
         for item in actions:
             print(f"- {item['id']} [{item['severity']}]: {item['reason']}")
+
+
+def load_question_stats(
+    *,
+    jobs_path: Path | None,
+    registry_path: Path | None,
+    dormant_after_days: int = DEFAULT_DORMANT_AFTER_DAYS,
+    resolve_registry_refs: bool = True,
+    include_details: bool = False,
+) -> dict[str, Any]:
+    if jobs_path is None:
+        return {"available": False, "reason": "jobs_unresolved"}
+    try:
+        payload = question_health_stats(
+            jobs_path,
+            registry_path=registry_path if resolve_registry_refs else None,
+            dormant_after_days=dormant_after_days,
+        )
+        return payload if include_details else aggregate_question_health_stats(payload)
+    except Exception as exc:
+        # Health checks are operator diagnostics. Question lifecycle reporting is
+        # allowed to disappear when local staging artifacts are stale or corrupt;
+        # it must not block core index/clean-source maintenance advice.
+        return {
+            "available": False,
+            "reason": "question_health_error",
+            "error_type": type(exc).__name__,
+            "message": str(exc)[:240],
+            "jobs": str(jobs_path),
+            "registry": str(registry_path) if registry_path else None,
+        }
+
+
+def default_question_jobs_path(registry_path: Path) -> Path:
+    return registry_path.resolve().parent / DEFAULT_JOBS_OUTPUT_NAME
 
 
 def main() -> int:
@@ -132,6 +184,34 @@ def main() -> int:
         "--clean-source-dir",
         default=None,
         help="Defaults to the global thread store's clean-source directory.",
+    )
+    parser.add_argument("--registry", default=None)
+    parser.add_argument("--registry-dir", default=None)
+    parser.add_argument(
+        "--jobs-output",
+        default=None,
+        help="Defaults to the registry-local subconscious_jobs.jsonl.",
+    )
+    parser.add_argument(
+        "--question-stats",
+        action="store_true",
+        help="Include derived aggregate question lifecycle/reporting stats.",
+    )
+    parser.add_argument(
+        "--question-stats-resolve-refs",
+        action="store_true",
+        help="Compatibility flag; question stats resolve refs against registry clean source by default.",
+    )
+    parser.add_argument(
+        "--question-stats-details",
+        action="store_true",
+        help="Include source-derived question lifecycle details in JSON; local diagnostics only.",
+    )
+    parser.add_argument(
+        "--question-dormant-days",
+        type=int,
+        default=DEFAULT_DORMANT_AFTER_DAYS,
+        help="Days without a source-backed reappearance before a question is reported dormant.",
     )
     parser.add_argument("--max-stale-messages", type=int, default=25)
     parser.add_argument("--max-stale-bytes", type=int, default=5 * 1024 * 1024)
@@ -162,6 +242,16 @@ def main() -> int:
     )
     clean_source_dir = resolve_artifact_path(
         args.clean_source_dir, cwd, default_thread_clean_source_dir(cwd, rollout)
+    )
+    registry_path = (
+        Path(args.registry).resolve()
+        if args.registry
+        else registry_paths(Path(args.registry_dir).resolve() if args.registry_dir else None)[0]
+    )
+    jobs_path = (
+        Path(args.jobs_output).resolve()
+        if args.jobs_output
+        else default_question_jobs_path(registry_path)
     )
     rollout_stat = rollout.stat()
     current_message_count, last_line = count_messages(rollout)
@@ -346,6 +436,17 @@ def main() -> int:
                 f'Use $graphify on "{graphify_corpus}" when conceptual navigation is worth the cost.',
             )
         )
+    question_stats = (
+        {"available": False, "reason": "not_requested"}
+        if not args.question_stats
+        else load_question_stats(
+            jobs_path=jobs_path,
+            registry_path=registry_path,
+            dormant_after_days=args.question_dormant_days,
+            resolve_registry_refs=True,
+            include_details=args.question_stats_details,
+        )
+    )
 
     result: dict[str, Any] = {
         "ok": not any(a["severity"] in {"critical", "warning"} for a in actions),
@@ -414,6 +515,7 @@ def main() -> int:
             "message_delta": segments_message_delta,
             "byte_delta": segments_byte_delta,
         },
+        "question_stats": question_stats,
         "recommended_actions": actions,
     }
 

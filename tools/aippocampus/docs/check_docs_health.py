@@ -82,6 +82,7 @@ REQUIRED_RUNTIME_MAP_SCRIPTS = [
     "subconscious_worker.py",
     "subconscious_review.py",
     "compensatory_dream.py",
+    "theme_emergence.py",
     "journey_tracking.py",
     "reflection_space.py",
     "memory_candidate_router.py",
@@ -94,8 +95,15 @@ REQUIRED_RUNTIME_MAP_SCRIPTS = [
     "semantic_cue_cache.py",
     "warm_ambient_recall.py",
     "ambient_warm_scheduler.py",
+    "ambient_recall_policy.py",
     "ambient_thread_cache.py",
+    "question_confirmation.py",
+    "question_confirmation_live.py",
+    "question_feedback_policy.py",
+    "question_index_sidecar.py",
     "question_vector_index.py",
+    "question_health.py",
+    "question_resolution.py",
 ]
 
 REQUIRED_RUNTIME_MAP_TERMS = {

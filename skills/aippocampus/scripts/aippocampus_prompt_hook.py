@@ -155,6 +155,7 @@ def main() -> int:
     parser.add_argument("--cognitive-map")
     parser.add_argument("--concept-graph")
     parser.add_argument("--working-memory")
+    parser.add_argument("--ambient-policy")
     parser.add_argument("--semantic-triggers")
     parser.add_argument("--semantic-cues")
     parser.add_argument("--semantic-cache")
@@ -209,6 +210,7 @@ def main() -> int:
             cognitive_map_path=Path(args.cognitive_map) if args.cognitive_map else None,
             concept_graph_path=Path(args.concept_graph) if args.concept_graph else None,
             working_memory_path=Path(args.working_memory) if args.working_memory else None,
+            ambient_policy_path=Path(args.ambient_policy) if args.ambient_policy else None,
             semantic_triggers_path=Path(args.semantic_triggers) if args.semantic_triggers else None,
             semantic_cues_path=Path(args.semantic_cues) if args.semantic_cues else None,
             semantic_cache_path=Path(args.semantic_cache) if args.semantic_cache else None,
