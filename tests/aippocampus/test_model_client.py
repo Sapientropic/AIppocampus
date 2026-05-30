@@ -219,6 +219,37 @@ class ModelClientTests(unittest.TestCase):
                 ),
             )
 
+    def test_chat_json_can_omit_json_response_format_for_compatible_providers(self) -> None:
+        captured: dict[str, object] = {}
+
+        class FakeResponse:
+            def __enter__(self) -> "FakeResponse":
+                return self
+
+            def __exit__(self, *_: object) -> None:
+                return None
+
+            def read(self) -> bytes:
+                return json.dumps({"choices": [{"message": {"content": "{}"}}]}).encode("utf-8")
+
+        def fake_urlopen(req: object, timeout: int) -> FakeResponse:
+            del timeout
+            captured["body"] = json.loads(getattr(req, "data").decode("utf-8"))
+            return FakeResponse()
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            model_client.chat_json(
+                [{"role": "user", "content": "{}"}],
+                model_client.ChatClientConfig(
+                    api_key="test",
+                    model="local-model",
+                    base_url="http://127.0.0.1:11434/v1",
+                    response_format_json=False,
+                ),
+            )
+
+        self.assertNotIn("response_format", captured["body"])
+
 
 if __name__ == "__main__":
     unittest.main()

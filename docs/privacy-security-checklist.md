@@ -32,6 +32,11 @@ bundle, demo, release, or plugin package.
 ## External Models
 
 - DeepSeek-compatible routes are optional.
+- Non-DeepSeek OpenAI-compatible or local/offline routes must be explicitly
+  configured and selected; they are privacy/fallback routes, not default
+  quality-parity claims.
+- Provider-specific fields such as DeepSeek `user_id`, `thinking`, and
+  prefix-cache metrics must be gated by route capabilities.
 - Prompt-time external-model calls must pass through shared redaction.
 - Mostly-secret prompts should hard-skip external calls.
 - Missing API keys should return structured errors, not tracebacks.

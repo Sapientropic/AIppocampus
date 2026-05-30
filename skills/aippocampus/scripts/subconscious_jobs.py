@@ -21,8 +21,16 @@ from aippocampuslib import (
     cli_error_payload_from_message,
     cli_exit_code_for_error_code,
     compact_text,
-    deepseek_cache_metrics_from_usage,
     now_utc,
+)
+from deepseek_model_routing import (
+    DEFAULT_DEEPSEEK_API_KEY_ENV,
+    ModelRoute,
+    resolve_model_route,
+    route_artifact_source,
+    route_cache_metrics,
+    route_payload_with_effective_values,
+    route_service_name,
 )
 from subconscious_job_circuits import JOB_SPECS, PROMPT_VERSION, job_names, jobs_initial_payload
 from subconscious_job_plan import JobRunTask, plan_job_run_tasks, sample_count, worker_count
@@ -92,7 +100,14 @@ def parse_action_for_job(response: dict[str, Any]) -> dict[str, Any]:
 
 
 def append_job_findings(
-    path: Path, findings: list[dict[str, Any]], *, model: str, batch_id: str, usage: dict[str, Any]
+    path: Path,
+    findings: list[dict[str, Any]],
+    *,
+    model: str,
+    batch_id: str,
+    usage: dict[str, Any],
+    source: str = "deepseek_subconscious_jobs",
+    model_route: dict[str, Any] | None = None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8", newline="\n") as fh:
@@ -107,7 +122,8 @@ def append_job_findings(
                 "model": model,
                 "batch_id": batch_id,
                 "status": "staging",
-                "source": "deepseek_subconscious_jobs",
+                "source": source,
+                "model_route": model_route or {},
                 "usage": usage or {},
                 **payload,
             }
@@ -151,6 +167,9 @@ def run_one_job(
     max_tokens: int | None,
     timeout: int,
     temperature: float,
+    api_key_env: str = DEFAULT_DEEPSEEK_API_KEY_ENV,
+    model_route: str | None = None,
+    route: ModelRoute | None = None,
     chat_fn: ChatFn = call_chat_json,
     dry_run: bool = False,
     no_write: bool = False,
@@ -183,8 +202,37 @@ def run_one_job(
             "effective_step_budget": step_budget,
             "prompt_preview": compact_text(initial_payload, 2600),
         }
-    if not api_key:
-        raise RuntimeError("missing DeepSeek API key; set DEEPSEEK_API_KEY or pass --api-key-env")
+    route = route or resolve_model_route(
+        model_route,
+        explicit_model=model if model != DEFAULT_MODEL and not model_route else None,
+        explicit_base_url=base_url if base_url != DEFAULT_BASE_URL and not model_route else None,
+        explicit_api_key_env=(
+            api_key_env
+            if api_key_env != DEFAULT_DEEPSEEK_API_KEY_ENV and not model_route
+            else None
+        ),
+    )
+    capabilities = route.capabilities
+    resolved_model = route.model if model == DEFAULT_MODEL else model
+    resolved_base_url = route.base_url if base_url == DEFAULT_BASE_URL else base_url
+    resolved_api_key_env = (
+        route.api_key_env
+        if api_key_env == DEFAULT_DEEPSEEK_API_KEY_ENV
+        else api_key_env
+    )
+    route_payload = route_payload_with_effective_values(
+        route,
+        model=resolved_model,
+        base_url=resolved_base_url,
+        api_key_env=resolved_api_key_env,
+    )
+    artifact_source = route_artifact_source(route, "subconscious_jobs")
+    key_value = api_key or os.environ.get(resolved_api_key_env)
+    if not key_value:
+        raise RuntimeError(
+            f"missing {route_service_name(route)} key; "
+            f"set {resolved_api_key_env} or pass --api-key-env"
+        )
 
     system_prompt = (
         AGENT_SYSTEM_PROMPT
@@ -232,9 +280,9 @@ def run_one_job(
         step_budget=step_budget,
         min_tool_steps=min_tool_steps,
         chat_fn=chat_fn,
-        api_key=api_key,
-        model=model,
-        base_url=base_url,
+        api_key=str(key_value),
+        model=resolved_model,
+        base_url=resolved_base_url,
         max_tokens=max_tokens,
         timeout=timeout,
         temperature=temperature,
@@ -262,6 +310,14 @@ def run_one_job(
             "Next: call another tool if needed; otherwise return action=final with source-backed findings. "
             "Do not return empty findings when observations contain useful durable structure."
         ),
+        chat_kwargs={
+            "service_name": route_service_name(route),
+            "response_format_json": bool(
+                capabilities.supports_json_response if capabilities else True
+            ),
+        }
+        if chat_fn is call_chat_json
+        else None,
     )
     findings = loop.final_items
 
@@ -269,17 +325,24 @@ def run_one_job(
     edge_count = 0
     if not no_write and not defer_writes:
         append_job_findings(
-            jobs_output_path, findings, model=model, batch_id=batch_id, usage=loop.usage_total
+            jobs_output_path,
+            findings,
+            model=resolved_model,
+            batch_id=batch_id,
+            usage=loop.usage_total,
+            source=artifact_source,
+            model_route=route_payload,
         )
         if edges:
             append_staging_edges(
                 edges_output_path,
                 edges,
-                model=model,
+                model=resolved_model,
                 batch_id=batch_id,
                 usage=loop.usage_total,
                 prompt_version=PROMPT_VERSION,
-                source="deepseek_subconscious_jobs",
+                source=artifact_source,
+                model_route=route_payload,
             )
             edge_count = len(edges)
     return {
@@ -288,7 +351,8 @@ def run_one_job(
         "job": job,
         "sample_index": sample_index,
         "sample_count": sample_count,
-        "model": model,
+        "model": resolved_model,
+        "model_route": route_payload,
         "turn_count": len(turns),
         "finding_count": len(findings),
         "edge_count": edge_count if (not no_write and not defer_writes) else len(edges),
@@ -296,13 +360,14 @@ def run_one_job(
         "tool_steps": loop.tool_steps,
         "final_attempts": loop.final_attempts,
         "usage": loop.usage_total,
-        "cache": deepseek_cache_metrics_from_usage(loop.usage_total),
+        "cache": route_cache_metrics(route, loop.usage_total),
         "jobs_output": str(jobs_output_path),
         "edges_output": str(edges_output_path),
         "wrote": False if no_write or defer_writes else True,
         "deferred_write": bool(defer_writes and not no_write),
         "batch_id": batch_id,
         "effective_step_budget": step_budget,
+        "timeout": timeout,
         "temperature": temperature,
     }
 
@@ -384,6 +449,8 @@ def run_jobs(
     max_tokens: int | None,
     timeout: int,
     temperature: float,
+    api_key_env: str = DEFAULT_DEEPSEEK_API_KEY_ENV,
+    model_route: str | None = None,
     dry_run: bool = False,
     no_write: bool = False,
     concurrency: int = DEFAULT_CONCURRENCY,
@@ -394,6 +461,34 @@ def run_jobs(
     usage_total: dict[str, Any] = {}
     sample_total = sample_count(samples_per_job)
     task_specs = plan_job_run_tasks(jobs, samples_per_job=sample_total)
+    route = resolve_model_route(
+        model_route,
+        explicit_model=model if model != DEFAULT_MODEL and not model_route else None,
+        explicit_base_url=base_url if base_url != DEFAULT_BASE_URL and not model_route else None,
+        explicit_api_key_env=(
+            api_key_env
+            if api_key_env != DEFAULT_DEEPSEEK_API_KEY_ENV and not model_route
+            else None
+        ),
+    )
+    capabilities = route.capabilities
+    resolved_model = route.model if model == DEFAULT_MODEL else model
+    resolved_base_url = route.base_url if base_url == DEFAULT_BASE_URL else base_url
+    resolved_api_key_env = (
+        route.api_key_env
+        if api_key_env == DEFAULT_DEEPSEEK_API_KEY_ENV
+        else api_key_env
+    )
+    route_payload = route_payload_with_effective_values(
+        route,
+        model=resolved_model,
+        base_url=resolved_base_url,
+        api_key_env=resolved_api_key_env,
+    )
+    key_value = api_key or os.environ.get(resolved_api_key_env)
+    effective_concurrency = int(concurrency)
+    if route.provider != "deepseek" and capabilities:
+        effective_concurrency = min(effective_concurrency, capabilities.safe_default_concurrency)
 
     def failed_result(job: str, sample_index: int, exc: BaseException) -> dict[str, Any]:
         return {
@@ -402,7 +497,8 @@ def run_jobs(
             "job": job,
             "sample_index": sample_index,
             "sample_count": sample_total,
-            "model": model,
+            "model": resolved_model,
+            "model_route": route_payload,
             "finding_count": 0,
             "edge_count": 0,
             "findings": [],
@@ -429,12 +525,15 @@ def run_jobs(
             max_turns=max_turns,
             max_steps=max_steps,
             min_tool_steps=min_tool_steps,
-            model=model,
-            base_url=base_url,
-            api_key=api_key,
+            model=resolved_model,
+            base_url=resolved_base_url,
+            api_key=key_value,
             max_tokens=max_tokens,
             timeout=timeout,
             temperature=temperature,
+            api_key_env=resolved_api_key_env,
+            model_route=model_route,
+            route=route,
             chat_fn=chat_fn,
             dry_run=dry_run,
             no_write=no_write,
@@ -443,7 +542,7 @@ def run_jobs(
             sample_count=task.sample_count,
         )
 
-    max_workers = worker_count(concurrency=concurrency, task_count=len(task_specs))
+    max_workers = worker_count(concurrency=effective_concurrency, task_count=len(task_specs))
     indexed_results = run_tasks_in_sample_waves(
         task_specs,
         max_workers=max_workers,
@@ -463,20 +562,23 @@ def run_jobs(
             append_job_findings(
                 jobs_output_path,
                 result.get("findings") or [],
-                model=model,
+                model=resolved_model,
                 batch_id=str(result.get("batch_id") or ""),
                 usage=result.get("usage") or {},
+                source=route_artifact_source(route, "subconscious_jobs"),
+                model_route=route_payload,
             )
             edges = concept_findings_to_edges(result.get("findings") or [])
             if edges:
                 append_staging_edges(
                     edges_output_path,
                     edges,
-                    model=model,
+                    model=resolved_model,
                     batch_id=str(result.get("batch_id") or ""),
                     usage=result.get("usage") or {},
                     prompt_version=PROMPT_VERSION,
-                    source="deepseek_subconscious_jobs",
+                    source=route_artifact_source(route, "subconscious_jobs"),
+                    model_route=route_payload,
                 )
             result["wrote"] = True
             result["deferred_write"] = False
@@ -494,10 +596,13 @@ def run_jobs(
         "requested_job_count": len(jobs),
         "samples_per_job": sample_total,
         "concurrency": max_workers,
+        "timeout": timeout,
+        "temperature": temperature,
+        "model_route": route_payload,
         "finding_count": sum(int(result.get("finding_count") or 0) for result in results),
         "edge_count": sum(int(result.get("edge_count") or 0) for result in results),
         "usage": usage_total,
-        "cache": deepseek_cache_metrics_from_usage(usage_total),
+        "cache": route_cache_metrics(route, usage_total),
         "jobs_output": str(jobs_output_path),
         "edges_output": str(edges_output_path),
         "wrote": False if no_write or dry_run else successful_count > 0,
@@ -525,6 +630,8 @@ def run_jobs_with_config(
         max_tokens=config.max_tokens,
         timeout=config.timeout,
         temperature=config.temperature,
+        api_key_env=config.api_key_env,
+        model_route=config.model_route,
         dry_run=config.dry_run,
         no_write=config.no_write,
         concurrency=config.concurrency,
@@ -547,9 +654,10 @@ def main() -> int:
     parser.add_argument("--max-turns", type=int, default=DEFAULT_MAX_TURNS)
     parser.add_argument("--max-steps", type=int, default=DEFAULT_MAX_STEPS)
     parser.add_argument("--min-tool-steps", type=int, default=DEFAULT_MIN_TOOL_STEPS)
+    parser.add_argument("--model-route")
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
-    parser.add_argument("--api-key-env", default="DEEPSEEK_API_KEY")
+    parser.add_argument("--api-key-env", default=DEFAULT_DEEPSEEK_API_KEY_ENV)
     parser.add_argument("--max-tokens", type=int, default=None)
     parser.add_argument("--timeout", type=int, default=120)
     parser.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE)

@@ -127,6 +127,28 @@ strict materializer. This restores labels only when stronger per-label evidence
 passes the same thresholds; it must not lower thresholds or revive empty
 evidence from old broad sidecars.
 
+## Provider Route Boundary
+
+DeepSeek remains the default high-throughput route for semantic gates, warm
+scouts, subconscious jobs, and review passes. Non-DeepSeek OpenAI-compatible
+routes are explicit fallbacks, not quality or latency parity claims. Configure
+one with `AIPPOCAMPUS_OPENAI_COMPAT_ROUTE`,
+`AIPPOCAMPUS_OPENAI_COMPAT_PROVIDER`, `AIPPOCAMPUS_OPENAI_COMPAT_MODEL`,
+`AIPPOCAMPUS_OPENAI_COMPAT_BASE_URL`, and
+`AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV`, then select it with `--model-route`
+on the relevant worker/review CLI.
+
+By default, OpenAI-compatible fallback routes do not send DeepSeek-only
+`user_id` or `thinking` fields, do not assume DeepSeek prefix-cache metrics,
+and use conservative concurrency (`AIPPOCAMPUS_OPENAI_COMPAT_CONCURRENCY`,
+default 1). Set `AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_JSON`,
+`AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_USER_ID`,
+`AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_THINKING`, and
+`AIPPOCAMPUS_OPENAI_COMPAT_CACHE_METRICS_KIND` only when the selected endpoint
+actually supports those behaviors. Local/offline routes are appropriate for
+privacy-sensitive or disconnected operation; do not route foreground hooks to
+them by default or claim they match hosted Flash-class throughput.
+
 ## Concurrency Contract
 
 DeepSeek can be used aggressively, but hooks must stay cheap. The split is:

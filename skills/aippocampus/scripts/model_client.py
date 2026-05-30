@@ -24,6 +24,7 @@ class ChatClientConfig:
     service_name: str = "OpenAI-compatible chat API"
     user_id: str | None = None
     thinking: str | None = None
+    response_format_json: bool = True
 
 
 def _chat_completions_url(config: ChatClientConfig) -> str:
@@ -43,8 +44,9 @@ def chat_json(messages: list[dict[str, str]], config: ChatClientConfig) -> dict[
     body: dict[str, Any] = {
         "model": config.model,
         "messages": sanitize_external_model_payload(messages),
-        "response_format": {"type": "json_object"},
     }
+    if config.response_format_json:
+        body["response_format"] = {"type": "json_object"}
     if thinking != "enabled":
         body["temperature"] = config.temperature
     if config.max_tokens is not None:

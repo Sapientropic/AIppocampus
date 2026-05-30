@@ -466,6 +466,8 @@ class AmbientRecallHookTests(unittest.TestCase):
                 "workers": [],
                 "errors": [],
                 "cached": False,
+                "model_route": {"provider": "test-provider", "model": "test-model"},
+                "cache_diagnostics": {"lookup": "disabled"},
             }
 
         semantic_result = hook.assess_prompt(
@@ -973,6 +975,8 @@ class AmbientRecallHookTests(unittest.TestCase):
                 "workers": [],
                 "errors": [],
                 "cached": False,
+                "model_route": {"provider": "test-provider", "model": "test-model"},
+                "cache_diagnostics": {"lookup": "disabled"},
             }
 
         result = hook.assess_prompt(
@@ -988,6 +992,11 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertIn("timeout", seen)
         self.assertLessEqual(seen["timeout"], 1.8)
         self.assertEqual(result["semantic_gate"]["available"], False)
+        self.assertEqual(result["semantic_gate"]["budget"]["requested_timeout"], 3)
+        self.assertEqual(result["semantic_gate"]["budget"]["effective_timeout"], seen["timeout"])
+        self.assertTrue(result["semantic_gate"]["budget"]["budget_clipped"])
+        self.assertEqual(result["semantic_gate"]["model_route"]["provider"], "test-provider")
+        self.assertEqual(result["semantic_gate"]["cache_diagnostics"]["lookup"], "disabled")
 
     def test_tiny_foreground_budget_skips_semantic_gate(self) -> None:
         registry_path = self.root / "semantic-budget-skip-registry" / "threads.json"
@@ -1014,6 +1023,9 @@ class AmbientRecallHookTests(unittest.TestCase):
 
         self.assertEqual(result["semantic_gate"]["available"], False)
         self.assertIn("foreground budget", " ".join(result["semantic_gate"]["reasons"]))
+        self.assertEqual(result["semantic_gate"]["budget"]["requested_timeout"], 3)
+        self.assertIsNone(result["semantic_gate"]["budget"]["effective_timeout"])
+        self.assertTrue(result["semantic_gate"]["budget"]["budget_clipped"])
 
     def test_multilingual_natural_language_can_reach_semantic_gate(self) -> None:
         registry_path = self.root / "semantic-registry-ru" / "threads.json"

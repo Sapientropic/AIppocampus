@@ -13,6 +13,8 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
+from aippocampuslib import deepseek_cache_metrics_from_usage
+
 FLASH_ROUTES = {"", "default", "fast", "flash", "cheap", "background"}
 PRO_ROUTES = {"pro", "slow_adjudication", "suppressed_label_recovery", "agentic_source_review"}
 DEFAULT_FLASH_MODEL = "deepseek-v4-flash"
@@ -20,6 +22,7 @@ DEFAULT_PRO_MODEL = "deepseek-v4-pro"
 DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEFAULT_DEEPSEEK_API_KEY_ENV = "DEEPSEEK_API_KEY"
 OPENAI_COMPAT_ROUTE_FALLBACKS = {"openai_compatible", "external", "custom_openai"}
+EXPLICIT_OPENAI_COMPAT_ROUTE = "explicit_openai_compatible"
 
 
 def env_truthy(name: str, *, default: bool) -> bool:
@@ -119,6 +122,68 @@ def deepseek_route(route: str, tier: str, model: str) -> ModelRoute:
     )
 
 
+def conservative_openai_compatible_route(
+    route: str,
+    *,
+    model: str,
+    base_url: str,
+    api_key_env: str,
+    provider: str = "openai-compatible",
+) -> ModelRoute:
+    return ModelRoute(
+        route=route,
+        tier="openai_compatible",
+        model=model,
+        provider=provider,
+        base_url=base_url,
+        api_key_env=api_key_env,
+        capabilities=ModelCapabilities(
+            api_compatibility="openai_chat_completions",
+            supports_json_response=True,
+            supports_user_id=False,
+            supports_thinking=False,
+            cache_metrics_kind="none",
+            safe_default_concurrency=1,
+        ),
+    )
+
+
+def route_service_name(route: ModelRoute) -> str:
+    if route.provider == "deepseek":
+        return "DeepSeek API"
+    provider = route.provider.strip() or "OpenAI-compatible"
+    return f"{provider} OpenAI-compatible API"
+
+
+def route_cache_metrics(route: ModelRoute, usage: dict[str, Any]) -> dict[str, Any]:
+    capabilities = route.capabilities or deepseek_capabilities(route.tier)
+    kind = capabilities.cache_metrics_kind or "none"
+    if kind == "deepseek_prefix":
+        result = deepseek_cache_metrics_from_usage(usage)
+        result["kind"] = kind
+        return result
+    return {"available": False, "kind": kind}
+
+
+def route_payload_with_effective_values(
+    route: ModelRoute,
+    *,
+    model: str,
+    base_url: str,
+    api_key_env: str,
+) -> dict[str, Any]:
+    payload = route.as_dict()
+    payload["model"] = model
+    payload["base_url"] = base_url
+    payload["api_key_env"] = api_key_env
+    return payload
+
+
+def route_artifact_source(route: ModelRoute, suffix: str) -> str:
+    prefix = "deepseek" if route.provider == "deepseek" else "external_model"
+    return f"{prefix}_{suffix}"
+
+
 def configured_openai_compatible_route_names() -> set[str]:
     configured_route = os.environ.get("AIPPOCAMPUS_OPENAI_COMPAT_ROUTE", "").strip()
     provider = os.environ.get("AIPPOCAMPUS_OPENAI_COMPAT_PROVIDER", "").strip()
@@ -183,8 +248,24 @@ def configured_openai_compatible_route(route: str) -> ModelRoute:
     )
 
 
-def resolve_model_route(route: str | None, *, explicit_model: str | None = None) -> ModelRoute:
+def resolve_model_route(
+    route: str | None,
+    *,
+    explicit_model: str | None = None,
+    explicit_base_url: str | None = None,
+    explicit_api_key_env: str | None = None,
+) -> ModelRoute:
     normalized = str(route or "default").strip() or "default"
+    custom_base_url = str(explicit_base_url or "").strip()
+    custom_api_key_env = str(explicit_api_key_env or "").strip()
+    explicit_model_name = explicit_model or flash_model()
+    if not route and custom_base_url and not explicit_model_name.startswith("deepseek"):
+        return conservative_openai_compatible_route(
+            EXPLICIT_OPENAI_COMPAT_ROUTE,
+            model=explicit_model_name,
+            base_url=custom_base_url or deepseek_base_url(),
+            api_key_env=custom_api_key_env or DEFAULT_DEEPSEEK_API_KEY_ENV,
+        )
     if explicit_model:
         return deepseek_route(normalized, "custom", explicit_model)
     if normalized in PRO_ROUTES:

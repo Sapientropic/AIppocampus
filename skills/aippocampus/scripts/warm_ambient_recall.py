@@ -22,7 +22,6 @@ from typing import Any, Callable
 
 from aippocampuslib import (
     compact_text,
-    deepseek_cache_metrics_from_usage,
     now_utc,
     sanitize_external_model_payload,
     sanitize_external_model_text,
@@ -41,6 +40,13 @@ from ambient_thread_cache import (
     default_ambient_cache_path,
     topic_epoch_from_terms,
     write_thread_cache,
+)
+from deepseek_model_routing import (
+    DEFAULT_DEEPSEEK_API_KEY_ENV,
+    resolve_model_route,
+    route_cache_metrics,
+    route_payload_with_effective_values,
+    route_service_name,
 )
 from registry import load_registry, registry_paths, unique_preserve
 from retrieval import split_query_terms
@@ -163,6 +169,7 @@ def warm_deepseek_user_id(*, cwd: Path | str, thread_id: str | None = None, user
         return user_id
     seed = f"{Path(cwd).resolve()}\n{thread_id or ''}\nwarm-ambient-recall"
     return f"{DEFAULT_USER_ID_PREFIX}-{hashlib.sha1(seed.casefold().encode('utf-8')).hexdigest()[:32]}"
+
 
 THEME_STOPWORDS = {
     "a",
@@ -348,12 +355,17 @@ def model_scout_fn(
     timeout: float,
     temperature: float,
     user_id: str | None,
+    thinking: str | None,
+    service_name: str,
+    response_format_json: bool,
     chat_fn: ChatFn,
 ) -> dict[str, Any]:
-    thinking = resolve_thinking_mode()
-    kwargs = {"thinking": thinking} if thinking else {}
+    kwargs: dict[str, Any] = {"thinking": thinking} if thinking else {}
     if user_id:
         kwargs["user_id"] = user_id
+    if chat_fn is call_chat_json:
+        kwargs["service_name"] = service_name
+        kwargs["response_format_json"] = response_format_json
     return chat_fn(
         [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -590,6 +602,9 @@ def run_scout(
     timeout: float,
     temperature: float,
     user_id: str | None,
+    thinking: str | None,
+    service_name: str,
+    response_format_json: bool,
     chat_fn: ChatFn,
     scout_fn: ScoutFn,
 ) -> dict[str, Any]:
@@ -603,6 +618,9 @@ def run_scout(
         timeout=timeout,
         temperature=temperature,
         user_id=user_id,
+        thinking=thinking,
+        service_name=service_name,
+        response_format_json=response_format_json,
         chat_fn=chat_fn,
     )
     return parse_scout_output(raw, scout)
@@ -621,6 +639,9 @@ def run_scout_batch(
     quorum: int,
     max_workers: int | None,
     user_id: str | None,
+    thinking: str | None,
+    service_name: str,
+    response_format_json: bool,
     wait_all: bool,
     prefix_cache_warmup_scouts: int = 0,
     prefix_cache_warmup_delay: float = 0.0,
@@ -657,6 +678,9 @@ def run_scout_batch(
                 timeout=timeout,
                 temperature=temperature,
                 user_id=user_id,
+                thinking=thinking,
+                service_name=service_name,
+                response_format_json=response_format_json,
                 chat_fn=chat_fn,
                 scout_fn=scout_fn,
             )
@@ -967,7 +991,13 @@ def resolve_topic_epoch(
     }
 
 
-def unavailable_result(reason: str, *, secret_policy: dict[str, Any] | None = None) -> dict[str, Any]:
+def unavailable_result(
+    reason: str,
+    *,
+    secret_policy: dict[str, Any] | None = None,
+    model_route: dict[str, Any] | None = None,
+    cache: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     return {
         "kind": "aippocampus_warm_ambient_recall",
         "schema_version": SCHEMA_VERSION,
@@ -977,10 +1007,14 @@ def unavailable_result(reason: str, *, secret_policy: dict[str, Any] | None = No
         "status": "unavailable",
         "reason": reason,
         "quorum_met": False,
+        "timeout": None,
+        "temperature": None,
         "accepted_scout_count": 0,
         "failed_scout_count": 0,
         "scouts": [],
         "cards": [],
+        "model_route": model_route or {},
+        "cache": cache or {},
         "cache_write": None,
         "secret_policy": secret_policy or None,
         "late_update_policy": "standalone_warm_path_only",
@@ -1036,6 +1070,8 @@ def warm_job_result_summary(job: dict[str, Any], result: dict[str, Any]) -> dict
         "topic_epoch_action": (result.get("topic_epoch_decision") or {}).get("action"),
         "current_thread_echo_count": int(result.get("current_thread_echo_count") or 0),
         "cache_write": _cache_write_summary(result.get("cache_write")),
+        "cache": result.get("cache") or {},
+        "model_route": result.get("model_route") or {},
         "elapsed_ms": float(result.get("elapsed_ms") or 0.0),
         "late_update_policy": "detached_wait_all_writes_thread_cache",
         "privacy_boundary": {
@@ -1076,8 +1112,9 @@ def run_warm_job_file(
         residue_path=Path(str(job.get("residue_path"))).resolve() if job.get("residue_path") else None,
         residue_reason="detached_warm_scout",
         api_key=api_key,
-        api_key_env=str(job.get("api_key_env") or "DEEPSEEK_API_KEY"),
+        api_key_env=str(job.get("api_key_env") or DEFAULT_DEEPSEEK_API_KEY_ENV),
         user_id=str(job.get("user_id") or "") or None,
+        model_route=str(job.get("model_route") or "") or None,
         timeout=float(job.get("timeout") or DEFAULT_TIMEOUT),
         quorum=int(job.get("quorum") or DEFAULT_QUORUM),
         max_workers=int(job.get("max_workers") or 0) or None,
@@ -1120,8 +1157,9 @@ def run_warm_ambient_recall(
     residue_path: Path | str | None = None,
     residue_reason: str = "warm_scout",
     api_key: str | None = None,
-    api_key_env: str = "DEEPSEEK_API_KEY",
+    api_key_env: str = DEFAULT_DEEPSEEK_API_KEY_ENV,
     user_id: str | None = None,
+    model_route: str | None = None,
     model: str = DEFAULT_MODEL,
     base_url: str = DEFAULT_BASE_URL,
     max_tokens: int | None = None,
@@ -1148,11 +1186,49 @@ def run_warm_ambient_recall(
             str(secret_policy.get("reason") or "sensitive prompt hard-blocked"),
             secret_policy=secret_policy,
         )
-    key_value = api_key or os.environ.get(api_key_env)
+    route = resolve_model_route(
+        model_route,
+        explicit_model=model if model != DEFAULT_MODEL and not model_route else None,
+        explicit_base_url=base_url if base_url != DEFAULT_BASE_URL and not model_route else None,
+        explicit_api_key_env=(
+            api_key_env
+            if api_key_env != DEFAULT_DEEPSEEK_API_KEY_ENV and not model_route
+            else None
+        ),
+    )
+    capabilities = route.capabilities
+    resolved_model = route.model if model == DEFAULT_MODEL else model
+    resolved_base_url = route.base_url if base_url == DEFAULT_BASE_URL else base_url
+    resolved_api_key_env = (
+        route.api_key_env
+        if api_key_env == DEFAULT_DEEPSEEK_API_KEY_ENV
+        else api_key_env
+    )
+    route_payload = route_payload_with_effective_values(
+        route,
+        model=resolved_model,
+        base_url=resolved_base_url,
+        api_key_env=resolved_api_key_env,
+    )
+    key_value = api_key or os.environ.get(resolved_api_key_env)
     if not key_value:
-        return unavailable_result("missing api key", secret_policy=secret_policy)
-    resolved_user_id = warm_deepseek_user_id(cwd=cwd_path, thread_id=thread_id, user_id=user_id)
+        return unavailable_result(
+            "missing api key",
+            secret_policy=secret_policy,
+            model_route=route_payload,
+            cache=route_cache_metrics(route, {}),
+        )
+    supports_user_id = bool(capabilities.supports_user_id if capabilities else True)
+    supports_thinking = bool(capabilities.supports_thinking if capabilities else True)
+    resolved_user_id = (
+        warm_deepseek_user_id(cwd=cwd_path, thread_id=thread_id, user_id=user_id)
+        if supports_user_id
+        else None
+    )
+    resolved_thinking = resolve_thinking_mode() if supports_thinking else None
     resolved_max_workers = resolve_max_workers(max_workers)
+    if resolved_max_workers is None and route.provider != "deepseek" and capabilities:
+        resolved_max_workers = capabilities.safe_default_concurrency
     registry_obj, registry_path_obj = resolve_registry(
         registry=registry, registry_path=registry_path, registry_dir=registry_dir
     )
@@ -1168,14 +1244,17 @@ def run_warm_ambient_recall(
         scouts=scout_names,
         payload=payload,
         api_key=str(key_value),
-        model=model,
-        base_url=base_url,
+        model=resolved_model,
+        base_url=resolved_base_url,
         max_tokens=max_tokens,
         timeout=timeout,
         temperature=temperature,
         quorum=quorum,
         max_workers=resolved_max_workers,
         user_id=resolved_user_id,
+        thinking=resolved_thinking,
+        service_name=route_service_name(route),
+        response_format_json=bool(capabilities.supports_json_response if capabilities else True),
         wait_all=wait_all,
         prefix_cache_warmup_scouts=prefix_cache_warmup_scouts,
         prefix_cache_warmup_delay=prefix_cache_warmup_delay,
@@ -1253,7 +1332,10 @@ def run_warm_ambient_recall(
         "max_workers": resolved_max_workers or len(scout_names),
         "prefix_cache_warmup_scout_count": max(0, min(int(prefix_cache_warmup_scouts or 0), len(scout_names))),
         "prefix_cache_warmup_delay": max(0.0, float(prefix_cache_warmup_delay or 0.0)),
+        "timeout": timeout,
+        "temperature": temperature,
         "user_id": resolved_user_id,
+        "model_route": route_payload,
         "accepted_scout_count": accepted_count,
         "failed_scout_count": failed_count,
         "trace_fallback_card_count": len(fallback_cards),
@@ -1268,7 +1350,7 @@ def run_warm_ambient_recall(
         "current_thread_echo_count": merged.get("current_thread_echo_count", 0),
         "cache_write": cache_write,
         "usage": usage_total,
-        "cache": deepseek_cache_metrics_from_usage(usage_total),
+        "cache": route_cache_metrics(route, usage_total),
         "secret_policy": secret_policy,
         "cached": False,
         "elapsed_ms": round((time.perf_counter() - start) * 1000, 2),
@@ -1295,8 +1377,9 @@ def main() -> int:
     parser.add_argument("--cache")
     parser.add_argument("--residue")
     parser.add_argument("--residue-reason", default="warm_scout")
-    parser.add_argument("--api-key-env", default="DEEPSEEK_API_KEY")
+    parser.add_argument("--api-key-env", default=DEFAULT_DEEPSEEK_API_KEY_ENV)
     parser.add_argument("--user-id", help="Optional DeepSeek user_id; omit to send a stable sanitized hash.")
+    parser.add_argument("--model-route")
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
     parser.add_argument("--max-tokens", type=int, default=None)
@@ -1339,9 +1422,10 @@ def main() -> int:
         cache_path=args.cache,
         residue_path=args.residue,
         residue_reason=args.residue_reason,
-        api_key=os.environ.get(args.api_key_env),
+        api_key=None,
         api_key_env=args.api_key_env,
         user_id=args.user_id,
+        model_route=args.model_route,
         model=args.model,
         base_url=args.base_url,
         max_tokens=args.max_tokens,

@@ -9,9 +9,12 @@ from pathlib import Path
 from typing import Any
 
 from build_concept_graph import default_concept_graph_path
+from deepseek_model_routing import DEFAULT_DEEPSEEK_API_KEY_ENV, resolve_model_route
 from registry import registry_paths
 from subconscious_job_circuits import job_names
 from subconscious_worker import (
+    DEFAULT_BASE_URL,
+    DEFAULT_MODEL,
     default_project_timeline_path,
     default_staging_path,
 )
@@ -40,6 +43,8 @@ class JobsRunConfig:
     max_tokens: int | None
     timeout: int
     temperature: float
+    api_key_env: str = DEFAULT_DEEPSEEK_API_KEY_ENV
+    model_route: str | None = None
     concurrency: int = DEFAULT_CONCURRENCY
     samples_per_job: int = DEFAULT_SAMPLES_PER_JOB
     dry_run: bool = False
@@ -56,6 +61,25 @@ def default_jobs_output_path(
 
 
 def jobs_run_config_from_args(args: Any) -> JobsRunConfig:
+    model_route = getattr(args, "model_route", None)
+    arg_api_key_env = str(getattr(args, "api_key_env", DEFAULT_DEEPSEEK_API_KEY_ENV) or DEFAULT_DEEPSEEK_API_KEY_ENV)
+    model = str(getattr(args, "model", DEFAULT_MODEL) or DEFAULT_MODEL)
+    base_url = str(getattr(args, "base_url", DEFAULT_BASE_URL) or DEFAULT_BASE_URL)
+    route = resolve_model_route(
+        model_route,
+        explicit_model=model if model != DEFAULT_MODEL and not model_route else None,
+        explicit_base_url=base_url if base_url != DEFAULT_BASE_URL and not model_route else None,
+        explicit_api_key_env=(
+            arg_api_key_env
+            if arg_api_key_env != DEFAULT_DEEPSEEK_API_KEY_ENV and not model_route
+            else None
+        ),
+    )
+    api_key_env = (
+        route.api_key_env
+        if arg_api_key_env == DEFAULT_DEEPSEEK_API_KEY_ENV
+        else arg_api_key_env
+    )
     registry_path = (
         Path(args.registry).resolve()
         if args.registry
@@ -93,9 +117,11 @@ def jobs_run_config_from_args(args: Any) -> JobsRunConfig:
         max_turns=args.max_turns,
         max_steps=args.max_steps,
         min_tool_steps=args.min_tool_steps,
-        model=args.model,
-        base_url=args.base_url,
-        api_key=os.environ.get(args.api_key_env),
+        model=model,
+        base_url=base_url,
+        api_key=os.environ.get(api_key_env),
+        api_key_env=api_key_env,
+        model_route=model_route,
         max_tokens=args.max_tokens,
         timeout=args.timeout,
         temperature=args.temperature,

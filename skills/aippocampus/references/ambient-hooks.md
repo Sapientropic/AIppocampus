@@ -149,6 +149,14 @@ the default at 45s because they do not block the user; 15s is only the
 foreground-style quorum-first floor, and the 100-case wait-all calibration
 showed 30s as tight with read-timeout pressure.
 
+Provider route metadata must remain visible in semantic/warm diagnostics:
+`model_route` identifies provider, route, model, base URL, API-key env name,
+and capabilities, while `cache` / `cache_diagnostics` distinguish DeepSeek
+prefix-cache metrics from unsupported cache metrics. Non-DeepSeek
+OpenAI-compatible routes are explicit fallback/privacy routes; they default to
+no DeepSeek `user_id`, no DeepSeek `thinking`, no prefix-cache claim, and low
+concurrency unless configured otherwise.
+
 Callers may opt into residue export by passing a residue output path to the
 thread-cache writer. This writes `aippocampus_ambient_residue` JSONL rows for
 source-ref-fingerprinted cards so future dream jobs can inspect unused
