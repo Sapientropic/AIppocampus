@@ -139,6 +139,7 @@ Examples:
 - `question_extraction`
 - `question_tracking`
 - `theme_emergence`
+- `journey_tracking`
 - `trigger_mining`
 - `decision_evolution`
 
