@@ -31,6 +31,7 @@ from conversation_sources import (
 from privacy_projection import redact_private_paths
 from registry_provider import current_thread_build_cmd, thread_key_for
 from registry_search import (
+    REGISTRY_SEARCH_DEEP_BUDGET,
     clean_hit_rank_score,
     deep_search_entry,
     deep_search_entry_result,
@@ -602,6 +603,10 @@ def main() -> int:
         action="store_true",
         help="Only search registry metadata; skip registered SQLite indexes.",
     )
+    search.add_argument(
+        "--search-budget", choices=("default", "deep"), default="default",
+        help="Use the bounded default search budget or the larger diagnostic budget.",
+    )
     search.add_argument("--json", action="store_true", dest="json_output")
     search.add_argument("--redact-paths", action="store_true")
 
@@ -691,13 +696,14 @@ def main() -> int:
         from retrieval import split_query_terms
 
         query_terms = split_query_terms(args.terms)
+        search_budget = REGISTRY_SEARCH_DEEP_BUDGET if args.search_budget == "deep" else None
         scored = []
         warnings = []
         for entry in registry.get("threads", []):
             score = entry_search_score(entry, query_terms)
             index_hits = []
             if not args.metadata_only:
-                deep_result = deep_search_entry_result(entry, query_terms)
+                deep_result = deep_search_entry_result(entry, query_terms, search_budget=search_budget)
                 score += float(deep_result.get("score") or 0.0)
                 index_hits = list(deep_result.get("hits") or [])
                 for warning in deep_result.get("warnings") or []:

@@ -4,17 +4,43 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 
 from aippocampuslib import compact_text, is_injected_instruction_text
 
 __all__ = [
+    "RegistrySearchBudget",
+    "REGISTRY_SEARCH_DEFAULT_BUDGET",
+    "REGISTRY_SEARCH_DEEP_BUDGET",
     "entry_search_score",
     "search_noise_reason",
     "clean_hit_rank_score",
     "deep_search_entry_result",
     "deep_search_entry",
 ]
+
+
+@dataclass(frozen=True)
+class RegistrySearchBudget:
+    candidate_limit: int
+    snippet_chars: int
+    context_radius: int
+
+
+# Registry search feeds ambient recall and hook-safe surfaces. Keep the default
+# intentionally compact; callers that are in an explicit diagnostic/deep-search
+# flow can opt into the larger budget below.
+REGISTRY_SEARCH_DEFAULT_BUDGET = RegistrySearchBudget(
+    candidate_limit=80,
+    snippet_chars=260,
+    context_radius=0,
+)
+REGISTRY_SEARCH_DEEP_BUDGET = RegistrySearchBudget(
+    candidate_limit=160,
+    snippet_chars=700,
+    context_radius=2,
+)
 
 
 def entry_search_score(entry: dict, terms: list[str]) -> float:
@@ -78,7 +104,14 @@ def _search_warning(stage: str, path: str | Path, exc: Exception) -> dict:
     }
 
 
-def deep_search_entry_result(entry: dict, terms: list[str], max_hits: int = 3) -> dict:
+def deep_search_entry_result(
+    entry: dict,
+    terms: list[str],
+    max_hits: int = 3,
+    *,
+    search_budget: RegistrySearchBudget | None = None,
+) -> dict:
+    budget = search_budget or REGISTRY_SEARCH_DEFAULT_BUDGET
     paths = entry.get("paths") or {}
     warnings: list[dict] = []
     clean_messages = paths.get("clean_source_messages_jsonl")
@@ -135,7 +168,9 @@ def deep_search_entry_result(entry: dict, terms: list[str], max_hits: int = 3) -
                         "rank_score": round(rank_score, 3),
                         "search_noise": bool(noise_reason),
                         "noise_reason": noise_reason,
-                        "snippet": compact_text(str(message.get("text") or ""), 260),
+                        "snippet": compact_text(
+                            str(message.get("text") or ""), budget.snippet_chars
+                        ),
                     }
                     for rank_score, score, noise_reason, message in clean_hits[:max_hits]
                 ]
@@ -170,16 +205,17 @@ def deep_search_entry_result(entry: dict, terms: list[str], max_hits: int = 3) -
             expanded,
             anchors,
             limit=max_hits,
-            candidate_limit=80,
-            snippet_chars=260,
-            context_radius=0,
+            candidate_limit=budget.candidate_limit,
+            snippet_chars=budget.snippet_chars,
+            context_radius=budget.context_radius,
         )
     except Exception as exc:
         warnings.append(_search_warning("sqlite", sqlite_path, exc))
         return {"score": 0.0, "hits": [], "warnings": warnings}
     score = max((float(hit.get("score") or 0.0) for hit in hits), default=0.0) * 0.08
-    compact_hits = [
-        {
+    compact_hits = []
+    for hit in hits:
+        item = {
             "source": "sqlite",
             "line": hit.get("line"),
             "role": hit.get("role"),
@@ -189,11 +225,18 @@ def deep_search_entry_result(entry: dict, terms: list[str], max_hits: int = 3) -
             "score": hit.get("score"),
             "snippet": hit.get("snippet"),
         }
-        for hit in hits
-    ]
+        if "context" in hit:
+            item["context"] = hit.get("context")
+        compact_hits.append(item)
     return {"score": score, "hits": compact_hits, "warnings": warnings}
 
 
-def deep_search_entry(entry: dict, terms: list[str], max_hits: int = 3) -> tuple[float, list[dict]]:
-    result = deep_search_entry_result(entry, terms, max_hits=max_hits)
+def deep_search_entry(
+    entry: dict,
+    terms: list[str],
+    max_hits: int = 3,
+    *,
+    search_budget: RegistrySearchBudget | None = None,
+) -> tuple[float, list[dict]]:
+    result = deep_search_entry_result(entry, terms, max_hits=max_hits, search_budget=search_budget)
     return float(result.get("score") or 0.0), list(result.get("hits") or [])

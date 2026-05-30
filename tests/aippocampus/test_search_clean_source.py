@@ -277,6 +277,54 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertEqual(payload["warnings"][0]["thread_key"], "session:bad-clean")
         self.assertEqual(payload["warnings"][0]["stage"], "clean_source")
 
+    def test_registry_search_cli_can_request_deep_budget(self) -> None:
+        registry_file = self.cwd / "threads.json"
+        registry_file.write_text(
+            json.dumps(
+                {
+                    "threads": [
+                        {
+                            "thread_key": "session:deep-budget",
+                            "title": "Deep budget thread",
+                            "keywords": ["needle"],
+                            "paths": {"sqlite": str(self.cwd / "missing.sqlite")},
+                        }
+                    ]
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        captured: dict = {}
+
+        def fake_deep_search(entry: dict, terms: list[str], **kwargs: object) -> dict:
+            captured["budget"] = kwargs.get("search_budget")
+            return {"score": 1.0, "hits": [], "warnings": []}
+
+        stdout = io.StringIO()
+        with (
+            patch.object(registry, "deep_search_entry_result", side_effect=fake_deep_search),
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "registry.py",
+                    "--registry-dir",
+                    str(self.cwd),
+                    "search",
+                    "needle",
+                    "--search-budget",
+                    "deep",
+                    "--json",
+                ],
+            ),
+            contextlib.redirect_stdout(stdout),
+        ):
+            code = registry.main()
+
+        self.assertEqual(code, 0)
+        self.assertIs(captured["budget"], registry.REGISTRY_SEARCH_DEEP_BUDGET)
+
 
 if __name__ == "__main__":
     unittest.main()
