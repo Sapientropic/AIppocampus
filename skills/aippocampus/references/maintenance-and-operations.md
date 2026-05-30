@@ -23,8 +23,24 @@ daemon. It can rebuild stale source/indexes, prepare graphify corpus, refresh
 segments, and produce checkpoint candidates. It should not append checkpoints
 unless called with `--append-checkpoint`.
 
-Run maintenance writes serially on Windows. `build_index.py`,
-`aippocampus_maintenance.py`, and `sync_vault.py` may all touch SQLite files.
+Generated artifact writers must coordinate through same-directory leases instead
+of relying on users to run commands serially. `build_index.py` holds
+`.index-publish.lock` while publishing `messages.jsonl`, `source_index.sqlite`,
+`graph.json`, and `manifest.json`. `make_sqlite()` builds a unique temporary
+SQLite database, copies it to `versions/source_index-*.sqlite`, updates
+`source_index.pointer.json`, and then tries to refresh the stable
+`source_index.sqlite` compatibility file through SQLite's backup API with WAL
+enabled. New readers should resolve the pointer first, then fall back to
+last-known-good, then to the stable file. Do not reintroduce `unlink()` /
+`Path.replace()` publishing for live `source_index.sqlite`; Windows readers can
+hold that file open, and locked stable refreshes must degrade to the versioned
+pointer path rather than failing the whole index publish.
+
+`aippocampus_maintenance.py`, `aippocampus_lifecycle_hook.py`, and
+`sync_vault.py` should keep delegating SQLite writes to the index builders. If a
+future entrypoint writes generated SQLite directly, it must reuse
+`scripts/artifact_publish.py` rather than creating a parallel lock or retry
+scheme.
 
 ## Checkpoints And Anchors
 
@@ -62,13 +78,21 @@ need a CI-safe multi-GB threshold model without creating large files. Its output
 is synthetic aggregate capacity evidence only; it cannot prove real GB/TB
 runtime, Windows interrupted rebuild recovery, or physical sync behavior.
 
-Segmented index rebuilds use a same-directory `.rebuild.lock` lease before
-building or publishing segment SQLite shards. This is the single-writer
-discipline for Windows rebuilds: do not run two `build_segments.py` writers
-against the same output directory. If a process dies, the next run may recover a
-stale lease after the configured age, but operators should first verify no live
-writer is still using the directory. New segments are staged before publish, and
-failed publish restores last-known-good `seg-*` dirs and manifest metadata.
+Segmented index rebuilds use the same shared lease helper with a
+same-directory `.rebuild.lock` before building or publishing segment SQLite
+shards. This is the single-writer discipline for segment rebuilds: do not run
+two `build_segments.py` writers against the same output directory. If a process
+dies, the next run may recover a stale lease after the configured age, but
+operators should first verify no live writer is still using the directory. New
+segments are staged before publish, and failed publish restores last-known-good
+`seg-*` dirs and manifest metadata.
+
+Cross-device sync treats SQLite as a rebuildable generated cache, not durable
+truth. `sync_bundle.py` syncs registry manifests, graph metadata, and
+content-addressed clean source by default; it does not require generated SQLite
+files to move between devices. Target devices repair registry locators to local
+artifacts when present and should rebuild missing SQLite from clean source or raw
+rollout rather than trusting a stale source-device lock state.
 
 ## Retention And Cold Archive
 

@@ -22,6 +22,7 @@ from aippocampuslib import (
     parse_anchor_file,
     resolve_artifact_path,
 )
+from artifact_publish import resolve_sqlite_index_path
 
 
 def load_json(path: Path) -> dict:
@@ -169,7 +170,8 @@ def main() -> int:
 
     manifest_path = index_dir / "manifest.json"
     messages_path = index_dir / "messages.jsonl"
-    sqlite_path = index_dir / "source_index.sqlite"
+    stable_sqlite_path = index_dir / "source_index.sqlite"
+    sqlite_path = resolve_sqlite_index_path(stable_sqlite_path)
     manifest = load_json(manifest_path)
 
     index_reasons: list[str] = []
@@ -363,6 +365,8 @@ def main() -> int:
         "index": {
             "dir": str(index_dir),
             "manifest": str(manifest_path),
+            "sqlite": str(sqlite_path),
+            "stable_sqlite": str(stable_sqlite_path),
             "exists": bool(manifest),
             "stale": index_stale,
             "reasons": index_reasons,

@@ -147,8 +147,9 @@ move the operational contract into one reference doc.
   unless the user explicitly asks and the scope is safe.
 - Treat rollouts, bundles, vault notes, and registry rows as local private
   history.
-- Run maintenance writes serially on Windows; SQLite replacement can hit file
-  locks if index, vault sync, and maintenance writers overlap.
+- Generated artifact writers use the shared lease, versioned SQLite pointer,
+  last-known-good fallback, and SQLite backup publish helpers; do not replace
+  live `source_index.sqlite` files directly.
 - For repository docs work, run
   `python tools/aippocampus/docs/check_docs_health.py` from the repo root so
   `SKILL.md` stays an entrypoint rather than becoming a release log.

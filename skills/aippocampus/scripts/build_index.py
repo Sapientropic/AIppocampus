@@ -7,7 +7,6 @@ import argparse
 import json
 import os
 import sqlite3
-import time
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +23,13 @@ from aippocampuslib import (
     read_session_meta,
     resolve_artifact_path,
 )
+from artifact_publish import (
+    DEFAULT_SQLITE_BUSY_TIMEOUT_MS,
+    artifact_lease,
+    publish_sqlite_with_pointer,
+    remove_sqlite_artifact,
+    unique_temp_sqlite_path,
+)
 from retrieval import build_rag_chunks
 
 
@@ -35,10 +41,11 @@ def make_sqlite(
     *,
     rag_cache: bool = True,
     rag_chunk_chars: int = 2800,
+    publish_lock: bool = True,
+    sqlite_busy_timeout_ms: int = DEFAULT_SQLITE_BUSY_TIMEOUT_MS,
 ) -> dict:
-    tmp_path = index_path.with_name(f"{index_path.name}.tmp")
-    if tmp_path.exists():
-        tmp_path.unlink()
+    tmp_path = unique_temp_sqlite_path(index_path)
+    remove_sqlite_artifact(tmp_path)
     con = sqlite3.connect(tmp_path)
     rag_status: dict[str, Any] = {
         "enabled": False,
@@ -167,24 +174,28 @@ def make_sqlite(
     finally:
         con.close()
 
-    # Build into a temp file first. This avoids leaving a half-created index if
-    # another maintenance command is reading the previous SQLite file. Windows
-    # can still block replacement while another process holds the file, so retry
-    # briefly and fail loudly rather than corrupting the index.
-    replace_error = None
-    for _ in range(8):
-        try:
-            if index_path.exists():
-                index_path.unlink()
-            tmp_path.replace(index_path)
-            replace_error = None
-            break
-        except PermissionError as exc:
-            replace_error = exc
-            time.sleep(0.25)
-    if replace_error:
-        raise replace_error
-    return {"fts_enabled": fts_enabled, "fts_error": fts_error, "rag": rag_status}
+    try:
+        if publish_lock:
+            with artifact_lease(index_path.parent, ".index-publish.lock"):
+                publish_status = publish_sqlite_with_pointer(
+                    tmp_path,
+                    index_path,
+                    busy_timeout_ms=sqlite_busy_timeout_ms,
+                )
+        else:
+            publish_status = publish_sqlite_with_pointer(
+                tmp_path,
+                index_path,
+                busy_timeout_ms=sqlite_busy_timeout_ms,
+            )
+    finally:
+        remove_sqlite_artifact(tmp_path)
+    return {
+        "fts_enabled": fts_enabled,
+        "fts_error": fts_error,
+        "rag": rag_status,
+        "publish": publish_status,
+    }
 
 
 def main() -> int:
@@ -208,6 +219,12 @@ def main() -> int:
         default=2800,
         help="Approximate character budget per RAG-lite chunk.",
     )
+    parser.add_argument(
+        "--sqlite-busy-timeout-ms",
+        type=int,
+        default=DEFAULT_SQLITE_BUSY_TIMEOUT_MS,
+        help="SQLite busy timeout for publishing the stable compatibility index.",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
@@ -220,65 +237,78 @@ def main() -> int:
     meta = public_session_meta(raw_meta)
     messages, turns = normalize_rollout(rollout, include_tools=args.include_tools)
 
-    messages_path = output_dir / "messages.jsonl"
-    with messages_path.open("w", encoding="utf-8", newline="\n") as f:
-        for m in messages:
-            f.write(json.dumps(m, ensure_ascii=False) + "\n")
+    with artifact_lease(output_dir, ".index-publish.lock"):
+        messages_path = output_dir / "messages.jsonl"
+        with messages_path.open("w", encoding="utf-8", newline="\n") as f:
+            for m in messages:
+                f.write(json.dumps(m, ensure_ascii=False) + "\n")
 
-    sqlite_path = output_dir / "source_index.sqlite"
-    anchor_path = Path(args.anchors)
-    if not anchor_path.is_absolute():
-        anchor_path = cwd / anchor_path
-    anchors = parse_anchor_file(anchor_path)
-    sqlite_status = make_sqlite(
-        sqlite_path,
-        messages,
-        anchors,
-        turns,
-        rag_cache=not args.no_rag_cache,
-        rag_chunk_chars=args.rag_chunk_chars,
-    )
-    graph = build_anchor_graph(anchors, meta.get("id"))
-    graph_path = output_dir / "graph.json"
-    graph_path.write_text(json.dumps(graph, ensure_ascii=False, indent=2), encoding="utf-8")
+        sqlite_path = output_dir / "source_index.sqlite"
+        anchor_path = Path(args.anchors)
+        if not anchor_path.is_absolute():
+            anchor_path = cwd / anchor_path
+        anchors = parse_anchor_file(anchor_path)
+        sqlite_status = make_sqlite(
+            sqlite_path,
+            messages,
+            anchors,
+            turns,
+            rag_cache=not args.no_rag_cache,
+            rag_chunk_chars=args.rag_chunk_chars,
+            publish_lock=False,
+            sqlite_busy_timeout_ms=args.sqlite_busy_timeout_ms,
+        )
+        sqlite_publish = sqlite_status.get("publish") or {}
+        sqlite_current = sqlite_publish.get("current")
+        sqlite_pointer = sqlite_publish.get("pointer")
+        graph = build_anchor_graph(anchors, meta.get("id"))
+        graph_path = output_dir / "graph.json"
+        graph_path.write_text(json.dumps(graph, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    stat = rollout.stat()
-    manifest = {
-        "schema_version": 1,
-        "created_at": now_utc(),
-        "cwd": str(cwd),
-        "artifact_scope": "global_thread_store"
-        if args.output_dir is None
-        else "explicit_output_dir",
-        "storage_policy": {
-            "default": "CODEX_HOME/aippocampus-registry/threads/<thread>/index",
-            "legacy_project_local": ".aippocampus",
-            "why": "Indexes are private generated recall artifacts; project-local output is explicit compatibility, not the default.",
-        },
-        "source_rollout": str(rollout),
-        "source_rollout_size": stat.st_size,
-        "source_rollout_mtime": stat.st_mtime,
-        "source_rollout_sha256": file_sha256(rollout) if args.hash_source else None,
-        "anchor_file": str(anchor_path) if anchor_path.exists() else None,
-        "anchor_mtime": anchor_path.stat().st_mtime if anchor_path.exists() else None,
-        "anchor_sha256": file_sha256(anchor_path) if anchor_path.exists() else None,
-        "session_meta": meta,
-        "message_count": len(messages),
-        "first_message_line": messages[0]["line"] if messages else None,
-        "last_message_line": messages[-1]["line"] if messages else None,
-        "turn_count": len(turns),
-        "anchor_count": len(anchors),
-        "graph": {"node_count": len(graph["nodes"]), "edge_count": len(graph["edges"])},
-        "outputs": {
-            "messages_jsonl": str(messages_path),
-            "sqlite": str(sqlite_path),
-            "graph_json": str(graph_path),
-        },
-        "sqlite": sqlite_status,
-        "rag": sqlite_status.get("rag"),
-    }
-    manifest_path = output_dir / "manifest.json"
-    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        stat = rollout.stat()
+        manifest = {
+            "schema_version": 1,
+            "created_at": now_utc(),
+            "cwd": str(cwd),
+            "artifact_scope": "global_thread_store"
+            if args.output_dir is None
+            else "explicit_output_dir",
+            "storage_policy": {
+                "default": "CODEX_HOME/aippocampus-registry/threads/<thread>/index",
+                "legacy_project_local": ".aippocampus",
+                "why": "Indexes are private generated recall artifacts; project-local output is explicit compatibility, not the default.",
+            },
+            "publish_policy": {
+                "sqlite": "versioned_pointer_with_stable_backup",
+                "writer_lease": ".index-publish.lock",
+                "why": "Windows readers can hold the legacy SQLite file open; versioned indexes plus a pointer keep new readers moving while SQLite backup updates the stable compatibility file when possible.",
+            },
+            "source_rollout": str(rollout),
+            "source_rollout_size": stat.st_size,
+            "source_rollout_mtime": stat.st_mtime,
+            "source_rollout_sha256": file_sha256(rollout) if args.hash_source else None,
+            "anchor_file": str(anchor_path) if anchor_path.exists() else None,
+            "anchor_mtime": anchor_path.stat().st_mtime if anchor_path.exists() else None,
+            "anchor_sha256": file_sha256(anchor_path) if anchor_path.exists() else None,
+            "session_meta": meta,
+            "message_count": len(messages),
+            "first_message_line": messages[0]["line"] if messages else None,
+            "last_message_line": messages[-1]["line"] if messages else None,
+            "turn_count": len(turns),
+            "anchor_count": len(anchors),
+            "graph": {"node_count": len(graph["nodes"]), "edge_count": len(graph["edges"])},
+            "outputs": {
+                "messages_jsonl": str(messages_path),
+                "sqlite": str(sqlite_path),
+                "sqlite_current": str(sqlite_current) if sqlite_current else str(sqlite_path),
+                "sqlite_pointer": str(sqlite_pointer) if sqlite_pointer else None,
+                "graph_json": str(graph_path),
+            },
+            "sqlite": sqlite_status,
+            "rag": sqlite_status.get("rag"),
+        }
+        manifest_path = output_dir / "manifest.json"
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
     if args.json_output:
         print(json.dumps(manifest, ensure_ascii=False, indent=2))

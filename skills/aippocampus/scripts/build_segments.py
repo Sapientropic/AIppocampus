@@ -29,6 +29,7 @@ from aippocampuslib import (
     read_session_meta,
     resolve_artifact_path,
 )
+from artifact_publish import artifact_lease
 from build_index import make_sqlite
 
 DEFAULT_SEGMENT_BYTES = 64 * 1024 * 1024
@@ -116,6 +117,31 @@ def new_rebuild_dir(output_dir: Path) -> Path:
     return rebuild_dir
 
 
+def remap_staged_sqlite_status(status: dict, staging_dir: Path, final_dir: Path) -> dict:
+    remapped = dict(status)
+    publish = dict(remapped.get("publish") or {})
+
+    def remap_path(value: object) -> object:
+        if not isinstance(value, str) or not value:
+            return value
+        candidate = Path(value)
+        if not candidate.is_absolute():
+            return value
+        try:
+            relative = candidate.relative_to(staging_dir)
+        except ValueError:
+            return value
+        return str(final_dir / relative)
+
+    # Segment indexes are built in a hidden staging directory and then moved
+    # into place. Keep status metadata pointed at the final segment directory so
+    # future maintenance agents do not chase stale staging paths.
+    for key in ("pointer", "stable", "current", "last_known_good"):
+        publish[key] = remap_path(publish.get(key))
+    remapped["publish"] = publish
+    return remapped
+
+
 @contextlib.contextmanager
 def rebuild_lease(
     output_dir: Path, *, stale_after_seconds: int = DEFAULT_REBUILD_LEASE_STALE_SECONDS
@@ -128,44 +154,12 @@ def rebuild_lease(
     can be recovered without relying on platform-specific file locking.
     """
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    lease_path = output_dir / REBUILD_LEASE_NAME
-    payload = {
-        "schema_version": 1,
-        "kind": "aippocampus_segment_rebuild_lease",
-        "pid": os.getpid(),
-        "created_at": now_utc(),
-        "stale_after_seconds": int(stale_after_seconds),
-    }
-    while True:
-        try:
-            fd = os.open(str(lease_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        except FileExistsError:
-            try:
-                age = time.time() - lease_path.stat().st_mtime
-            except OSError:
-                continue
-            if age > stale_after_seconds:
-                try:
-                    lease_path.unlink()
-                except OSError:
-                    pass
-                continue
-            raise RuntimeError(
-                f"segment rebuild lease already held: {lease_path}. "
-                "Wait for the current rebuild or remove the stale lock after verification."
-            )
-        else:
-            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
-                json.dump(payload, f, ensure_ascii=False, indent=2)
-            break
-    try:
+    with artifact_lease(
+        output_dir,
+        REBUILD_LEASE_NAME,
+        stale_after_seconds=stale_after_seconds,
+    ) as lease_path:
         yield lease_path
-    finally:
-        try:
-            lease_path.unlink()
-        except FileNotFoundError:
-            pass
 
 
 def install_staged_segments(staging_dir: Path, output_dir: Path, manifest: dict) -> Path:
@@ -303,6 +297,11 @@ def main() -> int:
                     segment_turns,
                     rag_cache=not args.no_rag_cache,
                     rag_chunk_chars=args.rag_chunk_chars,
+                )
+                sqlite_status = remap_staged_sqlite_status(
+                    sqlite_status,
+                    build_segment_dir,
+                    final_segment_dir,
                 )
                 segment_entries.append(
                     {

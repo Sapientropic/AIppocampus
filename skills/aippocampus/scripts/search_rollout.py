@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 from aippocampuslib import compact_text, default_thread_index_dir, iter_messages, locate_rollout
+from artifact_publish import index_pointer_path, resolve_sqlite_index_path
 from retrieval import (
     diversify_results,
     expanded_terms_from_anchors,
@@ -32,10 +33,11 @@ def auto_index_path(cwd: str, rollout: Path | None = None, *, prefer_existing: b
     global_index = default_thread_index_dir(root, rollout) / "source_index.sqlite"
     preferred = root / ".aippocampus" / "source_index.sqlite"
     if prefer_existing:
-        if global_index.exists():
-            return global_index
-        if preferred.exists():
-            return preferred
+        for candidate in (global_index, preferred):
+            if candidate.exists() or index_pointer_path(candidate).exists():
+                resolved = resolve_sqlite_index_path(candidate)
+                if resolved.exists():
+                    return resolved
     legacy = root / ".thread-memory-index" / "thread_index.sqlite"
     if prefer_existing and legacy.exists():
         return legacy
@@ -265,6 +267,7 @@ def main() -> int:
     if not args.no_index:
         if args.build_index:
             ensure_index(cwd, rollout, index, force=True)
+        index = resolve_sqlite_index_path(index)
         if index.exists():
             source = str(index)
             if args.mode == "literal":

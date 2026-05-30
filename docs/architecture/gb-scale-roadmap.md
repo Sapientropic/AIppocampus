@@ -14,8 +14,10 @@ agents do not mistake desired layers for finished behavior.
   `$CODEX_HOME/aippocampus-registry/threads/<thread>/...`.
 - `thread-anchors.md` is an optional private/export anchor input, not a public
   repo baseline file. The root file is gitignored.
-- The monolithic `source_index.sqlite` stores normalized visible messages,
-  FTS5 trigram search, and periodic RAG-lite chunks.
+- The monolithic stable `source_index.sqlite` remains the compatibility path.
+  Current main indexes are also copied to `versions/source_index-*.sqlite` and
+  selected by `source_index.pointer.json`, which falls back to last-known-good
+  if the current version is missing.
 - `$CODEX_HOME/aippocampus-registry/threads/<thread>/index/segments/manifest.json`
   can describe sealed segment indexes built by `build_segments.py`.
   Project-local `.aippocampus/segments/` is explicit compatibility/debug
@@ -50,6 +52,12 @@ remaining work is visible instead of hidden behind one broad issue:
   discipline, interrupted rebuild recovery, and last-known-good index
   preservation. Segment rebuilds now use a same-directory single-writer lease
   plus stale-lock recovery before publishing new SQLite shards.
+- [#111](https://github.com/Sapientropic/AIppocampus/issues/111): runtime writer
+  coordination for multi-session, multi-agent, cross-device, and
+  cross-platform operation. Main index publishing now uses a shared
+  same-directory writer lease, versioned index pointer, last-known-good
+  fallback, and SQLite backup/WAL stable refresh instead of replacing a live
+  `source_index.sqlite` file.
 
 Completed foundation:
 
@@ -162,6 +170,8 @@ Completed foundation:
      Synthetic multi-GB threshold smoke is implemented in
      `tools/aippocampus/smoke/smoke_synthetic_scale_capacity.py`; segmented
      index rebuilds now have a single-writer lease and last-known-good recovery.
+     Main indexes now have versioned pointer publishing for Windows locked-file
+     fallback while preserving `source_index.sqlite` compatibility.
 
 ## Near-term implementation order
 
@@ -192,8 +202,10 @@ Completed foundation:
    include planned fanout under a budget. The synthetic multi-GB capacity smoke
    models warning/blocker thresholds without creating large files. Segmented
    index rebuilds now use `.rebuild.lock` single-writer discipline, staged
-   publish, and last-known-good restoration; broader physical Windows sync
-   stress remains a release-readiness exercise, not a fast-tier claim.
+   publish, and last-known-good restoration. Main indexes now use a
+   `source_index.pointer.json` current/LKG pointer and stable SQLite backup
+   refresh; broader physical Windows sync stress remains a release-readiness
+   exercise, not a fast-tier claim.
 
 ## Cross-references
 

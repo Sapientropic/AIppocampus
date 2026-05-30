@@ -27,6 +27,7 @@ from aippocampuslib import (
 from aippocampuslib import (
     thread_key_from_rollout as lib_thread_key_from_rollout,
 )
+from artifact_publish import resolve_sqlite_index_path
 from registry_search import (
     clean_hit_rank_score,
     deep_search_entry,
@@ -211,8 +212,9 @@ def register_current_thread(
 
     thread_key = thread_key_for(cwd, manifest, rollout)
     session_meta = manifest.get("session_meta") or {}
-    sqlite_path = Path(
-        manifest.get("outputs", {}).get("sqlite") or index_dir / "source_index.sqlite"
+    index_outputs = manifest.get("outputs", {})
+    sqlite_path = resolve_sqlite_index_path(
+        Path(index_outputs.get("sqlite_current") or index_outputs.get("sqlite") or index_dir / "source_index.sqlite")
     )
     graph_path = Path(manifest.get("outputs", {}).get("graph_json") or index_dir / "graph.json")
     messages_path = Path(
@@ -360,7 +362,9 @@ def register_rollout_thread(
     )
     clean_outputs = clean_manifest.get("outputs") or {}
     index_outputs = index_manifest.get("outputs") or {}
-    sqlite_path = Path(index_outputs.get("sqlite") or index_dir / "source_index.sqlite")
+    sqlite_path = resolve_sqlite_index_path(
+        Path(index_outputs.get("sqlite_current") or index_outputs.get("sqlite") or index_dir / "source_index.sqlite")
+    )
     graph_path = Path(index_outputs.get("graph_json") or index_dir / "graph.json")
     messages_path = Path(index_outputs.get("messages_jsonl") or index_dir / "messages.jsonl")
     rag = index_manifest.get("rag") or (index_manifest.get("sqlite") or {}).get("rag") or {}
