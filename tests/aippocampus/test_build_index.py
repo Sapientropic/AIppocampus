@@ -18,6 +18,10 @@ import build_index  # noqa: E402
 import search_rollout  # noqa: E402
 
 
+def canonical(path: str | Path) -> Path:
+    return Path(path).resolve()
+
+
 def message(*, sha1: str, text: str) -> dict:
     return {
         "line": 1,
@@ -242,7 +246,7 @@ class BuildIndexTests(unittest.TestCase):
 
             self.assertEqual(
                 search_rollout.auto_index_path(str(root), None, prefer_existing=True),
-                current,
+                canonical(current),
             )
 
 
