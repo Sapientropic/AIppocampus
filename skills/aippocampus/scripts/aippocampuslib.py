@@ -49,6 +49,16 @@ def norm_path(path: str | Path) -> str:
 ROLLOUT_DISCOVERY_DIRS = ("sessions", "archived_sessions")
 
 
+def codex_provider(home: Path | None = None):
+    # Keep this import lazy so partially synced hook installs that only need
+    # `codex_home()` / `now_utc()` do not crash before the provider package is
+    # copied. Source discovery still fails loudly when the provider is actually
+    # needed, which is easier to diagnose than a prompt-hook startup failure.
+    from conversation_sources import CodexConversationProvider
+
+    return CodexConversationProvider(home or codex_home())
+
+
 def iter_rollouts(home: Path) -> Iterable[Path]:
     """Yield Codex Desktop raw rollouts from live and app-archived storage.
 
@@ -58,22 +68,11 @@ def iter_rollouts(home: Path) -> Iterable[Path]:
     the optional cold-archive flow that writes generated gzip copies.
     """
 
-    for dirname in ROLLOUT_DISCOVERY_DIRS:
-        root = home / dirname
-        if root.exists():
-            yield from root.rglob("rollout-*.jsonl")
+    yield from codex_provider(home).iter_rollouts()
 
 
 def read_session_meta(path: Path) -> dict | None:
-    try:
-        with path.open("r", encoding="utf-8") as f:
-            first = f.readline()
-        item = json.loads(first)
-    except Exception:
-        return None
-    if item.get("type") == "session_meta":
-        return item.get("payload", {})
-    return None
+    return codex_provider().read_metadata(path)
 
 
 def public_session_meta(meta: dict | None) -> dict:
@@ -93,28 +92,7 @@ def public_session_meta(meta: dict | None) -> dict:
 
 
 def locate_rollout(cwd: str | Path, home: Path | None = None, latest: bool = False) -> Path:
-    home = home or codex_home()
-    target = norm_path(cwd)
-    matches: list[tuple[float, Path]] = []
-    latest_seen: tuple[float, Path] | None = None
-
-    for path in iter_rollouts(home):
-        try:
-            stat = path.stat()
-        except OSError:
-            continue
-        if latest_seen is None or stat.st_mtime > latest_seen[0]:
-            latest_seen = (stat.st_mtime, path)
-        meta = read_session_meta(path)
-        if meta and meta.get("cwd") and norm_path(meta["cwd"]) == target:
-            matches.append((stat.st_mtime, path))
-
-    if matches:
-        matches.sort(reverse=True, key=lambda x: x[0])
-        return matches[0][1]
-    if latest and latest_seen:
-        return latest_seen[1]
-    raise FileNotFoundError(f"no rollout found for cwd: {cwd}")
+    return codex_provider(home or codex_home()).locate_current(cwd, latest=latest).path
 
 
 def thread_key_from_rollout(rollout: str | Path, meta: dict | None = None) -> str:
@@ -122,11 +100,7 @@ def thread_key_from_rollout(rollout: str | Path, meta: dict | None = None) -> st
     session_meta = (
         meta if meta is not None else public_session_meta(read_session_meta(rollout_path))
     )
-    session_id = (session_meta or {}).get("id")
-    if session_id:
-        return f"session:{session_id}"
-    digest = hashlib.sha1(str(rollout_path.resolve()).casefold().encode("utf-8")).hexdigest()[:16]
-    return f"rollout:{digest}"
+    return codex_provider().thread_key(rollout_path, session_meta)
 
 
 def workspace_thread_key(cwd: str | Path) -> str:

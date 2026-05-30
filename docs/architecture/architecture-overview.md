@@ -6,8 +6,12 @@ memory.
 
 ## Layers
 
-1. Raw rollout
-   - Immutable audit provenance from Codex sessions.
+1. Conversation source
+   - Provider-owned transcript provenance from a host agent, such as Codex
+     Desktop rollout JSONL files.
+   - The provider boundary owns session discovery, current-session lookup,
+     metadata extraction, and stable source identity. It does not own the
+     AIppocampus registry location.
    - Used for exact repair, latest-reply fallback, storage accounting, and
      optional raw audit.
    - Not the daily recall surface.
@@ -50,7 +54,8 @@ memory.
 ## Data Flow
 
 ```text
-raw rollout
+host transcript
+  -> conversation source provider
   -> clean source
   -> local index and registry
   -> search / MCP / hooks / sync / plugin distribution

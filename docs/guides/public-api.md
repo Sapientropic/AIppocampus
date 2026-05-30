@@ -50,6 +50,7 @@ The CLI contract applies to documented operator commands, especially:
 - `aippocampus_health.py`
 - `search_clean_source.py`
 - `latest_reply.py`
+- `onboard.py --provider codex|auto`
 - `onboard_codex.py`
 - `aippocampus_mcp_server.py --list-tools`
 - `sync_bundle.py status|push|pull|repair`

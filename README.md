@@ -135,12 +135,14 @@ To onboard an existing Codex install so old threads become discoverable in new
 projects:
 
 ```sh
-python "${CODEX_HOME}/skills/aippocampus/scripts/onboard_codex.py" --all --format json
+python "${CODEX_HOME}/skills/aippocampus/scripts/onboard.py" --provider codex --all --format json
 ```
 
-The onboarding wrapper scans local sessions, registers missing rollouts, builds
-clean-source and SQLite/RAG-lite indexes, repairs missing artifacts, rebuilds
-the project and life-wide timeline sidecar, and refreshes the cognitive map.
+The provider-aware onboarding wrapper scans local sessions, registers missing
+rollouts, builds clean-source and SQLite/RAG-lite indexes, repairs missing
+artifacts, rebuilds the project and life-wide timeline sidecar, and refreshes
+the cognitive map. `onboard_codex.py` remains a compatibility entrypoint for
+existing Codex-only scripts.
 
 External DeepSeek frontier extraction is explicit:
 

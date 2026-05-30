@@ -406,7 +406,7 @@ python "$env:CODEX_HOME\skills\aippocampus\scripts\subconscious_jobs.py" --job a
 For the higher-level onboarding wrapper, prefer:
 
 ```powershell
-python "$env:CODEX_HOME\skills\aippocampus\scripts\onboard_codex.py" --frontier-mode smoke --format json --cwd "$PWD"
+python "$env:CODEX_HOME\skills\aippocampus\scripts\onboard.py" --provider codex --frontier-mode smoke --format json --cwd "$PWD"
 ```
 
 That wrapper returns compact `sample_findings` and defaults the frontier scope

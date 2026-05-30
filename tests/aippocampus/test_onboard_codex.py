@@ -23,6 +23,8 @@ import onboard_codex as onboard  # noqa: E402
 import onboard_frontier  # noqa: E402
 import registry  # noqa: E402
 
+ONBOARD = SCRIPTS / "onboard.py"
+
 
 class OnboardCodexTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -96,6 +98,58 @@ class OnboardCodexTests(unittest.TestCase):
         self.assertEqual(result["data"]["plan"]["would_register_count"], 1)
         self.assertFalse((self.registry_dir / "threads.json").exists())
         self.assertIn("next", result)
+
+    def test_onboard_facade_provider_codex_delegates_to_existing_onboarding(self) -> None:
+        proc = self._run_onboard_facade(
+            "--provider",
+            "codex",
+            "--cwd",
+            str(self.cwd),
+            "--registry-dir",
+            str(self.registry_dir),
+            "--dry-run",
+            "--format",
+            "json",
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        data = json.loads(proc.stdout)
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["meta"]["provider"], "codex")
+        self.assertEqual(data["data"]["plan"]["would_register_count"], 1)
+
+    def test_onboard_facade_rejects_unimplemented_provider_without_claiming_support(self) -> None:
+        proc = self._run_onboard_facade(
+            "--provider",
+            "claude-code",
+            "--cwd",
+            str(self.cwd),
+            "--registry-dir",
+            str(self.registry_dir),
+            "--dry-run",
+            "--format",
+            "json",
+        )
+
+        self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
+        data = json.loads(proc.stdout)
+        self.assertFalse(data["ok"])
+        self.assertEqual(data["error"]["code"], "provider_not_available")
+        self.assertEqual(data["error"]["provider"], "claude-code")
+
+    def _run_onboard_facade(self, *args: str) -> Any:
+        import subprocess
+
+        env = {**os.environ, "CODEX_HOME": str(self.root)}
+        return subprocess.run(
+            [sys.executable, str(ONBOARD), *args],
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            env=env,
+            check=False,
+        )
 
     def test_onboarding_registers_indexes_and_returns_compact_stats(self) -> None:
         result = onboard.run_onboarding(

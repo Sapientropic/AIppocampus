@@ -22,7 +22,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 from build_cognitive_map import build_from_files as build_cognitive_map_from_files
 from build_cognitive_map import default_cognitive_map_path
@@ -134,6 +134,7 @@ def run_onboarding(
     *,
     cwd: Path,
     registry_dir: Path | None = None,
+    provider_name: str = "codex",
     dry_run: bool = False,
     build_index: bool = True,
     repair_indexes: bool = True,
@@ -221,6 +222,7 @@ def run_onboarding(
             "next": build_next_hints(dry_run=True, frontier_mode=frontier_mode),
             "meta": {
                 "schema_version": ONBOARD_SCHEMA_VERSION,
+                "provider": provider_name,
                 "duration_ms": int((time.perf_counter() - started) * 1000),
             },
         }
@@ -343,6 +345,7 @@ def run_onboarding(
         "next": build_next_hints(dry_run=False, frontier_mode=frontier_mode),
         "meta": {
             "schema_version": ONBOARD_SCHEMA_VERSION,
+            "provider": provider_name,
             "duration_ms": int((time.perf_counter() - started) * 1000),
         },
     }
@@ -361,7 +364,7 @@ def print_text(result: dict[str, Any]) -> None:
     print(f"frontier: {frontier.get('status')}")
 
 
-def main() -> int:
+def main(argv: Sequence[str] | None = None, *, provider_name: str = "codex") -> int:
     parser = argparse.ArgumentParser(
         description="Onboard local Codex sessions into the AIppocampus global registry."
     )
@@ -438,12 +441,13 @@ def main() -> int:
     parser.add_argument(
         "--json", action="store_true", dest="json_output", help="Alias for --format json."
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     registry_dir = Path(args.registry_dir).resolve() if args.registry_dir else None
     result = run_onboarding(
         cwd=Path(args.cwd),
         registry_dir=registry_dir,
+        provider_name=provider_name,
         dry_run=args.dry_run,
         build_index=not args.no_build_index,
         repair_indexes=not args.no_repair,

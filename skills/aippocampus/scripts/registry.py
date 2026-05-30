@@ -14,11 +14,10 @@ from pathlib import Path
 
 from aippocampuslib import (
     codex_home,
+    codex_provider,
     compact_text,
     default_thread_clean_source_dir,
     default_thread_index_dir,
-    iter_rollouts,
-    locate_rollout,
     now_utc,
     parse_anchor_file,
     public_session_meta,
@@ -28,6 +27,7 @@ from aippocampuslib import (
     thread_key_from_rollout as lib_thread_key_from_rollout,
 )
 from artifact_publish import resolve_sqlite_index_path
+from conversation_sources import ConversationProvider
 from registry_search import (
     clean_hit_rank_score,
     deep_search_entry,
@@ -152,10 +152,12 @@ def register_current_thread(
     registry_dir: Path | None = None,
     health: dict | None = None,
     build_index: bool = False,
+    provider: ConversationProvider | None = None,
 ) -> dict:
     cwd = cwd.resolve()
+    active_provider = provider or codex_provider(codex_home())
     try:
-        rollout = locate_rollout(cwd, codex_home())
+        rollout = active_provider.locate_current(cwd).path
     except Exception:
         rollout = None
     default_index_dir = default_thread_index_dir(cwd, rollout)
@@ -206,7 +208,7 @@ def register_current_thread(
         rollout = Path(manifest["source_rollout"])
     else:
         try:
-            rollout = locate_rollout(cwd, codex_home())
+            rollout = active_provider.locate_current(cwd).path
         except Exception:
             rollout = None
 
@@ -446,15 +448,20 @@ def scan_session_rollouts(
     project: str | None = None,
     tags: list[str] | None = None,
     dry_run: bool = False,
+    provider: ConversationProvider | None = None,
 ) -> dict:
     json_path, _ = registry_paths(registry_dir)
     existing = {entry.get("thread_key") for entry in load_registry(json_path).get("threads", [])}
     candidates: list[tuple[float, Path, dict, str]] = []
-    for rollout in iter_rollouts(codex_home()):
-        meta = public_session_meta(read_session_meta(rollout))
+    active_provider = provider or codex_provider(codex_home())
+    for source in active_provider.discover_sessions():
+        rollout = source.path
+        meta = dict(source.metadata or {})
+        if not meta:
+            meta = public_session_meta(active_provider.read_metadata(source))
         if cwd_filter and cwd_filter.casefold() not in str(meta.get("cwd") or "").casefold():
             continue
-        thread_key = thread_key_from_rollout(rollout, meta)
+        thread_key = active_provider.thread_key(source, meta)
         if not refresh and thread_key in existing:
             continue
         try:

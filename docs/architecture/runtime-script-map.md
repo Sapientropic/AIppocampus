@@ -17,7 +17,10 @@ call direction at the layer level; it is not a generated import graph.
 
 ```mermaid
 flowchart TD
-    User["Codex / user prompt"] --> Hook["Prompt hook entrypoint"]
+    User["Host agent / user prompt"] --> Hook["Prompt hook entrypoint"]
+    HostSource["Host transcript source"] --> Provider["conversation source provider"]
+    Provider --> SourceBuilder["clean-source builder"]
+    SourceBuilder --> Source["clean source + source refs"]
     Hook --> Decision["prompt_recall_* decision layer"]
     Decision --> Registry["registry + clean-source lookup"]
     Decision --> Retrieval["retrieval/query/scoring policy"]
@@ -77,9 +80,33 @@ adding fresh ad hoc `sys.path` insertion rules.
 |---|---|---|---|---|
 | `aippocampus_health.py` | Runtime readiness and public smoke checks. | CLI, install docs, CI-adjacent smoke. | `registry.py`, `aippocampuslib.py`, filesystem/env checks. | Public entrypoint |
 | `aippocampus_maintenance.py` | Compact maintenance wrapper for routine operator checks. | CLI/manual maintenance. | Health, registry, docs/smoke conventions. | Repo maintenance |
-| `onboard_codex.py`, `onboard_frontier.py`, `onboard_status.py` | Build or report source-backed onboarding state. | CLI and install/readiness workflows. | Clean source, registry, project timeline, optional external model env. | Public entrypoint |
+| `onboard.py`, `onboard_codex.py`, `onboard_frontier.py`, `onboard_status.py` | Build or report source-backed onboarding state. `onboard.py` is the provider-aware facade; `onboard_codex.py` remains the Codex-only compatibility entrypoint. | CLI and install/readiness workflows. | Clean source, registry, project timeline, optional external model env. | Public entrypoint |
 | `export_bundle.py`, `import_bundle.py`, `checkpoint.py` | Move or checkpoint clean-source memory bundles. | CLI/manual export/import. | Registry paths, clean-source manifests, privacy boundaries. | Public entrypoint |
 | `append_anchor.py`, `latest_reply.py`, `locate_rollout.py` | Raw rollout audit and recovery helpers. | CLI/debug paths only. | Raw rollout files and thread anchors. | Repo maintenance |
+
+## Conversation Source Providers
+
+Conversation providers are the ingestion boundary between host-agent transcript
+storage and AIppocampus clean source. They may know about Codex, Claude Code, or
+future hosts, but clean source, registry rows, retrieval, sync, MCP, semantic
+sidecars, and subconscious jobs should consume provider-normalized source
+identity rather than host-specific storage layouts.
+
+Provider modules must not decide where AIppocampus stores generated artifacts.
+Registry storage remains owned by `registry_store.py` and
+`aippocampus_registry_dir()`: `AIPPOCAMPUS_REGISTRY_DIR` and the legacy
+`CODEX_HOME/aippocampus-registry` path are storage compatibility concerns, not
+conversation-provider homes.
+
+| Script or group | Purpose | Invocation route | Key dependencies | Status |
+|---|---|---|---|---|
+| `conversation_sources/base.py` | Shared `ConversationProvider` protocol and `ConversationSourceRef` data shape. | Imported by registry/onboarding/source builders. | Standard library typing/dataclasses only. | Runtime internal |
+| `conversation_sources/codex.py` | Codex Desktop provider for live `sessions/` and `archived_sessions/` rollout JSONL discovery, current-cwd lookup, metadata extraction, and thread identity. | Legacy wrappers in `aippocampuslib.py`, registry scan, current-thread registration. | Codex rollout JSONL first-line `session_meta`; no registry writes. | Runtime internal |
+
+Do not add a Claude Code provider until transcript schema is verified from real
+samples or official SDK/session APIs. Claude Code MCP/hook/skill installers are
+host integrations and should live in their own issue/slice rather than inside
+the provider contract.
 
 ## Hook Paths
 

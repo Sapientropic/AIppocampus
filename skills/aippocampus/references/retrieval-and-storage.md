@@ -159,7 +159,7 @@ Default registry files under `$CODEX_HOME/aippocampus-registry/` include:
 
 Common commands:
 
-- `python ...\onboard_codex.py --all --format json`
+- `python ...\onboard.py --provider codex --all --format json`
 - `python ...\registry.py register --cwd "$PWD" --build-index`
 - `python ...\registry.py register-rollout --rollout "<rollout.jsonl>" --project "<label>"`
 - `python ...\registry.py scan-sessions --dry-run`
@@ -175,9 +175,9 @@ semantic gate, but they are never source truth. Retrieval policy should extract
 query terms from these rows through `retrieval_query_policy.semantic_trigger_terms`
 instead of growing `ALIASES` or `ASSOCIATIVE_CUES` with semantic proxy phrases.
 `semantic_trigger_router.py` writes reviewed seed triggers plus source-backed
-promotion candidates into `semantic_triggers.jsonl`; `onboard_codex.py` refreshes
-that sidecar during onboarding so a fresh registry has the data path before the
-foreground hook needs it.
+promotion candidates into `semantic_triggers.jsonl`; the provider-aware
+`onboard.py` wrapper refreshes that sidecar during onboarding so a fresh
+registry has the data path before the foreground hook needs it.
 
 `build_project_timeline.py` writes `project_timeline.json`. The `projects`
 section keeps the older project-scoped recent-turn view used by hooks and
@@ -191,19 +191,20 @@ scent when the prompt contains both a recency cue and a life-wide scope-label
 cue, so ordinary technical or status prompts are not over-personalized by
 global memory.
 
-`onboard_codex.py` is the preferred first-install and agent-facing wrapper. It
-returns a single JSON envelope with `ok`, `data`, `next`, and `meta`, including
-before/after registry counts, repair actions, cognitive-map status, and
-frontier extraction availability. Use `--dry-run` before large imports when an
-agent needs a preview. The command keeps generated artifacts in the global
+`onboard.py --provider codex` is the preferred first-install and agent-facing
+wrapper. `onboard_codex.py` remains the Codex-only compatibility wrapper. The
+wrapper returns a single JSON envelope with `ok`, `data`, `next`, and `meta`,
+including before/after registry counts, repair actions, cognitive-map status,
+and frontier extraction availability. Use `--dry-run` before large imports when
+an agent needs a preview. The command keeps generated artifacts in the global
 registry and treats project-local `.aippocampus/` as explicit export/debug
 compatibility only. When `--frontier-mode smoke|write` is used without an
 explicit `--frontier-project`, the command infers the current `--cwd` project
 and includes compact `sample_findings` in the frontier result so an agent can
 judge quality before writing. Use `--frontier-project *` only for a global
 whole-machine frontier pass. Explicit `smoke`/`write` modes are DeepSeek-backed
-quality checks: missing `DEEPSEEK_API_KEY`, model failures, partial failures,
-or zero accepted findings return a partial/blocking frontier status instead of
+quality checks: missing `DEEPSEEK_API_KEY`, model failures, partial failures, or
+zero accepted findings return a partial/blocking frontier status instead of
 quietly falling back to deterministic registry maintenance.
 
 Full-machine search has one important boundary: old clean-source files may

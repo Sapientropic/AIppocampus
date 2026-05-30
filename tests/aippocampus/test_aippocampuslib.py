@@ -19,6 +19,8 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 import aippocampuslib  # noqa: E402
+import registry  # noqa: E402
+from conversation_sources import CodexConversationProvider  # noqa: E402
 
 LOCATE_ROLLOUT = SCRIPTS / "locate_rollout.py"
 
@@ -110,6 +112,67 @@ class AippocampusLibTests(unittest.TestCase):
             data = json.loads(proc.stdout)
             self.assertEqual(Path(data["path"]), rollout)
             self.assertEqual(data["session_meta"]["id"], "archived-session")
+
+    def test_codex_provider_discovers_live_and_archived_rollouts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            home = root / "codex-home"
+            cwd = root / "Project Alpha"
+            cwd.mkdir()
+            live = home / "sessions" / "2026" / "05" / "30" / "rollout-live.jsonl"
+            archived = home / "archived_sessions" / "rollout-archived.jsonl"
+            write_rollout(live, cwd, session_id="live-session")
+            write_rollout(archived, cwd, session_id="archived-session")
+
+            provider = CodexConversationProvider(home)
+            sessions = list(provider.discover_sessions())
+
+            self.assertEqual({session.path for session in sessions}, {live, archived})
+            self.assertEqual(
+                {session.session_id for session in sessions},
+                {"live-session", "archived-session"},
+            )
+            self.assertEqual(provider.read_metadata(archived)["id"], "archived-session")
+
+    def test_legacy_rollout_helpers_match_codex_provider(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            home = root / "codex-home"
+            cwd = root / "Project Alpha"
+            cwd.mkdir()
+            rollout = home / "sessions" / "2026" / "05" / "30" / "rollout-live.jsonl"
+            write_rollout(rollout, cwd, session_id="live-session")
+
+            provider = CodexConversationProvider(home)
+            source = provider.locate_current(cwd)
+
+            self.assertEqual(source.path, rollout)
+            self.assertEqual(aippocampuslib.locate_rollout(cwd, home), source.path)
+            self.assertEqual(list(aippocampuslib.iter_rollouts(home)), [source.path])
+            self.assertEqual(
+                aippocampuslib.read_session_meta(source.path),
+                provider.read_metadata(source.path),
+            )
+
+    def test_registry_scan_accepts_explicit_conversation_provider(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            home = root / "codex-home"
+            cwd = root / "Project Alpha"
+            cwd.mkdir()
+            rollout = home / "sessions" / "2026" / "05" / "30" / "rollout-live.jsonl"
+            write_rollout(rollout, cwd, session_id="provider-session")
+            provider = CodexConversationProvider(home)
+
+            result = registry.scan_session_rollouts(
+                registry_dir=root / "registry",
+                provider=provider,
+                dry_run=True,
+            )
+
+            self.assertEqual(result["count"], 1)
+            self.assertEqual(result["planned"][0]["thread_key"], "session:provider-session")
+            self.assertEqual(Path(result["planned"][0]["rollout"]), rollout)
 
 
 if __name__ == "__main__":

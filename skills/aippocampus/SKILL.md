@@ -53,9 +53,11 @@ Use `$CODEX_HOME/skills/aippocampus/scripts` as the script root.
 - Manage encrypted sync device keys or plaintext migration:
   `python .../encrypted_sync_admin.py key list --registry-dir "<registry>" --json`.
 - First-install / full-machine onboarding:
-  `python .../onboard_codex.py --all --format json`. This is the preferred
-  agent entrypoint for registering local Codex sessions, repairing missing
-  indexes, rebuilding project timeline, and refreshing cognitive-map sidecars.
+  `python .../onboard.py --provider codex --all --format json`. This is the
+  preferred provider-aware agent entrypoint for registering local Codex sessions,
+  repairing missing indexes, rebuilding project timeline, and refreshing
+  cognitive-map sidecars. `onboard_codex.py` remains the Codex-only compatibility
+  entrypoint.
 - Discover other registered threads: `python .../registry.py list` or
   `python .../registry.py search "terms"`.
 - Register an old rollout: `python .../registry.py register-rollout --rollout "<rollout.jsonl>" --project "<label>"`.
@@ -116,8 +118,8 @@ move the operational contract into one reference doc.
   refresh clean source, indexes, registry rows, and due scheduler state; they
   must not cold-archive, delete, append checkpoints, run full Graphify, or run
   DeepSeek synchronously.
-- `onboard_codex.py` is an explicit operator/agent command, not a prompt hook.
-  It may perform multi-minute registration and index repair because the caller
+- `onboard.py` / `onboard_codex.py` are explicit operator/agent commands, not prompt hooks.
+  They may perform multi-minute registration and index repair because the caller
   chose that setup flow. Keep hooks on the cheap maintenance path.
 - The subconscious scheduler is hook-safe only in `--maybe-start` mode. It
   checks cooldowns, locks, new-turn thresholds, and `DEEPSEEK_API_KEY`, then

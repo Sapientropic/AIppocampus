@@ -74,12 +74,13 @@ diagnostic-only coverage rather than an overall pass.
 Register existing Codex sessions and build clean-source indexes:
 
 ```sh
-python "${CODEX_HOME}/skills/aippocampus/scripts/onboard_codex.py" --all --format json
+python "${CODEX_HOME}/skills/aippocampus/scripts/onboard.py" --provider codex --all --format json
 ```
 
 Use `--dry-run` before broad imports when you want a preview. Generated memory
 artifacts default to `$CODEX_HOME/aippocampus-registry/threads/<thread>/...`,
-not the active project repository.
+not the active project repository. `onboard_codex.py` remains available as the
+Codex-only compatibility entrypoint.
 
 ## MCP Mode
 
