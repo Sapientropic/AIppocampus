@@ -14,6 +14,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import encrypted_sync_bundle  # noqa: E402
 import sync_bundle  # noqa: E402
+import sync_contract  # noqa: E402
 
 
 class EncryptedSyncBundleTests(unittest.TestCase):
@@ -192,6 +193,10 @@ output.write_bytes(b"FAKEAGE\\n" + base64.b64encode(data))
         self.assertEqual(status["recipient_match"], "unknown")
         self.assertTrue(repair["ok"], repair)
         self.assertGreater(repair["checked"], 0)
+        self.assertEqual(
+            repair["inner_manifest"]["sync_manifest"]["privacy_boundary"],
+            sync_contract.sync_privacy_boundary(include_raw=False),
+        )
         self.assertTrue(pull["ok"], pull)
         messages = target_registry / "threads" / "session-test" / "clean-source" / "messages.jsonl"
         self.assertIn("source backed", messages.read_text(encoding="utf-8"))

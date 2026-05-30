@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 import sync_bundle
+import sync_contract
 from object_storage_client import (
     DEFAULT_PREFIX,
     DEFAULT_TIMEOUT_SECONDS,
@@ -49,13 +50,15 @@ def local_manifest_for_object_storage(manifest_path: Path, *, prefix: str) -> di
         raise FileNotFoundError(f"missing local sync manifest: {manifest_path}")
     rewritten = dict(manifest)
     rewritten["backend"] = OBJECT_BACKEND
-    rewritten["bundle_format"] = "aippocampus_sync_bundle"
+    rewritten["bundle_format"] = sync_contract.SYNC_BUNDLE_KIND
     rewritten["object_prefix"] = normalize_object_prefix(prefix)
-    rewritten["transport"] = {
-        "kind": OBJECT_BACKEND,
-        "manifest_object": object_key(prefix, sync_bundle.SYNC_MANIFEST_NAME),
-        "raw_rollout_default": "excluded",
-    }
+    rewritten["privacy_boundary"] = sync_contract.sync_privacy_boundary(
+        include_raw=bool(manifest.get("raw_rollout_included"))
+    )
+    rewritten["transport"] = sync_contract.sync_transport_metadata(
+        kind=OBJECT_BACKEND,
+        manifest_object=object_key(prefix, sync_bundle.SYNC_MANIFEST_NAME),
+    )
     return rewritten
 
 
