@@ -12,6 +12,7 @@ import hashlib
 from typing import Any
 
 from aippocampuslib import compact_text, sanitize_external_model_text
+from ambient_recall_policy import policy_payload_for_working_memory
 
 CARD_SCHEMA_VERSION = 1
 MAX_CARDS = 3
@@ -140,7 +141,7 @@ def _working_memory_card(item: dict[str, Any]) -> dict[str, Any]:
     ]
     refs = [ref for ref in refs if ref]
     is_dream = item.get("candidate_type") == "dream_hypothesis"
-    return {
+    card: dict[str, Any] = {
         "card_id": _stable_id([CANDIDATE, theme, item.get("route"), refs[0] if refs else ""]),
         "theme": theme,
         "resonance": "medium",
@@ -163,6 +164,10 @@ def _working_memory_card(item: dict[str, Any]) -> dict[str, Any]:
             else "Search clean source before presenting exact claims as facts."
         ),
     }
+    policy = policy_payload_for_working_memory(item)
+    if policy:
+        card["ambient_policy"] = policy
+    return card
 
 
 def _cognitive_map_card(item: dict[str, Any]) -> dict[str, Any]:

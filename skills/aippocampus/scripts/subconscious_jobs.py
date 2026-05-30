@@ -34,8 +34,8 @@ from deepseek_model_routing import (
 )
 from model_client import DEEPSEEK_PREFIX_CACHE_CONTRACT, NO_PROVIDER_CACHE_CONTRACT
 from subconscious_deterministic_jobs import (
-    DETERMINISTIC_QUESTION_TRACKING_RUNNER,
-    run_question_tracking_job,
+    DETERMINISTIC_RUNNERS,
+    run_deterministic_job,
 )
 from subconscious_job_circuits import JOB_SPECS, PROMPT_VERSION, job_names, jobs_initial_payload
 from subconscious_job_plan import JobRunTask, plan_job_run_tasks, sample_count, worker_count
@@ -182,8 +182,8 @@ def run_one_job(
     sample_index: int = 1,
     sample_count: int = 1,
 ) -> dict[str, Any]:
-    if JOB_SPECS.get(job, {}).get("runner") == DETERMINISTIC_QUESTION_TRACKING_RUNNER:
-        raise ValueError("question_tracking is a deterministic follow-up; run it through run_jobs")
+    if JOB_SPECS.get(job, {}).get("runner") in DETERMINISTIC_RUNNERS:
+        raise ValueError(f"{job} is a deterministic follow-up; run it through run_jobs")
     timeline = load_json(timeline_path)
     turns = select_timeline_turns(timeline, project=project, max_turns=max_turns)
     state = AgentState(source_bank=source_bank_from_turns(turns))
@@ -475,12 +475,12 @@ def run_jobs(
     deterministic_jobs = [
         job
         for job in jobs
-        if JOB_SPECS.get(job, {}).get("runner") == DETERMINISTIC_QUESTION_TRACKING_RUNNER
+        if JOB_SPECS.get(job, {}).get("runner") in DETERMINISTIC_RUNNERS
     ]
     semantic_jobs = [
         job
         for job in jobs
-        if JOB_SPECS.get(job, {}).get("runner") != DETERMINISTIC_QUESTION_TRACKING_RUNNER
+        if JOB_SPECS.get(job, {}).get("runner") not in DETERMINISTIC_RUNNERS
     ]
     task_specs = plan_job_run_tasks(semantic_jobs, samples_per_job=sample_total)
     route = resolve_model_route(
@@ -604,11 +604,13 @@ def run_jobs(
                 )
             result["wrote"] = True
             result["deferred_write"] = False
-    if "question_tracking" in deterministic_jobs:
+    for deterministic_job in deterministic_jobs:
         try:
             results.append(
-                run_question_tracking_job(
+                run_deterministic_job(
+                    deterministic_job,
                     registry_path=registry_path,
+                    concept_graph_path=concept_graph_path,
                     jobs_output_path=jobs_output_path,
                     edges_output_path=edges_output_path,
                     no_write=no_write,
@@ -616,7 +618,7 @@ def run_jobs(
                 )
             )
         except Exception as exc:
-            results.append(failed_result("question_tracking", 1, exc))
+            results.append(failed_result(deterministic_job, 1, exc))
     for result in results:
         add_usage(usage_total, result.get("usage") or {})
     successful_count = sum(1 for result in results if result.get("ok") is not False)

@@ -53,6 +53,7 @@ class RoutingBoundaryTests(unittest.TestCase):
             ("question_link", 0.55, 1, 1, router.USE_SILENTLY),
             ("frontier_marker", 0.60, 1, 1, router.USE_SILENTLY),
             ("theme_candidate", 0.55, 1, 1, router.USE_SILENTLY),
+            ("theme_candidate", 0.95, 4, 3, router.USE_SILENTLY),
         ]
         for candidate_type, confidence, ref_count, thread_count, expected in cases:
             with self.subTest(

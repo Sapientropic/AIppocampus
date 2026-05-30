@@ -29,8 +29,9 @@ vector cells, and social place cells as phase-anchored design constraints.
 
 ## Implementation Status
 
-Current code does **not** fully implement this whole design. It ships Phase 1
-and the first deterministic Phase 2 baseline:
+Current code does **not** fully implement this whole design. It ships Phase 1,
+the first deterministic Phase 2 baseline, and a conservative first Phase 3
+theme-emergence slice, plus first question-index scale/sidecar evaluation:
 
 - Implemented: `question_extraction` inside `JOB_SPECS`, including
   `question_candidate` and explicit `frontier_marker` output.
@@ -42,19 +43,118 @@ and the first deterministic Phase 2 baseline:
   when registry clean-source resolution is available, adds deterministic
   salience tags, adapts strong/borderline thresholds from six-axis evidence,
   and accepts borderline pairs only when an explicit confirmation artifact is
-  supplied.
+  supplied. Confirmation artifacts are now audited as accepted, rejected,
+  malformed, stale, or source-id mismatched; rejected/invalid artifacts do not
+  create links. Accepted `match_evidence` keeps a compact artifact-audit block
+  with pair id, source finding ids, model/source, prompt version, and timestamp;
+  it does not copy source refs or raw clean-source text into the confirmation
+  layer.
+- Implemented first health slice: `skills/aippocampus/scripts/question_health.py`
+  derives source-backed question stats for `aippocampus_health.py`, including
+  recurring links, neutral dormancy, explicit-resolution signals, frontier
+  counts, phase-context patterns, and longest-running open question. This is a
+  heuristic reporting layer, not a durable memory fact. Public health output
+  exposes aggregate counts only unless local diagnostics explicitly request
+  details; `aippocampus_health.py --question-stats` resolves refs against
+  registry clean source by default, and `resolved` requires independent later
+  resolution source refs.
+- Implemented first #135 resolution-extraction slice:
+  `skills/aippocampus/scripts/question_resolution.py` can read registry clean
+  source and emit append-only `question_resolution_signal` rows only when a
+  later same-thread user turn explicitly says the tracked question was solved,
+  understood, or no longer needed. It does not infer resolution from assistant
+  answers, generic positive language, same-ref self-certification, or source
+  refs that no longer resolve. The deterministic job runner now wires
+  `question_resolution` after `question_tracking` when requested.
+- Implemented first #134 offline confirmation/calibration slice:
+  `question_tracking.py` can now export compact
+  `question_pair_confirmation_request` JSONL for borderline pairs. The request
+  includes pair ids, source finding ids, extracted question axes, scores, and
+  threshold policy, but not clean-source messages or full source refs. The
+  selected-fixture calibration runner
+  `benchmarks/aippocampus/benchmark_question_tracking_calibration.py` checks
+  that obvious recurring questions still link, low-information generic
+  questions stay separated, and borderline pairs produce auditable pending
+  requests. It also compares the static strong-threshold baseline with the
+  current adaptive-threshold path and reports non-regression deltas for missed
+  positives and merged negatives.
+- Implemented first #134 optional live/model adapter slice:
+  `skills/aippocampus/scripts/question_confirmation_live.py` consumes pending
+  request JSONL and writes explicit confirmation artifacts that
+  `question_tracking.py --borderline-confirmations` can consume. The adapter is
+  dry-run by default; a caller must pass `--call-model` and provide an API key
+  route before any external model call occurs. A sanitized no-write smoke,
+  `tools/aippocampus/smoke/smoke_question_confirmation_live.py`, exercises the
+  pending-request -> live artifact -> tracking round trip without writing
+  formal job rows or emitting source refs/raw question text. The 2026-05-31
+  local DeepSeek run over the current registry produced 25 candidates, 17
+  frontiers, 1 pending request, 1 live artifact, and 1 accepted no-write
+  round-trip link; it does not claim real-user calibration or recall quality.
+- Implemented first #137 ambient-policy slice:
+  `skills/aippocampus/scripts/ambient_recall_policy.py` gives reviewed
+  `question_link` / `theme_candidate` / `frontier_marker` working-memory scent
+  a hash-only control overlay. The hook records local surface events for
+  ambient cards, caps nearby recurring question/theme hints, keeps frontier
+  markers quiet unless the prompt asks to resume or diagnose an unresolved edge,
+  fails open when the local overlay is too large for cheap foreground parsing,
+  and supports `stop tracking this` / `ignore question about X` style dismissal.
+  This is a foreground control plane, not a user-preference fact or clean-source
+  record.
+- Implemented first #137 feedback-pressure slice:
+  `skills/aippocampus/scripts/question_feedback_policy.py` lets
+  `question_tracking.py` consume source-id-backed ambient dismiss/reopen events
+  as conservative separation pressure for the same source-backed question pair.
+  Only `target_kind="question_link"` can affect pair separation; theme/frontier
+  dismissals remain hook-surface policy and do not change question-pair scoring.
+  Unsourced feedback fails open, and later reopen events clear dismissal
+  pressure.
 - Implemented benchmark: `benchmarks/aippocampus/benchmark_cognitive_portrait.py`
   builds a structured-text cognitive portrait from existing
   `question_candidate`, `frontier_marker`, and `question_link` shapes, then
   compares the compact portrait with fuller clean-source injection. It is a
   benchmark/report surface only; full clean source remains required for quotes
   and final evidence.
+- Implemented first #136 deterministic theme slice:
+  `skills/aippocampus/scripts/theme_emergence.py` consumes recurring
+  `question_link` rows, requires shared source-derived concepts plus
+  concept-graph neighbor evidence, aggregates related `frontier_marker` rows
+  into a boundary map, and writes append-only `theme_candidate` findings back
+  to `subconscious_jobs.jsonl`. Theme labels are selected from shared source
+  concepts; no LLM discovers or names themes in this slice.
+- Implemented first #138 sidecar evaluation slice:
+  `skills/aippocampus/scripts/question_index_sidecar.py` can build or reuse a
+  rebuildable SQLite `question_index.sqlite`, detect missing/stale cache state,
+  degrade to the current pair-scan baseline, and report source-ref-key join
+  fidelity before any future prefilter is allowed. The sidecar stores compact
+  term keys and source-ref fingerprints, not question text payloads. It now
+  emits a structured adoption report that separates "sidecar may be useful to
+  evaluate" from "default prefilter is safe"; synthetic-only evidence never
+  recommends the default path. The synthetic
+  `tools/aippocampus/smoke/smoke_question_tracking_scale.py` smoke reports
+  pair-scan growth, sidecar coverage, adoption decision, and privacy/cannot-
+  claim boundaries without reading private registry data.
+- Implemented first #139 structural benchmark slice:
+  `benchmarks/aippocampus/benchmark_question_aware_real_history.py` selects
+  private real-history question/frontier/link/theme rows when available,
+  emits sanitized aggregate packs with hashed source refs only, and compares
+  question-aware portrait scaffolding against plain source-derived terms. The
+  report records pack-selection strategy, aggregate coverage/token metrics,
+  known failure modes, and the boundary between helpful navigation scaffolding
+  and evidence that still requires clean-source lookup. The 2026-05-30 local
+  run over the current registry was explicitly conservative:
+  `structural_proxy_ready_but_scaffold_regressed`, with 697 job rows, 42
+  eligible rows, 2 sanitized packs, source-ref fidelity 1.0, no private text
+  emitted, token ratio 3.7005, and term-coverage delta -0.4412. It is a
+  structural proxy, not answer-quality or user-visible recall proof.
 - Open cleanup queue: umbrella #133, with focused follow-ups #134 through #139.
-- Designed/deferred: live model confirmation calls (#134),
-  `question_index.sqlite` / scale sidecar (#138), dormancy/resolution reporting
-  (#135), `theme_emergence` and theme maps (#136), ambient recall caps and user
-  escape hatch (#137), private real-history question-aware recall validation
-  (#139), and predictive/generative replay (#127).
+- Designed/deferred: real-user / private real-history calibration beyond
+  selected fixtures and the one sanitized no-write external-provider smoke for
+  #134, broader resolution extraction from non-explicit final-answer or fuzzy follow-up
+  evidence (#135), enabling the question index as a default tracking prefilter
+  (#138), full theme calibration / LLM naming beyond deterministic #136, full
+  ambient recall calibration beyond the first working-memory cap/dismissal
+  slice (#137), live/private answer-quality validation beyond the first #139
+  structural proxy, and predictive / generative replay (#127).
 
 Do not read later architecture sections as current behavior until matching
 `JOB_SPECS`, tests, and scheduler support exist in code.
@@ -504,8 +604,9 @@ kind of work the subconscious layer is designed for:
 **All question/theme jobs, plus explicit frontier markers, should output to the
 existing `subconscious_jobs.jsonl`.** No new staging files. In current code,
 Phase 1 `question_extraction` and the first deterministic Phase 2
-`question_tracking` runner are implemented; Phase 3 `theme_emergence` remains
-deferred to #136.
+`question_tracking` runner are implemented, and the first deterministic Phase 3
+`theme_emergence` runner is registered behind source-backed `question_link`
+rows and the concept graph.
 
 This is the most critical design decision. The existing subconscious pipeline
 already provides:
@@ -535,15 +636,17 @@ Today, every extracted question and frontier marker from `question_extraction`
 gets quality scoring, review, and routing through the same pipeline that
 already handles `concept_edges`, `decision_evolution`, `trigger_mining`, etc.
 The deterministic Phase 2 runner can also append `question_link` rows back to
-the same stream. Phase 3 `theme_candidate` rows remain design targets until
-#136 lands.
+the same stream. The first #136 Phase 3 runner can now append conservative
+`theme_candidate` rows to that stream; richer calibration and LLM naming remain
+deferred.
 
 ## What It Adds
 
 Phase 1 added one semantic job circuit, one cross-cutting `frontier_marker`
 finding kind, and zero new staging files. Phase 2 now has a deterministic
-follow-up runner for `question_link` rows. Phase 3 should add `theme_emergence`
-only after source-backed question links are stable enough to cluster.
+follow-up runner for `question_link` rows. Phase 3 now has a conservative
+`theme_emergence` runner that only clusters recurring links when concept-graph
+neighbor evidence is available.
 
 ### Job 1: `question_extraction`
 
@@ -700,9 +803,13 @@ A question is considered `dormant` (not `stalled`) when:
 A question is considered `resolved` when at least one of:
 
 - The user explicitly said something like "解决了"/"明白了"/"不再需要了" in a
-  turn related to the question.
-- The question's thread contains a `final_answer` that directly addresses the
-  question and the user did not re-raise it afterward.
+  later turn related to the question, and that later user turn has independent
+  source refs.
+
+Assistant `final_answer` text is not a resolution signal in the current
+implementation. It may become a future heuristic only if paired with later
+source-backed user confirmation; otherwise it is too easy to self-certify a
+question as resolved.
 
 `stalled` is not used. The distinction between "stalled" and "dormant" is not
 reliable without user confirmation, and `stalled` implies failure that creates
@@ -719,21 +826,21 @@ seemingly unrelated questions across time.
 **Output:** Findings with `finding_kind="theme_candidate"` in
 `subconscious_jobs.jsonl`.
 
-**Deterministic clustering first, LLM naming second:**
+**Deterministic clustering first; LLM naming later:**
 
 1. Query `concept_index.sqlite` for shared neighbors among recurring questions.
    If multiple questions share ≥2 common concept nodes, they form a candidate
    theme cluster.
-2. Only pass validated clusters to the LLM. The LLM's job is limited to
-   generating a readable `theme_label` and `theme_short`. It does not discover
-   themes — it names clusters that the deterministic layer already identified.
+2. Current code names the cluster from shared source-derived concepts only.
+   A later LLM naming pass may generate a more readable label, but it must name
+   only validated deterministic clusters. It must not discover themes.
 
 ```json
 {
   "finding_kind": "theme_candidate",
   "theme_label": "memory continuity across agent restarts",
   "theme_short": "memory continuity",
-  "cluster_method": "shared_concept_neighbors",
+  "cluster_method": "deterministic_shared_concept_neighbors_v1",
   "shared_concepts": ["AIppocampus", "clean source", "Codex rollout"],
   "linked_question_count": 4,
   "thread_span": 5,
@@ -746,11 +853,12 @@ seemingly unrelated questions across time.
 findings that share concept graph neighbors. This prevents premature theme
 extraction from sparse data.
 
-**Execution ordering:** `theme_emergence` runs after `question_tracking` within
-the same scheduler pass. If `question_tracking` produces new recurring links
-that push the count past the threshold, `theme_emergence` will pick them up in
-the same run. The scheduler runs jobs in dependency order
-(extraction → tracking → emergence), not alphabetically.
+**Execution ordering:** In the current `--job all` path, registered job order
+runs `question_tracking` before `theme_emergence`, so new recurring links can be
+picked up in the same pass. The `depends_on` field documents the intended
+dependency, but arbitrary explicit job lists are not yet topologically
+reordered; callers should use `--job all` or pass deterministic jobs in
+dependency order until a general planner owns that guarantee.
 
 ## Integration with Existing Subconscious Pipeline
 
@@ -811,15 +919,15 @@ are skipped, not treated as evidence.
 ### Changes to Existing Files
 
 **`subconscious_jobs.py` / `subconscious_job_circuits.py`:** Current code
-registers `question_extraction` and deterministic `question_tracking`.
-`question_tracking` is not an LLM job; it runs after semantic jobs write their
-rows so it does not race fresh extraction in the high-concurrency worker pool.
-`theme_emergence` is not registered yet and is tracked by #136.
+registers `question_extraction`, deterministic `question_tracking`, and
+deterministic `theme_emergence`. The deterministic runners are not LLM jobs;
+they run after semantic jobs write their rows so tracking and emergence do not
+race fresh extraction in the high-concurrency worker pool.
 
 **`subconscious_review.py`:** The review prompt currently admits
 `question_candidate`, `question_link`, `theme_candidate`, and `frontier_marker`
-candidate types. This is only review/router readiness; it does not mean
-`theme_emergence` already writes `theme_candidate` rows.
+candidate types. Review/router handling remains quiet ambient navigation; it
+does not make `theme_candidate` foreground truth.
 
 **`memory_candidate_router.py`:** Current code has routing rules for the
 question/theme finding kinds and the frontier marker:
@@ -831,8 +939,11 @@ question/theme finding kinds and the frontier marker:
   semantic relevance to the current prompt
 - `theme_candidate` → `use_silently` (ambient scent only, never pushed)
 
-Hook-level frequency caps, dismissal/archive behavior, and source-backed
-question-aware scent are still deferred to #137.
+The first #137 hook-level policy slice now exists in
+`ambient_recall_policy.py`: reviewed `question_link` and `frontier_marker`
+working-memory rows carry stable control keys into ambient cards, and the hook
+uses local surface/dismiss/reopen events to cap or suppress foreground scent.
+This is not yet full question-aware recall calibration.
 
 **`build_concept_graph.py`:** Do **not** add `question` or `母题` as concept
 node kinds. Instead, question, theme, and frontier findings are stored as
@@ -844,8 +955,9 @@ ephemeral questions.
 
 - `subconscious_scheduler.py` for Phase 1. Current scheduler runs
   `subconscious_jobs.py --job all`, and `question_tracking` runs after semantic
-  job writes. Phase 3 should still add explicit sequencing for extraction →
-  tracking → emergence when `theme_emergence` lands.
+  job writes. `theme_emergence` follows `question_tracking` in the registered
+  `--job all` order; future scheduler work should add a general depends-on
+  planner before claiming arbitrary explicit job-list reordering.
 - `subconscious_worker.py` — concept-edge extraction is unaffected.
 - Clean source format — questions are derived, never stored in source.
 - SKILL.md — new jobs are referenced in `references/subconscious-jobs.md`.
@@ -856,10 +968,10 @@ ephemeral questions.
 
 Current code can route reviewed question/theme/frontier candidates into soft
 working memory, and the prompt hook can consume working-memory rows generically.
-The question-specific hook policy below is still a design target, tracked by
-#137. By default this should remain model-facing scent, not user-facing
-notification. When the user's new prompt is semantically related to a tracked
-question, the hook can eventually add compact recall context:
+The first #137 slice adds local cap/dismissal policy for those rows. By default
+this remains model-facing scent, not user-facing notification. When the user's
+new prompt is semantically related to a tracked question, the hook can add
+compact recall context:
 
 ```
 [recall scent] related question: "memory continuity across agent restarts";
@@ -869,19 +981,23 @@ seen across 5 threads since April. Related old turns: t012, t047, t083.
 This is a hint, not a claim. It does not force the question into the foreground,
 and it should not phrase the hint as a judgment about the user.
 
-**Frequency control:** Target behavior for #137: each recurring question's
-ambient hint appears at most once per 7 days. Frontier hints should be even more
-conservative: they surface only when the current prompt asks to resume,
-diagnose, or plan around unresolved edges. This prevents the same scent from
-becoming background noise.
+**Frequency control:** Implemented first slice: reviewed recurring question
+cards carry the working-memory `candidate_key`, and `ambient_recall_policy.py`
+records hash-only `surface` events so nearby prompts do not repeat the same
+hint. Frontier rows are more conservative: the policy filters them unless the
+prompt asks to resume, diagnose, or plan around an unresolved edge. This
+prevents the same scent from becoming background noise without storing raw
+prompt text or treating suppression as a durable user trait.
 
 ### User escape hatch
 
-Target behavior for #137: if the hook surfaces a question the user does not
-want tracked, the user can say "stop tracking this" or "ignore question about
-X". The prompt hook should recognize this pattern and mark the corresponding
-working-memory entry as archived or dismissed. It should not surface again
-unless the user explicitly re-opens the topic.
+Implemented first slice: if the hook surfaces a working-memory
+question/frontier card and the user says "stop tracking this" or "ignore
+question about X", the prompt hook writes a local dismissal event keyed by the
+reviewed candidate. The candidate stops surfacing until a later reopen event
+wins. This does not delete source refs, does not alter clean source, and must
+not be interpreted as "the user no longer cares about this topic" outside the
+foreground hint policy.
 
 ### Health Report
 
@@ -891,6 +1007,7 @@ can report question statistics:
 - Total tracked questions.
 - Questions recurring across threads.
 - Dormant questions (not appeared in 30+ days).
+- Explicitly resolved questions from source-backed follow-up signals.
 - Active themes.
 - Frontier markers by type.
 - Repeated `phase_context` patterns, such as new-project-start questions.
@@ -903,7 +1020,12 @@ Note: no `stalled` metric. Dormant is neutral, not a failure signal.
 When the user asks "what was I working on last week", the recall system can
 answer from questions, not just from keywords. This is the bridge between
 AIppocampus's source-backed recall and Metaflow's question-continuity vision.
-Private real-history validation for this claim is tracked by #139.
+The first #139 benchmark now validates sanitized structural pack formation over
+private real-history rows and records known failure modes. The current local
+run shows the scaffold is source-faithful but not yet more compact or more
+complete than the plain structural baseline, so answer usefulness and live
+behavioral lift remain unproven until a later opt-in evaluation reopens clean
+source and compares actual answers.
 
 ## ADHD Design Principles
 
@@ -972,6 +1094,27 @@ noisy ones. Frontier markers must feel like saved trail markers, not guilt.
 - Shipped first slice: borderline pairs are accepted only when an explicit
   confirmation artifact accepts the pair; the link still derives truth from the
   original question source refs.
+- Shipped artifact-audit slice: rejected, malformed, stale, and source-id
+  mismatched confirmation artifacts are counted in diagnostics and never replace
+  the original question source refs. Accepted pairs keep a compact artifact
+  audit in `match_evidence` so reviewers can trace model/source, prompt version,
+  created time, pair id, and source finding ids without copying source refs.
+- Shipped first #134 offline confirmation/calibration slice:
+  `question_tracking.py --pending-confirmations-output` exports compact
+  confirmation-request JSONL for borderline pairs without full history or source
+  refs. `benchmark_question_tracking_calibration.py` provides selected-fixture
+  evidence that default thresholds keep obvious recurring questions, reject
+  low-information generic merges, surface pending requests for review, and do
+  not regress the static strong-threshold baseline on selected positive /
+  negative pairs.
+- Shipped first #134 optional live/model adapter slice:
+  `question_confirmation_live.py` turns pending request JSONL into explicit
+  confirmation artifacts for `question_tracking.py --borderline-confirmations`.
+  The CLI defaults to dry-run and requires `--call-model` plus an API key route
+  before contacting an external provider. The sanitized
+  `smoke_question_confirmation_live.py` no-write smoke exercises request
+  generation, optional live artifact generation, and tracking round trip without
+  persisting formal jobs or emitting source refs/raw question text.
 - Shipped first salience/threshold slice: every parsed candidate gets a
   deterministic `salience` profile with score, tags, reasons, and `trackable`.
   Low-information source-backed rows are kept as candidates but skipped as
@@ -979,9 +1122,38 @@ noisy ones. Frontier markers must feel like saved trail markers, not guilt.
   compatible `what_features`, `where_context`, `intent_orientation`,
   `phase_context`, and collaboration context lower completion thresholds,
   while orientation/context conflicts raise separation pressure.
-- Deferred: live model confirmation calls and real-user calibration (#134),
-  optional `question_index.sqlite` sidecar for fast lookup (#138), dormancy /
-  resolution detection (#135), and live acceptance/dismissal feedback (#137).
+- Shipped first #137 feedback-pressure slice: source-id-backed ambient
+  dismiss/reopen events are consumed by `question_tracking.py` through
+  `question_feedback_policy.py`. A dismissed same source-backed `question_link`
+  pair is treated as separated unless a later reopen event wins; dismissals for
+  `theme_candidate` or `frontier_marker` remain ambient-surface policy only.
+- Shipped first health slice: `question_health.py` reports neutral `dormant`
+  and explicit `resolved` states from source-backed job rows, skips stale refs
+  through default registry resolution in `aippocampus_health.py --question-stats`,
+  rejects same-ref self-certification, and does not use `stalled`.
+- Shipped first #135 resolution-extraction slice: `question_resolution.py`
+  emits `question_resolution_signal` only for later same-thread user clean-source
+  turns with explicit solved / understood / no-longer-needed wording and
+  matching question terms. `question_health.py` consumes those rows as
+  independent resolution evidence. `question_resolution` is now available as a
+  deterministic follow-up job after `question_tracking`.
+- Shipped first #138 scale/sidecar evaluation slice:
+  `question_index_sidecar.py` can build or reuse an optional rebuildable SQLite
+  question-index cache, detect missing/stale caches, degrade to the current
+  pair-scan baseline, and report whether index candidates still join back to
+  current source-backed question rows and their source-ref keys. The cache does
+  not store `question_text` or `question_short` in its row payload.
+  `smoke_question_tracking_scale.py` provides synthetic lookup-cost,
+  source-join coverage, and adoption-decision evidence. This is evaluation and
+  smoke substrate, not a default acceleration path: synthetic evidence can show
+  the boundary behaves, but real-history parity and wall-clock evidence are
+  still required before default prefiltering.
+- Deferred: real-user / private real-history calibration beyond selected
+  fixtures and the one sanitized no-write external-provider smoke (#134),
+  fuzzy/non-explicit resolution inference beyond explicit user follow-up signals
+  (#135), enabling `question_index.sqlite` as a default lookup prefilter (#138),
+  and broader live acceptance/dismissal calibration beyond source-id-backed
+  same-pair feedback (#137).
 
 **Validation criterion:** Does the system correctly identify that "how do I
 keep agent context" and "why does Codex forget everything after compaction" are
@@ -989,10 +1161,20 @@ the same underlying question?
 
 ### Phase 3: `theme_emergence`
 
-- Deterministic clustering via shared concept graph neighbors.
-- Boundary-map aggregation from `frontier_marker` findings.
-- LLM naming pass for validated clusters.
-- Hook consumption with frequency control.
+- Shipped first slice (2026-05-30): deterministic clustering over recurring
+  `question_link` rows via shared source-derived concepts and concept graph
+  neighbors.
+- Shipped first slice: append-only `theme_candidate` findings in
+  `subconscious_jobs.jsonl`, with preserved question-link ids, source refs,
+  thread/time span, shared concepts, and match/naming evidence.
+- Shipped first slice: boundary-map aggregation from related
+  `frontier_marker` findings, explicitly marked as navigation rather than
+  proof of unresolved status.
+- Shipped first ambient-policy coverage: `theme_candidate` uses the same
+  frequency cap and dismiss/reopen latest-wins overlay as question scent.
+- Deferred: LLM naming for already-validated clusters, user resonance
+  calibration, and theme-specific hook calibration beyond the existing quiet
+  `theme_candidate` router/policy path.
 
 **Validation criterion:** Do the emergent themes resonate with the user's
 self-understanding? This is inherently subjective and can only be validated by

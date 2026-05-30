@@ -13,6 +13,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ambient_recall_policy import (
+    apply_working_memory_policy,
+    default_ambient_policy_path,
+    load_policy_events,
+)
 from build_associations import (
     default_associations_path,
     load_associations,
@@ -62,6 +67,7 @@ class RecallDecisionContext:
     working_memory_path: Path
     semantic_triggers_path: Path
     semantic_cues_path: Path
+    ambient_policy_path: Path
     is_noise: bool
     registry: dict[str, Any]
     project_label: str | None
@@ -69,8 +75,11 @@ class RecallDecisionContext:
     association_matches: list[dict[str, Any]]
     cognitive_map: dict[str, Any]
     cognitive_map_matches: list[dict[str, Any]]
+    working_memory_all_rows: list[dict[str, Any]]
     working_memory_rows: list[dict[str, Any]]
     working_memory_matches: list[dict[str, Any]]
+    ambient_policy_events: list[dict[str, Any]]
+    ambient_policy_diagnostics: dict[str, Any]
     pre_explicit: list[str]
     pre_associative: list[str]
     pre_important: list[str]
@@ -86,6 +95,7 @@ class RecallDecisionContext:
             "working_memory_path": str(self.working_memory_path),
             "semantic_triggers_path": str(self.semantic_triggers_path),
             "semantic_cues_path": str(self.semantic_cues_path),
+            "ambient_policy_path": str(self.ambient_policy_path),
         }
 
 
@@ -100,7 +110,8 @@ def _resolve_context_paths(
     working_memory_path: Path | str | None,
     semantic_triggers_path: Path | str | None,
     semantic_cues_path: Path | str | None,
-) -> tuple[Path, Path, Path, Path, Path, Path, Path, Path]:
+    ambient_policy_path: Path | str | None,
+) -> tuple[Path, Path, Path, Path, Path, Path, Path, Path, Path]:
     cwd_path = Path(cwd).resolve()
     path = registry_json_path(
         Path(registry_path).resolve() if registry_path else None,
@@ -136,6 +147,11 @@ def _resolve_context_paths(
         if semantic_cues_path
         else default_semantic_cues_path(registry_path=path)
     )
+    ambient_policy_file = (
+        Path(ambient_policy_path).resolve()
+        if ambient_policy_path
+        else default_ambient_policy_path(registry_path=path)
+    )
     return (
         cwd_path,
         path,
@@ -145,6 +161,7 @@ def _resolve_context_paths(
         working_memory_file,
         semantic_triggers_file,
         semantic_cues_file,
+        ambient_policy_file,
     )
 
 
@@ -160,6 +177,7 @@ def build_recall_decision_context(
     working_memory_path: Path | str | None = None,
     semantic_triggers_path: Path | str | None = None,
     semantic_cues_path: Path | str | None = None,
+    ambient_policy_path: Path | str | None = None,
     use_cognitive_map: bool = True,
 ) -> RecallDecisionContext:
     prompt = str(prompt or "").strip()
@@ -172,6 +190,7 @@ def build_recall_decision_context(
         working_memory_file,
         semantic_triggers_file,
         semantic_cues_file,
+        ambient_policy_file,
     ) = _resolve_context_paths(
         cwd=cwd,
         registry_path=registry_path,
@@ -182,6 +201,7 @@ def build_recall_decision_context(
         working_memory_path=working_memory_path,
         semantic_triggers_path=semantic_triggers_path,
         semantic_cues_path=semantic_cues_path,
+        ambient_policy_path=ambient_policy_path,
     )
     is_noise = source_text_is_noise(prompt)
     registry: dict[str, Any] = {}
@@ -190,8 +210,16 @@ def build_recall_decision_context(
     association_matches: list[dict[str, Any]] = []
     cognitive_map: dict[str, Any] = {}
     cognitive_map_matches: list[dict[str, Any]] = []
+    working_memory_all_rows: list[dict[str, Any]] = []
     working_memory_rows: list[dict[str, Any]] = []
     working_memory_matches: list[dict[str, Any]] = []
+    ambient_policy_events: list[dict[str, Any]] = []
+    ambient_policy_diagnostics: dict[str, Any] = {
+        "dismissed": 0,
+        "frequency_capped": 0,
+        "frontier_not_requested": 0,
+        "policy_event_count": 0,
+    }
     pre_explicit: list[str] = []
     pre_associative: list[str] = []
     pre_important: list[str] = []
@@ -210,9 +238,23 @@ def build_recall_decision_context(
             if prompt and cognitive_map
             else []
         )
-        working_memory_rows = (
+        working_memory_all_rows = (
             load_working_memory(working_memory_file) if working_memory_file.exists() else []
         )
+        working_memory_rows = working_memory_all_rows
+        ambient_policy_events = load_policy_events(ambient_policy_file)
+        if working_memory_rows and ambient_policy_events:
+            policy_result = apply_working_memory_policy(
+                prompt,
+                working_memory_rows,
+                ambient_policy_events,
+            )
+            working_memory_rows = policy_result["rows"]
+            ambient_policy_diagnostics = policy_result["diagnostics"]
+        elif working_memory_rows:
+            policy_result = apply_working_memory_policy(prompt, working_memory_rows, [])
+            working_memory_rows = policy_result["rows"]
+            ambient_policy_diagnostics = policy_result["diagnostics"]
         working_memory_matches = (
             match_working_memory(
                 prompt,
@@ -272,6 +314,7 @@ def build_recall_decision_context(
         working_memory_path=working_memory_file,
         semantic_triggers_path=semantic_triggers_file,
         semantic_cues_path=semantic_cues_file,
+        ambient_policy_path=ambient_policy_file,
         is_noise=is_noise,
         registry=registry,
         project_label=project_label,
@@ -279,8 +322,11 @@ def build_recall_decision_context(
         association_matches=association_matches,
         cognitive_map=cognitive_map,
         cognitive_map_matches=cognitive_map_matches,
+        working_memory_all_rows=working_memory_all_rows,
         working_memory_rows=working_memory_rows,
         working_memory_matches=working_memory_matches,
+        ambient_policy_events=ambient_policy_events,
+        ambient_policy_diagnostics=ambient_policy_diagnostics,
         pre_explicit=pre_explicit,
         pre_associative=pre_associative,
         pre_important=pre_important,

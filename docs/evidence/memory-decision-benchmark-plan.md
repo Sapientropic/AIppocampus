@@ -87,6 +87,14 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
 - `tests/aippocampus/test_benchmark_cognitive_portrait.py` checks that the
   reusable portrait artifact keeps source refs/back-pointers, records quote
   fidelity loss, and keeps private debug text opt-in.
+- `benchmarks/aippocampus/benchmark_question_aware_real_history.py` runs the
+  #139 private real-history structural proxy. It selects source-backed
+  question/frontier/link/theme rows when present, emits sanitized packs with
+  hashed source refs by default, and reports pack selection, source-fidelity,
+  term-coverage delta, token ratio, known failure modes, and clean-source
+  lookup boundaries. The current 2026-05-30 registry run proves source-faithful
+  pack formation but reports scaffold regression, so it is not an answer-quality
+  or token-savings claim.
 
 This slice is a smoke gate, not a real-history quality claim. It proves the
 benchmark runner can catch skip/scent/evidence mistakes and can report sanitized

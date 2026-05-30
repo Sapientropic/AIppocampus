@@ -56,6 +56,44 @@ JOB_SPECS: dict[str, dict[str, Any]] = {
             "vector or model output as truth without source_refs."
         ),
     },
+    "theme_emergence": {
+        "purpose": "Cluster recurring source-backed question links into quiet theme candidates.",
+        "finding_kind": "theme_candidate",
+        "runner": "deterministic_theme_emergence",
+        "depends_on": ["question_tracking"],
+        "must_include": [
+            "theme_cluster_id",
+            "theme_label",
+            "theme_short",
+            "cluster_method",
+            "shared_concepts",
+            "source_refs",
+            "source_question_link_ids",
+        ],
+        "notes": (
+            "Deterministic Phase 3 runner over recurring question_link rows. "
+            "It requires shared source-derived concepts plus concept-graph neighbor evidence before writing a theme_candidate. "
+            "LLMs may later name deterministic clusters, but they must not discover themes or replace clean-source refs."
+        ),
+    },
+    "question_resolution": {
+        "purpose": "Derive explicit user follow-up resolution signals for tracked questions.",
+        "finding_kind": "question_resolution_signal",
+        "runner": "deterministic_question_resolution",
+        "depends_on": ["question_tracking"],
+        "must_include": [
+            "resolved_subject_id",
+            "resolved_question_ids",
+            "resolved_source_finding_ids",
+            "resolution_source_refs",
+            "resolution_kind",
+        ],
+        "notes": (
+            "Deterministic follow-up runner over source-backed question_candidate/question_link rows "
+            "and clean-source user messages. It only accepts explicit later user wording such as solved/answered, "
+            "never assistant claims, and writes a resolution signal with independent source refs."
+        ),
+    },
     "concept_edges": {
         "purpose": "Propose source-backed concept graph edges for ambient recall.",
         "finding_kind": "concept_edge",
@@ -229,6 +267,18 @@ def jobs_initial_payload(
                     "link_type": "required for question_link only: recurring|evolving|parent_of|child_of|related",
                     "dependency_edges": "required for question_link only; auditable ordering hints between linked questions",
                     "match_evidence": "required for question_link only; deterministic scores and optional confirmation audit",
+                    "theme_cluster_id": "required for theme_candidate only; stable id for deterministic cluster",
+                    "theme_label": "required for theme_candidate only; readable label derived from shared source concepts",
+                    "theme_short": "required for theme_candidate only; compact source-derived concept label",
+                    "cluster_method": "required for theme_candidate only; deterministic shared-concept-neighbor method",
+                    "shared_concepts": "required for theme_candidate only; shared source-derived concepts/graph neighbors",
+                    "source_question_link_ids": "required for theme_candidate only; backing question_link finding ids",
+                    "boundary_map": "optional for theme_candidate; frontier aggregation from source-backed frontier_marker rows",
+                    "resolved_subject_id": "required for question_resolution_signal only; tracked question unit being resolved",
+                    "resolved_question_ids": "required for question_resolution_signal only; source-backed question ids affected",
+                    "resolved_source_finding_ids": "required for question_resolution_signal only; source-backed finding ids affected",
+                    "resolution_source_refs": "required for question_resolution_signal only; later user source refs proving resolution",
+                    "resolution_kind": "required for question_resolution_signal only; explicit user follow-up signal kind",
                 }
             ],
         },

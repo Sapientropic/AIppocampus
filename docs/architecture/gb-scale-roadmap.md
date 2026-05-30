@@ -200,7 +200,18 @@ Completed foundation:
    `LocalQuestionVectorIndex` with add / search / remove / write / load
    behavior. It is intentionally non-default and source-id-only; question
    tracking must still re-open clean source before accepting a link. TurboVec
-   remains a later replacement when scale warrants.
+   remains a later replacement when scale warrants. A first #138 evaluator in
+   `question_index_sidecar.py` can build/reuse an optional SQLite question-index
+   cache, detect missing or stale caches, and measure whether lookup candidates
+   still join back to current source-backed question rows and source-ref keys;
+   it does not make the sidecar a default tracking dependency or store question
+   text in the row payload. Its adoption report keeps default prefiltering
+   disabled when evidence is synthetic-only, when source-ref-key joins fail,
+   when baseline strong-pair coverage is incomplete, or when current pair
+   volume is below the cache threshold. The synthetic
+   `smoke_question_tracking_scale.py` smoke reports quadratic pair-scan growth,
+   sidecar coverage, adoption decision, and privacy boundaries without reading
+   private registry content.
 7. Add source chunking, delta sync, and registry query planning. Done for the
    first executable slice: local-folder/object-storage sync now moves
    clean-source JSONL through content-addressed chunks, and capacity reports now

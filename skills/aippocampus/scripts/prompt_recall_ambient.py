@@ -7,8 +7,15 @@ from pathlib import Path
 from typing import Any
 
 from ambient_recall_cards import ambient_recall_from_decision
+from ambient_recall_policy import (
+    append_policy_events,
+    filter_ambient_cards,
+    load_policy_events,
+    surface_events_for_cards,
+)
 from ambient_thread_cache import (
     default_ambient_cache_path,
+    read_latest_thread_cache,
     read_thread_cache,
     topic_epoch_from_terms,
     write_thread_cache,
@@ -21,6 +28,7 @@ from ambient_warm_scheduler import (
 
 __all__ = [
     "attach_ambient_recall",
+    "cached_cards_for_policy",
     "current_thread_key_from_hook_thread_id",
     "warm_prompt_trace",
 ]
@@ -34,6 +42,7 @@ def attach_ambient_recall(
     workspace: str,
     registry_path: Path,
     ambient_cache_path: Path | str | None,
+    ambient_policy_path: Path | str | None,
     topic_epoch: str | None,
     use_thread_cache: bool,
     warm_background: bool | None,
@@ -53,6 +62,7 @@ def attach_ambient_recall(
         if ambient_cache_path
         else default_ambient_cache_path(registry_path)
     )
+    policy_file = Path(ambient_policy_path).resolve() if ambient_policy_path else None
     try:
         cached = read_thread_cache(
             cache_file,
@@ -74,6 +84,15 @@ def attach_ambient_recall(
             cache_status=cache_status,
             cached_cards_first=True,
         )
+        if policy_file:
+            policy_events = load_policy_events(policy_file)
+            policy_filter = filter_ambient_cards(
+                result["ambient_recall"].get("cards") or [],
+                policy_events,
+                prompt=prompt,
+            )
+            result["ambient_recall"]["cards"] = policy_filter["cards"]
+            result["ambient_recall"]["policy_filter"] = policy_filter["diagnostics"]
         cache_is_warm = cached.get("status") == "hit" and bool(cached.get("cards"))
         if result.get("decision") != "skip" and result["ambient_recall"].get("cards"):
             written = write_thread_cache(
@@ -99,6 +118,22 @@ def attach_ambient_recall(
                 "write_status": written.get("status"),
                 "written_card_count": written.get("card_count"),
             }
+            if policy_file:
+                try:
+                    append_policy_events(
+                        policy_file,
+                        surface_events_for_cards(
+                            result["ambient_recall"].get("cards") or [],
+                            thread_id=thread_id,
+                            workspace=workspace,
+                        ),
+                    )
+                except Exception as exc:
+                    result["ambient_recall"]["policy_write"] = {
+                        "status": "error",
+                        "error_type": type(exc).__name__,
+                        "message": str(exc)[:160],
+                    }
         if (
             result.get("decision") != "skip"
             and not cache_is_warm
@@ -137,6 +172,27 @@ def attach_ambient_recall(
             },
         )
     return result
+
+
+def cached_cards_for_policy(
+    *,
+    registry_path: Path,
+    ambient_cache_path: Path | str | None,
+    thread_id: str | None,
+    workspace: str,
+) -> list[dict[str, Any]]:
+    if not thread_id:
+        return []
+    cache_file = (
+        Path(ambient_cache_path).resolve()
+        if ambient_cache_path
+        else default_ambient_cache_path(registry_path)
+    )
+    try:
+        cached = read_latest_thread_cache(cache_file, thread_id=thread_id, workspace=workspace)
+    except Exception:
+        return []
+    return [card for card in cached.get("cards") or [] if isinstance(card, dict)]
 
 
 def current_thread_key_from_hook_thread_id(thread_id: str | None) -> str | None:

@@ -167,6 +167,7 @@ def _compact_card(card: dict[str, Any]) -> dict[str, Any]:
         "source_refs",
         "source_validation",
         "expand_if",
+        "ambient_policy",
     }
     clean = {key: card.get(key) for key in allowed if key in card}
     for key in ("theme", "suggested_use", "nudge", "key_line", "expand_if"):
@@ -320,6 +321,54 @@ def read_thread_cache(
         "query_aliases": entry.get("query_aliases") or [],
         "topic_epoch_decision": entry.get("topic_epoch_decision") or None,
         "visibility_bias": entry.get("visibility_bias") or None,
+    }
+
+
+def read_latest_thread_cache(
+    path: Path | str,
+    *,
+    thread_id: str,
+    workspace: str,
+    ttl_seconds: int = DEFAULT_TTL_SECONDS,
+) -> dict[str, Any]:
+    """Return the newest cache entry for a thread/workspace without raw keys.
+
+    The escape hatch uses this for phrases like "stop tracking this", where the
+    prompt intentionally omits the old topic. Matching by hashed thread and
+    workspace identity keeps that local control path from persisting the raw
+    foreground prompt or absolute workspace in the policy overlay.
+    """
+
+    target = Path(path)
+    data = _load_cache(target)
+    thread_fp = _fingerprint(thread_id, prefix="thread")
+    workspace_fp = _fingerprint(workspace, prefix="workspace")
+    entries: list[dict[str, Any]] = []
+    for entry in (data.get("entries") or {}).values():
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("thread_fingerprint") != thread_fp:
+            continue
+        if entry.get("workspace_fingerprint") != workspace_fp:
+            continue
+        updated_unix = float(entry.get("updated_unix") or 0.0)
+        if ttl_seconds > 0 and updated_unix and time.time() - updated_unix > ttl_seconds:
+            continue
+        entries.append(entry)
+    if not entries:
+        return {"status": "miss", "cards": []}
+    latest = sorted(entries, key=lambda item: float(item.get("updated_unix") or 0.0), reverse=True)[0]
+    cards = [card for card in latest.get("cards") or [] if isinstance(card, dict)]
+    return {
+        "status": "hit",
+        "topic_epoch": latest.get("topic_epoch"),
+        "mode": latest.get("mode"),
+        "confidence": latest.get("confidence"),
+        "cards": cards,
+        "source_ref_fingerprints": latest.get("source_ref_fingerprints") or [],
+        "query_aliases": latest.get("query_aliases") or [],
+        "topic_epoch_decision": latest.get("topic_epoch_decision") or None,
+        "visibility_bias": latest.get("visibility_bias") or None,
     }
 
 

@@ -25,6 +25,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
+import build_concept_graph as concept_graph  # noqa: E402
 import build_semantic_scope_labels as semantic_scope_materializer  # noqa: E402
 import subconscious_jobs as jobs  # noqa: E402
 from redaction_fixtures import (  # noqa: E402
@@ -410,6 +411,218 @@ class SubconsciousJobsTests(unittest.TestCase):
         self.assertEqual(rows[-1]["source"], "deterministic_question_tracking")
         self.assertEqual(rows[-1]["question_count"], 2)
 
+    def test_run_jobs_runs_theme_emergence_after_question_tracking(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jobs_output = root / "subconscious_jobs.jsonl"
+            jobs_output.write_text(
+                "".join(
+                    json.dumps(
+                        {
+                            "schema_version": 1,
+                            "kind": "aippocampus_subconscious_job_finding",
+                            "created_at": f"2026-05-2{suffix}T00:00:00Z",
+                            "job": "question_tracking",
+                            "finding_kind": "question_link",
+                            "fingerprint": f"sf_link_{suffix}",
+                            "title": f"Question continuity {suffix}",
+                            "summary": "Tracked recurring question continuity.",
+                            "confidence": 0.86,
+                            "source": "deterministic_question_tracking",
+                            "question_cluster_id": f"ql_{suffix}",
+                            "linked_question_short": f"context continuity {suffix}",
+                            "question_count": 2,
+                            "link_type": "recurring",
+                            "first_seen": f"2026-05-2{suffix}T00:00:00Z",
+                            "last_seen": f"2026-05-2{suffix}T12:00:00Z",
+                            "concepts": ["context continuity", "agent alignment"],
+                            "source_refs": [
+                                {
+                                    "thread_key": f"session:{suffix}",
+                                    "message_id": f"msg_{suffix}",
+                                    "source_line": int(suffix) * 10,
+                                }
+                            ],
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                    for suffix in ("1", "2", "3")
+                ),
+                encoding="utf-8",
+            )
+            associations = root / "associations.json"
+            associations.write_text(
+                json.dumps(
+                    {
+                        "terms": {
+                            "context continuity": {
+                                "term": "context continuity",
+                                "status": "verified",
+                                "confidence": 0.95,
+                                "hit_count": 12,
+                                "related_terms": ["source-backed recall", "continuity map"],
+                                "threads": [],
+                            },
+                            "agent alignment": {
+                                "term": "agent alignment",
+                                "status": "verified",
+                                "confidence": 0.94,
+                                "hit_count": 12,
+                                "related_terms": ["source-backed recall", "continuity map"],
+                                "threads": [],
+                            },
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            concept_graph_path = root / "concept_index.sqlite"
+            concept_graph.build_concept_graph(associations, concept_graph_path)
+            result = jobs.run_jobs(
+                jobs=["question_tracking", "theme_emergence"],
+                registry_path=root / "threads.json",
+                timeline_path=root / "project_timeline.json",
+                concept_graph_path=concept_graph_path,
+                jobs_output_path=jobs_output,
+                edges_output_path=root / "subconscious_edges.jsonl",
+                project=None,
+                objective="deterministic follow-up chain",
+                max_turns=0,
+                max_steps=0,
+                min_tool_steps=0,
+                model="deepseek-v4-flash",
+                base_url="https://example.invalid",
+                api_key="test",
+                max_tokens=None,
+                timeout=1,
+                temperature=0.2,
+            )
+            rows = [
+                json.loads(line)
+                for line in jobs_output.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual([item["job"] for item in result["jobs"]], ["question_tracking", "theme_emergence"])
+        self.assertEqual(rows[-1]["finding_kind"], "theme_candidate")
+        self.assertEqual(rows[-1]["source"], "deterministic_theme_emergence")
+
+    def test_run_jobs_runs_question_resolution_after_tracking(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            clean_dir = root / "clean"
+            clean_dir.mkdir()
+            messages_path = clean_dir / "messages.jsonl"
+            messages_path.write_text(
+                "\n".join(
+                    json.dumps(row, ensure_ascii=False)
+                    for row in [
+                        {
+                            "message_id": "msg_question",
+                            "turn_id": "turn_1",
+                            "turn_index": 1,
+                            "source_line": 10,
+                            "timestamp": "2026-02-10T00:00:00Z",
+                            "role": "user",
+                            "text": "How do I keep agent context across compaction?",
+                        },
+                        {
+                            "message_id": "msg_resolution",
+                            "turn_id": "turn_2",
+                            "turn_index": 2,
+                            "source_line": 20,
+                            "timestamp": "2026-02-12T00:00:00Z",
+                            "role": "user",
+                            "text": "The compaction context question is solved.",
+                        },
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            registry_path = root / "threads.json"
+            registry_path.write_text(
+                json.dumps(
+                    {
+                        "threads": [
+                            {
+                                "thread_key": "session:context",
+                                "paths": {"clean_source_messages_jsonl": str(messages_path)},
+                            }
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            jobs_output = root / "subconscious_jobs.jsonl"
+            jobs_output.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "kind": "aippocampus_subconscious_job_finding",
+                        "created_at": "2026-02-10T00:00:00Z",
+                        "job": "question_extraction",
+                        "finding_kind": "question_candidate",
+                        "fingerprint": "sf_context_question",
+                        "title": "Agent context continuity",
+                        "summary": "The user asks how context survives compaction.",
+                        "confidence": 0.88,
+                        "source_refs": [
+                            {
+                                "thread_key": "session:context",
+                                "message_id": "msg_question",
+                                "turn_id": "turn_1",
+                                "source_line": 10,
+                                "timestamp": "2026-02-10T00:00:00Z",
+                            }
+                        ],
+                        "question_text": "How do I keep agent context across compaction?",
+                        "question_short": "agent context continuity",
+                        "intent_orientation": "implementation",
+                        "what_features": ["context", "compaction"],
+                        "where_context": ["AIppocampus"],
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = jobs.run_jobs(
+                jobs=["question_resolution"],
+                registry_path=registry_path,
+                timeline_path=root / "project_timeline.json",
+                concept_graph_path=root / "missing.sqlite",
+                jobs_output_path=jobs_output,
+                edges_output_path=root / "subconscious_edges.jsonl",
+                project=None,
+                objective="deterministic resolution follow-up",
+                max_turns=0,
+                max_steps=0,
+                min_tool_steps=0,
+                model="deepseek-v4-flash",
+                base_url="https://example.invalid",
+                api_key="test",
+                max_tokens=None,
+                timeout=1,
+                temperature=0.2,
+            )
+            rows = [
+                json.loads(line)
+                for line in jobs_output.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual([item["job"] for item in result["jobs"]], ["question_resolution"])
+        self.assertEqual(rows[-1]["finding_kind"], "question_resolution_signal")
+        self.assertEqual(rows[-1]["source"], "deterministic_question_resolution")
+        self.assertEqual(rows[-1]["resolved_source_finding_ids"], ["sf_context_question"])
+
     def test_semantic_scope_labeling_validates_exact_message_refs_and_labels(self) -> None:
         parsed = {
             "findings": [
@@ -568,6 +781,63 @@ class SubconsciousJobsTests(unittest.TestCase):
         self.assertIn("scope_labels", payload["final_schema"]["findings"][0])
         self.assertIn("label_evidence", payload["final_schema"]["findings"][0])
         self.assertIn("label_evidence", payload["job_spec"]["notes"])
+
+    def test_theme_emergence_payload_exposes_quiet_candidate_contract(self) -> None:
+        payload = json.loads(
+            jobs.jobs_initial_payload("theme_emergence", "cluster recurring questions", [], 2, 0)
+        )
+        schema = payload["final_schema"]["findings"][0]
+
+        self.assertEqual(payload["job"], "theme_emergence")
+        self.assertEqual(payload["job_spec"]["runner"], "deterministic_theme_emergence")
+        self.assertIn("theme_cluster_id", schema)
+        self.assertIn("shared_concepts", schema)
+        self.assertIn("source_question_link_ids", schema)
+        self.assertIn("LLMs may later name deterministic clusters", payload["job_spec"]["notes"])
+
+    def test_theme_emergence_validation_rejects_llm_or_invented_labels(self) -> None:
+        source_bank = {
+            "t0": {
+                "turn_ref": "t0",
+                "thread_key": "session:theme",
+                "message_id": "msg_theme",
+                "source_line": 42,
+            }
+        }
+        base_finding = {
+            "kind": "theme_candidate",
+            "title": "Recurring question theme: context continuity",
+            "summary": "Three recurring links share source-backed concepts.",
+            "confidence": 0.86,
+            "source_refs": ["t0"],
+            "theme_cluster_id": "th_context",
+            "theme_label": "Recurring question theme: context continuity",
+            "theme_short": "context continuity",
+            "cluster_method": "deterministic_shared_concept_neighbors_v1",
+            "shared_concepts": ["context continuity", "source-backed recall"],
+            "source_question_link_ids": ["sf_link_1", "sf_link_2", "sf_link_3"],
+            "linked_question_count": 6,
+            "thread_span": 3,
+        }
+
+        accepted = jobs.validate_findings(
+            "theme_emergence",
+            {"findings": [base_finding]},
+            source_bank,
+        )
+        llm_discovery = dict(base_finding, cluster_method="llm_theme_discovery")
+        invented_label = dict(base_finding, theme_short="deep identity continuity")
+
+        rejected = jobs.validate_findings(
+            "theme_emergence",
+            {"findings": [llm_discovery, invented_label]},
+            source_bank,
+        )
+
+        self.assertEqual(len(accepted), 1)
+        self.assertEqual(accepted[0]["theme_short"], "context continuity")
+        self.assertEqual(accepted[0]["source_refs"][0]["message_id"], "msg_theme")
+        self.assertEqual(rejected, [])
 
     def test_question_extraction_compresses_or_rejects_overlong_raw_questions(self) -> None:
         long_raw = (

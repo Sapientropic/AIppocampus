@@ -32,6 +32,8 @@ FAST_REVIEWED_SENSITIVE_MODULES = {
     "tests.aippocampus.test_install_lifecycle_hook",
     "tests.aippocampus.test_install_prompt_hook",
     "tests.aippocampus.test_memory_pain_prompt_hook_smoke",
+    "tests.aippocampus.test_question_confirmation_live_smoke",
+    "tests.aippocampus.test_question_tracking_scale_smoke",
     "tests.aippocampus.test_semantic_scope_source_review",
     "tests.aippocampus.test_simulate_prompt_hook",
     "tests.aippocampus.test_synthetic_scale_capacity_smoke",

@@ -20,9 +20,23 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping
+from typing import Any, Iterable, Mapping
 
 from aippocampuslib import cli_error_payload, cli_exit_code_for_error_code, compact_text, now_utc
+from ambient_recall_policy import default_ambient_policy_path
+from question_confirmation import (
+    ConfirmationFn,
+    append_confirmation_requests,
+    borderline_confirmation_request,
+    confirmation_diagnostics,
+    load_confirmation_decisions,
+    normalize_confirmation,
+)
+from question_feedback_policy import (
+    QuestionPairFeedback,
+    load_question_pair_feedback,
+    matching_pair_feedback,
+)
 from question_source_refs import (
     SourceRefIndex,
     build_source_ref_index,
@@ -41,8 +55,6 @@ QUESTION_LINK_KIND = "question_link"
 DEFAULT_STRONG_THRESHOLD = 0.80
 DEFAULT_BORDERLINE_THRESHOLD = 0.66
 HASH_VECTOR_DIMS = 96
-
-ConfirmationFn = Callable[[dict[str, Any]], Mapping[str, Any] | None]
 
 STOPWORDS = {
     "a",
@@ -129,6 +141,7 @@ class PairDecision:
     reason: str
     threshold_policy: dict[str, Any]
     confirmation: dict[str, Any] | None = None
+    confirmation_request: dict[str, Any] | None = None
 
 
 def iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
@@ -468,56 +481,13 @@ def pair_id(left: QuestionCandidate, right: QuestionCandidate) -> str:
     return stable_digest(first, second, prefix="qp", length=18)
 
 
-def load_confirmation_decisions(path: Path | None) -> ConfirmationFn | None:
-    if path is None:
-        return None
-    rows = list(iter_jsonl(path))
-    by_pair: dict[str, dict[str, Any]] = {}
-    for row in rows:
-        key = str(row.get("pair_id") or "").strip()
-        if not key:
-            ids = [str(value) for value in row.get("source_finding_ids") or [] if str(value)]
-            if len(ids) == 2:
-                key = stable_digest(*sorted(ids), prefix="qp", length=18)
-        if key:
-            by_pair[key] = row
-
-    def confirm(payload: dict[str, Any]) -> Mapping[str, Any] | None:
-        return by_pair.get(str(payload.get("pair_id") or ""))
-
-    return confirm
-
-
-def normalize_confirmation(raw: Mapping[str, Any] | None) -> dict[str, Any] | None:
-    if not raw:
-        return None
-    decision = str(raw.get("decision") or raw.get("action") or "").strip().casefold()
-    if decision not in {"accept", "same", "link", "confirmed"}:
-        return None
-    try:
-        confidence = max(0.0, min(1.0, float(raw.get("confidence") or 0.0)))
-    except (TypeError, ValueError):
-        return None
-    if confidence < 0.45:
-        return None
-    link_type = str(raw.get("link_type") or "related").strip()
-    if link_type not in {"recurring", "evolving", "parent_of", "child_of", "related"}:
-        link_type = "related"
-    return {
-        "decision": "accept",
-        "link_type": link_type,
-        "confidence": round(confidence, 4),
-        "model": compact_text(str(raw.get("model") or raw.get("source") or "external"), 120),
-        "rationale": compact_text(str(raw.get("rationale") or raw.get("reason") or ""), 260),
-    }
-
-
 def adaptive_pair_thresholds(
     left: QuestionCandidate,
     right: QuestionCandidate,
     *,
     strong_threshold: float,
     borderline_threshold: float,
+    feedback: tuple[QuestionPairFeedback, ...] = (),
 ) -> dict[str, Any]:
     separation = 0.0
     completion = 0.0
@@ -561,6 +531,10 @@ def adaptive_pair_thresholds(
     if not left.salience.trackable or not right.salience.trackable:
         separation += 0.26
         reasons.append("low_salience_candidate")
+    pair_feedback = matching_pair_feedback(feedback, [left.finding_id, right.finding_id])
+    if pair_feedback:
+        separation += 0.55
+        reasons.append("dismissal_feedback_separation")
 
     delta = (separation - completion) * 0.12
     strong = max(0.0, min(1.0, strong_threshold + delta))
@@ -570,6 +544,7 @@ def adaptive_pair_thresholds(
         "borderline_threshold": round(borderline, 4),
         "separation_pressure": round(separation, 4),
         "completion_pressure": round(completion, 4),
+        "feedback_signal_count": len(pair_feedback),
         "reasons": unique_preserve(reasons, limit=10),
     }
 
@@ -592,6 +567,7 @@ def decide_pair(
     strong_threshold: float,
     borderline_threshold: float,
     confirmation_fn: ConfirmationFn | None,
+    feedback: tuple[QuestionPairFeedback, ...] = (),
 ) -> PairDecision | None:
     if not pair_is_trackable(left, right):
         return None
@@ -602,9 +578,22 @@ def decide_pair(
         right,
         strong_threshold=strong_threshold,
         borderline_threshold=borderline_threshold,
+        feedback=feedback,
     )
     effective_strong = float(threshold_policy["strong_threshold"])
     effective_borderline = float(threshold_policy["borderline_threshold"])
+    if "dismissal_feedback_separation" in threshold_policy["reasons"]:
+        return PairDecision(
+            pair_id=current_pair_id,
+            left_id=left.question_id,
+            right_id=right.question_id,
+            score=score,
+            decision="feedback_separated",
+            link_type="related",
+            confidence=0.0,
+            reason="dismissal feedback increased separation pressure",
+            threshold_policy=threshold_policy,
+        )
     if score >= effective_strong:
         return PairDecision(
             pair_id=current_pair_id,
@@ -619,26 +608,59 @@ def decide_pair(
         )
     if score < effective_borderline:
         return None
-    payload = {
-        "pair_id": current_pair_id,
-        "score": score,
-        "source_finding_ids": [left.finding_id, right.finding_id],
-        "left": question_for_confirmation(left),
-        "right": question_for_confirmation(right),
-    }
-    confirmation = normalize_confirmation(confirmation_fn(payload) if confirmation_fn else None)
+    payload = borderline_confirmation_request(
+        left,
+        right,
+        score,
+        threshold_policy,
+        pair_id=current_pair_id,
+        schema_version=SCHEMA_VERSION,
+    )
+    confirmation = normalize_confirmation(
+        confirmation_fn(payload) if confirmation_fn else None,
+        payload=payload,
+    )
     if not confirmation:
         return PairDecision(
             pair_id=current_pair_id,
             left_id=left.question_id,
             right_id=right.question_id,
             score=score,
-        decision="needs_confirmation",
-        link_type="related",
-        confidence=0.0,
-        reason="borderline score skipped without explicit confirmation artifact",
-        threshold_policy=threshold_policy,
-    )
+            decision="needs_confirmation",
+            link_type="related",
+            confidence=0.0,
+            reason="borderline score skipped without explicit confirmation artifact",
+            threshold_policy=threshold_policy,
+            confirmation_request=payload,
+        )
+    if confirmation.get("decision") == "reject":
+        return PairDecision(
+            pair_id=current_pair_id,
+            left_id=left.question_id,
+            right_id=right.question_id,
+            score=score,
+            decision="confirmation_rejected",
+            link_type="related",
+            confidence=0.0,
+            reason="borderline score rejected by explicit confirmation artifact",
+            threshold_policy=threshold_policy,
+            confirmation=confirmation,
+            confirmation_request=payload,
+        )
+    if confirmation.get("decision") != "accept":
+        return PairDecision(
+            pair_id=current_pair_id,
+            left_id=left.question_id,
+            right_id=right.question_id,
+            score=score,
+            decision="confirmation_invalid",
+            link_type="related",
+            confidence=0.0,
+            reason="borderline confirmation artifact was invalid",
+            threshold_policy=threshold_policy,
+            confirmation=confirmation,
+            confirmation_request=payload,
+        )
     return PairDecision(
         pair_id=current_pair_id,
         left_id=left.question_id,
@@ -650,22 +672,8 @@ def decide_pair(
         reason="borderline score accepted by explicit confirmation artifact",
         threshold_policy=threshold_policy,
         confirmation=confirmation,
+        confirmation_request=payload,
     )
-
-
-def question_for_confirmation(candidate: QuestionCandidate) -> dict[str, Any]:
-    return {
-        "question_id": candidate.question_id,
-        "source_finding_id": candidate.finding_id,
-        "question_text": candidate.question_text,
-        "question_short": candidate.question_short,
-        "intent_orientation": candidate.intent_orientation,
-        "what_features": list(candidate.what_features),
-        "where_context": list(candidate.where_context),
-        "phase_context": candidate.phase_context,
-        "source_refs": list(candidate.source_refs),
-    }
-
 
 def connected_components(candidates: list[QuestionCandidate], pairs: list[PairDecision]) -> list[list[str]]:
     parent = {candidate.question_id: candidate.question_id for candidate in candidates}
@@ -943,6 +951,7 @@ def build_question_links(
     strong_threshold: float = DEFAULT_STRONG_THRESHOLD,
     borderline_threshold: float = DEFAULT_BORDERLINE_THRESHOLD,
     confirmation_fn: ConfirmationFn | None = None,
+    feedback: tuple[QuestionPairFeedback, ...] = (),
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     pair_decisions: list[PairDecision] = []
     skipped_borderline = 0
@@ -958,10 +967,14 @@ def build_question_links(
                 strong_threshold=strong_threshold,
                 borderline_threshold=borderline_threshold,
                 confirmation_fn=confirmation_fn,
+                feedback=feedback,
             )
             if not decision:
                 continue
-            if decision.decision == "needs_confirmation":
+            if decision.decision == "feedback_separated":
+                pair_decisions.append(decision)
+                continue
+            if decision.decision != "accepted":
                 skipped_borderline += 1
                 pair_decisions.append(decision)
                 continue
@@ -978,13 +991,36 @@ def build_question_links(
         "pair_count": len(pair_decisions),
         "accepted_pair_count": len(accepted_pairs),
         "borderline_skipped_pair_count": skipped_borderline,
+        **confirmation_diagnostics(pair_decisions),
+        "pending_confirmation_request_count": sum(
+            1
+            for pair in pair_decisions
+            if pair.decision == "needs_confirmation" and pair.confirmation_request
+        ),
+        "pending_confirmation_requests": [
+            pair.confirmation_request
+            for pair in pair_decisions
+            if pair.decision == "needs_confirmation" and pair.confirmation_request
+        ][:24],
+        "feedback_separated_pair_count": sum(
+            1 for pair in pair_decisions if pair.decision == "feedback_separated"
+        ),
+        "feedback_separation_audit": [
+            {
+                "pair_id": pair.pair_id,
+                "score": pair.score,
+                "reason": pair.reason,
+                "threshold_policy": pair.threshold_policy,
+            }
+            for pair in pair_decisions
+            if pair.decision == "feedback_separated"
+        ][:24],
         "low_salience_pair_skipped_count": skipped_low_salience,
         "link_count": len(links),
         "salience_tag_counts": salience_tag_counts(candidates),
         "low_salience_candidate_count": sum(1 for candidate in candidates if not candidate.salience.trackable),
     }
     return links, diagnostics
-
 
 def append_question_links(
     path: Path,
@@ -1027,6 +1063,8 @@ def run_question_tracking(
     strong_threshold: float = DEFAULT_STRONG_THRESHOLD,
     borderline_threshold: float = DEFAULT_BORDERLINE_THRESHOLD,
     confirmation_fn: ConfirmationFn | None = None,
+    pending_confirmations_output_path: Path | None = None,
+    ambient_policy_path: Path | None = None,
     no_write: bool = False,
 ) -> dict[str, Any]:
     output = output_path or jobs_path
@@ -1034,12 +1072,17 @@ def run_question_tracking(
     candidates, frontiers, input_diagnostics, rows = load_tracking_inputs(
         jobs_path, source_index=source_index
     )
+    feedback_path = ambient_policy_path or (
+        default_ambient_policy_path(registry_path=registry_path) if registry_path else None
+    )
+    feedback = load_question_pair_feedback(feedback_path)
     links, link_diagnostics = build_question_links(
         candidates,
         frontiers,
         strong_threshold=strong_threshold,
         borderline_threshold=borderline_threshold,
         confirmation_fn=confirmation_fn,
+        feedback=feedback,
     )
     existing_ids = existing_question_link_ids(rows if output == jobs_path else iter_jsonl(output))
     fresh_links = [
@@ -1050,7 +1093,13 @@ def run_question_tracking(
     wrote_count = 0
     if not no_write and fresh_links:
         wrote_count = append_question_links(output, fresh_links, batch_id=batch_id)
-    return {
+    pending_confirmation_wrote_count = 0
+    if pending_confirmations_output_path is not None:
+        pending_confirmation_wrote_count = append_confirmation_requests(
+            pending_confirmations_output_path,
+            link_diagnostics["pending_confirmation_requests"],
+        )
+    result: dict[str, Any] = {
         "ok": True,
         "job": "question_tracking",
         "jobs_input": str(jobs_path),
@@ -1063,12 +1112,9 @@ def run_question_tracking(
         "source_ref_resolution": "registry_clean_source" if source_index else "shape_only",
         "source_ref_index_thread_count": input_diagnostics["source_ref_index_thread_count"],
         "source_ref_index_message_count": input_diagnostics["source_ref_index_message_count"],
-        "pair_count": link_diagnostics["pair_count"],
-        "accepted_pair_count": link_diagnostics["accepted_pair_count"],
-        "borderline_skipped_pair_count": link_diagnostics["borderline_skipped_pair_count"],
-        "low_salience_pair_skipped_count": link_diagnostics["low_salience_pair_skipped_count"],
-        "low_salience_candidate_count": link_diagnostics["low_salience_candidate_count"],
-        "salience_tag_counts": link_diagnostics["salience_tag_counts"],
+        "ambient_policy_path": str(feedback_path) if feedback_path else None,
+        "question_pair_feedback_count": len(feedback),
+        "pending_confirmation_wrote_count": pending_confirmation_wrote_count,
         "link_count": len(links),
         "fresh_link_count": len(fresh_links),
         "duplicate_link_count": duplicate_count,
@@ -1080,6 +1126,18 @@ def run_question_tracking(
         "links": links,
         "batch_id": batch_id,
     }
+    diagnostic_keys = (
+        "pair_count accepted_pair_count borderline_skipped_pair_count "
+        "borderline_confirmation_accepted_pair_count borderline_confirmation_rejected_pair_count "
+        "borderline_confirmation_stale_pair_count borderline_confirmation_malformed_pair_count "
+        "borderline_confirmation_source_mismatch_pair_count borderline_confirmation_audit "
+        "pending_confirmation_request_count pending_confirmation_requests "
+        "feedback_separated_pair_count feedback_separation_audit "
+        "low_salience_pair_skipped_count low_salience_candidate_count salience_tag_counts"
+    ).split()
+    for key in diagnostic_keys:
+        result[key] = link_diagnostics[key]
+    return result
 
 
 def default_registry_path(registry: str | None, registry_dir: str | None) -> Path | None:
@@ -1109,6 +1167,14 @@ def main() -> int:
     parser.add_argument("--strong-threshold", type=float, default=DEFAULT_STRONG_THRESHOLD)
     parser.add_argument("--borderline-threshold", type=float, default=DEFAULT_BORDERLINE_THRESHOLD)
     parser.add_argument("--borderline-confirmations")
+    parser.add_argument(
+        "--pending-confirmations-output",
+        help=(
+            "Write JSONL confirmation-request payloads for borderline pairs that "
+            "need external/live review."
+        ),
+    )
+    parser.add_argument("--ambient-policy", help="Optional ambient_recall_policy.jsonl feedback overlay.")
     parser.add_argument("--no-write", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
@@ -1133,6 +1199,12 @@ def main() -> int:
             strong_threshold=args.strong_threshold,
             borderline_threshold=args.borderline_threshold,
             confirmation_fn=confirmation_fn,
+            pending_confirmations_output_path=(
+                Path(args.pending_confirmations_output).resolve()
+                if args.pending_confirmations_output
+                else None
+            ),
+            ambient_policy_path=Path(args.ambient_policy).resolve() if args.ambient_policy else None,
             no_write=args.no_write,
         )
     except Exception as exc:

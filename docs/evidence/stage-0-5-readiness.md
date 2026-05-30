@@ -232,12 +232,33 @@ above. The canonical command details live in
   inputs and records why pair thresholds leaned toward completion or separation,
   but does not claim calibrated live semantic quality or user-confirmed
   threshold weights.
+- #134 adds the first optional live question-confirmation smoke. The 2026-05-31
+  local no-write run over the current registry observed 25 candidates, 17
+  frontiers, 1 pending confirmation request, 1 DeepSeek confirmation artifact,
+  and 1 accepted tracking round-trip link. The live artifact was written only
+  to a temp file for the smoke, formal tracking `wrote_count=0`, and the smoke
+  emitted no raw text or source refs. The selected-fixture calibration report
+  also records static-vs-adaptive threshold non-regression deltas. This proves
+  the request/artifact/round-trip contract and selected-fixture boundary only;
+  it does not claim real-user calibration, private-history threshold quality,
+  or user-visible recall improvement.
 - #70 adds the first deterministic structured-text cognitive portrait
   benchmark. It compares compact portraits built from source-backed
   question/frontier/link findings against fuller clean-source injection,
   records source-ref back-pointers, quote-fidelity loss, and
   over-personalization risk, but does not claim live model behavioral
   equivalence or activation steering.
+- #139 adds a private real-history structural proxy for question-aware recall.
+  The 2026-05-30 local run over the current registry read 697 subconscious job
+  rows, found 42 eligible source-backed question/frontier rows, selected 2
+  sanitized packs, preserved source-ref fidelity at 1.0, and emitted no private
+  text. Its status was intentionally conservative:
+  `structural_proxy_ready_but_scaffold_regressed`, with
+  `portrait_token_ratio=3.7005`, `term_coverage_delta=-0.4412`, and no selected
+  `question_link` / `theme_candidate` context. This proves sanitized pack
+  formation and known-failure reporting only; it does not claim token savings,
+  answer usefulness, user-visible recall improvement, or quote fidelity without
+  reopening clean source.
 - #63 adds the first deterministic Journey Tracking P1-P3 core. It defines
   source-backed waypoint/journey structures, append-only waypoint history,
   conservative multi-thread instantiation, status transitions, expiry/TTL

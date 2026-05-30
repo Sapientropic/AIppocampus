@@ -58,12 +58,12 @@
 | clean source / registry / global onboarding | implemented | 860 条本机 Codex thread 已完成全局 clean-source、SQLite、graph sidecar 注册。 |
 | `question_extraction` / `question_candidate` / `frontier_marker` | implemented | 已进入 `subconscious_jobs.py`，但仍是候选结构，不是正式长期记忆。 |
 | cognitive map sidecar | implemented | `build_cognitive_map.py` 可以 materialize source-backed routes；当前路线数量仍取决于 DeepSeek job 质量。 |
-| six-axis question map | partial implementation | `question_tracking.py` 已有确定性 Phase 2 baseline，并开始把六轴用于 salience 与 adaptive threshold；live model confirmation、dormancy 和向量 sidecar 仍未实现。 |
-| `question_link` / `theme_emergence` | partial / designed | `question_link` 可由 Phase 2 runner 写入 `subconscious_jobs.jsonl`；`theme_emergence` 仍是设计阶段。 |
-| `journey_tracking` P1-P3 core | first deterministic prototype | `journey_tracking.py` 已有 source-backed Waypoint/Journey 结构、保守多线程实例化 gate、状态/过期/反馈动作、`current_frontier` 导航候选和 fixture replay smoke；live `theme_emergence` 和真实历史 Journey 质量仍未实现。 |
+| six-axis question map | partial implementation | `question_tracking.py` 已有确定性 Phase 2 baseline，并开始把六轴用于 salience 与 adaptive threshold；offline pending-confirmation request、selected-fixture calibration、static-vs-adaptive threshold non-regression report，以及 optional live/model confirmation no-write smoke 已有首片；更大真实历史 / 用户校准仍未实现。 |
+| `question_link` / `theme_emergence` | partial implementation | `question_link` 可由 Phase 2 runner 写入 `subconscious_jobs.jsonl`；`theme_emergence.py` 已有 first deterministic Phase 3 slice，可从 recurring question links + concept graph 写入 source-backed `theme_candidate`，但 LLM naming、用户共鸣校准、scale sidecar 仍未实现。 |
+| `journey_tracking` P1-P3 core | first deterministic prototype | `journey_tracking.py` 已有 source-backed Waypoint/Journey 结构、保守多线程实例化 gate、状态/过期/反馈动作、`current_frontier` 导航候选和 fixture replay smoke；Journey 仍未接入 live `theme_candidate` 输出，真实历史 Journey 质量仍未实现。 |
 | compensatory dream Phase 1 + P2/P3 substrate | first deterministic prototype | `compensatory_dream.py` 已能从 source-backed 单线程 extraction rows 生成 adjudication-only `dream_synthesized` 补偿性候选，并为每条 bridge claim 保留同线程 source refs；`dream_input_pack.py` 可把 source-backed question links / Journey rows 与 ambient residue 弱提示打成跨线程 dream input pack；`dream_working_memory.py` 会在后台 structural adjudication 后才允许 dream hypothesis 进入 working memory；`dream_real_history_eval.py` 已能选 real-history packs，跑小型 compensatory/amplification worker，并量化相对 plain rows 的结构性 recall/reflection substrate delta。prospective / model-backed validated amplification / active imagination、真实历史 dream 质量和用户可感知 recall/reflection lift 仍未实现。 |
 | reflection-space topology/feedback MVP | first deterministic prototype | `reflection_space.py` 已能把 Journey/Waypoint/current_frontier 生成可检查拓扑，并把 recall 效果、转折点、用户纠正和 merge/revive/abandon 反馈转换为 ranking/confidence/visibility 调整；视觉 polish、真实用户行为变化和 AAR runtime enforcement 仍未实现。 |
-| dynamic separation/completion threshold | first deterministic prototype | `question_tracking.py` 会按六轴兼容/冲突调整 strong/borderline 阈值，并跳过低信息 salience 候选；真实语义阈值调参仍需要更多 clean-source 样本。 |
+| dynamic separation/completion threshold | first deterministic prototype | `question_tracking.py` 会按六轴兼容/冲突调整 strong/borderline 阈值，并跳过低信息 salience 候选；`benchmark_question_tracking_calibration.py` 覆盖 selected fixtures，并报告相对静态 strong-threshold baseline 的 missed-positive / merged-negative delta；真实语义阈值调参仍需要更多 clean-source 样本。 |
 | reconsolidation queue / retrieval-count update | proposed | `working_memory.jsonl` 和 router 提供骨架，但 hook 侧还未记录 retrieval lifecycle。 |
 | preplay / state-dependent routing | research | 适合 Phase 3+，必须保持 ambient scent，不直接推送用户。 |
 
@@ -240,8 +240,9 @@ AIppocampus 的 `working_memory.jsonl` + `subconscious_review.py` + `memory_cand
 ### AIppocampus 怎么做
 
 AIppocampus 的 `question_link` 和六轴地图已有 deterministic Phase 2
-baseline，但 `theme_emergence` 仍是设计骨架，不是已完成实现。预激活应建立在
-Phase 1-3 产出稳定 source-backed signals 之后：
+baseline，`theme_emergence` 也已有 first deterministic retrospective cluster
+slice；但它还不是 predictive / preplay runtime。预激活应建立在 Phase 1-3
+产出稳定 source-backed signals 并经过真实历史校准之后：
 
 **具体工程路径**：
 
@@ -293,8 +294,9 @@ Phase 1-3 产出稳定 source-backed signals 之后：
 - 外部竞品判断必须保持可反驳：优先写“公开资料中尚未看到一等机制”，不要写“没有任何系统”。
 - 技术相邻能力不等于机制等价。一个系统有 importance score、sleep worker 或 memory update，不代表它实现了 SWR-inspired online tagging、reconsolidation lifecycle 或 state-dependent routing。
 - AIppocampus 自身也必须区分已实现和已设计。`question_extraction` 已实现；
-  `question_link` 与动态阈值已有 deterministic baseline；`theme_emergence`、
-  preplay、真实用户确认/否认闭环仍是后续阶段。
+  `question_link` 与动态阈值已有 deterministic baseline；`theme_emergence`
+  已有 source-backed deterministic first slice；preplay、LLM naming、真实用户
+  确认/否认闭环仍是后续阶段。
 - 公开发布前应给竞品表补一列 source link / checked date。没有逐项验证来源时，保留为内部战略假设。
 
 External anchors checked during this revision:
