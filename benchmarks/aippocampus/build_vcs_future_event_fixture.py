@@ -19,7 +19,7 @@ import hashlib
 import json
 import time
 from collections import OrderedDict
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -44,7 +44,7 @@ ALLOWED_FAMILIES = {
 
 
 def now_utc() -> str:
-    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def sha1_text(text: str) -> str:
