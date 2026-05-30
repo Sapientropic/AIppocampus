@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""Codex UserPromptSubmit hook for ambient long-thread recall.
-
-The heavy recall policy lives in prompt_recall_core.py and
-prompt_recall_decision.py. This entrypoint owns only hook I/O, debug logging,
-and command-line wiring.
-"""
+"""Codex UserPromptSubmit hook glue for ambient long-thread recall."""
 
 from __future__ import annotations
 
@@ -17,12 +12,8 @@ from typing import Any
 from aippocampuslib import codex_home, now_utc
 
 DEFAULT_SEARCH_BUDGET_FALLBACK = 3
-PROMPT_HOOK_SEMANTIC_TIMEOUT_FALLBACK = float(
-    os.environ.get("AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT", "2.5")
-)
-PROMPT_HOOK_MAX_ELAPSED_MS_FALLBACK = int(
-    os.environ.get("AIPPOCAMPUS_PROMPT_HOOK_BUDGET_MS", "4300")
-)
+PROMPT_HOOK_SEMANTIC_TIMEOUT_FALLBACK = float(os.environ.get("AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT", "2.5"))
+PROMPT_HOOK_MAX_ELAPSED_MS_FALLBACK = int(os.environ.get("AIPPOCAMPUS_PROMPT_HOOK_BUDGET_MS", "4300"))
 _RUNTIME_EXPORTS = {
     "DEFAULT_SEARCH_BUDGET",
     "PROMPT_HOOK_SEMANTIC_TIMEOUT",
@@ -157,9 +148,7 @@ def write_debug_log(
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--prompt", help="Dry-run prompt text. If omitted, read Codex hook JSON from stdin."
-    )
+    parser.add_argument("--prompt", help="Dry-run prompt text. If omitted, read Codex hook JSON from stdin.")
     parser.add_argument("--cwd", help="Workspace cwd override for dry runs.")
     parser.add_argument("--registry")
     parser.add_argument("--registry-dir")
@@ -195,6 +184,9 @@ def main() -> int:
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--log", action="store_true")
     parser.add_argument("--log-skip", action="store_true")
+    parser.add_argument("--dream-shadow-ab", action="store_true")
+    parser.add_argument("--dream-shadow-log")
+    parser.add_argument("--dream-shadow-salt", default=os.environ.get("AIPPOCAMPUS_DREAM_SHADOW_AB_SALT"))
     parser.add_argument("--strict", action="store_true")
     args = parser.parse_args()
 
@@ -239,6 +231,12 @@ def main() -> int:
         )
         if args.log or args.log_skip:
             write_debug_log(result, hook_input=hook_input, include_skip=args.log_skip)
+        shadow_env = str(os.environ.get("AIPPOCAMPUS_DREAM_SHADOW_AB") or "").casefold()
+        shadow_enabled = args.dream_shadow_ab or shadow_env in {"1", "true", "yes", "on"}
+        if shadow_enabled:
+            from dream_live_shadow_ab import record_prompt_shadow_from_hook_args  # noqa: PLC0415
+
+            record_prompt_shadow_from_hook_args(prompt=prompt, hook_input=hook_input, args=args)
         if args.json_output:
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0

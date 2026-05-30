@@ -4,6 +4,7 @@ import io
 import json
 import os
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import time
@@ -107,6 +108,65 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertEqual(semantic["diagnostic"], "semantic_timed_out_under_foreground_budget")
         self.assertEqual(semantic["error_buckets"], {"read_timeout": 3})
         self.assertNotIn("synthetic multilingual continuity cue", json.dumps(event))
+
+    def test_prompt_hook_can_write_opt_in_dream_shadow_event(self) -> None:
+        working_memory = self.root / "working_memory.jsonl"
+        working_memory.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_working_memory",
+                    "status": "active",
+                    "route": "use_with_source",
+                    "candidate_type": "dream_hypothesis",
+                    "candidate_key": "wm_dream_continuity",
+                    "title": "Continuity route bridge",
+                    "summary": "Use only as a route hint.",
+                    "trigger_terms": ["continuity"],
+                    "source_finding_ids": ["dreamfinding_continuity"],
+                    "confidence": 0.7,
+                    "project_label": "AIppocampus",
+                    "review_state": "agent_adjudicated",
+                    "sensitive_use_gate": {"state": "allowed"},
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        shadow_log = self.root / "shadow.jsonl"
+
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPTS / "aippocampus_prompt_hook.py"),
+                "--prompt",
+                "continuity 这条线下一步怎么收？",
+                "--cwd",
+                str(self.workspace),
+                "--registry",
+                str(self.registry),
+                "--working-memory",
+                str(working_memory),
+                "--dream-shadow-ab",
+                "--dream-shadow-log",
+                str(shadow_log),
+                "--no-semantic-gate",
+                "--search-budget",
+                "0",
+                "--json",
+            ],
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+            check=True,
+        )
+
+        self.assertIn('"decision"', proc.stdout)
+        event = json.loads(shadow_log.read_text(encoding="utf-8").strip())
+        encoded = json.dumps(event, ensure_ascii=False)
+        self.assertTrue(event["eligible_exposure"])
+        self.assertEqual(event["dream"]["match_count"], 1)
+        self.assertNotIn("continuity 这条线", encoded)
 
     def _write_sqlite(self) -> None:
         con = sqlite3.connect(self.sqlite)

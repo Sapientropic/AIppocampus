@@ -23,6 +23,8 @@ benchmark design details in
    [`memory-pain-fixture-report.md`](memory-pain-fixture-report.md).
 6. Need dream natural-prompt route/noise evidence:
    [`dream-natural-prompt-large-sample-2026-05-30.md`](dream-natural-prompt-large-sample-2026-05-30.md).
+7. Need explicit recall-reminder shadow A/B evidence:
+   [`dream-live-shadow-ab-2026-05-30.md`](dream-live-shadow-ab-2026-05-30.md).
 
 Research notes may include calibration context, but they are not claim ledgers.
 Use them for background only until a result is linked back to the readiness
@@ -38,6 +40,7 @@ snapshot or dated verification ledger.
 | Corpus setup | `benchmark_corpus/README.md` and `benchmark_corpus/sharegpt_manifest.json` | Public corpus conversion commands, ignored local outputs, and corpus-specific claim boundaries. |
 | Demo fixture report | `docs/evidence/memory-pain-fixture-report.md` | Public-safe fixture families and their narrow claim boundary. |
 | Dream natural-prompt route/noise evidence | `docs/evidence/dream-natural-prompt-large-sample-2026-05-30.md` | Dated aggregate run for manual-reminder reduction, negative prompt noise, overbroad fanout, and strong-claim source-reopen gates. |
+| Dream live shadow A/B reminder evidence | `docs/evidence/dream-live-shadow-ab-2026-05-30.md` | Dated aggregate run for explicit recall-reminder frequency, shadow assignment, nearest-prior exposure attribution, and delivered-vs-shadow claim boundaries. |
 | Raw / generated artifacts | `.tmp/` or `benchmark_corpus/reports/` | Local JSON outputs and case packs. Keep them gitignored unless a small public subset is deliberately promoted. |
 
 ## Benchmark Runners

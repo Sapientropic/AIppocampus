@@ -347,6 +347,13 @@ manual-reminder prompts, checks unrelated and over-personalizing negative
 prompts, and verifies strong dream claims require source reopen. The output is
 aggregate and sanitized; it is not a live user-behavior A/B test.
 
+`dream_live_shadow_ab.py` adds the opt-in live measurement ledger for that last
+boundary. Prompt hooks can record hash-only shadow events for baseline and
+dream arms without changing foreground recall; later analysis counts explicit
+user reminder language and attributes each reminder to only the nearest prior
+eligible exposure. Historical clean-source replay is diagnostic only. Causal
+user-behavior lift requires delivered treatment/control arms.
+
 Background-adjudicated dream hypotheses can project onto the existing
 working-memory substrate for recall, ambient, and reflection consumers, but
 only after structural adjudication in `dream_working_memory.py`: the finding
