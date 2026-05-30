@@ -793,7 +793,7 @@ def registry_entry_by_thread(registry_dir: Path | None = None) -> dict[str, dict
     registry_path, _ = registry_paths(registry_dir)
     registry = load_registry(registry_path)
     return {
-        str(entry.get("thread_key")): entry
+        str(entry.get("thread_key")): dict(entry)
         for entry in registry.get("threads") or []
         if isinstance(entry, Mapping) and entry.get("thread_key")
     }
@@ -1210,7 +1210,9 @@ def run_dream_real_history_eval(
         for row in run.get("dream_working_memory_rows") or []
         if isinstance(row, dict)
     ]
-    review_rows = list(manual_source_review_rows or [])
+    review_rows: list[dict[str, Any]] = [
+        dict(row) for row in manual_source_review_rows or [] if isinstance(row, Mapping)
+    ]
     if generate_manual_source_review:
         review_rows = manual_source_review_rows_from_clean_source(
             dream_working_rows,
