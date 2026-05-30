@@ -190,6 +190,21 @@ handoff context.
      whether host agents use tickets correctly before claiming intervention
      timing quality.
 
+12. Agency affordance map and ticket selector
+   - Source: `docs/research/agency-from-cognitive-map.md`,
+     `docs/research/agent-coding-context-analysis.md`, and
+     `docs/research/correction-reconsolidation.md`.
+   - First deterministic selector is implemented in
+     `skills/aippocampus/scripts/agency_affordance.py`: it builds conservative
+     source-backed affordances from cognitive-map-like inputs, correction
+     windows, ambient recall cards, dream outputs, coding tickets, unfinished
+     tasks, and scheduled revisits; emits at most one foreground ticket per
+     topic epoch plus bounded backstage tickets; and records append-only ticket
+     feedback outcomes.
+   - Next hardening: wire host integration only through explicit executive
+     policy, then measure real dismissal/acceptance patterns before claiming
+     timing quality or annoyance-risk calibration.
+
 ## Do Not Start With
 
 - A generic vector database rewrite.

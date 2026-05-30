@@ -48,6 +48,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_health.py",
     "skills/aippocampus/scripts/aippocampus_lifecycle_hook.py",
     "skills/aippocampus/scripts/aippocampus_mcp_server.py",
+    "skills/aippocampus/scripts/agency_affordance.py",
     "skills/aippocampus/scripts/ambient_thread_cache.py",
     "skills/aippocampus/scripts/ambient_warm_scheduler.py",
     "skills/aippocampus/scripts/build_associations.py",

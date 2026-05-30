@@ -936,6 +936,7 @@ Scripts:
 - `benchmarks/aippocampus/benchmark_compaction_continuity.py`
 - `benchmarks/aippocampus/benchmark_live_semantic_gate.py`
 - `benchmarks/aippocampus/benchmark_suite.py`
+- `skills/aippocampus/scripts/agency_affordance.py`
 
 Tests:
 
@@ -946,6 +947,7 @@ Tests:
 - `tests/aippocampus/test_benchmark_compaction_continuity.py`
 - `tests/aippocampus/test_benchmark_live_semantic_gate.py`
 - `tests/aippocampus/test_benchmark_suite.py`
+- `tests/aippocampus/test_agency_affordance.py`
 
 Track D command:
 
@@ -1030,14 +1032,24 @@ uses the correction-reconsolidation anti-nag gate before rendering at most one
 compact `coding_continuity_ticket`. Broader real-history review and host-agent
 intervention timing remain future work.
 
-P7: local private real-history case generation. Reports must stay sanitized and
+P7: agency affordance tickets. The first deterministic slice is implemented in
+`skills/aippocampus/scripts/agency_affordance.py`: it normalizes conservative
+source-backed affordances from cognitive-map-like rows, correction windows,
+ambient recall cards, dream outputs, coding tickets, unfinished tasks, and
+scheduled revisits; selects at most one foreground ticket and a bounded
+backstage set per topic epoch; suppresses repeated, visible, thin, or
+matched-terms-only reminders; and records append-only outcome feedback rows.
+Live host timing, annoyance calibration, multi-host duplicate suppression, and
+any autonomous push-forward behavior remain future work.
+
+P8: local private real-history case generation. Reports must stay sanitized and
 aggregate-only by default.
 
-P8: optional live semantic-model slices for release verification. The first
+P9: optional live semantic-model slices for release verification. The first
 opt-in live semantic-gate runner is implemented; broader scheduled runs remain
 manual verification jobs, not required CI gates.
 
-P8: optional external baseline adapters. Only start this after AIppocampus has a
+P10: optional external baseline adapters. Only start this after AIppocampus has a
 stable internal decision benchmark; otherwise "competitor comparison" will
 measure mismatched product semantics.
 
