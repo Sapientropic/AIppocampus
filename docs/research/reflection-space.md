@@ -1,12 +1,37 @@
 # Reflection Space: 认知地图与反思空间
 
-Status: research memo, not a runtime contract; initial design based on user
-insight + Kimi/Gemini discussion.
+Status: research memo plus first deterministic topology/feedback MVP; not a
+complete visual product or foreground runtime contract.
 Origin: user observation, 2026-05-28.
 Related: [journey-tracking.md](journey-tracking.md) — Journey 数据结构,
 [dream-task-design.md](dream-task-design.md) — 整合型任务（compensatory/prospective/amplification）,
 [affect-side-channel.md](affect-side-channel.md) — hexagram 直觉层,
 [ambient-associative-recall.md](ambient-associative-recall.md) — AAR 管线.
+
+## Implementation Status
+
+The first MVP lives in `skills/aippocampus/scripts/reflection_space.py`.
+
+- It builds an inspectable `aippocampus_reflection_topology` from existing
+  Journey dictionaries: journey nodes, waypoint nodes, current-frontier nodes,
+  source-ref-carrying edges, and available actions (`expand`, `merge`,
+  `revive`, `abandon`).
+- It converts source-ref-carried feedback rows into advisory
+  `aippocampus_reflection_adjustment` records over only three surfaces:
+  `ranking`, `confidence`, and `visibility`.
+- It handles recall effects, turning points, user corrections, and map actions
+  as AAR/reflection strategy hints; every adjustment declares
+  `clean_source_mutation=false` and `journey_mutation=false`.
+- It does not select foreground tickets by itself. AAR or the host must still
+  apply visible-context, matched-terms-only, source-thickness, anti-nag, and
+  permission guards before surfacing anything.
+- Current tests live in `tests/aippocampus/test_reflection_space.py` and cover
+  small graph rendering, merge/revive/abandon actions, recall-effect feedback,
+  unsourced feedback suppression, and a fixture smoke.
+
+Still not claimed: polished visualization, real user behavior change,
+scheduler/AAR enforcement, calibrated suggestion timing, or any clean-source /
+Journey-history mutation.
 
 ## TL;DR
 
@@ -243,9 +268,9 @@ Thread Intuition (affect-side-channel.md)
 
 | 阶段 | 内容 | 依赖 |
 |------|------|------|
-| P1 | 潜意识反馈机制（subconscious job 分析 recall 效果、转折点） | Journey Tracking P1 |
-| P2 | 反馈→AAR 策略的闭环 | P1 + AAR |
-| P3 | 反思空间 MVP：拓扑图 + 用户动作（点击展开、merge、revive/abandon） | Journey Tracking P1 |
+| P1 | 潜意识反馈机制（subconscious job 分析 recall 效果、转折点） | implemented as deterministic source-ref-carried adjustments |
+| P2 | 反馈→AAR 策略的闭环 | implemented as advisory ranking/confidence/visibility adjustment records |
+| P3 | 反思空间 MVP：拓扑图 + 用户动作（点击展开、merge、revive/abandon） | implemented as inspectable topology data, not polished UI |
 | P4 | Agent 在反思空间中的行为（Dream 洞察呈现） | P3 + Dream |
 | P5 | 智能触发机制（compensatory 驱动的"看地图"建议） | P4 |
 | P6 | 视觉升级（星空/星座隐喻） | P3，验证交互模式后 |
