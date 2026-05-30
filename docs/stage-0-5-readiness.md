@@ -196,6 +196,11 @@ above. The canonical command details live in
   third-party install review, second-user install, and human interactive
   Desktop UI marketplace click-through remain unclaimed unless separately
   verified.
+- #27/#28 add public-safe memory pain fixture evidence and a short report in
+  `docs/memory-pain-fixture-report.md`. This is Stage 2 boundary evidence for
+  source-backed recall and unsupported-memory suppression, not competitor
+  superiority, live semantic-model quality, real-history pain coverage, or a
+  complete Track D compaction-continuity runner.
 
 ## Evidence Matrix
 
