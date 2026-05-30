@@ -31,6 +31,10 @@ from conversation_sources import (  # noqa: E402
 LOCATE_ROLLOUT = SCRIPTS / "locate_rollout.py"
 
 
+def canonical(path: str | Path) -> Path:
+    return Path(path).resolve()
+
+
 def write_rollout(path: Path, cwd: Path, session_id: str = "archived-session") -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     rows = [
@@ -251,10 +255,11 @@ class AippocampusLibTests(unittest.TestCase):
             transcript = home / "projects" / "-mixed" / "session.jsonl"
             write_claude_transcript(transcript, target_cwd, first_cwd=first_cwd)
 
-            source = ClaudeCodeConversationProvider(home).locate_current(target_cwd)
+            target_cwd_alias = first_cwd / ".." / "Target Project"
+            source = ClaudeCodeConversationProvider(home).locate_current(target_cwd_alias)
 
             self.assertEqual(source.path, transcript)
-            self.assertEqual(source.cwd, target_cwd)
+            self.assertEqual(source.cwd, canonical(target_cwd))
 
     def test_claude_code_provider_normalizes_visible_text_without_tools(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
