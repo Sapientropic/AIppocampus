@@ -278,6 +278,9 @@ MVP 只做 Claude.ai。理由：
 browser-extension local MVP 验证 prompt 层虚拟 `memory_search`，不把
 内部 API 或官方 remote MCP 当成第一版稳定路线。
 
+当前原型入口：`examples/browser-memory-companion/claude-memory-search.user.js`。
+它是本地显式捕获 / 可见 handoff 原型，不是发布版扩展。
+
 1. **显式开启捕获**：用户对当前站点 / 当前会话开启后，才把消息片段存入
    IndexedDB
 2. **Prompt 层虚拟工具**：在对话开头注入 memory_search 工具定义
