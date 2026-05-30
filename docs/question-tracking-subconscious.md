@@ -38,8 +38,10 @@ Current code ships Phase 1 and the first deterministic Phase 2 baseline:
   dependency-ordered `JOB_SPECS` entry. It groups existing source-backed
   candidates, writes append-only `question_link` findings back to
   `subconscious_jobs.jsonl`, records auditable ordering edges, skips stale refs
-  when registry clean-source resolution is available, and accepts borderline
-  pairs only when an explicit confirmation artifact is supplied.
+  when registry clean-source resolution is available, adds deterministic
+  salience tags, adapts strong/borderline thresholds from six-axis evidence,
+  and accepts borderline pairs only when an explicit confirmation artifact is
+  supplied.
 - Designed/deferred: live model confirmation calls, `question_index.sqlite`,
   dormancy detection, `theme_emergence`, theme maps, and predictive/generative
   replay.
@@ -947,8 +949,16 @@ noisy ones. Frontier markers must feel like saved trail markers, not guilt.
 - Shipped first slice: borderline pairs are accepted only when an explicit
   confirmation artifact accepts the pair; the link still derives truth from the
   original question source refs.
+- Shipped first salience/threshold slice: every parsed candidate gets a
+  deterministic `salience` profile with score, tags, reasons, and `trackable`.
+  Low-information source-backed rows are kept as candidates but skipped as
+  noisy link inputs. Pair thresholds are adjusted from source-backed axes:
+  compatible `what_features`, `where_context`, `intent_orientation`,
+  `phase_context`, and collaboration context lower completion thresholds,
+  while orientation/context conflicts raise separation pressure.
 - Deferred: live model confirmation calls, optional `question_index.sqlite`
-  sidecar for fast lookup, and dormancy detection.
+  sidecar for fast lookup, dormancy detection, real-user salience calibration,
+  and live acceptance/dismissal feedback.
 
 **Validation criterion:** Does the system correctly identify that "how do I
 keep agent context" and "why does Codex forget everything after compaction" are

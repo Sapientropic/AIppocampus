@@ -81,6 +81,14 @@ STOPWORDS = {
 
 
 @dataclass(frozen=True)
+class SalienceProfile:
+    score: float
+    tags: tuple[str, ...]
+    reasons: tuple[str, ...]
+    trackable: bool
+
+
+@dataclass(frozen=True)
 class QuestionCandidate:
     question_id: str
     finding_id: str
@@ -95,6 +103,7 @@ class QuestionCandidate:
     intent_orientation: str
     phase_context: str
     collaboration_context: tuple[str, ...]
+    salience: SalienceProfile
     created_at: str
     first_seen: str
 
@@ -118,6 +127,7 @@ class PairDecision:
     link_type: str
     confidence: float
     reason: str
+    threshold_policy: dict[str, Any]
     confirmation: dict[str, Any] | None = None
 
 
@@ -231,6 +241,105 @@ def axis_overlap(left: Iterable[str], right: Iterable[str]) -> float:
     return token_jaccard(normalize_tokens(" ".join(left)), normalize_tokens(" ".join(right)))
 
 
+def safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    if number != number or number in {float("inf"), float("-inf")}:
+        return default
+    return number
+
+
+def candidate_salience(
+    row: Mapping[str, Any],
+    *,
+    question_text: str,
+    source_refs: tuple[dict[str, Any], ...],
+    concepts: tuple[str, ...],
+    what_features: tuple[str, ...],
+    where_context: tuple[str, ...],
+    intent_orientation: str,
+    phase_context: str,
+    collaboration_context: tuple[str, ...],
+) -> SalienceProfile:
+    question_tokens = normalize_tokens(question_text)
+    axis_count = sum(
+        1
+        for present in [
+            bool(what_features or concepts),
+            bool(where_context),
+            bool(intent_orientation),
+            bool(phase_context),
+            bool(collaboration_context),
+        ]
+        if present
+    )
+    raw_quality = row.get("quality")
+    quality: Mapping[str, Any] = raw_quality if isinstance(raw_quality, Mapping) else {}
+    confidence = safe_float(row.get("confidence"), 0.0)
+    evidence_strength = safe_float(quality.get("evidence_strength"), 0.0)
+    novelty = safe_float(quality.get("novelty"), 0.0)
+    actionability = safe_float(quality.get("actionability"), 0.0)
+    score = 0.0
+    tags: list[str] = []
+    reasons: list[str] = []
+
+    if source_refs:
+        score += 0.24
+        tags.append("source_backed")
+        reasons.append("has clean-source refs")
+    if confidence >= 0.78:
+        score += 0.14
+        tags.append("high_confidence")
+        reasons.append("candidate confidence is high")
+    if axis_count >= 3:
+        score += 0.20
+        tags.append("axis_rich")
+        reasons.append("three or more question-map axes are present")
+    elif axis_count >= 1:
+        score += 0.09
+        tags.append("axis_present")
+        reasons.append("at least one question-map axis is present")
+    if len(question_tokens) >= 6:
+        score += 0.12
+        tags.append("specific_wording")
+        reasons.append("question wording has enough content tokens")
+    elif len(question_tokens) <= 2:
+        score -= 0.20
+        tags.append("low_information")
+        reasons.append("question wording is too generic")
+    if evidence_strength:
+        score += min(0.10, evidence_strength * 0.10)
+        tags.append("evidence_weighted")
+    if novelty:
+        score += min(0.08, novelty * 0.08)
+        tags.append("novelty_weighted")
+    if actionability:
+        score += min(0.08, actionability * 0.08)
+        tags.append("actionable")
+    text = " ".join(
+        [question_text, str(row.get("summary") or ""), " ".join(concepts + what_features)]
+    ).casefold()
+    if any(term in text for term in ("unresolved", "frontier", "blocked", "deferred", "边界", "未解决")):
+        score += 0.10
+        tags.append("frontier_adjacent")
+        reasons.append("wording indicates unresolved or boundary work")
+    if any(term in text for term in ("continuity", "context", "compaction", "memory", "记忆", "连续")):
+        score += 0.08
+        tags.append("continuity_relevant")
+        reasons.append("wording touches memory or continuity")
+
+    clamped = round(max(0.0, min(1.0, score)), 4)
+    trackable = bool(source_refs) and clamped >= 0.35 and "low_information" not in tags
+    return SalienceProfile(
+        score=clamped,
+        tags=tuple(unique_preserve(tags, limit=10)),
+        reasons=tuple(unique_preserve(reasons, limit=8)),
+        trackable=trackable,
+    )
+
+
 def same_text(left: str, right: str) -> bool:
     return left.strip().casefold() == right.strip().casefold() and bool(left.strip())
 
@@ -280,6 +389,24 @@ def candidate_from_row(
     question_text = compact_text(str(row.get("question_text") or row.get("title") or ""), 180)
     if not question_text:
         return None
+    concepts = compact_string_list(row.get("concepts"), limit=12)
+    what_features = compact_string_list(row.get("what_features"), limit=10)
+    where_context = compact_string_list(row.get("where_context"), limit=8)
+    intent_orientation = compact_text(str(row.get("intent_orientation") or ""), 80)
+    phase_context = compact_text(str(row.get("phase_context") or ""), 80)
+    collaboration_context = compact_string_list(row.get("collaboration_context"), limit=8)
+    question_short = compact_text(str(row.get("question_short") or row.get("title") or ""), 90)
+    salience = candidate_salience(
+        row,
+        question_text=question_text,
+        source_refs=refs,
+        concepts=concepts,
+        what_features=what_features,
+        where_context=where_context,
+        intent_orientation=intent_orientation,
+        phase_context=phase_context,
+        collaboration_context=collaboration_context,
+    )
     finding_id = question_source_id(row, refs)
     question_id = stable_digest(
         finding_id,
@@ -292,16 +419,17 @@ def candidate_from_row(
         question_id=question_id,
         finding_id=finding_id,
         question_text=question_text,
-        question_short=compact_text(str(row.get("question_short") or row.get("title") or ""), 90),
+        question_short=question_short,
         title=compact_text(str(row.get("title") or question_text), 140),
         summary=compact_text(str(row.get("summary") or ""), 480),
         source_refs=refs,
-        concepts=compact_string_list(row.get("concepts"), limit=12),
-        what_features=compact_string_list(row.get("what_features"), limit=10),
-        where_context=compact_string_list(row.get("where_context"), limit=8),
-        intent_orientation=compact_text(str(row.get("intent_orientation") or ""), 80),
-        phase_context=compact_text(str(row.get("phase_context") or ""), 80),
-        collaboration_context=compact_string_list(row.get("collaboration_context"), limit=8),
+        concepts=concepts,
+        what_features=what_features,
+        where_context=where_context,
+        intent_orientation=intent_orientation,
+        phase_context=phase_context,
+        collaboration_context=collaboration_context,
+        salience=salience,
         created_at=str(row.get("created_at") or ""),
         first_seen=first_seen_from(row, refs),
     )
@@ -384,6 +512,79 @@ def normalize_confirmation(raw: Mapping[str, Any] | None) -> dict[str, Any] | No
     }
 
 
+def adaptive_pair_thresholds(
+    left: QuestionCandidate,
+    right: QuestionCandidate,
+    *,
+    strong_threshold: float,
+    borderline_threshold: float,
+) -> dict[str, Any]:
+    separation = 0.0
+    completion = 0.0
+    reasons: list[str] = []
+
+    what = axis_overlap(left.what_features or left.concepts, right.what_features or right.concepts)
+    where = axis_overlap(left.where_context, right.where_context)
+    collab = axis_overlap(left.collaboration_context, right.collaboration_context)
+    if what >= 0.45:
+        completion += 0.18
+        reasons.append("what_feature_overlap")
+    elif (left.what_features or left.concepts) and (right.what_features or right.concepts):
+        separation += 0.10
+        reasons.append("what_feature_conflict")
+    if where >= 0.50:
+        completion += 0.12
+        reasons.append("where_context_overlap")
+    elif left.where_context and right.where_context:
+        separation += 0.10
+        reasons.append("where_context_conflict")
+    if left.intent_orientation and right.intent_orientation:
+        if same_text(left.intent_orientation, right.intent_orientation):
+            completion += 0.16
+            reasons.append("same_intent_orientation")
+        else:
+            separation += 0.22
+            reasons.append("intent_orientation_conflict")
+    if left.phase_context and right.phase_context:
+        if same_text(left.phase_context, right.phase_context):
+            completion += 0.08
+            reasons.append("same_phase_context")
+        else:
+            separation += 0.06
+            reasons.append("phase_context_shift")
+    if collab >= 0.50:
+        completion += 0.04
+        reasons.append("collaboration_context_overlap")
+    if left.salience.score >= 0.65 and right.salience.score >= 0.65:
+        completion += 0.06
+        reasons.append("both_high_salience")
+    if not left.salience.trackable or not right.salience.trackable:
+        separation += 0.26
+        reasons.append("low_salience_candidate")
+
+    delta = (separation - completion) * 0.12
+    strong = max(0.0, min(1.0, strong_threshold + delta))
+    borderline = max(0.0, min(strong - 0.05, borderline_threshold + delta * 0.75))
+    return {
+        "strong_threshold": round(strong, 4),
+        "borderline_threshold": round(borderline, 4),
+        "separation_pressure": round(separation, 4),
+        "completion_pressure": round(completion, 4),
+        "reasons": unique_preserve(reasons, limit=10),
+    }
+
+
+def pair_is_trackable(left: QuestionCandidate, right: QuestionCandidate) -> bool:
+    if left.salience.trackable and right.salience.trackable:
+        return True
+    # A single low-salience candidate can still participate when the other
+    # candidate is well-anchored and the wording is an exact repeat. Two generic
+    # low-information candidates should not create a noisy question link.
+    return (left.salience.trackable or right.salience.trackable) and same_text(
+        left.question_text, right.question_text
+    )
+
+
 def decide_pair(
     left: QuestionCandidate,
     right: QuestionCandidate,
@@ -392,9 +593,19 @@ def decide_pair(
     borderline_threshold: float,
     confirmation_fn: ConfirmationFn | None,
 ) -> PairDecision | None:
+    if not pair_is_trackable(left, right):
+        return None
     score = match_score(left, right)
     current_pair_id = pair_id(left, right)
-    if score >= strong_threshold:
+    threshold_policy = adaptive_pair_thresholds(
+        left,
+        right,
+        strong_threshold=strong_threshold,
+        borderline_threshold=borderline_threshold,
+    )
+    effective_strong = float(threshold_policy["strong_threshold"])
+    effective_borderline = float(threshold_policy["borderline_threshold"])
+    if score >= effective_strong:
         return PairDecision(
             pair_id=current_pair_id,
             left_id=left.question_id,
@@ -404,8 +615,9 @@ def decide_pair(
             link_type="recurring",
             confidence=round(min(0.98, 0.62 + score * 0.34), 4),
             reason="deterministic multi-field score met strong threshold",
+            threshold_policy=threshold_policy,
         )
-    if score < borderline_threshold:
+    if score < effective_borderline:
         return None
     payload = {
         "pair_id": current_pair_id,
@@ -421,11 +633,12 @@ def decide_pair(
             left_id=left.question_id,
             right_id=right.question_id,
             score=score,
-            decision="needs_confirmation",
-            link_type="related",
-            confidence=0.0,
-            reason="borderline score skipped without explicit confirmation artifact",
-        )
+        decision="needs_confirmation",
+        link_type="related",
+        confidence=0.0,
+        reason="borderline score skipped without explicit confirmation artifact",
+        threshold_policy=threshold_policy,
+    )
     return PairDecision(
         pair_id=current_pair_id,
         left_id=left.question_id,
@@ -435,6 +648,7 @@ def decide_pair(
         link_type=str(confirmation["link_type"]),
         confidence=float(confirmation["confidence"]),
         reason="borderline score accepted by explicit confirmation artifact",
+        threshold_policy=threshold_policy,
         confirmation=confirmation,
     )
 
@@ -584,6 +798,12 @@ def build_question_link(
             "what_features": list(candidate.what_features),
             "where_context": list(candidate.where_context),
             "phase_context": candidate.phase_context,
+            "salience": {
+                "score": candidate.salience.score,
+                "tags": list(candidate.salience.tags),
+                "reasons": list(candidate.salience.reasons),
+                "trackable": candidate.salience.trackable,
+            },
             "first_seen": candidate.first_seen,
             "source_refs": list(candidate.source_refs),
         }
@@ -642,6 +862,7 @@ def build_question_link(
                     "link_type": pair.link_type,
                     "confidence": pair.confidence,
                     "reason": pair.reason,
+                    "threshold_policy": pair.threshold_policy,
                     "confirmation": pair.confirmation,
                 }
                 for pair in accepted_pairs
@@ -658,6 +879,14 @@ def build_question_link(
             },
         },
     }
+
+
+def salience_tag_counts(candidates: Iterable[QuestionCandidate]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for candidate in candidates:
+        for tag in candidate.salience.tags:
+            counts[tag] = counts.get(tag, 0) + 1
+    return dict(sorted(counts.items()))
 
 
 def existing_question_link_ids(rows: Iterable[Mapping[str, Any]]) -> set[str]:
@@ -717,8 +946,12 @@ def build_question_links(
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     pair_decisions: list[PairDecision] = []
     skipped_borderline = 0
+    skipped_low_salience = 0
     for left_index, left in enumerate(candidates):
         for right in candidates[left_index + 1 :]:
+            if not pair_is_trackable(left, right):
+                skipped_low_salience += 1
+                continue
             decision = decide_pair(
                 left,
                 right,
@@ -745,7 +978,10 @@ def build_question_links(
         "pair_count": len(pair_decisions),
         "accepted_pair_count": len(accepted_pairs),
         "borderline_skipped_pair_count": skipped_borderline,
+        "low_salience_pair_skipped_count": skipped_low_salience,
         "link_count": len(links),
+        "salience_tag_counts": salience_tag_counts(candidates),
+        "low_salience_candidate_count": sum(1 for candidate in candidates if not candidate.salience.trackable),
     }
     return links, diagnostics
 
@@ -830,6 +1066,9 @@ def run_question_tracking(
         "pair_count": link_diagnostics["pair_count"],
         "accepted_pair_count": link_diagnostics["accepted_pair_count"],
         "borderline_skipped_pair_count": link_diagnostics["borderline_skipped_pair_count"],
+        "low_salience_pair_skipped_count": link_diagnostics["low_salience_pair_skipped_count"],
+        "low_salience_candidate_count": link_diagnostics["low_salience_candidate_count"],
+        "salience_tag_counts": link_diagnostics["salience_tag_counts"],
         "link_count": len(links),
         "fresh_link_count": len(fresh_links),
         "duplicate_link_count": duplicate_count,

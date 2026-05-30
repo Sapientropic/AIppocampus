@@ -304,6 +304,109 @@ class QuestionTrackingTests(unittest.TestCase):
         self.assertEqual(len(link_rows), 1)
         self.assertEqual(link_rows[0]["source"], "deterministic_question_tracking")
 
+    def test_low_salience_generic_questions_do_not_create_noisy_links(self) -> None:
+        self.write_rows(
+            [
+                self.question_row(
+                    "1",
+                    confidence=0.42,
+                    title="Generic process question",
+                    summary="Generic wording without a source-backed axis.",
+                    question_text="How should it work?",
+                    question_short="how should it work",
+                    intent_orientation="",
+                    what_features=[],
+                    where_context=[],
+                    phase_context="",
+                    collaboration_context=[],
+                    concepts=[],
+                ),
+                self.question_row(
+                    "2",
+                    confidence=0.41,
+                    title="Generic process question",
+                    summary="Another generic wording without a source-backed axis.",
+                    question_text="How should it work?",
+                    question_short="how should it work",
+                    intent_orientation="",
+                    what_features=[],
+                    where_context=[],
+                    phase_context="",
+                    collaboration_context=[],
+                    concepts=[],
+                ),
+            ]
+        )
+
+        result = tracking.run_question_tracking(jobs_path=self.jobs_path, no_write=True)
+
+        self.assertEqual(result["candidate_count"], 2)
+        self.assertEqual(result["link_count"], 0)
+        self.assertEqual(result["low_salience_candidate_count"], 2)
+        self.assertEqual(result["low_salience_pair_skipped_count"], 1)
+        self.assertIn("low_information", result["salience_tag_counts"])
+
+    def test_salience_tags_and_adaptive_thresholds_keep_obvious_recurring_questions(self) -> None:
+        self.write_rows(
+            [
+                self.question_row(
+                    "1",
+                    question_text="How do I preserve agent context after compaction?",
+                    question_short="preserve context after compaction",
+                    quality={"evidence_strength": 0.9, "novelty": 0.7, "actionability": 0.6},
+                ),
+                self.question_row(
+                    "2",
+                    question_text="How can Codex keep continuity after compaction?",
+                    question_short="keep continuity after compaction",
+                    quality={"evidence_strength": 0.8, "novelty": 0.5, "actionability": 0.6},
+                ),
+            ]
+        )
+
+        result = tracking.run_question_tracking(jobs_path=self.jobs_path, no_write=True)
+        link = result["links"][0]
+        pair = link["match_evidence"]["accepted_pairs"][0]
+
+        self.assertEqual(result["link_count"], 1)
+        self.assertIn("axis_rich", result["salience_tag_counts"])
+        self.assertIn("source_backed", link["linked_questions"][0]["salience"]["tags"])
+        self.assertLess(
+            pair["threshold_policy"]["strong_threshold"],
+            tracking.DEFAULT_STRONG_THRESHOLD,
+        )
+        self.assertGreater(
+            pair["threshold_policy"]["completion_pressure"],
+            pair["threshold_policy"]["separation_pressure"],
+        )
+        self.assertIn("same_intent_orientation", pair["threshold_policy"]["reasons"])
+
+    def test_orientation_conflict_raises_separation_threshold(self) -> None:
+        left = tracking.candidate_from_row(self.question_row("1"))
+        right = tracking.candidate_from_row(
+            self.question_row(
+                "2",
+                question_text="How should AI memory continuity work?",
+                question_short="AI memory continuity",
+                intent_orientation="philosophy",
+                where_context=["personal reflection"],
+                phase_context="self_reflection",
+            )
+        )
+        assert left is not None
+        assert right is not None
+
+        policy = tracking.adaptive_pair_thresholds(
+            left,
+            right,
+            strong_threshold=tracking.DEFAULT_STRONG_THRESHOLD,
+            borderline_threshold=tracking.DEFAULT_BORDERLINE_THRESHOLD,
+        )
+
+        self.assertGreater(policy["strong_threshold"], tracking.DEFAULT_STRONG_THRESHOLD)
+        self.assertGreater(policy["separation_pressure"], 0)
+        self.assertIn("intent_orientation_conflict", policy["reasons"])
+
 
 if __name__ == "__main__":
     unittest.main()
