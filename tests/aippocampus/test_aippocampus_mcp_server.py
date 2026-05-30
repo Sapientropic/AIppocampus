@@ -105,6 +105,33 @@ class AippocampusMcpServerTests(unittest.TestCase):
             },
         )
 
+    def test_register_thread_passes_explicit_provider_to_registry(self) -> None:
+        with mock.patch.object(
+            mcp.registry,
+            "register_current_thread",
+            return_value={"status": "registered"},
+        ) as register:
+            response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 31,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "register_thread",
+                        "arguments": {
+                            "cwd": str(self.cwd),
+                            "provider": "codex",
+                            "build_index": False,
+                        },
+                    },
+                }
+            )
+
+        payload = self.tool_payload(response)
+        self.assertEqual(payload["status"], "registered")
+        provider = register.call_args.kwargs["provider"]
+        self.assertEqual(provider.name, "codex")
+
     def test_search_memory_returns_clean_source_hits_as_tool_content(self) -> None:
         response = mcp.handle_request(
             {

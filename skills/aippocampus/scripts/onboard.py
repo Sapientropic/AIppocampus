@@ -10,12 +10,7 @@ from typing import Sequence
 
 import onboard_codex
 from aippocampuslib import codex_home
-from conversation_sources import CodexConversationProvider
-
-PROVIDER_ALIASES = {
-    "auto": "codex",
-    "codex": "codex",
-}
+from conversation_sources import create_conversation_provider, normalize_provider_name
 
 
 def _wants_json(argv: Sequence[str]) -> bool:
@@ -60,12 +55,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     provider = str(known.provider or "auto").strip().replace("_", "-").casefold()
-    resolved = PROVIDER_ALIASES.get(provider)
+    resolved = normalize_provider_name(provider)
     if resolved == "codex":
         return onboard_codex.main(
             remaining,
             provider_name="codex",
-            provider=CodexConversationProvider(codex_home()),
+            provider=create_conversation_provider("codex", codex_home_dir=codex_home()),
         )
 
     error = _provider_error(provider)

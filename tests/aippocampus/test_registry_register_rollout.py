@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
@@ -17,7 +20,11 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
+import aippocampuslib  # noqa: E402
 import registry  # noqa: E402
+from conversation_sources import CodexConversationProvider  # noqa: E402
+
+REGISTRY = SCRIPTS / "registry.py"
 
 
 class RegisterRolloutTests(unittest.TestCase):
@@ -71,6 +78,12 @@ class RegisterRolloutTests(unittest.TestCase):
             }
         )
 
+    def _copy_rollout_into_codex_sessions(self) -> Path:
+        target = self.root / "sessions" / "2026" / "05" / "26" / "rollout-copy.jsonl"
+        target.parent.mkdir(parents=True)
+        target.write_text(self.rollout.read_text(encoding="utf-8"), encoding="utf-8")
+        return target
+
     def test_register_rollout_writes_per_thread_store_and_project_tags(self) -> None:
         result = registry.register_rollout_thread(
             self.rollout,
@@ -120,10 +133,7 @@ class RegisterRolloutTests(unittest.TestCase):
     def test_scan_sessions_dry_run_reports_unregistered_rollouts(self) -> None:
         original_home = registry.codex_home
         registry.codex_home = lambda: self.root
-        sessions = self.root / "sessions" / "2026" / "05" / "26"
-        sessions.mkdir(parents=True)
-        target = sessions / "rollout-copy.jsonl"
-        target.write_text(self.rollout.read_text(encoding="utf-8"), encoding="utf-8")
+        self._copy_rollout_into_codex_sessions()
         try:
             result = registry.scan_session_rollouts(registry_dir=self.registry_dir, dry_run=True)
         finally:
@@ -131,6 +141,106 @@ class RegisterRolloutTests(unittest.TestCase):
 
         self.assertEqual(result["count"], 1)
         self.assertEqual(result["planned"][0]["thread_key"], "session:session-other")
+
+    def test_registry_cli_scan_sessions_accepts_explicit_provider(self) -> None:
+        self._copy_rollout_into_codex_sessions()
+
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(REGISTRY),
+                "--registry-dir",
+                str(self.registry_dir),
+                "scan-sessions",
+                "--provider",
+                "codex",
+                "--dry-run",
+                "--json",
+            ],
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+            env={**os.environ, "CODEX_HOME": str(self.root)},
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        data = json.loads(proc.stdout)
+        self.assertEqual(data["count"], 1)
+        self.assertEqual(data["planned"][0]["thread_key"], "session:session-other")
+
+    def test_register_current_thread_build_passes_provider_rollout_to_child_scripts(
+        self,
+    ) -> None:
+        target = self._copy_rollout_into_codex_sessions()
+        old_codex_home = os.environ.get("CODEX_HOME")
+        os.environ["CODEX_HOME"] = str(self.root)
+        self.addCleanup(
+            lambda: (
+                os.environ.pop("CODEX_HOME", None)
+                if old_codex_home is None
+                else os.environ.__setitem__("CODEX_HOME", old_codex_home)
+            )
+        )
+        index_dir = aippocampuslib.default_thread_index_dir(self.cwd, target)
+        clean_dir = aippocampuslib.default_thread_clean_source_dir(self.cwd, target)
+        calls: list[list[str]] = []
+
+        def fake_run_json(cmd: list[str]) -> dict:
+            call = [str(part) for part in cmd]
+            calls.append(call)
+            script_name = Path(call[1]).name
+            rollout_arg = call[call.index("--rollout") + 1]
+            self.assertEqual(Path(rollout_arg), target)
+            if script_name == "build_index.py":
+                index_dir.mkdir(parents=True, exist_ok=True)
+                (index_dir / "manifest.json").write_text(
+                    json.dumps(
+                        {
+                            "created_at": "2026-05-26T03:00:00Z",
+                            "session_meta": {"id": "session-other"},
+                            "source_rollout": str(target),
+                            "outputs": {},
+                            "sqlite": {},
+                        },
+                        ensure_ascii=False,
+                    ),
+                    encoding="utf-8",
+                )
+            if script_name == "build_clean_source.py":
+                clean_dir.mkdir(parents=True, exist_ok=True)
+                (clean_dir / "manifest.json").write_text(
+                    json.dumps(
+                        {
+                            "created_at": "2026-05-26T03:00:00Z",
+                            "message_count": 2,
+                            "turn_count": 1,
+                            "outputs": {
+                                "messages_jsonl": str(clean_dir / "messages.jsonl"),
+                                "turns_jsonl": str(clean_dir / "turns.jsonl"),
+                            },
+                        },
+                        ensure_ascii=False,
+                    ),
+                    encoding="utf-8",
+                )
+            return {}
+
+        with mock.patch.object(registry, "run_json", side_effect=fake_run_json):
+            result = registry.register_current_thread(
+                self.cwd,
+                registry_dir=self.registry_dir,
+                build_index=True,
+                health={"ok": True},
+                provider=CodexConversationProvider(self.root),
+            )
+
+        self.assertEqual(result["entry"]["thread_key"], "session:session-other")
+        self.assertEqual(
+            [Path(call[1]).name for call in calls],
+            ["build_index.py", "build_clean_source.py"],
+        )
 
     def test_scan_sessions_dry_run_reports_archived_rollouts(self) -> None:
         original_home = registry.codex_home

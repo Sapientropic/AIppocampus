@@ -27,7 +27,11 @@ from aippocampuslib import (
     thread_key_from_rollout as lib_thread_key_from_rollout,
 )
 from artifact_publish import resolve_sqlite_index_path
-from conversation_sources import ConversationProvider
+from conversation_sources import (
+    PROVIDER_CHOICES,
+    ConversationProvider,
+    create_conversation_provider,
+)
 from registry_search import (
     clean_hit_rank_score,
     deep_search_entry,
@@ -86,6 +90,14 @@ def run_json(cmd: list[str]) -> dict:
     if proc.returncode != 0:
         raise RuntimeError(proc.stdout or proc.stderr)
     return json.loads(proc.stdout)
+
+
+def current_thread_build_cmd(script_name: str, cwd: Path, rollout: Path | None) -> list[str]:
+    # Provider resolution happens at the orchestration boundary. Pass the
+    # already-located source path to child builders so they do not silently
+    # rediscover by cwd through the legacy Codex default.
+    rollout_args = [] if rollout is None else ["--rollout", str(rollout)]
+    return [sys.executable, str(SCRIPT_DIR / script_name), "--cwd", str(cwd), *rollout_args, "--json"]
 
 
 def unique_preserve(items: list[str], limit: int | None = None) -> list[str]:
@@ -155,6 +167,8 @@ def register_current_thread(
     provider: ConversationProvider | None = None,
 ) -> dict:
     cwd = cwd.resolve()
+    # CLI/MCP/onboarding call sites pass a provider explicitly. This fallback is
+    # kept only for legacy in-process callers during the provider migration.
     active_provider = provider or codex_provider(codex_home())
     try:
         rollout = active_provider.locate_current(cwd).path
@@ -170,7 +184,7 @@ def register_current_thread(
         else legacy_index_dir
     )
     if build_index and not (index_dir / "manifest.json").exists():
-        run_json([sys.executable, str(SCRIPT_DIR / "build_index.py"), "--cwd", str(cwd), "--json"])
+        run_json(current_thread_build_cmd("build_index.py", cwd, rollout))
     clean_source_dir = default_thread_clean_source_dir(cwd, rollout)
     legacy_clean_source_dir = legacy_index_dir / "clean-source"
     if (
@@ -180,9 +194,7 @@ def register_current_thread(
     ):
         clean_source_dir = legacy_clean_source_dir
     if build_index and not (clean_source_dir / "manifest.json").exists():
-        run_json(
-            [sys.executable, str(SCRIPT_DIR / "build_clean_source.py"), "--cwd", str(cwd), "--json"]
-        )
+        run_json(current_thread_build_cmd("build_clean_source.py", cwd, rollout))
 
     manifest = load_json(index_dir / "manifest.json")
     clean_manifest = load_json(clean_source_dir / "manifest.json")
@@ -453,6 +465,8 @@ def scan_session_rollouts(
     json_path, _ = registry_paths(registry_dir)
     existing = {entry.get("thread_key") for entry in load_registry(json_path).get("threads", [])}
     candidates: list[tuple[float, Path, dict, str]] = []
+    # CLI/onboarding call sites pass a provider explicitly. This fallback is
+    # kept only for legacy in-process callers during the provider migration.
     active_provider = provider or codex_provider(codex_home())
     for source in active_provider.discover_sessions():
         rollout = source.path
@@ -544,6 +558,7 @@ def main() -> int:
     register.add_argument("--dashboard-note")
     register.add_argument("--dashboard-html")
     register.add_argument("--build-index", action="store_true")
+    register.add_argument("--provider", choices=PROVIDER_CHOICES, default="codex")
     register.add_argument("--json", action="store_true", dest="json_output")
 
     register_rollout = sub.add_parser("register-rollout")
@@ -587,6 +602,7 @@ def main() -> int:
         default=[],
         help="Extra tag to attach to all matched sessions. Can be repeated.",
     )
+    scan.add_argument("--provider", choices=PROVIDER_CHOICES, default="codex")
     scan.add_argument("--dry-run", action="store_true")
     scan.add_argument("--json", action="store_true", dest="json_output")
 
@@ -619,6 +635,7 @@ def main() -> int:
             dashboard_html=Path(args.dashboard_html) if args.dashboard_html else None,
             registry_dir=registry_dir,
             build_index=args.build_index,
+            provider=create_conversation_provider(args.provider, codex_home_dir=codex_home()),
         )
         if args.json_output:
             print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -657,6 +674,7 @@ def main() -> int:
             project=args.project,
             tags=args.tag,
             dry_run=args.dry_run,
+            provider=create_conversation_provider(args.provider, codex_home_dir=codex_home()),
         )
         if args.json_output:
             print(json.dumps(result, ensure_ascii=False, indent=2))

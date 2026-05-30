@@ -15,7 +15,13 @@ import latest_reply as latest_reply_module
 import registry
 import sync_bundle
 import sync_object_storage
-from aippocampuslib import default_thread_clean_source_dir, locate_rollout, resolve_artifact_path
+from aippocampuslib import (
+    codex_home,
+    default_thread_clean_source_dir,
+    locate_rollout,
+    resolve_artifact_path,
+)
+from conversation_sources import PROVIDER_CHOICES, create_conversation_provider
 from search_clean_source import iter_clean_messages, search_clean_source
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -82,6 +88,7 @@ TOOLS: list[dict[str, Any]] = [
             "cwd": {"type": "string"},
             "registry_dir": {"type": "string"},
             "build_index": {"type": "boolean"},
+            "provider": {"type": "string", "enum": list(PROVIDER_CHOICES)},
         },
     ),
     tool_schema(
@@ -340,10 +347,21 @@ def call_register_thread(arguments: dict[str, Any]) -> dict[str, Any]:
     registry_dir = (
         Path(str(arguments["registry_dir"])).resolve() if arguments.get("registry_dir") else None
     )
+    provider_name = str(arguments.get("provider") or "codex")
+    try:
+        provider = create_conversation_provider(provider_name, codex_home_dir=codex_home())
+    except ValueError:
+        return tool_error(
+            "provider_not_available",
+            "The requested conversation provider is not available for register_thread.",
+            provider=provider_name,
+            supported=list(PROVIDER_CHOICES),
+        )
     result = registry.register_current_thread(
         cwd_arg(arguments),
         registry_dir=registry_dir,
         build_index=bool(arguments.get("build_index")),
+        provider=provider,
     )
     return text_result(result)
 

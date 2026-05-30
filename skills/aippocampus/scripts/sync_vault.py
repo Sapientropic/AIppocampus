@@ -9,7 +9,8 @@ import os
 import sys
 from pathlib import Path
 
-from aippocampuslib import default_thread_index_dir, parse_anchor_file
+from aippocampuslib import codex_home, default_thread_index_dir, parse_anchor_file
+from conversation_sources import PROVIDER_CHOICES, create_conversation_provider
 from registry import register_current_thread
 from vault_dashboard import html_dashboard_v2
 from vault_notes import (
@@ -43,6 +44,12 @@ def main() -> int:
     parser.add_argument("--vault", default=str(DEFAULT_VAULT))
     parser.add_argument("--automation-name")
     parser.add_argument("--no-hook", action="store_true")
+    parser.add_argument(
+        "--provider",
+        choices=PROVIDER_CHOICES,
+        default="codex",
+        help="Conversation source provider for registry refresh.",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
@@ -122,6 +129,7 @@ def main() -> int:
         dashboard_note=dashboard_path,
         dashboard_html=dashboard_html_path,
         health=health,
+        provider=create_conversation_provider(args.provider, codex_home_dir=codex_home()),
     )
 
     summary = {
