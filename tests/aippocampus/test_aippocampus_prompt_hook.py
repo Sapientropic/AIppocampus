@@ -69,6 +69,44 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertEqual(parsed["prompt"], payload["prompt"])
         self.assertEqual(parsed["cwd"], payload["cwd"])
 
+    def test_debug_log_records_semantic_budget_diagnostics_for_skip(self) -> None:
+        log_path = self.root / "prompt_hook_debug.jsonl"
+        result = {
+            "decision": "skip",
+            "score": 0.0,
+            "confidence": "low",
+            "query_terms": [],
+            "concept_expansions": [],
+            "cognitive_map": [],
+            "candidates": [],
+            "working_memory": [],
+            "evidence": [],
+            "semantic_gate": {
+                "available": False,
+                "decision": "skip",
+                "confidence": 0.0,
+                "cached": False,
+                "query_aliases": [],
+                "availability_reason": "foreground_budget_timeout",
+                "diagnostic": "semantic_timed_out_under_foreground_budget",
+                "elapsed_ms": 1949.33,
+                "timeout": 0.87,
+                "budget": {"requested_timeout": 20.0, "effective_timeout": 0.87},
+                "error_buckets": {"read_timeout": 3},
+            },
+            "elapsed_ms": 4232.23,
+        }
+
+        hook.write_debug_log(result, log_path=log_path, include_skip=True)
+
+        event = json.loads(log_path.read_text(encoding="utf-8").strip())
+        semantic = event["semantic_gate"]
+        self.assertFalse(semantic["available"])
+        self.assertEqual(semantic["availability_reason"], "foreground_budget_timeout")
+        self.assertEqual(semantic["diagnostic"], "semantic_timed_out_under_foreground_budget")
+        self.assertEqual(semantic["error_buckets"], {"read_timeout": 3})
+        self.assertNotIn("synthetic multilingual continuity cue", json.dumps(event))
+
     def _write_sqlite(self) -> None:
         con = sqlite3.connect(self.sqlite)
         try:
@@ -774,6 +812,77 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertIn("memoria externa", result["query_terms"])
         self.assertIn("associative cue", " ".join(result["reasons"]))
 
+    def test_active_non_latin_semantic_cues_emit_scent_without_live_semantic(self) -> None:
+        registry_path = self.root / "nonlatin-semantic-cue-registry" / "threads.json"
+        registry_path.parent.mkdir()
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:aippocampus",
+                            "title": "AIppocampus work",
+                            "project_label": "AIppocampus",
+                            "anchor_titles": ["External hippocampus recall"],
+                            "keywords": ["external hippocampus", "conversation continuity"],
+                            "summary": "Source-backed continuity work for external memory.",
+                            "paths": {"workspace": str(self.workspace)},
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        cues_path = self.root / "nonlatin_semantic_cues.jsonl"
+        semantic_result = {
+            "available": True,
+            "decision": "scent",
+            "confidence": 0.9,
+            "query_aliases": [
+                "внешний гиппокамп",
+                "الحُصين الخارجي",
+                "外部海馬",
+                "외부 해마",
+                "ฮิปโปแคมปัสภายนอก",
+            ],
+        }
+        for _ in range(2):
+            cue_cache.record_semantic_cue_hits(
+                cues_path,
+                prompt="synthetic multilingual continuity cue",
+                semantic_result=semantic_result,
+                source_refs=[{"thread_key": "session:aippocampus", "message_id": "m1"}],
+                route="semantic_gate",
+            )
+
+        def fail_semantic_gate(*args, **kwargs) -> dict:
+            raise AssertionError("active semantic cues should avoid live semantic spend")
+
+        prompts = [
+            "Как там мой внешний гиппокамп памяти и продолжение разговоров?",
+            "كيف حال الحُصين الخارجي للذاكرة واستمرار المحادثات؟",
+            "外部海馬みたいな記憶システムの進捗はどう？",
+            "외부 해마 같은 기억 시스템은 지금 어떻게 되고 있어?",
+            "ระบบความจำแบบฮิปโปแคมปัสภายนอกตอนนี้เป็นอย่างไรบ้าง",
+        ]
+        for prompt in prompts:
+            with self.subTest(prompt=prompt):
+                result = hook.assess_prompt(
+                    prompt,
+                    cwd=self.workspace,
+                    registry_path=registry_path,
+                    semantic_cues_path=cues_path,
+                    semantic_gate_fn=fail_semantic_gate,
+                    use_semantic_gate=False,
+                    search_budget=0,
+                )
+
+                self.assertEqual(result["decision"], "scent")
+                self.assertEqual(result["candidates"][0]["thread_key"], "session:aippocampus")
+                self.assertIn("associative cue", " ".join(result["reasons"]))
+
     def test_reviewed_semantic_trigger_can_emit_scent_without_hardcoded_cue(self) -> None:
         registry_path = self.root / "reviewed-semantic-trigger-registry" / "threads.json"
         registry_path.parent.mkdir()
@@ -998,6 +1107,48 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertEqual(result["semantic_gate"]["model_route"]["provider"], "test-provider")
         self.assertEqual(result["semantic_gate"]["cache_diagnostics"]["lookup"], "disabled")
 
+    def test_foreground_budget_timeout_gets_specific_semantic_diagnostic(self) -> None:
+        registry_path = self.root / "semantic-timeout-diagnostic-registry" / "threads.json"
+        registry_path.parent.mkdir()
+        registry_path.write_text(
+            json.dumps({"schema_version": 1, "threads": []}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        def fake_semantic_gate(prompt: str, **kwargs) -> dict:
+            return {
+                "available": False,
+                "decision": "skip",
+                "confidence": 0.0,
+                "query_aliases": [],
+                "memory_scope": [],
+                "reasons": ["gate: The read operation timed out"],
+                "workers": [],
+                "errors": ["gate: The read operation timed out"],
+                "error_buckets": {"read_timeout": 1},
+                "cached": False,
+            }
+
+        result = hook.assess_prompt(
+            "那个脑内续接器现在怎么样了？",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            semantic_gate_fn=fake_semantic_gate,
+            semantic_timeout=3,
+            max_elapsed_ms=3000,
+            search_budget=0,
+        )
+
+        self.assertEqual(
+            result["semantic_gate"]["availability_reason"],
+            "foreground_budget_timeout",
+        )
+        self.assertEqual(
+            result["semantic_gate"]["diagnostic"],
+            "semantic_timed_out_under_foreground_budget",
+        )
+        self.assertEqual(result["semantic_gate"]["error_buckets"], {"read_timeout": 1})
+
     def test_tiny_foreground_budget_skips_semantic_gate(self) -> None:
         registry_path = self.root / "semantic-budget-skip-registry" / "threads.json"
         registry_path.parent.mkdir()
@@ -1023,6 +1174,15 @@ class AmbientRecallHookTests(unittest.TestCase):
 
         self.assertEqual(result["semantic_gate"]["available"], False)
         self.assertIn("foreground budget", " ".join(result["semantic_gate"]["reasons"]))
+        self.assertEqual(
+            result["semantic_gate"]["availability_reason"],
+            "foreground_budget_skipped",
+        )
+        self.assertEqual(
+            result["semantic_gate"]["diagnostic"],
+            "semantic_skipped_under_foreground_budget",
+        )
+        self.assertEqual(result["semantic_gate"]["error_buckets"], {"foreground_budget": 1})
         self.assertEqual(result["semantic_gate"]["budget"]["requested_timeout"], 3)
         self.assertIsNone(result["semantic_gate"]["budget"]["effective_timeout"])
         self.assertTrue(result["semantic_gate"]["budget"]["budget_clipped"])

@@ -13,6 +13,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,8 @@ from typing import Any
 import _paths
 
 _paths.ensure_paths()
+
+import semantic_cue_cache as cue_cache  # noqa: E402
 
 PROMPT_HOOK = _paths.SKILL_SCRIPTS / "aippocampus_prompt_hook.py"
 
@@ -105,7 +108,13 @@ CASES: list[dict[str, Any]] = [
 
 
 def run_case(
-    case: dict[str, Any], *, cwd: Path, semantic_gate: str, semantic_timeout: int
+    case: dict[str, Any],
+    *,
+    cwd: Path,
+    semantic_gate: str,
+    semantic_timeout: int,
+    registry_path: Path | None = None,
+    semantic_cues_path: Path | None = None,
 ) -> dict[str, Any]:
     cmd = [
         sys.executable,
@@ -120,6 +129,10 @@ def run_case(
         "--prompt",
         str(case["prompt"]),
     ]
+    if registry_path:
+        cmd.extend(["--registry", str(registry_path)])
+    if semantic_cues_path:
+        cmd.extend(["--semantic-cues", str(semantic_cues_path)])
     start = time.perf_counter()
     proc = subprocess.run(
         cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False
@@ -145,9 +158,66 @@ def run_case(
         "semantic_decision": semantic.get("decision"),
         "semantic_available": semantic.get("available"),
         "semantic_cached": semantic.get("cached"),
+        "semantic_availability_reason": semantic.get("availability_reason"),
+        "semantic_diagnostic": semantic.get("diagnostic"),
+        "semantic_error_buckets": semantic.get("error_buckets") or {},
+        "semantic_budget": semantic.get("budget") or {},
         "aliases": (semantic.get("query_aliases") or result.get("query_terms") or [])[:5],
         "elapsed_ms": elapsed_ms,
     }
+
+
+def write_seeded_semantic_fixture(root: Path, cwd: Path) -> tuple[Path, Path]:
+    registry_path = root / "registry" / "threads.json"
+    registry_path.parent.mkdir(parents=True)
+    registry_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "threads": [
+                    {
+                        "thread_key": "session:aippocampus",
+                        "title": "AIppocampus continuity work",
+                        "project_label": "AIppocampus",
+                        "anchor_titles": ["External hippocampus recall"],
+                        "keywords": ["external hippocampus", "conversation continuity"],
+                        "summary": "Source-backed continuity work for external memory.",
+                        "paths": {"workspace": str(cwd)},
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    cues_path = root / "registry" / "semantic_cues.jsonl"
+    semantic_result = {
+        "available": True,
+        "decision": "scent",
+        "confidence": 0.9,
+        "query_aliases": [
+            "внешний гиппокамп",
+            "hipocampo externo",
+            "hippocampe externe",
+            "Gedächtnis-Hippocampus",
+            "hipocampo externo de memória",
+            "الحُصين الخارجي",
+            "外部海馬",
+            "외부 해마",
+            "ฮิปโปแคมปัสภายนอก",
+            "frase exacta hipocampo externo",
+            "citation exacte hippocampe externe",
+        ],
+    }
+    for _ in range(2):
+        cue_cache.record_semantic_cue_hits(
+            cues_path,
+            prompt="synthetic multilingual continuity fixture",
+            semantic_result=semantic_result,
+            source_refs=[{"thread_key": "session:aippocampus", "message_id": "m1"}],
+            route="semantic_gate",
+        )
+    return registry_path, cues_path
 
 
 def main() -> int:
@@ -156,21 +226,39 @@ def main() -> int:
     parser.add_argument("--semantic-gate", choices=["auto", "on", "off"], default="on")
     parser.add_argument("--semantic-timeout", type=int, default=20)
     parser.add_argument("--max-cases", type=int, default=0)
+    parser.add_argument(
+        "--seed-semantic-cues",
+        action="store_true",
+        help="Use a temporary public fixture registry with active multilingual semantic cues.",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
+    cwd = Path(args.cwd).resolve()
     cases = CASES[: args.max_cases] if args.max_cases and args.max_cases > 0 else CASES
-    rows = [
-        run_case(
-            case,
-            cwd=Path(args.cwd).resolve(),
-            semantic_gate=args.semantic_gate,
-            semantic_timeout=args.semantic_timeout,
-        )
-        for case in cases
-    ]
+    with tempfile.TemporaryDirectory() as tmp:
+        registry_path: Path | None = None
+        semantic_cues_path: Path | None = None
+        if args.seed_semantic_cues:
+            registry_path, semantic_cues_path = write_seeded_semantic_fixture(Path(tmp), cwd)
+        rows = [
+            run_case(
+                case,
+                cwd=cwd,
+                semantic_gate=args.semantic_gate,
+                semantic_timeout=args.semantic_timeout,
+                registry_path=registry_path,
+                semantic_cues_path=semantic_cues_path,
+            )
+            for case in cases
+        ]
     passed = sum(1 for row in rows if row.get("ok"))
-    result = {"passed": passed, "total": len(rows), "rows": rows}
+    result = {
+        "passed": passed,
+        "total": len(rows),
+        "seeded_semantic_cues": bool(args.seed_semantic_cues),
+        "rows": rows,
+    }
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:

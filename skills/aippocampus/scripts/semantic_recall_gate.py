@@ -346,17 +346,19 @@ def trigger_from_association(term: str, row: dict[str, Any]) -> dict[str, Any]:
 def trigger_overlap_score(trigger: dict[str, Any], prompt_terms: list[str]) -> int:
     if not prompt_terms:
         return 0
+    trigger_values = collect_aliases(
+        [
+            trigger.get("title"),
+            trigger.get("aliases") or [],
+            trigger.get("when_to_use"),
+            trigger.get("project_label"),
+        ],
+        limit=32,
+    )
     # `when_not_to_use` is reviewer guidance, not an activation surface. Treating
     # it as positive text made prompts such as "fixture 名字太误导" wake the Atlas
     # trigger only because the trigger warned not to use it for fixture edits.
-    blob = " ".join(
-        [
-            str(trigger.get("title") or ""),
-            " ".join(str(x) for x in trigger.get("aliases") or []),
-            str(trigger.get("when_to_use") or ""),
-            str(trigger.get("project_label") or ""),
-        ]
-    ).casefold()
+    blob = " ".join(trigger_values).casefold()
     score = 0
     for term in prompt_terms:
         normalized = str(term or "").strip().casefold()
@@ -364,6 +366,12 @@ def trigger_overlap_score(trigger: dict[str, Any], prompt_terms: list[str]) -> i
             continue
         if normalized in blob:
             score += trigger_term_weight(normalized)
+            continue
+        for value in trigger_values:
+            value_low = value.casefold()
+            if trigger_term_weight(value_low) >= 3 and value_low in normalized:
+                score += trigger_term_weight(value_low)
+                break
     return score
 
 
@@ -375,6 +383,8 @@ def trigger_term_weight(term: str) -> int:
     if re.fullmatch(r"[a-z0-9_.-]+", term) and len(term) < 6:
         return 1
     if re.search(r"[\u4e00-\u9fff]", term) and len(term) >= 4:
+        return 3
+    if any(ch.isalpha() and ord(ch) > 0x7F for ch in term) and len(term) >= 4:
         return 3
     return 3 if len(term) >= 6 else 1
 
@@ -680,6 +690,7 @@ def cache_fingerprint(
     cwd: Path,
     registry_path: Path | None = None,
     semantic_triggers_path: Path | None = None,
+    semantic_cues_path: Path | None = None,
     mode: str = "auto",
     model: str = "",
     base_url: str = "",
@@ -696,13 +707,18 @@ def cache_fingerprint(
         re.sub(r"\s+", " ", prompt).strip(),
         str(cwd.resolve()).casefold(),
     ]
-    for path in [registry_path, semantic_triggers_path]:
-        if path and path.exists():
-            try:
+    for path in [registry_path, semantic_triggers_path, semantic_cues_path]:
+        if not path:
+            continue
+        try:
+            resolved = path.resolve()
+            if path.exists():
                 stat = path.stat()
-                parts.append(f"{path.resolve()}:{stat.st_mtime_ns}:{stat.st_size}")
-            except OSError:
-                parts.append(str(path))
+                parts.append(f"{resolved}:{stat.st_mtime_ns}:{stat.st_size}")
+            else:
+                parts.append(f"{resolved}:missing")
+        except OSError:
+            parts.append(str(path))
     return "sg_" + hashlib.sha1("\n".join(parts).encode("utf-8")).hexdigest()[:24]
 
 
@@ -787,6 +803,16 @@ def unavailable_result(
     temperature: float | None = None,
     worker_count: int | None = None,
 ) -> dict[str, Any]:
+    buckets = error_buckets([reason])
+    if buckets.get("read_timeout"):
+        availability_reason = "semantic_worker_timeout"
+        diagnostic = "semantic_provider_read_timeout"
+    elif buckets.get("auth_error"):
+        availability_reason = "semantic_unavailable"
+        diagnostic = "semantic_disabled_or_auth_unavailable"
+    else:
+        availability_reason = "semantic_unavailable"
+        diagnostic = "semantic_unavailable"
     return {
         "kind": "aippocampus_semantic_recall_gate",
         "schema_version": SCHEMA_VERSION,
@@ -794,6 +820,8 @@ def unavailable_result(
         "available": False,
         "decision": "skip",
         "confidence": 0.0,
+        "availability_reason": availability_reason,
+        "diagnostic": diagnostic,
         "query_aliases": [],
         "memory_scope": [],
         "negative_contexts": [],
@@ -801,7 +829,7 @@ def unavailable_result(
         "reasons": [reason],
         "workers": [],
         "errors": [reason],
-        "error_buckets": error_buckets([reason]),
+        "error_buckets": buckets,
         "timeout": timeout,
         "temperature": temperature,
         "worker_count": worker_count,
@@ -910,6 +938,7 @@ def run_semantic_gate(
         cwd=cwd_path,
         registry_path=registry_path_obj,
         semantic_triggers_path=triggers_path,
+        semantic_cues_path=cues_path,
         mode=mode or "auto",
         model=resolved_model,
         base_url=resolved_base_url,
@@ -925,7 +954,7 @@ def run_semantic_gate(
                 **(cached.get("cache_diagnostics") or {}),
                 "lookup": "hit",
                 "cache_key": cache_key,
-                "semantic_cues_in_cache_key": False,
+                "semantic_cues_in_cache_key": bool(cues_path),
             }
             cached["elapsed_ms"] = round((time.perf_counter() - start) * 1000, 2)
             return cached
@@ -997,7 +1026,7 @@ def run_semantic_gate(
         "cache_diagnostics": {
             "lookup": cache_lookup,
             "cache_key": cache_key,
-            "semantic_cues_in_cache_key": False,
+            "semantic_cues_in_cache_key": bool(cues_path),
         },
         "secret_policy": secret_policy,
         "cached": False,
@@ -1006,6 +1035,12 @@ def run_semantic_gate(
     if not parsed_workers and errors:
         result["available"] = False
         result["decision"] = "skip"
+        if result["error_buckets"].get("read_timeout"):
+            result["availability_reason"] = "semantic_worker_timeout"
+            result["diagnostic"] = "semantic_provider_read_timeout"
+        else:
+            result["availability_reason"] = "semantic_worker_error"
+            result["diagnostic"] = "semantic_worker_error"
     if use_cache and cache and result.get("available"):
         try:
             write_cache(cache, cache_key, result)

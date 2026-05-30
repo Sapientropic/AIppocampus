@@ -370,6 +370,7 @@ def semantic_cue_triggers(path: Path | None, *, limit: int = 64) -> list[dict[st
                 "script": row.get("script"),
                 "hit_count": row.get("hit_count"),
                 "false_positive_count": row.get("false_positive_count"),
+                "source_refs": row.get("source_refs") or [],
             }
         )
     return triggers

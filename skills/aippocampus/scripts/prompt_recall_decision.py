@@ -43,6 +43,7 @@ from prompt_recall_core import (
     EVIDENCE_LITE_MIN_PROBE_SCORE,
     PROMPT_HOOK_SEMANTIC_TIMEOUT,
     SCENT_THRESHOLD,
+    candidate_summary,
     cognitive_map_terms,
     default_project_timeline_path,
     fallback_search_candidates,
@@ -53,6 +54,7 @@ from prompt_recall_core import (
     rerank_candidates_with_probe,
     score_candidates,
     should_suppress,
+    sort_candidates,
 )
 from prompt_recall_evidence import collect_evidence, strip_private_fields, strip_semantic_gate
 from registry import unique_preserve
@@ -176,6 +178,50 @@ def _score_recall_candidates(
     return merge_timeline_candidates(candidates, registry, timeline, prompt, cwd_path, query_terms)
 
 
+def _merge_semantic_trigger_source_candidates(
+    candidates: list[dict[str, Any]],
+    registry: dict[str, Any],
+    semantic_trigger_matches: list[dict[str, Any]],
+    query_terms: list[str],
+) -> list[dict[str, Any]]:
+    """Let reviewed/learned cue refs wake their source thread without a model call.
+
+    Active semantic cues already require repeated hits and source refs before
+    promotion. Reusing those refs here keeps multilingual foreground recall
+    cache-first, instead of adding every translated phrase to hard-coded cue
+    lists or waiting on a cold semantic worker inside the prompt-hook budget.
+    """
+
+    by_thread = {entry.get("thread_key"): entry for entry in registry.get("threads") or []}
+    by_key = {item.get("thread_key"): item for item in candidates}
+    for trigger in semantic_trigger_matches:
+        refs = [ref for ref in trigger.get("source_refs") or [] if isinstance(ref, dict)]
+        if not refs:
+            continue
+        trigger_terms = semantic_trigger_terms([trigger], limit=8)
+        for ref in refs[:4]:
+            thread_key = str(ref.get("thread_key") or "")
+            entry = by_thread.get(thread_key)
+            if not entry:
+                continue
+            existing = by_key.get(thread_key)
+            if existing:
+                existing["score"] = round(
+                    max(float(existing.get("score") or 0.0), SCENT_THRESHOLD), 3
+                )
+                existing["matched_terms"] = unique_preserve(
+                    list(existing.get("matched_terms") or []) + trigger_terms,
+                    limit=8,
+                )
+                continue
+            item = candidate_summary(entry, SCENT_THRESHOLD, query_terms)
+            item["matched_terms"] = unique_preserve(trigger_terms, limit=8)
+            item["semantic_trigger_source"] = True
+            candidates.append(item)
+            by_key[thread_key] = item
+    return sort_candidates(candidates)
+
+
 def _explicit_evidence_request_is_ambiguous(
     prompt: str,
     candidates: list[dict[str, Any]],
@@ -283,15 +329,29 @@ def _run_semantic_gate_for_prompt(
                 timeout=budgeted_timeout,
             )
             result.setdefault("budget", budget)
+            if not result.get("available"):
+                buckets = result.get("error_buckets") or {}
+                if buckets.get("read_timeout") and budget.get("budget_clipped"):
+                    result.setdefault("availability_reason", "foreground_budget_timeout")
+                    result.setdefault("diagnostic", "semantic_timed_out_under_foreground_budget")
+                elif buckets.get("read_timeout"):
+                    result.setdefault("availability_reason", "semantic_worker_timeout")
+                    result.setdefault("diagnostic", "semantic_provider_read_timeout")
+                else:
+                    result.setdefault("availability_reason", "semantic_unavailable")
+                    result.setdefault("diagnostic", "semantic_unavailable")
             return result
         except Exception as exc:
             return {
                 "available": False,
                 "decision": "skip",
                 "confidence": 0.0,
+                "availability_reason": "semantic_worker_error",
+                "diagnostic": "semantic_worker_error",
                 "query_aliases": [],
                 "reasons": [f"semantic gate error: {exc}"],
                 "errors": [str(exc)],
+                "error_buckets": {"semantic_worker_error": 1},
                 "budget": budget,
             }
     if (
@@ -580,6 +640,7 @@ def assess_prompt(
         cognitive_map_matches=cognitive_map_matches,
         association_matches=association_matches,
     )
+    candidates = _merge_semantic_trigger_source_candidates(candidates, registry, context.semantic_trigger_matches, query_terms)
     if (
         not candidates
         and use_concept_graph
@@ -607,6 +668,7 @@ def assess_prompt(
                 cognitive_map_matches=cognitive_map_matches,
                 association_matches=association_matches,
             )
+            candidates = _merge_semantic_trigger_source_candidates(candidates, registry, context.semantic_trigger_matches, query_terms)
     if not candidates and (explicit or associative or natural_evidence or source_evidence):
         # Metadata can miss memorable wording that only exists inside the
         # SQLite message index. When the user explicitly asks to recover prior

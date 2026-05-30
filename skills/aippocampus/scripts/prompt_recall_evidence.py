@@ -121,6 +121,8 @@ def strip_semantic_gate(result: dict[str, Any] | None) -> dict[str, Any] | None:
         "available": bool(result.get("available")),
         "decision": result.get("decision"),
         "confidence": result.get("confidence"),
+        "availability_reason": result.get("availability_reason"),
+        "diagnostic": result.get("diagnostic"),
         "intent": result.get("intent"),
         "query_aliases": unique_preserve(
             [str(value) for value in result.get("query_aliases") or []], limit=12
