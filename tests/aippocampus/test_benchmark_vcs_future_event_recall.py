@@ -196,6 +196,124 @@ class VcsFutureEventRecallBenchmarkTests(unittest.TestCase):
         self.assertGreaterEqual(payload["metrics"]["source_support_failure_count"], 1)
         self.assertEqual(payload["metrics"]["unknown_event_false_positive_count"], 1)
 
+    def test_adversarial_controls_catch_stale_behavior_and_abstention_failures(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fixture = root / "adversarial.jsonl"
+            predictions = root / "bad-predictions.jsonl"
+            rows = [
+                {
+                    "dataset_id": "unit_adversarial_vcs",
+                    "schema_version": 1,
+                    "license": "CC0-1.0",
+                    "project_id": "dual-source",
+                    "source_family": "unit_adversarial",
+                    "past_window": [
+                        {
+                            "source_id": "old-public-source",
+                            "kind": "pull_request_metadata",
+                            "text": "Old public rationale that has been superseded.",
+                        },
+                        {
+                            "source_id": "current-local-source",
+                            "kind": "current_decision_source",
+                            "text": "Current local rationale that overrides the old public source.",
+                        },
+                    ],
+                    "future_window": [
+                        {
+                            "event_id": "current-route-reopened",
+                            "family": "reopen_condition",
+                            "hard_event_kind": "pull_request_merged",
+                            "flag_worthy": True,
+                            "text": "The route was reopened under the current source.",
+                            "required_past_source_ids": ["current-local-source"],
+                        },
+                        {
+                            "event_id": "near-miss-revert",
+                            "family": "reopen_condition",
+                            "hard_event_kind": "commit_reverted",
+                            "flag_worthy": False,
+                            "text": "Similar vocabulary, unrelated route.",
+                            "required_past_source_ids": [],
+                        },
+                    ],
+                },
+                {
+                    "dataset_id": "unit_adversarial_vcs",
+                    "schema_version": 1,
+                    "license": "CC0-1.0",
+                    "project_id": "behavior-only",
+                    "source_family": "unit_adversarial",
+                    "past_window": [
+                        {
+                            "source_id": "failed-test-trace",
+                            "kind": "test_failed",
+                            "behavior_backed": True,
+                            "text": "A deterministic test failure rejected this route.",
+                        },
+                        {
+                            "source_id": "assistant-narrative",
+                            "kind": "assistant_message",
+                            "behavior_backed": False,
+                            "text": "Narrative-only claim that the route is risky.",
+                        },
+                    ],
+                    "future_window": [
+                        {
+                            "event_id": "route-failed-again",
+                            "family": "rejected_route",
+                            "hard_event_kind": "test_failed",
+                            "flag_worthy": True,
+                            "text": "The route failed tests again.",
+                            "required_past_source_ids": ["failed-test-trace"],
+                        }
+                    ],
+                },
+            ]
+            bad_predictions = [
+                {
+                    "prediction_id": "stale-source",
+                    "event_id": "current-route-reopened",
+                    "decision": "flag",
+                    "past_source_ids": ["old-public-source"],
+                },
+                {
+                    "prediction_id": "near-miss-fp",
+                    "event_id": "near-miss-revert",
+                    "decision": "flag",
+                    "past_source_ids": [],
+                },
+                {
+                    "prediction_id": "narrative-source",
+                    "event_id": "route-failed-again",
+                    "decision": "flag",
+                    "past_source_ids": ["assistant-narrative"],
+                },
+            ]
+            fixture.write_text(
+                "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
+                encoding="utf-8",
+            )
+            predictions.write_text(
+                "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in bad_predictions),
+                encoding="utf-8",
+            )
+
+            payload = benchmark.run_benchmark(
+                dataset_path=fixture,
+                predictions_file=predictions,
+            )
+
+        by_event = {row["event_id"]: row for row in payload["events"]}
+        self.assertFalse(payload["ok"])
+        self.assertTrue(by_event["current-route-reopened"]["false_negative"])
+        self.assertTrue(by_event["route-failed-again"]["false_negative"])
+        self.assertTrue(by_event["near-miss-revert"]["false_positive"])
+        self.assertEqual(payload["metrics"]["source_support_failure_count"], 2)
+        self.assertEqual(payload["metrics"]["false_positive_count"], 1)
+        self.assertEqual(payload["metrics"]["anti_drift_pass_rate"], 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()

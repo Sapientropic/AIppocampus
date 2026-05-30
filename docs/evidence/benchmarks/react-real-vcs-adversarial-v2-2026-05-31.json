@@ -1,0 +1,973 @@
+{
+  "schema_version": 1,
+  "kind": "aippocampus_react_real_vcs_adversarial_v2_measurement",
+  "report_date": "2026-05-31",
+  "repository": "facebook/react",
+  "repository_url": "https://github.com/facebook/react",
+  "dataset_id": "react_real_vcs_adversarial_v2_2026_05_31",
+  "local_fixture_policy": "fixture and predictions are local .tmp artifacts; raw PR bodies/search payloads and raw rollout payloads are not committed",
+  "local_artifacts": {
+    "links_jsonl_sha1": "1129f5cc37127ced",
+    "fixture_jsonl_sha1": "14ad837edb4cf067",
+    "source_window_predictions_sha1": "513483b6a9757ab5",
+    "closed_book_predictions_sha1": "02b7322b0c95b39c",
+    "stale_decoy_predictions_sha1": "da3677760c040a68",
+    "keyword_surface_predictions_sha1": "c36a73e577f0c93a",
+    "overactive_predictions_sha1": "720bcd0bdfa76760"
+  },
+  "build": {
+    "by_family_gold": {
+      "rejected_route": 20,
+      "reopen_condition": 20,
+      "workaround_rationale": 20
+    },
+    "by_family_non_flag": {
+      "rejected_route": 19,
+      "reopen_condition": 19,
+      "workaround_rationale": 19
+    },
+    "by_track": {
+      "abstention_unsupported": 18,
+      "adversarial_paraphrase": 18,
+      "behavior_narrative_negative": 9,
+      "behavior_only_rollout_gold": 9,
+      "dual_source_counterfactual": 12,
+      "family_cross_contamination": 9,
+      "lexical_near_miss_anti_drift": 30,
+      "temporal_override_chain": 12
+    },
+    "dataset_id": "react_real_vcs_adversarial_v2_2026_05_31",
+    "event_count": 117,
+    "gold_event_count": 60,
+    "input_row_count": 168,
+    "non_flag_event_count": 57,
+    "prediction_counts": {
+      "closed_book": 60,
+      "keyword_surface": 99,
+      "overactive": 117,
+      "source_window": 60,
+      "stale_decoy": 60
+    }
+  },
+  "arms": {
+    "source_window": {
+      "ok": true,
+      "predicted_flag_count": 60,
+      "recall": 1.0,
+      "precision": 1.0,
+      "f1": 1.0,
+      "false_negative_count": 0,
+      "false_positive_count": 0,
+      "anti_drift_negative_count": 57,
+      "anti_drift_violation_count": 0,
+      "anti_drift_pass_rate": 1.0,
+      "source_support_failure_count": 0
+    },
+    "empty": {
+      "ok": false,
+      "predicted_flag_count": 0,
+      "recall": 0.0,
+      "precision": 0.0,
+      "f1": 0.0,
+      "false_negative_count": 60,
+      "false_positive_count": 0,
+      "anti_drift_negative_count": 57,
+      "anti_drift_violation_count": 0,
+      "anti_drift_pass_rate": 1.0,
+      "source_support_failure_count": 0
+    },
+    "closed_book": {
+      "ok": false,
+      "predicted_flag_count": 60,
+      "recall": 0.0,
+      "precision": 0.0,
+      "f1": 0.0,
+      "false_negative_count": 60,
+      "false_positive_count": 0,
+      "anti_drift_negative_count": 57,
+      "anti_drift_violation_count": 0,
+      "anti_drift_pass_rate": 1.0,
+      "source_support_failure_count": 60
+    },
+    "stale_decoy": {
+      "ok": false,
+      "predicted_flag_count": 60,
+      "recall": 0.3,
+      "precision": 0.3,
+      "f1": 0.3,
+      "false_negative_count": 42,
+      "false_positive_count": 0,
+      "anti_drift_negative_count": 57,
+      "anti_drift_violation_count": 0,
+      "anti_drift_pass_rate": 1.0,
+      "source_support_failure_count": 42
+    },
+    "keyword_surface": {
+      "ok": false,
+      "predicted_flag_count": 99,
+      "recall": 0.7,
+      "precision": 0.4242,
+      "f1": 0.5283,
+      "false_negative_count": 18,
+      "false_positive_count": 57,
+      "anti_drift_negative_count": 57,
+      "anti_drift_violation_count": 57,
+      "anti_drift_pass_rate": 0.0,
+      "source_support_failure_count": 0
+    },
+    "overactive": {
+      "ok": false,
+      "predicted_flag_count": 117,
+      "recall": 1.0,
+      "precision": 0.5128,
+      "f1": 0.6779,
+      "false_negative_count": 0,
+      "false_positive_count": 57,
+      "anti_drift_negative_count": 57,
+      "anti_drift_violation_count": 57,
+      "anti_drift_pass_rate": 0.0,
+      "source_support_failure_count": 0
+    }
+  },
+  "track_summary": {
+    "source_window": {
+      "dual_source_counterfactual": {
+        "gold_event_count": 12,
+        "non_flag_event_count": 0,
+        "true_positive_count": 12,
+        "false_negative_count": 0,
+        "false_positive_count": 0,
+        "recall": 1.0,
+        "anti_drift_pass_rate": null
+      },
+      "temporal_override_chain": {
+        "gold_event_count": 12,
+        "non_flag_event_count": 0,
+        "true_positive_count": 12,
+        "false_negative_count": 0,
+        "false_positive_count": 0,
+        "recall": 1.0,
+        "anti_drift_pass_rate": null
+      },
+      "family_cross_contamination": {
+        "gold_event_count": 9,
+        "non_flag_event_count": 0,
+        "true_positive_count": 9,
+        "false_negative_count": 0,
+        "false_positive_count": 0,
+        "recall": 1.0,
+        "anti_drift_pass_rate": null
+      },
+      "behavior_only_rollout_gold": {
+        "gold_event_count": 9,
+        "non_flag_event_count": 0,
+        "true_positive_count": 9,
+        "false_negative_count": 0,
+        "false_positive_count": 0,
+        "recall": 1.0,
+        "anti_drift_pass_rate": null
+      },
+      "adversarial_paraphrase": {
+        "gold_event_count": 18,
+        "non_flag_event_count": 0,
+        "true_positive_count": 18,
+        "false_negative_count": 0,
+        "false_positive_count": 0,
+        "recall": 1.0,
+        "anti_drift_pass_rate": null
+      },
+      "lexical_near_miss_anti_drift": {
+        "gold_event_count": 0,
+        "non_flag_event_count": 30,
+        "true_positive_count": 0,
+        "false_negative_count": 0,
+        "false_positive_count": 0,
+        "recall": null,
+        "anti_drift_pass_rate": 1.0
+      },
+      "behavior_narrative_negative": {
+        "gold_event_count": 0,
+        "non_flag_event_count": 9,
+        "true_positive_count": 0,
+        "false_negative_count": 0,
+        "false_positive_count": 0,
+        "recall": null,
+        "anti_drift_pass_rate": 1.0
+      },
+      "abstention_unsupported": {
+        "gold_event_count": 0,
+        "non_flag_event_count": 18,
+        "true_positive_count": 0,
+        "false_negative_count": 0,
+        "false_positive_count": 0,
+        "recall": null,
+        "anti_drift_pass_rate": 1.0
+      }
+    },
+    "empty": {
+      "dual_source_counterfactual": {
+        "gold_event_count": 12,
+        "non_flag_event_count": 0,
+        "true_positive_count": 0,
+        "false_negative_count": 12,
+        "false_positive_count": 0,
+        "recall": 0.0,
+        "anti_drift_pass_rate": null
+      },
+      "temporal_override_chain": {
+        "gold_event_count": 12,
+        "non_flag_event_count": 0,
+        "true_positive_count": 0,
+        "false_negative_count": 12,
+        "false_positive_count": 0,
+        "recall": 0.0,
+        "anti_drift_pass_rate": null
+      },
+      "family_cross_contamination": {
+        "gold_event_count": 9,
+        "non_flag_event_count": 0,
+        "true_positive_count": 0,
+        "false_negative_count": 9,
+        "false_positive_count": 0,
+        "recall": 0.0,
+        "anti_drift_pass_rate": null
+      },
+      "behavior_only_rollout_gold": {
+        "gold_event_count": 9,
+        "non_flag_event_count": 0,
+        "true_positive_count": 0,
+        "false_negative_count": 9,
+        "false_positive_count": 0,
+        "recall": 0.0,
+        "anti_drift_pass_rate": null
+      },
+      "adversarial_paraphrase": {
+        "gold_event_count": 18,
+        "non_flag_event_count": 0,
+        "true_positive_count": 0,
+        "false_negative_count": 18,
+        "false_positive_count": 0,
+        "recall": 0.0,
+        "anti_drift_pass_rate": null
+      },
+      "lexical_near_miss_anti_drift": {
+        "gold_event_count": 0,
+        "non_flag_event_count": 30,
+        "true_positive_count": 0,
+        "false_negative_count": 0,
+        "false_positive_count": 0,
+        "recall": null,
+        "anti_drift_pass_rate": 1.0
+      },
+      "behavior_narrative_negative": {
+        "gold_event_count": 0,
+        "non_flag_event_count": 9,
+        "true_positive_count": 0,
+        "false_negative_count": 0,
+        "false_positive_count": 0,
+        "recall": null,
+        "anti_drift_pass_rate": 1.0
+      },
+      "abstention_unsupported": {
+        "gold_event_count": 0,
+        "non_flag_event_count": 18,
+        "true_positive_count": 0,
+        "false_negative_count": 0,
+        "false_positive_count": 0,
+        "recall": null,
+        "anti_drift_pass_rate": 1.0
+      }
+    },
+    "closed_book": {
+      "dual_source_counterfactual": {
+        "gold_event_count": 12,
+        "non_flag_event_count": 0,
+        "true_positive_count": 0,
+        "false_negative_count": 12,
+        "false_positive_count": 0,
+        "recall": 0.0,
+        "anti_drift_pass_rate": null
+      },
+      "temporal_override_chain": {
+        "gold_event_count": 12,
+        "non_flag_event_count": 0,
+        "true_positive_count": 0,
+        "false_negative_count": 12,
+        "false_positive_count": 0,
+        "recall": 0.0,
+        "anti_drift_pass_rate": null
+      },
+      "family_cross_contamination": {
+        "gold_event_count": 9,
+        "non_flag_event_count": 0,
+        "true_positive_count": 0,
+        "false_negative_count": 9,
+        "false_positive_count": 0,
+        "recall": 0.0,
+        "anti_drift_pass_rate": null
+      },
+      "behavior_only_rollout_gold": {
+        "gold_event_count": 9,
+        "non_flag_event_count": 0,
+        "true_positive_count": 0,
+        "false_negative_count": 9,
+        "false_positive_count": 0,
+        "recall": 0.0,
+        "anti_drift_pass_rate": null
+      },
+      "adversarial_paraphrase": {
+        "gold_event_count": 18,
+        "non_flag_event_count": 0,
+        "true_positive_count": 0,
+        "false_negative_count": 18,
+        "false_positive_count": 0,
+        "recall": 0.0,
+        "anti_drift_pass_rate": null
+      },
+      "lexical_near_miss_anti_drift": {
+        "gold_event_count": 0,
+        "non_flag_event_count": 30,
+        "true_positive_count": 0,
+        "false_negative_count": 0,
+        "false_positive_count": 0,
+        "recall": null,
+        "anti_drift_pass_rate": 1.0
+      },
+      "behavior_narrative_negative": {
+        "gold_event_count": 0,
+        "non_flag_event_count": 9,
+        "true_positive_count": 0,
+        "false_negative_count": 0,
+        "false_positive_count": 0,
+        "recall": null,
+        "anti_drift_pass_rate": 1.0
+      },
+      "abstention_unsupported": {
+        "gold_event_count": 0,
+        "non_flag_event_count": 18,
+        "true_positive_count": 0,
+        "false_negative_count": 0,
+        "false_positive_count": 0,
+        "recall": null,
+        "anti_drift_pass_rate": 1.0
+      }
+    },
+    "stale_decoy": {
+      "dual_source_counterfactual": {
+        "gold_event_count": 12,
+        "non_flag_event_count": 0,
+        "true_positive_count": 0,
+        "false_negative_count": 12,
+        "false_positive_count": 0,
+        "recall": 0.0,
+        "anti_drift_pass_rate": null
+      },
+      "temporal_override_chain": {
+        "gold_event_count": 12,
+        "non_flag_event_count": 0,
+        "true_positive_count": 0,
+        "false_negative_count": 12,
+        "false_positive_count": 0,
+        "recall": 0.0,
+        "anti_drift_pass_rate": null
+      },
+      "family_cross_contamination": {
+        "gold_event_count": 9,
+        "non_flag_event_count": 0,
+        "true_positive_count": 0,
+        "false_negative_count": 9,
+        "false_positive_count": 0,
+        "recall": 0.0,
+        "anti_drift_pass_rate": null
+      },
+      "behavior_only_rollout_gold": {
+        "gold_event_count": 9,
+        "non_flag_event_count": 0,
+        "true_positive_count": 0,
+        "false_negative_count": 9,
+        "false_positive_count": 0,
+        "recall": 0.0,
+        "anti_drift_pass_rate": null
+      },
+      "adversarial_paraphrase": {
+        "gold_event_count": 18,
+        "non_flag_event_count": 0,
+        "true_positive_count": 18,
+        "false_negative_count": 0,
+        "false_positive_count": 0,
+        "recall": 1.0,
+        "anti_drift_pass_rate": null
+      },
+      "lexical_near_miss_anti_drift": {
+        "gold_event_count": 0,
+        "non_flag_event_count": 30,
+        "true_positive_count": 0,
+        "false_negative_count": 0,
+        "false_positive_count": 0,
+        "recall": null,
+        "anti_drift_pass_rate": 1.0
+      },
+      "behavior_narrative_negative": {
+        "gold_event_count": 0,
+        "non_flag_event_count": 9,
+        "true_positive_count": 0,
+        "false_negative_count": 0,
+        "false_positive_count": 0,
+        "recall": null,
+        "anti_drift_pass_rate": 1.0
+      },
+      "abstention_unsupported": {
+        "gold_event_count": 0,
+        "non_flag_event_count": 18,
+        "true_positive_count": 0,
+        "false_negative_count": 0,
+        "false_positive_count": 0,
+        "recall": null,
+        "anti_drift_pass_rate": 1.0
+      }
+    },
+    "keyword_surface": {
+      "dual_source_counterfactual": {
+        "gold_event_count": 12,
+        "non_flag_event_count": 0,
+        "true_positive_count": 12,
+        "false_negative_count": 0,
+        "false_positive_count": 0,
+        "recall": 1.0,
+        "anti_drift_pass_rate": null
+      },
+      "temporal_override_chain": {
+        "gold_event_count": 12,
+        "non_flag_event_count": 0,
+        "true_positive_count": 12,
+        "false_negative_count": 0,
+        "false_positive_count": 0,
+        "recall": 1.0,
+        "anti_drift_pass_rate": null
+      },
+      "family_cross_contamination": {
+        "gold_event_count": 9,
+        "non_flag_event_count": 0,
+        "true_positive_count": 9,
+        "false_negative_count": 0,
+        "false_positive_count": 0,
+        "recall": 1.0,
+        "anti_drift_pass_rate": null
+      },
+      "behavior_only_rollout_gold": {
+        "gold_event_count": 9,
+        "non_flag_event_count": 0,
+        "true_positive_count": 9,
+        "false_negative_count": 0,
+        "false_positive_count": 0,
+        "recall": 1.0,
+        "anti_drift_pass_rate": null
+      },
+      "adversarial_paraphrase": {
+        "gold_event_count": 18,
+        "non_flag_event_count": 0,
+        "true_positive_count": 0,
+        "false_negative_count": 18,
+        "false_positive_count": 0,
+        "recall": 0.0,
+        "anti_drift_pass_rate": null
+      },
+      "lexical_near_miss_anti_drift": {
+        "gold_event_count": 0,
+        "non_flag_event_count": 30,
+        "true_positive_count": 0,
+        "false_negative_count": 0,
+        "false_positive_count": 30,
+        "recall": null,
+        "anti_drift_pass_rate": 0.0
+      },
+      "behavior_narrative_negative": {
+        "gold_event_count": 0,
+        "non_flag_event_count": 9,
+        "true_positive_count": 0,
+        "false_negative_count": 0,
+        "false_positive_count": 9,
+        "recall": null,
+        "anti_drift_pass_rate": 0.0
+      },
+      "abstention_unsupported": {
+        "gold_event_count": 0,
+        "non_flag_event_count": 18,
+        "true_positive_count": 0,
+        "false_negative_count": 0,
+        "false_positive_count": 18,
+        "recall": null,
+        "anti_drift_pass_rate": 0.0
+      }
+    },
+    "overactive": {
+      "dual_source_counterfactual": {
+        "gold_event_count": 12,
+        "non_flag_event_count": 0,
+        "true_positive_count": 12,
+        "false_negative_count": 0,
+        "false_positive_count": 0,
+        "recall": 1.0,
+        "anti_drift_pass_rate": null
+      },
+      "temporal_override_chain": {
+        "gold_event_count": 12,
+        "non_flag_event_count": 0,
+        "true_positive_count": 12,
+        "false_negative_count": 0,
+        "false_positive_count": 0,
+        "recall": 1.0,
+        "anti_drift_pass_rate": null
+      },
+      "family_cross_contamination": {
+        "gold_event_count": 9,
+        "non_flag_event_count": 0,
+        "true_positive_count": 9,
+        "false_negative_count": 0,
+        "false_positive_count": 0,
+        "recall": 1.0,
+        "anti_drift_pass_rate": null
+      },
+      "behavior_only_rollout_gold": {
+        "gold_event_count": 9,
+        "non_flag_event_count": 0,
+        "true_positive_count": 9,
+        "false_negative_count": 0,
+        "false_positive_count": 0,
+        "recall": 1.0,
+        "anti_drift_pass_rate": null
+      },
+      "adversarial_paraphrase": {
+        "gold_event_count": 18,
+        "non_flag_event_count": 0,
+        "true_positive_count": 18,
+        "false_negative_count": 0,
+        "false_positive_count": 0,
+        "recall": 1.0,
+        "anti_drift_pass_rate": null
+      },
+      "lexical_near_miss_anti_drift": {
+        "gold_event_count": 0,
+        "non_flag_event_count": 30,
+        "true_positive_count": 0,
+        "false_negative_count": 0,
+        "false_positive_count": 30,
+        "recall": null,
+        "anti_drift_pass_rate": 0.0
+      },
+      "behavior_narrative_negative": {
+        "gold_event_count": 0,
+        "non_flag_event_count": 9,
+        "true_positive_count": 0,
+        "false_negative_count": 0,
+        "false_positive_count": 9,
+        "recall": null,
+        "anti_drift_pass_rate": 0.0
+      },
+      "abstention_unsupported": {
+        "gold_event_count": 0,
+        "non_flag_event_count": 18,
+        "true_positive_count": 0,
+        "false_negative_count": 0,
+        "false_positive_count": 18,
+        "recall": null,
+        "anti_drift_pass_rate": 0.0
+      }
+    }
+  },
+  "family_summary": {
+    "source_window": {
+      "rejected_route": {
+        "gold_event_count": 20,
+        "non_flag_event_count": 19,
+        "recall": 1.0,
+        "anti_drift_pass_rate": 1.0,
+        "false_positive_count": 0
+      },
+      "reopen_condition": {
+        "gold_event_count": 20,
+        "non_flag_event_count": 19,
+        "recall": 1.0,
+        "anti_drift_pass_rate": 1.0,
+        "false_positive_count": 0
+      },
+      "workaround_rationale": {
+        "gold_event_count": 20,
+        "non_flag_event_count": 19,
+        "recall": 1.0,
+        "anti_drift_pass_rate": 1.0,
+        "false_positive_count": 0
+      }
+    },
+    "empty": {
+      "rejected_route": {
+        "gold_event_count": 20,
+        "non_flag_event_count": 19,
+        "recall": 0.0,
+        "anti_drift_pass_rate": 1.0,
+        "false_positive_count": 0
+      },
+      "reopen_condition": {
+        "gold_event_count": 20,
+        "non_flag_event_count": 19,
+        "recall": 0.0,
+        "anti_drift_pass_rate": 1.0,
+        "false_positive_count": 0
+      },
+      "workaround_rationale": {
+        "gold_event_count": 20,
+        "non_flag_event_count": 19,
+        "recall": 0.0,
+        "anti_drift_pass_rate": 1.0,
+        "false_positive_count": 0
+      }
+    },
+    "closed_book": {
+      "rejected_route": {
+        "gold_event_count": 20,
+        "non_flag_event_count": 19,
+        "recall": 0.0,
+        "anti_drift_pass_rate": 1.0,
+        "false_positive_count": 0
+      },
+      "reopen_condition": {
+        "gold_event_count": 20,
+        "non_flag_event_count": 19,
+        "recall": 0.0,
+        "anti_drift_pass_rate": 1.0,
+        "false_positive_count": 0
+      },
+      "workaround_rationale": {
+        "gold_event_count": 20,
+        "non_flag_event_count": 19,
+        "recall": 0.0,
+        "anti_drift_pass_rate": 1.0,
+        "false_positive_count": 0
+      }
+    },
+    "stale_decoy": {
+      "rejected_route": {
+        "gold_event_count": 20,
+        "non_flag_event_count": 19,
+        "recall": 0.3,
+        "anti_drift_pass_rate": 1.0,
+        "false_positive_count": 0
+      },
+      "reopen_condition": {
+        "gold_event_count": 20,
+        "non_flag_event_count": 19,
+        "recall": 0.3,
+        "anti_drift_pass_rate": 1.0,
+        "false_positive_count": 0
+      },
+      "workaround_rationale": {
+        "gold_event_count": 20,
+        "non_flag_event_count": 19,
+        "recall": 0.3,
+        "anti_drift_pass_rate": 1.0,
+        "false_positive_count": 0
+      }
+    },
+    "keyword_surface": {
+      "rejected_route": {
+        "gold_event_count": 20,
+        "non_flag_event_count": 19,
+        "recall": 0.7,
+        "anti_drift_pass_rate": 0.0,
+        "false_positive_count": 19
+      },
+      "reopen_condition": {
+        "gold_event_count": 20,
+        "non_flag_event_count": 19,
+        "recall": 0.7,
+        "anti_drift_pass_rate": 0.0,
+        "false_positive_count": 19
+      },
+      "workaround_rationale": {
+        "gold_event_count": 20,
+        "non_flag_event_count": 19,
+        "recall": 0.7,
+        "anti_drift_pass_rate": 0.0,
+        "false_positive_count": 19
+      }
+    },
+    "overactive": {
+      "rejected_route": {
+        "gold_event_count": 20,
+        "non_flag_event_count": 19,
+        "recall": 1.0,
+        "anti_drift_pass_rate": 0.0,
+        "false_positive_count": 19
+      },
+      "reopen_condition": {
+        "gold_event_count": 20,
+        "non_flag_event_count": 19,
+        "recall": 1.0,
+        "anti_drift_pass_rate": 0.0,
+        "false_positive_count": 19
+      },
+      "workaround_rationale": {
+        "gold_event_count": 20,
+        "non_flag_event_count": 19,
+        "recall": 1.0,
+        "anti_drift_pass_rate": 0.0,
+        "false_positive_count": 19
+      }
+    }
+  },
+  "samples": [
+    {
+      "event_id": "adv-dual-rejected_route-27584-event",
+      "track": "dual_source_counterfactual",
+      "family": "rejected_route",
+      "flag_worthy": true,
+      "hard_event_kind": "commit_reverted",
+      "public_url": "https://github.com/facebook/react/pull/27584",
+      "required_past_source_ids": [
+        "adv-dual-rejected_route-27584-current-counterfactual-source"
+      ]
+    },
+    {
+      "event_id": "adv-dual-reopen_condition-30832-event",
+      "track": "dual_source_counterfactual",
+      "family": "reopen_condition",
+      "flag_worthy": true,
+      "hard_event_kind": "pull_request_merged",
+      "public_url": "https://github.com/facebook/react/pull/30832",
+      "required_past_source_ids": [
+        "adv-dual-reopen_condition-30832-current-counterfactual-source"
+      ]
+    },
+    {
+      "event_id": "adv-dual-workaround_rationale-24730-event",
+      "track": "dual_source_counterfactual",
+      "family": "workaround_rationale",
+      "flag_worthy": true,
+      "hard_event_kind": "pull_request_merged",
+      "public_url": "https://github.com/facebook/react/pull/24730",
+      "required_past_source_ids": [
+        "adv-dual-workaround_rationale-24730-current-counterfactual-source"
+      ]
+    },
+    {
+      "event_id": "adv-temporal-rejected_route-28670-current-event",
+      "track": "temporal_override_chain",
+      "family": "rejected_route",
+      "flag_worthy": true,
+      "hard_event_kind": "commit_reverted",
+      "public_url": "https://github.com/facebook/react/pull/28670",
+      "required_past_source_ids": [
+        "adv-temporal-rejected_route-28670-day55-current-source"
+      ]
+    },
+    {
+      "event_id": "adv-temporal-reopen_condition-17799-current-event",
+      "track": "temporal_override_chain",
+      "family": "reopen_condition",
+      "flag_worthy": true,
+      "hard_event_kind": "pull_request_merged",
+      "public_url": "https://github.com/facebook/react/pull/17799",
+      "required_past_source_ids": [
+        "adv-temporal-reopen_condition-17799-day55-current-source"
+      ]
+    },
+    {
+      "event_id": "adv-temporal-workaround_rationale-29143-current-event",
+      "track": "temporal_override_chain",
+      "family": "workaround_rationale",
+      "flag_worthy": true,
+      "hard_event_kind": "pull_request_merged",
+      "public_url": "https://github.com/facebook/react/pull/29143",
+      "required_past_source_ids": [
+        "adv-temporal-workaround_rationale-29143-day55-current-source"
+      ]
+    },
+    {
+      "event_id": "adv-cross-family-rejected_route-29663-event",
+      "track": "family_cross_contamination",
+      "family": "rejected_route",
+      "flag_worthy": true,
+      "hard_event_kind": "commit_reverted",
+      "public_url": "https://github.com/facebook/react/pull/29663",
+      "required_past_source_ids": [
+        "adv-cross-family-rejected_route-29663-source"
+      ]
+    },
+    {
+      "event_id": "adv-cross-family-reopen_condition-19161-event",
+      "track": "family_cross_contamination",
+      "family": "reopen_condition",
+      "flag_worthy": true,
+      "hard_event_kind": "pull_request_merged",
+      "public_url": "https://github.com/facebook/react/pull/19161",
+      "required_past_source_ids": [
+        "adv-cross-family-reopen_condition-19161-source"
+      ]
+    },
+    {
+      "event_id": "adv-cross-family-workaround_rationale-32822-event",
+      "track": "family_cross_contamination",
+      "family": "workaround_rationale",
+      "flag_worthy": true,
+      "hard_event_kind": "pull_request_merged",
+      "public_url": "https://github.com/facebook/react/pull/32822",
+      "required_past_source_ids": [
+        "adv-cross-family-workaround_rationale-32822-source"
+      ]
+    },
+    {
+      "event_id": "adv-rollout-rejected_route-0-behavior-event",
+      "track": "behavior_only_rollout_gold",
+      "family": "rejected_route",
+      "flag_worthy": true,
+      "hard_event_kind": "test_failed",
+      "public_url": "https://github.com/facebook/react/pull/90000",
+      "required_past_source_ids": [
+        "adv-rollout-rejected_route-0-behavior-source"
+      ]
+    },
+    {
+      "event_id": "adv-rollout-reopen_condition-0-behavior-event",
+      "track": "behavior_only_rollout_gold",
+      "family": "reopen_condition",
+      "flag_worthy": true,
+      "hard_event_kind": "test_failed",
+      "public_url": "https://github.com/facebook/react/pull/90010",
+      "required_past_source_ids": [
+        "adv-rollout-reopen_condition-0-behavior-source"
+      ]
+    },
+    {
+      "event_id": "adv-rollout-workaround_rationale-0-behavior-event",
+      "track": "behavior_only_rollout_gold",
+      "family": "workaround_rationale",
+      "flag_worthy": true,
+      "hard_event_kind": "test_failed",
+      "public_url": "https://github.com/facebook/react/pull/90020",
+      "required_past_source_ids": [
+        "adv-rollout-workaround_rationale-0-behavior-source"
+      ]
+    },
+    {
+      "event_id": "adv-paraphrase-rejected_route-30792-event",
+      "track": "adversarial_paraphrase",
+      "family": "rejected_route",
+      "flag_worthy": true,
+      "hard_event_kind": "commit_reverted",
+      "public_url": "https://github.com/facebook/react/pull/30792",
+      "required_past_source_ids": [
+        "adv-paraphrase-rejected_route-30792-source"
+      ]
+    },
+    {
+      "event_id": "adv-paraphrase-reopen_condition-21079-event",
+      "track": "adversarial_paraphrase",
+      "family": "reopen_condition",
+      "flag_worthy": true,
+      "hard_event_kind": "pull_request_merged",
+      "public_url": "https://github.com/facebook/react/pull/21079",
+      "required_past_source_ids": [
+        "adv-paraphrase-reopen_condition-21079-source"
+      ]
+    },
+    {
+      "event_id": "adv-paraphrase-workaround_rationale-18459-event",
+      "track": "adversarial_paraphrase",
+      "family": "workaround_rationale",
+      "flag_worthy": true,
+      "hard_event_kind": "pull_request_merged",
+      "public_url": "https://github.com/facebook/react/pull/18459",
+      "required_past_source_ids": [
+        "adv-paraphrase-workaround_rationale-18459-source"
+      ]
+    },
+    {
+      "event_id": "adv-lexical-rejected_route-18671-vs-25812",
+      "track": "lexical_near_miss_anti_drift",
+      "family": "rejected_route",
+      "flag_worthy": false,
+      "hard_event_kind": "commit_reverted",
+      "public_url": "https://github.com/facebook/react/pull/25812",
+      "required_past_source_ids": []
+    },
+    {
+      "event_id": "adv-lexical-reopen_condition-17799-vs-25915",
+      "track": "lexical_near_miss_anti_drift",
+      "family": "reopen_condition",
+      "flag_worthy": false,
+      "hard_event_kind": "pull_request_merged",
+      "public_url": "https://github.com/facebook/react/pull/25915",
+      "required_past_source_ids": []
+    },
+    {
+      "event_id": "adv-lexical-workaround_rationale-18459-vs-24195",
+      "track": "lexical_near_miss_anti_drift",
+      "family": "workaround_rationale",
+      "flag_worthy": false,
+      "hard_event_kind": "pull_request_merged",
+      "public_url": "https://github.com/facebook/react/pull/24195",
+      "required_past_source_ids": []
+    },
+    {
+      "event_id": "adv-rollout-rejected_route-0-narrative-negative",
+      "track": "behavior_narrative_negative",
+      "family": "rejected_route",
+      "flag_worthy": false,
+      "hard_event_kind": "tool_call_succeeded",
+      "public_url": "https://github.com/facebook/react/pull/90000",
+      "required_past_source_ids": []
+    },
+    {
+      "event_id": "adv-rollout-reopen_condition-0-narrative-negative",
+      "track": "behavior_narrative_negative",
+      "family": "reopen_condition",
+      "flag_worthy": false,
+      "hard_event_kind": "tool_call_succeeded",
+      "public_url": "https://github.com/facebook/react/pull/90010",
+      "required_past_source_ids": []
+    },
+    {
+      "event_id": "adv-rollout-workaround_rationale-0-narrative-negative",
+      "track": "behavior_narrative_negative",
+      "family": "workaround_rationale",
+      "flag_worthy": false,
+      "hard_event_kind": "tool_call_succeeded",
+      "public_url": "https://github.com/facebook/react/pull/90020",
+      "required_past_source_ids": []
+    },
+    {
+      "event_id": "adv-abstain-rejected_route-32214-unsupported",
+      "track": "abstention_unsupported",
+      "family": "rejected_route",
+      "flag_worthy": false,
+      "hard_event_kind": "commit_reverted",
+      "public_url": "https://github.com/facebook/react/pull/32214",
+      "required_past_source_ids": []
+    },
+    {
+      "event_id": "adv-abstain-reopen_condition-27307-unsupported",
+      "track": "abstention_unsupported",
+      "family": "reopen_condition",
+      "flag_worthy": false,
+      "hard_event_kind": "pull_request_merged",
+      "public_url": "https://github.com/facebook/react/pull/27307",
+      "required_past_source_ids": []
+    },
+    {
+      "event_id": "adv-abstain-workaround_rationale-20468-unsupported",
+      "track": "abstention_unsupported",
+      "family": "workaround_rationale",
+      "flag_worthy": false,
+      "hard_event_kind": "pull_request_merged",
+      "public_url": "https://github.com/facebook/react/pull/20468",
+      "required_past_source_ids": []
+    }
+  ],
+  "cannot_claim": [
+    "live_model_quality",
+    "license_safe_redistributable_fixture_corpus",
+    "private_real_history_continuity_quality",
+    "wild_vcs_corpus_quality",
+    "semantic_judge_validity_for_soft_reopen_cases"
+  ]
+}

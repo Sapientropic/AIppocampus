@@ -14,6 +14,9 @@ Latest real public VCS smoke:
 Latest 100+ gold real public VCS measurement:
 [`react-real-vcs-100-gold-2026-05-31.md`](react-real-vcs-100-gold-2026-05-31.md).
 
+Latest adversarial React VCS measurement:
+[`react-real-vcs-adversarial-v2-2026-05-31.md`](react-real-vcs-adversarial-v2-2026-05-31.md).
+
 ## Purpose
 
 AIppocampus should help agents remember hidden engineering context across
@@ -219,6 +222,15 @@ It runs the builder on 105 curated `facebook/react` gold events plus 105
 anti-drift negatives, keeps source-window / empty / closed-book arms separate,
 adds a 105-event counterfactual perturbation control, and reports
 `rejected_route`, `reopen_condition`, and `workaround_rationale` separately.
+
+The sharper adversarial follow-up is
+[`react-real-vcs-adversarial-v2-2026-05-31.md`](react-real-vcs-adversarial-v2-2026-05-31.md).
+It adds dual-source counterfactuals, temporal override chains, family
+cross-contamination, behavior-only rollout gold, adversarial paraphrase,
+lexical near-miss anti-drift, narrative-only negatives, and abstention cases.
+The bad-control arms deliberately fail: stale/decoy sources fall to 30% recall,
+keyword-surface matching produces 57 false positives, and overactive all-flags
+gets 0% anti-drift pass.
 
 ## Runner
 
