@@ -8,6 +8,9 @@ It is the evidence companion for GitHub issue #172.
 Latest dated measurement:
 [`public-longitudinal-users-measurement-2026-05-31.md`](public-longitudinal-users-measurement-2026-05-31.md).
 
+Latest real public VCS smoke:
+[`react-real-vcs-smoke-2026-05-31.md`](react-real-vcs-smoke-2026-05-31.md).
+
 ## Purpose
 
 AIppocampus should help agents remember hidden engineering context across
@@ -200,6 +203,11 @@ with source URLs, timestamps, repository scope, and closed-book predictions.
 Keep raw code and large raw review text out of the public fixture unless the
 license and redistribution boundary are explicit; use local ignored reports for
 large curated rows.
+
+The first real public VCS smoke is now
+[`react-real-vcs-smoke-2026-05-31.md`](react-real-vcs-smoke-2026-05-31.md).
+It runs this scaffold on three curated `facebook/react` event clusters and
+separate source-window, empty, and source-stripped closed-book arms.
 
 ## Runner
 

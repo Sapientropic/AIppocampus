@@ -1,0 +1,187 @@
+{
+  "schema_version": 1,
+  "kind": "aippocampus_real_public_vcs_smoke_measurement",
+  "report_date": "2026-05-31",
+  "repository": "facebook/react",
+  "repository_url": "https://github.com/facebook/react",
+  "repository_license_spdx": "MIT",
+  "dataset_id": "react_real_vcs_smoke_2026_05_31",
+  "source_family": "real_public_react_vcs_curated",
+  "raw_fixture_policy": "local .tmp only; raw PR text is not committed",
+  "project_count": 3,
+  "future_event_count": 6,
+  "flag_worthy_event_count": 3,
+  "anti_drift_negative_count": 3,
+  "hard_event_kinds": [
+    "commit_reverted",
+    "pull_request_merged"
+  ],
+  "source_window": {
+    "ok": true,
+    "recall": 1.0,
+    "precision": 1.0,
+    "f1": 1.0,
+    "false_negative_count": 0,
+    "false_positive_count": 0,
+    "anti_drift_pass_rate": 1.0,
+    "by_family": {
+      "rejected_route": {
+        "gold_event_count": 1,
+        "true_positive_count": 1,
+        "false_negative_count": 0,
+        "recall": 1.0
+      },
+      "reopen_condition": {
+        "gold_event_count": 1,
+        "true_positive_count": 1,
+        "false_negative_count": 0,
+        "recall": 1.0
+      },
+      "workaround_rationale": {
+        "gold_event_count": 1,
+        "true_positive_count": 1,
+        "false_negative_count": 0,
+        "recall": 1.0
+      }
+    }
+  },
+  "empty_baseline": {
+    "ok": false,
+    "recall": 0.0,
+    "precision": 0.0,
+    "false_negative_count": 3,
+    "false_positive_count": 0
+  },
+  "closed_book_source_stripped_control": {
+    "ok": false,
+    "recall": 0.0,
+    "precision": 0.0,
+    "false_negative_count": 3,
+    "source_support_failure_count": 3
+  },
+  "source_over_closed_book_lift": {
+    "recall": 1.0,
+    "precision": 1.0,
+    "f1": 1.0,
+    "false_negative_reduction": 3
+  },
+  "projects": [
+    {
+      "project_id": "react-compiler-variabledeclarator-reland",
+      "project_label": "facebook/react compiler VariableDeclarator reland",
+      "past_sources": [
+        {
+          "source_id": "react-pr-35346-revert",
+          "kind": "pull_request_body",
+          "timestamp": "2025-12-11T20:26:56Z",
+          "public_url": "https://github.com/facebook/react/pull/35346"
+        }
+      ],
+      "future_events": [
+        {
+          "event_id": "react-pr-35348-reland-merged",
+          "family": "reopen_condition",
+          "hard_event_kind": "pull_request_merged",
+          "timestamp": "2025-12-11T23:02:06Z",
+          "flag_worthy": true,
+          "public_url": "https://github.com/facebook/react/pull/35348",
+          "required_past_source_ids": [
+            "react-pr-35346-revert"
+          ]
+        },
+        {
+          "event_id": "react-pr-35487-gesture-revert-merged",
+          "family": "anti_drift_negative",
+          "hard_event_kind": "pull_request_merged",
+          "timestamp": "2026-01-16T01:45:15Z",
+          "flag_worthy": false,
+          "public_url": "https://github.com/facebook/react/pull/35487",
+          "required_past_source_ids": []
+        }
+      ]
+    },
+    {
+      "project_id": "react-eprh-hermesparser-revert",
+      "project_label": "facebook/react eslint-plugin-react-hooks HermesParser revert",
+      "past_sources": [
+        {
+          "source_id": "react-pr-34747-hermes-rationale",
+          "kind": "pull_request_body",
+          "timestamp": "2025-10-06T05:03:08Z",
+          "public_url": "https://github.com/facebook/react/pull/34747"
+        }
+      ],
+      "future_events": [
+        {
+          "event_id": "react-pr-34747-hermes-revert-merged",
+          "family": "workaround_rationale",
+          "hard_event_kind": "commit_reverted",
+          "timestamp": "2025-10-06T16:43:39Z",
+          "flag_worthy": true,
+          "public_url": "https://github.com/facebook/react/pull/34747",
+          "required_past_source_ids": [
+            "react-pr-34747-hermes-rationale"
+          ]
+        },
+        {
+          "event_id": "react-pr-35546-internal-accidental-revert",
+          "family": "anti_drift_negative",
+          "hard_event_kind": "commit_reverted",
+          "timestamp": "2026-01-17T18:21:47Z",
+          "flag_worthy": false,
+          "public_url": "https://github.com/facebook/react/pull/35546",
+          "required_past_source_ids": []
+        }
+      ]
+    },
+    {
+      "project_id": "react-compiler-feature-flag-cleanup",
+      "project_label": "facebook/react compiler feature flag cleanup",
+      "past_sources": [
+        {
+          "source_id": "react-pr-35825-cleanup-rationale",
+          "kind": "pull_request_body",
+          "timestamp": "2026-02-20T00:04:41Z",
+          "public_url": "https://github.com/facebook/react/pull/35825"
+        }
+      ],
+      "future_events": [
+        {
+          "event_id": "react-pr-35825-feature-cleanup-merged",
+          "family": "rejected_route",
+          "hard_event_kind": "pull_request_merged",
+          "timestamp": "2026-02-20T20:29:12Z",
+          "flag_worthy": true,
+          "public_url": "https://github.com/facebook/react/pull/35825",
+          "required_past_source_ids": [
+            "react-pr-35825-cleanup-rationale"
+          ]
+        },
+        {
+          "event_id": "react-pr-35559-gesture-animation-cleanup",
+          "family": "anti_drift_negative",
+          "hard_event_kind": "pull_request_merged",
+          "timestamp": "2026-01-20T00:26:29Z",
+          "flag_worthy": false,
+          "public_url": "https://github.com/facebook/react/pull/35559",
+          "required_past_source_ids": []
+        }
+      ]
+    }
+  ],
+  "cannot_claim": [
+    "wild_vcs_corpus_quality",
+    "model_quality_against_real_vcs_without_external_predictions",
+    "closed_book_contamination_resistance_against_model_generated_answers",
+    "intentional_forget_compliance",
+    "post_compaction_detail_recall",
+    "dream_semantic_quality",
+    "private_real_history_quality"
+  ],
+  "privacy_boundary": {
+    "committed_report_contains_raw_pr_body": false,
+    "committed_report_contains_private_user_data": false,
+    "committed_report_contains_local_absolute_paths": false,
+    "committed_report_contains_credential_like_strings": false
+  }
+}
