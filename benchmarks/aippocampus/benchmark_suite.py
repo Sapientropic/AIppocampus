@@ -23,6 +23,7 @@ _paths.ensure_paths()
 
 import smoke_source_evidence_recall_eval as source_evidence_eval
 
+import benchmark_compaction_continuity as compaction_benchmark
 import benchmark_live_semantic_gate as live_semantic_benchmark
 import benchmark_memory_decision_gate as gate_benchmark
 import benchmark_payload_fidelity as payload_benchmark
@@ -36,10 +37,12 @@ class BenchmarkSuiteConfig:
     registry_path: Path | None = None
     include_private_text: bool = False
     include_track_b: bool = True
+    include_track_d: bool = True
     include_deterministic_source_labels: bool = True
     include_live_semantic: bool = False
     gate_case_limit: int | None = None
     payload_case_limit: int | None = None
+    track_d_case_limit: int | None = None
     live_semantic_conversations: int = live_semantic_benchmark.DEFAULT_LIVE_CONVERSATIONS
     live_semantic_cases: int | None = None
     live_semantic_min_cases: int = live_semantic_benchmark.DEFAULT_MIN_LIVE_CASES
@@ -103,12 +106,14 @@ class BenchmarkSuiteConfig:
             "registry_path_provided": self.registry_path is not None,
             "include_private_text": bool(self.include_private_text),
             "include_track_b": bool(self.include_track_b),
+            "include_track_d": bool(self.include_track_d),
             "include_deterministic_source_labels": bool(
                 self.include_deterministic_source_labels
             ),
             "include_live_semantic": bool(self.include_live_semantic),
             "gate_case_limit": self.gate_case_limit,
             "payload_case_limit": self.payload_case_limit,
+            "track_d_case_limit": self.track_d_case_limit,
             "live_semantic_conversations": int(self.live_semantic_conversations),
             "live_semantic_cases": self.live_semantic_cases,
             "live_semantic_min_cases": int(self.live_semantic_min_cases),
@@ -177,6 +182,8 @@ def aggregate_privacy_boundary(tracks: dict[str, dict[str, Any]]) -> dict[str, A
         "raw_text_emitted",
         "raw_prompt_emitted",
         "raw_context_emitted",
+        "raw_correction_text_emitted",
+        "raw_source_refs_emitted",
         "snippets_emitted",
         "source_reference_details_emitted",
     )
@@ -278,10 +285,12 @@ def run_benchmark_suite(
     registry_path: Path | None = None,
     include_private_text: bool = False,
     include_track_b: bool = True,
+    include_track_d: bool = True,
     include_deterministic_source_labels: bool = True,
     include_live_semantic: bool = False,
     gate_case_limit: int | None = None,
     payload_case_limit: int | None = None,
+    track_d_case_limit: int | None = None,
     live_semantic_conversations: int = live_semantic_benchmark.DEFAULT_LIVE_CONVERSATIONS,
     live_semantic_cases: int | None = None,
     live_semantic_min_cases: int = live_semantic_benchmark.DEFAULT_MIN_LIVE_CASES,
@@ -344,10 +353,12 @@ def run_benchmark_suite(
             registry_path=registry_path,
             include_private_text=include_private_text,
             include_track_b=include_track_b,
+            include_track_d=include_track_d,
             include_deterministic_source_labels=include_deterministic_source_labels,
             include_live_semantic=include_live_semantic,
             gate_case_limit=gate_case_limit,
             payload_case_limit=payload_case_limit,
+            track_d_case_limit=track_d_case_limit,
             live_semantic_conversations=live_semantic_conversations,
             live_semantic_cases=live_semantic_cases,
             live_semantic_min_cases=live_semantic_min_cases,
@@ -396,10 +407,12 @@ def run_benchmark_suite_with_config(config: BenchmarkSuiteConfig) -> dict[str, A
     registry_path = config.registry_path
     include_private_text = config.include_private_text
     include_track_b = config.include_track_b
+    include_track_d = config.include_track_d
     include_deterministic_source_labels = config.include_deterministic_source_labels
     include_live_semantic = config.include_live_semantic
     gate_case_limit = config.gate_case_limit
     payload_case_limit = config.payload_case_limit
+    track_d_case_limit = config.track_d_case_limit
     live_semantic_conversations = config.live_semantic_conversations
     live_semantic_cases = config.live_semantic_cases
     live_semantic_min_cases = config.live_semantic_min_cases
@@ -452,6 +465,11 @@ def run_benchmark_suite_with_config(config: BenchmarkSuiteConfig) -> dict[str, A
             case_limit=payload_case_limit,
         ),
     }
+    if include_track_d:
+        tracks["compaction_continuity"] = compaction_benchmark.run_benchmark(
+            include_private_text=include_private_text,
+            case_limit=track_d_case_limit,
+        )
     if include_track_b:
         tracks["source_evidence_retrieval"] = (
             retrieval_benchmark.run_source_evidence_retrieval_benchmark(
@@ -575,12 +593,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--registry", type=Path, default=None)
     parser.add_argument("--include-private-text", action="store_true")
     parser.add_argument("--skip-track-b", action="store_true")
+    parser.add_argument("--skip-track-d", action="store_true")
     parser.add_argument("--skip-deterministic-source-labels", action="store_true")
     parser.add_argument("--include-live-semantic", action="store_true")
     parser.add_argument("--include-sharegpt-public-track-b", action="store_true")
     parser.add_argument("--include-standard-public-track-b", action="store_true")
     parser.add_argument("--gate-cases", type=int, default=None)
     parser.add_argument("--payload-cases", type=int, default=None)
+    parser.add_argument("--track-d-cases", type=int, default=None)
     parser.add_argument(
         "--live-semantic-conversations",
         type=int,
@@ -756,10 +776,12 @@ def benchmark_suite_config_from_args(args: argparse.Namespace) -> BenchmarkSuite
         registry_path=args.registry,
         include_private_text=args.include_private_text,
         include_track_b=not args.skip_track_b,
+        include_track_d=not args.skip_track_d,
         include_deterministic_source_labels=not args.skip_deterministic_source_labels,
         include_live_semantic=args.include_live_semantic,
         gate_case_limit=args.gate_cases,
         payload_case_limit=args.payload_cases,
+        track_d_case_limit=args.track_d_cases,
         live_semantic_conversations=args.live_semantic_conversations,
         live_semantic_cases=args.live_semantic_cases,
         live_semantic_min_cases=args.live_semantic_min_cases,

@@ -133,7 +133,8 @@ memory-pain fixture family. The public report is
 [`memory-pain-fixture-report.md`](memory-pain-fixture-report.md).
 
 Cannot claim: competitor superiority, live semantic-model quality, real-history
-coverage, or a complete Track D compaction-continuity runner.
+coverage, or real Track D runtime compaction-continuity behavior. Use the
+separate Track D synthetic runner when demonstrating that measurement surface.
 
 ## Scenario 7: Inspect MCP Tools
 

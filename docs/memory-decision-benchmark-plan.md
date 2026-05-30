@@ -2,8 +2,8 @@
 
 Status: repeatable baseline suite implemented; current source-evidence recall
 has improved, live semantic-gate smoke is opt-in, semantic-sidecar coverage
-remains a known gap, and Track D compaction-continuity testing is specified but
-not implemented.
+remains a known gap, and deterministic synthetic Track D
+compaction-continuity testing is implemented as a measurement surface.
 
 This document defines the benchmark direction for AIppocampus memory decisions.
 It complements the existing FTS5/source-evidence checks; it does not replace
@@ -933,6 +933,7 @@ Scripts:
 - `benchmarks/aippocampus/benchmark_memory_decision_gate.py`
 - `benchmarks/aippocampus/benchmark_source_evidence_retrieval.py`
 - `benchmarks/aippocampus/benchmark_payload_fidelity.py`
+- `benchmarks/aippocampus/benchmark_compaction_continuity.py`
 - `benchmarks/aippocampus/benchmark_live_semantic_gate.py`
 - `benchmarks/aippocampus/benchmark_suite.py`
 
@@ -942,13 +943,23 @@ Tests:
 - `tests/aippocampus/test_benchmark_memory_decision_gate.py`
 - `tests/aippocampus/test_benchmark_source_evidence_retrieval.py`
 - `tests/aippocampus/test_benchmark_payload_fidelity.py`
+- `tests/aippocampus/test_benchmark_compaction_continuity.py`
 - `tests/aippocampus/test_benchmark_live_semantic_gate.py`
 - `tests/aippocampus/test_benchmark_suite.py`
 
-Planned Track D files:
+Track D command:
 
-- `benchmarks/aippocampus/benchmark_compaction_continuity.py`
-- `tests/aippocampus/test_benchmark_compaction_continuity.py`
+```powershell
+python benchmarks\aippocampus\benchmark_compaction_continuity.py
+python benchmarks\aippocampus\benchmark_suite.py
+```
+
+The implemented Track D runner is deterministic and synthetic. It covers the
+planned hook-stage expectations, simulated `visible`, `post_compaction`, and
+`horizon_lost` states, synthetic correction/outcome event chains, same-epoch
+repeated-anchor suppression, and mocked adjudication statuses. It does not
+prove the runtime #65 correction-event pipeline, live semantic adjudication
+quality, or private real-history compaction survival.
 
 Reusable existing pieces:
 
@@ -1001,9 +1012,11 @@ P4: one-command baseline suite. Implemented as `benchmark_suite.py`; current
 status records known gaps rather than treating them as failures to run the
 baseline.
 
-P5: Track D compaction-continuity runner. Start with deterministic synthetic
-correction/outcome fixtures, mocked semantic adjudication, and simulated
-visible/post-compaction/horizon-lost states.
+P5: Track D compaction-continuity runner. Implemented as the deterministic
+synthetic `benchmark_compaction_continuity.py` runner with correction/outcome
+fixtures, mocked semantic adjudication, and simulated
+visible/post-compaction/horizon-lost states. The real hook/event pipeline and
+private real-history packs remain future work.
 
 P6: local private real-history case generation. Reports must stay sanitized and
 aggregate-only by default.

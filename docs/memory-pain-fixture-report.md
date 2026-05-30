@@ -93,9 +93,9 @@ audited, provenance-linked sample.
   comparison.
 - No live semantic-model quality claim.
 - No real-history memory-pain quality claim.
-- No complete Track D compaction-continuity runner. The current
-  `compaction_continuity` fixture is a Track D seed that protects the claim
-  boundary; it does not prove correction, rejected route, accepted decision,
-  and scope narrowing all survive a real compaction pipeline.
+- No real Track D runtime compaction-continuity proof. #66 adds a deterministic
+  synthetic Track D runner, while this report's `compaction_continuity` fixture
+  remains a boundary seed; neither proves correction, rejected route, accepted
+  decision, and scope narrowing all survive a real compaction pipeline.
 - No guarantee that every future generated summary, graph node, semantic
   sidecar, or vector neighbor is source truth.
