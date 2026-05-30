@@ -10,7 +10,11 @@ from typing import Any, Callable
 
 from aippocampuslib import compact_text
 from build_concept_graph import expand_concepts
-from model_client import ChatClientConfig, chat_json
+from model_client import (
+    DEEPSEEK_PREFIX_CACHE_CONTRACT,
+    ChatClientConfig,
+    chat_json,
+)
 from registry import load_registry
 from retrieval import split_query_terms
 from search_clean_source import iter_clean_messages, score_message
@@ -103,6 +107,7 @@ def call_chat_json(
     thinking: str | None = None,
     service_name: str = "DeepSeek API",
     response_format_json: bool = True,
+    cache_contract: str | None = DEEPSEEK_PREFIX_CACHE_CONTRACT,
 ) -> dict[str, Any]:
     return chat_json(
         messages,
@@ -117,6 +122,7 @@ def call_chat_json(
             user_id=user_id,
             thinking=thinking,
             response_format_json=response_format_json,
+            cache_contract=cache_contract,
         ),
     )
 

@@ -1,8 +1,9 @@
 # Dream Task Design: From Jung's Dream Theory to Subconscious Consolidation
 
-Status: research memo with deterministic Phase 1 compensatory output plus a
-Phase 2 source-pack/adjudication substrate; awaiting cross-model validation,
-selected real-history packs, and measured recall/reflection impact.
+Status: research memo with deterministic Phase 1 compensatory output, a Phase 2
+source-pack/adjudication substrate, and a selected real-history Phase 3
+structural eval; awaiting cross-model validation, live model-backed dream
+workers, and measured user-visible recall/reflection impact.
 Anthropic Managed Agents Dreams are confirmed as an adjacent official Research
 Preview, but this memo's Jung-inspired dream tasks are an AIppocampus-specific
 design proposal.
@@ -319,6 +320,46 @@ structural substrate added by dream hypotheses. It still cannot claim live model
 behavioral lift, private real-history dream quality, user-visible reflection
 value, full-history coverage, or clean-source factual resolution without
 reopening source.
+
+### Live Dream Worker DeepSeek KV Cache Contract
+
+Current P1-P3 dream workers are deterministic, so they must not claim provider
+cache hits. The next live/model-backed dream worker must use the shared
+`model_client.ChatClientConfig(cache_contract="deepseek_prefix_v1")` path before
+it can call DeepSeek. This is a runtime contract, not an optional optimization.
+
+DeepSeek's KV cache is server-side and automatic, but the official guide says
+requests only hit when later prompts fully match previously landed cache-prefix
+units; it also exposes `usage.prompt_cache_hit_tokens` and
+`usage.prompt_cache_miss_tokens` for verification. Therefore live dream prompts
+must preserve this order:
+
+- stable dream worker contract first: role, function, truth boundary, output
+  schema, tool/source rules, and the exact dream function definitions
+- source pack payload next: selected source-pack metadata, sanitized source-ref
+  summaries, pack audit, and already adjudicated context
+- variable run directive last: current objective, sample/diversity instruction,
+  repair instruction, operator focus, and one-off evaluation prompt
+
+Do not alphabetize or generic-format the dream JSON if doing so moves variable
+fields upward. Same-prefix amplification/compensatory follow-up samples should
+run after an earlier request has completed enough to warm DeepSeek's cache,
+mirroring the existing subconscious sample-wave rule.
+
+The executable guard has three layers:
+
+- `model_client.py` rejects DeepSeek-flavored chat configs that omit
+  `cache_contract="deepseek_prefix_v1"`.
+- `tools/aippocampus/docs/check_docs_health.py` scans production script
+  `ChatClientConfig(...)` call sites and fails docs health if a new LLM caller
+  omits an explicit `cache_contract`.
+- `dream_real_history_eval.py` returns a `live_worker_contract` block so the
+  dream layer carries this boundary even while the current worker remains
+  deterministic.
+
+DeepSeek cache telemetry can be reported only from provider `usage` fields. Do
+not invent hit rates for deterministic dream evals, OpenAI-compatible fallback
+routes, or offline providers that do not return DeepSeek prefix-cache metrics.
 
 ## Dream Outputs As Reusable Inference Substrate
 

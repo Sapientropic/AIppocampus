@@ -31,6 +31,7 @@ from memory_candidate_router import (
     iter_jsonl,
     load_working_memory,
 )
+from model_client import DEEPSEEK_KV_CACHE_GUIDE_URL, DEEPSEEK_PREFIX_CACHE_CONTRACT
 from registry_store import registry_paths
 
 SCHEMA_VERSION = 1
@@ -72,6 +73,31 @@ LOW_SIGNAL_TERMS = {
     "with",
     "would",
 }
+
+
+def dream_live_worker_cache_contract() -> dict[str, Any]:
+    return {
+        "status": "required_before_live_model_worker",
+        "provider": "deepseek",
+        "cache_contract": DEEPSEEK_PREFIX_CACHE_CONTRACT,
+        "official_guide": DEEPSEEK_KV_CACHE_GUIDE_URL,
+        "message_order": [
+            "stable_dream_worker_contract",
+            "source_pack_payload",
+            "variable_run_directive",
+        ],
+        "usage_fields": ["prompt_cache_hit_tokens", "prompt_cache_miss_tokens"],
+        "runtime_notes": [
+            "DeepSeek KV cache is server-side and automatic, but only complete repeated prefixes can hit.",
+            "Future live dream workers must keep stable role/schema/function instructions before source packs, and put objective/sample/repair text at the tail.",
+            "Same-prefix follow-up samples should start after an earlier request has completed enough to warm the provider cache.",
+        ],
+        "cannot_claim": [
+            "do_not_claim_cache_hit_for_deterministic_worker",
+            "do_not_emit_private_source_text_in_cache_metrics",
+            "do_not_optimize_prompt_order_by_sorting_json_keys",
+        ],
+    }
 
 
 @dataclass(frozen=True)
@@ -659,6 +685,7 @@ def run_dream_real_history_eval(
             **comparison,
         },
         "packs": [sanitized_pack(pack) for pack in packs],
+        "live_worker_contract": dream_live_worker_cache_contract(),
         "can_claim": [
             "selected_real_history_packs_have_structural_cross_thread_source_refs",
             "deterministic_dream_hypotheses_can_be_compared_against_plain_rows",

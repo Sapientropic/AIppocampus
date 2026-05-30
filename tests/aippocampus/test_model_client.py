@@ -22,6 +22,39 @@ from redaction_fixtures import (  # noqa: E402
 
 
 class ModelClientTests(unittest.TestCase):
+    def test_deepseek_chat_requires_explicit_cache_contract(self) -> None:
+        with self.assertRaisesRegex(ValueError, "cache_contract"):
+            model_client.chat_json(
+                [{"role": "user", "content": "{}"}],
+                model_client.ChatClientConfig(
+                    api_key="test",
+                    model="deepseek-v4-flash",
+                    base_url="https://example.invalid",
+                ),
+            )
+
+    def test_deepseek_cache_metrics_are_available_from_response_usage(self) -> None:
+        response = {
+            "usage": {
+                "prompt_cache_hit_tokens": 90,
+                "prompt_cache_miss_tokens": 10,
+            }
+        }
+        metrics = model_client.cache_metrics_from_response(
+            response,
+            model_client.ChatClientConfig(
+                api_key="test",
+                model="deepseek-v4-flash",
+                base_url="https://example.invalid",
+                cache_contract=model_client.DEEPSEEK_PREFIX_CACHE_CONTRACT,
+            ),
+        )
+
+        self.assertEqual(metrics["kind"], "deepseek_prefix")
+        self.assertEqual(metrics["hit_tokens"], 90)
+        self.assertEqual(metrics["miss_tokens"], 10)
+        self.assertEqual(metrics["hit_rate"], 0.9)
+
     def test_chat_json_sanitizes_payload_and_omits_unset_max_tokens(self) -> None:
         captured: dict[str, object] = {}
 
@@ -54,6 +87,7 @@ class ModelClientTests(unittest.TestCase):
                     api_key="test",
                     model="deepseek-v4-flash",
                     base_url="https://example.invalid",
+                    cache_contract=model_client.DEEPSEEK_PREFIX_CACHE_CONTRACT,
                     max_tokens=None,
                     timeout=7,
                     temperature=0.2,
@@ -76,6 +110,7 @@ class ModelClientTests(unittest.TestCase):
                     api_key="test",
                     model="deepseek-v4-flash",
                     base_url="http://api.example.invalid",
+                    cache_contract=model_client.DEEPSEEK_PREFIX_CACHE_CONTRACT,
                 ),
             )
 
@@ -136,6 +171,7 @@ class ModelClientTests(unittest.TestCase):
                     api_key="test",
                     model="deepseek-v4-flash",
                     base_url="https://example.invalid",
+                    cache_contract=model_client.DEEPSEEK_PREFIX_CACHE_CONTRACT,
                     user_id="aip-warm-abc_123",
                 ),
             )
@@ -167,6 +203,7 @@ class ModelClientTests(unittest.TestCase):
                     api_key="test",
                     model="deepseek-v4-flash",
                     base_url="https://example.invalid",
+                    cache_contract=model_client.DEEPSEEK_PREFIX_CACHE_CONTRACT,
                     thinking="disabled",
                 ),
             )
@@ -199,6 +236,7 @@ class ModelClientTests(unittest.TestCase):
                     api_key="test",
                     model="deepseek-v4-flash",
                     base_url="https://example.invalid",
+                    cache_contract=model_client.DEEPSEEK_PREFIX_CACHE_CONTRACT,
                     temperature=0.2,
                     thinking="enabled",
                 ),
@@ -215,6 +253,7 @@ class ModelClientTests(unittest.TestCase):
                     api_key="test",
                     model="deepseek-v4-flash",
                     base_url="https://example.invalid",
+                    cache_contract=model_client.DEEPSEEK_PREFIX_CACHE_CONTRACT,
                     thinking="fast",
                 ),
             )

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import re
 import sys
@@ -121,6 +122,12 @@ REQUIRED_DREAM_PHASE1_CONTRACT_TERMS = {
     "tests/aippocampus/test_compensatory_dream.py": (
         "dream task design missing executable contract test pointer"
     ),
+    "### Live Dream Worker DeepSeek KV Cache Contract": (
+        "dream task design missing live DeepSeek KV cache contract"
+    ),
+    "deepseek_prefix_v1": "dream task design missing explicit DeepSeek cache contract id",
+    "prompt_cache_hit_tokens": "dream task design missing DeepSeek cache hit telemetry field",
+    "prompt_cache_miss_tokens": "dream task design missing DeepSeek cache miss telemetry field",
 }
 
 REQUIRED_BENCHMARK_EVIDENCE_MAP_TERMS = {
@@ -143,6 +150,7 @@ REQUIRED_BENCHMARK_EVIDENCE_MAP_TERMS = {
 }
 
 BENCHMARK_EVIDENCE_EXCLUDED_SCRIPT_NAMES = {"_paths.py"}
+LLM_CALL_CONTRACT_EXCLUDED_SCRIPT_NAMES = {"model_client.py"}
 
 REQUIRED_PUBLIC_READINESS_DOCS = [
     "CONTRIBUTING.md",
@@ -289,6 +297,38 @@ def dream_phase1_contract_issues(repo_root: Path) -> list[str]:
     return issues
 
 
+def llm_call_contract_issues(repo_root: Path) -> list[str]:
+    issues: list[str] = []
+    scripts_dir = repo_root / "skills" / "aippocampus" / "scripts"
+    if not scripts_dir.exists():
+        return issues
+    for path in sorted(scripts_dir.rglob("*.py")):
+        if path.name in LLM_CALL_CONTRACT_EXCLUDED_SCRIPT_NAMES:
+            continue
+        rel = path.relative_to(repo_root).as_posix()
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=rel)
+        except SyntaxError as exc:
+            issues.append(f"cannot parse Python script for LLM contract scan: {rel}:{exc.lineno}")
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            is_chat_config = (
+                isinstance(func, ast.Name)
+                and func.id == "ChatClientConfig"
+                or isinstance(func, ast.Attribute)
+                and func.attr == "ChatClientConfig"
+            )
+            if not is_chat_config:
+                continue
+            keyword_names = {keyword.arg for keyword in node.keywords if keyword.arg}
+            if "cache_contract" not in keyword_names:
+                issues.append(f"LLM ChatClientConfig missing explicit cache_contract: {rel}:{node.lineno}")
+    return issues
+
+
 def benchmark_evidence_entrypoints(repo_root: Path) -> list[str]:
     """Return benchmark/smoke entrypoints that must stay discoverable from the docs map."""
 
@@ -420,6 +460,7 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
 
     issues.extend(runtime_script_map_issues(repo_root))
     issues.extend(dream_phase1_contract_issues(repo_root))
+    issues.extend(llm_call_contract_issues(repo_root))
     issues.extend(benchmark_evidence_map_issues(repo_root))
 
     gitignore = repo_root / ".gitignore"

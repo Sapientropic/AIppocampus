@@ -153,6 +153,27 @@ class DreamRealHistoryEvalTests(unittest.TestCase):
         self.assertNotIn("question_text", payload["packs"][0])
         self.assertEqual(payload["packs"][0]["themes"], ["continuity"])
 
+    def test_eval_exposes_deepseek_cache_contract_for_future_live_worker(self) -> None:
+        job_rows, working_rows = fixture_rows()
+
+        payload = dream_eval.run_dream_real_history_eval(
+            job_rows=job_rows,
+            working_memory_rows=working_rows,
+        )
+
+        contract = payload["live_worker_contract"]
+        self.assertEqual(contract["status"], "required_before_live_model_worker")
+        self.assertEqual(contract["provider"], "deepseek")
+        self.assertEqual(contract["cache_contract"], "deepseek_prefix_v1")
+        self.assertEqual(
+            contract["message_order"],
+            ["stable_dream_worker_contract", "source_pack_payload", "variable_run_directive"],
+        )
+        self.assertIn("prompt_cache_hit_tokens", contract["usage_fields"])
+        self.assertIn("prompt_cache_miss_tokens", contract["usage_fields"])
+        self.assertIn("https://api-docs.deepseek.com/zh-cn/guides/kv_cache", contract["official_guide"])
+        self.assertIn("do_not_claim_cache_hit_for_deterministic_worker", contract["cannot_claim"])
+
 
 if __name__ == "__main__":
     unittest.main()

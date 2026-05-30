@@ -82,6 +82,41 @@ class DocsHealthTests(unittest.TestCase):
 
         self.assertEqual(result, [])
 
+    def test_llm_call_contract_covers_current_script_configs(self) -> None:
+        repo_root = docs_health.find_repo_root(ROOT)
+        self.assertIsNotNone(repo_root)
+
+        result = docs_health.llm_call_contract_issues(repo_root)
+
+        self.assertEqual(result, [])
+
+    def test_llm_call_contract_reports_missing_cache_contract_keyword(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            scripts = repo / "skills" / "aippocampus" / "scripts"
+            scripts.mkdir(parents=True)
+            (scripts / "new_worker.py").write_text(
+                "\n".join(
+                    [
+                        "from model_client import ChatClientConfig",
+                        "CONFIG = ChatClientConfig(",
+                        "    api_key='x',",
+                        "    model='deepseek-v4-flash',",
+                        "    base_url='https://api.deepseek.com',",
+                        ")",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            issues = docs_health.llm_call_contract_issues(repo)
+
+        self.assertIn(
+            "LLM ChatClientConfig missing explicit cache_contract: "
+            "skills/aippocampus/scripts/new_worker.py:2",
+            issues,
+        )
+
     def test_benchmark_evidence_map_covers_current_entrypoints(self) -> None:
         repo_root = docs_health.find_repo_root(ROOT)
         self.assertIsNotNone(repo_root)

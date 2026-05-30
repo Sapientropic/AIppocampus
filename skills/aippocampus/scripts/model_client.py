@@ -10,7 +10,16 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any
 
-from aippocampuslib import sanitize_external_model_payload, validate_private_credential_transport
+from aippocampuslib import (
+    deepseek_cache_metrics_from_usage,
+    sanitize_external_model_payload,
+    validate_private_credential_transport,
+)
+
+DEEPSEEK_PREFIX_CACHE_CONTRACT = "deepseek_prefix_v1"
+NO_PROVIDER_CACHE_CONTRACT = "none"
+DEEPSEEK_KV_CACHE_GUIDE_URL = "https://api-docs.deepseek.com/zh-cn/guides/kv_cache"
+VALID_CACHE_CONTRACTS = {DEEPSEEK_PREFIX_CACHE_CONTRACT, NO_PROVIDER_CACHE_CONTRACT}
 
 
 @dataclass(frozen=True)
@@ -25,6 +34,7 @@ class ChatClientConfig:
     user_id: str | None = None
     thinking: str | None = None
     response_format_json: bool = True
+    cache_contract: str | None = None
 
 
 def _chat_completions_url(config: ChatClientConfig) -> str:
@@ -34,7 +44,43 @@ def _chat_completions_url(config: ChatClientConfig) -> str:
     return config.base_url.rstrip("/") + "/chat/completions"
 
 
+def is_deepseek_config(config: ChatClientConfig) -> bool:
+    model = config.model.strip().casefold()
+    service_name = config.service_name.strip().casefold()
+    base_url = config.base_url.strip().casefold()
+    return model.startswith("deepseek") or "deepseek" in service_name or "deepseek" in base_url
+
+
+def validate_cache_contract(config: ChatClientConfig) -> str | None:
+    contract = config.cache_contract.strip() if config.cache_contract else None
+    if contract is not None and contract not in VALID_CACHE_CONTRACTS:
+        raise ValueError(
+            f"cache_contract must be one of {sorted(VALID_CACHE_CONTRACTS)!r}; got {contract!r}"
+        )
+    if is_deepseek_config(config) and contract != DEEPSEEK_PREFIX_CACHE_CONTRACT:
+        raise ValueError(
+            "DeepSeek chat calls must set "
+            f"cache_contract={DEEPSEEK_PREFIX_CACHE_CONTRACT!r}. "
+            "DeepSeek's KV cache is automatic, but AIppocampus prompt builders "
+            "must preserve stable-prefix ordering and usage telemetry; see "
+            f"{DEEPSEEK_KV_CACHE_GUIDE_URL}."
+        )
+    return contract
+
+
+def cache_metrics_from_response(
+    response: dict[str, Any], config: ChatClientConfig
+) -> dict[str, Any]:
+    contract = validate_cache_contract(config)
+    if contract == DEEPSEEK_PREFIX_CACHE_CONTRACT:
+        metrics = deepseek_cache_metrics_from_usage(response.get("usage") or {})
+        metrics["kind"] = "deepseek_prefix"
+        return metrics
+    return {"available": False, "kind": NO_PROVIDER_CACHE_CONTRACT}
+
+
 def chat_json(messages: list[dict[str, str]], config: ChatClientConfig) -> dict[str, Any]:
+    validate_cache_contract(config)
     url = _chat_completions_url(config)
     thinking = ""
     if config.thinking:

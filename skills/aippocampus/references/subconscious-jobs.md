@@ -212,6 +212,13 @@ profile/schema/instructions and repeated scan context belong before incremental
 or per-run questions. Do not "clean up" the JSON key order alphabetically; for
 DeepSeek cache behavior, order is part of the runtime contract.
 
+All production `ChatClientConfig(...)` call sites must now pass an explicit
+`cache_contract`: `deepseek_prefix_v1` for DeepSeek-compatible routes and
+`none` for providers where AIppocampus must not claim DeepSeek prefix-cache
+telemetry. `model_client.py` rejects DeepSeek-flavored configs without the
+DeepSeek contract, and docs health scans scripts for missing keywords so newly
+added LLM callers cannot silently bypass this billing guard.
+
 ## Jobs
 
 ### `question_extraction`

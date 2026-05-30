@@ -34,7 +34,7 @@ from deepseek_model_routing import (
     route_payload_with_effective_values,
     route_service_name,
 )
-from model_client import ChatClientConfig, chat_json
+from model_client import DEEPSEEK_PREFIX_CACHE_CONTRACT, ChatClientConfig, chat_json
 from registry import registry_paths, unique_preserve
 
 PROMPT_VERSION = "aippocampus-subconscious-v0"
@@ -211,6 +211,7 @@ def call_deepseek(
             temperature=0,
             service_name=service_name,
             response_format_json=response_format_json,
+            cache_contract=DEEPSEEK_PREFIX_CACHE_CONTRACT,
         ),
     )
 

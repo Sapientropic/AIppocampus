@@ -32,6 +32,7 @@ from deepseek_model_routing import (
     route_payload_with_effective_values,
     route_service_name,
 )
+from model_client import DEEPSEEK_PREFIX_CACHE_CONTRACT, NO_PROVIDER_CACHE_CONTRACT
 from subconscious_deterministic_jobs import (
     DETERMINISTIC_QUESTION_TRACKING_RUNNER,
     run_question_tracking_job,
@@ -320,6 +321,11 @@ def run_one_job(
             "service_name": route_service_name(route),
             "response_format_json": bool(
                 capabilities.supports_json_response if capabilities else True
+            ),
+            "cache_contract": (
+                DEEPSEEK_PREFIX_CACHE_CONTRACT
+                if (capabilities and capabilities.cache_metrics_kind == "deepseek_prefix")
+                else NO_PROVIDER_CACHE_CONTRACT
             ),
         }
         if chat_fn is call_chat_json
