@@ -264,7 +264,7 @@ handoff context.
      `journey_waypoint` outputs when the job circuit exists, then evaluate on
      time-sliced private history before surfacing Journey hints in AAR.
 
-17. Compensatory dream Phase 1 plus P2 source-pack substrate
+17. Compensatory dream Phase 1 plus P2/P3 substrate
    - Source: `docs/research/dream-task-design.md`,
      `docs/research/source-as-world.md`, and
      `docs/architecture/cognitive-runtime-architecture.md`.
@@ -290,10 +290,19 @@ handoff context.
      holding-queue plus background-adjudication substrate, not proof of live
      dream quality, prospective analysis, validated amplification output, or
      active imagination.
-   - Next hardening: run selected real-history packs through a small
-     compensatory/amplification worker, then measure whether adjudicated
-     dream-hypothesis rows improve recall/reflection over plain
-     question/link/Journey/working-memory rows.
+   - The P3 structural eval is implemented in
+     `skills/aippocampus/scripts/dream_real_history_eval.py`: it selects
+     source-backed real-history packs from materialized question/frontier/link
+     and working-memory rows, runs a deterministic compensatory/amplification
+     worker, adjudicates dream hypotheses, and compares dream-augmented
+     substrate against plain rows. A 2026-05-30 local smoke over the current
+     registry selected 4 packs and observed structural lift
+     (`source_thread_coverage_delta=2.5`, `reflection_ready_delta=64`,
+     `bridge_claim_coverage_delta=1.0`) with sanitized aggregate output only.
+   - Next hardening: replace the deterministic toy worker with a bounded
+     model-backed amplification worker over the selected packs, then manually
+     source-review a small sample before claiming private real-history dream
+     quality or user-visible recall/reflection lift.
 
 18. Reflection-space topology and feedback MVP
    - Source: `docs/research/reflection-space.md`,
@@ -320,9 +329,9 @@ handoff context.
 - A cloud service dependency.
 - Phase 3 `theme_emergence` or predictive replay before Phase 2 produces stable
   links.
-- Prospective or active-imagination dream work before P2 source packs show
-  source-backed value. Amplification may proceed only as a pack-backed
-  background worker with structural adjudication and measured recall/reflection
-  impact.
+- Prospective or active-imagination dream work before selected pack-backed
+  amplification has source-review evidence. Amplification may proceed only as a
+  pack-backed background worker with structural adjudication and measured
+  recall/reflection impact.
 - Any change that treats summaries, findings, or vector neighbors as truth
   without clean-source refs.

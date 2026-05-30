@@ -10,6 +10,7 @@ TEST_ROOT = REPO_ROOT / "tests" / "aippocampus"
 
 SLOW_MODULES = {
     "tests.aippocampus.test_aippocampus_prompt_hook",
+    "tests.aippocampus.test_dream_real_history_eval",
     "tests.aippocampus.test_life_wide_registry_smoke",
     "tests.aippocampus.test_object_storage_sync",
     "tests.aippocampus.test_onboard_codex",

@@ -142,6 +142,7 @@ Examples:
 - `journey_tracking`
 - `compensatory_dream`
 - `dream_input_pack`
+- `dream_real_history_eval`
 - `trigger_mining`
 - `decision_evolution`
 
@@ -330,6 +331,15 @@ threads. Ambient residue can add themes and negative contexts, but cannot stand
 in for clean source. The pack advertises background dream functions such as
 compensatory analysis and amplification without claiming those workers have
 already produced validated dream quality.
+
+`dream_real_history_eval.py` adds a selected real-history structural eval over
+the same boundary. It selects cross-thread packs from materialized
+question/frontier/question-link/working-memory rows, runs a tiny deterministic
+compensatory/amplification worker, adjudicates the outputs, and measures the
+delta versus plain rows for prompt hit-rate, source-thread coverage,
+reflection-ready rows, and bridge-claim coverage. Its output is sanitized
+aggregate evidence; it does not prove private-history dream quality or live
+model/user-visible lift.
 
 Background-adjudicated dream hypotheses can project onto the existing
 working-memory substrate for recall, ambient, and reflection consumers, but

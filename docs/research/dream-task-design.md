@@ -12,7 +12,10 @@ adjudication-only compensatory candidates from source-backed single-thread
 extraction rows; `skills/aippocampus/scripts/dream_input_pack.py` builds
 cross-thread source packs from question links, Journey rows, and ambient
 residue; `skills/aippocampus/scripts/dream_working_memory.py` provides the
-background adjudication guard before dream hypotheses can feed working memory.
+background adjudication guard before dream hypotheses can feed working memory;
+`skills/aippocampus/scripts/dream_real_history_eval.py` runs a selected
+real-history structural eval against plain question/frontier/Journey/working
+memory surfaces.
 Related: [affect-side-channel.md](affect-side-channel.md),
 [compact-activation-signals.md](compact-activation-signals.md),
 [correction-reconsolidation.md](correction-reconsolidation.md).
@@ -279,6 +282,43 @@ source refs.
 
 The executable contract lives in
 `tests/aippocampus/test_dream_input_pack.py`.
+
+### Implemented Phase 3 Structural Eval
+
+`skills/aippocampus/scripts/dream_real_history_eval.py` is the first selected
+real-history evaluation loop. It is intentionally not a private-history dream
+quality benchmark. It does three narrow things:
+
+- Selects source-backed cross-thread resonance packs from currently
+  materialized `question_candidate`, `frontier_marker`, `question_link`, and
+  `aippocampus_working_memory` rows.
+- Runs a tiny deterministic worker that emits one compensatory and one
+  amplification candidate per ready pack, then sends them through the background
+  adjudication guard.
+- Compares plain source rows against the augmented surface that includes
+  adjudicated `candidate_type="dream_hypothesis"` working-memory rows.
+
+The current metric is structural lift, not user-visible usefulness:
+
+- prompt hit-rate delta
+- source-thread coverage delta
+- reflection-ready row delta
+- bridge-claim coverage delta
+
+The runner returns `claim_level="selected_real_history_structural_eval"` and
+`private_text_emitted=false`. Public/sanitized output omits raw source text,
+raw source refs, and source thread ids; it keeps aggregate counts, selected
+resonance terms, seed kinds, and claim boundaries. A 2026-05-30 local smoke over
+the current registry observed 697 subconscious job rows, 63 working-memory rows,
+4 selected packs, 8 adjudicated dream working-memory rows, unchanged prompt hit
+rate at 1.0, `source_thread_coverage_delta=2.5`,
+`reflection_ready_delta=64`, and `bridge_claim_coverage_delta=1.0`.
+
+This can claim that the pipeline can select real-history packs and measure the
+structural substrate added by dream hypotheses. It still cannot claim live model
+behavioral lift, private real-history dream quality, user-visible reflection
+value, full-history coverage, or clean-source factual resolution without
+reopening source.
 
 ## Dream Outputs As Reusable Inference Substrate
 

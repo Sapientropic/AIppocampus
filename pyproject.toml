@@ -69,6 +69,7 @@ files = [
     "skills/aippocampus/scripts/correction_reconsolidation.py",
     "skills/aippocampus/scripts/deepseek_model_routing.py",
     "skills/aippocampus/scripts/dream_input_pack.py",
+    "skills/aippocampus/scripts/dream_real_history_eval.py",
     "skills/aippocampus/scripts/dream_working_memory.py",
     "skills/aippocampus/scripts/encrypted_sync_bundle.py",
     "skills/aippocampus/scripts/encrypted_sync_crypto.py",
