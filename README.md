@@ -27,6 +27,38 @@ time a thread, device, model, or project changes.
 The origin essay is [未干的地图](docs/未干的地图.md). English readers can start with
 [The Unfinished Map](docs/the-unfinished-map.md).
 
+## Quick Start
+
+This path checks a fresh clone without copying private memory data or enabling
+hooks:
+
+```sh
+git clone https://github.com/Sapientropic/AIppocampus.git
+cd AIppocampus
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e .
+python tools/aippocampus/docs/check_docs_health.py --json
+```
+
+A successful repository check prints JSON with `"ok": true`. On Windows
+PowerShell, activate the environment with `.venv\Scripts\Activate.ps1`.
+
+If you already have local Codex history and want a runtime health check, run:
+
+```sh
+aippocampus health --cwd "$PWD"
+```
+
+The health command reports index, clean-source, segment, checkpoint, and
+graphify-corpus freshness. If it recommends maintenance on a new machine, that
+usually means there is no registered local history yet; start with the full
+[install guide](docs/guides/install-guide.md) or the public-safe
+[demo scenarios](docs/guides/demo-scenarios.md). Do not publish or commit raw
+rollouts, registry exports, `.aippocampus/` output, API keys, cookies, or sync
+bundles while following the quick path.
+
 ## What It Is
 
 AIppocampus is the canonical public home for an external hippocampus for agents:
@@ -75,6 +107,9 @@ recognizable again.
 - Supported public surface:
   [Public API](docs/guides/public-api.md) and
   [Public Core Boundary](docs/guides/public-core-boundary.md).
+- Security and release hygiene:
+  [SECURITY.md](SECURITY.md) and
+  [Release Checklist](docs/guides/release-checklist.md).
 - Full documentation map: [docs/README.md](docs/README.md).
 
 ## Reading For The Soul
@@ -169,11 +204,12 @@ From the repository root:
 ```sh
 python -m venv .venv
 . .venv/bin/activate
-python -m pip install --upgrade pip ruff mypy
+python -m pip install --upgrade pip ruff mypy coverage
 python tools/aippocampus/docs/check_docs_health.py --json
 python -m ruff check skills plugins tests tools benchmarks benchmark_corpus
 python -m mypy
 python tools/aippocampus/run_tests.py --tier fast
+python tools/aippocampus/run_coverage.py --tier fast
 ```
 
 Use the full tier before making a repository-health or public-readiness claim:

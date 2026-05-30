@@ -24,7 +24,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install checks
-        run: python -m pip install ruff mypy
+        run: python -m pip install ruff mypy coverage
 
       - name: Ruff
         run: ruff check skills plugins tests tools benchmarks benchmark_corpus
@@ -35,8 +35,19 @@ jobs:
       - name: Docs health
         run: python tools/aippocampus/docs/check_docs_health.py --json
 
-      - name: Fast test tier
-        run: python tools/aippocampus/run_tests.py --tier fast
+      - name: Fast test tier with coverage
+        run: |
+          python -m coverage run --branch --source=skills/aippocampus/scripts,tools/aippocampus,plugins/aippocampus tools/aippocampus/run_tests.py --tier fast
+          python -m coverage report -m
+          python -m coverage xml -o coverage.xml
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.python-version }}
+          path: coverage.xml
+          if-no-files-found: ignore
 
       - name: Compile Python files
         run: python -m compileall -q skills plugins tests tools benchmarks benchmark_corpus

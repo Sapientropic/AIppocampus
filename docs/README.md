@@ -49,6 +49,7 @@ material.
 - [`public-core-boundary.md`](guides/public-core-boundary.md) - Apache-2.0 public-core license, adapter, schema, third-party asset, and relicensing boundary.
 - [`demo-scenarios.md`](guides/demo-scenarios.md) - public-safe demo flows using synthetic memory data.
 - [`privacy-security-checklist.md`](guides/privacy-security-checklist.md) - public-readiness privacy and security checklist.
+- [`release-checklist.md`](guides/release-checklist.md) - repeatable release, tag, coverage, and public-boundary gates.
 - [`object-storage-providers.md`](guides/object-storage-providers.md) - S3/R2/GCS XML provider setup and object-storage pitfalls.
 
 ### Evidence
