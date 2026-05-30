@@ -62,6 +62,17 @@ The installable runtime is still script-first: public and internal runtime code
 lives under `skills/aippocampus/scripts/` and must keep direct script invocation
 working after the skill is copied into Codex home.
 
+Runtime helpers may move under `skills/aippocampus/scripts/aippocampus_runtime/`
+when a narrow ownership boundary is clear. Keep the old top-level script/import
+name as a thin compatibility shim until the public stability boundary says it
+can be removed.
+
+Current package pilots:
+
+| Package | Top-level compatibility shims | Owner boundary |
+|---|---|---|
+| `aippocampus_runtime/warm_ambient/` | `warm_ambient_prompting.py`, `warm_ambient_scout_profiles.py`, `warm_ambient_source_validation.py` | Prompt rendering, scout taxonomy, and source-ref validation for warm ambient recall. |
+
 Repo-owned docs, smoke, and benchmark tools may import runtime helpers through
 `tools/aippocampus/repo_paths.py`. The local `_paths.py` files in docs, smoke,
 and benchmark folders are compatibility wrappers around that single helper, not
@@ -207,7 +218,7 @@ back to clean source. External-model features must stay optional.
 
 | Script or group | Purpose | Invocation route | Key dependencies | Status |
 |---|---|---|---|---|
-| `warm_ambient_recall.py`, `warm_ambient_prompting.py`, `warm_ambient_scout_profiles.py`, `warm_ambient_source_validation.py` | Multi-scout ambient recall, prompting, profile taxonomy, and validation. | Optional warm recall jobs and smokes. | Registry, clean source, semantic/model routes, privacy filters. | Runtime internal |
+| `warm_ambient_recall.py`, `aippocampus_runtime/warm_ambient/`, and `warm_ambient_*` compatibility shims | Multi-scout ambient recall, prompting, profile taxonomy, and validation. | Optional warm recall jobs and smokes. | Registry, clean source, semantic/model routes, privacy filters. | Runtime internal |
 | `ambient_warm_scheduler.py`, `ambient_thread_cache.py`, `ambient_recall_policy.py`, `active_recall.py`, `ambient_recall_cards.py` | Scheduling, cache, anti-nag policy overlay, active recall cards, and thread-level ambient state. | Hook/maintenance/warm recall paths. | Prompt hook budget, thread cache, source-backed card rendering, hash-only dismissal/surface events. | Runtime internal |
 
 Warm ambient output should remain quiet and advisory unless a prompt explicitly
