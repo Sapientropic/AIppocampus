@@ -22,6 +22,7 @@ from aippocampuslib import (
     resolve_artifact_path,
 )
 from conversation_sources import PROVIDER_CHOICES, create_conversation_provider
+from privacy_projection import LOCAL_PATH_REDACTION, redact_private_paths
 from search_clean_source import iter_clean_messages, search_clean_source
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -54,13 +55,18 @@ TOOLS: list[dict[str, Any]] = [
             "cwd": {"type": "string"},
             "max": {"type": "integer", "minimum": 1, "maximum": 25},
             "clean_source_dir": {"type": "string"},
+            "include_private_paths": {"type": "boolean"},
         },
         ["query"],
     ),
     tool_schema(
         "latest_reply",
         "Return the latest assistant final answer for a workspace rollout.",
-        {"cwd": {"type": "string"}, "rollout": {"type": "string"}},
+        {
+            "cwd": {"type": "string"},
+            "rollout": {"type": "string"},
+            "include_private_paths": {"type": "boolean"},
+        },
     ),
     tool_schema(
         "get_turn_context",
@@ -71,6 +77,7 @@ TOOLS: list[dict[str, Any]] = [
             "message_id": {"type": "string"},
             "turn_index": {"type": "integer"},
             "clean_source_dir": {"type": "string"},
+            "include_private_paths": {"type": "boolean"},
         },
     ),
     tool_schema(
@@ -79,6 +86,7 @@ TOOLS: list[dict[str, Any]] = [
         {
             "registry_dir": {"type": "string"},
             "max": {"type": "integer", "minimum": 1, "maximum": 100},
+            "include_private_paths": {"type": "boolean"},
         },
     ),
     tool_schema(
@@ -89,6 +97,7 @@ TOOLS: list[dict[str, Any]] = [
             "registry_dir": {"type": "string"},
             "build_index": {"type": "boolean"},
             "provider": {"type": "string", "enum": list(PROVIDER_CHOICES)},
+            "include_private_paths": {"type": "boolean"},
         },
     ),
     tool_schema(
@@ -100,12 +109,13 @@ TOOLS: list[dict[str, Any]] = [
             "object_store_url": {"type": "string"},
             "object_prefix": {"type": "string"},
             "token_env": {"type": "string"},
+            "include_private_paths": {"type": "boolean"},
         },
     ),
     tool_schema(
         "memory_health",
         "Run the local AIppocampus health check for a workspace.",
-        {"cwd": {"type": "string"}},
+        {"cwd": {"type": "string"}, "include_private_paths": {"type": "boolean"}},
     ),
 ]
 
@@ -182,17 +192,35 @@ def text_result(payload: Any, *, is_error: bool = False) -> dict[str, Any]:
     }
 
 
-def tool_error(code: str, message: str, **details: Any) -> dict[str, Any]:
+def public_payload(arguments: dict[str, Any], payload: Any) -> Any:
+    if arguments.get("include_private_paths"):
+        return payload
+    return redact_private_paths(payload)
+
+
+def tool_error(
+    code: str,
+    message: str,
+    *,
+    arguments: dict[str, Any] | None = None,
+    **details: Any,
+) -> dict[str, Any]:
     error: dict[str, Any] = {"code": code, "message": message}
     if details:
         error["details"] = details
-    return text_result({"ok": False, "error": error}, is_error=True)
+    payload: Any = {"ok": False, "error": error}
+    if arguments is not None:
+        payload = public_payload(arguments, payload)
+    return text_result(payload, is_error=True)
 
 
-def clean_source_unavailable(source_dir: Path, required: list[str]) -> dict[str, Any]:
+def clean_source_unavailable(
+    source_dir: Path, required: list[str], arguments: dict[str, Any]
+) -> dict[str, Any]:
     return tool_error(
         "clean_source_unavailable",
         "Clean-source artifacts are unavailable for the requested workspace or clean_source_dir.",
+        arguments=arguments,
         clean_source_dir=str(source_dir),
         missing_files=missing_files(source_dir, required),
         required_files=required,
@@ -202,12 +230,14 @@ def clean_source_unavailable(source_dir: Path, required: list[str]) -> dict[str,
 def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
     query = str(arguments.get("query") or "").strip()
     if not query:
-        return tool_error("missing_query", "search_memory requires a non-empty query.")
+        return tool_error(
+            "missing_query", "search_memory requires a non-empty query.", arguments=arguments
+        )
     limit = int_range(arguments.get("max"), default=10, minimum=1, maximum=25)
     source_dir = clean_source_dir_for(arguments)
     required = ["messages.jsonl"]
     if missing_files(source_dir, required):
-        return clean_source_unavailable(source_dir, required)
+        return clean_source_unavailable(source_dir, required, arguments)
     result = search_clean_source(
         cwd_arg(arguments),
         [query],
@@ -215,7 +245,7 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
         limit=limit,
     )
     result["limit"] = limit
-    return text_result(result)
+    return text_result(public_payload(arguments, result))
 
 
 def call_latest_reply(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -230,15 +260,18 @@ def call_latest_reply(arguments: dict[str, Any]) -> dict[str, Any]:
     ]
     if final_messages and not arguments.get("rollout"):
         return text_result(
-            {
-                "status": "clean_source_final_answer",
-                "source": str(source_dir / "messages.jsonl"),
-                "message": final_messages[-1],
-                "message_count": len(messages),
-            }
+            public_payload(
+                arguments,
+                {
+                    "status": "clean_source_final_answer",
+                    "source": str(source_dir / "messages.jsonl"),
+                    "message": final_messages[-1],
+                    "message_count": len(messages),
+                },
+            )
         )
     rollout = Path(str(arguments["rollout"])) if arguments.get("rollout") else locate_rollout(cwd)
-    return text_result(latest_reply_module.latest_reply(rollout))
+    return text_result(public_payload(arguments, latest_reply_module.latest_reply(rollout)))
 
 
 def call_get_turn_context(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -250,12 +283,13 @@ def call_get_turn_context(arguments: dict[str, Any]) -> dict[str, Any]:
         return tool_error(
             "missing_turn_selector",
             "get_turn_context requires turn_id, message_id, or turn_index.",
+            arguments=arguments,
             required_any=["turn_id", "message_id", "turn_index"],
         )
 
     required = ["messages.jsonl", "turns.jsonl"]
     if missing_files(source_dir, required):
-        return clean_source_unavailable(source_dir, required)
+        return clean_source_unavailable(source_dir, required, arguments)
 
     messages = iter_clean_messages(source_dir / "messages.jsonl")
     turns = read_jsonl(source_dir / "turns.jsonl")
@@ -276,6 +310,7 @@ def call_get_turn_context(arguments: dict[str, Any]) -> dict[str, Any]:
             return tool_error(
                 "message_not_found",
                 "No clean-source message matched the requested message_id.",
+                arguments=arguments,
                 message_id=str(message_id),
                 source=str(source_dir / "messages.jsonl"),
             )
@@ -292,6 +327,7 @@ def call_get_turn_context(arguments: dict[str, Any]) -> dict[str, Any]:
         return tool_error(
             "turn_not_found",
             "No clean-source turn matched the requested identifier.",
+            arguments=arguments,
             turn_id=str(turn_id) if turn_id is not None else None,
             turn_index=turn_index,
         )
@@ -308,11 +344,14 @@ def call_get_turn_context(arguments: dict[str, Any]) -> dict[str, Any]:
         key=lambda item: int(item.get("clean_ordinal") or item.get("source_line") or 0)
     )
     return text_result(
-        {
-            "source": str(source_dir),
-            "turn": selected_turn,
-            "messages": selected_messages,
-        }
+        public_payload(
+            arguments,
+            {
+                "source": str(source_dir),
+                "turn": selected_turn,
+                "messages": selected_messages,
+            },
+        )
     )
 
 
@@ -325,7 +364,9 @@ def call_list_threads(arguments: dict[str, Any]) -> dict[str, Any]:
         return text_result(
             {
                 "status": "registry_missing",
-                "registry": str(json_path),
+                "registry": str(json_path)
+                if arguments.get("include_private_paths")
+                else LOCAL_PATH_REDACTION,
                 "threads": [],
                 "count": 0,
             }
@@ -334,12 +375,15 @@ def call_list_threads(arguments: dict[str, Any]) -> dict[str, Any]:
     limit = int(arguments.get("max") or len(payload.get("threads") or []) or 0)
     threads = list(payload.get("threads") or [])[:limit]
     return text_result(
-        {
-            "status": "ok",
-            "registry": str(json_path),
-            "threads": threads,
-            "count": len(threads),
-        }
+        public_payload(
+            arguments,
+            {
+                "status": "ok",
+                "registry": str(json_path),
+                "threads": threads,
+                "count": len(threads),
+            },
+        )
     )
 
 
@@ -354,6 +398,7 @@ def call_register_thread(arguments: dict[str, Any]) -> dict[str, Any]:
         return tool_error(
             "provider_not_available",
             "The requested conversation provider is not available for register_thread.",
+            arguments=arguments,
             provider=provider_name,
             supported=list(PROVIDER_CHOICES),
         )
@@ -363,7 +408,7 @@ def call_register_thread(arguments: dict[str, Any]) -> dict[str, Any]:
         build_index=bool(arguments.get("build_index")),
         provider=provider,
     )
-    return text_result(result)
+    return text_result(public_payload(arguments, result))
 
 
 def call_sync_status(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -371,40 +416,48 @@ def call_sync_status(arguments: dict[str, Any]) -> dict[str, Any]:
     if arguments.get("object_store_url"):
         token_env = str(arguments.get("token_env") or "AIPPOCAMPUS_OBJECT_STORE_TOKEN")
         return text_result(
-            sync_object_storage.status_object_storage_bundle(
-                str(arguments["object_store_url"]),
-                prefix=str(arguments.get("object_prefix") or sync_object_storage.DEFAULT_PREFIX),
-                token=os.environ.get(token_env),
+            public_payload(
+                arguments,
+                sync_object_storage.status_object_storage_bundle(
+                    str(arguments["object_store_url"]),
+                    prefix=str(arguments.get("object_prefix") or sync_object_storage.DEFAULT_PREFIX),
+                    token=os.environ.get(token_env),
+                ),
             )
         )
     if arguments.get("sync_dir"):
-        return text_result(sync_bundle.status_sync_bundle(str(arguments["sync_dir"])))
+        return text_result(
+            public_payload(arguments, sync_bundle.status_sync_bundle(str(arguments["sync_dir"])))
+        )
 
     # Without a selected backend, report capability truth rather than claiming
     # a global sync state. This keeps plugin users from assuming cross-device
     # sync is active merely because the MCP server is installed.
     return text_result(
-        {
-            "cwd": str(cwd),
-            "status": "available_requires_sync_dir",
-            "backend": "local_folder",
-            "backends": ["local_folder", "http_object_store"],
-            "commands": ["status", "push", "pull", "repair"],
-            "script": str(SCRIPT_DIR / "sync_bundle.py"),
-            "object_storage_script": str(SCRIPT_DIR / "sync_object_storage.py"),
-            "sync_flows": {
-                "status": "implemented",
-                "push": "implemented",
-                "pull": "implemented",
-                "repair": "implemented",
+        public_payload(
+            arguments,
+            {
+                "cwd": str(cwd),
+                "status": "available_requires_sync_dir",
+                "backend": "local_folder",
+                "backends": ["local_folder", "http_object_store"],
+                "commands": ["status", "push", "pull", "repair"],
+                "script": str(SCRIPT_DIR / "sync_bundle.py"),
+                "object_storage_script": str(SCRIPT_DIR / "sync_object_storage.py"),
+                "sync_flows": {
+                    "status": "implemented",
+                    "push": "implemented",
+                    "pull": "implemented",
+                    "repair": "implemented",
+                },
+                "object_storage": {
+                    "backend": "http_object_store",
+                    "status": "implemented_requires_object_store_url",
+                    "transport": "HTTP PUT/GET object keys",
+                },
+                "raw_rollout_sync": "explicit_only",
             },
-            "object_storage": {
-                "backend": "http_object_store",
-                "status": "implemented_requires_object_store_url",
-                "transport": "HTTP PUT/GET object keys",
-            },
-            "raw_rollout_sync": "explicit_only",
-        }
+        )
     )
 
 
@@ -420,8 +473,10 @@ def call_memory_health(arguments: dict[str, Any]) -> dict[str, Any]:
         cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False
     )
     if proc.returncode != 0:
-        return tool_error("health_check_failed", (proc.stdout or proc.stderr).strip())
-    return text_result(json.loads(proc.stdout))
+        return tool_error(
+            "health_check_failed", (proc.stdout or proc.stderr).strip(), arguments=arguments
+        )
+    return text_result(public_payload(arguments, json.loads(proc.stdout)))
 
 
 TOOL_CALLS = {
@@ -508,15 +563,20 @@ def handle_request(request: dict[str, Any]) -> dict[str, Any] | None:
                     tool_error(
                         "unsupported_mutation",
                         "This MCP server is read-mostly; the requested mutating tool is not exposed.",
+                        arguments=arguments,
                         requested_tool=name,
                     ),
                 )
-            return jsonrpc_result(request_id, tool_error("unknown_tool", f"Unknown tool: {name}"))
+            return jsonrpc_result(
+                request_id,
+                tool_error("unknown_tool", f"Unknown tool: {name}", arguments=arguments),
+            )
         try:
             return jsonrpc_result(request_id, handler(arguments))
         except Exception as exc:
             return jsonrpc_result(
-                request_id, tool_error("tool_failed", f"{type(exc).__name__}: {exc}")
+                request_id,
+                tool_error("tool_failed", f"{type(exc).__name__}: {exc}", arguments=arguments),
             )
     if method in {"notifications/initialized", "ping"}:
         return jsonrpc_result(request_id, {})

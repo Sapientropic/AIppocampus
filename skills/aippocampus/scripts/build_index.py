@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build portable JSONL, SQLite FTS, manifest, and graph files for a Codex rollout."""
+"""Build portable JSONL, SQLite FTS, manifest, and graph files for a transcript source."""
 
 from __future__ import annotations
 
@@ -16,11 +16,8 @@ from aippocampuslib import (
     default_thread_index_dir,
     file_sha256,
     locate_rollout,
-    normalize_rollout,
     now_utc,
     parse_anchor_file,
-    public_session_meta,
-    read_session_meta,
     resolve_artifact_path,
 )
 from artifact_publish import (
@@ -30,6 +27,7 @@ from artifact_publish import (
     remove_sqlite_artifact,
     unique_temp_sqlite_path,
 )
+from conversation_sources import create_conversation_provider
 from retrieval import build_rag_chunks
 
 
@@ -203,6 +201,11 @@ def main() -> int:
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument("--rollout")
     parser.add_argument(
+        "--provider",
+        default="codex",
+        help="Conversation source provider: codex, claude-code, or generic-jsonl.",
+    )
+    parser.add_argument(
         "--output-dir",
         default=None,
         help="Defaults to the CODEX_HOME global thread store; pass .aippocampus for project-local output.",
@@ -229,13 +232,15 @@ def main() -> int:
     args = parser.parse_args()
 
     cwd = Path(args.cwd).resolve()
-    rollout = Path(args.rollout) if args.rollout else locate_rollout(cwd, codex_home())
+    provider = create_conversation_provider(args.provider, codex_home_dir=codex_home())
+    rollout = Path(args.rollout) if args.rollout else None
+    if rollout is None:
+        rollout = locate_rollout(cwd, codex_home()) if provider.name == "codex" else provider.locate_current(cwd).path
     output_dir = resolve_artifact_path(args.output_dir, cwd, default_thread_index_dir(cwd, rollout))
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    raw_meta = read_session_meta(rollout) or {}
-    meta = public_session_meta(raw_meta)
-    messages, turns = normalize_rollout(rollout, include_tools=args.include_tools)
+    meta = provider.read_metadata(rollout) or {}
+    messages, turns = provider.read_normalized_messages(rollout, include_tools=args.include_tools)
 
     with artifact_lease(output_dir, ".index-publish.lock"):
         messages_path = output_dir / "messages.jsonl"
@@ -284,6 +289,8 @@ def main() -> int:
                 "why": "Windows readers can hold the legacy SQLite file open; versioned indexes plus a pointer keep new readers moving while SQLite backup updates the stable compatibility file when possible.",
             },
             "source_rollout": str(rollout),
+            "source_provider": provider.name,
+            "source_thread_key": provider.thread_key(rollout, meta),
             "source_rollout_size": stat.st_size,
             "source_rollout_mtime": stat.st_mtime,
             "source_rollout_sha256": file_sha256(rollout) if args.hash_source else None,

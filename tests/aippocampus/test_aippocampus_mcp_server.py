@@ -166,6 +166,41 @@ class AippocampusMcpServerTests(unittest.TestCase):
         payload = self.tool_payload(response)
         self.assertEqual(payload["limit"], 25)
 
+    def test_search_memory_redacts_local_source_path_by_default(self) -> None:
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 34,
+                "method": "tools/call",
+                "params": {
+                    "name": "search_memory",
+                    "arguments": {"query": "source", "cwd": str(self.cwd), "max": 2},
+                },
+            }
+        )
+
+        payload = self.tool_payload(response)
+        self.assertEqual(payload["source"], mcp.LOCAL_PATH_REDACTION)
+
+        private_response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 35,
+                "method": "tools/call",
+                "params": {
+                    "name": "search_memory",
+                    "arguments": {
+                        "query": "source",
+                        "cwd": str(self.cwd),
+                        "max": 2,
+                        "include_private_paths": True,
+                    },
+                },
+            }
+        )
+        private_payload = self.tool_payload(private_response)
+        self.assertIn(str(self.clean), private_payload["source"])
+
     def test_get_turn_context_returns_turn_messages_without_raw_rollout(self) -> None:
         response = mcp.handle_request(
             {
@@ -239,8 +274,32 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertTrue(response["result"]["isError"])
         payload = self.tool_payload(response)
         self.assertEqual(payload["error"]["code"], "clean_source_unavailable")
-        self.assertEqual(payload["error"]["details"]["clean_source_dir"], str(missing_clean))
+        self.assertEqual(
+            payload["error"]["details"]["clean_source_dir"], mcp.LOCAL_PATH_REDACTION
+        )
         self.assertIn("messages.jsonl", payload["error"]["details"]["missing_files"])
+
+    def test_mcp_error_paths_can_be_opted_back_in_for_local_operator(self) -> None:
+        missing_clean = self.cwd / "missing-clean-source"
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 431,
+                "method": "tools/call",
+                "params": {
+                    "name": "get_turn_context",
+                    "arguments": {
+                        "cwd": str(self.cwd),
+                        "clean_source_dir": str(missing_clean),
+                        "turn_id": "turn_1",
+                        "include_private_paths": True,
+                    },
+                },
+            }
+        )
+
+        payload = self.tool_payload(response)
+        self.assertEqual(payload["error"]["details"]["clean_source_dir"], str(missing_clean))
 
     def test_latest_reply_uses_clean_source_before_raw_rollout(self) -> None:
         response = mcp.handle_request(
@@ -336,6 +395,48 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(payload["status"], "registry_missing")
         self.assertEqual(payload["threads"], [])
         self.assertEqual(payload["count"], 0)
+
+    def test_list_threads_redacts_registry_paths_by_default(self) -> None:
+        registry_dir = self.cwd / "registry"
+        registry_dir.mkdir()
+        (registry_dir / "threads.json").write_text(
+            json.dumps(
+                {
+                    "threads": [
+                        {
+                            "thread_key": "session:test",
+                            "paths": {
+                                "workspace": str(self.cwd),
+                                "rollout": str(self.cwd / "rollout.jsonl"),
+                            },
+                        }
+                    ]
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 68,
+                "method": "tools/call",
+                "params": {
+                    "name": "list_threads",
+                    "arguments": {"registry_dir": str(registry_dir)},
+                },
+            }
+        )
+
+        payload = self.tool_payload(response)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn(str(self.cwd), encoded)
+        self.assertEqual(payload["registry"], mcp.LOCAL_PATH_REDACTION)
+        self.assertEqual(
+            payload["threads"][0]["paths"]["workspace"],
+            mcp.LOCAL_PATH_REDACTION,
+        )
 
     def test_unknown_tool_is_tool_error_not_protocol_crash(self) -> None:
         response = mcp.handle_request(

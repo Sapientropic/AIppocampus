@@ -124,18 +124,19 @@ The public API and stability boundary is
 
 ## Use Inside A Codex Workspace
 
-For normal agent-facing use, start with the installed skill scripts:
+For normal agent-facing use, start with the unified Python facade when the
+package is installed:
 
 ```sh
-python "${CODEX_HOME}/skills/aippocampus/scripts/aippocampus_health.py" --cwd "$PWD"
-python "${CODEX_HOME}/skills/aippocampus/scripts/search_clean_source.py" "your query" --cwd "$PWD"
+aippocampus health --cwd "$PWD"
+aippocampus search "your query" --cwd "$PWD"
 ```
 
 To onboard an existing Codex install so old threads become discoverable in new
 projects:
 
 ```sh
-python "${CODEX_HOME}/skills/aippocampus/scripts/onboard.py" --provider codex --all --format json
+aippocampus onboard --provider codex --all --format json
 ```
 
 The provider-aware onboarding wrapper scans local sessions, registers missing
@@ -143,6 +144,11 @@ rollouts, builds clean-source and SQLite/RAG-lite indexes, repairs missing
 artifacts, rebuilds the project and life-wide timeline sidecar, and refreshes
 the cognitive map. `onboard_codex.py` remains a compatibility entrypoint for
 existing Codex-only scripts.
+
+Direct `python "${CODEX_HOME}/skills/aippocampus/scripts/*.py"` commands remain
+supported as the script-first fallback. The facade delegates to those scripts
+and preserves their JSON stdout and exit codes; standalone Python-free binaries
+are a later packaging slice, not a current release claim.
 
 External DeepSeek frontier extraction is explicit:
 

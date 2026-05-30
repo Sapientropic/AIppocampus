@@ -129,6 +129,7 @@ def search_clean_source(
                 "message_id": message.get("message_id") or message.get("id"),
                 "turn_id": message.get("turn_id"),
                 "source_id": message.get("source_id"),
+                "source_ref": message.get("source_ref"),
                 "clean_ordinal": message.get("clean_ordinal"),
                 "source_line": message.get("source_line"),
                 "raw_start_line": message.get("raw_start_line") or message.get("source_line"),

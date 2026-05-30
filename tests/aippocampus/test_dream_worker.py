@@ -17,7 +17,7 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 import dream_worker  # noqa: E402
-from model_client import ChatClientConfig, DEEPSEEK_PREFIX_CACHE_CONTRACT  # noqa: E402
+from model_client import DEEPSEEK_PREFIX_CACHE_CONTRACT, ChatClientConfig  # noqa: E402
 
 
 def source_ref(thread_key: str, message_id: str, line: int) -> dict[str, object]:

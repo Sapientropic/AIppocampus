@@ -21,10 +21,6 @@ from aippocampuslib import (
     now_utc,
     parse_anchor_file,
     public_session_meta,
-    read_session_meta,
-)
-from aippocampuslib import (
-    thread_key_from_rollout as lib_thread_key_from_rollout,
 )
 from artifact_publish import resolve_sqlite_index_path
 from conversation_sources import (
@@ -32,6 +28,8 @@ from conversation_sources import (
     ConversationProvider,
     create_conversation_provider,
 )
+from privacy_projection import redact_private_paths
+from registry_provider import current_thread_build_cmd, thread_key_for
 from registry_search import (
     clean_hit_rank_score,
     deep_search_entry,
@@ -92,14 +90,6 @@ def run_json(cmd: list[str]) -> dict:
     return json.loads(proc.stdout)
 
 
-def current_thread_build_cmd(script_name: str, cwd: Path, rollout: Path | None) -> list[str]:
-    # Provider resolution happens at the orchestration boundary. Pass the
-    # already-located source path to child builders so they do not silently
-    # rediscover by cwd through the legacy Codex default.
-    rollout_args = [] if rollout is None else ["--rollout", str(rollout)]
-    return [sys.executable, str(SCRIPT_DIR / script_name), "--cwd", str(cwd), *rollout_args, "--json"]
-
-
 def unique_preserve(items: list[str], limit: int | None = None) -> list[str]:
     seen: set[str] = set()
     out: list[str] = []
@@ -145,16 +135,6 @@ def anchor_summary(anchors: list[dict]) -> tuple[list[str], list[str], str]:
     return titles, unique_preserve(keywords, limit=32), summary
 
 
-def thread_key_for(cwd: Path, manifest: dict, rollout: Path | None) -> str:
-    session_id = (manifest.get("session_meta") or {}).get("id")
-    if not session_id and rollout:
-        session_id = (public_session_meta(read_session_meta(rollout)) or {}).get("id")
-    if session_id:
-        return f"session:{session_id}"
-    digest = hashlib.sha1(str(cwd).casefold().encode("utf-8")).hexdigest()[:12]
-    return f"workspace:{safe_slug(cwd.name)}:{digest}"
-
-
 def register_current_thread(
     cwd: Path,
     *,
@@ -167,8 +147,7 @@ def register_current_thread(
     provider: ConversationProvider | None = None,
 ) -> dict:
     cwd = cwd.resolve()
-    # CLI/MCP/onboarding call sites pass a provider explicitly. This fallback is
-    # kept only for legacy in-process callers during the provider migration.
+    # Fallback is only for legacy in-process callers during provider migration.
     active_provider = provider or codex_provider(codex_home())
     try:
         rollout = active_provider.locate_current(cwd).path
@@ -184,7 +163,7 @@ def register_current_thread(
         else legacy_index_dir
     )
     if build_index and not (index_dir / "manifest.json").exists():
-        run_json(current_thread_build_cmd("build_index.py", cwd, rollout))
+        run_json(current_thread_build_cmd(SCRIPT_DIR, "build_index.py", cwd, rollout, active_provider.name))
     clean_source_dir = default_thread_clean_source_dir(cwd, rollout)
     legacy_clean_source_dir = legacy_index_dir / "clean-source"
     if (
@@ -194,7 +173,7 @@ def register_current_thread(
     ):
         clean_source_dir = legacy_clean_source_dir
     if build_index and not (clean_source_dir / "manifest.json").exists():
-        run_json(current_thread_build_cmd("build_clean_source.py", cwd, rollout))
+        run_json(current_thread_build_cmd(SCRIPT_DIR, "build_clean_source.py", cwd, rollout, active_provider.name))
 
     manifest = load_json(index_dir / "manifest.json")
     clean_manifest = load_json(clean_source_dir / "manifest.json")
@@ -243,6 +222,7 @@ def register_current_thread(
         **project,
         "updated_at": now_utc(),
         "created_at": manifest.get("created_at"),
+        "source_provider": session_meta.get("source") or clean_manifest.get("source_provider") or active_provider.name,
         "session_meta": session_meta,
         "message_count": manifest.get("message_count")
         or health.get("rollout", {}).get("message_count"),
@@ -299,10 +279,6 @@ def register_current_thread(
     }
 
 
-def thread_key_from_rollout(rollout: Path, meta: dict | None = None) -> str:
-    return lib_thread_key_from_rollout(rollout, meta)
-
-
 def register_rollout_thread(
     rollout: Path,
     *,
@@ -312,6 +288,7 @@ def register_rollout_thread(
     tags: list[str] | None = None,
     registry_dir: Path | None = None,
     build_index: bool = False,
+    provider: ConversationProvider | None = None,
 ) -> dict:
     """Register an arbitrary rollout into the machine-wide memory registry.
 
@@ -322,12 +299,13 @@ def register_rollout_thread(
     """
 
     rollout = rollout.resolve()
-    meta = public_session_meta(read_session_meta(rollout))
+    active_provider = provider or codex_provider(codex_home())
+    meta = active_provider.read_metadata(rollout) or {}
     if cwd is None:
         cwd_value = meta.get("cwd")
         cwd = Path(cwd_value) if cwd_value else rollout.parent
     cwd = cwd.resolve()
-    thread_key = thread_key_from_rollout(rollout, meta)
+    thread_key = active_provider.thread_key(rollout, meta)
     store = thread_store_dir(thread_key, registry_dir)
     clean_source_dir = store / "clean-source"
     index_dir = store / "index"
@@ -339,6 +317,8 @@ def register_rollout_thread(
             str(SCRIPT_DIR / "build_clean_source.py"),
             "--cwd",
             str(cwd),
+            "--provider",
+            active_provider.name,
             "--rollout",
             str(rollout),
             "--output-dir",
@@ -355,6 +335,8 @@ def register_rollout_thread(
                 str(SCRIPT_DIR / "build_index.py"),
                 "--cwd",
                 str(cwd),
+                "--provider",
+                active_provider.name,
                 "--rollout",
                 str(rollout),
                 "--output-dir",
@@ -391,6 +373,7 @@ def register_rollout_thread(
         **project_meta,
         "updated_at": now_utc(),
         "created_at": clean_manifest.get("created_at"),
+        "source_provider": meta.get("source") or clean_manifest.get("source_provider") or active_provider.name,
         "session_meta": meta,
         "artifact_scope": "registry_thread_store",
         "message_count": index_manifest.get("message_count") or clean_manifest.get("message_count"),
@@ -468,10 +451,6 @@ def scan_session_rollouts(
     # CLI/onboarding call sites pass a provider explicitly. This fallback is
     # kept only for legacy in-process callers during the provider migration.
     active_provider = provider or codex_provider(codex_home())
-    if active_provider.name != "codex" and not dry_run:
-        raise NotImplementedError(
-            "non-Codex session registration requires a provider-specific clean-source parser"
-        )
     for source in active_provider.discover_sessions():
         rollout = source.path
         meta = dict(source.metadata or {})
@@ -510,6 +489,7 @@ def scan_session_rollouts(
             tags=tags,
             registry_dir=registry_dir,
             build_index=build_index,
+            provider=active_provider,
         )
         registered.append(result["entry"])
     return {
@@ -612,6 +592,7 @@ def main() -> int:
 
     list_cmd = sub.add_parser("list")
     list_cmd.add_argument("--json", action="store_true", dest="json_output")
+    list_cmd.add_argument("--redact-paths", action="store_true")
 
     search = sub.add_parser("search")
     search.add_argument("terms", nargs="+")
@@ -622,10 +603,12 @@ def main() -> int:
         help="Only search registry metadata; skip registered SQLite indexes.",
     )
     search.add_argument("--json", action="store_true", dest="json_output")
+    search.add_argument("--redact-paths", action="store_true")
 
     show = sub.add_parser("show")
     show.add_argument("thread_key")
     show.add_argument("--json", action="store_true", dest="json_output")
+    show.add_argument("--redact-paths", action="store_true")
 
     args = parser.parse_args()
     registry_dir = Path(args.registry_dir).resolve() if args.registry_dir else None
@@ -695,6 +678,8 @@ def main() -> int:
 
     registry = load_registry(json_path)
     if args.command == "list":
+        if args.redact_paths:
+            registry = redact_private_paths(registry)
         if args.json_output:
             print(json.dumps(registry, ensure_ascii=False, indent=2))
         else:
@@ -727,13 +712,10 @@ def main() -> int:
         scored.sort(key=lambda item: (-item["score"], item.get("updated_at") or ""))
         scored = scored[: args.max]
         if args.json_output:
-            print(
-                json.dumps(
-                    {"registry": str(json_path), "matches": scored, "warnings": warnings},
-                    ensure_ascii=False,
-                    indent=2,
-                )
-            )
+            payload = {"registry": str(json_path), "matches": scored, "warnings": warnings}
+            if args.redact_paths:
+                payload = redact_private_paths(payload)
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
             print(f"registry: {json_path}")
             print_entries(scored)
@@ -769,6 +751,8 @@ def main() -> int:
             )
             return 1
         if args.json_output:
+            if args.redact_paths:
+                match = redact_private_paths(match)
             print(json.dumps(match, ensure_ascii=False, indent=2))
         else:
             print_entries([match])

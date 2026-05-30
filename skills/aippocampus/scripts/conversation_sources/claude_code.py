@@ -10,6 +10,13 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from .base import ConversationSourceRef
+from .normalized import (
+    load_jsonl_dicts,
+    normalized_message,
+    source_path,
+    turn_summaries,
+    visible_text_from_content,
+)
 
 
 def claude_home() -> Path:
@@ -162,3 +169,67 @@ class ClaudeCodeConversationProvider:
             :16
         ]
         return f"claude-code:transcript:{digest}"
+
+    def read_normalized_messages(
+        self,
+        source: str | Path | ConversationSourceRef,
+        *,
+        include_tools: bool = False,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """Parse Claude Code JSONL into visible provider-neutral messages.
+
+        Thinking, tool-use/result blocks, attachments, and other non-message rows
+        stay in the raw transcript audit path. Clean source only receives text a
+        normal user or assistant would see in the conversation.
+        """
+
+        path = source_path(source)
+        meta = self.read_metadata(path) or {}
+        session_id = meta.get("id")
+        messages: list[dict[str, Any]] = []
+        current_turn = 0
+        seen: set[tuple[str, str, str, str]] = set()
+
+        for line_no, item in load_jsonl_dicts(path):
+            row_type = str(item.get("type") or "").casefold()
+            if row_type not in {"user", "assistant"}:
+                continue
+            raw_payload = item.get("message")
+            payload: dict[str, Any] = raw_payload if isinstance(raw_payload, dict) else {}
+            role = str(payload.get("role") or row_type).casefold()
+            if role not in {"user", "assistant"}:
+                continue
+            text = visible_text_from_content(payload.get("content"))
+            if not text:
+                continue
+            phase = "final_answer" if role == "assistant" else ""
+            digest_key = (role, phase, text, str(item.get("uuid") or line_no))
+            if digest_key in seen:
+                continue
+            seen.add(digest_key)
+            if role == "user":
+                current_turn += 1
+            elif not current_turn:
+                continue
+            messages.append(
+                normalized_message(
+                    provider=self.name,
+                    session_id=session_id,
+                    line=line_no,
+                    role=role,
+                    text=text,
+                    timestamp=item.get("timestamp"),
+                    kind="message",
+                    phase=phase,
+                    turn_index=current_turn,
+                    is_final=role == "assistant",
+                    provider_turn_id=item.get("parentUuid") or item.get("uuid"),
+                    metadata={
+                        key: item[key]
+                        for key in ("uuid", "parentUuid", "cwd")
+                        if item.get(key) is not None
+                    },
+                )
+            )
+
+        return messages, turn_summaries(messages)

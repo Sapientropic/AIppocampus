@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Build an AIppocampus clean-source corpus from a Codex rollout.
+"""Build an AIppocampus clean-source corpus from a host transcript source.
 
 Clean source is original visible conversation text, not a summary. It removes
-raw rollout envelopes, tool payloads, injected workspace instructions, and
-routine commentary when a turn has a final answer. Raw rollout remains the
-audit source, but day-to-day recall can use this smaller source-backed corpus.
+raw host envelopes, tool payloads, injected workspace instructions, and routine
+commentary when a turn has a final answer. Raw host transcripts remain the audit
+source, but day-to-day recall can use this smaller source-backed corpus.
 """
 
 from __future__ import annotations
@@ -22,12 +22,10 @@ from aippocampuslib import (
     default_thread_clean_source_dir,
     file_sha256,
     locate_rollout,
-    normalize_rollout,
     now_utc,
-    public_session_meta,
-    read_session_meta,
     resolve_artifact_path,
 )
+from conversation_sources import ConversationProvider, create_conversation_provider
 
 LEGACY_OUTPUT_DIR = ".aippocampus/clean-source"
 CLEAN_SOURCE_SCHEMA_VERSION = 2
@@ -276,9 +274,10 @@ def _clean_messages(
                 "message_id": message_id,
                 "turn_id": turn_uid,
                 "source_id": source_id,
+                "source_ref": item.get("source_ref"),
                 "source_line": item.get("line"),
-                "raw_start_line": item.get("line"),
-                "raw_end_line": item.get("line"),
+                "raw_start_line": item.get("raw_start_line") or item.get("line"),
+                "raw_end_line": item.get("raw_end_line") or item.get("line"),
                 "timestamp": item.get("timestamp"),
                 "role": item.get("role"),
                 "kind": item.get("kind"),
@@ -331,20 +330,31 @@ def build_clean_source(
     rollout: str | Path | None = None,
     output_dir: str | Path | None = None,
     hash_source: bool = False,
+    provider_name: str = "codex",
+    provider: ConversationProvider | None = None,
 ) -> dict[str, Any]:
     cwd = Path(cwd).resolve()
-    rollout_path = Path(rollout) if rollout else locate_rollout(cwd, codex_home())
-    if not rollout_path.is_absolute():
-        rollout_path = cwd / rollout_path
+    active_provider = provider or create_conversation_provider(
+        provider_name,
+        codex_home_dir=codex_home(),
+    )
+    source_path = Path(rollout) if rollout else None
+    if source_path is None:
+        if active_provider.name == "codex":
+            source_path = locate_rollout(cwd, codex_home())
+        else:
+            source_path = active_provider.locate_current(cwd).path
+    if not source_path.is_absolute():
+        source_path = cwd / source_path
 
-    out = resolve_artifact_path(output_dir, cwd, default_thread_clean_source_dir(cwd, rollout_path))
+    out = resolve_artifact_path(output_dir, cwd, default_thread_clean_source_dir(cwd, source_path))
     out.mkdir(parents=True, exist_ok=True)
 
-    raw_meta = read_session_meta(rollout_path) or {}
-    meta = public_session_meta(raw_meta)
-    messages, turns = normalize_rollout(rollout_path, include_tools=False)
+    meta = active_provider.read_metadata(source_path) or {}
+    messages, turns = active_provider.read_normalized_messages(source_path, include_tools=False)
 
-    source_key = meta.get("id") or str(rollout_path.resolve())
+    source_thread_key = active_provider.thread_key(source_path, meta)
+    source_key = source_thread_key or meta.get("id") or str(source_path.resolve())
     source_id = _stable_id("src", source_key, length=20)
     clean_messages, clean_turns = _clean_messages(messages, turns, source_id)
     for ordinal, item in enumerate(clean_messages):
@@ -361,7 +371,7 @@ def build_clean_source(
         for item in clean_turns:
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
 
-    stat = rollout_path.stat()
+    stat = source_path.stat()
     manifest: dict[str, Any] = {
         "schema_version": CLEAN_SOURCE_SCHEMA_VERSION,
         "kind": "aippocampus_clean_source",
@@ -374,10 +384,13 @@ def build_clean_source(
             "why": "Clean source is private cross-project memory; project-local output is explicit compatibility, not the default.",
         },
         "source_id": source_id,
-        "source_rollout": str(rollout_path),
+        "source_provider": active_provider.name,
+        "source_thread_key": source_thread_key,
+        "source_transcript": str(source_path),
+        "source_rollout": str(source_path),
         "source_rollout_size": stat.st_size,
         "source_rollout_mtime": stat.st_mtime,
-        "source_rollout_sha256": file_sha256(rollout_path) if hash_source else None,
+        "source_rollout_sha256": file_sha256(source_path) if hash_source else None,
         "session_meta": meta,
         "message_count": len(clean_messages),
         "turn_count": len(clean_turns),
@@ -386,11 +399,18 @@ def build_clean_source(
             "turns_jsonl": str(turns_path),
         },
         "identity_policy": {
-            "stable_join_keys": ["source_id", "turn_id", "message_id", "content_sha256"],
+            "stable_join_keys": [
+                "source_id",
+                "source_ref",
+                "turn_id",
+                "message_id",
+                "content_sha256",
+            ],
             "message_id": "Stable over rebuilds for the same source, raw line, role, phase, and exact text.",
             "turn_id": "Stable over rebuilds for the same source and inferred user turn boundary.",
+            "source_ref": "Provider-neutral audit pointer using provider/session/line, without relying on local absolute paths as identity.",
             "semantic_key": "Deterministic normalized-text key for lightweight sidecars; it is not a semantic embedding.",
-            "source_id": "Opaque hash of the session id when available, otherwise the resolved rollout path.",
+            "source_id": "Opaque hash of the provider thread key or session id when available, otherwise the resolved private source path.",
         },
         "upgrade_contract": {
             "principle": "approximate_locate_then_exact_reconstruct",
@@ -440,6 +460,11 @@ def main() -> int:
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument("--rollout")
     parser.add_argument(
+        "--provider",
+        default="codex",
+        help="Conversation source provider: codex, claude-code, or generic-jsonl.",
+    )
+    parser.add_argument(
         "--output-dir",
         default=None,
         help="Defaults to the CODEX_HOME global thread store; pass .aippocampus/clean-source for project-local output.",
@@ -453,6 +478,7 @@ def main() -> int:
         rollout=args.rollout,
         output_dir=args.output_dir,
         hash_source=args.hash_source,
+        provider_name=args.provider,
     )
     if args.json_output:
         print(json.dumps(manifest, ensure_ascii=False, indent=2))

@@ -71,6 +71,69 @@ This is boundary evidence only. It does not claim competitor superiority,
 real-history memory-pain quality, live semantic-model quality, or a complete
 Track D compaction-continuity runner.
 
+## 2026-05-30 Provider And Cross-Agent Continuity Slice
+
+Issues #112-#120 refined the first multi-provider landing slice. Current
+evidence supports these narrower claims:
+
+- `aippocampus` exists as a Python CLI facade over existing script entrypoints;
+  it preserves child JSON output and exit codes.
+- Codex, Claude Code, and validated generic JSONL providers can expose
+  provider-normalized visible messages to the clean-source builder.
+- Claude Code registration is explicit and filters thinking/tool payloads from
+  daily clean source by default.
+- MCP results redact local paths by default while retaining source-backed ids
+  and source refs.
+- `tools/aippocampus/smoke/smoke_cross_agent_continuity.py` provides a
+  deterministic synthetic proof of Codex-origin to Claude Code-facing retrieval
+  and Claude Code-origin to Codex-facing retrieval through registry clean source
+  and the MCP `search_memory` surface.
+- `tools/aippocampus/smoke/smoke_claude_code_history.py` probes local Claude
+  Code history parsing while reporting only booleans and counts, never
+  transcript text or local paths.
+- `tools/aippocampus/smoke/smoke_claude_code_mcp_host.py` records whether the
+  local Claude Code host can see the configured AIppocampus MCP server, or the
+  exact host setup blocker.
+
+This does not claim standalone binaries, unattended ingestion of private host
+history, Claude Code hook support, or successful live Claude Code MCP tool-call
+in an environment where the host probe reports a blocker. Standalone binary
+work is tracked in `docs/planning/standalone-binary-packaging.md`.
+
+Latest verification for this slice:
+
+- Temporary editable-install console-script smoke: `aippocampus --help` and
+  `aippocampus mcp list-tools` passed from a fresh virtual environment. The
+  facade exposed the documented operator commands and preserved the MCP tool
+  JSON catalog.
+- `python tools\aippocampus\smoke\smoke_cross_agent_continuity.py --json`:
+  passed. The smoke registered one synthetic Codex source and one synthetic
+  Claude Code source, retrieved both through MCP `search_memory`, observed two
+  matches in each direction, preserved `codex:session:` and
+  `claude-code:session:` source refs, and kept registry/search paths redacted.
+- `python tools\aippocampus\smoke\smoke_claude_code_history.py --json`:
+  passed against the local Claude Code history store. It found 308 candidate
+  sessions and parsed three samples with message/turn counts only; it reported
+  no transcript text and no local paths.
+- `python tools\aippocampus\smoke\smoke_claude_code_mcp_host.py --json`:
+  returned `blocked_host_config`. `claude mcp list` ran, but
+  `claude mcp get aippocampus` reported no configured AIppocampus MCP server.
+  The output redacted key-like query values and local Windows/POSIX paths.
+- `python skills\aippocampus\scripts\onboard.py --status --format text --cwd .`:
+  passed and rendered human-readable provider states for Codex, Claude Code,
+  and generic JSONL. JSON status remains the default for non-TTY agent callers.
+- Focused unit coverage now checks generic JSONL structured validation errors,
+  generic JSONL onboarding dry-run planning, missing-provider status, human
+  status rendering, provider-thread-key source-id stability across path moves,
+  POSIX host-output path redaction, and JSON-escaped private-root detection in
+  the cross-agent smoke.
+- `python tools\aippocampus\docs\check_docs_health.py --json`: passed.
+- `python tools\aippocampus\run_tests.py --tier fast`: 483 tests passed.
+- `python -m mypy`: passed across 96 source files.
+- `python -m ruff check skills plugins tests tools benchmarks benchmark_corpus`:
+  passed.
+- `git diff --check`: passed.
+
 ## 2026-05-30 Track D Synthetic Runner Evidence
 
 Issue #66 added the deterministic synthetic Track D compaction-continuity

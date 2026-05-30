@@ -47,6 +47,7 @@ The public API does not include every helper module or every script under
 
 The CLI contract applies to documented operator commands, especially:
 
+- `aippocampus health|search|onboard|mcp|sync|object-sync|hooks`
 - `aippocampus_health.py`
 - `search_clean_source.py`
 - `latest_reply.py`
@@ -74,6 +75,14 @@ For these commands:
   command-specific hard failure.
 - Exact non-zero exit-code numbers are not stable yet. Use structured JSON error
   payloads or documented status fields where available.
+- The `aippocampus` facade is a thin dispatcher. It must preserve child command
+  stdout/stderr, JSON shape, and return code rather than wrapping runtime output
+  in a second envelope.
+
+The Python facade is the current packaging step. Standalone Python-free binaries
+are not part of the public claim until the follow-up
+[standalone binary packaging plan](../planning/standalone-binary-packaging.md)
+has produced artifacts and verified the target platform matrix.
 
 Repo-maintenance commands under `tools/aippocampus/` and
 `benchmarks/aippocampus/` are public development aids, not end-user runtime APIs,
@@ -104,6 +113,50 @@ For these tools:
 
 `register_thread` is an explicit control-plane operation. It is not a general
 memory-write API.
+
+MCP JSON output defaults to public-safe local-path redaction for tool results
+that can be forwarded through host agents. Callers that are acting as local
+operators may pass `include_private_paths: true` where documented by the tool
+schema to recover local locators for repair/debug work.
+
+## Provider Identity And Privacy
+
+Provider-neutral identity uses stable join keys such as `thread_key`,
+`source_id`, `source_ref`, `turn_id`, `message_id`, and content hashes. Local
+absolute paths are private locators for audit, repair, and generated artifact
+lookup; they are not identity and should not be forwarded as public evidence.
+
+Clean-source manifests may retain private `cwd`, `source_transcript`, and output
+paths for local operators. Public/MCP/sync projections should redact or bundle-
+relativize those paths while preserving source-backed ids and source refs.
+
+## Generic JSONL Import
+
+`generic-jsonl` is the public import path for hosts that do not yet have a
+bespoke provider. Each JSONL row must describe one visible message:
+
+```json
+{
+  "session_id": "stable-public-or-local-session-id",
+  "timestamp": "2026-05-30T05:00:00Z",
+  "cwd": "optional local project locator",
+  "role": "user",
+  "text": "visible message text",
+  "turn_id": "optional stable turn id",
+  "source_ref": "optional host source pointer",
+  "provider_metadata": {"provider": "example-agent"}
+}
+```
+
+Required fields are `session_id`, `role`, and `text`. `role` must be `user` or
+`assistant` for clean source; `system` rows are ignored, and ambiguous or orphan
+assistant rows are rejected with actionable validation errors. Markdown import
+is intentionally not claimed until role boundaries and stable source refs can be
+preserved.
+
+Generic JSONL validation failures expose a machine-readable code, source line,
+message, and details, so import callers can report the exact malformed row
+without guessing from prose.
 
 ## JSON And Schema Contracts
 

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from .base import ConversationSourceRef
+from .normalized import stable_source_ref
 
 ROLLOUT_DISCOVERY_DIRS = ("sessions", "archived_sessions")
 
@@ -121,3 +122,24 @@ class CodexConversationProvider:
             :16
         ]
         return f"rollout:{digest}"
+
+    def read_normalized_messages(
+        self,
+        source: str | Path | ConversationSourceRef,
+        *,
+        include_tools: bool = False,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        # Keep the Codex-specific envelope parser in the legacy helper while
+        # exposing the same provider-neutral shape as newer host providers.
+        from aippocampuslib import normalize_rollout
+
+        source_path = _source_path(source)
+        meta = public_codex_session_meta(self.read_metadata(source_path))
+        messages, turns = normalize_rollout(source_path, include_tools=include_tools)
+        for message in messages:
+            line_no = message.get("line")
+            if isinstance(line_no, int):
+                message["source_ref"] = stable_source_ref(self.name, meta.get("id"), line_no)
+                message["raw_start_line"] = line_no
+                message["raw_end_line"] = line_no
+        return messages, turns

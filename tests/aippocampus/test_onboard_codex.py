@@ -113,6 +113,31 @@ class OnboardCodexTests(unittest.TestCase):
             encoding="utf-8",
         )
 
+    def _write_generic_transcript(self, path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        rows = [
+            {
+                "session_id": "generic-onboard",
+                "timestamp": "2026-05-30T04:00:00Z",
+                "cwd": str(self.cwd),
+                "role": "user",
+                "text": "generic onboarding user turn",
+                "turn_id": "g1",
+            },
+            {
+                "session_id": "generic-onboard",
+                "timestamp": "2026-05-30T04:00:01Z",
+                "cwd": str(self.cwd),
+                "role": "assistant",
+                "text": "generic onboarding assistant turn",
+                "turn_id": "g1",
+            },
+        ]
+        path.write_text(
+            "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
+            encoding="utf-8",
+        )
+
     def test_dry_run_returns_agent_native_plan_without_writing(self) -> None:
         result = onboard.run_onboarding(
             cwd=self.cwd,
@@ -194,7 +219,7 @@ class OnboardCodexTests(unittest.TestCase):
         self.assertEqual(data["meta"]["provider"], "claude-code")
         self.assertEqual(data["data"]["plan"]["would_register_count"], 1)
 
-    def test_onboard_facade_provider_claude_code_blocks_write_until_parser_exists(
+    def test_onboard_facade_provider_claude_code_registers_after_parser_exists(
         self,
     ) -> None:
         self._write_claude_transcript(
@@ -208,14 +233,105 @@ class OnboardCodexTests(unittest.TestCase):
             str(self.cwd),
             "--registry-dir",
             str(self.registry_dir),
+            "--no-timeline",
+            "--no-cognitive-map",
+            "--no-repair",
+            "--no-refresh-current",
             "--format",
             "json",
             env_extra={"CLAUDE_HOME": str(self.root / "claude-home")},
         )
 
-        self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         data = json.loads(proc.stdout)
-        self.assertEqual(data["error"]["code"], "provider_registration_not_available")
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["meta"]["provider"], "claude-code")
+        self.assertEqual(data["data"]["actions"]["scan_sessions"]["registered_count"], 1)
+        threads = json.loads((self.registry_dir / "threads.json").read_text(encoding="utf-8"))
+        self.assertEqual(threads["threads"][0]["thread_key"], "claude-code:session:claude-onboard")
+
+    def test_onboard_status_reports_provider_capabilities(self) -> None:
+        self._write_claude_transcript(
+            self.root / "claude-home" / "projects" / "-project" / "claude-session.jsonl"
+        )
+
+        proc = self._run_onboard_facade(
+            "--status",
+            "--cwd",
+            str(self.cwd),
+            env_extra={"CLAUDE_HOME": str(self.root / "claude-home")},
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        data = json.loads(proc.stdout)
+        providers = {item["provider"]: item for item in data["data"]["providers"]}
+        self.assertEqual(providers["codex"]["state"], "write_enabled")
+        self.assertEqual(providers["claude-code"]["state"], "write_enabled")
+        self.assertTrue(providers["claude-code"]["current_cwd_match"])
+        self.assertIn("blocked", data["data"]["state_legend"])
+
+    def test_onboard_status_reports_missing_non_codex_providers_as_blocked(self) -> None:
+        proc = self._run_onboard_facade(
+            "--status",
+            "--cwd",
+            str(self.cwd),
+            env_extra={
+                "CLAUDE_HOME": str(self.root / "missing-claude-home"),
+                "AIPPOCAMPUS_GENERIC_IMPORT_DIR": str(self.root / "missing-generic.jsonl"),
+            },
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        data = json.loads(proc.stdout)
+        providers = {item["provider"]: item for item in data["data"]["providers"]}
+        self.assertEqual(providers["codex"]["state"], "write_enabled")
+        self.assertEqual(providers["claude-code"]["state"], "blocked")
+        self.assertFalse(providers["claude-code"]["detected"])
+        self.assertEqual(providers["generic-jsonl"]["state"], "blocked")
+        self.assertFalse(providers["generic-jsonl"]["detected"])
+        self.assertIn("AIPPOCAMPUS_GENERIC_IMPORT_DIR", providers["generic-jsonl"]["blockers"][0])
+
+    def test_onboard_status_can_render_human_readable_output(self) -> None:
+        proc = self._run_onboard_facade(
+            "--status",
+            "--format",
+            "text",
+            "--cwd",
+            str(self.cwd),
+            env_extra={"CLAUDE_HOME": str(self.root / "missing-claude-home")},
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("AIppocampus provider status", proc.stdout)
+        self.assertIn("- codex: write_enabled", proc.stdout)
+        self.assertIn("- claude-code: blocked", proc.stdout)
+
+    def test_onboard_facade_provider_generic_jsonl_dry_run_reports_plan(self) -> None:
+        generic = self.root / "generic" / "generic-session.jsonl"
+        self._write_generic_transcript(generic)
+
+        proc = self._run_onboard_facade(
+            "--provider",
+            "generic-jsonl",
+            "--cwd",
+            str(self.cwd),
+            "--registry-dir",
+            str(self.registry_dir),
+            "--dry-run",
+            "--format",
+            "json",
+            env_extra={"AIPPOCAMPUS_GENERIC_IMPORT_DIR": str(generic)},
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        data = json.loads(proc.stdout)
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["meta"]["provider"], "generic-jsonl")
+        self.assertEqual(data["data"]["plan"]["would_register_count"], 1)
+        self.assertEqual(
+            data["data"]["plan"]["sample_candidates"][0]["thread_key"],
+            "generic-jsonl:session:generic-onboard",
+        )
 
     def _run_onboard_facade(self, *args: str, env_extra: dict[str, str] | None = None) -> Any:
         import subprocess

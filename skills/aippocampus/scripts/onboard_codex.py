@@ -79,6 +79,8 @@ def repair_missing_artifacts(
     registry_dir: Path | None = None,
     build_index: bool = True,
     max_repair: int | None = None,
+    provider_name: str = "codex",
+    provider: ConversationProvider | None = None,
 ) -> dict[str, Any]:
     stats = registry_stats(registry_dir=registry_dir)
     repaired: list[dict[str, Any]] = []
@@ -87,6 +89,9 @@ def repair_missing_artifacts(
     if max_repair is not None:
         candidates = candidates[: max(0, int(max_repair))]
     for item in candidates:
+        if not _repair_candidate_matches_provider(item, provider_name):
+            skipped.append({**item, "reason": "provider_mismatch"})
+            continue
         rollout = item.get("rollout")
         if not rollout or not Path(str(rollout)).exists():
             skipped.append({**item, "reason": "missing_rollout"})
@@ -97,6 +102,7 @@ def repair_missing_artifacts(
                 cwd=Path(str(item.get("workspace"))) if item.get("workspace") else None,
                 registry_dir=registry_dir,
                 build_index=build_index,
+                provider=provider,
             )
         except Exception as exc:  # pragma: no cover - exercised by real onboarding failures
             skipped.append({**item, "reason": "repair_failed", "error": str(exc)[:260]})
@@ -120,6 +126,18 @@ def repair_missing_artifacts(
         "repaired": repaired[:20],
         "skipped": skipped[:20],
     }
+
+
+def _repair_candidate_matches_provider(item: dict[str, Any], provider_name: str) -> bool:
+    provider_name = provider_name.replace("_", "-")
+    thread_key = str(item.get("thread_key") or "")
+    source_provider = str(item.get("source_provider") or "").replace("_", "-")
+    if provider_name == "codex":
+        return not thread_key.startswith(("claude-code:", "generic-jsonl:")) and source_provider in {
+            "",
+            "codex",
+        }
+    return thread_key.startswith(f"{provider_name}:") or source_provider == provider_name
 
 
 def build_next_hints(*, dry_run: bool, frontier_mode: str) -> list[str]:
@@ -177,7 +195,13 @@ def run_onboarding(
         provider=provider,
     )
     repair_plan = (
-        repair_missing_artifacts(registry_dir=registry_dir, build_index=build_index, max_repair=0)
+        repair_missing_artifacts(
+            registry_dir=registry_dir,
+            build_index=build_index,
+            max_repair=0,
+            provider_name=provider_name,
+            provider=provider,
+        )
         if repair_indexes
         else {}
     )
@@ -248,7 +272,10 @@ def run_onboarding(
     }
     if repair_indexes:
         actions["repair_missing_artifacts"] = repair_missing_artifacts(
-            registry_dir=registry_dir, build_index=build_index
+            registry_dir=registry_dir,
+            build_index=build_index,
+            provider_name=provider_name,
+            provider=provider,
         )
     if refresh_current:
         try:

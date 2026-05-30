@@ -19,6 +19,7 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 import build_clean_source as clean_source  # noqa: E402
+from conversation_sources import GenericConversationProvider  # noqa: E402
 
 
 class BuildCleanSourceTests(unittest.TestCase):
@@ -283,6 +284,105 @@ class BuildCleanSourceTests(unittest.TestCase):
         self.assertNotIn("<skill>", text)
         self.assertNotIn("secret-local-path", text)
         self.assertIn("真实回答仍然保留。", text)
+
+    def test_clean_source_builds_from_provider_normalized_generic_transcript(self) -> None:
+        transcript = self.cwd / "generic.jsonl"
+        rows = [
+            {
+                "session_id": "generic-clean",
+                "timestamp": "2026-05-30T04:10:00Z",
+                "cwd": str(self.cwd),
+                "role": "user",
+                "text": "generic import should keep source refs",
+                "turn_id": "t1",
+            },
+            {
+                "session_id": "generic-clean",
+                "timestamp": "2026-05-30T04:10:01Z",
+                "cwd": str(self.cwd),
+                "role": "assistant",
+                "text": "generic import builds clean source",
+                "turn_id": "t1",
+            },
+        ]
+        transcript.write_text(
+            "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
+            encoding="utf-8",
+        )
+
+        result = clean_source.build_clean_source(
+            self.cwd,
+            rollout=transcript,
+            output_dir=self.cwd / "generic-clean-source",
+            provider_name="generic-jsonl",
+            provider=GenericConversationProvider(transcript),
+        )
+
+        self.assertEqual(result["source_provider"], "generic-jsonl")
+        self.assertEqual(result["source_thread_key"], "generic-jsonl:session:generic-clean")
+        self.assertIn("source_ref", result["identity_policy"]["stable_join_keys"])
+        messages = [
+            json.loads(line)
+            for line in Path(result["outputs"]["messages_jsonl"])
+            .read_text(encoding="utf-8")
+            .splitlines()
+        ]
+        self.assertEqual(messages[0]["source_ref"], "generic-jsonl:session:generic-clean#L1")
+        self.assertEqual(messages[1]["source_ref"], "generic-jsonl:session:generic-clean#L2")
+
+    def test_provider_thread_identity_keeps_source_id_stable_across_path_moves(self) -> None:
+        rows = [
+            {
+                "session_id": "path-move-stable",
+                "timestamp": "2026-05-30T04:20:00Z",
+                "cwd": str(self.cwd),
+                "role": "user",
+                "text": "path moves should not change source identity",
+            },
+            {
+                "session_id": "path-move-stable",
+                "timestamp": "2026-05-30T04:20:01Z",
+                "cwd": str(self.cwd),
+                "role": "assistant",
+                "text": "source ids come from provider thread keys when available",
+            },
+        ]
+        first = self.cwd / "first" / "generic.jsonl"
+        second = self.cwd / "second" / "generic.jsonl"
+        first.parent.mkdir()
+        second.parent.mkdir()
+        payload = "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n"
+        first.write_text(payload, encoding="utf-8")
+        second.write_text(payload, encoding="utf-8")
+
+        first_manifest = clean_source.build_clean_source(
+            self.cwd,
+            rollout=first,
+            output_dir=self.cwd / "first-clean",
+            provider_name="generic-jsonl",
+            provider=GenericConversationProvider(first),
+        )
+        second_manifest = clean_source.build_clean_source(
+            self.cwd,
+            rollout=second,
+            output_dir=self.cwd / "second-clean",
+            provider_name="generic-jsonl",
+            provider=GenericConversationProvider(second),
+        )
+
+        self.assertEqual(first_manifest["source_thread_key"], "generic-jsonl:session:path-move-stable")
+        self.assertEqual(first_manifest["source_id"], second_manifest["source_id"])
+        first_message = json.loads(
+            Path(first_manifest["outputs"]["messages_jsonl"])
+            .read_text(encoding="utf-8")
+            .splitlines()[0]
+        )
+        second_message = json.loads(
+            Path(second_manifest["outputs"]["messages_jsonl"])
+            .read_text(encoding="utf-8")
+            .splitlines()[0]
+        )
+        self.assertEqual(first_message["source_id"], second_message["source_id"])
 
 
 if __name__ == "__main__":

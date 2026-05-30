@@ -684,7 +684,8 @@ def iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
 
 
 def public_pack_summary(payload: Mapping[str, Any]) -> dict[str, Any]:
-    audit = payload.get("source_ref_audit") if isinstance(payload.get("source_ref_audit"), Mapping) else {}
+    audit_value = payload.get("source_ref_audit")
+    audit: Mapping[str, Any] = audit_value if isinstance(audit_value, Mapping) else {}
     contributions = [
         {
             "seed_kind": item.get("seed_kind"),

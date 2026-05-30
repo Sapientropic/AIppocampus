@@ -23,6 +23,8 @@ import registry  # noqa: E402
 from conversation_sources import (  # noqa: E402
     ClaudeCodeConversationProvider,
     CodexConversationProvider,
+    GenericConversationProvider,
+    GenericJsonlValidationError,
     create_conversation_provider,
 )
 
@@ -254,6 +256,118 @@ class AippocampusLibTests(unittest.TestCase):
             self.assertEqual(source.path, transcript)
             self.assertEqual(source.cwd, target_cwd)
 
+    def test_claude_code_provider_normalizes_visible_text_without_tools(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            home = root / "claude-home"
+            cwd = root / "Project Claude"
+            cwd.mkdir()
+            transcript = home / "projects" / "-project-claude" / "session.jsonl"
+            transcript.parent.mkdir(parents=True, exist_ok=True)
+            rows = [
+                {
+                    "type": "user",
+                    "sessionId": "claude-session",
+                    "uuid": "user-uuid",
+                    "timestamp": "2026-05-30T03:00:00Z",
+                    "cwd": str(cwd),
+                    "message": {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "visible user text"},
+                            {"type": "tool_result", "content": "private tool result"},
+                        ],
+                    },
+                },
+                {
+                    "type": "assistant",
+                    "sessionId": "claude-session",
+                    "uuid": "assistant-uuid",
+                    "parentUuid": "user-uuid",
+                    "timestamp": "2026-05-30T03:00:01Z",
+                    "cwd": str(cwd),
+                    "message": {
+                        "role": "assistant",
+                        "content": [
+                            {"type": "thinking", "thinking": "private chain"},
+                            {"type": "tool_use", "name": "Read", "input": {"file_path": "secret"}},
+                            {"type": "text", "text": "visible assistant text"},
+                        ],
+                    },
+                },
+            ]
+            transcript.write_text(
+                "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
+                encoding="utf-8",
+            )
+
+            messages, turns = ClaudeCodeConversationProvider(home).read_normalized_messages(
+                transcript
+            )
+
+            self.assertEqual([message["text"] for message in messages], ["visible user text", "visible assistant text"])
+            self.assertNotIn("private", json.dumps(messages, ensure_ascii=False))
+            self.assertEqual(messages[1]["phase"], "final_answer")
+            self.assertEqual(messages[1]["source_ref"], "claude-code:session:claude-session#L2")
+            self.assertEqual(turns[0]["final_line"], 2)
+
+    def test_claude_code_provider_keeps_repeated_user_text_as_distinct_turns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            home = root / "claude-home"
+            cwd = root / "Project Claude"
+            cwd.mkdir()
+            transcript = home / "projects" / "-project-claude" / "session.jsonl"
+            transcript.parent.mkdir(parents=True, exist_ok=True)
+            rows = [
+                {
+                    "type": "user",
+                    "sessionId": "claude-session",
+                    "uuid": "user-1",
+                    "timestamp": "2026-05-30T03:00:00Z",
+                    "cwd": str(cwd),
+                    "message": {"role": "user", "content": "repeat this"},
+                },
+                {
+                    "type": "assistant",
+                    "sessionId": "claude-session",
+                    "uuid": "assistant-1",
+                    "parentUuid": "user-1",
+                    "timestamp": "2026-05-30T03:00:01Z",
+                    "cwd": str(cwd),
+                    "message": {"role": "assistant", "content": "first answer"},
+                },
+                {
+                    "type": "user",
+                    "sessionId": "claude-session",
+                    "uuid": "user-2",
+                    "timestamp": "2026-05-30T03:01:00Z",
+                    "cwd": str(cwd),
+                    "message": {"role": "user", "content": "repeat this"},
+                },
+                {
+                    "type": "assistant",
+                    "sessionId": "claude-session",
+                    "uuid": "assistant-2",
+                    "parentUuid": "user-2",
+                    "timestamp": "2026-05-30T03:01:01Z",
+                    "cwd": str(cwd),
+                    "message": {"role": "assistant", "content": "second answer"},
+                },
+            ]
+            transcript.write_text(
+                "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
+                encoding="utf-8",
+            )
+
+            messages, turns = ClaudeCodeConversationProvider(home).read_normalized_messages(
+                transcript
+            )
+
+            self.assertEqual([message["turn_index"] for message in messages], [1, 1, 2, 2])
+            self.assertEqual([turn["user_line"] for turn in turns], [1, 3])
+            self.assertEqual([turn["final_line"] for turn in turns], [2, 4])
+
     def test_registry_scan_accepts_claude_code_provider_for_dry_run(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -274,6 +388,56 @@ class AippocampusLibTests(unittest.TestCase):
                 result["planned"][0]["thread_key"], "claude-code:session:claude-session"
             )
             self.assertEqual(Path(result["planned"][0]["rollout"]), transcript)
+
+    def test_generic_jsonl_provider_validates_and_normalizes_public_schema(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cwd = root / "Generic Project"
+            cwd.mkdir()
+            transcript = root / "generic.jsonl"
+            rows = [
+                {
+                    "session_id": "generic-session",
+                    "timestamp": "2026-05-30T04:00:00Z",
+                    "cwd": str(cwd),
+                    "role": "user",
+                    "text": "generic user text",
+                    "turn_id": "turn-a",
+                    "source_ref": "host://conversation/generic-session/messages/1",
+                    "provider_metadata": {"provider": "synthetic-agent"},
+                },
+                {
+                    "session_id": "generic-session",
+                    "timestamp": "2026-05-30T04:00:01Z",
+                    "cwd": str(cwd),
+                    "role": "assistant",
+                    "text": "generic assistant text",
+                    "turn_id": "turn-a",
+                },
+            ]
+            transcript.write_text(
+                "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
+                encoding="utf-8",
+            )
+            provider = GenericConversationProvider(transcript)
+
+            sessions = list(provider.discover_sessions())
+            messages, turns = provider.read_normalized_messages(transcript)
+
+            self.assertEqual(sessions[0].session_id, "generic-session")
+            self.assertEqual(provider.thread_key(transcript), "generic-jsonl:session:generic-session")
+            self.assertEqual(
+                messages[0]["source_ref"], "host://conversation/generic-session/messages/1"
+            )
+            self.assertEqual(messages[1]["turn_index"], 1)
+            self.assertEqual(turns[0]["final_line"], 2)
+
+            bad = root / "bad.jsonl"
+            bad.write_text('{"session_id":"s","role":"assistant","text":"orphan"}\n', encoding="utf-8")
+            with self.assertRaises(GenericJsonlValidationError) as raised:
+                GenericConversationProvider(bad).read_normalized_messages(bad)
+            self.assertEqual(raised.exception.asdict()["code"], "orphan_assistant")
+            self.assertEqual(raised.exception.asdict()["line"], 1)
 
     def test_conversation_provider_factory_creates_claude_code_provider(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

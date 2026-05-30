@@ -44,6 +44,7 @@ maps.
 material.
 
 - [`install-guide.md`](guides/install-guide.md) - public skill, MCP, plugin, hook, and local-sync install paths.
+- [`claude-code-mcp.md`](guides/claude-code-mcp.md) - Claude Code MCP setup, provider onboarding states, and privacy boundary.
 - [`public-api.md`](guides/public-api.md) - supported CLI, MCP, JSON, environment-variable, and Python import stability boundary.
 - [`public-core-boundary.md`](guides/public-core-boundary.md) - Apache-2.0 public-core license, adapter, schema, third-party asset, and relicensing boundary.
 - [`demo-scenarios.md`](guides/demo-scenarios.md) - public-safe demo flows using synthetic memory data.
@@ -67,6 +68,7 @@ boundaries. Keep raw JSON reports and private case packs out of git.
 drafts. Treat it as useful context, not the final claim boundary.
 
 - [`next-iteration-plan.md`](planning/next-iteration-plan.md) - short handoff for upcoming development slices.
+- [`standalone-binary-packaging.md`](planning/standalone-binary-packaging.md) - follow-up plan for Python-free binary tooling candidates and cross-platform smoke matrix.
 - [`encrypted-sync-follow-up-rfc.md`](planning/encrypted-sync-follow-up-rfc.md) - follow-up issue/RFC for encrypted sync device-key UX and plaintext-to-encrypted migration.
 - [`technical-differentiation-analysis.md`](planning/technical-differentiation-analysis.md) - strategic hypothesis draft. Treat claims as positioning until externally sourced.
 

@@ -74,7 +74,7 @@ diagnostic-only coverage rather than an overall pass.
 Register existing Codex sessions and build clean-source indexes:
 
 ```sh
-python "${CODEX_HOME}/skills/aippocampus/scripts/onboard.py" --provider codex --all --format json
+aippocampus onboard --provider codex --all --format json
 ```
 
 Use `--dry-run` before broad imports when you want a preview. Generated memory
@@ -82,16 +82,33 @@ artifacts default to `$CODEX_HOME/aippocampus-registry/threads/<thread>/...`,
 not the active project repository. `onboard_codex.py` remains available as the
 Codex-only compatibility entrypoint.
 
+Check provider readiness before writing:
+
+```sh
+aippocampus onboard --status --cwd "$PWD"
+```
+
+`auto` keeps Codex as the safest default and lists other detected providers
+separately. `claude-code` and `generic-jsonl` require explicit provider
+selection before they write clean source.
+
 ## MCP Mode
 
 Inspect the local MCP tool catalog:
 
 ```sh
-python ./skills/aippocampus/scripts/aippocampus_mcp_server.py --list-tools
+aippocampus mcp list-tools
 ```
 
 The initial MCP layer is read-mostly. It exposes clean-source and registry
 tools plus explicit `register_thread` and `sync_status`.
+
+Direct script commands remain supported when the facade is not installed:
+
+```sh
+python ./skills/aippocampus/scripts/aippocampus_mcp_server.py --list-tools
+python "${CODEX_HOME}/skills/aippocampus/scripts/onboard.py" --provider codex --all --format json
+```
 
 Tool errors use stable JSON payloads inside MCP `content` text:
 

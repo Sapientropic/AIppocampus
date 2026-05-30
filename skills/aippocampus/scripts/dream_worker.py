@@ -88,6 +88,8 @@ def stable_digest(*parts: object, prefix: str, length: int = 18) -> str:
 
 
 def safe_float(value: object, default: float = 0.0) -> float:
+    if not isinstance(value, (int, float, str)):
+        return default
     try:
         number = float(value)
     except (TypeError, ValueError):
@@ -187,7 +189,8 @@ def source_refs_by_id(pack: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
 
 
 def safe_pack_payload(pack: Mapping[str, Any]) -> dict[str, Any]:
-    audit = pack.get("source_ref_audit") if isinstance(pack.get("source_ref_audit"), Mapping) else {}
+    audit_value = pack.get("source_ref_audit")
+    audit: Mapping[str, Any] = audit_value if isinstance(audit_value, Mapping) else {}
     payload = {
         "pack_id": pack.get("pack_id"),
         "pack_kind": pack.get("pack_kind"),

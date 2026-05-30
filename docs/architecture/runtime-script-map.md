@@ -73,11 +73,14 @@ adding fresh ad hoc `sys.path` insertion rules.
 | Tool or group | Purpose | Invocation route | Key dependencies | Status |
 |---|---|---|---|---|
 | `tools/aippocampus/smoke/smoke_codex_long_session_continuity.py` | Slow/live real Codex app-server long-session smoke for synthetic correction survival across host compaction, plus clean-source rebuild verification. | Manual public-readiness command; not part of the fast deterministic tier. | Codex app-server, `build_clean_source.py`, existing real-host smoke client. | Repo maintenance |
+| `tools/aippocampus/smoke/smoke_claude_code_history.py` | Privacy-preserving local Claude Code history parser smoke that reports counts and booleans only. | Manual provider-readiness command; not part of the fast deterministic tier. | `conversation_sources/claude_code.py`; local Claude Code `projects/**/*.jsonl` store. | Repo maintenance |
+| `tools/aippocampus/smoke/smoke_cross_agent_continuity.py` | Deterministic synthetic Codex/Claude source-backed retrieval smoke through registry clean source and MCP `search_memory`. | Manual provider-readiness command and fast reviewed sensitive test coverage. | Codex/Claude providers, registry, MCP search. | Repo maintenance |
 
 ## Public Entrypoints And Install Flow
 
 | Script or group | Purpose | Invocation route | Key dependencies | Status |
 |---|---|---|---|---|
+| `aippocampus_cli.py` | Thin `aippocampus` command facade over documented script entrypoints. | Console script / operator CLI. | Existing script mains via subprocess; preserves child JSON and exit codes. | Public entrypoint |
 | `aippocampus_health.py` | Runtime readiness and public smoke checks. | CLI, install docs, CI-adjacent smoke. | `registry.py`, `aippocampuslib.py`, filesystem/env checks. | Public entrypoint |
 | `aippocampus_maintenance.py` | Compact maintenance wrapper for routine operator checks. | CLI/manual maintenance. | Health, registry, docs/smoke conventions. | Repo maintenance |
 | `onboard.py`, `onboard_codex.py`, `onboard_frontier.py`, `onboard_status.py` | Build or report source-backed onboarding state. `onboard.py` is the provider-aware facade; `onboard_codex.py` remains the Codex-only compatibility entrypoint. | CLI and install/readiness workflows. | Clean source, registry, project timeline, optional external model env. | Public entrypoint |
@@ -100,15 +103,15 @@ conversation-provider homes.
 
 | Script or group | Purpose | Invocation route | Key dependencies | Status |
 |---|---|---|---|---|
-| `conversation_sources/base.py` | Shared `ConversationProvider` protocol and `ConversationSourceRef` data shape. | Imported by registry/onboarding/source builders. | Standard library typing/dataclasses only. | Runtime internal |
+| `conversation_sources/base.py` | Shared `ConversationProvider`, `ConversationSourceRef`, and provider-normalized visible message shapes. | Imported by registry/onboarding/source builders. | Standard library typing/dataclasses only. | Runtime internal |
 | `conversation_sources/codex.py` | Codex Desktop provider for live `sessions/` and `archived_sessions/` rollout JSONL discovery, current-cwd lookup, metadata extraction, and thread identity. | Legacy wrappers in `aippocampuslib.py`, registry scan, current-thread registration. | Codex rollout JSONL first-line `session_meta`; no registry writes. | Runtime internal |
-| `conversation_sources/claude_code.py` | Claude Code provider for local `projects/**/*.jsonl` transcript discovery, current-cwd lookup, public metadata extraction, and provider-prefixed thread identity. | `onboard.py --provider claude-code --dry-run`, registry dry-run scan, provider smoke tests. | Claude Code JSONL top-level `sessionId` / `cwd` / `timestamp`; no generated registry storage decisions. | Runtime internal |
+| `conversation_sources/claude_code.py` | Claude Code provider for local `projects/**/*.jsonl` transcript discovery, current-cwd lookup, public metadata extraction, provider-prefixed thread identity, and visible-message clean-source parsing. | `onboard.py --provider claude-code`, registry scan, provider smoke tests. | Claude Code JSONL top-level `sessionId` / `cwd` / `timestamp`; filters thinking/tool payloads from daily clean source. | Runtime internal |
+| `conversation_sources/generic_jsonl.py` | Validated generic JSONL import provider for non-Codex/non-Claude hosts. | `onboard.py --provider generic-jsonl`, explicit import/smoke paths. | `AIPPOCAMPUS_GENERIC_IMPORT_DIR` or explicit provider path; rejects ambiguous roles/turns. | Runtime internal |
 
-Claude Code support is currently discovery-only: local real-session schema has
-been verified enough for dry-run scan and current-session lookup, but
-clean-source conversion/registration remains a separate parser slice. Claude
-Code MCP/hook/skill installers are host integrations and should live in their
-own issue/slice rather than inside the provider contract.
+Claude Code support has a clean-source parser for visible text and explicit
+registration. Host MCP setup remains a separate integration surface documented
+in `docs/guides/claude-code-mcp.md`. Claude Code hook/skill installers are not
+claimed by the provider contract.
 
 ## Hook Paths
 
@@ -125,7 +128,7 @@ own issue/slice rather than inside the provider contract.
 | Script or group | Purpose | Invocation route | Key dependencies | Status |
 |---|---|---|---|---|
 | `registry.py`, `registry_store.py`, `registry_search.py` | Resolve registry paths, store thread rows, and search registry metadata. | Most runtime entrypoints. | Global registry layout and privacy policy. | Runtime internal |
-| `build_clean_source.py` | Convert raw rollouts into source-backed clean messages/turns. | Onboarding, import, maintenance, tests. | Raw rollout audit, scope-label policy. | Public entrypoint |
+| `build_clean_source.py` | Convert provider-normalized transcript messages into source-backed clean messages/turns. | Onboarding, import, maintenance, tests. | Provider parsers, raw transcript audit, scope-label policy. | Public entrypoint |
 | `retrieval.py`, `retrieval_query_policy.py`, `retrieval_score_fusion.py`, `search_clean_source.py`, `search_rollout.py` | Source-backed retrieval, explicit score-fusion policy, and raw audit fallback. | Prompt hook, MCP, CLI search surfaces, future vector/graph fusion consumers. | Clean-source JSONL, registry rows, query policy, stable source ids/source refs; scores remain ranking hints only. | Runtime internal |
 | `build_index.py`, `build_segments.py`, `search_segments.py` | SQLite/RAG-lite index and large-thread segment fanout. | Maintenance, query paths, scale smokes. | Clean source, segment manifests, last-known-good publish semantics. | Rebuildable cache |
 | `build_project_timeline.py`, `build_semantic_scope_labels.py`, `build_associations.py` | Timeline, semantic sidecars, and source-derived associations. | Onboarding, prompt recall, semantic smokes. | Registry rows, clean source, optional model sidecars. | Rebuildable cache |

@@ -20,8 +20,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from aippocampuslib import compact_text, deepseek_cache_metrics_from_usage, now_utc
 import dream_worker
+from aippocampuslib import compact_text, deepseek_cache_metrics_from_usage, now_utc
 from dream_working_memory import (
     adjudicated_dream_findings_to_working_memory,
     background_adjudicate_dream_findings,
@@ -34,7 +34,11 @@ from memory_candidate_router import (
     iter_jsonl,
     load_working_memory,
 )
-from model_client import DEEPSEEK_KV_CACHE_GUIDE_URL, DEEPSEEK_PREFIX_CACHE_CONTRACT, ChatClientConfig
+from model_client import (
+    DEEPSEEK_KV_CACHE_GUIDE_URL,
+    DEEPSEEK_PREFIX_CACHE_CONTRACT,
+    ChatClientConfig,
+)
 from registry_store import registry_paths
 
 SCHEMA_VERSION = 1
@@ -467,12 +471,13 @@ def dream_finding(
 
 
 def aggregate_usage(worker_runs: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
-    totals: Counter[str] = Counter()
+    totals: dict[str, float] = {}
     for run in worker_runs:
-        usage = run.get("usage") if isinstance(run.get("usage"), Mapping) else {}
+        usage_value = run.get("usage")
+        usage: Mapping[str, Any] = usage_value if isinstance(usage_value, Mapping) else {}
         for key, value in usage.items():
             if isinstance(value, (int, float)):
-                totals[str(key)] += value
+                totals[str(key)] = totals.get(str(key), 0.0) + float(value)
     return dict(totals)
 
 
@@ -743,7 +748,10 @@ def manual_source_review_metrics(rows: Iterable[Mapping[str, Any]]) -> dict[str,
 
 
 def source_support_correct(row: Mapping[str, Any]) -> bool:
-    source_strength = row.get("source_strength") if isinstance(row.get("source_strength"), Mapping) else {}
+    source_strength_value = row.get("source_strength")
+    source_strength: Mapping[str, Any] = (
+        source_strength_value if isinstance(source_strength_value, Mapping) else {}
+    )
     preview = render_dream_hypothesis_preview(row)
     return (
         int(source_strength.get("source_ref_count") or 0) > 0
@@ -912,7 +920,7 @@ def run_dream_real_history_eval(
         working_memory_rows=working_rows,
         max_packs=max_packs,
     )
-    worker_runs = [run_pack_dream_worker(pack) for pack in packs]
+    worker_runs: list[Mapping[str, Any]] = [run_pack_dream_worker(pack) for pack in packs]
     dream_working_rows = [
         row
         for run in worker_runs

@@ -208,6 +208,8 @@ def registry_stats(*, registry_dir: Path | None = None) -> dict[str, Any]:
                 {
                     "thread_key": entry.get("thread_key"),
                     "title": entry.get("title"),
+                    "source_provider": entry.get("source_provider")
+                    or (entry.get("session_meta") or {}).get("source"),
                     "rollout": paths.get("rollout"),
                     "workspace": paths.get("workspace"),
                     "missing": missing_fields,
@@ -220,6 +222,8 @@ def registry_stats(*, registry_dir: Path | None = None) -> dict[str, Any]:
                     {
                         "thread_key": entry.get("thread_key"),
                         "title": entry.get("title"),
+                        "source_provider": entry.get("source_provider")
+                        or (entry.get("session_meta") or {}).get("source"),
                         "rollout": paths.get("rollout"),
                         "workspace": paths.get("workspace"),
                         "stale": ["sqlite_index"],

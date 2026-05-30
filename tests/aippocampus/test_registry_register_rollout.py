@@ -170,6 +170,36 @@ class RegisterRolloutTests(unittest.TestCase):
         self.assertEqual(data["count"], 1)
         self.assertEqual(data["planned"][0]["thread_key"], "session:session-other")
 
+    def test_registry_cli_search_redacts_top_level_registry_path(self) -> None:
+        registry.register_rollout_thread(
+            self.rollout,
+            project="Life OS",
+            registry_dir=self.registry_dir,
+        )
+
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(REGISTRY),
+                "--registry-dir",
+                str(self.registry_dir),
+                "search",
+                "Life",
+                "--json",
+                "--redact-paths",
+            ],
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        data = json.loads(proc.stdout)
+        self.assertEqual(data["registry"], "<local-path-redacted>")
+        self.assertNotIn(str(self.registry_dir), proc.stdout)
+
     def test_register_current_thread_build_passes_provider_rollout_to_child_scripts(
         self,
     ) -> None:
