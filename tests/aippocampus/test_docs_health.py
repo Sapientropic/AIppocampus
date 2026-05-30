@@ -55,12 +55,12 @@ class DocsHealthTests(unittest.TestCase):
         result = docs_health.check_repo_docs(repo_root)[0]
 
         self.assertNotIn("missing public-readiness doc: CONTRIBUTING.md", result)
-        self.assertNotIn("missing public-readiness doc: docs/architecture-overview.md", result)
-        self.assertNotIn("missing public-readiness doc: docs/install-guide.md", result)
-        self.assertNotIn("missing public-readiness doc: docs/demo-scenarios.md", result)
-        self.assertNotIn("missing public-readiness doc: docs/privacy-security-checklist.md", result)
+        self.assertNotIn("missing public-readiness doc: docs/architecture/architecture-overview.md", result)
+        self.assertNotIn("missing public-readiness doc: docs/guides/install-guide.md", result)
+        self.assertNotIn("missing public-readiness doc: docs/guides/demo-scenarios.md", result)
+        self.assertNotIn("missing public-readiness doc: docs/guides/privacy-security-checklist.md", result)
         self.assertNotIn(
-            "missing public-readiness doc: docs/public-readiness-verification.md", result
+            "missing public-readiness doc: docs/evidence/public-readiness-verification.md", result
         )
         self.assertNotIn("missing public example memory bundle", result)
         self.assertFalse(any("scope_label_policy" in issue for issue in result), result)
@@ -82,12 +82,49 @@ class DocsHealthTests(unittest.TestCase):
 
         self.assertEqual(result, [])
 
-    def test_runtime_script_map_reports_missing_required_script(self) -> None:
+    def test_benchmark_evidence_map_covers_current_entrypoints(self) -> None:
+        repo_root = docs_health.find_repo_root(ROOT)
+        self.assertIsNotNone(repo_root)
+
+        result = docs_health.benchmark_evidence_map_issues(repo_root)
+
+        self.assertEqual(result, [])
+
+    def test_benchmark_evidence_map_reports_missing_runner(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
             docs = repo / "docs"
-            docs.mkdir(parents=True)
-            (docs / "runtime-script-map.md").write_text(
+            evidence = docs / "evidence"
+            evidence.mkdir(parents=True)
+            (docs / "README.md").write_text(
+                "# Docs\n\n- benchmark-evidence-map.md\n",
+                encoding="utf-8",
+            )
+            (evidence / "benchmark-evidence-map.md").write_text(
+                "\n".join(docs_health.REQUIRED_BENCHMARK_EVIDENCE_MAP_TERMS) + "\n",
+                encoding="utf-8",
+            )
+            benchmark_dir = repo / "benchmarks" / "aippocampus"
+            benchmark_dir.mkdir(parents=True)
+            (benchmark_dir / "benchmark_new_surface.py").write_text(
+                '"""New benchmark."""\n',
+                encoding="utf-8",
+            )
+
+            issues = docs_health.benchmark_evidence_map_issues(repo)
+
+        self.assertIn(
+            "benchmark evidence map missing entrypoint: "
+            "benchmarks/aippocampus/benchmark_new_surface.py",
+            issues,
+        )
+
+    def test_runtime_script_map_reports_missing_required_script(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            architecture = repo / "docs" / "architecture"
+            architecture.mkdir(parents=True)
+            (architecture / "runtime-script-map.md").write_text(
                 "aippocampus_prompt_hook.py\n", encoding="utf-8"
             )
 
@@ -98,9 +135,9 @@ class DocsHealthTests(unittest.TestCase):
     def test_runtime_script_map_reports_missing_navigation_sections(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
-            docs = repo / "docs"
-            docs.mkdir(parents=True)
-            (docs / "runtime-script-map.md").write_text(
+            architecture = repo / "docs" / "architecture"
+            architecture.mkdir(parents=True)
+            (architecture / "runtime-script-map.md").write_text(
                 "\n".join(docs_health.REQUIRED_RUNTIME_MAP_SCRIPTS) + "\n",
                 encoding="utf-8",
             )
@@ -153,6 +190,37 @@ class DocsHealthTests(unittest.TestCase):
 
         self.assertIn(
             "research index subdirectory docs/research/topic-pack must include README.md",
+            issues,
+        )
+
+    def test_docs_root_reports_unclassified_markdown(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            docs = repo / "docs"
+            docs.mkdir(parents=True)
+            (docs / "loose-status-report.md").write_text("# Loose\n", encoding="utf-8")
+
+            issues, _ = docs_health.check_repo_docs(repo)
+
+        self.assertIn(
+            "docs root has unclassified markdown file: docs/loose-status-report.md; "
+            "move it under docs/architecture, docs/guides, docs/evidence, "
+            "docs/planning, or docs/research",
+            issues,
+        )
+
+    def test_docs_root_reports_unclassified_directories(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            docs = repo / "docs"
+            (docs / "misc").mkdir(parents=True)
+
+            issues, _ = docs_health.check_repo_docs(repo)
+
+        self.assertIn(
+            "docs root has unclassified directory: docs/misc; "
+            "use docs/architecture, docs/guides, docs/evidence, "
+            "docs/planning, docs/research, or docs/archive",
             issues,
         )
 
@@ -222,11 +290,11 @@ class DocsHealthTests(unittest.TestCase):
             issues, _ = docs_health.check_repo_docs(repo)
 
         self.assertIn("missing public-readiness doc: CONTRIBUTING.md", issues)
-        self.assertIn("missing public-readiness doc: docs/architecture-overview.md", issues)
-        self.assertIn("missing public-readiness doc: docs/install-guide.md", issues)
-        self.assertIn("missing public-readiness doc: docs/demo-scenarios.md", issues)
-        self.assertIn("missing public-readiness doc: docs/privacy-security-checklist.md", issues)
-        self.assertIn("missing public-readiness doc: docs/public-readiness-verification.md", issues)
+        self.assertIn("missing public-readiness doc: docs/architecture/architecture-overview.md", issues)
+        self.assertIn("missing public-readiness doc: docs/guides/install-guide.md", issues)
+        self.assertIn("missing public-readiness doc: docs/guides/demo-scenarios.md", issues)
+        self.assertIn("missing public-readiness doc: docs/guides/privacy-security-checklist.md", issues)
+        self.assertIn("missing public-readiness doc: docs/evidence/public-readiness-verification.md", issues)
         self.assertIn("missing public example memory bundle", issues)
 
     def test_public_example_guard_requires_scope_label_metadata(self) -> None:

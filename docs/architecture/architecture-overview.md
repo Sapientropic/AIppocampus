@@ -71,6 +71,6 @@ Detailed runtime behavior lives in the skill references:
 
 Product direction remains in `docs/roadmap.md`.
 The public-core license, adapter, and schema boundary lives in
-`docs/public-core-boundary.md`.
+`docs/guides/public-core-boundary.md`.
 Runtime script ownership and dependency navigation lives in
-`docs/runtime-script-map.md`.
+`docs/architecture/runtime-script-map.md`.

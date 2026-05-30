@@ -227,7 +227,7 @@ Phase 1 helper with this concrete contract:
 
 The executable contract lives in
 `tests/aippocampus/test_compensatory_dream.py`. Keep changes to this schema
-paired with that test file and the runtime map in `docs/runtime-script-map.md`.
+paired with that test file and the runtime map in `docs/architecture/runtime-script-map.md`.
 
 ## Dream Outputs As Reusable Inference Substrate
 

@@ -8,14 +8,14 @@ competitor scorecard or leaderboard.
 
 ## Source Map
 
-- Taxonomy: [`docs/research/memory-system-pain-taxonomy.md`](research/memory-system-pain-taxonomy.md)
-- Benchmark plan: [`docs/memory-decision-benchmark-plan.md`](memory-decision-benchmark-plan.md)
-- Gate runner: [`benchmarks/aippocampus/benchmark_memory_decision_gate.py`](../benchmarks/aippocampus/benchmark_memory_decision_gate.py)
-- Payload runner: [`benchmarks/aippocampus/benchmark_payload_fidelity.py`](../benchmarks/aippocampus/benchmark_payload_fidelity.py)
+- Taxonomy: [`docs/research/memory-system-pain-taxonomy.md`](../research/memory-system-pain-taxonomy.md)
+- Benchmark plan: [`docs/evidence/memory-decision-benchmark-plan.md`](memory-decision-benchmark-plan.md)
+- Gate runner: [`benchmarks/aippocampus/benchmark_memory_decision_gate.py`](../../benchmarks/aippocampus/benchmark_memory_decision_gate.py)
+- Payload runner: [`benchmarks/aippocampus/benchmark_payload_fidelity.py`](../../benchmarks/aippocampus/benchmark_payload_fidelity.py)
 - Tests:
-  [`tests/aippocampus/test_benchmark_memory_decision_gate.py`](../tests/aippocampus/test_benchmark_memory_decision_gate.py)
+  [`tests/aippocampus/test_benchmark_memory_decision_gate.py`](../../tests/aippocampus/test_benchmark_memory_decision_gate.py)
   and
-  [`tests/aippocampus/test_benchmark_payload_fidelity.py`](../tests/aippocampus/test_benchmark_payload_fidelity.py)
+  [`tests/aippocampus/test_benchmark_payload_fidelity.py`](../../tests/aippocampus/test_benchmark_payload_fidelity.py)
 
 ## What Was Demonstrated
 

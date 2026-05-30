@@ -11,4 +11,4 @@ shipped as Apache-2.0 code in this public repository.
 
 The canonical boundary between the Apache-2.0 public core, private user data,
 and commercial/separate-license product surfaces is
-`docs/public-core-boundary.md`.
+`docs/guides/public-core-boundary.md`.

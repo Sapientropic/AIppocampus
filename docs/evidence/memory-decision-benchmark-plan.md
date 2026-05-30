@@ -8,6 +8,8 @@ compaction-continuity testing is implemented as a measurement surface.
 This document defines the benchmark direction for AIppocampus memory decisions.
 It complements the existing FTS5/source-evidence checks; it does not replace
 them and does not turn AIppocampus into a generic vector-search benchmark.
+For the shortest map of every benchmark runner, smoke surface, corpus note, and
+dated evidence owner, start with `docs/evidence/benchmark-evidence-map.md`.
 
 ## Goal
 
@@ -768,7 +770,7 @@ or evidence-based review may mark valid, refuted, superseded, local-only, or
 uncertain.
 
 Track D depends on the Hook Timing Matrix in
-[`docs/research/correction-reconsolidation.md`](research/correction-reconsolidation.md).
+[`docs/research/correction-reconsolidation.md`](../research/correction-reconsolidation.md).
 The benchmark should measure event-stage behavior without turning every hook
 into a semantic judge. In particular, `PreToolUse` is a contextual preview hook
 only; security, approval, and permission policy remain outside the memory

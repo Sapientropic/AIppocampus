@@ -318,7 +318,7 @@ object-store client boundary is split into `object_storage_client.py` and
 `object_storage_providers.py`; provider mode covers generic HTTP bearer-token
 endpoints, S3-compatible SigV4, Cloudflare R2 region `auto`, and Google Cloud
 Storage XML HMAC signing. Provider-specific setup notes live in
-`docs/object-storage-providers.md`.
+`docs/guides/object-storage-providers.md`.
 
 Raw rollout files are excluded from plaintext sync. Normal raw rollout transfer
 requires encrypted sync. Pull never overwrites conflicting local files; it

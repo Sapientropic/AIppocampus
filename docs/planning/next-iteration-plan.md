@@ -19,7 +19,7 @@ handoff context.
 - Public repo boundary: no raw rollouts, registry exports, private anchors,
   generated indexes, or local paths in Git.
 - Public-core licensing and adapter boundaries live in
-  `docs/public-core-boundary.md`; do not mirror that contract into release
+  `docs/guides/public-core-boundary.md`; do not mirror that contract into release
   notes, package metadata, or roadmap prose beyond a short pointer.
 - Default generated artifacts live under
   `$CODEX_HOME/aippocampus-registry/threads/<thread>/...`.
@@ -166,8 +166,8 @@ handoff context.
      source-backed baseline shows a scale bottleneck.
 
 10. Retrieval score fusion contract
-   - Source: `docs/wukong-mining-notes.md`, `docs/gb-scale-roadmap.md`,
-     `docs/question-tracking-subconscious.md`, and `docs/public-api.md`.
+   - Source: `docs/architecture/wukong-mining-notes.md`, `docs/architecture/gb-scale-roadmap.md`,
+     `docs/architecture/question-tracking-subconscious.md`, and `docs/guides/public-api.md`.
    - First internal policy is implemented in
      `skills/aippocampus/scripts/retrieval_score_fusion.py`: it preserves the
      existing text score formula, blends optional vector and graph scores with
@@ -179,7 +179,7 @@ handoff context.
 
 11. Correction reconsolidation events
    - Source: `docs/research/correction-reconsolidation.md` and
-     `docs/memory-decision-benchmark-plan.md`.
+     `docs/evidence/memory-decision-benchmark-plan.md`.
    - First runtime helper is implemented in
      `skills/aippocampus/scripts/correction_reconsolidation.py`: it builds and
      appends source-backed `correction_activation_event` /
@@ -191,7 +191,7 @@ handoff context.
 
 12. Coding decision events
    - Source: `docs/research/agent-coding-context-analysis.md` and
-     `docs/memory-decision-benchmark-plan.md`.
+     `docs/evidence/memory-decision-benchmark-plan.md`.
    - First deterministic extractor is implemented in
      `skills/aippocampus/scripts/coding_decision_events.py`: it reads clean
      source messages, emits staging `decision_event` candidates with source
@@ -218,9 +218,9 @@ handoff context.
      timing quality or annoyance-risk calibration.
 
 14. Question salience and adaptive separation/completion thresholds
-   - Source: `docs/technical-differentiation-analysis.md`,
-     `docs/question-tracking-subconscious.md`, and
-     `docs/cognitive-runtime-architecture.md`.
+   - Source: `docs/planning/technical-differentiation-analysis.md`,
+     `docs/architecture/question-tracking-subconscious.md`, and
+     `docs/architecture/cognitive-runtime-architecture.md`.
    - First deterministic slice is implemented in
      `skills/aippocampus/scripts/question_tracking.py`: parsed
      `question_candidate` rows receive salience profiles, low-information
@@ -233,7 +233,7 @@ handoff context.
 15. Cognitive portrait structured-text benchmark
    - Source: `docs/research/compact-activation-signals.md`,
      `docs/research/README.md`, and
-     `docs/question-tracking-subconscious.md`.
+     `docs/architecture/question-tracking-subconscious.md`.
    - First deterministic benchmark is implemented in
      `benchmarks/aippocampus/benchmark_cognitive_portrait.py`: it builds a
      compact structured-text portrait from source-backed
@@ -248,7 +248,7 @@ handoff context.
 
 16. Journey Tracking P1-P3 core
    - Source: `docs/research/journey-tracking.md`,
-     `docs/question-tracking-subconscious.md`, and the hexagram validation
+     `docs/architecture/question-tracking-subconscious.md`, and the hexagram validation
      study pack.
    - First deterministic core is implemented in
      `skills/aippocampus/scripts/journey_tracking.py`: it defines source-backed
@@ -267,7 +267,7 @@ handoff context.
 17. Compensatory dream Phase 1
    - Source: `docs/research/dream-task-design.md`,
      `docs/research/source-as-world.md`, and
-     `docs/cognitive-runtime-architecture.md`.
+     `docs/architecture/cognitive-runtime-architecture.md`.
    - First deterministic helper is implemented in
      `skills/aippocampus/scripts/compensatory_dream.py`: it consumes
      source-backed single-thread extraction rows, discards unsourced or prior

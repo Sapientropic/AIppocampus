@@ -28,7 +28,7 @@ exports unless you have the right to publish them.
 
 The canonical split between Apache-2.0 public core, private user data, and
 commercial/separate-license product surfaces is
-`docs/public-core-boundary.md`.
+`docs/guides/public-core-boundary.md`.
 
 ## Development Checks
 

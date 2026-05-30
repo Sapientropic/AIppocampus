@@ -36,7 +36,7 @@ HIGH_RISK_MYPY_SCRIPTS = {
     "skills/aippocampus/scripts/retrieval.py",
     "skills/aippocampus/scripts/warm_ambient_recall.py",
 }
-DEBT_REGISTER = REPO_ROOT / "docs" / "architecture-debt-register.md"
+DEBT_REGISTER = REPO_ROOT / "docs" / "architecture" / "architecture-debt-register.md"
 
 
 def debt_register_entries() -> dict[str, int]:

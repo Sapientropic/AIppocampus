@@ -50,7 +50,7 @@ Implemented command shape:
    - Keep raw rollout sync encrypted-only and explicit.
 
 The concrete CLI entrypoint is `encrypted_sync_admin.py`; see
-`docs/install-guide.md` for local-folder and object-storage examples. Cleanup
+`docs/guides/install-guide.md` for local-folder and object-storage examples. Cleanup
 is scoped to manifest-managed plaintext files/objects, requires an explicit
 verified-target acknowledgement after encrypted repair or pull, and does not
 claim to erase unrelated provider objects.

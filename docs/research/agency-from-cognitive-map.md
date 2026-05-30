@@ -7,7 +7,7 @@ Related: [Ambient Associative Recall](ambient-associative-recall.md),
 [Correction Reconsolidation](correction-reconsolidation.md),
 [Dream Task Design](dream-task-design.md),
 [Journey Tracking](journey-tracking.md),
-[Memory Decision Benchmark Plan](../memory-decision-benchmark-plan.md).
+[Memory Decision Benchmark Plan](../evidence/memory-decision-benchmark-plan.md).
 
 ## Thesis
 

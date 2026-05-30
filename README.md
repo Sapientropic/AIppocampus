@@ -14,7 +14,7 @@ The origin essay is [未干的地图](docs/未干的地图.md), with an English 
 at [The Unfinished Map](docs/the-unfinished-map.md).
 
 The runtime design note
-[Cognitive Runtime Architecture](docs/cognitive-runtime-architecture.md)
+[Cognitive Runtime Architecture](docs/architecture/cognitive-runtime-architecture.md)
 explains why AIppocampus uses deterministic gates, fast semantic workers, job
 circuits, and pipeline-level routing instead of one all-purpose agent.
 
@@ -65,7 +65,7 @@ Then restart Codex or reload skills if your runtime requires it.
 
 The skill entrypoint is [skills/aippocampus/SKILL.md](skills/aippocampus/SKILL.md).
 The public API and stability boundary is
-[docs/public-api.md](docs/public-api.md).
+[docs/guides/public-api.md](docs/guides/public-api.md).
 
 ## First Checks
 
@@ -85,6 +85,10 @@ Use `python tools/aippocampus/run_tests.py --tier full` before making a
 repository-health or public-readiness claim. Use `--tier benchmark` or
 `--tier slow` when touching benchmark runners, smoke tools, plugin packaging,
 onboarding, object sync, or prompt-hook integration behavior.
+
+For benchmark runners, smoke tools, dated measurement records, and the right
+place to add new evidence, start with
+[Benchmark And Evidence Map](docs/evidence/benchmark-evidence-map.md).
 
 The Stage 0-5 public-readiness smoke is broader than a fresh-clone install
 check. Some gates inspect the local AIppocampus registry under `$CODEX_HOME`;
@@ -160,7 +164,7 @@ python ./skills/aippocampus/scripts/sync_object_storage.py repair --object-store
 
 S3-compatible providers can be configured with `AIPPOCAMPUS_OBJECT_PROVIDER`
 (`s3`, `r2`, or `gcs-xml`) plus bucket, region/account id, and HMAC credentials.
-See [object-storage-providers.md](docs/object-storage-providers.md) for the
+See [object-storage-providers.md](docs/guides/object-storage-providers.md) for the
 provider-specific setup notes.
 
 Encrypted sync uses the external `age` CLI and writes `encrypted-sync/`
@@ -234,7 +238,7 @@ exports, registry rows, sync bundles, vault exports, generated indexes, and
 thread anchors remain private user artifacts unless their owner explicitly
 publishes them.
 
-See [docs/public-core-boundary.md](docs/public-core-boundary.md) for the
+See [docs/guides/public-core-boundary.md](docs/guides/public-core-boundary.md) for the
 canonical licensing, adapter, schema, third-party asset, and relicensing
-boundary. See [docs/public-api.md](docs/public-api.md) for supported CLI, MCP,
+boundary. See [docs/guides/public-api.md](docs/guides/public-api.md) for supported CLI, MCP,
 environment-variable, JSON, and import-stability expectations.

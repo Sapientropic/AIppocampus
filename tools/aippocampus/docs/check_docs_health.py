@@ -30,13 +30,30 @@ REQUIRED_REFERENCES = [
 REQUIRED_PROJECT_DOCS = [
     "docs/README.md",
     "docs/roadmap.md",
-    "docs/stage-0-5-readiness.md",
-    "docs/next-iteration-plan.md",
-    "docs/runtime-script-map.md",
-    "docs/gb-scale-roadmap.md",
-    "docs/wukong-mining-notes.md",
-    "docs/technical-differentiation-analysis.md",
+    "docs/evidence/benchmark-evidence-map.md",
+    "docs/evidence/stage-0-5-readiness.md",
+    "docs/planning/next-iteration-plan.md",
+    "docs/architecture/runtime-script-map.md",
+    "docs/architecture/gb-scale-roadmap.md",
+    "docs/architecture/wukong-mining-notes.md",
+    "docs/planning/technical-differentiation-analysis.md",
 ]
+
+DOCS_ROOT_ALLOWED_MARKDOWN = {
+    "README.md",
+    "roadmap.md",
+    "the-unfinished-map.md",
+    "未干的地图.md",
+}
+
+DOCS_ROOT_ALLOWED_DIRECTORIES = {
+    "archive",
+    "architecture",
+    "evidence",
+    "guides",
+    "planning",
+    "research",
+}
 
 REQUIRED_RUNTIME_MAP_SCRIPTS = [
     "aippocampus_prompt_hook.py",
@@ -106,20 +123,41 @@ REQUIRED_DREAM_PHASE1_CONTRACT_TERMS = {
     ),
 }
 
+REQUIRED_BENCHMARK_EVIDENCE_MAP_TERMS = {
+    "docs/evidence/stage-0-5-readiness.md": (
+        "benchmark evidence map missing current claim-boundary pointer"
+    ),
+    "docs/evidence/public-readiness-verification.md": (
+        "benchmark evidence map missing dated verification ledger pointer"
+    ),
+    "docs/evidence/memory-decision-benchmark-plan.md": (
+        "benchmark evidence map missing benchmark methodology pointer"
+    ),
+    "benchmark_corpus/README.md": "benchmark evidence map missing corpus README pointer",
+    "benchmark_corpus/sharegpt_manifest.json": (
+        "benchmark evidence map missing corpus manifest pointer"
+    ),
+    "docs/evidence/memory-pain-fixture-report.md": (
+        "benchmark evidence map missing memory-pain fixture report pointer"
+    ),
+}
+
+BENCHMARK_EVIDENCE_EXCLUDED_SCRIPT_NAMES = {"_paths.py"}
+
 REQUIRED_PUBLIC_READINESS_DOCS = [
     "CONTRIBUTING.md",
-    "docs/architecture-overview.md",
-    "docs/public-core-boundary.md",
-    "docs/install-guide.md",
-    "docs/demo-scenarios.md",
-    "docs/privacy-security-checklist.md",
-    "docs/public-readiness-verification.md",
+    "docs/architecture/architecture-overview.md",
+    "docs/guides/public-core-boundary.md",
+    "docs/guides/install-guide.md",
+    "docs/guides/demo-scenarios.md",
+    "docs/guides/privacy-security-checklist.md",
+    "docs/evidence/public-readiness-verification.md",
 ]
 
 PUBLIC_DOC_COMMAND_LINT_FILES = {
     "README.md",
-    "docs/install-guide.md",
-    "docs/demo-scenarios.md",
+    "docs/guides/install-guide.md",
+    "docs/guides/demo-scenarios.md",
     "skills/aippocampus/SKILL.md",
 }
 
@@ -226,9 +264,9 @@ def research_index_issues(repo_root: Path) -> list[str]:
 
 def runtime_script_map_issues(repo_root: Path) -> list[str]:
     issues: list[str] = []
-    runtime_map = repo_root / "docs" / "runtime-script-map.md"
+    runtime_map = repo_root / "docs" / "architecture" / "runtime-script-map.md"
     if not runtime_map.exists():
-        return ["missing runtime script map: docs/runtime-script-map.md"]
+        return ["missing runtime script map: docs/architecture/runtime-script-map.md"]
     text = runtime_map.read_text(encoding="utf-8")
     for script in REQUIRED_RUNTIME_MAP_SCRIPTS:
         if script not in text:
@@ -248,6 +286,59 @@ def dream_phase1_contract_issues(repo_root: Path) -> list[str]:
     for term, issue in REQUIRED_DREAM_PHASE1_CONTRACT_TERMS.items():
         if term not in text:
             issues.append(issue)
+    return issues
+
+
+def benchmark_evidence_entrypoints(repo_root: Path) -> list[str]:
+    """Return benchmark/smoke entrypoints that must stay discoverable from the docs map."""
+
+    paths: list[Path] = []
+
+    benchmark_dir = repo_root / "benchmarks" / "aippocampus"
+    if benchmark_dir.exists():
+        paths.extend(sorted(benchmark_dir.glob("benchmark_*.py")))
+        warm_case_builder = benchmark_dir / "build_warm_ambient_trace_cases.py"
+        if warm_case_builder.exists():
+            paths.append(warm_case_builder)
+
+    smoke_dir = repo_root / "tools" / "aippocampus" / "smoke"
+    if smoke_dir.exists():
+        paths.extend(
+            sorted(
+                path
+                for path in smoke_dir.glob("*.py")
+                if path.name not in BENCHMARK_EVIDENCE_EXCLUDED_SCRIPT_NAMES
+            )
+        )
+
+    plugin_dir = repo_root / "plugins" / "aippocampus"
+    if plugin_dir.exists():
+        paths.extend(sorted(plugin_dir.glob("smoke_*.py")))
+
+    return sorted({path.relative_to(repo_root).as_posix() for path in paths})
+
+
+def benchmark_evidence_map_issues(repo_root: Path) -> list[str]:
+    issues: list[str] = []
+    rel_path = "docs/evidence/benchmark-evidence-map.md"
+    evidence_map = repo_root / rel_path
+    if not evidence_map.exists():
+        return [f"missing benchmark evidence map: {rel_path}"]
+
+    text = evidence_map.read_text(encoding="utf-8")
+    for term, issue in REQUIRED_BENCHMARK_EVIDENCE_MAP_TERMS.items():
+        if term not in text:
+            issues.append(issue)
+
+    docs_readme = repo_root / "docs" / "README.md"
+    if docs_readme.exists() and "benchmark-evidence-map.md" not in docs_readme.read_text(
+        encoding="utf-8"
+    ):
+        issues.append("docs README missing benchmark evidence map pointer")
+
+    for entrypoint in benchmark_evidence_entrypoints(repo_root):
+        if entrypoint not in text:
+            issues.append(f"benchmark evidence map missing entrypoint: {entrypoint}")
     return issues
 
 
@@ -306,12 +397,30 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
     issues: list[str] = []
     metrics: dict[str, Any] = {"repo_docs_checked": True}
 
+    docs_dir = repo_root / "docs"
+    if docs_dir.exists():
+        for path in sorted(docs_dir.glob("*.md")):
+            if path.name not in DOCS_ROOT_ALLOWED_MARKDOWN:
+                issues.append(
+                    f"docs root has unclassified markdown file: docs/{path.name}; "
+                    "move it under docs/architecture, docs/guides, docs/evidence, "
+                    "docs/planning, or docs/research"
+                )
+        for path in sorted(item for item in docs_dir.iterdir() if item.is_dir()):
+            if path.name not in DOCS_ROOT_ALLOWED_DIRECTORIES:
+                issues.append(
+                    f"docs root has unclassified directory: docs/{path.name}; "
+                    "use docs/architecture, docs/guides, docs/evidence, "
+                    "docs/planning, docs/research, or docs/archive"
+                )
+
     origin_stub = repo_root / "docs" / "origin.md"
     if origin_stub.exists():
         issues.append("docs/origin.md duplicates the origin essay; link docs/未干的地图.md instead")
 
     issues.extend(runtime_script_map_issues(repo_root))
     issues.extend(dream_phase1_contract_issues(repo_root))
+    issues.extend(benchmark_evidence_map_issues(repo_root))
 
     gitignore = repo_root / ".gitignore"
     if not gitignore.exists():

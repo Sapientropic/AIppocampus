@@ -137,7 +137,7 @@ Current verified package surfaces are:
 - package-level temporary install/MCP JSON-RPC/uninstall smoke
 - real Codex app-server local-marketplace install/MCP/uninstall smoke
 - external install validation recorded by issue #29 and summarized in
-  `docs/public-readiness-verification.md`
+  `docs/evidence/public-readiness-verification.md`
 
 These checks do not claim a public marketplace submission, every Codex client UI
 wrapper, or independent third-party review. If you publish through a marketplace
@@ -291,7 +291,7 @@ python ./skills/aippocampus/scripts/sync_object_storage.py push --encrypt --reci
 For Cloudflare R2, set `AIPPOCAMPUS_OBJECT_PROVIDER=r2` and
 `AIPPOCAMPUS_OBJECT_ACCOUNT_ID=<account id>`; the default region is `auto`.
 For Google Cloud Storage, set `AIPPOCAMPUS_OBJECT_PROVIDER=gcs-xml` and use XML
-API interoperability HMAC keys. See `docs/object-storage-providers.md` for the
+API interoperability HMAC keys. See `docs/guides/object-storage-providers.md` for the
 provider-specific pitfalls.
 
 Raw rollouts are still excluded from plaintext object-storage sync. Use

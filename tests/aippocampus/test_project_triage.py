@@ -21,7 +21,7 @@ def test_sync_child_issue_gets_full_ready_fields() -> None:
         issue(
             36,
             "Run physical second-machine cross-device sync smoke",
-            "Parent: #21\n\n## Source docs and tools\n\n- `docs/encrypted-sync-v1.md`",
+            "Parent: #21\n\n## Source docs and tools\n\n- `docs/architecture/encrypted-sync-v1.md`",
         )
     )
 

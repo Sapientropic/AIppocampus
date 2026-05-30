@@ -3,6 +3,9 @@
 This folder holds public conversation-corpus inputs and converters for
 AIppocampus benchmark work.
 
+For the cross-repository map of benchmark runners, smoke evidence, and dated
+records, start with [`docs/evidence/benchmark-evidence-map.md`](../docs/evidence/benchmark-evidence-map.md).
+
 ## Contents
 
 - `convert_to_aippocampus.py` converts public conversation datasets into
@@ -46,16 +49,14 @@ python benchmark_corpus\convert_to_aippocampus.py --source sharegpt --input benc
 Run the Track A P1 gate-decision baseline over the coding corpus:
 
 ```powershell
-cd skills\aippocampus
-python scripts\benchmark_memory_decision_gate.py --case-set sharegpt-coding --sharegpt-conversations 100 --output ..\..\benchmark_corpus\reports\sharegpt-p1-gate-100.json
+python benchmarks\aippocampus\benchmark_memory_decision_gate.py --case-set sharegpt-coding --sharegpt-conversations 100 --output benchmark_corpus\reports\sharegpt-p1-gate-100.json
 ```
 
 Run the optional public-corpus Track B source-evidence baseline over the broad
 ShareGPT corpus:
 
 ```powershell
-cd skills\aippocampus
-python scripts\benchmark_source_evidence_retrieval.py --include-sharegpt-public --sharegpt-public-conversations 100 --sharegpt-public-cases 200 --sharegpt-public-min-cases 50 --output ..\..\benchmark_corpus\reports\sharegpt-track-b-public-100.json
+python benchmarks\aippocampus\benchmark_source_evidence_retrieval.py --include-sharegpt-public --sharegpt-public-conversations 100 --sharegpt-public-cases 200 --sharegpt-public-min-cases 50 --output benchmark_corpus\reports\sharegpt-track-b-public-100.json
 ```
 
 This Track B slice reports message-level and turn-level source hits. It is a
@@ -86,9 +87,8 @@ semantic-sidecar quality.
 Run the optional standard retrieval-QA Track B adapter:
 
 ```powershell
-cd skills\aippocampus
-python scripts\benchmark_source_evidence_retrieval.py --include-standard-public --standard-dataset locomo --standard-questions 100 --standard-min-questions 20 --standard-top-k 10 --output ..\..\benchmark_corpus\reports\locomo-track-b-standard-100.json
-python scripts\benchmark_source_evidence_retrieval.py --include-standard-public --standard-dataset longmemeval-v1-oracle --standard-questions 50 --standard-min-questions 20 --standard-top-k 10 --output ..\..\benchmark_corpus\reports\longmemeval-oracle-track-b-standard-50.json
+python benchmarks\aippocampus\benchmark_source_evidence_retrieval.py --include-standard-public --standard-dataset locomo --standard-questions 100 --standard-min-questions 20 --standard-top-k 10 --output benchmark_corpus\reports\locomo-track-b-standard-100.json
+python benchmarks\aippocampus\benchmark_source_evidence_retrieval.py --include-standard-public --standard-dataset longmemeval-v1-oracle --standard-questions 50 --standard-min-questions 20 --standard-top-k 10 --output benchmark_corpus\reports\longmemeval-oracle-track-b-standard-50.json
 ```
 
 The standard adapter reports retrieval-only session/source R@K and MRR. LoCoMo
@@ -105,8 +105,7 @@ Run the optional semantic second-stage line reranker over the same source
 boundary:
 
 ```powershell
-cd skills\aippocampus
-python scripts\benchmark_source_evidence_retrieval.py --include-standard-public --standard-dataset longmemeval-v1-oracle --standard-questions 50 --standard-min-questions 20 --standard-top-k 10 --standard-line-reranker semantic --standard-line-reranker-workers 0 --output ..\..\benchmark_corpus\reports\longmemeval-oracle-track-b-standard-50-semantic-line-reranker.json
+python benchmarks\aippocampus\benchmark_source_evidence_retrieval.py --include-standard-public --standard-dataset longmemeval-v1-oracle --standard-questions 50 --standard-min-questions 20 --standard-top-k 10 --standard-line-reranker semantic --standard-line-reranker-workers 0 --output benchmark_corpus\reports\longmemeval-oracle-track-b-standard-50-semantic-line-reranker.json
 ```
 
 `--standard-line-reranker semantic` requires a configured DeepSeek-compatible
@@ -125,8 +124,7 @@ roughly half the requested question count for faster live runs.
 Run the optional live semantic-gate smoke over the coding corpus:
 
 ```powershell
-cd skills\aippocampus
-python scripts\benchmark_live_semantic_gate.py --sharegpt-conversations 100 --semantic-mode on --semantic-workers gate --output ..\..\benchmark_corpus\reports\live-semantic-gate-100.json
+python benchmarks\aippocampus\benchmark_live_semantic_gate.py --sharegpt-conversations 100 --semantic-mode on --semantic-workers gate --output benchmark_corpus\reports\live-semantic-gate-100.json
 ```
 
 The live smoke is not part of the required default suite. It needs a configured

@@ -9,8 +9,9 @@ Repository-layout command paths refreshed: 2026-05-29.
 Public-core license and adapter boundary refreshed: 2026-05-30.
 
 Keep this page focused on claim boundaries and missing proof. Dated command
-evidence belongs in `docs/public-readiness-verification.md`; next-slice task
-handoff belongs in `docs/next-iteration-plan.md`.
+evidence belongs in `docs/evidence/public-readiness-verification.md`; next-slice task
+handoff belongs in `docs/planning/next-iteration-plan.md`. The benchmark and smoke
+navigation map lives in `docs/evidence/benchmark-evidence-map.md`.
 
 ## Can Claim Now
 
@@ -181,7 +182,7 @@ handoff belongs in `docs/next-iteration-plan.md`.
 
 The #55/#56 closeout refreshes evidence without changing the claim boundary
 above. The canonical command details live in
-`docs/public-readiness-verification.md`.
+`docs/evidence/public-readiness-verification.md`.
 
 - #55 adds a 24-case live source-review pass for the current strict semantic
   sidecar slice and records a broader 96-case diagnostic live run with strong
@@ -197,7 +198,7 @@ above. The canonical command details live in
   Desktop UI marketplace click-through remain unclaimed unless separately
   verified.
 - #27/#28 add public-safe memory pain fixture evidence and a short report in
-  `docs/memory-pain-fixture-report.md`. This is Stage 2 boundary evidence for
+  `docs/evidence/memory-pain-fixture-report.md`. This is Stage 2 boundary evidence for
   source-backed recall and unsupported-memory suppression, not competitor
   superiority, live semantic-model quality, real-history pain coverage, or a
   real Track D runtime compaction-continuity proof.
@@ -266,7 +267,7 @@ above. The canonical command details live in
 | Stage | Current evidence | Missing proof |
 | --- | --- | --- |
 | 0 | `python tools/aippocampus/run_tests.py --tier fast` covers the default deterministic regression path, with docs health, hook installer tests, Ruff `E9` + full Pyflakes `F`, mypy coverage, retrieval/onboarding/warm recall/registry search/prompt recall/subconscious job behavior tests, and import-coupling guards for script cycles / hook import fan-out. `--tier full` remains the explicit release/readiness suite. | Keep the fast tier green after each slice; run the slow, benchmark, or full tier when claiming the surface they own |
-| 1 | `README.md`, `CONTRIBUTING.md`, `docs/public-core-boundary.md`, architecture/install/demo/privacy docs, synthetic example bundle, docs health guardrails, dated full-suite/scan notes, Apache-2.0 package/plugin/provenance metadata, `tools/aippocampus/smoke/run_stage_0_5_smoke.py` unified smoke runner, package-level temporary plugin install/MCP/uninstall smoke, and real Codex app-server plugin manager/MCP host smoke | Third-party fresh-clone or second-user install review, public marketplace submission if claimed, and repeated full-suite/scan evidence after each release slice |
+| 1 | `README.md`, `CONTRIBUTING.md`, `docs/guides/public-core-boundary.md`, architecture/install/demo/privacy docs, synthetic example bundle, docs health guardrails, dated full-suite/scan notes, Apache-2.0 package/plugin/provenance metadata, `tools/aippocampus/smoke/run_stage_0_5_smoke.py` unified smoke runner, package-level temporary plugin install/MCP/uninstall smoke, and real Codex app-server plugin manager/MCP host smoke | Third-party fresh-clone or second-user install review, public marketplace submission if claimed, and repeated full-suite/scan evidence after each release slice |
 | 2 | Registry, clean source, cognitive map, semantic triggers, subconscious jobs, deterministic `scope_labels`, mocked DeepSeek `semantic_scope_labeling` job-to-sidecar test, `build_semantic_scope_labels.py` materializer, dynamic `semantic-scope-labels.jsonl` sidecar merging with strict per-label evidence gates for every materialized label, scope-filtered clean-source search, public casual-important metaphor/pivot example, `life_wide` timeline groups with source refs, quiet life-wide ambient scent with anti-over-personalization tests, real-registry aggregate coverage smoke with claim-level/ratio guards, refreshed 949-thread local registry, full-candidate real-history semantic sidecar smoke evaluating 609 selected candidates and expanding to 27 threads/119 rows before strict filtering, v2 fresh DeepSeek probe with 11 findings / 15 accepted labels / complete per-label evidence, current strict sidecars at 2 threads/5 rows/5 timeline turns, selected source-evidence recall eval with 24/24 top-5 hits, broader selected source-review smoke with 96 cases / 84 supported / 0 failed label categories, DeepSeek flash/pro route tests, live Pro-agent suppressed-label recovery restoring 3 labels from 8 suppressed cases / 11 candidate labels without relaxing strict gates, synthetic Track D compaction-continuity benchmark coverage for event-chain source fidelity / correction-anchor recall / anti-nag / repeated-anchor and stale-anchor suppression, slow/live #45 real Codex app-server long-session smoke coverage for 50 pre-compaction turns, real compaction hooks, synthetic correction survival, and clean-source rebuild verification, deterministic #65 correction-reconsolidation event/adjudication helper coverage, deterministic #67 coding decision-event/ticket helper coverage, deterministic #68 agency affordance-map/ticket-selector coverage, deterministic #71 retrieval score-fusion policy coverage, deterministic #72 question salience/adaptive-threshold coverage, deterministic #70 structured-text cognitive portrait benchmark coverage, deterministic #63 Journey Tracking P1-P3 core coverage, deterministic #64 compensatory dream Phase 1 coverage, and deterministic #69 reflection-space topology/feedback MVP coverage | Broader human/source review and stronger model-side evidence to restore high-confidence coverage for still-suppressed soft labels; live semantic adjudication quality, private real-history compaction survival, host-agent decision-ticket timing, agency-ticket annoyance calibration, measured real vector/graph fusion quality, calibrated question salience/threshold weights, private/live portrait quality, live Journey/theme quality, reviewed real-history dream quality before dream output influences recall/reflection space, and real reflection-space behavior/UI evidence before visual polish claims |
 | 3 | `sync_bundle.py`, `sync_object_storage.py`, `export_bundle.py`, `import_bundle.py`, global thread store defaults, semantic scope-label sidecar sync, device-neutral bundle registry locators, target-registry path repair on pull, conflict-preserving pull tests, single-machine dual-device/cross-OS-path-shape smoke, local HTTP object-storage adapter smoke, Docker/WSL alternate-runtime smoke when available, physical Windows-to-MacBook sync smoke, managed Cloudflare R2 encrypted object-storage smoke, Python 3.9 sync path-repair compatibility coverage, and install docs | Broader provider matrix, cloud-folder client evidence if claimed, and longer-running multi-user/device operational soak |
 | 4 | `aippocampus_mcp_server.py`, `.mcp.json`, MCP unit tests, structured MCP error-contract tests, source stdio JSON-RPC process smoke, installed-plugin `.mcp.json` standalone MCP JSON-RPC client smoke, real Codex app-server MCP host list and `mcpServer/tool/call sync_status` smoke | Interactive Desktop UI verification or additional Codex client surfaces only if claiming those wrappers |
