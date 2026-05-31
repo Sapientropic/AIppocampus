@@ -6,6 +6,9 @@ on:
     branches: ["main"]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   checks:
     runs-on: ubuntu-latest
@@ -24,7 +27,15 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install checks
-        run: python -m pip install ruff mypy coverage
+        run: python -m pip install ruff mypy coverage build
+
+      - name: Editable install smoke
+        run: |
+          python -m pip install -e .
+          python -c "import aippocampus_runtime; print('editable-install-ok')"
+
+      - name: Build package metadata
+        run: python -m build --sdist --wheel
 
       - name: Ruff
         run: ruff check skills plugins tests tools benchmarks benchmark_corpus

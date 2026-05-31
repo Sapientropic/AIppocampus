@@ -6,8 +6,10 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "macos-install-smoke.yml"
+CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "aippocampus-ci.yml"
 INSTALL_GUIDE = REPO_ROOT / "docs" / "guides" / "install-guide.md"
 PYPROJECT = REPO_ROOT / "pyproject.toml"
+RELEASE_CHECKLIST = REPO_ROOT / "docs" / "guides" / "release-checklist.md"
 
 
 class MacOSInstallSmokeWorkflowTests(unittest.TestCase):
@@ -44,6 +46,22 @@ class MacOSInstallSmokeWorkflowTests(unittest.TestCase):
 
         self.assertIn('"aippocampus_runtime.vault" = [', text)
         self.assertNotIn("\naippocampus_runtime.vault = [", text)
+
+    def test_pr_ci_exercises_editable_install_and_build_metadata(self) -> None:
+        text = CI_WORKFLOW.read_text(encoding="utf-8")
+
+        self.assertIn("permissions:\n  contents: read", text)
+        self.assertIn("python -m pip install ruff mypy coverage build", text)
+        self.assertIn("python -m pip install -e .", text)
+        self.assertIn("python -m build --sdist --wheel", text)
+
+    def test_release_checklist_includes_install_build_and_macos_path_gate(self) -> None:
+        text = RELEASE_CHECKLIST.read_text(encoding="utf-8")
+
+        self.assertIn("uv run --python 3.12 python -c", text)
+        self.assertIn("python -m build --sdist --wheel", text)
+        self.assertIn("macOS", text)
+        self.assertIn("TMPDIR", text)
 
 
 if __name__ == "__main__":

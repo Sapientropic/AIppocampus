@@ -19,6 +19,9 @@ repeatable gate list.
 Run from the repository root:
 
 ```sh
+uv run --python 3.12 python -c 'import aippocampus_runtime; print("uv-run-ok")'
+python -m pip install -e .
+python -m build --sdist --wheel
 python tools/aippocampus/docs/check_docs_health.py --json
 python -m ruff check skills plugins tests tools benchmarks benchmark_corpus
 python -m mypy
@@ -37,6 +40,14 @@ Run slow, benchmark, provider, or smoke tiers when the release touches their
 surface. Do not use fast-tier coverage to claim that cloud providers, physical
 device sync, prompt hooks, external-model routes, or private real-history packs
 were exercised.
+
+For runtime/package-owner or path-identity changes, also run the manual macOS
+install smoke on GitHub's default `TMPDIR` before making a release or public
+readiness claim:
+
+```sh
+gh workflow run macos-install-smoke.yml -f runner-label=macos-latest -f python-version=3.12
+```
 
 ## Privacy And Secret Scan
 
