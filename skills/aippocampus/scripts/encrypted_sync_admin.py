@@ -1,13 +1,259 @@
 #!/usr/bin/env python3
-"""Compatibility shim for packaged encrypted sync admin."""
+"""Operator CLI for encrypted sync device keys and plaintext migration."""
 
 from __future__ import annotations
 
-import sys
+import argparse
+import json
+import os
+from pathlib import Path
+from typing import Any
 
-from aippocampus_runtime.sync.encrypted import admin as _impl
+from aippocampus_runtime.sync.encrypted import keys as encrypted_sync_keys
+from aippocampus_runtime.sync.encrypted import migration as encrypted_sync_migration
+from aippocampus_runtime.sync.object_storage import cli as sync_object_storage
+from aippocampuslib import aippocampus_registry_dir
 
-sys.modules[__name__] = _impl
+
+def add_json_flag(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--json", action="store_true", dest="json_output")
+
+
+def add_recipient_flags(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--recipient", action="append", default=[])
+    parser.add_argument("--recipient-file", action="append", default=[])
+    parser.add_argument("--age-bin", default=None)
+
+
+def add_object_flags(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--object-store-url",
+        default=os.environ.get("AIPPOCAMPUS_OBJECT_STORE_URL"),
+    )
+    parser.add_argument(
+        "--object-prefix",
+        default=os.environ.get("AIPPOCAMPUS_OBJECT_PREFIX", sync_object_storage.DEFAULT_PREFIX),
+    )
+    parser.add_argument(
+        "--object-provider",
+        default=os.environ.get("AIPPOCAMPUS_OBJECT_PROVIDER"),
+    )
+    parser.add_argument("--object-bucket", default=os.environ.get("AIPPOCAMPUS_OBJECT_BUCKET"))
+    parser.add_argument("--object-region", default=os.environ.get("AIPPOCAMPUS_OBJECT_REGION"))
+    parser.add_argument(
+        "--object-account-id",
+        default=os.environ.get("AIPPOCAMPUS_OBJECT_ACCOUNT_ID"),
+    )
+    parser.add_argument("--token-env", default="AIPPOCAMPUS_OBJECT_STORE_TOKEN")
+    parser.add_argument("--access-key-env", default="AIPPOCAMPUS_OBJECT_ACCESS_KEY_ID")
+    parser.add_argument("--secret-key-env", default="AIPPOCAMPUS_OBJECT_SECRET_ACCESS_KEY")
+    parser.add_argument("--session-token-env", default="AIPPOCAMPUS_OBJECT_SESSION_TOKEN")
+    parser.add_argument("--timeout", type=float, default=sync_object_storage.DEFAULT_TIMEOUT_SECONDS)
+
+
+def token_from_env(env_name: str | None) -> str | None:
+    if not env_name:
+        return None
+    return os.environ.get(env_name)
+
+
+def provider_kwargs(args: argparse.Namespace) -> dict[str, Any]:
+    return {
+        "token": token_from_env(args.token_env),
+        "timeout": args.timeout,
+        "provider": args.object_provider,
+        "bucket": args.object_bucket,
+        "region": args.object_region,
+        "account_id": args.object_account_id,
+        "access_key_id": token_from_env(args.access_key_env),
+        "secret_access_key": token_from_env(args.secret_key_env),
+        "session_token": token_from_env(args.session_token_env),
+    }
+
+
+def emit_result(result: dict[str, Any], *, json_output: bool, plain_field: str | None = None) -> int:
+    if json_output:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    elif plain_field and result.get(plain_field):
+        print(result[plain_field])
+    else:
+        print("encrypted sync: ok" if result.get("ok") else "encrypted sync: needs attention")
+        for item in result.get("issues") or []:
+            print(f"- {item.get('code')}: {item.get('message') or item.get('path')}")
+    return 0 if result.get("ok") else 1
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser()
+    subcommands = parser.add_subparsers(dest="command", required=True)
+
+    key = subcommands.add_parser("key")
+    key_subcommands = key.add_subparsers(dest="key_command", required=True)
+
+    key_init = key_subcommands.add_parser("init")
+    key_init.add_argument("--registry-dir", default=None)
+    key_init.add_argument("--device-name", default=None)
+    key_init.add_argument("--identity-file", default=None)
+    key_init.add_argument("--age-keygen-bin", default=None)
+    key_init.add_argument("--overwrite", action="store_true")
+    add_json_flag(key_init)
+
+    key_recipient = key_subcommands.add_parser("recipient")
+    key_recipient.add_argument("--registry-dir", default=None)
+    key_recipient.add_argument("--age-keygen-bin", default=None)
+    add_json_flag(key_recipient)
+
+    key_list = key_subcommands.add_parser("list")
+    key_list.add_argument("--registry-dir", default=None)
+    add_json_flag(key_list)
+
+    key_trust = key_subcommands.add_parser("trust")
+    key_trust.add_argument("--registry-dir", default=None)
+    key_trust.add_argument("--recipient", required=True)
+    key_trust.add_argument("--device-name", default=None)
+    key_trust.add_argument(
+        "--recovery",
+        action="store_true",
+        help="Trust this public recipient as an offline recovery identity.",
+    )
+    add_json_flag(key_trust)
+
+    key_revoke = key_subcommands.add_parser("revoke")
+    key_revoke.add_argument("--registry-dir", default=None)
+    key_revoke.add_argument("--recipient", required=True)
+    key_revoke.add_argument("--dry-run", action="store_true")
+    key_revoke.add_argument("--confirm", action="store_true")
+    add_json_flag(key_revoke)
+
+    migrate = subcommands.add_parser("migrate-to-encrypted")
+    migrate.add_argument("--sync-dir", required=True)
+    migrate.add_argument("--target-sync-dir", required=True)
+    migrate.add_argument("--registry-dir", default=None)
+    migrate.add_argument("--dry-run", action="store_true")
+    add_recipient_flags(migrate)
+    add_json_flag(migrate)
+
+    cleanup = subcommands.add_parser("cleanup-plaintext")
+    cleanup.add_argument("--sync-dir", required=True)
+    cleanup.add_argument("--dry-run", action="store_true")
+    cleanup.add_argument("--confirm", action="store_true")
+    cleanup.add_argument("--verified-encrypted-target", action="store_true")
+    add_json_flag(cleanup)
+
+    object_migrate = subcommands.add_parser("migrate-object-to-encrypted")
+    object_migrate.add_argument("--registry-dir", default=None)
+    object_migrate.add_argument("--target-object-prefix", required=True)
+    object_migrate.add_argument("--dry-run", action="store_true")
+    add_object_flags(object_migrate)
+    add_recipient_flags(object_migrate)
+    add_json_flag(object_migrate)
+
+    object_cleanup = subcommands.add_parser("cleanup-object-plaintext")
+    object_cleanup.add_argument("--dry-run", action="store_true")
+    object_cleanup.add_argument("--confirm", action="store_true")
+    object_cleanup.add_argument("--verified-encrypted-target", action="store_true")
+    add_object_flags(object_cleanup)
+    add_json_flag(object_cleanup)
+
+    return parser
+
+
+def registry_arg(value: str | None) -> Path:
+    return Path(value).resolve() if value else aippocampus_registry_dir().resolve()
+
+
+def main() -> int:
+    parser = build_parser()
+    args = parser.parse_args()
+    try:
+        if args.command == "key":
+            registry_dir = registry_arg(args.registry_dir)
+            if args.key_command == "init":
+                result = encrypted_sync_keys.init_device_key(
+                    registry_dir,
+                    device_name=args.device_name,
+                    identity_file=args.identity_file,
+                    age_keygen_bin=args.age_keygen_bin,
+                    overwrite=args.overwrite,
+                )
+                return emit_result(result, json_output=args.json_output)
+            if args.key_command == "recipient":
+                result = encrypted_sync_keys.recipient_for_device_key(
+                    registry_dir,
+                    age_keygen_bin=args.age_keygen_bin,
+                )
+                return emit_result(
+                    result,
+                    json_output=args.json_output,
+                    plain_field="recipient",
+                )
+            if args.key_command == "list":
+                result = encrypted_sync_keys.list_device_keys(registry_dir)
+                return emit_result(result, json_output=args.json_output)
+            if args.key_command == "trust":
+                result = encrypted_sync_keys.trust_recipient(
+                    registry_dir,
+                    recipient=args.recipient,
+                    device_name=args.device_name,
+                    role="recovery" if args.recovery else "device",
+                )
+                return emit_result(result, json_output=args.json_output)
+            result = encrypted_sync_keys.revoke_recipient(
+                registry_dir,
+                args.recipient,
+                dry_run=args.dry_run,
+                confirm=args.confirm,
+            )
+            return emit_result(result, json_output=args.json_output)
+
+        if args.command == "migrate-to-encrypted":
+            result = encrypted_sync_migration.migrate_plaintext_sync_dir_to_encrypted(
+                args.sync_dir,
+                args.target_sync_dir,
+                registry_dir=args.registry_dir,
+                recipients=args.recipient,
+                recipient_files=args.recipient_file,
+                age_bin=args.age_bin,
+                dry_run=args.dry_run,
+            )
+            return emit_result(result, json_output=args.json_output)
+
+        if args.command == "cleanup-plaintext":
+            result = encrypted_sync_migration.cleanup_plaintext_sync_dir(
+                args.sync_dir,
+                dry_run=args.dry_run,
+                confirm=args.confirm,
+                verified_encrypted_target=args.verified_encrypted_target,
+            )
+            return emit_result(result, json_output=args.json_output)
+
+        if args.command == "migrate-object-to-encrypted":
+            result = encrypted_sync_migration.migrate_plaintext_object_storage_to_encrypted(
+                registry_arg(args.registry_dir) if args.registry_dir else None,
+                args.object_store_url,
+                prefix=args.object_prefix,
+                target_prefix=args.target_object_prefix,
+                recipients=args.recipient,
+                recipient_files=args.recipient_file,
+                age_bin=args.age_bin,
+                dry_run=args.dry_run,
+                **provider_kwargs(args),
+            )
+            return emit_result(result, json_output=args.json_output)
+
+        result = encrypted_sync_migration.cleanup_plaintext_object_storage_bundle(
+            args.object_store_url,
+            prefix=args.object_prefix,
+            dry_run=args.dry_run,
+            confirm=args.confirm,
+            verified_encrypted_target=args.verified_encrypted_target,
+            **provider_kwargs(args),
+        )
+        return emit_result(result, json_output=args.json_output)
+    except ValueError as exc:
+        result = {"ok": False, "issues": [{"code": str(exc).split(":", 1)[0], "message": str(exc)}]}
+        return emit_result(result, json_output=getattr(args, "json_output", False))
+
 
 if __name__ == "__main__":
-    raise SystemExit(getattr(_impl, "main", lambda: 0)())
+    raise SystemExit(main())

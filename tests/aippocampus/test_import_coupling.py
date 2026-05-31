@@ -544,12 +544,14 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(sync_object_storage.main, object_storage_cli.main)
 
     def test_encrypted_sync_helpers_have_package_owner_and_compat_shims(self) -> None:
+        import encrypted_sync_admin
         import encrypted_sync_bundle
         import encrypted_sync_crypto
         import encrypted_sync_keys
         import encrypted_sync_migration
         import encrypted_sync_object_storage
         from aippocampus_runtime.sync.encrypted import (
+            admin,
             bundle,
             crypto,
             keys,
@@ -567,26 +569,29 @@ class ImportCouplingTests(unittest.TestCase):
             SCRIPTS / "aippocampus_runtime" / "sync" / "encrypted" / "object_storage.py",
         ]
         shim_paths = [
-            SCRIPTS / "encrypted_sync_admin.py",
             SCRIPTS / "encrypted_sync_bundle.py",
             SCRIPTS / "encrypted_sync_crypto.py",
             SCRIPTS / "encrypted_sync_keys.py",
             SCRIPTS / "encrypted_sync_migration.py",
             SCRIPTS / "encrypted_sync_object_storage.py",
         ]
+        legacy_bridge_path = SCRIPTS / "encrypted_sync_admin.py"
 
-        for path in package_paths + shim_paths:
+        for path in package_paths + shim_paths + [legacy_bridge_path]:
             self.assertTrue(path.exists(), path)
         for path in shim_paths:
             self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+        self.assertNotIn("Compatibility shim", legacy_bridge_path.read_text(encoding="utf-8"))
 
         edges = same_dir_import_edges(top_level_only=True)
-        admin_edges = edges["aippocampus_runtime.sync.encrypted.admin"]
-        self.assertIn("aippocampus_runtime.sync.encrypted.admin", edges["encrypted_sync_admin"])
+        admin_edges = edges["encrypted_sync_admin"]
+        self.assertIn("encrypted_sync_admin", edges["aippocampus_runtime.sync.encrypted.admin"])
+        self.assertNotIn("aippocampus_runtime.sync.encrypted.admin", admin_edges)
         self.assertIn("aippocampus_runtime.sync.encrypted.keys", admin_edges)
         self.assertIn("aippocampus_runtime.sync.encrypted.migration", admin_edges)
         self.assertNotIn("encrypted_sync_keys", admin_edges)
         self.assertNotIn("encrypted_sync_migration", admin_edges)
+        self.assertIs(encrypted_sync_admin, admin)
         self.assertIn(
             "aippocampus_runtime.sync.encrypted.keys",
             edges["aippocampus_runtime.sync.encrypted.bundle"],
@@ -746,9 +751,9 @@ class ImportCouplingTests(unittest.TestCase):
             "aippocampus_runtime.subconscious.validation_audit",
             "aippocampus_runtime.onboarding.frontier",
             "aippocampus_runtime.recall.semantic_recall_gate",
-            "aippocampus_runtime.source.semantic_scope_suppressed_recovery",
+            "semantic_scope_suppressed_recovery",
             "aippocampus_runtime.subconscious.jobs",
-            "aippocampus_runtime.subconscious.review",
+            "subconscious_review",
             "aippocampus_runtime.warm_ambient.recall",
         ]
         for source in worker_consumers:
@@ -1709,7 +1714,7 @@ class ImportCouplingTests(unittest.TestCase):
         for source in [
             "aippocampus_runtime.subconscious.validation_audit",
             "aippocampus_runtime.subconscious.jobs",
-            "aippocampus_runtime.subconscious.review",
+            "subconscious_review",
         ]:
             self.assertIn("aippocampus_runtime.subconscious.job_validation", edges[source])
             self.assertNotIn("subconscious_job_validation", edges[source])
@@ -2229,9 +2234,9 @@ class ImportCouplingTests(unittest.TestCase):
             "aippocampus_runtime.subconscious.agent",
             "aippocampus_runtime.subconscious.tool_loop",
             "aippocampus_runtime.recall.semantic_recall_gate",
-            "aippocampus_runtime.source.semantic_scope_suppressed_recovery",
+            "semantic_scope_suppressed_recovery",
             "aippocampus_runtime.subconscious.jobs",
-            "aippocampus_runtime.subconscious.review",
+            "subconscious_review",
             "aippocampus_runtime.warm_ambient.recall",
         ]
         for source in runtime_consumers:
@@ -2450,7 +2455,7 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(import_bundle.safe_extract, import_owner.safe_extract)
         self.assertIs(import_bundle.main, import_owner.main)
 
-    def test_remaining_flat_scripts_are_compatibility_shims(self) -> None:
+    def test_remaining_flat_scripts_have_package_paths(self) -> None:
         owner_modules = {
             "agency_affordance": "aippocampus_runtime.coding.agency_affordance",
             "aippocampus_maintenance": "aippocampus_runtime.ops.maintenance",
@@ -2461,12 +2466,14 @@ class ImportCouplingTests(unittest.TestCase):
             "correction_reconsolidation": "aippocampus_runtime.reflection.reconsolidation",
             "dream_live_shadow_ab": "aippocampus_runtime.dream.live_shadow_ab",
             "dream_real_history_eval": "aippocampus_runtime.dream.real_history_eval",
-            "encrypted_sync_admin": "aippocampus_runtime.sync.encrypted.admin",
             "locate_rollout": "aippocampus_runtime.source.locate_rollout",
             "prepare_graphify_corpus": "aippocampus_runtime.ops.graphify_corpus",
             "semantic_scope_source_review_core": (
                 "aippocampus_runtime.source.semantic_scope_source_review_core"
             ),
+        }
+        legacy_bridges = {
+            "encrypted_sync_admin": "aippocampus_runtime.sync.encrypted.admin",
             "semantic_scope_suppressed_recovery": (
                 "aippocampus_runtime.source.semantic_scope_suppressed_recovery"
             ),
@@ -2485,14 +2492,36 @@ class ImportCouplingTests(unittest.TestCase):
             self.assertNotIn(flat_name, edges[owner_name])
             self.assertIs(importlib.import_module(flat_name), importlib.import_module(owner_name))
 
-    def test_top_level_scripts_are_only_compatibility_surfaces(self) -> None:
+        for flat_name, owner_name in legacy_bridges.items():
+            flat_path = SCRIPTS / f"{flat_name}.py"
+            owner_path = SCRIPTS / (owner_name.replace(".", "/") + ".py")
+
+            self.assertTrue(flat_path.exists(), flat_path)
+            self.assertTrue(owner_path.exists(), owner_path)
+            # These model-output/credential-adjacent scripts keep one legacy
+            # implementation and expose package import aliases. Do not copy the
+            # full body into the package path without a scanner-aware sanitizer
+            # contract; that recreates a second security-analysis surface.
+            self.assertNotIn("Compatibility shim", flat_path.read_text(encoding="utf-8"))
+            self.assertIn(flat_name, edges[owner_name])
+            self.assertNotIn(owner_name, edges[flat_name])
+            self.assertIs(importlib.import_module(flat_name), importlib.import_module(owner_name))
+
+    def test_top_level_scripts_are_only_compatibility_surfaces_or_legacy_bridges(
+        self,
+    ) -> None:
+        legacy_bridge_files = {
+            "encrypted_sync_admin.py",
+            "semantic_scope_suppressed_recovery.py",
+            "subconscious_review.py",
+        }
         real_flat_scripts = []
         for path in sorted(SCRIPTS.glob("*.py")):
             source = path.read_text(encoding="utf-8")
             if "Compatibility shim" not in source and "module alias compatibility shim" not in source:
                 real_flat_scripts.append(path.name)
 
-        self.assertEqual(real_flat_scripts, [])
+        self.assertEqual(real_flat_scripts, sorted(legacy_bridge_files))
 
     def test_ops_reports_have_package_owners_and_compat_shims(self) -> None:
         import cold_archive
