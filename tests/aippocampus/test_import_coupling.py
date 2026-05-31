@@ -180,6 +180,24 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(aippocampuslib.aippocampus_registry_dir, core.aippocampus_registry_dir)
         self.assertIs(aippocampuslib.sanitize_external_model_text, core.sanitize_external_model_text)
 
+    def test_privacy_projection_has_package_owner_and_compat_shim(self) -> None:
+        import privacy_projection
+        from aippocampus_runtime import privacy
+
+        package_path = SCRIPTS / "aippocampus_runtime" / "privacy.py"
+        shim_path = SCRIPTS / "privacy_projection.py"
+
+        self.assertTrue(package_path.exists(), package_path)
+        self.assertTrue(shim_path.exists(), shim_path)
+        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges(top_level_only=True)
+        self.assertIn("aippocampus_runtime.privacy", edges["privacy_projection"])
+        for source in ["aippocampus_mcp_server", "aippocampus_runtime.registry.api"]:
+            self.assertIn("aippocampus_runtime.privacy", edges[source])
+            self.assertNotIn("privacy_projection", edges[source])
+        self.assertIs(privacy_projection.redact_private_paths, privacy.redact_private_paths)
+
     def test_registry_storage_is_separate_from_registry_runner(self) -> None:
         import registry
         from aippocampus_runtime.registry import api as registry_api

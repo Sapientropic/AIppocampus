@@ -23,6 +23,7 @@ from aippocampus_runtime.core import (
     parse_anchor_file,
     public_session_meta,
 )
+from aippocampus_runtime.privacy import redact_private_paths
 from aippocampus_runtime.registry.provider import current_thread_build_cmd, thread_key_for
 from aippocampus_runtime.registry.search import (
     REGISTRY_SEARCH_DEEP_BUDGET,
@@ -52,7 +53,6 @@ from conversation_sources import (
     ConversationProvider,
     create_conversation_provider,
 )
-from privacy_projection import redact_private_paths
 
 __all__ = [
     "REGISTRY_SCHEMA_VERSION",

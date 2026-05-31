@@ -252,6 +252,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/model/client.py",
     "skills/aippocampus/scripts/aippocampus_runtime/model/routing.py",
     "skills/aippocampus/scripts/deepseek_model_routing.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/privacy.py",
     "skills/aippocampus/scripts/dream_live_shadow_ab.py",
     "skills/aippocampus/scripts/aippocampus_runtime/dream/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/dream/delivery_policy.py",

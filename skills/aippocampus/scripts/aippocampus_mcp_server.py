@@ -13,6 +13,7 @@ from typing import Any
 
 import latest_reply as latest_reply_module
 import registry
+from aippocampus_runtime.privacy import LOCAL_PATH_REDACTION, redact_private_paths
 from aippocampus_runtime.source.search import iter_clean_messages, search_clean_source
 from aippocampus_runtime.sync import bundle as sync_bundle
 from aippocampus_runtime.sync.object_storage import cli as sync_object_storage
@@ -23,7 +24,6 @@ from aippocampuslib import (
     resolve_artifact_path,
 )
 from conversation_sources import PROVIDER_CHOICES, create_conversation_provider
-from privacy_projection import LOCAL_PATH_REDACTION, redact_private_paths
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SERVER_NAME = "aippocampus"
