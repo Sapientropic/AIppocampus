@@ -40,7 +40,7 @@ EXCLUDED_SCAN_DIRS = {
 }
 EXCLUDED_SCAN_PARTS = {
     ("skills", "aippocampus", "assets"),
-    ("skills", "aippocampus", "scripts", "vault_dashboard_assets"),
+    ("skills", "aippocampus", "scripts", "aippocampus_runtime", "vault", "dashboard_assets"),
 }
 SECRET_PATTERNS = (
     ("openai_key", re.compile(r"sk-[A-Za-z0-9_-]{20,}")),
