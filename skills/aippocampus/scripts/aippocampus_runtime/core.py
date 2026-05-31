@@ -5,13 +5,24 @@ from __future__ import annotations
 
 import hashlib
 import ipaddress
-import json
 import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 from urllib.parse import SplitResult, urlsplit
+
+from aippocampus_runtime.source import rollout as _rollout
+
+INJECTED_INSTRUCTION_PREFIXES = _rollout.INJECTED_INSTRUCTION_PREFIXES
+empty_turn = _rollout.empty_turn
+extract_message = _rollout.extract_message
+is_injected_instruction_text = _rollout.is_injected_instruction_text
+iter_jsonl = _rollout.iter_jsonl
+iter_messages = _rollout.iter_messages
+message_phase = _rollout.message_phase
+normalize_rollout = _rollout.normalize_rollout
+tool_payload_kind = _rollout.tool_payload_kind
 
 
 def now_utc() -> str:
@@ -215,213 +226,6 @@ def resolve_artifact_path(value: str | Path | None, cwd: str | Path, default_pat
         return default_path
     path = Path(value)
     return path if path.is_absolute() else Path(cwd).resolve() / path
-
-
-def iter_jsonl(path: Path) -> Iterable[tuple[int, dict]]:
-    with path.open("r", encoding="utf-8") as f:
-        for line_no, line in enumerate(f, start=1):
-            try:
-                yield line_no, json.loads(line)
-            except json.JSONDecodeError:
-                continue
-
-
-def message_phase(payload: dict) -> str:
-    phase = payload.get("phase")
-    return str(phase or "")
-
-
-def extract_message(item: dict, include_tools: bool = False) -> dict | None:
-    payload = item.get("payload") or {}
-    typ = item.get("type")
-
-    if typ == "event_msg":
-        ptype = payload.get("type")
-        if ptype == "user_message":
-            return {
-                "role": "user",
-                "kind": "user_message",
-                "phase": message_phase(payload),
-                "text": payload.get("message") or "",
-            }
-        if ptype == "agent_message":
-            return {
-                "role": "assistant",
-                "kind": "agent_message",
-                "phase": message_phase(payload),
-                "text": payload.get("message") or "",
-            }
-        if include_tools:
-            return {
-                "role": "event",
-                "kind": ptype or "event_msg",
-                "phase": message_phase(payload),
-                "text": json.dumps(payload, ensure_ascii=False),
-            }
-
-    if typ == "response_item":
-        ptype = payload.get("type")
-        if ptype == "message":
-            role = payload.get("role") or "message"
-            if role not in {"user", "assistant"}:
-                return None
-            texts = []
-            for part in payload.get("content") or []:
-                if isinstance(part, dict):
-                    texts.append(part.get("text") or "")
-                    texts.append(part.get("input_text") or "")
-                    texts.append(part.get("output_text") or "")
-            text = "\n".join(t for t in texts if t)
-            return {"role": role, "kind": "message", "phase": message_phase(payload), "text": text}
-        if include_tools and ptype in {"function_call", "function_call_output", "web_search_call"}:
-            return {
-                "role": "tool",
-                "kind": ptype,
-                "phase": "tool",
-                "text": json.dumps(payload, ensure_ascii=False),
-            }
-
-    return None
-
-
-def tool_payload_kind(item: dict) -> str | None:
-    if item.get("type") != "response_item":
-        return None
-    payload = item.get("payload") or {}
-    ptype = payload.get("type")
-    if ptype in {"function_call", "function_call_output", "web_search_call"}:
-        return str(ptype)
-    return None
-
-
-def empty_turn(turn_index: int, line_no: int, timestamp: str | None) -> dict:
-    return {
-        "id": turn_index,
-        "user_line": line_no,
-        "user_timestamp": timestamp,
-        "final_line": None,
-        "final_timestamp": None,
-        "fallback_assistant_line": None,
-        "fallback_assistant_timestamp": None,
-        "commentary_count": 0,
-        "tool_call_count": 0,
-        "tool_output_count": 0,
-        "start_line": line_no,
-        "end_line": line_no,
-    }
-
-
-INJECTED_INSTRUCTION_PREFIXES = (
-    "# AGENTS.md instructions",
-    "<skill>",
-    "<permissions instructions>",
-    "<environment_context>",
-    "<collaboration_mode>",
-    "<skills_instructions>",
-    "<plugins_instructions>",
-    "<app-context>",
-    "WECHAT SESSION INSTRUCTIONS",
-    "WECHAT THREAD CONTINUITY REFRESH",
-    "WECHAT SESSION INSTRUCTIONS REFRESH",
-)
-
-
-def is_injected_instruction_text(text: str) -> bool:
-    """Return True for known runtime carrier blocks, not topical user prose.
-
-    Full-machine onboarding makes any repeated carrier text show up hundreds of
-    times. If these blocks enter clean source or registry search as normal user
-    messages, they outrank the real project evidence. Keep this structural and
-    prefix-based; do not turn it into a user-facing topic filter.
-    """
-
-    stripped = str(text or "").lstrip()
-    if any(stripped.startswith(prefix) for prefix in INJECTED_INSTRUCTION_PREFIXES):
-        return True
-    if re.match(r"^<developer(?:\s|>)", stripped, flags=re.IGNORECASE):
-        return True
-    return False
-
-
-def normalize_rollout(rollout: Path, include_tools: bool = False) -> tuple[list[dict], list[dict]]:
-    """Return deduped visible messages plus turn summaries.
-
-    Codex Desktop writes a user request as a stream of raw events: commentary,
-    tool calls/outputs, and finally a final_answer. Long-term recall should
-    prefer the user request plus final_answer, while audit/provenance tools can
-    still inspect raw tool lines. For that reason this normalizer records tool
-    counts and raw line spans in turns, but it does not put tool payload text in
-    the default message index unless include_tools is explicitly requested.
-    """
-
-    seen: set[str] = set()
-    messages: list[dict] = []
-    turns: dict[int, dict] = {}
-    current_turn = 0
-
-    for line_no, item in iter_jsonl(rollout):
-        timestamp = item.get("timestamp")
-        tool_kind = tool_payload_kind(item)
-        if current_turn and current_turn in turns:
-            turns[current_turn]["end_line"] = line_no
-            if tool_kind == "function_call":
-                turns[current_turn]["tool_call_count"] += 1
-            elif tool_kind in {"function_call_output", "web_search_call"}:
-                turns[current_turn]["tool_output_count"] += 1
-
-        msg = extract_message(item, include_tools=include_tools)
-        if not msg or not msg.get("text"):
-            continue
-        text = msg["text"].lstrip()
-        if msg["role"] == "user" and is_injected_instruction_text(text):
-            continue
-
-        phase = str(msg.get("phase") or "")
-        digest = hashlib.sha1(
-            (msg["role"] + "\0" + phase + "\0" + msg["text"]).encode("utf-8")
-        ).hexdigest()
-        if digest in seen:
-            continue
-        seen.add(digest)
-
-        if msg["role"] == "user":
-            current_turn += 1
-            turns[current_turn] = empty_turn(current_turn, line_no, timestamp)
-        elif current_turn and current_turn in turns:
-            turns[current_turn]["end_line"] = line_no
-
-        turn_index = current_turn if current_turn else None
-        is_final = msg["role"] == "assistant" and phase == "final_answer"
-
-        if turn_index and turn_index in turns and msg["role"] == "assistant":
-            turns[turn_index]["fallback_assistant_line"] = line_no
-            turns[turn_index]["fallback_assistant_timestamp"] = timestamp
-            if phase == "commentary":
-                turns[turn_index]["commentary_count"] += 1
-            if is_final:
-                turns[turn_index]["final_line"] = line_no
-                turns[turn_index]["final_timestamp"] = timestamp
-
-        messages.append(
-            {
-                "line": line_no,
-                "timestamp": timestamp,
-                "role": msg["role"],
-                "kind": msg["kind"],
-                "phase": phase,
-                "turn_index": turn_index,
-                "is_final": is_final,
-                "sha1": digest,
-                "text": msg["text"],
-            }
-        )
-
-    return messages, list(turns.values())
-
-
-def iter_messages(rollout: Path, include_tools: bool = False) -> Iterable[dict]:
-    messages, _ = normalize_rollout(rollout, include_tools=include_tools)
-    yield from messages
 
 
 def compact_text(text: str, max_chars: int) -> str:

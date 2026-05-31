@@ -23,7 +23,6 @@ from aippocampus_runtime.core import (
     default_thread_segments_dir,
     file_sha256,
     locate_rollout,
-    normalize_rollout,
     now_utc,
     parse_anchor_file,
     public_session_meta,
@@ -31,6 +30,7 @@ from aippocampus_runtime.core import (
     resolve_artifact_path,
 )
 from aippocampus_runtime.recall.index_builder import make_sqlite
+from aippocampus_runtime.source.rollout import normalize_rollout
 
 DEFAULT_SEGMENT_BYTES = 64 * 1024 * 1024
 DEFAULT_MAX_MESSAGES = 1200

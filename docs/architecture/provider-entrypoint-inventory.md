@@ -12,8 +12,9 @@ audit/host integration paths.
 
 | Surface | Classification | Boundary |
 | --- | --- | --- |
-| `aippocampus_runtime/core.py` plus `aippocampuslib.py` compatibility shim | Shared compatibility helpers | Owns legacy Codex raw-rollout helpers and provider-neutral registry storage resolution. New public raw-source logic should use `conversation_sources/` instead of adding more helpers here. |
+| `aippocampus_runtime/core.py` plus `aippocampuslib.py` compatibility shim | Shared compatibility helpers | Re-exports legacy Codex rollout parser helpers from `aippocampus_runtime/source/rollout.py` and owns provider-neutral registry storage/home helpers. New public raw-source logic should use `conversation_sources/` or source package owners instead of adding more helpers here. |
 | `conversation_sources/codex.py` | Codex provider implementation | The only provider module that should know Codex `sessions/` and `archived_sessions/` layout. |
+| `aippocampus_runtime/source/rollout.py` | Codex rollout parser owner | Parses Codex event/response JSONL into the legacy normalized message/turn schema for audit, clean-source, and index consumers. It does not discover rollout files or decide artifact storage; `core.py` and `aippocampuslib.py` only re-export these helpers for compatibility. |
 | `aippocampus_runtime/onboarding/facade.py` plus `onboard.py` compatibility shim | Provider-aware public entrypoint | Accepts `--provider codex\|claude-code\|generic-jsonl`; `auto` remains conservative and lists other providers separately. |
 | `build_clean_source.py` and `aippocampus_runtime/source/clean_source.py` | Provider-aware public entrypoint | Accepts `--provider`; Codex raw rollout discovery is used only for the Codex provider or explicit `--rollout`. The top-level script is a compatibility shim over the package owner. |
 | `aippocampus_runtime/recall/index_builder.py` plus `build_index.py` compatibility shim | Provider-aware public entrypoint | Accepts `--provider`; indexes provider-normalized visible messages. The default Codex rollout discovery applies only when `--rollout` is omitted. |

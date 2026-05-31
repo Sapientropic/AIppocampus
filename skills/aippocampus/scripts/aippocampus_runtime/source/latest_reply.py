@@ -9,10 +9,11 @@ import os
 from pathlib import Path
 
 from aippocampus_runtime import core
+from aippocampus_runtime.source.rollout import normalize_rollout
 
 
 def latest_reply(rollout: Path) -> dict:
-    messages, turns = core.normalize_rollout(rollout)
+    messages, turns = normalize_rollout(rollout)
     assistant_messages = [msg for msg in messages if msg.get("role") == "assistant"]
     final_messages = [
         msg

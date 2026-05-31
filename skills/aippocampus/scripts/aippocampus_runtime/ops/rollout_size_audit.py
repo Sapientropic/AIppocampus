@@ -21,10 +21,9 @@ from typing import Any
 from aippocampus_runtime.core import (
     codex_home,
     compact_text,
-    extract_message,
-    iter_messages,
     locate_rollout,
 )
+from aippocampus_runtime.source.rollout import extract_message, iter_messages
 
 AGENTS_PREFIX = "# AGENTS.md instructions"
 
