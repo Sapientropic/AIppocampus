@@ -9,8 +9,8 @@ proposal layer: source refs are required before anything is marked evidence.
 
 from __future__ import annotations
 
-import argparse
 import hashlib
+import importlib
 import json
 import os
 import queue
@@ -18,7 +18,7 @@ import re
 import threading
 import time
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 from aippocampus_runtime.core import (
     compact_text,
@@ -56,6 +56,20 @@ from aippocampus_runtime.subconscious.worker import (
     DEFAULT_MODEL,
     clamp_confidence,
     parse_model_json,
+)
+from aippocampus_runtime.warm_ambient.config import (
+    DEFAULT_WARM_DETACHED_JOB_CONFIG,
+    DEFAULT_WARM_RECALL_CONFIG,
+    WarmRecallConfig,
+)
+from aippocampus_runtime.warm_ambient.config import (
+    WARM_RECALL_OPERATOR_ENV_VARS as _WARM_RECALL_OPERATOR_ENV_VARS,
+)
+from aippocampus_runtime.warm_ambient.config import (
+    WARM_RECALL_PRODUCT_TUNING_ENV_VARS as _WARM_RECALL_PRODUCT_TUNING_ENV_VARS,
+)
+from aippocampus_runtime.warm_ambient.config import (
+    warm_recall_config_from_env as warm_recall_config_from_env,
 )
 from aippocampus_runtime.warm_ambient.diagnostics import (
     suppression_diagnostics,
@@ -100,41 +114,26 @@ from aippocampus_runtime.warm_ambient.source_validation import (  # noqa: F401
 
 PROMPT_VERSION = "aippocampus-warm-ambient-recall-v0"
 SCHEMA_VERSION = 1
-DEFAULT_TIMEOUT = float(os.environ.get("AIPPOCAMPUS_WARM_RECALL_TIMEOUT", "1.8"))
-DEFAULT_QUORUM = int(os.environ.get("AIPPOCAMPUS_WARM_RECALL_QUORUM", "3"))
-DEFAULT_MAX_CARDS = 3
-DEFAULT_MAX_CATALOG_ITEMS = int(os.environ.get("AIPPOCAMPUS_WARM_RECALL_CATALOG_LIMIT", "64"))
-DEFAULT_TEMPERATURE = float(os.environ.get("AIPPOCAMPUS_WARM_RECALL_TEMPERATURE", "0.2"))
-DEFAULT_THINKING = os.environ.get("AIPPOCAMPUS_WARM_RECALL_THINKING", "enabled")
+DEFAULT_TIMEOUT = DEFAULT_WARM_RECALL_CONFIG.timeout
+DEFAULT_QUORUM = DEFAULT_WARM_RECALL_CONFIG.quorum
+DEFAULT_MAX_CARDS = DEFAULT_WARM_RECALL_CONFIG.max_cards
+DEFAULT_MAX_CATALOG_ITEMS = DEFAULT_WARM_RECALL_CONFIG.max_catalog_items
+DEFAULT_TEMPERATURE = DEFAULT_WARM_RECALL_CONFIG.temperature
+DEFAULT_THINKING = DEFAULT_WARM_RECALL_CONFIG.thinking
 DEFAULT_USER_ID_PREFIX = "aip-warm"
-DEFAULT_PREFIX_CACHE_WARMUP_SCOUTS = int(os.environ.get("AIPPOCAMPUS_WARM_PREFIX_CACHE_WARMUP_SCOUTS", "0") or 0)
-DEFAULT_DETACHED_PREFIX_CACHE_WARMUP_SCOUTS = int(
-    os.environ.get("AIPPOCAMPUS_DETACHED_WARM_PREFIX_CACHE_WARMUP_SCOUTS", "2") or 0
-)
-DEFAULT_PREFIX_CACHE_WARMUP_DELAY = float(os.environ.get("AIPPOCAMPUS_WARM_PREFIX_CACHE_WARMUP_DELAY", "0") or 0)
-DEFAULT_DETACHED_PREFIX_CACHE_WARMUP_DELAY = float(
-    os.environ.get("AIPPOCAMPUS_DETACHED_WARM_PREFIX_CACHE_WARMUP_DELAY", "0.5") or 0
-)
+DEFAULT_PREFIX_CACHE_WARMUP_SCOUTS = DEFAULT_WARM_RECALL_CONFIG.prefix_cache_warmup_scouts
+DEFAULT_PREFIX_CACHE_WARMUP_DELAY = DEFAULT_WARM_RECALL_CONFIG.prefix_cache_warmup_delay
+WARM_RECALL_OPERATOR_ENV_VARS = _WARM_RECALL_OPERATOR_ENV_VARS
+WARM_RECALL_PRODUCT_TUNING_ENV_VARS = _WARM_RECALL_PRODUCT_TUNING_ENV_VARS
 WARM_JOB_SCHEMA_VERSION = 1
 ChatFn = Callable[..., dict[str, Any]]
 ScoutFn = Callable[..., dict[str, Any]]
 
 
-def env_positive_int(name: str) -> int | None:
-    raw = str(os.environ.get(name) or "").strip()
-    if not raw:
-        return None
-    try:
-        value = int(raw)
-    except ValueError:
-        return None
-    return value if value > 0 else None
-
-
 def resolve_max_workers(max_workers: int | None) -> int | None:
     if max_workers and int(max_workers) > 0:
         return int(max_workers)
-    return env_positive_int("AIPPOCAMPUS_WARM_RECALL_MAX_WORKERS")
+    return None
 
 
 def resolve_thinking_mode(value: str | None = None) -> str | None:
@@ -303,6 +302,7 @@ def build_payload(
     registry_path: Path | str | None = None,
     registry_dir: Path | str | None = None,
     prompt_trace: list[dict[str, Any]] | None = None,
+    max_catalog_items: int = DEFAULT_MAX_CATALOG_ITEMS,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     sanitized_prompt, secret_policy = sanitize_external_model_text(prompt)
     registry_obj = registry
@@ -313,7 +313,7 @@ def build_payload(
     payload = {
         "prompt_version": PROMPT_VERSION,
         "task": "propose_warm_ambient_recall_hints",
-        "memory_catalog": _catalog_from_registry(registry_obj),
+        "memory_catalog": _catalog_from_registry(registry_obj, limit=max_catalog_items),
         "workspace_name": _safe_text(Path(cwd).resolve().name, 120),
         "output_contract": {
             "decision": "skip|background_only|scent|candidate|evidence",
@@ -1088,6 +1088,7 @@ def run_warm_job_file(
 
     scouts_value = job.get("scouts") or DEFAULT_SCOUTS
     scouts = tuple(str(item) for item in scouts_value if str(item or "").strip())
+    detached_defaults = DEFAULT_WARM_DETACHED_JOB_CONFIG
     result = run_warm_ambient_recall(
         str(job.get("prompt") or ""),
         cwd=Path(str(job.get("cwd") or ".")).resolve(),
@@ -1104,14 +1105,16 @@ def run_warm_job_file(
         api_key_env=str(job.get("api_key_env") or DEFAULT_DEEPSEEK_API_KEY_ENV),
         user_id=str(job.get("user_id") or "") or None,
         model_route=str(job.get("model_route") or "") or None,
-        timeout=float(job.get("timeout") or DEFAULT_TIMEOUT),
+        timeout=float(job.get("timeout") or detached_defaults.timeout),
         quorum=int(job.get("quorum") or DEFAULT_QUORUM),
         max_workers=int(job.get("max_workers") or 0) or None,
         prefix_cache_warmup_scouts=int(
-            job.get("prefix_cache_warmup_scouts") or DEFAULT_DETACHED_PREFIX_CACHE_WARMUP_SCOUTS
+            job.get("prefix_cache_warmup_scouts")
+            or detached_defaults.prefix_cache_warmup_scouts
         ),
         prefix_cache_warmup_delay=float(
-            job.get("prefix_cache_warmup_delay") or DEFAULT_DETACHED_PREFIX_CACHE_WARMUP_DELAY
+            job.get("prefix_cache_warmup_delay")
+            or detached_defaults.prefix_cache_warmup_delay
         ),
         wait_all=bool(job.get("wait_all", True)),
         no_write=bool(job.get("no_write", False)),
@@ -1152,13 +1155,15 @@ def run_warm_ambient_recall(
     model: str = DEFAULT_MODEL,
     base_url: str = DEFAULT_BASE_URL,
     max_tokens: int | None = None,
-    timeout: float = DEFAULT_TIMEOUT,
-    temperature: float = DEFAULT_TEMPERATURE,
-    scouts: tuple[str, ...] = DEFAULT_SCOUTS,
-    quorum: int = DEFAULT_QUORUM,
+    timeout: float | None = None,
+    temperature: float | None = None,
+    thinking: str | None = None,
+    scouts: tuple[str, ...] | None = None,
+    quorum: int | None = None,
     max_workers: int | None = None,
-    prefix_cache_warmup_scouts: int = DEFAULT_PREFIX_CACHE_WARMUP_SCOUTS,
-    prefix_cache_warmup_delay: float = DEFAULT_PREFIX_CACHE_WARMUP_DELAY,
+    prefix_cache_warmup_scouts: int | None = None,
+    prefix_cache_warmup_delay: float | None = None,
+    config: WarmRecallConfig | None = None,
     wait_all: bool = False,
     no_write: bool = False,
     chat_fn: ChatFn = call_chat_json,
@@ -1167,6 +1172,15 @@ def run_warm_ambient_recall(
     start = time.perf_counter()
     prompt = str(prompt or "").strip()
     cwd_path = Path(cwd).resolve()
+    runtime_config = (config or DEFAULT_WARM_RECALL_CONFIG).with_overrides(
+        timeout=timeout,
+        temperature=temperature,
+        thinking=thinking,
+        quorum=quorum,
+        max_workers=max_workers,
+        prefix_cache_warmup_scouts=prefix_cache_warmup_scouts,
+        prefix_cache_warmup_delay=prefix_cache_warmup_delay,
+    )
     _, secret_policy = sanitize_external_model_text(prompt)
     if not prompt:
         return unavailable_result("empty prompt", secret_policy=secret_policy)
@@ -1214,8 +1228,10 @@ def run_warm_ambient_recall(
         if supports_user_id
         else None
     )
-    resolved_thinking = resolve_thinking_mode() if supports_thinking else None
-    resolved_max_workers = resolve_max_workers(max_workers)
+    resolved_thinking = (
+        resolve_thinking_mode(runtime_config.thinking) if supports_thinking else None
+    )
+    resolved_max_workers = resolve_max_workers(runtime_config.max_workers)
     if resolved_max_workers is None and route.provider != "deepseek" and capabilities:
         resolved_max_workers = capabilities.safe_default_concurrency
     registry_obj, registry_path_obj = resolve_registry(
@@ -1226,9 +1242,10 @@ def run_warm_ambient_recall(
         cwd=cwd_path,
         registry=registry_obj,
         prompt_trace=prompt_trace,
+        max_catalog_items=runtime_config.max_catalog_items,
     )
 
-    scout_names = expand_scout_lanes(scouts)
+    scout_names = expand_scout_lanes(scouts or DEFAULT_SCOUTS)
     rows, quorum_met = run_scout_batch(
         scouts=scout_names,
         payload=payload,
@@ -1236,17 +1253,17 @@ def run_warm_ambient_recall(
         model=resolved_model,
         base_url=resolved_base_url,
         max_tokens=max_tokens,
-        timeout=timeout,
-        temperature=temperature,
-        quorum=quorum,
+        timeout=runtime_config.timeout,
+        temperature=runtime_config.temperature,
+        quorum=runtime_config.quorum,
         max_workers=resolved_max_workers,
         user_id=resolved_user_id,
         thinking=resolved_thinking,
         service_name=route_service_name(route),
         response_format_json=bool(capabilities.supports_json_response if capabilities else True),
         wait_all=wait_all,
-        prefix_cache_warmup_scouts=prefix_cache_warmup_scouts,
-        prefix_cache_warmup_delay=prefix_cache_warmup_delay,
+        prefix_cache_warmup_scouts=runtime_config.prefix_cache_warmup_scouts,
+        prefix_cache_warmup_delay=runtime_config.prefix_cache_warmup_delay,
         chat_fn=chat_fn,
         scout_fn=scout_fn,
     )
@@ -1254,6 +1271,7 @@ def run_warm_ambient_recall(
     source_thread_keys = referenced_thread_keys(rows) | referenced_thread_keys_from_cards(fallback_cards)
     merged = merge_scouts(
         rows,
+        max_cards=runtime_config.max_cards,
         fallback_cards=fallback_cards,
         source_index=source_index_from_registry(
             registry_obj, thread_keys=source_thread_keys
@@ -1319,10 +1337,14 @@ def run_warm_ambient_recall(
         "quorum_met": quorum_met,
         "scout_count": len(scout_names),
         "max_workers": resolved_max_workers or len(scout_names),
-        "prefix_cache_warmup_scout_count": max(0, min(int(prefix_cache_warmup_scouts or 0), len(scout_names))),
-        "prefix_cache_warmup_delay": max(0.0, float(prefix_cache_warmup_delay or 0.0)),
-        "timeout": timeout,
-        "temperature": temperature,
+        "prefix_cache_warmup_scout_count": max(
+            0, min(int(runtime_config.prefix_cache_warmup_scouts or 0), len(scout_names))
+        ),
+        "prefix_cache_warmup_delay": max(
+            0.0, float(runtime_config.prefix_cache_warmup_delay or 0.0)
+        ),
+        "timeout": runtime_config.timeout,
+        "temperature": runtime_config.temperature,
         "user_id": resolved_user_id,
         "model_route": route_payload,
         "accepted_scout_count": accepted_count,
@@ -1353,99 +1375,12 @@ def run_warm_ambient_recall(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--prompt")
-    parser.add_argument("--job-file")
-    parser.add_argument("--cwd", default=os.getcwd())
-    parser.add_argument("--thread-id")
-    parser.add_argument("--current-thread-key")
-    parser.add_argument("--allow-current-thread-echo", action="store_true")
-    parser.add_argument(
-        "--prompt-trace-json",
-        help="Optional sanitized prompt trace JSON array for warm calibration.",
+    cli_main = cast(
+        Callable[[], int],
+        getattr(importlib.import_module("aippocampus_runtime.warm_ambient.cli"), "main"),
     )
-    parser.add_argument("--topic-epoch")
-    parser.add_argument("--registry")
-    parser.add_argument("--registry-dir")
-    parser.add_argument("--cache")
-    parser.add_argument("--residue")
-    parser.add_argument("--residue-reason", default="warm_scout")
-    parser.add_argument("--api-key-env", default=DEFAULT_DEEPSEEK_API_KEY_ENV)
-    parser.add_argument("--user-id", help="Optional DeepSeek user_id; omit to send a stable sanitized hash.")
-    parser.add_argument("--model-route")
-    parser.add_argument("--model", default=DEFAULT_MODEL)
-    parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
-    parser.add_argument("--max-tokens", type=int, default=None)
-    parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT)
-    parser.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE)
-    parser.add_argument("--quorum", type=int, default=DEFAULT_QUORUM)
-    parser.add_argument("--max-workers", type=int, default=None)
-    parser.add_argument("--prefix-cache-warmup-scouts", type=int, default=DEFAULT_PREFIX_CACHE_WARMUP_SCOUTS)
-    parser.add_argument("--prefix-cache-warmup-delay", type=float, default=DEFAULT_PREFIX_CACHE_WARMUP_DELAY)
-    parser.add_argument("--wait-all", action="store_true")
-    parser.add_argument("--no-write", action="store_true")
-    parser.add_argument("--strict", action="store_true")
-    parser.add_argument("--json", action="store_true", dest="json_output")
-    args = parser.parse_args()
 
-    if args.job_file:
-        summary = run_warm_job_file(args.job_file)
-        if args.json_output:
-            print(json.dumps(summary, ensure_ascii=False, indent=2))
-        else:
-            print(
-                "warm ambient recall job: "
-                f"status={summary.get('status')} "
-                f"scout_results={summary.get('observed_scout_result_count', 0)}"
-            )
-        return 0 if summary.get("ok") else 2
-    if not args.prompt:
-        parser.error("--prompt is required unless --job-file is provided")
-
-    result = run_warm_ambient_recall(
-        args.prompt,
-        cwd=args.cwd,
-        thread_id=args.thread_id,
-        current_thread_key=args.current_thread_key,
-        allow_current_thread_echo=args.allow_current_thread_echo,
-        prompt_trace=json.loads(args.prompt_trace_json) if args.prompt_trace_json else None,
-        topic_epoch=args.topic_epoch,
-        registry_path=args.registry,
-        registry_dir=args.registry_dir,
-        cache_path=args.cache,
-        residue_path=args.residue,
-        residue_reason=args.residue_reason,
-        api_key=None,
-        api_key_env=args.api_key_env,
-        user_id=args.user_id,
-        model_route=args.model_route,
-        model=args.model,
-        base_url=args.base_url,
-        max_tokens=args.max_tokens,
-        timeout=args.timeout,
-        temperature=args.temperature,
-        quorum=args.quorum,
-        max_workers=args.max_workers,
-        prefix_cache_warmup_scouts=args.prefix_cache_warmup_scouts,
-        prefix_cache_warmup_delay=args.prefix_cache_warmup_delay,
-        wait_all=args.wait_all,
-        no_write=args.no_write,
-    )
-    if args.strict and not result.get("available"):
-        result["ok"] = False
-    if args.json_output:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-    else:
-        if not result.get("available"):
-            print(f"warm ambient recall unavailable: {result.get('reason') or result.get('status')}")
-        else:
-            print(
-                "warm ambient recall: "
-                f"{result.get('accepted_scout_count')} scout(s), "
-                f"{len(result.get('cards') or [])} card(s), "
-                f"status={result.get('status')}"
-            )
-    return 2 if args.strict and not result.get("available") else 0
+    return cli_main()
 
 
 if __name__ == "__main__":
