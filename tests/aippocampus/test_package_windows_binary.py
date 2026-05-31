@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -25,6 +26,20 @@ def load_packager():
 class WindowsBinaryPackagingTests(unittest.TestCase):
     def setUp(self) -> None:
         self.packager = load_packager()
+
+    def assertCommandPathEquals(
+        self, command: list[str], option: str, expected: Path
+    ) -> None:
+        value = command[command.index(option) + 1]
+        self.assertEqual(Path(value).resolve(), expected.resolve())
+
+    def assertCommandAddDataSourceEquals(
+        self, command: list[str], expected_source: Path, expected_dest: str
+    ) -> None:
+        add_data = next(part for part in command if part.startswith("--add-data="))
+        source, dest = add_data.removeprefix("--add-data=").split(os.pathsep, 1)
+        self.assertEqual(Path(source).resolve(), expected_source.resolve())
+        self.assertEqual(dest, expected_dest)
 
     def make_repo(self, root: Path) -> None:
         scripts = root / "skills" / "aippocampus" / "scripts"
@@ -74,20 +89,22 @@ class WindowsBinaryPackagingTests(unittest.TestCase):
             command_parts = [str(part) for part in plan.command]
             command_text = json.dumps(command_parts)
             self.assertIn("--distpath", plan.command)
-            self.assertIn(str(output / "dist"), command_parts)
+            self.assertCommandPathEquals(plan.command, "--distpath", output / "dist")
             self.assertIn("--workpath", plan.command)
-            self.assertIn(str(output / "build"), command_parts)
+            self.assertCommandPathEquals(plan.command, "--workpath", output / "build")
             self.assertIn("--specpath", plan.command)
-            self.assertIn(str(output / "spec"), command_parts)
+            self.assertCommandPathEquals(plan.command, "--specpath", output / "spec")
             self.assertIn("aippocampus_scripts", command_text)
-            self.assertTrue(
-                any(str(output / "runtime" / "aippocampus_scripts") in part for part in command_parts)
+            self.assertCommandAddDataSourceEquals(
+                plan.command,
+                output / "runtime" / "aippocampus_scripts",
+                "aippocampus_scripts",
             )
             self.assertIn("--hidden-import=aippocampus_cli", plan.command)
             self.assertIn("--hidden-import=aippocampus_runtime", plan.command)
             self.assertIn("--hidden-import=aippocampus_runtime.cli", plan.command)
-            self.assertNotIn(str(repo / ".aippocampus"), command_text)
-            self.assertNotIn(str(repo / "transcripts"), command_text)
+            self.assertNotIn(str((repo / ".aippocampus").resolve()), command_text)
+            self.assertNotIn(str((repo / "transcripts").resolve()), command_text)
             self.assertEqual(plan.private_data_policy["source_runtime"], "skills/aippocampus/scripts")
             self.assertEqual(plan.private_data_policy["bundled_source"], "staged runtime copy")
 
