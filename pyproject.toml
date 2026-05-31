@@ -21,6 +21,7 @@ package-dir = {"" = "skills/aippocampus/scripts"}
 packages = [
     "aippocampus_runtime",
     "aippocampus_runtime.cli",
+    "aippocampus_runtime.coding",
     "aippocampus_runtime.dream",
     "aippocampus_runtime.model",
     "aippocampus_runtime.registry",
@@ -211,6 +212,8 @@ files = [
     "skills/aippocampus/scripts/build_segments.py",
     "skills/aippocampus/scripts/coding_decision_events.py",
     "skills/aippocampus/scripts/coding_ticket_host_contract.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/coding/__init__.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/coding/host_contract.py",
     "skills/aippocampus/scripts/coding_rejected_route_probes.py",
     "skills/aippocampus/scripts/compensatory_dream.py",
     "skills/aippocampus/scripts/conversation_sources/__init__.py",

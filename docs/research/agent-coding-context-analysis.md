@@ -311,16 +311,17 @@ support a nudge or warning. A ticket should never smuggle a decayed
 `still_rejected` value from storage into authority.
 
 Status: first deterministic ticket gate implemented for coding continuity
-tickets. `skills/aippocampus/scripts/coding_ticket_host_contract.py` now defines
-the host consumption simulator and contract boundary: AIppocampus emits the
-source-backed ticket plus source-thickness, derived assessment, expiry,
-preconditions, annoyance risk, and feedback expectations; the host supplies
-runtime source visibility and owns timing, permission, priority, sequencing,
-safety, and final visibility. Feedback can tune future activation pressure, but
-it must not rewrite source facts or derived assessment rows. Live host timing
-and multi-host duplicate suppression remain validation gaps and should align
-with [Agency From Cognitive Maps](agency-from-cognitive-map.md), not duplicate
-it.
+tickets. `aippocampus_runtime.coding.host_contract`, with
+`skills/aippocampus/scripts/coding_ticket_host_contract.py` kept as a
+compatibility shim, now defines the host consumption simulator and contract
+boundary: AIppocampus emits the source-backed ticket plus source-thickness,
+derived assessment, expiry, preconditions, annoyance risk, and feedback
+expectations; the host supplies runtime source visibility and owns timing,
+permission, priority, sequencing, safety, and final visibility. Feedback can
+tune future activation pressure, but it must not rewrite source facts or derived
+assessment rows. Live host timing and multi-host duplicate suppression remain
+validation gaps and should align with [Agency From Cognitive Maps](agency-from-cognitive-map.md),
+not duplicate it.
 
 ## AIppocampus And Codeksei
 

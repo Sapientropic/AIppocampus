@@ -10,7 +10,7 @@ ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-import coding_ticket_host_contract as host_contract  # noqa: E402
+from aippocampus_runtime.coding import host_contract  # noqa: E402
 
 
 def source_ref(line: int = 10) -> dict[str, object]:

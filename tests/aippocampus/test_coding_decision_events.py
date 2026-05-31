@@ -14,7 +14,7 @@ sys.path.insert(0, str(TESTS))
 sys.path.insert(0, str(SCRIPTS))
 
 import coding_decision_events as decisions  # noqa: E402
-import coding_ticket_host_contract as host_contract  # noqa: E402
+from aippocampus_runtime.coding import host_contract  # noqa: E402
 from redaction_fixtures import (  # noqa: E402
     FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER,
     FAKE_TEST_SECRET_VALUE,
