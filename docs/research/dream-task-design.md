@@ -268,13 +268,13 @@ The second implemented slice is still infrastructure, not a full dream worker.
 navigation artifacts:
 
 - `question_link` rows from `question_tracking.py`
-- `aippocampus_journey` rows from `journey_tracking.py`
+- `aippocampus_journey` rows from `aippocampus_runtime.journey.tracking`
 - `aippocampus_ambient_residue` rows from `ambient_thread_cache.py`
 - `concept_edge` rows from subconscious concept extraction
 - source-backed `theme_candidate` rows from warm/ambient recall scouts
 - correction activation/outcome/adjudication rows from
   `correction_reconsolidation.py`
-- reflection feedback/adjustment rows from `reflection_space.py`
+- reflection feedback/adjustment rows from `aippocampus_runtime.reflection.space`
 - agency/coding tickets and decision events when they carry clean source refs
 
 The pack only becomes `status="ready_for_dream_worker"` when it has clean
