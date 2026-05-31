@@ -195,6 +195,97 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertNotIn("def save_registry", registry_source)
         self.assertIn("def save_registry", store_source)
 
+    def test_source_helpers_have_package_owner_and_compat_shims(self) -> None:
+        import build_clean_source
+        import build_semantic_scope_labels
+        import rollout_behavior_events
+        import search_clean_source
+        import semantic_scope_labels
+        from aippocampus_runtime.source import (
+            behavior_events,
+            clean_source,
+            registry_paths,
+            search,
+            semantic_scope_builder,
+        )
+        from aippocampus_runtime.source import (
+            semantic_scope_labels as packaged_scope_labels,
+        )
+
+        package_paths = [
+            SCRIPTS / "aippocampus_runtime" / "source" / "__init__.py",
+            SCRIPTS / "aippocampus_runtime" / "source" / "behavior_events.py",
+            SCRIPTS / "aippocampus_runtime" / "source" / "clean_source.py",
+            SCRIPTS / "aippocampus_runtime" / "source" / "registry_paths.py",
+            SCRIPTS / "aippocampus_runtime" / "source" / "search.py",
+            SCRIPTS / "aippocampus_runtime" / "source" / "semantic_scope_builder.py",
+            SCRIPTS / "aippocampus_runtime" / "source" / "semantic_scope_labels.py",
+        ]
+        shim_paths = [
+            SCRIPTS / "build_clean_source.py",
+            SCRIPTS / "build_semantic_scope_labels.py",
+            SCRIPTS / "search_clean_source.py",
+            SCRIPTS / "semantic_scope_labels.py",
+        ]
+
+        for path in package_paths + shim_paths:
+            self.assertTrue(path.exists(), path)
+        for path in shim_paths:
+            self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges(top_level_only=True)
+        packaged_consumers = [
+            "aippocampus_mcp_server",
+            "aippocampus_runtime.question.source_refs",
+            "aippocampus_runtime.registry.search",
+            "aippocampus_runtime.subconscious.job_validation",
+            "aippocampus_runtime.subconscious.runtime",
+            "aippocampus_runtime.subconscious.validation_audit",
+            "aippocampus_runtime.warm_ambient.source_validation",
+            "build_project_timeline",
+            "question_resolution",
+            "semantic_scope_suppressed_recovery",
+        ]
+        flat_source_modules = {
+            "build_clean_source",
+            "build_semantic_scope_labels",
+            "build_project_timeline",
+            "rollout_behavior_events",
+            "search_clean_source",
+            "semantic_scope_labels",
+        }
+        for source in packaged_consumers:
+            self.assertFalse(flat_source_modules & edges[source], source)
+        for source in [
+            "aippocampus_runtime.source.clean_source",
+            "aippocampus_runtime.source.semantic_scope_builder",
+        ]:
+            self.assertFalse(flat_source_modules & edges[source], source)
+        self.assertIn("rollout_behavior_events", pyproject_py_modules())
+
+        self.assertIs(build_clean_source.build_clean_source, clean_source.build_clean_source)
+        self.assertEqual(build_clean_source.SCOPE_LABEL_ORDER, clean_source.SCOPE_LABEL_ORDER)
+        self.assertIs(
+            rollout_behavior_events.extract_rollout_behavior_events,
+            behavior_events.extract_rollout_behavior_events,
+        )
+        self.assertIs(search_clean_source.search_clean_source, search.search_clean_source)
+        self.assertIs(search_clean_source.iter_clean_messages, search.iter_clean_messages)
+        self.assertIs(
+            semantic_scope_labels.load_semantic_scope_labels,
+            packaged_scope_labels.load_semantic_scope_labels,
+        )
+        self.assertEqual(
+            semantic_scope_labels.SEMANTIC_SCOPE_LABELS_FILENAME,
+            packaged_scope_labels.SEMANTIC_SCOPE_LABELS_FILENAME,
+        )
+        self.assertIs(
+            build_semantic_scope_labels.build_semantic_scope_labels_for_registry,
+            semantic_scope_builder.build_semantic_scope_labels_for_registry,
+        )
+        self.assertIs(build_semantic_scope_labels.main, semantic_scope_builder.main)
+        self.assertIsNotNone(registry_paths.resolve_registry_member_path("messages.jsonl"))
+
     def test_object_storage_helpers_have_package_owner_and_compat_shims(self) -> None:
         import object_storage_client
         import object_storage_providers

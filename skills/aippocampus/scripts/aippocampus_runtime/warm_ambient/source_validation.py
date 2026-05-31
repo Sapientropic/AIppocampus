@@ -21,8 +21,8 @@ from aippocampus_runtime.recall.ambient_cards import (
     SOURCE_BACKED_RECALL_CARD,
 )
 from aippocampus_runtime.recall.query_policy import split_query_terms
+from aippocampus_runtime.source.search import iter_clean_messages
 from aippocampuslib import compact_text, sanitize_external_model_text
-from search_clean_source import iter_clean_messages
 
 PROMPT_TRACE_BASE_STOPWORDS = {
     "a",

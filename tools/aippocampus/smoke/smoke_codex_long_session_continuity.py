@@ -34,8 +34,8 @@ PLUGIN_SMOKE_DIR = _paths.REPO_ROOT / "plugins" / "aippocampus"
 if str(PLUGIN_SMOKE_DIR) not in sys.path:
     sys.path.insert(0, str(PLUGIN_SMOKE_DIR))
 
-import build_clean_source  # noqa: E402
 import smoke_real_codex_host as codex_host  # noqa: E402
+from aippocampus_runtime.source import clean_source as build_clean_source  # noqa: E402
 
 KIND = "aippocampus_real_codex_long_session_continuity_smoke"
 SCHEMA_VERSION = 1

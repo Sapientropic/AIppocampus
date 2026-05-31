@@ -11,15 +11,18 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from aippocampuslib import compact_text, now_utc
-from build_associations import extract_terms_from_text, source_text_is_noise
-from build_clean_source import SCOPE_LABEL_ORDER
-from registry import load_registry, registry_paths, unique_preserve
-from semantic_scope_labels import (
+from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
+from aippocampus_runtime.source.registry_paths import (
+    resolve_registry_member_path as resolve_registry_member_path,
+)
+from aippocampus_runtime.source.semantic_scope_labels import (
     load_semantic_scope_labels,
     merged_scope_labels,
     semantic_labels_for_message,
 )
+from aippocampuslib import compact_text, now_utc
+from build_associations import extract_terms_from_text, source_text_is_noise
+from registry import load_registry, registry_paths, unique_preserve
 
 TIMELINE_SCHEMA_VERSION = 1
 DEFAULT_MAX_PER_PROJECT = 80
@@ -86,36 +89,6 @@ def iter_jsonl(path: Path) -> list[dict[str, Any]]:
             if isinstance(item, dict):
                 rows.append(item)
     return rows
-
-
-def resolve_registry_member_path(
-    value: str | None, registry_path: Path | None = None
-) -> Path | None:
-    if not value:
-        return None
-    path = Path(str(value).replace("\\", "/"))
-    if path.is_absolute() or registry_path is None:
-        return path
-    if path.drive or ".." in path.parts:
-        return None
-
-    # Public bundles keep registry/threads.json beside clean-source/ and index/
-    # at the bundle root. Machine registries usually store absolute paths, but
-    # portable examples and exports need relative paths to remain useful after
-    # moving between machines.
-    registry_root = registry_path.resolve().parent
-    bundle_root = registry_root.parent
-    candidates = [(registry_root, registry_root / path)]
-    if bundle_root != registry_root:
-        candidates.append((bundle_root, bundle_root / path))
-    for root, candidate in candidates:
-        resolved = candidate.resolve()
-        resolved_root = root.resolve()
-        if resolved != resolved_root and resolved_root not in resolved.parents:
-            continue
-        if resolved.exists():
-            return resolved
-    return candidates[0][1]
 
 
 def sortable_turn_value(turn: dict[str, Any]) -> tuple[int, int]:

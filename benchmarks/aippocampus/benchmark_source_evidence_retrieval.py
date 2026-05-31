@@ -29,17 +29,17 @@ _paths.ensure_paths()
 import smoke_source_evidence_recall_eval as source_evidence_eval
 
 import benchmark_fts5_recall as fts5_benchmark
-from aippocampuslib import compact_text
-from build_clean_source import SCOPE_LABEL_ORDER
-from build_index import make_sqlite
-from retrieval import split_query_terms
-from semantic_scope_labels import (
+from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
+from aippocampus_runtime.source.semantic_scope_labels import (
     SEMANTIC_SCOPE_LABELS_FILENAME,
     clean_messages_by_id,
     load_semantic_scope_labels,
     semantic_scope_label_rows_from_findings,
     write_semantic_scope_label_sidecar,
 )
+from aippocampuslib import compact_text
+from build_index import make_sqlite
+from retrieval import split_query_terms
 from subconscious_runtime import add_usage, call_chat_json, compact_usage
 from subconscious_worker import DEFAULT_BASE_URL, DEFAULT_MODEL, clamp_confidence, parse_model_json
 
