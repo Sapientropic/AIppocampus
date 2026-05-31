@@ -14,8 +14,8 @@ import json
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
+from aippocampus_runtime.question.source_refs import source_ref_key
 from aippocampuslib import cli_error_payload, cli_exit_code_for_error_code, compact_text, now_utc
-from question_source_refs import source_ref_key
 from registry import unique_preserve
 
 SCHEMA_VERSION = 1

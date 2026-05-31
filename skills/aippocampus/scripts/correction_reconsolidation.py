@@ -16,6 +16,7 @@ import re
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
+from aippocampus_runtime.question.source_refs import compact_source_refs, source_ref_key
 from aippocampuslib import (
     cli_error_payload,
     cli_exit_code_for_error_code,
@@ -24,7 +25,6 @@ from aippocampuslib import (
     safe_path_name,
     sanitize_external_model_text,
 )
-from question_source_refs import compact_source_refs, source_ref_key
 from registry import unique_preserve
 
 SCHEMA_VERSION = 1

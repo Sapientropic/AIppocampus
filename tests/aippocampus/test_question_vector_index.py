@@ -17,7 +17,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import question_vector_index as qvi  # noqa: E402
+from aippocampus_runtime.question import vector_index as qvi  # noqa: E402
 
 
 class QuestionVectorIndexTests(unittest.TestCase):

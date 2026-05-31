@@ -15,6 +15,7 @@ import re
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
+from aippocampus_runtime.question.source_refs import source_ref_key
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampuslib import (
     cli_error_payload,
@@ -30,7 +31,6 @@ from correction_reconsolidation import (
     sanitize_file_hints,
     should_surface_candidate,
 )
-from question_source_refs import source_ref_key
 from registry import unique_preserve
 
 SCHEMA_VERSION = 1

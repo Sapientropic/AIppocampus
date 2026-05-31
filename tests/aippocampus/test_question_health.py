@@ -19,7 +19,7 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 import question_health as qh  # noqa: E402
-from question_source_refs import build_source_ref_index  # noqa: E402
+from aippocampus_runtime.question.source_refs import build_source_ref_index  # noqa: E402
 
 
 class QuestionHealthTests(unittest.TestCase):

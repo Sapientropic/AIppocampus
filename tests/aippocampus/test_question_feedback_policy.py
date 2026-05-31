@@ -10,7 +10,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-import question_feedback_policy as feedback  # noqa: E402
+from aippocampus_runtime.question import feedback_policy as feedback  # noqa: E402
 
 
 class QuestionFeedbackPolicyTests(unittest.TestCase):

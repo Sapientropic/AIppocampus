@@ -21,10 +21,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from aippocampus_runtime.question.source_refs import source_ref_key
 from aippocampus_runtime.subconscious.jobs_config import default_jobs_output_path
 from aippocampuslib import compact_text, now_utc
 from build_concept_graph import default_concept_graph_path, expand_concepts
-from question_source_refs import source_ref_key
 from registry import registry_paths, unique_preserve
 
 SCHEMA_VERSION = 1
