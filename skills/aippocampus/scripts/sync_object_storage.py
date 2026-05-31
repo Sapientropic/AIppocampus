@@ -19,7 +19,7 @@ from typing import Any
 
 import sync_bundle
 from aippocampus_runtime.sync import contract as sync_contract
-from object_storage_client import (
+from aippocampus_runtime.sync.object_storage.client import (
     DEFAULT_PREFIX,
     DEFAULT_TIMEOUT_SECONDS,
     OBJECT_BACKEND,

@@ -22,6 +22,7 @@ packages = [
     "aippocampus_runtime",
     "aippocampus_runtime.registry",
     "aippocampus_runtime.sync",
+    "aippocampus_runtime.sync.object_storage",
     "aippocampus_runtime.warm_ambient",
     "conversation_sources",
 ]
@@ -232,6 +233,9 @@ files = [
     "skills/aippocampus/scripts/journey_tracking.py",
     "skills/aippocampus/scripts/memory_candidate_router.py",
     "skills/aippocampus/scripts/model_client.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/sync/object_storage/__init__.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/sync/object_storage/client.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/sync/object_storage/providers.py",
     "skills/aippocampus/scripts/object_storage_client.py",
     "skills/aippocampus/scripts/object_storage_providers.py",
     "skills/aippocampus/scripts/onboard.py",
