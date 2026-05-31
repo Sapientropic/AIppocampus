@@ -124,6 +124,14 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(seen["argv"], ["--flag", "value"])
         self.assertEqual(seen["sys_argv"], ["outer-host", "--keep"])
 
+    def test_package_facade_public_sync_commands_are_argv_aware(self) -> None:
+        from aippocampus_runtime.cli import facade
+        from aippocampus_runtime.sync import bundle
+        from aippocampus_runtime.sync.object_storage import cli as object_storage_cli
+
+        self.assertTrue(facade.main_accepts_argv(bundle.main))
+        self.assertTrue(facade.main_accepts_argv(object_storage_cli.main))
+
     def test_package_facade_capture_api_handles_usage_and_unknown_commands(self) -> None:
         from aippocampus_runtime.cli import facade
 
