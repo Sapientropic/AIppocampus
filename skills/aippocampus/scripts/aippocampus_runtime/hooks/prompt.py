@@ -46,12 +46,7 @@ def _load_runtime() -> dict[str, Any]:
     if _RUNTIME_CACHE is not None:
         return _RUNTIME_CACHE
 
-    from aippocampus_runtime.recall.prompt_context_render import (  # noqa: PLC0415
-        ambient_debug_summary,
-        apply_dream_delivery_boundary,
-        context_for_hook,
-        hook_stdout_payload,
-    )
+    from aippocampus_runtime.recall.prompt_context_render import ambient_debug_summary, apply_dream_delivery_boundary, context_for_hook, hook_stdout_payload, public_hook_debug_payload  # noqa: I001, PLC0415
     from aippocampus_runtime.recall.prompt_recall_core import (  # noqa: PLC0415
         DEFAULT_SEARCH_BUDGET,
         PROMPT_HOOK_SEMANTIC_TIMEOUT,
@@ -74,6 +69,7 @@ def _load_runtime() -> dict[str, Any]:
         "hook_input_from_stdin": hook_input_from_stdin,
         "hook_stdout_payload": hook_stdout_payload,
         "merge_association_candidates": merge_association_candidates,
+        "public_hook_debug_payload": public_hook_debug_payload,
     }
     return _RUNTIME_CACHE
 
@@ -82,6 +78,7 @@ def __getattr__(name: str) -> Any:
     if name in _RUNTIME_EXPORTS:
         return _load_runtime()[name]
     raise AttributeError(name)
+
 
 def write_debug_log(
     result: dict[str, Any],
@@ -242,7 +239,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.log or args.log_skip:
             write_debug_log(result, hook_input=hook_input, include_skip=args.log_skip)
         if args.json_output:
-            print(json.dumps(result, ensure_ascii=False, indent=2))
+            print(json.dumps(runtime["public_hook_debug_payload"](result), ensure_ascii=False, indent=2))
             return 0
         payload = runtime["hook_stdout_payload"](result)
         if payload:

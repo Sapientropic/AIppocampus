@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from aippocampus_runtime.core import compact_text
+from aippocampus_runtime.core import compact_text, sanitize_external_model_payload
 
 MAX_CONTEXT_CHARS = 1800
 DREAM_HYPOTHESIS_TYPE = "dream_hypothesis"
@@ -166,6 +166,29 @@ def ambient_debug_summary(result: dict[str, Any]) -> dict[str, Any] | None:
         "visibility_counts": visibility_counts,
         "source_validation_statuses": validation_statuses,
     }
+
+
+def public_hook_debug_payload(result: dict[str, Any]) -> dict[str, Any]:
+    """Project hook debug JSON without leaking prompt-derived credential text.
+
+    `assess_prompt()` keeps raw `query_terms` internally because the recall
+    path needs the real prompt terms for deterministic scoring and semantic
+    routing. Operator-facing JSON is different: users often paste it into
+    issues, so prompt-derived debug fields must pass through the same secret
+    projection used before external model calls. Do not move this redaction
+    upstream into query generation; that would silently change recall behavior.
+    """
+
+    payload = dict(result)
+    payload["query_terms"] = sanitize_external_model_payload(payload.get("query_terms") or [])
+    semantic_gate = payload.get("semantic_gate")
+    if isinstance(semantic_gate, dict):
+        projected_gate = dict(semantic_gate)
+        for key in ("query_aliases", "aliases"):
+            if key in projected_gate:
+                projected_gate[key] = sanitize_external_model_payload(projected_gate.get(key))
+        payload["semantic_gate"] = projected_gate
+    return payload
 
 
 def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHARS) -> str | None:
