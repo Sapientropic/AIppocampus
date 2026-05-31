@@ -4,7 +4,8 @@ This is the packaging plan and claim boundary for optional Python-free
 AIppocampus binaries. The canonical implementation remains the source-backed
 Python runtime; direct Python/script usage stays supported as the fallback.
 
-As of 2026-05-31, Windows x64 has a PyInstaller artifact smoke recorded in
+As of 2026-05-31, Windows x64 has a PyInstaller artifact smoke, plus a
+post-package-refactor binary MCP re-smoke, recorded in
 `docs/evidence/readiness/public-readiness-verification.md`. Do not claim any
 other platform until its artifact is built, smoke-tested, and linked from the
 dated evidence ledger.
