@@ -40,6 +40,16 @@ confirm both the MCP `tool_use` and the matching `tool_result` without printing
 the raw event body. A stale-index or stale-clean-source health result means the
 MCP tool was reached, but local AIppocampus memory artifacts need refresh.
 
+To test a Windows standalone binary as the stdio MCP server instead of the
+Python script, build the artifact first and pass the binary command explicitly:
+
+```sh
+python tools/aippocampus/smoke/smoke_claude_code_mcp_host.py --json --call-tool --cwd "$PWD" --max-budget-usd 0.20 --server-command /path/to/aippocampus.exe --server-arg mcp
+```
+
+This uses a temporary strict MCP config only; it does not replace the user's
+persistent Claude Code MCP settings.
+
 ## Project Skill Adapter
 
 This repository ships a Claude Code project skill at

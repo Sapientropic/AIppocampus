@@ -131,6 +131,11 @@ Latest verification for this slice:
   `mcp__aippocampus__memory_health` call. The smoke verifies Claude Code
   `stream-json` `tool_use` plus the matching `tool_result`, and reports only
   event counts/tool flags instead of raw event bodies.
+- `python tools\aippocampus\smoke\smoke_claude_code_mcp_host.py --json --call-tool --cwd . --max-budget-usd 0.20 --tool-timeout 180 --server-command <aippocampus.exe> --server-arg mcp`:
+  passed with the same `memory_health` `tool_use` plus matching `tool_result`.
+  This proves the Windows standalone binary can serve Claude Code over stdio
+  MCP through a temporary strict MCP config; it does not mutate the persistent
+  Claude Code MCP settings.
 - The same host smoke reported local Claude Code version metadata and verified
   the project skill adapter at `.claude/skills/aippocampus/SKILL.md` without
   reading transcript bodies.
@@ -169,17 +174,21 @@ Latest verification for this slice:
   11 tests passed.
 - `python tools\aippocampus\package_windows_binary.py --dry-run --json`:
   passed without claiming artifact smoke or Python-free support.
-- Running `tools\aippocampus\package_windows_binary.py --json --output-root .tmp\windows-binary-smoke-current`
-  from an isolated `.tmp` virtual environment with PyInstaller 6.20.0 built
+- Running `tools\aippocampus\package_windows_binary.py --json --output-root <temp>`
+  from an isolated temporary virtual environment with PyInstaller 6.20.0 built
   `aippocampus.exe` and passed the artifact smoke matrix:
   `aippocampus --help`, `aippocampus health --help`, public-bundle search,
   `aippocampus mcp list-tools`, `aippocampus onboard --status --format json`,
   empty-sync-dir status with the expected nonzero exit code and JSON payload,
   and `aippocampus hooks status`.
 - The packaging path stages only `skills/aippocampus/scripts` as runtime input.
-  The private data guard passed with no staged private roots and no
-  PyInstaller command inputs under `.aippocampus`, `aippocampus-registry`,
-  `transcripts`, `rollouts`, or a repo-local private `registry` directory.
+  The first live artifact smoke caught a real regression where the guard treated
+  `aippocampus_runtime/registry` as private data and omitted it from the staged
+  runtime; the fixed guard now preserves runtime package owners while still
+  excluding top-level private/generated roots. The private data guard passed
+  with no staged private roots and no PyInstaller command inputs under
+  `.aippocampus`, `aippocampus-registry`, `transcripts`, `rollouts`, or a
+  repo-local private `registry` directory.
 
 This does not claim signed release artifacts, installer/update UX, macOS/Linux
 binaries, or full-history/private-provider ingestion from the binary.

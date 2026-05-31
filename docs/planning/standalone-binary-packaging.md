@@ -27,7 +27,7 @@ Each claimed platform needs a fresh artifact built on or for that platform:
 
 | Platform | Required smoke checks |
 | --- | --- |
-| Windows x64 | `aippocampus --help`; `aippocampus health --help`; public-bundle search; `aippocampus mcp list-tools`; `aippocampus onboard --status --format json`; `aippocampus sync status --sync-dir <empty-dir> --json`; `aippocampus hooks status`; staged-runtime private-data guard. |
+| Windows x64 | `aippocampus --help`; `aippocampus health --help`; public-bundle search; `aippocampus mcp list-tools`; `aippocampus onboard --status --format json`; `aippocampus sync status --sync-dir <empty-dir> --json`; `aippocampus hooks status`; staged-runtime private-data guard; optional Claude Code strict MCP tool-call with `aippocampus.exe mcp` when claiming host integration. |
 | macOS arm64 | Same checks as Windows, plus Gatekeeper/quarantine note if distributing a downloaded binary. |
 | macOS x64 | Same checks as Windows; may be deferred if the project explicitly drops Intel Mac binary claims. |
 | Linux x64 | Same checks as Windows on a clean container or VM with no repo checkout on `PYTHONPATH`. |
@@ -43,6 +43,9 @@ fallback until the matrix above passes.
 PyInstaller. It stages `skills/aippocampus/scripts` into a temporary runtime
 copy, generates a small frozen entrypoint for the existing `aippocampus_cli`
 facade, and then runs the smoke matrix above against the built executable.
+The executable can also launch the stdio MCP server through
+`aippocampus.exe mcp`; host-level proof still requires the dedicated Claude
+Code smoke because `mcp list-tools` only proves local catalog generation.
 
 The private-data guard intentionally checks the build input rather than treating
 the executable as an arbitrary secret scanner. PyInstaller diagnostics may carry

@@ -33,6 +33,8 @@ def run_claude_mcp_probe(
     max_budget_usd: float = 0.25,
     tool_timeout: int = 120,
     server_script: Path | None = None,
+    server_command: str | None = None,
+    server_args: list[str] | None = None,
 ) -> dict[str, Any]:
     claude = shutil.which("claude")
     if not claude:
@@ -83,6 +85,8 @@ def run_claude_mcp_probe(
                 max_budget_usd=max_budget_usd,
                 timeout=tool_timeout,
                 server_script=server_script or DEFAULT_SERVER_SCRIPT,
+                server_command=server_command,
+                server_args=server_args,
             )
             result["tool_call"] = tool_call
             result["ok"] = bool(tool_call.get("ok"))
@@ -95,12 +99,20 @@ def run_claude_mcp_probe(
     return result
 
 
-def strict_mcp_config(server_name: str, server_script: Path) -> dict[str, Any]:
+def strict_mcp_config(
+    server_name: str,
+    *,
+    server_script: Path,
+    server_command: str | None = None,
+    server_args: list[str] | None = None,
+) -> dict[str, Any]:
+    command = server_command or sys.executable
+    args = list(server_args) if server_args is not None else [str(server_script)]
     return {
         "mcpServers": {
             server_name: {
-                "command": sys.executable,
-                "args": [str(server_script)],
+                "command": command,
+                "args": args,
             }
         }
     }
@@ -146,6 +158,8 @@ def run_claude_mcp_tool_call(
     max_budget_usd: float,
     timeout: int,
     server_script: Path,
+    server_command: str | None = None,
+    server_args: list[str] | None = None,
 ) -> dict[str, Any]:
     """Run one minimal Claude Code session that must call the MCP tool.
 
@@ -158,7 +172,15 @@ def run_claude_mcp_tool_call(
     with tempfile.TemporaryDirectory(prefix="aippocampus-claude-mcp-") as tmp:
         config_path = Path(tmp) / "mcp.json"
         config_path.write_text(
-            json.dumps(strict_mcp_config(server_name, server_script), ensure_ascii=False),
+            json.dumps(
+                strict_mcp_config(
+                    server_name,
+                    server_script=server_script,
+                    server_command=server_command,
+                    server_args=server_args,
+                ),
+                ensure_ascii=False,
+            ),
             encoding="utf-8",
         )
         proc = subprocess.run(
@@ -320,6 +342,16 @@ def main() -> int:
     parser.add_argument("--max-budget-usd", type=float, default=0.25)
     parser.add_argument("--tool-timeout", type=int, default=120)
     parser.add_argument("--server-script", type=Path, default=DEFAULT_SERVER_SCRIPT)
+    parser.add_argument(
+        "--server-command",
+        help="Override the strict MCP server command, e.g. a standalone aippocampus.exe.",
+    )
+    parser.add_argument(
+        "--server-arg",
+        action="append",
+        default=None,
+        help="Argument for --server-command. Repeat for multiple args; use --server-arg mcp for the standalone binary.",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
@@ -330,6 +362,8 @@ def main() -> int:
         max_budget_usd=args.max_budget_usd,
         tool_timeout=args.tool_timeout,
         server_script=args.server_script,
+        server_command=args.server_command,
+        server_args=args.server_arg,
     )
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))

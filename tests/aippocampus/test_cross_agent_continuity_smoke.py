@@ -206,6 +206,65 @@ class CrossAgentContinuitySmokeTests(unittest.TestCase):
             [str(server_script)],
         )
 
+    def test_claude_tool_call_smoke_can_use_standalone_binary_command(self) -> None:
+        configs: list[dict[str, object]] = []
+
+        def fake_run(args: list[str], **kwargs: object) -> object:
+            config_path = Path(args[args.index("--mcp-config") + 1])
+            configs.append(json.loads(config_path.read_text(encoding="utf-8")))
+
+            class Proc:
+                returncode = 0
+                stdout = "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "type": "assistant",
+                                "message": {
+                                    "content": [
+                                        {
+                                            "type": "tool_use",
+                                            "id": "call_1",
+                                            "name": "mcp__aippocampus__memory_health",
+                                        }
+                                    ]
+                                },
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "type": "user",
+                                "message": {
+                                    "content": [
+                                        {"type": "tool_result", "tool_use_id": "call_1"}
+                                    ]
+                                },
+                            }
+                        ),
+                    ]
+                )
+                stderr = ""
+
+            return Proc()
+
+        with patch.object(smoke_claude_code_mcp_host.subprocess, "run", side_effect=fake_run):
+            result = smoke_claude_code_mcp_host.run_claude_mcp_tool_call(
+                claude="claude",
+                server_name="aippocampus",
+                cwd="E:/repo",
+                max_budget_usd=0.1,
+                timeout=30,
+                server_script=Path("unused.py"),
+                server_command="E:/dist/aippocampus.exe",
+                server_args=["mcp"],
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(
+            configs[0]["mcpServers"]["aippocampus"],
+            {"command": "E:/dist/aippocampus.exe", "args": ["mcp"]},
+        )
+
     def test_claude_probe_can_require_real_tool_call_after_host_is_reachable(self) -> None:
         proc_by_command = {
             ("mcp", "list"): "aippocampus: python server - ✓ Connected",
