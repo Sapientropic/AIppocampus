@@ -313,10 +313,12 @@ boundary.
 Purpose: group existing source-backed `question_candidate` findings into
 append-only `question_link` findings.
 
-The Phase 2 runner is deterministic and lives in `question_tracking.py`.
-`subconscious_jobs.py --job question_tracking` invokes it after semantic
-extraction jobs have serialized their writes, so tracking reads completed
-`question_candidate` rows instead of racing the concurrent worker pool.
+The Phase 2 runner is deterministic and lives in
+`aippocampus_runtime.question.tracking`; `question_tracking.py` is the
+direct-script/import compatibility shim. `subconscious_jobs.py --job
+question_tracking` invokes it after semantic extraction jobs have serialized
+their writes, so tracking reads completed `question_candidate` rows instead of
+racing the concurrent worker pool.
 
 Output: `question_link` findings in the same `subconscious_jobs.jsonl` stream,
 with `question_cluster_id`, `linked_questions`, `dependency_edges`,

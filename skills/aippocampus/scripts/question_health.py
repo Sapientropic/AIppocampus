@@ -22,8 +22,7 @@ from aippocampus_runtime.question.source_refs import (
     compact_source_refs,
     source_ref_key,
 )
-from aippocampuslib import compact_text
-from question_tracking import (
+from aippocampus_runtime.question.tracking import (
     FINDING_ROW_KIND,
     FRONTIER_MARKER_KIND,
     QUESTION_CANDIDATE_KIND,
@@ -34,6 +33,7 @@ from question_tracking import (
     parse_timestamp,
     stable_digest,
 )
+from aippocampuslib import compact_text
 from registry import unique_preserve
 
 THEME_CANDIDATE_KIND = "theme_candidate"

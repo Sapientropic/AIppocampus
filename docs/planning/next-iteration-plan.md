@@ -149,13 +149,15 @@ handoff context.
 8. Question tracking Phase 2
    - Source: `question-tracking-subconscious.md`.
    - First deterministic slice is implemented in
-     `skills/aippocampus/scripts/question_tracking.py`: it groups existing
+     `skills/aippocampus/scripts/aippocampus_runtime/question/tracking.py`, with
+     `question_tracking.py` kept as the compatibility shim: it groups existing
      `question_candidate` findings, writes `question_link` rows to
      `subconscious_jobs.jsonl`, records auditable ordering edges, skips stale
      refs when registry clean-source resolution is available, and requires
      explicit confirmation artifacts for borderline pairs.
-   - First offline #134 slice is implemented: `question_tracking.py` can export
-     compact pending confirmation requests for borderline pairs, and
+   - First offline #134 slice is implemented:
+     `aippocampus_runtime.question.tracking` can export compact pending
+     confirmation requests for borderline pairs, and
      `benchmark_question_tracking_calibration.py` checks selected fixtures for
      obvious recurring retention, generic merge rejection, and pending request
      formation. The report now compares the static strong-threshold baseline
@@ -163,7 +165,7 @@ handoff context.
      merged-negative deltas.
    - First optional live/model adapter slice is implemented:
      `question_confirmation_live.py` converts pending requests into confirmation
-     artifacts for `question_tracking.py --borderline-confirmations`, but defaults
+     artifacts for the tracking `--borderline-confirmations` path, but defaults
      to dry-run unless `--call-model` and an API key route are supplied.
    - First #134 live smoke is implemented:
      `tools/aippocampus/smoke/smoke_question_confirmation_live.py` exercises the

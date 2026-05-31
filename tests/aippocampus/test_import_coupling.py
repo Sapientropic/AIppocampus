@@ -138,7 +138,7 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertEqual(cycles, [])
 
     def test_registry_does_not_import_retrieval_at_module_load(self) -> None:
-        edges = same_dir_import_edges(top_level_only=True)
+        edges = same_dir_import_edges()
         self.assertNotIn("retrieval", edges["registry"])
 
     def test_cli_facade_has_package_owner_and_compat_shim(self) -> None:
@@ -156,7 +156,7 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertTrue(shim_path.exists(), shim_path)
         self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
 
-        edges = same_dir_import_edges(top_level_only=True)
+        edges = same_dir_import_edges()
         self.assertIn("aippocampus_runtime.cli.facade", edges["aippocampus_cli"])
         self.assertIs(aippocampus_cli.main, facade.main)
         self.assertIs(aippocampus_cli.run_script, facade.run_script)
@@ -849,7 +849,11 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
 
         edges = same_dir_import_edges(top_level_only=True)
-        for source in ["subconscious_jobs", "question_tracking", "theme_emergence"]:
+        for source in [
+            "subconscious_jobs",
+            "aippocampus_runtime.question.tracking",
+            "theme_emergence",
+        ]:
             self.assertIn("aippocampus_runtime.subconscious.jobs_config", edges[source])
             self.assertNotIn("subconscious_jobs_config", edges[source])
 
@@ -894,13 +898,19 @@ class ImportCouplingTests(unittest.TestCase):
             "question_health",
             "question_index_sidecar",
             "question_resolution",
-            "question_tracking",
+            "aippocampus_runtime.question.tracking",
             "theme_emergence",
         ]:
             self.assertIn("aippocampus_runtime.question.source_refs", edges[source])
             self.assertNotIn("question_source_refs", edges[source])
-        self.assertIn("aippocampus_runtime.question.feedback_policy", edges["question_tracking"])
-        self.assertNotIn("question_feedback_policy", edges["question_tracking"])
+        self.assertIn(
+            "aippocampus_runtime.question.feedback_policy",
+            edges["aippocampus_runtime.question.tracking"],
+        )
+        self.assertNotIn(
+            "question_feedback_policy",
+            edges["aippocampus_runtime.question.tracking"],
+        )
 
         modules = pyproject_py_modules()
         self.assertTrue(
@@ -916,6 +926,56 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(
             question_vector_index.LocalQuestionVectorIndex,
             vector_index.LocalQuestionVectorIndex,
+        )
+
+    def test_question_tracking_has_package_owner_and_compat_shims(self) -> None:
+        import question_confirmation
+        import question_tracking
+        from aippocampus_runtime.question import confirmation, tracking
+
+        package_paths = [
+            SCRIPTS / "aippocampus_runtime" / "question" / "confirmation.py",
+            SCRIPTS / "aippocampus_runtime" / "question" / "tracking.py",
+        ]
+        shim_paths = [
+            SCRIPTS / "question_confirmation.py",
+            SCRIPTS / "question_tracking.py",
+        ]
+
+        for path in package_paths + shim_paths:
+            self.assertTrue(path.exists(), path)
+        for path in shim_paths:
+            self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges()
+        for source in [
+            "aippocampus_runtime.subconscious.deterministic_jobs",
+            "question_health",
+            "question_index_sidecar",
+            "question_resolution",
+            "question_confirmation_live",
+        ]:
+            self.assertIn("aippocampus_runtime.question.tracking", edges[source])
+            self.assertNotIn("question_tracking", edges[source])
+        for source in [
+            "aippocampus_runtime.question.tracking",
+            "aippocampus_runtime.subconscious.deterministic_jobs",
+            "question_confirmation_live",
+        ]:
+            self.assertIn("aippocampus_runtime.question.confirmation", edges[source])
+            self.assertNotIn("question_confirmation", edges[source])
+
+        self.assertIs(question_tracking.QuestionCandidate, tracking.QuestionCandidate)
+        self.assertIs(question_tracking.PairDecision, tracking.PairDecision)
+        self.assertIs(question_tracking.run_question_tracking, tracking.run_question_tracking)
+        self.assertIs(question_tracking.main, tracking.main)
+        self.assertIs(
+            question_confirmation.load_confirmation_decisions,
+            confirmation.load_confirmation_decisions,
+        )
+        self.assertIs(
+            question_confirmation.borderline_confirmation_request,
+            confirmation.borderline_confirmation_request,
         )
 
     def test_subconscious_validation_audit_has_package_owner_and_compat_shim(self) -> None:
