@@ -84,6 +84,33 @@ would change the answer, plan, or action. Any specific memory-backed claim still
 requires clean-source reopen; scent packets, route reasons, locks, aliases, and
 candidate refs are not enough.
 
+`fresh_thread_activation.py` owns the #283 progressive activation overlay that
+keeps a scent from haunting later turns. It produces a compact
+`fresh_thread_activation_state` snapshot for one `thread + workspace +
+topic_epoch + route` with states `pending`, `scent_emitted`,
+`soft_hypothesis`, `ignored`, `confirmed`, `rejected`, `source_backed`,
+`retired`, and `suppressed`. The snapshot stores thread/workspace/route
+fingerprints, counts, TTL, registry-freshness fingerprint, and optional #277
+lock state/id. It must not store raw prompts, raw source snippets, local paths,
+or durable preferences.
+
+The activation state feeds `fresh_thread_action.py` only through explicit
+context flags. `confirmed` may set `user_confirmed_memory_theme` so the agent
+can perform deeper active recall; `rejected`, `suppressed`, topic shift,
+registry freshness changes, or TTL expiry set `route_suppressed_by_activation`;
+`ignored`, `scent_emitted`, and `soft_hypothesis` without a new user anchor set
+`prior_scent_without_new_anchor`, keeping the old scent internal. `source_backed`
+records that source was reopened once, but it still does not remove the normal
+rule that any future specific memory-backed claim must reopen clean source.
+
+Invalidation is intentionally conservative: `topic_epoch` changes retire the
+old activation unless a later related-cache path explicitly proves strong
+overlap; registry freshness changes mark the state stale until source is
+reopened; weak first-turn states default to a short TTL, while confirmed or
+rejected states may live as long as the ambient cache for the current topic
+epoch. This overlay is not a second long-lived cache and must not be promoted to
+formal memory.
+
 When the hook receives a thread/session id, `ambient_thread_cache.py` may store
 up to a few compact cards under a hashed `thread_id + workspace + topic_epoch`
 key. The cache is a soft working surface: it expires, records source-ref
