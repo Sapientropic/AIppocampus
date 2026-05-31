@@ -556,6 +556,28 @@ class ImportCouplingTests(unittest.TestCase):
             sleep_cycle.public_sleep_cycle_summary,
         )
 
+    def test_dream_queue_has_package_owner_and_compat_shim(self) -> None:
+        import dream_queue
+        from aippocampus_runtime.dream import queue
+
+        package_path = SCRIPTS / "aippocampus_runtime" / "dream" / "queue.py"
+        shim_path = SCRIPTS / "dream_queue.py"
+
+        self.assertTrue(package_path.exists(), package_path)
+        self.assertTrue(shim_path.exists(), shim_path)
+        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges(top_level_only=True)
+        self.assertIn(
+            "aippocampus_runtime.dream.queue",
+            edges["aippocampus_runtime.dream.sleep_cycle"],
+        )
+        self.assertNotIn("dream_queue", edges["aippocampus_runtime.dream.sleep_cycle"])
+
+        self.assertIs(dream_queue.build_dream_queue, queue.build_dream_queue)
+        self.assertIs(dream_queue.public_queue_summary, queue.public_queue_summary)
+        self.assertIs(dream_queue.main, queue.main)
+
     def test_dream_one_sidedness_has_package_owner_and_compat_shim(self) -> None:
         import dream_one_sidedness
         from aippocampus_runtime.dream import one_sidedness
