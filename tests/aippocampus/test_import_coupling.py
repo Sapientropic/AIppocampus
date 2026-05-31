@@ -503,7 +503,7 @@ class ImportCouplingTests(unittest.TestCase):
             "aippocampus_runtime.recall.semantic_recall_gate",
             "subconscious_worker",
             "aippocampus_runtime.dream.worker",
-            "warm_ambient_recall",
+            "aippocampus_runtime.warm_ambient.recall",
         ]:
             self.assertNotIn("model_client", edges[source])
         self.assertIn(
@@ -595,7 +595,7 @@ class ImportCouplingTests(unittest.TestCase):
             "semantic_scope_suppressed_recovery",
             "subconscious_jobs",
             "subconscious_review",
-            "warm_ambient_recall",
+            "aippocampus_runtime.warm_ambient.recall",
         ]
         for source in worker_consumers:
             self.assertIn("aippocampus_runtime.subconscious.worker", edges[source])
@@ -1584,7 +1584,7 @@ class ImportCouplingTests(unittest.TestCase):
             "semantic_scope_suppressed_recovery",
             "subconscious_jobs",
             "subconscious_review",
-            "warm_ambient_recall",
+            "aippocampus_runtime.warm_ambient.recall",
         ]
         for source in runtime_consumers:
             self.assertIn("aippocampus_runtime.subconscious.runtime", edges[source])
@@ -1626,17 +1626,25 @@ class ImportCouplingTests(unittest.TestCase):
 
     def test_warm_ambient_helpers_have_package_owner_and_compat_shims(self) -> None:
         import warm_ambient_prompting
+        import warm_ambient_recall
         import warm_ambient_scout_profiles
         import warm_ambient_source_validation
-        from aippocampus_runtime.warm_ambient import prompting, scout_profiles, source_validation
+        from aippocampus_runtime.warm_ambient import (
+            prompting,
+            recall,
+            scout_profiles,
+            source_validation,
+        )
 
         package_files = [
             SCRIPTS / "aippocampus_runtime" / "warm_ambient" / "prompting.py",
+            SCRIPTS / "aippocampus_runtime" / "warm_ambient" / "recall.py",
             SCRIPTS / "aippocampus_runtime" / "warm_ambient" / "scout_profiles.py",
             SCRIPTS / "aippocampus_runtime" / "warm_ambient" / "source_validation.py",
         ]
         shim_files = [
             SCRIPTS / "warm_ambient_prompting.py",
+            SCRIPTS / "warm_ambient_recall.py",
             SCRIPTS / "warm_ambient_scout_profiles.py",
             SCRIPTS / "warm_ambient_source_validation.py",
         ]
@@ -1646,7 +1654,16 @@ class ImportCouplingTests(unittest.TestCase):
         for path in shim_files:
             self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
 
+        edges = same_dir_import_edges(top_level_only=True)
+        self.assertIn(
+            "aippocampus_runtime.warm_ambient.recall",
+            edges["warm_ambient_recall"],
+        )
+        self.assertNotIn("warm_ambient_recall", edges["ambient_warm_scheduler"])
+
         self.assertIs(warm_ambient_prompting.scout_prompt, prompting.scout_prompt)
+        self.assertIs(warm_ambient_recall.run_warm_ambient_recall, recall.run_warm_ambient_recall)
+        self.assertIs(warm_ambient_recall.main, recall.main)
         self.assertIs(
             warm_ambient_scout_profiles.expand_scout_lanes,
             scout_profiles.expand_scout_lanes,

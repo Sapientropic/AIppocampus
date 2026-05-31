@@ -234,7 +234,7 @@ back to clean source. External-model features must stay optional.
 
 | Script or group | Purpose | Invocation route | Key dependencies | Status |
 |---|---|---|---|---|
-| `warm_ambient_recall.py`, `aippocampus_runtime/warm_ambient/`, and `warm_ambient_*` compatibility shims | Multi-scout ambient recall, prompting, profile taxonomy, and validation. | Optional warm recall jobs and smokes. | Registry, clean source, semantic/model routes, privacy filters. | Runtime internal |
+| `aippocampus_runtime/warm_ambient/{recall,prompting,scout_profiles,source_validation}.py` plus `warm_ambient_*` compatibility shims | Multi-scout ambient recall, prompting, profile taxonomy, and validation. | Optional warm recall jobs and smokes; top-level `warm_ambient_recall.py` remains a direct-script shim. | Registry, clean source, semantic/model routes, privacy filters. | Runtime internal |
 | `ambient_warm_scheduler.py`, `aippocampus_runtime/recall/{active_recall,ambient_cache,ambient_cards,ambient_policy}.py`, and `active_recall.py` / `ambient_*` compatibility shims | Scheduling, cache, anti-nag policy overlay, active recall cards, and thread-level ambient state. | Hook/maintenance/warm recall paths. | Prompt hook budget, thread cache, source-backed card rendering, hash-only dismissal/surface events. | Runtime internal |
 
 Warm ambient output should remain quiet and advisory unless a prompt explicitly
