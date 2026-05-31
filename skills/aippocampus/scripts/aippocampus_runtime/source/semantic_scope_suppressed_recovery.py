@@ -20,6 +20,7 @@ from aippocampus_runtime.core import (
     compact_text,
     deepseek_cache_metrics_from_usage,
     sanitize_external_model_payload,
+    sanitize_external_model_text,
 )
 from aippocampus_runtime.model.routing import resolve_model_route
 from aippocampus_runtime.registry.api import load_registry
@@ -44,6 +45,21 @@ from aippocampus_runtime.subconscious.runtime import add_usage, call_chat_json, 
 from aippocampus_runtime.subconscious.worker import DEFAULT_BASE_URL
 
 PROMPT_KIND = "semantic_scope_suppressed_label_recovery"
+
+
+def sanitized_json_text(payload: Any, *, indent: int | None = None) -> str:
+    structured = sanitize_external_model_payload(payload)
+    text = json.dumps(structured, ensure_ascii=False, indent=indent)
+    sanitized, _ = sanitize_external_model_text(text)
+    return sanitized
+
+
+def print_sanitized_json(payload: Any) -> None:
+    text = sanitized_json_text(payload, indent=2)
+    # model-returned snippets, so JSON output is recursively redacted and then
+    # text-sanitized immediately before stdout.
+    # codeql[py/clear-text-logging-sensitive-data]
+    print(text)
 
 
 def case_hash(*values: Any) -> str:
@@ -495,7 +511,7 @@ def main(argv: list[str] | None = None) -> int:
         min_tool_steps=args.min_tool_steps,
     )
     if args.json_output:
-        print(json.dumps(sanitize_external_model_payload(result), ensure_ascii=False, indent=2))
+        print_sanitized_json(result)
     else:
         print(f"suppressed label recovery: {result.get('status')}")
         print(f"strict recovered labels: {result.get('strict_recovered_label_count')}")

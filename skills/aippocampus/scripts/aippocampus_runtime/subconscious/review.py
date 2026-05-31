@@ -17,6 +17,7 @@ from aippocampus_runtime.core import (
     compact_text,
     now_utc,
     sanitize_external_model_payload,
+    sanitize_external_model_text,
 )
 from aippocampus_runtime.model.routing import (
     DEFAULT_DEEPSEEK_API_KEY_ENV,
@@ -368,7 +369,7 @@ def append_review_output(
                 "usage": usage or {},
                 **safe_candidate,
             }
-            fh.write(json.dumps(event, ensure_ascii=False) + "\n")
+            write_sanitized_jsonl(fh, event)
         for group in review.get("duplicate_groups") or []:
             safe_group = sanitize_external_model_payload(group)
             event = {
@@ -383,7 +384,7 @@ def append_review_output(
                 "model_route": model_route or {},
                 **safe_group,
             }
-            fh.write(json.dumps(event, ensure_ascii=False) + "\n")
+            write_sanitized_jsonl(fh, event)
         for weak in review.get("weak_findings") or []:
             safe_weak = sanitize_external_model_payload(weak)
             event = {
@@ -398,7 +399,29 @@ def append_review_output(
                 "model_route": model_route or {},
                 **safe_weak,
             }
-            fh.write(json.dumps(event, ensure_ascii=False) + "\n")
+            write_sanitized_jsonl(fh, event)
+
+
+def sanitized_json_text(payload: Any, *, indent: int | None = None) -> str:
+    structured = sanitize_external_model_payload(payload)
+    text = json.dumps(structured, ensure_ascii=False, indent=indent)
+    sanitized, _ = sanitize_external_model_text(text)
+    return sanitized
+
+
+def write_sanitized_jsonl(handle: Any, payload: Any) -> None:
+    text = sanitized_json_text(payload)
+    # through the shared AIppocampus secret/local-path sanitizer immediately
+    # before persistence; raw model output is intentionally not written here.
+    # codeql[py/clear-text-storage-sensitive-data]
+    handle.write(text + "\n")
+
+
+def print_sanitized_json(payload: Any) -> None:
+    text = sanitized_json_text(payload, indent=2)
+    # after recursive payload sanitization and final text-level redaction.
+    # codeql[py/clear-text-logging-sensitive-data]
+    print(text)
 
 
 def run_review(
@@ -590,7 +613,7 @@ def main() -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return cli_exit_code_for_error_code(result["error"]["code"])
     if args.json_output:
-        print(json.dumps(sanitize_external_model_payload(result), ensure_ascii=False, indent=2))
+        print_sanitized_json(result)
     else:
         print(f"findings reviewed: {result['finding_count']}")
         print(f"promotion candidates: {result['promotion_candidate_count']}")

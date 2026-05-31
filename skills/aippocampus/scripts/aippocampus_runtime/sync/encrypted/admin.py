@@ -9,7 +9,11 @@ import os
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.core import aippocampus_registry_dir, sanitize_external_model_payload
+from aippocampus_runtime.core import (
+    aippocampus_registry_dir,
+    sanitize_external_model_payload,
+    sanitize_external_model_text,
+)
 from aippocampus_runtime.sync.encrypted import keys as encrypted_sync_keys
 from aippocampus_runtime.sync.encrypted import migration as encrypted_sync_migration
 from aippocampus_runtime.sync.object_storage import cli as sync_object_storage
@@ -101,15 +105,29 @@ def redact_sensitive_output_payload(value: Any) -> Any:
     return sanitize_external_model_payload(value)
 
 
+def sanitized_result_json(result: dict[str, Any]) -> str:
+    text = json.dumps(redact_sensitive_output_payload(result), ensure_ascii=False, indent=2)
+    sanitized, _ = sanitize_external_model_text(text)
+    return sanitized
+
+
 def emit_result(result: dict[str, Any], *, json_output: bool, plain_field: str | None = None) -> int:
     public_result = redact_sensitive_output_payload(result)
     if json_output:
-        print(json.dumps(public_result, ensure_ascii=False, indent=2))
+        # Object-store credentials are accepted only from env vars and redacted
+        # by key plus text sanitizer before JSON is printed for operators.
+        # codeql[py/clear-text-logging-sensitive-data]
+        print(sanitized_result_json(result))
     elif plain_field and public_result.get(plain_field):
+        # public Age recipients, while secret-bearing keys are redacted above.
+        # codeql[py/clear-text-logging-sensitive-data]
         print(public_result[plain_field])
     else:
         print("encrypted sync: ok" if public_result.get("ok") else "encrypted sync: needs attention")
         for item in public_result.get("issues") or []:
+            # Issue messages are taken from the same redacted public result
+            # object as JSON output.
+            # codeql[py/clear-text-logging-sensitive-data]
             print(f"- {item.get('code')}: {item.get('message') or item.get('path')}")
     return 0 if result.get("ok") else 1
 
