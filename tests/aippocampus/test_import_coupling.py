@@ -2359,6 +2359,59 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(cold_archive.gzip_copy, cold_archive_owner.gzip_copy)
         self.assertIs(cold_archive.main, cold_archive_owner.main)
 
+    def test_vault_projection_has_package_owner_and_compat_shims(self) -> None:
+        import sync_vault
+        import vault_dashboard
+        import vault_notes
+        import vault_sync_utils
+        from aippocampus_runtime.vault import dashboard, notes, sync, utils
+
+        package_paths = [
+            SCRIPTS / "aippocampus_runtime" / "vault" / "__init__.py",
+            SCRIPTS / "aippocampus_runtime" / "vault" / "dashboard.py",
+            SCRIPTS / "aippocampus_runtime" / "vault" / "notes.py",
+            SCRIPTS / "aippocampus_runtime" / "vault" / "sync.py",
+            SCRIPTS / "aippocampus_runtime" / "vault" / "utils.py",
+        ]
+        shim_paths = [
+            SCRIPTS / "sync_vault.py",
+            SCRIPTS / "vault_dashboard.py",
+            SCRIPTS / "vault_notes.py",
+            SCRIPTS / "vault_sync_utils.py",
+        ]
+
+        for path in package_paths:
+            self.assertTrue(path.exists(), path)
+        for path in shim_paths:
+            self.assertTrue(path.exists(), path)
+            self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges(top_level_only=True)
+        self.assertIn("aippocampus_runtime.vault.sync", edges["sync_vault"])
+        self.assertIn("aippocampus_runtime.vault.dashboard", edges["vault_dashboard"])
+        self.assertIn("aippocampus_runtime.vault.notes", edges["vault_notes"])
+        self.assertIn("aippocampus_runtime.vault.utils", edges["vault_sync_utils"])
+        for owner in [
+            "aippocampus_runtime.vault.dashboard",
+            "aippocampus_runtime.vault.notes",
+            "aippocampus_runtime.vault.sync",
+            "aippocampus_runtime.vault.utils",
+        ]:
+            self.assertNotIn("aippocampuslib", edges[owner])
+            self.assertNotIn("registry", edges[owner])
+            self.assertNotIn("vault_dashboard", edges[owner])
+            self.assertNotIn("vault_notes", edges[owner])
+            self.assertNotIn("vault_sync_utils", edges[owner])
+        self.assertIn("aippocampus_runtime.vault.dashboard", edges["aippocampus_runtime.vault.sync"])
+        self.assertIn("aippocampus_runtime.vault.notes", edges["aippocampus_runtime.vault.sync"])
+        self.assertIn("aippocampus_runtime.vault.utils", edges["aippocampus_runtime.vault.sync"])
+
+        self.assertEqual(sync.SCRIPT_DIR, SCRIPTS)
+        self.assertIs(sync_vault.main, sync.main)
+        self.assertIs(vault_dashboard.html_dashboard_v2, dashboard.html_dashboard_v2)
+        self.assertIs(vault_notes.dashboard_markdown, notes.dashboard_markdown)
+        self.assertIs(vault_sync_utils.copy_dashboard_assets, utils.copy_dashboard_assets)
+
     def test_sync_contract_has_package_owner_and_compat_shim(self) -> None:
         import sync_contract
         from aippocampus_runtime.sync import contract
