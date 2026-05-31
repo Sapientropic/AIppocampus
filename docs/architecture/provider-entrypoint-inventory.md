@@ -33,9 +33,9 @@ audit/host integration paths.
 | `locate_rollout.py` | Codex-only raw audit/debug tool | Finds current Codex rollout JSONL. Do not present as general AI-agent transcript discovery. |
 | `aippocampus_runtime/recall/rollout_search.py` plus `search_rollout.py` compatibility shim | Codex-only raw audit/debug tool | Searches raw Codex rollout text. Clean-source search is the general recall surface. |
 | `aippocampus_runtime/source/latest_reply.py` plus `latest_reply.py` compatibility shim | Codex-only raw audit/debug fallback | Reads final answers from raw Codex rollout. MCP prefers clean-source final answers first. |
-| `rollout_size_audit.py` | Codex-only raw audit/debug tool | Audits raw Codex rollout size/path behavior. |
-| `cold_archive.py` | Codex-only raw audit/archive tool | Optional raw rollout archive path; not daily recall. |
-| `retention_report.py` | Codex-only raw audit/report tool | Uses raw Codex rollout unless an explicit rollout is supplied. |
+| `aippocampus_runtime/ops/rollout_size_audit.py` plus `rollout_size_audit.py` compatibility shim | Codex-only raw audit/debug tool | Audits raw Codex rollout size/path behavior. |
+| `aippocampus_runtime/ops/cold_archive.py` plus `cold_archive.py` compatibility shim | Codex-only raw audit/archive tool | Optional raw rollout archive path; not daily recall. |
+| `aippocampus_runtime/ops/retention_report.py` plus `retention_report.py` compatibility shim | Codex-only raw audit/report tool | Uses raw Codex rollout unless an explicit rollout is supplied. |
 | `export_bundle.py` | Codex-current-thread export helper | Exports generated artifacts for a current Codex thread unless explicit paths are supplied. |
 
 ## Guardrail

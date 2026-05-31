@@ -2309,6 +2309,56 @@ class ImportCouplingTests(unittest.TestCase):
             publish.publish_sqlite_with_pointer,
         )
 
+    def test_ops_reports_have_package_owners_and_compat_shims(self) -> None:
+        import cold_archive
+        import retention_report
+        import rollout_size_audit
+        import storage_capacity_report
+        from aippocampus_runtime.ops import cold_archive as cold_archive_owner
+        from aippocampus_runtime.ops import retention_report as retention_report_owner
+        from aippocampus_runtime.ops import rollout_size_audit as rollout_size_audit_owner
+        from aippocampus_runtime.ops import storage_capacity_report as storage_capacity_report_owner
+
+        package_modules = {
+            "storage_capacity_report": storage_capacity_report_owner,
+            "rollout_size_audit": rollout_size_audit_owner,
+            "retention_report": retention_report_owner,
+            "cold_archive": cold_archive_owner,
+        }
+        for name in package_modules:
+            self.assertTrue(
+                (SCRIPTS / "aippocampus_runtime" / "ops" / f"{name}.py").exists(),
+                name,
+            )
+            shim = SCRIPTS / f"{name}.py"
+            self.assertTrue(shim.exists(), name)
+            self.assertIn("Compatibility shim", shim.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges(top_level_only=True)
+        for name in package_modules:
+            self.assertIn(f"aippocampus_runtime.ops.{name}", edges[name])
+            self.assertIn("aippocampus_runtime.core", edges[f"aippocampus_runtime.ops.{name}"])
+            self.assertNotIn("aippocampuslib", edges[f"aippocampus_runtime.ops.{name}"])
+
+        self.assertIn(
+            "aippocampus_runtime.ops.rollout_size_audit",
+            edges["aippocampus_runtime.ops.retention_report"],
+        )
+        self.assertNotIn("rollout_size_audit", edges["aippocampus_runtime.ops.retention_report"])
+        self.assertIn(
+            "aippocampus_runtime.ops.retention_report",
+            edges["aippocampus_runtime.ops.cold_archive"],
+        )
+        self.assertNotIn("retention_report", edges["aippocampus_runtime.ops.cold_archive"])
+
+        self.assertIs(storage_capacity_report.build_report, storage_capacity_report_owner.build_report)
+        self.assertIs(storage_capacity_report.render_text, storage_capacity_report_owner.render_text)
+        self.assertIs(rollout_size_audit.audit_rollout, rollout_size_audit_owner.audit_rollout)
+        self.assertIs(retention_report.build_report, retention_report_owner.build_report)
+        self.assertIs(retention_report.markdown_report, retention_report_owner.markdown_report)
+        self.assertIs(cold_archive.gzip_copy, cold_archive_owner.gzip_copy)
+        self.assertIs(cold_archive.main, cold_archive_owner.main)
+
     def test_sync_contract_has_package_owner_and_compat_shim(self) -> None:
         import sync_contract
         from aippocampus_runtime.sync import contract
