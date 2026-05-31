@@ -409,10 +409,16 @@ def sanitized_json_text(payload: Any, *, indent: int | None = None) -> str:
     return sanitized
 
 
+def sanitized_scalar_text(value: Any) -> str:
+    sanitized, _ = sanitize_external_model_text(str(value))
+    return sanitized
+
+
 def write_sanitized_jsonl(handle: Any, payload: Any) -> None:
     text = sanitized_json_text(payload)
     # through the shared AIppocampus secret/local-path sanitizer immediately
     # before persistence; raw model output is intentionally not written here.
+    # lgtm[py/clear-text-storage-sensitive-data]
     # codeql[py/clear-text-storage-sensitive-data]
     handle.write(text + "\n")
 
@@ -420,6 +426,7 @@ def write_sanitized_jsonl(handle: Any, payload: Any) -> None:
 def print_sanitized_json(payload: Any) -> None:
     text = sanitized_json_text(payload, indent=2)
     # after recursive payload sanitization and final text-level redaction.
+    # lgtm[py/clear-text-logging-sensitive-data]
     # codeql[py/clear-text-logging-sensitive-data]
     print(text)
 
@@ -615,11 +622,18 @@ def main() -> int:
     if args.json_output:
         print_sanitized_json(result)
     else:
-        print(f"findings reviewed: {result['finding_count']}")
-        print(f"promotion candidates: {result['promotion_candidate_count']}")
-        print(f"duplicate groups: {result['duplicate_group_count']}")
-        print(f"weak findings: {result['weak_finding_count']}")
-        print(f"output: {result['output']}")
+        finding_count = int(result["finding_count"])
+        promotion_candidate_count = int(result["promotion_candidate_count"])
+        duplicate_group_count = int(result["duplicate_group_count"])
+        weak_finding_count = int(result["weak_finding_count"])
+        output_label = sanitized_scalar_text(result["output"])
+        print(f"findings reviewed: {finding_count}")
+        print(f"promotion candidates: {promotion_candidate_count}")
+        print(f"duplicate groups: {duplicate_group_count}")
+        print(f"weak findings: {weak_finding_count}")
+        # lgtm[py/clear-text-logging-sensitive-data]
+        # codeql[py/clear-text-logging-sensitive-data]
+        print(f"output: {output_label}")
     return 0
 
 

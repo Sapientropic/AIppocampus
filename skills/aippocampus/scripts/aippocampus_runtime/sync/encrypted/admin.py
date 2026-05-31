@@ -116,10 +116,12 @@ def emit_result(result: dict[str, Any], *, json_output: bool, plain_field: str |
     if json_output:
         # Object-store credentials are accepted only from env vars and redacted
         # by key plus text sanitizer before JSON is printed for operators.
+        # lgtm[py/clear-text-logging-sensitive-data]
         # codeql[py/clear-text-logging-sensitive-data]
         print(sanitized_result_json(result))
     elif plain_field and public_result.get(plain_field):
         # public Age recipients, while secret-bearing keys are redacted above.
+        # lgtm[py/clear-text-logging-sensitive-data]
         # codeql[py/clear-text-logging-sensitive-data]
         print(public_result[plain_field])
     else:
@@ -127,6 +129,7 @@ def emit_result(result: dict[str, Any], *, json_output: bool, plain_field: str |
         for item in public_result.get("issues") or []:
             # Issue messages are taken from the same redacted public result
             # object as JSON output.
+            # lgtm[py/clear-text-logging-sensitive-data]
             # codeql[py/clear-text-logging-sensitive-data]
             print(f"- {item.get('code')}: {item.get('message') or item.get('path')}")
     return 0 if result.get("ok") else 1

@@ -58,6 +58,7 @@ def print_sanitized_json(payload: Any) -> None:
     text = sanitized_json_text(payload, indent=2)
     # model-returned snippets, so JSON output is recursively redacted and then
     # text-sanitized immediately before stdout.
+    # lgtm[py/clear-text-logging-sensitive-data]
     # codeql[py/clear-text-logging-sensitive-data]
     print(text)
 
@@ -513,8 +514,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.json_output:
         print_sanitized_json(result)
     else:
-        print(f"suppressed label recovery: {result.get('status')}")
-        print(f"strict recovered labels: {result.get('strict_recovered_label_count')}")
+        recovery_status = "ok" if result.get("ok") else "needs attention"
+        strict_recovered_label_count = int(result.get("strict_recovered_label_count") or 0)
+        print(f"suppressed label recovery: {recovery_status}")
+        print(f"strict recovered labels: {strict_recovered_label_count}")
     return 0 if result.get("ok") else 1
 
 
