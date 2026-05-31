@@ -476,6 +476,31 @@ class ImportCouplingTests(unittest.TestCase):
             precision_policy.retrospective_policy_for_probe,
         )
 
+    def test_dream_one_sidedness_has_package_owner_and_compat_shim(self) -> None:
+        import dream_one_sidedness
+        from aippocampus_runtime.dream import one_sidedness
+
+        package_path = SCRIPTS / "aippocampus_runtime" / "dream" / "one_sidedness.py"
+        shim_path = SCRIPTS / "dream_one_sidedness.py"
+
+        self.assertTrue(package_path.exists(), package_path)
+        self.assertTrue(shim_path.exists(), shim_path)
+        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+
+        self.assertIs(
+            dream_one_sidedness.evaluate_one_sidedness_gate,
+            one_sidedness.evaluate_one_sidedness_gate,
+        )
+        self.assertIs(
+            dream_one_sidedness.build_opposite_hexagram_probe,
+            one_sidedness.build_opposite_hexagram_probe,
+        )
+        self.assertIs(
+            dream_one_sidedness.compute_opposite_arc,
+            one_sidedness.compute_opposite_arc,
+        )
+        self.assertIs(dream_one_sidedness.main, one_sidedness.main)
+
     def test_subconscious_job_storage_has_package_owner_and_compat_shim(self) -> None:
         import subconscious_job_storage
         from aippocampus_runtime.subconscious import job_storage
