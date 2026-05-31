@@ -47,6 +47,7 @@ from aippocampus_runtime.subconscious.jobs_config import (
     default_jobs_output_path,
     jobs_run_config_from_args,
 )
+from aippocampus_runtime.subconscious.validation_audit import validation_audit
 from aippocampuslib import (
     cli_error_payload,
     cli_error_payload_from_message,
@@ -82,7 +83,6 @@ from subconscious_runtime import (
     source_bank_from_turns,
 )
 from subconscious_tool_loop import run_tool_using_loop
-from subconscious_validation_audit import validation_audit
 from subconscious_worker import (
     DEFAULT_BASE_URL,
     DEFAULT_MAX_TURNS,
