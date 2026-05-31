@@ -7,6 +7,7 @@ import re
 import unicodedata
 from typing import Any
 
+from prompt_life_cues import LIFE_WIDE_SCOPE_LABEL_CUES, profile_recall_terms
 from retrieval import RECALL_TRIGGERS, split_query_terms
 
 CONCEPT_EXPANSION_MAX_TERMS = 14
@@ -278,70 +279,6 @@ RECENCY_CUES = {
     "recent",
 }
 
-LIFE_WIDE_SCOPE_LABEL_CUES = {
-    "personal_reflection": {
-        "焦虑",
-        "困惑",
-        "感觉",
-        "感受",
-        "自我",
-        "reflection",
-        "anxiety",
-        "feeling",
-    },
-    "relationship_continuity": {
-        "关系",
-        "我们聊",
-        "我和你",
-        "陪伴",
-        "continuity",
-        "relationship",
-    },
-    "reading_notes": {
-        "读到",
-        "看过",
-        "那篇",
-        "这篇",
-        "文章",
-        "书",
-        "reading",
-        "article",
-        "book",
-    },
-    "idea_seed": {
-        "点子",
-        "想法",
-        "灵感",
-        "脑洞",
-        "idea",
-        "spark",
-    },
-    "preference": {
-        "偏好",
-        "喜欢",
-        "不喜欢",
-        "以后",
-        "preference",
-        "prefer",
-    },
-    "life_context": {
-        "生活",
-        "日常",
-        "人生",
-        "近况",
-        "life",
-        "daily",
-    },
-    "open_question": {
-        "问题",
-        "疑问",
-        "要不要",
-        "该不该",
-        "是否",
-        "question",
-    },
-}
-
 SEMANTIC_GATE_LIGHT_CUES = {
     "这个",
     "那个",
@@ -487,6 +424,7 @@ def explicit_recall_terms(prompt: str) -> list[str]:
 def expand_query_terms(prompt: str) -> list[str]:
     terms = split_query_terms([prompt]) if prompt else []
     expanded = list(terms)
+    expanded.extend(profile_recall_terms(prompt))
     for phrase in re.findall(
         r"[A-Za-z][A-Za-z0-9_.+-]*(?:\s+[A-Za-z][A-Za-z0-9_.+-]*){1,3}", prompt
     ):

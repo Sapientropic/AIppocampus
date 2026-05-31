@@ -41,6 +41,7 @@ from prompt_cues import (
     association_term_is_generic,
     explicit_recall_terms,
     matched_terms,
+    profile_recall_terms,
     prompt_is_code_surface,
     semantic_trigger_context_intent,
     unique_preserve,
@@ -300,7 +301,8 @@ def build_recall_decision_context(
             dynamic_associative = semantic_trigger_terms(semantic_trigger_matches, limit=16)
         pre_associative = unique_preserve(
             matched_terms(prompt, set(CONCEPT_TRIGGERS) | ASSOCIATIVE_CUES)
-            + dynamic_associative,
+            + dynamic_associative
+            + profile_recall_terms(prompt),
             limit=24,
         )
 
