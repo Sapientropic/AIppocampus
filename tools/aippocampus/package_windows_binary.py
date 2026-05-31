@@ -140,18 +140,11 @@ def _read_pyproject_imports(pyproject: Path) -> list[str]:
     text = pyproject.read_text(encoding="utf-8")
     imports = {"aippocampus_cli"}
     for key in ("packages", "py-modules"):
-        marker = f"{key} = ["
-        start = text.find(marker)
-        if start < 0:
+        match = re.search(rf"(?m)^\s*{re.escape(key)}\s*=\s*\[(.*?)\]", text, re.DOTALL)
+        if match is None:
             continue
-        end = text.find("]", start)
-        if end < 0:
-            continue
-        block = text[start:end]
-        for raw in block.replace("\n", " ").split(","):
-            value = raw.strip().strip('"').strip("'")
-            if value and "=" not in value:
-                imports.add(value)
+        for value in re.findall(r"""["']([^"']+)["']""", match.group(1)):
+            imports.add(value)
     return sorted(imports)
 
 
@@ -387,14 +380,16 @@ def run_packaging(
         "private_data_guard": None,
         "smoke": [],
     }
-    if platform.system() != "Windows":
-        result["status"] = "unsupported_platform"
-        result["error"] = "This packaging path is intentionally Windows-only."
-        return result
     if dry_run:
+        # Dry-run is a cross-platform planning/report mode used by CI. Keeping
+        # it before the Windows-only build gate avoids implying artifact support.
         result["private_data_guard"] = private_data_guard(plan)
         result["ok"] = True
         result["status"] = "dry_run"
+        return result
+    if platform.system() != "Windows":
+        result["status"] = "unsupported_platform"
+        result["error"] = "This packaging path is intentionally Windows-only."
         return result
     if not result["pyinstaller_available"]:
         result["status"] = "pyinstaller_missing"

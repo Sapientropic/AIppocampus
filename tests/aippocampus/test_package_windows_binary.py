@@ -53,11 +53,12 @@ class WindowsBinaryPackagingTests(unittest.TestCase):
             output = Path(tmp) / "out"
             self.make_repo(repo)
 
-            plan = self.packager.make_packaging_plan(
-                repo_root=repo,
-                output_root=output,
-                python_executable=Path("python.exe"),
-            )
+            with patch.object(self.packager, "tomllib", None):
+                plan = self.packager.make_packaging_plan(
+                    repo_root=repo,
+                    output_root=output,
+                    python_executable=Path("python.exe"),
+                )
 
             command_parts = [str(part) for part in plan.command]
             command_text = json.dumps(command_parts)
@@ -97,12 +98,13 @@ class WindowsBinaryPackagingTests(unittest.TestCase):
             output = Path(tmp) / "out"
             self.make_repo(repo)
 
-            result = self.packager.run_packaging(
-                repo_root=repo,
-                output_root=output,
-                dry_run=True,
-                require_pyinstaller=False,
-            )
+            with patch.object(self.packager.platform, "system", return_value="Linux"):
+                result = self.packager.run_packaging(
+                    repo_root=repo,
+                    output_root=output,
+                    dry_run=True,
+                    require_pyinstaller=False,
+                )
 
         self.assertTrue(result["ok"])
         self.assertEqual(result["status"], "dry_run")
