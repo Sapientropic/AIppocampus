@@ -390,6 +390,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/recall/ambient_cache.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/ambient_cards.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/ambient_policy.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/fresh_thread_action.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/fresh_thread_scent.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/index_builder.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/life_cues.py",
