@@ -6,7 +6,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from model_client import DEEPSEEK_PREFIX_CACHE_CONTRACT
+from aippocampus_runtime.model.client import DEEPSEEK_PREFIX_CACHE_CONTRACT
 
 PROMPT_VERSION = "dream_worker_v1"
 PROMPT_ORDER = ["stable_dream_worker_contract", "source_pack_payload", "variable_run_directive"]

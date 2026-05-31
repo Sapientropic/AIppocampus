@@ -20,6 +20,13 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
+from aippocampus_runtime.model.routing import (
+    DEFAULT_DEEPSEEK_API_KEY_ENV,
+    resolve_model_route,
+    route_cache_metrics,
+    route_payload_with_effective_values,
+    route_service_name,
+)
 from aippocampus_runtime.warm_ambient.prompting import OUTPUT_BUDGET_RULES as OUTPUT_BUDGET_RULES
 from aippocampus_runtime.warm_ambient.prompting import SYSTEM_PROMPT, scout_prompt
 from aippocampus_runtime.warm_ambient.scout_profiles import (
@@ -100,13 +107,6 @@ from ambient_thread_cache import (
     default_ambient_cache_path,
     topic_epoch_from_terms,
     write_thread_cache,
-)
-from deepseek_model_routing import (
-    DEFAULT_DEEPSEEK_API_KEY_ENV,
-    resolve_model_route,
-    route_cache_metrics,
-    route_payload_with_effective_values,
-    route_service_name,
 )
 from registry import load_registry, registry_paths, unique_preserve
 from retrieval import split_query_terms

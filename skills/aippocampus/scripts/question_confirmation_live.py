@@ -16,18 +16,18 @@ import os
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
-from aippocampuslib import compact_text, now_utc
-from deepseek_model_routing import (
-    resolve_model_route,
-    route_cache_metrics,
-    route_service_name,
-)
-from model_client import (
+from aippocampus_runtime.model.client import (
     DEEPSEEK_PREFIX_CACHE_CONTRACT,
     NO_PROVIDER_CACHE_CONTRACT,
     ChatClientConfig,
     chat_json,
 )
+from aippocampus_runtime.model.routing import (
+    resolve_model_route,
+    route_cache_metrics,
+    route_service_name,
+)
+from aippocampuslib import compact_text, now_utc
 from question_confirmation import (
     append_confirmation_artifacts,
     default_confirmation_artifacts_path,

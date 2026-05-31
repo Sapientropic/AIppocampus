@@ -22,14 +22,20 @@ from pathlib import Path
 from typing import Any
 
 import dream_worker
-from aippocampus_runtime.registry.store import registry_paths
-from aippocampuslib import compact_text, deepseek_cache_metrics_from_usage, now_utc
-from deepseek_model_routing import (
+from aippocampus_runtime.model.client import (
+    DEEPSEEK_KV_CACHE_GUIDE_URL,
+    DEEPSEEK_PREFIX_CACHE_CONTRACT,
+    NO_PROVIDER_CACHE_CONTRACT,
+    ChatClientConfig,
+)
+from aippocampus_runtime.model.routing import (
     DEFAULT_DEEPSEEK_API_KEY_ENV,
     resolve_model_route,
     route_payload_with_effective_values,
     route_service_name,
 )
+from aippocampus_runtime.registry.store import registry_paths
+from aippocampuslib import compact_text, deepseek_cache_metrics_from_usage, now_utc
 from dream_working_memory import (
     adjudicated_dream_findings_to_working_memory,
     background_adjudicate_dream_findings,
@@ -41,12 +47,6 @@ from memory_candidate_router import (
     default_working_memory_path,
     iter_jsonl,
     load_working_memory,
-)
-from model_client import (
-    DEEPSEEK_KV_CACHE_GUIDE_URL,
-    DEEPSEEK_PREFIX_CACHE_CONTRACT,
-    NO_PROVIDER_CACHE_CONTRACT,
-    ChatClientConfig,
 )
 
 SCHEMA_VERSION = 1

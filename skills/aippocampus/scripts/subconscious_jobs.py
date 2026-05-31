@@ -15,13 +15,11 @@ import time
 from pathlib import Path
 from typing import Any
 
-from aippocampuslib import (
-    cli_error_payload,
-    cli_error_payload_from_message,
-    cli_exit_code_for_error_code,
-    compact_text,
+from aippocampus_runtime.model.client import (
+    DEEPSEEK_PREFIX_CACHE_CONTRACT,
+    NO_PROVIDER_CACHE_CONTRACT,
 )
-from deepseek_model_routing import (
+from aippocampus_runtime.model.routing import (
     DEFAULT_DEEPSEEK_API_KEY_ENV,
     ModelRoute,
     resolve_model_route,
@@ -30,7 +28,12 @@ from deepseek_model_routing import (
     route_payload_with_effective_values,
     route_service_name,
 )
-from model_client import DEEPSEEK_PREFIX_CACHE_CONTRACT, NO_PROVIDER_CACHE_CONTRACT
+from aippocampuslib import (
+    cli_error_payload,
+    cli_error_payload_from_message,
+    cli_exit_code_for_error_code,
+    compact_text,
+)
 from subconscious_deterministic_jobs import (
     DETERMINISTIC_RUNNERS,
     run_deterministic_job,
