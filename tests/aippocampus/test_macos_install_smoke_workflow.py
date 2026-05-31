@@ -53,7 +53,24 @@ class MacOSInstallSmokeWorkflowTests(unittest.TestCase):
         self.assertIn("permissions:\n  contents: read", text)
         self.assertIn("python -m pip install ruff mypy coverage build", text)
         self.assertIn("python -m pip install -e .", text)
+        self.assertIn("aippocampus hooks status --codex-home .tmp/ci-codex-home --json", text)
+        self.assertIn("aippocampus hooks install --codex-home .tmp/ci-codex-home --json", text)
         self.assertIn("python -m build --sdist --wheel", text)
+
+    def test_macos_smoke_exercises_path_identity_regressions(self) -> None:
+        text = WORKFLOW.read_text(encoding="utf-8")
+
+        self.assertIn("tests.aippocampus.test_path_identity", text)
+        self.assertIn(
+            "test_related_thread_cache_canonicalizes_workspace_fingerprint",
+            text,
+        )
+        self.assertIn(
+            "test_memory_health_runs_in_process_for_frozen_binary_entrypoints",
+            text,
+        )
+        self.assertIn("test_memory_health_cwd_uses_canonical_identity_for_path_aliases", text)
+        self.assertIn("test_prompt_hook_uses_related_cache_after_paraphrase_epoch_miss", text)
 
     def test_release_checklist_includes_install_build_and_macos_path_gate(self) -> None:
         text = RELEASE_CHECKLIST.read_text(encoding="utf-8")

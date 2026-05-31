@@ -33,6 +33,10 @@ jobs:
         run: |
           python -m pip install -e .
           python -c "import aippocampus_runtime; print('editable-install-ok')"
+          mkdir -p .tmp/ci-codex-home
+          aippocampus hooks status --codex-home .tmp/ci-codex-home --json
+          aippocampus hooks install --codex-home .tmp/ci-codex-home --json
+          aippocampus hooks status --codex-home .tmp/ci-codex-home --json
 
       - name: Build package metadata
         run: python -m build --sdist --wheel
