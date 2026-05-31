@@ -30,16 +30,7 @@ from aippocampus_runtime.subconscious.runtime import (
     source_bank_from_turns,
 )
 from aippocampus_runtime.subconscious.tool_loop import run_tool_using_loop
-from aippocampuslib import (
-    cli_error_payload,
-    cli_exit_code_for_error_code,
-    compact_text,
-    deepseek_cache_metrics_from_usage,
-    sanitize_external_model_payload,
-)
-from build_concept_graph import concept_is_noise, default_concept_graph_path
-from registry import registry_paths
-from subconscious_worker import (
+from aippocampus_runtime.subconscious.worker import (
     ALLOWED_EDGE_TYPES,
     DEFAULT_BASE_URL,
     DEFAULT_MAX_TURNS,
@@ -51,6 +42,15 @@ from subconscious_worker import (
     load_json,
     select_timeline_turns,
 )
+from aippocampuslib import (
+    cli_error_payload,
+    cli_exit_code_for_error_code,
+    compact_text,
+    deepseek_cache_metrics_from_usage,
+    sanitize_external_model_payload,
+)
+from build_concept_graph import concept_is_noise, default_concept_graph_path
+from registry import registry_paths
 
 PROMPT_VERSION = "aippocampus-subconscious-agent-v0"
 

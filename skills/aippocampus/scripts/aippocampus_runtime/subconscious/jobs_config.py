@@ -10,14 +10,14 @@ from typing import Any
 
 from aippocampus_runtime.model.routing import DEFAULT_DEEPSEEK_API_KEY_ENV, resolve_model_route
 from aippocampus_runtime.subconscious.job_circuits import job_names
-from build_concept_graph import default_concept_graph_path
-from registry import registry_paths
-from subconscious_worker import (
+from aippocampus_runtime.subconscious.worker import (
     DEFAULT_BASE_URL,
     DEFAULT_MODEL,
     default_project_timeline_path,
     default_staging_path,
 )
+from build_concept_graph import default_concept_graph_path
+from registry import registry_paths
 
 DEFAULT_JOBS_OUTPUT_NAME = "subconscious_jobs.jsonl"
 DEFAULT_CONCURRENCY = int(os.environ.get("AIPPOCAMPUS_SUBCONSCIOUS_CONCURRENCY", "4"))

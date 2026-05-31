@@ -14,10 +14,10 @@ import re
 from typing import Any
 
 from aippocampus_runtime.subconscious.job_circuits import JOB_SPECS
+from aippocampus_runtime.subconscious.worker import ALLOWED_EDGE_TYPES, clamp_confidence
 from aippocampuslib import compact_text
 from build_clean_source import SCOPE_LABEL_ORDER
 from semantic_scope_labels import filtered_semantic_scope_labels, label_evidence_for_labels
-from subconscious_worker import ALLOWED_EDGE_TYPES, clamp_confidence
 
 
 def normalize_for_fingerprint(value: str) -> str:

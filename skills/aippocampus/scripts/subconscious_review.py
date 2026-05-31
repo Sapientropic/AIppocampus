@@ -29,6 +29,11 @@ from aippocampus_runtime.subconscious.runtime import (
     compact_usage,
     parse_action,
 )
+from aippocampus_runtime.subconscious.worker import (
+    DEFAULT_BASE_URL,
+    DEFAULT_MODEL,
+    clamp_confidence,
+)
 from aippocampuslib import (
     cli_error_payload,
     cli_exit_code_for_error_code,
@@ -44,7 +49,6 @@ from subconscious_jobs import (
 from subconscious_jobs import (
     default_jobs_output_path,
 )
-from subconscious_worker import DEFAULT_BASE_URL, DEFAULT_MODEL, clamp_confidence
 
 PROMPT_VERSION = "aippocampus-subconscious-review-v0"
 DEFAULT_REVIEW_OUTPUT_NAME = "promotion_candidates.jsonl"
