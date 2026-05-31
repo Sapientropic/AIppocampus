@@ -48,10 +48,20 @@ Registry.
 
 The release workflow at
 `.github/workflows/publish-agent-discovery.yml` encodes the intended sequence:
-docs health, fast tests, Python package build, Twine metadata check, PyPI
-publication through trusted publishing, then MCP Registry publication through
-GitHub OIDC. It will not succeed until the PyPI trusted publisher/project setup
-exists for `aippocampus`.
+tag/version match, docs health, fast tests, MCP `server.json` schema validation,
+Python package build, Twine metadata check, built-wheel CLI/MCP smoke, PyPI
+publication through trusted publishing, then MCP Registry validation and
+publication through GitHub OIDC. It targets the GitHub `release` environment and
+will not succeed until the PyPI trusted publisher/project setup exists for
+`aippocampus`.
+
+Configure the PyPI trusted publisher with:
+
+- project name: `aippocampus`
+- owner: `Sapientropic`
+- repository: `AIppocampus`
+- workflow: `publish-agent-discovery.yml`
+- environment: `release`
 
 ## Recommended Agent Decision Snippet
 
