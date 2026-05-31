@@ -302,6 +302,7 @@ files = [
     "skills/aippocampus/scripts/semantic_scope_suppressed_recovery.py",
     "skills/aippocampus/scripts/storage_capacity_report.py",
     "skills/aippocampus/scripts/subconscious_agent.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/subconscious/agent.py",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/deterministic_jobs.py",
     "skills/aippocampus/scripts/subconscious_deterministic_jobs.py",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/__init__.py",
