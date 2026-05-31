@@ -19,6 +19,7 @@ from collections import Counter
 from pathlib import Path
 
 from aippocampus_runtime.core import compact_text
+from aippocampus_runtime.recall import scoring_policy
 from aippocampus_runtime.recall.life_cues import life_wide_recall_terms, profile_recall_terms
 from aippocampus_runtime.recall.query_policy import ALIASES as ALIASES
 from aippocampus_runtime.recall.query_policy import (
@@ -87,13 +88,13 @@ def phase_weight(row: sqlite3.Row) -> float:
     phase = str(row["phase"] or "")
     role = str(row["role"] or "")
     if phase == "final_answer" or int(row["is_final"] or 0):
-        return 18.0
+        return scoring_policy.PHASE_WEIGHT_POLICY.final_answer
     if role == "user":
-        return 3.0
+        return scoring_policy.PHASE_WEIGHT_POLICY.user
     if phase == "commentary":
-        return -5.0
+        return scoring_policy.PHASE_WEIGHT_POLICY.commentary
     if role == "tool":
-        return -12.0
+        return scoring_policy.PHASE_WEIGHT_POLICY.tool
     return 0.0
 
 
@@ -358,7 +359,7 @@ def search_rag_chunks_connection(
                 candidates[row["id"]] = {
                     "row": row,
                     "signals": {
-                        "chunk_fts": max(1.0, 60.0 - pos * 0.7),
+                        "chunk_fts": scoring_policy.RAG_CHUNK_FTS_POLICY.score_position(pos),
                         "chunk_fts_rank": float(row["rank"]),
                     },
                 }
@@ -383,7 +384,9 @@ def search_rag_chunks_connection(
             ).fetchall()
             for row in rows:
                 item = candidates.setdefault(row["id"], {"row": row, "signals": {}})
-                item["signals"]["chunk_literal_scan"] = 12.0
+                item["signals"]["chunk_literal_scan"] = (
+                    scoring_policy.RAG_CHUNK_TEXT_POLICY.literal_scan_signal
+                )
         except sqlite3.Error:
             pass
 
@@ -522,6 +525,7 @@ def diversify_results(
     while len(selected) < min(limit, len(pool)):
         best = None
         best_value = None
+        policy = scoring_policy.RETRIEVAL_DIVERSITY_POLICY
         selected_buckets = {_result_bucket(item, anchor_matches) for item in selected}
         selected_lines = [int(item.get("line") or 0) for item in selected]
         for item in pool:
@@ -531,12 +535,12 @@ def diversify_results(
             value = float(item.get("score") or 0)
             bucket = _result_bucket(item, anchor_matches)
             if bucket in selected_buckets:
-                value -= 12.0
+                value -= policy.bucket_repeat_penalty
             line = int(item.get("line") or 0)
-            if any(abs(line - other) < 25 for other in selected_lines):
-                value -= 10.0
+            if any(abs(line - other) < policy.nearby_line_window for other in selected_lines):
+                value -= policy.nearby_line_penalty
             if mode == "early" and (item.get("signals") or {}).get("literal_hits", 0) > 0:
-                value += max(0.0, 8.0 - line / 250.0)
+                value += max(0.0, policy.early_literal_boost - line / policy.early_line_divisor)
             if best_value is None or value > best_value:
                 best = item
                 best_value = value
@@ -581,7 +585,7 @@ def search_hybrid_index(
                     candidates[row["id"]] = {
                         "row": row,
                         "signals": {
-                            "fts": max(1.0, 80.0 - pos * 0.5),
+                            "fts": scoring_policy.MESSAGE_FTS_POLICY.score_position(pos),
                             "fts_rank": float(row["rank"]),
                         },
                     }
@@ -607,7 +611,9 @@ def search_hybrid_index(
                 ).fetchall()
                 for row in rows:
                     item = candidates.setdefault(row["id"], {"row": row, "signals": {}})
-                    item["signals"]["literal_scan"] = 15.0
+                    item["signals"]["literal_scan"] = (
+                        scoring_policy.RETRIEVAL_TEXT_POLICY.literal_scan_signal
+                    )
             except sqlite3.Error:
                 pass
 
@@ -650,7 +656,8 @@ def search_hybrid_index(
                 for row in rows:
                     item = candidates.setdefault(row["id"], {"row": row, "signals": {}})
                     item["signals"]["rag_chunk"] = max(
-                        float(item["signals"].get("rag_chunk", 0.0)), chunk["score"] * 0.35
+                        float(item["signals"].get("rag_chunk", 0.0)),
+                        chunk["score"] * scoring_policy.RETRIEVAL_TEXT_POLICY.rag_chunk_multiplier,
                     )
                     item["signals"]["rag_chunk_id"] = chunk["id"]
 
@@ -745,18 +752,19 @@ def active_recall_decision(
 ) -> dict:
     low = prompt.casefold()
     reasons: list[str] = []
+    policy = scoring_policy.ACTIVE_RECALL_POLICY
     score = 0.0
 
     matched_triggers = [trigger for trigger in RECALL_TRIGGERS if trigger.casefold() in low]
     if matched_triggers:
-        score += min(6.0, len(matched_triggers) * 1.5)
+        score += min(policy.recall_trigger_cap, len(matched_triggers) * policy.recall_trigger_weight)
         reasons.append(
             "message contains recall/deictic trigger(s): " + ", ".join(matched_triggers[:6])
         )
 
     matched_concepts = [trigger for trigger in CONCEPT_TRIGGERS if trigger.casefold() in low]
     if matched_concepts:
-        score += min(4.0, len(matched_concepts) * 2.0)
+        score += min(policy.concept_trigger_cap, len(matched_concepts) * policy.concept_trigger_weight)
         reasons.append(
             "message mentions durable concept trigger(s): " + ", ".join(matched_concepts[:6])
         )
@@ -765,7 +773,7 @@ def active_recall_decision(
         # Profile/resume prompts are personal by nature, but this is still only
         # a search-route decision. Source-backed claims remain gated by the
         # downstream clean-source evidence path.
-        score += 3.0
+        score += policy.profile_cue_bonus
         reasons.append("message contains personal-profile recall cue")
 
     if life_wide_recall_terms(prompt):
@@ -773,12 +781,12 @@ def active_recall_decision(
         # life_cues.py. This only opens deterministic search terms for the
         # explicit active_recall command; source-backed claims still need
         # downstream clean-source or registry evidence.
-        score += 3.0
+        score += policy.life_wide_cue_bonus
         reasons.append("message contains life-wide recall cue")
 
     if anchor_matches:
         anchor_score = sum(float(item.get("score") or 0) for item in anchor_matches[:3])
-        score += min(5.0, anchor_score / 4.0)
+        score += min(policy.anchor_overlap_cap, anchor_score / policy.anchor_score_divisor)
         reasons.append(
             "message overlaps existing anchors: "
             + ", ".join(item["title"] for item in anchor_matches[:3])
@@ -786,19 +794,25 @@ def active_recall_decision(
 
     if health:
         if health.get("index", {}).get("stale"):
-            score += 1.5
+            score += policy.stale_index_bonus
             reasons.append("thread index is stale")
         if health.get("checkpoint", {}).get("due"):
-            score += 1.0
+            score += policy.checkpoint_due_bonus
             reasons.append("checkpoint is due")
         if any(
             item.get("id") == "consider_graphify" for item in health.get("recommended_actions", [])
         ):
-            score += 0.5
+            score += policy.graphify_recommendation_bonus
             reasons.append("thread crossed the deep graph threshold")
 
-    decision = "search" if score >= 3.0 else "skip"
-    confidence = "high" if score >= 6.0 else "medium" if score >= 3.0 else "low"
+    decision = "search" if score >= policy.search_threshold else "skip"
+    confidence = (
+        "high"
+        if score >= policy.high_threshold
+        else "medium"
+        if score >= policy.search_threshold
+        else "low"
+    )
     return {
         "decision": decision,
         "score": round(score, 3),
