@@ -56,6 +56,11 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(invocation.script_name, "aippocampus_mcp_server.py")
         self.assertEqual(invocation.args, ["--list-tools", "--json"])
 
+        search_invocation = facade.resolve_command(["search", "source", "--json"])
+        self.assertEqual(search_invocation.command, "search")
+        self.assertEqual(search_invocation.module_name, "aippocampus_runtime.source.search")
+        self.assertEqual(search_invocation.script_name, "search_clean_source.py")
+
     def test_package_facade_default_runner_is_in_process(self) -> None:
         from aippocampus_runtime.cli import facade
 

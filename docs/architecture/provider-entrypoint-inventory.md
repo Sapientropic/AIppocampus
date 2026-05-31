@@ -31,7 +31,7 @@ audit/host integration paths.
 | `install_aippocampus_lifecycle_hook.py` | Codex host integration | Mutates Codex hook config only after explicit operator command. |
 | `diagnose_hooks.py` | Codex host diagnostic | Inspects Codex hook config; not a provider-neutral health tool. |
 | `locate_rollout.py` | Codex-only raw audit/debug tool | Finds current Codex rollout JSONL. Do not present as general AI-agent transcript discovery. |
-| `search_rollout.py` | Codex-only raw audit/debug tool | Searches raw Codex rollout text. Clean-source search is the general recall surface. |
+| `aippocampus_runtime/recall/rollout_search.py` plus `search_rollout.py` compatibility shim | Codex-only raw audit/debug tool | Searches raw Codex rollout text. Clean-source search is the general recall surface. |
 | `aippocampus_runtime/source/latest_reply.py` plus `latest_reply.py` compatibility shim | Codex-only raw audit/debug fallback | Reads final answers from raw Codex rollout. MCP prefers clean-source final answers first. |
 | `rollout_size_audit.py` | Codex-only raw audit/debug tool | Audits raw Codex rollout size/path behavior. |
 | `cold_archive.py` | Codex-only raw audit/archive tool | Optional raw rollout archive path; not daily recall. |

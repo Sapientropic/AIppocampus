@@ -6,10 +6,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import subprocess
 import sys
 from pathlib import Path
 
+from aippocampus_runtime.health import health_report
 from aippocampus_runtime.recall.life_cues import (
     life_wide_recall_terms,
     profile_recall_terms,
@@ -21,19 +21,8 @@ from aippocampus_runtime.recall.retrieval import (
     split_query_terms,
     unique_preserve,
 )
-
-SCRIPT_DIR = Path(__file__).resolve().parents[2]
-
-
-def run_json(cmd: list[str], *, allow_empty_result: bool = False) -> dict:
-    proc = subprocess.run(
-        cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False
-    )
-    if proc.returncode != 0:
-        if allow_empty_result and proc.stdout.strip().startswith("{"):
-            return json.loads(proc.stdout)
-        raise RuntimeError(proc.stdout or proc.stderr)
-    return json.loads(proc.stdout)
+from aippocampus_runtime.recall.rollout_search import RolloutSearchOptions, search_rollout_payload
+from aippocampus_runtime.recall.segment_search import SegmentSearchOptions, search_segments_payload
 
 
 def read_prompt(args: argparse.Namespace) -> str:
@@ -113,9 +102,7 @@ def main() -> int:
     if not prompt:
         raise SystemExit("active_recall.py requires prompt text or --stdin")
 
-    health = run_json(
-        [sys.executable, str(SCRIPT_DIR / "aippocampus_health.py"), "--cwd", str(cwd), "--json"]
-    )
+    health = health_report(cwd)
     anchor_path = resolve_anchor_path(cwd, args.anchors)
     query_terms = active_recall_query_terms(prompt)
     anchors = match_anchors(anchor_path, query_terms) if anchor_path.exists() else []
@@ -135,39 +122,28 @@ def main() -> int:
         segments = health.get("segments") or {}
         use_segments = bool(segments.get("exists")) or bool(segments.get("needed"))
         if use_segments:
-            cmd = [
-                sys.executable,
-                str(SCRIPT_DIR / "search_segments.py"),
-                *search_terms,
-                "--cwd",
-                str(cwd),
-                "--mode",
-                "hybrid",
-                "--max",
-                str(args.max),
-                "--context",
-                str(args.context),
-                "--json",
-            ]
-            if not segments.get("exists") or segments.get("stale"):
-                cmd.append("--build-segments")
+            build_segments = not segments.get("exists") or bool(segments.get("stale"))
+            search_payload = search_segments_payload(
+                SegmentSearchOptions(
+                    patterns=search_terms,
+                    cwd=cwd,
+                    mode="hybrid",
+                    max_results=args.max,
+                    context=args.context,
+                    build_segments=build_segments,
+                )
+            )
         else:
-            cmd = [
-                sys.executable,
-                str(SCRIPT_DIR / "search_rollout.py"),
-                *search_terms,
-                "--cwd",
-                str(cwd),
-                "--build-index",
-                "--mode",
-                "hybrid",
-                "--max",
-                str(args.max),
-                "--context",
-                str(args.context),
-                "--json",
-            ]
-        search_payload = run_json(cmd, allow_empty_result=True)
+            search_payload = search_rollout_payload(
+                RolloutSearchOptions(
+                    patterns=search_terms,
+                    cwd=cwd,
+                    build_index=True,
+                    mode="hybrid",
+                    max_results=args.max,
+                    context=args.context,
+                )
+            )
 
     result = {
         "prompt": prompt,

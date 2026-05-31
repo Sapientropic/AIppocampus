@@ -1296,8 +1296,8 @@ class ImportCouplingTests(unittest.TestCase):
         for owner in [
             "aippocampus_runtime.artifacts.publish",
             "aippocampus_runtime.core",
-            "aippocampus_runtime.question.health",
-            "aippocampus_runtime.registry.api",
+            "aippocampus_runtime.question.constants",
+            "aippocampus_runtime.registry.store",
         ]:
             self.assertIn(owner, package_edges)
         for flat_module in [
@@ -1308,7 +1308,37 @@ class ImportCouplingTests(unittest.TestCase):
         ]:
             self.assertNotIn(flat_module, package_edges)
         self.assertIs(aippocampus_health.main, health.main)
+        self.assertIs(aippocampus_health.health_report, health.health_report)
         self.assertIs(aippocampus_health.load_question_stats, health.load_question_stats)
+
+    def test_runtime_health_package_api_replaces_script_health_dispatch(self) -> None:
+        package_sources = [
+            SCRIPTS / "aippocampus_runtime" / "mcp" / "server.py",
+            SCRIPTS / "aippocampus_runtime" / "recall" / "active_recall.py",
+            SCRIPTS / "aippocampus_runtime" / "registry" / "api.py",
+        ]
+        for source in package_sources:
+            text = source.read_text(encoding="utf-8")
+            self.assertNotIn('SCRIPT_DIR / "aippocampus_health.py"', text, source)
+            self.assertNotIn("sys.executable, str(SCRIPT_DIR / \"aippocampus_health.py\")", text, source)
+
+        self.assertIn(
+            "aippocampus_health.health_report(cwd_arg(arguments))",
+            (SCRIPTS / "aippocampus_runtime" / "mcp" / "server.py").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "health = health_report(cwd)",
+            (SCRIPTS / "aippocampus_runtime" / "recall" / "active_recall.py").read_text(
+                encoding="utf-8"
+            ),
+        )
+        active_recall_source = (
+            SCRIPTS / "aippocampus_runtime" / "recall" / "active_recall.py"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn('SCRIPT_DIR / "search_rollout.py"', active_recall_source)
+        self.assertNotIn('SCRIPT_DIR / "search_segments.py"', active_recall_source)
+        self.assertIn("search_rollout_payload(", active_recall_source)
+        self.assertIn("search_segments_payload(", active_recall_source)
 
     def test_subconscious_validation_audit_has_package_owner_and_compat_shim(self) -> None:
         import subconscious_validation_audit
@@ -1592,13 +1622,17 @@ class ImportCouplingTests(unittest.TestCase):
             SCRIPTS / "aippocampus_runtime" / "recall" / "active_recall.py",
             SCRIPTS / "aippocampus_runtime" / "recall" / "query_policy.py",
             SCRIPTS / "aippocampus_runtime" / "recall" / "retrieval.py",
+            SCRIPTS / "aippocampus_runtime" / "recall" / "rollout_search.py",
             SCRIPTS / "aippocampus_runtime" / "recall" / "score_fusion.py",
+            SCRIPTS / "aippocampus_runtime" / "recall" / "segment_search.py",
         ]
         shim_paths = [
             SCRIPTS / "active_recall.py",
             SCRIPTS / "retrieval.py",
             SCRIPTS / "retrieval_query_policy.py",
             SCRIPTS / "retrieval_score_fusion.py",
+            SCRIPTS / "search_rollout.py",
+            SCRIPTS / "search_segments.py",
         ]
 
         for path in package_paths + shim_paths:
@@ -1610,12 +1644,16 @@ class ImportCouplingTests(unittest.TestCase):
         import retrieval
         import retrieval_query_policy
         import retrieval_score_fusion
+        import search_rollout
+        import search_segments
         from aippocampus_runtime.recall import (
             active_recall as packaged_active_recall,
         )
         from aippocampus_runtime.recall import (
             query_policy,
+            rollout_search,
             score_fusion,
+            segment_search,
         )
         from aippocampus_runtime.recall import (
             retrieval as packaged_retrieval,
@@ -1634,9 +1672,15 @@ class ImportCouplingTests(unittest.TestCase):
             "aippocampus_runtime.recall.score_fusion",
             edges["aippocampus_runtime.recall.retrieval"],
         )
+        self.assertIn(
+            "aippocampus_runtime.recall.rollout_search",
+            edges["aippocampus_runtime.recall.segment_search"],
+        )
 
         flat_recall_modules = {
             "active_recall",
+            "search_rollout",
+            "search_segments",
             "retrieval",
             "retrieval_query_policy",
             "retrieval_score_fusion",
@@ -1659,6 +1703,8 @@ class ImportCouplingTests(unittest.TestCase):
             retrieval_score_fusion.retrieval_text_score,
             score_fusion.retrieval_text_score,
         )
+        self.assertIs(search_rollout.auto_index_path, rollout_search.auto_index_path)
+        self.assertIs(search_segments.merge_topk, segment_search.merge_topk)
 
     def test_ambient_recall_helpers_have_package_owner_and_compat_shims(self) -> None:
         package_paths = [
@@ -2019,7 +2065,7 @@ class ImportCouplingTests(unittest.TestCase):
             "build_segments",
             "import_bundle",
             "aippocampus_runtime.registry.api",
-            "search_rollout",
+            "aippocampus_runtime.recall.rollout_search",
         ]:
             self.assertIn("aippocampus_runtime.artifacts.publish", edges[source])
             self.assertNotIn("artifact_publish", edges[source])

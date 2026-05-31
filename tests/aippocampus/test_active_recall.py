@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
@@ -10,9 +13,58 @@ sys.path.insert(0, str(SCRIPTS))
 
 import active_recall  # noqa: E402
 import retrieval  # noqa: E402
+from aippocampus_runtime.recall import active_recall as packaged_active_recall  # noqa: E402
 
 
 class ActiveRecallTests(unittest.TestCase):
+    def test_main_uses_package_apis_without_health_or_search_script_subprocess(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = Path(tmp).resolve()
+            old_argv = sys.argv[:]
+            sys.argv = [
+                "active_recall.py",
+                "继续刚才那个状态",
+                "--cwd",
+                str(cwd),
+                "--search",
+                "always",
+                "--json",
+            ]
+            try:
+                with mock.patch.object(
+                    packaged_active_recall,
+                    "health_report",
+                    return_value={
+                        "status": "ok",
+                        "index": {"stale": False},
+                        "segments": {"exists": False, "needed": False},
+                        "checkpoint": {"due": False},
+                        "graphify": {"stale": False},
+                        "recommended_actions": [],
+                    },
+                ) as health, mock.patch.object(
+                    packaged_active_recall,
+                    "search_rollout_payload",
+                    return_value={"source": "package-api", "matches": []},
+                ) as rollout_search, mock.patch.object(
+                    packaged_active_recall, "search_segments_payload"
+                ) as segment_search:
+                    with mock.patch("sys.stdout") as stdout:
+                        code = packaged_active_recall.main()
+            finally:
+                sys.argv = old_argv
+
+        self.assertEqual(code, 0)
+        health.assert_called_once_with(cwd)
+        rollout_search.assert_called_once()
+        options = rollout_search.call_args.args[0]
+        self.assertEqual(options.cwd, cwd)
+        self.assertTrue(options.build_index)
+        segment_search.assert_not_called()
+        self.assertFalse(hasattr(packaged_active_recall, "run_json"))
+        output = "".join(call.args[0] for call in stdout.write.call_args_list if call.args)
+        self.assertTrue(json.loads(output)["searched"])
+
     def test_profile_prompt_searches_with_stale_checkpoint_and_alias_terms(self) -> None:
         prompt = "你知道我的简历和领英资料吗？"
         health = {

@@ -4,11 +4,9 @@
 from __future__ import annotations
 
 import argparse
-import io
 import json
 import os
 import sys
-from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from typing import Any
 
@@ -459,25 +457,11 @@ def call_sync_status(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def call_memory_health(arguments: dict[str, Any]) -> dict[str, Any]:
-    old_argv = sys.argv[:]
-    stdout = io.StringIO()
-    stderr = io.StringIO()
-    sys.argv = ["aippocampus_health.py", "--cwd", str(cwd_arg(arguments)), "--json"]
     try:
-        with redirect_stdout(stdout), redirect_stderr(stderr):
-            returncode = aippocampus_health.main()
+        payload = aippocampus_health.health_report(cwd_arg(arguments))
     except Exception as exc:
         return tool_error("health_check_failed", str(exc), arguments=arguments)
-    finally:
-        sys.argv = old_argv
 
-    output = stdout.getvalue()
-    if returncode != 0:
-        return tool_error("health_check_failed", (output or stderr.getvalue()).strip(), arguments=arguments)
-    try:
-        payload = json.loads(output)
-    except json.JSONDecodeError as exc:
-        return tool_error("health_check_failed", f"invalid health JSON: {exc}", arguments=arguments)
     return text_result(public_payload(arguments, payload))
 
 

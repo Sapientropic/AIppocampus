@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from aippocampus_runtime.core import compact_text
+from aippocampus_runtime.question.constants import DEFAULT_DORMANT_AFTER_DAYS
 from aippocampus_runtime.question.source_refs import (
     SourceRefIndex,
     build_source_ref_index,
@@ -38,7 +39,6 @@ from aippocampus_runtime.registry.api import unique_preserve
 
 THEME_CANDIDATE_KIND = "theme_candidate"
 QUESTION_RESOLUTION_KIND = "question_resolution_signal"
-DEFAULT_DORMANT_AFTER_DAYS = 30
 RESOLVED_STATES = {"resolved", "closed", "answered"}
 
 
