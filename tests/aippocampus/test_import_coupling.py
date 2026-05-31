@@ -497,6 +497,30 @@ class ImportCouplingTests(unittest.TestCase):
             validation_audit.validation_rejection_reason,
         )
 
+    def test_subconscious_deterministic_jobs_have_package_owner_and_compat_shim(self) -> None:
+        import subconscious_deterministic_jobs
+        from aippocampus_runtime.subconscious import deterministic_jobs
+
+        package_path = SCRIPTS / "aippocampus_runtime" / "subconscious" / "deterministic_jobs.py"
+        shim_path = SCRIPTS / "subconscious_deterministic_jobs.py"
+
+        self.assertTrue(package_path.exists(), package_path)
+        self.assertTrue(shim_path.exists(), shim_path)
+        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges(top_level_only=True)
+        self.assertIn("aippocampus_runtime.subconscious.deterministic_jobs", edges["subconscious_jobs"])
+        self.assertNotIn("subconscious_deterministic_jobs", edges["subconscious_jobs"])
+
+        self.assertIs(
+            subconscious_deterministic_jobs.run_deterministic_job,
+            deterministic_jobs.run_deterministic_job,
+        )
+        self.assertEqual(
+            subconscious_deterministic_jobs.DETERMINISTIC_RUNNERS,
+            deterministic_jobs.DETERMINISTIC_RUNNERS,
+        )
+
     def test_prompt_recall_core_stays_small_foreground_gate(self) -> None:
         edges = same_dir_import_edges()
         forbidden = {
