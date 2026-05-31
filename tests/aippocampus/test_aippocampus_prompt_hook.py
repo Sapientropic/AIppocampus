@@ -736,6 +736,97 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertEqual(result["decision"], "skip")
         self.assertIsNone(hook.context_for_hook(result))
 
+    def test_profile_recall_uses_cross_lingual_aliases_without_semantic_gate(self) -> None:
+        registry_path = self._write_single_thread_registry(
+            title="Professional profile and job search history",
+            keywords=["CV", "LinkedIn", "job search", "professional profile"],
+            summary=(
+                "Prior records discuss the user's resume, CV, LinkedIn profile, "
+                "and job-search materials."
+            ),
+        )
+
+        result = hook.assess_prompt(
+            "你知道我的简历和领英资料吗？",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            use_semantic_gate=False,
+            search_budget=0,
+        )
+
+        self.assertEqual(result["decision"], "scent")
+        self.assertIn("resume", result["query_terms"])
+        self.assertIn("LinkedIn", result["query_terms"])
+        self.assertEqual(result["evidence"], [])
+        self.assertEqual(result["candidates"][0]["title"], "Professional profile and job search history")
+
+    def test_recent_work_friction_prompt_uses_life_wide_timeline_route(self) -> None:
+        registry_dir = self.root / "life-wide-registry"
+        registry_dir.mkdir()
+        registry_path = registry_dir / "threads.json"
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:work-friction",
+                            "title": "Product workflow friction",
+                            "workspace_name": "OtherProject",
+                            "project_label": "OtherProject",
+                            "updated_at": "2026-05-24T12:00:00Z",
+                            "anchor_titles": ["Workflow friction and product pressure"],
+                            "keywords": ["workflow friction", "product pressure"],
+                            "summary": (
+                                "Old English and Russian project notes about product "
+                                "workflow friction and pressure."
+                            ),
+                            "paths": {"workspace": str(self.old)},
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        (registry_dir / "project_timeline.json").write_text(
+            json.dumps(
+                {
+                    "life_wide": {
+                        "labels": {
+                            "personal_reflection": {
+                                "latest_turns": [
+                                    {
+                                        "thread_key": "session:work-friction",
+                                        "scope_labels": ["personal_reflection"],
+                                        "topic_terms": ["workflow friction", "product pressure"],
+                                        "source_refs": [
+                                            {"thread_key": "session:work-friction", "source_line": 91}
+                                        ],
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        result = hook.assess_prompt(
+            "最近工作上那些摩擦和困扰，我们后来怎么处理比较好？",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            use_semantic_gate=False,
+            search_budget=0,
+        )
+
+        self.assertEqual(result["decision"], "scent")
+        self.assertEqual(result["candidates"][0]["title"], "Product workflow friction")
+        self.assertTrue(result["candidates"][0]["life_wide_timeline_source"])
+        self.assertEqual(result["evidence"], [])
+
     def test_vague_continuation_without_semantic_stays_silent_despite_overlap(self) -> None:
         registry_path = self._write_single_thread_registry(
             title="Python list.sort None",
