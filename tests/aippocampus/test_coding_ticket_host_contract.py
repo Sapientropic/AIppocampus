@@ -143,6 +143,61 @@ class CodingTicketHostContractTests(unittest.TestCase):
         self.assertEqual(tuning["adjustments"][0]["activation_tuning"], "quieter")
         self.assertIn("source_fact_rewrite", tuning["forbidden_mutations"])
 
+    def test_recent_dismissal_suppresses_same_ticket_without_rewriting_source_facts(self) -> None:
+        ticket = coding_ticket("dismissed", proposed_use="warn", intervention_level="warning")
+        before = copy.deepcopy(ticket["derived_assessment"])
+
+        decision = host_contract.host_decision_for_ticket(
+            ticket,
+            recent_feedback=[
+                {
+                    "kind": "aippocampus_agency_ticket_feedback",
+                    "ticket_id": "coding-ticket-dismissed",
+                    "outcome": "dismissed",
+                    "topic_epoch": "task_or_topic_epoch_end",
+                }
+            ],
+        )
+
+        self.assertEqual(decision["visibility"], "stay_silent")
+        self.assertIn("recent_feedback_suppressed", decision["suppression_reasons"])
+        self.assertEqual(ticket["derived_assessment"], before)
+
+    def test_recent_delivery_suppresses_duplicate_ticket_surface(self) -> None:
+        ticket = coding_ticket("duplicate", proposed_use="ask", intervention_level="state_check")
+
+        decision = host_contract.host_decision_for_ticket(
+            ticket,
+            recent_feedback=[
+                {
+                    "kind": "aippocampus_coding_ticket_delivery_event",
+                    "ticket_id": "coding-ticket-duplicate",
+                    "delivery_state": "delivered",
+                    "topic_epoch": "task_or_topic_epoch_end",
+                }
+            ],
+        )
+
+        self.assertEqual(decision["visibility"], "stay_silent")
+        self.assertIn("duplicate_ticket_suppressed", decision["suppression_reasons"])
+
+    def test_simulation_passes_host_feedback_to_each_ticket_decision(self) -> None:
+        ticket = coding_ticket("sim-feedback", proposed_use="ask", intervention_level="state_check")
+
+        result = host_contract.simulate_host_consumption(
+            [ticket],
+            recent_feedback=[
+                {
+                    "ticket_id": "coding-ticket-sim-feedback",
+                    "outcome": "ignored",
+                    "topic_epoch": "task_or_topic_epoch_end",
+                }
+            ],
+        )
+
+        self.assertEqual(result["decisions"][0]["visibility"], "stay_silent")
+        self.assertIn("recent_feedback_suppressed", result["decisions"][0]["suppression_reasons"])
+
     def test_no_host_degrades_to_silence(self) -> None:
         ticket = coding_ticket("no-host", proposed_use="warn", intervention_level="warning")
         decision = host_contract.host_decision_for_ticket(ticket, host_present=False)
