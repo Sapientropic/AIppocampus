@@ -18,8 +18,8 @@ import _paths
 
 _paths.ensure_paths()
 
-from aippocampuslib import now_utc
-from storage_capacity_report import human_bytes, ratio
+from aippocampus_runtime.core import now_utc
+from aippocampus_runtime.ops.storage_capacity_report import human_bytes, ratio
 
 GIB = 1024**3
 MIB = 1024**2
