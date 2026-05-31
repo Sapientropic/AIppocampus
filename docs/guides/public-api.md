@@ -92,10 +92,13 @@ For these commands:
   with `capture_output=True` to receive a `CommandResult` without launching a
   subprocess or polluting the caller's stdout/stderr.
 
-The Python facade is the current packaging step. Standalone Python-free binaries
-are not part of the public claim until the follow-up
-[standalone binary packaging plan](../planning/standalone-binary-packaging.md)
-has produced artifacts and verified the target platform matrix.
+The Python facade remains the default public runtime surface. Windows x64 has
+dated PyInstaller artifact smoke evidence, including the standalone binary as a
+Claude Code stdio MCP server through `aippocampus.exe mcp`; the current claim is
+limited to that verified Windows path. Signed downloads, installer/update UX,
+macOS/Linux artifacts, and a cross-platform binary support matrix remain future
+work tracked by the
+[standalone binary packaging plan](../planning/standalone-binary-packaging.md).
 
 Repo-maintenance commands under `tools/aippocampus/` and
 `benchmarks/aippocampus/` are public development aids, not end-user runtime APIs,

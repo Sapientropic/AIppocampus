@@ -280,6 +280,16 @@ Latest verification for this refresh:
   recall now calls `search_rollout_payload()` / `search_segments_payload()`
   directly, so the recall package no longer re-enters its own flat
   `search_rollout.py` or `search_segments.py` scripts for normal search.
+- Follow-up verification on current `main` commit `1f76565`, after PR #255's
+  sidecar activation-cue recall changes, repeated the Windows path on the same
+  host class. A fresh temporary virtual environment installed PyInstaller
+  6.20.0, rebuilt `aippocampus.exe`, set
+  `python_free_support_claimed=true`, passed all 8 artifact smoke specs
+  including `mcp_memory_health_jsonrpc` with `tool_is_error=false`, and kept the
+  private-data guard clean. The rebuilt binary then served Claude Code 2.1.138
+  through a temporary strict MCP config as `aippocampus.exe mcp`; the smoke
+  observed `mcp__aippocampus__memory_health` `tool_use` plus the matching
+  `tool_result`.
 
 This refresh does not close #104. The post-migration encrypted provider sync
 smoke still needs a maintainer-provided real object-store provider target and
