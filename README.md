@@ -184,8 +184,10 @@ existing Codex-only scripts.
 
 Direct `python "${CODEX_HOME}/skills/aippocampus/scripts/*.py"` commands remain
 supported as the script-first fallback. The facade delegates to those scripts
-and preserves their JSON stdout and exit codes; standalone Python-free binaries
-are a later packaging slice, not a current release claim.
+and preserves their JSON stdout and exit codes. Windows x64 has dated
+PyInstaller artifact smoke evidence, including Claude Code stdio MCP use through
+`aippocampus.exe mcp`; this is not yet a signed release, installer/update UX, or
+macOS/Linux binary claim.
 
 External DeepSeek frontier extraction is explicit:
 
