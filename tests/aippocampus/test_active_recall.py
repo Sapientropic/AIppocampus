@@ -14,6 +14,7 @@ sys.path.insert(0, str(SCRIPTS))
 import active_recall  # noqa: E402
 import retrieval  # noqa: E402
 from aippocampus_runtime.recall import active_recall as packaged_active_recall  # noqa: E402
+from aippocampus_runtime.recall import active_recall_lock  # noqa: E402
 
 
 class ActiveRecallTests(unittest.TestCase):
@@ -118,6 +119,88 @@ class ActiveRecallTests(unittest.TestCase):
         self.assertEqual(decision["decision"], "skip")
         self.assertNotIn("workflow friction", query_terms)
         self.assertNotIn("work pressure", query_terms)
+
+    def test_probe_read_lock_is_navigation_only_and_reopen_is_source_backed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry = root / "registry" / "threads.json"
+            messages = root / "clean-source" / "messages.jsonl"
+            registry.parent.mkdir()
+            messages.parent.mkdir()
+            registry.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "threads": [
+                            {
+                                "thread_key": "session:old",
+                                "paths": {"clean_source_messages_jsonl": str(messages)},
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            messages.write_text(
+                json.dumps(
+                    {
+                        "message_id": "msg-1",
+                        "turn_id": "turn-1",
+                        "source_line": 9,
+                        "role": "assistant",
+                        "phase": "final_answer",
+                        "text": "Only reopen may reveal this sourced sentence.",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            lock_path = root / "active_recall_locks.json"
+            prompt = "继续那个 SECRET_TOKEN=abc123 的语义判断"
+
+            probe = packaged_active_recall.active_recall_probe(
+                prompt=prompt,
+                cwd=root,
+                lock_path=lock_path,
+                registry_path=registry,
+                thread_id="thread-a",
+                topic_epoch="epoch-a",
+                use_lock=True,
+            )
+            lock_id = str((probe.get("lock") or {}).get("lock_id") or "")
+            ready = active_recall_lock.enrich_recall_lock(
+                lock_path,
+                lock_id=lock_id,
+                candidate_refs=[{"thread_key": "session:old", "message_id": "msg-1"}],
+                route_reasons=["background semantic route"],
+                state="ready",
+            )
+            read = packaged_active_recall.active_recall_read_lock(
+                lock_path=lock_path,
+                lock_id=lock_id,
+                topic_epoch="epoch-a",
+                registry_path=registry,
+            )
+            reopened = packaged_active_recall.active_recall_reopen_lock(
+                lock_path=lock_path,
+                lock_id=lock_id,
+                registry_path=registry,
+                max_matches=3,
+            )
+            raw_read = json.dumps(read, ensure_ascii=False)
+
+        self.assertEqual(probe["support_level"], "scent")
+        self.assertEqual(ready["support_level"], "scent")
+        self.assertEqual(read["lock"]["state"], "ready")
+        self.assertTrue(read["source_reopen_required"])
+        self.assertNotIn("SECRET_TOKEN", raw_read)
+        self.assertNotIn("abc123", raw_read)
+        self.assertNotIn("Only reopen may reveal", raw_read)
+        self.assertEqual(reopened["support_level"], "evidence")
+        self.assertEqual(
+            reopened["matches"][0]["text"],
+            "Only reopen may reveal this sourced sentence.",
+        )
 
 
 if __name__ == "__main__":

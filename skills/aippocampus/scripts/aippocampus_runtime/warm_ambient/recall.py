@@ -34,6 +34,7 @@ from aippocampus_runtime.model.routing import (
     route_payload_with_effective_values,
     route_service_name,
 )
+from aippocampus_runtime.recall.active_recall_lock import enrich_recall_lock
 from aippocampus_runtime.recall.ambient_cache import (
     default_ambient_cache_path,
     topic_epoch_from_terms,
@@ -1059,6 +1060,14 @@ def warm_job_result_summary(job: dict[str, Any], result: dict[str, Any]) -> dict
         "suppression_reason_buckets": suppression_reason_buckets(result),
         "suppression_diagnostics": suppression_diagnostics(result),
         "cache_write": _cache_write_summary(result.get("cache_write")),
+        "active_recall_lock": {
+            "lock_id": (result.get("active_recall_lock") or {}).get("lock_id"),
+            "state": (result.get("active_recall_lock") or {}).get("state"),
+            "support_level": "scent",
+            "source_reopen_required": True,
+        }
+        if isinstance(result.get("active_recall_lock"), dict)
+        else None,
         "cache": result.get("cache") or {},
         "model_route": result.get("model_route") or {},
         "elapsed_ms": float(result.get("elapsed_ms") or 0.0),
@@ -1100,6 +1109,8 @@ def run_warm_job_file(
         registry_dir=Path(str(job.get("registry_dir"))).resolve() if job.get("registry_dir") else None,
         cache_path=Path(str(job.get("cache_path"))).resolve() if job.get("cache_path") else None,
         residue_path=Path(str(job.get("residue_path"))).resolve() if job.get("residue_path") else None,
+        lock_path=Path(str(job.get("lock_path"))).resolve() if job.get("lock_path") else None,
+        lock_id=str(job.get("lock_id") or "") or None,
         residue_reason="detached_warm_scout",
         api_key=api_key,
         api_key_env=str(job.get("api_key_env") or DEFAULT_DEEPSEEK_API_KEY_ENV),
@@ -1147,6 +1158,8 @@ def run_warm_ambient_recall(
     registry_dir: Path | str | None = None,
     cache_path: Path | str | None = None,
     residue_path: Path | str | None = None,
+    lock_path: Path | str | None = None,
+    lock_id: str | None = None,
     residue_reason: str = "warm_scout",
     api_key: str | None = None,
     api_key_env: str = DEFAULT_DEEPSEEK_API_KEY_ENV,
@@ -1319,6 +1332,46 @@ def run_warm_ambient_recall(
             residue_path=Path(residue_path).resolve() if residue_path else None,
             residue_reason=residue_reason,
         )
+    lock_update = None
+    if lock_path and lock_id:
+        try:
+            if cache_write and cache_write.get("status") == "written":
+                lock_update = enrich_recall_lock(
+                    Path(lock_path).resolve(),
+                    lock_id=lock_id,
+                    cards=merged["cards"],
+                    query_aliases=merged.get("query_aliases") or [],
+                    route_reasons=["warm_ambient_quorum_enriched_lock"],
+                    diagnostics={
+                        "cold_model_call": True,
+                        "fast_scout_used": False,
+                        "thinking_enrichment_pending": False,
+                    },
+                    state="ready",
+                )
+            elif not no_write:
+                lock_update = enrich_recall_lock(
+                    Path(lock_path).resolve(),
+                    lock_id=lock_id,
+                    query_aliases=merged.get("query_aliases") or [],
+                    route_reasons=["warm_ambient_no_ready_cards"],
+                    diagnostics={
+                        "cold_model_call": True,
+                        "fast_scout_used": False,
+                        "thinking_enrichment_pending": False,
+                    },
+                    state="failed",
+                )
+        except Exception as exc:
+            lock_update = {
+                "state": "failed",
+                "support_level": "scent",
+                "source_reopen_required": True,
+                "diagnostics": {
+                    "error_type": type(exc).__name__,
+                    "message": str(exc)[:160],
+                },
+            }
     status = "written" if cache_write and cache_write.get("status") == "written" else "ready"
     if not rows:
         status = "timeout"
@@ -1361,6 +1414,7 @@ def run_warm_ambient_recall(
         "current_thread_echo_count": merged.get("current_thread_echo_count", 0),
         "source_validation_status_counts": merged.get("source_validation_status_counts", {}),
         "cache_write": cache_write,
+        "active_recall_lock": lock_update,
         "usage": usage_total,
         "cache": route_cache_metrics(route, usage_total),
         "secret_policy": secret_policy,
