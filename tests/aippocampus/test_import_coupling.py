@@ -1615,13 +1615,17 @@ class ImportCouplingTests(unittest.TestCase):
             SCRIPTS / "aippocampus_runtime" / "recall" / "active_recall.py",
             SCRIPTS / "aippocampus_runtime" / "recall" / "query_policy.py",
             SCRIPTS / "aippocampus_runtime" / "recall" / "retrieval.py",
+            SCRIPTS / "aippocampus_runtime" / "recall" / "rollout_search.py",
             SCRIPTS / "aippocampus_runtime" / "recall" / "score_fusion.py",
+            SCRIPTS / "aippocampus_runtime" / "recall" / "segment_search.py",
         ]
         shim_paths = [
             SCRIPTS / "active_recall.py",
             SCRIPTS / "retrieval.py",
             SCRIPTS / "retrieval_query_policy.py",
             SCRIPTS / "retrieval_score_fusion.py",
+            SCRIPTS / "search_rollout.py",
+            SCRIPTS / "search_segments.py",
         ]
 
         for path in package_paths + shim_paths:
@@ -1633,12 +1637,16 @@ class ImportCouplingTests(unittest.TestCase):
         import retrieval
         import retrieval_query_policy
         import retrieval_score_fusion
+        import search_rollout
+        import search_segments
         from aippocampus_runtime.recall import (
             active_recall as packaged_active_recall,
         )
         from aippocampus_runtime.recall import (
             query_policy,
+            rollout_search,
             score_fusion,
+            segment_search,
         )
         from aippocampus_runtime.recall import (
             retrieval as packaged_retrieval,
@@ -1657,9 +1665,15 @@ class ImportCouplingTests(unittest.TestCase):
             "aippocampus_runtime.recall.score_fusion",
             edges["aippocampus_runtime.recall.retrieval"],
         )
+        self.assertIn(
+            "aippocampus_runtime.recall.rollout_search",
+            edges["aippocampus_runtime.recall.segment_search"],
+        )
 
         flat_recall_modules = {
             "active_recall",
+            "search_rollout",
+            "search_segments",
             "retrieval",
             "retrieval_query_policy",
             "retrieval_score_fusion",
@@ -1682,6 +1696,8 @@ class ImportCouplingTests(unittest.TestCase):
             retrieval_score_fusion.retrieval_text_score,
             score_fusion.retrieval_text_score,
         )
+        self.assertIs(search_rollout.auto_index_path, rollout_search.auto_index_path)
+        self.assertIs(search_segments.merge_topk, segment_search.merge_topk)
 
     def test_ambient_recall_helpers_have_package_owner_and_compat_shims(self) -> None:
         package_paths = [
@@ -2042,7 +2058,7 @@ class ImportCouplingTests(unittest.TestCase):
             "build_segments",
             "import_bundle",
             "aippocampus_runtime.registry.api",
-            "search_rollout",
+            "aippocampus_runtime.recall.rollout_search",
         ]:
             self.assertIn("aippocampus_runtime.artifacts.publish", edges[source])
             self.assertNotIn("artifact_publish", edges[source])
