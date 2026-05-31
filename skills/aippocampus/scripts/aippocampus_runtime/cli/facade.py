@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import importlib
 import sys
 from dataclasses import dataclass
+from io import StringIO
 from pathlib import Path
+from typing import TextIO
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
 
@@ -23,6 +26,19 @@ class CommandInvocation:
     script_name: str
     module_name: str
     args: list[str]
+
+
+@dataclass(frozen=True)
+class CommandResult:
+    argv: tuple[str, ...]
+    invocation: CommandInvocation | None
+    exit_code: int
+    stdout: str = ""
+    stderr: str = ""
+
+    @property
+    def ok(self) -> bool:
+        return self.exit_code == 0
 
 
 COMMANDS = {
@@ -51,6 +67,13 @@ def run_script(script_name: str, args: list[str]) -> int:
 
 
 def run_module_main(module_name: str, script_name: str, args: list[str]) -> int:
+    """Run a legacy main in-process while preserving its script-shaped argv contract.
+
+    Most package owners still expose argparse-based `main()` functions. The
+    facade API keeps those entrypoints composable without a subprocess, but
+    `sys.argv` remains a compatibility boundary until each command grows a
+    smaller typed API of its own.
+    """
     module = importlib.import_module(module_name)
     main_func = getattr(module, "main", None)
     if not callable(main_func):
@@ -128,19 +151,36 @@ def run_invocation(invocation: CommandInvocation) -> int:
     return run_script(invocation.script_name, invocation.args)
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = list(sys.argv[1:] if argv is None else argv)
+def dispatch(argv: list[str]) -> tuple[CommandInvocation | None, int]:
+    args = list(argv)
     if not args or args[0] in {"-h", "--help"}:
         print_help()
-        return 0
+        return None, 0
 
     invocation = resolve_command(args)
     if invocation is not None:
-        return run_invocation(invocation)
+        return invocation, run_invocation(invocation)
 
     print(f"unknown command: {args[0]}", file=sys.stderr)
     print_help(file=sys.stderr)
-    return 2
+    return None, 2
+
+
+def run_command(argv: list[str] | None = None, *, capture_output: bool = False) -> CommandResult:
+    args = list(sys.argv[1:] if argv is None else argv)
+    if not capture_output:
+        invocation, code = dispatch(args)
+        return CommandResult(tuple(args), invocation, code)
+
+    stdout = StringIO()
+    stderr = StringIO()
+    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+        invocation, code = dispatch(args)
+    return CommandResult(tuple(args), invocation, code, stdout.getvalue(), stderr.getvalue())
+
+
+def main(argv: list[str] | None = None) -> int:
+    return run_command(argv).exit_code
 
 
 def run_hooks(args: list[str]) -> int:
@@ -150,24 +190,25 @@ def run_hooks(args: list[str]) -> int:
     return run_invocation(invocation)
 
 
-def print_help(*, file=sys.stdout) -> None:
+def print_help(*, file: TextIO | None = None) -> None:
+    target = sys.stdout if file is None else file
     parser = argparse.ArgumentParser(
         prog="aippocampus",
         description="Unified facade for AIppocampus operator commands.",
         add_help=False,
     )
-    parser.print_usage(file)
-    print("", file=file)
-    print("Commands:", file=file)
-    print("  health              Run runtime health checks", file=file)
-    print("  onboard             Register/build provider-backed clean source", file=file)
-    print("  search              Search clean-source memory", file=file)
-    print("  mcp list-tools      List MCP tool schemas", file=file)
-    print("  sync                Local-folder sync status/push/pull/repair", file=file)
-    print("  object-sync         Object-storage sync status/push/pull/repair", file=file)
-    print("  hooks [kind]        Prompt or lifecycle hook status/install/uninstall", file=file)
-    print("", file=file)
-    print("All commands run packaged entrypoints and preserve their output and exit code.", file=file)
+    parser.print_usage(target)
+    print("", file=target)
+    print("Commands:", file=target)
+    print("  health              Run runtime health checks", file=target)
+    print("  onboard             Register/build provider-backed clean source", file=target)
+    print("  search              Search clean-source memory", file=target)
+    print("  mcp list-tools      List MCP tool schemas", file=target)
+    print("  sync                Local-folder sync status/push/pull/repair", file=target)
+    print("  object-sync         Object-storage sync status/push/pull/repair", file=target)
+    print("  hooks [kind]        Prompt or lifecycle hook status/install/uninstall", file=target)
+    print("", file=target)
+    print("All commands run packaged entrypoints and preserve their output and exit code.", file=target)
 
 
 if __name__ == "__main__":

@@ -105,7 +105,7 @@ adding fresh ad hoc `sys.path` insertion rules.
 
 | Script or group | Purpose | Invocation route | Key dependencies | Status |
 |---|---|---|---|---|
-| `aippocampus_runtime/cli/facade.py` and `aippocampus_cli.py` compatibility shim | Composable `aippocampus` command facade over packaged entrypoint mains. | Console script / operator CLI; old direct script path remains available. | In-process command resolution via `CommandInvocation`; preserves child JSON and exit codes. | Public entrypoint |
+| `aippocampus_runtime/cli/facade.py` and `aippocampus_cli.py` compatibility shim | Composable `aippocampus` command facade over packaged entrypoint mains. | Console script / operator CLI; old direct script path remains available. | In-process command resolution via `CommandInvocation`; `run_command(..., capture_output=True)` returns a `CommandResult` for Python callers while preserving child JSON and exit codes. | Public entrypoint |
 | `aippocampus_health.py` | Runtime readiness, public smoke checks, and optional derived question stats. | CLI, install docs, CI-adjacent smoke. | `registry.py`, `aippocampuslib.py`, `question_health.py`, filesystem/env checks. | Public entrypoint |
 | `aippocampus_maintenance.py` | Compact maintenance wrapper for routine operator checks. | CLI/manual maintenance. | Health, registry, docs/smoke conventions. | Repo maintenance |
 | `onboard.py`, `onboard_codex.py`, `onboard_frontier.py`, `onboard_status.py` | Build or report source-backed onboarding state. `onboard.py` is the provider-aware facade; `onboard_codex.py` remains the Codex-only compatibility entrypoint. | CLI and install/readiness workflows. | Clean source, registry, project timeline, optional external model env. | Public entrypoint |

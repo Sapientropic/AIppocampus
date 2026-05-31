@@ -77,7 +77,10 @@ For these commands:
   payloads or documented status fields where available.
 - The `aippocampus` facade is a thin Python dispatcher. It resolves commands to
   packaged entrypoint mains and preserves stdout/stderr, JSON shape, and return
-  code rather than wrapping runtime output in a second envelope.
+  code rather than wrapping runtime output in a second envelope. Python callers
+  that need composability can use `aippocampus_runtime.cli.facade.run_command`
+  with `capture_output=True` to receive a `CommandResult` without launching a
+  subprocess or polluting the caller's stdout/stderr.
 
 The Python facade is the current packaging step. Standalone Python-free binaries
 are not part of the public claim until the follow-up
