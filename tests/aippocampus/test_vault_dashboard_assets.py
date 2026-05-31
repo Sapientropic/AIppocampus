@@ -8,7 +8,7 @@ from unittest import mock
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
-ASSETS = SCRIPTS / "vault_dashboard_assets"
+ASSETS = SCRIPTS / "aippocampus_runtime" / "vault" / "dashboard_assets"
 for _path in (
     SCRIPTS,
     REPO_ROOT / "benchmarks" / "aippocampus",
@@ -18,6 +18,7 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 import vault_dashboard  # noqa: E402
+from aippocampus_runtime.vault import dashboard as packaged_dashboard  # noqa: E402
 
 
 class VaultDashboardAssetTests(unittest.TestCase):
@@ -42,8 +43,12 @@ class VaultDashboardAssetTests(unittest.TestCase):
         )
 
     def test_dashboard_asset_functions_return_file_contents(self) -> None:
-        script = (ASSETS / "dashboard_v2.js").read_text(encoding="utf-8")
-        css = (ASSETS / "dashboard_v2.css").read_text(encoding="utf-8")
+        package_assets = SCRIPTS / "aippocampus_runtime" / "vault" / "dashboard_assets"
+        self.assertEqual(packaged_dashboard._DASHBOARD_ASSET_DIR, package_assets)
+        self.assertTrue((package_assets / "dashboard_v2.js").exists())
+        self.assertTrue((package_assets / "dashboard_v2.css").exists())
+        script = (package_assets / "dashboard_v2.js").read_text(encoding="utf-8")
+        css = (package_assets / "dashboard_v2.css").read_text(encoding="utf-8")
 
         self.assertIn("const body = document.body;", script)
         self.assertIn("--codex-pane-divider", css)

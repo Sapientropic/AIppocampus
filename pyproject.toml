@@ -38,6 +38,7 @@ packages = [
     "aippocampus_runtime.sync",
     "aippocampus_runtime.sync.encrypted",
     "aippocampus_runtime.sync.object_storage",
+    "aippocampus_runtime.vault",
     "aippocampus_runtime.warm_ambient",
     "conversation_sources",
 ]
@@ -169,6 +170,9 @@ py-modules = [
     "warm_ambient_scout_profiles",
     "warm_ambient_source_validation",
 ]
+
+[tool.setuptools.package-data]
+aippocampus_runtime.vault = ["dashboard_assets/*.css", "dashboard_assets/*.js"]
 
 [tool.ruff]
 line-length = 100
@@ -450,7 +454,15 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/sync/object_storage/cli.py",
     "skills/aippocampus/scripts/sync_object_storage.py",
     "skills/aippocampus/scripts/theme_emergence.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/vault/__init__.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/vault/dashboard.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/vault/notes.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/vault/sync.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/vault/utils.py",
+    "skills/aippocampus/scripts/sync_vault.py",
     "skills/aippocampus/scripts/vault_dashboard.py",
+    "skills/aippocampus/scripts/vault_notes.py",
+    "skills/aippocampus/scripts/vault_sync_utils.py",
     "skills/aippocampus/scripts/aippocampus_runtime/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/prompting.py",
