@@ -314,11 +314,13 @@ thread ids, questions, or frontier text. Full internal packs require
 
 ### Implemented Phase 2.5 Queue Lifecycle
 
-`skills/aippocampus/scripts/dream_queue.py` is the deterministic handoff layer
-between ready packs and future detached dream workers. It does not call a model
-or promote dream output. It creates `kind="aippocampus_dream_queue_item"` rows
-only for `status="ready_for_dream_worker"` packs, one bounded item per eligible
-dream function.
+`skills/aippocampus/scripts/aippocampus_runtime/dream/queue.py` is the
+deterministic handoff layer between ready packs and future detached dream
+workers. `skills/aippocampus/scripts/dream_queue.py` remains the documented
+direct-script compatibility shim. The queue owner does not call a model or
+promote dream output. It creates `kind="aippocampus_dream_queue_item"` rows only
+for `status="ready_for_dream_worker"` packs, one bounded item per eligible dream
+function.
 
 Queue items carry lifecycle and cost metadata:
 
@@ -351,7 +353,7 @@ The executable contract lives in `tests/aippocampus/test_dream_queue.py`.
 
 `skills/aippocampus/scripts/aippocampus_runtime/dream/sleep_cycle.py` is the
 narrow execution bridge that consumes ready/due queue items from
-`dream_queue.py` and invokes bounded model-backed workers from
+`aippocampus_runtime.dream.queue` and invokes bounded model-backed workers from
 `dream_worker.py`. `skills/aippocampus/scripts/dream_sleep_cycle.py` remains a
 compatibility shim for the documented direct script route. It is
 scheduler-only/background work, not a foreground hook route. The runner preserves
