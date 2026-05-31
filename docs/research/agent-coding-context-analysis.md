@@ -491,10 +491,11 @@ Current implementation:
   confidence on the event. Read-time `decision_state_assessment` rows derive
   `source_thickness`, `freshness`, `still_rejected`, `confidence`,
   `proposed_use`, and `basis_refs` without mutating the event.
-- `skills/aippocampus/scripts/coding_rejected_route_probes.py` turns
-  source-backed rejected-route decision events into review-only prospective
-  Dream probes. The fixture asks what later evidence would justify reopening a
-  rejected route, then reuses
+- `aippocampus_runtime.coding.rejected_route_probes`, with
+  `skills/aippocampus/scripts/coding_rejected_route_probes.py` kept as a
+  compatibility shim, turns source-backed rejected-route decision events into
+  review-only prospective Dream probes. The fixture asks what later evidence
+  would justify reopening a rejected route, then reuses
   `aippocampus_runtime.dream.retrospective_lifecycle` to bucket explicit future
   support/refutation/staleness without treating similar vocabulary as evidence
   or promoting a supported probe into formal memory.

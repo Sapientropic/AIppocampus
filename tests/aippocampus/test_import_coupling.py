@@ -372,6 +372,30 @@ class ImportCouplingTests(unittest.TestCase):
         )
         self.assertIs(coding_ticket_host_contract.main, host_contract.main)
 
+    def test_coding_rejected_route_probes_have_package_owner_and_compat_shim(self) -> None:
+        import coding_rejected_route_probes
+        from aippocampus_runtime.coding import rejected_route_probes
+
+        package_path = SCRIPTS / "aippocampus_runtime" / "coding" / "rejected_route_probes.py"
+        shim_path = SCRIPTS / "coding_rejected_route_probes.py"
+
+        self.assertTrue(package_path.exists(), package_path)
+        self.assertTrue(shim_path.exists(), shim_path)
+        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+
+        self.assertIs(
+            coding_rejected_route_probes.build_rejected_route_probe,
+            rejected_route_probes.build_rejected_route_probe,
+        )
+        self.assertIs(
+            coding_rejected_route_probes.run_rejected_route_fixture,
+            rejected_route_probes.run_rejected_route_fixture,
+        )
+        self.assertIs(
+            coding_rejected_route_probes.public_fixture_summary,
+            rejected_route_probes.public_fixture_summary,
+        )
+
     def test_subconscious_worker_has_package_owner_and_compat_shim(self) -> None:
         import subconscious_worker
         from aippocampus_runtime.subconscious import worker
@@ -544,9 +568,12 @@ class ImportCouplingTests(unittest.TestCase):
         edges = same_dir_import_edges(top_level_only=True)
         self.assertIn(
             "aippocampus_runtime.dream.retrospective_lifecycle",
-            edges["coding_rejected_route_probes"],
+            edges["aippocampus_runtime.coding.rejected_route_probes"],
         )
-        self.assertNotIn("dream_retrospective_lifecycle", edges["coding_rejected_route_probes"])
+        self.assertNotIn(
+            "dream_retrospective_lifecycle",
+            edges["aippocampus_runtime.coding.rejected_route_probes"],
+        )
 
         self.assertIs(
             dream_retrospective_lifecycle.run_retrospective_lifecycle,
