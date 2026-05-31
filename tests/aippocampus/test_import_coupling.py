@@ -180,6 +180,32 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(aippocampuslib.aippocampus_registry_dir, core.aippocampus_registry_dir)
         self.assertIs(aippocampuslib.sanitize_external_model_text, core.sanitize_external_model_text)
 
+    def test_rollout_parser_has_source_owner_and_core_compat_exports(self) -> None:
+        import aippocampuslib
+        from aippocampus_runtime import core
+        from aippocampus_runtime.source import rollout, turns
+        from conversation_sources import normalized
+
+        owner_path = SCRIPTS / "aippocampus_runtime" / "source" / "rollout.py"
+
+        self.assertTrue(owner_path.exists(), owner_path)
+
+        edges = same_dir_import_edges(top_level_only=True)
+        self.assertIn("aippocampus_runtime.source.rollout", edges["aippocampus_runtime.core"])
+        self.assertNotIn("aippocampus_runtime.core", edges["aippocampus_runtime.source.rollout"])
+        self.assertNotIn("aippocampuslib", edges["aippocampus_runtime.source.rollout"])
+
+        self.assertIs(core.iter_jsonl, rollout.iter_jsonl)
+        self.assertIs(core.extract_message, rollout.extract_message)
+        self.assertIs(core.normalize_rollout, rollout.normalize_rollout)
+        self.assertIs(core.iter_messages, rollout.iter_messages)
+        self.assertIs(core.is_injected_instruction_text, rollout.is_injected_instruction_text)
+        self.assertIs(aippocampuslib.normalize_rollout, rollout.normalize_rollout)
+        self.assertIs(aippocampuslib.iter_messages, rollout.iter_messages)
+        self.assertIs(rollout.empty_turn, turns.empty_turn)
+        self.assertIs(normalized.empty_turn, turns.empty_turn)
+        self.assertIs(normalized.message_digest, turns.message_digest)
+
     def test_privacy_projection_has_package_owner_and_compat_shim(self) -> None:
         import privacy_projection
         from aippocampus_runtime import privacy
@@ -335,9 +361,11 @@ class ImportCouplingTests(unittest.TestCase):
             SCRIPTS / "aippocampus_runtime" / "source" / "clean_source.py",
             SCRIPTS / "aippocampus_runtime" / "source" / "latest_reply.py",
             SCRIPTS / "aippocampus_runtime" / "source" / "registry_paths.py",
+            SCRIPTS / "aippocampus_runtime" / "source" / "rollout.py",
             SCRIPTS / "aippocampus_runtime" / "source" / "search.py",
             SCRIPTS / "aippocampus_runtime" / "source" / "semantic_scope_builder.py",
             SCRIPTS / "aippocampus_runtime" / "source" / "semantic_scope_labels.py",
+            SCRIPTS / "aippocampus_runtime" / "source" / "turns.py",
         ]
         shim_paths = [
             SCRIPTS / "build_clean_source.py",
