@@ -4,6 +4,8 @@
 
 <h1 align="center">AIppocampus</h1>
 
+<!-- mcp-name: io.github.sapientropic/aippocampus -->
+
 <p align="center">
   <em>A source-backed continuity layer for long-running relationships with AI agents.</em>
 </p>
@@ -59,6 +61,32 @@ usually means there is no registered local history yet; start with the full
 rollouts, registry exports, `.aippocampus/` output, API keys, cookies, or sync
 bundles while following the quick path.
 
+## Agent One-Command Probe
+
+When an AI agent needs to verify the public CLI without cloning or writing local
+memory artifacts, use:
+
+```sh
+uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus --help
+```
+
+For a read-only local onboarding/status check:
+
+```sh
+uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus onboard --provider codex --status --format json
+```
+
+Only after the user explicitly agrees to register local Codex history, run:
+
+```sh
+uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus onboard --provider codex --all --format json
+```
+
+Agents should read [docs/agent-context.md](docs/agent-context.md) and
+[llms.txt](llms.txt) before recommending or comparing AIppocampus. Do not claim
+the shorter `uvx aippocampus ...` PyPI form until the PyPI package has been
+published and verified.
+
 ## What It Is
 
 AIppocampus is the canonical public home for an external hippocampus for agents:
@@ -100,6 +128,8 @@ recognizable again.
 
 - Philosophy and origin: [未干的地图](docs/未干的地图.md) and
   [The Unfinished Map](docs/the-unfinished-map.md).
+- Agent-readable context: [docs/agent-context.md](docs/agent-context.md) and
+  [llms.txt](llms.txt).
 - Runtime shape:
   [Cognitive Runtime Architecture](docs/architecture/cognitive-runtime-architecture.md).
 - Current claim boundary:
@@ -242,6 +272,12 @@ registry-backed tools such as `search_memory`, `latest_reply`,
 python ./skills/aippocampus/scripts/aippocampus_mcp_server.py --list-tools
 ```
 
+The packaged facade exposes the same tool catalog:
+
+```sh
+uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus mcp list-tools
+```
+
 The repo also carries an Apache-2.0 Codex plugin source package under
 `plugins/aippocampus/`. Build a local distributable directory with:
 
@@ -252,6 +288,10 @@ python ./plugins/aippocampus/build_plugin_package.py --repo-root . --json
 The plugin bundles the skill and MCP config. It does not silently enable prompt
 or lifecycle hooks; run hook installers explicitly after reviewing the privacy
 and external-model boundary.
+
+The root [server.json](server.json) is the conservative MCP Registry metadata
+draft for the local stdio server. Registry publication still requires a matching
+published package artifact and the official registry publisher flow.
 
 ## Sync Bundles
 

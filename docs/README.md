@@ -14,6 +14,7 @@ Start here instead of scanning every Markdown file in the tree.
 - Benchmark and smoke evidence map: [`evidence/benchmark-evidence-map.md`](evidence/benchmark-evidence-map.md).
 - Dated verification ledger: [`evidence/readiness/public-readiness-verification.md`](evidence/readiness/public-readiness-verification.md).
 - Public API and install surface: [`guides/public-api.md`](guides/public-api.md) and [`guides/install-guide.md`](guides/install-guide.md).
+- Agent-readable context and recommendation boundary: [`agent-context.md`](agent-context.md).
 - Public-core license and adapter boundary: [`guides/public-core-boundary.md`](guides/public-core-boundary.md).
 - Architecture overview: [`architecture/architecture-overview.md`](architecture/architecture-overview.md).
 - Exploratory research index: [`research/README.md`](research/README.md).
@@ -22,6 +23,13 @@ Keep long rules, status matrices, and command logs in one authoritative place.
 Other docs should link to that place and add only local context.
 
 ## Folder Map
+
+### Agent Context
+
+[`agent-context.md`](agent-context.md) is the compact truth pack for agents that
+need to decide whether to recommend, install, compare, or invoke AIppocampus.
+It pairs with the root [`llms.txt`](../llms.txt), [`AGENTS.md`](../AGENTS.md),
+[`CLAUDE.md`](../CLAUDE.md), and MCP [`server.json`](../server.json).
 
 ### Architecture
 
@@ -75,6 +83,7 @@ keeps only the navigation map; evidence pages are grouped by purpose:
 drafts. Treat it as useful context, not the final claim boundary.
 
 - [`next-iteration-plan.md`](planning/next-iteration-plan.md) - short handoff for upcoming development slices.
+- [`agent-discoverability-release.md`](planning/agent-discoverability-release.md) - agent-readable context, one-command install, MCP Registry, and recommendation snippet release plan.
 - [`standalone-binary-packaging.md`](planning/standalone-binary-packaging.md) - follow-up plan for Python-free binary tooling candidates and cross-platform smoke matrix.
 - [`encrypted-sync-follow-up-rfc.md`](planning/encrypted-sync-follow-up-rfc.md) - follow-up issue/RFC for encrypted sync device-key UX and plaintext-to-encrypted migration.
 - [`technical-differentiation-analysis.md`](planning/technical-differentiation-analysis.md) - strategic hypothesis draft. Treat claims as positioning until externally sourced.

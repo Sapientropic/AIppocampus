@@ -16,6 +16,16 @@ claude mcp list
 claude mcp get aippocampus
 ```
 
+For a clone-free package probe, use the packaged facade through `uvx`:
+
+```sh
+claude mcp add aippocampus -- uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus mcp
+claude mcp get aippocampus
+```
+
+Use the direct script path when you are developing from a local clone. Use the
+`uvx --from` path when an agent needs a copyable public command.
+
 Use the repository probe to record the current host status without reading
 private transcripts:
 

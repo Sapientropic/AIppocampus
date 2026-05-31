@@ -63,6 +63,16 @@ The CLI contract applies to documented operator commands, especially:
 - `plugins/aippocampus/build_plugin_package.py`
 - documented plugin smoke commands
 
+The clone-free GitHub `uvx --from` entrypoint is also a documented agent-facing
+install/probe path:
+
+```sh
+uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus --help
+```
+
+The shorter PyPI form, `uvx aippocampus ...`, is not a public claim until the
+package is published on PyPI and verified in a fresh environment.
+
 The hook scripts and installers above are direct-path compatibility shims over
 `aippocampus_runtime.hooks.*` package owners. Keep invoking the documented
 script paths from Codex hook configs; Python/runtime callers should import the

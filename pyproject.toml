@@ -4,10 +4,34 @@ version = "0.1.0"
 description = "Source-backed continuity layer for long-running AI agent relationships."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { file = "LICENSE" }
-classifiers = [
-    "License :: OSI Approved :: Apache Software License",
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+keywords = [
+    "ai-agents",
+    "agent-memory",
+    "mcp",
+    "source-backed-memory",
+    "codex",
+    "claude-code",
 ]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.urls]
+Homepage = "https://github.com/Sapientropic/AIppocampus"
+Repository = "https://github.com/Sapientropic/AIppocampus"
+Issues = "https://github.com/Sapientropic/AIppocampus/issues"
+Discussions = "https://github.com/Sapientropic/AIppocampus/discussions"
+Documentation = "https://github.com/Sapientropic/AIppocampus/tree/main/docs"
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -41,6 +65,7 @@ packages = [
     "aippocampus_runtime.sync.encrypted",
     "aippocampus_runtime.sync.object_storage",
     "aippocampus_runtime.vault",
+    "aippocampus_runtime.vault.dashboard_assets",
     "aippocampus_runtime.warm_ambient",
     "conversation_sources",
 ]

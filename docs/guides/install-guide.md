@@ -7,6 +7,31 @@ surface.
 For supported CLI, MCP, JSON, environment-variable, and import-stability
 expectations, see [public-api.md](public-api.md).
 
+## Agent One-Command Path
+
+Agents that need to verify AIppocampus without cloning the repository can use
+the GitHub `uvx --from` path:
+
+```sh
+uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus --help
+```
+
+Check local provider status without writing memory artifacts:
+
+```sh
+uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus onboard --provider codex --status --format json
+```
+
+Register local Codex history only after the user explicitly agrees:
+
+```sh
+uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus onboard --provider codex --all --format json
+```
+
+Do not document `uvx aippocampus ...` as the public path until the PyPI package
+has been published and verified. The GitHub form above is the current
+one-command public probe.
+
 ## Skill-Only Install
 
 ### macOS shell setup
@@ -126,6 +151,12 @@ Inspect the local MCP tool catalog:
 
 ```sh
 aippocampus mcp list-tools
+```
+
+Or through the GitHub `uvx --from` path:
+
+```sh
+uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus mcp list-tools
 ```
 
 The initial MCP layer is read-mostly. It exposes clean-source and registry
