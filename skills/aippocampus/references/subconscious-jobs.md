@@ -172,10 +172,11 @@ DeepSeek can be used aggressively, but hooks must stay cheap. The split is:
   rebuilds `project_timeline.json` so search and timeline consumers see the
   same navigation metadata
 - dream queue planning is deterministic and detached-only:
-  `dream_queue.py` turns ready dream input packs into bounded queue items with
-  trigger family, priority, dedup key, review/expiry horizon, cost budget, and
-  `deepseek_prefix_v1` prompt-order metadata. It does not make model calls and
-  must not be run as a foreground hook worker.
+  `aippocampus_runtime.dream.queue` turns ready dream input packs into bounded
+  queue items with trigger family, priority, dedup key, review/expiry horizon,
+  cost budget, and `deepseek_prefix_v1` prompt-order metadata. `dream_queue.py`
+  remains the direct-script compatibility shim. It does not make model calls
+  and must not be run as a foreground hook worker.
 - queued dream worker samples keep stable prompt-prefix groups together:
   stable worker contract first, source-pack payload second, and variable run
   directive last. This preserves the same-prefix ordering needed for DeepSeek
