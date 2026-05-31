@@ -13,16 +13,17 @@ import json
 from typing import Any, Mapping, Sequence
 
 from aippocampus_runtime.core import now_utc
+from aippocampus_runtime.recall.scoring_policy import (
+    RAG_CHUNK_TEXT_POLICY,
+    RETRIEVAL_TEXT_POLICY,
+    SCORE_FUSION_POLICY,
+    SOURCE_SIGNAL_POLICY,
+)
 
 SCHEMA_VERSION = 1
 FUSION_KIND = "aippocampus_retrieval_score_fusion"
 
-CONTEXT_WEIGHTS: dict[str, dict[str, float]] = {
-    "normal_recall": {"text": 0.65, "vector": 0.20, "graph": 0.10, "source": 0.05},
-    "exact_quote": {"text": 0.84, "vector": 0.07, "graph": 0.04, "source": 0.05},
-    "question_tracking": {"text": 0.35, "vector": 0.45, "graph": 0.15, "source": 0.05},
-    "theme_emergence": {"text": 0.25, "vector": 0.20, "graph": 0.50, "source": 0.05},
-}
+CONTEXT_WEIGHTS: dict[str, dict[str, float]] = SCORE_FUSION_POLICY.context_weights_dict()
 
 
 def sha1_text(value: str) -> str:
@@ -92,9 +93,9 @@ def retrieval_text_score(
     score = 0.0
     score += positive(signals.get("fts"))
     score += positive(signals.get("rag_chunk"))
-    score += literal * 14.0
-    score += max(0, expanded - literal) * 1.5
-    score += anchors * 2.0
+    score += literal * RETRIEVAL_TEXT_POLICY.literal_hit
+    score += max(0, expanded - literal) * RETRIEVAL_TEXT_POLICY.expanded_hit
+    score += anchors * RETRIEVAL_TEXT_POLICY.anchor_hit
     score += safe_float(phase_weight)
     return score
 
@@ -112,9 +113,9 @@ def rag_chunk_text_score(
     return (
         positive(signals.get("chunk_fts"))
         + positive(signals.get("chunk_literal_scan"))
-        + literal * 16.0
-        + max(0, expanded - literal) * 2.0
-        + anchors * 3.0
+        + literal * RAG_CHUNK_TEXT_POLICY.literal_hit
+        + max(0, expanded - literal) * RAG_CHUNK_TEXT_POLICY.expanded_hit
+        + anchors * RAG_CHUNK_TEXT_POLICY.anchor_hit
     )
 
 
@@ -184,8 +185,11 @@ def graph_signal(candidate: Mapping[str, Any]) -> float:
 def source_signal(candidate: Mapping[str, Any]) -> float:
     refs = [ref for ref in candidate.get("source_refs") or [] if isinstance(ref, Mapping)]
     if refs:
-        return min(1.0, 0.55 + len(refs) * 0.15)
-    return 0.25 if source_join_key(candidate) else 0.0
+        return min(
+            SOURCE_SIGNAL_POLICY.maximum,
+            SOURCE_SIGNAL_POLICY.ref_base + len(refs) * SOURCE_SIGNAL_POLICY.per_ref,
+        )
+    return SOURCE_SIGNAL_POLICY.join_key_only if source_join_key(candidate) else 0.0
 
 
 def normalize(values: Mapping[str, float], key: str) -> float:
@@ -197,7 +201,7 @@ def normalize(values: Mapping[str, float], key: str) -> float:
 
 
 def context_weights(context: str) -> dict[str, float]:
-    return dict(CONTEXT_WEIGHTS.get(context, CONTEXT_WEIGHTS["normal_recall"]))
+    return SCORE_FUSION_POLICY.weights_for(context)
 
 
 def merge_candidate(into: dict[str, Any], candidate: Mapping[str, Any]) -> None:
@@ -259,9 +263,12 @@ def score_merged_candidate(
         for key in ("text", "vector", "graph", "source")
     }
     score = sum(components.values())
-    if context == "exact_quote" and normalized["text"] >= 0.85:
-        score += 0.08
-        components["exact_text_guard"] = 0.08
+    if (
+        context == "exact_quote"
+        and normalized["text"] >= SCORE_FUSION_POLICY.exact_text_guard_threshold
+    ):
+        score += SCORE_FUSION_POLICY.exact_text_guard_bonus
+        components["exact_text_guard"] = SCORE_FUSION_POLICY.exact_text_guard_bonus
     return {
         "source_id": candidate["source_id"],
         "score": round(score, 6),
@@ -348,7 +355,7 @@ def blend(
         "schema_version": SCHEMA_VERSION,
         "kind": FUSION_KIND,
         "created_at": now_utc(),
-        "context": context if context in CONTEXT_WEIGHTS else "normal_recall",
+        "context": SCORE_FUSION_POLICY.canonical_context(context),
         "weights": weights,
         "ranked": ranked[: max(0, int(limit))],
         "candidate_count": len(candidates),

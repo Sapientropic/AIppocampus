@@ -116,6 +116,15 @@ Default retrieval is local hybrid search:
   keeping commentary as lower-priority process evidence.
 - Diversity ranking so later recaps do not crowd out original turns.
 
+The retrieval rank weights that affect user-visible recall behavior live in
+`aippocampus_runtime.recall.scoring_policy` as named frozen policy objects.
+This includes phase weights, text/RAG-lite scoring contributions, diversification
+penalties, segmented merge weights, active-recall decision bands, and vector /
+graph score-fusion blends. Keep those values as reviewable ranking policy. Do
+not mix prompt-evidence truth gates or model judgement into that module merely
+because they also have numbers; source refs and stable source ids remain the
+truth boundary.
+
 Use `--mode literal` only for chronological/debug behavior. Use `--diversity
 none` when inspecting pure score order.
 

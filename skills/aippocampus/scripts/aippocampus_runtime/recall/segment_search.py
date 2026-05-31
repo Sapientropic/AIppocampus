@@ -26,6 +26,7 @@ from aippocampus_runtime.recall.rollout_search import (
     resolve_anchor_path,
     search_index_literal,
 )
+from aippocampus_runtime.recall.scoring_policy import SEGMENT_MERGE_POLICY
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
 
@@ -87,8 +88,14 @@ def ensure_segments(cwd: Path, rollout: str | None, manifest: Path, force: bool)
 
 
 def segment_sort_key(result: dict) -> tuple[float, int, int]:
-    final_bonus = 12.0 if result.get("phase") == "final_answer" or result.get("is_final") else 0.0
-    commentary_penalty = -4.0 if result.get("phase") == "commentary" else 0.0
+    final_bonus = (
+        SEGMENT_MERGE_POLICY.final_answer_bonus
+        if result.get("phase") == "final_answer" or result.get("is_final")
+        else 0.0
+    )
+    commentary_penalty = (
+        SEGMENT_MERGE_POLICY.commentary_penalty if result.get("phase") == "commentary" else 0.0
+    )
     return (
         -(float(result.get("score") or 0.0) + final_bonus + commentary_penalty),
         int(result.get("line") or 10**12),
@@ -138,7 +145,11 @@ def merge_topk(results: list[dict], limit: int) -> list[dict]:
         max(
             (item for item in pool if item.get("role") == "assistant"),
             key=lambda item: (
-                (12.0 if item.get("phase") == "final_answer" or item.get("is_final") else 0.0)
+                (
+                    SEGMENT_MERGE_POLICY.final_answer_bonus
+                    if item.get("phase") == "final_answer" or item.get("is_final")
+                    else 0.0
+                )
                 + float(item.get("score") or 0)
             ),
             default=None,
@@ -155,18 +166,21 @@ def merge_topk(results: list[dict], limit: int) -> list[dict]:
                 continue
             value = float(item.get("score") or 0.0)
             if str(item.get("segment_id")) in selected_segments:
-                value -= 7.0
+                value -= SEGMENT_MERGE_POLICY.same_segment_penalty
             if item.get("phase") == "final_answer" or item.get("is_final"):
-                value += 12.0
+                value += SEGMENT_MERGE_POLICY.final_answer_bonus
             if item.get("phase") == "commentary":
-                value -= 4.0
+                value += SEGMENT_MERGE_POLICY.commentary_penalty
             line = int(item.get("line") or 0)
-            if any(abs(line - other) < 25 for other in selected_lines):
-                value -= 8.0
+            if any(
+                abs(line - other) < SEGMENT_MERGE_POLICY.nearby_line_window
+                for other in selected_lines
+            ):
+                value -= SEGMENT_MERGE_POLICY.nearby_line_penalty
             if (item.get("signals") or {}).get("literal_hits", 0) > 0 and item.get(
                 "role"
             ) == "user":
-                value += 3.0
+                value += SEGMENT_MERGE_POLICY.user_literal_bonus
             if best_value is None or value > best_value:
                 best = item
                 best_value = value
