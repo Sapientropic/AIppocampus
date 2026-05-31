@@ -94,8 +94,36 @@ def aippocampus_registry_dir(home: Path | None = None) -> Path:
     return Path(str(aippocampus_registry_resolution(home)["path"]))
 
 
+def canonical_path(path: str | Path) -> Path:
+    return Path(path).resolve()
+
+
+def path_identity_key(path: str | Path) -> str:
+    return str(canonical_path(path)).casefold()
+
+
+def workspace_identity(workspace: str | Path) -> str:
+    text = str(workspace or "")
+    path = Path(text)
+    # Workspace values are sometimes human/project labels rather than host
+    # paths. Only absolute paths get canonicalized; resolving labels against the
+    # current process cwd would make cache and policy keys drift across machines.
+    if text.startswith("/") or path.is_absolute():
+        return str(canonical_path(path))
+    return text
+
+
+def workspace_identity_key(workspace: str | Path) -> str:
+    return workspace_identity(workspace).casefold()
+
+
+def workspace_fingerprint(workspace: str | Path, *, prefix: str = "workspace") -> str:
+    digest = hashlib.sha1(workspace_identity_key(workspace).encode("utf-8")).hexdigest()[:16]
+    return f"{prefix}_{digest}"
+
+
 def norm_path(path: str | Path) -> str:
-    return str(Path(path).resolve()).casefold()
+    return path_identity_key(path)
 
 
 ROLLOUT_DISCOVERY_DIRS = ("sessions", "archived_sessions")
@@ -156,8 +184,8 @@ def thread_key_from_rollout(rollout: str | Path, meta: dict | None = None) -> st
 
 
 def workspace_thread_key(cwd: str | Path) -> str:
-    cwd_path = Path(cwd).resolve()
-    digest = hashlib.sha1(str(cwd_path).casefold().encode("utf-8")).hexdigest()[:12]
+    cwd_path = canonical_path(cwd)
+    digest = hashlib.sha1(workspace_identity_key(cwd_path).encode("utf-8")).hexdigest()[:12]
     return f"workspace:{safe_path_name(cwd_path.name, 'workspace')}:{digest}"
 
 
@@ -177,7 +205,7 @@ def default_thread_store_dir(
     CODEX_HOME storage used only as a compatibility fallback.
     """
 
-    cwd_path = Path(cwd).resolve()
+    cwd_path = canonical_path(cwd)
     rollout_path: Path | None = Path(rollout) if rollout else None
     if rollout_path is None:
         try:

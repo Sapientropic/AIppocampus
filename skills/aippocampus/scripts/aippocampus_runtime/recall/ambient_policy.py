@@ -17,7 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.core import compact_text, now_utc
+from aippocampus_runtime.core import compact_text, now_utc, workspace_fingerprint
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.registry.api import registry_paths, unique_preserve
 
@@ -472,7 +472,7 @@ def _policy_event(
         ),
         "reason": compact_text(reason, 120),
         "thread_fingerprint": _hash_value(thread_id or "", "thread", hashlib.sha1),
-        "workspace_fingerprint": _hash_value(workspace or "", "workspace", hashlib.sha1),
+        "workspace_fingerprint": workspace_fingerprint(workspace),
     }
 
 
