@@ -1681,6 +1681,7 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertEqual(offenders, {})
 
     def test_warm_ambient_helpers_have_package_owner_and_compat_shims(self) -> None:
+        import ambient_warm_scheduler
         import warm_ambient_prompting
         import warm_ambient_recall
         import warm_ambient_scout_profiles
@@ -1688,6 +1689,7 @@ class ImportCouplingTests(unittest.TestCase):
         from aippocampus_runtime.warm_ambient import (
             prompting,
             recall,
+            scheduler,
             scout_profiles,
             source_validation,
         )
@@ -1695,10 +1697,12 @@ class ImportCouplingTests(unittest.TestCase):
         package_files = [
             SCRIPTS / "aippocampus_runtime" / "warm_ambient" / "prompting.py",
             SCRIPTS / "aippocampus_runtime" / "warm_ambient" / "recall.py",
+            SCRIPTS / "aippocampus_runtime" / "warm_ambient" / "scheduler.py",
             SCRIPTS / "aippocampus_runtime" / "warm_ambient" / "scout_profiles.py",
             SCRIPTS / "aippocampus_runtime" / "warm_ambient" / "source_validation.py",
         ]
         shim_files = [
+            SCRIPTS / "ambient_warm_scheduler.py",
             SCRIPTS / "warm_ambient_prompting.py",
             SCRIPTS / "warm_ambient_recall.py",
             SCRIPTS / "warm_ambient_scout_profiles.py",
@@ -1715,8 +1719,29 @@ class ImportCouplingTests(unittest.TestCase):
             "aippocampus_runtime.warm_ambient.recall",
             edges["warm_ambient_recall"],
         )
+        self.assertIn(
+            "aippocampus_runtime.warm_ambient.scheduler",
+            edges["ambient_warm_scheduler"],
+        )
+        self.assertIn(
+            "aippocampus_runtime.warm_ambient.scheduler",
+            edges["aippocampus_runtime.recall.prompt_recall_ambient"],
+        )
+        self.assertNotIn(
+            "ambient_warm_scheduler",
+            edges["aippocampus_runtime.recall.prompt_recall_ambient"],
+        )
         self.assertNotIn("warm_ambient_recall", edges["ambient_warm_scheduler"])
 
+        self.assertIs(
+            ambient_warm_scheduler.schedule_warm_ambient_recall,
+            scheduler.schedule_warm_ambient_recall,
+        )
+        self.assertIs(ambient_warm_scheduler.spawn_warm_job, scheduler.spawn_warm_job)
+        self.assertIs(
+            ambient_warm_scheduler.warm_background_enabled,
+            scheduler.warm_background_enabled,
+        )
         self.assertIs(warm_ambient_prompting.scout_prompt, prompting.scout_prompt)
         self.assertIs(warm_ambient_recall.run_warm_ambient_recall, recall.run_warm_ambient_recall)
         self.assertIs(warm_ambient_recall.main, recall.main)
