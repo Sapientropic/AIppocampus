@@ -290,6 +290,18 @@ Latest verification for this refresh:
   through a temporary strict MCP config as `aippocampus.exe mcp`; the smoke
   observed `mcp__aippocampus__memory_health` `tool_use` plus the matching
   `tool_result`.
+- Follow-up verification on current `main` commit `07bf5e6`, after the #263
+  ops package slice and #264 vault projection package slice, repeated the same
+  Windows path on the same host class. The local Python 3.13 user environment
+  installed PyInstaller 6.20.0, rebuilt `aippocampus.exe`, set
+  `python_free_support_claimed=true`, passed all 8 artifact smoke specs
+  including `mcp_memory_health_jsonrpc` with `tool_is_error=false`, and kept the
+  private-data guard clean. The persistent local Claude Code config reported the
+  script-backed `aippocampus` MCP server as reachable, and a temporary strict
+  MCP config then used the rebuilt binary as `aippocampus.exe mcp`; Claude Code
+  2.1.138 observed `mcp__aippocampus__memory_health` `tool_use` plus the
+  matching `tool_result`. This refresh does not mutate the persistent Claude
+  Code MCP settings.
 
 This refresh does not close #104. The post-migration encrypted provider sync
 smoke still needs a maintainer-provided real object-store provider target and

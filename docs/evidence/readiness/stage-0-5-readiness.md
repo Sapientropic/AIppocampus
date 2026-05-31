@@ -4,7 +4,7 @@ This is a current-state evidence matrix for completing roadmap stages 0 through
 5. The canonical requirements remain in `docs/roadmap.md`; this file records
 what the current worktree can and cannot honestly claim.
 
-Snapshot date: 2026-05-30.
+Snapshot date: 2026-06-01.
 Repository-layout command paths refreshed: 2026-05-29.
 Public-core license and adapter boundary refreshed: 2026-05-30.
 
@@ -105,7 +105,11 @@ navigation map lives in `docs/evidence/benchmark-evidence-map.md`.
   `sync_status`. MCP tool failures now have structured error contracts for
   malformed arguments, missing registry state, missing clean source, missing
   turn selectors, unknown ids, unsupported mutation requests, and generic tool
-  failures.
+  failures. The local Claude Code host has also been verified through a
+  temporary strict MCP config: both the script-backed server and a freshly
+  rebuilt Windows standalone `aippocampus.exe mcp` server reached
+  `mcp__aippocampus__memory_health` and returned a matching tool result without
+  mutating persistent Claude Code settings.
 - Stage 3 now has a first local-folder sync backend at
   `skills/aippocampus/scripts/sync_bundle.py`, with `status`, `push`, `pull`,
   and `repair`. The local-folder sync path includes the clean-source semantic
@@ -171,9 +175,10 @@ navigation map lives in `docs/evidence/benchmark-evidence-map.md`.
   R2 run into all S3-compatible/GCS/cloud-folder providers, and do not treat
   local HTTP object-storage as managed-provider evidence.
 - Stage 4 still needs broader client coverage beyond the headless Codex
-  app-server path and the standalone stdio JSON-RPC client if claiming every
-  Codex UI wrapper. Current real-host evidence does not prove an interactive
-  Desktop UI marketplace flow.
+  app-server path, standalone stdio JSON-RPC client, and local Claude Code
+  strict-config tool-call smoke if claiming every Codex UI wrapper. Current
+  real-host evidence does not prove an interactive Desktop UI marketplace flow
+  or signed binary distribution.
 - Stage 5 still needs public marketplace submission or independent third-party
   install review if those are claimed. The real Codex app-server plugin manager
   path and package-level installed-plugin MCP path are verified locally.
