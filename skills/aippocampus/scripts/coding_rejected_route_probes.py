@@ -15,7 +15,7 @@ from collections.abc import Iterable, Mapping
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-import dream_retrospective_lifecycle
+from aippocampus_runtime.dream import retrospective_lifecycle as dream_retrospective_lifecycle
 from aippocampuslib import compact_text, now_utc
 
 PROBE_KIND = "aippocampus_dream_finding"

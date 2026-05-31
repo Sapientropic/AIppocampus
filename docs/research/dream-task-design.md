@@ -735,7 +735,9 @@ must connect back to the finding, frontier, question, or source-backed route it
 claimed to illuminate.
 
 The implemented lifecycle lives in
-`skills/aippocampus/scripts/dream_retrospective_lifecycle.py` and is covered by
+`skills/aippocampus/scripts/aippocampus_runtime/dream/retrospective_lifecycle.py`,
+with `skills/aippocampus/scripts/dream_retrospective_lifecycle.py` kept as a
+compatibility shim. It is covered by
 `tests/aippocampus/test_dream_retrospective_lifecycle.py`. The detached
 scheduler runs it after the sleep-cycle bridge. It ignores source rows created
 before the probe, ignores rows after the current replay cutoff, and reports

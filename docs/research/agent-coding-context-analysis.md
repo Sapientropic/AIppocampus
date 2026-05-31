@@ -493,9 +493,10 @@ Current implementation:
 - `skills/aippocampus/scripts/coding_rejected_route_probes.py` turns
   source-backed rejected-route decision events into review-only prospective
   Dream probes. The fixture asks what later evidence would justify reopening a
-  rejected route, then reuses `dream_retrospective_lifecycle.py` to bucket
-  explicit future support/refutation/staleness without treating similar
-  vocabulary as evidence or promoting a supported probe into formal memory.
+  rejected route, then reuses
+  `aippocampus_runtime.dream.retrospective_lifecycle` to bucket explicit future
+  support/refutation/staleness without treating similar vocabulary as evidence
+  or promoting a supported probe into formal memory.
 - Branch-local or broad ambiguous decisions stay `local_only` or
   `needs_confirmation`. A compact `coding_continuity_ticket` is rendered only
   when the current prompt is relevant, the source is not visible, and the shared
