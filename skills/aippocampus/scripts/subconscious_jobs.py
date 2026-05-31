@@ -28,6 +28,13 @@ from aippocampus_runtime.model.routing import (
     route_payload_with_effective_values,
     route_service_name,
 )
+from aippocampus_runtime.subconscious.job_plan import (
+    JobRunTask,
+    plan_job_run_tasks,
+    run_tasks_in_sample_waves,
+    sample_count,
+    worker_count,
+)
 from aippocampus_runtime.subconscious.job_storage import (
     append_job_findings,
     concept_findings_to_edges,
@@ -43,13 +50,6 @@ from subconscious_deterministic_jobs import (
     run_deterministic_job,
 )
 from subconscious_job_circuits import JOB_SPECS, PROMPT_VERSION, job_names, jobs_initial_payload
-from subconscious_job_plan import (
-    JobRunTask,
-    plan_job_run_tasks,
-    run_tasks_in_sample_waves,
-    sample_count,
-    worker_count,
-)
 from subconscious_job_validation import (
     QUESTION_TEXT_MAX_CHARS,
     validate_findings,

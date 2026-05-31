@@ -425,6 +425,28 @@ class ImportCouplingTests(unittest.TestCase):
             job_storage.concept_findings_to_edges,
         )
 
+    def test_subconscious_job_plan_has_package_owner_and_compat_shim(self) -> None:
+        import subconscious_job_plan
+        from aippocampus_runtime.subconscious import job_plan
+
+        package_path = SCRIPTS / "aippocampus_runtime" / "subconscious" / "job_plan.py"
+        shim_path = SCRIPTS / "subconscious_job_plan.py"
+
+        self.assertTrue(package_path.exists(), package_path)
+        self.assertTrue(shim_path.exists(), shim_path)
+        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges(top_level_only=True)
+        self.assertIn("aippocampus_runtime.subconscious.job_plan", edges["subconscious_jobs"])
+        self.assertNotIn("subconscious_job_plan", edges["subconscious_jobs"])
+
+        self.assertIs(subconscious_job_plan.JobRunTask, job_plan.JobRunTask)
+        self.assertIs(subconscious_job_plan.plan_job_run_tasks, job_plan.plan_job_run_tasks)
+        self.assertIs(
+            subconscious_job_plan.run_tasks_in_sample_waves,
+            job_plan.run_tasks_in_sample_waves,
+        )
+
     def test_prompt_recall_core_stays_small_foreground_gate(self) -> None:
         edges = same_dir_import_edges()
         forbidden = {
