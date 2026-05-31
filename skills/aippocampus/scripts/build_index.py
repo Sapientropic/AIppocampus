@@ -208,7 +208,7 @@ def main() -> int:
     parser.add_argument(
         "--output-dir",
         default=None,
-        help="Defaults to the CODEX_HOME global thread store; pass .aippocampus for project-local output.",
+        help="Defaults to the AIppocampus registry thread store; pass .aippocampus for project-local output.",
     )
     parser.add_argument("--anchors", default="thread-anchors.md")
     parser.add_argument("--include-tools", action="store_true")
@@ -279,7 +279,7 @@ def main() -> int:
             if args.output_dir is None
             else "explicit_output_dir",
             "storage_policy": {
-                "default": "CODEX_HOME/aippocampus-registry/threads/<thread>/index",
+                "default": "AIPPOCAMPUS_REGISTRY_DIR or AIPPOCAMPUS_HOME/registry, with legacy CODEX_HOME fallback",
                 "legacy_project_local": ".aippocampus",
                 "why": "Indexes are private generated recall artifacts; project-local output is explicit compatibility, not the default.",
             },

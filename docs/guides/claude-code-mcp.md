@@ -27,6 +27,31 @@ If the `claude` CLI is missing or the server is not configured, the smoke
 returns a concrete blocker. That blocker is evidence of host setup state, not a
 failure of the core clean-source runtime.
 
+For an opt-in live Claude Code tool-call proof, run:
+
+```sh
+python tools/aippocampus/smoke/smoke_claude_code_mcp_host.py --json --call-tool --cwd "$PWD" --max-budget-usd 0.20
+```
+
+`--call-tool` starts a minimal `claude -p --bare --strict-mcp-config` session
+with only the AIppocampus MCP server and calls `memory_health`. It may spend a
+small live-model budget. The smoke uses Claude Code `stream-json` events to
+confirm both the MCP `tool_use` and the matching `tool_result` without printing
+the raw event body. A stale-index or stale-clean-source health result means the
+MCP tool was reached, but local AIppocampus memory artifacts need refresh.
+
+## Project Skill Adapter
+
+This repository ships a Claude Code project skill at
+`.claude/skills/aippocampus/SKILL.md`. Claude Code discovers project skills
+from `.claude/skills/`, so users can invoke `/aippocampus` in this repository
+without installing a Codex plugin or mutating Claude Code settings.
+
+The skill is intentionally small. It points Claude Code at the existing
+AIppocampus MCP and CLI surfaces, reminds the agent that recall is source-backed
+rather than model-native memory, and makes Claude Code transcript registration a
+dry-run-first, explicit write action.
+
 ## Onboarding States
 
 Check detected providers first:

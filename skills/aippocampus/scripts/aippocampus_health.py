@@ -10,6 +10,7 @@ from pathlib import Path, PureWindowsPath
 from typing import Any
 
 from aippocampuslib import (
+    aippocampus_registry_resolution,
     codex_home,
     default_thread_checkpoint_state_path,
     default_thread_clean_source_dir,
@@ -81,10 +82,17 @@ def render_health_text(result: dict[str, Any]) -> None:
     segments = result["segments"]
     checkpoint = result["checkpoint"]
     graphify = result["graphify"]
+    storage = result.get("storage") or {}
     question_stats = result.get("question_stats") or {}
     actions = result["recommended_actions"]
 
     print(f"thread memory health: {status}")
+    if storage:
+        print(
+            "registry: "
+            f"{storage.get('active_registry')} "
+            f"({storage.get('active_registry_source')})"
+        )
     print(
         f"rollout: {rollout['path']} ({rollout['size']} bytes, {rollout['message_count']} messages)"
     )
@@ -162,7 +170,9 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument(
-        "--index-dir", default=None, help="Defaults to the CODEX_HOME global thread store."
+        "--index-dir",
+        default=None,
+        help="Defaults to the AIppocampus registry thread store.",
     )
     parser.add_argument("--anchors", default="thread-anchors.md")
     parser.add_argument(
@@ -248,6 +258,7 @@ def main() -> int:
         if args.registry
         else registry_paths(Path(args.registry_dir).resolve() if args.registry_dir else None)[0]
     )
+    registry_resolution = aippocampus_registry_resolution()
     jobs_path = (
         Path(args.jobs_output).resolve()
         if args.jobs_output
@@ -462,6 +473,19 @@ def main() -> int:
             "exists": anchors.exists(),
             "count": current_anchor_count,
             "sha256": current_anchor_sha,
+        },
+        "storage": {
+            "default_registry_dir": registry_resolution["path"],
+            "default_registry_source": registry_resolution["source"],
+            "legacy_fallback": registry_resolution["legacy_fallback"],
+            "active_registry": str(registry_path),
+            "active_registry_source": (
+                "--registry"
+                if args.registry
+                else "--registry-dir"
+                if args.registry_dir
+                else registry_resolution["source"]
+            ),
         },
         "index": {
             "dir": str(index_dir),

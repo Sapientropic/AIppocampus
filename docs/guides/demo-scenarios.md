@@ -140,7 +140,9 @@ Expected result: multilingual hook smoke cases pass or report concrete failing
 cases with semantic availability, budget, and error-bucket diagnostics. Cached
 or reviewed semantic cues should be able to warm repeated multilingual recall;
 the seeded command is the public-safe deterministic proof that this works
-without forcing a live semantic call in the foreground hook.
+without forcing a live semantic call in the foreground hook. Seeded rows also
+report `exact_cache_hit`, `semantic_cue_hit`, and `cold_model_call` separately
+so operators can tell an exact prompt cache hit from reusable cue coverage.
 
 Cannot claim: that optional external semantic gates are enabled, or that every
 private multilingual prompt already has warmed semantic cue coverage.

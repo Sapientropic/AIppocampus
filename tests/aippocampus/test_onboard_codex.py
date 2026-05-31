@@ -259,7 +259,10 @@ class OnboardCodexTests(unittest.TestCase):
             "--status",
             "--cwd",
             str(self.cwd),
-            env_extra={"CLAUDE_HOME": str(self.root / "claude-home")},
+            env_extra={
+                "CLAUDE_HOME": str(self.root / "claude-home"),
+                "AIPPOCAMPUS_HOME": str(self.root / "aippo-home"),
+            },
         )
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
@@ -269,6 +272,8 @@ class OnboardCodexTests(unittest.TestCase):
         self.assertEqual(providers["claude-code"]["state"], "write_enabled")
         self.assertTrue(providers["claude-code"]["current_cwd_match"])
         self.assertIn("blocked", data["data"]["state_legend"])
+        self.assertEqual(data["data"]["storage"]["source"], "AIPPOCAMPUS_HOME/registry")
+        self.assertFalse(data["data"]["storage"]["legacy_fallback"])
 
     def test_onboard_status_reports_missing_non_codex_providers_as_blocked(self) -> None:
         proc = self._run_onboard_facade(
@@ -305,6 +310,8 @@ class OnboardCodexTests(unittest.TestCase):
         self.assertIn("AIppocampus provider status", proc.stdout)
         self.assertIn("- codex: write_enabled", proc.stdout)
         self.assertIn("- claude-code: blocked", proc.stdout)
+        self.assertIn("registry:", proc.stdout)
+        self.assertIn("CODEX_HOME/aippocampus-registry legacy fallback", proc.stdout)
 
     def test_onboard_facade_provider_generic_jsonl_dry_run_reports_plan(self) -> None:
         generic = self.root / "generic" / "generic-session.jsonl"

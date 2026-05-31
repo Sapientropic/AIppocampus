@@ -14,6 +14,7 @@ sys.path.insert(0, str(TESTS))
 sys.path.insert(0, str(SCRIPTS))
 
 import coding_decision_events as decisions  # noqa: E402
+import coding_ticket_host_contract as host_contract  # noqa: E402
 from redaction_fixtures import (  # noqa: E402
     FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER,
     FAKE_TEST_SECRET_VALUE,
@@ -108,8 +109,14 @@ class CodingDecisionEventsTests(unittest.TestCase):
             self.assertEqual(candidate["finding_kind"], "decision_event")
             self.assertEqual(candidate["evidence_status"], "source_backed")
             self.assertEqual(candidate["formal_memory_promoted"], False)
+            self.assertNotIn("freshness", candidate)
+            self.assertNotIn("confidence", candidate)
+            self.assertIn("extraction_confidence", candidate)
             self.assertTrue(candidate["source_refs"])
             self.assertEqual(candidate["source_refs"][0]["thread_key"], "session:decision-test")
+            self.assertFalse(candidate["review_boundary"]["current_validity_weather_stored_on_event"])
+            for rejected in candidate["rejected_paths"]:
+                self.assertNotIn("still_rejected", rejected)
 
     def test_privacy_scan_redacts_secret_and_local_path_surfaces(self) -> None:
         rows = [
@@ -163,7 +170,12 @@ class CodingDecisionEventsTests(unittest.TestCase):
 
         self.assertEqual(len(candidates), 1)
         self.assertEqual(candidates[0]["review_status"], "needs_confirmation")
-        self.assertEqual(candidates[0]["freshness"], "needs_confirmation")
+        self.assertNotIn("freshness", candidates[0])
+        assessment = decisions.build_decision_state_assessment(candidates[0])
+        self.assertEqual(assessment["kind"], decisions.ASSESSMENT_KIND)
+        self.assertEqual(assessment["freshness"], "needs_confirmation")
+        self.assertEqual(assessment["still_rejected"], "unknown")
+        self.assertEqual(assessment["truth_boundary"], "derived_weather_not_source_fact")
 
     def test_ticket_warns_after_compaction_without_over_nagging(self) -> None:
         rows = [
@@ -201,9 +213,51 @@ class CodingDecisionEventsTests(unittest.TestCase):
         self.assertEqual(len(ticket), 1)
         self.assertEqual(ticket[0]["kind"], decisions.TICKET_KIND)
         self.assertEqual(ticket[0]["intervention_level"], "warning")
+        self.assertEqual(ticket[0]["proposed_use"], "warn")
         self.assertEqual(ticket[0]["source_thickness"], "usable")
+        self.assertEqual(ticket[0]["derived_assessment"]["still_rejected"], "unknown")
+        self.assertEqual(ticket[0]["derived_assessment"]["truth_boundary"], "derived_weather_not_source_fact")
+        self.assertEqual(ticket[0]["basis_refs"], ticket[0]["evidence_refs"])
+        contract = host_contract.describe_host_contract(ticket[0])
+        self.assertEqual(contract["validation"]["missing_required_ai_fields"], [])
+        self.assertEqual(ticket[0]["source_visibility"], "host_runtime_input")
+        self.assertIn("host confirms the ticket source is not already visible", ticket[0]["preconditions"])
+        self.assertIn("dismissed", ticket[0]["outcome_feedback_expected"])
         self.assertEqual(visible_ticket, [])
         self.assertEqual(unrelated_ticket, [])
+
+    def test_thin_source_refreshes_instead_of_warning(self) -> None:
+        rows = [
+            message(
+                message_id="m1",
+                turn_id="t1",
+                role="user",
+                line=1,
+                text="Do not replace the search_clean_source.py source-ref checks with summary-only lookup.",
+            )
+        ]
+        candidates = decisions.review_decision_candidates(
+            decisions.extract_decision_candidates(rows, thread_key="session:thin")
+        )
+        thin_candidate = {
+            **candidates[0],
+            "source_thickness": "thin",
+            "source_refs": [],
+        }
+
+        tickets = decisions.render_coding_continuity_ticket(
+            [thin_candidate],
+            prompt="Patch search_clean_source.py by using summary-only lookup.",
+            trigger="compaction_loss",
+        )
+
+        self.assertEqual(len(tickets), 1)
+        self.assertEqual(tickets[0]["source_thickness"], "thin")
+        self.assertEqual(tickets[0]["proposed_use"], "refresh_sources")
+        self.assertEqual(tickets[0]["intervention_level"], "state_check")
+        self.assertNotEqual(tickets[0]["proposed_use"], "warn")
+        self.assertEqual(tickets[0]["diagnostics"]["decision"], "degraded_to_refresh_sources")
+        self.assertIn("refresh_sources", tickets[0]["derived_assessment"]["policy"]["thin_source_safe_uses"])
 
     def test_refuted_and_superseded_candidates_do_not_surface_as_tickets(self) -> None:
         rows = [
@@ -270,7 +324,9 @@ class CodingDecisionEventsTests(unittest.TestCase):
             lines = output.read_text(encoding="utf-8").splitlines()
 
         self.assertEqual(result["candidate_count"], 1)
+        self.assertEqual(result["assessment_count"], 1)
         self.assertEqual(result["ticket_count"], 1)
+        self.assertEqual(result["assessments"][0]["kind"], decisions.ASSESSMENT_KIND)
         self.assertIn("host_agent_intervention_timing", result["cannot_claim"])
         self.assertEqual(second["wrote_count"], 1)
         self.assertEqual(len(lines), 2)

@@ -81,9 +81,10 @@ benchmark runner should be added here and linked to its dated evidence owner.
 
 | Surface | Entrypoint | Reads / updates |
 | --- | --- | --- |
-| One-command baseline suite | `benchmarks/aippocampus/benchmark_suite.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `docs/evidence/readiness/public-readiness-verification.md` |
+| One-command baseline suite and `public-fast` profile | `benchmarks/aippocampus/benchmark_suite.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `docs/evidence/readiness/public-readiness-verification.md` |
 | Track A memory decision gate | `benchmarks/aippocampus/benchmark_memory_decision_gate.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `docs/evidence/benchmarks/memory-pain-fixture-report.md` |
 | Track B source-evidence retrieval wrapper | `benchmarks/aippocampus/benchmark_source_evidence_retrieval.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `benchmark_corpus/README.md` |
+| Coding decision-shadow Tracks A-E | `benchmarks/aippocampus/benchmark_coding_decision_shadow.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `docs/research/agent-coding-context-analysis.md` |
 | LongMemEval retrieval-only benchmark | `benchmarks/aippocampus/benchmark_longmemeval.py` | `docs/evidence/benchmarks/longmemeval.md`, `benchmark_corpus/longmemeval_manifest.json` |
 | LoCoMo public longitudinal-users control | `benchmarks/aippocampus/benchmark_locomo_public_users.py` | `docs/evidence/benchmarks/public-longitudinal-users.md`, `benchmark_corpus/README.md`, `benchmark_corpus/locomo_manifest.json` |
 | Public longitudinal pseudo-user coding implicit-knowledge contract smoke | `benchmarks/aippocampus/benchmark_public_longitudinal_users.py` | `docs/evidence/benchmarks/public-longitudinal-users.md`, `benchmark_corpus/public_longitudinal_users/README.md` |

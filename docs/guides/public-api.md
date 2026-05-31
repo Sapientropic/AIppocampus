@@ -50,8 +50,8 @@ The CLI contract applies to documented operator commands, especially:
 - `aippocampus health|search|onboard|mcp|sync|object-sync|hooks`
 - `aippocampus_health.py`
 - `search_clean_source.py`
-- `latest_reply.py`
-- `onboard.py --provider codex|auto`
+- `latest_reply.py` as a Codex raw-rollout audit compatibility command
+- `onboard.py --provider codex|claude-code|generic-jsonl|auto`
 - `onboard_codex.py`
 - `aippocampus_mcp_server.py --list-tools`
 - `sync_bundle.py status|push|pull|repair`
@@ -87,6 +87,12 @@ has produced artifacts and verified the target platform matrix.
 Repo-maintenance commands under `tools/aippocampus/` and
 `benchmarks/aippocampus/` are public development aids, not end-user runtime APIs,
 unless a public doc explicitly promotes a command.
+
+Remaining Codex raw-rollout/default-home script surfaces are classified in
+[provider-entrypoint-inventory.md](../architecture/provider-entrypoint-inventory.md).
+General recall should use clean-source search, provider-aware onboarding, MCP
+tools, or registry paths; raw Codex audit helpers are not generic
+cross-agent-provider APIs.
 
 ## MCP Contract
 
@@ -180,7 +186,8 @@ summary, label, or model-organized output when they need evidence.
 Public environment variables use the `AIPPOCAMPUS_*` prefix. Important supported
 groups are:
 
-- Storage and discovery: `CODEX_HOME`, `AIPPOCAMPUS_REGISTRY_DIR`.
+- Storage and discovery: `AIPPOCAMPUS_REGISTRY_DIR`, `AIPPOCAMPUS_HOME`,
+  legacy `THREAD_MEMORY_REGISTRY_DIR`, and legacy `CODEX_HOME`.
 - Vault projection: `AIPPOCAMPUS_VAULT`, `AIPPOCAMPUS_STYLE_SOURCE`,
   `AIPPOCAMPUS_SCRIPT_SOURCE`, `AIPPOCAMPUS_SITE_MARK`,
   `AIPPOCAMPUS_SITE_TITLE`.
@@ -210,6 +217,19 @@ groups are:
 
 Legacy `DEEPSEEK_*` model override variables may remain as compatibility
 fallbacks. New public configuration should prefer `AIPPOCAMPUS_*`.
+
+Generated registry storage resolves in this order:
+
+1. `AIPPOCAMPUS_REGISTRY_DIR`: exact registry root.
+2. `THREAD_MEMORY_REGISTRY_DIR`: legacy exact registry root.
+3. `AIPPOCAMPUS_HOME/registry`: provider-neutral AIppocampus home.
+4. `CODEX_HOME/aippocampus-registry`, or the default Codex home path if no
+   AIppocampus storage variable is set: legacy compatibility fallback.
+
+AIppocampus never migrates or deletes an existing registry automatically.
+Codex skill installation and Codex hook configuration may still use
+`CODEX_HOME`; generated memory storage should prefer the `AIPPOCAMPUS_*`
+variables for new non-Codex setups.
 
 Never log or publish environment variable values that contain credentials,
 tokens, cookies, local private paths, or private memory locations.

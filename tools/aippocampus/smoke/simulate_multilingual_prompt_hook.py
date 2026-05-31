@@ -148,6 +148,7 @@ def run_case(
         }
     result = json.loads(proc.stdout)
     semantic = result.get("semantic_gate") or {}
+    reuse = result.get("semantic_gate_reuse") or {}
     decision = result.get("decision")
     return {
         "name": case["name"],
@@ -162,6 +163,10 @@ def run_case(
         "semantic_diagnostic": semantic.get("diagnostic"),
         "semantic_error_buckets": semantic.get("error_buckets") or {},
         "semantic_budget": semantic.get("budget") or {},
+        "semantic_reuse_source": reuse.get("source"),
+        "exact_cache_hit": reuse.get("exact_cache_hit"),
+        "semantic_cue_hit": reuse.get("semantic_cue_hit"),
+        "cold_model_call": reuse.get("cold_model_call"),
         "aliases": (semantic.get("query_aliases") or result.get("query_terms") or [])[:5],
         "elapsed_ms": elapsed_ms,
     }

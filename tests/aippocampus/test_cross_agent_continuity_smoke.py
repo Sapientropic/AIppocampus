@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SMOKE = REPO_ROOT / "tools" / "aippocampus" / "smoke"
@@ -120,6 +121,145 @@ class CrossAgentContinuitySmokeTests(unittest.TestCase):
         self.assertNotIn("/Users/name", text)
         self.assertNotIn("/home/name", text)
         self.assertIn("<local-path-redacted>", text)
+
+    def test_claude_project_skill_adapter_points_at_safe_surfaces(self) -> None:
+        result = smoke_claude_code_mcp_host.inspect_project_skill()
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["path"], ".claude/skills/aippocampus/SKILL.md")
+        self.assertTrue(all(result["markers"].values()))
+
+    def test_claude_tool_call_smoke_uses_strict_temp_config_and_redacts_output(self) -> None:
+        calls: list[list[str]] = []
+        configs: list[dict[str, object]] = []
+
+        def fake_run(args: list[str], **kwargs: object) -> object:
+            calls.append(args)
+            config_path = Path(args[args.index("--mcp-config") + 1])
+            configs.append(json.loads(config_path.read_text(encoding="utf-8")))
+
+            class Proc:
+                returncode = 0
+                stdout = "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "type": "assistant",
+                                "message": {
+                                    "content": [
+                                        {
+                                            "type": "tool_use",
+                                            "id": "call_1",
+                                            "name": "mcp__aippocampus__memory_health",
+                                            "input": {"cwd": "E:/repo"},
+                                        }
+                                    ]
+                                },
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "type": "user",
+                                "message": {
+                                    "content": [
+                                        {
+                                            "type": "tool_result",
+                                            "tool_use_id": "call_1",
+                                            "content": [
+                                                {
+                                                    "type": "text",
+                                                    "text": '{"ok":true,"path":"C:/Users/name/private"}',
+                                                }
+                                            ],
+                                        }
+                                    ]
+                                },
+                            }
+                        ),
+                    ]
+                )
+                stderr = ""
+
+            return Proc()
+
+        server_script = Path("E:/repo/skills/aippocampus/scripts/aippocampus_mcp_server.py")
+        with patch.object(smoke_claude_code_mcp_host.subprocess, "run", side_effect=fake_run):
+            result = smoke_claude_code_mcp_host.run_claude_mcp_tool_call(
+                claude="claude",
+                server_name="aippocampus",
+                cwd="E:/repo",
+                max_budget_usd=0.1,
+                timeout=30,
+                server_script=server_script,
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["tool_called"])
+        self.assertNotIn("C:/Users/name", result["summary"])
+        self.assertIn("--bare", calls[0])
+        self.assertIn("--strict-mcp-config", calls[0])
+        self.assertIn("stream-json", calls[0])
+        self.assertIn("--verbose", calls[0])
+        self.assertIn("mcp__aippocampus__memory_health", calls[0])
+        self.assertEqual(
+            configs[0]["mcpServers"]["aippocampus"]["args"],
+            [str(server_script)],
+        )
+
+    def test_claude_probe_can_require_real_tool_call_after_host_is_reachable(self) -> None:
+        proc_by_command = {
+            ("mcp", "list"): "aippocampus: python server - ✓ Connected",
+            ("mcp", "get"): "aippocampus:\n  Status: ✓ Connected",
+        }
+
+        def fake_run(args: list[str], **kwargs: object) -> object:
+            command = tuple(args[1:3])
+            stream = "\n".join(
+                [
+                    json.dumps(
+                        {
+                            "type": "assistant",
+                            "message": {
+                                "content": [
+                                    {
+                                        "type": "tool_use",
+                                        "id": "call_1",
+                                        "name": "mcp__aippocampus__memory_health",
+                                    }
+                                ]
+                            },
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "type": "user",
+                            "message": {
+                                "content": [
+                                    {"type": "tool_result", "tool_use_id": "call_1", "content": []}
+                                ]
+                            },
+                        }
+                    ),
+                ]
+            )
+
+            class Proc:
+                returncode = 0
+                stderr = ""
+                stdout = proc_by_command.get(command, stream)
+
+            return Proc()
+
+        with (
+            patch.object(smoke_claude_code_mcp_host.shutil, "which", return_value="claude"),
+            patch.object(smoke_claude_code_mcp_host.subprocess, "run", side_effect=fake_run),
+        ):
+            result = smoke_claude_code_mcp_host.run_claude_mcp_probe(call_tool=True)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["status"], "tool_call_reachable")
+        self.assertEqual(result["tool_call"]["status"], "called_memory_health")
+        self.assertEqual(result["project_skill"]["status"], "present")
 
 
 if __name__ == "__main__":

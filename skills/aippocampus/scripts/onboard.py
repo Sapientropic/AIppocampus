@@ -9,7 +9,7 @@ import sys
 from typing import Sequence
 
 import onboard_codex
-from aippocampuslib import codex_home
+from aippocampuslib import aippocampus_registry_resolution, codex_home
 from conversation_sources import create_conversation_provider, normalize_provider_name
 
 
@@ -114,6 +114,7 @@ def provider_status_report(cwd: str | None = None) -> dict:
                 "default_provider": "codex",
                 "why": "auto keeps the safest fully implemented default and lists other providers separately.",
             },
+            "storage": aippocampus_registry_resolution(),
         },
         "meta": {"facade": "onboard.py", "schema_version": 1},
     }
@@ -137,6 +138,10 @@ def render_status_text(report: dict) -> str:
         )
     auto = report.get("data", {}).get("auto", {})
     lines.append(f"auto: {auto.get('default_provider')} - {auto.get('why')}")
+    storage = report.get("data", {}).get("storage") or {}
+    if storage:
+        legacy = " legacy fallback" if storage.get("legacy_fallback") else ""
+        lines.append(f"registry: {storage.get('path')} ({storage.get('source')}{legacy})")
     return "\n".join(lines)
 
 

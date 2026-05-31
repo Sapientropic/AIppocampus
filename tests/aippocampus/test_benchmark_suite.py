@@ -143,6 +143,75 @@ class BenchmarkSuiteTests(unittest.TestCase):
         self.assertEqual(config.track_d_case_limit, 4)
         self.assertEqual(config.standard_dataset, "locomo")
 
+    def test_public_fast_profile_forces_fresh_clone_deterministic_surface(self) -> None:
+        parser = suite.build_arg_parser()
+        args = parser.parse_args(
+            [
+                "--profile",
+                "public-fast",
+                "--include-private-text",
+                "--include-live-semantic",
+                "--include-sharegpt-public-track-b",
+                "--include-standard-public-track-b",
+                "--registry",
+                "private-registry.json",
+            ]
+        )
+
+        config = suite.benchmark_suite_config_from_args(args)
+
+        self.assertEqual(config.profile, "public-fast")
+        self.assertIsNone(config.registry_path)
+        self.assertFalse(config.include_private_text)
+        self.assertFalse(config.include_track_b)
+        self.assertFalse(config.include_deterministic_source_labels)
+        self.assertFalse(config.include_live_semantic)
+        self.assertFalse(config.include_sharegpt_public_track_b)
+        self.assertFalse(config.include_standard_public_track_b)
+
+    def test_public_fast_profile_runs_only_deterministic_a_c_d_tracks(self) -> None:
+        with (
+            patch.object(
+                suite.gate_benchmark,
+                "run_benchmark",
+                return_value=fake_gate_payload(),
+            ),
+            patch.object(
+                suite.payload_benchmark,
+                "run_benchmark",
+                return_value=fake_payload_payload(),
+            ),
+            patch.object(
+                suite.compaction_benchmark,
+                "run_benchmark",
+                return_value=fake_compaction_payload(),
+            ),
+            patch.object(
+                suite.retrieval_benchmark,
+                "run_source_evidence_retrieval_benchmark",
+                return_value=fake_retrieval_payload(ok=True),
+            ) as retrieval_run,
+            patch.object(
+                suite.live_semantic_benchmark,
+                "run_live_semantic_eval",
+                return_value=fake_live_semantic_payload(),
+            ) as live_run,
+        ):
+            payload = suite.run_benchmark_suite(
+                profile="public-fast",
+                include_private_text=True,
+                include_track_b=True,
+                include_live_semantic=True,
+            )
+
+        self.assertEqual(payload["config"]["profile"], "public-fast")
+        self.assertEqual(set(payload["tracks"]), {"gate_decision", "payload_fidelity", "compaction_continuity"})
+        self.assertEqual(payload["privacy_boundary"]["raw_text_emitted"], False)
+        self.assertIn("public_fast_profile_track_b_quality", payload["cannot_claim"])
+        self.assertIn("public_fast_profile_live_semantic_quality", payload["cannot_claim"])
+        retrieval_run.assert_not_called()
+        live_run.assert_not_called()
+
     def test_suite_includes_track_d_by_default(self) -> None:
         with (
             patch.object(

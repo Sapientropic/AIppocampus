@@ -93,11 +93,15 @@ evidence supports these narrower claims:
   transcript text or local paths.
 - `tools/aippocampus/smoke/smoke_claude_code_mcp_host.py` records whether the
   local Claude Code host can see the configured AIppocampus MCP server, or the
-  exact host setup blocker.
+  exact host setup blocker. With `--call-tool`, it also runs an opt-in minimal
+  live Claude Code session that must call the `memory_health` MCP tool.
+- `.claude/skills/aippocampus/SKILL.md` is the Claude Code project-skill
+  adapter. It points Claude Code at existing MCP/CLI surfaces and keeps Claude
+  Code transcript onboarding explicit and dry-run-first.
 
-This does not claim standalone binaries, unattended ingestion of private host
-history, Claude Code hook support, or successful live Claude Code MCP tool-call
-in an environment where the host probe reports a blocker. Standalone binary
+This does not claim unattended ingestion of private host history, Claude Code
+hook support, cross-platform standalone binaries, or successful live Claude Code
+MCP tool-calls on hosts that still report setup blockers. Standalone binary
 work is tracked in `docs/planning/standalone-binary-packaging.md`.
 
 Latest verification for this slice:
@@ -112,16 +116,35 @@ Latest verification for this slice:
   matches in each direction, preserved `codex:session:` and
   `claude-code:session:` source refs, and kept registry/search paths redacted.
 - `python tools\aippocampus\smoke\smoke_claude_code_history.py --json`:
-  passed against the local Claude Code history store. It found 308 candidate
+  passed against the local Claude Code history store. It found 307 candidate
   sessions and parsed three samples with message/turn counts only; it reported
   no transcript text and no local paths.
+- Earlier 2026-05-30 `python tools\aippocampus\smoke\smoke_claude_code_mcp_host.py --json`
+  returned `blocked_host_config` because no local `aippocampus` MCP server was
+  configured. That blocker is superseded for this Windows host by the
+  2026-05-31 refresh below.
 - `python tools\aippocampus\smoke\smoke_claude_code_mcp_host.py --json`:
-  returned `blocked_host_config`. `claude mcp list` ran, but
-  `claude mcp get aippocampus` reported no configured AIppocampus MCP server.
-  The output redacted key-like query values and local Windows/POSIX paths.
+  passed after local Claude Code MCP configuration and returned
+  `status=reachable`.
+- `python tools\aippocampus\smoke\smoke_claude_code_mcp_host.py --json --call-tool --cwd . --max-budget-usd 0.20 --tool-timeout 180`:
+  passed with `status=tool_call_reachable` and a successful
+  `mcp__aippocampus__memory_health` call. The smoke verifies Claude Code
+  `stream-json` `tool_use` plus the matching `tool_result`, and reports only
+  event counts/tool flags instead of raw event bodies.
+- The same host smoke reported local Claude Code version metadata and verified
+  the project skill adapter at `.claude/skills/aippocampus/SKILL.md` without
+  reading transcript bodies.
 - `python skills\aippocampus\scripts\onboard.py --status --format text --cwd .`:
   passed and rendered human-readable provider states for Codex, Claude Code,
   and generic JSONL. JSON status remains the default for non-TTY agent callers.
+- `python skills\aippocampus\scripts\aippocampus_cli.py onboard --provider claude-code --dry-run --format json --cwd .`:
+  passed without writing registry data. It previewed 307 Claude Code
+  registrations for the AIppocampus workspace and one stale-index repair; raw
+  local paths stay out of this public ledger.
+- `python skills\aippocampus\scripts\aippocampus_cli.py onboard --status --format json --cwd .`:
+  passed with Codex, Claude Code, and generic JSONL all detected as
+  `write_enabled`; `auto` still defaults to Codex and lists other providers
+  separately.
 - Focused unit coverage now checks generic JSONL structured validation errors,
   generic JSONL onboarding dry-run planning, missing-provider status, human
   status rendering, provider-thread-key source-id stability across path moves,
@@ -133,6 +156,62 @@ Latest verification for this slice:
 - `python -m ruff check skills plugins tests tools benchmarks benchmark_corpus`:
   passed.
 - `git diff --check`: passed.
+
+## 2026-05-31 Windows Standalone Binary Smoke
+
+Issue #121 now has a Windows x64 PyInstaller spike and smoke-tested artifact
+path. This is a first-platform binary claim only; macOS/Linux artifacts and
+release distribution polish remain outside this slice.
+
+Latest verification for this slice:
+
+- `python -m unittest tests.aippocampus.test_package_windows_binary tests.aippocampus.test_cross_agent_continuity_smoke`:
+  11 tests passed.
+- `python tools\aippocampus\package_windows_binary.py --dry-run --json`:
+  passed without claiming artifact smoke or Python-free support.
+- Running `tools\aippocampus\package_windows_binary.py --json --output-root .tmp\windows-binary-smoke-current`
+  from an isolated `.tmp` virtual environment with PyInstaller 6.20.0 built
+  `aippocampus.exe` and passed the artifact smoke matrix:
+  `aippocampus --help`, `aippocampus health --help`, public-bundle search,
+  `aippocampus mcp list-tools`, `aippocampus onboard --status --format json`,
+  empty-sync-dir status with the expected nonzero exit code and JSON payload,
+  and `aippocampus hooks status`.
+- The packaging path stages only `skills/aippocampus/scripts` as runtime input.
+  The private data guard passed with no staged private roots and no
+  PyInstaller command inputs under `.aippocampus`, `aippocampus-registry`,
+  `transcripts`, `rollouts`, or a repo-local private `registry` directory.
+
+This does not claim signed release artifacts, installer/update UX, macOS/Linux
+binaries, or full-history/private-provider ingestion from the binary.
+
+## 2026-05-31 Provider Entrypoint And Storage Boundary Refresh
+
+Issues #122 and #123 tightened the remaining Codex-default ambiguity without
+pretending Codex is no longer a supported provider.
+
+Latest verification for this slice:
+
+- `docs/architecture/provider-entrypoint-inventory.md` classifies remaining
+  `locate_rollout(...)`, `iter_rollouts(...)`, `codex_home()`, and
+  `provider or codex_provider(...)` call sites as provider-aware,
+  clean-source/registry, Codex host integration, or Codex-only raw audit/debug
+  surfaces.
+- `aippocampus_registry_resolution()` now resolves generated registry storage
+  in this order: `AIPPOCAMPUS_REGISTRY_DIR`, legacy
+  `THREAD_MEMORY_REGISTRY_DIR`, `AIPPOCAMPUS_HOME/registry`, then legacy
+  `CODEX_HOME/aippocampus-registry`. Hook logs, lifecycle state, and the
+  subconscious scheduler use this AIppocampus registry root while Codex hook
+  installers still use Codex hook config.
+- `aippocampus onboard --status --format json --cwd .` reports provider
+  readiness plus active registry storage source.
+- `aippocampus_health.py --json --cwd .` reports default and active registry
+  storage source alongside health details.
+- `python -m unittest tests.aippocampus.test_aippocampuslib tests.aippocampus.test_onboard_codex tests.aippocampus.test_architecture_boundaries tests.aippocampus.test_aippocampus_health tests.aippocampus.test_global_storage_defaults`:
+  46 tests passed.
+
+This does not make Codex hook installers provider-neutral, migrate existing
+registries, or remove Codex raw audit tools. Those surfaces are now explicitly
+labeled instead of implied as general provider APIs.
 
 ## 2026-05-30 Track D Synthetic Runner Evidence
 

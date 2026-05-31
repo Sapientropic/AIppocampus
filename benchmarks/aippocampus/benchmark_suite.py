@@ -12,7 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -30,10 +30,14 @@ import benchmark_payload_fidelity as payload_benchmark
 import benchmark_source_evidence_retrieval as retrieval_benchmark
 
 SCHEMA_VERSION = 1
+BASELINE_PROFILE = "baseline"
+PUBLIC_FAST_PROFILE = "public-fast"
+PROFILE_CHOICES = (BASELINE_PROFILE, PUBLIC_FAST_PROFILE)
 
 
 @dataclass(frozen=True)
 class BenchmarkSuiteConfig:
+    profile: str = BASELINE_PROFILE
     registry_path: Path | None = None
     include_private_text: bool = False
     include_track_b: bool = True
@@ -103,6 +107,7 @@ class BenchmarkSuiteConfig:
     def sanitized_payload_config(self) -> dict[str, Any]:
         return {
             "suite_mode": "baseline",
+            "profile": self.profile,
             "registry_path_provided": self.registry_path is not None,
             "include_private_text": bool(self.include_private_text),
             "include_track_b": bool(self.include_track_b),
@@ -224,6 +229,35 @@ def collect_cannot_claim(tracks: dict[str, dict[str, Any]], *, quality_gate_ok: 
     return sorted(claims)
 
 
+def profile_cannot_claims(config: BenchmarkSuiteConfig) -> list[str]:
+    if config.profile != PUBLIC_FAST_PROFILE:
+        return []
+    return [
+        "public_fast_profile_track_b_quality",
+        "public_fast_profile_live_semantic_quality",
+        "public_fast_profile_private_real_history_quality",
+        "public_fast_profile_large_external_dataset_quality",
+    ]
+
+
+def normalize_config_for_profile(config: BenchmarkSuiteConfig) -> BenchmarkSuiteConfig:
+    if config.profile != PUBLIC_FAST_PROFILE:
+        return config
+    # The public-fast profile is the fresh-clone deterministic contract. Keep it
+    # free of private registries, raw text, live models, large downloads, and
+    # optional Track B adapters even if a caller accidentally passes those flags.
+    return replace(
+        config,
+        registry_path=None,
+        include_private_text=False,
+        include_track_b=False,
+        include_deterministic_source_labels=False,
+        include_live_semantic=False,
+        include_sharegpt_public_track_b=False,
+        include_standard_public_track_b=False,
+    )
+
+
 def collect_known_gaps(tracks: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
     gaps: dict[str, dict[str, Any]] = {}
     for name, payload in tracks.items():
@@ -282,6 +316,7 @@ def deterministic_source_label_slice(
 
 def run_benchmark_suite(
     *,
+    profile: str = BASELINE_PROFILE,
     registry_path: Path | None = None,
     include_private_text: bool = False,
     include_track_b: bool = True,
@@ -350,6 +385,7 @@ def run_benchmark_suite(
 ) -> dict[str, Any]:
     return run_benchmark_suite_with_config(
         BenchmarkSuiteConfig(
+            profile=profile,
             registry_path=registry_path,
             include_private_text=include_private_text,
             include_track_b=include_track_b,
@@ -404,6 +440,7 @@ def run_benchmark_suite(
 
 
 def run_benchmark_suite_with_config(config: BenchmarkSuiteConfig) -> dict[str, Any]:
+    config = normalize_config_for_profile(config)
     registry_path = config.registry_path
     include_private_text = config.include_private_text
     include_track_b = config.include_track_b
@@ -555,6 +592,12 @@ def run_benchmark_suite_with_config(config: BenchmarkSuiteConfig) -> dict[str, A
         name: track_status(name, payload) for name, payload in tracks.items()
     }
     known_gaps = collect_known_gaps(tracks)
+    cannot_claim = sorted(
+        set(
+            collect_cannot_claim(tracks, quality_gate_ok=quality_gate_ok)
+            + profile_cannot_claims(config)
+        )
+    )
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_benchmark_suite",
@@ -567,9 +610,7 @@ def run_benchmark_suite_with_config(config: BenchmarkSuiteConfig) -> dict[str, A
         "known_gaps": known_gaps,
         "tracks": tracks,
         "privacy_boundary": privacy_boundary,
-        "cannot_claim": collect_cannot_claim(
-            tracks, quality_gate_ok=quality_gate_ok
-        ),
+        "cannot_claim": cannot_claim,
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
     }
 
@@ -590,6 +631,12 @@ def print_human_summary(payload: dict[str, Any]) -> None:
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--profile",
+        choices=PROFILE_CHOICES,
+        default=BASELINE_PROFILE,
+        help="Use public-fast for the deterministic fresh-clone A/C/D profile.",
+    )
     parser.add_argument("--registry", type=Path, default=None)
     parser.add_argument("--include-private-text", action="store_true")
     parser.add_argument("--skip-track-b", action="store_true")
@@ -772,7 +819,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 
 def benchmark_suite_config_from_args(args: argparse.Namespace) -> BenchmarkSuiteConfig:
-    return BenchmarkSuiteConfig(
+    config = BenchmarkSuiteConfig(
+        profile=args.profile,
         registry_path=args.registry,
         include_private_text=args.include_private_text,
         include_track_b=not args.skip_track_b,
@@ -823,6 +871,7 @@ def benchmark_suite_config_from_args(args: argparse.Namespace) -> BenchmarkSuite
         standard_line_reranker_max_tokens=args.standard_line_reranker_max_tokens,
         standard_line_reranker_workers=args.standard_line_reranker_workers,
     )
+    return normalize_config_for_profile(config)
 
 
 def main() -> int:

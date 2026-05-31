@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
@@ -202,6 +204,33 @@ class AippocampusLibTests(unittest.TestCase):
                 aippocampuslib.read_session_meta(source.path),
                 provider.read_metadata(source.path),
             )
+
+    def test_registry_storage_precedence_prefers_aippocampus_envs_then_legacy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with patch.dict(
+                os.environ,
+                {"AIPPOCAMPUS_REGISTRY_DIR": str(root / "exact-registry")},
+                clear=True,
+            ):
+                resolution = aippocampuslib.aippocampus_registry_resolution()
+                self.assertEqual(Path(resolution["path"]), root / "exact-registry")
+                self.assertEqual(resolution["source"], "AIPPOCAMPUS_REGISTRY_DIR")
+                self.assertFalse(resolution["legacy_fallback"])
+
+            with patch.dict(os.environ, {"AIPPOCAMPUS_HOME": str(root / "home")}, clear=True):
+                resolution = aippocampuslib.aippocampus_registry_resolution()
+                self.assertEqual(Path(resolution["path"]), root / "home" / "registry")
+                self.assertEqual(resolution["source"], "AIPPOCAMPUS_HOME/registry")
+                self.assertFalse(resolution["legacy_fallback"])
+
+            with patch.dict(os.environ, {"CODEX_HOME": str(root / "codex-home")}, clear=True):
+                resolution = aippocampuslib.aippocampus_registry_resolution()
+                self.assertEqual(
+                    Path(resolution["path"]), root / "codex-home" / "aippocampus-registry"
+                )
+                self.assertEqual(resolution["source"], "CODEX_HOME/aippocampus-registry")
+                self.assertTrue(resolution["legacy_fallback"])
 
     def test_registry_scan_accepts_explicit_conversation_provider(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

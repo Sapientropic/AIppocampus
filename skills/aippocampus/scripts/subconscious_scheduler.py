@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from aippocampuslib import codex_home, now_utc
+from aippocampuslib import aippocampus_registry_dir, now_utc
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 STATE_SCHEMA_VERSION = 1
@@ -85,7 +85,7 @@ class FileLock:
 
 
 def registry_dir(path: Path | None = None) -> Path:
-    return path or (codex_home() / "aippocampus-registry")
+    return path or aippocampus_registry_dir()
 
 
 def registry_path(root: Path) -> Path:
@@ -457,6 +457,30 @@ def run_project(
             str(SCRIPT_DIR / "memory_candidate_router.py"),
             "--registry-dir",
             str(root),
+        ],
+        [
+            sys.executable,
+            str(SCRIPT_DIR / "dream_sleep_cycle.py"),
+            "--registry-dir",
+            str(root),
+            "--project",
+            stats.label,
+            "--max-items",
+            "1",
+            "--run-ready",
+            "--no-write",
+            "--summary",
+            "--json",
+        ],
+        [
+            sys.executable,
+            str(SCRIPT_DIR / "dream_retrospective_lifecycle.py"),
+            "--registry-dir",
+            str(root),
+            "--project",
+            stats.label,
+            "--summary",
+            "--json",
         ],
         [sys.executable, str(SCRIPT_DIR / "build_concept_graph.py"), "--registry-dir", str(root)],
     ]

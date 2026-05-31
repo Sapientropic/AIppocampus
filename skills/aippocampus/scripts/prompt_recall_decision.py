@@ -59,7 +59,7 @@ from prompt_recall_core import (
     sort_candidates,
 )
 from prompt_recall_evidence import collect_evidence, strip_private_fields, strip_semantic_gate
-from prompt_recall_semantic import run_semantic_gate_for_prompt
+from prompt_recall_semantic import run_semantic_gate_for_context
 from registry import unique_preserve
 from retrieval_query_policy import semantic_trigger_terms
 from semantic_cue_cache import default_semantic_cues_path, record_semantic_cue_hits
@@ -626,7 +626,6 @@ def assess_prompt(
     cwd_path = context.cwd_path
     path = context.registry_path
     concept_file = context.concept_graph_path
-    semantic_triggers_file = context.semantic_triggers_path
     ambient_policy_file = context.ambient_policy_path
     if context.is_noise:
         return _noise_prompt_result(context, start)
@@ -643,9 +642,7 @@ def assess_prompt(
         return policy_result
     registry = context.registry
     cognitive_map_matches = context.cognitive_map_matches
-    working_memory_rows = context.working_memory_rows
     working_memory_matches = _limit_dream_matches(context.working_memory_matches, dream_hypothesis_limit)
-    associations = context.associations
     association_matches = context.association_matches
     pre_explicit = context.pre_explicit
     pre_associative = context.pre_associative
@@ -653,27 +650,11 @@ def assess_prompt(
     natural_evidence = natural_evidence_intent(prompt)
     source_evidence = source_evidence_intent(prompt)
     negative_evidence = negative_evidence_intent(prompt)
-    semantic_result = run_semantic_gate_for_prompt(
-        prompt=prompt,
-        cwd_path=cwd_path,
-        registry=registry,
-        registry_path=path,
-        associations=associations,
-        working_memory_rows=working_memory_rows,
-        semantic_triggers_file=semantic_triggers_file,
-        semantic_cache_path=semantic_cache_path,
-        semantic_gate_mode=semantic_gate_mode,
-        semantic_timeout=semantic_timeout,
-        semantic_gate_fn=semantic_gate_fn,
-        use_semantic_gate=use_semantic_gate,
-        start=start,
-        max_elapsed_ms=max_elapsed_ms,
-        explicit=pre_explicit,
-        associative=pre_associative,
-        important=pre_important,
-        association_matches=association_matches,
-        working_memory_matches=working_memory_matches,
-        cognitive_map_matches=cognitive_map_matches,
+    semantic_result, semantic_gate_reuse = run_semantic_gate_for_context(
+        prompt=prompt, context=context, semantic_cache_path=semantic_cache_path,
+        semantic_gate_mode=semantic_gate_mode, semantic_timeout=semantic_timeout,
+        semantic_gate_fn=semantic_gate_fn, use_semantic_gate=use_semantic_gate,
+        start=start, max_elapsed_ms=max_elapsed_ms,
     )
     seed_terms = unique_preserve(
         (expand_query_terms(prompt) if prompt else [])
@@ -825,6 +806,7 @@ def assess_prompt(
         "working_memory": strip_for_hook(working_memory_matches[:3]),
         "ambient_policy": context.ambient_policy_diagnostics,
         "semantic_gate": strip_semantic_gate(semantic_result),
+        "semantic_gate_reuse": semantic_gate_reuse,
         "semantic_bridge_diagnostic": semantic_bridge_diagnostic,
         "semantic_cue_cache": semantic_cue_cache,
         "elapsed_ms": elapsed_ms, "deep_archival_requested": _deep_archival_requested(prompt),
