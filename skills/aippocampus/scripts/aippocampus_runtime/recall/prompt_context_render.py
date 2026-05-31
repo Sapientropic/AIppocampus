@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from aippocampuslib import compact_text
+from aippocampus_runtime.core import compact_text
 
 MAX_CONTEXT_CHARS = 1800
 DREAM_HYPOTHESIS_TYPE = "dream_hypothesis"

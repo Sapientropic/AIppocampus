@@ -17,9 +17,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.core import compact_text, now_utc
 from aippocampus_runtime.recall.query_policy import split_query_terms
-from aippocampuslib import compact_text, now_utc
-from registry import registry_paths, unique_preserve
+from aippocampus_runtime.registry.api import registry_paths, unique_preserve
 
 POLICY_SCHEMA_VERSION = 1
 DEFAULT_POLICY_NAME = "ambient_recall_policy.jsonl"

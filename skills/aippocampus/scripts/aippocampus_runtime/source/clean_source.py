@@ -17,8 +17,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.source.behavior_events import extract_rollout_behavior_events
-from aippocampuslib import (
+from aippocampus_runtime.core import (
     codex_home,
     default_thread_clean_source_dir,
     file_sha256,
@@ -26,6 +25,7 @@ from aippocampuslib import (
     now_utc,
     resolve_artifact_path,
 )
+from aippocampus_runtime.source.behavior_events import extract_rollout_behavior_events
 from conversation_sources import ConversationProvider, create_conversation_provider
 from conversation_sources.normalized import stable_source_ref
 

@@ -17,6 +17,7 @@ from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from aippocampus_runtime.core import compact_text, now_utc, sanitize_external_model_payload
 from aippocampus_runtime.dream.worker_contract import (
     PROMPT_ORDER,
     stable_worker_contract,
@@ -31,7 +32,6 @@ from aippocampus_runtime.model.client import (
     cache_metrics_from_response,
     chat_json,
 )
-from aippocampuslib import compact_text, now_utc, sanitize_external_model_payload
 
 SCHEMA_VERSION = 1
 WORKER_KIND = "aippocampus_dream_worker_run"

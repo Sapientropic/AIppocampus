@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from aippocampuslib import aippocampus_registry_dir, now_utc
+from aippocampus_runtime.core import aippocampus_registry_dir, now_utc
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
 STATE_SCHEMA_VERSION = 1

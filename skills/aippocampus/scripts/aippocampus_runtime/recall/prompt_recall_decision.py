@@ -71,8 +71,8 @@ from aippocampus_runtime.recall.semantic_cue_cache import (
     default_semantic_cues_path,
     record_semantic_cue_hits,
 )
-from memory_candidate_router import strip_for_hook
-from registry import unique_preserve
+from aippocampus_runtime.registry.api import unique_preserve
+from aippocampus_runtime.subconscious.candidate_router import strip_for_hook
 
 
 def _deep_archival_requested(prompt: str) -> bool:

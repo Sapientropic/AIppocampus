@@ -7,7 +7,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from aippocampuslib import compact_text, is_injected_instruction_text
+from aippocampus_runtime.core import compact_text, is_injected_instruction_text
 
 __all__ = [
     "RegistrySearchBudget",

@@ -6,7 +6,7 @@ import hashlib
 import sys
 from pathlib import Path
 
-from aippocampuslib import public_session_meta, read_session_meta
+from aippocampus_runtime.core import public_session_meta, read_session_meta
 
 from .store import safe_slug
 

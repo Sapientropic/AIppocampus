@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from aippocampus_runtime.core import compact_text, now_utc
 from aippocampus_runtime.question.source_refs import (
     SourceRefIndex,
     build_source_ref_index,
@@ -32,9 +33,8 @@ from aippocampus_runtime.question.tracking import (
     parse_timestamp,
     stable_digest,
 )
+from aippocampus_runtime.registry.api import load_registry, unique_preserve
 from aippocampus_runtime.source.search import iter_clean_messages
-from aippocampuslib import compact_text, now_utc
-from registry import load_registry, unique_preserve
 
 SCHEMA_VERSION = 1
 PROMPT_VERSION = "aippocampus-question-resolution-v1"

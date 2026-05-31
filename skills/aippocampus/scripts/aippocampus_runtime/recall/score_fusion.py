@@ -12,7 +12,7 @@ import hashlib
 import json
 from typing import Any, Mapping, Sequence
 
-from aippocampuslib import now_utc
+from aippocampus_runtime.core import now_utc
 
 SCHEMA_VERSION = 1
 FUSION_KIND = "aippocampus_retrieval_score_fusion"

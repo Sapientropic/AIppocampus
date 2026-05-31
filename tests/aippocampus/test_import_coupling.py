@@ -162,14 +162,37 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(aippocampus_cli.run_script, facade.run_script)
         self.assertEqual(facade.SCRIPT_DIR, SCRIPTS)
 
+    def test_core_helpers_have_package_owner_and_compat_shim(self) -> None:
+        import aippocampuslib
+        from aippocampus_runtime import core
+
+        package_path = SCRIPTS / "aippocampus_runtime" / "core.py"
+        shim_path = SCRIPTS / "aippocampuslib.py"
+
+        self.assertTrue(package_path.exists(), package_path)
+        self.assertTrue(shim_path.exists(), shim_path)
+        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges()
+        self.assertIn("aippocampus_runtime.core", edges["aippocampuslib"])
+        self.assertNotIn("aippocampuslib", edges["aippocampus_runtime.core"])
+        self.assertIs(aippocampuslib.codex_home, core.codex_home)
+        self.assertIs(aippocampuslib.aippocampus_registry_dir, core.aippocampus_registry_dir)
+        self.assertIs(aippocampuslib.sanitize_external_model_text, core.sanitize_external_model_text)
+
     def test_registry_storage_is_separate_from_registry_runner(self) -> None:
+        import registry
+        from aippocampus_runtime.registry import api as registry_api
+
         package_paths = [
             SCRIPTS / "aippocampus_runtime" / "registry" / "__init__.py",
+            SCRIPTS / "aippocampus_runtime" / "registry" / "api.py",
             SCRIPTS / "aippocampus_runtime" / "registry" / "provider.py",
             SCRIPTS / "aippocampus_runtime" / "registry" / "search.py",
             SCRIPTS / "aippocampus_runtime" / "registry" / "store.py",
         ]
         shim_paths = [
+            SCRIPTS / "registry.py",
             SCRIPTS / "registry_provider.py",
             SCRIPTS / "registry_search.py",
             SCRIPTS / "registry_store.py",
@@ -182,9 +205,10 @@ class ImportCouplingTests(unittest.TestCase):
 
         edges = same_dir_import_edges()
 
-        self.assertIn("aippocampus_runtime.registry.provider", edges["registry"])
-        self.assertIn("aippocampus_runtime.registry.search", edges["registry"])
-        self.assertIn("aippocampus_runtime.registry.store", edges["registry"])
+        self.assertIn("aippocampus_runtime.registry.api", edges["registry"])
+        self.assertIn("aippocampus_runtime.registry.provider", edges["aippocampus_runtime.registry.api"])
+        self.assertIn("aippocampus_runtime.registry.search", edges["aippocampus_runtime.registry.api"])
+        self.assertIn("aippocampus_runtime.registry.store", edges["aippocampus_runtime.registry.api"])
         self.assertNotIn("registry_store", edges["registry"])
         self.assertNotIn("registry", edges["aippocampus_runtime.registry.store"])
 
@@ -194,6 +218,36 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIn("def load_registry", store_source)
         self.assertNotIn("def save_registry", registry_source)
         self.assertIn("def save_registry", store_source)
+        self.assertIs(registry.register_current_thread, registry_api.register_current_thread)
+        self.assertIs(registry.run_json, registry_api.run_json)
+
+    def test_candidate_router_has_package_owner_and_compat_shim(self) -> None:
+        import memory_candidate_router
+        from aippocampus_runtime.subconscious import candidate_router
+
+        package_path = SCRIPTS / "aippocampus_runtime" / "subconscious" / "candidate_router.py"
+        shim_path = SCRIPTS / "memory_candidate_router.py"
+
+        self.assertTrue(package_path.exists(), package_path)
+        self.assertTrue(shim_path.exists(), shim_path)
+        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges()
+        self.assertIn(
+            "aippocampus_runtime.subconscious.candidate_router",
+            edges["memory_candidate_router"],
+        )
+        self.assertIn(
+            "aippocampus_runtime.registry.api",
+            edges["aippocampus_runtime.subconscious.candidate_router"],
+        )
+        self.assertNotIn("registry", edges["aippocampus_runtime.subconscious.candidate_router"])
+        self.assertNotIn(
+            "memory_candidate_router",
+            edges["aippocampus_runtime.subconscious.candidate_router"],
+        )
+        self.assertIs(memory_candidate_router.route_candidate, candidate_router.route_candidate)
+        self.assertIs(memory_candidate_router.strip_for_hook, candidate_router.strip_for_hook)
 
     def test_source_helpers_have_package_owner_and_compat_shims(self) -> None:
         import build_clean_source
@@ -1826,7 +1880,7 @@ class ImportCouplingTests(unittest.TestCase):
             "build_index",
             "build_segments",
             "import_bundle",
-            "registry",
+            "aippocampus_runtime.registry.api",
             "search_rollout",
         ]:
             self.assertIn("aippocampus_runtime.artifacts.publish", edges[source])

@@ -7,7 +7,7 @@ import json
 import re
 from pathlib import Path
 
-from aippocampuslib import aippocampus_registry_dir, now_utc
+from aippocampus_runtime.core import aippocampus_registry_dir, now_utc
 
 REGISTRY_SCHEMA_VERSION = 1
 

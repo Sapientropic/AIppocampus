@@ -7,7 +7,7 @@ import re
 from typing import Any
 
 from aippocampus_runtime.recall.prompt_cues import semantic_gate_can_request_evidence
-from registry import unique_preserve
+from aippocampus_runtime.registry.api import unique_preserve
 
 _VAGUE_CROSS_PROJECT_REFERENT_PATTERNS = [
     re.compile(pattern, re.IGNORECASE)

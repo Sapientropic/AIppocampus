@@ -14,6 +14,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.core import compact_text, sanitize_external_model_text
 from aippocampus_runtime.recall.ambient_cards import (
     ACTIVE_GENTLE_NUDGE,
     CANDIDATE,
@@ -22,7 +23,6 @@ from aippocampus_runtime.recall.ambient_cards import (
 )
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.source.search import iter_clean_messages
-from aippocampuslib import compact_text, sanitize_external_model_text
 
 PROMPT_TRACE_BASE_STOPWORDS = {
     "a",

@@ -14,8 +14,8 @@ import os
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
-from aippocampuslib import compact_text
 
 SEMANTIC_SCOPE_LABELS_FILENAME = "semantic-scope-labels.jsonl"
 SEMANTIC_SCOPE_LABEL_FINDING_KIND = "semantic_scope_labels"

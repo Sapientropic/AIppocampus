@@ -14,6 +14,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.core import compact_text, now_utc
 from aippocampus_runtime.navigation.associations import (
     normalize_term,
     source_text_is_noise,
@@ -21,9 +22,12 @@ from aippocampus_runtime.navigation.associations import (
 )
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.recall.semantic_recall_gate import default_semantic_triggers_path
-from aippocampuslib import compact_text, now_utc
-from memory_candidate_router import default_candidates_path, iter_jsonl, write_jsonl
-from registry import registry_paths, unique_preserve
+from aippocampus_runtime.registry.api import registry_paths, unique_preserve
+from aippocampus_runtime.subconscious.candidate_router import (
+    default_candidates_path,
+    iter_jsonl,
+    write_jsonl,
+)
 
 TRIGGER_SCHEMA_VERSION = 1
 TRIGGER_TYPES = {"hook_trigger", "project_memory", "concept_edge"}

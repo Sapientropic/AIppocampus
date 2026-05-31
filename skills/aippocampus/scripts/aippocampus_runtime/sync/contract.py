@@ -6,7 +6,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from aippocampuslib import now_utc
+from aippocampus_runtime.core import now_utc
 
 SYNC_BUNDLE_KIND = "aippocampus_sync_bundle"
 SYNC_SCHEMA_VERSION = 1

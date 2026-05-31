@@ -20,6 +20,13 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
+from aippocampus_runtime.core import (
+    compact_text,
+    now_utc,
+    sanitize_external_model_payload,
+    sanitize_external_model_text,
+    workspace_thread_key,
+)
 from aippocampus_runtime.model.routing import (
     DEFAULT_DEEPSEEK_API_KEY_ENV,
     resolve_model_route,
@@ -42,6 +49,7 @@ from aippocampus_runtime.recall.ambient_cards import (
     SOURCE_BACKED_RECALL_CARD,
 )
 from aippocampus_runtime.recall.query_policy import split_query_terms
+from aippocampus_runtime.registry.api import load_registry, registry_paths, unique_preserve
 from aippocampus_runtime.subconscious.runtime import add_usage, call_chat_json, compact_usage
 from aippocampus_runtime.subconscious.worker import (
     DEFAULT_BASE_URL,
@@ -85,14 +93,6 @@ from aippocampus_runtime.warm_ambient.source_validation import (  # noqa: F401
     source_index_from_registry,
     validate_card_source_refs,
 )
-from aippocampuslib import (
-    compact_text,
-    now_utc,
-    sanitize_external_model_payload,
-    sanitize_external_model_text,
-    workspace_thread_key,
-)
-from registry import load_registry, registry_paths, unique_preserve
 
 PROMPT_VERSION = "aippocampus-warm-ambient-recall-v0"
 SCHEMA_VERSION = 1

@@ -30,7 +30,7 @@ HIGH_RISK_MYPY_SCRIPTS = {
     "skills/aippocampus/scripts/aippocampus_runtime/recall/ambient_cache.py",
     "skills/aippocampus/scripts/aippocampus_runtime/navigation/associations.py",
     "skills/aippocampus/scripts/aippocampus_runtime/navigation/project_timeline.py",
-    "skills/aippocampus/scripts/memory_candidate_router.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/subconscious/candidate_router.py",
     "skills/aippocampus/scripts/onboard_codex.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_core.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/retrieval.py",

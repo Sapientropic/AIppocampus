@@ -20,6 +20,12 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.core import (
+    cli_error_payload,
+    cli_exit_code_for_error_code,
+    compact_text,
+    now_utc,
+)
 from aippocampus_runtime.dream import input_pack as dream_input_pack
 from aippocampus_runtime.dream import precision_policy as dream_precision_policy
 from aippocampus_runtime.dream import queue as dream_queue
@@ -36,7 +42,6 @@ from aippocampus_runtime.model.routing import (
     resolve_model_route,
     route_service_name,
 )
-from aippocampuslib import cli_error_payload, cli_exit_code_for_error_code, compact_text, now_utc
 
 SLEEP_CYCLE_KIND = "aippocampus_dream_sleep_cycle"
 SUMMARY_KIND = "aippocampus_dream_sleep_cycle_summary"

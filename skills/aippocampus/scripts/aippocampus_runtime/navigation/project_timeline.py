@@ -11,10 +11,12 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.core import compact_text, now_utc
 from aippocampus_runtime.navigation.associations import (
     extract_terms_from_text,
     source_text_is_noise,
 )
+from aippocampus_runtime.registry.api import load_registry, registry_paths, unique_preserve
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
 from aippocampus_runtime.source.registry_paths import (
     resolve_registry_member_path as resolve_registry_member_path,
@@ -24,8 +26,6 @@ from aippocampus_runtime.source.semantic_scope_labels import (
     merged_scope_labels,
     semantic_labels_for_message,
 )
-from aippocampuslib import compact_text, now_utc
-from registry import load_registry, registry_paths, unique_preserve
 
 TIMELINE_SCHEMA_VERSION = 1
 DEFAULT_MAX_PER_PROJECT = 80

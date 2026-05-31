@@ -200,6 +200,7 @@ warn_redundant_casts = true
 pretty = true
 files = [
     "skills/aippocampus/scripts/aippocampuslib.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/core.py",
     "skills/aippocampus/scripts/aippocampus_cli.py",
     "skills/aippocampus/scripts/aippocampus_runtime/cli/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/cli/facade.py",
@@ -287,6 +288,7 @@ files = [
     "skills/aippocampus/scripts/encrypted_sync_object_storage.py",
     "skills/aippocampus/scripts/journey_tracking.py",
     "skills/aippocampus/scripts/memory_candidate_router.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/subconscious/candidate_router.py",
     "skills/aippocampus/scripts/model_client.py",
     "skills/aippocampus/scripts/aippocampus_runtime/sync/object_storage/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/sync/object_storage/client.py",
@@ -349,6 +351,7 @@ files = [
     "skills/aippocampus/scripts/reflection_space.py",
     "skills/aippocampus/scripts/registry.py",
     "skills/aippocampus/scripts/aippocampus_runtime/registry/__init__.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/registry/api.py",
     "skills/aippocampus/scripts/aippocampus_runtime/registry/provider.py",
     "skills/aippocampus/scripts/aippocampus_runtime/registry/search.py",
     "skills/aippocampus/scripts/aippocampus_runtime/registry/store.py",

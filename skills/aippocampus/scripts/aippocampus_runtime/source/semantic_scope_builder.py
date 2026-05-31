@@ -14,6 +14,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.core import cli_error_payload, cli_exit_code_for_error_code
+from aippocampus_runtime.registry.api import load_registry, registry_paths
 from aippocampus_runtime.source.registry_paths import resolve_registry_member_path
 from aippocampus_runtime.source.semantic_scope_labels import (
     SEMANTIC_SCOPE_LABELS_FILENAME,
@@ -22,8 +24,6 @@ from aippocampus_runtime.source.semantic_scope_labels import (
     semantic_scope_label_rows_from_findings,
     write_semantic_scope_label_sidecar,
 )
-from aippocampuslib import cli_error_payload, cli_exit_code_for_error_code
-from registry import load_registry, registry_paths
 
 
 def entry_matches_project(entry: dict[str, Any], project: str | None) -> bool:

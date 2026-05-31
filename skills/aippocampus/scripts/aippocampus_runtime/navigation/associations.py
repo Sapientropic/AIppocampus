@@ -17,8 +17,8 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from aippocampuslib import now_utc
-from registry import load_registry, registry_paths, unique_preserve
+from aippocampus_runtime.core import now_utc
+from aippocampus_runtime.registry.api import load_registry, registry_paths, unique_preserve
 
 ASSOCIATION_SCHEMA_VERSION = 1
 DEFAULT_MAX_MESSAGES_PER_THREAD = 120

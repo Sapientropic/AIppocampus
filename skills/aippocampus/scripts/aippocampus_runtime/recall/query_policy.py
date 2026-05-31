@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from aippocampuslib import parse_anchor_file
+from aippocampus_runtime.core import parse_anchor_file
 
 RECALL_TRIGGERS = [
     "还记得",

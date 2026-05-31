@@ -15,8 +15,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from aippocampuslib import compact_text, now_utc
-from registry import registry_paths, unique_preserve
+from aippocampus_runtime.core import compact_text, now_utc
+from aippocampus_runtime.registry.api import registry_paths, unique_preserve
 
 CACHE_SCHEMA_VERSION = 1
 RESIDUE_SCHEMA_VERSION = 1

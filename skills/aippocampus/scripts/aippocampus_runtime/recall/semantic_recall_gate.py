@@ -26,6 +26,11 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
+from aippocampus_runtime.core import (
+    compact_text,
+    now_utc,
+    sanitize_external_model_text,
+)
 from aippocampus_runtime.model.routing import (
     DEFAULT_DEEPSEEK_API_KEY_ENV,
     resolve_model_route,
@@ -38,14 +43,9 @@ from aippocampus_runtime.recall.semantic_cue_cache import (
     default_semantic_cues_path,
     semantic_cue_triggers,
 )
+from aippocampus_runtime.registry.api import load_registry, registry_paths, unique_preserve
 from aippocampus_runtime.subconscious.runtime import add_usage, call_chat_json, compact_usage
 from aippocampus_runtime.subconscious.worker import clamp_confidence, parse_model_json
-from aippocampuslib import (
-    compact_text,
-    now_utc,
-    sanitize_external_model_text,
-)
-from registry import load_registry, registry_paths, unique_preserve
 
 PROMPT_VERSION = "aippocampus-semantic-recall-gate-v0"
 SCHEMA_VERSION = 1

@@ -12,10 +12,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from aippocampus_runtime.core import sanitize_external_model_payload
 from aippocampus_runtime.subconscious.question_diagnostics import (
     QUESTION_EXTRACTION_FIELD_CONTRACT,
 )
-from aippocampuslib import sanitize_external_model_payload
 
 PROMPT_VERSION = "aippocampus-subconscious-jobs-v2"
 

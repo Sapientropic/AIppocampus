@@ -6,6 +6,7 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any
 
+from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.source.semantic_scope_labels import filtered_semantic_scope_labels
 from aippocampus_runtime.subconscious.job_circuits import JOB_SPECS
 from aippocampus_runtime.subconscious.job_validation import (
@@ -18,7 +19,6 @@ from aippocampus_runtime.subconscious.job_validation import (
     validate_cognitive_map_fields,
 )
 from aippocampus_runtime.subconscious.worker import clamp_confidence
-from aippocampuslib import compact_text
 
 
 def validation_rejection_reason(

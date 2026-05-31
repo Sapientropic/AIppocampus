@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
-from aippocampuslib import compact_text, now_utc
+from aippocampus_runtime.core import compact_text, now_utc
 
 DEFAULT_CONFIRMATION_MAX_AGE_DAYS = 14
 DEFAULT_CONFIRMATION_REQUESTS_NAME = "question_pair_confirmation_requests.jsonl"
