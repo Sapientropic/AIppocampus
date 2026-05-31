@@ -32,6 +32,12 @@ from aippocampus_runtime.subconscious.deterministic_jobs import (
     DETERMINISTIC_RUNNERS,
     run_deterministic_job,
 )
+from aippocampus_runtime.subconscious.job_circuits import (
+    JOB_SPECS,
+    PROMPT_VERSION,
+    job_names,
+    jobs_initial_payload,
+)
 from aippocampus_runtime.subconscious.job_plan import (
     JobRunTask,
     plan_job_run_tasks,
@@ -43,6 +49,10 @@ from aippocampus_runtime.subconscious.job_storage import (
     append_job_findings,
     concept_findings_to_edges,
 )
+from aippocampus_runtime.subconscious.job_validation import (
+    QUESTION_TEXT_MAX_CHARS,
+    validate_findings,
+)
 from aippocampus_runtime.subconscious.jobs_config import (
     DEFAULT_CONCURRENCY,
     DEFAULT_JOBS_OUTPUT_NAME,
@@ -51,22 +61,17 @@ from aippocampus_runtime.subconscious.jobs_config import (
     default_jobs_output_path,
     jobs_run_config_from_args,
 )
+from aippocampus_runtime.subconscious.question_diagnostics import (
+    question_axis_repair_feedback,
+    question_extraction_quality_diagnostics,
+    should_request_question_axis_repair,
+)
 from aippocampus_runtime.subconscious.validation_audit import validation_audit
 from aippocampuslib import (
     cli_error_payload,
     cli_error_payload_from_message,
     cli_exit_code_for_error_code,
     compact_text,
-)
-from subconscious_job_circuits import JOB_SPECS, PROMPT_VERSION, job_names, jobs_initial_payload
-from subconscious_job_validation import (
-    QUESTION_TEXT_MAX_CHARS,
-    validate_findings,
-)
-from subconscious_question_diagnostics import (
-    question_axis_repair_feedback,
-    question_extraction_quality_diagnostics,
-    should_request_question_axis_repair,
 )
 from subconscious_runtime import (
     AGENT_SYSTEM_PROMPT,

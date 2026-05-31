@@ -521,6 +521,81 @@ class ImportCouplingTests(unittest.TestCase):
             deterministic_jobs.DETERMINISTIC_RUNNERS,
         )
 
+    def test_subconscious_job_contracts_have_package_owner_and_compat_shims(self) -> None:
+        import subconscious_job_circuits
+        import subconscious_job_validation
+        import subconscious_question_diagnostics
+        from aippocampus_runtime.subconscious import (
+            job_circuits,
+            job_validation,
+            question_diagnostics,
+        )
+
+        package_paths = [
+            SCRIPTS / "aippocampus_runtime" / "subconscious" / "question_diagnostics.py",
+            SCRIPTS / "aippocampus_runtime" / "subconscious" / "job_circuits.py",
+            SCRIPTS / "aippocampus_runtime" / "subconscious" / "job_validation.py",
+        ]
+        shim_paths = [
+            SCRIPTS / "subconscious_question_diagnostics.py",
+            SCRIPTS / "subconscious_job_circuits.py",
+            SCRIPTS / "subconscious_job_validation.py",
+        ]
+
+        for path in package_paths + shim_paths:
+            self.assertTrue(path.exists(), path)
+        for path in shim_paths:
+            self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges(top_level_only=True)
+        self.assertIn(
+            "aippocampus_runtime.subconscious.question_diagnostics",
+            edges["aippocampus_runtime.subconscious.job_circuits"],
+        )
+        self.assertNotIn(
+            "subconscious_question_diagnostics",
+            edges["aippocampus_runtime.subconscious.job_circuits"],
+        )
+        self.assertIn(
+            "aippocampus_runtime.subconscious.job_circuits",
+            edges["aippocampus_runtime.subconscious.job_validation"],
+        )
+        self.assertNotIn(
+            "subconscious_job_circuits",
+            edges["aippocampus_runtime.subconscious.job_validation"],
+        )
+        for source in [
+            "aippocampus_runtime.subconscious.job_storage",
+            "aippocampus_runtime.subconscious.jobs_config",
+            "aippocampus_runtime.subconscious.validation_audit",
+            "subconscious_jobs",
+        ]:
+            self.assertIn("aippocampus_runtime.subconscious.job_circuits", edges[source])
+            self.assertNotIn("subconscious_job_circuits", edges[source])
+        for source in [
+            "aippocampus_runtime.subconscious.validation_audit",
+            "subconscious_jobs",
+            "subconscious_review",
+        ]:
+            self.assertIn("aippocampus_runtime.subconscious.job_validation", edges[source])
+            self.assertNotIn("subconscious_job_validation", edges[source])
+        self.assertIn(
+            "aippocampus_runtime.subconscious.question_diagnostics",
+            edges["subconscious_jobs"],
+        )
+        self.assertNotIn("subconscious_question_diagnostics", edges["subconscious_jobs"])
+
+        self.assertIs(subconscious_job_circuits.JOB_SPECS, job_circuits.JOB_SPECS)
+        self.assertIs(subconscious_job_circuits.job_names, job_circuits.job_names)
+        self.assertIs(
+            subconscious_job_validation.validate_findings,
+            job_validation.validate_findings,
+        )
+        self.assertIs(
+            subconscious_question_diagnostics.question_extraction_quality_diagnostics,
+            question_diagnostics.question_extraction_quality_diagnostics,
+        )
+
     def test_prompt_recall_core_stays_small_foreground_gate(self) -> None:
         edges = same_dir_import_edges()
         forbidden = {

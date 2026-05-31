@@ -19,6 +19,10 @@ from aippocampus_runtime.model.routing import (
     route_payload_with_effective_values,
     route_service_name,
 )
+from aippocampus_runtime.subconscious.job_validation import (
+    estimate_finding_quality,
+    finding_fingerprint,
+)
 from aippocampuslib import (
     cli_error_payload,
     cli_exit_code_for_error_code,
@@ -28,10 +32,6 @@ from aippocampuslib import (
 )
 from registry import registry_paths, unique_preserve
 from retrieval import split_query_terms
-from subconscious_job_validation import (
-    estimate_finding_quality,
-    finding_fingerprint,
-)
 from subconscious_jobs import (
     PROMPT_VERSION as JOBS_PROMPT_VERSION,
 )
