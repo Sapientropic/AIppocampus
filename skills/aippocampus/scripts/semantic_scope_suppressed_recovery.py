@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.model.routing import resolve_model_route
+from aippocampus_runtime.subconscious.runtime import add_usage, call_chat_json, compact_usage
 from aippocampuslib import (
     aippocampus_registry_dir,
     compact_text,
@@ -37,7 +38,6 @@ from semantic_scope_labels import (
 )
 from semantic_scope_source_review_core import LABEL_GUIDANCE, parse_agent_action
 from subconscious_jobs import default_jobs_output_path
-from subconscious_runtime import add_usage, call_chat_json, compact_usage
 from subconscious_worker import DEFAULT_BASE_URL
 
 PROMPT_KIND = "semantic_scope_suppressed_label_recovery"

@@ -16,17 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.subconscious.tool_loop import run_tool_using_loop
-from aippocampuslib import (
-    cli_error_payload,
-    cli_exit_code_for_error_code,
-    compact_text,
-    deepseek_cache_metrics_from_usage,
-    sanitize_external_model_payload,
-)
-from build_concept_graph import concept_is_noise, default_concept_graph_path
-from registry import registry_paths
-from subconscious_runtime import (
+from aippocampus_runtime.subconscious.runtime import (
     AGENT_SYSTEM_PROMPT,
     DEFAULT_MAX_STEPS,
     DEFAULT_MIN_TOOL_STEPS,
@@ -39,6 +29,16 @@ from subconscious_runtime import (
     run_tool,
     source_bank_from_turns,
 )
+from aippocampus_runtime.subconscious.tool_loop import run_tool_using_loop
+from aippocampuslib import (
+    cli_error_payload,
+    cli_exit_code_for_error_code,
+    compact_text,
+    deepseek_cache_metrics_from_usage,
+    sanitize_external_model_payload,
+)
+from build_concept_graph import concept_is_noise, default_concept_graph_path
+from registry import registry_paths
 from subconscious_worker import (
     ALLOWED_EDGE_TYPES,
     DEFAULT_BASE_URL,

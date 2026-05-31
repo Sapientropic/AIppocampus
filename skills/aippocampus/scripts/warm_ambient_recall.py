@@ -27,6 +27,7 @@ from aippocampus_runtime.model.routing import (
     route_payload_with_effective_values,
     route_service_name,
 )
+from aippocampus_runtime.subconscious.runtime import add_usage, call_chat_json, compact_usage
 from aippocampus_runtime.warm_ambient.prompting import OUTPUT_BUDGET_RULES as OUTPUT_BUDGET_RULES
 from aippocampus_runtime.warm_ambient.prompting import SYSTEM_PROMPT, scout_prompt
 from aippocampus_runtime.warm_ambient.scout_profiles import (
@@ -110,7 +111,6 @@ from ambient_thread_cache import (
 )
 from registry import load_registry, registry_paths, unique_preserve
 from retrieval import split_query_terms
-from subconscious_runtime import add_usage, call_chat_json, compact_usage
 from subconscious_worker import DEFAULT_BASE_URL, DEFAULT_MODEL, clamp_confidence, parse_model_json
 
 PROMPT_VERSION = "aippocampus-warm-ambient-recall-v0"

@@ -7,8 +7,8 @@ import json
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from aippocampus_runtime.subconscious.runtime import ChatFn, add_usage, compact_usage
 from aippocampuslib import sanitize_external_model_payload
-from subconscious_runtime import ChatFn, add_usage, compact_usage
 
 
 @dataclass
