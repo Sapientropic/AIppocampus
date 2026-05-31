@@ -274,21 +274,26 @@ Report boundary:
 Current smoke and diagnostic results from 2026-05-30:
 
 - synthetic Track A gate benchmark now includes the original 13 synthetic
-  boundary cases plus public memory-pain fixtures and a 162-case harder bank.
-  The harder bank currently reports 160/162 correct, accuracy 0.9877, macro F1
-  0.989, over-escalation 0, evidence false positives 0, evidence false
-  negatives 0, and expected-evidence source match 34/36. This remains a
+  boundary cases plus public memory-pain fixtures and a 166-case harder bank.
+  The harder bank currently reports 163/166 correct, accuracy 0.9819, macro F1
+  0.9839, over-escalation 0, evidence false positives 0, evidence false
+  negatives 0, and expected-evidence source match 37/37. This remains a
   deterministic routing contract, not a live semantic-model quality claim: the
-  mocked `positive_scent`, `overeager_evidence`, and `timeout` fixtures validate
-  hook routing and evidence guards after a semantic decision. The optional live
-  semantic-gate benchmark owns whether the configured model would make that
-  decision on real prompts. The harder bank now covers hard negatives with high
-  registry overlap, false memory cues inside code-surface prompts,
-  cross-project same-name entity traps, semantic over-evidence traps,
+  mocked `positive_scent`, `overeager_evidence`, `timeout`, and paraphrase
+  fixtures validate hook routing and evidence guards after a semantic decision.
+  The optional live semantic-gate benchmark owns whether the configured model
+  would make that decision on real prompts. The harder bank now covers hard
+  negatives with high registry overlap, false memory cues inside code-surface
+  prompts, cross-project same-name entity traps, semantic over-evidence traps,
   competing-source evidence requests, mixed-language paraphrase,
-  timeout/degradation behavior, secret-like suppression, and 30 natural oral
-  prompts, including 12 should-evidence cases that catch under-recall on weak
-  user wording such as "上次那个 bug 怎么说的来着".
+  timeout/degradation behavior, secret-like suppression, explicit source-free
+  evidence/scent twin contracts, four alias-ablation controls, and 30 natural
+  oral prompts, including 12 should-evidence cases that catch under-recall on
+  weak user wording such as "上次那个 bug 怎么说的来着". The alias-ablation
+  controls run with benchmark-authored exact trigger aliases removed from the
+  sidecar and report `exact_prompt_alias_violation_count=0`; they prove the
+  fixture is not only rewarding prompts that repeat `external hippocampus`,
+  `raw history`, or `source-backed` verbatim.
 - Private real-history memory-pain prompt smoke now has a hash-only runner:
   `tools/aippocampus/smoke/smoke_memory_pain_prompt_hook.py`. On 2026-05-30,
   local deterministic mode over the installed real registry reported 8 cases,
@@ -665,6 +670,9 @@ any payload is judged.
   same-name entity than the highest-risk remembered project
 - mixed Chinese/English continuation prompts that should not depend on a
   static single-language continuation word list
+- explicit source-free evidence/scent twins whose `should_scent` side removes
+  source-request language through hand-written invariant-checked fixture
+  contracts, not through ad hoc string replacement
 
 `should_evidence` cases:
 
@@ -672,6 +680,9 @@ any payload is judged.
   citations
 - mixed Chinese/English explicit source recall when the query contains enough
   source-derived content to identify the expected clean-source row
+- alias-ablated paraphrase controls where the prompt avoids exact reviewed
+  trigger aliases, but a mocked semantic/subconscious decision supplies bounded
+  query aliases and clean-source evidence still must match the expected thread
 - source-backed status questions where the user asks what was decided before
 - decision-continuation prompts whose current answer would depend on old source
   facts and whose source probe is strong enough
@@ -701,6 +712,8 @@ Initial targets:
 - `should_evidence` recall: at least `80%`
 - `scent_or_evidence_recall`: at least `70%`
 - ordinary coding prompt scent/evidence false positive rate: less than `5%`
+- `semantic_trigger_alias_ablation.exact_prompt_alias_violation_count`: `0`
+  for the synthetic alias-ablation controls
 
 These numbers are starting gates. Tighten them after the first real-history
 case set exposes the natural error distribution.

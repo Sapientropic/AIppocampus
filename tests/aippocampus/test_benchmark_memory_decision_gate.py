@@ -202,6 +202,85 @@ class MemoryDecisionGateBenchmarkTests(unittest.TestCase):
         self.assertFalse(any("那句原话" in prompt for prompt in scent_twins))
         self.assertFalse(any("source-backed evidence" in prompt for prompt in scent_twins))
 
+    def test_source_free_twins_are_explicit_fixture_contracts(self) -> None:
+        twins = benchmark.source_free_scent_twin_fixtures()
+
+        self.assertGreaterEqual(len(twins), 8)
+        self.assertTrue(all(twin.expected_support_level == "scent" for twin in twins))
+        for twin in twins:
+            twin.validate()
+            self.assertTrue(twin.required_topic_terms, twin.twin)
+            self.assertTrue(
+                any(term in twin.scent_prompt for term in twin.required_topic_terms),
+                twin.twin,
+            )
+            self.assertNotEqual(
+                benchmark.source_free_scent_twin_prompt(twin.evidence_prompt),
+                twin.scent_prompt,
+                twin.twin,
+            )
+
+    def test_alias_ablated_trigger_fixture_removes_exact_seed_aliases(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            registry_path = Path(tmp) / "registry" / "threads.json"
+            registry_path.parent.mkdir(parents=True)
+
+            benchmark.write_synthetic_reviewed_semantic_triggers(
+                registry_path,
+                alias_mode="ablated",
+            )
+
+            trigger_rows = [
+                json.loads(line)
+                for line in (registry_path.parent / "semantic_triggers.jsonl").read_text(
+                    encoding="utf-8"
+                ).splitlines()
+                if line.strip()
+            ]
+
+        aliases = {
+            str(alias).casefold()
+            for row in trigger_rows
+            for alias in row.get("aliases", [])
+        }
+        activation_surface = "\n".join(
+            str(value)
+            for row in trigger_rows
+            for value in [row.get("title"), row.get("when_to_use"), *(row.get("aliases", []))]
+        ).casefold()
+        self.assertTrue(benchmark.EXACT_ALIAS_ABLATION_TERMS)
+        self.assertFalse(
+            aliases & {term.casefold() for term in benchmark.EXACT_ALIAS_ABLATION_TERMS}
+        )
+        self.assertFalse(
+            [
+                term
+                for term in benchmark.EXACT_ALIAS_ABLATION_TERMS
+                if term.casefold() in activation_surface
+            ]
+        )
+
+    def test_alias_ablation_controls_avoid_exact_prompt_aliases(self) -> None:
+        payload = benchmark.run_benchmark(case_set="synthetic", include_private_text=False)
+
+        controls = payload["semantic_trigger_alias_ablation"]
+        control_cases = [
+            case
+            for case in payload["cases"]
+            if case["case_type"] == "hard_bank_alias_ablation"
+        ]
+
+        self.assertGreaterEqual(controls["case_count"], 4)
+        self.assertEqual(controls["case_count"], len(control_cases))
+        self.assertEqual(controls["correct_count"], controls["case_count"])
+        self.assertEqual(controls["exact_prompt_alias_violation_count"], 0)
+        self.assertGreaterEqual(controls["semantic_gate_fixture_cases"], 3)
+        self.assertEqual(
+            set(controls["removed_exact_aliases"]),
+            set(benchmark.EXACT_ALIAS_ABLATION_TERMS),
+        )
+        self.assertTrue(all("prompt" not in case for case in control_cases))
+
     def test_multilingual_evidence_twins_include_source_request_wording(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             fixture = benchmark.build_synthetic_fixture(Path(tmp))
@@ -417,7 +496,15 @@ class MemoryDecisionGateBenchmarkTests(unittest.TestCase):
         self.assertFalse(boundary["live_llm_required"])
         self.assertEqual(
             set(boundary["fixture_decisions"]),
-            {"positive_scent", "overeager_evidence", "timeout"},
+            {
+                "positive_scent",
+                "overeager_evidence",
+                "timeout",
+                "paraphrase_scent",
+                "paraphrase_evidence",
+                "paraphrase_project_scent",
+                "paraphrase_project_evidence",
+            },
         )
         self.assertIn("benchmark_live_semantic_gate.py", boundary["live_track"])
         self.assertIn("live_semantic_model_quality", payload["cannot_claim"])

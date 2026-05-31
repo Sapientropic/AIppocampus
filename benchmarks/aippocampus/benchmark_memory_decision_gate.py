@@ -35,6 +35,32 @@ EXPECTED_TO_ACTUAL = {
 }
 ACTUAL_DECISIONS = {"skip", "scent", "evidence"}
 SCHEMA_VERSION = 1
+SOURCE_FREE_TWIN_FORBIDDEN_TERMS = (
+    "can you cite",
+    "cite",
+    "citation",
+    "clean source",
+    "evidence",
+    "source-backed",
+    "source evidence",
+    "source-backed evidence",
+    "verbatim",
+    "quote",
+    "原话",
+    "原文",
+    "引用",
+    "证据",
+    "行号",
+)
+EXACT_ALIAS_ABLATION_TERMS = (
+    "external hippocampus",
+    "source-backed",
+    "source-backed memory",
+    "raw history",
+    "AIppocampus Atlas",
+    "Atlas recall gate",
+    "same-name entity trap",
+)
 DEFAULT_SHAREGPT_CORPUS_DIR = (
     _paths.REPO_ROOT
     / "benchmark_corpus"
@@ -166,6 +192,7 @@ class GateCase:
     cwd_role: str = "workspace"
     expected_evidence_thread_key: str | None = None
     memory_pain_family: str | None = None
+    semantic_trigger_alias_mode: str = "full"
 
     def to_result_stub(self, *, include_private_text: bool = False) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -176,6 +203,7 @@ class GateCase:
             "search_budget": self.search_budget,
             "use_semantic_gate": self.use_semantic_gate,
             "semantic_gate_fixture": self.semantic_gate_fixture,
+            "semantic_trigger_alias_mode": self.semantic_trigger_alias_mode,
             "uses_working_memory": self.working_memory,
             "cwd_role": self.cwd_role,
         }
@@ -203,6 +231,107 @@ class SyntheticFixture:
     working_memory_path: Path
     cases: list[GateCase]
     other_workspace: Path | None = None
+    semantic_triggers_path: Path | None = None
+    semantic_triggers_ablated_path: Path | None = None
+
+
+@dataclass(frozen=True)
+class SourceFreeTwinFixture:
+    twin: str
+    evidence_prompt: str
+    scent_prompt: str
+    expected_evidence_thread_key: str
+    required_topic_terms: tuple[str, ...]
+    expected_support_level: str = "scent"
+    forbidden_source_request_terms: tuple[str, ...] = SOURCE_FREE_TWIN_FORBIDDEN_TERMS
+
+    def validate(self) -> None:
+        """Guard explicit same-topic twins from drifting back to source requests."""
+
+        if self.expected_support_level != "scent":
+            raise ValueError(f"{self.twin}: source-free twin must expect scent")
+        if not self.required_topic_terms:
+            raise ValueError(f"{self.twin}: required_topic_terms must not be empty")
+        if self.evidence_prompt.strip() == self.scent_prompt.strip():
+            raise ValueError(f"{self.twin}: scent twin must be an explicit rewrite")
+        scent_low = self.scent_prompt.casefold()
+        forbidden = [
+            term
+            for term in self.forbidden_source_request_terms
+            if term.casefold() in scent_low
+        ]
+        if forbidden:
+            raise ValueError(f"{self.twin}: scent twin kept source request terms {forbidden}")
+        if not any(term in self.scent_prompt for term in self.required_topic_terms):
+            raise ValueError(f"{self.twin}: scent twin lost required topic terms")
+
+
+def source_free_scent_twin_fixtures() -> list[SourceFreeTwinFixture]:
+    """Explicit evidence/scent pairs for support-level routing tests.
+
+    These prompts are hand-written fixture contracts, not runtime semantic
+    policy. The invariant list below only prevents the benchmark from rewarding
+    itself for leaving source-request wording in a should-scent case.
+    """
+
+    return [
+        SourceFreeTwinFixture(
+            twin="quote_exact",
+            evidence_prompt="找回 生命还能变成什么 而我能不能仍然是我 那句原话。",
+            scent_prompt="生命还能变成什么，而我能不能仍然是我，这个自我连续性的方向继续想。",
+            expected_evidence_thread_key="session:synthetic-memory",
+            required_topic_terms=("生命还能变成什么", "自我连续性"),
+        ),
+        SourceFreeTwinFixture(
+            twin="raw_history_exact",
+            evidence_prompt="找回 raw history 明明在本地 需要外置海马体 那句原话。",
+            scent_prompt="本地历史被压缩后不好定位，这个可重开的来源层继续想。",
+            expected_evidence_thread_key="session:synthetic-memory",
+            required_topic_terms=("本地历史", "来源层"),
+        ),
+        SourceFreeTwinFixture(
+            twin="atlas_current_exact",
+            evidence_prompt="找回 AIppocampus Atlas recall gate project-scoped 那句原话。",
+            scent_prompt="AIppocampus 里那个项目作用域召回边界继续想。",
+            expected_evidence_thread_key="session:atlas-current-project",
+            required_topic_terms=("AIppocampus", "项目作用域"),
+        ),
+        SourceFreeTwinFixture(
+            twin="atlas_other_exact",
+            evidence_prompt="找回 Atlas dashboard project different entity 那句原话。",
+            scent_prompt="另一个 dashboard 项目的同名 Atlas 边界继续想。",
+            expected_evidence_thread_key="session:atlas-other-project",
+            required_topic_terms=("dashboard", "Atlas"),
+        ),
+        SourceFreeTwinFixture(
+            twin="atlas_current_line",
+            evidence_prompt="Can you cite AIppocampus Atlas recall gate should stay project-scoped?",
+            scent_prompt="AIppocampus 里那个项目作用域召回边界，继续收一下。",
+            expected_evidence_thread_key="session:atlas-current-project",
+            required_topic_terms=("AIppocampus", "项目作用域"),
+        ),
+        SourceFreeTwinFixture(
+            twin="atlas_other_line",
+            evidence_prompt="Can you cite Atlas dashboard project uses a different entity?",
+            scent_prompt="另一个 dashboard 项目里同名 Atlas 的边界，继续收一下。",
+            expected_evidence_thread_key="session:atlas-other-project",
+            required_topic_terms=("dashboard", "Atlas"),
+        ),
+        SourceFreeTwinFixture(
+            twin="hippocampus_source",
+            evidence_prompt="请给 source-backed evidence：raw history 明明在本地。",
+            scent_prompt="本地历史需要一个可重开的来源层，这个方向继续想。",
+            expected_evidence_thread_key="session:synthetic-memory",
+            required_topic_terms=("本地历史", "来源层"),
+        ),
+        SourceFreeTwinFixture(
+            twin="life_quote_source",
+            evidence_prompt="请给 source evidence：生命还能变成什么。",
+            scent_prompt="生命还能变成什么这条自我连续性线索继续想。",
+            expected_evidence_thread_key="session:synthetic-memory",
+            required_topic_terms=("生命还能变成什么", "自我连续性"),
+        ),
+    ]
 
 
 def source_free_scent_twin_prompt(prompt: str) -> str:
@@ -255,6 +384,7 @@ def build_harder_synthetic_case_bank() -> list[GateCase]:
         working_memory: bool = False,
         cwd_role: str = "workspace",
         expected_evidence_thread_key: str | None = None,
+        semantic_trigger_alias_mode: str = "full",
     ) -> None:
         cases.append(
             GateCase(
@@ -268,6 +398,7 @@ def build_harder_synthetic_case_bank() -> list[GateCase]:
                 working_memory=working_memory,
                 cwd_role=cwd_role,
                 expected_evidence_thread_key=expected_evidence_thread_key,
+                semantic_trigger_alias_mode=semantic_trigger_alias_mode,
             )
         )
 
@@ -442,67 +573,74 @@ def build_harder_synthetic_case_bank() -> list[GateCase]:
             else "session:atlas-current-project",
         )
 
-    evidence_prompts = [
-        (
-            "quote_exact",
-            "找回 生命还能变成什么 而我能不能仍然是我 那句原话。",
-            "session:synthetic-memory",
-        ),
-        (
-            "raw_history_exact",
-            "找回 raw history 明明在本地 需要外置海马体 那句原话。",
-            "session:synthetic-memory",
-        ),
-        (
-            "atlas_current_exact",
-            "找回 AIppocampus Atlas recall gate project-scoped 那句原话。",
-            "session:atlas-current-project",
-        ),
-        (
-            "atlas_other_exact",
-            "找回 Atlas dashboard project different entity 那句原话。",
-            "session:atlas-other-project",
-        ),
-        (
-            "atlas_current_line",
-            "Can you cite AIppocampus Atlas recall gate should stay project-scoped?",
-            "session:atlas-current-project",
-        ),
-        (
-            "atlas_other_line",
-            "Can you cite Atlas dashboard project uses a different entity?",
-            "session:atlas-other-project",
-        ),
-        (
-            "hippocampus_source",
-            "请给 source-backed evidence：raw history 明明在本地。",
-            "session:synthetic-memory",
-        ),
-        (
-            "life_quote_source",
-            "请给 source evidence：生命还能变成什么。",
-            "session:synthetic-memory",
-        ),
-    ]
-    for twin, prompt, thread_key in evidence_prompts:
+    for twin_fixture in source_free_scent_twin_fixtures():
+        twin_fixture.validate()
         add(
-            twin,
+            twin_fixture.twin,
             "evidence_competing_source",
             "competing_source_evidence",
             "should_evidence",
-            prompt,
+            twin_fixture.evidence_prompt,
             search_budget=3,
-            expected_evidence_thread_key=thread_key,
+            expected_evidence_thread_key=twin_fixture.expected_evidence_thread_key,
         )
         add(
-            twin,
+            twin_fixture.twin,
             "scent_no_source_twin",
             "semantic_overevidence_trap",
-            "should_scent",
-            source_free_scent_twin_prompt(prompt),
+            "should_" + twin_fixture.expected_support_level,
+            twin_fixture.scent_prompt,
             search_budget=3,
             use_semantic_gate=True,
             semantic_gate_fixture="overeager_evidence",
+        )
+
+    alias_ablation_prompts = [
+        (
+            "recoverable_source_layer",
+            "scent_semantic_paraphrase",
+            "should_scent",
+            "我们之前说的可重开来源层，继续收一下，只要方向。",
+            "paraphrase_scent",
+            None,
+        ),
+        (
+            "local_history_boundary",
+            "scent_semantic_paraphrase",
+            "should_scent",
+            "本地历史被压缩后不好定位，这个边界继续想。",
+            "paraphrase_scent",
+            None,
+        ),
+        (
+            "project_scope_wording",
+            "evidence_semantic_paraphrase",
+            "should_evidence",
+            "之前关于记忆项目里那个同名计划边界怎么说来着？",
+            "paraphrase_project_evidence",
+            "session:atlas-current-project",
+        ),
+        (
+            "project_scope_boundary",
+            "scent_project_paraphrase",
+            "should_scent",
+            "记忆项目里那个同名计划边界继续收一下，只要方向。",
+            "paraphrase_project_scent",
+            None,
+        ),
+    ]
+    for twin, role, expected, prompt, semantic_fixture, thread_key in alias_ablation_prompts:
+        add(
+            twin,
+            role,
+            "alias_ablation",
+            expected,
+            prompt,
+            search_budget=3 if expected == "should_evidence" else 2,
+            use_semantic_gate=True,
+            semantic_gate_fixture=semantic_fixture,
+            expected_evidence_thread_key=thread_key,
+            semantic_trigger_alias_mode="ablated",
         )
 
     multilingual_prompts = [
@@ -705,9 +843,100 @@ def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
     )
 
 
-def write_synthetic_reviewed_semantic_triggers(registry_path: Path) -> None:
+def synthetic_reviewed_trigger_aliases(alias_mode: str) -> tuple[list[str], list[str]]:
+    if alias_mode not in {"full", "ablated"}:
+        raise ValueError("alias_mode must be 'full' or 'ablated'")
+    if alias_mode == "ablated":
+        # This is benchmark fixture data, not runtime cue policy. The ablated
+        # sidecar deliberately removes benchmark-authored exact aliases so the
+        # control cases must be carried by semantic/subconscious-style judgment
+        # fixtures and clean-source reopening, not by prompt text repeating the
+        # seed row verbatim.
+        return (
+            [
+                "recoverable source layer",
+                "clean-source continuity boundary",
+                "foreground recall boundary",
+                "memory router budget",
+                "本地来源可重开",
+                "前台联想边界",
+            ],
+            [
+                "dashboard project context",
+                "layout planning sprint",
+                "charts project boundary",
+            ],
+        )
+    return (
+        [
+            "external hippocampus",
+            "外置海马体",
+            "小海马体",
+            "active recall",
+            "ambient recall",
+            "source-backed",
+            "source-backed memory",
+            "raw history",
+            "self-continuity",
+            "生命还能变成什么",
+            "prompt hook",
+            "recall gate",
+            "project-scoped",
+            "scent-only",
+            "AIppocampus Atlas",
+            "Atlas recall gate",
+            "same-name entity trap",
+            "cwd",
+            "project scope",
+        ],
+        [
+            "Atlas dashboard",
+            "Atlas dashboard layout",
+            "layout sprint",
+            "charts",
+            "same-name entity trap",
+        ],
+    )
+
+
+def write_synthetic_reviewed_semantic_triggers(
+    registry_path: Path,
+    *,
+    alias_mode: str = "full",
+    filename: str = "semantic_triggers.jsonl",
+) -> Path:
+    memory_aliases, atlas_aliases = synthetic_reviewed_trigger_aliases(alias_mode)
+    memory_title = (
+        "AIppocampus recoverable source boundary"
+        if alias_mode == "ablated"
+        else "AIppocampus external hippocampus and recall gate"
+    )
+    memory_when_to_use = (
+        "Use when the benchmark prompt asks to continue AIppocampus continuity, "
+        "recoverable source-layer, or project-boundary context."
+        if alias_mode == "ablated"
+        else (
+            "Use when the benchmark prompt asks to continue AIppocampus "
+            "memory architecture, recall-gate, source-backed, or project-scope context."
+        )
+    )
+    atlas_title = (
+        "Dashboard project context"
+        if alias_mode == "ablated"
+        else "Atlas dashboard same-name project context"
+    )
+    atlas_when_to_use = (
+        "Use only when the prompt asks to continue the dashboard project context "
+        "instead of implementing the dashboard task."
+        if alias_mode == "ablated"
+        else (
+            "Use only when the prompt asks to continue the Atlas dashboard context "
+            "instead of implementing the dashboard task."
+        )
+    )
+    path = registry_path.parent / filename
     write_jsonl(
-        registry_path.parent / "semantic_triggers.jsonl",
+        path,
         [
             {
                 "schema_version": 1,
@@ -715,32 +944,9 @@ def write_synthetic_reviewed_semantic_triggers(registry_path: Path) -> None:
                 "trigger_id": "synthetic_reviewed_aippocampus_memory",
                 "status": "active",
                 "source": "synthetic_reviewed_trigger_fixture",
-                "title": "AIppocampus external hippocampus and recall gate",
-                "aliases": [
-                    "external hippocampus",
-                    "外置海马体",
-                    "小海马体",
-                    "active recall",
-                    "ambient recall",
-                    "source-backed",
-                    "source-backed memory",
-                    "raw history",
-                    "self-continuity",
-                    "生命还能变成什么",
-                    "prompt hook",
-                    "recall gate",
-                    "project-scoped",
-                    "scent-only",
-                    "AIppocampus Atlas",
-                    "Atlas recall gate",
-                    "same-name entity trap",
-                    "cwd",
-                    "project scope",
-                ],
-                "when_to_use": (
-                    "Use when the benchmark prompt asks to continue AIppocampus "
-                    "memory architecture, recall-gate, source-backed, or project-scope context."
-                ),
+                "title": memory_title,
+                "aliases": memory_aliases,
+                "when_to_use": memory_when_to_use,
                 "when_not_to_use": (
                     "Do not use for plain implementation tasks; keep it as scent unless "
                     "source evidence is explicitly requested."
@@ -754,18 +960,9 @@ def write_synthetic_reviewed_semantic_triggers(registry_path: Path) -> None:
                 "trigger_id": "synthetic_reviewed_atlas_dashboard",
                 "status": "active",
                 "source": "synthetic_reviewed_trigger_fixture",
-                "title": "Atlas dashboard same-name project context",
-                "aliases": [
-                    "Atlas dashboard",
-                    "Atlas dashboard layout",
-                    "layout sprint",
-                    "charts",
-                    "same-name entity trap",
-                ],
-                "when_to_use": (
-                    "Use only when the prompt asks to continue the Atlas dashboard context "
-                    "instead of implementing the dashboard task."
-                ),
+                "title": atlas_title,
+                "aliases": atlas_aliases,
+                "when_to_use": atlas_when_to_use,
                 "when_not_to_use": (
                     "Do not use for ordinary dashboard CSS, test, layout, or fixture edits."
                 ),
@@ -774,6 +971,7 @@ def write_synthetic_reviewed_semantic_triggers(registry_path: Path) -> None:
             },
         ],
     )
+    return path
 
 
 def selected_cue_terms(text: str, *, limit: int = 4) -> list[str]:
@@ -1041,7 +1239,10 @@ def build_synthetic_fixture(root: Path) -> SyntheticFixture:
             "turn_index": 19,
             "is_final": True,
             "sha1": "synthetic-hippocampus-line",
-            "text": "raw history 明明在本地，但压缩后的我不知道该找什么，所以需要外置海马体和触发式召回。",
+            "text": (
+                "raw history 明明在本地，但压缩后的我不知道该找什么，所以需要外置海马体和触发式召回；"
+                "也就是说，它是一个可重开来源层。"
+            ),
         },
         {
             "line": 480,
@@ -1260,7 +1461,12 @@ def build_synthetic_fixture(root: Path) -> SyntheticFixture:
         ),
         encoding="utf-8",
     )
-    write_synthetic_reviewed_semantic_triggers(registry_path)
+    semantic_triggers_path = write_synthetic_reviewed_semantic_triggers(registry_path)
+    semantic_triggers_ablated_path = write_synthetic_reviewed_semantic_triggers(
+        registry_path,
+        alias_mode="ablated",
+        filename="semantic_triggers_ablated.jsonl",
+    )
     working_memory_path = registry_path.parent / "working_memory.jsonl"
     write_jsonl(
         working_memory_path,
@@ -1396,6 +1602,8 @@ def build_synthetic_fixture(root: Path) -> SyntheticFixture:
         working_memory_path=working_memory_path,
         cases=cases,
         other_workspace=other_workspace,
+        semantic_triggers_path=semantic_triggers_path,
+        semantic_triggers_ablated_path=semantic_triggers_ablated_path,
     )
 
 
@@ -1584,6 +1792,48 @@ def summarize_harder_case_bank(results: list[dict[str, Any]]) -> dict[str, Any]:
     return summary
 
 
+def exact_alias_hits(text: str, terms: tuple[str, ...] = EXACT_ALIAS_ABLATION_TERMS) -> list[str]:
+    low = str(text or "").casefold()
+    return [term for term in terms if term.casefold() in low]
+
+
+def summarize_semantic_trigger_alias_ablation(
+    cases: list[GateCase],
+    results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    case_by_id = {case.case_id: case for case in cases}
+    rows = [
+        row for row in results if row.get("case_type") == "hard_bank_alias_ablation"
+    ]
+    prompt_violations = [
+        {
+            "case_id": case.case_id,
+            "terms": exact_alias_hits(case.prompt),
+        }
+        for case in (
+            case_by_id.get(str(row.get("case_id")))
+            for row in rows
+        )
+        if case is not None and exact_alias_hits(case.prompt)
+    ]
+    return {
+        "case_count": len(rows),
+        "correct_count": sum(1 for row in rows if row.get("correct")),
+        "semantic_gate_fixture_cases": sum(
+            1 for row in rows if row.get("semantic_gate_fixture") != "disabled"
+        ),
+        "exact_prompt_alias_violation_count": len(prompt_violations),
+        "exact_prompt_alias_violations": prompt_violations,
+        "removed_exact_aliases": list(EXACT_ALIAS_ABLATION_TERMS),
+        "trigger_alias_mode": "ablated",
+        "description": (
+            "Synthetic Track A controls whose prompts avoid benchmark-authored exact "
+            "trigger aliases. They validate hook routing after a semantic/paraphrase "
+            "fixture and clean-source reopening; they do not claim live semantic model quality."
+        ),
+    }
+
+
 def summarize_memory_pain_fixtures(
     results: list[dict[str, Any]],
     *,
@@ -1651,6 +1901,38 @@ def run_case(case: GateCase, fixture: SyntheticFixture) -> dict[str, Any]:
                 "errors": [],
                 "cached": False,
             }
+        if case.semantic_gate_fixture in {
+            "paraphrase_scent",
+            "paraphrase_evidence",
+            "paraphrase_project_scent",
+            "paraphrase_project_evidence",
+        }:
+            project_case = case.semantic_gate_fixture in {
+                "paraphrase_project_scent",
+                "paraphrase_project_evidence",
+            }
+            evidence_case = case.semantic_gate_fixture in {
+                "paraphrase_evidence",
+                "paraphrase_project_evidence",
+            }
+            return {
+                "available": True,
+                "decision": "evidence" if evidence_case else "scent",
+                "confidence": 0.88 if evidence_case else 0.84,
+                "intent": "source_recall" if evidence_case else "continuation",
+                "query_aliases": [
+                    "AIppocampus Atlas recall gate",
+                    "project-scoped",
+                ]
+                if project_case
+                else ["raw history 明明在本地", "压缩后的我不知道该找什么"],
+                "memory_scope": ["registered_threads"],
+                "anti_personalization_risk": "low",
+                "reasons": ["benchmark semantic paraphrase alias-ablation control"],
+                "workers": [],
+                "errors": [],
+                "cached": False,
+            }
         if case.semantic_gate_fixture == "overeager_evidence":
             return {
                 "available": True,
@@ -1698,11 +1980,17 @@ def run_case(case: GateCase, fixture: SyntheticFixture) -> dict[str, Any]:
         if case.cwd_role == "other_project" and fixture.other_workspace is not None
         else fixture.workspace
     )
+    semantic_triggers_path = (
+        fixture.semantic_triggers_ablated_path
+        if case.semantic_trigger_alias_mode == "ablated"
+        else fixture.semantic_triggers_path
+    )
     result = hook.assess_prompt(
         case.prompt,
         cwd=cwd,
         registry_path=fixture.registry_path,
         working_memory_path=fixture.working_memory_path if case.working_memory else None,
+        semantic_triggers_path=semantic_triggers_path,
         search_budget=case.search_budget,
         use_semantic_gate=case.use_semantic_gate,
         semantic_gate_fn=semantic_gate_spy,
@@ -1765,6 +2053,12 @@ def run_benchmark(
         },
         "metrics": metrics,
         "harder_case_bank": harder_case_bank,
+        "semantic_trigger_alias_ablation": summarize_semantic_trigger_alias_ablation(
+            cases,
+            results,
+        )
+        if case_set == "synthetic"
+        else None,
         "memory_pain_fixtures": summarize_memory_pain_fixtures(
             results,
             include_private_text=include_private_text,
@@ -1774,7 +2068,15 @@ def run_benchmark(
         "semantic_gate_boundary": {
             "mode": "deterministic_fixture" if case_set == "synthetic" else "fixture_public_corpus",
             "live_llm_required": False,
-            "fixture_decisions": ["positive_scent", "overeager_evidence", "timeout"],
+            "fixture_decisions": [
+                "positive_scent",
+                "overeager_evidence",
+                "timeout",
+                "paraphrase_scent",
+                "paraphrase_evidence",
+                "paraphrase_project_scent",
+                "paraphrase_project_evidence",
+            ],
             "validates": "hook routing and evidence guards after a semantic decision",
             "does_not_validate": "whether the live semantic model would choose that decision",
             "live_track": "benchmarks/aippocampus/benchmark_live_semantic_gate.py",
