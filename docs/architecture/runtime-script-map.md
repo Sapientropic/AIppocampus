@@ -75,6 +75,7 @@ Current package pilots:
 | Package | Top-level compatibility shims | Owner boundary |
 |---|---|---|
 | `aippocampus_runtime/sync/` | `sync_contract.py` | Shared manifest, transport metadata, and privacy boundary helpers reused by sync routes. |
+| `aippocampus_runtime/sync/encrypted/` | `encrypted_sync_bundle.py`, `encrypted_sync_crypto.py`, `encrypted_sync_keys.py`, `encrypted_sync_migration.py`, `encrypted_sync_object_storage.py` | Age-backed encrypted bundle, key, migration, and object-storage helpers. |
 | `aippocampus_runtime/warm_ambient/` | `warm_ambient_prompting.py`, `warm_ambient_scout_profiles.py`, `warm_ambient_source_validation.py` | Prompt rendering, scout taxonomy, and source-ref validation for warm ambient recall. |
 
 Repo-owned docs, smoke, and benchmark tools may import runtime helpers through
@@ -193,7 +194,7 @@ file-selection, path, conflict, or raw-rollout defaults.
 |---|---|---|---|---|
 | `aippocampus_runtime/sync/contract.py`, `sync_contract.py`, `sync_bundle.py` | Shared manifest/privacy contract plus local-folder clean-source bundle sync. | CLI/sync docs; `sync_contract.py` is an import compatibility shim. | Content-addressed chunks, path repair, conflict policy. | Public entrypoint |
 | `sync_object_storage.py`, `aippocampus_runtime/sync/object_storage/{client,providers}.py`, and `object_storage_*` compatibility shims | HTTP/S3/R2/GCS-compatible object transport. | CLI/sync docs; `sync_object_storage.py` remains the public command. | Shared bundle semantics, provider config, no secret logging. | Public entrypoint |
-| `encrypted_sync_bundle.py`, `encrypted_sync_object_storage.py`, `encrypted_sync_crypto.py`, `encrypted_sync_keys.py`, `encrypted_sync_migration.py`, `encrypted_sync_admin.py` | Age-backed encrypted sync overlay, device-key UX, and plaintext migration helpers. | CLI/encrypted sync docs. | Sync bundle/object transport plus key handling. | Public entrypoint |
+| `encrypted_sync_admin.py`, `aippocampus_runtime/sync/encrypted/{bundle,object_storage,crypto,keys,migration}.py`, and `encrypted_sync_*` compatibility shims | Age-backed encrypted sync overlay, device-key UX, and plaintext migration helpers. | CLI/encrypted sync docs; `encrypted_sync_admin.py` remains the public command. | Sync bundle/object transport plus key handling. | Public entrypoint |
 | `vault_sync_utils.py`, `sync_vault.py`, `vault_notes.py`, `vault_dashboard.py` | Human-readable vault projection and dashboard. | CLI/manual projection. | Clean source and registry rows; not a transport backend. | Public entrypoint |
 
 The local-folder route writes the bundle directly. The object-storage route is

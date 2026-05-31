@@ -781,7 +781,9 @@ def main() -> int:
     try:
         if args.command == "status":
             if args.require_encrypted:
-                encrypted_sync_bundle = importlib.import_module("encrypted_sync_bundle")
+                encrypted_sync_bundle = importlib.import_module(
+                    "aippocampus_runtime.sync.encrypted.bundle"
+                )
 
                 result = encrypted_sync_bundle.status_encrypted_sync_bundle(
                     args.sync_dir,
@@ -793,7 +795,9 @@ def main() -> int:
                 result = status_sync_bundle(args.sync_dir)
         elif args.command == "push":
             if args.encrypt:
-                encrypted_sync_bundle = importlib.import_module("encrypted_sync_bundle")
+                encrypted_sync_bundle = importlib.import_module(
+                    "aippocampus_runtime.sync.encrypted.bundle"
+                )
 
                 result = encrypted_sync_bundle.push_encrypted_sync_bundle(
                     args.registry_dir,
@@ -811,7 +815,9 @@ def main() -> int:
                 )
         elif args.command == "pull":
             if args.require_encrypted:
-                encrypted_sync_bundle = importlib.import_module("encrypted_sync_bundle")
+                encrypted_sync_bundle = importlib.import_module(
+                    "aippocampus_runtime.sync.encrypted.bundle"
+                )
 
                 result = encrypted_sync_bundle.pull_encrypted_sync_bundle(
                     args.sync_dir,
@@ -823,7 +829,9 @@ def main() -> int:
                 result = pull_sync_bundle(args.sync_dir, args.registry_dir)
         else:
             if args.require_encrypted:
-                encrypted_sync_bundle = importlib.import_module("encrypted_sync_bundle")
+                encrypted_sync_bundle = importlib.import_module(
+                    "aippocampus_runtime.sync.encrypted.bundle"
+                )
 
                 result = encrypted_sync_bundle.repair_encrypted_sync_bundle(
                     args.sync_dir,

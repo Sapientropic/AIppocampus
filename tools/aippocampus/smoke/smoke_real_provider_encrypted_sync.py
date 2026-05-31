@@ -26,10 +26,10 @@ _paths.ensure_paths()
 
 import smoke_cross_device_sync
 
-import encrypted_sync_object_storage
 import object_storage_client
 import sync_bundle
 import sync_object_storage
+from aippocampus_runtime.sync.encrypted import object_storage as encrypted_sync_object_storage
 
 DEFAULT_SMOKE_PREFIX = "aippocampus/encrypted-sync-smoke"
 

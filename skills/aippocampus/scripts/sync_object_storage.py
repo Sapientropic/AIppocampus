@@ -392,7 +392,9 @@ def push_encrypted_object_storage_bundle(
     secret_access_key: str | None = None,
     session_token: str | None = None,
 ) -> dict[str, Any]:
-    encrypted_sync_object_storage = importlib.import_module("encrypted_sync_object_storage")
+    encrypted_sync_object_storage = importlib.import_module(
+        "aippocampus_runtime.sync.encrypted.object_storage"
+    )
 
     return encrypted_sync_object_storage.push_encrypted_object_storage_bundle(
         registry_dir,
@@ -431,7 +433,9 @@ def repair_encrypted_object_storage_bundle(
     secret_access_key: str | None = None,
     session_token: str | None = None,
 ) -> dict[str, Any]:
-    encrypted_sync_object_storage = importlib.import_module("encrypted_sync_object_storage")
+    encrypted_sync_object_storage = importlib.import_module(
+        "aippocampus_runtime.sync.encrypted.object_storage"
+    )
 
     return encrypted_sync_object_storage.repair_encrypted_object_storage_bundle(
         object_store_url,
@@ -465,7 +469,9 @@ def status_encrypted_object_storage_bundle(
     secret_access_key: str | None = None,
     session_token: str | None = None,
 ) -> dict[str, Any]:
-    encrypted_sync_object_storage = importlib.import_module("encrypted_sync_object_storage")
+    encrypted_sync_object_storage = importlib.import_module(
+        "aippocampus_runtime.sync.encrypted.object_storage"
+    )
 
     return encrypted_sync_object_storage.status_encrypted_object_storage_bundle(
         object_store_url,
@@ -499,7 +505,9 @@ def pull_encrypted_object_storage_bundle(
     secret_access_key: str | None = None,
     session_token: str | None = None,
 ) -> dict[str, Any]:
-    encrypted_sync_object_storage = importlib.import_module("encrypted_sync_object_storage")
+    encrypted_sync_object_storage = importlib.import_module(
+        "aippocampus_runtime.sync.encrypted.object_storage"
+    )
 
     return encrypted_sync_object_storage.pull_encrypted_object_storage_bundle(
         object_store_url,
