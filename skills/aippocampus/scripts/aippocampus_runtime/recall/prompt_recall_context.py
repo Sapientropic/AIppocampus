@@ -13,6 +13,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.navigation.associations import (
+    default_associations_path,
+    load_associations,
+    match_associations,
+    source_text_is_noise,
+)
+from aippocampus_runtime.navigation.cognitive_map import (
+    default_cognitive_map_path,
+    load_cognitive_map,
+    match_cognitive_map,
+)
+from aippocampus_runtime.navigation.concept_graph import default_concept_graph_path
 from aippocampus_runtime.recall.ambient_policy import (
     apply_working_memory_policy,
     default_ambient_policy_path,
@@ -39,18 +51,6 @@ from aippocampus_runtime.recall.semantic_recall_gate import (
     default_semantic_triggers_path,
     prompt_relevant_triggers,
 )
-from build_associations import (
-    default_associations_path,
-    load_associations,
-    match_associations,
-    source_text_is_noise,
-)
-from build_cognitive_map import (
-    default_cognitive_map_path,
-    load_cognitive_map,
-    match_cognitive_map,
-)
-from build_concept_graph import default_concept_graph_path
 from memory_candidate_router import (
     default_working_memory_path,
     load_working_memory,

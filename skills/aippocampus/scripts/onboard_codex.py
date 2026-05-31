@@ -24,17 +24,19 @@ import time
 from pathlib import Path
 from typing import Any, Sequence
 
+from aippocampus_runtime.navigation.cognitive_map import (
+    build_from_files as build_cognitive_map_from_files,
+)
+from aippocampus_runtime.navigation.cognitive_map import default_cognitive_map_path
+from aippocampus_runtime.navigation.project_timeline import (
+    build_project_timeline,
+    default_timeline_path,
+    save_project_timeline,
+)
 from aippocampus_runtime.recall.semantic_recall_gate import default_semantic_triggers_path
 from aippocampus_runtime.recall.semantic_trigger_router import (
     build_semantic_triggers,
     default_seed_triggers_path,
-)
-from build_cognitive_map import build_from_files as build_cognitive_map_from_files
-from build_cognitive_map import default_cognitive_map_path
-from build_project_timeline import (
-    build_project_timeline,
-    default_timeline_path,
-    save_project_timeline,
 )
 from conversation_sources import ConversationProvider
 from memory_candidate_router import default_candidates_path

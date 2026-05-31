@@ -24,14 +24,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.recall.query_policy import split_query_terms
-from aippocampuslib import compact_text, now_utc
-from build_associations import (
+from aippocampus_runtime.navigation.associations import (
     extract_terms_from_text,
     normalize_term,
     source_text_is_noise,
     term_is_noise,
 )
+from aippocampus_runtime.recall.query_policy import split_query_terms
+from aippocampuslib import compact_text, now_utc
 from registry import registry_paths, unique_preserve
 
 ROUTER_SCHEMA_VERSION = 1

@@ -31,6 +31,7 @@ from aippocampus_runtime.model.routing import (
     route_payload_with_effective_values,
     route_service_name,
 )
+from aippocampus_runtime.navigation.concept_graph import concept_is_noise
 from aippocampuslib import (
     cli_error_payload,
     cli_exit_code_for_error_code,
@@ -38,7 +39,6 @@ from aippocampuslib import (
     now_utc,
     sanitize_external_model_payload,
 )
-from build_concept_graph import concept_is_noise
 from registry import registry_paths, unique_preserve
 
 PROMPT_VERSION = "aippocampus-subconscious-v0"
