@@ -701,9 +701,10 @@ should not create a blind-spot probe merely because a complementary symbol can
 be computed.
 
 The implemented deterministic slice lives in
-`skills/aippocampus/scripts/dream_one_sidedness.py` and is covered by
-`tests/aippocampus/test_dream_one_sidedness.py`. It separates
-`compute_opposite_arc()` from `evaluate_one_sidedness_gate()`: an opposite arc
+`skills/aippocampus/scripts/aippocampus_runtime/dream/one_sidedness.py`, with
+`skills/aippocampus/scripts/dream_one_sidedness.py` kept as a compatibility
+shim. It is covered by `tests/aippocampus/test_dream_one_sidedness.py` and
+separates `compute_opposite_arc()` from `evaluate_one_sidedness_gate()`: an opposite arc
 can be computed without granting permission to generate a probe. Gate-on probes
 are `dream_synthesized`, `dream_function="compensatory"`,
 `voice_id="opposite_hexagram_voice"`, `foreground_eligible=false`, and carry

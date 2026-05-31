@@ -9,7 +9,7 @@ ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-import dream_one_sidedness as one_sidedness  # noqa: E402
+from aippocampus_runtime.dream import one_sidedness  # noqa: E402
 
 
 def source_ref(line: int) -> dict[str, object]:
