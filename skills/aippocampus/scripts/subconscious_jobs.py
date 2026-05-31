@@ -28,6 +28,10 @@ from aippocampus_runtime.model.routing import (
     route_payload_with_effective_values,
     route_service_name,
 )
+from aippocampus_runtime.subconscious.job_storage import (
+    append_job_findings,
+    concept_findings_to_edges,
+)
 from aippocampuslib import (
     cli_error_payload,
     cli_error_payload_from_message,
@@ -46,7 +50,6 @@ from subconscious_job_plan import (
     sample_count,
     worker_count,
 )
-from subconscious_job_storage import append_job_findings, concept_findings_to_edges
 from subconscious_job_validation import (
     QUESTION_TEXT_MAX_CHARS,
     validate_findings,
