@@ -29,6 +29,13 @@ SCHEMA_VERSION = corr.SCHEMA_VERSION
 HOOK_STAGES = corr.HOOK_STAGES
 COMPACTION_STATES = corr.COMPACTION_STATES
 ADJUDICATION_STATUSES = corr.ADJUDICATION_STATUSES
+HIGH_RISK_COVERAGE_CELLS = (
+    ("PostCompact", "horizon_lost", "valid_adopted"),
+    ("PostCompact", "horizon_lost", "valid_ignored"),
+    ("PostCompact", "horizon_lost", "refuted"),
+    ("PostCompact", "horizon_lost", "superseded"),
+    ("PostCompact", "horizon_lost", "uncertain"),
+)
 SECRET_OR_PATH_RE = re.compile(
     r"(?i)(api[_-]?key|authorization|bearer\s+[a-z0-9._-]{8,}|password|secret|token)"
     r"|([a-z]:\\[^ \n\r\t]+)"
@@ -515,6 +522,83 @@ def safe_rate(numerator: int | float, denominator: int | float) -> float:
     return round(float(numerator) / float(denominator), 4) if denominator else 0.0
 
 
+def coverage_cell(
+    hook_stage: str,
+    compaction_state: str,
+    adjudication_status: str,
+    *,
+    case_count: int | None = None,
+) -> dict[str, Any]:
+    cell: dict[str, Any] = {
+        "hook_stage": hook_stage,
+        "compaction_state": compaction_state,
+        "adjudication_status": adjudication_status,
+    }
+    if case_count is not None:
+        cell["case_count"] = case_count
+    return cell
+
+
+def coverage_density_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    counts: dict[tuple[str, str, str], int] = {}
+    for row in rows:
+        key = (
+            str(row.get("hook_stage") or "unknown"),
+            str(row.get("compaction_state") or row.get("context_state") or "unknown"),
+            str(row.get("adjudication_status") or "unknown"),
+        )
+        counts[key] = counts.get(key, 0) + 1
+
+    possible_cells = [
+        (stage, state, status)
+        for stage in HOOK_STAGES
+        for state in COMPACTION_STATES
+        for status in ADJUDICATION_STATUSES
+    ]
+    missing_cells = [cell for cell in possible_cells if cell not in counts]
+    observed_cells = [
+        coverage_cell(stage, state, status, case_count=count)
+        for (stage, state, status), count in sorted(counts.items())
+    ]
+    singleton_cells = [cell for cell in observed_cells if cell["case_count"] == 1]
+    high_risk_required = list(HIGH_RISK_COVERAGE_CELLS)
+    missing_high_risk = [cell for cell in high_risk_required if cell not in counts]
+    sparse_high_risk = [
+        cell for cell in high_risk_required if counts.get(cell, 0) == 1
+    ]
+    return {
+        "axes": ["hook_stage", "compaction_state", "adjudication_status"],
+        "possible_cell_count": len(possible_cells),
+        "observed_cell_count": len(observed_cells),
+        "density": safe_rate(len(observed_cells), len(possible_cells)),
+        "missing_cell_count": len(missing_cells),
+        "singleton_cell_count": len(singleton_cells),
+        "max_cell_count": max(counts.values(), default=0),
+        "observed_cells": observed_cells,
+        "sparse_cells": singleton_cells,
+        "missing_cell_examples": [
+            coverage_cell(stage, state, status)
+            for stage, state, status in missing_cells[:24]
+        ],
+        "high_risk_required_cells": [
+            coverage_cell(stage, state, status)
+            for stage, state, status in high_risk_required
+        ],
+        "missing_high_risk_cells": [
+            coverage_cell(stage, state, status)
+            for stage, state, status in missing_high_risk
+        ],
+        "high_risk_sparse_cells": [
+            coverage_cell(stage, state, status, case_count=counts[(stage, state, status)])
+            for stage, state, status in sparse_high_risk
+        ],
+        "notes": [
+            "Density is diagnostic only; Track D remains a synthetic runner and does not claim full cross-product coverage.",
+            "High-risk cells focus on post-compaction horizon-lost stale/superseded/refuted/uncertain anchor behavior.",
+        ],
+    }
+
+
 def summarize_results(rows: list[dict[str, Any]]) -> dict[str, Any]:
     total = len(rows)
     expected_silent = [row for row in rows if not row.get("expected_emit")]
@@ -577,6 +661,8 @@ def summarize_results(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "context_state_coverage": context_state_coverage,
         "adjudication_coverage": adjudication_coverage,
         "correct_count": correct_count,
+        "incorrect_count": total - correct_count,
+        "all_cases_correct": correct_count == total if total else False,
         "accuracy": safe_rate(correct_count, total),
         "privacy_breach_count": privacy_count,
         "privacy_breach_rate": safe_rate(privacy_count, total),
@@ -679,12 +765,13 @@ def run_benchmark(
     ]
     metrics = summarize_results(rows)
     coverage = coverage_summary(rows)
+    coverage_density = coverage_density_summary(rows)
     required_stage_coverage = set(HOOK_STAGES) <= set(coverage["hook_stages"])
     required_state_coverage = set(COMPACTION_STATES) <= set(coverage["compaction_states"])
     required_status_coverage = set(ADJUDICATION_STATUSES) <= set(
         coverage["adjudication_statuses"]
     )
-    regression_free = (
+    regression_counters_free = (
         metrics["privacy_breach_count"] == 0
         and metrics["false_anchor_count"] == 0
         and metrics["stale_route_retry_count"] == 0
@@ -695,6 +782,8 @@ def run_benchmark(
         and metrics["correction_anchor_recall"] == 1.0
         and metrics["anti_nag_precision"] == 1.0
     )
+    all_cases_correct = metrics["correct_count"] == metrics["total_cases"]
+    regression_free = regression_counters_free and all_cases_correct
     full_coverage = (
         required_stage_coverage
         and required_state_coverage
@@ -722,8 +811,14 @@ def run_benchmark(
         },
         "status": status,
         "quality_gate_ok": quality_gate_ok,
+        "diagnostic": {
+            "is_subset": diagnostic_subset,
+            "sufficient_quality_evidence": quality_gate_ok,
+            "reason": "case_limit" if diagnostic_subset else None,
+        },
         "metrics": metrics,
         "coverage": coverage,
+        "coverage_density": coverage_density,
         "cases": rows,
         "privacy_boundary": {
             "raw_correction_text_emitted": bool(include_private_text),
