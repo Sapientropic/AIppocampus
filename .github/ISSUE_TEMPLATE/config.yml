@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ideas and discussion
+    url: https://github.com/Sapientropic/AIppocampus/discussions
+    about: Use Discussions for broad product direction, philosophy, and early proposals.

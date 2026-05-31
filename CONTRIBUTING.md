@@ -1,9 +1,14 @@
 # Contributing To AIppocampus
 
+![Hands holding a crystal heart](.github/assets/community/contributing-crystal-heart.jpg)
+
 AIppocampus is a source-backed continuity layer for long-running relationships
 with AI agents. Contributions should preserve that purpose: clean source and
 source references are truth; summaries, graphs, and model findings are
 navigation layers.
+
+The best contribution usually has a small surface and a clean receipt: what it
+changes, what proves it, and what it still cannot claim.
 
 ## Public Boundary
 
@@ -89,3 +94,6 @@ A useful PR should state:
 - what source-backed evidence or tests prove the change
 - what cannot be claimed yet
 - what private-data boundary was checked
+
+Use the repository PR template as the minimum receipt. For broader ideas,
+start with a GitHub Discussion or a focused issue before opening a large patch.
