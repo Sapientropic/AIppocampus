@@ -36,8 +36,10 @@ theme-emergence slice, plus first question-index scale/sidecar evaluation:
 - Implemented: `question_extraction` inside `JOB_SPECS`, including
   `question_candidate` and explicit `frontier_marker` output.
 - Implemented: `question_tracking` as a deterministic runner in
-  `skills/aippocampus/scripts/question_tracking.py`, registered as a
-  dependency-ordered `JOB_SPECS` entry. It groups existing source-backed
+  `skills/aippocampus/scripts/aippocampus_runtime/question/tracking.py`;
+  `skills/aippocampus/scripts/question_tracking.py` remains the direct-script
+  compatibility shim. It is registered as a dependency-ordered `JOB_SPECS`
+  entry and groups existing source-backed
   candidates, writes append-only `question_link` findings back to
   `subconscious_jobs.jsonl`, records auditable ordering edges, skips stale refs
   when registry clean-source resolution is available, adds deterministic
@@ -80,8 +82,8 @@ theme-emergence slice, plus first question-index scale/sidecar evaluation:
   positives and merged negatives.
 - Implemented first #134 optional live/model adapter slice:
   `skills/aippocampus/scripts/question_confirmation_live.py` consumes pending
-  request JSONL and writes explicit confirmation artifacts that
-  `question_tracking.py --borderline-confirmations` can consume. The adapter is
+  request JSONL and writes explicit confirmation artifacts that the tracking
+  `--borderline-confirmations` path can consume. The adapter is
   dry-run by default; a caller must pass `--call-model` and provide an API key
   route before any external model call occurs. A sanitized no-write smoke,
   `tools/aippocampus/smoke/smoke_question_confirmation_live.py`, exercises the
@@ -1110,7 +1112,7 @@ noisy ones. Frontier markers must feel like saved trail markers, not guilt.
   audit in `match_evidence` so reviewers can trace model/source, prompt version,
   created time, pair id, and source finding ids without copying source refs.
 - Shipped first #134 offline confirmation/calibration slice:
-  `question_tracking.py --pending-confirmations-output` exports compact
+  `aippocampus_runtime.question.tracking --pending-confirmations-output` exports compact
   confirmation-request JSONL for borderline pairs without full history or source
   refs. `benchmark_question_tracking_calibration.py` provides selected-fixture
   evidence that default thresholds keep obvious recurring questions, reject
@@ -1119,7 +1121,7 @@ noisy ones. Frontier markers must feel like saved trail markers, not guilt.
   negative pairs.
 - Shipped first #134 optional live/model adapter slice:
   `question_confirmation_live.py` turns pending request JSONL into explicit
-  confirmation artifacts for `question_tracking.py --borderline-confirmations`.
+  confirmation artifacts for the tracking `--borderline-confirmations` path.
   The CLI defaults to dry-run and requires `--call-model` plus an API key route
   before contacting an external provider. The sanitized
   `smoke_question_confirmation_live.py` no-write smoke exercises request
