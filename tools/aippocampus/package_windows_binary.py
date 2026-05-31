@@ -30,6 +30,10 @@ PRIVATE_DATA_GUARDS = (
     "rollouts",
     "registry",
 )
+PRIVATE_DATA_GUARDS_ANYWHERE = frozenset(
+    name for name in PRIVATE_DATA_GUARDS if name != "registry"
+)
+PRIVATE_DATA_GUARDS_TOP_LEVEL = frozenset(PRIVATE_DATA_GUARDS)
 
 
 @dataclass(frozen=True)
@@ -176,7 +180,15 @@ def stage_runtime_scripts(plan: PackagingPlan) -> None:
     plan.staged_scripts.parent.mkdir(parents=True, exist_ok=True)
 
     def ignore_private_dirs(_dir: str, names: list[str]) -> set[str]:
-        return {name for name in names if name in PRIVATE_DATA_GUARDS}
+        current = Path(_dir).resolve()
+        guarded = set(PRIVATE_DATA_GUARDS_ANYWHERE)
+        if current == plan.source_scripts.resolve():
+            # `registry` is a private/generated root only at package-copy root.
+            # Keep package owners such as `aippocampus_runtime/registry`; hiding
+            # them produces a binary that passes shallow smoke but fails health,
+            # onboarding, and MCP imports.
+            guarded.update(PRIVATE_DATA_GUARDS_TOP_LEVEL)
+        return {name for name in names if name in guarded}
 
     shutil.copytree(plan.source_scripts, plan.staged_scripts, ignore=ignore_private_dirs)
 
@@ -193,9 +205,13 @@ def private_data_guard(plan: PackagingPlan) -> dict[str, Any]:
     if plan.staged_scripts.exists():
         for root, dirs, _files in os.walk(plan.staged_scripts):
             for dirname in dirs:
-                if dirname in PRIVATE_DATA_GUARDS:
+                path = Path(root) / dirname
+                relative = path.relative_to(plan.staged_scripts)
+                if dirname in PRIVATE_DATA_GUARDS_ANYWHERE or (
+                    dirname in PRIVATE_DATA_GUARDS_TOP_LEVEL and str(relative) == dirname
+                ):
                     staged_private_entries.append(
-                        str((Path(root) / dirname).relative_to(plan.staged_scripts))
+                        str(relative)
                     )
     private_roots = [str((plan.repo_root / name).resolve()) for name in PRIVATE_DATA_GUARDS]
     command_text = "\n".join(str(part) for part in plan.command)

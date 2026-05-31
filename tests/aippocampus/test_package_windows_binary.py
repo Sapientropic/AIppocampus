@@ -42,8 +42,15 @@ class WindowsBinaryPackagingTests(unittest.TestCase):
         )
         (scripts / "aippocampus_cli.py").write_text("def main(): return 0\n", encoding="utf-8")
         (scripts / "aippocampuslib.py").write_text("", encoding="utf-8")
+        package_registry = scripts / "aippocampus_runtime" / "registry"
+        package_registry.mkdir(parents=True)
+        (scripts / "aippocampus_runtime" / "__init__.py").write_text("", encoding="utf-8")
+        (package_registry / "__init__.py").write_text("", encoding="utf-8")
+        (package_registry / "store.py").write_text("def load_registry(): return {}\n", encoding="utf-8")
         (scripts / ".aippocampus").mkdir()
         (scripts / ".aippocampus" / "registry.json").write_text("private", encoding="utf-8")
+        (scripts / "registry").mkdir()
+        (scripts / "registry" / "private.json").write_text("private", encoding="utf-8")
         (root / ".aippocampus").mkdir()
         (root / "transcripts").mkdir()
 
@@ -82,6 +89,17 @@ class WindowsBinaryPackagingTests(unittest.TestCase):
             self.packager.stage_runtime_scripts(plan)
             self.assertTrue((output / "runtime" / "aippocampus_scripts" / "aippocampus_cli.py").is_file())
             self.assertFalse((output / "runtime" / "aippocampus_scripts" / ".aippocampus").exists())
+            self.assertFalse((output / "runtime" / "aippocampus_scripts" / "registry").exists())
+            self.assertTrue(
+                (
+                    output
+                    / "runtime"
+                    / "aippocampus_scripts"
+                    / "aippocampus_runtime"
+                    / "registry"
+                    / "store.py"
+                ).is_file()
+            )
             self.assertTrue(self.packager.private_data_guard(plan)["ok"])
 
     def test_entrypoint_runs_child_scripts_in_process_when_frozen(self) -> None:
