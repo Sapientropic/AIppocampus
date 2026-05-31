@@ -19,7 +19,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import prompt_recall_decision as decision  # noqa: E402
+from aippocampus_runtime.recall import prompt_recall_decision as decision  # noqa: E402
 
 
 class PromptRecallDecisionBoundaryTests(unittest.TestCase):
@@ -55,7 +55,7 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
 
     def _context_module(self):
         try:
-            return importlib.import_module("prompt_recall_context")
+            return importlib.import_module("aippocampus_runtime.recall.prompt_recall_context")
         except ModuleNotFoundError:
             self.fail("prompt_recall_context helper module is missing")
 
@@ -238,8 +238,10 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
         self.assertLessEqual(len(source.splitlines()), 255)
 
     def test_foreground_budget_helpers_are_split_from_decision_orchestration(self) -> None:
-        decision_source = (SCRIPTS / "prompt_recall_decision.py").read_text(encoding="utf-8")
-        boundary = SCRIPTS / "prompt_recall_budget.py"
+        decision_source = (
+            SCRIPTS / "aippocampus_runtime" / "recall" / "prompt_recall_decision.py"
+        ).read_text(encoding="utf-8")
+        boundary = SCRIPTS / "aippocampus_runtime" / "recall" / "prompt_recall_budget.py"
         self.assertTrue(boundary.exists())
         boundary_source = boundary.read_text(encoding="utf-8")
 
@@ -262,8 +264,10 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
             self.assertIn(f"def {function_name}(", boundary_source)
 
     def test_ambient_cache_and_warming_are_split_from_decision_policy(self) -> None:
-        decision_source = (SCRIPTS / "prompt_recall_decision.py").read_text(encoding="utf-8")
-        boundary = SCRIPTS / "prompt_recall_ambient.py"
+        decision_source = (
+            SCRIPTS / "aippocampus_runtime" / "recall" / "prompt_recall_decision.py"
+        ).read_text(encoding="utf-8")
+        boundary = SCRIPTS / "aippocampus_runtime" / "recall" / "prompt_recall_ambient.py"
         self.assertTrue(boundary.exists())
         boundary_source = boundary.read_text(encoding="utf-8")
 

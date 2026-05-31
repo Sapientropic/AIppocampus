@@ -32,7 +32,7 @@ HIGH_RISK_MYPY_SCRIPTS = {
     "skills/aippocampus/scripts/build_project_timeline.py",
     "skills/aippocampus/scripts/memory_candidate_router.py",
     "skills/aippocampus/scripts/onboard_codex.py",
-    "skills/aippocampus/scripts/prompt_recall_core.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_core.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/retrieval.py",
     "skills/aippocampus/scripts/warm_ambient_recall.py",
 }
@@ -134,7 +134,7 @@ class ArchitectureBoundaryTests(unittest.TestCase):
         self.assertNotIn("def should_run_semantic_gate", text)
 
     def test_prompt_decision_module_does_not_import_hook_glue(self) -> None:
-        decision_path = SCRIPTS / "prompt_recall_decision.py"
+        decision_path = SCRIPTS / "aippocampus_runtime" / "recall" / "prompt_recall_decision.py"
         text = decision_path.read_text(encoding="utf-8")
 
         self.assertNotIn("from aippocampus_prompt_hook import", text)

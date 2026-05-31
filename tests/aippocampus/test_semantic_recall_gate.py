@@ -22,8 +22,8 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import semantic_cue_cache as cues  # noqa: E402
-import semantic_recall_gate as gate  # noqa: E402
+from aippocampus_runtime.recall import semantic_cue_cache as cues  # noqa: E402
+from aippocampus_runtime.recall import semantic_recall_gate as gate  # noqa: E402
 from redaction_fixtures import FAKE_TEST_OPENAI_API_KEY, FAKE_TEST_SECRET_VALUE  # noqa: E402
 
 

@@ -27,7 +27,7 @@ import _paths
 _paths.ensure_paths()
 
 import aippocampus_prompt_hook as hook  # noqa: E402
-import semantic_cue_cache as cue_cache  # noqa: E402
+from aippocampus_runtime.recall import semantic_cue_cache as cue_cache  # noqa: E402
 
 THREAD_KEY = "session:aippocampus-paraphrase-reuse"
 SOURCE_REF = {"thread_key": THREAD_KEY, "message_id": "m1", "source_line": 1}

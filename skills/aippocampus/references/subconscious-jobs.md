@@ -33,12 +33,13 @@ but they must not rewrite source, delete source, or directly write formal memory
 - `memory_candidate_router.py`: deterministic promotion-candidate router for
   soft working memory. It prevents a human review inbox by assigning
   `use_silently`, `use_with_source`, `confirm_when_relevant`, or `park`.
-- `semantic_trigger_router.py`: deterministic router that turns source-backed
-  `hook_trigger`/project candidates into `semantic_triggers.jsonl`, so the
-  prompt hook can use data-driven semantic cues instead of expanding hard-coded
-  phrase lists. It also merges the reviewed seed triggers in
-  `references/reviewed-semantic-triggers.seed.jsonl`; keep that seed compact and
-  AIppocampus-specific.
+- `aippocampus_runtime.recall.semantic_trigger_router` plus the
+  `semantic_trigger_router.py` compatibility command: deterministic router that
+  turns source-backed `hook_trigger`/project candidates into
+  `semantic_triggers.jsonl`, so the prompt hook can use data-driven semantic
+  cues instead of expanding hard-coded phrase lists. It also merges the
+  reviewed seed triggers in `references/reviewed-semantic-triggers.seed.jsonl`;
+  keep that seed compact and AIppocampus-specific.
 - `build_cognitive_map.py`: deterministic materializer for DeepSeek-proposed
   landmarks, regions, and routes. It never creates routes from registry
   keywords alone.
@@ -55,8 +56,8 @@ but they must not rewrite source, delete source, or directly write formal memory
 - `$CODEX_HOME/aippocampus-registry/working_memory.jsonl`: soft working memory
   consumed by the prompt hook as source-backed staging, not formal truth.
 - `$CODEX_HOME/aippocampus-registry/semantic_triggers.jsonl`: dynamic trigger
-  rows consumed by `semantic_recall_gate.py` and the prompt hook's local
-  pre-gate/query seed path.
+  rows consumed by `aippocampus_runtime.recall.semantic_recall_gate` and the
+  prompt hook's local pre-gate/query seed path.
 - `$CODEX_HOME/aippocampus-registry/semantic_cues.jsonl`: learned multilingual
   semantic aliases from repeated prompt-hook hits. It is consumed as trigger
   context/query hints only and must not be treated as source truth.

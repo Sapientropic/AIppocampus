@@ -187,10 +187,12 @@ They can provide multilingual/domain aliases to the foreground hook and
 semantic gate, but they are never source truth. Retrieval policy should extract
 query terms from these rows through `retrieval_query_policy.semantic_trigger_terms`
 instead of growing `ALIASES` or `ASSOCIATIVE_CUES` with semantic proxy phrases.
-`semantic_trigger_router.py` writes reviewed seed triggers plus source-backed
-promotion candidates into `semantic_triggers.jsonl`; the provider-aware
-`onboard.py` wrapper refreshes that sidecar during onboarding so a fresh
-registry has the data path before the foreground hook needs it.
+`aippocampus_runtime.recall.semantic_trigger_router` writes reviewed seed
+triggers plus source-backed promotion candidates into `semantic_triggers.jsonl`;
+the top-level `semantic_trigger_router.py` remains a compatibility command.
+The provider-aware `onboard.py` wrapper refreshes that sidecar during
+onboarding so a fresh registry has the data path before the foreground hook
+needs it.
 
 `build_project_timeline.py` writes `project_timeline.json`. The `projects`
 section keeps the older project-scoped recent-turn view used by hooks and

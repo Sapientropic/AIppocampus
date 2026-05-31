@@ -27,8 +27,8 @@ import aippocampus_prompt_hook as hook  # noqa: E402
 import ambient_thread_cache as thread_cache  # noqa: E402
 import build_concept_graph as concept_graph  # noqa: E402
 import dream_live_shadow_ab as dream_shadow  # noqa: E402
-import prompt_cues as recall_cues  # noqa: E402
-import semantic_cue_cache as cue_cache  # noqa: E402
+from aippocampus_runtime.recall import prompt_cues as recall_cues  # noqa: E402
+from aippocampus_runtime.recall import semantic_cue_cache as cue_cache  # noqa: E402
 
 
 class AmbientRecallHookTests(unittest.TestCase):
@@ -56,9 +56,18 @@ class AmbientRecallHookTests(unittest.TestCase):
             os.environ["AIPPOCAMPUS_SEMANTIC_GATE"] = self.old_semantic_gate
 
     def test_prompt_hook_keeps_decision_and_rendering_in_split_modules(self) -> None:
-        self.assertEqual(hook.assess_prompt.__module__, "prompt_recall_decision")
-        self.assertEqual(hook.context_for_hook.__module__, "prompt_context_render")
-        self.assertEqual(hook.hook_stdout_payload.__module__, "prompt_context_render")
+        self.assertEqual(
+            hook.assess_prompt.__module__,
+            "aippocampus_runtime.recall.prompt_recall_decision",
+        )
+        self.assertEqual(
+            hook.context_for_hook.__module__,
+            "aippocampus_runtime.recall.prompt_context_render",
+        )
+        self.assertEqual(
+            hook.hook_stdout_payload.__module__,
+            "aippocampus_runtime.recall.prompt_context_render",
+        )
 
     def test_hook_input_from_stdin_reads_codex_json_after_split(self) -> None:
         old_stdin = sys.stdin
@@ -3359,7 +3368,10 @@ class AmbientRecallHookTests(unittest.TestCase):
             scheduled.append({"prompt": prompt, **kwargs})
             return {"status": "queued", "job_id": "job-test", "spawned": False}
 
-        with patch("prompt_recall_ambient.schedule_warm_ambient_recall", fake_schedule):
+        with patch(
+            "aippocampus_runtime.recall.prompt_recall_ambient.schedule_warm_ambient_recall",
+            fake_schedule,
+        ):
             result = hook.assess_prompt(
                 "hook 机制就像人类的触发式联想，我们可以把小海马体做得更主动一点",
                 cwd=self.workspace,
@@ -3448,7 +3460,10 @@ class AmbientRecallHookTests(unittest.TestCase):
             )
             return {"status": "scheduled", "job_id": "job-detached", "spawned": False}
 
-        with patch("prompt_recall_ambient.schedule_warm_ambient_recall", fake_schedule):
+        with patch(
+            "aippocampus_runtime.recall.prompt_recall_ambient.schedule_warm_ambient_recall",
+            fake_schedule,
+        ):
             first = hook.assess_prompt(
                 "hook 机制就像人类的触发式联想，我们可以把小海马体做得更主动一点",
                 cwd=self.workspace,
