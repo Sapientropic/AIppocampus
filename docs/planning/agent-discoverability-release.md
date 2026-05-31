@@ -55,6 +55,16 @@ publication through GitHub OIDC. It targets the GitHub `release` environment and
 will not succeed until the PyPI trusted publisher/project setup exists for
 `aippocampus`.
 
+It can run in two equivalent ways:
+
+- automatic: push a matching tag such as `v0.1.0`;
+- manual: run the workflow from GitHub Actions with `release_tag` set to an
+  existing tag such as `v0.1.0`.
+
+Both paths check that the release tag matches `pyproject.toml` and that the
+checked-out commit is exactly the tag commit before publishing. Do not use the
+manual trigger to publish an arbitrary branch.
+
 Run the repeatable readiness probe before and after external publication:
 
 ```sh

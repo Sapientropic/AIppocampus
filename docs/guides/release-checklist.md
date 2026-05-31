@@ -85,6 +85,11 @@ gh workflow run macos-install-smoke.yml -f runner-label=macos-latest -f python-v
 ## Tag And Publish
 
 - Create the tag only after the verification evidence is recorded.
+- For the agent-discoverability release, configure the PyPI trusted publisher
+  for the `release` environment before pushing the tag or manually running
+  `publish-agent-discovery.yml`.
+- After the tag exists, either push the tag or run `Publish Python Package And
+  MCP Registry` from GitHub Actions with `release_tag` set to the existing tag.
 - Draft the GitHub release from the tag, linking the evidence ledger and known
   follow-up issues.
 - If a plugin or package is produced, verify install, uninstall, and rollback
