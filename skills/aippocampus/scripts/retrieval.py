@@ -19,6 +19,7 @@ from collections import Counter
 from pathlib import Path
 
 from aippocampuslib import compact_text
+from prompt_life_cues import profile_recall_terms
 from retrieval_query_policy import ALIASES as ALIASES
 from retrieval_query_policy import (
     CONCEPT_TRIGGERS,
@@ -755,6 +756,13 @@ def active_recall_decision(
         reasons.append(
             "message mentions durable concept trigger(s): " + ", ".join(matched_concepts[:6])
         )
+
+    if profile_recall_terms(prompt):
+        # Profile/resume prompts are personal by nature, but this is still only
+        # a search-route decision. Source-backed claims remain gated by the
+        # downstream clean-source evidence path.
+        score += 3.0
+        reasons.append("message contains personal-profile recall cue")
 
     if anchor_matches:
         anchor_score = sum(float(item.get("score") or 0) for item in anchor_matches[:3])

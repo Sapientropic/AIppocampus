@@ -10,11 +10,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+from prompt_life_cues import profile_recall_terms
 from retrieval import (
     active_recall_decision,
     expanded_terms_from_anchors,
     match_anchors,
     split_query_terms,
+    unique_preserve,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -78,6 +80,10 @@ def search_terms_from_query(query_terms: list[str], prompt: str) -> list[str]:
     return out or [prompt]
 
 
+def active_recall_query_terms(prompt: str) -> list[str]:
+    return unique_preserve(split_query_terms([prompt]) + profile_recall_terms(prompt), limit=32)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("prompt", nargs="*", help="Current user message or task description.")
@@ -103,7 +109,7 @@ def main() -> int:
         [sys.executable, str(SCRIPT_DIR / "aippocampus_health.py"), "--cwd", str(cwd), "--json"]
     )
     anchor_path = resolve_anchor_path(cwd, args.anchors)
-    query_terms = split_query_terms([prompt])
+    query_terms = active_recall_query_terms(prompt)
     anchors = match_anchors(anchor_path, query_terms) if anchor_path.exists() else []
     expanded_terms = expanded_terms_from_anchors(query_terms, anchors, limit=24)
     decision = active_recall_decision(prompt, anchors, health)
