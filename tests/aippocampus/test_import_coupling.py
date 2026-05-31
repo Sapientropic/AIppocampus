@@ -12,6 +12,7 @@ from tempfile import TemporaryDirectory
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
+sys.path.insert(0, str(SCRIPTS))
 
 
 def load_module_from_path(name: str, path: Path):
@@ -203,6 +204,87 @@ class ImportCouplingTests(unittest.TestCase):
         )
         self.assertIs(object_storage_providers.SigV4Auth, providers.SigV4Auth)
         self.assertIs(object_storage_providers.provider_config, providers.provider_config)
+
+    def test_encrypted_sync_helpers_have_package_owner_and_compat_shims(self) -> None:
+        import encrypted_sync_bundle
+        import encrypted_sync_crypto
+        import encrypted_sync_keys
+        import encrypted_sync_migration
+        import encrypted_sync_object_storage
+        from aippocampus_runtime.sync.encrypted import (
+            bundle,
+            crypto,
+            keys,
+            migration,
+            object_storage,
+        )
+
+        package_paths = [
+            SCRIPTS / "aippocampus_runtime" / "sync" / "encrypted" / "__init__.py",
+            SCRIPTS / "aippocampus_runtime" / "sync" / "encrypted" / "bundle.py",
+            SCRIPTS / "aippocampus_runtime" / "sync" / "encrypted" / "crypto.py",
+            SCRIPTS / "aippocampus_runtime" / "sync" / "encrypted" / "keys.py",
+            SCRIPTS / "aippocampus_runtime" / "sync" / "encrypted" / "migration.py",
+            SCRIPTS / "aippocampus_runtime" / "sync" / "encrypted" / "object_storage.py",
+        ]
+        shim_paths = [
+            SCRIPTS / "encrypted_sync_bundle.py",
+            SCRIPTS / "encrypted_sync_crypto.py",
+            SCRIPTS / "encrypted_sync_keys.py",
+            SCRIPTS / "encrypted_sync_migration.py",
+            SCRIPTS / "encrypted_sync_object_storage.py",
+        ]
+
+        for path in package_paths + shim_paths:
+            self.assertTrue(path.exists(), path)
+        for path in shim_paths:
+            self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges(top_level_only=True)
+        self.assertIn("aippocampus_runtime.sync.encrypted.keys", edges["encrypted_sync_admin"])
+        self.assertIn("aippocampus_runtime.sync.encrypted.migration", edges["encrypted_sync_admin"])
+        self.assertNotIn("encrypted_sync_keys", edges["encrypted_sync_admin"])
+        self.assertNotIn("encrypted_sync_migration", edges["encrypted_sync_admin"])
+        self.assertIn(
+            "aippocampus_runtime.sync.encrypted.keys",
+            edges["aippocampus_runtime.sync.encrypted.bundle"],
+        )
+        self.assertIn(
+            "aippocampus_runtime.sync.encrypted.crypto",
+            edges["aippocampus_runtime.sync.encrypted.bundle"],
+        )
+        self.assertFalse(
+            {
+                "encrypted_sync_bundle",
+                "encrypted_sync_crypto",
+                "encrypted_sync_keys",
+                "encrypted_sync_migration",
+                "encrypted_sync_object_storage",
+            }
+            & edges["aippocampus_runtime.sync.encrypted.migration"]
+        )
+
+        sync_bundle_source = (SCRIPTS / "sync_bundle.py").read_text(encoding="utf-8")
+        sync_object_source = (SCRIPTS / "sync_object_storage.py").read_text(encoding="utf-8")
+        self.assertIn("aippocampus_runtime.sync.encrypted.bundle", sync_bundle_source)
+        self.assertNotIn('import_module("encrypted_sync_bundle")', sync_bundle_source)
+        self.assertIn("aippocampus_runtime.sync.encrypted.object_storage", sync_object_source)
+        self.assertNotIn('import_module("encrypted_sync_object_storage")', sync_object_source)
+
+        self.assertEqual(
+            encrypted_sync_bundle.ENCRYPTED_SYNC_DIR_NAME,
+            bundle.ENCRYPTED_SYNC_DIR_NAME,
+        )
+        self.assertIs(encrypted_sync_crypto.EncryptedSyncError, crypto.EncryptedSyncError)
+        self.assertIs(encrypted_sync_keys.init_device_key, keys.init_device_key)
+        self.assertIs(
+            encrypted_sync_migration.inventory_plaintext_sync_dir,
+            migration.inventory_plaintext_sync_dir,
+        )
+        self.assertIs(
+            encrypted_sync_object_storage.encrypted_manifest_relative_path,
+            object_storage.encrypted_manifest_relative_path,
+        )
 
     def test_external_model_helpers_have_package_owner_and_compat_shims(self) -> None:
         import deepseek_model_routing
