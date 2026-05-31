@@ -762,7 +762,7 @@ def status_sync_bundle(sync_dir: str | Path) -> dict:
     }
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("command", choices=["status", "push", "pull", "repair"])
     parser.add_argument("--sync-dir", required=True)
@@ -776,7 +776,7 @@ def main() -> int:
     parser.add_argument("--age-bin", default=None)
     parser.add_argument("--no-decrypt", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     try:
         if args.command == "status":

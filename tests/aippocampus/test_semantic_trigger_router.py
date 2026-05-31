@@ -35,6 +35,12 @@ class SemanticTriggerRouterTests(unittest.TestCase):
             for row in rows:
                 fh.write(json.dumps(row, ensure_ascii=False) + "\n")
 
+    def test_default_reviewed_seed_path_survives_package_layout(self) -> None:
+        seed = router.default_seed_triggers_path()
+
+        self.assertEqual(seed.name, "reviewed-semantic-triggers.seed.jsonl")
+        self.assertTrue(seed.exists(), seed)
+
     def test_hook_trigger_candidate_becomes_semantic_trigger(self) -> None:
         self.write_candidates(
             [

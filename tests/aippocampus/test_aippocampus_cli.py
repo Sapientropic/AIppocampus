@@ -4,6 +4,7 @@ import json
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
 from io import StringIO
 from pathlib import Path
@@ -92,6 +93,44 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(result.stderr, "")
         self.assertEqual(ambient_stdout.getvalue(), "")
         self.assertEqual(ambient_stderr.getvalue(), "")
+
+    def test_package_facade_prefers_argv_aware_main_without_sys_argv_shim(self) -> None:
+        from aippocampus_runtime.cli import facade
+
+        module_name = "tests._fake_facade_argv_main"
+        fake_module = types.ModuleType(module_name)
+        seen: dict[str, object] = {}
+
+        def main(argv: list[str] | None = None) -> int:
+            seen["argv"] = list(argv or [])
+            seen["sys_argv"] = list(sys.argv)
+            return 7
+
+        fake_module.main = main  # type: ignore[attr-defined]
+        old_module = sys.modules.get(module_name)
+        old_argv = sys.argv[:]
+        sys.modules[module_name] = fake_module
+        sys.argv = ["outer-host", "--keep"]
+        try:
+            code = facade.run_module_main(module_name, "fake_child.py", ["--flag", "value"])
+        finally:
+            sys.argv = old_argv
+            if old_module is None:
+                sys.modules.pop(module_name, None)
+            else:
+                sys.modules[module_name] = old_module
+
+        self.assertEqual(code, 7)
+        self.assertEqual(seen["argv"], ["--flag", "value"])
+        self.assertEqual(seen["sys_argv"], ["outer-host", "--keep"])
+
+    def test_package_facade_public_sync_commands_are_argv_aware(self) -> None:
+        from aippocampus_runtime.cli import facade
+        from aippocampus_runtime.sync import bundle
+        from aippocampus_runtime.sync.object_storage import cli as object_storage_cli
+
+        self.assertTrue(facade.main_accepts_argv(bundle.main))
+        self.assertTrue(facade.main_accepts_argv(object_storage_cli.main))
 
     def test_package_facade_capture_api_handles_usage_and_unknown_commands(self) -> None:
         from aippocampus_runtime.cli import facade

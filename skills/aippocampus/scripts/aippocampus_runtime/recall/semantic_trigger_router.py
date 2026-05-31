@@ -33,7 +33,7 @@ TRIGGER_SCHEMA_VERSION = 1
 TRIGGER_TYPES = {"hook_trigger", "project_memory", "concept_edge"}
 MIN_CONFIDENCE = 0.62
 DEFAULT_SEED_TRIGGERS_PATH = (
-    Path(__file__).resolve().parents[1] / "references" / "reviewed-semantic-triggers.seed.jsonl"
+    Path(__file__).resolve().parents[3] / "references" / "reviewed-semantic-triggers.seed.jsonl"
 )
 GENERIC_ALIASES = {
     "memory",

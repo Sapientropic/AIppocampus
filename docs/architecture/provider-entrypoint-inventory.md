@@ -14,7 +14,7 @@ audit/host integration paths.
 | --- | --- | --- |
 | `aippocampus_runtime/core.py` plus `aippocampuslib.py` compatibility shim | Shared compatibility helpers | Owns legacy Codex raw-rollout helpers and provider-neutral registry storage resolution. New public raw-source logic should use `conversation_sources/` instead of adding more helpers here. |
 | `conversation_sources/codex.py` | Codex provider implementation | The only provider module that should know Codex `sessions/` and `archived_sessions/` layout. |
-| `onboard.py` | Provider-aware public entrypoint | Accepts `--provider codex\|claude-code\|generic-jsonl`; `auto` remains conservative and lists other providers separately. |
+| `aippocampus_runtime/onboarding/facade.py` plus `onboard.py` compatibility shim | Provider-aware public entrypoint | Accepts `--provider codex\|claude-code\|generic-jsonl`; `auto` remains conservative and lists other providers separately. |
 | `build_clean_source.py` and `aippocampus_runtime/source/clean_source.py` | Provider-aware public entrypoint | Accepts `--provider`; Codex raw rollout discovery is used only for the Codex provider or explicit `--rollout`. The top-level script is a compatibility shim over the package owner. |
 | `build_index.py` | Provider-aware public entrypoint | Accepts `--provider`; indexes provider-normalized visible messages. |
 | `aippocampus_runtime/registry/api.py` plus `registry.py` compatibility shim | Provider-aware registry entrypoint | CLI accepts `--provider`; in-process `provider or codex_provider(...)` fallback is legacy compatibility only. |
@@ -25,10 +25,10 @@ audit/host integration paths.
 | `prepare_graphify_corpus.py` | Codex-current-thread maintenance | Uses current Codex rollout to find the matching default index. Non-Codex callers should pass explicit artifact paths or use registry-derived inputs. |
 | `checkpoint.py` | Codex-current-thread maintenance | Checkpoint state is a generated AIppocampus artifact; current default still follows the current Codex thread store. |
 | `subconscious_scheduler.py` | Registry maintenance | Reads the AIppocampus registry. Its default root is provider-neutral registry storage, with legacy Codex fallback. |
-| `aippocampus_prompt_hook.py` | Codex host integration | UserPromptSubmit hook glue. It may write AIppocampus debug logs, but it is not a generic host hook installer. |
-| `aippocampus_lifecycle_hook.py` | Codex host integration | Codex lifecycle hook glue. Maintenance state/logs use AIppocampus registry storage; hook events remain Codex-specific. |
-| `install_aippocampus_prompt_hook.py` | Codex host integration | Mutates Codex hook config only after explicit operator command. |
-| `install_aippocampus_lifecycle_hook.py` | Codex host integration | Mutates Codex hook config only after explicit operator command. |
+| `aippocampus_runtime/hooks/prompt.py` plus `aippocampus_prompt_hook.py` compatibility shim | Codex host integration | UserPromptSubmit hook glue. It may write AIppocampus debug logs, but it is not a generic host hook installer. |
+| `aippocampus_runtime/hooks/lifecycle.py` plus `aippocampus_lifecycle_hook.py` compatibility shim | Codex host integration | Codex lifecycle hook glue. Maintenance state/logs use AIppocampus registry storage; hook events remain Codex-specific. |
+| `aippocampus_runtime/hooks/install_prompt.py` plus `install_aippocampus_prompt_hook.py` compatibility shim | Codex host integration | Mutates Codex hook config only after explicit operator command. |
+| `aippocampus_runtime/hooks/install_lifecycle.py` plus `install_aippocampus_lifecycle_hook.py` compatibility shim | Codex host integration | Mutates Codex hook config only after explicit operator command. |
 | `diagnose_hooks.py` | Codex host diagnostic | Inspects Codex hook config; not a provider-neutral health tool. |
 | `locate_rollout.py` | Codex-only raw audit/debug tool | Finds current Codex rollout JSONL. Do not present as general AI-agent transcript discovery. |
 | `aippocampus_runtime/recall/rollout_search.py` plus `search_rollout.py` compatibility shim | Codex-only raw audit/debug tool | Searches raw Codex rollout text. Clean-source search is the general recall surface. |

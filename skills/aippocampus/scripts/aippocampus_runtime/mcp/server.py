@@ -597,12 +597,12 @@ def serve_stdio() -> int:
     return 0
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--list-tools", action="store_true", help="Print the tool catalog as JSON and exit."
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if args.list_tools:
         print(json.dumps({"tools": TOOLS}, ensure_ascii=False, indent=2))
         return 0

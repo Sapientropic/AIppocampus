@@ -5,11 +5,12 @@ from __future__ import annotations
 import argparse
 import contextlib
 import importlib
+import inspect
 import sys
 from dataclasses import dataclass
 from io import StringIO
 from pathlib import Path
-from typing import TextIO
+from typing import Any, Callable, TextIO
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
 
@@ -43,7 +44,7 @@ class CommandResult:
 
 COMMANDS = {
     "health": CommandSpec("aippocampus_health.py", "aippocampus_runtime.health"),
-    "onboard": CommandSpec("onboard.py", "onboard"),
+    "onboard": CommandSpec("onboard.py", "aippocampus_runtime.onboarding.facade"),
     "search": CommandSpec("search_clean_source.py", "aippocampus_runtime.source.search"),
 }
 
@@ -53,8 +54,8 @@ SCRIPT_MODULES = {
     "aippocampus_mcp_server.py": "aippocampus_runtime.mcp.server",
     "sync_bundle.py": "aippocampus_runtime.sync.bundle",
     "sync_object_storage.py": "aippocampus_runtime.sync.object_storage.cli",
-    "install_aippocampus_prompt_hook.py": "install_aippocampus_prompt_hook",
-    "install_aippocampus_lifecycle_hook.py": "install_aippocampus_lifecycle_hook",
+    "install_aippocampus_prompt_hook.py": "aippocampus_runtime.hooks.install_prompt",
+    "install_aippocampus_lifecycle_hook.py": "aippocampus_runtime.hooks.install_lifecycle",
 }
 
 
@@ -66,34 +67,69 @@ def run_script(script_name: str, args: list[str]) -> int:
     return run_module_main(module_name_for_script(script_name), script_name, args)
 
 
-def run_module_main(module_name: str, script_name: str, args: list[str]) -> int:
-    """Run a legacy main in-process while preserving its script-shaped argv contract.
+def _coerce_exit_code(result: Any) -> int:
+    return int(result or 0)
 
-    Most package owners still expose argparse-based `main()` functions. The
-    facade API keeps those entrypoints composable without a subprocess, but
-    `sys.argv` remains a compatibility boundary until each command grows a
-    smaller typed API of its own.
+
+def _system_exit_code(exc: SystemExit) -> int:
+    code = exc.code
+    if code is None:
+        return 0
+    if isinstance(code, int):
+        return code
+    print(code, file=sys.stderr)
+    return 1
+
+
+def main_accepts_argv(main_func: Callable[..., Any]) -> bool:
+    """Return whether a command main can be called as `main(argv)`.
+
+    The facade should prefer package APIs over script emulation. Some older
+    entrypoints still only expose a no-argument `main()` that reads `sys.argv`;
+    those stay on the compatibility path until their owner grows an argv-aware
+    API. Do not simplify this to "always pass argv": it would break legacy
+    public scripts that are intentionally still script-shaped.
+    """
+    try:
+        signature = inspect.signature(main_func)
+    except (TypeError, ValueError):
+        return False
+    for parameter in signature.parameters.values():
+        if parameter.kind in {
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            inspect.Parameter.VAR_POSITIONAL,
+        }:
+            return True
+    return False
+
+
+def run_module_main(module_name: str, script_name: str, args: list[str]) -> int:
+    """Run a packaged command main in-process.
+
+    Argv-aware package owners are called directly as Python APIs. Legacy
+    no-argument mains still get a temporary script-shaped `sys.argv` so old
+    direct-entrypoint semantics remain intact while the runtime is migrated.
     """
     module = importlib.import_module(module_name)
     main_func = getattr(module, "main", None)
     if not callable(main_func):
         raise RuntimeError(f"module {module_name} has no callable main()")
 
+    if main_accepts_argv(main_func):
+        try:
+            return _coerce_exit_code(main_func(list(args)))
+        except SystemExit as exc:
+            return _system_exit_code(exc)
+
     old_argv = sys.argv[:]
     sys.argv = [str(SCRIPT_DIR / script_name), *args]
     try:
-        result = main_func()
+        return _coerce_exit_code(main_func())
     except SystemExit as exc:
-        code = exc.code
-        if code is None:
-            return 0
-        if isinstance(code, int):
-            return code
-        print(code, file=sys.stderr)
-        return 1
+        return _system_exit_code(exc)
     finally:
         sys.argv = old_argv
-    return int(result or 0)
 
 
 def invocation_from_spec(command: str, spec: CommandSpec, rest: list[str]) -> CommandInvocation:

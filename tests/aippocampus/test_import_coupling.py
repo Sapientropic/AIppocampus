@@ -191,7 +191,7 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertTrue(shim_path.exists(), shim_path)
         self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
 
-        edges = same_dir_import_edges(top_level_only=True)
+        edges = same_dir_import_edges()
         self.assertIn("aippocampus_runtime.privacy", edges["privacy_projection"])
         for source in ["aippocampus_runtime.mcp.server", "aippocampus_runtime.registry.api"]:
             self.assertIn("aippocampus_runtime.privacy", edges[source])
@@ -428,7 +428,7 @@ class ImportCouplingTests(unittest.TestCase):
         for path in shim_paths:
             self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
 
-        edges = same_dir_import_edges(top_level_only=True)
+        edges = same_dir_import_edges()
         self.assertIn(
             "aippocampus_runtime.sync.object_storage.cli",
             edges["sync_object_storage"],
@@ -712,7 +712,7 @@ class ImportCouplingTests(unittest.TestCase):
             "aippocampus_runtime.subconscious.job_validation",
             "aippocampus_runtime.subconscious.jobs_config",
             "aippocampus_runtime.subconscious.validation_audit",
-            "onboard_frontier",
+            "aippocampus_runtime.onboarding.frontier",
             "aippocampus_runtime.recall.semantic_recall_gate",
             "semantic_scope_suppressed_recovery",
             "aippocampus_runtime.subconscious.jobs",
@@ -779,9 +779,11 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
 
         edges = same_dir_import_edges(top_level_only=True)
-        prompt_hook_source = (SCRIPTS / "aippocampus_prompt_hook.py").read_text(encoding="utf-8")
+        prompt_hook_source = (
+            SCRIPTS / "aippocampus_runtime" / "hooks" / "prompt.py"
+        ).read_text(encoding="utf-8")
         self.assertIn("aippocampus_runtime.dream import delivery_policy", prompt_hook_source)
-        self.assertNotIn("dream_delivery_policy", edges["aippocampus_prompt_hook"])
+        self.assertNotIn("dream_delivery_policy", edges["aippocampus_runtime.hooks.prompt"])
 
         self.assertIs(
             dream_delivery_policy.prepare_dream_delivery,
@@ -791,6 +793,122 @@ class ImportCouplingTests(unittest.TestCase):
             dream_delivery_policy.add_dream_delivery_arguments,
             delivery_policy.add_dream_delivery_arguments,
         )
+
+    def test_codex_hooks_have_package_owner_and_compat_shims(self) -> None:
+        import aippocampus_lifecycle_hook
+        import aippocampus_prompt_hook
+        import install_aippocampus_lifecycle_hook
+        import install_aippocampus_prompt_hook
+        from aippocampus_runtime.hooks import (
+            install_lifecycle,
+            install_prompt,
+            lifecycle,
+            prompt,
+        )
+
+        package_paths = [
+            SCRIPTS / "aippocampus_runtime" / "hooks" / "__init__.py",
+            SCRIPTS / "aippocampus_runtime" / "hooks" / "prompt.py",
+            SCRIPTS / "aippocampus_runtime" / "hooks" / "lifecycle.py",
+            SCRIPTS / "aippocampus_runtime" / "hooks" / "install_prompt.py",
+            SCRIPTS / "aippocampus_runtime" / "hooks" / "install_lifecycle.py",
+        ]
+        shim_paths = [
+            SCRIPTS / "aippocampus_prompt_hook.py",
+            SCRIPTS / "aippocampus_lifecycle_hook.py",
+            SCRIPTS / "install_aippocampus_prompt_hook.py",
+            SCRIPTS / "install_aippocampus_lifecycle_hook.py",
+        ]
+
+        for path in package_paths + shim_paths:
+            self.assertTrue(path.exists(), path)
+        for path in shim_paths:
+            self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges()
+        self.assertIn("aippocampus_runtime.hooks.prompt", edges["aippocampus_prompt_hook"])
+        self.assertIn("aippocampus_runtime.hooks.lifecycle", edges["aippocampus_lifecycle_hook"])
+        self.assertIn(
+            "aippocampus_runtime.hooks.install_prompt",
+            edges["install_aippocampus_prompt_hook"],
+        )
+        self.assertIn(
+            "aippocampus_runtime.hooks.install_lifecycle",
+            edges["install_aippocampus_lifecycle_hook"],
+        )
+
+        self.assertIs(aippocampus_prompt_hook.write_debug_log, prompt.write_debug_log)
+        self.assertIs(aippocampus_prompt_hook.main, prompt.main)
+        self.assertIs(aippocampus_lifecycle_hook.decide_actions, lifecycle.decide_actions)
+        self.assertIs(aippocampus_lifecycle_hook.run_action, lifecycle.run_action)
+        self.assertIs(aippocampus_lifecycle_hook.main, lifecycle.main)
+        self.assertIs(install_aippocampus_prompt_hook.install, install_prompt.install)
+        self.assertIs(install_aippocampus_prompt_hook.command_for, install_prompt.command_for)
+        self.assertIs(install_aippocampus_lifecycle_hook.install, install_lifecycle.install)
+        self.assertIs(
+            install_aippocampus_lifecycle_hook.command_for,
+            install_lifecycle.command_for,
+        )
+        self.assertEqual(lifecycle.SCRIPT_DIR, SCRIPTS)
+        self.assertEqual(install_prompt.SCRIPT_DIR, SCRIPTS)
+        self.assertEqual(install_lifecycle.SCRIPT_DIR, SCRIPTS)
+
+    def test_onboarding_entrypoints_have_package_owners_and_compat_shims(self) -> None:
+        import onboard
+        import onboard_codex
+        import onboard_frontier
+        import onboard_status
+        from aippocampus_runtime.onboarding import codex, facade, frontier, status
+
+        package_paths = [
+            SCRIPTS / "aippocampus_runtime" / "onboarding" / "__init__.py",
+            SCRIPTS / "aippocampus_runtime" / "onboarding" / "facade.py",
+            SCRIPTS / "aippocampus_runtime" / "onboarding" / "codex.py",
+            SCRIPTS / "aippocampus_runtime" / "onboarding" / "frontier.py",
+            SCRIPTS / "aippocampus_runtime" / "onboarding" / "status.py",
+        ]
+        shim_paths = [
+            SCRIPTS / "onboard.py",
+            SCRIPTS / "onboard_codex.py",
+            SCRIPTS / "onboard_frontier.py",
+            SCRIPTS / "onboard_status.py",
+        ]
+
+        for path in package_paths + shim_paths:
+            self.assertTrue(path.exists(), path)
+        for path in shim_paths:
+            self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges()
+        self.assertIn("aippocampus_runtime.onboarding.facade", edges["onboard"])
+        self.assertIn("aippocampus_runtime.onboarding.codex", edges["onboard_codex"])
+        self.assertIn("aippocampus_runtime.onboarding.frontier", edges["onboard_frontier"])
+        self.assertIn("aippocampus_runtime.onboarding.status", edges["onboard_status"])
+        self.assertIn(
+            "aippocampus_runtime.onboarding.codex",
+            edges["aippocampus_runtime.onboarding.facade"],
+        )
+        self.assertIn(
+            "aippocampus_runtime.onboarding.frontier",
+            edges["aippocampus_runtime.onboarding.codex"],
+        )
+        self.assertIn(
+            "aippocampus_runtime.onboarding.status",
+            edges["aippocampus_runtime.onboarding.codex"],
+        )
+        self.assertNotIn("onboard_codex", edges["aippocampus_runtime.onboarding.facade"])
+        self.assertNotIn("onboard_frontier", edges["aippocampus_runtime.onboarding.codex"])
+        self.assertNotIn("onboard_status", edges["aippocampus_runtime.onboarding.codex"])
+        self.assertNotIn("registry", edges["aippocampus_runtime.onboarding.status"])
+
+        self.assertIs(onboard.main, facade.main)
+        self.assertIs(onboard.provider_status_report, facade.provider_status_report)
+        self.assertIs(onboard_codex.run_onboarding, codex.run_onboarding)
+        self.assertIs(onboard_codex.repair_missing_artifacts, codex.repair_missing_artifacts)
+        self.assertIs(onboard_frontier.frontier_boundary_result, frontier.frontier_boundary_result)
+        self.assertIs(onboard_frontier.run_jobs, frontier.run_jobs)
+        self.assertIs(onboard_status.registry_stats, status.registry_stats)
+        self.assertIs(onboard_status.sqlite_consistency_issues, status.sqlite_consistency_issues)
 
     def test_dream_worker_contract_has_package_owner_and_compat_shim(self) -> None:
         import dream_worker_contract
@@ -1834,8 +1952,8 @@ class ImportCouplingTests(unittest.TestCase):
         }
 
         for source in [
-            "aippocampus_prompt_hook",
-            "onboard_codex",
+            "aippocampus_runtime.hooks.prompt",
+            "aippocampus_runtime.onboarding.codex",
             "prompt_recall_decision",
             "prompt_recall_context",
             "prompt_recall_core",
@@ -1849,11 +1967,11 @@ class ImportCouplingTests(unittest.TestCase):
 
         self.assertIn(
             "aippocampus_runtime.recall.prompt_context_render",
-            edges["aippocampus_prompt_hook"],
+            edges["aippocampus_runtime.hooks.prompt"],
         )
         self.assertIn(
             "aippocampus_runtime.recall.prompt_recall_decision",
-            edges["aippocampus_prompt_hook"],
+            edges["aippocampus_runtime.hooks.prompt"],
         )
         self.assertIn(
             "aippocampus_runtime.recall.semantic_recall_gate",

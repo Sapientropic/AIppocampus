@@ -533,7 +533,7 @@ def token_from_env(env_name: str | None) -> str | None:
     return os.environ.get(env_name)
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("command", choices=["status", "push", "pull", "repair"])
     parser.add_argument(
@@ -565,7 +565,7 @@ def main() -> int:
     parser.add_argument("--no-decrypt", action="store_true")
     parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT_SECONDS)
     parser.add_argument("--json", action="store_true", dest="json_output")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if not args.object_store_url and not args.object_provider:
         parser.error(
