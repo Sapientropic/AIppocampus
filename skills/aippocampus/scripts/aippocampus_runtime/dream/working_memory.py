@@ -17,8 +17,12 @@ from collections.abc import Iterable, Mapping
 from datetime import datetime, timezone
 from typing import Any
 
-from aippocampuslib import compact_text, now_utc
-from memory_candidate_router import USE_WITH_SOURCE, ask_policy_for, trigger_terms_for
+from aippocampus_runtime.core import compact_text, now_utc
+from aippocampus_runtime.subconscious.candidate_router import (
+    USE_WITH_SOURCE,
+    ask_policy_for,
+    trigger_terms_for,
+)
 
 SCHEMA_VERSION = 1
 DREAM_FINDING_KIND = "dream_synthesized"

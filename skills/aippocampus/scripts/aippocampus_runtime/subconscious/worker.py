@@ -16,6 +16,13 @@ import time
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.core import (
+    cli_error_payload,
+    cli_exit_code_for_error_code,
+    compact_text,
+    now_utc,
+    sanitize_external_model_payload,
+)
 from aippocampus_runtime.model.client import (
     DEEPSEEK_PREFIX_CACHE_CONTRACT,
     ChatClientConfig,
@@ -32,14 +39,7 @@ from aippocampus_runtime.model.routing import (
     route_service_name,
 )
 from aippocampus_runtime.navigation.concept_graph import concept_is_noise
-from aippocampuslib import (
-    cli_error_payload,
-    cli_exit_code_for_error_code,
-    compact_text,
-    now_utc,
-    sanitize_external_model_payload,
-)
-from registry import registry_paths, unique_preserve
+from aippocampus_runtime.registry.api import registry_paths, unique_preserve
 
 PROMPT_VERSION = "aippocampus-subconscious-v0"
 DEFAULT_MODEL = flash_model()

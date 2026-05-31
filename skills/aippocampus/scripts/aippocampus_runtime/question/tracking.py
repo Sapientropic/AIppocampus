@@ -22,6 +22,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from aippocampus_runtime.core import (
+    cli_error_payload,
+    cli_exit_code_for_error_code,
+    compact_text,
+    now_utc,
+)
 from aippocampus_runtime.question.confirmation import (
     ConfirmationFn,
     append_confirmation_requests,
@@ -42,9 +48,8 @@ from aippocampus_runtime.question.source_refs import (
     source_ref_key,
 )
 from aippocampus_runtime.recall.ambient_policy import default_ambient_policy_path
+from aippocampus_runtime.registry.api import registry_paths, unique_preserve
 from aippocampus_runtime.subconscious.jobs_config import default_jobs_output_path
-from aippocampuslib import cli_error_payload, cli_exit_code_for_error_code, compact_text, now_utc
-from registry import registry_paths, unique_preserve
 
 SCHEMA_VERSION = 1
 PROMPT_VERSION = "aippocampus-question-tracking-v1"

@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
+from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.model.client import (
     DEEPSEEK_PREFIX_CACHE_CONTRACT,
     ChatClientConfig,
@@ -15,9 +16,8 @@ from aippocampus_runtime.model.client import (
 )
 from aippocampus_runtime.navigation.concept_graph import expand_concepts
 from aippocampus_runtime.recall.query_policy import split_query_terms
+from aippocampus_runtime.registry.api import load_registry
 from aippocampus_runtime.source.search import iter_clean_messages, score_message
-from aippocampuslib import compact_text
-from registry import load_registry
 
 DEFAULT_MAX_STEPS = 16
 HARD_MAX_STEPS = 64

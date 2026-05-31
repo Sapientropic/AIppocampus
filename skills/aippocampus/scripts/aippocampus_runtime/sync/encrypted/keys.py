@@ -10,9 +10,9 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.core import now_utc, safe_path_name
 from aippocampus_runtime.sync import bundle as sync_bundle
 from aippocampus_runtime.sync.encrypted.crypto import issue, validate_recipients
-from aippocampuslib import now_utc, safe_path_name
 
 DEVICE_KEYS_NAME = "device-keys.json"
 DEVICE_ID_PREFIX = "device"

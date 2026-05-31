@@ -18,6 +18,7 @@ import sqlite3
 from collections import Counter
 from pathlib import Path
 
+from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.recall.life_cues import life_wide_recall_terms, profile_recall_terms
 from aippocampus_runtime.recall.query_policy import ALIASES as ALIASES
 from aippocampus_runtime.recall.query_policy import (
@@ -39,7 +40,6 @@ from aippocampus_runtime.recall.query_policy import (
 from aippocampus_runtime.recall.query_policy import match_anchors as match_anchors
 from aippocampus_runtime.recall.query_policy import split_query_terms as split_query_terms
 from aippocampus_runtime.recall.score_fusion import rag_chunk_text_score, retrieval_text_score
-from aippocampuslib import compact_text
 
 
 def sqlite_has_table(con: sqlite3.Connection, name: str) -> bool:

@@ -17,7 +17,12 @@ from typing import Any
 
 from aippocampus_runtime.recall import prompt_cues
 from aippocampus_runtime.recall.query_policy import CONCEPT_TRIGGERS
-from registry import deep_search_entry, entry_search_score, registry_paths, unique_preserve
+from aippocampus_runtime.registry.api import (
+    deep_search_entry,
+    entry_search_score,
+    registry_paths,
+    unique_preserve,
+)
 
 # Keep these assignments as compatibility re-exports for older installed hooks.
 # First-party code should import cue policy directly from

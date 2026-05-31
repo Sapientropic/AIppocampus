@@ -11,8 +11,8 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
+from aippocampus_runtime.core import compact_text, sanitize_external_model_text
 from aippocampus_runtime.recall.ambient_policy import policy_payload_for_working_memory
-from aippocampuslib import compact_text, sanitize_external_model_text
 
 CARD_SCHEMA_VERSION = 1
 MAX_CARDS = 3

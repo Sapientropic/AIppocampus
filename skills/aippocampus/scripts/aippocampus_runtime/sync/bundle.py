@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from aippocampus_runtime.artifacts.publish import resolve_sqlite_index_path
+from aippocampus_runtime.core import aippocampus_registry_dir, file_sha256, now_utc, safe_path_name
 from aippocampus_runtime.sync.contract import (
     LOCAL_FOLDER_BACKEND,
     SYNC_BUNDLE_KIND,
@@ -19,7 +20,6 @@ from aippocampus_runtime.sync.contract import (
     SYNC_SCHEMA_VERSION,
     build_sync_manifest,
 )
-from aippocampuslib import aippocampus_registry_dir, file_sha256, now_utc, safe_path_name
 
 CLEAN_SOURCE_CHUNK_BYTES = 1024 * 1024
 CLEAN_SOURCE_CHUNK_STORE = "clean-source-chunks"

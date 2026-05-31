@@ -16,6 +16,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
 TESTS = Path(__file__).resolve().parent
+JOBS_RUNNER = SCRIPTS / "aippocampus_runtime" / "subconscious" / "jobs.py"
 sys.path.insert(0, str(TESTS))
 for _path in (
     SCRIPTS,
@@ -40,7 +41,7 @@ from redaction_fixtures import (  # noqa: E402
 class SubconsciousJobsTests(unittest.TestCase):
     def test_job_circuit_catalog_is_separate_from_runner(self) -> None:
         circuits = importlib.import_module("subconscious_job_circuits")
-        runner_source = (SCRIPTS / "subconscious_jobs.py").read_text(encoding="utf-8")
+        runner_source = JOBS_RUNNER.read_text(encoding="utf-8")
 
         self.assertNotIn("JOB_SPECS: dict", runner_source)
         self.assertEqual(jobs.JOB_SPECS, circuits.JOB_SPECS)
@@ -52,7 +53,7 @@ class SubconsciousJobsTests(unittest.TestCase):
 
     def test_job_sample_plan_is_separate_from_runner(self) -> None:
         plan = importlib.import_module("subconscious_job_plan")
-        runner_source = (SCRIPTS / "subconscious_jobs.py").read_text(encoding="utf-8")
+        runner_source = JOBS_RUNNER.read_text(encoding="utf-8")
 
         tasks = plan.plan_job_run_tasks(["project_drift", "trigger_mining"], samples_per_job=2)
 
@@ -70,7 +71,7 @@ class SubconsciousJobsTests(unittest.TestCase):
 
     def test_jobs_run_config_factory_derives_default_paths_from_registry_dir(self) -> None:
         config_module = importlib.import_module("subconscious_jobs_config")
-        runner_source = (SCRIPTS / "subconscious_jobs.py").read_text(encoding="utf-8")
+        runner_source = JOBS_RUNNER.read_text(encoding="utf-8")
 
         self.assertIs(jobs.JobsRunConfig, config_module.JobsRunConfig)
         self.assertIs(jobs.jobs_run_config_from_args, config_module.jobs_run_config_from_args)
@@ -118,7 +119,7 @@ class SubconsciousJobsTests(unittest.TestCase):
     def test_job_validation_is_separate_from_runner(self) -> None:
         validation = importlib.import_module("subconscious_job_validation")
         validation_audit = importlib.import_module("subconscious_validation_audit")
-        runner_source = (SCRIPTS / "subconscious_jobs.py").read_text(encoding="utf-8")
+        runner_source = JOBS_RUNNER.read_text(encoding="utf-8")
 
         self.assertIs(jobs.validate_findings, validation.validate_findings)
         self.assertIs(jobs.validation_audit, validation_audit.validation_audit)

@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from aippocampuslib import compact_text, now_utc
+from aippocampus_runtime.core import compact_text, now_utc
 
 SCHEMA_VERSION = 1
 PACK_KIND = "aippocampus_dream_input_pack"

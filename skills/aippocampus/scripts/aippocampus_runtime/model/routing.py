@@ -13,7 +13,7 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
-from aippocampuslib import deepseek_cache_metrics_from_usage
+from aippocampus_runtime.core import deepseek_cache_metrics_from_usage
 
 FLASH_ROUTES = {"", "default", "fast", "flash", "cheap", "background"}
 PRO_ROUTES = {"pro", "slow_adjudication", "suppressed_label_recovery", "agentic_source_review"}

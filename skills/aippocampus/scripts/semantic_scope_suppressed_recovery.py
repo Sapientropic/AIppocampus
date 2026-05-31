@@ -28,6 +28,7 @@ from aippocampus_runtime.source.semantic_scope_labels import (
     label_evidence_min_confidence,
     semantic_scope_label_rows_from_findings,
 )
+from aippocampus_runtime.subconscious.jobs import default_jobs_output_path
 from aippocampus_runtime.subconscious.runtime import add_usage, call_chat_json, compact_usage
 from aippocampus_runtime.subconscious.worker import DEFAULT_BASE_URL
 from aippocampuslib import (
@@ -38,7 +39,6 @@ from aippocampuslib import (
 )
 from registry import load_registry
 from semantic_scope_source_review_core import LABEL_GUIDANCE, parse_agent_action
-from subconscious_jobs import default_jobs_output_path
 
 PROMPT_KIND = "semantic_scope_suppressed_label_recovery"
 

@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from aippocampuslib import now_utc
+from aippocampus_runtime.core import now_utc
 
 QUEUE_KIND = "aippocampus_dream_queue"
 QUEUE_ITEM_KIND = "aippocampus_dream_queue_item"

@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from registry import unique_preserve
+from aippocampus_runtime.registry.api import unique_preserve
 
 FEEDBACK_EVENT_KIND = "aippocampus_ambient_policy_event"
 DISMISS = "dismiss"

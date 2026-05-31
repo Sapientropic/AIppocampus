@@ -16,8 +16,8 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.core import now_utc
 from aippocampus_runtime.dream import precision_policy as precision
-from aippocampuslib import now_utc
 
 LIFECYCLE_KIND = "aippocampus_dream_retrospective_lifecycle"
 SUMMARY_KIND = "aippocampus_dream_retrospective_lifecycle_summary"

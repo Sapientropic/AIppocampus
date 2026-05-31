@@ -16,7 +16,7 @@ from collections.abc import Iterable, Mapping
 from datetime import datetime, timezone
 from typing import Any
 
-from aippocampuslib import compact_text
+from aippocampus_runtime.core import compact_text
 
 SCHEMA_VERSION = 1
 POLICY_VERSION = "dream_precision_policy_v1"

@@ -16,10 +16,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.core import (
+    cli_error_payload,
+    cli_exit_code_for_error_code,
+    compact_text,
+    deepseek_cache_metrics_from_usage,
+    sanitize_external_model_payload,
+)
 from aippocampus_runtime.navigation.concept_graph import (
     concept_is_noise,
     default_concept_graph_path,
 )
+from aippocampus_runtime.registry.api import registry_paths
 from aippocampus_runtime.subconscious.runtime import (
     AGENT_SYSTEM_PROMPT,
     DEFAULT_MAX_STEPS,
@@ -46,14 +54,6 @@ from aippocampus_runtime.subconscious.worker import (
     load_json,
     select_timeline_turns,
 )
-from aippocampuslib import (
-    cli_error_payload,
-    cli_exit_code_for_error_code,
-    compact_text,
-    deepseek_cache_metrics_from_usage,
-    sanitize_external_model_payload,
-)
-from registry import registry_paths
 
 PROMPT_VERSION = "aippocampus-subconscious-agent-v0"
 

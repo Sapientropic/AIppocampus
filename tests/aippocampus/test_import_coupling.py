@@ -162,14 +162,96 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(aippocampus_cli.run_script, facade.run_script)
         self.assertEqual(facade.SCRIPT_DIR, SCRIPTS)
 
+    def test_core_helpers_have_package_owner_and_compat_shim(self) -> None:
+        import aippocampuslib
+        from aippocampus_runtime import core
+
+        package_path = SCRIPTS / "aippocampus_runtime" / "core.py"
+        shim_path = SCRIPTS / "aippocampuslib.py"
+
+        self.assertTrue(package_path.exists(), package_path)
+        self.assertTrue(shim_path.exists(), shim_path)
+        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges()
+        self.assertIn("aippocampus_runtime.core", edges["aippocampuslib"])
+        self.assertNotIn("aippocampuslib", edges["aippocampus_runtime.core"])
+        self.assertIs(aippocampuslib.codex_home, core.codex_home)
+        self.assertIs(aippocampuslib.aippocampus_registry_dir, core.aippocampus_registry_dir)
+        self.assertIs(aippocampuslib.sanitize_external_model_text, core.sanitize_external_model_text)
+
+    def test_privacy_projection_has_package_owner_and_compat_shim(self) -> None:
+        import privacy_projection
+        from aippocampus_runtime import privacy
+
+        package_path = SCRIPTS / "aippocampus_runtime" / "privacy.py"
+        shim_path = SCRIPTS / "privacy_projection.py"
+
+        self.assertTrue(package_path.exists(), package_path)
+        self.assertTrue(shim_path.exists(), shim_path)
+        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges(top_level_only=True)
+        self.assertIn("aippocampus_runtime.privacy", edges["privacy_projection"])
+        for source in ["aippocampus_runtime.mcp.server", "aippocampus_runtime.registry.api"]:
+            self.assertIn("aippocampus_runtime.privacy", edges[source])
+            self.assertNotIn("privacy_projection", edges[source])
+        self.assertIs(privacy_projection.redact_private_paths, privacy.redact_private_paths)
+
+    def test_mcp_server_has_package_owner_and_compat_shim(self) -> None:
+        import aippocampus_mcp_server
+        from aippocampus_runtime.mcp import server
+
+        package_paths = [
+            SCRIPTS / "aippocampus_runtime" / "mcp" / "__init__.py",
+            SCRIPTS / "aippocampus_runtime" / "mcp" / "server.py",
+        ]
+        shim_path = SCRIPTS / "aippocampus_mcp_server.py"
+
+        for path in [*package_paths, shim_path]:
+            self.assertTrue(path.exists(), path)
+        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges()
+        package_edges = edges["aippocampus_runtime.mcp.server"]
+        self.assertIn("aippocampus_runtime.mcp.server", edges["aippocampus_mcp_server"])
+        for owner in [
+            "aippocampus_runtime.core",
+            "aippocampus_runtime.privacy",
+            "aippocampus_runtime.registry.api",
+            "aippocampus_runtime.source.latest_reply",
+            "aippocampus_runtime.source.search",
+            "aippocampus_runtime.sync.bundle",
+            "aippocampus_runtime.sync.object_storage.cli",
+        ]:
+            self.assertIn(owner, package_edges)
+        for flat_module in [
+            "aippocampus_mcp_server",
+            "aippocampuslib",
+            "latest_reply",
+            "privacy_projection",
+            "registry",
+            "sync_object_storage",
+        ]:
+            self.assertNotIn(flat_module, package_edges)
+
+        self.assertIs(aippocampus_mcp_server.TOOLS, server.TOOLS)
+        self.assertIs(aippocampus_mcp_server.handle_request, server.handle_request)
+        self.assertIs(aippocampus_mcp_server.main, server.main)
+
     def test_registry_storage_is_separate_from_registry_runner(self) -> None:
+        import registry
+        from aippocampus_runtime.registry import api as registry_api
+
         package_paths = [
             SCRIPTS / "aippocampus_runtime" / "registry" / "__init__.py",
+            SCRIPTS / "aippocampus_runtime" / "registry" / "api.py",
             SCRIPTS / "aippocampus_runtime" / "registry" / "provider.py",
             SCRIPTS / "aippocampus_runtime" / "registry" / "search.py",
             SCRIPTS / "aippocampus_runtime" / "registry" / "store.py",
         ]
         shim_paths = [
+            SCRIPTS / "registry.py",
             SCRIPTS / "registry_provider.py",
             SCRIPTS / "registry_search.py",
             SCRIPTS / "registry_store.py",
@@ -182,9 +264,10 @@ class ImportCouplingTests(unittest.TestCase):
 
         edges = same_dir_import_edges()
 
-        self.assertIn("aippocampus_runtime.registry.provider", edges["registry"])
-        self.assertIn("aippocampus_runtime.registry.search", edges["registry"])
-        self.assertIn("aippocampus_runtime.registry.store", edges["registry"])
+        self.assertIn("aippocampus_runtime.registry.api", edges["registry"])
+        self.assertIn("aippocampus_runtime.registry.provider", edges["aippocampus_runtime.registry.api"])
+        self.assertIn("aippocampus_runtime.registry.search", edges["aippocampus_runtime.registry.api"])
+        self.assertIn("aippocampus_runtime.registry.store", edges["aippocampus_runtime.registry.api"])
         self.assertNotIn("registry_store", edges["registry"])
         self.assertNotIn("registry", edges["aippocampus_runtime.registry.store"])
 
@@ -194,10 +277,41 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIn("def load_registry", store_source)
         self.assertNotIn("def save_registry", registry_source)
         self.assertIn("def save_registry", store_source)
+        self.assertIs(registry.register_current_thread, registry_api.register_current_thread)
+        self.assertIs(registry.run_json, registry_api.run_json)
+
+    def test_candidate_router_has_package_owner_and_compat_shim(self) -> None:
+        import memory_candidate_router
+        from aippocampus_runtime.subconscious import candidate_router
+
+        package_path = SCRIPTS / "aippocampus_runtime" / "subconscious" / "candidate_router.py"
+        shim_path = SCRIPTS / "memory_candidate_router.py"
+
+        self.assertTrue(package_path.exists(), package_path)
+        self.assertTrue(shim_path.exists(), shim_path)
+        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges()
+        self.assertIn(
+            "aippocampus_runtime.subconscious.candidate_router",
+            edges["memory_candidate_router"],
+        )
+        self.assertIn(
+            "aippocampus_runtime.registry.api",
+            edges["aippocampus_runtime.subconscious.candidate_router"],
+        )
+        self.assertNotIn("registry", edges["aippocampus_runtime.subconscious.candidate_router"])
+        self.assertNotIn(
+            "memory_candidate_router",
+            edges["aippocampus_runtime.subconscious.candidate_router"],
+        )
+        self.assertIs(memory_candidate_router.route_candidate, candidate_router.route_candidate)
+        self.assertIs(memory_candidate_router.strip_for_hook, candidate_router.strip_for_hook)
 
     def test_source_helpers_have_package_owner_and_compat_shims(self) -> None:
         import build_clean_source
         import build_semantic_scope_labels
+        import latest_reply
         import rollout_behavior_events
         import search_clean_source
         import semantic_scope_labels
@@ -209,6 +323,9 @@ class ImportCouplingTests(unittest.TestCase):
             semantic_scope_builder,
         )
         from aippocampus_runtime.source import (
+            latest_reply as packaged_latest_reply,
+        )
+        from aippocampus_runtime.source import (
             semantic_scope_labels as packaged_scope_labels,
         )
 
@@ -216,6 +333,7 @@ class ImportCouplingTests(unittest.TestCase):
             SCRIPTS / "aippocampus_runtime" / "source" / "__init__.py",
             SCRIPTS / "aippocampus_runtime" / "source" / "behavior_events.py",
             SCRIPTS / "aippocampus_runtime" / "source" / "clean_source.py",
+            SCRIPTS / "aippocampus_runtime" / "source" / "latest_reply.py",
             SCRIPTS / "aippocampus_runtime" / "source" / "registry_paths.py",
             SCRIPTS / "aippocampus_runtime" / "source" / "search.py",
             SCRIPTS / "aippocampus_runtime" / "source" / "semantic_scope_builder.py",
@@ -224,6 +342,7 @@ class ImportCouplingTests(unittest.TestCase):
         shim_paths = [
             SCRIPTS / "build_clean_source.py",
             SCRIPTS / "build_semantic_scope_labels.py",
+            SCRIPTS / "latest_reply.py",
             SCRIPTS / "search_clean_source.py",
             SCRIPTS / "semantic_scope_labels.py",
         ]
@@ -235,7 +354,7 @@ class ImportCouplingTests(unittest.TestCase):
 
         edges = same_dir_import_edges()
         packaged_consumers = [
-            "aippocampus_mcp_server",
+            "aippocampus_runtime.mcp.server",
             "aippocampus_runtime.question.source_refs",
             "aippocampus_runtime.registry.search",
             "aippocampus_runtime.subconscious.job_validation",
@@ -250,6 +369,7 @@ class ImportCouplingTests(unittest.TestCase):
             "build_clean_source",
             "build_semantic_scope_labels",
             "build_project_timeline",
+            "latest_reply",
             "rollout_behavior_events",
             "search_clean_source",
             "semantic_scope_labels",
@@ -269,6 +389,8 @@ class ImportCouplingTests(unittest.TestCase):
             rollout_behavior_events.extract_rollout_behavior_events,
             behavior_events.extract_rollout_behavior_events,
         )
+        self.assertIs(latest_reply.latest_reply, packaged_latest_reply.latest_reply)
+        self.assertIs(latest_reply.main, packaged_latest_reply.main)
         self.assertIs(search_clean_source.search_clean_source, search.search_clean_source)
         self.assertIs(search_clean_source.iter_clean_messages, search.iter_clean_messages)
         self.assertIs(
@@ -376,9 +498,9 @@ class ImportCouplingTests(unittest.TestCase):
         )
         self.assertIn(
             "aippocampus_runtime.sync.object_storage.cli",
-            edges["aippocampus_mcp_server"],
+            edges["aippocampus_runtime.mcp.server"],
         )
-        self.assertNotIn("sync_object_storage", edges["aippocampus_mcp_server"])
+        self.assertNotIn("sync_object_storage", edges["aippocampus_runtime.mcp.server"])
 
         self.assertIs(sync_bundle.push_sync_bundle, bundle.push_sync_bundle)
         self.assertIs(sync_bundle.pull_sync_bundle, bundle.pull_sync_bundle)
@@ -593,7 +715,7 @@ class ImportCouplingTests(unittest.TestCase):
             "onboard_frontier",
             "aippocampus_runtime.recall.semantic_recall_gate",
             "semantic_scope_suppressed_recovery",
-            "subconscious_jobs",
+            "aippocampus_runtime.subconscious.jobs",
             "subconscious_review",
             "aippocampus_runtime.warm_ambient.recall",
         ]
@@ -622,6 +744,24 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(subconscious_scheduler.run_project, scheduler.run_project)
         self.assertIs(subconscious_scheduler.main, scheduler.main)
         self.assertEqual(scheduler.SCRIPT_DIR, SCRIPTS)
+
+    def test_subconscious_jobs_runner_has_package_owner_and_compat_shim(self) -> None:
+        import subconscious_jobs
+        from aippocampus_runtime.subconscious import jobs
+
+        package_path = SCRIPTS / "aippocampus_runtime" / "subconscious" / "jobs.py"
+        shim_path = SCRIPTS / "subconscious_jobs.py"
+
+        self.assertTrue(package_path.exists(), package_path)
+        self.assertTrue(shim_path.exists(), shim_path)
+        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges(top_level_only=True)
+        self.assertIn("aippocampus_runtime.subconscious.jobs", edges["subconscious_jobs"])
+        self.assertNotIn("subconscious_jobs", edges["aippocampus_runtime.subconscious.jobs"])
+        self.assertIs(subconscious_jobs.run_jobs, jobs.run_jobs)
+        self.assertIs(subconscious_jobs.run_one_job, jobs.run_one_job)
+        self.assertIs(subconscious_jobs.main, jobs.main)
 
     def test_dream_delivery_policy_has_package_owner_and_compat_shim(self) -> None:
         import dream_delivery_policy
@@ -897,8 +1037,8 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
 
         edges = same_dir_import_edges(top_level_only=True)
-        self.assertIn("aippocampus_runtime.subconscious.job_storage", edges["subconscious_jobs"])
-        self.assertNotIn("subconscious_job_storage", edges["subconscious_jobs"])
+        self.assertIn("aippocampus_runtime.subconscious.job_storage", edges["aippocampus_runtime.subconscious.jobs"])
+        self.assertNotIn("subconscious_job_storage", edges["aippocampus_runtime.subconscious.jobs"])
 
         self.assertIs(
             subconscious_job_storage.append_job_findings,
@@ -921,8 +1061,8 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
 
         edges = same_dir_import_edges(top_level_only=True)
-        self.assertIn("aippocampus_runtime.subconscious.job_plan", edges["subconscious_jobs"])
-        self.assertNotIn("subconscious_job_plan", edges["subconscious_jobs"])
+        self.assertIn("aippocampus_runtime.subconscious.job_plan", edges["aippocampus_runtime.subconscious.jobs"])
+        self.assertNotIn("subconscious_job_plan", edges["aippocampus_runtime.subconscious.jobs"])
 
         self.assertIs(subconscious_job_plan.JobRunTask, job_plan.JobRunTask)
         self.assertIs(subconscious_job_plan.plan_job_run_tasks, job_plan.plan_job_run_tasks)
@@ -944,7 +1084,7 @@ class ImportCouplingTests(unittest.TestCase):
 
         edges = same_dir_import_edges(top_level_only=True)
         for source in [
-            "subconscious_jobs",
+            "aippocampus_runtime.subconscious.jobs",
             "aippocampus_runtime.question.tracking",
             "aippocampus_runtime.subconscious.theme_emergence",
         ]:
@@ -1130,8 +1270,8 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
 
         edges = same_dir_import_edges(top_level_only=True)
-        self.assertIn("aippocampus_runtime.subconscious.validation_audit", edges["subconscious_jobs"])
-        self.assertNotIn("subconscious_validation_audit", edges["subconscious_jobs"])
+        self.assertIn("aippocampus_runtime.subconscious.validation_audit", edges["aippocampus_runtime.subconscious.jobs"])
+        self.assertNotIn("subconscious_validation_audit", edges["aippocampus_runtime.subconscious.jobs"])
 
         self.assertIs(
             subconscious_validation_audit.validation_audit,
@@ -1154,8 +1294,8 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
 
         edges = same_dir_import_edges(top_level_only=True)
-        self.assertIn("aippocampus_runtime.subconscious.deterministic_jobs", edges["subconscious_jobs"])
-        self.assertNotIn("subconscious_deterministic_jobs", edges["subconscious_jobs"])
+        self.assertIn("aippocampus_runtime.subconscious.deterministic_jobs", edges["aippocampus_runtime.subconscious.jobs"])
+        self.assertNotIn("subconscious_deterministic_jobs", edges["aippocampus_runtime.subconscious.jobs"])
 
         self.assertIs(
             subconscious_deterministic_jobs.run_deterministic_job,
@@ -1213,22 +1353,22 @@ class ImportCouplingTests(unittest.TestCase):
             "aippocampus_runtime.subconscious.job_storage",
             "aippocampus_runtime.subconscious.jobs_config",
             "aippocampus_runtime.subconscious.validation_audit",
-            "subconscious_jobs",
+            "aippocampus_runtime.subconscious.jobs",
         ]:
             self.assertIn("aippocampus_runtime.subconscious.job_circuits", edges[source])
             self.assertNotIn("subconscious_job_circuits", edges[source])
         for source in [
             "aippocampus_runtime.subconscious.validation_audit",
-            "subconscious_jobs",
+            "aippocampus_runtime.subconscious.jobs",
             "subconscious_review",
         ]:
             self.assertIn("aippocampus_runtime.subconscious.job_validation", edges[source])
             self.assertNotIn("subconscious_job_validation", edges[source])
         self.assertIn(
             "aippocampus_runtime.subconscious.question_diagnostics",
-            edges["subconscious_jobs"],
+            edges["aippocampus_runtime.subconscious.jobs"],
         )
-        self.assertNotIn("subconscious_question_diagnostics", edges["subconscious_jobs"])
+        self.assertNotIn("subconscious_question_diagnostics", edges["aippocampus_runtime.subconscious.jobs"])
 
         self.assertIs(subconscious_job_circuits.JOB_SPECS, job_circuits.JOB_SPECS)
         self.assertIs(subconscious_job_circuits.job_names, job_circuits.job_names)
@@ -1684,27 +1824,27 @@ class ImportCouplingTests(unittest.TestCase):
             "aippocampus_runtime.subconscious.tool_loop",
             "aippocampus_runtime.recall.semantic_recall_gate",
             "semantic_scope_suppressed_recovery",
-            "subconscious_jobs",
+            "aippocampus_runtime.subconscious.jobs",
             "subconscious_review",
             "aippocampus_runtime.warm_ambient.recall",
         ]
         for source in runtime_consumers:
             self.assertIn("aippocampus_runtime.subconscious.runtime", edges[source])
             self.assertNotIn("subconscious_runtime", edges[source])
-        self.assertIn("aippocampus_runtime.subconscious.tool_loop", edges["subconscious_jobs"])
+        self.assertIn("aippocampus_runtime.subconscious.tool_loop", edges["aippocampus_runtime.subconscious.jobs"])
         self.assertNotIn("subconscious_tool_loop", edges["subconscious_agent"])
-        self.assertNotIn("subconscious_tool_loop", edges["subconscious_jobs"])
-        self.assertNotIn("subconscious_agent", edges["subconscious_jobs"])
+        self.assertNotIn("subconscious_tool_loop", edges["aippocampus_runtime.subconscious.jobs"])
+        self.assertNotIn("subconscious_agent", edges["aippocampus_runtime.subconscious.jobs"])
         self.assertFalse(
-            {"subconscious_jobs", "subconscious_review"}
+            {"aippocampus_runtime.subconscious.jobs", "subconscious_review"}
             & edges["aippocampus_runtime.subconscious.agent"]
         )
         self.assertFalse(
-            {"subconscious_agent", "subconscious_jobs"}
+            {"subconscious_agent", "aippocampus_runtime.subconscious.jobs"}
             & edges["aippocampus_runtime.subconscious.runtime"]
         )
         self.assertFalse(
-            {"subconscious_agent", "subconscious_jobs"}
+            {"subconscious_agent", "aippocampus_runtime.subconscious.jobs"}
             & edges["aippocampus_runtime.subconscious.tool_loop"]
         )
         self.assertIs(subconscious_agent.AgentRunConfig, agent.AgentRunConfig)
@@ -1826,7 +1966,7 @@ class ImportCouplingTests(unittest.TestCase):
             "build_index",
             "build_segments",
             "import_bundle",
-            "registry",
+            "aippocampus_runtime.registry.api",
             "search_rollout",
         ]:
             self.assertIn("aippocampus_runtime.artifacts.publish", edges[source])

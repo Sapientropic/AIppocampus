@@ -10,7 +10,7 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any
 
-from aippocampuslib import (
+from aippocampus_runtime.core import (
     deepseek_cache_metrics_from_usage,
     sanitize_external_model_payload,
     validate_private_credential_transport,

@@ -17,8 +17,8 @@ import unicodedata
 from pathlib import Path
 from typing import Any
 
-from aippocampuslib import compact_text, now_utc, sanitize_external_model_text
-from registry import registry_paths, unique_preserve
+from aippocampus_runtime.core import compact_text, now_utc, sanitize_external_model_text
+from aippocampus_runtime.registry.api import registry_paths, unique_preserve
 
 SEMANTIC_CUE_SCHEMA_VERSION = 1
 SEMANTIC_CUE_KIND = "aippocampus_semantic_cue"

@@ -11,6 +11,13 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.core import (
+    cli_error_payload,
+    cli_exit_code_for_error_code,
+    compact_text,
+    now_utc,
+    sanitize_external_model_payload,
+)
 from aippocampus_runtime.model.routing import (
     DEFAULT_DEEPSEEK_API_KEY_ENV,
     resolve_model_route,
@@ -20,9 +27,16 @@ from aippocampus_runtime.model.routing import (
     route_service_name,
 )
 from aippocampus_runtime.recall.query_policy import split_query_terms
+from aippocampus_runtime.registry.api import registry_paths, unique_preserve
 from aippocampus_runtime.subconscious.job_validation import (
     estimate_finding_quality,
     finding_fingerprint,
+)
+from aippocampus_runtime.subconscious.jobs import (
+    PROMPT_VERSION as JOBS_PROMPT_VERSION,
+)
+from aippocampus_runtime.subconscious.jobs import (
+    default_jobs_output_path,
 )
 from aippocampus_runtime.subconscious.runtime import (
     DEFAULT_TEMPERATURE,
@@ -34,20 +48,6 @@ from aippocampus_runtime.subconscious.worker import (
     DEFAULT_BASE_URL,
     DEFAULT_MODEL,
     clamp_confidence,
-)
-from aippocampuslib import (
-    cli_error_payload,
-    cli_exit_code_for_error_code,
-    compact_text,
-    now_utc,
-    sanitize_external_model_payload,
-)
-from registry import registry_paths, unique_preserve
-from subconscious_jobs import (
-    PROMPT_VERSION as JOBS_PROMPT_VERSION,
-)
-from subconscious_jobs import (
-    default_jobs_output_path,
 )
 
 PROMPT_VERSION = "aippocampus-subconscious-review-v0"

@@ -16,14 +16,14 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.core import now_utc
 from aippocampus_runtime.navigation.associations import (
     default_associations_path,
     load_associations,
     normalize_term,
     term_is_noise,
 )
-from aippocampuslib import now_utc
-from registry import registry_paths, unique_preserve
+from aippocampus_runtime.registry.api import registry_paths, unique_preserve
 
 CONCEPT_GRAPH_SCHEMA_VERSION = 1
 DEFAULT_MAX_RELATED_PER_TERM = 10

@@ -12,6 +12,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Iterable
 
+from aippocampus_runtime.core import aippocampus_registry_dir, file_sha256, now_utc, safe_path_name
 from aippocampus_runtime.sync import bundle as sync_bundle
 from aippocampus_runtime.sync.encrypted import keys as encrypted_sync_keys
 from aippocampus_runtime.sync.encrypted.crypto import (
@@ -23,7 +24,6 @@ from aippocampus_runtime.sync.encrypted.crypto import (
     resolve_age_binary,
     validate_recipients,
 )
-from aippocampuslib import aippocampus_registry_dir, file_sha256, now_utc, safe_path_name
 
 ENCRYPTED_SYNC_SCHEMA_VERSION = 1
 ENCRYPTED_SYNC_DIR_NAME = "encrypted-sync"

@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
+from aippocampus_runtime.registry.api import load_registry
 from aippocampus_runtime.source.search import iter_clean_messages
-from registry import load_registry
 
 
 @dataclass(frozen=True)

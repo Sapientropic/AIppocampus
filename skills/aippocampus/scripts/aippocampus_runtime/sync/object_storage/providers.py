@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from urllib.parse import parse_qsl, quote, urlsplit, urlunsplit
 
-from aippocampuslib import validate_http_endpoint_url
+from aippocampus_runtime.core import validate_http_endpoint_url
 
 GENERIC_HTTP_PROVIDER = "generic-http"
 S3_PROVIDER = "s3"

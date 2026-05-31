@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import Any
 
 from aippocampus_runtime.recall.prompt_cues import evidence_content_terms
-from registry import deep_search_entry, unique_preserve
+from aippocampus_runtime.registry.api import deep_search_entry, unique_preserve
 
 
 def collect_evidence(

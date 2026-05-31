@@ -9,6 +9,11 @@ import os
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.core import (
+    compact_text,
+    default_thread_clean_source_dir,
+    resolve_artifact_path,
+)
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
 from aippocampus_runtime.source.semantic_scope_labels import (
@@ -16,7 +21,6 @@ from aippocampus_runtime.source.semantic_scope_labels import (
     merged_scope_labels,
     semantic_labels_for_message,
 )
-from aippocampuslib import compact_text, default_thread_clean_source_dir, resolve_artifact_path
 
 LEGACY_CLEAN_SOURCE_DIR = ".aippocampus/clean-source"
 

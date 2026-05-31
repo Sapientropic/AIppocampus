@@ -51,12 +51,12 @@ from aippocampus_runtime.recall.semantic_recall_gate import (
     default_semantic_triggers_path,
     prompt_relevant_triggers,
 )
-from memory_candidate_router import (
+from aippocampus_runtime.registry.api import load_registry
+from aippocampus_runtime.subconscious.candidate_router import (
     default_working_memory_path,
     load_working_memory,
     match_working_memory,
 )
-from registry import load_registry
 
 
 @dataclass(frozen=True)

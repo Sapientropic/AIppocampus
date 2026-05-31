@@ -13,6 +13,7 @@ import hashlib
 import re
 from typing import Any
 
+from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
 from aippocampus_runtime.source.semantic_scope_labels import (
     filtered_semantic_scope_labels,
@@ -20,7 +21,6 @@ from aippocampus_runtime.source.semantic_scope_labels import (
 )
 from aippocampus_runtime.subconscious.job_circuits import JOB_SPECS
 from aippocampus_runtime.subconscious.worker import ALLOWED_EDGE_TYPES, clamp_confidence
-from aippocampuslib import compact_text
 
 
 def normalize_for_fingerprint(value: str) -> str:
