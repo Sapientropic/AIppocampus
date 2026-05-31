@@ -116,7 +116,7 @@ Latest verification for this slice:
   matches in each direction, preserved `codex:session:` and
   `claude-code:session:` source refs, and kept registry/search paths redacted.
 - `python tools\aippocampus\smoke\smoke_claude_code_history.py --json`:
-  passed against the local Claude Code history store. It found 308 candidate
+  passed against the local Claude Code history store. It found 307 candidate
   sessions and parsed three samples with message/turn counts only; it reported
   no transcript text and no local paths.
 - Earlier 2026-05-30 `python tools\aippocampus\smoke\smoke_claude_code_mcp_host.py --json`
@@ -126,7 +126,7 @@ Latest verification for this slice:
 - `python tools\aippocampus\smoke\smoke_claude_code_mcp_host.py --json`:
   passed after local Claude Code MCP configuration and returned
   `status=reachable`.
-- `python tools\aippocampus\smoke\smoke_claude_code_mcp_host.py --json --call-tool --cwd . --max-budget-usd 0.20 --tool-timeout 120`:
+- `python tools\aippocampus\smoke\smoke_claude_code_mcp_host.py --json --call-tool --cwd . --max-budget-usd 0.20 --tool-timeout 180`:
   passed with `status=tool_call_reachable` and a successful
   `mcp__aippocampus__memory_health` call. The smoke verifies Claude Code
   `stream-json` `tool_use` plus the matching `tool_result`, and reports only
@@ -137,6 +137,14 @@ Latest verification for this slice:
 - `python skills\aippocampus\scripts\onboard.py --status --format text --cwd .`:
   passed and rendered human-readable provider states for Codex, Claude Code,
   and generic JSONL. JSON status remains the default for non-TTY agent callers.
+- `python skills\aippocampus\scripts\aippocampus_cli.py onboard --provider claude-code --dry-run --format json --cwd .`:
+  passed without writing registry data. It previewed 307 Claude Code
+  registrations for the AIppocampus workspace and one stale-index repair; raw
+  local paths stay out of this public ledger.
+- `python skills\aippocampus\scripts\aippocampus_cli.py onboard --status --format json --cwd .`:
+  passed with Codex, Claude Code, and generic JSONL all detected as
+  `write_enabled`; `auto` still defaults to Codex and lists other providers
+  separately.
 - Focused unit coverage now checks generic JSONL structured validation errors,
   generic JSONL onboarding dry-run planning, missing-provider status, human
   status rendering, provider-thread-key source-id stability across path moves,
