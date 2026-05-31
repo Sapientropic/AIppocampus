@@ -243,7 +243,7 @@ class ImportCouplingTests(unittest.TestCase):
             "aippocampus_runtime.subconscious.validation_audit",
             "aippocampus_runtime.warm_ambient.source_validation",
             "build_project_timeline",
-            "question_resolution",
+            "aippocampus_runtime.subconscious.question_resolution",
             "semantic_scope_suppressed_recovery",
         ]
         flat_source_modules = {
@@ -946,7 +946,7 @@ class ImportCouplingTests(unittest.TestCase):
         for source in [
             "subconscious_jobs",
             "aippocampus_runtime.question.tracking",
-            "theme_emergence",
+            "aippocampus_runtime.subconscious.theme_emergence",
         ]:
             self.assertIn("aippocampus_runtime.subconscious.jobs_config", edges[source])
             self.assertNotIn("subconscious_jobs_config", edges[source])
@@ -960,6 +960,52 @@ class ImportCouplingTests(unittest.TestCase):
             subconscious_jobs_config.default_jobs_output_path,
             jobs_config.default_jobs_output_path,
         )
+
+    def test_subconscious_deterministic_followup_runners_have_package_owner_and_compat_shims(
+        self,
+    ) -> None:
+        import question_resolution
+        import theme_emergence
+        from aippocampus_runtime.subconscious import (
+            question_resolution as packaged_question_resolution,
+        )
+        from aippocampus_runtime.subconscious import (
+            theme_emergence as packaged_theme_emergence,
+        )
+
+        package_paths = [
+            SCRIPTS / "aippocampus_runtime" / "subconscious" / "question_resolution.py",
+            SCRIPTS / "aippocampus_runtime" / "subconscious" / "theme_emergence.py",
+        ]
+        shim_paths = [
+            SCRIPTS / "question_resolution.py",
+            SCRIPTS / "theme_emergence.py",
+        ]
+
+        for path in package_paths + shim_paths:
+            self.assertTrue(path.exists(), path)
+        for path in shim_paths:
+            self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges()
+        for target in [
+            "aippocampus_runtime.subconscious.question_resolution",
+            "aippocampus_runtime.subconscious.theme_emergence",
+        ]:
+            self.assertIn(target, edges["aippocampus_runtime.subconscious.deterministic_jobs"])
+        self.assertNotIn("question_resolution", edges["aippocampus_runtime.subconscious.deterministic_jobs"])
+        self.assertNotIn("theme_emergence", edges["aippocampus_runtime.subconscious.deterministic_jobs"])
+
+        self.assertIs(
+            question_resolution.run_question_resolution,
+            packaged_question_resolution.run_question_resolution,
+        )
+        self.assertIs(question_resolution.main, packaged_question_resolution.main)
+        self.assertIs(
+            theme_emergence.run_theme_emergence,
+            packaged_theme_emergence.run_theme_emergence,
+        )
+        self.assertIs(theme_emergence.main, packaged_theme_emergence.main)
 
     def test_question_helpers_have_package_owner_and_compat_shims(self) -> None:
         import question_feedback_policy
@@ -991,9 +1037,9 @@ class ImportCouplingTests(unittest.TestCase):
             "correction_reconsolidation",
             "question_health",
             "question_index_sidecar",
-            "question_resolution",
+            "aippocampus_runtime.subconscious.question_resolution",
             "aippocampus_runtime.question.tracking",
-            "theme_emergence",
+            "aippocampus_runtime.subconscious.theme_emergence",
         ]:
             self.assertIn("aippocampus_runtime.question.source_refs", edges[source])
             self.assertNotIn("question_source_refs", edges[source])
@@ -1046,7 +1092,7 @@ class ImportCouplingTests(unittest.TestCase):
             "aippocampus_runtime.subconscious.deterministic_jobs",
             "question_health",
             "question_index_sidecar",
-            "question_resolution",
+            "aippocampus_runtime.subconscious.question_resolution",
             "question_confirmation_live",
         ]:
             self.assertIn("aippocampus_runtime.question.tracking", edges[source])
@@ -1681,6 +1727,7 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertEqual(offenders, {})
 
     def test_warm_ambient_helpers_have_package_owner_and_compat_shims(self) -> None:
+        import ambient_warm_scheduler
         import warm_ambient_prompting
         import warm_ambient_recall
         import warm_ambient_scout_profiles
@@ -1688,6 +1735,7 @@ class ImportCouplingTests(unittest.TestCase):
         from aippocampus_runtime.warm_ambient import (
             prompting,
             recall,
+            scheduler,
             scout_profiles,
             source_validation,
         )
@@ -1695,10 +1743,12 @@ class ImportCouplingTests(unittest.TestCase):
         package_files = [
             SCRIPTS / "aippocampus_runtime" / "warm_ambient" / "prompting.py",
             SCRIPTS / "aippocampus_runtime" / "warm_ambient" / "recall.py",
+            SCRIPTS / "aippocampus_runtime" / "warm_ambient" / "scheduler.py",
             SCRIPTS / "aippocampus_runtime" / "warm_ambient" / "scout_profiles.py",
             SCRIPTS / "aippocampus_runtime" / "warm_ambient" / "source_validation.py",
         ]
         shim_files = [
+            SCRIPTS / "ambient_warm_scheduler.py",
             SCRIPTS / "warm_ambient_prompting.py",
             SCRIPTS / "warm_ambient_recall.py",
             SCRIPTS / "warm_ambient_scout_profiles.py",
@@ -1715,8 +1765,29 @@ class ImportCouplingTests(unittest.TestCase):
             "aippocampus_runtime.warm_ambient.recall",
             edges["warm_ambient_recall"],
         )
+        self.assertIn(
+            "aippocampus_runtime.warm_ambient.scheduler",
+            edges["ambient_warm_scheduler"],
+        )
+        self.assertIn(
+            "aippocampus_runtime.warm_ambient.scheduler",
+            edges["aippocampus_runtime.recall.prompt_recall_ambient"],
+        )
+        self.assertNotIn(
+            "ambient_warm_scheduler",
+            edges["aippocampus_runtime.recall.prompt_recall_ambient"],
+        )
         self.assertNotIn("warm_ambient_recall", edges["ambient_warm_scheduler"])
 
+        self.assertIs(
+            ambient_warm_scheduler.schedule_warm_ambient_recall,
+            scheduler.schedule_warm_ambient_recall,
+        )
+        self.assertIs(ambient_warm_scheduler.spawn_warm_job, scheduler.spawn_warm_job)
+        self.assertIs(
+            ambient_warm_scheduler.warm_background_enabled,
+            scheduler.warm_background_enabled,
+        )
         self.assertIs(warm_ambient_prompting.scout_prompt, prompting.scout_prompt)
         self.assertIs(warm_ambient_recall.run_warm_ambient_recall, recall.run_warm_ambient_recall)
         self.assertIs(warm_ambient_recall.main, recall.main)
@@ -1731,6 +1802,45 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(
             warm_ambient_source_validation._stable_id,
             source_validation._stable_id,
+        )
+
+    def test_artifact_publish_has_package_owner_and_compat_shim(self) -> None:
+        import artifact_publish
+        from aippocampus_runtime.artifacts import publish
+
+        package_paths = [
+            SCRIPTS / "aippocampus_runtime" / "artifacts" / "__init__.py",
+            SCRIPTS / "aippocampus_runtime" / "artifacts" / "publish.py",
+        ]
+        shim_path = SCRIPTS / "artifact_publish.py"
+
+        for path in package_paths:
+            self.assertTrue(path.exists(), path)
+        self.assertTrue(shim_path.exists(), shim_path)
+        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges()
+        for source in [
+            "aippocampus_health",
+            "aippocampus_runtime.sync.bundle",
+            "build_index",
+            "build_segments",
+            "import_bundle",
+            "registry",
+            "search_rollout",
+        ]:
+            self.assertIn("aippocampus_runtime.artifacts.publish", edges[source])
+            self.assertNotIn("artifact_publish", edges[source])
+
+        self.assertIs(artifact_publish.artifact_lease, publish.artifact_lease)
+        self.assertIs(artifact_publish.index_pointer_path, publish.index_pointer_path)
+        self.assertIs(
+            artifact_publish.resolve_sqlite_index_path,
+            publish.resolve_sqlite_index_path,
+        )
+        self.assertIs(
+            artifact_publish.publish_sqlite_with_pointer,
+            publish.publish_sqlite_with_pointer,
         )
 
     def test_sync_contract_has_package_owner_and_compat_shim(self) -> None:

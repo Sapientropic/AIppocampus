@@ -17,6 +17,7 @@ import shutil
 import time
 from pathlib import Path
 
+from aippocampus_runtime.artifacts.publish import artifact_lease
 from aippocampuslib import (
     codex_home,
     default_thread_segments_dir,
@@ -29,7 +30,6 @@ from aippocampuslib import (
     read_session_meta,
     resolve_artifact_path,
 )
-from artifact_publish import artifact_lease
 from build_index import make_sqlite
 
 DEFAULT_SEGMENT_BYTES = 64 * 1024 * 1024

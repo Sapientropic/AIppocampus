@@ -10,6 +10,13 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.artifacts.publish import (
+    DEFAULT_SQLITE_BUSY_TIMEOUT_MS,
+    artifact_lease,
+    publish_sqlite_with_pointer,
+    remove_sqlite_artifact,
+    unique_temp_sqlite_path,
+)
 from aippocampus_runtime.recall.retrieval import build_rag_chunks
 from aippocampuslib import (
     build_anchor_graph,
@@ -20,13 +27,6 @@ from aippocampuslib import (
     now_utc,
     parse_anchor_file,
     resolve_artifact_path,
-)
-from artifact_publish import (
-    DEFAULT_SQLITE_BUSY_TIMEOUT_MS,
-    artifact_lease,
-    publish_sqlite_with_pointer,
-    remove_sqlite_artifact,
-    unique_temp_sqlite_path,
 )
 from conversation_sources import create_conversation_provider
 

@@ -274,7 +274,7 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
         for import_line in (
             "from aippocampus_runtime.recall.ambient_cards import",
             "from aippocampus_runtime.recall.ambient_cache import",
-            "from ambient_warm_scheduler import",
+            "from aippocampus_runtime.warm_ambient.scheduler import",
         ):
             self.assertNotIn(import_line, decision_source)
             self.assertIn(import_line, boundary_source)

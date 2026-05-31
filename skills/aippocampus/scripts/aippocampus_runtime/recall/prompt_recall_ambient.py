@@ -20,7 +20,7 @@ from aippocampus_runtime.recall.ambient_policy import (
     load_policy_events,
     surface_events_for_cards,
 )
-from ambient_warm_scheduler import (
+from aippocampus_runtime.warm_ambient.scheduler import (
     public_warm_schedule_status,
     schedule_warm_ambient_recall,
     warm_background_enabled,

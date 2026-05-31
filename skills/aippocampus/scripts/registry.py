@@ -12,6 +12,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from aippocampus_runtime.artifacts.publish import resolve_sqlite_index_path
 from aippocampus_runtime.registry.provider import current_thread_build_cmd, thread_key_for
 from aippocampus_runtime.registry.search import (
     REGISTRY_SEARCH_DEEP_BUDGET,
@@ -46,7 +47,6 @@ from aippocampuslib import (
     parse_anchor_file,
     public_session_meta,
 )
-from artifact_publish import resolve_sqlite_index_path
 from conversation_sources import (
     PROVIDER_CHOICES,
     ConversationProvider,
