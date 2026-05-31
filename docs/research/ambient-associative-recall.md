@@ -139,6 +139,17 @@ small, expiring, source-ref-fingerprinted, and safe to discard. It must not log
 raw prompt text. When the thread changes topic, the topic epoch should rotate so
 old cards stop coloring unrelated work.
 
+After an exact `thread_id + workspace + topic_epoch` miss, the foreground hook
+may perform a narrow related-cache lookup over the newest same-thread,
+same-workspace entries. This lookup is pattern completion over hashed stable
+signals such as source refs, candidate thread keys, semantic trigger ids, scope
+labels, card ids, and scout topic labels. Query aliases may be retained as weak
+diagnostic evidence, but alias overlap alone must not reuse cards; that would
+turn the cache into prompt-text fuzzy matching and weaken the semantic boundary.
+Related hits remain advisory until the current turn reopens clean source, so
+cached evidence cards should be downgraded to candidate-level guidance rather
+than surfaced as fresh source-backed evidence.
+
 Safe to discard does not have to mean wasted. The cache may optionally export
 `ambient_residue` rows when a topic epoch rotates, a cache entry expires, or a
 caller explicitly wants to keep source-backed unused resonance for future dream
