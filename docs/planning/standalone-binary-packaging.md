@@ -5,8 +5,8 @@ AIppocampus binaries. The canonical implementation remains the source-backed
 Python runtime; direct Python/script usage stays supported as the fallback.
 
 As of 2026-05-31, Windows x64 has a PyInstaller artifact smoke, plus
-post-package-refactor binary MCP re-smokes through current `main` commit
-`a5217d1`, recorded in
+post-package-refactor binary MCP re-smokes and a content-level
+`tools/call:memory_health` JSON-RPC guard recorded in
 `docs/evidence/readiness/public-readiness-verification.md`. Do not claim any
 other platform until its artifact is built, smoke-tested, and linked from the
 dated evidence ledger.
@@ -29,7 +29,7 @@ Each claimed platform needs a fresh artifact built on or for that platform:
 
 | Platform | Required smoke checks |
 | --- | --- |
-| Windows x64 | `aippocampus --help`; `aippocampus health --help`; public-bundle search; `aippocampus mcp list-tools`; `aippocampus onboard --status --format json`; `aippocampus sync status --sync-dir <empty-dir> --json`; `aippocampus hooks status`; staged-runtime private-data guard; optional Claude Code strict MCP tool-call with `aippocampus.exe mcp` when claiming host integration. |
+| Windows x64 | `aippocampus --help`; `aippocampus health --help`; public-bundle search; `aippocampus mcp list-tools`; stdio JSON-RPC `tools/call:memory_health` through `aippocampus.exe mcp`; `aippocampus onboard --status --format json`; `aippocampus sync status --sync-dir <empty-dir> --json`; `aippocampus hooks status`; staged-runtime private-data guard; optional Claude Code strict MCP tool-call with `aippocampus.exe mcp` when claiming host integration. |
 | macOS arm64 | Same checks as Windows, plus Gatekeeper/quarantine note if distributing a downloaded binary. |
 | macOS x64 | Same checks as Windows; may be deferred if the project explicitly drops Intel Mac binary claims. |
 | Linux x64 | Same checks as Windows on a clean container or VM with no repo checkout on `PYTHONPATH`. |

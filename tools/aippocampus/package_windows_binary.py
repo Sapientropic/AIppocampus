@@ -354,7 +354,86 @@ def _run_smoke(artifact: Path, plan: PackagingPlan) -> list[dict[str, Any]]:
                 and (not spec.require_json or parsed_json is not None),
             }
         )
+    results.append(_run_mcp_memory_health_jsonrpc_smoke(artifact, plan))
     return results
+
+
+def _run_mcp_memory_health_jsonrpc_smoke(artifact: Path, plan: PackagingPlan) -> dict[str, Any]:
+    requests: list[dict[str, Any]] = [
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {"protocolVersion": "2025-11-25"},
+        },
+        {"jsonrpc": "2.0", "method": "notifications/initialized"},
+        {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+        {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "memory_health",
+                "arguments": {"cwd": str(plan.repo_root)},
+            },
+        },
+    ]
+    stdin = "\n".join(json.dumps(item, ensure_ascii=False) for item in requests) + "\n"
+    proc = subprocess.run(
+        [str(artifact), "mcp"],
+        input=stdin,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        check=False,
+        timeout=30,
+    )
+    responses: list[dict[str, Any]] = []
+    if proc.returncode == 0:
+        try:
+            responses = [json.loads(line) for line in proc.stdout.splitlines() if line.strip()]
+        except json.JSONDecodeError:
+            responses = []
+
+    tool_names: list[str] = []
+    tool_payload: dict[str, Any] = {}
+    tool_is_error = True
+    if len(responses) >= 3:
+        tool_names = [
+            str(tool.get("name") or "")
+            for tool in responses[1].get("result", {}).get("tools", [])
+        ]
+        tool_result = responses[2].get("result", {})
+        tool_is_error = bool(tool_result.get("isError"))
+        content = tool_result.get("content") or []
+        if content:
+            try:
+                tool_payload = json.loads(str(content[0].get("text") or "{}"))
+            except json.JSONDecodeError:
+                tool_payload = {}
+
+    ok = (
+        proc.returncode == 0
+        and [item.get("id") for item in responses] == [1, 2, 3]
+        and "memory_health" in tool_names
+        and not tool_is_error
+        and isinstance(tool_payload.get("recommended_actions"), list)
+    )
+    return {
+        "name": "mcp_memory_health_jsonrpc",
+        "args": ["mcp"],
+        "expected_returncodes": [0],
+        "returncode": proc.returncode,
+        "stdout_preview": _sanitize_preview(proc.stdout, plan)[:1000],
+        "stderr_preview": _sanitize_preview(proc.stderr, plan)[:1000],
+        "json_parse": bool(responses),
+        "response_ids": [item.get("id") for item in responses],
+        "tool_count": len(tool_names),
+        "tool_is_error": tool_is_error,
+        "tool_payload_keys": sorted(tool_payload.keys())[:20],
+        "ok": ok,
+    }
 
 
 def _parse_json(text: str) -> Any | None:

@@ -1149,18 +1149,21 @@ class ImportCouplingTests(unittest.TestCase):
 
     def test_question_helpers_have_package_owner_and_compat_shims(self) -> None:
         import question_feedback_policy
+        import question_health
         import question_source_refs
         import question_vector_index
-        from aippocampus_runtime.question import feedback_policy, source_refs, vector_index
+        from aippocampus_runtime.question import feedback_policy, health, source_refs, vector_index
 
         package_paths = [
             SCRIPTS / "aippocampus_runtime" / "question" / "__init__.py",
             SCRIPTS / "aippocampus_runtime" / "question" / "feedback_policy.py",
+            SCRIPTS / "aippocampus_runtime" / "question" / "health.py",
             SCRIPTS / "aippocampus_runtime" / "question" / "source_refs.py",
             SCRIPTS / "aippocampus_runtime" / "question" / "vector_index.py",
         ]
         shim_paths = [
             SCRIPTS / "question_feedback_policy.py",
+            SCRIPTS / "question_health.py",
             SCRIPTS / "question_source_refs.py",
             SCRIPTS / "question_vector_index.py",
         ]
@@ -1175,7 +1178,7 @@ class ImportCouplingTests(unittest.TestCase):
             "agency_affordance",
             "coding_decision_events",
             "correction_reconsolidation",
-            "question_health",
+            "aippocampus_runtime.question.health",
             "question_index_sidecar",
             "aippocampus_runtime.subconscious.question_resolution",
             "aippocampus_runtime.question.tracking",
@@ -1191,13 +1194,31 @@ class ImportCouplingTests(unittest.TestCase):
             "question_feedback_policy",
             edges["aippocampus_runtime.question.tracking"],
         )
+        self.assertIn("aippocampus_runtime.question.health", edges["question_health"])
+        self.assertIn("aippocampus_runtime.core", edges["aippocampus_runtime.question.health"])
+        self.assertIn(
+            "aippocampus_runtime.registry.api",
+            edges["aippocampus_runtime.question.health"],
+        )
+        self.assertNotIn("aippocampuslib", edges["aippocampus_runtime.question.health"])
+        self.assertNotIn("registry", edges["aippocampus_runtime.question.health"])
 
         modules = pyproject_py_modules()
         self.assertTrue(
-            {"question_feedback_policy", "question_source_refs", "question_vector_index"}
+            {
+                "question_feedback_policy",
+                "question_health",
+                "question_source_refs",
+                "question_vector_index",
+            }
             <= modules
         )
 
+        self.assertIs(question_health.question_health_stats, health.question_health_stats)
+        self.assertIs(
+            question_health.aggregate_question_health_stats,
+            health.aggregate_question_health_stats,
+        )
         self.assertIs(question_source_refs.source_ref_key, source_refs.source_ref_key)
         self.assertIs(
             question_feedback_policy.load_question_pair_feedback,
@@ -1230,7 +1251,7 @@ class ImportCouplingTests(unittest.TestCase):
         edges = same_dir_import_edges()
         for source in [
             "aippocampus_runtime.subconscious.deterministic_jobs",
-            "question_health",
+            "aippocampus_runtime.question.health",
             "question_index_sidecar",
             "aippocampus_runtime.subconscious.question_resolution",
             "question_confirmation_live",
@@ -1257,6 +1278,37 @@ class ImportCouplingTests(unittest.TestCase):
             question_confirmation.borderline_confirmation_request,
             confirmation.borderline_confirmation_request,
         )
+
+    def test_runtime_health_has_package_owner_and_compat_shim(self) -> None:
+        import aippocampus_health
+        from aippocampus_runtime import health
+
+        package_path = SCRIPTS / "aippocampus_runtime" / "health.py"
+        shim_path = SCRIPTS / "aippocampus_health.py"
+
+        self.assertTrue(package_path.exists(), package_path)
+        self.assertTrue(shim_path.exists(), shim_path)
+        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges()
+        self.assertIn("aippocampus_runtime.health", edges["aippocampus_health"])
+        package_edges = edges["aippocampus_runtime.health"]
+        for owner in [
+            "aippocampus_runtime.artifacts.publish",
+            "aippocampus_runtime.core",
+            "aippocampus_runtime.question.health",
+            "aippocampus_runtime.registry.api",
+        ]:
+            self.assertIn(owner, package_edges)
+        for flat_module in [
+            "aippocampus_health",
+            "aippocampuslib",
+            "question_health",
+            "registry",
+        ]:
+            self.assertNotIn(flat_module, package_edges)
+        self.assertIs(aippocampus_health.main, health.main)
+        self.assertIs(aippocampus_health.load_question_stats, health.load_question_stats)
 
     def test_subconscious_validation_audit_has_package_owner_and_compat_shim(self) -> None:
         import subconscious_validation_audit
@@ -1961,7 +2013,7 @@ class ImportCouplingTests(unittest.TestCase):
 
         edges = same_dir_import_edges()
         for source in [
-            "aippocampus_health",
+            "aippocampus_runtime.health",
             "aippocampus_runtime.sync.bundle",
             "build_index",
             "build_segments",
