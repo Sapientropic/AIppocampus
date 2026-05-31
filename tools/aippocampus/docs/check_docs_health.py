@@ -42,6 +42,7 @@ REQUIRED_PROJECT_DOCS = [
 
 DOCS_ROOT_ALLOWED_MARKDOWN = {
     "README.md",
+    "agent-context.md",
     "roadmap.md",
     "the-unfinished-map.md",
     "未干的地图.md",
