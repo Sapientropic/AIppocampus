@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import sys
@@ -293,11 +295,12 @@ class WarmAmbientRecallTests(unittest.TestCase):
             "9",
             "--json",
         ]
+        stdout = io.StringIO()
 
         with (
             patch.object(sys, "argv", argv),
             patch.object(warm, "run_warm_ambient_recall", side_effect=fake_run),
-            patch("builtins.print"),
+            contextlib.redirect_stdout(stdout),
         ):
             code = warm.main()
 
@@ -308,6 +311,83 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(config.thinking, "disabled")
         self.assertEqual(config.quorum, 1)
         self.assertEqual(config.max_catalog_items, 9)
+
+    def test_cli_json_emits_public_summary_not_private_warm_payload(self) -> None:
+        def fake_run(prompt: str, **kwargs):
+            del prompt, kwargs
+            return {
+                "kind": "aippocampus_warm_ambient_recall",
+                "schema_version": 1,
+                "ok": True,
+                "available": True,
+                "status": "ready",
+                "reason": "model replied with private detail",
+                "quorum_met": True,
+                "scout_count": 1,
+                "max_workers": 1,
+                "accepted_scout_count": 1,
+                "failed_scout_count": 0,
+                "trace_fallback_card_count": 0,
+                "user_id": "aip-warm-private-user-id",
+                "model_route": {
+                    "provider": "deepseek",
+                    "api_key_env": "LOCAL_SECRET_KEY_ENV",
+                },
+                "scouts": [
+                    {
+                        "ok": True,
+                        "reason": "private scout reasoning",
+                    }
+                ],
+                "cards": [
+                    {
+                        "theme": "private card",
+                        "key_line": "private source line",
+                    }
+                ],
+                "cache": {"available": True, "hit_tokens": 3, "miss_tokens": 2},
+                "secret_policy": {"redacted": True, "reason": "contains secret"},
+                "suppression_reason_buckets": ["no_supported_cards"],
+                "suppression_diagnostics": {
+                    "reason_buckets": ["no_supported_cards"],
+                    "card_count": 1,
+                    "quorum_met": True,
+                    "current_thread_echo_count": 0,
+                },
+            }
+
+        argv = [
+            "warm_ambient_recall.py",
+            "--prompt",
+            "继续 ambient recall",
+            "--cwd",
+            str(self.workspace),
+            "--json",
+        ]
+        stdout = io.StringIO()
+
+        with (
+            patch.object(sys, "argv", argv),
+            patch.object(warm, "run_warm_ambient_recall", side_effect=fake_run),
+            contextlib.redirect_stdout(stdout),
+        ):
+            code = warm.main()
+
+        raw_output = stdout.getvalue()
+        payload = json.loads(raw_output)
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["status"], "ready")
+        self.assertEqual(payload["card_count"], 1)
+        self.assertEqual(payload["reason"], "")
+        self.assertFalse(payload["privacy_boundary"]["raw_cards_emitted"])
+        self.assertFalse(payload["privacy_boundary"]["model_route_emitted"])
+        self.assertNotIn("cards", payload)
+        self.assertNotIn("scouts", payload)
+        self.assertNotIn("model_route", payload)
+        self.assertNotIn("user_id", payload)
+        self.assertNotIn("secret_policy", payload)
+        self.assertNotIn("private source line", raw_output)
+        self.assertNotIn("LOCAL_SECRET_KEY_ENV", raw_output)
 
     def test_warm_background_is_default_on_with_explicit_opt_outs(self) -> None:
         self.assertTrue(warm_scheduler.warm_background_enabled(env={}))

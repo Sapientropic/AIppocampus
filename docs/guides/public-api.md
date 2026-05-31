@@ -80,6 +80,11 @@ For these commands:
 - JSON objects may gain fields. Consumers should key off documented fields and
   tolerate extra keys.
 - Human-readable text is not a stable parse target.
+- Warm ambient recall CLI JSON is a public-safe operational summary. It keeps
+  status, counts, cache telemetry, and gate buckets, but does not emit raw
+  prompts, scout rows, model route secrets, user ids, or raw cards. Python
+  callers that need local private diagnostics should call the packaged runtime
+  API directly inside the trusted process boundary.
 - Exit code `0` means the command completed successfully. Non-zero means invalid
   arguments, missing prerequisites, failed validation, failed smoke, or another
   command-specific hard failure.

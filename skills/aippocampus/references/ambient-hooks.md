@@ -191,6 +191,12 @@ Useful commands:
 - `python benchmarks\aippocampus\benchmark_warm_ambient_sweep.py --cases-file traces.jsonl --registry .tmp\warm-sharegpt-coding-pack\threads.json --live --wait-modes quorum_first,wait_all --case-workers 2 --progress-dir .tmp\warm-progress --prefix-cache-warmup-scouts 2 --prefix-cache-warmup-delay 0.5 --max-workers-list 20,50 --timeouts 15,30 --json`
 - `python ...\install_aippocampus_prompt_hook.py install|status|uninstall`
 
+`warm_ambient_recall.py --json` is an operational summary, not a private
+diagnostic dump: it reports status, counts, cache telemetry, and gate buckets
+without raw prompts, scout rows, model route secrets, user ids, or raw cards.
+Local Python callers that need the full private result should import the
+packaged runtime API inside a trusted process boundary.
+
 `deep_archival_recall` is an escalation request, not a license to dump history:
 the foreground agent should open clean source first using the card's
 `source_refs`, and only use raw audit paths when clean source cannot settle an
