@@ -1170,6 +1170,68 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertIn("memoria externa", result["query_terms"])
         self.assertIn("associative cue", " ".join(result["reasons"]))
 
+    def test_active_semantic_cue_hit_skips_cold_foreground_semantic_call(self) -> None:
+        registry_path = self.root / "semantic-cue-skip-live-registry" / "threads.json"
+        registry_path.parent.mkdir()
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:aippocampus",
+                            "title": "AIppocampus work",
+                            "project_label": "AIppocampus",
+                            "anchor_titles": ["External hippocampus recall"],
+                            "keywords": ["memoria externa", "conversation continuity"],
+                            "summary": "Source-backed continuity work for external memory.",
+                            "paths": {"workspace": str(self.old), "sqlite": str(self.sqlite)},
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        cues_path = self.root / "semantic_cue_skip_live.jsonl"
+        semantic_result = {
+            "available": True,
+            "decision": "background_only",
+            "confidence": 0.9,
+            "query_aliases": ["memoria externa"],
+            "memory_scope": ["registered_threads"],
+        }
+        for prompt in (
+            "¿Podemos seguir con la memoria externa de la que hablamos?",
+            "¿Puedes continuar esa memoria externa para mantener la continuidad?",
+        ):
+            cue_cache.record_semantic_cue_hits(
+                cues_path,
+                prompt=prompt,
+                semantic_result=semantic_result,
+                source_refs=[{"thread_key": "session:aippocampus", "message_id": "m1"}],
+                route="semantic_gate",
+            )
+
+        def fail_semantic_gate(*args, **kwargs) -> dict:
+            raise AssertionError("active semantic cue hit should avoid a cold foreground model call")
+
+        result = hook.assess_prompt(
+            "¿Seguimos con esa memoria externa de continuidad?",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            semantic_cues_path=cues_path,
+            semantic_gate_fn=fail_semantic_gate,
+            search_budget=0,
+        )
+
+        self.assertEqual(result["decision"], "scent")
+        self.assertIsNone(result["semantic_gate"])
+        self.assertEqual(result["semantic_gate_reuse"]["source"], "semantic_cue_cache")
+        self.assertTrue(result["semantic_gate_reuse"]["semantic_cue_hit"])
+        self.assertFalse(result["semantic_gate_reuse"]["cold_model_call"])
+        self.assertIn("memoria externa", result["query_terms"])
+
     def test_active_non_latin_semantic_cues_emit_scent_without_live_semantic(self) -> None:
         registry_path = self.root / "nonlatin-semantic-cue-registry" / "threads.json"
         registry_path.parent.mkdir()

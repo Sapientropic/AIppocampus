@@ -546,6 +546,11 @@ The first slice should stay small but real:
    when the hook has the required runtime inputs, while foreground behavior
    stays cache-first and fail-open. Prompt-hook cache hits now keep warmed cards
    ahead of fresh local hints and expose sanitized cache metadata for debugging.
+   Learned semantic cues also act as a foreground reuse gate: once a cue has
+   repeated source-backed hits, neighboring paraphrases use the local
+   semantic-cue path and skip a cold live semantic call unless an operator
+   explicitly forces `semantic_gate=on` for calibration. Hook diagnostics report
+   `exact_cache_hit`, `semantic_cue_hit`, and `cold_model_call` separately.
    Further work should be driven by new regressions or product behavior gaps,
    not by repeating the completed calibration suite.
 

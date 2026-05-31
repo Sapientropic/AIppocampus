@@ -29,8 +29,8 @@ recovery_status: normal
 blockers: []
 needs_human:
   - "Final product acceptance and any remote publishing/PR decision"
-residual_risk: "Claude Code MCP host/tool-call smoke now passes on this Windows host, explicit Claude Code onboarding dry-run previews 307 registrations without writing, Windows x64 PyInstaller artifact smoke passes, and #165/#166 have a local deterministic terrain/weather plus source-thickness slice; #104 needs real provider credentials, #108/#157 need targeted semantic/live evidence, #144 should be a separate refactor PR after this broad issue slice, and #148/#163/#168 are intentionally skipped for this pass."
-next_action: "Keep PR #174 focused on the evidence-backed closeout slice; after merge, address #144 as a separate compatibility-shim refactor or run targeted #157 paraphrase-cache smoke before claiming semantic-cache closure."
+residual_risk: "Claude Code MCP host/tool-call smoke now passes on this Windows host, explicit Claude Code onboarding dry-run previews 307 registrations without writing, Windows x64 PyInstaller artifact smoke passes, and #165/#166 have a local deterministic terrain/weather plus source-thickness slice; #157 now has deterministic semantic-cue reuse diagnostics and seeded multilingual smoke coverage, but still lacks live/private proof that a single exact warm makes neighboring paraphrases hot; #104 needs real provider credentials, #108 needs targeted real-history semantic evidence, #144 should be a separate refactor PR after this broad issue slice, and #148/#163/#168 are intentionally skipped for this pass."
+next_action: "Keep PR #174 focused on the evidence-backed closeout slice; after merge, address #144 as a separate compatibility-shim refactor or run live #157 paraphrase-cache calibration before claiming full semantic-cache closure."
 candidate_slices:
   - "issues-113-116-120-provider-mainline: provider contract, normalized clean source, Claude/generic import, onboarding status"
   - "issue-112-cli-facade: aippocampus command wrapper over existing scripts"
@@ -40,7 +40,7 @@ candidate_slices:
   - "issues-122-124-host-boundary: Codex-specific surface inventory, registry-home precedence, and Claude host-native adapter decision"
   - "issues-158-162-dream-mainline: dream queue, policies, one-sidedness gate, and parked lifecycle validation"
   - "issues-164-170-coding-memory: coding decision terrain/weather split, thin-evidence gating, probes, benchmark runner, and host affordance simulator"
-last_update: "2026-05-31T09:50:00+08:00"
+last_update: "2026-05-31T10:12:00+08:00"
 deadline: null
 time_budget_remaining: null
 checkpoint_ready: true
