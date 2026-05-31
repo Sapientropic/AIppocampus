@@ -213,9 +213,12 @@ def check_marker_and_agent_text(repo: Path, checks: list[Check]) -> None:
 def check_workflow(repo: Path, checks: list[Check]) -> None:
     workflow = read_text(repo, ".github/workflows/publish-agent-discovery.yml")
     required_terms = {
+        "workflow_dispatch": "manual release trigger",
+        "release_tag": "manual release tag input",
         "environment: release": "GitHub release environment",
         "pypa/gh-action-pypi-publish": "PyPI trusted publishing action",
         "Check tag matches package version": "tag/version guard",
+        "git\", \"rev-list\", \"-n\", \"1\", tag": "tag commit guard",
         "check-jsonschema": "MCP schema validation",
         "Smoke built wheel": "built wheel CLI smoke",
         "mcp-publisher login github-oidc": "MCP GitHub OIDC auth",
