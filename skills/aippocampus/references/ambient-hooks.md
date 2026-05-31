@@ -203,8 +203,10 @@ prompts still complete within budget.
 The foreground default is about one second for fresh semantic calls, plus a
 whole-hook fail-open budget below the Codex hook timeout. Treat that as a
 scent/cache pass, not as the full recall budget; explicit `active_recall.py`,
-`runtime recall`, and standalone `semantic_recall_gate.py` can spend longer
-when the user asks for source-backed memory.
+`runtime recall`, and standalone `semantic_recall_gate.py` compatibility
+commands can spend longer when the user asks for source-backed memory. The
+implementation owner lives under `aippocampus_runtime.recall`; do not add new
+foreground-recall policy to the top-level compatibility shims.
 
 When an explicit memory cue already has local association or working-memory
 overlap, the prompt hook skips the external semantic gate and goes straight to
@@ -232,8 +234,10 @@ should not be the first evidence card when better human-facing source exists.
 ## Semantic Gate
 
 When `DEEPSEEK_API_KEY` is present and `AIPPOCAMPUS_SEMANTIC_GATE` is not `off`,
-the prompt hook may call `scripts/semantic_recall_gate.py`. The semantic gate
-runs small parallel workers:
+the prompt hook may call the packaged semantic gate through
+`aippocampus_runtime.recall.semantic_recall_gate`; the top-level
+`scripts/semantic_recall_gate.py` path remains a direct-script compatibility
+command. The semantic gate runs small parallel workers:
 
 - `gate`: choose `skip`, `scent`, or evidence-worthy recall.
 - `alias`: generate multilingual and paraphrase search aliases.
@@ -250,14 +254,15 @@ repeated hits with source refs, demoted when false positives accumulate, and fed
 back into the semantic gate's trigger catalog as search hints.
 Active `semantic_cues.jsonl` rows and reviewed `semantic_triggers.jsonl` rows
 also feed the hook's local pre-gate and query seed terms. This is the intended
-replacement path for semantic proxy word lists in `prompt_cues.py` and
-`retrieval_query_policy.py`: static cues stay as a compact bootstrap/fallback,
-while repeated or reviewed multilingual paraphrases live in sidecar data.
-`semantic_trigger_router.py` also ships a small reviewed seed sidecar for
-AIppocampus-specific memory architecture terms, and onboarding refreshes it
-into the private registry's `semantic_triggers.jsonl`. Keep future
-domain-semantic additions there or in reviewed promotion candidates, not in
-Python phrase lists.
+replacement path for semantic proxy word lists in
+`aippocampus_runtime.recall.prompt_cues` and
+`aippocampus_runtime.recall.query_policy`: static cues stay as a compact
+bootstrap/fallback, while repeated or reviewed multilingual paraphrases live in
+sidecar data. `aippocampus_runtime.recall.semantic_trigger_router` also ships a
+small reviewed seed sidecar for AIppocampus-specific memory architecture terms,
+and onboarding refreshes it into the private registry's
+`semantic_triggers.jsonl`. Keep future domain-semantic additions there or in
+reviewed promotion candidates, not in Python phrase lists.
 
 The local pre-gate avoids unnecessary external calls. Obvious code-surface
 prompts such as "fix dashboard hover and run tests" should not call the semantic
