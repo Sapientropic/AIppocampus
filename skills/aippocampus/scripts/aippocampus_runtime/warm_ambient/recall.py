@@ -57,6 +57,10 @@ from aippocampus_runtime.subconscious.worker import (
     clamp_confidence,
     parse_model_json,
 )
+from aippocampus_runtime.warm_ambient.diagnostics import (
+    suppression_diagnostics,
+    suppression_reason_buckets,
+)
 from aippocampus_runtime.warm_ambient.prompting import OUTPUT_BUDGET_RULES as OUTPUT_BUDGET_RULES
 from aippocampus_runtime.warm_ambient.prompting import SYSTEM_PROMPT, scout_prompt
 from aippocampus_runtime.warm_ambient.scout_profiles import (  # noqa: F401
@@ -978,7 +982,7 @@ def unavailable_result(
     model_route: dict[str, Any] | None = None,
     cache: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return {
+    result = {
         "kind": "aippocampus_warm_ambient_recall",
         "schema_version": SCHEMA_VERSION,
         "prompt_version": PROMPT_VERSION,
@@ -999,6 +1003,9 @@ def unavailable_result(
         "secret_policy": secret_policy or None,
         "late_update_policy": "standalone_warm_path_only",
     }
+    result["suppression_reason_buckets"] = suppression_reason_buckets(result)
+    result["suppression_diagnostics"] = suppression_diagnostics(result)
+    return result
 
 
 def _cache_write_summary(cache_write: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -1049,6 +1056,8 @@ def warm_job_result_summary(job: dict[str, Any], result: dict[str, Any]) -> dict
         "topic_epoch": result.get("topic_epoch"),
         "topic_epoch_action": (result.get("topic_epoch_decision") or {}).get("action"),
         "current_thread_echo_count": int(result.get("current_thread_echo_count") or 0),
+        "suppression_reason_buckets": suppression_reason_buckets(result),
+        "suppression_diagnostics": suppression_diagnostics(result),
         "cache_write": _cache_write_summary(result.get("cache_write")),
         "cache": result.get("cache") or {},
         "model_route": result.get("model_route") or {},
@@ -1299,7 +1308,7 @@ def run_warm_ambient_recall(
         status = "quorum_not_met"
     if topic_epoch_decision.get("suppress_write"):
         status = "suppressed"
-    return {
+    result = {
         "kind": "aippocampus_warm_ambient_recall",
         "schema_version": SCHEMA_VERSION,
         "prompt_version": PROMPT_VERSION,
@@ -1328,6 +1337,7 @@ def run_warm_ambient_recall(
         "negative_contexts": merged["negative_contexts"],
         "blocked_by": merged["blocked_by"],
         "current_thread_echo_count": merged.get("current_thread_echo_count", 0),
+        "source_validation_status_counts": merged.get("source_validation_status_counts", {}),
         "cache_write": cache_write,
         "usage": usage_total,
         "cache": route_cache_metrics(route, usage_total),
@@ -1337,6 +1347,9 @@ def run_warm_ambient_recall(
         "created_at": now_utc(),
         "late_update_policy": "quorum_result_may_warm_thread_cache; foreground hook must not wait_all",
     }
+    result["suppression_reason_buckets"] = suppression_reason_buckets(result)
+    result["suppression_diagnostics"] = suppression_diagnostics(result)
+    return result
 
 
 def main() -> int:

@@ -358,6 +358,7 @@ def calibrate_cards(
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     calibrated: list[dict[str, Any]] = []
     echo_count = 0
+    source_validation_status_counts: dict[str, int] = {}
     for card in cards:
         refs = [ref for ref in card.get("source_refs") or [] if isinstance(ref, dict)]
         if (
@@ -370,6 +371,9 @@ def calibrate_cards(
                 continue
         clean = dict(card)
         validation = validate_card_source_refs(clean, source_index or {})
+        status = str(validation.get("status") or "")
+        if status:
+            source_validation_status_counts[status] = source_validation_status_counts.get(status, 0) + 1
         if validation.get("status") in {"missing_source_ref", "unsupported"}:
             # Citation-shaped hallucinations are worse than source-less scents:
             # drop them so lower-ranked supported cards can still surface.
@@ -380,4 +384,7 @@ def calibrate_cards(
             clean["visibility"] = ACTIVE_GENTLE_NUDGE
             clean["suggested_use"] = "Treat as provisional resonance until clean source support is verified."
         calibrated.append(clean)
-    return calibrated, {"current_thread_echo_count": echo_count}
+    return calibrated, {
+        "current_thread_echo_count": echo_count,
+        "source_validation_status_counts": source_validation_status_counts,
+    }

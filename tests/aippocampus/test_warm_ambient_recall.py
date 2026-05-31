@@ -569,6 +569,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
 
         self.assertFalse(result["quorum_met"])
         self.assertEqual(result["status"], "quorum_not_met")
+        self.assertEqual(result["suppression_reason_buckets"], ["quorum_not_met"])
         self.assertIsNone(result["cache_write"])
         self.assertFalse(self.cache_path.exists())
 
@@ -908,6 +909,11 @@ class WarmAmbientRecallTests(unittest.TestCase):
 
         self.assertFalse(result["available"])
         self.assertEqual(result["cards"], [])
+        self.assertEqual(
+            result["suppression_reason_buckets"],
+            ["source_validation_failed", "no_supported_cards"],
+        )
+        self.assertEqual(result["suppression_diagnostics"]["source_validation_status_counts"], {"unsupported": 1})
 
     def test_source_validation_keeps_supported_evidence_ref(self) -> None:
         messages = self._write_clean_thread(
@@ -1064,6 +1070,44 @@ class WarmAmbientRecallTests(unittest.TestCase):
 
         self.assertEqual(result["cards"], [])
         self.assertEqual(result["current_thread_echo_count"], 1)
+        self.assertEqual(
+            result["suppression_reason_buckets"],
+            ["current_thread_echo", "no_supported_cards"],
+        )
+
+    def test_topic_epoch_suppress_reports_public_reason_buckets(self) -> None:
+        def scout_fn(scout, payload, **kwargs):
+            del scout, payload, kwargs
+            return {
+                "decision": "skip",
+                "confidence": 0.9,
+                "topic_epoch_action": "suppress",
+                "topic_epoch_label": "private drift",
+                "topic_epoch_reason": "Do not warm this turn.",
+            }
+
+        result = warm.run_warm_ambient_recall(
+            "继续 ambient recall 但这一轮不要写入",
+            cwd=self.workspace,
+            thread_id="thread-a",
+            cache_path=self.cache_path,
+            api_key="test-key",
+            scout_fn=scout_fn,
+            scouts=("intent_mode_classifier:direct",),
+            quorum=1,
+            timeout=0.5,
+        )
+        summary = warm.warm_job_result_summary({"job_id": "job", "prompt_sha1": "abc"}, result)
+
+        self.assertEqual(result["status"], "suppressed")
+        self.assertEqual(result["cards"], [])
+        self.assertEqual(
+            result["suppression_reason_buckets"],
+            ["topic_epoch_suppressed", "no_supported_cards"],
+        )
+        self.assertEqual(summary["suppression_reason_buckets"], result["suppression_reason_buckets"])
+        self.assertEqual(summary["suppression_diagnostics"]["card_count"], 0)
+        self.assertNotIn("cards", summary)
 
     def test_llm_topic_epoch_rotation_uses_scout_label_not_prompt_terms(self) -> None:
         label = "semantic scope sidecar calibration"
@@ -1348,6 +1392,10 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(result["cards"], [])
         self.assertEqual(result["mode"], warm.SILENT_TUNING)
         self.assertEqual(result["blocked_by"], ["privacy_boundary_guard:direct"])
+        self.assertEqual(
+            warm.suppression_reason_buckets(result),
+            ["privacy_blocked", "no_supported_cards"],
+        )
 
     def test_privacy_blocker_still_counts_suppressed_current_thread_fallback(self) -> None:
         rows = [
@@ -1466,6 +1514,10 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(result["cards"], [])
         self.assertEqual(result["mode"], warm.SILENT_TUNING)
         self.assertEqual(result["blocked_by"], ["evidence_gap_sentinel:direct"])
+        self.assertEqual(
+            warm.suppression_reason_buckets(result),
+            ["evidence_sentinel_blocked", "no_supported_cards"],
+        )
 
     def test_legacy_scout_family_names_expand_to_canonical_taxonomy(self) -> None:
         self.assertEqual(warm.expand_scout_lanes(("query_expansion",)), ("semantic_expander:direct",))
