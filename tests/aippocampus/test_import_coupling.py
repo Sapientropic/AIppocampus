@@ -243,7 +243,7 @@ class ImportCouplingTests(unittest.TestCase):
             "aippocampus_runtime.subconscious.validation_audit",
             "aippocampus_runtime.warm_ambient.source_validation",
             "build_project_timeline",
-            "question_resolution",
+            "aippocampus_runtime.subconscious.question_resolution",
             "semantic_scope_suppressed_recovery",
         ]
         flat_source_modules = {
@@ -946,7 +946,7 @@ class ImportCouplingTests(unittest.TestCase):
         for source in [
             "subconscious_jobs",
             "aippocampus_runtime.question.tracking",
-            "theme_emergence",
+            "aippocampus_runtime.subconscious.theme_emergence",
         ]:
             self.assertIn("aippocampus_runtime.subconscious.jobs_config", edges[source])
             self.assertNotIn("subconscious_jobs_config", edges[source])
@@ -960,6 +960,52 @@ class ImportCouplingTests(unittest.TestCase):
             subconscious_jobs_config.default_jobs_output_path,
             jobs_config.default_jobs_output_path,
         )
+
+    def test_subconscious_deterministic_followup_runners_have_package_owner_and_compat_shims(
+        self,
+    ) -> None:
+        import question_resolution
+        import theme_emergence
+        from aippocampus_runtime.subconscious import (
+            question_resolution as packaged_question_resolution,
+        )
+        from aippocampus_runtime.subconscious import (
+            theme_emergence as packaged_theme_emergence,
+        )
+
+        package_paths = [
+            SCRIPTS / "aippocampus_runtime" / "subconscious" / "question_resolution.py",
+            SCRIPTS / "aippocampus_runtime" / "subconscious" / "theme_emergence.py",
+        ]
+        shim_paths = [
+            SCRIPTS / "question_resolution.py",
+            SCRIPTS / "theme_emergence.py",
+        ]
+
+        for path in package_paths + shim_paths:
+            self.assertTrue(path.exists(), path)
+        for path in shim_paths:
+            self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges()
+        for target in [
+            "aippocampus_runtime.subconscious.question_resolution",
+            "aippocampus_runtime.subconscious.theme_emergence",
+        ]:
+            self.assertIn(target, edges["aippocampus_runtime.subconscious.deterministic_jobs"])
+        self.assertNotIn("question_resolution", edges["aippocampus_runtime.subconscious.deterministic_jobs"])
+        self.assertNotIn("theme_emergence", edges["aippocampus_runtime.subconscious.deterministic_jobs"])
+
+        self.assertIs(
+            question_resolution.run_question_resolution,
+            packaged_question_resolution.run_question_resolution,
+        )
+        self.assertIs(question_resolution.main, packaged_question_resolution.main)
+        self.assertIs(
+            theme_emergence.run_theme_emergence,
+            packaged_theme_emergence.run_theme_emergence,
+        )
+        self.assertIs(theme_emergence.main, packaged_theme_emergence.main)
 
     def test_question_helpers_have_package_owner_and_compat_shims(self) -> None:
         import question_feedback_policy
@@ -991,9 +1037,9 @@ class ImportCouplingTests(unittest.TestCase):
             "correction_reconsolidation",
             "question_health",
             "question_index_sidecar",
-            "question_resolution",
+            "aippocampus_runtime.subconscious.question_resolution",
             "aippocampus_runtime.question.tracking",
-            "theme_emergence",
+            "aippocampus_runtime.subconscious.theme_emergence",
         ]:
             self.assertIn("aippocampus_runtime.question.source_refs", edges[source])
             self.assertNotIn("question_source_refs", edges[source])
@@ -1046,7 +1092,7 @@ class ImportCouplingTests(unittest.TestCase):
             "aippocampus_runtime.subconscious.deterministic_jobs",
             "question_health",
             "question_index_sidecar",
-            "question_resolution",
+            "aippocampus_runtime.subconscious.question_resolution",
             "question_confirmation_live",
         ]:
             self.assertIn("aippocampus_runtime.question.tracking", edges[source])

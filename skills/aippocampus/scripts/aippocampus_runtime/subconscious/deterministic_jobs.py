@@ -104,7 +104,7 @@ def run_theme_emergence_job(
     dry_run: bool,
 ) -> dict[str, Any]:
     del registry_path
-    import theme_emergence
+    from aippocampus_runtime.subconscious import theme_emergence
 
     theme_result = theme_emergence.run_theme_emergence(
         jobs_path=jobs_output_path,
@@ -152,7 +152,7 @@ def run_question_resolution_job(
     no_write: bool,
     dry_run: bool,
 ) -> dict[str, Any]:
-    import question_resolution
+    from aippocampus_runtime.subconscious import question_resolution
 
     resolution = question_resolution.run_question_resolution(
         jobs_path=jobs_output_path,
