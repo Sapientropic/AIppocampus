@@ -32,9 +32,9 @@ from aippocampus_runtime.question.tracking import (
     parse_timestamp,
     stable_digest,
 )
+from aippocampus_runtime.source.search import iter_clean_messages
 from aippocampuslib import compact_text, now_utc
 from registry import load_registry, unique_preserve
-from search_clean_source import iter_clean_messages
 
 SCHEMA_VERSION = 1
 PROMPT_VERSION = "aippocampus-question-resolution-v1"

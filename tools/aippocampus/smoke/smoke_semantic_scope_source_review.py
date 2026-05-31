@@ -22,17 +22,20 @@ import _paths
 
 _paths.ensure_paths()
 
+from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
+from aippocampus_runtime.source.registry_paths import resolve_registry_member_path
+from aippocampus_runtime.source.semantic_scope_labels import (
+    clean_messages_by_id,
+    load_semantic_scope_labels,
+)
 from aippocampuslib import (
     aippocampus_registry_dir,
     compact_text,
     deepseek_cache_metrics_from_usage,
     sanitize_external_model_payload,
 )
-from build_clean_source import SCOPE_LABEL_ORDER
-from build_project_timeline import resolve_registry_member_path
 from deepseek_model_routing import resolve_model_route
 from registry import load_registry
-from semantic_scope_labels import clean_messages_by_id, load_semantic_scope_labels
 from semantic_scope_source_review_core import (
     LABEL_GUIDANCE,
     parse_agent_action,

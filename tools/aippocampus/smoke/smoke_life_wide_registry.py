@@ -19,8 +19,8 @@ import _paths
 
 _paths.ensure_paths()
 
+from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
 from aippocampuslib import aippocampus_registry_dir
-from build_clean_source import SCOPE_LABEL_ORDER
 from build_project_timeline import build_project_timeline
 from registry import load_registry
 

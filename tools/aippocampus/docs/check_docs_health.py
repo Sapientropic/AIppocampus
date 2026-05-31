@@ -15,7 +15,7 @@ import _paths
 
 _paths.ensure_paths()
 
-from build_clean_source import SCOPE_LABEL_ORDER, infer_scope_labels
+from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER, infer_scope_labels
 
 MAX_SKILL_LINES = 220
 MAX_SKILL_WORDS = 2600
