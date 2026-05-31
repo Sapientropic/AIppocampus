@@ -12,10 +12,9 @@ import os
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.navigation.concept_graph import default_concept_graph_path
-from aippocampus_runtime.subconscious.worker import default_staging_path
-from aippocampuslib import compact_text
-from subconscious_jobs import (
+from aippocampus_runtime.subconscious.jobs import (
     DEFAULT_BASE_URL,
     DEFAULT_MODEL,
     JOB_SPECS,
@@ -23,6 +22,7 @@ from subconscious_jobs import (
     default_jobs_output_path,
     run_jobs,
 )
+from aippocampus_runtime.subconscious.worker import default_staging_path
 
 
 def sample_findings_for_frontier(result: dict[str, Any], *, limit: int = 5) -> list[dict[str, Any]]:

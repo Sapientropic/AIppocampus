@@ -380,6 +380,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/job_storage.py",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/job_circuits.py",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/job_validation.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/subconscious/jobs.py",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/jobs_config.py",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/question_resolution.py",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/question_diagnostics.py",

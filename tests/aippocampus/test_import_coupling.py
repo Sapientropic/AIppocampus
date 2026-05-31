@@ -647,7 +647,7 @@ class ImportCouplingTests(unittest.TestCase):
             "onboard_frontier",
             "aippocampus_runtime.recall.semantic_recall_gate",
             "semantic_scope_suppressed_recovery",
-            "subconscious_jobs",
+            "aippocampus_runtime.subconscious.jobs",
             "subconscious_review",
             "aippocampus_runtime.warm_ambient.recall",
         ]
@@ -676,6 +676,24 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(subconscious_scheduler.run_project, scheduler.run_project)
         self.assertIs(subconscious_scheduler.main, scheduler.main)
         self.assertEqual(scheduler.SCRIPT_DIR, SCRIPTS)
+
+    def test_subconscious_jobs_runner_has_package_owner_and_compat_shim(self) -> None:
+        import subconscious_jobs
+        from aippocampus_runtime.subconscious import jobs
+
+        package_path = SCRIPTS / "aippocampus_runtime" / "subconscious" / "jobs.py"
+        shim_path = SCRIPTS / "subconscious_jobs.py"
+
+        self.assertTrue(package_path.exists(), package_path)
+        self.assertTrue(shim_path.exists(), shim_path)
+        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges(top_level_only=True)
+        self.assertIn("aippocampus_runtime.subconscious.jobs", edges["subconscious_jobs"])
+        self.assertNotIn("subconscious_jobs", edges["aippocampus_runtime.subconscious.jobs"])
+        self.assertIs(subconscious_jobs.run_jobs, jobs.run_jobs)
+        self.assertIs(subconscious_jobs.run_one_job, jobs.run_one_job)
+        self.assertIs(subconscious_jobs.main, jobs.main)
 
     def test_dream_delivery_policy_has_package_owner_and_compat_shim(self) -> None:
         import dream_delivery_policy
@@ -951,8 +969,8 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
 
         edges = same_dir_import_edges(top_level_only=True)
-        self.assertIn("aippocampus_runtime.subconscious.job_storage", edges["subconscious_jobs"])
-        self.assertNotIn("subconscious_job_storage", edges["subconscious_jobs"])
+        self.assertIn("aippocampus_runtime.subconscious.job_storage", edges["aippocampus_runtime.subconscious.jobs"])
+        self.assertNotIn("subconscious_job_storage", edges["aippocampus_runtime.subconscious.jobs"])
 
         self.assertIs(
             subconscious_job_storage.append_job_findings,
@@ -975,8 +993,8 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
 
         edges = same_dir_import_edges(top_level_only=True)
-        self.assertIn("aippocampus_runtime.subconscious.job_plan", edges["subconscious_jobs"])
-        self.assertNotIn("subconscious_job_plan", edges["subconscious_jobs"])
+        self.assertIn("aippocampus_runtime.subconscious.job_plan", edges["aippocampus_runtime.subconscious.jobs"])
+        self.assertNotIn("subconscious_job_plan", edges["aippocampus_runtime.subconscious.jobs"])
 
         self.assertIs(subconscious_job_plan.JobRunTask, job_plan.JobRunTask)
         self.assertIs(subconscious_job_plan.plan_job_run_tasks, job_plan.plan_job_run_tasks)
@@ -998,7 +1016,7 @@ class ImportCouplingTests(unittest.TestCase):
 
         edges = same_dir_import_edges(top_level_only=True)
         for source in [
-            "subconscious_jobs",
+            "aippocampus_runtime.subconscious.jobs",
             "aippocampus_runtime.question.tracking",
             "aippocampus_runtime.subconscious.theme_emergence",
         ]:
@@ -1184,8 +1202,8 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
 
         edges = same_dir_import_edges(top_level_only=True)
-        self.assertIn("aippocampus_runtime.subconscious.validation_audit", edges["subconscious_jobs"])
-        self.assertNotIn("subconscious_validation_audit", edges["subconscious_jobs"])
+        self.assertIn("aippocampus_runtime.subconscious.validation_audit", edges["aippocampus_runtime.subconscious.jobs"])
+        self.assertNotIn("subconscious_validation_audit", edges["aippocampus_runtime.subconscious.jobs"])
 
         self.assertIs(
             subconscious_validation_audit.validation_audit,
@@ -1208,8 +1226,8 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
 
         edges = same_dir_import_edges(top_level_only=True)
-        self.assertIn("aippocampus_runtime.subconscious.deterministic_jobs", edges["subconscious_jobs"])
-        self.assertNotIn("subconscious_deterministic_jobs", edges["subconscious_jobs"])
+        self.assertIn("aippocampus_runtime.subconscious.deterministic_jobs", edges["aippocampus_runtime.subconscious.jobs"])
+        self.assertNotIn("subconscious_deterministic_jobs", edges["aippocampus_runtime.subconscious.jobs"])
 
         self.assertIs(
             subconscious_deterministic_jobs.run_deterministic_job,
@@ -1267,22 +1285,22 @@ class ImportCouplingTests(unittest.TestCase):
             "aippocampus_runtime.subconscious.job_storage",
             "aippocampus_runtime.subconscious.jobs_config",
             "aippocampus_runtime.subconscious.validation_audit",
-            "subconscious_jobs",
+            "aippocampus_runtime.subconscious.jobs",
         ]:
             self.assertIn("aippocampus_runtime.subconscious.job_circuits", edges[source])
             self.assertNotIn("subconscious_job_circuits", edges[source])
         for source in [
             "aippocampus_runtime.subconscious.validation_audit",
-            "subconscious_jobs",
+            "aippocampus_runtime.subconscious.jobs",
             "subconscious_review",
         ]:
             self.assertIn("aippocampus_runtime.subconscious.job_validation", edges[source])
             self.assertNotIn("subconscious_job_validation", edges[source])
         self.assertIn(
             "aippocampus_runtime.subconscious.question_diagnostics",
-            edges["subconscious_jobs"],
+            edges["aippocampus_runtime.subconscious.jobs"],
         )
-        self.assertNotIn("subconscious_question_diagnostics", edges["subconscious_jobs"])
+        self.assertNotIn("subconscious_question_diagnostics", edges["aippocampus_runtime.subconscious.jobs"])
 
         self.assertIs(subconscious_job_circuits.JOB_SPECS, job_circuits.JOB_SPECS)
         self.assertIs(subconscious_job_circuits.job_names, job_circuits.job_names)
@@ -1738,27 +1756,27 @@ class ImportCouplingTests(unittest.TestCase):
             "aippocampus_runtime.subconscious.tool_loop",
             "aippocampus_runtime.recall.semantic_recall_gate",
             "semantic_scope_suppressed_recovery",
-            "subconscious_jobs",
+            "aippocampus_runtime.subconscious.jobs",
             "subconscious_review",
             "aippocampus_runtime.warm_ambient.recall",
         ]
         for source in runtime_consumers:
             self.assertIn("aippocampus_runtime.subconscious.runtime", edges[source])
             self.assertNotIn("subconscious_runtime", edges[source])
-        self.assertIn("aippocampus_runtime.subconscious.tool_loop", edges["subconscious_jobs"])
+        self.assertIn("aippocampus_runtime.subconscious.tool_loop", edges["aippocampus_runtime.subconscious.jobs"])
         self.assertNotIn("subconscious_tool_loop", edges["subconscious_agent"])
-        self.assertNotIn("subconscious_tool_loop", edges["subconscious_jobs"])
-        self.assertNotIn("subconscious_agent", edges["subconscious_jobs"])
+        self.assertNotIn("subconscious_tool_loop", edges["aippocampus_runtime.subconscious.jobs"])
+        self.assertNotIn("subconscious_agent", edges["aippocampus_runtime.subconscious.jobs"])
         self.assertFalse(
-            {"subconscious_jobs", "subconscious_review"}
+            {"aippocampus_runtime.subconscious.jobs", "subconscious_review"}
             & edges["aippocampus_runtime.subconscious.agent"]
         )
         self.assertFalse(
-            {"subconscious_agent", "subconscious_jobs"}
+            {"subconscious_agent", "aippocampus_runtime.subconscious.jobs"}
             & edges["aippocampus_runtime.subconscious.runtime"]
         )
         self.assertFalse(
-            {"subconscious_agent", "subconscious_jobs"}
+            {"subconscious_agent", "aippocampus_runtime.subconscious.jobs"}
             & edges["aippocampus_runtime.subconscious.tool_loop"]
         )
         self.assertIs(subconscious_agent.AgentRunConfig, agent.AgentRunConfig)

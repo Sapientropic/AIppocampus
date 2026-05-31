@@ -38,6 +38,16 @@ from aippocampus_runtime.recall.semantic_trigger_router import (
     build_semantic_triggers,
     default_seed_triggers_path,
 )
+from aippocampus_runtime.registry.api import (
+    register_current_thread,
+    register_rollout_thread,
+    registry_paths,
+    scan_session_rollouts,
+)
+from aippocampus_runtime.subconscious.jobs import (
+    JOB_SPECS,
+    default_jobs_output_path,
+)
 from conversation_sources import ConversationProvider
 from memory_candidate_router import default_candidates_path
 from onboard_frontier import (
@@ -62,16 +72,6 @@ from onboard_status import (
 )
 from onboard_status import same_path as same_path
 from onboard_status import sqlite_consistency_issues as sqlite_consistency_issues
-from registry import (
-    register_current_thread,
-    register_rollout_thread,
-    registry_paths,
-    scan_session_rollouts,
-)
-from subconscious_jobs import (
-    JOB_SPECS,
-    default_jobs_output_path,
-)
 
 ONBOARD_SCHEMA_VERSION = 1
 

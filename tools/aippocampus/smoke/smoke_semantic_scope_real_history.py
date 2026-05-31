@@ -25,6 +25,11 @@ _paths.ensure_paths()
 
 from smoke_life_wide_registry import coverage_ratios, dict_value, run_life_wide_registry_smoke
 
+from aippocampus_runtime.core import (
+    aippocampus_registry_dir,
+    compact_text,
+    deepseek_cache_metrics_from_usage,
+)
 from aippocampus_runtime.navigation.concept_graph import default_concept_graph_path
 from aippocampus_runtime.navigation.project_timeline import (
     build_project_timeline,
@@ -34,8 +39,7 @@ from aippocampus_runtime.source.semantic_scope_builder import (
     build_semantic_scope_labels_for_registry,
 )
 from aippocampus_runtime.source.semantic_scope_labels import label_evidence_is_sufficient
-from aippocampuslib import aippocampus_registry_dir, compact_text, deepseek_cache_metrics_from_usage
-from subconscious_jobs import (
+from aippocampus_runtime.subconscious.jobs import (
     DEFAULT_CONCURRENCY,
     DEFAULT_SAMPLES_PER_JOB,
     append_job_findings,
