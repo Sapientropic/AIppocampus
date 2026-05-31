@@ -447,6 +447,35 @@ class ImportCouplingTests(unittest.TestCase):
             worker_contract.variable_run_directive,
         )
 
+    def test_dream_precision_policy_has_package_owner_and_compat_shim(self) -> None:
+        import dream_precision_policy
+        from aippocampus_runtime.dream import precision_policy
+
+        package_path = SCRIPTS / "aippocampus_runtime" / "dream" / "precision_policy.py"
+        shim_path = SCRIPTS / "dream_precision_policy.py"
+
+        self.assertTrue(package_path.exists(), package_path)
+        self.assertTrue(shim_path.exists(), shim_path)
+        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges(top_level_only=True)
+        for source in ["dream_retrospective_lifecycle", "dream_sleep_cycle"]:
+            self.assertIn("aippocampus_runtime.dream.precision_policy", edges[source])
+            self.assertNotIn("dream_precision_policy", edges[source])
+
+        self.assertIs(
+            dream_precision_policy.retention_policy_for_probe,
+            precision_policy.retention_policy_for_probe,
+        )
+        self.assertIs(
+            dream_precision_policy.activation_policy_for_row,
+            precision_policy.activation_policy_for_row,
+        )
+        self.assertIs(
+            dream_precision_policy.retrospective_policy_for_probe,
+            precision_policy.retrospective_policy_for_probe,
+        )
+
     def test_subconscious_job_storage_has_package_owner_and_compat_shim(self) -> None:
         import subconscious_job_storage
         from aippocampus_runtime.subconscious import job_storage

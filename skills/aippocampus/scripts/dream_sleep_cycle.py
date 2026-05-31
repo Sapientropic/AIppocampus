@@ -21,9 +21,9 @@ from pathlib import Path
 from typing import Any
 
 import dream_input_pack
-import dream_precision_policy
 import dream_queue
 import dream_worker
+from aippocampus_runtime.dream import precision_policy as dream_precision_policy
 from aippocampus_runtime.model.client import (
     DEEPSEEK_PREFIX_CACHE_CONTRACT,
     NO_PROVIDER_CACHE_CONTRACT,

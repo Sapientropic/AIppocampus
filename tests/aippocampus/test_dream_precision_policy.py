@@ -16,7 +16,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import dream_precision_policy as policy  # noqa: E402
+from aippocampus_runtime.dream import precision_policy as policy  # noqa: E402
 
 
 def source_ref(thread_key: str, message_id: str, line: int) -> dict[str, object]:
