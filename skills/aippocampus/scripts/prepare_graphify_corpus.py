@@ -168,7 +168,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument(
-        "--index-dir", default=None, help="Defaults to the CODEX_HOME global thread store."
+        "--index-dir", default=None, help="Defaults to the AIppocampus registry thread store."
     )
     parser.add_argument("--anchors", default="thread-anchors.md")
     parser.add_argument(

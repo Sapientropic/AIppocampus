@@ -458,7 +458,7 @@ def build_clean_source(
         "cwd": str(cwd),
         "artifact_scope": "global_thread_store" if output_dir is None else "explicit_output_dir",
         "storage_policy": {
-            "default": "CODEX_HOME/aippocampus-registry/threads/<thread>/clean-source",
+            "default": "AIPPOCAMPUS_REGISTRY_DIR or AIPPOCAMPUS_HOME/registry, with legacy CODEX_HOME fallback",
             "legacy_project_local": LEGACY_OUTPUT_DIR,
             "why": "Clean source is private cross-project memory; project-local output is explicit compatibility, not the default.",
         },
@@ -560,7 +560,7 @@ def main() -> int:
     parser.add_argument(
         "--output-dir",
         default=None,
-        help="Defaults to the CODEX_HOME global thread store; pass .aippocampus/clean-source for project-local output.",
+        help="Defaults to the AIppocampus registry thread store; pass .aippocampus/clean-source for project-local output.",
     )
     parser.add_argument("--hash-source", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")

@@ -273,12 +273,27 @@ class SubconsciousSchedulerTests(unittest.TestCase):
 
         scripts = [Path(command[1]).name for command in commands]
         self.assertIn("build_semantic_scope_labels.py", scripts)
+        self.assertIn("dream_sleep_cycle.py", scripts)
+        self.assertIn("dream_retrospective_lifecycle.py", scripts)
         semantic_index = scripts.index("build_semantic_scope_labels.py")
+        dream_index = scripts.index("dream_sleep_cycle.py")
+        retrospective_index = scripts.index("dream_retrospective_lifecycle.py")
         timeline_indexes = [
             index for index, name in enumerate(scripts) if name == "build_project_timeline.py"
         ]
         self.assertLess(scripts.index("subconscious_jobs.py"), semantic_index)
         self.assertTrue(any(index > semantic_index for index in timeline_indexes))
+        self.assertGreater(dream_index, scripts.index("memory_candidate_router.py"))
+        self.assertGreater(retrospective_index, dream_index)
+        dream_command = commands[dream_index]
+        self.assertIn("--project", dream_command)
+        self.assertEqual(dream_command[dream_command.index("--project") + 1], "T-Sense")
+        self.assertIn("--no-write", dream_command)
+        self.assertIn("--summary", dream_command)
+        retrospective_command = commands[retrospective_index]
+        self.assertIn("--project", retrospective_command)
+        self.assertEqual(retrospective_command[retrospective_command.index("--project") + 1], "T-Sense")
+        self.assertIn("--summary", retrospective_command)
         self.assertEqual(result["commands"], len(commands))
         self.assertTrue(all("--registry-dir" in command for command in commands))
 

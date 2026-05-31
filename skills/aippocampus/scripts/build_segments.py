@@ -226,7 +226,7 @@ def main() -> int:
     parser.add_argument(
         "--output-dir",
         default=None,
-        help="Defaults to the CODEX_HOME global thread store; pass .aippocampus/segments for project-local output.",
+        help="Defaults to the AIppocampus registry thread store; pass .aippocampus/segments for project-local output.",
     )
     parser.add_argument("--anchors", default="thread-anchors.md")
     parser.add_argument("--include-tools", action="store_true")

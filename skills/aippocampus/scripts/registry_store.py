@@ -4,11 +4,10 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 from pathlib import Path
 
-from aippocampuslib import codex_home, now_utc
+from aippocampuslib import aippocampus_registry_dir, now_utc
 
 REGISTRY_SCHEMA_VERSION = 1
 
@@ -18,13 +17,7 @@ class RegistryReadError(RuntimeError):
 
 
 def default_registry_dir() -> Path:
-    env = os.environ.get("AIPPOCAMPUS_REGISTRY_DIR")
-    if env:
-        return Path(env)
-    legacy_env = os.environ.get("THREAD_MEMORY_REGISTRY_DIR")
-    if legacy_env:
-        return Path(legacy_env)
-    return codex_home() / "aippocampus-registry"
+    return aippocampus_registry_dir()
 
 
 def registry_paths(registry_dir: Path | None = None) -> tuple[Path, Path]:

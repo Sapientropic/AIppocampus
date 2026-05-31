@@ -347,6 +347,27 @@ trigger-family totals only, not raw source refs, message ids, or thread ids.
 
 The executable contract lives in `tests/aippocampus/test_dream_queue.py`.
 
+### Implemented Phase 2.75 Detached Sleep Cycle
+
+`skills/aippocampus/scripts/dream_sleep_cycle.py` is the narrow execution bridge
+that consumes ready/due queue items from `dream_queue.py` and invokes bounded
+model-backed workers from `dream_worker.py`. It is scheduler-only/background
+work, not a foreground hook route. The runner preserves
+`execution_mode="detached_background"`, refuses foreground-eligible queue
+items, defaults to `no_write=True`, and only appends lifecycle/findings/working
+memory rows when explicitly called with `--write`.
+
+The detached scheduler calls it after the ordinary review/router pass with
+`--run-ready --no-write --summary`, so a project sleep cycle can exercise the
+queue-to-worker path without silently promoting dream hypotheses. Failed worker
+samples are bucketed per item and do not block other selected queue items.
+Public summaries report aggregate queue, worker status, failure, cache, and
+write counts without raw source refs, message ids, or thread ids.
+
+The executable contract lives in `tests/aippocampus/test_dream_sleep_cycle.py`
+and the scheduler handoff is covered by
+`tests/aippocampus/test_subconscious_scheduler.py`.
+
 ### Implemented Phase 3 Structural Eval
 
 `skills/aippocampus/scripts/dream_real_history_eval.py` is the first selected
@@ -648,6 +669,16 @@ divergence: ask multiple structure voices to respond to the same frontier and
 measure where their proposed probes disagree. High disagreement marks a likely
 uncertainty pocket; deterministic aggregation then ranks the resulting probes.
 
+The implemented runtime shape lives in
+`skills/aippocampus/scripts/dream_precision_policy.py` and is covered by
+`tests/aippocampus/test_dream_precision_policy.py`. It keeps
+`retention_policy`, `activation_policy`, and `retrospective_policy` as separate
+objects with `hard_gate`, `raw_components`, and `aggregate` sections. Aggregate
+pressure is explicitly `attention_lifecycle_not_truth`; model self-ratings are
+reported only as ignored telemetry, and deterministic structural divergence is
+the information-gain proxy. The detached sleep-cycle runner attaches
+`retention_policy` to adjudicated dream findings before optional staging writes.
+
 ### One-Sidedness Gate For Compensation
 
 The opposite / 错卦 voice is useful because its symbolic structure is
@@ -668,6 +699,16 @@ include:
 If the gate does not fire, the opposite voice is not "balanced"; it is noise. It
 should not create a blind-spot probe merely because a complementary symbol can
 be computed.
+
+The implemented deterministic slice lives in
+`skills/aippocampus/scripts/dream_one_sidedness.py` and is covered by
+`tests/aippocampus/test_dream_one_sidedness.py`. It separates
+`compute_opposite_arc()` from `evaluate_one_sidedness_gate()`: an opposite arc
+can be computed without granting permission to generate a probe. Gate-on probes
+are `dream_synthesized`, `dream_function="compensatory"`,
+`voice_id="opposite_hexagram_voice"`, `foreground_eligible=false`, and carry
+source refs plus counter-evidence. The voice boundary says it speaks from
+unresolved journey structure, not from or about the user's persona.
 
 ### Three Ways To Wake
 
@@ -691,6 +732,15 @@ review horizon, then let future source sort them into `supported`, `refuted`,
 `stale`, or `unknown`. Similar vocabulary alone is not support; later evidence
 must connect back to the finding, frontier, question, or source-backed route it
 claimed to illuminate.
+
+The implemented lifecycle lives in
+`skills/aippocampus/scripts/dream_retrospective_lifecycle.py` and is covered by
+`tests/aippocampus/test_dream_retrospective_lifecycle.py`. The detached
+scheduler runs it after the sleep-cycle bridge. It ignores source rows created
+before the probe, ignores rows after the current replay cutoff, and reports
+term-overlap-without-target as a diagnostic rather than support. The first
+coding rejected-route fixture is explicit-target only; broader #167 fixture
+coverage can build on this path without changing the source boundary.
 
 ### Ambient Residue As Dream Seed
 

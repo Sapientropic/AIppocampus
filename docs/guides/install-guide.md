@@ -39,10 +39,11 @@ cp -R ./skills/aippocampus "${CODEX_HOME}/skills/aippocampus"
 Restart Codex or reload skills if your runtime requires it.
 
 To uninstall or roll back a skill-only preview, remove or replace only
-`${CODEX_HOME}/skills/aippocampus`. Generated registries under
-`$CODEX_HOME/aippocampus-registry/` are user data, not package files; do not
-delete them as part of package rollback unless you are intentionally discarding
-local memory artifacts.
+`${CODEX_HOME}/skills/aippocampus`. Generated registries are user data, not
+package files; do not delete them as part of package rollback unless you are
+intentionally discarding local memory artifacts. New non-Codex setups should
+prefer `AIPPOCAMPUS_REGISTRY_DIR` or `AIPPOCAMPUS_HOME`; existing Codex installs
+continue to use `$CODEX_HOME/aippocampus-registry/` as a legacy fallback.
 
 Verify the package from the repository:
 
@@ -65,9 +66,9 @@ scan, then cleans the run-id-scoped `dist/` and `.tmp` artifacts it created.
 The product-surface secret/local-path scan excludes third-party benchmark
 corpora, which require a separate corpus audit before making claims about the
 corpora themselves. The unified smoke is broader than a fresh-clone install
-check: source-evidence readiness gates use the local AIppocampus registry under
-`$CODEX_HOME`, so a new Mac without enough registered clean source may get
-diagnostic-only coverage rather than an overall pass.
+check: source-evidence readiness gates use the configured AIppocampus registry,
+so a new machine without enough registered clean source may get diagnostic-only
+coverage rather than an overall pass.
 
 ## First Onboarding
 
@@ -78,9 +79,10 @@ aippocampus onboard --provider codex --all --format json
 ```
 
 Use `--dry-run` before broad imports when you want a preview. Generated memory
-artifacts default to `$CODEX_HOME/aippocampus-registry/threads/<thread>/...`,
-not the active project repository. `onboard_codex.py` remains available as the
-Codex-only compatibility entrypoint.
+artifacts default to the configured AIppocampus registry
+(`AIPPOCAMPUS_REGISTRY_DIR`, `AIPPOCAMPUS_HOME/registry`, then legacy
+`$CODEX_HOME/aippocampus-registry`) rather than the active project repository.
+`onboard_codex.py` remains available as the Codex-only compatibility entrypoint.
 
 Check provider readiness before writing:
 

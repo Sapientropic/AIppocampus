@@ -5,6 +5,16 @@ coding implicit-knowledge scenario in
 [`docs/research/agent-coding-context-analysis.md`](../../research/agent-coding-context-analysis.md).
 It is the evidence companion for GitHub issue #172.
 
+Related implementation surfaces:
+
+- #167 / `skills/aippocampus/scripts/coding_rejected_route_probes.py` covers
+  source-backed rejected-route Dream retrospective fixtures.
+- #169 / `benchmarks/aippocampus/benchmark_coding_decision_shadow.py` covers
+  deterministic coding decision-shadow Tracks A-E.
+- #171 / `benchmarks/aippocampus/benchmark_suite.py --profile public-fast`
+  remains the fresh-clone deterministic profile and keeps omitted surfaces in
+  `cannot_claim`.
+
 Latest dated measurement:
 [`public-longitudinal-users-measurement-2026-05-31.md`](public-longitudinal-users-measurement-2026-05-31.md).
 

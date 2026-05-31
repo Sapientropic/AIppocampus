@@ -65,6 +65,26 @@ Run the Track A P1 gate-decision baseline over the coding corpus:
 python benchmarks\aippocampus\benchmark_memory_decision_gate.py --case-set sharegpt-coding --sharegpt-conversations 100 --output benchmark_corpus\reports\sharegpt-p1-gate-100.json
 ```
 
+Run the fresh-clone public-fast benchmark profile:
+
+```powershell
+python benchmarks\aippocampus\benchmark_suite.py --profile public-fast --json
+```
+
+This runs deterministic Track A/C/D slices only. It intentionally skips private
+registry data, live semantic providers, Track B retrieval quality, and large
+external corpus downloads; those omitted surfaces appear in `cannot_claim`.
+
+Run the deterministic coding decision-shadow A-E contract:
+
+```powershell
+python benchmarks\aippocampus\benchmark_coding_decision_shadow.py --json
+```
+
+This public-safe runner checks original source refs, rejected-route warnings,
+compaction boundary preservation, relevant decision selection, and anti-nag
+suppression. It is a synthetic contract, not private real-history lift evidence.
+
 Run the public longitudinal pseudo-user contract smoke for coding implicit
 knowledge:
 

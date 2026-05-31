@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from aippocampuslib import codex_home, now_utc
+from aippocampuslib import aippocampus_registry_dir, now_utc
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 STATE_SCHEMA_VERSION = 1
@@ -45,7 +45,7 @@ SUPPORTED_EVENTS = {"SessionStart", "Stop", "PreCompact", "PostCompact"}
 
 
 def state_path(path: Path | None = None) -> Path:
-    return path or (codex_home() / "aippocampus-registry" / "maintenance_state.json")
+    return path or (aippocampus_registry_dir() / "maintenance_state.json")
 
 
 def state_key(cwd: Path | str) -> str:
@@ -214,7 +214,7 @@ def run_health(cwd: Path) -> dict[str, Any]:
 
 
 def maintenance_log_path(name: str) -> Path:
-    return codex_home() / "aippocampus-registry" / "logs" / name
+    return aippocampus_registry_dir() / "logs" / name
 
 
 def start_detached_json(cmd: list[str], *, log_name: str) -> dict[str, Any]:
@@ -350,7 +350,7 @@ def update_workspace_state(
 
 
 def write_log(result: dict[str, Any], *, log_path: Path | None = None) -> None:
-    path = log_path or (codex_home() / "aippocampus-registry" / "maintenance_hook.jsonl")
+    path = log_path or (aippocampus_registry_dir() / "maintenance_hook.jsonl")
     path.parent.mkdir(parents=True, exist_ok=True)
     event = {
         "timestamp": now_utc(),

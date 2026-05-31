@@ -84,9 +84,11 @@ recognizable again.
   recall surface.
 - Provides ambient recall hooks so related old memory can surface as a quiet
   scent before an agent makes claims.
-- Stores generated recall artifacts under `$CODEX_HOME` by default, so memory
-  remains useful when a new project opens. Project-local `.aippocampus/` output
-  is explicit compatibility or export mode.
+- Stores generated recall artifacts in the configured AIppocampus registry
+  (`AIPPOCAMPUS_REGISTRY_DIR`, `AIPPOCAMPUS_HOME/registry`, then legacy
+  `$CODEX_HOME/aippocampus-registry`) so memory remains useful when a new
+  project opens. Project-local `.aippocampus/` output is explicit compatibility
+  or export mode.
 - Supports optional DeepSeek-compatible semantic gates, background consolidation
   jobs, and cognitive-map routes for memory wayfinding.
 - Provides local-folder sync, HTTP object-storage sync, MCP access, and plugin

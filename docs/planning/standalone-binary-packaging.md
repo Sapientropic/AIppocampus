@@ -1,9 +1,13 @@
 # Standalone Binary Packaging Plan
 
-This is a follow-up packaging plan, not a release claim. The current public
-surface is the Python `aippocampus` console facade plus direct script fallback.
-Do not claim Python-free installs until the binary artifact for each platform
-below has been built, smoke-tested, and linked from the dated evidence ledger.
+This is the packaging plan and claim boundary for optional Python-free
+AIppocampus binaries. The canonical implementation remains the source-backed
+Python runtime; direct Python/script usage stays supported as the fallback.
+
+As of 2026-05-31, Windows x64 has a PyInstaller artifact smoke recorded in
+`docs/evidence/readiness/public-readiness-verification.md`. Do not claim any
+other platform until its artifact is built, smoke-tested, and linked from the
+dated evidence ledger.
 
 ## Candidate Tooling
 
@@ -23,7 +27,7 @@ Each claimed platform needs a fresh artifact built on or for that platform:
 
 | Platform | Required smoke checks |
 | --- | --- |
-| Windows x64 | `aippocampus --help`; `aippocampus health --help`; `aippocampus mcp list-tools`; `aippocampus onboard --status --format json`; `aippocampus sync status --sync-dir <empty-dir> --json`; product-surface secret/path scan. |
+| Windows x64 | `aippocampus --help`; `aippocampus health --help`; public-bundle search; `aippocampus mcp list-tools`; `aippocampus onboard --status --format json`; `aippocampus sync status --sync-dir <empty-dir> --json`; `aippocampus hooks status`; staged-runtime private-data guard. |
 | macOS arm64 | Same checks as Windows, plus Gatekeeper/quarantine note if distributing a downloaded binary. |
 | macOS x64 | Same checks as Windows; may be deferred if the project explicitly drops Intel Mac binary claims. |
 | Linux x64 | Same checks as Windows on a clean container or VM with no repo checkout on `PYTHONPATH`. |
@@ -32,3 +36,21 @@ Smoke outputs must preserve child command JSON and exit codes. The binary must
 not silently install hooks, scan private host history, or mutate registries
 outside explicit operator commands. Direct script invocation remains the
 fallback until the matrix above passes.
+
+## Windows x64 Implementation
+
+`tools/aippocampus/package_windows_binary.py` builds the Windows artifact with
+PyInstaller. It stages `skills/aippocampus/scripts` into a temporary runtime
+copy, generates a small frozen entrypoint for the existing `aippocampus_cli`
+facade, and then runs the smoke matrix above against the built executable.
+
+The private-data guard intentionally checks the build input rather than treating
+the executable as an arbitrary secret scanner. PyInstaller diagnostics may carry
+machine-local build paths, but the artifact input is limited to the staged
+installable runtime; repo-local `.aippocampus`, `aippocampus-registry`,
+`transcripts`, `rollouts`, and private registry directories are not copied into
+that staged runtime or passed as PyInstaller inputs.
+
+The script only sets `python_free_support_claimed=true` after the artifact smoke
+passes. `--dry-run` is allowed for planning and CI checks, but it must never be
+reported as binary support.

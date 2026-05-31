@@ -265,8 +265,9 @@ Related mechanisms:
 - dream work for cross-thread synthesis and blind-spot detection
 - source-backed review before promotion into durable memory
 
-Status: designed or proposed. This layer needs benchmark validation before it
-can be presented as solved.
+Status: first deterministic terrain/weather slice implemented. This layer
+still needs real-history benchmark validation before it can be presented as
+solved.
 
 ### Layer 3: Action Interface
 
@@ -288,6 +289,12 @@ coding_continuity_ticket:
   evidence_refs:
     - "clean-source:..."
   source_thickness: "thin | usable | strong"
+  source_visibility: "host_runtime_input"
+  annoyance_risk: "low | medium | high"
+  preconditions:
+    - "host confirms the ticket source is not already visible"
+  outcome_feedback_expected:
+    - "accepted | ignored | dismissed | corrected | tool_success | tool_failure"
   derived_assessment:
     still_rejected: "yes | no | unknown"
     freshness: "fresh | aging | stale | superseded"
@@ -295,16 +302,25 @@ coding_continuity_ticket:
   expires_at: "..."
 ```
 
-Codeksei or another host can decide whether the ticket becomes a visible
-message, a backstage refresh, a blocked route, or no action.
+Codeksei or another host can decide whether the ticket becomes silent tuning,
+backstage prep, a light nudge, a warning, an offered next step, or no action.
 
 The ticket must preserve the terrain/weather boundary. Thin evidence can ask
 the host to refresh sources or ask the user; usable or strong evidence can
 support a nudge or warning. A ticket should never smuggle a decayed
 `still_rejected` value from storage into authority.
 
-Status: blueprint. This should align with
-[Agency From Cognitive Maps](agency-from-cognitive-map.md), not duplicate it.
+Status: first deterministic ticket gate implemented for coding continuity
+tickets. `skills/aippocampus/scripts/coding_ticket_host_contract.py` now defines
+the host consumption simulator and contract boundary: AIppocampus emits the
+source-backed ticket plus source-thickness, derived assessment, expiry,
+preconditions, annoyance risk, and feedback expectations; the host supplies
+runtime source visibility and owns timing, permission, priority, sequencing,
+safety, and final visibility. Feedback can tune future activation pressure, but
+it must not rewrite source facts or derived assessment rows. Live host timing
+and multi-host duplicate suppression remain validation gaps and should align
+with [Agency From Cognitive Maps](agency-from-cognitive-map.md), not duplicate
+it.
 
 ## AIppocampus And Codeksei
 
@@ -469,12 +485,29 @@ Current implementation:
   "do not repeat" notes, and user-correction language. It writes candidate
   hypotheses only: `status=staging`, `truth_status=candidate_hypothesis_until_reviewed`,
   and `formal_memory_promoted=false`.
+- Decision events now keep terrain separate from weather: old rejected-route
+  source text does not store `still_rejected`, `freshness`, or generic current
+  confidence on the event. Read-time `decision_state_assessment` rows derive
+  `source_thickness`, `freshness`, `still_rejected`, `confidence`,
+  `proposed_use`, and `basis_refs` without mutating the event.
+- `skills/aippocampus/scripts/coding_rejected_route_probes.py` turns
+  source-backed rejected-route decision events into review-only prospective
+  Dream probes. The fixture asks what later evidence would justify reopening a
+  rejected route, then reuses `dream_retrospective_lifecycle.py` to bucket
+  explicit future support/refutation/staleness without treating similar
+  vocabulary as evidence or promoting a supported probe into formal memory.
 - Branch-local or broad ambiguous decisions stay `local_only` or
   `needs_confirmation`. A compact `coding_continuity_ticket` is rendered only
   when the current prompt is relevant, the source is not visible, and the shared
-  correction-reconsolidation anti-nag gate allows surfacing. Current-validity
-  weather should be recomputed or reviewed before the ticket warns that an old
-  rejection still applies.
+  correction-reconsolidation anti-nag gate allows surfacing. Thin evidence is
+  degraded to `refresh_sources` or `ask`; usable or strong adopted evidence can
+  remind or warn while preserving the derived-assessment truth boundary.
+- `benchmarks/aippocampus/benchmark_coding_decision_shadow.py` now runs the
+  deterministic A-E behavior contract for this memo: original source refs,
+  rejected-route protection, compaction boundary preservation, relevant
+  decision selection without code-index authority, and anti-nag suppression.
+  The report is sanitized by default and keeps private real-history lift,
+  full code-navigation quality, and live host timing in `cannot_claim`.
 
 This does not yet claim complete design-intent extraction, global validity for
 old branch-local decisions, or host-agent intervention timing.

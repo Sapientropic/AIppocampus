@@ -180,6 +180,22 @@ DeepSeek can be used aggressively, but hooks must stay cheap. The split is:
   stable worker contract first, source-pack payload second, and variable run
   directive last. This preserves the same-prefix ordering needed for DeepSeek
   KV cache warm-up when a later live worker consumes the queue.
+- `dream_sleep_cycle.py` is the detached execution bridge from queue metadata to
+  bounded workers. It selects only due items, unless the scheduler explicitly
+  passes `--run-ready` during a detached project pass, never widens
+  `foreground_eligible=false`, defaults to `--no-write`, and emits sanitized
+  counts/failure/cache summaries instead of raw source handles. When `--write`
+  is enabled, it appends queue lifecycle, adjudicated finding, and projected
+  working-memory rows under the scheduler's serialized process lock.
+- `dream_precision_policy.py` adds explicit retention, activation, and
+  retrospective policy shapes. These policies separate hard gate failures from
+  soft lifecycle pressure; aggregate scores tune attention/ranking only and do
+  not promote model confidence into truth.
+- `dream_retrospective_lifecycle.py` is the periodic retrospective check for
+  parked prospective and active-imagination probes. It waits until
+  `review_after`, ignores pre-probe and future-leakage rows, and counts only
+  later source-backed rows that explicitly target the probe; term overlap alone
+  remains diagnostic noise.
 - bounded model-backed dream workers live in `dream_worker.py`. They consume
   only `status="ready_for_dream_worker"` packs for compensatory,
   amplification, prospective, and active-imagination functions, require cited

@@ -37,6 +37,7 @@ SCHEMA_VERSION = 1
 PROMPT_VERSION = "aippocampus-coding-decision-events-v1"
 
 DECISION_KIND = "aippocampus_coding_decision_candidate"
+ASSESSMENT_KIND = "aippocampus_coding_decision_state_assessment"
 TICKET_KIND = "aippocampus_coding_continuity_ticket"
 
 EVENT_TYPES = (
@@ -57,6 +58,15 @@ REVIEW_STATUSES = (
 TICKET_TRIGGERS = ("session_start", "compaction_loss", "pre_patch", "rejected_route")
 SURFACEABLE_STATUSES = {"adopted"}
 SURFACEABLE_EVENT_TYPES = {"rejected_route", "scope_narrowing", "do_not_repeat", "user_correction"}
+THIN_SOURCE_SAFE_USES = {"refresh_sources", "ask"}
+TICKET_FEEDBACK_OUTCOMES = (
+    "accepted",
+    "ignored",
+    "dismissed",
+    "corrected",
+    "tool_success",
+    "tool_failure",
+)
 
 REJECTED_PATTERNS = [
     r"\bdo not\b",
@@ -323,11 +333,11 @@ def build_decision_candidate(
         return None
     affected_scope = scope_from_text(text, workspace=workspace)
     trigger_terms = trigger_terms_for(surface, affected_scope)
-    confidence = confidence_for(event_type, text, refs)
+    extraction_confidence = confidence_for(event_type, text, refs)
     review_status = classify_review_status(
         text,
         event_type,
-        confidence,
+        extraction_confidence,
         affected_scope=affected_scope,
         trigger_terms=trigger_terms,
     )
@@ -339,7 +349,6 @@ def build_decision_candidate(
             {
                 "path": surface,
                 "why_rejected": "source-backed rejected-route or constraint language",
-                "still_rejected": "unknown" if review_status == "needs_confirmation" else "yes",
             }
         )
         constraints.append(surface)
@@ -362,16 +371,16 @@ def build_decision_candidate(
         "event_type": event_type,
         "status": "staging",
         "review_status": review_status,
+        "source_review_status": review_status,
         "truth_status": "candidate_hypothesis_until_reviewed",
         "evidence_status": "source_backed",
-        "freshness": "fresh" if review_status == "adopted" else review_status,
         "source_role": role,
         "source_refs": refs,
         "affected_scope": affected_scope,
         "chosen_path": chosen_path,
         "rejected_paths": rejected_paths,
         "constraints": constraints,
-        "confidence": confidence,
+        "extraction_confidence": extraction_confidence,
         "trigger_terms": trigger_terms,
         "formal_memory_promoted": False,
         "candidate_type": "coding_decision_event",
@@ -447,16 +456,31 @@ def review_decision_candidates(candidates: Sequence[Mapping[str, Any]]) -> list[
     reviewed: list[dict[str, Any]] = []
     for candidate in candidates:
         copy = dict(candidate)
-        status = str(copy.get("review_status") or "needs_confirmation")
+        status = str(copy.get("source_review_status") or copy.get("review_status") or "needs_confirmation")
         if status not in REVIEW_STATUSES:
             status = "needs_confirmation"
         copy["review_status"] = status
-        copy["freshness"] = "fresh" if status == "adopted" else status
+        copy["source_review_status"] = status
+        # Decision events are terrain: source-backed records of what was said
+        # then. Current-validity weather such as freshness or still-rejected
+        # status is recomputed into ASSESSMENT_KIND rows below so stale source
+        # cannot quietly become foreground authority.
+        copy.pop("freshness", None)
+        copy.pop("confidence", None)
+        cleaned_rejected_paths = []
+        for item in copy.get("rejected_paths") or []:
+            if not isinstance(item, Mapping):
+                continue
+            cleaned = dict(item)
+            cleaned.pop("still_rejected", None)
+            cleaned_rejected_paths.append(cleaned)
+        copy["rejected_paths"] = cleaned_rejected_paths
         copy["review_boundary"] = {
             "deterministic_prototype": True,
             "model_output": "none",
             "formal_memory": False,
             "review_or_validation_required": status != "adopted",
+            "current_validity_weather_stored_on_event": False,
         }
         reviewed.append(copy)
     return reviewed
@@ -479,12 +503,221 @@ def prompt_matches_candidate(prompt: str, candidate: Mapping[str, Any]) -> bool:
 
 
 def source_thickness(candidate: Mapping[str, Any]) -> str:
+    explicit = str(candidate.get("source_thickness") or "")
+    if explicit in {"thin", "usable", "strong"}:
+        return explicit
     refs = candidate.get("source_refs") or []
     if len(refs) >= 3:
         return "strong"
     if len(refs) >= 1:
         return "usable"
     return "thin"
+
+
+def source_thickness_for_refs(refs: Sequence[Mapping[str, Any]]) -> str:
+    if len(refs) >= 3:
+        return "strong"
+    if refs:
+        return "usable"
+    return "thin"
+
+
+def assessment_confidence(*, source_status: str, thickness: str, basis_refs: Sequence[Mapping[str, Any]]) -> float:
+    base = {
+        "adopted": 0.66,
+        "needs_confirmation": 0.44,
+        "local_only": 0.40,
+        "stale": 0.36,
+        "superseded": 0.62,
+        "refuted": 0.62,
+    }.get(source_status, 0.38)
+    base += {"strong": 0.12, "usable": 0.04, "thin": -0.10}.get(thickness, -0.10)
+    if len(basis_refs) >= 2:
+        base += 0.03
+    return round(max(0.0, min(0.95, base)), 4)
+
+
+def still_rejected_for_assessment(source_status: str) -> str:
+    if source_status in {"refuted", "superseded"}:
+        return "no"
+    # Old source proves the route was rejected then. It does not prove the same
+    # route is still invalid now without a read-time source/repo-state basis.
+    return "unknown"
+
+
+def freshness_for_assessment(source_status: str) -> str:
+    if source_status in {"refuted", "superseded", "stale", "local_only", "needs_confirmation"}:
+        return source_status
+    return "unknown"
+
+
+def proposed_use_for_assessment(
+    *,
+    source_status: str,
+    thickness: str,
+    event_type: str,
+    action_relevant: bool = True,
+) -> str:
+    if thickness == "thin":
+        return "refresh_sources" if action_relevant else "ask"
+    if source_status in {"refuted", "superseded"}:
+        return "refresh_sources"
+    if source_status in {"needs_confirmation", "local_only", "stale"}:
+        return "ask"
+    if event_type in {"rejected_route", "do_not_repeat"}:
+        return "warn"
+    if event_type in {"scope_narrowing", "user_correction"}:
+        return "remind"
+    return "refresh_sources"
+
+
+def build_decision_state_assessment(
+    candidate: Mapping[str, Any],
+    *,
+    action_relevant: bool = True,
+    as_of: str | None = None,
+    basis_refs: Sequence[Mapping[str, Any]] | None = None,
+    repo_state_fingerprint: str = "",
+) -> dict[str, Any]:
+    refs = merge_source_refs(basis_refs or candidate.get("source_refs") or [])
+    explicit_thickness = str(candidate.get("source_thickness") or "")
+    thickness = explicit_thickness if explicit_thickness in {"thin", "usable", "strong"} else source_thickness_for_refs(refs)
+    source_status = str(
+        candidate.get("source_review_status")
+        or candidate.get("review_status")
+        or "needs_confirmation"
+    )
+    if source_status not in REVIEW_STATUSES:
+        source_status = "needs_confirmation"
+    event_type = str(candidate.get("event_type") or "")
+    proposed_use = proposed_use_for_assessment(
+        source_status=source_status,
+        thickness=thickness,
+        event_type=event_type,
+        action_relevant=action_relevant,
+    )
+    if thickness == "thin" and proposed_use not in THIN_SOURCE_SAFE_USES:
+        proposed_use = "refresh_sources"
+    decision_id = str(candidate.get("decision_id") or "")
+    created_at = as_of or now_utc()
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": ASSESSMENT_KIND,
+        "assessment_id": stable_id(
+            "decision_state",
+            decision_id,
+            source_status,
+            thickness,
+            proposed_use,
+            repo_state_fingerprint,
+            length=20,
+        ),
+        "created_at": created_at,
+        "as_of": created_at,
+        "assessment_kind": "read_time",
+        "decision_event_id": decision_id,
+        "basis_refs": refs,
+        "repo_state_fingerprint": repo_state_fingerprint,
+        "source_review_status": source_status,
+        "source_thickness": thickness,
+        "still_rejected": still_rejected_for_assessment(source_status),
+        "freshness": freshness_for_assessment(source_status),
+        "confidence": assessment_confidence(
+            source_status=source_status,
+            thickness=thickness,
+            basis_refs=refs,
+        ),
+        "proposed_use": proposed_use,
+        "truth_boundary": "derived_weather_not_source_fact",
+        "terrain_event_mutated": False,
+        "policy": {
+            "old_source_alone_cannot_assert_still_rejected": True,
+            "thin_source_safe_uses": sorted(THIN_SOURCE_SAFE_USES),
+        },
+    }
+
+
+def assess_decision_candidates(
+    candidates: Sequence[Mapping[str, Any]],
+    *,
+    prompt: str = "",
+) -> list[dict[str, Any]]:
+    return [
+        build_decision_state_assessment(
+            candidate,
+            action_relevant=prompt_matches_candidate(prompt, candidate) if prompt else True,
+        )
+        for candidate in candidates
+    ]
+
+
+def assessment_by_decision_id(
+    assessments: Sequence[Mapping[str, Any]],
+) -> dict[str, Mapping[str, Any]]:
+    return {
+        str(item.get("decision_event_id") or ""): item
+        for item in assessments
+        if item.get("kind") == ASSESSMENT_KIND and item.get("decision_event_id")
+    }
+
+
+def intervention_level_for_proposed_use(proposed_use: str) -> str:
+    if proposed_use == "warn":
+        return "warning"
+    if proposed_use == "remind":
+        return "light_nudge"
+    if proposed_use in {"ask", "refresh_sources"}:
+        return "state_check"
+    return "backstage_only"
+
+
+def ticket_diagnostic_for_assessment(assessment: Mapping[str, Any]) -> dict[str, Any]:
+    proposed_use = str(assessment.get("proposed_use") or "")
+    thickness = str(assessment.get("source_thickness") or "thin")
+    if thickness == "thin":
+        decision = "degraded_to_refresh_sources" if proposed_use == "refresh_sources" else "degraded_to_ask"
+    elif proposed_use == "warn":
+        decision = "warned"
+    elif proposed_use == "remind":
+        decision = "nudged"
+    elif proposed_use in {"ask", "refresh_sources"}:
+        decision = f"degraded_to_{proposed_use}"
+    else:
+        decision = "backstage_only"
+    return {
+        "decision": decision,
+        "reason": (
+            "thin evidence cannot warn"
+            if thickness == "thin"
+            else "read-time assessment selected safe proposed_use"
+        ),
+    }
+
+
+def host_contract_fields_for_ticket(*, proposed_use: str, thickness: str) -> dict[str, Any]:
+    annoyance = "high" if proposed_use == "warn" else ("low" if proposed_use in THIN_SOURCE_SAFE_USES else "medium")
+    preconditions = [
+        "host confirms the ticket source is not already visible",
+        "host confirms the active task still matches relevant decisions",
+    ]
+    if thickness == "thin":
+        preconditions.append("host refreshes sources or asks before warning")
+    return {
+        # Source visibility is runtime context owned by the host. Storing it as
+        # a host input marker prevents future agents from treating old storage
+        # as proof that the current context is or is not already showing source.
+        "source_visibility": "host_runtime_input",
+        "annoyance_risk": annoyance,
+        "preconditions": preconditions,
+        "outcome_feedback_expected": list(TICKET_FEEDBACK_OUTCOMES),
+        "host_boundary": {
+            "aippocampus_proposes_only": True,
+            "host_decides_permission": True,
+            "host_decides_priority": True,
+            "host_decides_sequence": True,
+            "host_decides_safety": True,
+        },
+    }
 
 
 def render_coding_continuity_ticket(
@@ -494,19 +727,30 @@ def render_coding_continuity_ticket(
     trigger: str = "compaction_loss",
     visible_context_has_source: bool = False,
     limit: int = 1,
+    assessments: Sequence[Mapping[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     if trigger not in TICKET_TRIGGERS or visible_context_has_source:
         return []
     tickets: list[dict[str, Any]] = []
+    assessment_lookup = assessment_by_decision_id(assessments or [])
     for candidate in candidates:
-        if str(candidate.get("review_status") or "") not in SURFACEABLE_STATUSES:
-            continue
         if str(candidate.get("event_type") or "") not in SURFACEABLE_EVENT_TYPES:
             continue
         action_relevant = prompt_matches_candidate(prompt, candidate)
+        decision_id = str(candidate.get("decision_id") or "")
+        assessment = dict(
+            assessment_lookup.get(decision_id)
+            or build_decision_state_assessment(candidate, action_relevant=action_relevant)
+        )
+        source_status = str(assessment.get("source_review_status") or "")
+        proposed_use = str(assessment.get("proposed_use") or "")
+        if source_status in {"refuted", "superseded", "stale", "local_only"}:
+            continue
+        if source_status not in SURFACEABLE_STATUSES and proposed_use not in THIN_SOURCE_SAFE_USES:
+            continue
         gate_candidate = {
             "kind": ADJUDICATION_KIND,
-            "activation_event_id": candidate.get("decision_id"),
+            "activation_event_id": decision_id,
             "adjudication_status": "valid_ignored",
             "route": route_for_adjudication("valid_ignored"),
         }
@@ -517,29 +761,34 @@ def render_coding_continuity_ticket(
             visible_context_has_source=visible_context_has_source,
         ):
             continue
-        decision_id = str(candidate.get("decision_id") or "")
+        intervention_level = intervention_level_for_proposed_use(proposed_use)
         tickets.append(
             {
                 "schema_version": SCHEMA_VERSION,
                 "kind": TICKET_KIND,
                 "ticket_id": stable_id("coding_ticket", trigger, prompt, decision_id, length=20),
                 "trigger": trigger,
-                "intervention_level": "warning"
-                if candidate.get("event_type") in {"rejected_route", "do_not_repeat"}
-                else "light_nudge",
+                "intervention_level": intervention_level,
                 "relevant_decisions": [decision_id],
                 "do_not_repeat": [
                     item.get("path")
                     for item in candidate.get("rejected_paths") or []
                     if isinstance(item, Mapping) and item.get("path")
                 ],
-                "proposed_use": "warn",
-                "evidence_refs": candidate.get("source_refs") or [],
-                "source_thickness": source_thickness(candidate),
+                "proposed_use": proposed_use,
+                "evidence_refs": assessment.get("basis_refs") or [],
+                "basis_refs": assessment.get("basis_refs") or [],
+                "source_thickness": assessment.get("source_thickness"),
+                "derived_assessment": assessment,
                 "expires_at": "task_or_topic_epoch_end",
                 "summary": candidate.get("summary"),
                 "truth_status": candidate.get("truth_status"),
                 "formal_memory_promoted": False,
+                "diagnostics": ticket_diagnostic_for_assessment(assessment),
+                **host_contract_fields_for_ticket(
+                    proposed_use=proposed_use,
+                    thickness=str(assessment.get("source_thickness") or "thin"),
+                ),
             }
         )
         if len(tickets) >= limit:
@@ -574,6 +823,7 @@ def run_extraction(
     candidates = review_decision_candidates(
         extract_decision_candidates(messages, thread_key=thread_key, workspace=workspace)
     )
+    assessments = assess_decision_candidates(candidates, prompt=ticket_prompt)
     wrote_count = 0
     if output_path and not no_write and candidates:
         wrote_count = append_rows(output_path, candidates)
@@ -583,6 +833,7 @@ def run_extraction(
             prompt=ticket_prompt,
             trigger=ticket_trigger,
             visible_context_has_source=visible_context_has_source,
+            assessments=assessments,
         )
         if ticket_prompt
         else []
@@ -595,9 +846,11 @@ def run_extraction(
         "output": str(output_path) if output_path else None,
         "message_count": len(messages),
         "candidate_count": len(candidates),
+        "assessment_count": len(assessments),
         "wrote_count": wrote_count,
         "ticket_count": len(tickets),
         "candidates": candidates,
+        "assessments": assessments,
         "tickets": tickets,
         "cannot_claim": [
             "complete_design_intent_extraction",

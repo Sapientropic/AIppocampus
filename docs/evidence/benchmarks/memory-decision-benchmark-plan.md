@@ -1,9 +1,10 @@
 # AIppocampus Memory Decision Benchmark Plan
 
-Status: repeatable baseline suite implemented; current source-evidence recall
-has improved, live semantic-gate smoke is opt-in, semantic-sidecar coverage
-remains a known gap, and deterministic synthetic Track D
-compaction-continuity testing is implemented as a measurement surface.
+Status: repeatable baseline suite and `public-fast` fresh-clone profile
+implemented; current source-evidence recall has improved, live semantic-gate
+smoke is opt-in, semantic-sidecar coverage remains a known gap, and
+deterministic synthetic Track D compaction-continuity testing is implemented as
+a measurement surface.
 
 This document defines the benchmark direction for AIppocampus memory decisions.
 It complements the existing FTS5/source-evidence checks; it does not replace
@@ -62,10 +63,21 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
   turn-level hit metrics, an opt-in bounded public semantic-sidecar pilot, and
   an opt-in standard retrieval-QA adapter for LoCoMo and LongMemEval V1
   source/session recall metrics.
+- `benchmarks/aippocampus/benchmark_coding_decision_shadow.py` runs the
+  deterministic coding-agent decision-shadow tracks A-E from
+  `docs/research/agent-coding-context-analysis.md`: original source refs,
+  rejected-route warnings, compaction boundary preservation, relevant
+  historical-decision selection without a repo map, and anti-nag suppression.
+  Its default report is sanitized and carries `cannot_claim` boundaries for
+  private real-history lift, full code-index navigation quality, and live host
+  timing.
 - `tests/aippocampus/test_benchmark_source_evidence_retrieval.py` checks
   Track B report shape, diagnostic status, ShareGPT public-corpus case
   generation, public semantic-sidecar materialization, LoCoMo/LongMemEval source
   ref handling, and default privacy boundaries.
+- `tests/aippocampus/test_benchmark_coding_decision_shadow.py` checks A-E
+  track statuses, wrong-source evidence, visible-source suppression, stale
+  authority, and explicit private-text debug boundaries.
 - `benchmarks/aippocampus/benchmark_suite.py` runs the repeatable baseline
   suite across Track A, Track B, Track C, and the broader deterministic
   source-label diagnostic slice, with opt-in ShareGPT public Track B, standard
@@ -102,6 +114,23 @@ metrics; the next slice still needs broader private real-history gate cases,
 budget curves, larger live semantic-model verification, and a first Track D
 compaction-continuity runner.
 
+### Public-Fast Profile
+
+Run this from a fresh clone when you need the deterministic public benchmark
+surface without private registry data, live model calls, or external dataset
+downloads:
+
+```powershell
+python benchmarks\aippocampus\benchmark_suite.py --profile public-fast --json
+```
+
+`public-fast` runs the Track A gate-decision, Track C payload-fidelity, and
+Track D compaction-continuity slices. It forcibly disables private text, live
+semantic checks, Track B source-evidence retrieval, and optional public-corpus
+adapters. Its report includes `cannot_claim` entries for those omitted surfaces
+so the profile cannot be mistaken for Track B, private-history, or live-model
+quality evidence.
+
 ### Repeatable Baseline Command
 
 Run from the repository root:
@@ -128,6 +157,22 @@ Default suite semantics:
   registry details stay out of default reports.
 - `--include-private-text` is a local-debug opt-in only and should not be used
   for public docs or committed artifacts.
+
+### Coding Decision-Shadow A-E Benchmark
+
+Run the public deterministic coding-agent decision-shadow contract:
+
+```powershell
+python benchmarks\aippocampus\benchmark_coding_decision_shadow.py --json
+```
+
+This benchmark is narrower than the one-command baseline suite. It directly
+exercises the coding continuity wedge: source-backed decision refs,
+rejected-route warnings, compaction boundary preservation, historical decision
+selection, and anti-nag suppression. Negative controls cover wrong-source
+evidence, visible-source suppression, and stale authority. The default report
+is sanitized and cannot claim private real-history behavior lift, full
+code-index navigation quality, or live host intervention timing.
 
 ### Optional ShareGPT Public Track B
 

@@ -31,6 +31,7 @@ maps.
 - [`architecture-overview.md`](architecture/architecture-overview.md) - public map of runtime layers and boundaries.
 - [`cognitive-runtime-architecture.md`](architecture/cognitive-runtime-architecture.md) - layered runtime architecture and cognitive-map direction.
 - [`runtime-script-map.md`](architecture/runtime-script-map.md) - maintainer map for high-risk runtime scripts, recall flow, entrypoints, callers, and tests.
+- [`provider-entrypoint-inventory.md`](architecture/provider-entrypoint-inventory.md) - classified inventory of remaining Codex-specific and provider-aware runtime entrypoints.
 - [`architecture-debt-register.md`](architecture/architecture-debt-register.md) - lightweight large-runtime-script debt register and guard budgets.
 - [`gb-scale-roadmap.md`](architecture/gb-scale-roadmap.md) - long-thread indexing, segmenting, retention, vector-index, and scale planning.
 - [`encrypted-sync-v1.md`](architecture/encrypted-sync-v1.md) - end-to-end encrypted multi-device sync design contract.
@@ -98,8 +99,10 @@ evidence. Archived notes are not current contracts.
 
 Do not place raw rollouts, generated indexes, private anchors, registry exports,
 or local-machine paths in this docs folder. Generated memory artifacts belong in
-the global `$CODEX_HOME/aippocampus-registry/threads/<thread>/...` store by
-default, or in explicit local export/debug paths that stay gitignored.
+the configured AIppocampus registry by default
+(`AIPPOCAMPUS_REGISTRY_DIR`, `AIPPOCAMPUS_HOME/registry`, then legacy
+`$CODEX_HOME/aippocampus-registry`), or in explicit local export/debug paths
+that stay gitignored.
 
 Public benchmark-corpus scripts and curated samples live in
 `benchmark_corpus/`. Keep local caches, generated outputs, benchmark reports,

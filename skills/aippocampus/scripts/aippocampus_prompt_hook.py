@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from aippocampuslib import codex_home, now_utc
+from aippocampuslib import aippocampus_registry_dir, now_utc
 
 DEFAULT_SEARCH_BUDGET_FALLBACK = 3
 PROMPT_HOOK_SEMANTIC_TIMEOUT_FALLBACK = float(os.environ.get("AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT", "2.5"))
@@ -92,7 +92,7 @@ def write_debug_log(
 ) -> None:
     if result.get("decision") == "skip" and not include_skip:
         return
-    path = log_path or (codex_home() / "aippocampus-registry" / "aippocampus_prompt_hook.jsonl")
+    path = log_path or (aippocampus_registry_dir() / "aippocampus_prompt_hook.jsonl")
     path.parent.mkdir(parents=True, exist_ok=True)
     ambient_summary = _load_runtime()["ambient_debug_summary"](result)
     semantic_gate = result.get("semantic_gate") or {}

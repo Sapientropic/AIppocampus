@@ -37,6 +37,9 @@ HIGH_RISK_MYPY_SCRIPTS = {
     "skills/aippocampus/scripts/warm_ambient_recall.py",
 }
 DEBT_REGISTER = REPO_ROOT / "docs" / "architecture" / "architecture-debt-register.md"
+PROVIDER_ENTRYPOINT_INVENTORY = (
+    REPO_ROOT / "docs" / "architecture" / "provider-entrypoint-inventory.md"
+)
 
 
 def debt_register_entries() -> dict[str, int]:
@@ -200,6 +203,23 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             {"missing": missing, "stale": stale, "over_budget": over_budget},
             {"missing": [], "stale": [], "over_budget": {}},
         )
+
+    def test_codex_default_call_sites_are_classified_in_provider_inventory(self) -> None:
+        inventory = PROVIDER_ENTRYPOINT_INVENTORY.read_text(encoding="utf-8")
+        markers = (
+            "locate_rollout(",
+            "iter_rollouts(",
+            "codex_home(",
+            "provider or codex_provider",
+        )
+        call_sites = sorted(
+            path.relative_to(SCRIPTS).as_posix()
+            for path in runtime_python_files()
+            if any(marker in path.read_text(encoding="utf-8") for marker in markers)
+        )
+        missing = [path for path in call_sites if f"`{path}`" not in inventory]
+
+        self.assertEqual(missing, [])
 
     def test_prompt_hook_exits_zero_when_split_helper_install_lags(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
