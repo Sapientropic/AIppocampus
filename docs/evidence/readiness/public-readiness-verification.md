@@ -71,6 +71,34 @@ This is boundary evidence only. It does not claim competitor superiority,
 real-history memory-pain quality, live semantic-model quality, or a complete
 Track D compaction-continuity runner.
 
+## 2026-05-31 Russian Real-History Memory-Pain Smoke
+
+Issue #108 turned a stricter private Russian real-history probe shape into a
+public-safe, hash-only smoke family named `russian-real-history`. The family
+covers Russian negative prompts that must not be upgraded to source-backed
+evidence, Russian positive prompts for prior wording recovery, and a vague
+cross-project plan prompt that should remain scent/diagnostic unless a strong
+source bridge exists.
+
+Latest verification for that slice:
+
+- `python -m pytest tests\aippocampus\test_aippocampus_prompt_hook.py::AmbientRecallHookTests::test_russian_prior_wording_recall_can_recover_source_evidence tests\aippocampus\test_memory_pain_prompt_hook_smoke.py::MemoryPainPromptHookSmokeTests::test_russian_real_history_case_family_captures_stricter_probe_shapes -q`:
+  passed.
+- `python tools\aippocampus\smoke\smoke_memory_pain_prompt_hook.py --case-family russian-real-history --semantic-gate off --json --strict --require-positive-evidence`:
+  passed; 5 cases, 0 unsafe issues, 0 positive misses.
+- `python tools\aippocampus\smoke\smoke_memory_pain_prompt_hook.py --case-family russian-real-history --semantic-gate auto --json --strict --require-positive-evidence`:
+  passed; 5 cases, 0 unsafe issues, 0 positive misses. Foreground budget
+  diagnostics stayed non-fatal and did not create evidence over-escalation.
+- `python tools\aippocampus\smoke\smoke_memory_pain_prompt_hook.py --case-family russian-real-history --semantic-gate on --semantic-timeout 20 --max-elapsed-ms 0 --json --strict --require-positive-evidence`:
+  passed; 5 cases, 0 unsafe issues, 0 positive misses. Relaxed live semantic
+  produced one `semantic_evidence_without_source_bridge` diagnostic on the
+  vague prompt, with no source-backed evidence emitted for that prompt.
+
+This does not publish raw private prompts, source refs, snippets, local paths,
+session ids, API keys, provider responses, or a broad multilingual quality
+claim. It only claims the sanitized Russian probe family is now reproducible
+and guarded by deterministic tests plus the hash-only smoke.
+
 ## 2026-05-30 Provider And Cross-Agent Continuity Slice
 
 Issues #112-#120 refined the first multi-provider landing slice. Current
