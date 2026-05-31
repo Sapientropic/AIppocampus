@@ -138,6 +138,14 @@ class MemoryPainPromptHookSmokeTests(unittest.TestCase):
         self.assertNotIn("ru_pos_external_hippocampus_wording", rendered)
         self.assertEqual(result["privacy"], "aggregate_hash_only")
 
+    def test_russian_real_history_case_family_captures_stricter_probe_shapes(self) -> None:
+        cases = smoke.load_cases(None, case_family="russian-real-history")
+        names = {str(case.get("name") or "") for case in cases}
+
+        self.assertIn("ru_real_pos_prior_raw_history_wording", names)
+        self.assertIn("ru_real_neg_do_not_upgrade_without_source_row", names)
+        self.assertIn("ru_real_vague_cross_project_plan", names)
+
     def test_vague_cross_project_natural_evidence_stays_scent(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -114,10 +114,39 @@ RUSSIAN_CASES: list[dict[str, Any]] = [
     },
 ]
 
+RUSSIAN_REAL_HISTORY_CASES: list[dict[str, Any]] = [
+    {
+        "name": "ru_real_neg_do_not_upgrade_without_source_row",
+        "kind": "negative",
+        "prompt": "Не поднимай это до source-backed evidence без явной строки источника.",
+    },
+    {
+        "name": "ru_real_neg_not_durable_memory_without_clean_source",
+        "kind": "negative",
+        "prompt": "Не считай эту тему durable memory, если нет clean source строки.",
+    },
+    {
+        "name": "ru_real_pos_prior_raw_history_wording",
+        "kind": "positive",
+        "prompt": "Найди прежнюю формулировку про raw history после сжатия.",
+    },
+    {
+        "name": "ru_real_pos_prior_external_hippocampus_wording",
+        "kind": "positive",
+        "prompt": "Вспомни прежнюю фразу про внешний гиппокамп и trigger recall.",
+    },
+    {
+        "name": "ru_real_vague_cross_project_plan",
+        "kind": "vague",
+        "prompt": "Как мы в прошлый раз описывали тот план между проектами?",
+    },
+]
+
 CASE_FAMILIES = {
     "default": DEFAULT_CASES,
     "russian": RUSSIAN_CASES,
-    "all": DEFAULT_CASES + RUSSIAN_CASES,
+    "russian-real-history": RUSSIAN_REAL_HISTORY_CASES,
+    "all": DEFAULT_CASES + RUSSIAN_CASES + RUSSIAN_REAL_HISTORY_CASES,
 }
 
 

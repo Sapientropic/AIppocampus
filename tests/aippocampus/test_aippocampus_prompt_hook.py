@@ -2210,6 +2210,43 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertTrue(result["evidence"])
         self.assertIn("внешний гиппокамп", result["evidence"][0]["snippet"])
 
+    def test_russian_prior_wording_recall_can_recover_source_evidence(self) -> None:
+        messages = self._write_clean_thread_rows(
+            "session:russian-prior-wording",
+            [
+                {
+                    "source_line": 91,
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": (
+                        "Прежняя формулировка про raw history после сжатия: "
+                        "история уже локальна, но после сжатия агент не знает, что искать."
+                    ),
+                }
+            ],
+        )
+        registry_path = self._write_clean_registry(
+            thread_key="session:russian-prior-wording",
+            title="Прежняя формулировка raw history",
+            keywords=["raw history", "прежняя формулировка", "сжатия"],
+            summary="Русская формулировка про raw history после сжатия.",
+            messages_path=messages,
+        )
+        prompt = "Найди прежнюю формулировку про raw history после сжатия."
+
+        result = hook.assess_prompt(
+            prompt,
+            cwd=self.workspace,
+            registry_path=registry_path,
+            search_budget=2,
+            use_semantic_gate=False,
+        )
+
+        self.assertTrue(recall_cues.natural_evidence_intent(prompt))
+        self.assertEqual(result["decision"], "evidence")
+        self.assertTrue(result["evidence"])
+        self.assertIn("raw history", result["evidence"][0]["snippet"])
+
     def test_scent_only_topic_can_be_explicitly_retrieved(self) -> None:
         messages = self._write_clean_thread_rows(
             "session:scent-boundary",
