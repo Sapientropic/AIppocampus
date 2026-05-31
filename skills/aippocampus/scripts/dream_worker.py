@@ -17,17 +17,17 @@ from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from aippocampus_runtime.dream.worker_contract import (
+    PROMPT_ORDER,
+    stable_worker_contract,
+    variable_run_directive,
+)
 from aippocampus_runtime.model.client import (
     ChatClientConfig,
     cache_metrics_from_response,
     chat_json,
 )
 from aippocampuslib import compact_text, now_utc, sanitize_external_model_payload
-from dream_worker_contract import (
-    PROMPT_ORDER,
-    stable_worker_contract,
-    variable_run_directive,
-)
 from dream_working_memory import (
     adjudicated_dream_findings_to_working_memory,
     background_adjudicate_dream_findings,
