@@ -7,8 +7,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.subconscious.job_circuits import PROMPT_VERSION
 from aippocampuslib import now_utc
-from subconscious_job_circuits import PROMPT_VERSION
 
 
 def append_job_findings(

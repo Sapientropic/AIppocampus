@@ -6,10 +6,8 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any
 
-from aippocampuslib import compact_text
-from semantic_scope_labels import filtered_semantic_scope_labels
-from subconscious_job_circuits import JOB_SPECS
-from subconscious_job_validation import (
+from aippocampus_runtime.subconscious.job_circuits import JOB_SPECS
+from aippocampus_runtime.subconscious.job_validation import (
     ALLOWED_QUESTION_FINDING_KINDS,
     QUESTION_TEXT_MAX_CHARS,
     compact_string_list,
@@ -18,6 +16,8 @@ from subconscious_job_validation import (
     short_question_fallback,
     validate_cognitive_map_fields,
 )
+from aippocampuslib import compact_text
+from semantic_scope_labels import filtered_semantic_scope_labels
 from subconscious_worker import clamp_confidence
 
 
