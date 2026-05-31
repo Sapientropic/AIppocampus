@@ -3535,6 +3535,54 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertEqual(ambient["cache_status"]["visibility_bias"], "active_gentle_nudge")
         self.assertEqual(ambient["cards"][0]["card_id"], "cached-card")
 
+    def test_prompt_hook_uses_related_cache_after_paraphrase_epoch_miss(self) -> None:
+        cache_path = self.root / "ambient-cache-related.json"
+        registry_path = self._write_single_thread_registry(
+            title="Ambient recall design",
+            keywords=["ambient recall", "associative cache"],
+            summary="Prior notes about warm ambient recall cards and associative cache behavior.",
+        )
+        thread_cache.write_thread_cache(
+            cache_path,
+            thread_id="thread-a",
+            workspace=str(self.workspace),
+            topic_epoch="epoch-first-phrasing",
+            cards=[
+                {
+                    "card_id": "cached-related-card",
+                    "theme": "Ambient recall design: ambient recall",
+                    "support_level": "candidate",
+                    "visibility": "active_gentle_nudge",
+                    "matched_terms": ["ambient recall"],
+                }
+            ],
+            mode="active_gentle_nudge",
+            confidence="medium",
+            related_fingerprints=thread_cache.related_signal_fingerprints(
+                candidates=[{"thread_key": "session:single-thread"}],
+            ),
+            topic_epoch_decision={
+                "action": "reuse",
+                "label": "ambient recall cache continuity",
+            },
+        )
+
+        result = hook.assess_prompt(
+            "ambient associative cache 这个暖启动还能再顺一点吗？",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            thread_id="thread-a",
+            ambient_cache_path=cache_path,
+            warm_background=True,
+            search_budget=0,
+        )
+
+        ambient = result["ambient_recall"]
+        self.assertEqual(ambient["cache_status"]["status"], "related_hit")
+        self.assertEqual(ambient["cache_status"]["matched_topic_epoch"], "epoch-first-phrasing")
+        self.assertEqual(ambient["cards"][0]["card_id"], "cached-related-card")
+        self.assertNotIn("warm_background", ambient)
+
     def test_prompt_hook_next_turn_reads_detached_warm_cache_without_rescheduling(self) -> None:
         cache_path = self.root / "ambient-cache-next-turn.json"
         scheduled: list[dict] = []

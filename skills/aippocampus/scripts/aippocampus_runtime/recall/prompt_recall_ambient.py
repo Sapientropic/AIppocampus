@@ -9,7 +9,9 @@ from typing import Any
 from aippocampus_runtime.recall.ambient_cache import (
     default_ambient_cache_path,
     read_latest_thread_cache,
+    read_related_thread_cache,
     read_thread_cache,
+    related_signal_fingerprints,
     topic_epoch_from_terms,
     write_thread_cache,
 )
@@ -63,6 +65,17 @@ def attach_ambient_recall(
         else default_ambient_cache_path(registry_path)
     )
     policy_file = Path(ambient_policy_path).resolve() if ambient_policy_path else None
+    related_fingerprints = related_signal_fingerprints(
+        candidates=result.get("candidates") or [],
+        evidence=result.get("evidence") or [],
+        working_memory=result.get("working_memory") or [],
+        semantic_gate=result.get("semantic_gate") or None,
+        query_aliases=(
+            (result.get("semantic_gate") or {}).get("query_aliases")
+            if isinstance(result.get("semantic_gate"), dict)
+            else result.get("query_terms") or []
+        ),
+    )
     try:
         cached = read_thread_cache(
             cache_file,
@@ -70,10 +83,22 @@ def attach_ambient_recall(
             workspace=workspace,
             topic_epoch=epoch,
         )
+        if cached.get("status") in {"miss", "expired"}:
+            related = read_related_thread_cache(
+                cache_file,
+                thread_id=thread_id,
+                workspace=workspace,
+                topic_epoch=epoch,
+                related_fingerprints=related_fingerprints,
+            )
+            if related.get("status") == "related_hit":
+                cached = related
         cache_status = {
             "status": cached.get("status"),
             "topic_epoch": epoch,
+            "matched_topic_epoch": cached.get("matched_topic_epoch") or None,
             "card_count": len(cached.get("cards") or []),
+            "related_overlap_count": cached.get("related_overlap_count") or 0,
             "query_aliases": cached.get("query_aliases") or [],
             "topic_epoch_decision": cached.get("topic_epoch_decision") or None,
             "visibility_bias": cached.get("visibility_bias") or "",
@@ -111,6 +136,7 @@ def attach_ambient_recall(
                     or result.get("query_terms")
                     or []
                 ),
+                related_fingerprints=related_fingerprints,
                 visibility_bias=str(result["ambient_recall"].get("mode") or ""),
             )
             result["ambient_recall"]["cache_status"] = {

@@ -176,6 +176,117 @@ class AmbientThreadCacheTests(unittest.TestCase):
         self.assertEqual(loaded["status"], "expired")
         self.assertEqual(loaded["cards"], [])
 
+    def test_related_thread_cache_uses_stable_candidate_fingerprints_after_exact_miss(self) -> None:
+        cache_path = self.root / "ambient-thread-cache.json"
+        signals = cache.related_signal_fingerprints(
+            candidates=[{"thread_key": "session:old-topic"}],
+        )
+        cache.write_thread_cache(
+            cache_path,
+            thread_id="thread-a",
+            workspace="E:/private/workspace",
+            topic_epoch="epoch-first-phrasing",
+            cards=[
+                {
+                    "card_id": "arc_related",
+                    "theme": "same source-backed candidate",
+                    "support_level": "candidate",
+                    "visibility": "active_gentle_nudge",
+                }
+            ],
+            related_fingerprints=signals,
+            topic_epoch_decision={
+                "action": "reuse",
+                "label": "same source-backed candidate cluster",
+            },
+        )
+
+        exact = cache.read_thread_cache(
+            cache_path,
+            thread_id="thread-a",
+            workspace="E:/private/workspace",
+            topic_epoch="epoch-natural-paraphrase",
+        )
+        related = cache.read_related_thread_cache(
+            cache_path,
+            thread_id="thread-a",
+            workspace="E:/private/workspace",
+            topic_epoch="epoch-natural-paraphrase",
+            related_fingerprints=signals,
+        )
+        raw = cache_path.read_text(encoding="utf-8")
+
+        self.assertEqual(exact["status"], "miss")
+        self.assertEqual(related["status"], "related_hit")
+        self.assertEqual(related["topic_epoch"], "epoch-natural-paraphrase")
+        self.assertEqual(related["matched_topic_epoch"], "epoch-first-phrasing")
+        self.assertEqual(related["cards"][0]["card_id"], "arc_related")
+        self.assertGreaterEqual(related["related_overlap_count"], 1)
+        self.assertNotIn("old-topic", raw)
+        self.assertNotIn("private/workspace", raw.replace("\\", "/"))
+
+    def test_related_thread_cache_rejects_same_session_different_candidate(self) -> None:
+        cache_path = self.root / "ambient-thread-cache.json"
+        cache.write_thread_cache(
+            cache_path,
+            thread_id="thread-a",
+            workspace="workspace",
+            topic_epoch="epoch-old",
+            cards=[{"card_id": "arc_old", "theme": "old candidate"}],
+            related_fingerprints=cache.related_signal_fingerprints(
+                candidates=[{"thread_key": "session:old-topic"}],
+            ),
+        )
+
+        related = cache.read_related_thread_cache(
+            cache_path,
+            thread_id="thread-a",
+            workspace="workspace",
+            topic_epoch="epoch-new",
+            related_fingerprints=cache.related_signal_fingerprints(
+                candidates=[{"thread_key": "session:different-topic"}],
+            ),
+        )
+
+        self.assertEqual(related["status"], "miss")
+        self.assertEqual(related["cards"], [])
+
+    def test_related_thread_cache_downgrades_cached_evidence_without_source_overlap(self) -> None:
+        cache_path = self.root / "ambient-thread-cache.json"
+        signals = cache.related_signal_fingerprints(
+            candidates=[{"thread_key": "session:old-topic"}],
+        )
+        cache.write_thread_cache(
+            cache_path,
+            thread_id="thread-a",
+            workspace="workspace",
+            topic_epoch="epoch-old",
+            cards=[
+                {
+                    "card_id": "arc_evidence",
+                    "theme": "old sourced detail",
+                    "support_level": "evidence",
+                    "visibility": "source_backed_recall_card",
+                    "source_refs": [
+                        {"thread_key": "session:old-topic", "line": 42, "message_id": "msg-1"}
+                    ],
+                }
+            ],
+            related_fingerprints=signals,
+        )
+
+        related = cache.read_related_thread_cache(
+            cache_path,
+            thread_id="thread-a",
+            workspace="workspace",
+            topic_epoch="epoch-new",
+            related_fingerprints=signals,
+        )
+
+        self.assertEqual(related["status"], "related_hit")
+        self.assertEqual(related["cards"][0]["support_level"], "candidate")
+        self.assertEqual(related["cards"][0]["visibility"], "active_gentle_nudge")
+
     def test_topic_epoch_is_stable_without_raw_prompt_text(self) -> None:
         first = cache.topic_epoch_from_terms(["ambient recall", "Card/cache", "ambient"])
         second = cache.topic_epoch_from_terms(["ambient", "Card/cache", "ambient recall"])

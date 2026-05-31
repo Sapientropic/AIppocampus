@@ -27,6 +27,9 @@ DEFAULT_MAX_ENTRIES = 128
 DEFAULT_MAX_CARDS = 8
 DEFAULT_RESIDUE_REVIEW_AFTER_SECONDS = 7 * 24 * 60 * 60
 
+RELATED_STRONG_PREFIXES = ("src_", "cand_", "sem_", "scope_", "topic_", "card_")
+RELATED_WEAK_PREFIXES = ("alias_",)
+
 
 def default_ambient_cache_path(
     registry_path: Path | None = None, registry_dir: Path | None = None
@@ -142,6 +145,98 @@ def _source_ref_fingerprint(ref: dict[str, Any]) -> str:
         ),
         prefix="src",
     )
+
+
+def _related_fingerprint(kind: str, value: Any) -> str:
+    text = compact_text(str(value or "").strip(), 200)
+    if not text:
+        return ""
+    return _fingerprint(text, prefix=kind)
+
+
+def _candidate_related_fingerprints(items: Any) -> list[str]:
+    values: list[str] = []
+    if not isinstance(items, list):
+        return []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        thread_key = item.get("thread_key") or item.get("source_id") or item.get("thread")
+        if thread_key:
+            values.append(_related_fingerprint("cand", thread_key))
+        for ref in item.get("source_refs") or []:
+            if isinstance(ref, dict):
+                values.append(_source_ref_fingerprint(ref))
+        for label_key in ("scope_labels", "semantic_scope_labels", "labels"):
+            labels = item.get(label_key)
+            if isinstance(labels, list):
+                values.extend(_related_fingerprint("scope", label) for label in labels)
+    return [value for value in values if value]
+
+
+def _semantic_related_fingerprints(semantic_gate: Any) -> list[str]:
+    values: list[str] = []
+    if not isinstance(semantic_gate, dict):
+        return []
+    for key in ("trigger_ids", "active_trigger_ids", "cue_ids", "active_cue_ids"):
+        items = semantic_gate.get(key)
+        if isinstance(items, list):
+            values.extend(_related_fingerprint("sem", item) for item in items)
+    for key in ("scope_labels", "semantic_scope_labels"):
+        labels = semantic_gate.get(key)
+        if isinstance(labels, list):
+            values.extend(_related_fingerprint("scope", label) for label in labels)
+    aliases = semantic_gate.get("query_aliases")
+    if isinstance(aliases, list):
+        values.extend(_related_fingerprint("alias", alias) for alias in aliases)
+    return [value for value in values if value]
+
+
+def related_signal_fingerprints(
+    *,
+    candidates: list[dict[str, Any]] | None = None,
+    evidence: list[dict[str, Any]] | None = None,
+    working_memory: list[dict[str, Any]] | None = None,
+    cards: list[dict[str, Any]] | None = None,
+    semantic_gate: dict[str, Any] | None = None,
+    query_aliases: list[str] | None = None,
+    topic_epoch_decision: dict[str, Any] | None = None,
+) -> list[str]:
+    """Return privacy-safe related-cache signals for source/candidate overlap.
+
+    These are hashed navigation signals, not semantic facts. Strong signals come
+    from source refs, candidate thread keys, semantic trigger ids, scope labels,
+    and model/scout topic labels. Query aliases are stored as weak evidence for
+    diagnostics and future scoring, but a related-cache hit must not be based on
+    alias overlap alone; otherwise paraphrase reuse would quietly regress into a
+    prompt-text fuzzy matcher.
+    """
+
+    values: list[str] = []
+    values.extend(_candidate_related_fingerprints(candidates or []))
+    values.extend(_candidate_related_fingerprints(working_memory or []))
+    if isinstance(evidence, list):
+        for item in evidence:
+            if not isinstance(item, dict):
+                continue
+            values.append(_source_ref_fingerprint(item))
+            values.extend(_candidate_related_fingerprints([item]))
+    if isinstance(cards, list):
+        for card in cards:
+            if not isinstance(card, dict):
+                continue
+            if card.get("card_id"):
+                values.append(_related_fingerprint("card", card.get("card_id")))
+            for ref in card.get("source_refs") or []:
+                if isinstance(ref, dict):
+                    values.append(_source_ref_fingerprint(ref))
+    values.extend(_semantic_related_fingerprints(semantic_gate))
+    for alias in query_aliases or []:
+        values.append(_related_fingerprint("alias", alias))
+    compact_decision = _compact_topic_epoch_decision(topic_epoch_decision)
+    if compact_decision and compact_decision.get("label"):
+        values.append(_related_fingerprint("topic", compact_decision.get("label")))
+    return unique_preserve([value for value in values if value], limit=48)
 
 
 def _source_ref_fingerprints(cards: list[dict[str, Any]]) -> list[str]:
@@ -318,6 +413,135 @@ def read_thread_cache(
         "confidence": entry.get("confidence"),
         "cards": cards,
         "source_ref_fingerprints": entry.get("source_ref_fingerprints") or [],
+        "related_fingerprints": entry.get("related_fingerprints") or [],
+        "query_aliases": entry.get("query_aliases") or [],
+        "topic_epoch_decision": entry.get("topic_epoch_decision") or None,
+        "visibility_bias": entry.get("visibility_bias") or None,
+    }
+
+
+def _same_thread_workspace_entries(
+    data: dict[str, Any],
+    *,
+    thread_id: str,
+    workspace: str,
+    ttl_seconds: int,
+) -> list[dict[str, Any]]:
+    thread_fp = _fingerprint(thread_id, prefix="thread")
+    workspace_fp = _fingerprint(workspace, prefix="workspace")
+    entries: list[dict[str, Any]] = []
+    for entry in (data.get("entries") or {}).values():
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("thread_fingerprint") != thread_fp:
+            continue
+        if entry.get("workspace_fingerprint") != workspace_fp:
+            continue
+        updated_unix = float(entry.get("updated_unix") or 0.0)
+        if ttl_seconds > 0 and updated_unix and time.time() - updated_unix > ttl_seconds:
+            continue
+        entries.append(entry)
+    return entries
+
+
+def _strong_related_overlap(
+    left: set[str],
+    right: set[str],
+) -> set[str]:
+    overlap = left & right
+    return {value for value in overlap if value.startswith(RELATED_STRONG_PREFIXES)}
+
+
+def _related_cache_cards(cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep related hits advisory until current-turn source is reopened.
+
+    A related cache hit is pattern completion over source/candidate fingerprints,
+    not a fresh source lookup. Downgrading cached evidence cards prevents an
+    apparently helpful paraphrase match from surfacing old snippets as current
+    evidence without reopening clean source in this turn.
+    """
+
+    out: list[dict[str, Any]] = []
+    for card in cards:
+        clean = dict(card)
+        if clean.get("support_level") == "evidence" or clean.get("visibility") in {
+            "source_backed_recall_card",
+            "deep_archival_recall",
+        }:
+            clean["support_level"] = "candidate"
+            clean["visibility"] = "active_gentle_nudge"
+            clean["key_line"] = ""
+            clean["suggested_use"] = (
+                "Related cached source exists; reopen clean source before exact claims."
+            )
+            clean["expand_if"] = "Search clean source before presenting exact claims as facts."
+        out.append(clean)
+    return out
+
+
+def read_related_thread_cache(
+    path: Path | str,
+    *,
+    thread_id: str,
+    workspace: str,
+    topic_epoch: str,
+    related_fingerprints: list[str],
+    ttl_seconds: int = DEFAULT_TTL_SECONDS,
+    max_scan: int = 16,
+) -> dict[str, Any]:
+    """Return a same-thread cache entry matched by stable hashed signals.
+
+    This is intentionally narrower than fuzzy text matching: it only scans the
+    same thread/workspace, respects TTL, and requires overlap in strong hashed
+    signals such as candidate thread keys, source refs, semantic trigger ids,
+    scope labels, card ids, or scout topic labels. Query-alias overlap is kept
+    for diagnostics but is not enough to reuse cards.
+    """
+
+    requested = set(related_fingerprints or [])
+    if not requested:
+        return {"status": "miss", "topic_epoch": topic_epoch, "cards": []}
+    data = _load_cache(Path(path))
+    entries = sorted(
+        _same_thread_workspace_entries(
+            data,
+            thread_id=thread_id,
+            workspace=workspace,
+            ttl_seconds=ttl_seconds,
+        ),
+        key=lambda item: float(item.get("updated_unix") or 0.0),
+        reverse=True,
+    )[: max(1, max_scan)]
+    scored: list[tuple[int, float, set[str], dict[str, Any]]] = []
+    for entry in entries:
+        if entry.get("topic_epoch") == topic_epoch:
+            continue
+        stored = set(entry.get("related_fingerprints") or [])
+        strong_overlap = _strong_related_overlap(requested, stored)
+        if not strong_overlap:
+            continue
+        weak_overlap = {
+            value
+            for value in (requested & stored)
+            if value.startswith(RELATED_WEAK_PREFIXES)
+        }
+        score = len(strong_overlap) * 10 + len(weak_overlap)
+        scored.append((score, float(entry.get("updated_unix") or 0.0), strong_overlap, entry))
+    if not scored:
+        return {"status": "miss", "topic_epoch": topic_epoch, "cards": []}
+    score, _updated, overlap, entry = sorted(scored, key=lambda item: (item[0], item[1]), reverse=True)[0]
+    cards = _related_cache_cards([card for card in entry.get("cards") or [] if isinstance(card, dict)])
+    return {
+        "status": "related_hit",
+        "topic_epoch": topic_epoch,
+        "matched_topic_epoch": entry.get("topic_epoch"),
+        "mode": entry.get("mode"),
+        "confidence": entry.get("confidence"),
+        "cards": cards,
+        "source_ref_fingerprints": entry.get("source_ref_fingerprints") or [],
+        "related_fingerprints": entry.get("related_fingerprints") or [],
+        "related_overlap_count": len(overlap),
+        "related_score": score,
         "query_aliases": entry.get("query_aliases") or [],
         "topic_epoch_decision": entry.get("topic_epoch_decision") or None,
         "visibility_bias": entry.get("visibility_bias") or None,
@@ -341,20 +565,12 @@ def read_latest_thread_cache(
 
     target = Path(path)
     data = _load_cache(target)
-    thread_fp = _fingerprint(thread_id, prefix="thread")
-    workspace_fp = _fingerprint(workspace, prefix="workspace")
-    entries: list[dict[str, Any]] = []
-    for entry in (data.get("entries") or {}).values():
-        if not isinstance(entry, dict):
-            continue
-        if entry.get("thread_fingerprint") != thread_fp:
-            continue
-        if entry.get("workspace_fingerprint") != workspace_fp:
-            continue
-        updated_unix = float(entry.get("updated_unix") or 0.0)
-        if ttl_seconds > 0 and updated_unix and time.time() - updated_unix > ttl_seconds:
-            continue
-        entries.append(entry)
+    entries = _same_thread_workspace_entries(
+        data,
+        thread_id=thread_id,
+        workspace=workspace,
+        ttl_seconds=ttl_seconds,
+    )
     if not entries:
         return {"status": "miss", "cards": []}
     latest = sorted(entries, key=lambda item: float(item.get("updated_unix") or 0.0), reverse=True)[0]
@@ -366,6 +582,7 @@ def read_latest_thread_cache(
         "confidence": latest.get("confidence"),
         "cards": cards,
         "source_ref_fingerprints": latest.get("source_ref_fingerprints") or [],
+        "related_fingerprints": latest.get("related_fingerprints") or [],
         "query_aliases": latest.get("query_aliases") or [],
         "topic_epoch_decision": latest.get("topic_epoch_decision") or None,
         "visibility_bias": latest.get("visibility_bias") or None,
@@ -385,6 +602,7 @@ def write_thread_cache(
     query_aliases: list[str] | None = None,
     topic_epoch_decision: dict[str, Any] | None = None,
     visibility_bias: str | None = None,
+    related_fingerprints: list[str] | None = None,
     residue_path: Path | str | None = None,
     residue_reason: str = "cache_write",
     max_cards: int = DEFAULT_MAX_CARDS,
@@ -397,6 +615,11 @@ def write_thread_cache(
     data = _load_cache(target)
     entries: dict[str, Any] = dict(data.get("entries") or {})
     key = cache_key(thread_id=thread_id, workspace=workspace, topic_epoch=topic_epoch)
+    source_ref_fingerprints = _source_ref_fingerprints(compact_cards)
+    related_values = unique_preserve(
+        [*source_ref_fingerprints, *(related_fingerprints or [])],
+        limit=48,
+    )
     entries[key] = {
         "updated_at": now_utc(),
         "updated_unix": time.time(),
@@ -407,7 +630,8 @@ def write_thread_cache(
         "confidence": confidence,
         "cards": compact_cards,
         "negative_contexts": [compact_text(str(item or ""), 120) for item in (negative_contexts or [])[:8]],
-        "source_ref_fingerprints": _source_ref_fingerprints(compact_cards),
+        "source_ref_fingerprints": source_ref_fingerprints,
+        "related_fingerprints": related_values,
         "query_aliases": unique_preserve(
             [compact_text(str(item or ""), 120) for item in (query_aliases or []) if str(item or "").strip()],
             limit=16,
@@ -429,6 +653,7 @@ def write_thread_cache(
         "topic_epoch": topic_epoch,
         "card_count": len(compact_cards),
         "source_ref_fingerprints": entries[key].get("source_ref_fingerprints") or [],
+        "related_fingerprints": entries[key].get("related_fingerprints") or [],
     }
     if residue_path is not None:
         result["residue_export"] = export_thread_residue(
