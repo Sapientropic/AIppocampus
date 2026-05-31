@@ -31,6 +31,7 @@ FAST_REVIEWED_SENSITIVE_MODULES = {
     "tests.aippocampus.test_diagnose_hooks",
     "tests.aippocampus.test_install_lifecycle_hook",
     "tests.aippocampus.test_install_prompt_hook",
+    "tests.aippocampus.test_macos_install_smoke_workflow",
     "tests.aippocampus.test_memory_pain_prompt_hook_smoke",
     "tests.aippocampus.test_question_confirmation_live_smoke",
     "tests.aippocampus.test_question_tracking_scale_smoke",

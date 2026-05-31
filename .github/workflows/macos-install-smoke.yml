@@ -1,0 +1,114 @@
+name: macOS Install Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner-label:
+        description: "GitHub-hosted macOS runner label"
+        required: true
+        default: "macos-latest"
+        type: choice
+        options:
+          - macos-latest
+          - macos-15
+          - macos-14
+      python-version:
+        description: "Python version for the clean install smoke"
+        required: true
+        default: "3.12"
+        type: choice
+        options:
+          - "3.12"
+          - "3.11"
+          - "3.10"
+
+permissions:
+  contents: read
+
+jobs:
+  install-smoke:
+    name: ${{ inputs.runner-label }} / Python ${{ inputs.python-version }}
+    runs-on: ${{ inputs.runner-label }}
+    timeout-minutes: 20
+    env:
+      CODEX_HOME: ${{ github.workspace }}/.tmp/macos-install-smoke/codex-home
+      AIPPOCAMPUS_HOME: ${{ github.workspace }}/.tmp/macos-install-smoke/aippocampus-home
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Capture runner environment
+        shell: bash
+        run: |
+          mkdir -p .tmp/macos-install-smoke "$CODEX_HOME/skills" "$AIPPOCAMPUS_HOME"
+          {
+            echo "# macOS Install Smoke"
+            date -u
+            sw_vers
+            uname -a
+            python --version
+            python - <<'PY'
+          import os
+          import pathlib
+          import sys
+          import tempfile
+
+          print(f"sys.executable={sys.executable}")
+          print(f"cwd={pathlib.Path.cwd()}")
+          print(f"tempdir={tempfile.gettempdir()}")
+          print(f"CODEX_HOME={os.environ.get('CODEX_HOME')}")
+          print(f"AIPPOCAMPUS_HOME={os.environ.get('AIPPOCAMPUS_HOME')}")
+          PY
+          } | tee .tmp/macos-install-smoke/environment.txt
+
+      - name: Create clean virtual environment and install package
+        shell: bash
+        run: |
+          python -m venv .venv
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          . .venv/bin/activate
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          python --version | tee .tmp/macos-install-smoke/venv-python.txt
+          python -m pip freeze | tee .tmp/macos-install-smoke/pip-freeze.txt
+
+      - name: Stage skill package into isolated Codex home
+        shell: bash
+        run: |
+          rm -rf "$CODEX_HOME/skills/aippocampus"
+          cp -R ./skills/aippocampus "$CODEX_HOME/skills/aippocampus"
+          test -f "$CODEX_HOME/skills/aippocampus/SKILL.md"
+          test -f "$CODEX_HOME/skills/aippocampus/scripts/aippocampus_mcp_server.py"
+
+      - name: Verify docs and installed CLI surface
+        shell: bash
+        run: |
+          python tools/aippocampus/docs/check_docs_health.py --json \
+            | tee .tmp/macos-install-smoke/docs-health.json
+          aippocampus --help | tee .tmp/macos-install-smoke/aippocampus-help.txt
+          aippocampus mcp list-tools | tee .tmp/macos-install-smoke/mcp-tools-via-cli.json
+          python "$CODEX_HOME/skills/aippocampus/scripts/aippocampus_mcp_server.py" --list-tools \
+            | tee .tmp/macos-install-smoke/mcp-tools-via-staged-skill.json
+
+      - name: Run focused deterministic repo smoke
+        shell: bash
+        run: |
+          python -m unittest \
+            tests.aippocampus.test_run_tests_tiers \
+            tests.aippocampus.test_docs_health \
+            tests.aippocampus.test_macos_install_smoke_workflow \
+            | tee .tmp/macos-install-smoke/unittest.txt
+
+      - name: Upload smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-install-smoke-${{ inputs.runner-label }}-py${{ inputs.python-version }}
+          path: .tmp/macos-install-smoke/
+          if-no-files-found: warn
