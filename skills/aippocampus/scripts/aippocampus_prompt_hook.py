@@ -23,7 +23,7 @@ _RUNTIME_CACHE: dict[str, Any] | None = None
 
 def _add_dream_delivery_arguments(parser: argparse.ArgumentParser) -> None:
     try:
-        from dream_delivery_policy import add_dream_delivery_arguments as add_args  # noqa: PLC0415
+        from aippocampus_runtime.dream import delivery_policy as dream_delivery  # noqa: PLC0415
     except Exception:
         parser.add_argument("--dream-shadow-ab", action="store_true")
         parser.add_argument("--dream-shadow-log")
@@ -31,14 +31,14 @@ def _add_dream_delivery_arguments(parser: argparse.ArgumentParser) -> None:
         parser.add_argument("--dream-delivery-mode")
         parser.add_argument("--dream-rollout-rate", type=float, default=None)
     else:
-        add_args(parser)
+        dream_delivery.add_dream_delivery_arguments(parser)
 
 def _prepare_dream_delivery(*, prompt: str, hook_input: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
     try:
-        from dream_delivery_policy import prepare_dream_delivery as prepare  # noqa: PLC0415
+        from aippocampus_runtime.dream import delivery_policy as dream_delivery  # noqa: PLC0415
     except Exception:
         return {"mode": "off", "event": None, "allow_dream": False, "dream_hypothesis_limit": 0, "reason": "policy_unavailable"}
-    return prepare(prompt=prompt, hook_input=hook_input, args=args)
+    return dream_delivery.prepare_dream_delivery(prompt=prompt, hook_input=hook_input, args=args)
 
 def _load_runtime() -> dict[str, Any]:
     """Load split recall modules lazily so partial installs quietly skip."""

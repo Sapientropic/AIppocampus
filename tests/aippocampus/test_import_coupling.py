@@ -343,6 +343,35 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(deepseek_model_routing.resolve_model_route, routing.resolve_model_route)
         self.assertIs(deepseek_model_routing.ModelRoute, routing.ModelRoute)
 
+    def test_dream_delivery_policy_has_package_owner_and_compat_shim(self) -> None:
+        import dream_delivery_policy
+        from aippocampus_runtime.dream import delivery_policy
+
+        package_paths = [
+            SCRIPTS / "aippocampus_runtime" / "dream" / "__init__.py",
+            SCRIPTS / "aippocampus_runtime" / "dream" / "delivery_policy.py",
+        ]
+        shim_path = SCRIPTS / "dream_delivery_policy.py"
+
+        for path in package_paths:
+            self.assertTrue(path.exists(), path)
+        self.assertTrue(shim_path.exists(), shim_path)
+        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges(top_level_only=True)
+        prompt_hook_source = (SCRIPTS / "aippocampus_prompt_hook.py").read_text(encoding="utf-8")
+        self.assertIn("aippocampus_runtime.dream import delivery_policy", prompt_hook_source)
+        self.assertNotIn("dream_delivery_policy", edges["aippocampus_prompt_hook"])
+
+        self.assertIs(
+            dream_delivery_policy.prepare_dream_delivery,
+            delivery_policy.prepare_dream_delivery,
+        )
+        self.assertIs(
+            dream_delivery_policy.add_dream_delivery_arguments,
+            delivery_policy.add_dream_delivery_arguments,
+        )
+
     def test_prompt_recall_core_stays_small_foreground_gate(self) -> None:
         edges = same_dir_import_edges()
         forbidden = {
