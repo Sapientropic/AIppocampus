@@ -846,6 +846,27 @@ class ImportCouplingTests(unittest.TestCase):
             }
             self.assertFalse(cue_compat_names & imported_from_core)
 
+    def test_prompt_life_cues_have_package_owner_and_compat_shim(self) -> None:
+        import prompt_life_cues
+        from aippocampus_runtime.recall import life_cues
+
+        package_file = SCRIPTS / "aippocampus_runtime" / "recall" / "life_cues.py"
+        shim_file = SCRIPTS / "prompt_life_cues.py"
+        self.assertTrue(package_file.exists())
+        self.assertTrue(shim_file.exists())
+        self.assertIn("Compatibility shim", shim_file.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges(top_level_only=True)
+        for source in ["active_recall", "prompt_cues", "retrieval"]:
+            self.assertIn("aippocampus_runtime.recall.life_cues", edges[source])
+            self.assertNotIn("prompt_life_cues", edges[source])
+
+        self.assertIs(prompt_life_cues.profile_recall_terms, life_cues.profile_recall_terms)
+        self.assertIs(
+            prompt_life_cues.LIFE_WIDE_SCOPE_LABEL_CUES,
+            life_cues.LIFE_WIDE_SCOPE_LABEL_CUES,
+        )
+
     def test_subconscious_jobs_do_not_depend_on_agent_runner(self) -> None:
         package_agent_path = SCRIPTS / "aippocampus_runtime" / "subconscious" / "agent.py"
         shim_agent_path = SCRIPTS / "subconscious_agent.py"

@@ -7,7 +7,10 @@ import re
 import unicodedata
 from typing import Any
 
-from prompt_life_cues import LIFE_WIDE_SCOPE_LABEL_CUES, profile_recall_terms
+from aippocampus_runtime.recall.life_cues import (
+    LIFE_WIDE_SCOPE_LABEL_CUES,
+    profile_recall_terms,
+)
 from retrieval import RECALL_TRIGGERS, split_query_terms
 
 CONCEPT_EXPANSION_MAX_TERMS = 14

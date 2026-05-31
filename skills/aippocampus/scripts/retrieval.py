@@ -18,8 +18,8 @@ import sqlite3
 from collections import Counter
 from pathlib import Path
 
+from aippocampus_runtime.recall.life_cues import profile_recall_terms
 from aippocampuslib import compact_text
-from prompt_life_cues import profile_recall_terms
 from retrieval_query_policy import ALIASES as ALIASES
 from retrieval_query_policy import (
     CONCEPT_TRIGGERS,

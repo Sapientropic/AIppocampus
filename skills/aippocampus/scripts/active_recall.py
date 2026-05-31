@@ -10,7 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from prompt_life_cues import profile_recall_terms
+from aippocampus_runtime.recall.life_cues import profile_recall_terms
 from retrieval import (
     active_recall_decision,
     expanded_terms_from_anchors,
