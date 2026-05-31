@@ -267,6 +267,50 @@ class SubconsciousReviewTests(unittest.TestCase):
         self.assertEqual(result["promotion_candidates"][0]["source_finding_ids"], ["sf_one"])
         self.assertEqual(result["promotion_candidates"][0]["source_refs"][0]["line"], 12)
 
+    def test_validate_review_preserves_activation_cues_for_hook_candidates(self) -> None:
+        self.assertIn("activation_cues", review.REVIEW_SYSTEM_PROMPT)
+        findings_by_id = {
+            "sf_trigger": {
+                "fingerprint": "sf_trigger",
+                "source_refs": [{"thread_key": "session:friction", "assistant_line": 88}],
+            }
+        }
+        parsed = {
+            "promotion_candidates": [
+                {
+                    "candidate_type": "hook_trigger",
+                    "title": "Natural friction recall",
+                    "summary": "Use source-backed cue route for natural friction prompts.",
+                    "recommendation": "Feed semantic trigger and working-memory sidecars.",
+                    "activation_cues": [
+                        "最近让我很烦",
+                        "recent personal friction",
+                        "что меня раздражало недавно",
+                    ],
+                    "confidence": 0.9,
+                    "source_finding_ids": ["sf_trigger"],
+                },
+                {
+                    "candidate_type": "hook_trigger",
+                    "title": "No cue trigger",
+                    "summary": "Should not fall back to summary prose.",
+                    "recommendation": "Drop this until the sidecar has activation cues.",
+                    "confidence": 0.9,
+                    "source_finding_ids": ["sf_trigger"],
+                }
+            ]
+        }
+
+        result = review.validate_review(parsed, findings_by_id)
+
+        self.assertEqual(len(result["promotion_candidates"]), 1)
+        candidate = result["promotion_candidates"][0]
+        self.assertEqual(candidate["candidate_type"], "hook_trigger")
+        self.assertEqual(
+            candidate["activation_cues"],
+            ["最近让我很烦", "recent personal friction", "что меня раздражало недавно"],
+        )
+
     def test_review_prompt_admits_question_tracking_candidate_types(self) -> None:
         for candidate_type in [
             "question_candidate",
