@@ -52,7 +52,7 @@ class AippocampusCliTests(unittest.TestCase):
         invocation = facade.resolve_command(["mcp", "list-tools", "--json"])
 
         self.assertEqual(invocation.command, "mcp")
-        self.assertEqual(invocation.module_name, "aippocampus_mcp_server")
+        self.assertEqual(invocation.module_name, "aippocampus_runtime.mcp.server")
         self.assertEqual(invocation.script_name, "aippocampus_mcp_server.py")
         self.assertEqual(invocation.args, ["--list-tools", "--json"])
 

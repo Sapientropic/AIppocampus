@@ -50,7 +50,7 @@ COMMANDS = {
 SCRIPT_MODULES = {
     spec.script_name: spec.module_name for spec in COMMANDS.values()
 } | {
-    "aippocampus_mcp_server.py": "aippocampus_mcp_server",
+    "aippocampus_mcp_server.py": "aippocampus_runtime.mcp.server",
     "sync_bundle.py": "aippocampus_runtime.sync.bundle",
     "sync_object_storage.py": "aippocampus_runtime.sync.object_storage.cli",
     "install_aippocampus_prompt_hook.py": "install_aippocampus_prompt_hook",
@@ -116,7 +116,7 @@ def resolve_command(argv: list[str]) -> CommandInvocation | None:
         return CommandInvocation(
             command=command,
             script_name="aippocampus_mcp_server.py",
-            module_name="aippocampus_mcp_server",
+            module_name=module_name_for_script("aippocampus_mcp_server.py"),
             args=args,
         )
     if command == "sync":

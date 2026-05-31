@@ -18,7 +18,7 @@ audit/host integration paths.
 | `build_clean_source.py` and `aippocampus_runtime/source/clean_source.py` | Provider-aware public entrypoint | Accepts `--provider`; Codex raw rollout discovery is used only for the Codex provider or explicit `--rollout`. The top-level script is a compatibility shim over the package owner. |
 | `build_index.py` | Provider-aware public entrypoint | Accepts `--provider`; indexes provider-normalized visible messages. |
 | `aippocampus_runtime/registry/api.py` plus `registry.py` compatibility shim | Provider-aware registry entrypoint | CLI accepts `--provider`; in-process `provider or codex_provider(...)` fallback is legacy compatibility only. |
-| `aippocampus_mcp_server.py` | MCP over clean source/registry, with provider-aware registration | `search_memory`, `get_turn_context`, `list_threads`, `sync_status`, and `memory_health` consume clean source/registry. `register_thread` accepts `provider`. `latest_reply` prefers clean source and falls back to raw Codex only when no clean-source final answer exists. |
+| `aippocampus_runtime/mcp/server.py` plus `aippocampus_mcp_server.py` compatibility shim | MCP over clean source/registry, with provider-aware registration | `search_memory`, `get_turn_context`, `list_threads`, `sync_status`, and `memory_health` consume clean source/registry. `register_thread` accepts `provider`. `latest_reply` prefers clean source and falls back to raw Codex only when no clean-source final answer exists. |
 | `sync_vault.py` | Provider-aware projection | Accepts `--provider`; vault output remains a local projection, not a provider truth source. |
 | `aippocampus_health.py` | Codex-current-thread health plus registry artifact health | Still uses raw Codex rollout discovery for current live thread freshness. Treat it as Codex host health until a provider-neutral health surface exists. It now reports active AIppocampus registry storage separately. |
 | `build_segments.py` | Codex-current-thread maintenance | Uses current Codex rollout when `--rollout` is omitted. Use explicit rollout/output paths for non-Codex maintenance until this is migrated. |
@@ -32,7 +32,7 @@ audit/host integration paths.
 | `diagnose_hooks.py` | Codex host diagnostic | Inspects Codex hook config; not a provider-neutral health tool. |
 | `locate_rollout.py` | Codex-only raw audit/debug tool | Finds current Codex rollout JSONL. Do not present as general AI-agent transcript discovery. |
 | `search_rollout.py` | Codex-only raw audit/debug tool | Searches raw Codex rollout text. Clean-source search is the general recall surface. |
-| `latest_reply.py` | Codex-only raw audit/debug fallback | Reads final answers from raw Codex rollout. MCP prefers clean-source final answers first. |
+| `aippocampus_runtime/source/latest_reply.py` plus `latest_reply.py` compatibility shim | Codex-only raw audit/debug fallback | Reads final answers from raw Codex rollout. MCP prefers clean-source final answers first. |
 | `rollout_size_audit.py` | Codex-only raw audit/debug tool | Audits raw Codex rollout size/path behavior. |
 | `cold_archive.py` | Codex-only raw audit/archive tool | Optional raw rollout archive path; not daily recall. |
 | `retention_report.py` | Codex-only raw audit/report tool | Uses raw Codex rollout unless an explicit rollout is supplied. |

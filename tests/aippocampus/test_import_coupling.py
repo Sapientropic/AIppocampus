@@ -193,10 +193,51 @@ class ImportCouplingTests(unittest.TestCase):
 
         edges = same_dir_import_edges(top_level_only=True)
         self.assertIn("aippocampus_runtime.privacy", edges["privacy_projection"])
-        for source in ["aippocampus_mcp_server", "aippocampus_runtime.registry.api"]:
+        for source in ["aippocampus_runtime.mcp.server", "aippocampus_runtime.registry.api"]:
             self.assertIn("aippocampus_runtime.privacy", edges[source])
             self.assertNotIn("privacy_projection", edges[source])
         self.assertIs(privacy_projection.redact_private_paths, privacy.redact_private_paths)
+
+    def test_mcp_server_has_package_owner_and_compat_shim(self) -> None:
+        import aippocampus_mcp_server
+        from aippocampus_runtime.mcp import server
+
+        package_paths = [
+            SCRIPTS / "aippocampus_runtime" / "mcp" / "__init__.py",
+            SCRIPTS / "aippocampus_runtime" / "mcp" / "server.py",
+        ]
+        shim_path = SCRIPTS / "aippocampus_mcp_server.py"
+
+        for path in [*package_paths, shim_path]:
+            self.assertTrue(path.exists(), path)
+        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges()
+        package_edges = edges["aippocampus_runtime.mcp.server"]
+        self.assertIn("aippocampus_runtime.mcp.server", edges["aippocampus_mcp_server"])
+        for owner in [
+            "aippocampus_runtime.core",
+            "aippocampus_runtime.privacy",
+            "aippocampus_runtime.registry.api",
+            "aippocampus_runtime.source.latest_reply",
+            "aippocampus_runtime.source.search",
+            "aippocampus_runtime.sync.bundle",
+            "aippocampus_runtime.sync.object_storage.cli",
+        ]:
+            self.assertIn(owner, package_edges)
+        for flat_module in [
+            "aippocampus_mcp_server",
+            "aippocampuslib",
+            "latest_reply",
+            "privacy_projection",
+            "registry",
+            "sync_object_storage",
+        ]:
+            self.assertNotIn(flat_module, package_edges)
+
+        self.assertIs(aippocampus_mcp_server.TOOLS, server.TOOLS)
+        self.assertIs(aippocampus_mcp_server.handle_request, server.handle_request)
+        self.assertIs(aippocampus_mcp_server.main, server.main)
 
     def test_registry_storage_is_separate_from_registry_runner(self) -> None:
         import registry
@@ -270,6 +311,7 @@ class ImportCouplingTests(unittest.TestCase):
     def test_source_helpers_have_package_owner_and_compat_shims(self) -> None:
         import build_clean_source
         import build_semantic_scope_labels
+        import latest_reply
         import rollout_behavior_events
         import search_clean_source
         import semantic_scope_labels
@@ -281,6 +323,9 @@ class ImportCouplingTests(unittest.TestCase):
             semantic_scope_builder,
         )
         from aippocampus_runtime.source import (
+            latest_reply as packaged_latest_reply,
+        )
+        from aippocampus_runtime.source import (
             semantic_scope_labels as packaged_scope_labels,
         )
 
@@ -288,6 +333,7 @@ class ImportCouplingTests(unittest.TestCase):
             SCRIPTS / "aippocampus_runtime" / "source" / "__init__.py",
             SCRIPTS / "aippocampus_runtime" / "source" / "behavior_events.py",
             SCRIPTS / "aippocampus_runtime" / "source" / "clean_source.py",
+            SCRIPTS / "aippocampus_runtime" / "source" / "latest_reply.py",
             SCRIPTS / "aippocampus_runtime" / "source" / "registry_paths.py",
             SCRIPTS / "aippocampus_runtime" / "source" / "search.py",
             SCRIPTS / "aippocampus_runtime" / "source" / "semantic_scope_builder.py",
@@ -296,6 +342,7 @@ class ImportCouplingTests(unittest.TestCase):
         shim_paths = [
             SCRIPTS / "build_clean_source.py",
             SCRIPTS / "build_semantic_scope_labels.py",
+            SCRIPTS / "latest_reply.py",
             SCRIPTS / "search_clean_source.py",
             SCRIPTS / "semantic_scope_labels.py",
         ]
@@ -307,7 +354,7 @@ class ImportCouplingTests(unittest.TestCase):
 
         edges = same_dir_import_edges()
         packaged_consumers = [
-            "aippocampus_mcp_server",
+            "aippocampus_runtime.mcp.server",
             "aippocampus_runtime.question.source_refs",
             "aippocampus_runtime.registry.search",
             "aippocampus_runtime.subconscious.job_validation",
@@ -322,6 +369,7 @@ class ImportCouplingTests(unittest.TestCase):
             "build_clean_source",
             "build_semantic_scope_labels",
             "build_project_timeline",
+            "latest_reply",
             "rollout_behavior_events",
             "search_clean_source",
             "semantic_scope_labels",
@@ -341,6 +389,8 @@ class ImportCouplingTests(unittest.TestCase):
             rollout_behavior_events.extract_rollout_behavior_events,
             behavior_events.extract_rollout_behavior_events,
         )
+        self.assertIs(latest_reply.latest_reply, packaged_latest_reply.latest_reply)
+        self.assertIs(latest_reply.main, packaged_latest_reply.main)
         self.assertIs(search_clean_source.search_clean_source, search.search_clean_source)
         self.assertIs(search_clean_source.iter_clean_messages, search.iter_clean_messages)
         self.assertIs(
@@ -448,9 +498,9 @@ class ImportCouplingTests(unittest.TestCase):
         )
         self.assertIn(
             "aippocampus_runtime.sync.object_storage.cli",
-            edges["aippocampus_mcp_server"],
+            edges["aippocampus_runtime.mcp.server"],
         )
-        self.assertNotIn("sync_object_storage", edges["aippocampus_mcp_server"])
+        self.assertNotIn("sync_object_storage", edges["aippocampus_runtime.mcp.server"])
 
         self.assertIs(sync_bundle.push_sync_bundle, bundle.push_sync_bundle)
         self.assertIs(sync_bundle.pull_sync_bundle, bundle.pull_sync_bundle)

@@ -25,7 +25,7 @@ import aippocampus_prompt_hook as prompt_hook  # noqa: E402
 import sync_vault  # noqa: E402
 
 HIGH_RISK_MYPY_SCRIPTS = {
-    "skills/aippocampus/scripts/aippocampus_mcp_server.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/server.py",
     "skills/aippocampus/scripts/aippocampus_lifecycle_hook.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/ambient_cache.py",
     "skills/aippocampus/scripts/aippocampus_runtime/navigation/associations.py",
