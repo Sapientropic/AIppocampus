@@ -66,6 +66,7 @@ from aippocampus_runtime.subconscious.question_diagnostics import (
     question_extraction_quality_diagnostics,
     should_request_question_axis_repair,
 )
+from aippocampus_runtime.subconscious.tool_loop import run_tool_using_loop
 from aippocampus_runtime.subconscious.validation_audit import validation_audit
 from aippocampuslib import (
     cli_error_payload,
@@ -87,7 +88,6 @@ from subconscious_runtime import (
     run_tool,
     source_bank_from_turns,
 )
-from subconscious_tool_loop import run_tool_using_loop
 from subconscious_worker import (
     DEFAULT_BASE_URL,
     DEFAULT_MAX_TURNS,

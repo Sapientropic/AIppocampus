@@ -311,6 +311,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/job_validation.py",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/jobs_config.py",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/question_diagnostics.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/subconscious/tool_loop.py",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/validation_audit.py",
     "skills/aippocampus/scripts/subconscious_job_circuits.py",
     "skills/aippocampus/scripts/subconscious_job_plan.py",

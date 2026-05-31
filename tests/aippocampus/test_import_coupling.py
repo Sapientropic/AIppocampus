@@ -660,20 +660,32 @@ class ImportCouplingTests(unittest.TestCase):
 
     def test_subconscious_jobs_do_not_depend_on_agent_runner(self) -> None:
         runtime_path = SCRIPTS / "subconscious_runtime.py"
-        loop_path = SCRIPTS / "subconscious_tool_loop.py"
+        package_loop_path = SCRIPTS / "aippocampus_runtime" / "subconscious" / "tool_loop.py"
+        shim_loop_path = SCRIPTS / "subconscious_tool_loop.py"
         self.assertTrue(runtime_path.exists())
-        self.assertTrue(loop_path.exists())
+        self.assertTrue(package_loop_path.exists())
+        self.assertTrue(shim_loop_path.exists())
+        self.assertIn("Compatibility shim", shim_loop_path.read_text(encoding="utf-8"))
+
+        import subconscious_tool_loop
+        from aippocampus_runtime.subconscious import tool_loop
+
         edges = same_dir_import_edges(top_level_only=True)
 
         self.assertIn("subconscious_runtime", edges["subconscious_agent"])
         self.assertIn("subconscious_runtime", edges["subconscious_jobs"])
-        self.assertIn("subconscious_tool_loop", edges["subconscious_agent"])
-        self.assertIn("subconscious_tool_loop", edges["subconscious_jobs"])
+        self.assertIn("aippocampus_runtime.subconscious.tool_loop", edges["subconscious_agent"])
+        self.assertIn("aippocampus_runtime.subconscious.tool_loop", edges["subconscious_jobs"])
+        self.assertNotIn("subconscious_tool_loop", edges["subconscious_agent"])
+        self.assertNotIn("subconscious_tool_loop", edges["subconscious_jobs"])
         self.assertNotIn("subconscious_agent", edges["subconscious_jobs"])
         self.assertFalse({"subconscious_agent", "subconscious_jobs"} & edges["subconscious_runtime"])
         self.assertFalse(
-            {"subconscious_agent", "subconscious_jobs"} & edges["subconscious_tool_loop"]
+            {"subconscious_agent", "subconscious_jobs"}
+            & edges["aippocampus_runtime.subconscious.tool_loop"]
         )
+        self.assertIs(subconscious_tool_loop.ToolLoopResult, tool_loop.ToolLoopResult)
+        self.assertIs(subconscious_tool_loop.run_tool_using_loop, tool_loop.run_tool_using_loop)
 
     def test_runtime_scripts_do_not_import_smoke_modules(self) -> None:
         edges = same_dir_import_edges()
