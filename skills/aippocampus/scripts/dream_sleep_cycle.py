@@ -357,6 +357,7 @@ def run_sleep_cycle(
     max_items: int = DEFAULT_MAX_ITEMS,
     max_samples: int = DEFAULT_MAX_SAMPLES,
     no_write: bool = True,
+    write_working_memory: bool = True,
     run_ready: bool = False,
     queue_output_path: Path | None = None,
     findings_output_path: Path | None = None,
@@ -429,7 +430,10 @@ def run_sleep_cycle(
 
     written = {"queue": 0, "findings": 0, "working_memory": 0}
     if not no_write:
-        lock_path = write_lock_path(queue_output_path, findings_output_path, working_memory_output_path)
+        active_working_memory_output = working_memory_output_path if write_working_memory else None
+        lock_path = write_lock_path(
+            queue_output_path, findings_output_path, active_working_memory_output
+        )
         # The detached scheduler already serializes project runs. This local
         # lock protects direct `dream_sleep_cycle.py --write` CLI use on
         # Windows, where append-only JSONL writes from separate processes can
@@ -438,11 +442,15 @@ def run_sleep_cycle(
             with FileLock(lock_path):
                 written["queue"] = append_jsonl(queue_output_path, lifecycle_rows)
                 written["findings"] = append_jsonl(findings_output_path, adjudicated_findings)
-                written["working_memory"] = append_jsonl(working_memory_output_path, working_rows)
+                written["working_memory"] = append_jsonl(
+                    active_working_memory_output, working_rows
+                )
         else:
             written["queue"] = append_jsonl(queue_output_path, lifecycle_rows)
             written["findings"] = append_jsonl(findings_output_path, adjudicated_findings)
-            written["working_memory"] = append_jsonl(working_memory_output_path, working_rows)
+            written["working_memory"] = append_jsonl(
+                active_working_memory_output, working_rows
+            )
 
     worker_statuses = Counter(str(run.get("status") or "") for run in worker_runs)
     counts = dict(queue_payload.get("counts") or {})
@@ -468,6 +476,11 @@ def run_sleep_cycle(
         "foreground_eligible": False,
         "live_model_allowed_in_foreground": False,
         "no_write": bool(no_write),
+        "write_mode": "no_write"
+        if no_write
+        else "full"
+        if write_working_memory
+        else "staging",
         "run_ready": bool(run_ready),
         "queue": queue_payload,
         "selected_queue_items": selected,
@@ -484,6 +497,7 @@ def run_sleep_cycle(
             "clean_source_mutation_allowed": False,
             "default_no_write": True,
             "writes_require_explicit_write_mode": True,
+            "working_memory_projection_requires_full_write": True,
             "queue_state_is_not_clean_source": True,
         },
     }
@@ -496,6 +510,7 @@ def public_sleep_cycle_summary(payload: Mapping[str, Any]) -> dict[str, Any]:
         "execution_mode": payload.get("execution_mode"),
         "foreground_model_calls_allowed": False,
         "no_write": bool(payload.get("no_write")),
+        "write_mode": payload.get("write_mode") or "no_write",
         "run_ready": bool(payload.get("run_ready")),
         "counts": {
             "queue_items": int(counts.get("queue_items") or 0),
@@ -606,6 +621,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-samples", type=int, default=DEFAULT_MAX_SAMPLES)
     parser.add_argument("--run-ready", action="store_true")
     parser.add_argument("--no-write", action="store_true", help="Keep projected results in stdout only.")
+    parser.add_argument(
+        "--write-staging",
+        action="store_true",
+        help="Append queue lifecycle and adjudicated findings, but do not project working-memory rows.",
+    )
     parser.add_argument("--write", action="store_true", help="Append lifecycle/findings/working-memory staging rows.")
     parser.add_argument("--summary", action="store_true", help="Emit sanitized aggregate summary only.")
     parser.add_argument("--json", action="store_true", dest="json_output")
@@ -626,7 +646,9 @@ def main(argv: list[str] | None = None) -> int:
         packs = packs_from_args(args)
         previous = iter_jsonl(args.previous_queue_jsonl or default_path(root, "dream_queue.jsonl", None))
         existing = iter_jsonl(args.findings_jsonl or default_path(root, "dream_findings.jsonl", None))
-        no_write = not bool(args.write)
+        if args.write and args.write_staging:
+            raise ValueError("--write and --write-staging are mutually exclusive")
+        no_write = not bool(args.write or args.write_staging)
         payload = run_sleep_cycle(
             packs,
             previous_items=previous,
@@ -636,6 +658,7 @@ def main(argv: list[str] | None = None) -> int:
             max_items=args.max_items,
             max_samples=args.max_samples,
             no_write=no_write,
+            write_working_memory=bool(args.write),
             run_ready=args.run_ready,
             queue_output_path=default_path(root, "dream_queue.jsonl", args.queue_output),
             findings_output_path=default_path(root, "dream_findings.jsonl", args.findings_output),

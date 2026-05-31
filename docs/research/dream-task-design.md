@@ -358,11 +358,13 @@ items, defaults to `no_write=True`, and only appends lifecycle/findings/working
 memory rows when explicitly called with `--write`.
 
 The detached scheduler calls it after the ordinary review/router pass with
-`--run-ready --no-write --summary`, so a project sleep cycle can exercise the
-queue-to-worker path without silently promoting dream hypotheses. Failed worker
-samples are bucketed per item and do not block other selected queue items.
-Public summaries report aggregate queue, worker status, failure, cache, and
-write counts without raw source refs, message ids, or thread ids.
+`--run-ready --write-staging --summary`, so a project sleep cycle can persist
+queue lifecycle and adjudicated findings without projecting dream hypotheses
+into working memory. Full working-memory projection still requires the explicit
+`--write` mode. Failed worker samples are bucketed per item and do not block
+other selected queue items. Public summaries report aggregate queue, worker
+status, failure, cache, and write counts without raw source refs, message ids,
+or thread ids.
 
 The executable contract lives in `tests/aippocampus/test_dream_sleep_cycle.py`
 and the scheduler handoff is covered by

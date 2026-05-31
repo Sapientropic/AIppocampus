@@ -468,7 +468,7 @@ def run_project(
             "--max-items",
             "1",
             "--run-ready",
-            "--no-write",
+            "--write-staging",
             "--summary",
             "--json",
         ],
