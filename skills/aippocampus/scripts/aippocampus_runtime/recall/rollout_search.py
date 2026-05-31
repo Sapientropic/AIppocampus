@@ -21,7 +21,6 @@ from aippocampus_runtime.artifacts.publish import (
 from aippocampus_runtime.core import (
     compact_text,
     default_thread_index_dir,
-    iter_messages,
     locate_rollout,
 )
 from aippocampus_runtime.recall.retrieval import (
@@ -34,6 +33,7 @@ from aippocampus_runtime.recall.retrieval import (
     search_rag_chunks,
     split_query_terms,
 )
+from aippocampus_runtime.source.rollout import iter_messages
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
 

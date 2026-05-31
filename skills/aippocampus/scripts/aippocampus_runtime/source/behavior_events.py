@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.core import iter_jsonl
+from aippocampus_runtime.source.rollout import iter_jsonl
 
 TOOL_EXIT_CODE_RE = re.compile(r"Exit code:\s*(-?\d+)", re.IGNORECASE)
 

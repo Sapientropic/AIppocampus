@@ -129,9 +129,9 @@ class CodexConversationProvider:
         *,
         include_tools: bool = False,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-        # Keep the Codex-specific envelope parser in the legacy helper while
+        # Keep Codex-specific envelope parsing under the source owner while
         # exposing the same provider-neutral shape as newer host providers.
-        from aippocampuslib import normalize_rollout
+        from aippocampus_runtime.source.rollout import normalize_rollout
 
         source_path = _source_path(source)
         meta = public_codex_session_meta(self.read_metadata(source_path))

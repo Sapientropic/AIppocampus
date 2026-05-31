@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 from typing import Any, Iterable
+
+from aippocampus_runtime.source.turns import empty_turn, message_digest
 
 from .base import ConversationSourceRef, NormalizedConversationMessage
 
@@ -46,10 +47,6 @@ def visible_text_from_content(content: Any) -> str:
     return ""
 
 
-def message_digest(role: str, phase: str, text: str) -> str:
-    return hashlib.sha1((role + "\0" + phase + "\0" + text).encode("utf-8")).hexdigest()
-
-
 def normalized_message(
     *,
     provider: str,
@@ -81,23 +78,6 @@ def normalized_message(
     ).asdict()
     item["sha1"] = message_digest(role, phase, text)
     return item
-
-
-def empty_turn(turn_index: int, line_no: int | None, timestamp: str | None) -> dict[str, Any]:
-    return {
-        "id": turn_index,
-        "user_line": line_no,
-        "user_timestamp": timestamp,
-        "final_line": None,
-        "final_timestamp": None,
-        "fallback_assistant_line": None,
-        "fallback_assistant_timestamp": None,
-        "commentary_count": 0,
-        "tool_call_count": 0,
-        "tool_output_count": 0,
-        "start_line": line_no,
-        "end_line": line_no,
-    }
 
 
 def turn_summaries(messages: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:

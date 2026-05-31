@@ -21,13 +21,13 @@ from aippocampus_runtime.core import (
     default_thread_index_dir,
     default_thread_segments_dir,
     file_sha256,
-    iter_messages,
     locate_rollout,
     parse_anchor_file,
     resolve_artifact_path,
 )
 from aippocampus_runtime.question.constants import DEFAULT_DORMANT_AFTER_DAYS
 from aippocampus_runtime.registry.store import registry_paths
+from aippocampus_runtime.source.rollout import iter_messages
 
 DEFAULT_JOBS_OUTPUT_NAME = "subconscious_jobs.jsonl"
 
