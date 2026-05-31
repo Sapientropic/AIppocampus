@@ -221,6 +221,36 @@ Latest verification for this slice:
 This does not claim signed release artifacts, installer/update UX, macOS/Linux
 binaries, or full-history/private-provider ingestion from the binary.
 
+## 2026-05-31 Windows Binary Re-Smoke After Package Refactors
+
+After the #144 runtime package-layout slices through commit `d1b8617`, the
+Windows standalone binary path was rebuilt and re-smoked on the same host class
+to verify that the new `aippocampus_runtime.*` package owners still freeze and
+serve MCP correctly.
+
+Latest verification for this refresh:
+
+- An isolated temporary virtual environment installed PyInstaller 6.20.0 and
+  ran `python tools\aippocampus\package_windows_binary.py --json --output-root <temp>`.
+  The command built `aippocampus.exe`, set `python_free_support_claimed=true`,
+  and passed the artifact smoke matrix: `aippocampus --help`,
+  `aippocampus health --help`, public-bundle search,
+  `aippocampus mcp list-tools`, `aippocampus onboard --status --format json`,
+  empty-sync-dir status with the expected nonzero JSON result, and
+  `aippocampus hooks status`.
+- The packaging private-data guard passed: no private/generated repository roots
+  were staged and no PyInstaller command inputs pointed under `.aippocampus`,
+  `aippocampus-registry`, `transcripts`, `rollouts`, or a repo-local private
+  `registry` directory.
+- `python tools\aippocampus\smoke\smoke_claude_code_mcp_host.py --json --call-tool --cwd . --max-budget-usd 0.20 --tool-timeout 180 --server-command <aippocampus.exe> --server-arg mcp`
+  passed against Claude Code 2.1.138 with `status=tool_call_reachable`; the
+  smoke observed both `mcp__aippocampus__memory_health` `tool_use` and the
+  matching `tool_result` through a temporary strict MCP config.
+
+This refresh does not close #104. The post-migration encrypted provider sync
+smoke still needs a maintainer-provided real object-store provider target and
+credentials before it can verify encrypted push/status/repair/pull behavior.
+
 ## 2026-05-31 Provider Entrypoint And Storage Boundary Refresh
 
 Issues #122 and #123 tightened the remaining Codex-default ambiguity without
