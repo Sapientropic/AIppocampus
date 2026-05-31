@@ -311,10 +311,13 @@ the corpus folder's `graphify-out/`.
 
 ## Bundles
 
-`export_bundle.py` produces portable thread-memory bundles. Bundles normally
-include manifest, handoff, index files, graph, anchors, and raw rollout unless
-`--no-raw` is used. `import_bundle.py` extracts the bundle and appends a pointer
-to the current workspace's anchors.
+`aippocampus_runtime.artifacts.export_bundle` produces portable thread-memory
+bundles, with `export_bundle.py` and `aippocampus export` preserved as operator
+entrypoints. Bundles normally include manifest, handoff, index files, graph,
+anchors, and raw rollout unless `--no-raw` is used.
+`aippocampus_runtime.artifacts.import_bundle` extracts the bundle and appends a
+pointer to the current workspace's anchors, with `import_bundle.py` and
+`aippocampus import` preserved as compatibility/facade entrypoints.
 
 `aippocampus_runtime.sync.bundle` is the first Stage 3 sync backend.
 `sync_bundle.py` remains the direct-script/import compatibility shim. It

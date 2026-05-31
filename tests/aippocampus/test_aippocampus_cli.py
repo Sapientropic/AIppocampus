@@ -62,6 +62,16 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(search_invocation.module_name, "aippocampus_runtime.source.search")
         self.assertEqual(search_invocation.script_name, "search_clean_source.py")
 
+        export_invocation = facade.resolve_command(["export", "--cwd", "."])
+        self.assertEqual(export_invocation.command, "export")
+        self.assertEqual(export_invocation.module_name, "aippocampus_runtime.artifacts.export_bundle")
+        self.assertEqual(export_invocation.script_name, "export_bundle.py")
+
+        import_invocation = facade.resolve_command(["import", "bundle.zip"])
+        self.assertEqual(import_invocation.command, "import")
+        self.assertEqual(import_invocation.module_name, "aippocampus_runtime.artifacts.import_bundle")
+        self.assertEqual(import_invocation.script_name, "import_bundle.py")
+
     def test_package_facade_default_runner_is_in_process(self) -> None:
         from aippocampus_runtime.cli import facade
 
@@ -124,11 +134,14 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(seen["argv"], ["--flag", "value"])
         self.assertEqual(seen["sys_argv"], ["outer-host", "--keep"])
 
-    def test_package_facade_public_sync_commands_are_argv_aware(self) -> None:
+    def test_package_facade_public_bundle_and_sync_commands_are_argv_aware(self) -> None:
+        from aippocampus_runtime.artifacts import export_bundle, import_bundle
         from aippocampus_runtime.cli import facade
         from aippocampus_runtime.sync import bundle
         from aippocampus_runtime.sync.object_storage import cli as object_storage_cli
 
+        self.assertTrue(facade.main_accepts_argv(export_bundle.main))
+        self.assertTrue(facade.main_accepts_argv(import_bundle.main))
         self.assertTrue(facade.main_accepts_argv(bundle.main))
         self.assertTrue(facade.main_accepts_argv(object_storage_cli.main))
 

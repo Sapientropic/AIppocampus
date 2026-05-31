@@ -2385,6 +2385,57 @@ class ImportCouplingTests(unittest.TestCase):
             publish.publish_sqlite_with_pointer,
         )
 
+    def test_portable_bundle_entrypoints_have_package_owners_and_facade_commands(self) -> None:
+        import export_bundle
+        import import_bundle
+        from aippocampus_runtime.artifacts import export_bundle as export_owner
+        from aippocampus_runtime.artifacts import import_bundle as import_owner
+        from aippocampus_runtime.cli import facade
+
+        package_paths = [
+            SCRIPTS / "aippocampus_runtime" / "artifacts" / "export_bundle.py",
+            SCRIPTS / "aippocampus_runtime" / "artifacts" / "import_bundle.py",
+        ]
+        shim_paths = [
+            SCRIPTS / "export_bundle.py",
+            SCRIPTS / "import_bundle.py",
+        ]
+
+        for path in package_paths:
+            self.assertTrue(path.exists(), path)
+            self.assertNotIn("subprocess", path.read_text(encoding="utf-8"))
+        for path in shim_paths:
+            self.assertTrue(path.exists(), path)
+            self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges(top_level_only=True)
+        self.assertIn("aippocampus_runtime.artifacts.export_bundle", edges["export_bundle"])
+        self.assertIn("aippocampus_runtime.artifacts.import_bundle", edges["import_bundle"])
+        for owner in [
+            "aippocampus_runtime.artifacts.export_bundle",
+            "aippocampus_runtime.artifacts.import_bundle",
+        ]:
+            self.assertNotIn("export_bundle", edges[owner])
+            self.assertNotIn("import_bundle", edges[owner])
+            self.assertNotIn("aippocampuslib", edges[owner])
+
+        export_invocation = facade.resolve_command(["export", "--help"])
+        import_invocation = facade.resolve_command(["import", "bundle.zip"])
+        self.assertEqual(
+            export_invocation.module_name,
+            "aippocampus_runtime.artifacts.export_bundle",
+        )
+        self.assertEqual(
+            import_invocation.module_name,
+            "aippocampus_runtime.artifacts.import_bundle",
+        )
+
+        self.assertIs(export_bundle.write_handoff, export_owner.write_handoff)
+        self.assertIs(export_bundle.run_build_index, export_owner.run_build_index)
+        self.assertIs(export_bundle.main, export_owner.main)
+        self.assertIs(import_bundle.safe_extract, import_owner.safe_extract)
+        self.assertIs(import_bundle.main, import_owner.main)
+
     def test_ops_reports_have_package_owners_and_compat_shims(self) -> None:
         import cold_archive
         import retention_report

@@ -46,6 +46,8 @@ COMMANDS = {
     "health": CommandSpec("aippocampus_health.py", "aippocampus_runtime.health"),
     "onboard": CommandSpec("onboard.py", "aippocampus_runtime.onboarding.facade"),
     "search": CommandSpec("search_clean_source.py", "aippocampus_runtime.source.search"),
+    "export": CommandSpec("export_bundle.py", "aippocampus_runtime.artifacts.export_bundle"),
+    "import": CommandSpec("import_bundle.py", "aippocampus_runtime.artifacts.import_bundle"),
 }
 
 SCRIPT_MODULES = {
@@ -239,6 +241,8 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  health              Run runtime health checks", file=target)
     print("  onboard             Register/build provider-backed clean source", file=target)
     print("  search              Search clean-source memory", file=target)
+    print("  export              Export a portable AIppocampus bundle", file=target)
+    print("  import              Import a portable AIppocampus bundle", file=target)
     print("  mcp list-tools      List MCP tool schemas", file=target)
     print("  sync                Local-folder sync status/push/pull/repair", file=target)
     print("  object-sync         Object-storage sync status/push/pull/repair", file=target)

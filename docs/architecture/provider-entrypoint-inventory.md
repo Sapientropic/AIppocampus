@@ -37,7 +37,7 @@ audit/host integration paths.
 | `aippocampus_runtime/ops/rollout_size_audit.py` plus `rollout_size_audit.py` compatibility shim | Codex-only raw audit/debug tool | Audits raw Codex rollout size/path behavior. |
 | `aippocampus_runtime/ops/cold_archive.py` plus `cold_archive.py` compatibility shim | Codex-only raw audit/archive tool | Optional raw rollout archive path; not daily recall. |
 | `aippocampus_runtime/ops/retention_report.py` plus `retention_report.py` compatibility shim | Codex-only raw audit/report tool | Uses raw Codex rollout unless an explicit rollout is supplied. |
-| `export_bundle.py` | Codex-current-thread export helper | Exports generated artifacts for a current Codex thread unless explicit paths are supplied. |
+| `aippocampus_runtime/artifacts/export_bundle.py` plus `export_bundle.py` compatibility shim | Codex-current-thread export helper | Exports generated artifacts for a current Codex thread unless explicit paths are supplied. The package owner calls the packaged index builder in-process; the top-level script is compatibility only. |
 
 ## Guardrail
 
