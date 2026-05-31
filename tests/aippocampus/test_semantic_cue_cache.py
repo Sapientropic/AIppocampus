@@ -16,7 +16,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import semantic_cue_cache as cues  # noqa: E402
+from aippocampus_runtime.recall import semantic_cue_cache as cues  # noqa: E402
 
 
 class SemanticCueCacheTests(unittest.TestCase):

@@ -22,7 +22,7 @@ import _paths
 
 _paths.ensure_paths()
 
-import semantic_cue_cache as cue_cache  # noqa: E402
+from aippocampus_runtime.recall import semantic_cue_cache as cue_cache  # noqa: E402
 
 PROMPT_HOOK = _paths.SKILL_SCRIPTS / "aippocampus_prompt_hook.py"
 

@@ -17,7 +17,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import semantic_trigger_router as router  # noqa: E402
+from aippocampus_runtime.recall import semantic_trigger_router as router  # noqa: E402
 
 
 class SemanticTriggerRouterTests(unittest.TestCase):

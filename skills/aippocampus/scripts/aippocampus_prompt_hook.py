@@ -46,13 +46,13 @@ def _load_runtime() -> dict[str, Any]:
     if _RUNTIME_CACHE is not None:
         return _RUNTIME_CACHE
 
-    from prompt_context_render import (  # noqa: PLC0415
+    from aippocampus_runtime.recall.prompt_context_render import (  # noqa: PLC0415
         ambient_debug_summary,
         apply_dream_delivery_boundary,
         context_for_hook,
         hook_stdout_payload,
     )
-    from prompt_recall_core import (  # noqa: PLC0415
+    from aippocampus_runtime.recall.prompt_recall_core import (  # noqa: PLC0415
         DEFAULT_SEARCH_BUDGET,
         PROMPT_HOOK_SEMANTIC_TIMEOUT,
         SCENT_THRESHOLD,
@@ -60,7 +60,7 @@ def _load_runtime() -> dict[str, Any]:
         hook_input_from_stdin,
         merge_association_candidates,
     )
-    from prompt_recall_decision import assess_prompt  # noqa: PLC0415
+    from aippocampus_runtime.recall.prompt_recall_decision import assess_prompt  # noqa: PLC0415
 
     _RUNTIME_CACHE = {
         "DEFAULT_SEARCH_BUDGET": DEFAULT_SEARCH_BUDGET,

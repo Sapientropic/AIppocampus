@@ -180,7 +180,7 @@ class ImportCouplingTests(unittest.TestCase):
         for path in shim_paths:
             self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
 
-        edges = same_dir_import_edges(top_level_only=True)
+        edges = same_dir_import_edges()
 
         self.assertIn("aippocampus_runtime.registry.provider", edges["registry"])
         self.assertIn("aippocampus_runtime.registry.search", edges["registry"])
@@ -233,7 +233,7 @@ class ImportCouplingTests(unittest.TestCase):
         for path in shim_paths:
             self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
 
-        edges = same_dir_import_edges(top_level_only=True)
+        edges = same_dir_import_edges()
         packaged_consumers = [
             "aippocampus_mcp_server",
             "aippocampus_runtime.question.source_refs",
@@ -500,7 +500,7 @@ class ImportCouplingTests(unittest.TestCase):
 
         edges = same_dir_import_edges(top_level_only=True)
         for source in [
-            "semantic_recall_gate",
+            "aippocampus_runtime.recall.semantic_recall_gate",
             "subconscious_worker",
             "aippocampus_runtime.dream.worker",
             "warm_ambient_recall",
@@ -510,7 +510,10 @@ class ImportCouplingTests(unittest.TestCase):
             "aippocampus_runtime.model.client",
             edges["aippocampus_runtime.dream.worker"],
         )
-        self.assertIn("aippocampus_runtime.model.routing", edges["semantic_recall_gate"])
+        self.assertIn(
+            "aippocampus_runtime.model.routing",
+            edges["aippocampus_runtime.recall.semantic_recall_gate"],
+        )
 
         self.assertIs(model_client.ChatClientConfig, client.ChatClientConfig)
         self.assertIs(model_client.chat_json, client.chat_json)
@@ -588,7 +591,7 @@ class ImportCouplingTests(unittest.TestCase):
             "aippocampus_runtime.subconscious.jobs_config",
             "aippocampus_runtime.subconscious.validation_audit",
             "onboard_frontier",
-            "semantic_recall_gate",
+            "aippocampus_runtime.recall.semantic_recall_gate",
             "semantic_scope_suppressed_recovery",
             "subconscious_jobs",
             "subconscious_review",
@@ -1201,26 +1204,33 @@ class ImportCouplingTests(unittest.TestCase):
             "memory_candidate_router",
             "semantic_recall_gate",
         }
-        self.assertLessEqual(len(edges["prompt_recall_core"]), 4)
-        self.assertFalse(forbidden & edges["prompt_recall_core"])
+        source = "aippocampus_runtime.recall.prompt_recall_core"
+        direct_edges = edges[source] - {"aippocampus_runtime", "aippocampus_runtime.recall"}
+        self.assertLessEqual(len(direct_edges), 4)
+        self.assertFalse(forbidden & direct_edges)
 
     def test_prompt_recall_cues_are_separate_from_scoring_policy(self) -> None:
-        cues_path = SCRIPTS / "prompt_cues.py"
+        cues_path = SCRIPTS / "aippocampus_runtime" / "recall" / "prompt_cues.py"
         self.assertTrue(cues_path.exists())
         edges = same_dir_import_edges(top_level_only=True)
 
-        self.assertIn("prompt_cues", edges["prompt_recall_core"])
+        self.assertIn(
+            "aippocampus_runtime.recall.prompt_cues",
+            edges["aippocampus_runtime.recall.prompt_recall_core"],
+        )
         self.assertFalse(
             {
-                "prompt_recall_core",
+                "aippocampus_runtime.recall.prompt_recall_core",
                 "registry",
                 "search_clean_source",
                 "semantic_recall_gate",
             }
-            & edges["prompt_cues"]
+            & edges["aippocampus_runtime.recall.prompt_cues"]
         )
 
-        core_source = (SCRIPTS / "prompt_recall_core.py").read_text(encoding="utf-8")
+        core_source = (
+            SCRIPTS / "aippocampus_runtime" / "recall" / "prompt_recall_core.py"
+        ).read_text(encoding="utf-8")
         cues_source = cues_path.read_text(encoding="utf-8")
         self.assertIn("CUE_COMPAT_EXPORTS", core_source)
         self.assertNotIn("def matched_terms", core_source)
@@ -1244,12 +1254,16 @@ class ImportCouplingTests(unittest.TestCase):
             "should_run_semantic_gate",
             "working_memory_terms",
         }
-        for rel_path in ("prompt_recall_context.py", "prompt_recall_decision.py"):
-            tree = ast.parse((SCRIPTS / rel_path).read_text(encoding="utf-8"))
+        for rel_path in (
+            SCRIPTS / "aippocampus_runtime" / "recall" / "prompt_recall_context.py",
+            SCRIPTS / "aippocampus_runtime" / "recall" / "prompt_recall_decision.py",
+        ):
+            tree = ast.parse(rel_path.read_text(encoding="utf-8"))
             imported_from_core = {
                 alias.name
                 for node in ast.walk(tree)
-                if isinstance(node, ast.ImportFrom) and node.module == "prompt_recall_core"
+                if isinstance(node, ast.ImportFrom)
+                and node.module == "aippocampus_runtime.recall.prompt_recall_core"
                 for alias in node.names
             }
             self.assertFalse(cue_compat_names & imported_from_core)
@@ -1268,7 +1282,7 @@ class ImportCouplingTests(unittest.TestCase):
         for source in [
             "aippocampus_runtime.recall.active_recall",
             "aippocampus_runtime.recall.retrieval",
-            "prompt_cues",
+            "aippocampus_runtime.recall.prompt_cues",
         ]:
             self.assertIn("aippocampus_runtime.recall.life_cues", edges[source])
             self.assertNotIn("prompt_life_cues", edges[source])
@@ -1404,6 +1418,135 @@ class ImportCouplingTests(unittest.TestCase):
             ambient_policy.policy_update_for_prompt,
         )
 
+    def test_prompt_recall_stack_has_package_owner_and_compat_shims(self) -> None:
+        package_modules = {
+            "prompt_context_render": "prompt_context_render",
+            "prompt_cues": "prompt_cues",
+            "prompt_recall_ambient": "prompt_recall_ambient",
+            "prompt_recall_ambiguity": "prompt_recall_ambiguity",
+            "prompt_recall_budget": "prompt_recall_budget",
+            "prompt_recall_context": "prompt_recall_context",
+            "prompt_recall_core": "prompt_recall_core",
+            "prompt_recall_decision": "prompt_recall_decision",
+            "prompt_recall_evidence": "prompt_recall_evidence",
+            "prompt_recall_semantic": "prompt_recall_semantic",
+            "semantic_cue_cache": "semantic_cue_cache",
+            "semantic_recall_gate": "semantic_recall_gate",
+            "semantic_trigger_router": "semantic_trigger_router",
+        }
+        for shim, package_name in package_modules.items():
+            package_path = SCRIPTS / "aippocampus_runtime" / "recall" / f"{package_name}.py"
+            shim_path = SCRIPTS / f"{shim}.py"
+            self.assertTrue(package_path.exists(), package_path)
+            self.assertTrue(shim_path.exists(), shim_path)
+            self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+
+        import prompt_context_render
+        import prompt_cues
+        import prompt_recall_ambient
+        import prompt_recall_context
+        import prompt_recall_core
+        import prompt_recall_decision
+        import prompt_recall_evidence
+        import prompt_recall_semantic
+        import semantic_cue_cache
+        import semantic_recall_gate
+        import semantic_trigger_router
+        from aippocampus_runtime.recall import (
+            prompt_context_render as packaged_render,
+        )
+        from aippocampus_runtime.recall import (
+            prompt_cues as packaged_cues,
+        )
+        from aippocampus_runtime.recall import (
+            prompt_recall_ambient as packaged_ambient,
+        )
+        from aippocampus_runtime.recall import (
+            prompt_recall_context as packaged_context,
+        )
+        from aippocampus_runtime.recall import (
+            prompt_recall_core as packaged_core,
+        )
+        from aippocampus_runtime.recall import (
+            prompt_recall_decision as packaged_decision,
+        )
+        from aippocampus_runtime.recall import (
+            prompt_recall_evidence as packaged_evidence,
+        )
+        from aippocampus_runtime.recall import (
+            prompt_recall_semantic as packaged_semantic,
+        )
+        from aippocampus_runtime.recall import (
+            semantic_cue_cache as packaged_cue_cache,
+        )
+        from aippocampus_runtime.recall import (
+            semantic_recall_gate as packaged_gate,
+        )
+        from aippocampus_runtime.recall import (
+            semantic_trigger_router as packaged_trigger_router,
+        )
+
+        edges = same_dir_import_edges()
+        flat_prompt_modules = set(package_modules)
+        package_prompt_modules = {
+            f"aippocampus_runtime.recall.{package_name}"
+            for package_name in package_modules.values()
+        }
+
+        for source in [
+            "aippocampus_prompt_hook",
+            "onboard_codex",
+            "prompt_recall_decision",
+            "prompt_recall_context",
+            "prompt_recall_core",
+            "prompt_recall_semantic",
+            "semantic_recall_gate",
+            "semantic_trigger_router",
+        ]:
+            self.assertFalse(flat_prompt_modules & edges[source], source)
+        for source in package_prompt_modules:
+            self.assertFalse(flat_prompt_modules & edges[source], source)
+
+        self.assertIn(
+            "aippocampus_runtime.recall.prompt_context_render",
+            edges["aippocampus_prompt_hook"],
+        )
+        self.assertIn(
+            "aippocampus_runtime.recall.prompt_recall_decision",
+            edges["aippocampus_prompt_hook"],
+        )
+        self.assertIn(
+            "aippocampus_runtime.recall.semantic_recall_gate",
+            edges["aippocampus_runtime.recall.prompt_recall_semantic"],
+        )
+
+        self.assertIs(prompt_context_render.context_for_hook, packaged_render.context_for_hook)
+        self.assertIs(prompt_cues.explicit_recall_terms, packaged_cues.explicit_recall_terms)
+        self.assertIs(
+            prompt_recall_ambient.attach_ambient_recall,
+            packaged_ambient.attach_ambient_recall,
+        )
+        self.assertIs(
+            prompt_recall_context.build_recall_decision_context,
+            packaged_context.build_recall_decision_context,
+        )
+        self.assertIs(prompt_recall_core.score_candidates, packaged_core.score_candidates)
+        self.assertIs(prompt_recall_decision.assess_prompt, packaged_decision.assess_prompt)
+        self.assertIs(prompt_recall_evidence.collect_evidence, packaged_evidence.collect_evidence)
+        self.assertIs(
+            prompt_recall_semantic.run_semantic_gate_for_context,
+            packaged_semantic.run_semantic_gate_for_context,
+        )
+        self.assertIs(
+            semantic_cue_cache.record_semantic_cue_hits,
+            packaged_cue_cache.record_semantic_cue_hits,
+        )
+        self.assertIs(semantic_recall_gate.run_semantic_gate, packaged_gate.run_semantic_gate)
+        self.assertIs(
+            semantic_trigger_router.build_semantic_triggers,
+            packaged_trigger_router.build_semantic_triggers,
+        )
+
     def test_subconscious_jobs_do_not_depend_on_agent_runner(self) -> None:
         package_agent_path = SCRIPTS / "aippocampus_runtime" / "subconscious" / "agent.py"
         shim_agent_path = SCRIPTS / "subconscious_agent.py"
@@ -1437,7 +1580,7 @@ class ImportCouplingTests(unittest.TestCase):
         runtime_consumers = [
             "aippocampus_runtime.subconscious.agent",
             "aippocampus_runtime.subconscious.tool_loop",
-            "semantic_recall_gate",
+            "aippocampus_runtime.recall.semantic_recall_gate",
             "semantic_scope_suppressed_recovery",
             "subconscious_jobs",
             "subconscious_review",

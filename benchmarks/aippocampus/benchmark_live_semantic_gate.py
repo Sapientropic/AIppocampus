@@ -25,7 +25,7 @@ _paths.ensure_paths()
 
 import aippocampus_prompt_hook as hook
 import benchmark_memory_decision_gate as gate
-import semantic_recall_gate as semantic
+from aippocampus_runtime.recall import semantic_recall_gate as semantic
 
 DEFAULT_LIVE_CONVERSATIONS = 5
 DEFAULT_MIN_LIVE_CASES = 4
