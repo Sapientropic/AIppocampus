@@ -28,6 +28,10 @@ from aippocampus_runtime.model.routing import (
     route_payload_with_effective_values,
     route_service_name,
 )
+from aippocampus_runtime.subconscious.deterministic_jobs import (
+    DETERMINISTIC_RUNNERS,
+    run_deterministic_job,
+)
 from aippocampus_runtime.subconscious.job_plan import (
     JobRunTask,
     plan_job_run_tasks,
@@ -53,10 +57,6 @@ from aippocampuslib import (
     cli_error_payload_from_message,
     cli_exit_code_for_error_code,
     compact_text,
-)
-from subconscious_deterministic_jobs import (
-    DETERMINISTIC_RUNNERS,
-    run_deterministic_job,
 )
 from subconscious_job_circuits import JOB_SPECS, PROMPT_VERSION, job_names, jobs_initial_payload
 from subconscious_job_validation import (
