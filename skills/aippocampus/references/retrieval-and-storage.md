@@ -314,14 +314,16 @@ include manifest, handoff, index files, graph, anchors, and raw rollout unless
 `--no-raw` is used. `import_bundle.py` extracts the bundle and appends a pointer
 to the current workspace's anchors.
 
-`sync_bundle.py` is the first Stage 3 sync backend. It supports explicit
-local-folder `status`, `push`, `pull`, and `repair` commands over clean source,
-registry rows, manifests, semantic triggers, working memory, and cognitive-map
-sidecars. `encrypted_sync_bundle.py` adds the age-backed encrypted variant and
-keeps ciphertext under `encrypted-sync/`.
+`aippocampus_runtime.sync.bundle` is the first Stage 3 sync backend.
+`sync_bundle.py` remains the direct-script/import compatibility shim. It
+supports explicit local-folder `status`, `push`, `pull`, and `repair` commands
+over clean source, registry rows, manifests, semantic triggers, working memory,
+and cognitive-map sidecars. `encrypted_sync_bundle.py` adds the age-backed
+encrypted variant and keeps ciphertext under `encrypted-sync/`.
 
-`sync_object_storage.py` reuses that same bundle manifest over an HTTP
-object-storage transport: each manifest file is stored as an object under
+`aippocampus_runtime.sync.object_storage.cli` reuses that same bundle manifest
+over an HTTP object-storage transport; `sync_object_storage.py` remains the
+compatibility shim. Each manifest file is stored as an object under
 `AIPPOCAMPUS_OBJECT_PREFIX`, the manifest object is written last, and
 `status`/`repair` verify object content by sha256 before `pull` imports it.
 `encrypted_sync_object_storage.py` uses the same encrypted bundle contract over

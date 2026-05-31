@@ -116,12 +116,14 @@ handoff context.
 5. Cross-device sync bundle and commands
    - Source: `roadmap.md`, Stage 3.
    - The local-folder `sync status`, `sync push`, `sync pull`, and
-     `sync repair` flows now exist in `sync_bundle.py`; pushed registry rows
-     use portable bundle-relative locators, and pull repairs generated-artifact
+     `sync repair` flows now live in `aippocampus_runtime.sync.bundle`, with
+     `sync_bundle.py` kept as the compatibility shim; pushed registry rows use
+     portable bundle-relative locators, and pull repairs generated-artifact
      paths to the target registry. The local cross-device smoke now models two
      device registries, cross-OS-shaped source paths, bidirectional conflicts,
-     and raw opt-in. `sync_object_storage.py` now exercises the same contract
-     over HTTP object `PUT`/`GET`, with a local object-store smoke.
+     and raw opt-in. `aippocampus_runtime.sync.object_storage.cli` now exercises
+     the same contract over HTTP object `PUT`/`GET`, with
+     `sync_object_storage.py` kept as the compatibility shim.
    - Current P0 evidence now includes a physical Windows-to-MacBook sync smoke
      and a managed Cloudflare R2 encrypted object-storage smoke. Release-oriented
      repair boundaries are documented in `encrypted-sync-v1.md`. Next harden

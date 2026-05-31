@@ -55,9 +55,10 @@ Writer coordination entrypoints:
   main and segment SQLite writes to the builders.
 - `sync_vault.py`: runs maintenance first unless `--no-hook`, then reads health,
   messages JSONL, anchors, and registry metadata for vault/dashboard output.
-- `sync_bundle.py`: syncs manifests, graph metadata, and content-addressed clean
-  source by default; generated SQLite, pointer files, and versioned caches are
-  not portable source files.
+- `aippocampus_runtime.sync.bundle`: syncs manifests, graph metadata, and
+  content-addressed clean source by default; `sync_bundle.py` remains the
+  direct-script compatibility shim. Generated SQLite, pointer files, and
+  versioned caches are not portable source files.
 - `export_bundle.py` / `import_bundle.py`: explicit portable bundle path; export
   may include generated index files inside the bundle, and import reports both
   the stable search path and the pointer-resolved current SQLite path.
@@ -108,13 +109,14 @@ segments are staged before publish, and failed publish restores last-known-good
 `seg-*` dirs and manifest metadata.
 
 Cross-device sync treats SQLite as a rebuildable generated cache, not durable
-truth. `sync_bundle.py` syncs registry manifests, graph metadata, and
-content-addressed clean source by default; it does not require generated SQLite
+truth. `aippocampus_runtime.sync.bundle` syncs registry manifests, graph
+metadata, and content-addressed clean source by default; `sync_bundle.py` is the
+compatibility shim for the same command. It does not require generated SQLite
 files, pointer files, or versioned SQLite caches to move between devices. Target
-devices repair registry locators to local generated caches only when those caches
-already exist locally; otherwise `paths.sqlite` stays unresolved and the target
-should rebuild from clean source or raw rollout rather than trusting a stale
-source-device lock state.
+devices repair registry locators to local generated caches only when those
+caches already exist locally; otherwise `paths.sqlite` stays unresolved and the
+target should rebuild from clean source or raw rollout rather than trusting a
+stale source-device lock state.
 
 ## Retention And Cold Archive
 
