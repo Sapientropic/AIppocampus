@@ -25,6 +25,8 @@ DEFAULT_REPOSITORY = "Sapientropic/AIppocampus"
 PROJECT_FIELDS = ("Status", "Track", "Kind", "Stage", "Evidence", "Priority", "Source")
 SINGLE_SELECT_FIELDS = ("Status", "Track", "Kind", "Stage", "Evidence", "Priority")
 TEXT_FIELDS = ("Source",)
+REPAIRABLE_MANAGED_FIELDS = ("Track", "Kind", "Stage", "Evidence", "Priority")
+REPAIRABLE_STATUS_VALUES = ("Inbox", "Ready", "Archived")
 
 PARENT_TRACK: dict[int, str] = {
     2: "Benchmarks & Research",
@@ -36,6 +38,10 @@ PARENT_TRACK: dict[int, str] = {
     21: "Sync",
     22: "MCP & Plugin",
     23: "MCP & Plugin",
+    158: "Life-wide memory",
+    164: "Life-wide memory",
+    216: "Benchmarks & Research",
+    228: "Benchmarks & Research",
 }
 
 PARENT_STAGE: dict[int, str] = {
@@ -48,14 +54,22 @@ PARENT_STAGE: dict[int, str] = {
     21: "Stage 3",
     22: "Stage 4",
     23: "Stage 5",
+    158: "Research",
+    164: "Stage 2",
+    216: "Research",
+    228: "Research",
 }
 
 PARENT_RE = re.compile(r"(?im)^\s*Parent:\s*#(\d+)\b")
-EXPLICIT_PRIORITY_RE = re.compile(r"\b(P0|P1|P2|Later)\b", re.IGNORECASE)
+EXPLICIT_PRIORITY_LINE_RE = re.compile(
+    r"(?im)^\s*(?:priority|prio)\s*[:=-]\s*(P0|P1|P2|Later)\b"
+)
+TITLE_PRIORITY_RE = re.compile(r"(?i)^\s*\[?(P0|P1|P2|Later)\]?\s*[:\-]\s+")
 STAGE_RE = re.compile(r"\bStage\s+([0-7])\b", re.IGNORECASE)
 SOURCE_PATH_RE = re.compile(
     r"^(?:\.github|benchmarks|benchmark_corpus|docs|plugins|skills|sources|tests|tools)/"
 )
+SOURCE_ISSUE_PREFIX_RE = re.compile(r"^GitHub issue #(\d+)\b")
 
 
 @dataclass(frozen=True)
@@ -110,13 +124,84 @@ def _contains(text: str, *terms: str) -> bool:
     return any(term in text for term in terms)
 
 
+def _normalize_priority(value: str) -> str:
+    return "Later" if value.lower() == "later" else value.upper()
+
+
+def _explicit_priority(issue: IssueContext) -> tuple[str, str] | None:
+    for label in issue.labels:
+        if label.lower() in {"p0", "p1", "p2", "later"}:
+            return _normalize_priority(label), "priority label"
+
+    title_match = TITLE_PRIORITY_RE.search(issue.title or "")
+    if title_match:
+        return _normalize_priority(title_match.group(1)), "title prefix"
+
+    line_match = EXPLICIT_PRIORITY_LINE_RE.search(issue.body or "")
+    if line_match:
+        return _normalize_priority(line_match.group(1)), "explicit priority line"
+
+    return None
+
+
+def _source_issue_number(source: str | None) -> int | None:
+    match = SOURCE_ISSUE_PREFIX_RE.search((source or "").strip())
+    if not match:
+        return None
+    return int(match.group(1))
+
+
+def is_script_managed_current(current: dict[str, str], triage: TriageResult) -> bool:
+    """Best-effort guard for repair mode.
+
+    The Project API does not record field provenance, so repair mode only
+    touches items whose Source field still looks like this script's generated
+    value for the same issue. Human-authored Source values are treated as
+    ownership markers and are not repaired.
+    """
+
+    current_source = (current.get("Source") or "").strip()
+    if not current_source:
+        return False
+
+    lowered = current_source.lower()
+    if any(marker in lowered for marker in ("manual", "human", "owner", "do not overwrite")):
+        return False
+
+    current_issue = _source_issue_number(current_source)
+    inferred_issue = _source_issue_number(triage.source)
+    if current_issue is None or current_issue != inferred_issue:
+        return False
+
+    if "managed-by: project_triage" in lowered:
+        return True
+
+    return current.get("Status") in {"Inbox", "Archived"}
+
+
 def infer_track(issue: IssueContext, parents: list[int]) -> tuple[str | None, str | None]:
     for parent in parents:
         if parent in PARENT_TRACK:
             return PARENT_TRACK[parent], f"parent #{parent}"
 
     text = _text(issue)
-    if _contains(text, "deepseek", "external model", "provider", "offline provider", "local/offline"):
+    if _contains(text, "mem0", "zep", "graphiti", "letta", "arc-agi", "benchmark"):
+        return "Benchmarks & Research", "benchmark/research keywords"
+    if _contains(
+        text,
+        "topic-epoch",
+        "topic epoch",
+        "warm ambient",
+        "ambient cache",
+        "vague recall",
+        "question-tracking",
+        "question tracking",
+        "repo familiarity",
+        "decision-shadow",
+        "dream",
+    ):
+        return "Life-wide memory", "memory-continuity keywords"
+    if _contains(text, "deepseek", "external model", "provider-neutral", "offline provider", "local/offline"):
         return "External models", "external-model keywords"
     if _contains(text, "cross-device", "object-storage", "object storage", "encrypted sync", " sync "):
         return "Sync", "sync keywords"
@@ -128,9 +213,7 @@ def infer_track(issue: IssueContext, parents: list[int]) -> tuple[str | None, st
         return "GB/TB scale", "scale/search keywords"
     if _contains(text, "public-readiness", "public install", "release-readiness", "release readiness"):
         return "Public readiness", "public-readiness keywords"
-    if _contains(text, "mem0", "zep", "graphiti", "letta", "arc-agi", "benchmark"):
-        return "Benchmarks & Research", "benchmark/research keywords"
-    if _contains(text, "docs cleanup", "archive", "stale doc"):
+    if _contains(text, "docs cleanup", "archive", "stale doc", "ruff", "subpackages", "compatibility shims"):
         return "Docs cleanup", "docs-cleanup keywords"
     return None, None
 
@@ -169,23 +252,59 @@ def infer_kind(issue: IssueContext) -> tuple[str | None, str | None]:
 
     if title.startswith("umbrella:"):
         return "Umbrella", "title prefix"
+    if _contains(
+        text,
+        "assess ",
+        "evaluate whether",
+        "feasibility",
+        "inspect ",
+        "explore",
+        "research",
+        "arc-agi",
+    ):
+        return "Research", "research keywords"
+    if _contains(text, "hard-negative", "fixture schema", "recall-discrimination runner"):
+        return "Implementation", "benchmark implementation keywords"
+    if _contains(
+        text,
+        "anti-circular controls",
+        "confidence intervals",
+        "lower-bound gates",
+        "small-sample",
+        "stratified sampling",
+        "sparse coverage",
+        "trigger controls",
+    ):
+        return "Smoke", "benchmark-control keywords"
     if _contains(text, "smoke", "validate ", "verification", "scan", "install paths"):
         return "Smoke", "verification keywords"
     if _contains(text, "docs", "document ", "readme", "guide", "taxonomy", "claim-boundary"):
         return "Docs", "docs keywords"
-    if _contains(text, "research", "explore", "arc-agi"):
-        return "Research", "research keywords"
-    if _contains(text, "implement", "build", "harden", "wire", "define", "protocol", "improve"):
+    if _contains(
+        text,
+        "implement",
+        "build",
+        "harden",
+        "wire",
+        "define",
+        "protocol",
+        "improve",
+        "refactor",
+        "replace",
+        "tighten",
+        "redact",
+        "prototype",
+        "bug",
+    ):
         return "Implementation", "implementation keywords"
     return None, None
 
 
 def infer_priority(issue: IssueContext, track: str | None, kind: str | None) -> tuple[str, str]:
     text = _text(issue)
-    explicit = EXPLICIT_PRIORITY_RE.search(f"{issue.title}\n{issue.body}\n{' '.join(issue.labels)}")
+    explicit = _explicit_priority(issue)
     if explicit:
-        value = explicit.group(1)
-        return ("Later" if value.lower() == "later" else value.upper()), "explicit priority"
+        return explicit
 
     if _contains(text, "physical second-machine", "managed cloud", "real object-storage"):
         return "P0", "external sync evidence"
@@ -493,18 +612,35 @@ def fetch_issue(client: GitHubProjectClient, repo: str, issue_number: int) -> tu
     )
 
 
-def planned_updates(current: dict[str, str], triage: TriageResult) -> dict[str, str]:
+def planned_updates(
+    current: dict[str, str],
+    triage: TriageResult,
+    *,
+    fill_missing: bool = True,
+    repair_managed_fields: bool = False,
+) -> dict[str, str]:
     updates: dict[str, str] = {}
     inferred = triage.field_values()
+    repair_allowed = (
+        repair_managed_fields
+        and triage.confidence == "high"
+        and is_script_managed_current(current, triage)
+    )
 
     for field, value in inferred.items():
         existing = current.get(field)
         if field == "Status":
-            if existing in (None, "", "Inbox") and value:
+            if fill_missing and existing in (None, "", "Inbox") and value:
+                updates[field] = value
+            elif repair_allowed and existing in REPAIRABLE_STATUS_VALUES and existing != value:
                 updates[field] = value
             continue
-        if existing in (None, "") and value:
+        if fill_missing and existing in (None, "") and value:
             updates[field] = value
+            continue
+        if repair_allowed and field in REPAIRABLE_MANAGED_FIELDS and existing != value:
+            updates[field] = value
+            continue
     return updates
 
 
@@ -544,6 +680,8 @@ def triage_item(
     item: dict[str, Any],
     *,
     dry_run: bool,
+    fill_missing: bool = True,
+    repair_managed_fields: bool = False,
 ) -> dict[str, Any]:
     content = item.get("content")
     if not isinstance(content, dict) or content.get("__typename") != "Issue":
@@ -551,7 +689,13 @@ def triage_item(
     issue = issue_context_from_node(content)
     triage = infer_triage(issue)
     current = item_field_values(item)
-    updates = planned_updates(current, triage)
+    managed_by_triage = is_script_managed_current(current, triage)
+    updates = planned_updates(
+        current,
+        triage,
+        fill_missing=fill_missing,
+        repair_managed_fields=repair_managed_fields,
+    )
     if updates and not dry_run:
         apply_updates(client, project_id, item["id"], fields, updates)
     return {
@@ -561,6 +705,9 @@ def triage_item(
         "reasons": triage.reasons,
         "current": current,
         "updates": updates,
+        "fill_missing": fill_missing,
+        "managed_by_triage": managed_by_triage,
+        "repair_managed_fields": repair_managed_fields,
         "dry_run": dry_run,
     }
 
@@ -592,11 +739,19 @@ def triage_single_issue(
     issue_number: int,
     *,
     dry_run: bool,
+    fill_missing: bool = True,
+    repair_managed_fields: bool = False,
 ) -> dict[str, Any]:
     item, issue = ensure_issue_item(client, project_id, items, repo, issue_number, dry_run=dry_run)
     triage = infer_triage(issue)
     current = item_field_values(item) if item else {}
-    updates = planned_updates(current, triage)
+    managed_by_triage = is_script_managed_current(current, triage)
+    updates = planned_updates(
+        current,
+        triage,
+        fill_missing=fill_missing,
+        repair_managed_fields=repair_managed_fields,
+    )
     if item is None:
         updates["_project_item"] = "would_add"
     elif updates and not dry_run:
@@ -608,6 +763,9 @@ def triage_single_issue(
         "reasons": triage.reasons,
         "current": current,
         "updates": updates,
+        "fill_missing": fill_missing,
+        "managed_by_triage": managed_by_triage,
+        "repair_managed_fields": repair_managed_fields,
         "dry_run": dry_run,
     }
 
@@ -626,6 +784,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--all-missing",
         action="store_true",
         help="Triage all project issues that still miss one or more configured fields.",
+    )
+    parser.add_argument(
+        "--repair-managed-fields",
+        action="store_true",
+        help=(
+            "Repair high-confidence fields that look generated by this script. "
+            "Use with --dry-run first to inspect the report."
+        ),
     )
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args(argv)
@@ -665,18 +831,32 @@ def main(argv: list[str] | None = None) -> int:
                 args.repo,
                 args.issue_number,
                 dry_run=args.dry_run,
+                fill_missing=True,
+                repair_managed_fields=args.repair_managed_fields,
             )
         ]
-    elif args.all_missing:
+    elif args.all_missing or args.repair_managed_fields:
         results = []
         for item in items:
             current = item_field_values(item)
-            if any(not current.get(field) for field in PROJECT_FIELDS):
-                results.append(
-                    triage_item(client, project_id, fields, item, dry_run=args.dry_run)
-                )
+            missing_fields = any(not current.get(field) for field in PROJECT_FIELDS)
+            if not args.all_missing and not args.repair_managed_fields:
+                continue
+            if not missing_fields and not args.repair_managed_fields:
+                continue
+            result = triage_item(
+                client,
+                project_id,
+                fields,
+                item,
+                dry_run=args.dry_run,
+                fill_missing=args.all_missing,
+                repair_managed_fields=args.repair_managed_fields,
+            )
+            if result["updates"] or (args.all_missing and missing_fields):
+                results.append(result)
     else:
-        raise RuntimeError("Pass --issue-number or --all-missing.")
+        raise RuntimeError("Pass --issue-number, --all-missing, or --repair-managed-fields.")
 
     print(json.dumps({"ok": True, "results": results}, ensure_ascii=False, indent=2))
     return 0
