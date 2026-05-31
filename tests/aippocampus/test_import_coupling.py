@@ -191,7 +191,7 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertTrue(shim_path.exists(), shim_path)
         self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
 
-        edges = same_dir_import_edges(top_level_only=True)
+        edges = same_dir_import_edges()
         self.assertIn("aippocampus_runtime.privacy", edges["privacy_projection"])
         for source in ["aippocampus_runtime.mcp.server", "aippocampus_runtime.registry.api"]:
             self.assertIn("aippocampus_runtime.privacy", edges[source])
@@ -428,7 +428,7 @@ class ImportCouplingTests(unittest.TestCase):
         for path in shim_paths:
             self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
 
-        edges = same_dir_import_edges(top_level_only=True)
+        edges = same_dir_import_edges()
         self.assertIn(
             "aippocampus_runtime.sync.object_storage.cli",
             edges["sync_object_storage"],
@@ -791,6 +791,65 @@ class ImportCouplingTests(unittest.TestCase):
             dream_delivery_policy.add_dream_delivery_arguments,
             delivery_policy.add_dream_delivery_arguments,
         )
+
+    def test_codex_hooks_have_package_owner_and_compat_shims(self) -> None:
+        import aippocampus_lifecycle_hook
+        import aippocampus_prompt_hook
+        import install_aippocampus_lifecycle_hook
+        import install_aippocampus_prompt_hook
+        from aippocampus_runtime.hooks import (
+            install_lifecycle,
+            install_prompt,
+            lifecycle,
+            prompt,
+        )
+
+        package_paths = [
+            SCRIPTS / "aippocampus_runtime" / "hooks" / "__init__.py",
+            SCRIPTS / "aippocampus_runtime" / "hooks" / "prompt.py",
+            SCRIPTS / "aippocampus_runtime" / "hooks" / "lifecycle.py",
+            SCRIPTS / "aippocampus_runtime" / "hooks" / "install_prompt.py",
+            SCRIPTS / "aippocampus_runtime" / "hooks" / "install_lifecycle.py",
+        ]
+        shim_paths = [
+            SCRIPTS / "aippocampus_prompt_hook.py",
+            SCRIPTS / "aippocampus_lifecycle_hook.py",
+            SCRIPTS / "install_aippocampus_prompt_hook.py",
+            SCRIPTS / "install_aippocampus_lifecycle_hook.py",
+        ]
+
+        for path in package_paths + shim_paths:
+            self.assertTrue(path.exists(), path)
+        for path in shim_paths:
+            self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges()
+        self.assertIn("aippocampus_runtime.hooks.prompt", edges["aippocampus_prompt_hook"])
+        self.assertIn("aippocampus_runtime.hooks.lifecycle", edges["aippocampus_lifecycle_hook"])
+        self.assertIn(
+            "aippocampus_runtime.hooks.install_prompt",
+            edges["install_aippocampus_prompt_hook"],
+        )
+        self.assertIn(
+            "aippocampus_runtime.hooks.install_lifecycle",
+            edges["install_aippocampus_lifecycle_hook"],
+        )
+
+        self.assertIs(aippocampus_prompt_hook.write_debug_log, prompt.write_debug_log)
+        self.assertIs(aippocampus_prompt_hook.main, prompt.main)
+        self.assertIs(aippocampus_lifecycle_hook.decide_actions, lifecycle.decide_actions)
+        self.assertIs(aippocampus_lifecycle_hook.run_action, lifecycle.run_action)
+        self.assertIs(aippocampus_lifecycle_hook.main, lifecycle.main)
+        self.assertIs(install_aippocampus_prompt_hook.install, install_prompt.install)
+        self.assertIs(install_aippocampus_prompt_hook.command_for, install_prompt.command_for)
+        self.assertIs(install_aippocampus_lifecycle_hook.install, install_lifecycle.install)
+        self.assertIs(
+            install_aippocampus_lifecycle_hook.command_for,
+            install_lifecycle.command_for,
+        )
+        self.assertEqual(lifecycle.SCRIPT_DIR, SCRIPTS)
+        self.assertEqual(install_prompt.SCRIPT_DIR, SCRIPTS)
+        self.assertEqual(install_lifecycle.SCRIPT_DIR, SCRIPTS)
 
     def test_dream_worker_contract_has_package_owner_and_compat_shim(self) -> None:
         import dream_worker_contract

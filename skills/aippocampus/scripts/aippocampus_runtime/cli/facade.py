@@ -54,8 +54,8 @@ SCRIPT_MODULES = {
     "aippocampus_mcp_server.py": "aippocampus_runtime.mcp.server",
     "sync_bundle.py": "aippocampus_runtime.sync.bundle",
     "sync_object_storage.py": "aippocampus_runtime.sync.object_storage.cli",
-    "install_aippocampus_prompt_hook.py": "install_aippocampus_prompt_hook",
-    "install_aippocampus_lifecycle_hook.py": "install_aippocampus_lifecycle_hook",
+    "install_aippocampus_prompt_hook.py": "aippocampus_runtime.hooks.install_prompt",
+    "install_aippocampus_lifecycle_hook.py": "aippocampus_runtime.hooks.install_lifecycle",
 }
 
 

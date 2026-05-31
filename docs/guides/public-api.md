@@ -62,6 +62,11 @@ The CLI contract applies to documented operator commands, especially:
 - `plugins/aippocampus/build_plugin_package.py`
 - documented plugin smoke commands
 
+The hook scripts and installers above are direct-path compatibility shims over
+`aippocampus_runtime.hooks.*` package owners. Keep invoking the documented
+script paths from Codex hook configs; Python/runtime callers should import the
+package owners.
+
 For these commands:
 
 - Documented command names and documented flags are stable unless release notes
