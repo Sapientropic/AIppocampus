@@ -39,6 +39,14 @@ from aippocampus_runtime.subconscious.job_storage import (
     append_job_findings,
     concept_findings_to_edges,
 )
+from aippocampus_runtime.subconscious.jobs_config import (
+    DEFAULT_CONCURRENCY,
+    DEFAULT_JOBS_OUTPUT_NAME,
+    DEFAULT_SAMPLES_PER_JOB,
+    JobsRunConfig,
+    default_jobs_output_path,
+    jobs_run_config_from_args,
+)
 from aippocampuslib import (
     cli_error_payload,
     cli_error_payload_from_message,
@@ -53,14 +61,6 @@ from subconscious_job_circuits import JOB_SPECS, PROMPT_VERSION, job_names, jobs
 from subconscious_job_validation import (
     QUESTION_TEXT_MAX_CHARS,
     validate_findings,
-)
-from subconscious_jobs_config import (
-    DEFAULT_CONCURRENCY,
-    DEFAULT_JOBS_OUTPUT_NAME,
-    DEFAULT_SAMPLES_PER_JOB,
-    JobsRunConfig,
-    default_jobs_output_path,
-    jobs_run_config_from_args,
 )
 from subconscious_question_diagnostics import (
     question_axis_repair_feedback,
