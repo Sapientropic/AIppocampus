@@ -164,6 +164,46 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertNotIn("def save_registry", registry_source)
         self.assertIn("def save_registry", store_source)
 
+    def test_object_storage_helpers_have_package_owner_and_compat_shims(self) -> None:
+        import object_storage_client
+        import object_storage_providers
+        from aippocampus_runtime.sync.object_storage import client, providers
+
+        package_paths = [
+            SCRIPTS / "aippocampus_runtime" / "sync" / "object_storage" / "__init__.py",
+            SCRIPTS / "aippocampus_runtime" / "sync" / "object_storage" / "client.py",
+            SCRIPTS / "aippocampus_runtime" / "sync" / "object_storage" / "providers.py",
+        ]
+        shim_paths = [
+            SCRIPTS / "object_storage_client.py",
+            SCRIPTS / "object_storage_providers.py",
+        ]
+
+        for path in package_paths + shim_paths:
+            self.assertTrue(path.exists(), path)
+        for path in shim_paths:
+            self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges(top_level_only=True)
+        self.assertIn("aippocampus_runtime.sync.object_storage.client", edges["sync_object_storage"])
+        self.assertNotIn("object_storage_client", edges["sync_object_storage"])
+        self.assertIn(
+            "aippocampus_runtime.sync.object_storage.providers",
+            edges["aippocampus_runtime.sync.object_storage.client"],
+        )
+        self.assertNotIn(
+            "object_storage_providers",
+            edges["aippocampus_runtime.sync.object_storage.client"],
+        )
+
+        self.assertIs(object_storage_client.HttpObjectStoreClient, client.HttpObjectStoreClient)
+        self.assertIs(
+            object_storage_client.object_storage_client_for,
+            client.object_storage_client_for,
+        )
+        self.assertIs(object_storage_providers.SigV4Auth, providers.SigV4Auth)
+        self.assertIs(object_storage_providers.provider_config, providers.provider_config)
+
     def test_prompt_recall_core_stays_small_foreground_gate(self) -> None:
         edges = same_dir_import_edges()
         forbidden = {
