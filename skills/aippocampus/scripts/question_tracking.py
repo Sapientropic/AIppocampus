@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from aippocampus_runtime.subconscious.jobs_config import default_jobs_output_path
 from aippocampuslib import cli_error_payload, cli_exit_code_for_error_code, compact_text, now_utc
 from ambient_recall_policy import default_ambient_policy_path
 from question_confirmation import (
@@ -44,7 +45,6 @@ from question_source_refs import (
     source_ref_key,
 )
 from registry import registry_paths, unique_preserve
-from subconscious_jobs_config import default_jobs_output_path
 
 SCHEMA_VERSION = 1
 PROMPT_VERSION = "aippocampus-question-tracking-v1"
