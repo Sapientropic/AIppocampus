@@ -70,6 +70,8 @@ VISIBILITIES = (
 )
 SAFE_THIN_SOURCE_USES = {"ask", "refresh_sources"}
 FEEDBACK_OUTCOMES = ("accepted", "ignored", "dismissed", "corrected", "tool_success", "tool_failure")
+SUPPRESSIVE_FEEDBACK_OUTCOMES = {"ignored", "dismissed", "corrected"}
+DUPLICATE_DELIVERY_OUTCOMES = {"already_delivered", "delivered"}
 
 
 def _list(value: Any) -> list[Any]:
@@ -277,6 +279,39 @@ def _host_boundary() -> dict[str, bool]:
     }
 
 
+def _topic_epoch(value: Mapping[str, Any]) -> str:
+    return str(value.get("topic_epoch") or value.get("expires_at") or "task_or_topic_epoch_end")
+
+
+def _feedback_matches_ticket(normalized: Mapping[str, Any], row: Mapping[str, Any]) -> bool:
+    ticket_id = str(normalized.get("ticket_id") or "")
+    if not ticket_id or str(row.get("ticket_id") or "") != ticket_id:
+        return False
+    row_epoch = _topic_epoch(row)
+    ticket_epoch = _topic_epoch(normalized)
+    return row_epoch == ticket_epoch or row_epoch in {"", "task_or_topic_epoch_end"}
+
+
+def _recent_feedback_suppression(
+    normalized: Mapping[str, Any], recent_feedback: Sequence[Mapping[str, Any]]
+) -> tuple[str, str] | None:
+    for row in recent_feedback:
+        if not isinstance(row, Mapping) or not _feedback_matches_ticket(normalized, row):
+            continue
+        outcome = str(row.get("outcome") or "").casefold()
+        delivery_state = str(row.get("delivery_state") or row.get("delivery") or "").casefold()
+        event = str(row.get("event") or "").casefold()
+        if outcome in SUPPRESSIVE_FEEDBACK_OUTCOMES:
+            return "recent_feedback_suppressed", "recent_feedback"
+        if (
+            outcome in DUPLICATE_DELIVERY_OUTCOMES
+            or delivery_state == "delivered"
+            or event == "delivered"
+        ):
+            return "duplicate_ticket_suppressed", "duplicate_delivery"
+    return None
+
+
 def host_decision_for_ticket(
     ticket: Mapping[str, Any],
     *,
@@ -284,6 +319,7 @@ def host_decision_for_ticket(
     source_visible: bool = False,
     preconditions_satisfied: bool = True,
     attention_budget: str = "normal",
+    recent_feedback: Sequence[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     normalized = normalize_ticket(ticket)
     validation = validate_ticket_contract(ticket)
@@ -297,6 +333,10 @@ def host_decision_for_ticket(
         return _silent_decision(normalized, reasons=["preconditions_not_satisfied"])
     if attention_budget == "none":
         return _silent_decision(normalized, reasons=["no_attention_budget"])
+    feedback_suppression = _recent_feedback_suppression(normalized, recent_feedback or [])
+    if feedback_suppression:
+        reason, degradation = feedback_suppression
+        return _silent_decision(normalized, reasons=[reason], safe_degradation=degradation)
 
     level = str(normalized.get("intervention_level") or "")
     proposed_use = str(normalized.get("proposed_use") or "")
@@ -331,6 +371,7 @@ def simulate_host_consumption(
     *,
     host_present: bool = True,
     source_visible_ticket_ids: Sequence[str] | None = None,
+    recent_feedback: Sequence[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     visible_ids = {str(item) for item in source_visible_ticket_ids or []}
     decisions = [
@@ -338,6 +379,7 @@ def simulate_host_consumption(
             ticket,
             host_present=host_present,
             source_visible=str(ticket.get("ticket_id") or "") in visible_ids,
+            recent_feedback=recent_feedback,
         )
         for ticket in tickets
     ]

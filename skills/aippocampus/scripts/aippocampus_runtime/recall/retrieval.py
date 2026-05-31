@@ -18,7 +18,7 @@ import sqlite3
 from collections import Counter
 from pathlib import Path
 
-from aippocampus_runtime.recall.life_cues import profile_recall_terms
+from aippocampus_runtime.recall.life_cues import life_wide_recall_terms, profile_recall_terms
 from aippocampus_runtime.recall.query_policy import ALIASES as ALIASES
 from aippocampus_runtime.recall.query_policy import (
     CONCEPT_TRIGGERS,
@@ -767,6 +767,14 @@ def active_recall_decision(
         # downstream clean-source evidence path.
         score += 3.0
         reasons.append("message contains personal-profile recall cue")
+
+    if life_wide_recall_terms(prompt):
+        # Life-wide routes intentionally require recency plus a scope cue in
+        # life_cues.py. This only opens deterministic search terms for the
+        # explicit active_recall command; source-backed claims still need
+        # downstream clean-source or registry evidence.
+        score += 3.0
+        reasons.append("message contains life-wide recall cue")
 
     if anchor_matches:
         anchor_score = sum(float(item.get("score") or 0) for item in anchor_matches[:3])

@@ -288,7 +288,8 @@ class SubconsciousSchedulerTests(unittest.TestCase):
         dream_command = commands[dream_index]
         self.assertIn("--project", dream_command)
         self.assertEqual(dream_command[dream_command.index("--project") + 1], "T-Sense")
-        self.assertIn("--no-write", dream_command)
+        self.assertIn("--write-staging", dream_command)
+        self.assertNotIn("--no-write", dream_command)
         self.assertIn("--summary", dream_command)
         retrospective_command = commands[retrospective_index]
         self.assertIn("--project", retrospective_command)
