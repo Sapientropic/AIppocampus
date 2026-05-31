@@ -75,9 +75,9 @@ For these commands:
   command-specific hard failure.
 - Exact non-zero exit-code numbers are not stable yet. Use structured JSON error
   payloads or documented status fields where available.
-- The `aippocampus` facade is a thin dispatcher. It must preserve child command
-  stdout/stderr, JSON shape, and return code rather than wrapping runtime output
-  in a second envelope.
+- The `aippocampus` facade is a thin Python dispatcher. It resolves commands to
+  packaged entrypoint mains and preserves stdout/stderr, JSON shape, and return
+  code rather than wrapping runtime output in a second envelope.
 
 The Python facade is the current packaging step. Standalone Python-free binaries
 are not part of the public claim until the follow-up
