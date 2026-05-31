@@ -198,7 +198,9 @@ DeepSeek can be used aggressively, but hooks must stay cheap. The split is:
   `review_after`, ignores pre-probe and future-leakage rows, and counts only
   later source-backed rows that explicitly target the probe; term overlap alone
   remains diagnostic noise.
-- bounded model-backed dream workers live in `dream_worker.py`. They consume
+- bounded model-backed dream workers live in
+  `aippocampus_runtime.dream.worker`; `dream_worker.py` is only the direct-script
+  compatibility shim. They consume
   only `status="ready_for_dream_worker"` packs for compensatory,
   amplification, prospective, and active-imagination functions, require cited
   source-ref ids for every candidate/bridge claim, default to `no_write=True`,
@@ -209,8 +211,10 @@ DeepSeek can be used aggressively, but hooks must stay cheap. The split is:
   sensitive/profile-style interpretations stay parked. Prospective
   retrospective validation only counts later rows that explicitly target the
   finding id and carry source refs; similar terms alone stay `unknown`.
-- adjudicated dream hypotheses project through `dream_working_memory.py` into
-  ordinary working-memory rows, not a parallel dream channel. Those rows carry
+- adjudicated dream hypotheses project through
+  `aippocampus_runtime.dream.working_memory` into ordinary working-memory rows;
+  `dream_working_memory.py` is only the compatibility shim, not a second owner.
+  Those rows carry
   `foreground_use` / `sensitive_use_gate` metadata: use quietly only when it
   changes the current answer or route, stay silent when source is already
   visible, expired, or high-annoyance, and reopen source before any strong
@@ -224,7 +228,8 @@ DeepSeek can be used aggressively, but hooks must stay cheap. The split is:
   separates recall, reflection, unsupported-claim suppression, source-support,
   manual source-review, and cost/cache metrics; it must not be treated as real
   user-value proof without reviewed samples and live/behavioral evidence.
-- `dream_input_pack.py` CLI output is public-summary by default. Use
+- `aippocampus_runtime.dream.input_pack` owns source-pack assembly and
+  `dream_input_pack.py` remains the public-summary CLI compatibility shim. Use
   `--internal-full` only for local worker handoff paths that are allowed to
   carry source refs; do not paste full pack output into public logs, docs, or
   GitHub issues.

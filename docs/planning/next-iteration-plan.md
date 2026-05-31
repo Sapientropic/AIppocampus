@@ -321,8 +321,8 @@ handoff context.
      self-reingestion, and background-adjudicated working-memory projection
      fixtures.
    - The P2 substrate is implemented in
-     `skills/aippocampus/scripts/dream_input_pack.py` and
-     `skills/aippocampus/scripts/dream_working_memory.py`: it builds
+     `skills/aippocampus/scripts/aippocampus_runtime/dream/input_pack.py` and
+     `skills/aippocampus/scripts/aippocampus_runtime/dream/working_memory.py`: it builds
      `aippocampus_dream_input_pack` rows from source-backed question links and
      Journey rows, allows ambient residue only as weak source-ref fingerprints,
      requires at least two clean source threads for a ready pack, and parks
