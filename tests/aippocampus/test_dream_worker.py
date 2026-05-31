@@ -16,7 +16,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import dream_worker  # noqa: E402
+from aippocampus_runtime.dream import worker as dream_worker  # noqa: E402
 from model_client import DEEPSEEK_PREFIX_CACHE_CONTRACT, ChatClientConfig  # noqa: E402
 
 

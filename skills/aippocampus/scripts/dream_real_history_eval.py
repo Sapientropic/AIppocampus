@@ -21,7 +21,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import dream_worker
+from aippocampus_runtime.dream import worker as dream_worker
+from aippocampus_runtime.dream.working_memory import (
+    adjudicated_dream_findings_to_working_memory,
+    background_adjudicate_dream_findings,
+    plan_dream_hypothesis_use,
+    render_dream_hypothesis_preview,
+)
 from aippocampus_runtime.model.client import (
     DEEPSEEK_KV_CACHE_GUIDE_URL,
     DEEPSEEK_PREFIX_CACHE_CONTRACT,
@@ -36,12 +42,6 @@ from aippocampus_runtime.model.routing import (
 )
 from aippocampus_runtime.registry.store import registry_paths
 from aippocampuslib import compact_text, deepseek_cache_metrics_from_usage, now_utc
-from dream_working_memory import (
-    adjudicated_dream_findings_to_working_memory,
-    background_adjudicate_dream_findings,
-    plan_dream_hypothesis_use,
-    render_dream_hypothesis_preview,
-)
 from memory_candidate_router import (
     default_jobs_path,
     default_working_memory_path,

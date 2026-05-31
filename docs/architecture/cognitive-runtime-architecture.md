@@ -323,7 +323,7 @@ chain now preserves source-derived `scope_labels` / `semantic_scope_labels`
 into validated findings, which keeps life-wide dream branches fed without
 trusting model-invented labels.
 
-`dream_input_pack.py` is the first cross-thread dream substrate. It combines
+`aippocampus_runtime.dream.input_pack` is the first cross-thread dream substrate. It combines
 source-backed `question_link` rows, `aippocampus_journey` rows, and weak
 `aippocampus_ambient_residue` handles into an
 `aippocampus_dream_input_pack` only when clean source refs span at least two
@@ -352,8 +352,8 @@ treatment/control arms.
 
 Background-adjudicated dream hypotheses can project onto the existing
 working-memory substrate for recall, ambient, and reflection consumers, but
-only after structural adjudication in `dream_working_memory.py`: the finding
-must carry source refs, every bridge claim must carry source refs, and
+only after structural adjudication in `aippocampus_runtime.dream.working_memory`:
+the finding must carry source refs, every bridge claim must carry source refs, and
 pack-backed findings must overlap the pack that triggered them. Unadjudicated
 or parked dream candidates remain in a background holding queue and are not
 eligible for foreground hooks. User confirmation is a high-risk escape hatch,

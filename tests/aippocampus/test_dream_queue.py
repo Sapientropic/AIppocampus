@@ -19,7 +19,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import dream_input_pack as input_pack  # noqa: E402
+from aippocampus_runtime.dream import input_pack  # noqa: E402
 from aippocampus_runtime.dream import queue as dream_queue  # noqa: E402
 
 

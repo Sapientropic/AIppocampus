@@ -340,11 +340,14 @@ class ImportCouplingTests(unittest.TestCase):
         for source in [
             "semantic_recall_gate",
             "subconscious_worker",
-            "dream_worker",
+            "aippocampus_runtime.dream.worker",
             "warm_ambient_recall",
         ]:
             self.assertNotIn("model_client", edges[source])
-        self.assertIn("aippocampus_runtime.model.client", edges["dream_worker"])
+        self.assertIn(
+            "aippocampus_runtime.model.client",
+            edges["aippocampus_runtime.dream.worker"],
+        )
         self.assertIn("aippocampus_runtime.model.routing", edges["semantic_recall_gate"])
 
         self.assertIs(model_client.ChatClientConfig, client.ChatClientConfig)
@@ -496,8 +499,14 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
 
         edges = same_dir_import_edges(top_level_only=True)
-        self.assertIn("aippocampus_runtime.dream.worker_contract", edges["dream_worker"])
-        self.assertNotIn("dream_worker_contract", edges["dream_worker"])
+        self.assertIn(
+            "aippocampus_runtime.dream.worker_contract",
+            edges["aippocampus_runtime.dream.worker"],
+        )
+        self.assertNotIn(
+            "dream_worker_contract",
+            edges["aippocampus_runtime.dream.worker"],
+        )
 
         self.assertEqual(dream_worker_contract.PROMPT_VERSION, worker_contract.PROMPT_VERSION)
         self.assertIs(
@@ -586,6 +595,70 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(dream_queue.build_dream_queue, queue.build_dream_queue)
         self.assertIs(dream_queue.public_queue_summary, queue.public_queue_summary)
         self.assertIs(dream_queue.main, queue.main)
+
+    def test_dream_core_helpers_have_package_owner_and_compat_shims(self) -> None:
+        package_paths = [
+            SCRIPTS / "aippocampus_runtime" / "dream" / "input_pack.py",
+            SCRIPTS / "aippocampus_runtime" / "dream" / "worker.py",
+            SCRIPTS / "aippocampus_runtime" / "dream" / "working_memory.py",
+        ]
+        shim_paths = [
+            SCRIPTS / "dream_input_pack.py",
+            SCRIPTS / "dream_worker.py",
+            SCRIPTS / "dream_working_memory.py",
+        ]
+
+        for path in package_paths + shim_paths:
+            self.assertTrue(path.exists(), path)
+        for path in shim_paths:
+            self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+
+        import dream_input_pack
+        import dream_worker
+        import dream_working_memory
+        from aippocampus_runtime.dream import input_pack, worker, working_memory
+
+        edges = same_dir_import_edges(top_level_only=True)
+        self.assertIn(
+            "aippocampus_runtime.dream.input_pack",
+            edges["aippocampus_runtime.dream.sleep_cycle"],
+        )
+        self.assertIn(
+            "aippocampus_runtime.dream.worker",
+            edges["aippocampus_runtime.dream.sleep_cycle"],
+        )
+        self.assertNotIn("dream_input_pack", edges["aippocampus_runtime.dream.sleep_cycle"])
+        self.assertNotIn("dream_worker", edges["aippocampus_runtime.dream.sleep_cycle"])
+        self.assertIn(
+            "aippocampus_runtime.dream.working_memory",
+            edges["aippocampus_runtime.dream.worker"],
+        )
+        self.assertNotIn("dream_working_memory", edges["aippocampus_runtime.dream.worker"])
+        self.assertIn("aippocampus_runtime.dream.worker", edges["dream_real_history_eval"])
+        self.assertIn(
+            "aippocampus_runtime.dream.working_memory",
+            edges["dream_real_history_eval"],
+        )
+        self.assertNotIn("dream_worker", edges["dream_real_history_eval"])
+        self.assertNotIn("dream_working_memory", edges["dream_real_history_eval"])
+        self.assertIn(
+            "aippocampus_runtime.dream.working_memory",
+            edges["compensatory_dream"],
+        )
+        self.assertNotIn("dream_working_memory", edges["compensatory_dream"])
+
+        self.assertIs(
+            dream_input_pack.build_dream_input_pack,
+            input_pack.build_dream_input_pack,
+        )
+        self.assertIs(
+            dream_worker.run_model_backed_dream_worker,
+            worker.run_model_backed_dream_worker,
+        )
+        self.assertIs(
+            dream_working_memory.background_adjudicate_dream_findings,
+            working_memory.background_adjudicate_dream_findings,
+        )
 
     def test_dream_one_sidedness_has_package_owner_and_compat_shim(self) -> None:
         import dream_one_sidedness

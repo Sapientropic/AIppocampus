@@ -15,7 +15,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import dream_working_memory as wm  # noqa: E402
+from aippocampus_runtime.dream import working_memory as wm  # noqa: E402
 
 
 def source_ref(thread_key: str, message_id: str, line: int) -> dict[str, object]:

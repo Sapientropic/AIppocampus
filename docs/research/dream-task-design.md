@@ -13,11 +13,12 @@ design proposal.
 Origin: conversation between user and Claude Code, 2026-05-27.
 Implemented slices: `skills/aippocampus/scripts/compensatory_dream.py` emits
 adjudication-only compensatory candidates from source-backed single-thread
-extraction rows; `skills/aippocampus/scripts/dream_input_pack.py` builds
-cross-thread source packs from question links, Journey rows, and ambient
-residue; `skills/aippocampus/scripts/dream_working_memory.py` provides the
-background adjudication guard before dream hypotheses can feed working memory;
-`skills/aippocampus/scripts/dream_worker.py` runs bounded model-backed
+extraction rows; `skills/aippocampus/scripts/aippocampus_runtime/dream/input_pack.py`
+builds cross-thread source packs from question links, Journey rows, and ambient
+residue; `skills/aippocampus/scripts/aippocampus_runtime/dream/working_memory.py`
+provides the background adjudication guard before dream hypotheses can feed
+working memory; `skills/aippocampus/scripts/aippocampus_runtime/dream/worker.py`
+runs bounded model-backed
 compensatory/amplification/prospective workers plus active-imagination sandbox
 candidates over ready packs and validates prospective hypotheses
 retrospectively against explicit later evidence; and
@@ -262,7 +263,7 @@ paired with that test file and the runtime map in `docs/architecture/runtime-scr
 ### Implemented Phase 2 Source-Pack Contract
 
 The second implemented slice is still infrastructure, not a full dream worker.
-`skills/aippocampus/scripts/dream_input_pack.py` creates a deterministic
+`skills/aippocampus/scripts/aippocampus_runtime/dream/input_pack.py` creates a deterministic
 `kind="aippocampus_dream_input_pack"` object from existing source-backed
 navigation artifacts:
 
@@ -295,8 +296,10 @@ The pack stays out of foreground hooks and formal memory:
 - `clean_source_mutation=false`
 - `truth_boundary="dream_input_pack_seed_not_fact"`
 
-Background adjudication lives in `dream_working_memory.py` as structural guard
-code, not a user approval ritual. `background_adjudicate_dream_finding()` only
+Background adjudication lives in
+`skills/aippocampus/scripts/aippocampus_runtime/dream/working_memory.py` as
+structural guard code, not a user approval ritual.
+`background_adjudicate_dream_finding()` only
 sets `review_state="agent_adjudicated"` when the finding is a dream-synthesized
 candidate, carries source refs, passes its source-ref audit, has source refs on
 every bridge claim, meets the confidence floor, and, when a P2 pack is supplied,
@@ -311,6 +314,8 @@ summary (`kind="aippocampus_dream_input_pack_summary"`) that reports aggregate
 readiness and source-count diagnostics without raw `source_refs`, message ids,
 thread ids, questions, or frontier text. Full internal packs require
 `--internal-full` and are not suitable for public logs, docs, or issue comments.
+`skills/aippocampus/scripts/dream_input_pack.py` remains the compatibility shim
+for the documented direct-script route.
 
 ### Implemented Phase 2.5 Queue Lifecycle
 
@@ -354,8 +359,9 @@ The executable contract lives in `tests/aippocampus/test_dream_queue.py`.
 `skills/aippocampus/scripts/aippocampus_runtime/dream/sleep_cycle.py` is the
 narrow execution bridge that consumes ready/due queue items from
 `aippocampus_runtime.dream.queue` and invokes bounded model-backed workers from
-`dream_worker.py`. `skills/aippocampus/scripts/dream_sleep_cycle.py` remains a
-compatibility shim for the documented direct script route. It is
+`aippocampus_runtime.dream.worker`. `skills/aippocampus/scripts/dream_worker.py`
+and `skills/aippocampus/scripts/dream_sleep_cycle.py` remain compatibility shims
+for documented direct script routes. It is
 scheduler-only/background work, not a foreground hook route. The runner preserves
 `execution_mode="detached_background"`, refuses foreground-eligible queue
 items, defaults to `no_write=True`, and only appends lifecycle/findings/working
@@ -424,7 +430,7 @@ private text.
 
 ### Implemented Phase 3.5 Bounded Model-Backed Workers
 
-`skills/aippocampus/scripts/dream_worker.py` adds the first bounded
+`skills/aippocampus/scripts/aippocampus_runtime/dream/worker.py` adds the first bounded
 model-backed path for `dream_function="compensatory"` and
 `dream_function="amplification"` over `status="ready_for_dream_worker"` packs,
 then extends the same contract to `dream_function="prospective"` and a
@@ -505,7 +511,7 @@ The executable guard has three layers:
 - `tools/aippocampus/docs/check_docs_health.py` scans production script
   `ChatClientConfig(...)` call sites and fails docs health if a new LLM caller
   omits an explicit `cache_contract`.
-- `dream_worker.py` builds the stable-prefix message order and reports provider
+- `aippocampus_runtime.dream.worker` builds the stable-prefix message order and reports provider
   `usage` plus DeepSeek cache metrics when a model call is used.
 - `dream_real_history_eval.py` returns a `live_worker_contract` block so the
   dream layer carries this boundary even when using the deterministic fallback.

@@ -20,10 +20,10 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
-import dream_input_pack
-import dream_worker
+from aippocampus_runtime.dream import input_pack as dream_input_pack
 from aippocampus_runtime.dream import precision_policy as dream_precision_policy
 from aippocampus_runtime.dream import queue as dream_queue
+from aippocampus_runtime.dream import worker as dream_worker
 from aippocampus_runtime.model.client import (
     DEEPSEEK_PREFIX_CACHE_CONTRACT,
     NO_PROVIDER_CACHE_CONTRACT,
