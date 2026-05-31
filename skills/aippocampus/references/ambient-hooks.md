@@ -111,6 +111,15 @@ rejected states may live as long as the ambient cache for the current topic
 epoch. This overlay is not a second long-lived cache and must not be promoted to
 formal memory.
 
+`fresh_thread_demo.py` is the #285 public-safe demonstration runner for this
+contract. It strings together the existing scent packet, action policy, and
+activation state modules over synthetic upstream decision packets across
+`no_memory`, `hook_only`, and `active_recall` arms. The runner is intentionally
+not a semantic classifier: fixture inputs model reviewed sidecar or hook output,
+so future semantic improvements still belong in the semantic/subconscious
+layers. Treat its output as demo proof only; real-history quality, live model
+quality, and benchmark claims need their own evidence.
+
 When the hook receives a thread/session id, `ambient_thread_cache.py` may store
 up to a few compact cards under a hashed `thread_id + workspace + topic_epoch`
 key. The cache is a soft working surface: it expires, records source-ref

@@ -181,6 +181,25 @@ Cannot claim: full private-history coverage or live semantic-model quality. A
 relaxed live run with `--max-elapsed-ms 0` is useful for diagnosis, but it is not
 part of the fast deterministic path.
 
+## Scenario 6d: Fresh-Thread Recall Arms
+
+```sh
+python ./skills/aippocampus/scripts/fresh_thread_demo.py --flow website_cue --arm active_recall
+python ./benchmarks/aippocampus/benchmark_fresh_thread_recall_demo.py --json --output ./.tmp/fresh-thread-recall-demo.json
+```
+
+Expected result: the runtime demo prints turn-by-turn scent, action,
+activation, lock-handling, and source-reopen progression for public-safe
+synthetic flows. The benchmark wrapper reports 4 positive flows, 4 negative
+controls, and three arms: `no_memory`, `hook_only`, and `active_recall`.
+Privacy, unsupported-evidence, and negative-control gates should pass.
+
+Cannot claim: real-history fresh-thread recall quality, live semantic-model
+quality, competitor superiority, or production coverage for private emotional,
+family, design, or coding memories. The fixtures model upstream
+semantic/subconscious output; the runner must not be read as a prompt-keyword
+classifier.
+
 ## Scenario 7: Inspect MCP Tools
 
 ```sh
