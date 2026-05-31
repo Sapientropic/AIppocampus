@@ -216,8 +216,19 @@ groups are:
   `AIPPOCAMPUS_OBJECT_SESSION_TOKEN`.
 - Encrypted sync: `AIPPOCAMPUS_AGE_BIN`.
 - Hook budgets and semantic recall: `AIPPOCAMPUS_PROMPT_HOOK_BUDGET_MS`,
-  `AIPPOCAMPUS_LIFECYCLE_HOOK_BUDGET_MS`,
-  `AIPPOCAMPUS_SEMANTIC_GATE`, and documented warm-recall tuning variables.
+  `AIPPOCAMPUS_LIFECYCLE_HOOK_BUDGET_MS`, and
+  `AIPPOCAMPUS_SEMANTIC_GATE`.
+- Warm ambient recall operator limits:
+  `AIPPOCAMPUS_WARM_RECALL_TIMEOUT`,
+  `AIPPOCAMPUS_WARM_RECALL_CATALOG_LIMIT`,
+  `AIPPOCAMPUS_WARM_RECALL_MAX_WORKERS`,
+  `AIPPOCAMPUS_WARM_RECALL_BACKGROUND`,
+  `AIPPOCAMPUS_DETACHED_WARM_TIMEOUT`,
+  `AIPPOCAMPUS_DETACHED_WARM_PREFIX_CACHE_WARMUP_SCOUTS`, and
+  `AIPPOCAMPUS_DETACHED_WARM_PREFIX_CACHE_WARMUP_DELAY`.
+  Product-tuning values such as temperature, quorum, thinking mode, and
+  foreground prefix-cache warmup should use explicit CLI flags or
+  `WarmRecallConfig`, not ambient import-time env defaults.
 - Optional external models: `AIPPOCAMPUS_DEEPSEEK_FLASH_MODEL`,
   `AIPPOCAMPUS_DEEPSEEK_PRO_MODEL`, `AIPPOCAMPUS_DEEPSEEK_BASE_URL`, and
   `DEEPSEEK_API_KEY`.

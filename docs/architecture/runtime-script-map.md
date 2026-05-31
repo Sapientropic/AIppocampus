@@ -92,7 +92,7 @@ Current package pilots:
 | `aippocampus_runtime/sync/` | `sync_bundle.py`, `sync_contract.py` | Local-folder sync bundle command plus shared manifest, transport metadata, and privacy boundary helpers reused by sync routes. |
 | `aippocampus_runtime/sync/encrypted/` | `encrypted_sync_bundle.py`, `encrypted_sync_crypto.py`, `encrypted_sync_keys.py`, `encrypted_sync_migration.py`, `encrypted_sync_object_storage.py` | Age-backed encrypted bundle, key, migration, and object-storage helpers. |
 | `aippocampus_runtime/sync/object_storage/` | `sync_object_storage.py`, `object_storage_client.py`, `object_storage_providers.py` | Object-storage sync command, client construction, and provider signing helpers. |
-| `aippocampus_runtime/warm_ambient/` | `ambient_warm_scheduler.py`, `warm_ambient_prompting.py`, `warm_ambient_scout_profiles.py`, `warm_ambient_source_validation.py` | Detached warm-job scheduling, prompt rendering, scout taxonomy, and source-ref validation for warm ambient recall. |
+| `aippocampus_runtime/warm_ambient/` | `ambient_warm_scheduler.py`, `warm_ambient_prompting.py`, `warm_ambient_scout_profiles.py`, `warm_ambient_source_validation.py` | Warm-recall CLI edge, typed config, detached warm-job scheduling, prompt rendering, scout taxonomy, and source-ref validation for warm ambient recall. |
 
 Repo-owned docs, smoke, and benchmark tools may import runtime helpers through
 `tools/aippocampus/repo_paths.py`. The local `_paths.py` files in docs, smoke,
@@ -277,7 +277,7 @@ back to clean source. External-model features must stay optional.
 
 | Script or group | Purpose | Invocation route | Key dependencies | Status |
 |---|---|---|---|---|
-| `aippocampus_runtime/warm_ambient/{recall,scheduler,prompting,scout_profiles,source_validation}.py` plus `warm_ambient_*` and `ambient_warm_scheduler.py` compatibility shims | Multi-scout ambient recall, detached warm-job scheduling, prompting, profile taxonomy, and validation. | Optional warm recall jobs and smokes; top-level `warm_ambient_recall.py` and `ambient_warm_scheduler.py` remain direct-script/import shims. | Registry, clean source, semantic/model routes, privacy filters, prompt-hook enqueue budget. | Runtime internal |
+| `aippocampus_runtime/warm_ambient/{cli,config,recall,scheduler,prompting,scout_profiles,source_validation}.py` plus `warm_ambient_*` and `ambient_warm_scheduler.py` compatibility shims | Multi-scout ambient recall, CLI parsing edge, typed runtime config, detached warm-job scheduling, prompting, profile taxonomy, and validation. | Optional warm recall jobs and smokes; top-level `warm_ambient_recall.py` and `ambient_warm_scheduler.py` remain direct-script/import shims. | Registry, clean source, semantic/model routes, privacy filters, prompt-hook enqueue budget. Product-tuning defaults such as temperature, quorum, thinking mode, and prefix-cache warmup flow through explicit config/CLI flags rather than import-time env. | Runtime internal |
 | `aippocampus_runtime/recall/{active_recall,ambient_cache,ambient_cards,ambient_policy}.py`, `active_recall.py`, and `ambient_*` compatibility shims | Cache, anti-nag policy overlay, active recall cards, and thread-level ambient state. | Hook/maintenance/warm recall paths. | Thread cache, source-backed card rendering, hash-only dismissal/surface events. | Runtime internal |
 
 Warm ambient output should remain quiet and advisory unless a prompt explicitly
