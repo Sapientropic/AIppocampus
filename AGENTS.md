@@ -72,12 +72,14 @@ planning material:
   source. Suggested fields are `Status`, `Track`, `Kind`, `Stage`, `Evidence`,
   `Source`, and `Priority`. Do not claim a Project, fields, or automations exist
   until verified against GitHub.
-- New AIppocampus issues should be auto-triaged into Project fields by
+- New AIppocampus issues should be auto-triaged into Project fields and, when
+  confidently inferable, an open Milestone by
   `.github/workflows/project-triage.yml`, which calls
   `tools/aippocampus/github/project_triage.py`. This workflow needs the
-  `AIPPOCAMPUS_PROJECTS_TOKEN` repository secret with GitHub Projects write
-  access; if the secret is missing, it should warn rather than pretending fields
-  were filled. The script fills missing fields conservatively and avoids
+  `AIPPOCAMPUS_PROJECTS_TOKEN` repository secret with GitHub Projects and Issues
+  write access; if the secret is missing, it should warn rather than pretending
+  fields or milestones were filled. The script fills missing fields
+  conservatively, only assigns a Milestone when none exists, and avoids
   overwriting human-edited Project metadata.
 - Keep Project views simple: inbox, roadmap by track/stage, current work, and
   evidence gaps. Automation is optional and should follow the existing issue

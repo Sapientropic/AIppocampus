@@ -153,6 +153,121 @@ def test_topic_epoch_fragmentation_routes_to_life_wide_not_external_models() -> 
     assert result.kind == "Implementation"
     assert result.stage == "Stage 2"
     assert result.priority == "P1"
+    assert result.milestone == "Ambient Recall Warmth Pass"
+
+
+def test_hippocampal_child_issue_gets_benchmark_mvp_milestone() -> None:
+    result = project_triage.infer_triage(
+        issue(
+            244,
+            "Add H1 hard-negative confabulation discipline fixture and asymmetric scoring",
+            "Parent: #228\n\nMake honest abstention score better than confidently reopening the wrong source.",
+        )
+    )
+
+    assert result.milestone == "Hippocampal Benchmark MVP"
+
+
+def test_external_benchmark_adapter_gets_evidence_hardening_milestone() -> None:
+    result = project_triage.infer_triage(
+        issue(
+            258,
+            "Assess MemoryAgentBench as an incremental memory-agent benchmark adapter",
+            "Parent: #216\n\nEvaluate whether MemoryAgentBench should become an external benchmark adapter.",
+        )
+    )
+
+    assert result.milestone == "Benchmark Evidence Hardening"
+
+
+def test_architecture_debt_issue_gets_architecture_slice_milestone() -> None:
+    result = project_triage.infer_triage(
+        issue(
+            266,
+            "Split aippocampus_runtime/core.py before it becomes hidden architecture debt",
+            "core.py mixes path tools, rollout parsing, text processing, redaction, CLI, and graph building.",
+            labels=("enhancement",),
+        )
+    )
+
+    assert result.milestone == "Architecture Debt Slice 2026-06"
+
+
+def test_architecture_debt_issue_routes_to_cross_stage_implementation() -> None:
+    result = project_triage.infer_triage(
+        issue(
+            266,
+            "Split aippocampus_runtime/core.py before it becomes hidden architecture debt",
+            "core.py mixes path tools, rollout parsing, text processing, redaction, CLI, and graph building.",
+            labels=("enhancement",),
+        )
+    )
+
+    assert result.status == "Ready"
+    assert result.track == "Docs cleanup"
+    assert result.kind == "Implementation"
+    assert result.stage == "Cross-stage"
+    assert result.priority == "P1"
+
+
+def test_benchmark_parent_beats_hippocampal_keyword_for_external_adapter() -> None:
+    result = project_triage.infer_triage(
+        issue(
+            258,
+            "Assess MemoryAgentBench as an incremental memory-agent benchmark adapter",
+            "Parent: #216\n\nThis may later feed H1/H2/H5 comparison tables, but the slice is adapter assessment.",
+        )
+    )
+
+    assert result.milestone == "Benchmark Evidence Hardening"
+
+
+def test_milestone_update_only_fills_missing_open_issue_milestone() -> None:
+    triage = project_triage.infer_triage(
+        issue(
+            266,
+            "Split aippocampus_runtime/core.py before it becomes hidden architecture debt",
+            "core.py mixes path tools, rollout parsing, text processing, redaction, CLI, and graph building.",
+        )
+    )
+
+    update = project_triage.planned_milestone_update(
+        issue(266, "Split aippocampus_runtime/core.py before it becomes hidden architecture debt"),
+        triage,
+        {"Architecture Debt Slice 2026-06": 5},
+    )
+
+    assert update == {
+        "planned": "Architecture Debt Slice 2026-06",
+        "milestone_number": 5,
+    }
+
+
+def test_milestone_update_preserves_existing_manual_milestone() -> None:
+    triage = project_triage.infer_triage(
+        issue(
+            266,
+            "Split aippocampus_runtime/core.py before it becomes hidden architecture debt",
+            "core.py mixes path tools, rollout parsing, text processing, redaction, CLI, and graph building.",
+        )
+    )
+
+    update = project_triage.planned_milestone_update(
+        project_triage.IssueContext(
+            number=266,
+            title="Split aippocampus_runtime/core.py before it becomes hidden architecture debt",
+            body="",
+            milestone="Human chosen milestone",
+        ),
+        triage,
+        {"Architecture Debt Slice 2026-06": 5},
+    )
+
+    assert update == {
+        "current": "Human chosen milestone",
+        "planned": "Architecture Debt Slice 2026-06",
+        "skipped": "existing_milestone",
+    }
 
 
 def test_external_benchmark_adapter_assessment_is_research_not_smoke() -> None:
@@ -256,6 +371,62 @@ def test_repair_managed_fields_does_not_overwrite_human_sourced_triage() -> None
     )
 
     assert updates == {}
+
+
+def test_repair_managed_fields_treats_ownership_source_text_as_script_owned() -> None:
+    triage = project_triage.infer_triage(
+        issue(
+            266,
+            "Split aippocampus_runtime/core.py before it becomes hidden architecture debt",
+            "core.py mixes path tools, rollout parsing, text processing, redaction, CLI, and graph building.",
+            labels=("enhancement",),
+        )
+    )
+
+    updates = project_triage.planned_updates(
+        {
+            "Status": "Inbox",
+            "Kind": "Docs",
+            "Priority": "P2",
+            "Source": "GitHub issue #266; docs/runtime-script-map.md is updated if the ownership map changes.",
+        },
+        triage,
+        repair_managed_fields=True,
+    )
+
+    assert updates["Kind"] == "Implementation"
+    assert updates["Priority"] == "P1"
+
+
+def test_repair_managed_fields_repairs_ready_script_owned_items() -> None:
+    triage = project_triage.infer_triage(
+        issue(
+            267,
+            "Centralize recall scoring constants into typed policy objects",
+            "Magic numbers in recall scoring should move into a policy object.",
+        )
+    )
+
+    updates = project_triage.planned_updates(
+        {
+            "Status": "Ready",
+            "Track": "Benchmarks & Research",
+            "Kind": "Smoke",
+            "Stage": "Research",
+            "Evidence": "None",
+            "Priority": "P2",
+            "Source": "GitHub issue #267",
+        },
+        triage,
+        repair_managed_fields=True,
+    )
+
+    assert updates == {
+        "Track": "Docs cleanup",
+        "Kind": "Implementation",
+        "Stage": "Cross-stage",
+        "Priority": "P1",
+    }
 
 
 def test_repair_managed_fields_does_not_move_active_human_work_status() -> None:

@@ -12,12 +12,14 @@ import json
 import os
 import re
 import sys
+import urllib.parse
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from typing import Any
 
 GRAPHQL_URL = "https://api.github.com/graphql"
+REST_URL = "https://api.github.com"
 DEFAULT_PROJECT_OWNER = "Sapientropic"
 DEFAULT_PROJECT_NUMBER = 1
 DEFAULT_REPOSITORY = "Sapientropic/AIppocampus"
@@ -27,6 +29,12 @@ SINGLE_SELECT_FIELDS = ("Status", "Track", "Kind", "Stage", "Evidence", "Priorit
 TEXT_FIELDS = ("Source",)
 REPAIRABLE_MANAGED_FIELDS = ("Track", "Kind", "Stage", "Evidence", "Priority")
 REPAIRABLE_STATUS_VALUES = ("Inbox", "Ready", "Archived")
+
+MILESTONE_HIPPOCAMPAL = "Hippocampal Benchmark MVP"
+MILESTONE_BENCHMARK_EVIDENCE = "Benchmark Evidence Hardening"
+MILESTONE_AMBIENT = "Ambient Recall Warmth Pass"
+MILESTONE_ARCHITECTURE = "Architecture Debt Slice 2026-06"
+MILESTONE_STAGE2 = "Stage 2 Evidence Refresh"
 
 PARENT_TRACK: dict[int, str] = {
     2: "Benchmarks & Research",
@@ -70,6 +78,7 @@ SOURCE_PATH_RE = re.compile(
     r"^(?:\.github|benchmarks|benchmark_corpus|docs|plugins|skills|sources|tests|tools)/"
 )
 SOURCE_ISSUE_PREFIX_RE = re.compile(r"^GitHub issue #(\d+)\b")
+MANUAL_SOURCE_MARKER_RE = re.compile(r"(?i)\b(?:manual|human)\b|owner\s+triage|do not overwrite")
 
 
 @dataclass(frozen=True)
@@ -79,6 +88,7 @@ class IssueContext:
     body: str
     state: str = "OPEN"
     labels: tuple[str, ...] = ()
+    milestone: str | None = None
 
 
 @dataclass(frozen=True)
@@ -90,6 +100,7 @@ class TriageResult:
     evidence: str
     priority: str
     source: str
+    milestone: str | None
     confidence: str
     reasons: tuple[str, ...]
 
@@ -165,7 +176,7 @@ def is_script_managed_current(current: dict[str, str], triage: TriageResult) -> 
         return False
 
     lowered = current_source.lower()
-    if any(marker in lowered for marker in ("manual", "human", "owner", "do not overwrite")):
+    if MANUAL_SOURCE_MARKER_RE.search(current_source):
         return False
 
     current_issue = _source_issue_number(current_source)
@@ -176,7 +187,7 @@ def is_script_managed_current(current: dict[str, str], triage: TriageResult) -> 
     if "managed-by: project_triage" in lowered:
         return True
 
-    return current.get("Status") in {"Inbox", "Archived"}
+    return current.get("Status") in {"Inbox", "Ready", "Archived"}
 
 
 def infer_track(issue: IssueContext, parents: list[int]) -> tuple[str | None, str | None]:
@@ -185,6 +196,15 @@ def infer_track(issue: IssueContext, parents: list[int]) -> tuple[str | None, st
             return PARENT_TRACK[parent], f"parent #{parent}"
 
     text = _text(issue)
+    if _contains(
+        text,
+        "core.py",
+        "architecture debt",
+        "scoring constants",
+        "magic numbers",
+        "typed policy",
+    ):
+        return "Docs cleanup", "architecture-debt keywords"
     if _contains(text, "mem0", "zep", "graphiti", "letta", "arc-agi", "benchmark"):
         return "Benchmarks & Research", "benchmark/research keywords"
     if _contains(
@@ -243,6 +263,8 @@ def infer_stage(issue: IssueContext, track: str | None, parents: list[int]) -> t
         return "Cross-stage", "track default"
     if track == "Public readiness":
         return "Stage 1", "track default"
+    if track == "Docs cleanup":
+        return "Cross-stage", "track default"
     return None, None
 
 
@@ -263,6 +285,8 @@ def infer_kind(issue: IssueContext) -> tuple[str | None, str | None]:
         "arc-agi",
     ):
         return "Research", "research keywords"
+    if _contains(text, "core.py", "architecture debt", "scoring constants", "magic numbers", "typed policy"):
+        return "Implementation", "architecture-debt keywords"
     if _contains(text, "hard-negative", "fixture schema", "recall-discrimination runner"):
         return "Implementation", "benchmark implementation keywords"
     if _contains(
@@ -314,6 +338,8 @@ def infer_priority(issue: IssueContext, track: str | None, kind: str | None) -> 
         return "P0", "life-wide evidence blocker"
     if track == "GB/TB scale" and _contains(text, "content-addressed", "query planner"):
         return "P0", "scale architecture blocker"
+    if _contains(text, "core.py", "architecture debt", "scoring constants", "magic numbers", "typed policy"):
+        return "P1", "architecture-debt default"
     if track == "Release verification":
         return "P0", "release verification umbrella"
     if kind == "Umbrella" and track in {"Public readiness", "Life-wide memory", "MCP & Plugin"}:
@@ -325,6 +351,87 @@ def infer_priority(issue: IssueContext, track: str | None, kind: str | None) -> 
     if track:
         return "P1", "track default"
     return "P2", "fallback"
+
+
+def infer_milestone(
+    issue: IssueContext, parents: list[int], track: str | None, kind: str | None, stage: str | None
+) -> tuple[str | None, str | None]:
+    """Infer an open GitHub Milestone.
+
+    Milestones are a coarse delivery batch, not source truth. Keep this
+    intentionally conservative and only return a milestone when the issue has a
+    recognizable work stream; the caller must preserve any existing human-set
+    milestone.
+    """
+
+    text = _text(issue)
+
+    if _contains(
+        text,
+        "core.py",
+        "architecture debt",
+        "scoring constants",
+        "magic numbers",
+        "typed policy",
+        "ruff",
+        "subpackages",
+    ):
+        return MILESTONE_ARCHITECTURE, "architecture debt keywords"
+
+    if _contains(
+        text,
+        "topic-epoch",
+        "topic epoch",
+        "warm ambient",
+        "ambient cache",
+        "vague recall",
+        "same-session paraphrases",
+    ):
+        return MILESTONE_AMBIENT, "ambient-recall keywords"
+
+    if 228 in parents:
+        return MILESTONE_HIPPOCAMPAL, "parent #228"
+
+    if 216 in parents:
+        return MILESTONE_BENCHMARK_EVIDENCE, "parent #216"
+
+    if _contains(
+        text,
+        "hippocampal",
+        "h1",
+        "h2",
+        "h5",
+        "pattern completion",
+        "pattern separation",
+        "confabulation",
+        "recall-discrimination",
+    ):
+        return MILESTONE_HIPPOCAMPAL, "hippocampal benchmark keywords"
+
+    if _contains(
+        text,
+        "longmemeval",
+        "memoryagentbench",
+        "benchmark evidence",
+        "external benchmark adapter",
+        "react vcs",
+        "live retrieval",
+    ):
+        return MILESTONE_BENCHMARK_EVIDENCE, "benchmark-evidence keywords"
+
+    if _contains(
+        text,
+        "source-review",
+        "semantic label",
+        "question-tracking",
+        "question tracking",
+        "pro-agent",
+        "suppressed-label",
+        "stage 2 evidence",
+    ) or (track == "Life-wide memory" and stage == "Stage 2" and kind in {"Smoke", "Implementation"}):
+        return MILESTONE_STAGE2, "stage-2 evidence keywords"
+
+    return None, None
 
 
 def infer_source(issue: IssueContext, parents: list[int]) -> str:
@@ -365,6 +472,10 @@ def infer_triage(issue: IssueContext) -> TriageResult:
     priority, priority_reason = infer_priority(issue, track, kind)
     reasons.append(f"priority={priority_reason}")
 
+    milestone, milestone_reason = infer_milestone(issue, parents, track, kind, stage)
+    if milestone_reason:
+        reasons.append(f"milestone={milestone_reason}")
+
     complete_route = bool(track and kind and stage)
     if issue.state.upper() == "CLOSED":
         status = "Done"
@@ -388,6 +499,7 @@ def infer_triage(issue: IssueContext) -> TriageResult:
         evidence="None",
         priority=priority,
         source=infer_source(issue, parents),
+        milestone=milestone,
         confidence=confidence,
         reasons=tuple(reasons),
     )
@@ -418,6 +530,27 @@ class GitHubProjectClient:
             raise RuntimeError(json.dumps(payload["errors"], ensure_ascii=False))
         return payload["data"]
 
+    def rest(self, method: str, path: str, payload: dict[str, Any] | None = None) -> Any:
+        data = None if payload is None else json.dumps(payload).encode("utf-8")
+        request = urllib.request.Request(
+            REST_URL + path,
+            data=data,
+            headers={
+                "Authorization": f"Bearer {self.token}",
+                "Content-Type": "application/json",
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+            },
+            method=method,
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                body = response.read().decode("utf-8")
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"GitHub REST HTTP {exc.code}: {body}") from exc
+        return json.loads(body) if body else None
+
 
 PROJECT_QUERY = """
 query($owner: String!, $number: Int!, $after: String) {
@@ -444,6 +577,7 @@ query($owner: String!, $number: Int!, $after: String) {
               state
               repository { nameWithOwner }
               labels(first: 50) { nodes { name } }
+              milestone { title }
             }
           }
           fieldValues(first: 50) {
@@ -475,6 +609,7 @@ query($owner: String!, $repo: String!, $number: Int!) {
       body
       state
       labels(first: 50) { nodes { name } }
+      milestone { title }
     }
   }
 }
@@ -570,6 +705,13 @@ def item_field_values(item: dict[str, Any]) -> dict[str, str]:
     return values
 
 
+def _milestone_title(node: dict[str, Any]) -> str | None:
+    milestone = node.get("milestone")
+    if isinstance(milestone, dict) and isinstance(milestone.get("title"), str):
+        return milestone["title"]
+    return None
+
+
 def issue_context_from_node(node: dict[str, Any]) -> IssueContext:
     labels = tuple(label["name"] for label in node["labels"]["nodes"] if isinstance(label.get("name"), str))
     return IssueContext(
@@ -578,6 +720,7 @@ def issue_context_from_node(node: dict[str, Any]) -> IssueContext:
         body=str(node.get("body") or ""),
         state=str(node.get("state") or "OPEN"),
         labels=labels,
+        milestone=_milestone_title(node),
     )
 
 
@@ -609,7 +752,72 @@ def fetch_issue(client: GitHubProjectClient, repo: str, issue_number: int) -> tu
         body=str(issue.get("body") or ""),
         state=str(issue.get("state") or "OPEN"),
         labels=labels,
+        milestone=_milestone_title(issue),
     )
+
+
+def open_milestone_numbers(client: GitHubProjectClient, repo: str) -> dict[str, int]:
+    path = f"/repos/{urllib.parse.quote(repo, safe='/')}/milestones?state=open&per_page=100"
+    milestones = client.rest("GET", path)
+    if not isinstance(milestones, list):
+        raise RuntimeError("Unexpected GitHub milestones response")
+    result: dict[str, int] = {}
+    for milestone in milestones:
+        if not isinstance(milestone, dict):
+            continue
+        title = milestone.get("title")
+        number = milestone.get("number")
+        if isinstance(title, str) and isinstance(number, int):
+            result[title] = number
+    return result
+
+
+def planned_milestone_update(
+    issue: IssueContext,
+    triage: TriageResult,
+    milestone_numbers: dict[str, int],
+) -> dict[str, Any]:
+    if not triage.milestone:
+        return {}
+    if issue.milestone:
+        return {
+            "current": issue.milestone,
+            "planned": triage.milestone,
+            "skipped": "existing_milestone",
+        }
+    if issue.state.upper() == "CLOSED":
+        return {
+            "planned": triage.milestone,
+            "skipped": "closed_issue",
+        }
+
+    milestone_number = milestone_numbers.get(triage.milestone)
+    if milestone_number is None:
+        return {
+            "planned": triage.milestone,
+            "error": "missing_milestone",
+        }
+    return {
+        "planned": triage.milestone,
+        "milestone_number": milestone_number,
+    }
+
+
+def apply_milestone_update(
+    client: GitHubProjectClient,
+    repo: str,
+    issue_number: int,
+    milestone_update: dict[str, Any],
+) -> None:
+    milestone_number = milestone_update.get("milestone_number")
+    if not isinstance(milestone_number, int):
+        return
+    path = f"/repos/{urllib.parse.quote(repo, safe='/')}/issues/{issue_number}"
+    client.rest("PATCH", path, {"milestone": milestone_number})
+
+
+def is_actionable_milestone_update(milestone_update: dict[str, Any]) -> bool:
+    return bool(milestone_update) and not milestone_update.get("skipped")
 
 
 def planned_updates(
@@ -682,6 +890,9 @@ def triage_item(
     dry_run: bool,
     fill_missing: bool = True,
     repair_managed_fields: bool = False,
+    repo: str | None = None,
+    assign_milestones: bool = False,
+    milestone_numbers: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     content = item.get("content")
     if not isinstance(content, dict) or content.get("__typename") != "Issue":
@@ -698,11 +909,19 @@ def triage_item(
     )
     if updates and not dry_run:
         apply_updates(client, project_id, item["id"], fields, updates)
+    milestone_update: dict[str, Any] = {}
+    if assign_milestones:
+        milestone_update = planned_milestone_update(issue, triage, milestone_numbers or {})
+        if repo and milestone_update.get("milestone_number") and not dry_run:
+            apply_milestone_update(client, repo, issue.number, milestone_update)
     return {
         "issue": issue.number,
         "title": issue.title,
         "confidence": triage.confidence,
         "reasons": triage.reasons,
+        "milestone": triage.milestone,
+        "current_milestone": issue.milestone,
+        "milestone_update": milestone_update,
         "current": current,
         "updates": updates,
         "fill_missing": fill_missing,
@@ -741,6 +960,8 @@ def triage_single_issue(
     dry_run: bool,
     fill_missing: bool = True,
     repair_managed_fields: bool = False,
+    assign_milestones: bool = False,
+    milestone_numbers: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     item, issue = ensure_issue_item(client, project_id, items, repo, issue_number, dry_run=dry_run)
     triage = infer_triage(issue)
@@ -756,11 +977,19 @@ def triage_single_issue(
         updates["_project_item"] = "would_add"
     elif updates and not dry_run:
         apply_updates(client, project_id, item["id"], fields, updates)
+    milestone_update: dict[str, Any] = {}
+    if assign_milestones:
+        milestone_update = planned_milestone_update(issue, triage, milestone_numbers or {})
+        if milestone_update.get("milestone_number") and not dry_run:
+            apply_milestone_update(client, repo, issue.number, milestone_update)
     return {
         "issue": issue.number,
         "title": issue.title,
         "confidence": triage.confidence,
         "reasons": triage.reasons,
+        "milestone": triage.milestone,
+        "current_milestone": issue.milestone,
+        "milestone_update": milestone_update,
         "current": current,
         "updates": updates,
         "fill_missing": fill_missing,
@@ -793,6 +1022,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
             "Use with --dry-run first to inspect the report."
         ),
     )
+    parser.add_argument(
+        "--assign-milestones",
+        action="store_true",
+        help=(
+            "Assign an inferred open GitHub Milestone when an issue has no milestone. "
+            "Existing human-set milestones are preserved."
+        ),
+    )
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args(argv)
 
@@ -821,6 +1058,7 @@ def main(argv: list[str] | None = None) -> int:
         raise RuntimeError(f"Project is missing expected fields: {', '.join(missing_fields)}")
 
     project_id = project["id"]
+    milestone_numbers = open_milestone_numbers(client, args.repo) if args.assign_milestones else {}
     if args.issue_number:
         results = [
             triage_single_issue(
@@ -833,16 +1071,27 @@ def main(argv: list[str] | None = None) -> int:
                 dry_run=args.dry_run,
                 fill_missing=True,
                 repair_managed_fields=args.repair_managed_fields,
+                assign_milestones=args.assign_milestones,
+                milestone_numbers=milestone_numbers,
             )
         ]
-    elif args.all_missing or args.repair_managed_fields:
+    elif args.all_missing or args.repair_managed_fields or args.assign_milestones:
         results = []
         for item in items:
             current = item_field_values(item)
             has_missing_fields = any(not current.get(field) for field in PROJECT_FIELDS)
-            if not args.all_missing and not args.repair_managed_fields:
+            if not args.all_missing and not args.repair_managed_fields and not args.assign_milestones:
                 continue
             if not has_missing_fields and not args.repair_managed_fields:
+                content = item.get("content")
+                if not (
+                    args.assign_milestones
+                    and isinstance(content, dict)
+                    and content.get("__typename") == "Issue"
+                    and not _milestone_title(content)
+                ):
+                    continue
+            if not has_missing_fields and not args.repair_managed_fields and not args.assign_milestones:
                 continue
             result = triage_item(
                 client,
@@ -852,11 +1101,18 @@ def main(argv: list[str] | None = None) -> int:
                 dry_run=args.dry_run,
                 fill_missing=args.all_missing,
                 repair_managed_fields=args.repair_managed_fields,
+                repo=args.repo,
+                assign_milestones=args.assign_milestones,
+                milestone_numbers=milestone_numbers,
             )
-            if result["updates"] or (args.all_missing and has_missing_fields):
+            if (
+                result["updates"]
+                or is_actionable_milestone_update(result["milestone_update"])
+                or (args.all_missing and has_missing_fields)
+            ):
                 results.append(result)
     else:
-        raise RuntimeError("Pass --issue-number, --all-missing, or --repair-managed-fields.")
+        raise RuntimeError("Pass --issue-number, --all-missing, --repair-managed-fields, or --assign-milestones.")
 
     print(json.dumps({"ok": True, "results": results}, ensure_ascii=False, indent=2))
     return 0
