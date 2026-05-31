@@ -484,23 +484,19 @@ class AippocampusMcpServerTests(unittest.TestCase):
 
     def test_memory_health_runs_in_process_for_frozen_binary_entrypoints(self) -> None:
         old_argv = sys.argv[:]
-        seen_argv: list[str] = []
+        seen_cwd: list[Path] = []
 
-        def fake_health_main() -> int:
-            seen_argv.extend(sys.argv)
-            print(
-                json.dumps(
-                    {
-                        "ok": False,
-                        "cwd": str(self.cwd),
-                        "recommended_actions": [],
-                    },
-                    ensure_ascii=False,
-                )
-            )
-            return 0
+        def fake_health_report(cwd: str | Path) -> dict:
+            seen_cwd.append(Path(cwd))
+            return {
+                "ok": False,
+                "cwd": str(cwd),
+                "recommended_actions": [],
+            }
 
-        with mock.patch.object(mcp.aippocampus_health, "main", side_effect=fake_health_main):
+        with mock.patch.object(
+            mcp.aippocampus_health, "health_report", side_effect=fake_health_report
+        ):
             response = mcp.handle_request(
                 {
                     "jsonrpc": "2.0",
@@ -519,10 +515,7 @@ class AippocampusMcpServerTests(unittest.TestCase):
         payload = self.tool_payload(response)
         self.assertEqual(payload["cwd"], str(self.cwd))
         self.assertEqual(payload["recommended_actions"], [])
-        self.assertEqual(
-            seen_argv,
-            ["aippocampus_health.py", "--cwd", str(self.cwd), "--json"],
-        )
+        self.assertEqual(seen_cwd, [self.cwd])
 
     def test_stdio_jsonrpc_smoke_exercises_client_entrypoint(self) -> None:
         requests = [

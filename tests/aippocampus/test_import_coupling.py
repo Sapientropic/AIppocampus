@@ -1296,8 +1296,8 @@ class ImportCouplingTests(unittest.TestCase):
         for owner in [
             "aippocampus_runtime.artifacts.publish",
             "aippocampus_runtime.core",
-            "aippocampus_runtime.question.health",
-            "aippocampus_runtime.registry.api",
+            "aippocampus_runtime.question.constants",
+            "aippocampus_runtime.registry.store",
         ]:
             self.assertIn(owner, package_edges)
         for flat_module in [
@@ -1308,7 +1308,30 @@ class ImportCouplingTests(unittest.TestCase):
         ]:
             self.assertNotIn(flat_module, package_edges)
         self.assertIs(aippocampus_health.main, health.main)
+        self.assertIs(aippocampus_health.health_report, health.health_report)
         self.assertIs(aippocampus_health.load_question_stats, health.load_question_stats)
+
+    def test_runtime_health_package_api_replaces_script_health_dispatch(self) -> None:
+        package_sources = [
+            SCRIPTS / "aippocampus_runtime" / "mcp" / "server.py",
+            SCRIPTS / "aippocampus_runtime" / "recall" / "active_recall.py",
+            SCRIPTS / "aippocampus_runtime" / "registry" / "api.py",
+        ]
+        for source in package_sources:
+            text = source.read_text(encoding="utf-8")
+            self.assertNotIn('SCRIPT_DIR / "aippocampus_health.py"', text, source)
+            self.assertNotIn("sys.executable, str(SCRIPT_DIR / \"aippocampus_health.py\")", text, source)
+
+        self.assertIn(
+            "aippocampus_health.health_report(cwd_arg(arguments))",
+            (SCRIPTS / "aippocampus_runtime" / "mcp" / "server.py").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "health = health_report(cwd)",
+            (SCRIPTS / "aippocampus_runtime" / "recall" / "active_recall.py").read_text(
+                encoding="utf-8"
+            ),
+        )
 
     def test_subconscious_validation_audit_has_package_owner_and_compat_shim(self) -> None:
         import subconscious_validation_audit

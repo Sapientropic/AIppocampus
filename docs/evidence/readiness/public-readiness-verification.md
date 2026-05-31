@@ -269,6 +269,12 @@ Latest verification for this refresh:
   guard clean, and then reached `mcp__aippocampus__memory_health` through Claude
   Code 2.1.138 with both `tool_use` and matching `tool_result` observed through
   a temporary strict MCP config using `aippocampus.exe mcp`.
+- Follow-up #144 API cleanup kept the same public CLI and shim boundary while
+  exposing `HealthOptions`, `build_health_report()`, and `health_report()` as
+  the package-level health API. MCP `memory_health`, active recall, and registry
+  registration now call the package API directly instead of dispatching
+  `aippocampus_health.py` through `sys.executable`; targeted coupling tests
+  guard against reintroducing that package-to-script loop.
 
 This refresh does not close #104. The post-migration encrypted provider sync
 smoke still needs a maintainer-provided real object-store provider target and

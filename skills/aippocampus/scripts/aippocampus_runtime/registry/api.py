@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib
 import json
 import os
 import re
@@ -180,15 +181,8 @@ def register_current_thread(
     clean_manifest = load_json(clean_source_dir / "manifest.json")
     if health is None:
         try:
-            health = run_json(
-                [
-                    sys.executable,
-                    str(SCRIPT_DIR / "aippocampus_health.py"),
-                    "--cwd",
-                    str(cwd),
-                    "--json",
-                ]
-            )
+            health_module = importlib.import_module("aippocampus_runtime.health")
+            health = health_module.health_report(cwd)
         except Exception:
             health = {}
     anchors_path = cwd / "thread-anchors.md"

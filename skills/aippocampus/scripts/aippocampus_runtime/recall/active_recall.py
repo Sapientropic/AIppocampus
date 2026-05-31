@@ -10,6 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from aippocampus_runtime.health import health_report
 from aippocampus_runtime.recall.life_cues import (
     life_wide_recall_terms,
     profile_recall_terms,
@@ -113,9 +114,7 @@ def main() -> int:
     if not prompt:
         raise SystemExit("active_recall.py requires prompt text or --stdin")
 
-    health = run_json(
-        [sys.executable, str(SCRIPT_DIR / "aippocampus_health.py"), "--cwd", str(cwd), "--json"]
-    )
+    health = health_report(cwd)
     anchor_path = resolve_anchor_path(cwd, args.anchors)
     query_terms = active_recall_query_terms(prompt)
     anchors = match_anchors(anchor_path, query_terms) if anchor_path.exists() else []
