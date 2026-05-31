@@ -169,7 +169,7 @@ def search_clean_source(
     }
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("patterns", nargs="+")
     parser.add_argument("--cwd", default=os.getcwd())
@@ -187,7 +187,7 @@ def main() -> int:
         help="Filter to clean-source messages carrying this scope label. Repeat for OR semantics.",
     )
     parser.add_argument("--json", action="store_true", dest="json_output")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     result = search_clean_source(
         args.cwd,
