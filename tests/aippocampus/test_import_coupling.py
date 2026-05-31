@@ -343,6 +343,35 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(deepseek_model_routing.resolve_model_route, routing.resolve_model_route)
         self.assertIs(deepseek_model_routing.ModelRoute, routing.ModelRoute)
 
+    def test_coding_host_contract_has_package_owner_and_compat_shim(self) -> None:
+        import coding_ticket_host_contract
+        from aippocampus_runtime.coding import host_contract
+
+        package_paths = [
+            SCRIPTS / "aippocampus_runtime" / "coding" / "__init__.py",
+            SCRIPTS / "aippocampus_runtime" / "coding" / "host_contract.py",
+        ]
+        shim_path = SCRIPTS / "coding_ticket_host_contract.py"
+
+        for path in package_paths:
+            self.assertTrue(path.exists(), path)
+        self.assertTrue(shim_path.exists(), shim_path)
+        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+
+        self.assertIs(
+            coding_ticket_host_contract.host_decision_for_ticket,
+            host_contract.host_decision_for_ticket,
+        )
+        self.assertIs(
+            coding_ticket_host_contract.describe_host_contract,
+            host_contract.describe_host_contract,
+        )
+        self.assertIs(
+            coding_ticket_host_contract.tune_activation_from_feedback,
+            host_contract.tune_activation_from_feedback,
+        )
+        self.assertIs(coding_ticket_host_contract.main, host_contract.main)
+
     def test_subconscious_worker_has_package_owner_and_compat_shim(self) -> None:
         import subconscious_worker
         from aippocampus_runtime.subconscious import worker

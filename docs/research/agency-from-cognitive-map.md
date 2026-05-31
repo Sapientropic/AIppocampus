@@ -243,10 +243,12 @@ for `accepted`, `ignored`, `dismissed`, `corrected`, `tool_success`, and
 `tool_failure` outcomes.
 
 Coding-continuity tickets have a narrower host contract in
-`skills/aippocampus/scripts/coding_ticket_host_contract.py`. That simulator maps
-coding tickets to `silent_tuning`, `backstage_prep`, `light_nudge`, `warning`,
-`offer_next_step`, or `stay_silent`, and treats source visibility as a
-host-supplied runtime input rather than stored truth.
+`aippocampus_runtime.coding.host_contract`, with
+`skills/aippocampus/scripts/coding_ticket_host_contract.py` kept as a
+compatibility shim. That simulator maps coding tickets to `silent_tuning`,
+`backstage_prep`, `light_nudge`, `warning`, `offer_next_step`, or `stay_silent`,
+and treats source visibility as a host-supplied runtime input rather than stored
+truth.
 
 Current tests live in `tests/aippocampus/test_agency_affordance.py` and cover
 the first four evaluation cases: should stay silent, should remind, should
