@@ -44,7 +44,7 @@ class CommandResult:
 
 COMMANDS = {
     "health": CommandSpec("aippocampus_health.py", "aippocampus_runtime.health"),
-    "onboard": CommandSpec("onboard.py", "onboard"),
+    "onboard": CommandSpec("onboard.py", "aippocampus_runtime.onboarding.facade"),
     "search": CommandSpec("search_clean_source.py", "aippocampus_runtime.source.search"),
 }
 

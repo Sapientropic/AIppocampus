@@ -67,6 +67,11 @@ The hook scripts and installers above are direct-path compatibility shims over
 script paths from Codex hook configs; Python/runtime callers should import the
 package owners.
 
+The onboarding scripts are direct-path compatibility shims over
+`aippocampus_runtime.onboarding.*` package owners. Keep invoking documented
+script paths from installs and older automation; Python/runtime callers should
+import the package owners.
+
 For these commands:
 
 - Documented command names and documented flags are stable unless release notes

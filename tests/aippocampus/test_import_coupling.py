@@ -851,6 +851,63 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertEqual(install_prompt.SCRIPT_DIR, SCRIPTS)
         self.assertEqual(install_lifecycle.SCRIPT_DIR, SCRIPTS)
 
+    def test_onboarding_entrypoints_have_package_owners_and_compat_shims(self) -> None:
+        import onboard
+        import onboard_codex
+        import onboard_frontier
+        import onboard_status
+        from aippocampus_runtime.onboarding import codex, facade, frontier, status
+
+        package_paths = [
+            SCRIPTS / "aippocampus_runtime" / "onboarding" / "__init__.py",
+            SCRIPTS / "aippocampus_runtime" / "onboarding" / "facade.py",
+            SCRIPTS / "aippocampus_runtime" / "onboarding" / "codex.py",
+            SCRIPTS / "aippocampus_runtime" / "onboarding" / "frontier.py",
+            SCRIPTS / "aippocampus_runtime" / "onboarding" / "status.py",
+        ]
+        shim_paths = [
+            SCRIPTS / "onboard.py",
+            SCRIPTS / "onboard_codex.py",
+            SCRIPTS / "onboard_frontier.py",
+            SCRIPTS / "onboard_status.py",
+        ]
+
+        for path in package_paths + shim_paths:
+            self.assertTrue(path.exists(), path)
+        for path in shim_paths:
+            self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges()
+        self.assertIn("aippocampus_runtime.onboarding.facade", edges["onboard"])
+        self.assertIn("aippocampus_runtime.onboarding.codex", edges["onboard_codex"])
+        self.assertIn("aippocampus_runtime.onboarding.frontier", edges["onboard_frontier"])
+        self.assertIn("aippocampus_runtime.onboarding.status", edges["onboard_status"])
+        self.assertIn(
+            "aippocampus_runtime.onboarding.codex",
+            edges["aippocampus_runtime.onboarding.facade"],
+        )
+        self.assertIn(
+            "aippocampus_runtime.onboarding.frontier",
+            edges["aippocampus_runtime.onboarding.codex"],
+        )
+        self.assertIn(
+            "aippocampus_runtime.onboarding.status",
+            edges["aippocampus_runtime.onboarding.codex"],
+        )
+        self.assertNotIn("onboard_codex", edges["aippocampus_runtime.onboarding.facade"])
+        self.assertNotIn("onboard_frontier", edges["aippocampus_runtime.onboarding.codex"])
+        self.assertNotIn("onboard_status", edges["aippocampus_runtime.onboarding.codex"])
+        self.assertNotIn("registry", edges["aippocampus_runtime.onboarding.status"])
+
+        self.assertIs(onboard.main, facade.main)
+        self.assertIs(onboard.provider_status_report, facade.provider_status_report)
+        self.assertIs(onboard_codex.run_onboarding, codex.run_onboarding)
+        self.assertIs(onboard_codex.repair_missing_artifacts, codex.repair_missing_artifacts)
+        self.assertIs(onboard_frontier.frontier_boundary_result, frontier.frontier_boundary_result)
+        self.assertIs(onboard_frontier.run_jobs, frontier.run_jobs)
+        self.assertIs(onboard_status.registry_stats, status.registry_stats)
+        self.assertIs(onboard_status.sqlite_consistency_issues, status.sqlite_consistency_issues)
+
     def test_dream_worker_contract_has_package_owner_and_compat_shim(self) -> None:
         import dream_worker_contract
         from aippocampus_runtime.dream import worker_contract
