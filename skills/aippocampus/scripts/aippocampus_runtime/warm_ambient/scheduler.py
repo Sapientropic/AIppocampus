@@ -26,18 +26,21 @@ from aippocampus_runtime.core import (
     sanitize_external_model_text,
 )
 from aippocampus_runtime.recall.ambient_cache import default_ambient_cache_path
+from aippocampus_runtime.warm_ambient.config import (
+    DEFAULT_WARM_DETACHED_JOB_CONFIG,
+    WarmDetachedJobConfig,
+    warm_detached_job_config_from_env,
+)
 
 JOB_SCHEMA_VERSION = 1
 DEFAULT_JOB_DIR_NAME = "ambient_warm_jobs"
-DEFAULT_DETACHED_PREFIX_CACHE_WARMUP_SCOUTS = int(
-    os.environ.get("AIPPOCAMPUS_DETACHED_WARM_PREFIX_CACHE_WARMUP_SCOUTS", "2") or 0
+DEFAULT_DETACHED_PREFIX_CACHE_WARMUP_SCOUTS = (
+    DEFAULT_WARM_DETACHED_JOB_CONFIG.prefix_cache_warmup_scouts
 )
-DEFAULT_DETACHED_PREFIX_CACHE_WARMUP_DELAY = float(
-    os.environ.get("AIPPOCAMPUS_DETACHED_WARM_PREFIX_CACHE_WARMUP_DELAY", "0.5") or 0
+DEFAULT_DETACHED_PREFIX_CACHE_WARMUP_DELAY = (
+    DEFAULT_WARM_DETACHED_JOB_CONFIG.prefix_cache_warmup_delay
 )
-DEFAULT_DETACHED_WARM_TIMEOUT = float(
-    os.environ.get("AIPPOCAMPUS_DETACHED_WARM_TIMEOUT", "45") or 0
-)
+DEFAULT_DETACHED_WARM_TIMEOUT = DEFAULT_WARM_DETACHED_JOB_CONFIG.timeout
 TRUTHY = {"1", "true", "yes", "on", "enabled"}
 FALSY = {"0", "false", "no", "off", "disabled"}
 
@@ -132,6 +135,7 @@ def schedule_warm_ambient_recall(
     enabled: bool | None = None,
     spawn: bool = True,
     wait_all_foreground: bool = False,
+    detached_config: WarmDetachedJobConfig | None = None,
     runner: Callable[[Path], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     if not warm_background_enabled(enabled):
@@ -153,6 +157,11 @@ def schedule_warm_ambient_recall(
         }
     if spawn and not os.environ.get(api_key_env):
         return {"status": "skipped_missing_api_key", "reason": f"{api_key_env} is not set"}
+    job_config = (detached_config or warm_detached_job_config_from_env()).with_overrides(
+        timeout=timeout,
+        prefix_cache_warmup_scouts=prefix_cache_warmup_scouts,
+        prefix_cache_warmup_delay=prefix_cache_warmup_delay,
+    )
 
     target_dir = Path(job_dir).resolve() if job_dir else default_warm_job_dir(
         registry_path=registry_path, registry_dir=registry_dir
@@ -188,15 +197,11 @@ def schedule_warm_ambient_recall(
         # Detached jobs are allowed to spend seconds because they do not block
         # UserPromptSubmit. Do not inherit the standalone warm CLI's short
         # foreground-style timeout here, or the default-on loop warms nothing.
-        "timeout": DEFAULT_DETACHED_WARM_TIMEOUT if timeout is None else timeout,
+        "timeout": job_config.timeout,
         "quorum": quorum,
         "max_workers": max_workers,
-        "prefix_cache_warmup_scouts": DEFAULT_DETACHED_PREFIX_CACHE_WARMUP_SCOUTS
-        if prefix_cache_warmup_scouts is None
-        else int(prefix_cache_warmup_scouts),
-        "prefix_cache_warmup_delay": DEFAULT_DETACHED_PREFIX_CACHE_WARMUP_DELAY
-        if prefix_cache_warmup_delay is None
-        else float(prefix_cache_warmup_delay),
+        "prefix_cache_warmup_scouts": job_config.prefix_cache_warmup_scouts,
+        "prefix_cache_warmup_delay": job_config.prefix_cache_warmup_delay,
         "wait_all": True,
         "no_write": False,
         "result_path": str(result_path),

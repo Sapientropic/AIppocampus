@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import sys
@@ -169,18 +171,223 @@ class WarmAmbientRecallTests(unittest.TestCase):
             return {"decision": "skip", "confidence": 0.1}
 
         with patch.dict(os.environ, {"AIPPOCAMPUS_WARM_RECALL_MAX_WORKERS": "7"}):
+            config = warm.warm_recall_config_from_env()
             result = warm.run_warm_ambient_recall(
                 "继续 ambient recall",
                 cwd=self.workspace,
                 thread_id="thread-a",
                 cache_path=self.cache_path,
                 api_key="test-key",
+                config=config,
                 scout_fn=scout_fn,
                 wait_all=True,
                 no_write=True,
             )
 
         self.assertEqual(result["max_workers"], 7)
+
+    def test_warm_recall_config_env_boundary_ignores_product_tuning_vars(self) -> None:
+        env = {
+            "AIPPOCAMPUS_WARM_RECALL_TIMEOUT": "6.5",
+            "AIPPOCAMPUS_WARM_RECALL_CATALOG_LIMIT": "12",
+            "AIPPOCAMPUS_WARM_RECALL_MAX_WORKERS": "4",
+            "AIPPOCAMPUS_WARM_RECALL_TEMPERATURE": "0.9",
+            "AIPPOCAMPUS_WARM_RECALL_THINKING": "disabled",
+            "AIPPOCAMPUS_WARM_RECALL_QUORUM": "9",
+            "AIPPOCAMPUS_WARM_PREFIX_CACHE_WARMUP_SCOUTS": "3",
+            "AIPPOCAMPUS_WARM_PREFIX_CACHE_WARMUP_DELAY": "1.5",
+        }
+
+        config = warm.warm_recall_config_from_env(env)
+
+        self.assertEqual(config.timeout, 6.5)
+        self.assertEqual(config.max_catalog_items, 12)
+        self.assertEqual(config.max_workers, 4)
+        self.assertEqual(config.temperature, warm.DEFAULT_TEMPERATURE)
+        self.assertEqual(config.thinking, warm.DEFAULT_THINKING)
+        self.assertEqual(config.quorum, warm.DEFAULT_QUORUM)
+        self.assertEqual(
+            config.prefix_cache_warmup_scouts,
+            warm.DEFAULT_PREFIX_CACHE_WARMUP_SCOUTS,
+        )
+        self.assertEqual(
+            config.prefix_cache_warmup_delay,
+            warm.DEFAULT_PREFIX_CACHE_WARMUP_DELAY,
+        )
+        self.assertNotIn(
+            "AIPPOCAMPUS_WARM_RECALL_TEMPERATURE",
+            warm.WARM_RECALL_OPERATOR_ENV_VARS,
+        )
+
+    def test_explicit_warm_recall_config_controls_runtime_without_global_mutation(self) -> None:
+        seen_thinking: list[str | None] = []
+        seen_temperatures: list[float] = []
+
+        def chat_fn(
+            messages,
+            api_key,
+            model,
+            base_url,
+            max_tokens,
+            timeout,
+            temperature,
+            *,
+            user_id=None,
+            thinking=None,
+        ):
+            del messages, api_key, model, base_url, max_tokens, timeout, user_id
+            seen_thinking.append(thinking)
+            seen_temperatures.append(temperature)
+            content = json.dumps({"decision": "skip", "confidence": 0.1})
+            return {"choices": [{"message": {"content": content}}]}
+
+        config = warm.WarmRecallConfig(
+            timeout=0.7,
+            temperature=0.4,
+            quorum=1,
+            thinking="disabled",
+            max_workers=1,
+            prefix_cache_warmup_scouts=1,
+            prefix_cache_warmup_delay=0.0,
+        )
+
+        result = warm.run_warm_ambient_recall(
+            "继续 ambient recall",
+            cwd=self.workspace,
+            thread_id="thread-a",
+            cache_path=self.cache_path,
+            api_key="test-key",
+            config=config,
+            chat_fn=chat_fn,
+            scouts=("semantic_expander",),
+            wait_all=True,
+            no_write=True,
+        )
+
+        self.assertEqual(result["timeout"], 0.7)
+        self.assertEqual(result["temperature"], 0.4)
+        self.assertEqual(result["max_workers"], 1)
+        self.assertEqual(result["prefix_cache_warmup_scout_count"], 1)
+        self.assertEqual(seen_thinking, ["disabled"])
+        self.assertEqual(seen_temperatures, [0.4])
+
+    def test_cli_flags_build_explicit_warm_recall_config(self) -> None:
+        captured: dict[str, object] = {}
+
+        def fake_run(prompt: str, **kwargs):
+            captured["prompt"] = prompt
+            captured["config"] = kwargs["config"]
+            return {"ok": True, "available": True}
+
+        argv = [
+            "warm_ambient_recall.py",
+            "--prompt",
+            "继续 ambient recall",
+            "--cwd",
+            str(self.workspace),
+            "--temperature",
+            "0.4",
+            "--thinking",
+            "disabled",
+            "--quorum",
+            "1",
+            "--max-catalog-items",
+            "9",
+            "--json",
+        ]
+        stdout = io.StringIO()
+
+        with (
+            patch.object(sys, "argv", argv),
+            patch.object(warm, "run_warm_ambient_recall", side_effect=fake_run),
+            contextlib.redirect_stdout(stdout),
+        ):
+            code = warm.main()
+
+        config = captured["config"]
+        self.assertEqual(code, 0)
+        self.assertIsInstance(config, warm.WarmRecallConfig)
+        self.assertEqual(config.temperature, 0.4)
+        self.assertEqual(config.thinking, "disabled")
+        self.assertEqual(config.quorum, 1)
+        self.assertEqual(config.max_catalog_items, 9)
+
+    def test_cli_json_emits_public_summary_not_private_warm_payload(self) -> None:
+        def fake_run(prompt: str, **kwargs):
+            del prompt, kwargs
+            return {
+                "kind": "aippocampus_warm_ambient_recall",
+                "schema_version": 1,
+                "ok": True,
+                "available": True,
+                "status": "ready",
+                "reason": "model replied with private detail",
+                "quorum_met": True,
+                "scout_count": 1,
+                "max_workers": 1,
+                "accepted_scout_count": 1,
+                "failed_scout_count": 0,
+                "trace_fallback_card_count": 0,
+                "user_id": "aip-warm-private-user-id",
+                "model_route": {
+                    "provider": "deepseek",
+                    "api_key_env": "LOCAL_SECRET_KEY_ENV",
+                },
+                "scouts": [
+                    {
+                        "ok": True,
+                        "reason": "private scout reasoning",
+                    }
+                ],
+                "cards": [
+                    {
+                        "theme": "private card",
+                        "key_line": "private source line",
+                    }
+                ],
+                "cache": {"available": True, "hit_tokens": 3, "miss_tokens": 2},
+                "secret_policy": {"redacted": True, "reason": "contains secret"},
+                "suppression_reason_buckets": ["no_supported_cards"],
+                "suppression_diagnostics": {
+                    "reason_buckets": ["no_supported_cards"],
+                    "card_count": 1,
+                    "quorum_met": True,
+                    "current_thread_echo_count": 0,
+                },
+            }
+
+        argv = [
+            "warm_ambient_recall.py",
+            "--prompt",
+            "继续 ambient recall",
+            "--cwd",
+            str(self.workspace),
+            "--json",
+        ]
+        stdout = io.StringIO()
+
+        with (
+            patch.object(sys, "argv", argv),
+            patch.object(warm, "run_warm_ambient_recall", side_effect=fake_run),
+            contextlib.redirect_stdout(stdout),
+        ):
+            code = warm.main()
+
+        raw_output = stdout.getvalue()
+        payload = json.loads(raw_output)
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["status"], "ready")
+        self.assertEqual(payload["card_count"], 1)
+        self.assertEqual(payload["reason"], "")
+        self.assertFalse(payload["privacy_boundary"]["raw_cards_emitted"])
+        self.assertFalse(payload["privacy_boundary"]["model_route_emitted"])
+        self.assertNotIn("cards", payload)
+        self.assertNotIn("scouts", payload)
+        self.assertNotIn("model_route", payload)
+        self.assertNotIn("user_id", payload)
+        self.assertNotIn("secret_policy", payload)
+        self.assertNotIn("private source line", raw_output)
+        self.assertNotIn("LOCAL_SECRET_KEY_ENV", raw_output)
 
     def test_warm_background_is_default_on_with_explicit_opt_outs(self) -> None:
         self.assertTrue(warm_scheduler.warm_background_enabled(env={}))
@@ -301,24 +508,18 @@ class WarmAmbientRecallTests(unittest.TestCase):
             content = json.dumps({"decision": "skip", "confidence": 0.1})
             return {"choices": [{"message": {"content": content}}]}
 
-        with patch.dict(os.environ, {"AIPPOCAMPUS_WARM_RECALL_THINKING": "disabled"}):
-            previous = warm.DEFAULT_THINKING
-            warm.DEFAULT_THINKING = "disabled"
-            try:
-                warm.run_warm_ambient_recall(
-                    "继续 ambient recall",
-                    cwd=self.workspace,
-                    thread_id="thread-a",
-                    cache_path=self.cache_path,
-                    api_key="test-key",
-                    chat_fn=chat_fn,
-                    scouts=("semantic_expander",),
-                    wait_all=True,
-                    no_write=True,
-                    temperature=0.2,
-                )
-            finally:
-                warm.DEFAULT_THINKING = previous
+        warm.run_warm_ambient_recall(
+            "继续 ambient recall",
+            cwd=self.workspace,
+            thread_id="thread-a",
+            cache_path=self.cache_path,
+            api_key="test-key",
+            config=warm.WarmRecallConfig(thinking="disabled", temperature=0.2),
+            chat_fn=chat_fn,
+            scouts=("semantic_expander",),
+            wait_all=True,
+            no_write=True,
+        )
 
         self.assertEqual(seen_thinking, ["disabled"])
         self.assertEqual(seen_temperatures, [0.2])

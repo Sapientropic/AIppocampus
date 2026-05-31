@@ -2237,6 +2237,8 @@ class ImportCouplingTests(unittest.TestCase):
         import warm_ambient_scout_profiles
         import warm_ambient_source_validation
         from aippocampus_runtime.warm_ambient import (
+            cli,
+            config,
             prompting,
             recall,
             scheduler,
@@ -2245,6 +2247,8 @@ class ImportCouplingTests(unittest.TestCase):
         )
 
         package_files = [
+            SCRIPTS / "aippocampus_runtime" / "warm_ambient" / "cli.py",
+            SCRIPTS / "aippocampus_runtime" / "warm_ambient" / "config.py",
             SCRIPTS / "aippocampus_runtime" / "warm_ambient" / "prompting.py",
             SCRIPTS / "aippocampus_runtime" / "warm_ambient" / "recall.py",
             SCRIPTS / "aippocampus_runtime" / "warm_ambient" / "scheduler.py",
@@ -2292,9 +2296,15 @@ class ImportCouplingTests(unittest.TestCase):
             ambient_warm_scheduler.warm_background_enabled,
             scheduler.warm_background_enabled,
         )
+        self.assertIs(warm_ambient_recall.WarmRecallConfig, config.WarmRecallConfig)
+        self.assertIs(
+            warm_ambient_recall.warm_recall_config_from_env,
+            config.warm_recall_config_from_env,
+        )
         self.assertIs(warm_ambient_prompting.scout_prompt, prompting.scout_prompt)
         self.assertIs(warm_ambient_recall.run_warm_ambient_recall, recall.run_warm_ambient_recall)
         self.assertIs(warm_ambient_recall.main, recall.main)
+        self.assertTrue(callable(cli.main))
         self.assertIs(
             warm_ambient_scout_profiles.expand_scout_lanes,
             scout_profiles.expand_scout_lanes,

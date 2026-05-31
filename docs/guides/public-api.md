@@ -80,6 +80,11 @@ For these commands:
 - JSON objects may gain fields. Consumers should key off documented fields and
   tolerate extra keys.
 - Human-readable text is not a stable parse target.
+- Warm ambient recall CLI JSON is a public-safe operational summary. It keeps
+  status, counts, cache telemetry, and gate buckets, but does not emit raw
+  prompts, scout rows, model route secrets, user ids, or raw cards. Python
+  callers that need local private diagnostics should call the packaged runtime
+  API directly inside the trusted process boundary.
 - Exit code `0` means the command completed successfully. Non-zero means invalid
   arguments, missing prerequisites, failed validation, failed smoke, or another
   command-specific hard failure.
@@ -216,8 +221,19 @@ groups are:
   `AIPPOCAMPUS_OBJECT_SESSION_TOKEN`.
 - Encrypted sync: `AIPPOCAMPUS_AGE_BIN`.
 - Hook budgets and semantic recall: `AIPPOCAMPUS_PROMPT_HOOK_BUDGET_MS`,
-  `AIPPOCAMPUS_LIFECYCLE_HOOK_BUDGET_MS`,
-  `AIPPOCAMPUS_SEMANTIC_GATE`, and documented warm-recall tuning variables.
+  `AIPPOCAMPUS_LIFECYCLE_HOOK_BUDGET_MS`, and
+  `AIPPOCAMPUS_SEMANTIC_GATE`.
+- Warm ambient recall operator limits:
+  `AIPPOCAMPUS_WARM_RECALL_TIMEOUT`,
+  `AIPPOCAMPUS_WARM_RECALL_CATALOG_LIMIT`,
+  `AIPPOCAMPUS_WARM_RECALL_MAX_WORKERS`,
+  `AIPPOCAMPUS_WARM_RECALL_BACKGROUND`,
+  `AIPPOCAMPUS_DETACHED_WARM_TIMEOUT`,
+  `AIPPOCAMPUS_DETACHED_WARM_PREFIX_CACHE_WARMUP_SCOUTS`, and
+  `AIPPOCAMPUS_DETACHED_WARM_PREFIX_CACHE_WARMUP_DELAY`.
+  Product-tuning values such as temperature, quorum, thinking mode, and
+  foreground prefix-cache warmup should use explicit CLI flags or
+  `WarmRecallConfig`, not ambient import-time env defaults.
 - Optional external models: `AIPPOCAMPUS_DEEPSEEK_FLASH_MODEL`,
   `AIPPOCAMPUS_DEEPSEEK_PRO_MODEL`, `AIPPOCAMPUS_DEEPSEEK_BASE_URL`, and
   `DEEPSEEK_API_KEY`.
