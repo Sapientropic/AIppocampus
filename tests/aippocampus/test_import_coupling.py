@@ -1332,6 +1332,13 @@ class ImportCouplingTests(unittest.TestCase):
                 encoding="utf-8"
             ),
         )
+        active_recall_source = (
+            SCRIPTS / "aippocampus_runtime" / "recall" / "active_recall.py"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn('SCRIPT_DIR / "search_rollout.py"', active_recall_source)
+        self.assertNotIn('SCRIPT_DIR / "search_segments.py"', active_recall_source)
+        self.assertIn("search_rollout_payload(", active_recall_source)
+        self.assertIn("search_segments_payload(", active_recall_source)
 
     def test_subconscious_validation_audit_has_package_owner_and_compat_shim(self) -> None:
         import subconscious_validation_audit

@@ -275,6 +275,11 @@ Latest verification for this refresh:
   registration now call the package API directly instead of dispatching
   `aippocampus_health.py` through `sys.executable`; targeted coupling tests
   guard against reintroducing that package-to-script loop.
+- The same #144 pass moved rollout and segmented search implementations under
+  `aippocampus_runtime.recall` with compatibility shims preserved. Active
+  recall now calls `search_rollout_payload()` / `search_segments_payload()`
+  directly, so the recall package no longer re-enters its own flat
+  `search_rollout.py` or `search_segments.py` scripts for normal search.
 
 This refresh does not close #104. The post-migration encrypted provider sync
 smoke still needs a maintainer-provided real object-store provider target and

@@ -8,7 +8,9 @@ import json
 import os
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Sequence
 
 from aippocampus_runtime.core import default_thread_segments_dir
 from aippocampus_runtime.recall.retrieval import (
@@ -26,6 +28,23 @@ from aippocampus_runtime.recall.rollout_search import (
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
+
+
+@dataclass(frozen=True)
+class SegmentSearchOptions:
+    patterns: Sequence[str]
+    cwd: str | Path = os.getcwd()
+    rollout: str | Path | None = None
+    segments_dir: str | Path | None = None
+    anchors: str | Path = "thread-anchors.md"
+    build_segments: bool = False
+    mode: str = "hybrid"
+    context: int = 0
+    per_segment: int = 12
+    candidate_max: int = 120
+    rag_context: int = 6
+    max_results: int = 30
+    snippet_chars: int = 700
 
 
 def manifest_path(cwd: Path, segments_dir: str | None, *, prefer_existing: bool = True) -> Path:
@@ -180,6 +199,111 @@ def annotate_rag_chunk(chunk: dict, segment: dict, ordinal: int) -> dict:
     return item
 
 
+def search_segments_payload(options: SegmentSearchOptions) -> dict:
+    patterns = list(options.patterns)
+    cwd = Path(options.cwd).resolve()
+    manifest = manifest_path(cwd, str(options.segments_dir) if options.segments_dir else None, prefer_existing=not options.build_segments)
+    ensure_segments(
+        cwd,
+        str(options.rollout) if options.rollout else None,
+        manifest,
+        options.build_segments,
+    )
+    data = load_manifest(manifest)
+    if not data:
+        raise FileNotFoundError(f"segment manifest not found: {manifest}")
+
+    anchor_path = resolve_anchor_path(str(cwd), str(options.anchors))
+    query_terms = split_query_terms(patterns)
+    anchors = match_anchors(anchor_path, query_terms) if anchor_path.exists() else []
+    expanded_terms = (
+        expanded_terms_from_anchors(query_terms, anchors)
+        if options.mode == "hybrid"
+        else query_terms
+    )
+    graph = (
+        graph_neighbors(auto_graph_path(str(cwd)), expanded_terms)
+        if options.mode == "hybrid"
+        else []
+    )
+
+    raw_results: list[dict] = []
+    rag_context: list[dict] = []
+    segment_errors: list[dict] = []
+    for ordinal, segment in enumerate(data.get("segments") or [], start=1):
+        index = Path(segment["sqlite"])
+        if not index.exists():
+            segment_errors.append({"segment_id": segment.get("id"), "error": "sqlite missing"})
+            continue
+        try:
+            if options.mode == "literal":
+                hits = search_index_literal(
+                    index, patterns, options.per_segment, options.snippet_chars
+                )
+            else:
+                if options.mode == "hybrid" and options.rag_context > 0:
+                    for chunk in search_rag_chunks(
+                        index,
+                        query_terms,
+                        expanded_terms,
+                        anchors,
+                        limit=max(1, options.rag_context // 2),
+                        candidate_limit=max(24, options.candidate_max // 2),
+                        snippet_chars=max(options.snippet_chars, 900),
+                    ):
+                        rag_context.append(annotate_rag_chunk(chunk, segment, ordinal))
+                hits = search_hybrid_index(
+                    index,
+                    query_terms,
+                    expanded_terms,
+                    anchors if options.mode == "hybrid" else [],
+                    limit=options.per_segment,
+                    candidate_limit=options.candidate_max,
+                    snippet_chars=options.snippet_chars,
+                    context_radius=options.context,
+                )
+            raw_results.extend(annotate_segment_result(hit, segment, ordinal) for hit in hits)
+        except Exception as exc:
+            segment_errors.append({"segment_id": segment.get("id"), "error": str(exc)})
+
+    results = merge_topk(raw_results, options.max_results)
+    rag_context.sort(
+        key=lambda item: (-float(item.get("score") or 0.0), int(item.get("start_line") or 10**12))
+    )
+    rag_context = rag_context[: options.rag_context]
+
+    return {
+        "source": str(manifest),
+        "mode": f"segmented-{options.mode}",
+        "segment_count": int(data.get("segment_count") or len(data.get("segments") or [])),
+        "query_terms": query_terms,
+        "expanded_terms": expanded_terms,
+        "matched_anchors": anchors,
+        "graph_neighbors": graph,
+        "rag_context": rag_context,
+        "matches": results,
+        "segment_errors": segment_errors,
+    }
+
+
+def options_from_args(args: argparse.Namespace) -> SegmentSearchOptions:
+    return SegmentSearchOptions(
+        patterns=args.patterns,
+        cwd=args.cwd,
+        rollout=args.rollout,
+        segments_dir=args.segments_dir,
+        anchors=args.anchors,
+        build_segments=args.build_segments,
+        mode=args.mode,
+        context=args.context,
+        per_segment=args.per_segment,
+        candidate_max=args.candidate_max,
+        rag_context=args.rag_context,
+        max_results=args.max,
+        snippet_chars=args.snippet_chars,
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("patterns", nargs="+", help="Literal clues or recall prompt.")
@@ -203,85 +327,22 @@ def main() -> int:
     parser.add_argument("--snippet-chars", type=int, default=700)
     args = parser.parse_args()
 
-    cwd = Path(args.cwd).resolve()
-    manifest = manifest_path(cwd, args.segments_dir, prefer_existing=not args.build_segments)
-    ensure_segments(cwd, args.rollout, manifest, args.build_segments)
-    data = load_manifest(manifest)
-    if not data:
-        raise SystemExit(f"segment manifest not found: {manifest}")
-
-    anchor_path = resolve_anchor_path(str(cwd), args.anchors)
-    query_terms = split_query_terms(args.patterns)
-    anchors = match_anchors(anchor_path, query_terms) if anchor_path.exists() else []
-    expanded_terms = (
-        expanded_terms_from_anchors(query_terms, anchors) if args.mode == "hybrid" else query_terms
-    )
-    graph = (
-        graph_neighbors(auto_graph_path(str(cwd)), expanded_terms) if args.mode == "hybrid" else []
-    )
-
-    raw_results: list[dict] = []
-    rag_context: list[dict] = []
-    segment_errors: list[dict] = []
-    for ordinal, segment in enumerate(data.get("segments") or [], start=1):
-        index = Path(segment["sqlite"])
-        if not index.exists():
-            segment_errors.append({"segment_id": segment.get("id"), "error": "sqlite missing"})
-            continue
-        try:
-            if args.mode == "literal":
-                hits = search_index_literal(
-                    index, args.patterns, args.per_segment, args.snippet_chars
-                )
-            else:
-                if args.mode == "hybrid" and args.rag_context > 0:
-                    for chunk in search_rag_chunks(
-                        index,
-                        query_terms,
-                        expanded_terms,
-                        anchors,
-                        limit=max(1, args.rag_context // 2),
-                        candidate_limit=max(24, args.candidate_max // 2),
-                        snippet_chars=max(args.snippet_chars, 900),
-                    ):
-                        rag_context.append(annotate_rag_chunk(chunk, segment, ordinal))
-                hits = search_hybrid_index(
-                    index,
-                    query_terms,
-                    expanded_terms,
-                    anchors if args.mode == "hybrid" else [],
-                    limit=args.per_segment,
-                    candidate_limit=args.candidate_max,
-                    snippet_chars=args.snippet_chars,
-                    context_radius=args.context,
-                )
-            raw_results.extend(annotate_segment_result(hit, segment, ordinal) for hit in hits)
-        except Exception as exc:
-            segment_errors.append({"segment_id": segment.get("id"), "error": str(exc)})
-
-    results = merge_topk(raw_results, args.max)
-    rag_context.sort(
-        key=lambda item: (-float(item.get("score") or 0.0), int(item.get("start_line") or 10**12))
-    )
-    rag_context = rag_context[: args.rag_context]
-
-    payload = {
-        "source": str(manifest),
-        "mode": f"segmented-{args.mode}",
-        "segment_count": int(data.get("segment_count") or len(data.get("segments") or [])),
-        "query_terms": query_terms,
-        "expanded_terms": expanded_terms,
-        "matched_anchors": anchors,
-        "graph_neighbors": graph,
-        "rag_context": rag_context,
-        "matches": results,
-        "segment_errors": segment_errors,
-    }
+    try:
+        payload = search_segments_payload(options_from_args(args))
+    except FileNotFoundError as exc:
+        raise SystemExit(str(exc)) from exc
+    query_terms = payload["query_terms"]
+    expanded_terms = payload["expanded_terms"]
+    anchors = payload["matched_anchors"]
+    graph = payload["graph_neighbors"]
+    rag_context = payload["rag_context"]
+    segment_errors = payload["segment_errors"]
+    results = payload["matches"]
 
     if args.json_output:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
-        print(f"source: {manifest}")
+        print(f"source: {payload['source']}")
         print(f"mode: {payload['mode']} ({payload['segment_count']} segments)")
         if args.mode == "hybrid":
             print(f"query terms: {', '.join(query_terms) or '(none)'}")

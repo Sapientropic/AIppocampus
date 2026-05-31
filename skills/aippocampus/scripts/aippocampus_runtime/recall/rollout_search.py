@@ -10,7 +10,9 @@ import re
 import sqlite3
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Sequence
 
 from aippocampus_runtime.artifacts.publish import (
     index_pointer_path,
@@ -34,6 +36,25 @@ from aippocampus_runtime.recall.retrieval import (
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
+
+
+@dataclass(frozen=True)
+class RolloutSearchOptions:
+    patterns: Sequence[str]
+    cwd: str | Path = os.getcwd()
+    rollout: str | Path | None = None
+    index: str | Path | None = None
+    anchors: str | Path = "thread-anchors.md"
+    build_index: bool = False
+    no_index: bool = False
+    include_tools: bool = False
+    mode: str = "hybrid"
+    context: int = 0
+    candidate_max: int = 160
+    diversity: str = "balanced"
+    rag_context: int = 3
+    max_results: int = 30
+    snippet_chars: int = 700
 
 
 def auto_index_path(cwd: str, rollout: Path | None = None, *, prefer_existing: bool = True) -> Path:
@@ -189,6 +210,123 @@ def search_rollout_stream(
     return results
 
 
+def search_rollout_payload(options: RolloutSearchOptions) -> dict:
+    patterns = list(options.patterns)
+    cwd = str(Path(options.cwd).resolve())
+    rollout = Path(options.rollout) if options.rollout else None
+    index = (
+        Path(options.index)
+        if options.index
+        else auto_index_path(cwd, rollout, prefer_existing=not options.build_index)
+    )
+    anchor_path = resolve_anchor_path(cwd, str(options.anchors))
+
+    source = None
+    results: list[dict]
+    query_terms = split_query_terms(patterns)
+    anchors = match_anchors(anchor_path, query_terms) if anchor_path.exists() else []
+    expanded_terms = (
+        expanded_terms_from_anchors(query_terms, anchors)
+        if options.mode == "hybrid"
+        else query_terms
+    )
+    graph = (
+        graph_neighbors(
+            auto_graph_path(cwd, rollout, prefer_existing=not options.build_index), expanded_terms
+        )
+        if options.mode == "hybrid"
+        else []
+    )
+    rag_context: list[dict] = []
+
+    if not options.no_index:
+        if options.build_index:
+            ensure_index(cwd, rollout, index, force=True)
+        index = resolve_sqlite_index_path(index)
+        if index.exists():
+            source = str(index)
+            if options.mode == "literal":
+                results = search_index_literal(
+                    index, patterns, options.max_results, options.snippet_chars
+                )
+            else:
+                if options.mode == "hybrid" and options.rag_context > 0:
+                    rag_context = search_rag_chunks(
+                        index,
+                        query_terms,
+                        expanded_terms,
+                        anchors,
+                        limit=options.rag_context,
+                        candidate_limit=max(40, options.candidate_max // 2),
+                        snippet_chars=max(options.snippet_chars, 900),
+                    )
+                results = search_hybrid_index(
+                    index,
+                    query_terms,
+                    expanded_terms,
+                    anchors if options.mode == "hybrid" else [],
+                    limit=options.max_results,
+                    candidate_limit=options.candidate_max,
+                    snippet_chars=options.snippet_chars,
+                    context_radius=options.context,
+                )
+                if options.mode == "hybrid":
+                    results = diversify_results(
+                        results, options.max_results, anchors, mode=options.diversity
+                    )
+        else:
+            rollout = rollout or locate_rollout(cwd)
+            source = str(rollout)
+            results = search_rollout_stream(
+                rollout,
+                patterns,
+                options.include_tools,
+                options.max_results,
+                options.snippet_chars,
+            )
+    else:
+        rollout = rollout or locate_rollout(cwd)
+        source = str(rollout)
+        results = search_rollout_stream(
+            rollout,
+            patterns,
+            options.include_tools,
+            options.max_results,
+            options.snippet_chars,
+        )
+
+    return {
+        "source": source,
+        "mode": options.mode if not options.no_index else "stream",
+        "query_terms": query_terms,
+        "expanded_terms": expanded_terms,
+        "matched_anchors": anchors,
+        "graph_neighbors": graph,
+        "rag_context": rag_context,
+        "matches": results,
+    }
+
+
+def options_from_args(args: argparse.Namespace) -> RolloutSearchOptions:
+    return RolloutSearchOptions(
+        patterns=args.patterns,
+        rollout=args.rollout,
+        cwd=args.cwd,
+        index=args.index,
+        anchors=args.anchors,
+        build_index=args.build_index,
+        no_index=args.no_index,
+        include_tools=args.include_tools,
+        mode=args.mode,
+        context=args.context,
+        candidate_max=args.candidate_max,
+        diversity=args.diversity,
+        rag_context=args.rag_context,
+        max_results=args.max,
+        snippet_chars=args.snippet_chars,
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("patterns", nargs="+", help="Literal clues or regex patterns to search.")
@@ -247,90 +385,18 @@ def main() -> int:
     parser.add_argument("--snippet-chars", type=int, default=700)
     args = parser.parse_args()
 
-    cwd = str(Path(args.cwd).resolve())
-    rollout = Path(args.rollout) if args.rollout else None
-    index = (
-        Path(args.index)
-        if args.index
-        else auto_index_path(cwd, rollout, prefer_existing=not args.build_index)
-    )
-    anchor_path = resolve_anchor_path(cwd, args.anchors)
-
-    source = None
-    results: list[dict]
-    query_terms = split_query_terms(args.patterns)
-    anchors = match_anchors(anchor_path, query_terms) if anchor_path.exists() else []
-    expanded_terms = (
-        expanded_terms_from_anchors(query_terms, anchors) if args.mode == "hybrid" else query_terms
-    )
-    graph = (
-        graph_neighbors(
-            auto_graph_path(cwd, rollout, prefer_existing=not args.build_index), expanded_terms
-        )
-        if args.mode == "hybrid"
-        else []
-    )
-    rag_context: list[dict] = []
-
-    if not args.no_index:
-        if args.build_index:
-            ensure_index(cwd, rollout, index, force=True)
-        index = resolve_sqlite_index_path(index)
-        if index.exists():
-            source = str(index)
-            if args.mode == "literal":
-                results = search_index_literal(index, args.patterns, args.max, args.snippet_chars)
-            else:
-                if args.mode == "hybrid" and args.rag_context > 0:
-                    rag_context = search_rag_chunks(
-                        index,
-                        query_terms,
-                        expanded_terms,
-                        anchors,
-                        limit=args.rag_context,
-                        candidate_limit=max(40, args.candidate_max // 2),
-                        snippet_chars=max(args.snippet_chars, 900),
-                    )
-                results = search_hybrid_index(
-                    index,
-                    query_terms,
-                    expanded_terms,
-                    anchors if args.mode == "hybrid" else [],
-                    limit=args.max,
-                    candidate_limit=args.candidate_max,
-                    snippet_chars=args.snippet_chars,
-                    context_radius=args.context,
-                )
-                if args.mode == "hybrid":
-                    results = diversify_results(results, args.max, anchors, mode=args.diversity)
-        else:
-            rollout = rollout or locate_rollout(cwd)
-            source = str(rollout)
-            results = search_rollout_stream(
-                rollout, args.patterns, args.include_tools, args.max, args.snippet_chars
-            )
-    else:
-        rollout = rollout or locate_rollout(cwd)
-        source = str(rollout)
-        results = search_rollout_stream(
-            rollout, args.patterns, args.include_tools, args.max, args.snippet_chars
-        )
-
-    payload = {
-        "source": source,
-        "mode": args.mode if not args.no_index else "stream",
-        "query_terms": query_terms,
-        "expanded_terms": expanded_terms,
-        "matched_anchors": anchors,
-        "graph_neighbors": graph,
-        "rag_context": rag_context,
-        "matches": results,
-    }
+    payload = search_rollout_payload(options_from_args(args))
+    query_terms = payload["query_terms"]
+    expanded_terms = payload["expanded_terms"]
+    anchors = payload["matched_anchors"]
+    graph = payload["graph_neighbors"]
+    rag_context = payload["rag_context"]
+    results = payload["matches"]
 
     if args.json_output:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
-        print(f"source: {source}")
+        print(f"source: {payload['source']}")
         print(f"mode: {payload['mode']}")
         if args.mode == "hybrid":
             print(f"query terms: {', '.join(query_terms) or '(none)'}")
