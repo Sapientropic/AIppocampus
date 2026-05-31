@@ -1804,6 +1804,45 @@ class ImportCouplingTests(unittest.TestCase):
             source_validation._stable_id,
         )
 
+    def test_artifact_publish_has_package_owner_and_compat_shim(self) -> None:
+        import artifact_publish
+        from aippocampus_runtime.artifacts import publish
+
+        package_paths = [
+            SCRIPTS / "aippocampus_runtime" / "artifacts" / "__init__.py",
+            SCRIPTS / "aippocampus_runtime" / "artifacts" / "publish.py",
+        ]
+        shim_path = SCRIPTS / "artifact_publish.py"
+
+        for path in package_paths:
+            self.assertTrue(path.exists(), path)
+        self.assertTrue(shim_path.exists(), shim_path)
+        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges()
+        for source in [
+            "aippocampus_health",
+            "aippocampus_runtime.sync.bundle",
+            "build_index",
+            "build_segments",
+            "import_bundle",
+            "registry",
+            "search_rollout",
+        ]:
+            self.assertIn("aippocampus_runtime.artifacts.publish", edges[source])
+            self.assertNotIn("artifact_publish", edges[source])
+
+        self.assertIs(artifact_publish.artifact_lease, publish.artifact_lease)
+        self.assertIs(artifact_publish.index_pointer_path, publish.index_pointer_path)
+        self.assertIs(
+            artifact_publish.resolve_sqlite_index_path,
+            publish.resolve_sqlite_index_path,
+        )
+        self.assertIs(
+            artifact_publish.publish_sqlite_with_pointer,
+            publish.publish_sqlite_with_pointer,
+        )
+
     def test_sync_contract_has_package_owner_and_compat_shim(self) -> None:
         import sync_contract
         from aippocampus_runtime.sync import contract

@@ -9,6 +9,7 @@ import os
 from pathlib import Path, PureWindowsPath
 from typing import Any
 
+from aippocampus_runtime.artifacts.publish import resolve_sqlite_index_path
 from aippocampuslib import (
     aippocampus_registry_resolution,
     codex_home,
@@ -23,7 +24,6 @@ from aippocampuslib import (
     parse_anchor_file,
     resolve_artifact_path,
 )
-from artifact_publish import resolve_sqlite_index_path
 from question_health import (
     DEFAULT_DORMANT_AFTER_DAYS,
     aggregate_question_health_stats,

@@ -10,7 +10,10 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from artifact_publish import index_pointer_path, resolve_sqlite_index_path
+from aippocampus_runtime.artifacts.publish import (
+    index_pointer_path,
+    resolve_sqlite_index_path,
+)
 
 
 def timestamp_slug() -> str:
