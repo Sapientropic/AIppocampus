@@ -15,7 +15,12 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.core import compact_text, now_utc
+from aippocampus_runtime.core import (
+    compact_text,
+    now_utc,
+    workspace_fingerprint,
+    workspace_identity,
+)
 from aippocampus_runtime.registry.api import registry_paths, unique_preserve
 
 CACHE_SCHEMA_VERSION = 1
@@ -54,14 +59,7 @@ def _fingerprint(value: str, *, prefix: str) -> str:
 
 
 def cache_workspace_identity(workspace: str) -> str:
-    text = str(workspace or "")
-    path = Path(text)
-    # Only canonicalize host-style absolute paths. Plain project labels must not
-    # be resolved against the current process cwd, or identical labels would drift
-    # across machines and unrelated checkouts.
-    if text.startswith("/") or path.is_absolute():
-        return str(path.resolve())
-    return text
+    return workspace_identity(workspace)
 
 
 def cache_key(*, thread_id: str, workspace: str, topic_epoch: str) -> str:
@@ -428,7 +426,7 @@ def _same_thread_workspace_entries(
     ttl_seconds: int,
 ) -> list[dict[str, Any]]:
     thread_fp = _fingerprint(thread_id, prefix="thread")
-    workspace_fp = _fingerprint(workspace, prefix="workspace")
+    workspace_fp = workspace_fingerprint(workspace)
     entries: list[dict[str, Any]] = []
     for entry in (data.get("entries") or {}).values():
         if not isinstance(entry, dict):
@@ -624,7 +622,7 @@ def write_thread_cache(
         "updated_at": now_utc(),
         "updated_unix": time.time(),
         "thread_fingerprint": _fingerprint(thread_id, prefix="thread"),
-        "workspace_fingerprint": _fingerprint(workspace, prefix="workspace"),
+        "workspace_fingerprint": workspace_fingerprint(workspace),
         "topic_epoch": topic_epoch,
         "mode": mode,
         "confidence": confidence,

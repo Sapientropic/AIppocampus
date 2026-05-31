@@ -82,6 +82,38 @@ class AmbientThreadCacheTests(unittest.TestCase):
         self.assertEqual(loaded["status"], "hit")
         self.assertEqual(loaded["cards"][0]["card_id"], "arc_path")
 
+    def test_related_thread_cache_canonicalizes_workspace_fingerprint(self) -> None:
+        cache_path = self.root / "ambient-thread-cache.json"
+        workspace = self.root / "workspace"
+        workspace.mkdir()
+        alias = self.root / "workspace-alias"
+        try:
+            os.symlink(workspace, alias)
+        except (AttributeError, NotImplementedError, OSError) as exc:
+            self.skipTest(f"symlink unavailable: {exc}")
+        signals = cache.related_signal_fingerprints(
+            candidates=[{"thread_key": "session:old-topic"}],
+        )
+
+        cache.write_thread_cache(
+            cache_path,
+            thread_id="thread-a",
+            workspace=str(alias),
+            topic_epoch="epoch-first-phrasing",
+            cards=[{"card_id": "arc_related_path", "theme": "path alias"}],
+            related_fingerprints=signals,
+        )
+        related = cache.read_related_thread_cache(
+            cache_path,
+            thread_id="thread-a",
+            workspace=str(workspace.resolve()),
+            topic_epoch="epoch-natural-paraphrase",
+            related_fingerprints=signals,
+        )
+
+        self.assertEqual(related["status"], "related_hit")
+        self.assertEqual(related["cards"][0]["card_id"], "arc_related_path")
+
     def test_thread_cache_normalizes_workspace_before_keying(self) -> None:
         cache_path = self.root / "ambient-thread-cache.json"
         workspace = self.root / "workspace"

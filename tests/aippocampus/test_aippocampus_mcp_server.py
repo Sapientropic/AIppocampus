@@ -20,6 +20,7 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 import aippocampus_mcp_server as mcp  # noqa: E402
+from aippocampus_runtime import core  # noqa: E402
 from aippocampus_runtime.sync import bundle as sync_bundle  # noqa: E402
 
 
@@ -513,9 +514,51 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertFalse(hasattr(mcp, "subprocess"))
         self.assertFalse(response["result"].get("isError"))
         payload = self.tool_payload(response)
-        self.assertEqual(payload["cwd"], str(self.cwd))
+        self.assertEqual(payload["cwd"], str(core.canonical_path(self.cwd)))
         self.assertEqual(payload["recommended_actions"], [])
-        self.assertEqual(seen_cwd, [self.cwd])
+        self.assertEqual(seen_cwd, [core.canonical_path(self.cwd)])
+
+    def test_memory_health_cwd_uses_canonical_identity_for_path_aliases(self) -> None:
+        alias = self.cwd.parent / f"{self.cwd.name}-alias"
+        try:
+            alias.symlink_to(self.cwd, target_is_directory=True)
+        except (AttributeError, NotImplementedError, OSError) as exc:
+            self.skipTest(f"symlink unavailable: {exc}")
+        seen_cwd: list[Path] = []
+
+        def fake_health_report(cwd: str | Path) -> dict:
+            seen_cwd.append(Path(cwd))
+            return {
+                "ok": True,
+                "cwd": str(cwd),
+                "recommended_actions": [],
+            }
+
+        with mock.patch.object(
+            mcp.aippocampus_health, "health_report", side_effect=fake_health_report
+        ):
+            response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 58,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory_health",
+                        "arguments": {"cwd": str(alias), "include_private_paths": True},
+                    },
+                }
+            )
+
+        self.assertFalse(response["result"].get("isError"))
+        payload = self.tool_payload(response)
+        self.assertEqual(
+            core.workspace_identity_key(payload["cwd"]),
+            core.workspace_identity_key(self.cwd),
+        )
+        self.assertEqual(
+            [core.workspace_identity_key(item) for item in seen_cwd],
+            [core.workspace_identity_key(self.cwd)],
+        )
 
     def test_stdio_jsonrpc_smoke_exercises_client_entrypoint(self) -> None:
         requests = [

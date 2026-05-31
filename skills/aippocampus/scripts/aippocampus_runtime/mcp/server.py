@@ -133,7 +133,7 @@ UNSUPPORTED_MUTATION_TOOLS = {
 
 
 def cwd_arg(arguments: dict[str, Any]) -> Path:
-    return Path(str(arguments.get("cwd") or os.getcwd())).resolve()
+    return core.canonical_path(str(arguments.get("cwd") or os.getcwd()))
 
 
 def int_range(value: Any, *, default: int, minimum: int, maximum: int) -> int:
