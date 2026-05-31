@@ -54,6 +54,32 @@ python -m mypy
 python tools/aippocampus/run_tests.py --tier fast
 ```
 
+### Remote macOS install smoke
+
+Maintainers can trigger the fresh-clone macOS install smoke from a Windows
+machine without switching to a MacBook. The workflow at
+`.github/workflows/macos-install-smoke.yml` runs on a GitHub-hosted macOS runner,
+creates a clean virtual environment, installs the package, stages the skill into
+an isolated `CODEX_HOME`, checks the CLI/MCP surface, and uploads the smoke logs.
+
+From Windows PowerShell:
+
+```powershell
+gh workflow run macos-install-smoke.yml `
+  --repo Sapientropic/AIppocampus `
+  --ref main `
+  -f runner-label=macos-latest `
+  -f python-version=3.12
+
+gh run list --repo Sapientropic/AIppocampus --workflow "macOS Install Smoke" --limit 1
+gh run watch --repo Sapientropic/AIppocampus <run-id>
+```
+
+This is a public install smoke, not a claim about private Codex Desktop state,
+local registry quality, keychain behavior, or full Stage 0-5 readiness. Use a
+self-hosted MacBook runner only when you intentionally need those local-machine
+surfaces.
+
 For a repo-level Stage 0-5 public-readiness smoke, run:
 
 ```sh
