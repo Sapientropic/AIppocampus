@@ -69,6 +69,41 @@ class SemanticTriggerRouterTests(unittest.TestCase):
         self.assertIn("AIppocampus semantic recall gate", rows[0]["aliases"])
         self.assertEqual(rows[0]["source_refs"][0]["line"], 42)
 
+    def test_activation_cues_drive_natural_friction_trigger_aliases(self) -> None:
+        self.write_candidates(
+            [
+                {
+                    "kind": "aippocampus_promotion_candidate",
+                    "status": "staging",
+                    "candidate_type": "hook_trigger",
+                    "title": "Reviewed semantic hook",
+                    "summary": "A source-backed hook that should be activated by model-authored cues.",
+                    "recommendation": "Use the subconscious cue surface rather than summary prose.",
+                    "activation_cues": [
+                        "最近让我很烦",
+                        "recent personal friction",
+                        "что меня раздражало недавно",
+                    ],
+                    "confidence": 0.88,
+                    "source_refs": [
+                        {"thread_key": "session:friction", "title": "Friction thread", "line": 77}
+                    ],
+                }
+            ]
+        )
+
+        result = router.build_semantic_triggers(
+            candidates_path=self.candidates, output_path=self.output
+        )
+        rows = [json.loads(line) for line in self.output.read_text(encoding="utf-8").splitlines()]
+
+        self.assertEqual(result["trigger_count"], 1)
+        self.assertIn("最近让我很烦", rows[0]["aliases"])
+        self.assertIn("recent personal friction", rows[0]["aliases"])
+        self.assertIn("что меня раздражало недавно", rows[0]["aliases"])
+        self.assertEqual(rows[0]["activation_cues"][0], "最近让我很烦")
+        self.assertNotIn("source-backed hook", " ".join(rows[0]["aliases"]).casefold())
+
     def test_reviewed_seed_triggers_are_written_to_semantic_trigger_sidecar(self) -> None:
         seed = self.root / "reviewed-seed.jsonl"
         seed.write_text(

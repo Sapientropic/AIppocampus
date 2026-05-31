@@ -94,6 +94,22 @@ GENERIC_TRIGGER_TERMS = {
 }
 
 
+def activation_cues_for(candidate: dict[str, Any], *, limit: int = 12) -> list[str]:
+    cues: list[str] = []
+    for value in candidate.get("activation_cues") or []:
+        cue = normalize_term(str(value or ""))
+        if not cue or len(cue) > 96:
+            continue
+        if term_is_noise(cue) or source_text_is_noise(cue):
+            continue
+        cues.append(cue)
+    return unique_preserve(cues, limit=limit)
+
+
+def activation_cue_terms_for(candidate: dict[str, Any], *, limit: int = 18) -> list[str]:
+    return unique_preserve(activation_cues_for(candidate, limit=limit), limit=limit)
+
+
 def default_candidates_path(
     registry_path: Path | None = None, registry_dir: Path | None = None
 ) -> Path:
@@ -390,6 +406,13 @@ def ask_policy_for(route: str) -> str:
 def trigger_terms_for(
     candidate: dict[str, Any], concepts: list[str], project_label: str | None
 ) -> list[str]:
+    activation_terms = activation_cue_terms_for(candidate, limit=18)
+    if activation_terms:
+        # When the subconscious/model layer authored activation cues, those cues
+        # are the prompt-side route surface. Falling back to title/summary prose
+        # here reintroduces broad lexical triggers and makes semantic judgment
+        # look deterministic while hiding that it was guessed from prose.
+        return activation_terms
     text = "\n".join(
         [
             str(candidate.get("title") or ""),
@@ -442,6 +465,7 @@ def route_entry(
         "confidence": round(float(candidate.get("confidence") or 0.0), 4),
         "project_label": project_label,
         "trigger_terms": trigger_terms_for(candidate, concepts, project_label),
+        "activation_cues": activation_cues_for(candidate),
         "concepts": concepts,
         "source_finding_ids": unique_preserve(
             [str(value) for value in candidate.get("source_finding_ids") or []], limit=12

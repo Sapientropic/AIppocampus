@@ -24,6 +24,8 @@ from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.recall.semantic_recall_gate import default_semantic_triggers_path
 from aippocampus_runtime.registry.api import registry_paths, unique_preserve
 from aippocampus_runtime.subconscious.candidate_router import (
+    activation_cue_terms_for,
+    activation_cues_for,
     default_candidates_path,
     iter_jsonl,
     write_jsonl,
@@ -100,6 +102,13 @@ def source_refs(candidate: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def alias_candidates(candidate: dict[str, Any]) -> list[str]:
+    activation_terms = activation_cue_terms_for(candidate, limit=24)
+    if activation_terms:
+        # Model/subconscious-authored activation cues are the semantic route
+        # surface. Title/summary prose remains human-readable context, not a
+        # prompt matcher, because fuzzy frustration/annoyance judgment belongs
+        # in the sidecar that produced these cues.
+        return activation_terms
     text = "\n".join(
         [
             str(candidate.get("title") or ""),
@@ -181,6 +190,7 @@ def route_candidate(candidate: dict[str, Any]) -> dict[str, Any] | None:
         "when_to_use": compact_text(str(candidate.get("summary") or ""), 320),
         "when_not_to_use": "Use as a semantic recall hint only; search clean source before presenting exact claims as facts.",
         "confidence": round(confidence, 4),
+        "activation_cues": activation_cues_for(candidate),
         "source_refs": refs,
     }
 
