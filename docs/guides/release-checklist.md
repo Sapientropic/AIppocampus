@@ -23,6 +23,7 @@ uv run --python 3.12 python -c 'import aippocampus_runtime; print("uv-run-ok")'
 python -m pip install -e .
 python -m build --sdist --wheel
 python tools/aippocampus/docs/check_docs_health.py --json
+python tools/aippocampus/release/check_agent_discovery_release.py --json
 python -m ruff check skills plugins tests tools benchmarks benchmark_corpus
 python -m mypy
 python tools/aippocampus/run_tests.py --tier fast
@@ -35,6 +36,16 @@ claim:
 ```sh
 python tools/aippocampus/run_tests.py --tier full
 ```
+
+For an agent-discoverability release, run the stricter public-state gate after
+PyPI and MCP Registry publication:
+
+```sh
+python tools/aippocampus/release/check_agent_discovery_release.py --fail-on-not-ready
+```
+
+The non-strict check may report `pending` before publication. Do not translate
+that pending state into a public claim.
 
 Run slow, benchmark, provider, or smoke tiers when the release touches their
 surface. Do not use fast-tier coverage to claim that cloud providers, physical
