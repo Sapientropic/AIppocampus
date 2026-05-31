@@ -29,7 +29,7 @@ recovery_status: normal
 blockers: []
 needs_human:
   - "Final product acceptance and any remote publishing/PR decision"
-residual_risk: "Claude Code MCP host/tool-call smoke passes on this Windows host, explicit Claude Code onboarding dry-run has been previewed without writing, Windows x64 PyInstaller artifact smoke passes, and the standalone binary has been re-smoked after the #144 package-layout slices through commit d1b8617. #104 still needs real provider credentials and an ephemeral object-store target; #148/#163/#168 are intentionally skipped for this pass; #158/#164 remain dependent on the skipped Dream/coding-continuity evidence tracks."
+residual_risk: "Claude Code MCP host/tool-call smoke passes on this Windows host, explicit Claude Code onboarding dry-run has been previewed without writing, Windows x64 PyInstaller artifact smoke passes, and the standalone binary has been re-smoked after the #224 CLI facade / warm_ambient package-owner slice through commit a5217d1. #104 still needs real provider credentials and an ephemeral object-store target; #148/#163/#168 are intentionally skipped for this pass; #158/#164 remain dependent on the skipped Dream/coding-continuity evidence tracks."
 next_action: "Continue only evidence-backed slices: either run #104 after a real provider target is available, or take another narrow #144/Dream package boundary only when the ownership seam is clear."
 candidate_slices:
   - "issues-113-116-120-provider-mainline: provider contract, normalized clean source, Claude/generic import, onboarding status"
