@@ -33,6 +33,7 @@ from aippocampus_runtime.model.routing import (
     route_payload_with_effective_values,
     route_service_name,
 )
+from aippocampus_runtime.subconscious.runtime import add_usage, call_chat_json, compact_usage
 from aippocampuslib import (
     compact_text,
     now_utc,
@@ -41,7 +42,6 @@ from aippocampuslib import (
 from registry import load_registry, registry_paths, unique_preserve
 from retrieval import split_query_terms
 from semantic_cue_cache import default_semantic_cues_path, semantic_cue_triggers
-from subconscious_runtime import add_usage, call_chat_json, compact_usage
 from subconscious_worker import clamp_confidence, parse_model_json
 
 PROMPT_VERSION = "aippocampus-semantic-recall-gate-v0"

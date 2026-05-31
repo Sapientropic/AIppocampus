@@ -23,6 +23,12 @@ from aippocampus_runtime.subconscious.job_validation import (
     estimate_finding_quality,
     finding_fingerprint,
 )
+from aippocampus_runtime.subconscious.runtime import (
+    DEFAULT_TEMPERATURE,
+    call_chat_json,
+    compact_usage,
+    parse_action,
+)
 from aippocampuslib import (
     cli_error_payload,
     cli_exit_code_for_error_code,
@@ -37,12 +43,6 @@ from subconscious_jobs import (
 )
 from subconscious_jobs import (
     default_jobs_output_path,
-)
-from subconscious_runtime import (
-    DEFAULT_TEMPERATURE,
-    call_chat_json,
-    compact_usage,
-    parse_action,
 )
 from subconscious_worker import DEFAULT_BASE_URL, DEFAULT_MODEL, clamp_confidence
 

@@ -66,15 +66,7 @@ from aippocampus_runtime.subconscious.question_diagnostics import (
     question_extraction_quality_diagnostics,
     should_request_question_axis_repair,
 )
-from aippocampus_runtime.subconscious.tool_loop import run_tool_using_loop
-from aippocampus_runtime.subconscious.validation_audit import validation_audit
-from aippocampuslib import (
-    cli_error_payload,
-    cli_error_payload_from_message,
-    cli_exit_code_for_error_code,
-    compact_text,
-)
-from subconscious_runtime import (
+from aippocampus_runtime.subconscious.runtime import (
     AGENT_SYSTEM_PROMPT,
     DEFAULT_MAX_STEPS,
     DEFAULT_MIN_TOOL_STEPS,
@@ -87,6 +79,14 @@ from subconscious_runtime import (
     parse_action,
     run_tool,
     source_bank_from_turns,
+)
+from aippocampus_runtime.subconscious.tool_loop import run_tool_using_loop
+from aippocampus_runtime.subconscious.validation_audit import validation_audit
+from aippocampuslib import (
+    cli_error_payload,
+    cli_error_payload_from_message,
+    cli_exit_code_for_error_code,
+    compact_text,
 )
 from subconscious_worker import (
     DEFAULT_BASE_URL,
