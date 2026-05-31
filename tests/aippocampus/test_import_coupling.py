@@ -712,7 +712,7 @@ class ImportCouplingTests(unittest.TestCase):
             "aippocampus_runtime.subconscious.job_validation",
             "aippocampus_runtime.subconscious.jobs_config",
             "aippocampus_runtime.subconscious.validation_audit",
-            "onboard_frontier",
+            "aippocampus_runtime.onboarding.frontier",
             "aippocampus_runtime.recall.semantic_recall_gate",
             "semantic_scope_suppressed_recovery",
             "aippocampus_runtime.subconscious.jobs",
@@ -779,9 +779,11 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
 
         edges = same_dir_import_edges(top_level_only=True)
-        prompt_hook_source = (SCRIPTS / "aippocampus_prompt_hook.py").read_text(encoding="utf-8")
+        prompt_hook_source = (
+            SCRIPTS / "aippocampus_runtime" / "hooks" / "prompt.py"
+        ).read_text(encoding="utf-8")
         self.assertIn("aippocampus_runtime.dream import delivery_policy", prompt_hook_source)
-        self.assertNotIn("dream_delivery_policy", edges["aippocampus_prompt_hook"])
+        self.assertNotIn("dream_delivery_policy", edges["aippocampus_runtime.hooks.prompt"])
 
         self.assertIs(
             dream_delivery_policy.prepare_dream_delivery,
@@ -1950,8 +1952,8 @@ class ImportCouplingTests(unittest.TestCase):
         }
 
         for source in [
-            "aippocampus_prompt_hook",
-            "onboard_codex",
+            "aippocampus_runtime.hooks.prompt",
+            "aippocampus_runtime.onboarding.codex",
             "prompt_recall_decision",
             "prompt_recall_context",
             "prompt_recall_core",
@@ -1965,11 +1967,11 @@ class ImportCouplingTests(unittest.TestCase):
 
         self.assertIn(
             "aippocampus_runtime.recall.prompt_context_render",
-            edges["aippocampus_prompt_hook"],
+            edges["aippocampus_runtime.hooks.prompt"],
         )
         self.assertIn(
             "aippocampus_runtime.recall.prompt_recall_decision",
-            edges["aippocampus_prompt_hook"],
+            edges["aippocampus_runtime.hooks.prompt"],
         )
         self.assertIn(
             "aippocampus_runtime.recall.semantic_recall_gate",
