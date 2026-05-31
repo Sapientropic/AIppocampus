@@ -7,8 +7,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Iterable
 
-import sync_bundle
-import sync_object_storage
+from aippocampus_runtime.sync import bundle as sync_bundle
 from aippocampus_runtime.sync.encrypted import bundle as encrypted_sync_bundle
 from aippocampus_runtime.sync.encrypted import keys as encrypted_sync_keys
 from aippocampus_runtime.sync.encrypted import object_storage as encrypted_sync_object_storage
@@ -17,6 +16,7 @@ from aippocampus_runtime.sync.encrypted.crypto import (
     recipients_from_files,
     validate_recipients,
 )
+from aippocampus_runtime.sync.object_storage import cli as sync_object_storage
 
 
 def failed_local_result(sync_root: Path, code: str, message: str, **extra: Any) -> dict[str, Any]:

@@ -21,8 +21,8 @@ for _path in (
 import smoke_alternate_runtime_sync  # noqa: E402
 import smoke_cross_device_sync  # noqa: E402
 
-import sync_bundle  # noqa: E402
-import sync_contract  # noqa: E402
+from aippocampus_runtime.sync import bundle as sync_bundle  # noqa: E402
+from aippocampus_runtime.sync import contract as sync_contract  # noqa: E402
 
 
 class SyncBundleTests(unittest.TestCase):

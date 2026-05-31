@@ -16,8 +16,8 @@ sys.path.insert(0, str(SCRIPTS))
 import encrypted_sync_bundle  # noqa: E402
 import encrypted_sync_keys  # noqa: E402
 import encrypted_sync_migration  # noqa: E402
-import sync_bundle  # noqa: E402
 import sync_contract  # noqa: E402
+from aippocampus_runtime.sync import bundle as sync_bundle  # noqa: E402
 
 
 class EncryptedSyncBundleTests(unittest.TestCase):

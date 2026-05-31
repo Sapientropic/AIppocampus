@@ -13,8 +13,8 @@ import re
 from pathlib import Path
 from typing import Any, Iterable
 
+from aippocampus_runtime.sync.bundle import iter_clean_source_sync_files, iter_registry_sync_files
 from aippocampuslib import aippocampus_registry_dir, now_utc
-from sync_bundle import iter_clean_source_sync_files, iter_registry_sync_files
 
 CANONICAL_CLEAN_FILES = ("manifest.json", "messages.jsonl", "turns.jsonl")
 SEMANTIC_SIDECAR_FILES = ("semantic-scope-labels.jsonl",)

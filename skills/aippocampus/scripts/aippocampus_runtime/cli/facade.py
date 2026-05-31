@@ -35,8 +35,8 @@ SCRIPT_MODULES = {
     spec.script_name: spec.module_name for spec in COMMANDS.values()
 } | {
     "aippocampus_mcp_server.py": "aippocampus_mcp_server",
-    "sync_bundle.py": "sync_bundle",
-    "sync_object_storage.py": "sync_object_storage",
+    "sync_bundle.py": "aippocampus_runtime.sync.bundle",
+    "sync_object_storage.py": "aippocampus_runtime.sync.object_storage.cli",
     "install_aippocampus_prompt_hook.py": "install_aippocampus_prompt_hook",
     "install_aippocampus_lifecycle_hook.py": "install_aippocampus_lifecycle_hook",
 }
@@ -97,10 +97,18 @@ def resolve_command(argv: list[str]) -> CommandInvocation | None:
             args=args,
         )
     if command == "sync":
-        return CommandInvocation(command, "sync_bundle.py", "sync_bundle", rest)
+        return CommandInvocation(
+            command,
+            "sync_bundle.py",
+            module_name_for_script("sync_bundle.py"),
+            rest,
+        )
     if command == "object-sync":
         return CommandInvocation(
-            command, "sync_object_storage.py", "sync_object_storage", rest
+            command,
+            "sync_object_storage.py",
+            module_name_for_script("sync_object_storage.py"),
+            rest,
         )
     if command == "hooks":
         hook_kind = "prompt"

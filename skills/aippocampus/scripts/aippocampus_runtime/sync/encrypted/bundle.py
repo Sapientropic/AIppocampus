@@ -12,7 +12,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Iterable
 
-import sync_bundle
+from aippocampus_runtime.sync import bundle as sync_bundle
 from aippocampus_runtime.sync.encrypted import keys as encrypted_sync_keys
 from aippocampus_runtime.sync.encrypted.crypto import (
     EncryptedSyncError,

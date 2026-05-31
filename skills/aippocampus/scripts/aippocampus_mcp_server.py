@@ -13,8 +13,8 @@ from typing import Any
 
 import latest_reply as latest_reply_module
 import registry
-import sync_bundle
-import sync_object_storage
+from aippocampus_runtime.sync import bundle as sync_bundle
+from aippocampus_runtime.sync.object_storage import cli as sync_object_storage
 from aippocampuslib import (
     codex_home,
     default_thread_clean_source_dir,

@@ -216,7 +216,14 @@ class ImportCouplingTests(unittest.TestCase):
             self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
 
         edges = same_dir_import_edges(top_level_only=True)
-        self.assertIn("aippocampus_runtime.sync.object_storage.client", edges["sync_object_storage"])
+        self.assertIn(
+            "aippocampus_runtime.sync.object_storage.cli",
+            edges["sync_object_storage"],
+        )
+        self.assertIn(
+            "aippocampus_runtime.sync.object_storage.client",
+            edges["aippocampus_runtime.sync.object_storage.cli"],
+        )
         self.assertNotIn("object_storage_client", edges["sync_object_storage"])
         self.assertIn(
             "aippocampus_runtime.sync.object_storage.providers",
@@ -234,6 +241,66 @@ class ImportCouplingTests(unittest.TestCase):
         )
         self.assertIs(object_storage_providers.SigV4Auth, providers.SigV4Auth)
         self.assertIs(object_storage_providers.provider_config, providers.provider_config)
+
+    def test_sync_public_commands_have_package_owner_and_compat_shims(self) -> None:
+        import sync_bundle
+        import sync_object_storage
+        from aippocampus_runtime.sync import bundle
+        from aippocampus_runtime.sync.object_storage import cli as object_storage_cli
+
+        package_paths = [
+            SCRIPTS / "aippocampus_runtime" / "sync" / "bundle.py",
+            SCRIPTS / "aippocampus_runtime" / "sync" / "object_storage" / "cli.py",
+        ]
+        shim_paths = [
+            SCRIPTS / "sync_bundle.py",
+            SCRIPTS / "sync_object_storage.py",
+        ]
+
+        for path in package_paths + shim_paths:
+            self.assertTrue(path.exists(), path)
+        for path in shim_paths:
+            self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges(top_level_only=True)
+        packaged_sync_consumers = [
+            "aippocampus_runtime.sync.encrypted.bundle",
+            "aippocampus_runtime.sync.encrypted.keys",
+            "aippocampus_runtime.sync.encrypted.migration",
+            "aippocampus_runtime.sync.encrypted.object_storage",
+            "aippocampus_runtime.sync.object_storage.client",
+            "aippocampus_runtime.sync.object_storage.cli",
+        ]
+        for source in packaged_sync_consumers:
+            self.assertNotIn("sync_bundle", edges[source])
+        for source in [
+            "aippocampus_runtime.sync.encrypted.migration",
+            "aippocampus_runtime.sync.encrypted.object_storage",
+        ]:
+            self.assertNotIn("sync_object_storage", edges[source])
+
+        self.assertIn(
+            "aippocampus_runtime.sync.bundle",
+            edges["aippocampus_runtime.sync.object_storage.cli"],
+        )
+        self.assertIn(
+            "aippocampus_runtime.sync.object_storage.cli",
+            edges["aippocampus_mcp_server"],
+        )
+        self.assertNotIn("sync_object_storage", edges["aippocampus_mcp_server"])
+
+        self.assertIs(sync_bundle.push_sync_bundle, bundle.push_sync_bundle)
+        self.assertIs(sync_bundle.pull_sync_bundle, bundle.pull_sync_bundle)
+        self.assertIs(sync_bundle.main, bundle.main)
+        self.assertIs(
+            sync_object_storage.push_object_storage_bundle,
+            object_storage_cli.push_object_storage_bundle,
+        )
+        self.assertIs(
+            sync_object_storage.pull_object_storage_bundle,
+            object_storage_cli.pull_object_storage_bundle,
+        )
+        self.assertIs(sync_object_storage.main, object_storage_cli.main)
 
     def test_encrypted_sync_helpers_have_package_owner_and_compat_shims(self) -> None:
         import encrypted_sync_bundle
@@ -294,8 +361,12 @@ class ImportCouplingTests(unittest.TestCase):
             & edges["aippocampus_runtime.sync.encrypted.migration"]
         )
 
-        sync_bundle_source = (SCRIPTS / "sync_bundle.py").read_text(encoding="utf-8")
-        sync_object_source = (SCRIPTS / "sync_object_storage.py").read_text(encoding="utf-8")
+        sync_bundle_source = (
+            SCRIPTS / "aippocampus_runtime" / "sync" / "bundle.py"
+        ).read_text(encoding="utf-8")
+        sync_object_source = (
+            SCRIPTS / "aippocampus_runtime" / "sync" / "object_storage" / "cli.py"
+        ).read_text(encoding="utf-8")
         self.assertIn("aippocampus_runtime.sync.encrypted.bundle", sync_bundle_source)
         self.assertNotIn('import_module("encrypted_sync_bundle")', sync_bundle_source)
         self.assertIn("aippocampus_runtime.sync.encrypted.object_storage", sync_object_source)
