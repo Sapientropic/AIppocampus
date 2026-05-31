@@ -16,9 +16,9 @@ from aippocampus_runtime.subconscious.job_validation import (
     short_question_fallback,
     validate_cognitive_map_fields,
 )
+from aippocampus_runtime.subconscious.worker import clamp_confidence
 from aippocampuslib import compact_text
 from semantic_scope_labels import filtered_semantic_scope_labels
-from subconscious_worker import clamp_confidence
 
 
 def validation_rejection_reason(

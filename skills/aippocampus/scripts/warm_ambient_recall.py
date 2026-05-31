@@ -28,55 +28,39 @@ from aippocampus_runtime.model.routing import (
     route_service_name,
 )
 from aippocampus_runtime.subconscious.runtime import add_usage, call_chat_json, compact_usage
+from aippocampus_runtime.subconscious.worker import (
+    DEFAULT_BASE_URL,
+    DEFAULT_MODEL,
+    clamp_confidence,
+    parse_model_json,
+)
 from aippocampus_runtime.warm_ambient.prompting import OUTPUT_BUDGET_RULES as OUTPUT_BUDGET_RULES
 from aippocampus_runtime.warm_ambient.prompting import SYSTEM_PROMPT, scout_prompt
-from aippocampus_runtime.warm_ambient.scout_profiles import (
+from aippocampus_runtime.warm_ambient.scout_profiles import (  # noqa: F401
     DEFAULT_SCOUTS,
+    FAMILY_LENS_TASKS,
+    FAMILY_TASKS,
+    FAMILY_VARIANT_LENS_TASKS,
+    LEGACY_SCOUT_ALIASES,
     SCOUT_CANDIDATE_LIMITS,
+    SCOUT_FAMILIES,
+    SCOUT_OUTPUT_PROFILES,
+    SCOUT_PRIORITY,
+    SCOUT_VARIANTS,
     SUPPORT_RANK,
     TOPIC_EPOCH_FAMILIES,
     VALID_DECISIONS,
     VALID_SUPPORT_LEVELS,
     VALID_TOPIC_EPOCH_ACTIONS,
     VALID_VISIBILITIES,
+    VARIANT_LENS_TASKS,
+    VARIANT_TASKS,
     expand_scout_lanes,
+    lens_task_for,
     output_profile_for_family,
     scout_lane_parts,
 )
-from aippocampus_runtime.warm_ambient.scout_profiles import (
-    FAMILY_LENS_TASKS as FAMILY_LENS_TASKS,
-)
-from aippocampus_runtime.warm_ambient.scout_profiles import (
-    FAMILY_TASKS as FAMILY_TASKS,
-)
-from aippocampus_runtime.warm_ambient.scout_profiles import (
-    FAMILY_VARIANT_LENS_TASKS as FAMILY_VARIANT_LENS_TASKS,
-)
-from aippocampus_runtime.warm_ambient.scout_profiles import (
-    LEGACY_SCOUT_ALIASES as LEGACY_SCOUT_ALIASES,
-)
-from aippocampus_runtime.warm_ambient.scout_profiles import (
-    SCOUT_FAMILIES as SCOUT_FAMILIES,
-)
-from aippocampus_runtime.warm_ambient.scout_profiles import (
-    SCOUT_OUTPUT_PROFILES as SCOUT_OUTPUT_PROFILES,
-)
-from aippocampus_runtime.warm_ambient.scout_profiles import (
-    SCOUT_PRIORITY as SCOUT_PRIORITY,
-)
-from aippocampus_runtime.warm_ambient.scout_profiles import (
-    SCOUT_VARIANTS as SCOUT_VARIANTS,
-)
-from aippocampus_runtime.warm_ambient.scout_profiles import (
-    VARIANT_LENS_TASKS as VARIANT_LENS_TASKS,
-)
-from aippocampus_runtime.warm_ambient.scout_profiles import (
-    VARIANT_TASKS as VARIANT_TASKS,
-)
-from aippocampus_runtime.warm_ambient.scout_profiles import (
-    lens_task_for as lens_task_for,
-)
-from aippocampus_runtime.warm_ambient.source_validation import (
+from aippocampus_runtime.warm_ambient.source_validation import (  # noqa: F401
     _clean_source_ref,
     _stable_id,
     calibrate_cards,
@@ -84,9 +68,7 @@ from aippocampus_runtime.warm_ambient.source_validation import (
     referenced_thread_keys,
     referenced_thread_keys_from_cards,
     source_index_from_registry,
-)
-from aippocampus_runtime.warm_ambient.source_validation import (
-    validate_card_source_refs as validate_card_source_refs,
+    validate_card_source_refs,
 )
 from aippocampuslib import (
     compact_text,
@@ -111,7 +93,6 @@ from ambient_thread_cache import (
 )
 from registry import load_registry, registry_paths, unique_preserve
 from retrieval import split_query_terms
-from subconscious_worker import DEFAULT_BASE_URL, DEFAULT_MODEL, clamp_confidence, parse_model_json
 
 PROMPT_VERSION = "aippocampus-warm-ambient-recall-v0"
 SCHEMA_VERSION = 1
@@ -131,7 +112,6 @@ DEFAULT_DETACHED_PREFIX_CACHE_WARMUP_DELAY = float(
     os.environ.get("AIPPOCAMPUS_DETACHED_WARM_PREFIX_CACHE_WARMUP_DELAY", "0.5") or 0
 )
 WARM_JOB_SCHEMA_VERSION = 1
-
 ChatFn = Callable[..., dict[str, Any]]
 ScoutFn = Callable[..., dict[str, Any]]
 

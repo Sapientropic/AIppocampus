@@ -82,19 +82,19 @@ from aippocampus_runtime.subconscious.runtime import (
 )
 from aippocampus_runtime.subconscious.tool_loop import run_tool_using_loop
 from aippocampus_runtime.subconscious.validation_audit import validation_audit
-from aippocampuslib import (
-    cli_error_payload,
-    cli_error_payload_from_message,
-    cli_exit_code_for_error_code,
-    compact_text,
-)
-from subconscious_worker import (
+from aippocampus_runtime.subconscious.worker import (
     DEFAULT_BASE_URL,
     DEFAULT_MAX_TURNS,
     DEFAULT_MODEL,
     append_staging_edges,
     load_json,
     select_timeline_turns,
+)
+from aippocampuslib import (
+    cli_error_payload,
+    cli_error_payload_from_message,
+    cli_exit_code_for_error_code,
+    compact_text,
 )
 
 __all__ = [

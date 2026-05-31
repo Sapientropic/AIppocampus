@@ -343,6 +343,39 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(deepseek_model_routing.resolve_model_route, routing.resolve_model_route)
         self.assertIs(deepseek_model_routing.ModelRoute, routing.ModelRoute)
 
+    def test_subconscious_worker_has_package_owner_and_compat_shim(self) -> None:
+        import subconscious_worker
+        from aippocampus_runtime.subconscious import worker
+
+        package_path = SCRIPTS / "aippocampus_runtime" / "subconscious" / "worker.py"
+        shim_path = SCRIPTS / "subconscious_worker.py"
+
+        self.assertTrue(package_path.exists(), package_path)
+        self.assertTrue(shim_path.exists(), shim_path)
+        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges(top_level_only=True)
+        worker_consumers = [
+            "aippocampus_runtime.subconscious.agent",
+            "aippocampus_runtime.subconscious.job_validation",
+            "aippocampus_runtime.subconscious.jobs_config",
+            "aippocampus_runtime.subconscious.validation_audit",
+            "onboard_frontier",
+            "semantic_recall_gate",
+            "semantic_scope_suppressed_recovery",
+            "subconscious_jobs",
+            "subconscious_review",
+            "warm_ambient_recall",
+        ]
+        for source in worker_consumers:
+            self.assertIn("aippocampus_runtime.subconscious.worker", edges[source])
+            self.assertNotIn("subconscious_worker", edges[source])
+
+        self.assertIs(subconscious_worker.run_worker, worker.run_worker)
+        self.assertIs(subconscious_worker.select_timeline_turns, worker.select_timeline_turns)
+        self.assertIs(subconscious_worker.clamp_confidence, worker.clamp_confidence)
+        self.assertIs(subconscious_worker.main, worker.main)
+
     def test_dream_delivery_policy_has_package_owner_and_compat_shim(self) -> None:
         import dream_delivery_policy
         from aippocampus_runtime.dream import delivery_policy
