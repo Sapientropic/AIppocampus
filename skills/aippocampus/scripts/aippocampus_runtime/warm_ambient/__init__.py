@@ -1,5 +1,7 @@
 """Warm ambient recall helper package.
 
-The executable entrypoint remains `warm_ambient_recall.py`; this package owns
-prompt rendering, scout taxonomy, and source-ref validation helpers.
+This package owns the warm-path ambient recall runner plus its prompt rendering,
+scout taxonomy, and source-ref validation helpers. The top-level
+`warm_ambient_recall.py` file remains only as a direct-script compatibility
+shim so installed and scheduled entrypoints do not fork a second implementation.
 """

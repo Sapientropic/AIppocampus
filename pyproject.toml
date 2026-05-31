@@ -399,6 +399,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/prompting.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/recall.py",
     "skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/scout_profiles.py",
     "skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/source_validation.py",
     "skills/aippocampus/scripts/warm_ambient_prompting.py",

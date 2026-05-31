@@ -34,7 +34,7 @@ HIGH_RISK_MYPY_SCRIPTS = {
     "skills/aippocampus/scripts/onboard_codex.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_core.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/retrieval.py",
-    "skills/aippocampus/scripts/warm_ambient_recall.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/recall.py",
 }
 DEBT_REGISTER = REPO_ROOT / "docs" / "architecture" / "architecture-debt-register.md"
 PROVIDER_ENTRYPOINT_INVENTORY = (

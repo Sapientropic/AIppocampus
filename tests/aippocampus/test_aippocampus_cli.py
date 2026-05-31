@@ -40,8 +40,10 @@ class AippocampusCliTests(unittest.TestCase):
 
         self.assertIs(aippocampus_cli.main, facade.main)
         self.assertIs(aippocampus_cli.run_script, facade.run_script)
+        self.assertIs(aippocampus_cli.run_command, facade.run_command)
         self.assertIs(aippocampus_cli.resolve_command, facade.resolve_command)
         self.assertIs(aippocampus_cli.CommandInvocation, facade.CommandInvocation)
+        self.assertIs(aippocampus_cli.CommandResult, facade.CommandResult)
         self.assertEqual(facade.SCRIPT_DIR, SCRIPTS)
 
     def test_package_facade_resolves_commands_without_running_child_processes(self) -> None:
@@ -66,6 +68,39 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(code, 0)
         tools = json.loads(stdout.getvalue())["tools"]
         self.assertTrue(any(tool["name"] == "search_memory" for tool in tools))
+
+    def test_package_facade_exposes_captureable_python_api(self) -> None:
+        from aippocampus_runtime.cli import facade
+
+        with (
+            patch("subprocess.run", side_effect=AssertionError("facade should not spawn")),
+            patch("sys.stdout", new=StringIO()) as ambient_stdout,
+            patch("sys.stderr", new=StringIO()) as ambient_stderr,
+        ):
+            result = facade.run_command(["mcp", "list-tools"], capture_output=True)
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.exit_code, 0)
+        self.assertEqual(result.invocation.command, "mcp")
+        tools = json.loads(result.stdout)["tools"]
+        self.assertTrue(any(tool["name"] == "search_memory" for tool in tools))
+        self.assertEqual(result.stderr, "")
+        self.assertEqual(ambient_stdout.getvalue(), "")
+        self.assertEqual(ambient_stderr.getvalue(), "")
+
+    def test_package_facade_capture_api_handles_usage_and_unknown_commands(self) -> None:
+        from aippocampus_runtime.cli import facade
+
+        help_result = facade.run_command(["--help"], capture_output=True)
+        unknown_result = facade.run_command(["nope"], capture_output=True)
+
+        self.assertTrue(help_result.ok)
+        self.assertIn("Commands:", help_result.stdout)
+        self.assertIsNone(help_result.invocation)
+        self.assertFalse(unknown_result.ok)
+        self.assertEqual(unknown_result.exit_code, 2)
+        self.assertIn("unknown command: nope", unknown_result.stderr)
+        self.assertIn("Commands:", unknown_result.stderr)
 
     def test_mcp_list_tools_preserves_json_stdout(self) -> None:
         proc = self.run_cli("mcp", "list-tools")
