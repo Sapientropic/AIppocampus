@@ -13,6 +13,7 @@ from typing import Any
 
 from aippocampus_runtime.core import compact_text, sanitize_external_model_text
 from aippocampus_runtime.recall.ambient_policy import policy_payload_for_working_memory
+from aippocampus_runtime.recall.fresh_thread_scent import fresh_thread_scent_packet_from_decision
 
 CARD_SCHEMA_VERSION = 1
 MAX_CARDS = 3
@@ -251,6 +252,7 @@ def ambient_recall_from_decision(
         "mode": mode,
         "confidence": result.get("confidence") or ("medium" if cards else "low"),
         "cards": cards,
+        "fresh_thread_packet": fresh_thread_scent_packet_from_decision(result),
         "avoid": list(DEFAULT_AVOID),
         "latency_ms": result.get("elapsed_ms"),
         "cache_status": cache_status or {"status": "not_used"},

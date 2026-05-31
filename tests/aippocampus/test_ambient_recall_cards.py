@@ -117,9 +117,42 @@ class AmbientRecallCardTests(unittest.TestCase):
 
         self.assertEqual(payload["mode"], "active_gentle_nudge")
         self.assertEqual(payload["cards"][0]["support_level"], "scent")
+        self.assertEqual(payload["fresh_thread_packet"]["support_level"], "soft_hypothesis")
+        self.assertEqual(payload["fresh_thread_packet"]["suggested_action"], "active_recall")
         self.assertEqual(payload["cards"][0]["visibility"], "active_gentle_nudge")
         self.assertEqual(payload["cards"][0]["source_refs"], [])
         self.assertIn("Ambient recall design", payload["cards"][0]["theme"])
+
+    def test_evidence_packet_contains_source_refs_without_key_line_or_snippet(self) -> None:
+        payload = cards.ambient_recall_from_decision(
+            {
+                "decision": "evidence",
+                "confidence": "high",
+                "elapsed_ms": 1.0,
+                "evidence": [
+                    {
+                        "thread_key": "session:old",
+                        "message_id": "msg-11",
+                        "line": 77,
+                        "snippet": "private wording should stay on the evidence card only",
+                    }
+                ],
+                "working_memory": [],
+                "cognitive_map": [],
+                "candidates": [],
+            }
+        )
+
+        packet = payload["fresh_thread_packet"]
+
+        self.assertEqual(packet["support_level"], "source_required")
+        self.assertEqual(packet["suggested_action"], "source_reopen")
+        self.assertEqual(
+            packet["candidate_refs"],
+            [{"thread_key": "session:old", "message_id": "msg-11", "line": 77}],
+        )
+        self.assertNotIn("key_line", packet)
+        self.assertNotIn("snippet", packet)
 
     def test_skip_decision_stays_silent_with_stable_shape(self) -> None:
         payload = cards.ambient_recall_from_decision(
