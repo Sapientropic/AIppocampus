@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 import dream_worker
+from aippocampus_runtime.registry.store import registry_paths
 from aippocampuslib import compact_text, deepseek_cache_metrics_from_usage, now_utc
 from deepseek_model_routing import (
     DEFAULT_DEEPSEEK_API_KEY_ENV,
@@ -47,7 +48,6 @@ from model_client import (
     NO_PROVIDER_CACHE_CONTRACT,
     ChatClientConfig,
 )
-from registry_store import registry_paths
 
 SCHEMA_VERSION = 1
 EVAL_KIND = "aippocampus_dream_real_history_eval"

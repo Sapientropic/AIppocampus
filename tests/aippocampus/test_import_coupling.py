@@ -132,15 +132,33 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertNotIn("retrieval", edges["registry"])
 
     def test_registry_storage_is_separate_from_registry_runner(self) -> None:
-        store_path = SCRIPTS / "registry_store.py"
-        self.assertTrue(store_path.exists())
+        package_paths = [
+            SCRIPTS / "aippocampus_runtime" / "registry" / "__init__.py",
+            SCRIPTS / "aippocampus_runtime" / "registry" / "provider.py",
+            SCRIPTS / "aippocampus_runtime" / "registry" / "search.py",
+            SCRIPTS / "aippocampus_runtime" / "registry" / "store.py",
+        ]
+        shim_paths = [
+            SCRIPTS / "registry_provider.py",
+            SCRIPTS / "registry_search.py",
+            SCRIPTS / "registry_store.py",
+        ]
+
+        for path in package_paths + shim_paths:
+            self.assertTrue(path.exists(), path)
+        for path in shim_paths:
+            self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+
         edges = same_dir_import_edges(top_level_only=True)
 
-        self.assertIn("registry_store", edges["registry"])
-        self.assertNotIn("registry", edges["registry_store"])
+        self.assertIn("aippocampus_runtime.registry.provider", edges["registry"])
+        self.assertIn("aippocampus_runtime.registry.search", edges["registry"])
+        self.assertIn("aippocampus_runtime.registry.store", edges["registry"])
+        self.assertNotIn("registry_store", edges["registry"])
+        self.assertNotIn("registry", edges["aippocampus_runtime.registry.store"])
 
         registry_source = (SCRIPTS / "registry.py").read_text(encoding="utf-8")
-        store_source = store_path.read_text(encoding="utf-8")
+        store_source = package_paths[-1].read_text(encoding="utf-8")
         self.assertNotIn("def load_registry", registry_source)
         self.assertIn("def load_registry", store_source)
         self.assertNotIn("def save_registry", registry_source)

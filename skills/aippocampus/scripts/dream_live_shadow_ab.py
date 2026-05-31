@@ -24,6 +24,12 @@ from pathlib import Path
 from typing import Any, Callable
 
 import dream_real_history_eval as dream_eval
+from aippocampus_runtime.registry.store import (
+    load_registry,
+    registry_paths,
+    registry_root,
+    thread_store_dir,
+)
 from aippocampuslib import now_utc
 from deepseek_model_routing import (
     DEFAULT_DEEPSEEK_API_KEY_ENV,
@@ -45,7 +51,6 @@ from model_client import (
     ChatClientConfig,
     chat_json,
 )
-from registry_store import load_registry, registry_paths, registry_root, thread_store_dir
 
 SCHEMA_VERSION = 1
 EVENT_KIND = "aippocampus_dream_shadow_ab_event"
