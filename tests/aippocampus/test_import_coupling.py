@@ -372,6 +372,31 @@ class ImportCouplingTests(unittest.TestCase):
             delivery_policy.add_dream_delivery_arguments,
         )
 
+    def test_dream_worker_contract_has_package_owner_and_compat_shim(self) -> None:
+        import dream_worker_contract
+        from aippocampus_runtime.dream import worker_contract
+
+        package_path = SCRIPTS / "aippocampus_runtime" / "dream" / "worker_contract.py"
+        shim_path = SCRIPTS / "dream_worker_contract.py"
+
+        self.assertTrue(package_path.exists(), package_path)
+        self.assertTrue(shim_path.exists(), shim_path)
+        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges(top_level_only=True)
+        self.assertIn("aippocampus_runtime.dream.worker_contract", edges["dream_worker"])
+        self.assertNotIn("dream_worker_contract", edges["dream_worker"])
+
+        self.assertEqual(dream_worker_contract.PROMPT_VERSION, worker_contract.PROMPT_VERSION)
+        self.assertIs(
+            dream_worker_contract.stable_worker_contract,
+            worker_contract.stable_worker_contract,
+        )
+        self.assertIs(
+            dream_worker_contract.variable_run_directive,
+            worker_contract.variable_run_directive,
+        )
+
     def test_prompt_recall_core_stays_small_foreground_gate(self) -> None:
         edges = same_dir_import_edges()
         forbidden = {
