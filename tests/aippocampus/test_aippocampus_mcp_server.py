@@ -514,9 +514,9 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertFalse(hasattr(mcp, "subprocess"))
         self.assertFalse(response["result"].get("isError"))
         payload = self.tool_payload(response)
-        self.assertEqual(payload["cwd"], str(self.cwd))
+        self.assertEqual(payload["cwd"], str(core.canonical_path(self.cwd)))
         self.assertEqual(payload["recommended_actions"], [])
-        self.assertEqual(seen_cwd, [self.cwd])
+        self.assertEqual(seen_cwd, [core.canonical_path(self.cwd)])
 
     def test_memory_health_cwd_uses_canonical_identity_for_path_aliases(self) -> None:
         alias = self.cwd.parent / f"{self.cwd.name}-alias"
