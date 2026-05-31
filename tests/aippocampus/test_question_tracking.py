@@ -18,8 +18,8 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import question_tracking as tracking  # noqa: E402
-from question_confirmation import load_confirmation_decisions  # noqa: E402
+from aippocampus_runtime.question import tracking  # noqa: E402
+from aippocampus_runtime.question.confirmation import load_confirmation_decisions  # noqa: E402
 
 
 class QuestionTrackingTests(unittest.TestCase):

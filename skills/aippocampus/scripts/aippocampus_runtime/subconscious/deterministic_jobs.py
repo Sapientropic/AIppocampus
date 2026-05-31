@@ -24,8 +24,8 @@ def run_question_tracking_job(
     no_write: bool,
     dry_run: bool,
 ) -> dict[str, Any]:
-    import question_tracking
-    from question_confirmation import (
+    from aippocampus_runtime.question import tracking as question_tracking
+    from aippocampus_runtime.question.confirmation import (
         default_confirmation_artifacts_path,
         default_confirmation_requests_path,
         iter_confirmation_jsonl,

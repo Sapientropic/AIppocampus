@@ -14,7 +14,10 @@ SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import question_confirmation_live as live  # noqa: E402
-from question_confirmation import load_confirmation_decisions, normalize_confirmation  # noqa: E402
+from aippocampus_runtime.question.confirmation import (  # noqa: E402
+    load_confirmation_decisions,
+    normalize_confirmation,
+)
 
 
 class QuestionConfirmationLiveTests(unittest.TestCase):

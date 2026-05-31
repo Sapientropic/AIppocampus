@@ -27,14 +27,14 @@ from aippocampus_runtime.model.routing import (
     route_cache_metrics,
     route_service_name,
 )
-from aippocampuslib import compact_text, now_utc
-from question_confirmation import (
+from aippocampus_runtime.question.confirmation import (
     append_confirmation_artifacts,
     default_confirmation_artifacts_path,
     default_confirmation_requests_path,
     iter_confirmation_jsonl,
 )
-from question_tracking import default_jobs_path
+from aippocampus_runtime.question.tracking import default_jobs_path
+from aippocampuslib import compact_text, now_utc
 
 SCHEMA_VERSION = 1
 PROMPT_VERSION = "aippocampus-question-confirmation-live-v1"

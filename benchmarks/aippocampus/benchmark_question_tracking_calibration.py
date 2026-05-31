@@ -17,7 +17,7 @@ import _paths
 
 _paths.ensure_paths()
 
-import question_tracking as tracking  # noqa: E402
+from aippocampus_runtime.question import tracking  # noqa: E402
 from aippocampuslib import now_utc  # noqa: E402
 
 SCHEMA_VERSION = 1

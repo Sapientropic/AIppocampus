@@ -19,8 +19,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from aippocampus_runtime.question.source_refs import build_source_ref_index, source_ref_key
-from aippocampuslib import cli_error_payload, cli_exit_code_for_error_code, compact_text, now_utc
-from question_tracking import (
+from aippocampus_runtime.question.tracking import (
     DEFAULT_STRONG_THRESHOLD,
     ConfirmationFn,
     QuestionCandidate,
@@ -31,6 +30,7 @@ from question_tracking import (
     load_tracking_inputs,
     pair_is_trackable,
 )
+from aippocampuslib import cli_error_payload, cli_exit_code_for_error_code, compact_text, now_utc
 from registry import unique_preserve
 
 SCHEMA_VERSION = 2

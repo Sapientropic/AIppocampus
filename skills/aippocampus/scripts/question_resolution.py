@@ -22,8 +22,7 @@ from aippocampus_runtime.question.source_refs import (
     compact_source_refs,
     source_ref_key,
 )
-from aippocampuslib import compact_text, now_utc
-from question_tracking import (
+from aippocampus_runtime.question.tracking import (
     FINDING_ROW_KIND,
     QUESTION_CANDIDATE_KIND,
     QUESTION_LINK_KIND,
@@ -33,6 +32,7 @@ from question_tracking import (
     parse_timestamp,
     stable_digest,
 )
+from aippocampuslib import compact_text, now_utc
 from registry import load_registry, unique_preserve
 from search_clean_source import iter_clean_messages
 
