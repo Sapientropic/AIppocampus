@@ -349,10 +349,12 @@ The executable contract lives in `tests/aippocampus/test_dream_queue.py`.
 
 ### Implemented Phase 2.75 Detached Sleep Cycle
 
-`skills/aippocampus/scripts/dream_sleep_cycle.py` is the narrow execution bridge
-that consumes ready/due queue items from `dream_queue.py` and invokes bounded
-model-backed workers from `dream_worker.py`. It is scheduler-only/background
-work, not a foreground hook route. The runner preserves
+`skills/aippocampus/scripts/aippocampus_runtime/dream/sleep_cycle.py` is the
+narrow execution bridge that consumes ready/due queue items from
+`dream_queue.py` and invokes bounded model-backed workers from
+`dream_worker.py`. `skills/aippocampus/scripts/dream_sleep_cycle.py` remains a
+compatibility shim for the documented direct script route. It is
+scheduler-only/background work, not a foreground hook route. The runner preserves
 `execution_mode="detached_background"`, refuses foreground-eligible queue
 items, defaults to `no_write=True`, and only appends lifecycle/findings/working
 memory rows when explicitly called with `--write`.

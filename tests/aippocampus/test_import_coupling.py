@@ -512,7 +512,10 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
 
         edges = same_dir_import_edges(top_level_only=True)
-        for source in ["aippocampus_runtime.dream.retrospective_lifecycle", "dream_sleep_cycle"]:
+        for source in [
+            "aippocampus_runtime.dream.retrospective_lifecycle",
+            "aippocampus_runtime.dream.sleep_cycle",
+        ]:
             self.assertIn("aippocampus_runtime.dream.precision_policy", edges[source])
             self.assertNotIn("dream_precision_policy", edges[source])
 
@@ -527,6 +530,30 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(
             dream_precision_policy.retrospective_policy_for_probe,
             precision_policy.retrospective_policy_for_probe,
+        )
+
+    def test_dream_sleep_cycle_has_package_owner_and_compat_shim(self) -> None:
+        import dream_sleep_cycle
+        from aippocampus_runtime.dream import sleep_cycle
+
+        package_path = SCRIPTS / "aippocampus_runtime" / "dream" / "sleep_cycle.py"
+        shim_path = SCRIPTS / "dream_sleep_cycle.py"
+
+        self.assertTrue(package_path.exists(), package_path)
+        self.assertTrue(shim_path.exists(), shim_path)
+        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges(top_level_only=True)
+        self.assertIn(
+            "aippocampus_runtime.dream.precision_policy",
+            edges["aippocampus_runtime.dream.sleep_cycle"],
+        )
+        self.assertNotIn("dream_precision_policy", edges["aippocampus_runtime.dream.sleep_cycle"])
+
+        self.assertIs(dream_sleep_cycle.run_sleep_cycle, sleep_cycle.run_sleep_cycle)
+        self.assertIs(
+            dream_sleep_cycle.public_sleep_cycle_summary,
+            sleep_cycle.public_sleep_cycle_summary,
         )
 
     def test_dream_one_sidedness_has_package_owner_and_compat_shim(self) -> None:
