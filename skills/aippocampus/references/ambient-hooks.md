@@ -31,8 +31,7 @@ then exact claims should be checked against clean source when they matter.
 
 `ambient_recall` also carries a `fresh_thread_packet` projected by
 `fresh_thread_scent.py`. This is the #282 contract that bridges the #281
-fresh-thread product goal with #277-style active recall locks, while leaving
-#284's agent-owned action policy for the next layer. The packet fields are:
+fresh-thread product goal with #277-style active recall locks. The packet fields are:
 `support_level` (`silent_scent | soft_hypothesis | source_required |
 suppressed`), coarse `confidence`, `sensitivity`, `freshness`, `route_reason`,
 source-id-only `candidate_refs`, `suggested_action`, `when_not_to_use`, and a
@@ -46,6 +45,44 @@ Public-safe first-turn demo cues such as "我觉得压力好大", "帮我妈妈�
 candidate refs. They must not become first-turn private-history dumps. Specific
 memory-backed claims require `source_reopen`; broad, sensitive, stale, or
 superseded cues should stay `silent_scent` or `suppressed`.
+
+`fresh_thread_action.py` owns the #284 agent-facing action policy for consuming
+that packet. The hook prepares terrain; the foreground agent chooses one of
+`ignore`, `use_silently`, `ask_light_question`,
+`mention_soft_hypothesis`, `active_recall`, or `source_reopen` after considering
+the current task. The packet's `suggested_action` is advisory; it must not force
+lookup when the agent cannot say memory would change the answer, plan, or
+action. This layer must not parse the raw prompt with a static semantic word
+list. Subconscious/semantic judgement enters as packet fields, reviewed
+sidecars, active recall locks, or explicit agent context such as
+`memory_may_change_answer`, `specific_memory_claim`,
+`broad_or_sensitive_prompt`, and `user_confirmed_memory_theme`.
+
+Action policy examples:
+
+- Positive: a safe medium-confidence design/workflow preference scent that
+  could change the next design decision should call `active_recall`; if a #277
+  lock is `ready`, use that lock id as a route handle.
+- Positive: a user-confirmed prior theme with a `pending` lock should call
+  `active_recall` with `wait_or_probe_lock`, not present the pending lock as a
+  fact.
+- Positive: a profile/resume or other specific memory-backed claim with source
+  refs should choose `source_reopen` before answering concretely.
+- Negative control: a low-confidence, broad, or sensitive first-turn scent can
+  stay `use_silently`; support the user or ask normally without exposing an old
+  private theme.
+- Negative control: `silent_scent` or no candidate refs should `ignore`; a
+  generic creative or coding prompt should not become memory lookup by default.
+- Negative control: `suppressed`, superseded, or high-risk packets should
+  `ignore` and must not steer answer content, tone, or source reopening unless
+  the user supplies a clearer low-risk memory intent.
+
+#277 active recall locks are navigation handles, not evidence. A ready lock can
+make `active_recall` cheaper; a pending lock can be probed or waited on by the
+agent; expired or failed locks should be ignored and restarted only if memory
+would change the answer, plan, or action. Any specific memory-backed claim still
+requires clean-source reopen; scent packets, route reasons, locks, aliases, and
+candidate refs are not enough.
 
 When the hook receives a thread/session id, `ambient_thread_cache.py` may store
 up to a few compact cards under a hashed `thread_id + workspace + topic_epoch`
