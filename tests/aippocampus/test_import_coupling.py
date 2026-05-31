@@ -1139,6 +1139,44 @@ class ImportCouplingTests(unittest.TestCase):
         )
         self.assertIs(dream_retrospective_lifecycle.main, retrospective_lifecycle.main)
 
+    def test_journey_and_reflection_have_package_owners_and_compat_shims(self) -> None:
+        import journey_tracking
+        import reflection_space
+        from aippocampus_runtime.journey import tracking
+        from aippocampus_runtime.reflection import space
+
+        package_paths = [
+            SCRIPTS / "aippocampus_runtime" / "journey" / "__init__.py",
+            SCRIPTS / "aippocampus_runtime" / "journey" / "tracking.py",
+            SCRIPTS / "aippocampus_runtime" / "reflection" / "__init__.py",
+            SCRIPTS / "aippocampus_runtime" / "reflection" / "space.py",
+        ]
+        shim_paths = [
+            SCRIPTS / "journey_tracking.py",
+            SCRIPTS / "reflection_space.py",
+        ]
+
+        for path in package_paths + shim_paths:
+            self.assertTrue(path.exists(), path)
+        for path in shim_paths:
+            self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges(top_level_only=True)
+        self.assertIn("aippocampus_runtime.journey.tracking", edges["journey_tracking"])
+        self.assertIn("aippocampus_runtime.reflection.space", edges["reflection_space"])
+        self.assertIn(
+            "aippocampus_runtime.journey.tracking",
+            edges["aippocampus_runtime.reflection.space"],
+        )
+        self.assertNotIn("journey_tracking", edges["aippocampus_runtime.reflection.space"])
+
+        self.assertIs(journey_tracking.create_journey, tracking.create_journey)
+        self.assertIs(journey_tracking.JourneyFeedback, tracking.JourneyFeedback)
+        self.assertIs(journey_tracking.main, tracking.main)
+        self.assertIs(reflection_space.build_reflection_topology, space.build_reflection_topology)
+        self.assertIs(reflection_space.run_fixture_smoke, space.run_fixture_smoke)
+        self.assertIs(reflection_space.main, space.main)
+
     def test_subconscious_job_storage_has_package_owner_and_compat_shim(self) -> None:
         import subconscious_job_storage
         from aippocampus_runtime.subconscious import job_storage
