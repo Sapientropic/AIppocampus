@@ -495,7 +495,7 @@ def main(argv: list[str] | None = None) -> int:
         min_tool_steps=args.min_tool_steps,
     )
     if args.json_output:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        print(json.dumps(sanitize_external_model_payload(result), ensure_ascii=False, indent=2))
     else:
         print(f"suppressed label recovery: {result.get('status')}")
         print(f"strict recovered labels: {result.get('strict_recovered_label_count')}")

@@ -84,12 +84,12 @@ TEMPORAL_NOISE_PATTERNS = (
 
 def stable_hash(value: object, *, prefix: str, salt: str = DEFAULT_SALT, length: int = 16) -> str:
     raw = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
-    digest = hashlib.sha1(f"{salt}\n{raw}".encode("utf-8", errors="replace")).hexdigest()
+    digest = hashlib.sha256(f"{salt}\n{raw}".encode("utf-8", errors="replace")).hexdigest()
     return f"{prefix}_{digest[:length]}"
 
 
 def prompt_sha1(prompt: str) -> str:
-    return hashlib.sha1(prompt.encode("utf-8", errors="replace")).hexdigest()[:16]
+    return hashlib.sha256(prompt.encode("utf-8", errors="replace")).hexdigest()[:16]
 
 
 def ratio(numerator: int | float, denominator: int | float) -> float:
@@ -129,7 +129,7 @@ def clamped_rollout_rate(value: object) -> float:
 
 
 def rollout_bucket_for(*parts: object, salt: str = DEFAULT_SALT) -> float:
-    digest = hashlib.sha1(
+    digest = hashlib.sha256(
         json.dumps(parts, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
         + salt.encode("utf-8")
     ).hexdigest()
@@ -353,7 +353,7 @@ def semantic_relevance_dream_matches(
 
 
 def assigned_arm_for(*parts: object, salt: str = DEFAULT_SALT) -> str:
-    digest = hashlib.sha1(
+    digest = hashlib.sha256(
         json.dumps(parts, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
         + salt.encode("utf-8")
     ).hexdigest()

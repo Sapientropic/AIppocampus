@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.core import aippocampus_registry_dir
+from aippocampus_runtime.core import aippocampus_registry_dir, sanitize_external_model_payload
 from aippocampus_runtime.sync.encrypted import keys as encrypted_sync_keys
 from aippocampus_runtime.sync.encrypted import migration as encrypted_sync_migration
 from aippocampus_runtime.sync.object_storage import cli as sync_object_storage
@@ -71,14 +71,45 @@ def provider_kwargs(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+SENSITIVE_OUTPUT_KEY_PARTS = (
+    "access_key",
+    "api_key",
+    "authorization",
+    "bearer",
+    "cookie",
+    "password",
+    "secret",
+    "session_token",
+    "token",
+)
+
+
+def redact_sensitive_output_payload(value: Any) -> Any:
+    if isinstance(value, dict):
+        redacted: dict[Any, Any] = {}
+        for key, item in value.items():
+            key_text = str(key).casefold()
+            if any(part in key_text for part in SENSITIVE_OUTPUT_KEY_PARTS):
+                redacted[key] = "<redacted:secret>" if item else item
+            else:
+                redacted[key] = redact_sensitive_output_payload(item)
+        return redacted
+    if isinstance(value, list):
+        return [redact_sensitive_output_payload(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(redact_sensitive_output_payload(item) for item in value)
+    return sanitize_external_model_payload(value)
+
+
 def emit_result(result: dict[str, Any], *, json_output: bool, plain_field: str | None = None) -> int:
+    public_result = redact_sensitive_output_payload(result)
     if json_output:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-    elif plain_field and result.get(plain_field):
-        print(result[plain_field])
+        print(json.dumps(public_result, ensure_ascii=False, indent=2))
+    elif plain_field and public_result.get(plain_field):
+        print(public_result[plain_field])
     else:
-        print("encrypted sync: ok" if result.get("ok") else "encrypted sync: needs attention")
-        for item in result.get("issues") or []:
+        print("encrypted sync: ok" if public_result.get("ok") else "encrypted sync: needs attention")
+        for item in public_result.get("issues") or []:
             print(f"- {item.get('code')}: {item.get('message') or item.get('path')}")
     return 0 if result.get("ok") else 1
 

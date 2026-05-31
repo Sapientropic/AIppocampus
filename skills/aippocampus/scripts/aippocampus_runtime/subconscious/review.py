@@ -354,6 +354,7 @@ def append_review_output(
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8", newline="\n") as fh:
         for candidate in review.get("promotion_candidates") or []:
+            safe_candidate = sanitize_external_model_payload(candidate)
             event = {
                 "schema_version": 1,
                 "kind": "aippocampus_promotion_candidate",
@@ -365,10 +366,11 @@ def append_review_output(
                 "source": source,
                 "model_route": model_route or {},
                 "usage": usage or {},
-                **candidate,
+                **safe_candidate,
             }
             fh.write(json.dumps(event, ensure_ascii=False) + "\n")
         for group in review.get("duplicate_groups") or []:
+            safe_group = sanitize_external_model_payload(group)
             event = {
                 "schema_version": 1,
                 "kind": "aippocampus_subconscious_duplicate_group",
@@ -379,10 +381,11 @@ def append_review_output(
                 "status": "staging",
                 "source": source,
                 "model_route": model_route or {},
-                **group,
+                **safe_group,
             }
             fh.write(json.dumps(event, ensure_ascii=False) + "\n")
         for weak in review.get("weak_findings") or []:
+            safe_weak = sanitize_external_model_payload(weak)
             event = {
                 "schema_version": 1,
                 "kind": "aippocampus_subconscious_weak_finding",
@@ -393,7 +396,7 @@ def append_review_output(
                 "status": "staging",
                 "source": source,
                 "model_route": model_route or {},
-                **weak,
+                **safe_weak,
             }
             fh.write(json.dumps(event, ensure_ascii=False) + "\n")
 
@@ -587,7 +590,7 @@ def main() -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return cli_exit_code_for_error_code(result["error"]["code"])
     if args.json_output:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        print(json.dumps(sanitize_external_model_payload(result), ensure_ascii=False, indent=2))
     else:
         print(f"findings reviewed: {result['finding_count']}")
         print(f"promotion candidates: {result['promotion_candidate_count']}")
