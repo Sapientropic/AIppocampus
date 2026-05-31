@@ -2026,12 +2026,14 @@ class ImportCouplingTests(unittest.TestCase):
             SCRIPTS / "aippocampus_runtime" / "recall" / "ambient_policy.py",
             SCRIPTS / "aippocampus_runtime" / "recall" / "fresh_thread_activation.py",
             SCRIPTS / "aippocampus_runtime" / "recall" / "fresh_thread_action.py",
+            SCRIPTS / "aippocampus_runtime" / "recall" / "fresh_thread_demo.py",
             SCRIPTS / "aippocampus_runtime" / "recall" / "fresh_thread_scent.py",
         ]
         shim_paths = [
             SCRIPTS / "ambient_thread_cache.py",
             SCRIPTS / "ambient_recall_cards.py",
             SCRIPTS / "ambient_recall_policy.py",
+            SCRIPTS / "fresh_thread_demo.py",
         ]
 
         for path in package_paths + shim_paths:
@@ -2042,6 +2044,7 @@ class ImportCouplingTests(unittest.TestCase):
         import ambient_recall_cards
         import ambient_recall_policy
         import ambient_thread_cache
+        import fresh_thread_demo
         from aippocampus_runtime.recall import (
             ambient_cache,
             ambient_cards,
@@ -2049,6 +2052,9 @@ class ImportCouplingTests(unittest.TestCase):
             fresh_thread_action,
             fresh_thread_activation,
             fresh_thread_scent,
+        )
+        from aippocampus_runtime.recall import (
+            fresh_thread_demo as packaged_fresh_thread_demo,
         )
 
         edges = same_dir_import_edges(top_level_only=True)
@@ -2068,6 +2074,7 @@ class ImportCouplingTests(unittest.TestCase):
             "ambient_thread_cache",
             "ambient_recall_cards",
             "ambient_recall_policy",
+            "fresh_thread_demo",
         }
         offenders = {
             source: sorted(targets & flat_ambient_modules)
@@ -2091,6 +2098,10 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIn("soft_hypothesis", fresh_thread_scent.SUPPORT_LEVELS)
         self.assertIn("confirmed", fresh_thread_activation.ACTIVATION_STATES)
         self.assertIn("active_recall", fresh_thread_action.AGENT_ACTIONS)
+        self.assertIs(
+            fresh_thread_demo.run_fresh_thread_demo,
+            packaged_fresh_thread_demo.run_fresh_thread_demo,
+        )
 
     def test_prompt_recall_stack_has_package_owner_and_compat_shims(self) -> None:
         package_modules = {
