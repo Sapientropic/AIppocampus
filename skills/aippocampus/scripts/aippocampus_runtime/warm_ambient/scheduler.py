@@ -25,6 +25,7 @@ from aippocampus_runtime.core import (
     sanitize_external_model_payload,
     sanitize_external_model_text,
 )
+from aippocampus_runtime.recall.active_recall_lock import start_or_update_recall_lock
 from aippocampus_runtime.recall.ambient_cache import default_ambient_cache_path
 from aippocampus_runtime.warm_ambient.config import (
     DEFAULT_WARM_DETACHED_JOB_CONFIG,
@@ -107,6 +108,8 @@ def public_warm_schedule_status(result: dict[str, Any] | None) -> dict[str, Any]
         "reason": result.get("reason"),
         "job_id": result.get("job_id"),
         "spawned": result.get("spawned"),
+        "lock_id": result.get("lock_id"),
+        "lock_state": result.get("lock_state"),
     }
     return {key: value for key, value in public.items() if value is not None and value != ""}
 
@@ -120,6 +123,8 @@ def schedule_warm_ambient_recall(
     registry_dir: Path | str | None = None,
     cache_path: Path | str | None = None,
     residue_path: Path | str | None = None,
+    lock_path: Path | str | None = None,
+    lock_id: str | None = None,
     current_thread_key: str | None = None,
     prompt_trace: list[dict[str, Any]] | None = None,
     topic_epoch: str | None = None,
@@ -174,6 +179,25 @@ def schedule_warm_ambient_recall(
     )
     job_path = target_dir / f"{job_id}.json"
     result_path = target_dir / f"{job_id}.result.json"
+    lock_status: dict[str, Any] = {}
+    if lock_path and not lock_id:
+        lock = start_or_update_recall_lock(
+            Path(lock_path).resolve(),
+            prompt=sanitized_prompt,
+            thread_id=thread_id,
+            workspace=workspace,
+            topic_epoch=topic_epoch,
+            registry_path=Path(registry_path).resolve() if registry_path else None,
+            route_reasons=["warm_ambient_job_scheduled"],
+            diagnostics={
+                "cold_model_call": True,
+                "fast_scout_used": False,
+                "thinking_enrichment_pending": True,
+            },
+            state="pending",
+        )
+        lock_id = str(lock.get("lock_id") or "") or None
+        lock_status = {"lock_id": lock_id, "lock_state": lock.get("state")}
     job = {
         "kind": "aippocampus_warm_ambient_recall_job",
         "schema_version": JOB_SCHEMA_VERSION,
@@ -191,6 +215,8 @@ def schedule_warm_ambient_recall(
         "registry_dir": str(Path(registry_dir).resolve()) if registry_dir else None,
         "cache_path": str(Path(cache_path).resolve()) if cache_path else None,
         "residue_path": str(Path(residue_path).resolve()) if residue_path else None,
+        "lock_path": str(Path(lock_path).resolve()) if lock_path else None,
+        "lock_id": lock_id,
         "api_key_env": api_key_env,
         "user_id": user_id,
         "scouts": list(scouts or []),
@@ -211,7 +237,7 @@ def schedule_warm_ambient_recall(
     launch = {"spawned": False}
     if spawn:
         launch = (runner or (lambda path: spawn_warm_job(path, cwd=workspace)))(job_path)
-    return {
+    result = {
         "status": "scheduled" if launch.get("spawned") else "queued",
         "job_id": job_id,
         "job_path": str(job_path),
@@ -219,4 +245,9 @@ def schedule_warm_ambient_recall(
         "spawned": bool(launch.get("spawned")),
         "prompt_sha1": job["prompt_sha1"],
         "secret_policy": secret_policy,
+        **lock_status,
     }
+    if lock_id and not result.get("lock_id"):
+        result["lock_id"] = lock_id
+        result["lock_state"] = "pending"
+    return result

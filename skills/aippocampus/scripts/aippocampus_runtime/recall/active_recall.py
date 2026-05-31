@@ -8,8 +8,17 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 from aippocampus_runtime.health import health_report
+from aippocampus_runtime.recall.active_recall_lock import (
+    default_active_recall_lock_path,
+    find_recall_lock,
+    read_recall_lock,
+    registry_freshness_fingerprint,
+    reopen_lock_sources,
+    start_or_update_recall_lock,
+)
 from aippocampus_runtime.recall.life_cues import (
     life_wide_recall_terms,
     profile_recall_terms,
@@ -23,6 +32,7 @@ from aippocampus_runtime.recall.retrieval import (
 )
 from aippocampus_runtime.recall.rollout_search import RolloutSearchOptions, search_rollout_payload
 from aippocampus_runtime.recall.segment_search import SegmentSearchOptions, search_segments_payload
+from aippocampus_runtime.registry.api import registry_paths
 
 
 def read_prompt(args: argparse.Namespace) -> str:
@@ -81,7 +91,130 @@ def active_recall_query_terms(prompt: str) -> list[str]:
     )
 
 
-def main() -> int:
+def _registry_path_from_args(args: argparse.Namespace) -> Path | None:
+    if getattr(args, "registry", None):
+        return Path(args.registry).resolve()
+    registry_dir = Path(args.registry_dir).resolve() if getattr(args, "registry_dir", None) else None
+    if registry_dir is not None:
+        return registry_paths(registry_dir)[0]
+    return registry_paths(None)[0]
+
+
+def _lock_path_from_args(args: argparse.Namespace, registry_path: Path | None) -> Path:
+    if getattr(args, "lock_path", None):
+        return Path(args.lock_path).resolve()
+    return default_active_recall_lock_path(
+        registry_path=registry_path,
+        registry_dir=Path(args.registry_dir).resolve() if getattr(args, "registry_dir", None) else None,
+    )
+
+
+def _lock_probe_payload(*, mode: str, lock: dict[str, Any]) -> dict[str, Any]:
+    state = str(lock.get("state") or "missing")
+    if state == "ready":
+        suggested_next = "reopen_source"
+    elif state == "pending":
+        suggested_next = "wait_or_probe_lock"
+    else:
+        suggested_next = "start_lock"
+    return {
+        "mode": mode,
+        "support_level": "scent",
+        "lock": {
+            "state": state,
+            "lock_id": lock.get("lock_id"),
+            "route_handle": True,
+        },
+        "candidate_refs": lock.get("candidate_refs") or [],
+        "query_aliases": lock.get("query_aliases") or [],
+        "route_reasons": lock.get("route_reasons") or [],
+        "conflict_flags": lock.get("conflict_flags") or [],
+        "source_reopen_required": True,
+        "suggested_next": suggested_next,
+        "diagnostics": lock.get("diagnostics") or {},
+        "source_boundary": {
+            "lock_is_navigation_only": True,
+            "probe_read_returns_no_facts": True,
+            "source_backed_claims_require_reopen": True,
+        },
+    }
+
+
+def active_recall_probe(
+    *,
+    prompt: str,
+    cwd: Path,
+    lock_path: Path,
+    registry_path: Path | None,
+    thread_id: str | None,
+    topic_epoch: str | None,
+    use_lock: bool,
+) -> dict[str, Any]:
+    query_terms = active_recall_query_terms(prompt)
+    lock = find_recall_lock(
+        lock_path,
+        prompt=prompt,
+        thread_id=thread_id,
+        workspace=cwd,
+        topic_epoch=topic_epoch,
+        registry_path=registry_path,
+        query_aliases=query_terms,
+    )
+    if use_lock and lock.get("state") in {"missing", "expired", "failed"}:
+        lock = start_or_update_recall_lock(
+            lock_path,
+            prompt=prompt,
+            thread_id=thread_id,
+            workspace=cwd,
+            topic_epoch=topic_epoch,
+            registry_path=registry_path,
+            query_aliases=query_terms,
+            route_reasons=["active_recall_probe_started_lock"],
+            diagnostics={
+                "cold_model_call": False,
+                "fast_scout_used": False,
+                "thinking_enrichment_pending": True,
+            },
+            state="pending",
+    )
+    payload = _lock_probe_payload(mode="probe", lock=lock)
+    payload["registry_freshness_fingerprint"] = registry_freshness_fingerprint(registry_path)
+    return payload
+
+
+def active_recall_read_lock(
+    *,
+    lock_path: Path,
+    lock_id: str,
+    topic_epoch: str | None = None,
+    registry_path: Path | None = None,
+) -> dict[str, Any]:
+    registry_fp = registry_freshness_fingerprint(registry_path) if registry_path else None
+    lock = read_recall_lock(
+        lock_path,
+        lock_id,
+        topic_epoch=topic_epoch,
+        registry_freshness_fingerprint=registry_fp,
+    )
+    return _lock_probe_payload(mode="read", lock=lock)
+
+
+def active_recall_reopen_lock(
+    *,
+    lock_path: Path,
+    lock_id: str,
+    registry_path: Path | None,
+    max_matches: int,
+) -> dict[str, Any]:
+    return reopen_lock_sources(
+        lock_path,
+        lock_id=lock_id,
+        registry_path=registry_path,
+        max_matches=max_matches,
+    )
+
+
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("prompt", nargs="*", help="Current user message or task description.")
     parser.add_argument(
@@ -90,17 +223,90 @@ def main() -> int:
         help="Read prompt text from stdin and append it to positional text.",
     )
     parser.add_argument("--cwd", default=os.getcwd())
+    parser.add_argument("--registry")
+    parser.add_argument("--registry-dir")
     parser.add_argument("--anchors", default="thread-anchors.md")
     parser.add_argument("--search", choices=["auto", "always", "never"], default="auto")
+    parser.add_argument(
+        "--mode",
+        choices=["legacy", "probe", "read", "reopen"],
+        default="legacy",
+        help=(
+            "legacy keeps the old search decision flow; probe/read expose "
+            "navigation-only locks; reopen opens clean source by lock id."
+        ),
+    )
+    parser.add_argument("--use-lock", action="store_true", dest="use_lock")
+    parser.add_argument("--use-background-lock", action="store_true", dest="use_lock")
+    parser.add_argument("--lock-id")
+    parser.add_argument("--lock-path")
+    parser.add_argument("--thread-id")
+    parser.add_argument("--topic-epoch")
     parser.add_argument("--max", type=int, default=8)
     parser.add_argument("--context", type=int, default=1)
     parser.add_argument("--json", action="store_true", dest="json_output")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     cwd = Path(args.cwd).resolve()
     prompt = read_prompt(args)
+    registry_path = _registry_path_from_args(args)
+    lock_path = _lock_path_from_args(args, registry_path)
+    if args.mode == "reopen":
+        if not args.lock_id:
+            raise SystemExit("active_recall.py --mode reopen requires --lock-id")
+        result = active_recall_reopen_lock(
+            lock_path=lock_path,
+            lock_id=args.lock_id,
+            registry_path=registry_path,
+            max_matches=args.max,
+        )
+        if args.json_output:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print(f"reopen: {'ok' if result.get('ok') else 'unavailable'}")
+            for match in result.get("matches") or []:
+                print(
+                    f"- {match.get('thread_key')} line {match.get('line')}: "
+                    f"{match.get('text')}"
+                )
+        return 0 if result.get("ok") else 1
+
+    if args.mode == "read":
+        if not args.lock_id:
+            raise SystemExit("active_recall.py --mode read requires --lock-id")
+        result = active_recall_read_lock(
+            lock_path=lock_path,
+            lock_id=args.lock_id,
+            topic_epoch=args.topic_epoch,
+            registry_path=registry_path,
+        )
+        if args.json_output:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            lock = result.get("lock") or {}
+            print(f"lock: {lock.get('state')} {lock.get('lock_id') or ''}".strip())
+            print(f"suggested next: {result.get('suggested_next')}")
+        return 0
+
     if not prompt:
         raise SystemExit("active_recall.py requires prompt text or --stdin")
+    if args.mode == "probe":
+        result = active_recall_probe(
+            prompt=prompt,
+            cwd=cwd,
+            lock_path=lock_path,
+            registry_path=registry_path,
+            thread_id=args.thread_id,
+            topic_epoch=args.topic_epoch,
+            use_lock=bool(args.use_lock),
+        )
+        if args.json_output:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            lock = result.get("lock") or {}
+            print(f"lock: {lock.get('state')} {lock.get('lock_id') or ''}".strip())
+            print(f"suggested next: {result.get('suggested_next')}")
+        return 0
 
     health = health_report(cwd)
     anchor_path = resolve_anchor_path(cwd, args.anchors)

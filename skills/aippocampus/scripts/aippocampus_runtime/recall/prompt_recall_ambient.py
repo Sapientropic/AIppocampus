@@ -6,6 +6,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.recall.active_recall_lock import (
+    DEFAULT_LOCK_NAME,
+    start_or_update_recall_lock,
+)
 from aippocampus_runtime.recall.ambient_cache import (
     default_ambient_cache_path,
     read_latest_thread_cache,
@@ -118,6 +122,27 @@ def attach_ambient_recall(
             )
             result["ambient_recall"]["cards"] = policy_filter["cards"]
             result["ambient_recall"]["policy_filter"] = policy_filter["diagnostics"]
+        active_lock: dict[str, Any] | None = None
+        try:
+            active_lock = _attach_active_recall_lock(
+                result,
+                prompt=prompt,
+                thread_id=thread_id,
+                workspace=workspace,
+                topic_epoch=epoch,
+                registry_path=registry_path,
+                cache_file=cache_file,
+            )
+        except Exception as exc:
+            result["ambient_recall"]["active_recall_lock"] = {
+                "state": "failed",
+                "support_level": "scent",
+                "source_reopen_required": True,
+                "diagnostics": {
+                    "error_type": type(exc).__name__,
+                    "message": str(exc)[:160],
+                },
+            }
         cache_is_warm = cached.get("status") == "hit" and bool(cached.get("cards"))
         if result.get("decision") != "skip" and result["ambient_recall"].get("cards"):
             written = write_thread_cache(
@@ -179,6 +204,8 @@ def attach_ambient_recall(
                 registry_path=registry_path,
                 cache_path=cache_file,
                 topic_epoch=epoch,
+                lock_path=cache_file.resolve().parent / DEFAULT_LOCK_NAME,
+                lock_id=str(active_lock.get("lock_id") or "") if active_lock else None,
                 job_dir=warm_job_dir,
                 max_workers=warm_max_workers,
                 timeout=warm_timeout,
@@ -198,6 +225,80 @@ def attach_ambient_recall(
             },
         )
     return result
+
+
+def _lock_query_aliases(result: dict[str, Any]) -> list[str]:
+    semantic_gate = result.get("semantic_gate") if isinstance(result.get("semantic_gate"), dict) else {}
+    aliases = semantic_gate.get("query_aliases") if isinstance(semantic_gate, dict) else None
+    values = aliases if isinstance(aliases, list) else result.get("query_terms") or []
+    return [str(item) for item in values if str(item or "").strip()]
+
+
+def _attach_active_recall_lock(
+    result: dict[str, Any],
+    *,
+    prompt: str,
+    thread_id: str | None,
+    workspace: str,
+    topic_epoch: str,
+    registry_path: Path,
+    cache_file: Path,
+) -> dict[str, Any] | None:
+    """Create a short-lived route handle without making the hook wait.
+
+    The lock stores only fingerprints, aliases, route reasons, and source-id
+    refs. It deliberately mirrors the fresh-thread boundary: foreground scent
+    can prepare a route, but exact claims still require active recall reopen.
+    """
+
+    if not thread_id:
+        return None
+    ambient = result.get("ambient_recall")
+    if not isinstance(ambient, dict):
+        return None
+    raw_packet = ambient.get("fresh_thread_packet")
+    packet: dict[str, Any] = raw_packet if isinstance(raw_packet, dict) else {}
+    support_level = str(packet.get("support_level") or "")
+    if support_level in {"", "silent_scent", "suppressed"} and not ambient.get("cards"):
+        return None
+    lock_path = cache_file.resolve().parent / DEFAULT_LOCK_NAME
+    candidate_refs = [
+        ref
+        for ref in packet.get("candidate_refs") or []
+        if isinstance(ref, dict)
+    ]
+    route_reason = str(packet.get("route_reason") or "")
+    lock = start_or_update_recall_lock(
+        lock_path,
+        prompt=prompt,
+        thread_id=thread_id,
+        workspace=workspace,
+        topic_epoch=topic_epoch,
+        registry_path=registry_path,
+        candidate_refs=candidate_refs,
+        cards=[card for card in ambient.get("cards") or [] if isinstance(card, dict)],
+        query_aliases=_lock_query_aliases(result),
+        route_reasons=[route_reason, "foreground_hook_scent"] if route_reason else ["foreground_hook_scent"],
+        diagnostics={
+            "cold_model_call": False,
+            "fast_scout_used": bool((result.get("semantic_gate") or {}).get("cached") is False)
+            if isinstance(result.get("semantic_gate"), dict)
+            else False,
+            "thinking_enrichment_pending": True,
+        },
+    )
+    public = {
+        "lock_id": lock.get("lock_id"),
+        "state": lock.get("state"),
+        "support_level": "scent",
+        "source_reopen_required": True,
+        "suggested_next": lock.get("suggested_next"),
+        "diagnostics": lock.get("diagnostics") or {},
+    }
+    ambient["active_recall_lock"] = public
+    if isinstance(packet, dict):
+        packet["active_recall_lock"] = public
+    return lock
 
 
 def cached_cards_for_policy(
