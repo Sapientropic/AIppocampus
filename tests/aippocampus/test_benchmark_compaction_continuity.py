@@ -5,6 +5,7 @@ import sys
 import unittest
 from dataclasses import replace
 from pathlib import Path
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
@@ -125,6 +126,57 @@ class CompactionContinuityBenchmarkTests(unittest.TestCase):
         self.assertFalse(payload["quality_gate_ok"])
         self.assertEqual(payload["status"], "diagnostic_subset")
         self.assertFalse(payload["config"]["complete_case_set"])
+        self.assertTrue(payload["diagnostic"]["is_subset"])
+        self.assertFalse(payload["diagnostic"]["sufficient_quality_evidence"])
+
+    def test_full_suite_ok_requires_every_case_correct(self) -> None:
+        original_evaluate_case = benchmark.evaluate_case
+
+        def hidden_case_failure(*args, **kwargs):
+            row = original_evaluate_case(*args, **kwargs)
+            if row["case_type"] == "post_compaction_anchor_recall":
+                row["correct"] = False
+            return row
+
+        with patch.object(benchmark, "evaluate_case", side_effect=hidden_case_failure):
+            payload = benchmark.run_benchmark(include_private_text=False)
+
+        self.assertEqual(
+            payload["metrics"]["correct_count"],
+            payload["metrics"]["total_cases"] - 1,
+        )
+        self.assertFalse(payload["ok"])
+        self.assertFalse(payload["quality_gate_ok"])
+        self.assertEqual(payload["status"], "track_d_regression")
+
+    def test_report_includes_hook_state_status_density_diagnostics(self) -> None:
+        payload = benchmark.run_benchmark(include_private_text=False)
+        density = payload["coverage_density"]
+
+        self.assertEqual(
+            density["axes"],
+            ["hook_stage", "compaction_state", "adjudication_status"],
+        )
+        self.assertEqual(
+            density["possible_cell_count"],
+            len(benchmark.HOOK_STAGES)
+            * len(benchmark.COMPACTION_STATES)
+            * len(benchmark.ADJUDICATION_STATUSES),
+        )
+        self.assertEqual(density["observed_cell_count"], len(density["observed_cells"]))
+        self.assertLess(density["observed_cell_count"], density["possible_cell_count"])
+        self.assertGreater(density["missing_cell_count"], 0)
+        self.assertGreater(density["singleton_cell_count"], 0)
+        self.assertEqual(density["missing_high_risk_cells"], [])
+        self.assertGreater(len(density["high_risk_sparse_cells"]), 0)
+        self.assertTrue(
+            any(
+                cell["hook_stage"] == "PostCompact"
+                and cell["compaction_state"] == "horizon_lost"
+                and cell["adjudication_status"] == "superseded"
+                for cell in density["observed_cells"]
+            )
+        )
 
     def test_private_debug_text_requires_explicit_opt_in(self) -> None:
         public_payload = benchmark.run_benchmark(include_private_text=False)

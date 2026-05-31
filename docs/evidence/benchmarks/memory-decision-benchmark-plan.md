@@ -1054,6 +1054,17 @@ benchmark does not drift from the runtime prototype. It still does not prove
 live Codex hook capture, live semantic adjudication quality, or private
 real-history compaction survival.
 
+The Track D `ok` gate is stricter than the diagnostic counters alone:
+`ok=false` whenever `correct_count < total_cases`, even if no named regression
+counter fired. Limited `--cases` runs remain allowed, but their report carries
+`status=diagnostic_subset`, `quality_gate_ok=false`, and
+`diagnostic.sufficient_quality_evidence=false`. Reports also include a
+`coverage_density` block for the hook-stage x compaction-state x adjudication
+matrix so sparse combination coverage stays visible instead of being hidden by
+the broad axis lists. High-risk post-compaction horizon-lost cells are split
+out as missing or sparse diagnostics so stale/superseded/refuted/uncertain
+anchor behavior remains easy to audit.
+
 Reusable existing pieces:
 
 - `EvalCase`, sanitized result stubs, CLI/JSON style, and result summarization
