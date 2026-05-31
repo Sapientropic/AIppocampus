@@ -131,8 +131,9 @@ Completed foundation:
    - L3: RAG-lite chunks for neighborhood recall.
    - L4: TurboVec compressed vector index for semantic recall.
      Protocol interface (`QuestionVectorIndex`: add, search, remove, write)
-     starts in `skills/aippocampus/scripts/question_vector_index.py` with a
-     small local JSON-backed implementation. It is an adapter boundary only:
+     starts in `aippocampus_runtime.question.vector_index` with a small local
+     JSON-backed implementation. `question_vector_index.py` remains the
+     compatibility shim. It is an adapter boundary only:
      vector neighbors carry stable source ids and remain hints until clean-source
      evidence is re-opened. TurboVec can replace the local implementation when
      scale warrants, without changing the caller contract. Future coverage can
@@ -196,11 +197,12 @@ Completed foundation:
    `cold_archive.py` plus `retention_report.py`; cleanup remains manual and
    evidence-first.
 6. Add vector index via Protocol interface. Done for the first local slice:
-   `question_vector_index.py` defines `QuestionVectorIndex` and
-   `LocalQuestionVectorIndex` with add / search / remove / write / load
-   behavior. It is intentionally non-default and source-id-only; question
-   tracking must still re-open clean source before accepting a link. TurboVec
-   remains a later replacement when scale warrants. A first #138 evaluator in
+   `aippocampus_runtime.question.vector_index` defines `QuestionVectorIndex`
+   and `LocalQuestionVectorIndex` with add / search / remove / write / load
+   behavior; `question_vector_index.py` remains the compatibility shim. It is
+   intentionally non-default and source-id-only; question tracking must still
+   re-open clean source before accepting a link. TurboVec remains a later
+   replacement when scale warrants. A first #138 evaluator in
    `question_index_sidecar.py` can build/reuse an optional SQLite question-index
    cache, detect missing or stale caches, and measure whether lookup candidates
    still join back to current source-backed question rows and source-ref keys;
