@@ -112,7 +112,7 @@ sidecars, and subconscious jobs should consume provider-normalized source
 identity rather than host-specific storage layouts.
 
 Provider modules must not decide where AIppocampus stores generated artifacts.
-Registry storage remains owned by `registry_store.py` and
+Registry storage remains owned by `aippocampus_runtime/registry/store.py` and
 `aippocampus_registry_dir()`: `AIPPOCAMPUS_REGISTRY_DIR` and the legacy
 `CODEX_HOME/aippocampus-registry` path are storage compatibility concerns, not
 conversation-provider homes.
@@ -145,7 +145,7 @@ installers are not claimed by the provider contract.
 
 | Script or group | Purpose | Invocation route | Key dependencies | Status |
 |---|---|---|---|---|
-| `registry.py`, `registry_store.py`, `registry_search.py` | Resolve registry paths, store thread rows, and search registry metadata. | Most runtime entrypoints. | Global registry layout and privacy policy. | Runtime internal |
+| `registry.py`, `aippocampus_runtime/registry/{store,search,provider}.py`, and `registry_store.py` / `registry_search.py` / `registry_provider.py` compatibility shims | Resolve registry paths, store thread rows, search registry metadata, and build provider-aware thread keys. | Most runtime entrypoints; `registry.py` remains the public CLI. | Global registry layout and privacy policy. | Runtime internal |
 | `build_clean_source.py`, `rollout_behavior_events.py` | Convert provider-normalized transcript messages into source-backed clean messages/turns and structured rollout behavior events. | Onboarding, import, maintenance, tests. | Provider parsers, raw transcript audit, scope-label policy, tool/test event hashing. | Public entrypoint |
 | `retrieval.py`, `retrieval_query_policy.py`, `retrieval_score_fusion.py`, `search_clean_source.py`, `search_rollout.py` | Source-backed retrieval, explicit score-fusion policy, and raw audit fallback. | Prompt hook, MCP, CLI search surfaces, future vector/graph fusion consumers. | Clean-source JSONL, registry rows, query policy, stable source ids/source refs; scores remain ranking hints only. | Runtime internal |
 | `build_index.py`, `build_segments.py`, `search_segments.py` | SQLite/RAG-lite index and large-thread segment fanout. | Maintenance, query paths, scale smokes. | Clean source, segment manifests, last-known-good publish semantics. | Rebuildable cache |

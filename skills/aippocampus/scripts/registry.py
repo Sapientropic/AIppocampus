@@ -12,6 +12,30 @@ import subprocess
 import sys
 from pathlib import Path
 
+from aippocampus_runtime.registry.provider import current_thread_build_cmd, thread_key_for
+from aippocampus_runtime.registry.search import (
+    REGISTRY_SEARCH_DEEP_BUDGET,
+    clean_hit_rank_score,
+    deep_search_entry,
+    deep_search_entry_result,
+    entry_search_score,
+    search_noise_reason,
+)
+from aippocampus_runtime.registry.store import (
+    REGISTRY_SCHEMA_VERSION,
+    RegistryReadError,
+    default_registry_dir,
+    load_existing_json_object,
+    load_json,
+    load_registry,
+    registry_paths,
+    registry_root,
+    render_registry_markdown,
+    safe_slug,
+    save_registry,
+    thread_store_dir,
+    upsert_thread,
+)
 from aippocampuslib import (
     codex_home,
     codex_provider,
@@ -29,30 +53,6 @@ from conversation_sources import (
     create_conversation_provider,
 )
 from privacy_projection import redact_private_paths
-from registry_provider import current_thread_build_cmd, thread_key_for
-from registry_search import (
-    REGISTRY_SEARCH_DEEP_BUDGET,
-    clean_hit_rank_score,
-    deep_search_entry,
-    deep_search_entry_result,
-    entry_search_score,
-    search_noise_reason,
-)
-from registry_store import (
-    REGISTRY_SCHEMA_VERSION,
-    RegistryReadError,
-    default_registry_dir,
-    load_existing_json_object,
-    load_json,
-    load_registry,
-    registry_paths,
-    registry_root,
-    render_registry_markdown,
-    safe_slug,
-    save_registry,
-    thread_store_dir,
-    upsert_thread,
-)
 
 __all__ = [
     "REGISTRY_SCHEMA_VERSION",
