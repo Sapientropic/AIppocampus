@@ -15,7 +15,7 @@ audit/host integration paths.
 | `aippocampuslib.py` | Shared compatibility helpers | Owns legacy Codex raw-rollout helpers and provider-neutral registry storage resolution. New public raw-source logic should use `conversation_sources/` instead of adding more helpers here. |
 | `conversation_sources/codex.py` | Codex provider implementation | The only provider module that should know Codex `sessions/` and `archived_sessions/` layout. |
 | `onboard.py` | Provider-aware public entrypoint | Accepts `--provider codex\|claude-code\|generic-jsonl`; `auto` remains conservative and lists other providers separately. |
-| `build_clean_source.py` | Provider-aware public entrypoint | Accepts `--provider`; Codex raw rollout discovery is used only for the Codex provider or explicit `--rollout`. |
+| `build_clean_source.py` and `aippocampus_runtime/source/clean_source.py` | Provider-aware public entrypoint | Accepts `--provider`; Codex raw rollout discovery is used only for the Codex provider or explicit `--rollout`. The top-level script is a compatibility shim over the package owner. |
 | `build_index.py` | Provider-aware public entrypoint | Accepts `--provider`; indexes provider-normalized visible messages. |
 | `registry.py` | Provider-aware registry entrypoint | CLI accepts `--provider`; in-process `provider or codex_provider(...)` fallback is legacy compatibility only. |
 | `aippocampus_mcp_server.py` | MCP over clean source/registry, with provider-aware registration | `search_memory`, `get_turn_context`, `list_threads`, `sync_status`, and `memory_health` consume clean source/registry. `register_thread` accepts `provider`. `latest_reply` prefers clean source and falls back to raw Codex only when no clean-source final answer exists. |
