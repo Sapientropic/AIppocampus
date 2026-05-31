@@ -157,6 +157,14 @@ OpenAI-compatible routes are explicit fallback/privacy routes; they default to
 no DeepSeek `user_id`, no DeepSeek `thinking`, no prefix-cache claim, and low
 concurrency unless configured otherwise.
 
+Warm recall result summaries expose public-safe suppression diagnostics through
+`suppression_reason_buckets` and `suppression_diagnostics`. These buckets must
+come from runtime gates and structured counts only: privacy/evidence scout
+families, current-thread echo count, source-validation statuses, topic-epoch
+suppression, quorum status, and zero-card output. Do not derive these buckets
+from raw prompt text, source text, local paths, or a static semantic keyword
+list.
+
 Callers may opt into residue export by passing a residue output path to the
 thread-cache writer. This writes `aippocampus_ambient_residue` JSONL rows for
 source-ref-fingerprinted cards so future dream jobs can inspect unused
