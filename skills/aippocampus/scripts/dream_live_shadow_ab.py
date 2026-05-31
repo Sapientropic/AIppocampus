@@ -24,6 +24,18 @@ from pathlib import Path
 from typing import Any, Callable
 
 import dream_real_history_eval as dream_eval
+from aippocampus_runtime.model.client import (
+    DEEPSEEK_PREFIX_CACHE_CONTRACT,
+    NO_PROVIDER_CACHE_CONTRACT,
+    ChatClientConfig,
+    chat_json,
+)
+from aippocampus_runtime.model.routing import (
+    DEFAULT_DEEPSEEK_API_KEY_ENV,
+    resolve_model_route,
+    route_payload_with_effective_values,
+    route_service_name,
+)
 from aippocampus_runtime.registry.store import (
     load_registry,
     registry_paths,
@@ -31,12 +43,6 @@ from aippocampus_runtime.registry.store import (
     thread_store_dir,
 )
 from aippocampuslib import now_utc
-from deepseek_model_routing import (
-    DEFAULT_DEEPSEEK_API_KEY_ENV,
-    resolve_model_route,
-    route_payload_with_effective_values,
-    route_service_name,
-)
 from memory_candidate_router import (
     DREAM_HYPOTHESIS_TYPE,
     default_jobs_path,
@@ -44,12 +50,6 @@ from memory_candidate_router import (
     iter_jsonl,
     load_working_memory,
     match_working_memory,
-)
-from model_client import (
-    DEEPSEEK_PREFIX_CACHE_CONTRACT,
-    NO_PROVIDER_CACHE_CONTRACT,
-    ChatClientConfig,
-    chat_json,
 )
 
 SCHEMA_VERSION = 1

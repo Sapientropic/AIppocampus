@@ -8,13 +8,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from aippocampuslib import compact_text
-from build_concept_graph import expand_concepts
-from model_client import (
+from aippocampus_runtime.model.client import (
     DEEPSEEK_PREFIX_CACHE_CONTRACT,
     ChatClientConfig,
     chat_json,
 )
+from aippocampuslib import compact_text
+from build_concept_graph import expand_concepts
 from registry import load_registry
 from retrieval import split_query_terms
 from search_clean_source import iter_clean_messages, score_message

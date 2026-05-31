@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.model.routing import resolve_model_route
 from aippocampuslib import (
     aippocampus_registry_dir,
     compact_text,
@@ -23,7 +24,6 @@ from aippocampuslib import (
 )
 from build_clean_source import SCOPE_LABEL_ORDER
 from build_project_timeline import resolve_registry_member_path
-from deepseek_model_routing import resolve_model_route
 from registry import load_registry
 from semantic_scope_labels import (
     canonical_scope_labels,

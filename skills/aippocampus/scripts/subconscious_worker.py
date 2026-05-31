@@ -16,15 +16,12 @@ import time
 from pathlib import Path
 from typing import Any
 
-from aippocampuslib import (
-    cli_error_payload,
-    cli_exit_code_for_error_code,
-    compact_text,
-    now_utc,
-    sanitize_external_model_payload,
+from aippocampus_runtime.model.client import (
+    DEEPSEEK_PREFIX_CACHE_CONTRACT,
+    ChatClientConfig,
+    chat_json,
 )
-from build_concept_graph import concept_is_noise
-from deepseek_model_routing import (
+from aippocampus_runtime.model.routing import (
     DEFAULT_DEEPSEEK_API_KEY_ENV,
     deepseek_base_url,
     flash_model,
@@ -34,7 +31,14 @@ from deepseek_model_routing import (
     route_payload_with_effective_values,
     route_service_name,
 )
-from model_client import DEEPSEEK_PREFIX_CACHE_CONTRACT, ChatClientConfig, chat_json
+from aippocampuslib import (
+    cli_error_payload,
+    cli_exit_code_for_error_code,
+    compact_text,
+    now_utc,
+    sanitize_external_model_payload,
+)
+from build_concept_graph import concept_is_noise
 from registry import registry_paths, unique_preserve
 
 PROMPT_VERSION = "aippocampus-subconscious-v0"

@@ -8,8 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.model.routing import DEFAULT_DEEPSEEK_API_KEY_ENV, resolve_model_route
 from build_concept_graph import default_concept_graph_path
-from deepseek_model_routing import DEFAULT_DEEPSEEK_API_KEY_ENV, resolve_model_route
 from registry import registry_paths
 from subconscious_job_circuits import job_names
 from subconscious_worker import (

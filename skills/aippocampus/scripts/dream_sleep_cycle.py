@@ -24,19 +24,19 @@ import dream_input_pack
 import dream_precision_policy
 import dream_queue
 import dream_worker
-from aippocampuslib import cli_error_payload, cli_exit_code_for_error_code, compact_text, now_utc
-from deepseek_model_routing import (
+from aippocampus_runtime.model.client import (
+    DEEPSEEK_PREFIX_CACHE_CONTRACT,
+    NO_PROVIDER_CACHE_CONTRACT,
+    ChatClientConfig,
+)
+from aippocampus_runtime.model.routing import (
     DEFAULT_DEEPSEEK_API_KEY_ENV,
     deepseek_base_url,
     flash_model,
     resolve_model_route,
     route_service_name,
 )
-from model_client import (
-    DEEPSEEK_PREFIX_CACHE_CONTRACT,
-    NO_PROVIDER_CACHE_CONTRACT,
-    ChatClientConfig,
-)
+from aippocampuslib import cli_error_payload, cli_exit_code_for_error_code, compact_text, now_utc
 
 SLEEP_CYCLE_KIND = "aippocampus_dream_sleep_cycle"
 SUMMARY_KIND = "aippocampus_dream_sleep_cycle_summary"

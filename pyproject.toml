@@ -20,6 +20,7 @@ aippocampus = "aippocampus_cli:main"
 package-dir = {"" = "skills/aippocampus/scripts"}
 packages = [
     "aippocampus_runtime",
+    "aippocampus_runtime.model",
     "aippocampus_runtime.registry",
     "aippocampus_runtime.sync",
     "aippocampus_runtime.sync.object_storage",
@@ -212,6 +213,9 @@ files = [
     "skills/aippocampus/scripts/conversation_sources/generic_jsonl.py",
     "skills/aippocampus/scripts/conversation_sources/normalized.py",
     "skills/aippocampus/scripts/correction_reconsolidation.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/model/__init__.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/model/client.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/model/routing.py",
     "skills/aippocampus/scripts/deepseek_model_routing.py",
     "skills/aippocampus/scripts/dream_input_pack.py",
     "skills/aippocampus/scripts/dream_live_shadow_ab.py",

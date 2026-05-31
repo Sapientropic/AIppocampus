@@ -26,17 +26,17 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-from aippocampuslib import (
-    compact_text,
-    now_utc,
-    sanitize_external_model_text,
-)
-from deepseek_model_routing import (
+from aippocampus_runtime.model.routing import (
     DEFAULT_DEEPSEEK_API_KEY_ENV,
     resolve_model_route,
     route_cache_metrics,
     route_payload_with_effective_values,
     route_service_name,
+)
+from aippocampuslib import (
+    compact_text,
+    now_utc,
+    sanitize_external_model_text,
 )
 from registry import load_registry, registry_paths, unique_preserve
 from retrieval import split_query_terms

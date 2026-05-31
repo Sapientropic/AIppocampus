@@ -204,6 +204,42 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(object_storage_providers.SigV4Auth, providers.SigV4Auth)
         self.assertIs(object_storage_providers.provider_config, providers.provider_config)
 
+    def test_external_model_helpers_have_package_owner_and_compat_shims(self) -> None:
+        import deepseek_model_routing
+        import model_client
+        from aippocampus_runtime.model import client, routing
+
+        package_paths = [
+            SCRIPTS / "aippocampus_runtime" / "model" / "__init__.py",
+            SCRIPTS / "aippocampus_runtime" / "model" / "client.py",
+            SCRIPTS / "aippocampus_runtime" / "model" / "routing.py",
+        ]
+        shim_paths = [
+            SCRIPTS / "model_client.py",
+            SCRIPTS / "deepseek_model_routing.py",
+        ]
+
+        for path in package_paths + shim_paths:
+            self.assertTrue(path.exists(), path)
+        for path in shim_paths:
+            self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges(top_level_only=True)
+        for source in [
+            "semantic_recall_gate",
+            "subconscious_worker",
+            "dream_worker",
+            "warm_ambient_recall",
+        ]:
+            self.assertNotIn("model_client", edges[source])
+        self.assertIn("aippocampus_runtime.model.client", edges["dream_worker"])
+        self.assertIn("aippocampus_runtime.model.routing", edges["semantic_recall_gate"])
+
+        self.assertIs(model_client.ChatClientConfig, client.ChatClientConfig)
+        self.assertIs(model_client.chat_json, client.chat_json)
+        self.assertIs(deepseek_model_routing.resolve_model_route, routing.resolve_model_route)
+        self.assertIs(deepseek_model_routing.ModelRoute, routing.ModelRoute)
+
     def test_prompt_recall_core_stays_small_foreground_gate(self) -> None:
         edges = same_dir_import_edges()
         forbidden = {
