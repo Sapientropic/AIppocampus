@@ -14,12 +14,13 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project.scripts]
-aippocampus = "aippocampus_cli:main"
+aippocampus = "aippocampus_runtime.cli.facade:main"
 
 [tool.setuptools]
 package-dir = {"" = "skills/aippocampus/scripts"}
 packages = [
     "aippocampus_runtime",
+    "aippocampus_runtime.cli",
     "aippocampus_runtime.model",
     "aippocampus_runtime.registry",
     "aippocampus_runtime.sync",
@@ -188,6 +189,8 @@ pretty = true
 files = [
     "skills/aippocampus/scripts/aippocampuslib.py",
     "skills/aippocampus/scripts/aippocampus_cli.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/cli/__init__.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/cli/facade.py",
     "skills/aippocampus/scripts/aippocampus_health.py",
     "skills/aippocampus/scripts/aippocampus_lifecycle_hook.py",
     "skills/aippocampus/scripts/aippocampus_mcp_server.py",

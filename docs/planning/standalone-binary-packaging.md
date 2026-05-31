@@ -41,8 +41,9 @@ fallback until the matrix above passes.
 
 `tools/aippocampus/package_windows_binary.py` builds the Windows artifact with
 PyInstaller. It stages `skills/aippocampus/scripts` into a temporary runtime
-copy, generates a small frozen entrypoint for the existing `aippocampus_cli`
-facade, and then runs the smoke matrix above against the built executable.
+copy, generates a small frozen entrypoint for `aippocampus_runtime.cli.facade`
+while keeping the `aippocampus_cli.py` compatibility shim available, and then
+runs the smoke matrix above against the built executable.
 The executable can also launch the stdio MCP server through
 `aippocampus.exe mcp`; host-level proof still requires the dedicated Claude
 Code smoke because `mcp list-tools` only proves local catalog generation.

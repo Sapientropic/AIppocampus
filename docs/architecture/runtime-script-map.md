@@ -74,6 +74,7 @@ Current package pilots:
 
 | Package | Top-level compatibility shims | Owner boundary |
 |---|---|---|
+| `aippocampus_runtime/cli/` | `aippocampus_cli.py` | Public `aippocampus` command facade and child-script dispatch policy. |
 | `aippocampus_runtime/sync/` | `sync_contract.py` | Shared manifest, transport metadata, and privacy boundary helpers reused by sync routes. |
 | `aippocampus_runtime/sync/encrypted/` | `encrypted_sync_bundle.py`, `encrypted_sync_crypto.py`, `encrypted_sync_keys.py`, `encrypted_sync_migration.py`, `encrypted_sync_object_storage.py` | Age-backed encrypted bundle, key, migration, and object-storage helpers. |
 | `aippocampus_runtime/warm_ambient/` | `warm_ambient_prompting.py`, `warm_ambient_scout_profiles.py`, `warm_ambient_source_validation.py` | Prompt rendering, scout taxonomy, and source-ref validation for warm ambient recall. |
@@ -97,7 +98,7 @@ adding fresh ad hoc `sys.path` insertion rules.
 
 | Script or group | Purpose | Invocation route | Key dependencies | Status |
 |---|---|---|---|---|
-| `aippocampus_cli.py` | Thin `aippocampus` command facade over documented script entrypoints. | Console script / operator CLI. | Existing script mains via subprocess; preserves child JSON and exit codes. | Public entrypoint |
+| `aippocampus_runtime/cli/facade.py` and `aippocampus_cli.py` compatibility shim | Thin `aippocampus` command facade over documented script entrypoints. | Console script / operator CLI; old direct script path remains available. | Existing script mains via subprocess; preserves child JSON and exit codes. | Public entrypoint |
 | `aippocampus_health.py` | Runtime readiness, public smoke checks, and optional derived question stats. | CLI, install docs, CI-adjacent smoke. | `registry.py`, `aippocampuslib.py`, `question_health.py`, filesystem/env checks. | Public entrypoint |
 | `aippocampus_maintenance.py` | Compact maintenance wrapper for routine operator checks. | CLI/manual maintenance. | Health, registry, docs/smoke conventions. | Repo maintenance |
 | `onboard.py`, `onboard_codex.py`, `onboard_frontier.py`, `onboard_status.py` | Build or report source-backed onboarding state. `onboard.py` is the provider-aware facade; `onboard_codex.py` remains the Codex-only compatibility entrypoint. | CLI and install/readiness workflows. | Clean source, registry, project timeline, optional external model env. | Public entrypoint |

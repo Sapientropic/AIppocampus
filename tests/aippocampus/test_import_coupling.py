@@ -132,6 +132,27 @@ class ImportCouplingTests(unittest.TestCase):
         edges = same_dir_import_edges(top_level_only=True)
         self.assertNotIn("retrieval", edges["registry"])
 
+    def test_cli_facade_has_package_owner_and_compat_shim(self) -> None:
+        import aippocampus_cli
+        from aippocampus_runtime.cli import facade
+
+        package_paths = [
+            SCRIPTS / "aippocampus_runtime" / "cli" / "__init__.py",
+            SCRIPTS / "aippocampus_runtime" / "cli" / "facade.py",
+        ]
+        shim_path = SCRIPTS / "aippocampus_cli.py"
+
+        for path in package_paths:
+            self.assertTrue(path.exists(), path)
+        self.assertTrue(shim_path.exists(), shim_path)
+        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges(top_level_only=True)
+        self.assertIn("aippocampus_runtime.cli.facade", edges["aippocampus_cli"])
+        self.assertIs(aippocampus_cli.main, facade.main)
+        self.assertIs(aippocampus_cli.run_script, facade.run_script)
+        self.assertEqual(facade.SCRIPT_DIR, SCRIPTS)
+
     def test_registry_storage_is_separate_from_registry_runner(self) -> None:
         package_paths = [
             SCRIPTS / "aippocampus_runtime" / "registry" / "__init__.py",

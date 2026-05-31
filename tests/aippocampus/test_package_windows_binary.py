@@ -34,7 +34,7 @@ class WindowsBinaryPackagingTests(unittest.TestCase):
                 [
                     "[tool.setuptools]",
                     'package-dir = {"" = "skills/aippocampus/scripts"}',
-                    'packages = ["aippocampus_runtime"]',
+                    'packages = ["aippocampus_runtime", "aippocampus_runtime.cli"]',
                     'py-modules = ["aippocampus_cli", "aippocampuslib"]',
                 ]
             ),
@@ -42,9 +42,13 @@ class WindowsBinaryPackagingTests(unittest.TestCase):
         )
         (scripts / "aippocampus_cli.py").write_text("def main(): return 0\n", encoding="utf-8")
         (scripts / "aippocampuslib.py").write_text("", encoding="utf-8")
+        package_cli = scripts / "aippocampus_runtime" / "cli"
         package_registry = scripts / "aippocampus_runtime" / "registry"
+        package_cli.mkdir(parents=True)
         package_registry.mkdir(parents=True)
         (scripts / "aippocampus_runtime" / "__init__.py").write_text("", encoding="utf-8")
+        (package_cli / "__init__.py").write_text("", encoding="utf-8")
+        (package_cli / "facade.py").write_text("def main(): return 0\n", encoding="utf-8")
         (package_registry / "__init__.py").write_text("", encoding="utf-8")
         (package_registry / "store.py").write_text("def load_registry(): return {}\n", encoding="utf-8")
         (scripts / ".aippocampus").mkdir()
@@ -81,6 +85,7 @@ class WindowsBinaryPackagingTests(unittest.TestCase):
             )
             self.assertIn("--hidden-import=aippocampus_cli", plan.command)
             self.assertIn("--hidden-import=aippocampus_runtime", plan.command)
+            self.assertIn("--hidden-import=aippocampus_runtime.cli", plan.command)
             self.assertNotIn(str(repo / ".aippocampus"), command_text)
             self.assertNotIn(str(repo / "transcripts"), command_text)
             self.assertEqual(plan.private_data_policy["source_runtime"], "skills/aippocampus/scripts")
@@ -88,6 +93,16 @@ class WindowsBinaryPackagingTests(unittest.TestCase):
 
             self.packager.stage_runtime_scripts(plan)
             self.assertTrue((output / "runtime" / "aippocampus_scripts" / "aippocampus_cli.py").is_file())
+            self.assertTrue(
+                (
+                    output
+                    / "runtime"
+                    / "aippocampus_scripts"
+                    / "aippocampus_runtime"
+                    / "cli"
+                    / "facade.py"
+                ).is_file()
+            )
             self.assertFalse((output / "runtime" / "aippocampus_scripts" / ".aippocampus").exists())
             self.assertFalse((output / "runtime" / "aippocampus_scripts" / "registry").exists())
             self.assertTrue(
@@ -107,7 +122,8 @@ class WindowsBinaryPackagingTests(unittest.TestCase):
 
         self.assertIn("import runpy", entrypoint)
         self.assertIn("aippocampus_scripts", entrypoint)
-        self.assertIn("aippocampus_cli.run_script = _run_script_in_process", entrypoint)
+        self.assertIn("aippocampus_runtime.cli", entrypoint)
+        self.assertIn("cli_facade.run_script = _run_script_in_process", entrypoint)
         self.assertIn("runpy.run_path", entrypoint)
 
     def test_dry_run_json_does_not_claim_artifact_smoke_or_python_free_support(self) -> None:

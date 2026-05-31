@@ -116,11 +116,11 @@ def main() -> int:
     script_dir = _bundled_scripts_dir()
     if str(script_dir) not in sys.path:
         sys.path.insert(0, str(script_dir))
-    import aippocampus_cli
+    from aippocampus_runtime.cli import facade as cli_facade
 
-    aippocampus_cli.SCRIPT_DIR = script_dir
-    aippocampus_cli.run_script = _run_script_in_process
-    return int(aippocampus_cli.main())
+    cli_facade.SCRIPT_DIR = script_dir
+    cli_facade.run_script = _run_script_in_process
+    return int(cli_facade.main())
 
 
 if __name__ == "__main__":

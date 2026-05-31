@@ -8,7 +8,9 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-CLI = REPO_ROOT / "skills" / "aippocampus" / "scripts" / "aippocampus_cli.py"
+SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
+CLI = SCRIPTS / "aippocampus_cli.py"
+sys.path.insert(0, str(SCRIPTS))
 
 
 class AippocampusCliTests(unittest.TestCase):
@@ -29,6 +31,14 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("health", proc.stdout)
         self.assertIn("mcp list-tools", proc.stdout)
         self.assertIn("hooks", proc.stdout)
+
+    def test_top_level_script_is_compatibility_shim_for_package_facade(self) -> None:
+        import aippocampus_cli
+        from aippocampus_runtime.cli import facade
+
+        self.assertIs(aippocampus_cli.main, facade.main)
+        self.assertIs(aippocampus_cli.run_script, facade.run_script)
+        self.assertEqual(facade.SCRIPT_DIR, SCRIPTS)
 
     def test_mcp_list_tools_preserves_json_stdout(self) -> None:
         proc = self.run_cli("mcp", "list-tools")
