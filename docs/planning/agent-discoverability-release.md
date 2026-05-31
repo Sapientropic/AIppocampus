@@ -55,6 +55,22 @@ publication through GitHub OIDC. It targets the GitHub `release` environment and
 will not succeed until the PyPI trusted publisher/project setup exists for
 `aippocampus`.
 
+Run the repeatable readiness probe before and after external publication:
+
+```sh
+python tools/aippocampus/release/check_agent_discovery_release.py --json
+```
+
+Before PyPI/MCP publication it should report local checks as passing and public
+package/registry checks as `pending`. After the release workflow succeeds, run:
+
+```sh
+python tools/aippocampus/release/check_agent_discovery_release.py --fail-on-not-ready
+```
+
+That second command should pass before public docs claim `uvx aippocampus ...`
+or official MCP Registry availability.
+
 Configure the PyPI trusted publisher with:
 
 - project name: `aippocampus`
