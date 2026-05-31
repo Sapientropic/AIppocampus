@@ -11,7 +11,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
-import sync_bundle
+from aippocampus_runtime.sync import bundle as sync_bundle
 from aippocampuslib import validate_http_endpoint_url, validate_private_credential_transport
 
 from . import providers as object_storage_providers

@@ -27,9 +27,9 @@ import smoke_real_provider_encrypted_sync  # noqa: E402
 
 import encrypted_sync_bundle  # noqa: E402
 import encrypted_sync_migration  # noqa: E402
-import sync_bundle  # noqa: E402
-import sync_contract  # noqa: E402
-import sync_object_storage  # noqa: E402
+from aippocampus_runtime.sync import bundle as sync_bundle  # noqa: E402
+from aippocampus_runtime.sync import contract as sync_contract  # noqa: E402
+from aippocampus_runtime.sync.object_storage import cli as sync_object_storage  # noqa: E402
 
 
 class RecordingObjectHandler(BaseHTTPRequestHandler):

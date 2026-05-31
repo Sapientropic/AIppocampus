@@ -9,9 +9,9 @@ import os
 from pathlib import Path
 from typing import Any
 
-import sync_object_storage
 from aippocampus_runtime.sync.encrypted import keys as encrypted_sync_keys
 from aippocampus_runtime.sync.encrypted import migration as encrypted_sync_migration
+from aippocampus_runtime.sync.object_storage import cli as sync_object_storage
 from aippocampuslib import aippocampus_registry_dir
 
 

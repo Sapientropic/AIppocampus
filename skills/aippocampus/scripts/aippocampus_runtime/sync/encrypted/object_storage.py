@@ -8,10 +8,10 @@ import tempfile
 from pathlib import Path
 from typing import Any, Iterable
 
-import sync_bundle
-import sync_object_storage
+from aippocampus_runtime.sync import bundle as sync_bundle
 from aippocampus_runtime.sync.encrypted import bundle as encrypted_sync_bundle
 from aippocampus_runtime.sync.encrypted.crypto import EncryptedSyncError, issue, resolve_age_binary
+from aippocampus_runtime.sync.object_storage import cli as sync_object_storage
 
 
 def encrypted_manifest_relative_path() -> Path:

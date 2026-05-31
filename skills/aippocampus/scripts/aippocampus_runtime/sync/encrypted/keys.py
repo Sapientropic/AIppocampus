@@ -10,7 +10,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-import sync_bundle
+from aippocampus_runtime.sync import bundle as sync_bundle
 from aippocampus_runtime.sync.encrypted.crypto import issue, validate_recipients
 from aippocampuslib import now_utc, safe_path_name
 

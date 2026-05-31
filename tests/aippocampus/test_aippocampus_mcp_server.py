@@ -20,7 +20,7 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 import aippocampus_mcp_server as mcp  # noqa: E402
-import sync_bundle  # noqa: E402
+from aippocampus_runtime.sync import bundle as sync_bundle  # noqa: E402
 
 
 class AippocampusMcpServerTests(unittest.TestCase):

@@ -1,6 +1,6 @@
-"""Sync runtime helper package.
+"""Sync runtime package.
 
-Public sync commands remain top-level scripts. This package owns shared helper
-contracts that should be reused across local-folder, object-storage, and
-encrypted sync routes.
+The local-folder sync command now lives in :mod:`aippocampus_runtime.sync.bundle`;
+top-level sync scripts remain as compatibility shims for documented CLI/import
+paths.
 """
