@@ -20,12 +20,12 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
+from aippocampus_runtime.recall.ambient_cache import default_ambient_cache_path
 from aippocampuslib import (
     now_utc,
     sanitize_external_model_payload,
     sanitize_external_model_text,
 )
-from ambient_thread_cache import default_ambient_cache_path
 
 JOB_SCHEMA_VERSION = 1
 DEFAULT_JOB_DIR_NAME = "ambient_warm_jobs"

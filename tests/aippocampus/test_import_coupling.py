@@ -944,6 +944,58 @@ class ImportCouplingTests(unittest.TestCase):
             score_fusion.retrieval_text_score,
         )
 
+    def test_ambient_recall_helpers_have_package_owner_and_compat_shims(self) -> None:
+        package_paths = [
+            SCRIPTS / "aippocampus_runtime" / "recall" / "ambient_cache.py",
+            SCRIPTS / "aippocampus_runtime" / "recall" / "ambient_cards.py",
+            SCRIPTS / "aippocampus_runtime" / "recall" / "ambient_policy.py",
+        ]
+        shim_paths = [
+            SCRIPTS / "ambient_thread_cache.py",
+            SCRIPTS / "ambient_recall_cards.py",
+            SCRIPTS / "ambient_recall_policy.py",
+        ]
+
+        for path in package_paths + shim_paths:
+            self.assertTrue(path.exists(), path)
+        for path in shim_paths:
+            self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+
+        import ambient_recall_cards
+        import ambient_recall_policy
+        import ambient_thread_cache
+        from aippocampus_runtime.recall import ambient_cache, ambient_cards, ambient_policy
+
+        edges = same_dir_import_edges(top_level_only=True)
+        self.assertIn(
+            "aippocampus_runtime.recall.ambient_policy",
+            edges["aippocampus_runtime.recall.ambient_cards"],
+        )
+        flat_ambient_modules = {
+            "ambient_thread_cache",
+            "ambient_recall_cards",
+            "ambient_recall_policy",
+        }
+        offenders = {
+            source: sorted(targets & flat_ambient_modules)
+            for source, targets in edges.items()
+            if source not in flat_ambient_modules and targets & flat_ambient_modules
+        }
+        self.assertEqual(offenders, {})
+
+        self.assertIs(
+            ambient_thread_cache.default_ambient_cache_path,
+            ambient_cache.default_ambient_cache_path,
+        )
+        self.assertIs(
+            ambient_recall_cards.ambient_recall_from_decision,
+            ambient_cards.ambient_recall_from_decision,
+        )
+        self.assertIs(
+            ambient_recall_policy.policy_update_for_prompt,
+            ambient_policy.policy_update_for_prompt,
+        )
+
     def test_subconscious_jobs_do_not_depend_on_agent_runner(self) -> None:
         package_agent_path = SCRIPTS / "aippocampus_runtime" / "subconscious" / "agent.py"
         shim_agent_path = SCRIPTS / "subconscious_agent.py"

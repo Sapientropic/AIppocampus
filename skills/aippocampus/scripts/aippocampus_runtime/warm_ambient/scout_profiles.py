@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ambient_recall_cards import (
+from aippocampus_runtime.recall.ambient_cards import (
     ACTIVE_GENTLE_NUDGE,
     CANDIDATE,
     DEEP_ARCHIVAL_RECALL,

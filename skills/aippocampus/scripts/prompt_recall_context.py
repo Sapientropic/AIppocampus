@@ -13,12 +13,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.recall.query_policy import CONCEPT_TRIGGERS, semantic_trigger_terms
-from ambient_recall_policy import (
+from aippocampus_runtime.recall.ambient_policy import (
     apply_working_memory_policy,
     default_ambient_policy_path,
     load_policy_events,
 )
+from aippocampus_runtime.recall.query_policy import CONCEPT_TRIGGERS, semantic_trigger_terms
 from build_associations import (
     default_associations_path,
     load_associations,

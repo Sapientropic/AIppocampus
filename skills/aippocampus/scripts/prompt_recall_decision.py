@@ -12,8 +12,8 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
+from aippocampus_runtime.recall.ambient_policy import policy_update_for_prompt
 from aippocampus_runtime.recall.query_policy import semantic_trigger_terms
-from ambient_recall_policy import policy_update_for_prompt
 from build_concept_graph import expand_concepts
 from memory_candidate_router import strip_for_hook
 from prompt_cues import (

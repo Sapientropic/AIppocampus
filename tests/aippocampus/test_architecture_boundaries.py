@@ -27,13 +27,13 @@ import sync_vault  # noqa: E402
 HIGH_RISK_MYPY_SCRIPTS = {
     "skills/aippocampus/scripts/aippocampus_mcp_server.py",
     "skills/aippocampus/scripts/aippocampus_lifecycle_hook.py",
-    "skills/aippocampus/scripts/ambient_thread_cache.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/ambient_cache.py",
     "skills/aippocampus/scripts/build_associations.py",
     "skills/aippocampus/scripts/build_project_timeline.py",
     "skills/aippocampus/scripts/memory_candidate_router.py",
     "skills/aippocampus/scripts/onboard_codex.py",
     "skills/aippocampus/scripts/prompt_recall_core.py",
-    "skills/aippocampus/scripts/retrieval.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/retrieval.py",
     "skills/aippocampus/scripts/warm_ambient_recall.py",
 }
 DEBT_REGISTER = REPO_ROOT / "docs" / "architecture" / "architecture-debt-register.md"
