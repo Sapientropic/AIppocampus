@@ -20,11 +20,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from aippocampuslib import compact_text, now_utc
-from dream_working_memory import (
+from aippocampus_runtime.dream.working_memory import (
     adjudicated_dream_findings_to_working_memory,  # noqa: F401
     reviewed_dream_findings_to_working_memory,  # noqa: F401
 )
+from aippocampuslib import compact_text, now_utc
 
 SCHEMA_VERSION = 1
 REPORT_KIND = "aippocampus_compensatory_dream_report"
