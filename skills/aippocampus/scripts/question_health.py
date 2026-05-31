@@ -16,13 +16,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from aippocampuslib import compact_text
-from question_source_refs import (
+from aippocampus_runtime.question.source_refs import (
     SourceRefIndex,
     build_source_ref_index,
     compact_source_refs,
     source_ref_key,
 )
+from aippocampuslib import compact_text
 from question_tracking import (
     FINDING_ROW_KIND,
     FRONTIER_MARKER_KIND,

@@ -101,9 +101,10 @@ theme-emergence slice, plus first question-index scale/sidecar evaluation:
   This is a foreground control plane, not a user-preference fact or clean-source
   record.
 - Implemented first #137 feedback-pressure slice:
-  `skills/aippocampus/scripts/question_feedback_policy.py` lets
-  `question_tracking.py` consume source-id-backed ambient dismiss/reopen events
-  as conservative separation pressure for the same source-backed question pair.
+  `aippocampus_runtime.question.feedback_policy` lets `question_tracking.py`
+  consume source-id-backed ambient dismiss/reopen events as conservative
+  separation pressure for the same source-backed question pair.
+  `question_feedback_policy.py` remains the direct import compatibility shim.
   Only `target_kind="question_link"` can affect pair separation; theme/frontier
   dismissals remain hook-surface policy and do not change question-pair scoring.
   Unsourced feedback fails open, and later reopen events clear dismissal
@@ -913,8 +914,9 @@ Clean source turns
 None. All output goes to existing `subconscious_jobs.jsonl`.
 
 A lightweight vector adapter now exists in
-`skills/aippocampus/scripts/question_vector_index.py` for Phase 2 tests and
-small local smoke runs. It is deliberately not the default retrieval path:
+`aippocampus_runtime.question.vector_index` for Phase 2 tests and small local
+smoke runs. `question_vector_index.py` remains the compatibility shim. It is
+deliberately not the default retrieval path:
 neighbors carry stable source ids, and `question_tracking` must re-open clean
 source before accepting or promoting a link.
 
@@ -1139,9 +1141,10 @@ noisy ones. Frontier markers must feel like saved trail markers, not guilt.
   while orientation/context conflicts raise separation pressure.
 - Shipped first #137 feedback-pressure slice: source-id-backed ambient
   dismiss/reopen events are consumed by `question_tracking.py` through
-  `question_feedback_policy.py`. A dismissed same source-backed `question_link`
-  pair is treated as separated unless a later reopen event wins; dismissals for
-  `theme_candidate` or `frontier_marker` remain ambient-surface policy only.
+  `aippocampus_runtime.question.feedback_policy`. A dismissed same
+  source-backed `question_link` pair is treated as separated unless a later
+  reopen event wins; dismissals for `theme_candidate` or `frontier_marker`
+  remain ambient-surface policy only.
 - Shipped first health slice: `question_health.py` reports neutral `dormant`
   and explicit `resolved` states from source-backed job rows, skips stale refs
   through default registry resolution in `aippocampus_health.py --question-stats`,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import importlib.util
+import re
 import shutil
 import sys
 import unittest
@@ -34,6 +35,14 @@ def script_modules() -> dict[str, Path]:
         if parts:
             modules[".".join(parts)] = path
     return modules
+
+
+def pyproject_py_modules() -> set[str]:
+    text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    match = re.search(r"(?ms)^py-modules\s*=\s*\[(.*?)^\]", text)
+    if not match:
+        return set()
+    return set(re.findall(r'"([^"]+)"', match.group(1)))
 
 
 def import_targets_for_node(
@@ -708,6 +717,61 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(
             subconscious_jobs_config.default_jobs_output_path,
             jobs_config.default_jobs_output_path,
+        )
+
+    def test_question_helpers_have_package_owner_and_compat_shims(self) -> None:
+        import question_feedback_policy
+        import question_source_refs
+        import question_vector_index
+        from aippocampus_runtime.question import feedback_policy, source_refs, vector_index
+
+        package_paths = [
+            SCRIPTS / "aippocampus_runtime" / "question" / "__init__.py",
+            SCRIPTS / "aippocampus_runtime" / "question" / "feedback_policy.py",
+            SCRIPTS / "aippocampus_runtime" / "question" / "source_refs.py",
+            SCRIPTS / "aippocampus_runtime" / "question" / "vector_index.py",
+        ]
+        shim_paths = [
+            SCRIPTS / "question_feedback_policy.py",
+            SCRIPTS / "question_source_refs.py",
+            SCRIPTS / "question_vector_index.py",
+        ]
+
+        for path in package_paths + shim_paths:
+            self.assertTrue(path.exists(), path)
+        for path in shim_paths:
+            self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges(top_level_only=True)
+        for source in [
+            "agency_affordance",
+            "coding_decision_events",
+            "correction_reconsolidation",
+            "question_health",
+            "question_index_sidecar",
+            "question_resolution",
+            "question_tracking",
+            "theme_emergence",
+        ]:
+            self.assertIn("aippocampus_runtime.question.source_refs", edges[source])
+            self.assertNotIn("question_source_refs", edges[source])
+        self.assertIn("aippocampus_runtime.question.feedback_policy", edges["question_tracking"])
+        self.assertNotIn("question_feedback_policy", edges["question_tracking"])
+
+        modules = pyproject_py_modules()
+        self.assertTrue(
+            {"question_feedback_policy", "question_source_refs", "question_vector_index"}
+            <= modules
+        )
+
+        self.assertIs(question_source_refs.source_ref_key, source_refs.source_ref_key)
+        self.assertIs(
+            question_feedback_policy.load_question_pair_feedback,
+            feedback_policy.load_question_pair_feedback,
+        )
+        self.assertIs(
+            question_vector_index.LocalQuestionVectorIndex,
+            vector_index.LocalQuestionVectorIndex,
         )
 
     def test_subconscious_validation_audit_has_package_owner_and_compat_shim(self) -> None:

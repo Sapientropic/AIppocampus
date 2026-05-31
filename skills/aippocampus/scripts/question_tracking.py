@@ -22,6 +22,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from aippocampus_runtime.question.feedback_policy import (
+    QuestionPairFeedback,
+    load_question_pair_feedback,
+    matching_pair_feedback,
+)
+from aippocampus_runtime.question.source_refs import (
+    SourceRefIndex,
+    build_source_ref_index,
+    compact_source_refs,
+    source_ref_key,
+)
 from aippocampus_runtime.recall.ambient_policy import default_ambient_policy_path
 from aippocampus_runtime.subconscious.jobs_config import default_jobs_output_path
 from aippocampuslib import cli_error_payload, cli_exit_code_for_error_code, compact_text, now_utc
@@ -32,17 +43,6 @@ from question_confirmation import (
     confirmation_diagnostics,
     load_confirmation_decisions,
     normalize_confirmation,
-)
-from question_feedback_policy import (
-    QuestionPairFeedback,
-    load_question_pair_feedback,
-    matching_pair_feedback,
-)
-from question_source_refs import (
-    SourceRefIndex,
-    build_source_ref_index,
-    compact_source_refs,
-    source_ref_key,
 )
 from registry import registry_paths, unique_preserve
 

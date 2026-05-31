@@ -18,8 +18,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
+from aippocampus_runtime.question.source_refs import build_source_ref_index, source_ref_key
 from aippocampuslib import cli_error_payload, cli_exit_code_for_error_code, compact_text, now_utc
-from question_source_refs import build_source_ref_index, source_ref_key
 from question_tracking import (
     DEFAULT_STRONG_THRESHOLD,
     ConfirmationFn,

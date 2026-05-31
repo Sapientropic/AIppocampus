@@ -16,13 +16,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from aippocampuslib import compact_text, now_utc
-from question_source_refs import (
+from aippocampus_runtime.question.source_refs import (
     SourceRefIndex,
     build_source_ref_index,
     compact_source_refs,
     source_ref_key,
 )
+from aippocampuslib import compact_text, now_utc
 from question_tracking import (
     FINDING_ROW_KIND,
     QUESTION_CANDIDATE_KIND,
