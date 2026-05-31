@@ -16,6 +16,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.navigation.concept_graph import (
+    concept_is_noise,
+    default_concept_graph_path,
+)
 from aippocampus_runtime.subconscious.runtime import (
     AGENT_SYSTEM_PROMPT,
     DEFAULT_MAX_STEPS,
@@ -49,7 +53,6 @@ from aippocampuslib import (
     deepseek_cache_metrics_from_usage,
     sanitize_external_model_payload,
 )
-from build_concept_graph import concept_is_noise, default_concept_graph_path
 from registry import registry_paths
 
 PROMPT_VERSION = "aippocampus-subconscious-agent-v0"

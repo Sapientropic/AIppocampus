@@ -15,6 +15,11 @@ import re
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
+from aippocampus_runtime.navigation.associations import (
+    extract_terms_from_text,
+    normalize_term,
+    source_text_is_noise,
+)
 from aippocampus_runtime.question.source_refs import source_ref_key
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampuslib import (
@@ -24,7 +29,6 @@ from aippocampuslib import (
     now_utc,
     sanitize_external_model_text,
 )
-from build_associations import extract_terms_from_text, normalize_term, source_text_is_noise
 from correction_reconsolidation import (
     ADJUDICATION_KIND,
     route_for_adjudication,

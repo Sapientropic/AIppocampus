@@ -1209,6 +1209,62 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertLessEqual(len(direct_edges), 4)
         self.assertFalse(forbidden & direct_edges)
 
+    def test_navigation_sidecars_have_package_owner_and_compat_shims(self) -> None:
+        import build_associations
+        import build_cognitive_map
+        import build_concept_graph
+        import build_project_timeline
+        from aippocampus_runtime.navigation import (
+            associations,
+            cognitive_map,
+            concept_graph,
+            project_timeline,
+        )
+
+        package_modules = {
+            "build_associations": "associations",
+            "build_cognitive_map": "cognitive_map",
+            "build_concept_graph": "concept_graph",
+            "build_project_timeline": "project_timeline",
+        }
+        for shim, package_name in package_modules.items():
+            package_path = SCRIPTS / "aippocampus_runtime" / "navigation" / f"{package_name}.py"
+            shim_path = SCRIPTS / f"{shim}.py"
+            self.assertTrue(package_path.exists(), package_path)
+            self.assertTrue(shim_path.exists(), shim_path)
+            self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges(top_level_only=True)
+        flat_navigation_modules = set(package_modules)
+        package_navigation_modules = {
+            f"aippocampus_runtime.navigation.{package_name}"
+            for package_name in package_modules.values()
+        }
+        for source in package_navigation_modules:
+            self.assertFalse(flat_navigation_modules & edges[source], source)
+        for source in [
+            "aippocampus_runtime.recall.prompt_recall_context",
+            "aippocampus_runtime.recall.prompt_recall_decision",
+            "aippocampus_runtime.recall.semantic_trigger_router",
+            "aippocampus_runtime.subconscious.agent",
+            "aippocampus_runtime.subconscious.jobs_config",
+            "aippocampus_runtime.subconscious.runtime",
+            "aippocampus_runtime.subconscious.worker",
+        ]:
+            self.assertFalse(flat_navigation_modules & edges[source], source)
+
+        self.assertIs(build_associations.build_associations, associations.build_associations)
+        self.assertIs(build_associations.normalize_term, associations.normalize_term)
+        self.assertIs(build_cognitive_map.build_cognitive_map, cognitive_map.build_cognitive_map)
+        self.assertIs(build_cognitive_map.build_from_files, cognitive_map.build_from_files)
+        self.assertIs(build_concept_graph.expand_concepts, concept_graph.expand_concepts)
+        self.assertIs(build_concept_graph.default_concept_graph_path, concept_graph.default_concept_graph_path)
+        self.assertIs(
+            build_project_timeline.build_project_timeline,
+            project_timeline.build_project_timeline,
+        )
+        self.assertIs(build_project_timeline.main, project_timeline.main)
+
     def test_prompt_recall_cues_are_separate_from_scoring_policy(self) -> None:
         cues_path = SCRIPTS / "aippocampus_runtime" / "recall" / "prompt_cues.py"
         self.assertTrue(cues_path.exists())

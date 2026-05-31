@@ -19,9 +19,9 @@ import _paths
 
 _paths.ensure_paths()
 
+from aippocampus_runtime.navigation.project_timeline import build_project_timeline
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
 from aippocampuslib import aippocampus_registry_dir
-from build_project_timeline import build_project_timeline
 from registry import load_registry
 
 NON_TECHNICAL_LIFE_LABELS = tuple(label for label in SCOPE_LABEL_ORDER if label != "technical_work")

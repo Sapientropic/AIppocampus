@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
+from aippocampus_runtime.navigation.concept_graph import expand_concepts
 from aippocampus_runtime.recall.ambient_policy import policy_update_for_prompt
 from aippocampus_runtime.recall.prompt_cues import (
     CONCEPT_EXPANSION_MAX_TERMS,
@@ -70,7 +71,6 @@ from aippocampus_runtime.recall.semantic_cue_cache import (
     default_semantic_cues_path,
     record_semantic_cue_hits,
 )
-from build_concept_graph import expand_concepts
 from memory_candidate_router import strip_for_hook
 from registry import unique_preserve
 

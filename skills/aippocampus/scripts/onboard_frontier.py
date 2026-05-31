@@ -12,9 +12,9 @@ import os
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.navigation.concept_graph import default_concept_graph_path
 from aippocampus_runtime.subconscious.worker import default_staging_path
 from aippocampuslib import compact_text
-from build_concept_graph import default_concept_graph_path
 from subconscious_jobs import (
     DEFAULT_BASE_URL,
     DEFAULT_MODEL,
