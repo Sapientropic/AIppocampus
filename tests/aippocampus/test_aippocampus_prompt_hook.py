@@ -1549,6 +1549,75 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertIn("memoria externa", result["query_terms"])
         self.assertIn("associative cue", " ".join(result["reasons"]))
 
+    def test_reviewed_semantic_trigger_source_refs_wake_sparse_registry_candidate(self) -> None:
+        registry_path = self.root / "source-ref-semantic-trigger-registry" / "threads.json"
+        registry_path.parent.mkdir()
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:friction",
+                            "title": "Recovered sidecar-backed source thread",
+                            "project_label": "Life-wide continuity",
+                            "anchor_titles": [],
+                            "keywords": [],
+                            "summary": "No lexical overlap with the natural prompt or trigger aliases.",
+                            "paths": {"workspace": str(self.workspace)},
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        triggers_path = self.root / "source_ref_semantic_triggers.jsonl"
+        triggers_path.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_semantic_trigger",
+                    "status": "active",
+                    "title": "Subconscious friction recall route",
+                    "aliases": [
+                        "最近让我很烦",
+                        "recent personal friction",
+                        "что меня раздражало недавно",
+                    ],
+                    "confidence": 0.93,
+                    "when_to_use": "Use when subconscious review linked a natural annoyance/friction prompt to this source thread.",
+                    "source_refs": [
+                        {
+                            "thread_key": "session:friction",
+                            "title": "Recovered sidecar-backed source thread",
+                            "message_id": "m-friction",
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        def fail_semantic_gate(*args, **kwargs) -> dict:
+            raise AssertionError("reviewed source refs should provide a local sidecar route")
+
+        result = hook.assess_prompt(
+            "最近让我很烦的那个点后来怎么处理来着？",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            semantic_triggers_path=triggers_path,
+            semantic_gate_fn=fail_semantic_gate,
+            use_semantic_gate=False,
+            search_budget=0,
+        )
+
+        self.assertEqual(result["decision"], "scent")
+        self.assertEqual(result["candidates"][0]["thread_key"], "session:friction")
+        self.assertTrue(result["candidates"][0]["semantic_trigger_source"])
+        self.assertIn("最近让我很烦", result["query_terms"])
+
     def test_reviewed_semantic_trigger_does_not_turn_plain_code_task_into_recall(self) -> None:
         registry_path = self.root / "code-surface-semantic-trigger-registry" / "threads.json"
         registry_path.parent.mkdir()

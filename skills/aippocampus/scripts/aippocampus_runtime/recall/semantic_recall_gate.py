@@ -200,6 +200,10 @@ def collect_aliases(values: list[Any], limit: int = 24) -> list[str]:
     return unique_preserve(aliases, limit=limit)
 
 
+def collect_exact_aliases(values: list[Any], limit: int = 24) -> list[str]:
+    return unique_preserve([text for value in values if (text := normalize_alias(value))], limit)
+
+
 def current_project_hint(registry: dict[str, Any], cwd: Path) -> str | None:
     target = str(cwd.resolve()).casefold()
     best: tuple[int, str] | None = None
@@ -349,15 +353,20 @@ def trigger_from_association(term: str, row: dict[str, Any]) -> dict[str, Any]:
 def trigger_overlap_score(trigger: dict[str, Any], prompt_terms: list[str]) -> int:
     if not prompt_terms:
         return 0
-    trigger_values = collect_aliases(
-        [
-            trigger.get("title"),
-            trigger.get("aliases") or [],
-            trigger.get("when_to_use"),
-            trigger.get("project_label"),
-        ],
-        limit=32,
-    )
+    activation_cues = trigger.get("activation_cues") or []
+    if activation_cues:
+        # Sidecar cues are the prompt route surface; prose stays context only.
+        trigger_values = collect_exact_aliases([*activation_cues, *(trigger.get("aliases") or [])], 32)
+    else:
+        trigger_values = collect_aliases(
+            [
+                trigger.get("title"),
+                trigger.get("aliases") or [],
+                trigger.get("when_to_use"),
+                trigger.get("project_label"),
+            ],
+            limit=32,
+        )
     # `when_not_to_use` is reviewer guidance, not an activation surface. Treating
     # it as positive text made prompts such as "fixture 名字太误导" wake the Atlas
     # trigger only because the trigger warned not to use it for fixture edits.
@@ -401,6 +410,10 @@ def load_semantic_triggers(path: Path | None) -> list[dict[str, Any]]:
             continue
         if row.get("kind") not in {None, "aippocampus_semantic_trigger"}:
             continue
+        activation_cues = collect_exact_aliases(row.get("activation_cues") or [], limit=24)
+        source_refs = [ref for ref in row.get("source_refs") or [] if isinstance(ref, dict)]
+        fallback_inputs = [row.get("aliases") or [], row.get("trigger_terms") or [], row.get("concept")]
+        aliases = activation_cues or collect_aliases(fallback_inputs, limit=40)
         out.append(
             {
                 "source": "semantic_triggers",
@@ -409,15 +422,14 @@ def load_semantic_triggers(path: Path | None) -> list[dict[str, Any]]:
                 # enough aliases for long multilingual/domain clusters; a short
                 # cap silently drops late aliases such as self-continuity and
                 # makes reviewed triggers look worse than the old hard-coding.
-                "aliases": collect_aliases(
-                    [row.get("aliases") or [], row.get("trigger_terms") or [], row.get("concept")],
-                    limit=40,
-                ),
+                "aliases": aliases,
+                "activation_cues": activation_cues,
                 "when_to_use": compact_text(
                     str(row.get("when_to_use") or row.get("summary") or ""), 220
                 ),
                 "when_not_to_use": compact_text(str(row.get("when_not_to_use") or ""), 180),
                 "confidence": row.get("confidence"),
+                "source_refs": source_refs[:8],
             }
         )
     return out

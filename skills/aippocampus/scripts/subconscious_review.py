@@ -28,6 +28,7 @@ from aippocampus_runtime.model.routing import (
 )
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.registry.api import registry_paths, unique_preserve
+from aippocampus_runtime.subconscious.candidate_router import activation_cues_for
 from aippocampus_runtime.subconscious.job_validation import (
     estimate_finding_quality,
     finding_fingerprint,
@@ -68,6 +69,7 @@ Final schema:
       "title": "short title",
       "summary": "why this candidate matters",
       "recommendation": "what should consume or review it next",
+      "activation_cues": ["prompt meanings that should activate this candidate; required for hook_trigger routes and recommended for project_memory routes; do not copy generic title or summary words"],
       "confidence": 0.0,
       "source_finding_ids": ["sf_..."],
       "source_refs": [{"thread_key": "...", "line": 123}]
@@ -230,6 +232,9 @@ def validate_review(
         confidence = clamp_confidence(item.get("confidence"))
         if confidence < 0.45:
             continue
+        activation_cues = activation_cues_for(item)
+        if str(item.get("candidate_type") or "").strip() == "hook_trigger" and not activation_cues:
+            continue
         refs = []
         for finding in source_findings:
             for ref in finding.get("source_refs") or []:
@@ -250,6 +255,7 @@ def validate_review(
                 "title": compact_text(str(item.get("title") or ""), 160),
                 "summary": compact_text(str(item.get("summary") or ""), 700),
                 "recommendation": compact_text(str(item.get("recommendation") or ""), 360),
+                "activation_cues": activation_cues,
                 "confidence": round(confidence, 4),
                 "source_finding_ids": source_ids,
                 "source_refs": refs[:8],

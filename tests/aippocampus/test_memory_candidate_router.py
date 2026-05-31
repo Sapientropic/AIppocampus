@@ -141,6 +141,36 @@ class MemoryCandidateRouterTests(unittest.TestCase):
         self.assertEqual(wrong_project, [])
         self.assertEqual(broad_only, [])
 
+    def test_activation_cues_drive_working_memory_trigger_terms(self) -> None:
+        self.write_finding()
+        self.write_jsonl(
+            self.candidates,
+            [
+                self.base_candidate(
+                    title="Reviewed semantic hook",
+                    summary="A source-backed hook that should be activated by model-authored cues.",
+                    recommendation="Use the subconscious cue surface rather than summary prose.",
+                    activation_cues=[
+                        "最近让我很烦",
+                        "recent personal friction",
+                        "что меня раздражало недавно",
+                    ],
+                )
+            ],
+        )
+
+        row = router.route_candidates(self.candidates, self.jobs)["rows"][0]
+        matched = router.match_working_memory(
+            "最近让我很烦的那个点后来怎么处理来着？",
+            [row],
+            project_label="T-Sense",
+        )
+
+        self.assertIn("最近让我很烦", row["trigger_terms"])
+        self.assertNotIn("source-backed hook", " ".join(row["trigger_terms"]).casefold())
+        self.assertEqual(len(matched), 1)
+        self.assertEqual(matched[0]["matched_terms"], ["最近让我很烦"])
+
     def test_working_memory_ignores_generic_app_term(self) -> None:
         self.write_finding()
         self.write_jsonl(

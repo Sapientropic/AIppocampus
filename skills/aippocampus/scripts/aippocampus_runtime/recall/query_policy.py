@@ -196,6 +196,7 @@ def semantic_trigger_terms(rows: list[dict], limit: int = 24) -> list[str]:
         values = [
             row.get("title"),
             row.get("matched_terms") or [],
+            row.get("activation_cues") or [],
             row.get("aliases") or [],
         ]
         for value in iter_values(values):
