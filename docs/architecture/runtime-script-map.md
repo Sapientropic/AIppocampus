@@ -93,6 +93,41 @@ and benchmark folders are compatibility wrappers around that single helper, not
 new public APIs. New repo maintenance tools should reuse that helper instead of
 adding fresh ad hoc `sys.path` insertion rules.
 
+## Protocol-First Ports
+
+AIppocampus uses Protocol-first ports selectively; this is not a tagless-final architecture.
+Introduce a `Protocol` only when a runtime boundary has real replacement pressure:
+multiple host providers, optional local versus external
+implementations, test doubles that need the same contract, or backend adapters
+whose behavior must be swapped without changing source-backed payloads.
+
+Do not introduce a port for pure helper functions, one-off call sites, package
+cleanup, or code that is already clearer as direct source-backed transformation.
+The default shape is still ordinary typed functions plus dataclasses/typed dicts
+for durable payloads. A useful port must make a concrete swap safer; it must not
+create a second schema owner, dependency-injection framework, or abstraction
+layer whose only proof is that future code might need it.
+
+When a port is justified:
+
+- Keep the `Protocol` tiny and behavior-focused.
+- Keep source ids/source refs in the payload contract, not hidden in adapter
+  state.
+- Provide a deterministic local or test implementation when useful.
+- Preserve compatibility shims only for existing public commands/imports.
+- Add tests that swap the implementation and prove source-backed evidence keys
+  survive the boundary.
+
+Current pilots:
+
+- `ConversationProvider` is the ingestion port for Codex, Claude Code, generic
+  JSONL, and future host transcript sources. Clean-source tests include a
+  deterministic provider double and assert that `source_ref`, `source_id`,
+  message ids, and turn links survive the swap.
+- `QuestionVectorIndex` is an advisory vector-neighbor port. Its local
+  implementation returns stable `source_id` values and a truth-boundary marker;
+  vector scores remain navigation hints until clean source is reopened.
+
 ## Repo Smoke And Readiness Tools
 
 | Tool or group | Purpose | Invocation route | Key dependencies | Status |

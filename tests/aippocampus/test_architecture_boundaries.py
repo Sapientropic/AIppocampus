@@ -40,6 +40,7 @@ DEBT_REGISTER = REPO_ROOT / "docs" / "architecture" / "architecture-debt-registe
 PROVIDER_ENTRYPOINT_INVENTORY = (
     REPO_ROOT / "docs" / "architecture" / "provider-entrypoint-inventory.md"
 )
+RUNTIME_SCRIPT_MAP = REPO_ROOT / "docs" / "architecture" / "runtime-script-map.md"
 
 
 def debt_register_entries() -> dict[str, int]:
@@ -158,6 +159,19 @@ class ArchitectureBoundaryTests(unittest.TestCase):
         missing = sorted(path for path in helper_paths if not (SCRIPTS / path).is_file())
 
         self.assertEqual(missing, [])
+
+    def test_protocol_first_ports_have_selective_architecture_rule(self) -> None:
+        text = RUNTIME_SCRIPT_MAP.read_text(encoding="utf-8")
+
+        for phrase in (
+            "Protocol-First Ports",
+            "real replacement pressure",
+            "Do not introduce a port",
+            "source ids/source refs",
+            "not a tagless-final architecture",
+            "`ConversationProvider`",
+        ):
+            self.assertIn(phrase, text)
 
     def test_mypy_baseline_covers_high_risk_core_scripts(self) -> None:
         missing = sorted(HIGH_RISK_MYPY_SCRIPTS - mypy_file_entries())
