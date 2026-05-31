@@ -39,7 +39,8 @@ def load_hooks(path: Path) -> dict[str, Any]:
 
 def configured_handlers(data: dict[str, Any], events: set[str]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    hooks = data.get("hooks") if isinstance(data.get("hooks"), dict) else {}
+    raw_hooks = data.get("hooks")
+    hooks: dict[str, Any] = raw_hooks if isinstance(raw_hooks, dict) else {}
     for event in sorted(events):
         groups = hooks.get(event) or []
         if not isinstance(groups, list):

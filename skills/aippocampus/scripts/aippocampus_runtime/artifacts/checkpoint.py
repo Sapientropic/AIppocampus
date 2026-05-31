@@ -11,6 +11,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 from aippocampus_runtime.core import (
     codex_home,
@@ -228,7 +229,7 @@ def main(argv: list[str] | None = None) -> int:
             notes.append(f"Recent user focus: {snippet}")
 
     quotes = user_snippets[:2]
-    candidate = {
+    candidate: dict[str, Any] = {
         "title": title,
         "date": date,
         "keywords": keywords,
@@ -258,8 +259,8 @@ def main(argv: list[str] | None = None) -> int:
     else:
         mode = "appended" if args.append else "suggested"
         print(f"checkpoint {mode}: {candidate['title']}")
-        print(f"keywords: {', '.join(candidate['keywords'])}")
-        for note in candidate["notes"]:
+        print(f"keywords: {', '.join(keywords)}")
+        for note in notes:
             print(f"- {note}")
     return 0
 
