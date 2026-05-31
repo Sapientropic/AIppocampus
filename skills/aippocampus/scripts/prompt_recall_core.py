@@ -383,7 +383,6 @@ def merge_life_wide_timeline_candidates(
             added_threads.add(str(thread_key))
             if len(added_threads) >= LIFE_WIDE_TIMELINE_CANDIDATE_LIMIT:
                 return sort_candidates(candidates)
-            break
     return sort_candidates(candidates)
 
 

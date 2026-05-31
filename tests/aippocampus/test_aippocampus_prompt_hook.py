@@ -827,6 +827,93 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertTrue(result["candidates"][0]["life_wide_timeline_source"])
         self.assertEqual(result["evidence"], [])
 
+    def test_vague_life_wide_prompt_returns_multiple_timeline_routes(self) -> None:
+        registry_dir = self.root / "life-wide-multilingual-registry"
+        registry_dir.mkdir()
+        registry_path = registry_dir / "threads.json"
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:english-friction",
+                            "title": "English workflow friction",
+                            "project_label": "Ops",
+                            "updated_at": "2026-05-25T12:00:00Z",
+                            "keywords": ["workflow friction", "product pressure"],
+                            "summary": "English notes about product workflow friction.",
+                            "paths": {"workspace": str(self.old)},
+                        },
+                        {
+                            "thread_key": "session:russian-burnout",
+                            "title": "Russian burnout notes",
+                            "project_label": "Journal",
+                            "updated_at": "2026-05-24T12:00:00Z",
+                            "keywords": ["рабочее давление", "burnout"],
+                            "summary": "Russian notes about work pressure and burnout.",
+                            "paths": {"workspace": str(self.root / "journal")},
+                        },
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        (registry_dir / "project_timeline.json").write_text(
+            json.dumps(
+                {
+                    "life_wide": {
+                        "labels": {
+                            "personal_reflection": {
+                                "latest_turns": [
+                                    {
+                                        "thread_key": "session:english-friction",
+                                        "scope_labels": ["personal_reflection"],
+                                        "topic_terms": ["workflow friction", "product pressure"],
+                                        "source_refs": [
+                                            {
+                                                "thread_key": "session:english-friction",
+                                                "source_line": 91,
+                                            }
+                                        ],
+                                    },
+                                    {
+                                        "thread_key": "session:russian-burnout",
+                                        "scope_labels": ["personal_reflection"],
+                                        "topic_terms": ["рабочее давление", "burnout"],
+                                        "source_refs": [
+                                            {
+                                                "thread_key": "session:russian-burnout",
+                                                "source_line": 52,
+                                            }
+                                        ],
+                                    },
+                                ]
+                            }
+                        }
+                    }
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        result = hook.assess_prompt(
+            "最近工作上那些摩擦和压力，我们后来怎么处理比较好？",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            use_semantic_gate=False,
+            search_budget=0,
+        )
+
+        self.assertEqual(result["decision"], "scent")
+        candidate_keys = [candidate["thread_key"] for candidate in result["candidates"]]
+        self.assertIn("session:english-friction", candidate_keys)
+        self.assertIn("session:russian-burnout", candidate_keys)
+        self.assertTrue(all(candidate["life_wide_timeline_source"] for candidate in result["candidates"][:2]))
+        self.assertEqual(result["evidence"], [])
+
     def test_vague_continuation_without_semantic_stays_silent_despite_overlap(self) -> None:
         registry_path = self._write_single_thread_registry(
             title="Python list.sort None",
