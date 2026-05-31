@@ -10,7 +10,8 @@ Related: [dream-task-design.md](dream-task-design.md) — 不 impose 叙事结�
 ## Implementation Status
 
 Current code implements the source-backed P1-P3 Journey core in
-`skills/aippocampus/scripts/journey_tracking.py`:
+`skills/aippocampus/scripts/aippocampus_runtime/journey/tracking.py`, with
+`journey_tracking.py` kept as the direct-script/import compatibility shim:
 
 - P1: `Waypoint`, `Journey`, and `JourneyFeedback` structures; append-only
   waypoint history; `traveling` / `camped` / `arrived` / `abandoned` states;
@@ -442,7 +443,7 @@ class JourneyFeedback:
 
 | 阶段 | 内容 | 依赖 | 工时 |
 |------|------|------|------|
-| P1 | Waypoint + Journey dataclass + 状态转移 + 过期 | fixture-backed waypoint candidates | implemented in `journey_tracking.py` |
+| P1 | Waypoint + Journey dataclass + 状态转移 + 过期 | fixture-backed waypoint candidates | implemented in `aippocampus_runtime.journey.tracking` |
 | P1a | 卦象深层结构验证（八卦分解 / 爻变语义 / 互错综一致性） | affect-side-channel 验证方法 | 0.5 天 |
 | P2 | Journey 实例化逻辑（≥3 thread + source-backed coherence gate） | P1 | implemented as fixture-backed equivalent |
 | P3 | current_frontier 生成（从最新 waypoint 推断） | P1 | implemented as deterministic navigation candidate |
