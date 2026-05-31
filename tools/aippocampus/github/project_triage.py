@@ -839,10 +839,10 @@ def main(argv: list[str] | None = None) -> int:
         results = []
         for item in items:
             current = item_field_values(item)
-            missing_fields = any(not current.get(field) for field in PROJECT_FIELDS)
+            has_missing_fields = any(not current.get(field) for field in PROJECT_FIELDS)
             if not args.all_missing and not args.repair_managed_fields:
                 continue
-            if not missing_fields and not args.repair_managed_fields:
+            if not has_missing_fields and not args.repair_managed_fields:
                 continue
             result = triage_item(
                 client,
@@ -853,7 +853,7 @@ def main(argv: list[str] | None = None) -> int:
                 fill_missing=args.all_missing,
                 repair_managed_fields=args.repair_managed_fields,
             )
-            if result["updates"] or (args.all_missing and missing_fields):
+            if result["updates"] or (args.all_missing and has_missing_fields):
                 results.append(result)
     else:
         raise RuntimeError("Pass --issue-number, --all-missing, or --repair-managed-fields.")
