@@ -254,6 +254,21 @@ Latest verification for this refresh:
   reached `mcp__aippocampus__memory_health` through Claude Code 2.1.138 with
   both `tool_use` and matching `tool_result` observed through a temporary strict
   MCP config.
+- Follow-up verification after PR #245 started from `main` commit `b6d3166`
+  after the #144 MCP package-owner migration. The first content-level
+  standalone JSON-RPC check caught a frozen-binary-only regression where
+  `tools/call:memory_health` tried to launch `sys.executable
+  aippocampus_health.py` and returned an MCP error. The MCP server now calls
+  the health entrypoint in-process, and the Windows package smoke matrix includes
+  a strict `mcp_memory_health_jsonrpc` check for `initialize`, `tools/list`, and
+  `tools/call:memory_health` with `tool_is_error=false`.
+- After that fix, the persistent local Claude Code MCP config reported
+  `status=reachable` for the script-backed `aippocampus` server. An isolated
+  temporary virtual environment installed PyInstaller 6.20.0, rebuilt
+  `aippocampus.exe`, passed all 8 artifact smoke specs, kept the private-data
+  guard clean, and then reached `mcp__aippocampus__memory_health` through Claude
+  Code 2.1.138 with both `tool_use` and matching `tool_result` observed through
+  a temporary strict MCP config using `aippocampus.exe mcp`.
 
 This refresh does not close #104. The post-migration encrypted provider sync
 smoke still needs a maintainer-provided real object-store provider target and

@@ -42,7 +42,7 @@ class CommandResult:
 
 
 COMMANDS = {
-    "health": CommandSpec("aippocampus_health.py", "aippocampus_health"),
+    "health": CommandSpec("aippocampus_health.py", "aippocampus_runtime.health"),
     "onboard": CommandSpec("onboard.py", "onboard"),
     "search": CommandSpec("search_clean_source.py", "search_clean_source"),
 }

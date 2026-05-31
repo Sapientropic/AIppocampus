@@ -167,18 +167,45 @@ class WindowsBinaryPackagingTests(unittest.TestCase):
 
                 class Proc:
                     returncode = 1 if command_args[:2] == ["sync", "status"] else 0
-                    stdout = (
-                        '{"ok":false,"manifest_exists":false}'
-                        if command_args[:2] == ["sync", "status"]
-                        else json.dumps({"ok": True, "path": str(repo)})
-                        if (
-                            "--json" in command_args
-                            or command_args[:2] == ["mcp", "list-tools"]
-                            or command_args[:2] == ["onboard", "--status"]
-                        )
-                        else "usage: aippocampus"
-                    )
+                    stdout = "usage: aippocampus"
                     stderr = ""
+
+                if command_args == ["mcp"]:
+                    responses = [
+                        {"jsonrpc": "2.0", "id": 1, "result": {"serverInfo": {"name": "aippocampus"}}},
+                        {
+                            "jsonrpc": "2.0",
+                            "id": 2,
+                            "result": {"tools": [{"name": "memory_health"}]},
+                        },
+                        {
+                            "jsonrpc": "2.0",
+                            "id": 3,
+                            "result": {
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": json.dumps(
+                                            {
+                                                "ok": False,
+                                                "recommended_actions": [],
+                                            }
+                                        ),
+                                    }
+                                ],
+                                "isError": False,
+                            },
+                        },
+                    ]
+                    Proc.stdout = "\n".join(json.dumps(item) for item in responses) + "\n"
+                elif command_args[:2] == ["sync", "status"]:
+                    Proc.stdout = '{"ok":false,"manifest_exists":false}'
+                elif (
+                    "--json" in command_args
+                    or command_args[:2] == ["mcp", "list-tools"]
+                    or command_args[:2] == ["onboard", "--status"]
+                ):
+                    Proc.stdout = json.dumps({"ok": True, "path": str(repo)})
 
                 return Proc()
 
@@ -193,6 +220,7 @@ class WindowsBinaryPackagingTests(unittest.TestCase):
                 "health_help",
                 "search_public_bundle",
                 "mcp_list_tools",
+                "mcp_memory_health_jsonrpc",
                 "onboard_status",
                 "sync_empty_status",
                 "hooks_status",
@@ -200,6 +228,7 @@ class WindowsBinaryPackagingTests(unittest.TestCase):
         )
         self.assertTrue(all(item["ok"] for item in smoke))
         self.assertEqual(smoke_by_name["sync_empty_status"]["expected_returncodes"], [1])
+        self.assertFalse(smoke_by_name["mcp_memory_health_jsonrpc"]["tool_is_error"])
         self.assertNotIn(str(repo), smoke_by_name["search_public_bundle"]["stdout_preview"])
 
 

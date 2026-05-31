@@ -4,14 +4,16 @@
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import os
-import subprocess
 import sys
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime import core
+from aippocampus_runtime import health as aippocampus_health
 from aippocampus_runtime.privacy import LOCAL_PATH_REDACTION, redact_private_paths
 from aippocampus_runtime.registry import api as registry
 from aippocampus_runtime.source import latest_reply as latest_reply_module
@@ -457,21 +459,26 @@ def call_sync_status(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def call_memory_health(arguments: dict[str, Any]) -> dict[str, Any]:
-    cmd = [
-        sys.executable,
-        str(SCRIPT_DIR / "aippocampus_health.py"),
-        "--cwd",
-        str(cwd_arg(arguments)),
-        "--json",
-    ]
-    proc = subprocess.run(
-        cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False
-    )
-    if proc.returncode != 0:
-        return tool_error(
-            "health_check_failed", (proc.stdout or proc.stderr).strip(), arguments=arguments
-        )
-    return text_result(public_payload(arguments, json.loads(proc.stdout)))
+    old_argv = sys.argv[:]
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    sys.argv = ["aippocampus_health.py", "--cwd", str(cwd_arg(arguments)), "--json"]
+    try:
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            returncode = aippocampus_health.main()
+    except Exception as exc:
+        return tool_error("health_check_failed", str(exc), arguments=arguments)
+    finally:
+        sys.argv = old_argv
+
+    output = stdout.getvalue()
+    if returncode != 0:
+        return tool_error("health_check_failed", (output or stderr.getvalue()).strip(), arguments=arguments)
+    try:
+        payload = json.loads(output)
+    except json.JSONDecodeError as exc:
+        return tool_error("health_check_failed", f"invalid health JSON: {exc}", arguments=arguments)
+    return text_result(public_payload(arguments, payload))
 
 
 TOOL_CALLS = {
