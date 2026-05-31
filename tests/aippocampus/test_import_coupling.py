@@ -2024,6 +2024,7 @@ class ImportCouplingTests(unittest.TestCase):
             SCRIPTS / "aippocampus_runtime" / "recall" / "ambient_cache.py",
             SCRIPTS / "aippocampus_runtime" / "recall" / "ambient_cards.py",
             SCRIPTS / "aippocampus_runtime" / "recall" / "ambient_policy.py",
+            SCRIPTS / "aippocampus_runtime" / "recall" / "fresh_thread_scent.py",
         ]
         shim_paths = [
             SCRIPTS / "ambient_thread_cache.py",
@@ -2039,11 +2040,20 @@ class ImportCouplingTests(unittest.TestCase):
         import ambient_recall_cards
         import ambient_recall_policy
         import ambient_thread_cache
-        from aippocampus_runtime.recall import ambient_cache, ambient_cards, ambient_policy
+        from aippocampus_runtime.recall import (
+            ambient_cache,
+            ambient_cards,
+            ambient_policy,
+            fresh_thread_scent,
+        )
 
         edges = same_dir_import_edges(top_level_only=True)
         self.assertIn(
             "aippocampus_runtime.recall.ambient_policy",
+            edges["aippocampus_runtime.recall.ambient_cards"],
+        )
+        self.assertIn(
+            "aippocampus_runtime.recall.fresh_thread_scent",
             edges["aippocampus_runtime.recall.ambient_cards"],
         )
         flat_ambient_modules = {
@@ -2070,6 +2080,7 @@ class ImportCouplingTests(unittest.TestCase):
             ambient_recall_policy.policy_update_for_prompt,
             ambient_policy.policy_update_for_prompt,
         )
+        self.assertIn("soft_hypothesis", fresh_thread_scent.SUPPORT_LEVELS)
 
     def test_prompt_recall_stack_has_package_owner_and_compat_shims(self) -> None:
         package_modules = {

@@ -29,6 +29,24 @@ text to paste into the final answer. `scent` and `candidate` cards are
 resonance only; only `evidence` cards may be treated as source-backed, and even
 then exact claims should be checked against clean source when they matter.
 
+`ambient_recall` also carries a `fresh_thread_packet` projected by
+`fresh_thread_scent.py`. This is the #282 contract that bridges the #281
+fresh-thread product goal with #277-style active recall locks, while leaving
+#284's agent-owned action policy for the next layer. The packet fields are:
+`support_level` (`silent_scent | soft_hypothesis | source_required |
+suppressed`), coarse `confidence`, `sensitivity`, `freshness`, `route_reason`,
+source-id-only `candidate_refs`, `suggested_action`, `when_not_to_use`, and a
+`source_boundary` block. The packet is navigation material until source is
+reopened. It must not contain raw prompts, raw snippets, secrets, local paths,
+or user-facing memory narration.
+
+Public-safe first-turn demo cues such as "我觉得压力好大", "帮我妈妈挑个礼物",
+"我想建个网站", and a fresh coding workspace with no `AGENTS.md` may produce
+`soft_hypothesis` or `silent_scent` packets, depending on confidence and
+candidate refs. They must not become first-turn private-history dumps. Specific
+memory-backed claims require `source_reopen`; broad, sensitive, stale, or
+superseded cues should stay `silent_scent` or `suppressed`.
+
 When the hook receives a thread/session id, `ambient_thread_cache.py` may store
 up to a few compact cards under a hashed `thread_id + workspace + topic_epoch`
 key. The cache is a soft working surface: it expires, records source-ref
