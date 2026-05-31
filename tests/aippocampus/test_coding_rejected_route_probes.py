@@ -13,7 +13,7 @@ sys.path.insert(0, str(TESTS))
 sys.path.insert(0, str(SCRIPTS))
 
 import coding_decision_events as decisions  # noqa: E402
-import coding_rejected_route_probes as probes  # noqa: E402
+from aippocampus_runtime.coding import rejected_route_probes as probes  # noqa: E402
 
 
 def message(*, text: str, line: int, message_id: str = "m1") -> dict[str, object]:

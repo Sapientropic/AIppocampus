@@ -7,8 +7,10 @@ It is the evidence companion for GitHub issue #172.
 
 Related implementation surfaces:
 
-- #167 / `skills/aippocampus/scripts/coding_rejected_route_probes.py` covers
-  source-backed rejected-route Dream retrospective fixtures.
+- #167 / `aippocampus_runtime.coding.rejected_route_probes` covers
+  source-backed rejected-route Dream retrospective fixtures; the top-level
+  `skills/aippocampus/scripts/coding_rejected_route_probes.py` path remains a
+  compatibility shim.
 - #169 / `benchmarks/aippocampus/benchmark_coding_decision_shadow.py` covers
   deterministic coding decision-shadow Tracks A-E.
 - #171 / `benchmarks/aippocampus/benchmark_suite.py --profile public-fast`

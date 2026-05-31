@@ -214,6 +214,7 @@ files = [
     "skills/aippocampus/scripts/coding_ticket_host_contract.py",
     "skills/aippocampus/scripts/aippocampus_runtime/coding/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/coding/host_contract.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/coding/rejected_route_probes.py",
     "skills/aippocampus/scripts/coding_rejected_route_probes.py",
     "skills/aippocampus/scripts/compensatory_dream.py",
     "skills/aippocampus/scripts/conversation_sources/__init__.py",
