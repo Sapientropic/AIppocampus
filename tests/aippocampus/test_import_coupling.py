@@ -1893,6 +1893,47 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(search_rollout.auto_index_path, rollout_search.auto_index_path)
         self.assertIs(search_segments.merge_topk, segment_search.merge_topk)
 
+    def test_rebuildable_index_builders_have_package_owner_and_compat_shims(self) -> None:
+        import build_index
+        import build_segments
+        from aippocampus_runtime.recall import index_builder, segment_builder
+
+        package_paths = [
+            SCRIPTS / "aippocampus_runtime" / "recall" / "index_builder.py",
+            SCRIPTS / "aippocampus_runtime" / "recall" / "segment_builder.py",
+        ]
+        shim_paths = [
+            SCRIPTS / "build_index.py",
+            SCRIPTS / "build_segments.py",
+        ]
+
+        for path in package_paths + shim_paths:
+            self.assertTrue(path.exists(), path)
+        for path in shim_paths:
+            self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+
+        edges = same_dir_import_edges()
+        self.assertIn("aippocampus_runtime.recall.index_builder", edges["build_index"])
+        self.assertIn("aippocampus_runtime.recall.segment_builder", edges["build_segments"])
+        self.assertIn(
+            "aippocampus_runtime.recall.index_builder",
+            edges["aippocampus_runtime.recall.segment_builder"],
+        )
+        for package_module in [
+            "aippocampus_runtime.recall.index_builder",
+            "aippocampus_runtime.recall.segment_builder",
+        ]:
+            self.assertIn("aippocampus_runtime.core", edges[package_module])
+            self.assertNotIn("aippocampuslib", edges[package_module])
+            self.assertNotIn("build_index", edges[package_module])
+            self.assertNotIn("build_segments", edges[package_module])
+
+        self.assertIs(build_index.make_sqlite, index_builder.make_sqlite)
+        self.assertIs(build_index.main, index_builder.main)
+        self.assertIs(build_segments.segment_groups, segment_builder.segment_groups)
+        self.assertIs(build_segments.make_sqlite, index_builder.make_sqlite)
+        self.assertIs(build_segments.main, segment_builder.main)
+
     def test_ambient_recall_helpers_have_package_owner_and_compat_shims(self) -> None:
         package_paths = [
             SCRIPTS / "aippocampus_runtime" / "recall" / "ambient_cache.py",
@@ -2248,8 +2289,8 @@ class ImportCouplingTests(unittest.TestCase):
         for source in [
             "aippocampus_runtime.health",
             "aippocampus_runtime.sync.bundle",
-            "build_index",
-            "build_segments",
+            "aippocampus_runtime.recall.index_builder",
+            "aippocampus_runtime.recall.segment_builder",
             "import_bundle",
             "aippocampus_runtime.registry.api",
             "aippocampus_runtime.recall.rollout_search",

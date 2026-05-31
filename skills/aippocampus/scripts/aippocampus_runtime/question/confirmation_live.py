@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
+from aippocampus_runtime.core import compact_text, now_utc
 from aippocampus_runtime.model.client import (
     DEEPSEEK_PREFIX_CACHE_CONTRACT,
     NO_PROVIDER_CACHE_CONTRACT,
@@ -34,7 +35,6 @@ from aippocampus_runtime.question.confirmation import (
     iter_confirmation_jsonl,
 )
 from aippocampus_runtime.question.tracking import default_jobs_path
-from aippocampus_runtime.core import compact_text, now_utc
 
 SCHEMA_VERSION = 1
 PROMPT_VERSION = "aippocampus-question-confirmation-live-v1"

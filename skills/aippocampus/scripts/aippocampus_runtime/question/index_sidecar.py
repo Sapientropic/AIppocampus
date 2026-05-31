@@ -18,6 +18,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
+from aippocampus_runtime.core import (
+    cli_error_payload,
+    cli_exit_code_for_error_code,
+    compact_text,
+    now_utc,
+)
 from aippocampus_runtime.question.source_refs import build_source_ref_index, source_ref_key
 from aippocampus_runtime.question.tracking import (
     DEFAULT_STRONG_THRESHOLD,
@@ -29,12 +35,6 @@ from aippocampus_runtime.question.tracking import (
     default_registry_path,
     load_tracking_inputs,
     pair_is_trackable,
-)
-from aippocampus_runtime.core import (
-    cli_error_payload,
-    cli_exit_code_for_error_code,
-    compact_text,
-    now_utc,
 )
 from aippocampus_runtime.registry.api import unique_preserve
 
