@@ -19,6 +19,7 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 import diagnose_hooks as diagnose  # noqa: E402
+from aippocampus_runtime.hooks import diagnose as packaged_diagnose  # noqa: E402
 
 
 class HookDiagnosticsTests(unittest.TestCase):
@@ -28,6 +29,11 @@ class HookDiagnosticsTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
+
+    def test_top_level_script_is_compatibility_shim_for_package_owner(self) -> None:
+        self.assertIs(diagnose.diagnose, packaged_diagnose.diagnose)
+        self.assertIs(diagnose.script_paths_from_command, packaged_diagnose.script_paths_from_command)
+        self.assertIs(diagnose.main, packaged_diagnose.main)
 
     def test_script_paths_from_windows_hook_command(self) -> None:
         command = r'& "python.exe" "skills\aippocampus\scripts\aippocampus_prompt_hook.py"'

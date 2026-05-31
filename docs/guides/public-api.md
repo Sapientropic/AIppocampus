@@ -47,16 +47,17 @@ The public API does not include every helper module or every script under
 
 The CLI contract applies to documented operator commands, especially:
 
-- `aippocampus health|search|onboard|mcp|sync|object-sync|hooks`
+- `aippocampus health|search|onboard|export|import|mcp|sync|object-sync|hooks`
 - `aippocampus_health.py`
 - `search_clean_source.py`
 - `latest_reply.py` as a Codex raw-rollout audit compatibility command
 - `onboard.py --provider codex|claude-code|generic-jsonl|auto`
 - `onboard_codex.py`
 - `aippocampus_mcp_server.py --list-tools`
+- `export_bundle.py` / `import_bundle.py`
 - `sync_bundle.py status|push|pull|repair`
 - `sync_object_storage.py status|push|pull|repair`
-- `encrypted_sync_admin.py key|migrate-to-encrypted|cleanup-plaintext|migrate-object-to-encrypted|cleanup-object-plaintext`
+- `aippocampus_runtime.sync.encrypted.admin` package bridge and the `encrypted_sync_admin.py` direct command: `key|migrate-to-encrypted|cleanup-plaintext|migrate-object-to-encrypted|cleanup-object-plaintext`
 - `install_aippocampus_prompt_hook.py status|install|uninstall`
 - `install_aippocampus_lifecycle_hook.py status|install|uninstall`
 - `plugins/aippocampus/build_plugin_package.py`
@@ -71,6 +72,12 @@ The onboarding scripts are direct-path compatibility shims over
 `aippocampus_runtime.onboarding.*` package owners. Keep invoking documented
 script paths from installs and older automation; Python/runtime callers should
 import the package owners.
+
+The portable bundle scripts are direct-path compatibility shims over
+`aippocampus_runtime.artifacts.export_bundle` and
+`aippocampus_runtime.artifacts.import_bundle`. Python callers should prefer
+those package owners or the `aippocampus export` / `aippocampus import` facade
+commands when they need captureable in-process execution.
 
 For these commands:
 

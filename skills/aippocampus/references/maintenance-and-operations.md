@@ -59,9 +59,12 @@ Writer coordination entrypoints:
   content-addressed clean source by default; `sync_bundle.py` remains the
   direct-script compatibility shim. Generated SQLite, pointer files, and
   versioned caches are not portable source files.
-- `export_bundle.py` / `import_bundle.py`: explicit portable bundle path; export
-  may include generated index files inside the bundle, and import reports both
-  the stable search path and the pointer-resolved current SQLite path.
+- `aippocampus_runtime.artifacts.export_bundle` /
+  `aippocampus_runtime.artifacts.import_bundle`, with `export_bundle.py` /
+  `import_bundle.py` as compatibility shims: explicit portable bundle path;
+  export may include generated index files inside the bundle, and import
+  reports both the stable search path and the pointer-resolved current SQLite
+  path.
 
 ## Checkpoints And Anchors
 
@@ -180,8 +183,8 @@ Audit and archive commands:
 - `python tools\aippocampus\smoke\smoke_synthetic_scale_capacity.py --json`
 - `python ...\retention_report.py --cwd "$PWD" --write`
 - `python ...\cold_archive.py --cwd "$PWD"`
-- `python ...\export_bundle.py --cwd "$PWD"`
-- `python ...\import_bundle.py "<bundle.zip>"`
+- `aippocampus export --cwd "$PWD"` or `python ...\export_bundle.py --cwd "$PWD"`
+- `aippocampus import "<bundle.zip>"` or `python ...\import_bundle.py "<bundle.zip>"`
 
 Graph and vault commands:
 

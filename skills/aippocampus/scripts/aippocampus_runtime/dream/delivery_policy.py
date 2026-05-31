@@ -81,7 +81,7 @@ def prepare_dream_delivery(
             "reason": "delivery_disabled",
         }
 
-    from dream_live_shadow_ab import (  # noqa: PLC0415
+    from aippocampus_runtime.dream.live_shadow_ab import (  # noqa: PLC0415
         ASSIGNMENT_PROMPT,
         ASSIGNMENT_THREAD_TOPIC_EPOCH,
         DELIVERY_DELIVERED,

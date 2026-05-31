@@ -15,7 +15,14 @@ import os
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.core import (
+    aippocampus_registry_dir,
+    compact_text,
+    deepseek_cache_metrics_from_usage,
+    sanitize_external_model_payload,
+)
 from aippocampus_runtime.model.routing import resolve_model_route
+from aippocampus_runtime.registry.api import load_registry
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
 from aippocampus_runtime.source.registry_paths import resolve_registry_member_path
 from aippocampus_runtime.source.semantic_scope_labels import (
@@ -28,17 +35,13 @@ from aippocampus_runtime.source.semantic_scope_labels import (
     label_evidence_min_confidence,
     semantic_scope_label_rows_from_findings,
 )
+from aippocampus_runtime.source.semantic_scope_source_review_core import (
+    LABEL_GUIDANCE,
+    parse_agent_action,
+)
 from aippocampus_runtime.subconscious.jobs import default_jobs_output_path
 from aippocampus_runtime.subconscious.runtime import add_usage, call_chat_json, compact_usage
 from aippocampus_runtime.subconscious.worker import DEFAULT_BASE_URL
-from aippocampuslib import (
-    aippocampus_registry_dir,
-    compact_text,
-    deepseek_cache_metrics_from_usage,
-    sanitize_external_model_payload,
-)
-from registry import load_registry
-from semantic_scope_source_review_core import LABEL_GUIDANCE, parse_agent_action
 
 PROMPT_KIND = "semantic_scope_suppressed_label_recovery"
 
