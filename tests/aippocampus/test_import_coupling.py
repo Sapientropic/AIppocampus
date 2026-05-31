@@ -376,6 +376,23 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(subconscious_worker.clamp_confidence, worker.clamp_confidence)
         self.assertIs(subconscious_worker.main, worker.main)
 
+    def test_subconscious_scheduler_has_package_owner_and_compat_shim(self) -> None:
+        import subconscious_scheduler
+        from aippocampus_runtime.subconscious import scheduler
+
+        package_path = SCRIPTS / "aippocampus_runtime" / "subconscious" / "scheduler.py"
+        shim_path = SCRIPTS / "subconscious_scheduler.py"
+
+        self.assertTrue(package_path.exists(), package_path)
+        self.assertTrue(shim_path.exists(), shim_path)
+        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+
+        self.assertIs(subconscious_scheduler.maybe_start, scheduler.maybe_start)
+        self.assertIs(subconscious_scheduler.run_due, scheduler.run_due)
+        self.assertIs(subconscious_scheduler.run_project, scheduler.run_project)
+        self.assertIs(subconscious_scheduler.main, scheduler.main)
+        self.assertEqual(scheduler.SCRIPT_DIR, SCRIPTS)
+
     def test_dream_delivery_policy_has_package_owner_and_compat_shim(self) -> None:
         import dream_delivery_policy
         from aippocampus_runtime.dream import delivery_policy

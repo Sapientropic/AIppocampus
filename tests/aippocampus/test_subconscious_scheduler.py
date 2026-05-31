@@ -22,7 +22,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import subconscious_scheduler as scheduler  # noqa: E402
+from aippocampus_runtime.subconscious import scheduler  # noqa: E402
 
 
 class SubconsciousSchedulerTests(unittest.TestCase):
