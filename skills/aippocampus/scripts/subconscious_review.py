@@ -19,6 +19,7 @@ from aippocampus_runtime.model.routing import (
     route_payload_with_effective_values,
     route_service_name,
 )
+from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.subconscious.job_validation import (
     estimate_finding_quality,
     finding_fingerprint,
@@ -42,7 +43,6 @@ from aippocampuslib import (
     sanitize_external_model_payload,
 )
 from registry import registry_paths, unique_preserve
-from retrieval import split_query_terms
 from subconscious_jobs import (
     PROMPT_VERSION as JOBS_PROMPT_VERSION,
 )

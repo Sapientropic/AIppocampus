@@ -265,9 +265,10 @@ These are internal, experimental, or best-effort unless promoted elsewhere:
 - Raw rollout envelopes and host-specific JSONL fields.
 - Generated SQLite, FTS, graph, semantic, cognitive-map, and benchmark cache
   files.
-- Internal retrieval score-fusion helpers such as
-  `retrieval_score_fusion.py`; their outputs are policy diagnostics and
-  ranking hints, not stable public schemas or source truth.
+- Internal retrieval helpers under `aippocampus_runtime.recall`, with flat
+  compatibility shims such as `retrieval_score_fusion.py`; their outputs are
+  policy diagnostics and ranking hints, not stable public schemas or source
+  truth.
 - Debug output, trace fields, timing metrics, and local absolute paths.
 - Research notes under `docs/research/`.
 - External provider pricing, rate limits, model IDs, and cache behavior.

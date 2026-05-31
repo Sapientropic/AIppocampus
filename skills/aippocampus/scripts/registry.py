@@ -694,7 +694,7 @@ def main() -> int:
         return 0
 
     if args.command == "search":
-        from retrieval import split_query_terms
+        from aippocampus_runtime.recall.query_policy import split_query_terms
 
         query_terms = split_query_terms(args.terms)
         search_budget = REGISTRY_SEARCH_DEEP_BUDGET if args.search_budget == "deep" else None

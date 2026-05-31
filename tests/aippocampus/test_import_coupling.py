@@ -857,7 +857,11 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIn("Compatibility shim", shim_file.read_text(encoding="utf-8"))
 
         edges = same_dir_import_edges(top_level_only=True)
-        for source in ["active_recall", "prompt_cues", "retrieval"]:
+        for source in [
+            "aippocampus_runtime.recall.active_recall",
+            "aippocampus_runtime.recall.retrieval",
+            "prompt_cues",
+        ]:
             self.assertIn("aippocampus_runtime.recall.life_cues", edges[source])
             self.assertNotIn("prompt_life_cues", edges[source])
 
@@ -865,6 +869,79 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(
             prompt_life_cues.LIFE_WIDE_SCOPE_LABEL_CUES,
             life_cues.LIFE_WIDE_SCOPE_LABEL_CUES,
+        )
+
+    def test_recall_runtime_core_has_package_owner_and_compat_shims(self) -> None:
+        package_paths = [
+            SCRIPTS / "aippocampus_runtime" / "recall" / "active_recall.py",
+            SCRIPTS / "aippocampus_runtime" / "recall" / "query_policy.py",
+            SCRIPTS / "aippocampus_runtime" / "recall" / "retrieval.py",
+            SCRIPTS / "aippocampus_runtime" / "recall" / "score_fusion.py",
+        ]
+        shim_paths = [
+            SCRIPTS / "active_recall.py",
+            SCRIPTS / "retrieval.py",
+            SCRIPTS / "retrieval_query_policy.py",
+            SCRIPTS / "retrieval_score_fusion.py",
+        ]
+
+        for path in package_paths + shim_paths:
+            self.assertTrue(path.exists(), path)
+        for path in shim_paths:
+            self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+
+        import active_recall
+        import retrieval
+        import retrieval_query_policy
+        import retrieval_score_fusion
+        from aippocampus_runtime.recall import (
+            active_recall as packaged_active_recall,
+        )
+        from aippocampus_runtime.recall import (
+            query_policy,
+            score_fusion,
+        )
+        from aippocampus_runtime.recall import (
+            retrieval as packaged_retrieval,
+        )
+
+        edges = same_dir_import_edges(top_level_only=True)
+        self.assertIn(
+            "aippocampus_runtime.recall.retrieval",
+            edges["aippocampus_runtime.recall.active_recall"],
+        )
+        self.assertIn(
+            "aippocampus_runtime.recall.query_policy",
+            edges["aippocampus_runtime.recall.retrieval"],
+        )
+        self.assertIn(
+            "aippocampus_runtime.recall.score_fusion",
+            edges["aippocampus_runtime.recall.retrieval"],
+        )
+
+        flat_recall_modules = {
+            "active_recall",
+            "retrieval",
+            "retrieval_query_policy",
+            "retrieval_score_fusion",
+            "prompt_life_cues",
+        }
+        offenders = {
+            source: sorted(targets & flat_recall_modules)
+            for source, targets in edges.items()
+            if source not in flat_recall_modules and targets & flat_recall_modules
+        }
+        self.assertEqual(offenders, {})
+
+        self.assertIs(
+            active_recall.active_recall_query_terms,
+            packaged_active_recall.active_recall_query_terms,
+        )
+        self.assertIs(retrieval.active_recall_decision, packaged_retrieval.active_recall_decision)
+        self.assertIs(retrieval_query_policy.split_query_terms, query_policy.split_query_terms)
+        self.assertIs(
+            retrieval_score_fusion.retrieval_text_score,
+            score_fusion.retrieval_text_score,
         )
 
     def test_subconscious_jobs_do_not_depend_on_agent_runner(self) -> None:

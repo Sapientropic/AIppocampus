@@ -11,7 +11,7 @@ from aippocampus_runtime.recall.life_cues import (
     LIFE_WIDE_SCOPE_LABEL_CUES,
     profile_recall_terms,
 )
-from retrieval import RECALL_TRIGGERS, split_query_terms
+from aippocampus_runtime.recall.query_policy import RECALL_TRIGGERS, split_query_terms
 
 CONCEPT_EXPANSION_MAX_TERMS = 14
 SEMANTIC_GATE_CUE_DECISIONS = {"scent", "evidence"}

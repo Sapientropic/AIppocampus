@@ -188,7 +188,11 @@ def deep_search_entry_result(
     # Registry search is imported by low-level registry glue. Keep retrieval as
     # a use-site dependency so search policy can evolve without an import-time
     # cycle between catalog bookkeeping and heavier recall execution.
-    from retrieval import expanded_terms_from_anchors, match_anchors, search_hybrid_index
+    from aippocampus_runtime.recall.retrieval import (
+        expanded_terms_from_anchors,
+        match_anchors,
+        search_hybrid_index,
+    )
 
     anchors_value = paths.get("anchors")
     anchors_path = Path(anchors_value) if anchors_value else None

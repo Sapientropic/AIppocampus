@@ -10,8 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from aippocampuslib import default_thread_segments_dir
-from retrieval import (
+from aippocampus_runtime.recall.retrieval import (
     expanded_terms_from_anchors,
     graph_neighbors,
     match_anchors,
@@ -19,6 +18,7 @@ from retrieval import (
     search_rag_chunks,
     split_query_terms,
 )
+from aippocampuslib import default_thread_segments_dir
 from search_rollout import auto_graph_path, resolve_anchor_path, search_index_literal
 
 SCRIPT_DIR = Path(__file__).resolve().parent

@@ -27,6 +27,7 @@ from aippocampus_runtime.model.routing import (
     route_payload_with_effective_values,
     route_service_name,
 )
+from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.subconscious.runtime import add_usage, call_chat_json, compact_usage
 from aippocampus_runtime.subconscious.worker import (
     DEFAULT_BASE_URL,
@@ -92,7 +93,6 @@ from ambient_thread_cache import (
     write_thread_cache,
 )
 from registry import load_registry, registry_paths, unique_preserve
-from retrieval import split_query_terms
 
 PROMPT_VERSION = "aippocampus-warm-ambient-recall-v0"
 SCHEMA_VERSION = 1

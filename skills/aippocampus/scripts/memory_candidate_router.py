@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampuslib import compact_text, now_utc
 from build_associations import (
     extract_terms_from_text,
@@ -32,7 +33,6 @@ from build_associations import (
     term_is_noise,
 )
 from registry import registry_paths, unique_preserve
-from retrieval import split_query_terms
 
 ROUTER_SCHEMA_VERSION = 1
 DEFAULT_CANDIDATES_NAME = "promotion_candidates.jsonl"

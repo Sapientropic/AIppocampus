@@ -13,10 +13,10 @@ from aippocampus_runtime.model.client import (
     ChatClientConfig,
     chat_json,
 )
+from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampuslib import compact_text
 from build_concept_graph import expand_concepts
 from registry import load_registry
-from retrieval import split_query_terms
 from search_clean_source import iter_clean_messages, score_message
 
 DEFAULT_MAX_STEPS = 16
