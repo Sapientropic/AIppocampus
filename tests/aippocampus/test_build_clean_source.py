@@ -19,7 +19,86 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 import build_clean_source as clean_source  # noqa: E402
-from conversation_sources import GenericConversationProvider  # noqa: E402
+from conversation_sources import ConversationSourceRef, GenericConversationProvider  # noqa: E402
+
+
+class MemoryConversationProvider:
+    name = "memory-test"
+
+    def __init__(self, path: Path, cwd: Path) -> None:
+        self.path = path
+        self.cwd = cwd
+
+    def discover_sessions(self):
+        return [ConversationSourceRef(provider=self.name, path=self.path, session_id="port-session")]
+
+    def locate_current(self, cwd: str | Path, *, latest: bool = False) -> ConversationSourceRef:
+        del cwd, latest
+        return ConversationSourceRef(
+            provider=self.name,
+            path=self.path,
+            session_id="port-session",
+            cwd=self.cwd,
+        )
+
+    def read_metadata(self, source: str | Path | ConversationSourceRef) -> dict:
+        del source
+        return {"id": "port-session", "cwd": str(self.cwd)}
+
+    def thread_key(self, source: str | Path | ConversationSourceRef, meta: dict | None = None) -> str:
+        del source, meta
+        return "memory-test:session:port-session"
+
+    def read_normalized_messages(
+        self,
+        source: str | Path | ConversationSourceRef,
+        *,
+        include_tools: bool = False,
+    ) -> tuple[list[dict], list[dict]]:
+        del source, include_tools
+        messages = [
+            {
+                "line": 10,
+                "timestamp": "2026-05-31T01:00:00Z",
+                "role": "user",
+                "kind": "message",
+                "phase": "",
+                "turn_index": 1,
+                "is_final": False,
+                "raw_start_line": 10,
+                "raw_end_line": 10,
+                "source_ref": "memory-test:session:port-session#L10",
+                "provider_turn_id": "provider-turn-1",
+                "sha1": "u1",
+                "text": "Protocol ports must keep source evidence keys.",
+            },
+            {
+                "line": 11,
+                "timestamp": "2026-05-31T01:00:01Z",
+                "role": "assistant",
+                "kind": "message",
+                "phase": "final_answer",
+                "turn_index": 1,
+                "is_final": True,
+                "raw_start_line": 11,
+                "raw_end_line": 11,
+                "source_ref": "memory-test:session:port-session#L11",
+                "provider_turn_id": "provider-turn-1",
+                "sha1": "a1",
+                "text": "The clean source remains source backed.",
+            },
+        ]
+        turns = [
+            {
+                "id": 1,
+                "user_line": 10,
+                "final_line": 11,
+                "fallback_assistant_line": None,
+                "start_line": 10,
+                "end_line": 11,
+            }
+        ]
+        return messages, turns
 
 
 class BuildCleanSourceTests(unittest.TestCase):
@@ -338,6 +417,44 @@ class BuildCleanSourceTests(unittest.TestCase):
         ]
         self.assertEqual(messages[0]["source_ref"], "generic-jsonl:session:generic-clean#L1")
         self.assertEqual(messages[1]["source_ref"], "generic-jsonl:session:generic-clean#L2")
+
+    def test_protocol_provider_port_preserves_source_evidence_keys(self) -> None:
+        source = self.cwd / "memory-provider.jsonl"
+        source.write_text("placeholder for provider-owned source\n", encoding="utf-8")
+        provider = MemoryConversationProvider(source, self.cwd)
+
+        result = clean_source.build_clean_source(
+            self.cwd,
+            rollout=source,
+            output_dir=self.cwd / "memory-clean-source",
+            provider_name=provider.name,
+            provider=provider,
+        )
+
+        self.assertEqual(result["source_provider"], "memory-test")
+        self.assertEqual(result["source_thread_key"], "memory-test:session:port-session")
+        self.assertIn("source_ref", result["identity_policy"]["stable_join_keys"])
+        self.assertIn("message_id", result["identity_policy"]["stable_join_keys"])
+        messages = [
+            json.loads(line)
+            for line in Path(result["outputs"]["messages_jsonl"])
+            .read_text(encoding="utf-8")
+            .splitlines()
+        ]
+        turns = [
+            json.loads(line)
+            for line in Path(result["outputs"]["turns_jsonl"])
+            .read_text(encoding="utf-8")
+            .splitlines()
+        ]
+
+        self.assertEqual(messages[0]["source_ref"], "memory-test:session:port-session#L10")
+        self.assertEqual(messages[1]["source_ref"], "memory-test:session:port-session#L11")
+        self.assertEqual(messages[0]["source_id"], result["source_id"])
+        self.assertEqual(turns[0]["source_id"], result["source_id"])
+        self.assertEqual(turns[0]["user_message_id"], messages[0]["message_id"])
+        self.assertEqual(turns[0]["assistant_message_id"], messages[1]["message_id"])
+        self.assertNotIn("truth", messages[0])
 
     def test_provider_thread_identity_keeps_source_id_stable_across_path_moves(self) -> None:
         rows = [
