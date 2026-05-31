@@ -246,11 +246,23 @@ def fresh_thread_action_from_packet(
     user_confirmed_theme = _context_flag(context, "user_confirmed_memory_theme")
     broad_or_sensitive_prompt = _context_flag(context, "broad_or_sensitive_prompt")
     allow_gentle_hypothesis = _context_flag(context, "allow_gentle_hypothesis")
+    route_suppressed_by_activation = _context_flag(context, "route_suppressed_by_activation")
+    prior_scent_without_new_anchor = _context_flag(context, "prior_scent_without_new_anchor")
 
     if support_level == "suppressed" or sensitivity == "suppress" or freshness == "superseded":
         return _base_result(
             action=IGNORE,
             reason="suppressed_or_superseded_packet",
+            packet=packet,
+            context=context,
+            active_recall_lock=active_recall_lock,
+            specific_memory_claim=False,
+        )
+
+    if route_suppressed_by_activation:
+        return _base_result(
+            action=IGNORE,
+            reason="activation_state_suppressed_route",
             packet=packet,
             context=context,
             active_recall_lock=active_recall_lock,
@@ -265,6 +277,16 @@ def fresh_thread_action_from_packet(
             context=context,
             active_recall_lock=active_recall_lock,
             specific_memory_claim=True,
+        )
+
+    if prior_scent_without_new_anchor and refs:
+        return _base_result(
+            action=USE_SILENTLY,
+            reason="activation_state_holds_prior_scent_internal",
+            packet=packet,
+            context=context,
+            active_recall_lock=active_recall_lock,
+            specific_memory_claim=specific_memory_claim,
         )
 
     if support_level == "source_required" and refs:
