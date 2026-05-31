@@ -32,6 +32,41 @@ class ActiveRecallTests(unittest.TestCase):
         self.assertIn("resume", search_terms)
         self.assertIn("LinkedIn", search_terms)
 
+    def test_life_wide_work_prompt_searches_with_stale_checkpoint_and_alias_terms(self) -> None:
+        prompt = "最近工作上那些摩擦和压力，我们后来怎么处理比较好？"
+        health = {
+            "index": {"stale": True},
+            "checkpoint": {"due": True},
+            "recommended_actions": [],
+        }
+
+        decision = retrieval.active_recall_decision(prompt, [], health)
+        query_terms = active_recall.active_recall_query_terms(prompt)
+        search_terms = active_recall.search_terms_from_query(query_terms, prompt)
+
+        self.assertEqual(decision["decision"], "search")
+        self.assertIn("life-wide recall cue", " ".join(decision["reasons"]))
+        self.assertIn("workflow friction", query_terms)
+        self.assertIn("work pressure", query_terms)
+        self.assertIn("burnout", query_terms)
+        self.assertIn("workflow friction", search_terms)
+        self.assertIn("work pressure", search_terms)
+
+    def test_recent_work_status_alone_does_not_become_life_wide_route(self) -> None:
+        prompt = "最近工作进度怎么样？"
+        health = {
+            "index": {"stale": False},
+            "checkpoint": {"due": False},
+            "recommended_actions": [],
+        }
+
+        decision = retrieval.active_recall_decision(prompt, [], health)
+        query_terms = active_recall.active_recall_query_terms(prompt)
+
+        self.assertEqual(decision["decision"], "skip")
+        self.assertNotIn("workflow friction", query_terms)
+        self.assertNotIn("work pressure", query_terms)
+
 
 if __name__ == "__main__":
     unittest.main()

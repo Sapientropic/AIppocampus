@@ -10,7 +10,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-from aippocampus_runtime.recall.life_cues import profile_recall_terms
+from aippocampus_runtime.recall.life_cues import (
+    life_wide_recall_terms,
+    profile_recall_terms,
+)
 from aippocampus_runtime.recall.retrieval import (
     active_recall_decision,
     expanded_terms_from_anchors,
@@ -81,7 +84,12 @@ def search_terms_from_query(query_terms: list[str], prompt: str) -> list[str]:
 
 
 def active_recall_query_terms(prompt: str) -> list[str]:
-    return unique_preserve(split_query_terms([prompt]) + profile_recall_terms(prompt), limit=32)
+    return unique_preserve(
+        split_query_terms([prompt])
+        + profile_recall_terms(prompt)
+        + life_wide_recall_terms(prompt),
+        limit=32,
+    )
 
 
 def main() -> int:
