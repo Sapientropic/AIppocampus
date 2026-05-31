@@ -16,8 +16,8 @@ from pathlib import Path
 from typing import Any
 
 import prompt_cues
+from aippocampus_runtime.recall.query_policy import CONCEPT_TRIGGERS
 from registry import deep_search_entry, entry_search_score, registry_paths, unique_preserve
-from retrieval import CONCEPT_TRIGGERS
 
 # Keep these assignments as compatibility re-exports for older installed hooks.
 # First-party code should import cue policy directly from `prompt_cues.py`; this

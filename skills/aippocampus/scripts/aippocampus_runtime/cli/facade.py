@@ -1,28 +1,123 @@
-"""Unified AIppocampus command facade over the existing script-first runtime."""
+"""Unified AIppocampus command facade over packaged runtime entrypoints."""
 
 from __future__ import annotations
 
 import argparse
-import subprocess
+import importlib
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
 
+@dataclass(frozen=True)
+class CommandSpec:
+    script_name: str
+    module_name: str
+    prefix: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class CommandInvocation:
+    command: str
+    script_name: str
+    module_name: str
+    args: list[str]
+
+
 COMMANDS = {
-    "health": ("aippocampus_health.py", ()),
-    "onboard": ("onboard.py", ()),
-    "search": ("search_clean_source.py", ()),
+    "health": CommandSpec("aippocampus_health.py", "aippocampus_health"),
+    "onboard": CommandSpec("onboard.py", "onboard"),
+    "search": CommandSpec("search_clean_source.py", "search_clean_source"),
+}
+
+SCRIPT_MODULES = {
+    spec.script_name: spec.module_name for spec in COMMANDS.values()
+} | {
+    "aippocampus_mcp_server.py": "aippocampus_mcp_server",
+    "sync_bundle.py": "sync_bundle",
+    "sync_object_storage.py": "sync_object_storage",
+    "install_aippocampus_prompt_hook.py": "install_aippocampus_prompt_hook",
+    "install_aippocampus_lifecycle_hook.py": "install_aippocampus_lifecycle_hook",
 }
 
 
+def module_name_for_script(script_name: str) -> str:
+    return SCRIPT_MODULES.get(script_name, Path(script_name).stem)
+
+
 def run_script(script_name: str, args: list[str]) -> int:
-    proc = subprocess.run(
-        [sys.executable, str(SCRIPT_DIR / script_name), *args],
-        text=False,
-        check=False,
+    return run_module_main(module_name_for_script(script_name), script_name, args)
+
+
+def run_module_main(module_name: str, script_name: str, args: list[str]) -> int:
+    module = importlib.import_module(module_name)
+    main_func = getattr(module, "main", None)
+    if not callable(main_func):
+        raise RuntimeError(f"module {module_name} has no callable main()")
+
+    old_argv = sys.argv[:]
+    sys.argv = [str(SCRIPT_DIR / script_name), *args]
+    try:
+        result = main_func()
+    except SystemExit as exc:
+        code = exc.code
+        if code is None:
+            return 0
+        if isinstance(code, int):
+            return code
+        print(code, file=sys.stderr)
+        return 1
+    finally:
+        sys.argv = old_argv
+    return int(result or 0)
+
+
+def invocation_from_spec(command: str, spec: CommandSpec, rest: list[str]) -> CommandInvocation:
+    return CommandInvocation(
+        command=command,
+        script_name=spec.script_name,
+        module_name=spec.module_name,
+        args=[*spec.prefix, *rest],
     )
-    return int(proc.returncode)
+
+
+def resolve_command(argv: list[str]) -> CommandInvocation | None:
+    if not argv:
+        return None
+    command, rest = argv[0], argv[1:]
+    if command in COMMANDS:
+        return invocation_from_spec(command, COMMANDS[command], rest)
+    if command == "mcp":
+        args = ["--list-tools", *rest[1:]] if rest and rest[0] == "list-tools" else rest
+        return CommandInvocation(
+            command=command,
+            script_name="aippocampus_mcp_server.py",
+            module_name="aippocampus_mcp_server",
+            args=args,
+        )
+    if command == "sync":
+        return CommandInvocation(command, "sync_bundle.py", "sync_bundle", rest)
+    if command == "object-sync":
+        return CommandInvocation(
+            command, "sync_object_storage.py", "sync_object_storage", rest
+        )
+    if command == "hooks":
+        hook_kind = "prompt"
+        hook_args = list(rest)
+        if hook_args and hook_args[0] in {"prompt", "lifecycle"}:
+            hook_kind = hook_args.pop(0)
+        script = (
+            "install_aippocampus_lifecycle_hook.py"
+            if hook_kind == "lifecycle"
+            else "install_aippocampus_prompt_hook.py"
+        )
+        return CommandInvocation(command, script, module_name_for_script(script), hook_args)
+    return None
+
+
+def run_invocation(invocation: CommandInvocation) -> int:
+    return run_script(invocation.script_name, invocation.args)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -30,38 +125,21 @@ def main(argv: list[str] | None = None) -> int:
     if not args or args[0] in {"-h", "--help"}:
         print_help()
         return 0
-    command, rest = args[0], args[1:]
 
-    if command in COMMANDS:
-        script_name, prefix = COMMANDS[command]
-        return run_script(script_name, [*prefix, *rest])
-    if command == "mcp":
-        if rest and rest[0] == "list-tools":
-            return run_script("aippocampus_mcp_server.py", ["--list-tools", *rest[1:]])
-        return run_script("aippocampus_mcp_server.py", rest)
-    if command == "sync":
-        return run_script("sync_bundle.py", rest)
-    if command == "object-sync":
-        return run_script("sync_object_storage.py", rest)
-    if command == "hooks":
-        return run_hooks(rest)
+    invocation = resolve_command(args)
+    if invocation is not None:
+        return run_invocation(invocation)
 
-    print(f"unknown command: {command}", file=sys.stderr)
+    print(f"unknown command: {args[0]}", file=sys.stderr)
     print_help(file=sys.stderr)
     return 2
 
 
 def run_hooks(args: list[str]) -> int:
-    hook_kind = "prompt"
-    rest = list(args)
-    if rest and rest[0] in {"prompt", "lifecycle"}:
-        hook_kind = rest.pop(0)
-    script = (
-        "install_aippocampus_lifecycle_hook.py"
-        if hook_kind == "lifecycle"
-        else "install_aippocampus_prompt_hook.py"
-    )
-    return run_script(script, rest)
+    invocation = resolve_command(["hooks", *args])
+    if invocation is None:
+        return 2
+    return run_invocation(invocation)
 
 
 def print_help(*, file=sys.stdout) -> None:
@@ -81,9 +159,8 @@ def print_help(*, file=sys.stdout) -> None:
     print("  object-sync         Object-storage sync status/push/pull/repair", file=file)
     print("  hooks [kind]        Prompt or lifecycle hook status/install/uninstall", file=file)
     print("", file=file)
-    print("All commands delegate to existing scripts and preserve their output and exit code.", file=file)
+    print("All commands run packaged entrypoints and preserve their output and exit code.", file=file)
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

@@ -13,11 +13,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ambient_recall_policy import (
+from aippocampus_runtime.recall.ambient_policy import (
     apply_working_memory_policy,
     default_ambient_policy_path,
     load_policy_events,
 )
+from aippocampus_runtime.recall.query_policy import CONCEPT_TRIGGERS, semantic_trigger_terms
 from build_associations import (
     default_associations_path,
     load_associations,
@@ -51,8 +52,6 @@ from prompt_recall_core import (
     registry_json_path,
 )
 from registry import load_registry
-from retrieval import CONCEPT_TRIGGERS
-from retrieval_query_policy import semantic_trigger_terms
 from semantic_cue_cache import default_semantic_cues_path
 from semantic_recall_gate import default_semantic_triggers_path, prompt_relevant_triggers
 

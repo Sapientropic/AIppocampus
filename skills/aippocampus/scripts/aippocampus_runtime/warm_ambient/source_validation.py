@@ -14,14 +14,14 @@ import re
 from pathlib import Path
 from typing import Any
 
-from aippocampuslib import compact_text, sanitize_external_model_text
-from ambient_recall_cards import (
+from aippocampus_runtime.recall.ambient_cards import (
     ACTIVE_GENTLE_NUDGE,
     CANDIDATE,
     EVIDENCE,
     SOURCE_BACKED_RECALL_CARD,
 )
-from retrieval import split_query_terms
+from aippocampus_runtime.recall.query_policy import split_query_terms
+from aippocampuslib import compact_text, sanitize_external_model_text
 from search_clean_source import iter_clean_messages
 
 PROMPT_TRACE_BASE_STOPWORDS = {

@@ -14,10 +14,10 @@ import json
 from pathlib import Path
 from typing import Any, Iterable
 
+from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampuslib import compact_text, now_utc
 from build_associations import normalize_term, source_text_is_noise, term_is_noise
 from registry import load_registry, registry_paths, unique_preserve
-from retrieval import split_query_terms
 
 COGNITIVE_MAP_SCHEMA_VERSION = 1
 DEFAULT_COGNITIVE_MAP_NAME = "cognitive_map.json"

@@ -9,9 +9,9 @@ import os
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampuslib import compact_text, default_thread_clean_source_dir, resolve_artifact_path
 from build_clean_source import SCOPE_LABEL_ORDER
-from retrieval import split_query_terms
 from semantic_scope_labels import (
     load_semantic_scope_labels,
     merged_scope_labels,

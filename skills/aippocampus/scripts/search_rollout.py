@@ -12,9 +12,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from aippocampuslib import compact_text, default_thread_index_dir, iter_messages, locate_rollout
-from artifact_publish import index_pointer_path, resolve_sqlite_index_path
-from retrieval import (
+from aippocampus_runtime.recall.retrieval import (
     diversify_results,
     expanded_terms_from_anchors,
     graph_neighbors,
@@ -24,6 +22,8 @@ from retrieval import (
     search_rag_chunks,
     split_query_terms,
 )
+from aippocampuslib import compact_text, default_thread_index_dir, iter_messages, locate_rollout
+from artifact_publish import index_pointer_path, resolve_sqlite_index_path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 

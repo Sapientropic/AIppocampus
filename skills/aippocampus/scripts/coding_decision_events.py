@@ -15,6 +15,7 @@ import re
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
+from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampuslib import (
     cli_error_payload,
     cli_exit_code_for_error_code,
@@ -31,7 +32,6 @@ from correction_reconsolidation import (
 )
 from question_source_refs import source_ref_key
 from registry import unique_preserve
-from retrieval import split_query_terms
 
 SCHEMA_VERSION = 1
 PROMPT_VERSION = "aippocampus-coding-decision-events-v1"

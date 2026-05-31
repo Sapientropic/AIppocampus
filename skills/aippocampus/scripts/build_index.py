@@ -10,6 +10,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.recall.retrieval import build_rag_chunks
 from aippocampuslib import (
     build_anchor_graph,
     codex_home,
@@ -28,7 +29,6 @@ from artifact_publish import (
     unique_temp_sqlite_path,
 )
 from conversation_sources import create_conversation_provider
-from retrieval import build_rag_chunks
 
 
 def make_sqlite(

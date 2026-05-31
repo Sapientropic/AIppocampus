@@ -6,19 +6,19 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ambient_recall_cards import ambient_recall_from_decision
-from ambient_recall_policy import (
-    append_policy_events,
-    filter_ambient_cards,
-    load_policy_events,
-    surface_events_for_cards,
-)
-from ambient_thread_cache import (
+from aippocampus_runtime.recall.ambient_cache import (
     default_ambient_cache_path,
     read_latest_thread_cache,
     read_thread_cache,
     topic_epoch_from_terms,
     write_thread_cache,
+)
+from aippocampus_runtime.recall.ambient_cards import ambient_recall_from_decision
+from aippocampus_runtime.recall.ambient_policy import (
+    append_policy_events,
+    filter_ambient_cards,
+    load_policy_events,
+    surface_events_for_cards,
 )
 from ambient_warm_scheduler import (
     public_warm_schedule_status,

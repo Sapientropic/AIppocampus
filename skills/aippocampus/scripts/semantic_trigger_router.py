@@ -14,11 +14,11 @@ import json
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampuslib import compact_text, now_utc
 from build_associations import normalize_term, source_text_is_noise, term_is_noise
 from memory_candidate_router import default_candidates_path, iter_jsonl, write_jsonl
 from registry import registry_paths, unique_preserve
-from retrieval import split_query_terms
 from semantic_recall_gate import default_semantic_triggers_path
 
 TRIGGER_SCHEMA_VERSION = 1

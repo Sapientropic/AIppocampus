@@ -27,6 +27,21 @@ from aippocampus_runtime.model.routing import (
     route_payload_with_effective_values,
     route_service_name,
 )
+from aippocampus_runtime.recall.ambient_cache import (
+    default_ambient_cache_path,
+    topic_epoch_from_terms,
+    write_thread_cache,
+)
+from aippocampus_runtime.recall.ambient_cards import (
+    ACTIVE_GENTLE_NUDGE,
+    CANDIDATE,
+    DEEP_ARCHIVAL_RECALL,
+    EVIDENCE,
+    SCENT,
+    SILENT_TUNING,
+    SOURCE_BACKED_RECALL_CARD,
+)
+from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.subconscious.runtime import add_usage, call_chat_json, compact_usage
 from aippocampus_runtime.subconscious.worker import (
     DEFAULT_BASE_URL,
@@ -77,22 +92,7 @@ from aippocampuslib import (
     sanitize_external_model_text,
     workspace_thread_key,
 )
-from ambient_recall_cards import (
-    ACTIVE_GENTLE_NUDGE,
-    CANDIDATE,
-    DEEP_ARCHIVAL_RECALL,
-    EVIDENCE,
-    SCENT,
-    SILENT_TUNING,
-    SOURCE_BACKED_RECALL_CARD,
-)
-from ambient_thread_cache import (
-    default_ambient_cache_path,
-    topic_epoch_from_terms,
-    write_thread_cache,
-)
 from registry import load_registry, registry_paths, unique_preserve
-from retrieval import split_query_terms
 
 PROMPT_VERSION = "aippocampus-warm-ambient-recall-v0"
 SCHEMA_VERSION = 1

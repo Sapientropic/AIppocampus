@@ -12,7 +12,8 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-from ambient_recall_policy import policy_update_for_prompt
+from aippocampus_runtime.recall.ambient_policy import policy_update_for_prompt
+from aippocampus_runtime.recall.query_policy import semantic_trigger_terms
 from build_concept_graph import expand_concepts
 from memory_candidate_router import strip_for_hook
 from prompt_cues import (
@@ -61,7 +62,6 @@ from prompt_recall_core import (
 from prompt_recall_evidence import collect_evidence, strip_private_fields, strip_semantic_gate
 from prompt_recall_semantic import run_semantic_gate_for_context
 from registry import unique_preserve
-from retrieval_query_policy import semantic_trigger_terms
 from semantic_cue_cache import default_semantic_cues_path, record_semantic_cue_hits
 
 

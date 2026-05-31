@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import sys
 import tempfile
-import types
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -12,6 +11,7 @@ SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import registry_search  # noqa: E402
+from aippocampus_runtime.recall import retrieval as retrieval_impl  # noqa: E402
 
 
 class RegistrySearchBudgetTests(unittest.TestCase):
@@ -27,9 +27,7 @@ class RegistrySearchBudgetTests(unittest.TestCase):
     def _entry(self) -> dict:
         return {"paths": {"sqlite": str(self.sqlite)}}
 
-    def _retrieval_module(self, captured: dict) -> types.ModuleType:
-        module = types.ModuleType("retrieval")
-
+    def _retrieval_replacements(self, captured: dict) -> dict:
         def match_anchors(anchors_path: Path | None, terms: list[str], limit: int) -> list[dict]:
             captured["anchor_limit"] = limit
             return []
@@ -73,15 +71,16 @@ class RegistrySearchBudgetTests(unittest.TestCase):
                 }
             ]
 
-        module.match_anchors = match_anchors
-        module.expanded_terms_from_anchors = expanded_terms_from_anchors
-        module.search_hybrid_index = search_hybrid_index
-        return module
+        return {
+            "match_anchors": match_anchors,
+            "expanded_terms_from_anchors": expanded_terms_from_anchors,
+            "search_hybrid_index": search_hybrid_index,
+        }
 
     def test_default_registry_search_budget_stays_bounded(self) -> None:
         captured: dict = {}
 
-        with patch.dict(sys.modules, {"retrieval": self._retrieval_module(captured)}):
+        with patch.multiple(retrieval_impl, **self._retrieval_replacements(captured)):
             result = registry_search.deep_search_entry_result(
                 self._entry(), ["needle"], max_hits=2
             )
@@ -106,7 +105,7 @@ class RegistrySearchBudgetTests(unittest.TestCase):
     def test_deep_registry_search_budget_can_request_more_context(self) -> None:
         captured: dict = {}
 
-        with patch.dict(sys.modules, {"retrieval": self._retrieval_module(captured)}):
+        with patch.multiple(retrieval_impl, **self._retrieval_replacements(captured)):
             registry_search.deep_search_entry_result(
                 self._entry(),
                 ["needle"],

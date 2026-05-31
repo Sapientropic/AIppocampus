@@ -5,7 +5,9 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
@@ -38,7 +40,32 @@ class AippocampusCliTests(unittest.TestCase):
 
         self.assertIs(aippocampus_cli.main, facade.main)
         self.assertIs(aippocampus_cli.run_script, facade.run_script)
+        self.assertIs(aippocampus_cli.resolve_command, facade.resolve_command)
+        self.assertIs(aippocampus_cli.CommandInvocation, facade.CommandInvocation)
         self.assertEqual(facade.SCRIPT_DIR, SCRIPTS)
+
+    def test_package_facade_resolves_commands_without_running_child_processes(self) -> None:
+        from aippocampus_runtime.cli import facade
+
+        invocation = facade.resolve_command(["mcp", "list-tools", "--json"])
+
+        self.assertEqual(invocation.command, "mcp")
+        self.assertEqual(invocation.module_name, "aippocampus_mcp_server")
+        self.assertEqual(invocation.script_name, "aippocampus_mcp_server.py")
+        self.assertEqual(invocation.args, ["--list-tools", "--json"])
+
+    def test_package_facade_default_runner_is_in_process(self) -> None:
+        from aippocampus_runtime.cli import facade
+
+        with (
+            patch("subprocess.run", side_effect=AssertionError("facade should not spawn")),
+            patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = facade.main(["mcp", "list-tools"])
+
+        self.assertEqual(code, 0)
+        tools = json.loads(stdout.getvalue())["tools"]
+        self.assertTrue(any(tool["name"] == "search_memory" for tool in tools))
 
     def test_mcp_list_tools_preserves_json_stdout(self) -> None:
         proc = self.run_cli("mcp", "list-tools")
