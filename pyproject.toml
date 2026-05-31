@@ -228,6 +228,7 @@ files = [
     "skills/aippocampus/scripts/dream_live_shadow_ab.py",
     "skills/aippocampus/scripts/aippocampus_runtime/dream/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/dream/delivery_policy.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/dream/precision_policy.py",
     "skills/aippocampus/scripts/aippocampus_runtime/dream/worker_contract.py",
     "skills/aippocampus/scripts/dream_one_sidedness.py",
     "skills/aippocampus/scripts/dream_precision_policy.py",
