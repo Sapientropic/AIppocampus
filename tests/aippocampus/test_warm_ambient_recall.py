@@ -1726,12 +1726,14 @@ class WarmAmbientRecallTests(unittest.TestCase):
 
     def test_scheduler_writes_sanitized_detached_job_without_raw_prompt(self) -> None:
         local_path = "E:" + "\\private\\notes\\ambient.md"
+        lock_path = self.root / "active_recall_locks.json"
         result = warm_scheduler.schedule_warm_ambient_recall(
             f"继续 {local_path} 里的 ambient recall 方案",
             cwd=self.workspace,
             thread_id="thread-a",
             registry_path=self.root / "registry" / "threads.json",
             cache_path=self.cache_path,
+            lock_path=lock_path,
             topic_epoch="epoch-test",
             job_dir=self.root / "warm-jobs",
             spawn=False,
@@ -1747,6 +1749,9 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(job["topic_epoch"], "epoch-test")
         self.assertTrue(job["wait_all"])
         self.assertFalse(job["no_write"])
+        self.assertEqual(result["lock_state"], "pending")
+        self.assertEqual(job["lock_id"], result["lock_id"])
+        self.assertNotIn("private", lock_path.read_text(encoding="utf-8").casefold())
         self.assertGreaterEqual(job["prefix_cache_warmup_scouts"], 1)
         self.assertGreater(job["prefix_cache_warmup_delay"], 0)
         self.assertIn("<redacted:local-path>", job["prompt"])
@@ -1755,11 +1760,13 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertNotIn("ambient.md", job["prompt"].casefold())
 
     def test_detached_job_waits_all_and_writes_late_scout_results_to_cache(self) -> None:
+        lock_path = self.root / "active_recall_locks.json"
         job_result = warm_scheduler.schedule_warm_ambient_recall(
             "继续 ambient recall late cache",
             cwd=self.workspace,
             thread_id="thread-a",
             cache_path=self.cache_path,
+            lock_path=lock_path,
             topic_epoch="epoch-test",
             job_dir=self.root / "warm-jobs",
             spawn=False,
@@ -1806,6 +1813,8 @@ class WarmAmbientRecallTests(unittest.TestCase):
         themes = [card["theme"] for card in cache_cards]
 
         self.assertEqual(summary["status"], "written")
+        self.assertEqual(summary["active_recall_lock"]["state"], "ready")
+        self.assertEqual(summary["active_recall_lock"]["support_level"], "scent")
         self.assertEqual(summary["observed_scout_result_count"], 2)
         self.assertEqual(summary["accepted_scout_count"], 2)
         self.assertNotIn("cards", summary)

@@ -3495,6 +3495,32 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertEqual(result["ambient_recall"]["warm_background"]["status"], "queued")
         self.assertEqual(result["ambient_recall"]["warm_background"]["job_id"], "job-test")
 
+    def test_prompt_hook_creates_navigation_only_active_recall_lock(self) -> None:
+        cache_path = self.root / "ambient-cache-lock.json"
+        raw_prompt = "hook 机制就像人类的触发式联想，DO NOT STORE THIS PROMPT"
+
+        result = hook.assess_prompt(
+            raw_prompt,
+            cwd=self.workspace,
+            registry_path=self.registry,
+            thread_id="thread-a",
+            topic_epoch="epoch-lock",
+            ambient_cache_path=cache_path,
+            warm_background=False,
+            search_budget=0,
+        )
+        lock_path = cache_path.parent / "active_recall_locks.json"
+        raw_lock = lock_path.read_text(encoding="utf-8")
+        lock = result["ambient_recall"]["active_recall_lock"]
+
+        self.assertEqual(result["decision"], "scent")
+        self.assertIn(lock["state"], {"pending", "ready"})
+        self.assertEqual(lock["support_level"], "scent")
+        self.assertTrue(lock["source_reopen_required"])
+        self.assertNotIn("DO NOT STORE THIS PROMPT", raw_lock)
+        self.assertNotIn(str(self.workspace).replace("\\", "/"), raw_lock.replace("\\", "/"))
+        self.assertNotIn("snippet", raw_lock.casefold())
+
     def test_prompt_hook_prioritizes_warm_thread_cache_and_exposes_metadata(self) -> None:
         cache_path = self.root / "ambient-cache.json"
         thread_cache.write_thread_cache(

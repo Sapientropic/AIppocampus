@@ -1892,6 +1892,7 @@ class ImportCouplingTests(unittest.TestCase):
     def test_recall_runtime_core_has_package_owner_and_compat_shims(self) -> None:
         package_paths = [
             SCRIPTS / "aippocampus_runtime" / "recall" / "active_recall.py",
+            SCRIPTS / "aippocampus_runtime" / "recall" / "active_recall_lock.py",
             SCRIPTS / "aippocampus_runtime" / "recall" / "query_policy.py",
             SCRIPTS / "aippocampus_runtime" / "recall" / "retrieval.py",
             SCRIPTS / "aippocampus_runtime" / "recall" / "rollout_search.py",
@@ -1922,6 +1923,7 @@ class ImportCouplingTests(unittest.TestCase):
             active_recall as packaged_active_recall,
         )
         from aippocampus_runtime.recall import (
+            active_recall_lock,
             query_policy,
             rollout_search,
             score_fusion,
@@ -1934,6 +1936,10 @@ class ImportCouplingTests(unittest.TestCase):
         edges = same_dir_import_edges(top_level_only=True)
         self.assertIn(
             "aippocampus_runtime.recall.retrieval",
+            edges["aippocampus_runtime.recall.active_recall"],
+        )
+        self.assertIn(
+            "aippocampus_runtime.recall.active_recall_lock",
             edges["aippocampus_runtime.recall.active_recall"],
         )
         self.assertIn(
@@ -1969,6 +1975,7 @@ class ImportCouplingTests(unittest.TestCase):
             active_recall.active_recall_query_terms,
             packaged_active_recall.active_recall_query_terms,
         )
+        self.assertTrue(active_recall_lock.DEFAULT_LOCK_NAME.endswith(".json"))
         self.assertIs(retrieval.active_recall_decision, packaged_retrieval.active_recall_decision)
         self.assertIs(retrieval_query_policy.split_query_terms, query_policy.split_query_terms)
         self.assertIs(

@@ -84,6 +84,15 @@ would change the answer, plan, or action. Any specific memory-backed claim still
 requires clean-source reopen; scent packets, route reasons, locks, aliases, and
 candidate refs are not enough.
 
+The runtime owner is `aippocampus_runtime.recall.active_recall_lock`. Lock
+artifacts live beside the ambient thread cache as `active_recall_locks.json`.
+They store prompt/workspace/thread fingerprints, topic epoch, registry freshness,
+candidate refs, aliases, route reasons, conflict flags, TTL, and diagnostics.
+They must not store raw prompts, raw source snippets, absolute workspace paths,
+or model-generated factual claims. `active_recall.py --mode probe|read` returns
+only scent/navigation data; `--mode reopen` is the source-backed step that opens
+clean source by lock id.
+
 `fresh_thread_activation.py` owns the #283 progressive activation overlay that
 keeps a scent from haunting later turns. It produces a compact
 `fresh_thread_activation_state` snapshot for one `thread + workspace +
