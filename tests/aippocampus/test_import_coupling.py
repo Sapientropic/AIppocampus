@@ -559,6 +559,7 @@ class ImportCouplingTests(unittest.TestCase):
 
         package_paths = [
             SCRIPTS / "aippocampus_runtime" / "sync" / "encrypted" / "__init__.py",
+            SCRIPTS / "aippocampus_runtime" / "sync" / "encrypted" / "admin.py",
             SCRIPTS / "aippocampus_runtime" / "sync" / "encrypted" / "bundle.py",
             SCRIPTS / "aippocampus_runtime" / "sync" / "encrypted" / "crypto.py",
             SCRIPTS / "aippocampus_runtime" / "sync" / "encrypted" / "keys.py",
@@ -566,6 +567,7 @@ class ImportCouplingTests(unittest.TestCase):
             SCRIPTS / "aippocampus_runtime" / "sync" / "encrypted" / "object_storage.py",
         ]
         shim_paths = [
+            SCRIPTS / "encrypted_sync_admin.py",
             SCRIPTS / "encrypted_sync_bundle.py",
             SCRIPTS / "encrypted_sync_crypto.py",
             SCRIPTS / "encrypted_sync_keys.py",
@@ -579,10 +581,12 @@ class ImportCouplingTests(unittest.TestCase):
             self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
 
         edges = same_dir_import_edges(top_level_only=True)
-        self.assertIn("aippocampus_runtime.sync.encrypted.keys", edges["encrypted_sync_admin"])
-        self.assertIn("aippocampus_runtime.sync.encrypted.migration", edges["encrypted_sync_admin"])
-        self.assertNotIn("encrypted_sync_keys", edges["encrypted_sync_admin"])
-        self.assertNotIn("encrypted_sync_migration", edges["encrypted_sync_admin"])
+        admin_edges = edges["aippocampus_runtime.sync.encrypted.admin"]
+        self.assertIn("aippocampus_runtime.sync.encrypted.admin", edges["encrypted_sync_admin"])
+        self.assertIn("aippocampus_runtime.sync.encrypted.keys", admin_edges)
+        self.assertIn("aippocampus_runtime.sync.encrypted.migration", admin_edges)
+        self.assertNotIn("encrypted_sync_keys", admin_edges)
+        self.assertNotIn("encrypted_sync_migration", admin_edges)
         self.assertIn(
             "aippocampus_runtime.sync.encrypted.keys",
             edges["aippocampus_runtime.sync.encrypted.bundle"],
@@ -742,9 +746,9 @@ class ImportCouplingTests(unittest.TestCase):
             "aippocampus_runtime.subconscious.validation_audit",
             "aippocampus_runtime.onboarding.frontier",
             "aippocampus_runtime.recall.semantic_recall_gate",
-            "semantic_scope_suppressed_recovery",
+            "aippocampus_runtime.source.semantic_scope_suppressed_recovery",
             "aippocampus_runtime.subconscious.jobs",
-            "subconscious_review",
+            "aippocampus_runtime.subconscious.review",
             "aippocampus_runtime.warm_ambient.recall",
         ]
         for source in worker_consumers:
@@ -825,9 +829,11 @@ class ImportCouplingTests(unittest.TestCase):
     def test_codex_hooks_have_package_owner_and_compat_shims(self) -> None:
         import aippocampus_lifecycle_hook
         import aippocampus_prompt_hook
+        import diagnose_hooks
         import install_aippocampus_lifecycle_hook
         import install_aippocampus_prompt_hook
         from aippocampus_runtime.hooks import (
+            diagnose,
             install_lifecycle,
             install_prompt,
             lifecycle,
@@ -838,12 +844,14 @@ class ImportCouplingTests(unittest.TestCase):
             SCRIPTS / "aippocampus_runtime" / "hooks" / "__init__.py",
             SCRIPTS / "aippocampus_runtime" / "hooks" / "prompt.py",
             SCRIPTS / "aippocampus_runtime" / "hooks" / "lifecycle.py",
+            SCRIPTS / "aippocampus_runtime" / "hooks" / "diagnose.py",
             SCRIPTS / "aippocampus_runtime" / "hooks" / "install_prompt.py",
             SCRIPTS / "aippocampus_runtime" / "hooks" / "install_lifecycle.py",
         ]
         shim_paths = [
             SCRIPTS / "aippocampus_prompt_hook.py",
             SCRIPTS / "aippocampus_lifecycle_hook.py",
+            SCRIPTS / "diagnose_hooks.py",
             SCRIPTS / "install_aippocampus_prompt_hook.py",
             SCRIPTS / "install_aippocampus_lifecycle_hook.py",
         ]
@@ -856,6 +864,7 @@ class ImportCouplingTests(unittest.TestCase):
         edges = same_dir_import_edges()
         self.assertIn("aippocampus_runtime.hooks.prompt", edges["aippocampus_prompt_hook"])
         self.assertIn("aippocampus_runtime.hooks.lifecycle", edges["aippocampus_lifecycle_hook"])
+        self.assertIn("aippocampus_runtime.hooks.diagnose", edges["diagnose_hooks"])
         self.assertIn(
             "aippocampus_runtime.hooks.install_prompt",
             edges["install_aippocampus_prompt_hook"],
@@ -870,6 +879,9 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(aippocampus_lifecycle_hook.decide_actions, lifecycle.decide_actions)
         self.assertIs(aippocampus_lifecycle_hook.run_action, lifecycle.run_action)
         self.assertIs(aippocampus_lifecycle_hook.main, lifecycle.main)
+        self.assertIs(diagnose_hooks.diagnose, diagnose.diagnose)
+        self.assertIs(diagnose_hooks.script_paths_from_command, diagnose.script_paths_from_command)
+        self.assertIs(diagnose_hooks.main, diagnose.main)
         self.assertIs(install_aippocampus_prompt_hook.install, install_prompt.install)
         self.assertIs(install_aippocampus_prompt_hook.command_for, install_prompt.command_for)
         self.assertIs(install_aippocampus_lifecycle_hook.install, install_lifecycle.install)
@@ -1085,18 +1097,20 @@ class ImportCouplingTests(unittest.TestCase):
             edges["aippocampus_runtime.dream.worker"],
         )
         self.assertNotIn("dream_working_memory", edges["aippocampus_runtime.dream.worker"])
-        self.assertIn("aippocampus_runtime.dream.worker", edges["dream_real_history_eval"])
+        real_history_eval = "aippocampus_runtime.dream.real_history_eval"
+        compensatory = "aippocampus_runtime.dream.compensatory"
+        self.assertIn("aippocampus_runtime.dream.worker", edges[real_history_eval])
         self.assertIn(
             "aippocampus_runtime.dream.working_memory",
-            edges["dream_real_history_eval"],
+            edges[real_history_eval],
         )
-        self.assertNotIn("dream_worker", edges["dream_real_history_eval"])
-        self.assertNotIn("dream_working_memory", edges["dream_real_history_eval"])
+        self.assertNotIn("dream_worker", edges[real_history_eval])
+        self.assertNotIn("dream_working_memory", edges[real_history_eval])
         self.assertIn(
             "aippocampus_runtime.dream.working_memory",
-            edges["compensatory_dream"],
+            edges[compensatory],
         )
-        self.assertNotIn("dream_working_memory", edges["compensatory_dream"])
+        self.assertNotIn("dream_working_memory", edges[compensatory])
 
         self.assertIs(
             dream_input_pack.build_dream_input_pack,
@@ -1359,9 +1373,9 @@ class ImportCouplingTests(unittest.TestCase):
 
         edges = same_dir_import_edges(top_level_only=True)
         for source in [
-            "agency_affordance",
-            "coding_decision_events",
-            "correction_reconsolidation",
+            "aippocampus_runtime.coding.agency_affordance",
+            "aippocampus_runtime.coding.decision_events",
+            "aippocampus_runtime.reflection.reconsolidation",
             "aippocampus_runtime.question.health",
             "aippocampus_runtime.question.index_sidecar",
             "aippocampus_runtime.subconscious.question_resolution",
@@ -1695,7 +1709,7 @@ class ImportCouplingTests(unittest.TestCase):
         for source in [
             "aippocampus_runtime.subconscious.validation_audit",
             "aippocampus_runtime.subconscious.jobs",
-            "subconscious_review",
+            "aippocampus_runtime.subconscious.review",
         ]:
             self.assertIn("aippocampus_runtime.subconscious.job_validation", edges[source])
             self.assertNotIn("subconscious_job_validation", edges[source])
@@ -2215,9 +2229,9 @@ class ImportCouplingTests(unittest.TestCase):
             "aippocampus_runtime.subconscious.agent",
             "aippocampus_runtime.subconscious.tool_loop",
             "aippocampus_runtime.recall.semantic_recall_gate",
-            "semantic_scope_suppressed_recovery",
+            "aippocampus_runtime.source.semantic_scope_suppressed_recovery",
             "aippocampus_runtime.subconscious.jobs",
-            "subconscious_review",
+            "aippocampus_runtime.subconscious.review",
             "aippocampus_runtime.warm_ambient.recall",
         ]
         for source in runtime_consumers:
@@ -2228,7 +2242,7 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertNotIn("subconscious_tool_loop", edges["aippocampus_runtime.subconscious.jobs"])
         self.assertNotIn("subconscious_agent", edges["aippocampus_runtime.subconscious.jobs"])
         self.assertFalse(
-            {"aippocampus_runtime.subconscious.jobs", "subconscious_review"}
+            {"aippocampus_runtime.subconscious.jobs", "aippocampus_runtime.subconscious.review"}
             & edges["aippocampus_runtime.subconscious.agent"]
         )
         self.assertFalse(
@@ -2367,7 +2381,7 @@ class ImportCouplingTests(unittest.TestCase):
             "aippocampus_runtime.sync.bundle",
             "aippocampus_runtime.recall.index_builder",
             "aippocampus_runtime.recall.segment_builder",
-            "import_bundle",
+            "aippocampus_runtime.artifacts.import_bundle",
             "aippocampus_runtime.registry.api",
             "aippocampus_runtime.recall.rollout_search",
         ]:
@@ -2435,6 +2449,50 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(export_bundle.main, export_owner.main)
         self.assertIs(import_bundle.safe_extract, import_owner.safe_extract)
         self.assertIs(import_bundle.main, import_owner.main)
+
+    def test_remaining_flat_scripts_are_compatibility_shims(self) -> None:
+        owner_modules = {
+            "agency_affordance": "aippocampus_runtime.coding.agency_affordance",
+            "aippocampus_maintenance": "aippocampus_runtime.ops.maintenance",
+            "append_anchor": "aippocampus_runtime.source.anchors",
+            "checkpoint": "aippocampus_runtime.artifacts.checkpoint",
+            "coding_decision_events": "aippocampus_runtime.coding.decision_events",
+            "compensatory_dream": "aippocampus_runtime.dream.compensatory",
+            "correction_reconsolidation": "aippocampus_runtime.reflection.reconsolidation",
+            "dream_live_shadow_ab": "aippocampus_runtime.dream.live_shadow_ab",
+            "dream_real_history_eval": "aippocampus_runtime.dream.real_history_eval",
+            "encrypted_sync_admin": "aippocampus_runtime.sync.encrypted.admin",
+            "locate_rollout": "aippocampus_runtime.source.locate_rollout",
+            "prepare_graphify_corpus": "aippocampus_runtime.ops.graphify_corpus",
+            "semantic_scope_source_review_core": (
+                "aippocampus_runtime.source.semantic_scope_source_review_core"
+            ),
+            "semantic_scope_suppressed_recovery": (
+                "aippocampus_runtime.source.semantic_scope_suppressed_recovery"
+            ),
+            "subconscious_review": "aippocampus_runtime.subconscious.review",
+        }
+        edges = same_dir_import_edges(top_level_only=True)
+
+        for flat_name, owner_name in owner_modules.items():
+            flat_path = SCRIPTS / f"{flat_name}.py"
+            owner_path = SCRIPTS / (owner_name.replace(".", "/") + ".py")
+
+            self.assertTrue(flat_path.exists(), flat_path)
+            self.assertTrue(owner_path.exists(), owner_path)
+            self.assertIn("Compatibility shim", flat_path.read_text(encoding="utf-8"))
+            self.assertIn(owner_name, edges[flat_name])
+            self.assertNotIn(flat_name, edges[owner_name])
+            self.assertIs(importlib.import_module(flat_name), importlib.import_module(owner_name))
+
+    def test_top_level_scripts_are_only_compatibility_surfaces(self) -> None:
+        real_flat_scripts = []
+        for path in sorted(SCRIPTS.glob("*.py")):
+            source = path.read_text(encoding="utf-8")
+            if "Compatibility shim" not in source and "module alias compatibility shim" not in source:
+                real_flat_scripts.append(path.name)
+
+        self.assertEqual(real_flat_scripts, [])
 
     def test_ops_reports_have_package_owners_and_compat_shims(self) -> None:
         import cold_archive

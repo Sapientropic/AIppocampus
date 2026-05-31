@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import sys
+
 from aippocampus_runtime.artifacts import export_bundle as _impl
 
 sys.modules[__name__] = _impl
