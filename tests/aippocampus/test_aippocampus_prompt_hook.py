@@ -29,6 +29,7 @@ import build_concept_graph as concept_graph  # noqa: E402
 import dream_live_shadow_ab as dream_shadow  # noqa: E402
 from aippocampus_runtime.recall import prompt_cues as recall_cues  # noqa: E402
 from aippocampus_runtime.recall import semantic_cue_cache as cue_cache  # noqa: E402
+from tests.aippocampus.redaction_fixtures import FAKE_TEST_OPENAI_API_KEY  # noqa: E402
 
 
 class AmbientRecallHookTests(unittest.TestCase):
@@ -211,6 +212,38 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertEqual(payload["decision"], "skip")
         self.assertEqual(payload["working_memory"], [])
         self.assertNotIn("Dream hypothesis", encoded)
+
+    def test_prompt_hook_json_redacts_prompt_derived_secret_query_terms(self) -> None:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPTS / "aippocampus_prompt_hook.py"),
+                "--prompt",
+                f"Can you remember the API key {FAKE_TEST_OPENAI_API_KEY} from earlier?",
+                "--cwd",
+                str(self.workspace),
+                "--registry",
+                str(self.registry),
+                "--semantic-gate",
+                "off",
+                "--max-elapsed-ms",
+                "4300",
+                "--no-warm-background",
+                "--search-budget",
+                "0",
+                "--json",
+            ],
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+            check=True,
+        )
+
+        payload = json.loads(proc.stdout)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn(FAKE_TEST_OPENAI_API_KEY, encoded)
+        self.assertIn("<redacted:api-key>", encoded)
+        self.assertIn("<redacted:api-key>", payload["query_terms"])
 
     def test_prompt_hook_dry_run_logs_would_deliver_without_foreground_dream(self) -> None:
         working_memory = self._write_dream_working_memory()
