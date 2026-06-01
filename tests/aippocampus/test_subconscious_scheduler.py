@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
 import os
 import sys
 import tempfile
@@ -325,6 +326,33 @@ class SubconsciousSchedulerTests(unittest.TestCase):
             code = scheduler.main()
 
         self.assertEqual(code, 1)
+
+    def test_main_json_uses_public_scheduler_projection(self) -> None:
+        private_result = {
+            "started": True,
+            "pid": 1234,
+            "log": str(self.root / "subconscious_scheduler.log"),
+            "projects": [{"label": "Private Project", "reason": "missing_PRIVATE_TOKEN"}],
+            "results": [{"project": "Private Project", "last_output": "private model output"}],
+        }
+        stdout = io.StringIO()
+        with (
+            patch.object(sys, "argv", ["subconscious_scheduler.py", "--maybe-start", "--json"]),
+            patch.object(scheduler, "maybe_start", return_value=private_result),
+            contextlib.redirect_stdout(stdout),
+        ):
+            code = scheduler.main()
+
+        self.assertEqual(code, 0)
+        payload = json.loads(stdout.getvalue())
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertTrue(payload["started"])
+        self.assertTrue(payload["pid_present"])
+        self.assertNotIn("log", payload)
+        self.assertNotIn("projects", payload)
+        self.assertNotIn("Private Project", encoded)
+        self.assertNotIn("PRIVATE_TOKEN", encoded)
+        self.assertNotIn(str(self.root), encoded)
 
 
 if __name__ == "__main__":

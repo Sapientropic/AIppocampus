@@ -165,6 +165,8 @@ class ClaudeCodeConversationProvider:
         session_id = (session_meta or {}).get("id")
         if session_id:
             return f"claude-code:session:{session_id}"
+        # Fallback thread keys are source-backed registry ids. Changing this
+        # digest in place would orphan previously registered transcripts.
         digest = hashlib.sha1(str(source_path.resolve()).casefold().encode("utf-8")).hexdigest()[
             :16
         ]

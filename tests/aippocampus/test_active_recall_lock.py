@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 import tempfile
@@ -59,6 +60,12 @@ class ActiveRecallLockTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
+
+    def test_active_recall_lock_hash_handles_use_sha256(self) -> None:
+        self.assertEqual(
+            locks._sha("lock material", prefix="arl"),
+            "arl_" + hashlib.sha256("lock material".encode("utf-8")).hexdigest()[:20],
+        )
 
     def test_lock_serializes_navigation_only_without_raw_prompt_or_workspace(self) -> None:
         path = self.root / "active-recall-locks.json"

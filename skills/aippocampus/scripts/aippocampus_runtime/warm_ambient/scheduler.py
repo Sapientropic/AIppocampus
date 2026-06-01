@@ -80,7 +80,7 @@ def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
 
 def _job_id(*, thread_id: str, workspace: Path, topic_epoch: str | None, prompt: str) -> str:
     seed = f"{time.time_ns()}\n{thread_id}\n{workspace}\n{topic_epoch or ''}\n{prompt}"
-    return "warm_" + hashlib.sha1(seed.encode("utf-8")).hexdigest()[:20]
+    return "warm_" + hashlib.sha256(seed.encode("utf-8")).hexdigest()[:20]
 
 
 def spawn_warm_job(job_path: Path, *, cwd: Path | None = None) -> dict[str, Any]:
@@ -203,9 +203,14 @@ def schedule_warm_ambient_recall(
         "schema_version": JOB_SCHEMA_VERSION,
         "job_id": job_id,
         "created_at": now_utc(),
-        "prompt_sha1": hashlib.sha1(str(prompt or "").encode("utf-8")).hexdigest()[:16],
+        "prompt_hash": hashlib.sha256(str(sanitized_prompt or "").encode("utf-8")).hexdigest()[:16],
         "prompt": sanitized_prompt,
         "secret_policy": secret_policy,
+        "privacy_boundary": {
+            "sanitized_prompt_stored": True,
+            "absolute_paths_are_private_process_pointers": True,
+            "public_output": False,
+        },
         "cwd": str(workspace),
         "thread_id": thread_id,
         "current_thread_key": current_thread_key,
@@ -243,7 +248,7 @@ def schedule_warm_ambient_recall(
         "job_path": str(job_path),
         "result_path": str(result_path),
         "spawned": bool(launch.get("spawned")),
-        "prompt_sha1": job["prompt_sha1"],
+        "prompt_hash": job["prompt_hash"],
         "secret_policy": secret_policy,
         **lock_status,
     }

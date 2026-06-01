@@ -159,6 +159,9 @@ ASCII_NEEDLE_RE = re.compile(r"^[a-z0-9_+-]+$")
 
 
 def _stable_id(prefix: str, *parts: object, length: int = 16) -> str:
+    # Clean-source ids are persisted join keys across messages, turns, sidecars,
+    # and sync bundles. This legacy digest is not a password hash; changing it
+    # needs an explicit source-id migration plan with alias lookup.
     material = "\0".join(str(part or "") for part in parts)
     digest = hashlib.sha1(material.encode("utf-8")).hexdigest()
     return f"{prefix}_{digest[:length]}"

@@ -152,7 +152,7 @@ def warm_deepseek_user_id(*, cwd: Path | str, thread_id: str | None = None, user
             raise ValueError("user_id must match [a-zA-Z0-9\\-_]+ and be at most 512 chars")
         return user_id
     seed = f"{Path(cwd).resolve()}\n{thread_id or ''}\nwarm-ambient-recall"
-    return f"{DEFAULT_USER_ID_PREFIX}-{hashlib.sha1(seed.casefold().encode('utf-8')).hexdigest()[:32]}"
+    return f"{DEFAULT_USER_ID_PREFIX}-{hashlib.sha256(seed.casefold().encode('utf-8')).hexdigest()[:32]}"
 
 
 THEME_STOPWORDS = {
@@ -1036,11 +1036,11 @@ def warm_job_result_summary(job: dict[str, Any], result: dict[str, Any]) -> dict
             continue
         kind = str(row.get("error_kind") or scout_error_kind(row.get("reason")))
         error_kinds[kind] = error_kinds.get(kind, 0) + 1
-    return {
+    summary = {
         "kind": "aippocampus_warm_ambient_recall_job_result",
         "schema_version": WARM_JOB_SCHEMA_VERSION,
         "job_id": job.get("job_id"),
-        "prompt_sha1": job.get("prompt_sha1"),
+        "prompt_hash": job.get("prompt_hash") or job.get("prompt_sha1"),
         "created_at": now_utc(),
         "ok": bool(result.get("ok")),
         "available": bool(result.get("available")),
@@ -1079,6 +1079,9 @@ def warm_job_result_summary(job: dict[str, Any], result: dict[str, Any]) -> dict
             "absolute_paths_emitted": False,
         },
     }
+    if job.get("prompt_sha1"):
+        summary["legacy_prompt_sha1"] = job.get("prompt_sha1")
+    return summary
 
 
 def run_warm_job_file(
@@ -1139,6 +1142,10 @@ def run_warm_job_file(
         result_path = Path(str(result_path_value)).resolve()
         result_path.parent.mkdir(parents=True, exist_ok=True)
         tmp = result_path.with_suffix(result_path.suffix + ".tmp")
+        # Detached job files are local-private process envelopes; the companion
+        # result file is intentionally only this summary projection. Do not
+        # persist the full warm recall result here, because it may contain cards,
+        # traces, registry paths, and prompt-derived scout detail.
         tmp.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
         tmp.replace(result_path)
     return summary

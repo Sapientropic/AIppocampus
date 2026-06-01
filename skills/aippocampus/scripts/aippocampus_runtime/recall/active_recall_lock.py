@@ -39,7 +39,7 @@ LOCK_STATES = {"pending", "ready", "expired", "failed"}
 
 
 def _sha(value: str, *, prefix: str) -> str:
-    return f"{prefix}_{hashlib.sha1(value.encode('utf-8')).hexdigest()[:20]}"
+    return f"{prefix}_{hashlib.sha256(value.encode('utf-8')).hexdigest()[:20]}"
 
 
 def _prompt_fingerprint(prompt: str, query_aliases: list[str] | None = None) -> str:

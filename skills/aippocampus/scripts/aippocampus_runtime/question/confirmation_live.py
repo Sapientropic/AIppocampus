@@ -44,6 +44,62 @@ ARTIFACT_KIND = "question_pair_confirmation_artifact"
 ChatFn = Callable[[list[dict[str, str]], ChatClientConfig], Mapping[str, Any]]
 
 
+def public_count(value: Any) -> int:
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+def public_model_route(route: Any) -> dict[str, str]:
+    if not isinstance(route, Mapping):
+        return {}
+    provider = str(route.get("provider") or "").strip()
+    if not provider:
+        return {}
+    safe = "".join(char for char in provider[:48] if char.isalnum() or char in {"_", "-", "."})
+    return {"provider": safe or "unknown"}
+
+
+def public_usage_count(usage: Any) -> int:
+    if not isinstance(usage, list):
+        return 0
+    return len([item for item in usage if isinstance(item, Mapping)])
+
+
+def public_confirmation_live_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "ok": bool(payload.get("ok")),
+        "status": str(payload.get("status") or "unknown"),
+        "request_count": public_count(payload.get("request_count")),
+        "artifact_count": public_count(
+            payload.get("artifact_count")
+            if payload.get("artifact_count") is not None
+            else len(payload.get("artifacts") or [])
+        ),
+        "wrote_count": public_count(payload.get("wrote_count")),
+        "raw_text_emitted": bool(payload.get("raw_text_emitted")),
+        "can_claim": [
+            str(item)
+            for item in payload.get("can_claim") or []
+            if str(item) == "live_model_confirmation_artifacts_generated"
+        ],
+        "cannot_claim": [
+            str(item)
+            for item in payload.get("cannot_claim") or []
+            if str(item)
+            in {
+                "live_external_model_confirmation",
+                "real_user_calibration",
+                "user_visible_recall_improvement",
+            }
+        ],
+        "usage_count": public_usage_count(payload.get("usage")),
+        "model_route": public_model_route(payload.get("route")),
+        "output_boundary": "confirmation_details_are_local_private_artifacts",
+    }
+
+
 def valid_request(row: Mapping[str, Any]) -> bool:
     return (
         str(row.get("kind") or "") == REQUEST_KIND
@@ -312,7 +368,7 @@ def main(argv: list[str] | None = None) -> int:
         timeout=args.timeout,
     )
     if args.json_output:
-        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        print(json.dumps(public_confirmation_live_payload(payload), ensure_ascii=False, indent=2))
     else:
         print(
             "question confirmation live: "

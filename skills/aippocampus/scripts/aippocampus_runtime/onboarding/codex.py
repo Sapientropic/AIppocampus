@@ -413,7 +413,139 @@ def print_text(result: dict[str, Any]) -> None:
     print(f"sqlite indexes: {stats.get('sqlite_index_count', 0)}")
     print(f"graph.json: {stats.get('graph_json_count', 0)}")
     frontier = (data.get("boundary") or {}).get("frontier") or {}
-    print(f"frontier: {frontier.get('status')}")
+    print(f"frontier: {public_frontier_status(frontier.get('status'))}")
+
+
+def public_count(value: Any) -> int:
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+def public_frontier_status(value: Any) -> str:
+    status = str(value or "").strip()
+    allowed = {
+        "not_run",
+        "off",
+        "auto",
+        "smoke",
+        "write",
+        "blocked_missing_api_key",
+        "model_failed",
+        "model_partial_failure",
+        "model_no_findings",
+        "skipped_stale_state",
+        "completed",
+    }
+    return status if status in allowed else "unknown"
+
+
+def public_stats(stats: Any) -> dict[str, int]:
+    if not isinstance(stats, dict):
+        return {}
+    keys = (
+        "thread_count",
+        "clean_source_count",
+        "sqlite_index_count",
+        "graph_json_count",
+        "stale_sqlite",
+        "missing_clean_source",
+    )
+    return {key: public_count(stats.get(key)) for key in keys if key in stats}
+
+
+def public_plan_summary(plan: Any) -> dict[str, Any]:
+    if not isinstance(plan, dict):
+        return {}
+    return {
+        "would_register_count": public_count(plan.get("would_register_count")),
+        "would_repair_count": public_count(plan.get("would_repair_count")),
+        "would_refresh_current": bool(plan.get("would_refresh_current")),
+        "would_build_timeline": bool(plan.get("would_build_timeline")),
+        "would_build_cognitive_map": bool(plan.get("would_build_cognitive_map")),
+        "frontier_mode": public_frontier_status(plan.get("frontier_mode")),
+    }
+
+
+def public_action_summaries(actions: Any) -> dict[str, Any]:
+    if not isinstance(actions, dict):
+        return {}
+    summaries: dict[str, Any] = {}
+
+    scan_sessions = actions.get("scan_sessions")
+    if isinstance(scan_sessions, dict):
+        summaries["scan_sessions"] = {
+            "registered_count": public_count(scan_sessions.get("registered_count"))
+        }
+
+    repair_missing_artifacts = actions.get("repair_missing_artifacts")
+    if isinstance(repair_missing_artifacts, dict):
+        summaries["repair_missing_artifacts"] = {
+            "repaired_count": public_count(repair_missing_artifacts.get("repaired_count"))
+        }
+
+    refresh_current = actions.get("refresh_current")
+    if isinstance(refresh_current, dict):
+        summaries["refresh_current"] = {"ok": bool(refresh_current.get("ok"))}
+
+    project_timeline = actions.get("project_timeline")
+    if isinstance(project_timeline, dict):
+        summaries["project_timeline"] = {
+            "project_count": public_count(project_timeline.get("project_count")),
+            "life_label_count": public_count(project_timeline.get("life_label_count")),
+        }
+
+    cognitive_map = actions.get("cognitive_map")
+    if isinstance(cognitive_map, dict):
+        summaries["cognitive_map"] = {
+            "route_count": public_count(cognitive_map.get("route_count"))
+        }
+
+    semantic_triggers = actions.get("semantic_triggers")
+    if isinstance(semantic_triggers, dict):
+        summaries["semantic_triggers"] = {
+            "trigger_count": public_count(semantic_triggers.get("trigger_count"))
+        }
+
+    return summaries
+
+
+def public_onboarding_result(result: dict[str, Any]) -> dict[str, Any]:
+    raw_data = result.get("data")
+    data: dict[str, Any] = raw_data if isinstance(raw_data, dict) else {}
+    raw_boundary = data.get("boundary")
+    boundary: dict[str, Any] = raw_boundary if isinstance(raw_boundary, dict) else {}
+    raw_frontier = boundary.get("frontier")
+    frontier: dict[str, Any] = raw_frontier if isinstance(raw_frontier, dict) else {}
+    if not frontier:
+        raw_data_frontier = data.get("frontier")
+        if isinstance(raw_data_frontier, dict):
+            frontier = raw_data_frontier
+    raw_meta = result.get("meta")
+    meta: dict[str, Any] = raw_meta if isinstance(raw_meta, dict) else {}
+    raw_actions = data.get("actions")
+    actions: dict[str, Any] = raw_actions if isinstance(raw_actions, dict) else {}
+    return {
+        "ok": result.get("ok"),
+        "data": {
+            "dry_run": bool(data.get("dry_run")),
+            "stats_before": public_stats(data.get("stats_before")),
+            "stats_after": public_stats(data.get("stats_after")),
+            "plan": public_plan_summary(data.get("plan")),
+            "actions": public_action_summaries(actions),
+            "frontier_status": public_frontier_status(frontier.get("status")),
+            "action_count": len(actions),
+            "storage_policy": data.get("storage_policy") or {},
+        },
+        "next_count": len(result.get("next") or []),
+        "meta": {
+            "schema_version": public_count(meta.get("schema_version")),
+            "provider": str(meta.get("provider") or "codex"),
+            "duration_ms": public_count(meta.get("duration_ms")),
+        },
+        "output_boundary": "onboarding_cli_json_omits_private_artifacts_and_samples",
+    }
 
 
 def main(
@@ -529,7 +661,7 @@ def main(
         or (args.format == "auto" and not sys.stdout.isatty())
     )
     if wants_json:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        print(json.dumps(public_onboarding_result(result), ensure_ascii=False, indent=2))
     else:
         print_text(result)
     return 0 if result.get("ok") is True else 1

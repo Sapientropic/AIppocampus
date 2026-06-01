@@ -118,6 +118,8 @@ class CodexConversationProvider:
         session_id = (session_meta or {}).get("id")
         if session_id:
             return f"session:{session_id}"
+        # Fallback rollout keys are source-backed registry ids. Migrate with
+        # legacy aliases, not a one-line digest swap.
         digest = hashlib.sha1(str(source_path.resolve()).casefold().encode("utf-8")).hexdigest()[
             :16
         ]

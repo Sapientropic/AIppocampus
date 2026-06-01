@@ -35,6 +35,13 @@ DEFAULT_MAX_FINDINGS = 220
 DEFAULT_JOB_CONCURRENCY = int(os.environ.get("AIPPOCAMPUS_SUBCONSCIOUS_JOB_CONCURRENCY", "4"))
 DEFAULT_SAMPLES_PER_JOB = int(os.environ.get("AIPPOCAMPUS_SUBCONSCIOUS_SAMPLES_PER_JOB", "2"))
 DEFAULT_API_KEY_ENV = "DEEPSEEK_API_KEY"
+PUBLIC_SKIP_REASONS = {
+    "disabled_by_env",
+    "enqueue_locked",
+    "no_due_projects",
+    "leased_projects",
+    "enqueue_cooldown",
+}
 
 
 @dataclass
@@ -94,6 +101,34 @@ def registry_path(root: Path) -> Path:
 
 def state_path(root: Path, override: Path | None = None) -> Path:
     return override or (root / "subconscious_state.json")
+
+
+def public_skip_reason(value: Any) -> str | None:
+    reason = str(value or "").strip()
+    if reason.startswith("missing_"):
+        return "missing_api_key"
+    return reason if reason in PUBLIC_SKIP_REASONS else ("runtime_error" if reason else None)
+
+
+def public_scheduler_payload(result: dict[str, Any]) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "started": bool(result.get("started")),
+        "ran": bool(result.get("ran")),
+        "dry_run": bool(result.get("dry_run")),
+        "skipped": public_skip_reason(result.get("skipped")),
+        "pid_present": bool(result.get("pid")),
+        "project_count": len(result.get("projects") or [])
+        if isinstance(result.get("projects"), list)
+        else 0,
+        "result_count": len(result.get("results") or [])
+        if isinstance(result.get("results"), list)
+        else 0,
+        "log_private_artifact": bool(result.get("log")),
+        "output_boundary": "scheduler_project_details_are_local_private_artifacts",
+    }
+    if result.get("error"):
+        payload["error"] = {"code": "runtime_error"}
+    return payload
 
 
 def log_path(root: Path) -> Path:
@@ -791,19 +826,19 @@ def main() -> int:
         else:
             result = maybe_start(args)
         if args.json_output:
-            print(json.dumps(result, ensure_ascii=False, indent=2))
+            print(json.dumps(public_scheduler_payload(result), ensure_ascii=False, indent=2))
         elif result.get("started"):
             print(f"subconscious scheduler started: pid {result.get('pid')}")
         elif result.get("ran"):
             print("subconscious scheduler ran")
         else:
-            print(f"subconscious scheduler skipped: {result.get('skipped')}")
+            print(f"subconscious scheduler skipped: {public_skip_reason(result.get('skipped'))}")
         return 0
     except Exception as exc:
         if args.json_output:
-            print(json.dumps({"error": str(exc)}, ensure_ascii=False, indent=2))
+            print(json.dumps(public_scheduler_payload({"error": str(exc)}), ensure_ascii=False, indent=2))
         else:
-            print(f"subconscious scheduler error: {exc}", file=sys.stderr)
+            print("subconscious scheduler error: runtime_error", file=sys.stderr)
         return 1 if args.strict else 0
 
 

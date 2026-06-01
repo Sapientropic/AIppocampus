@@ -29,6 +29,7 @@ for _path in (
 import build_concept_graph as concept_graph  # noqa: E402
 import build_semantic_scope_labels as semantic_scope_materializer  # noqa: E402
 import subconscious_jobs as jobs  # noqa: E402
+from aippocampus_runtime.subconscious import job_storage  # noqa: E402
 from redaction_fixtures import (  # noqa: E402
     FAKE_TEST_BEARER_TOKEN,
     FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER,
@@ -39,6 +40,44 @@ from redaction_fixtures import (  # noqa: E402
 
 
 class SubconsciousJobsTests(unittest.TestCase):
+    def test_job_storage_writes_sanitized_private_staging_findings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output = root / "subconscious_jobs.jsonl"
+            local_path = fake_test_windows_path("subconscious-job-secret.txt")
+
+            job_storage.append_job_findings(
+                output,
+                [
+                    {
+                        "kind": "question_candidate",
+                        "title": f"Bearer {FAKE_TEST_BEARER_TOKEN}",
+                        "summary": f"review {local_path}",
+                        "source_refs": [{"thread_key": "thread:one", "line": 12}],
+                    }
+                ],
+                model="deepseek-test",
+                batch_id="batch-one",
+                usage={"prompt_tokens": 11},
+                model_route={
+                    "provider": "deepseek",
+                    "base_url": "https://api.deepseek.example/v1",
+                    "api_key_env": "DEEPSEEK_API_KEY",
+                },
+            )
+
+            raw = output.read_text(encoding="utf-8")
+            event = json.loads(raw)
+
+            self.assertEqual(event["source_refs"], [{"thread_key": "thread:one", "line": 12}])
+            self.assertEqual(event["model_route"], {"provider": "deepseek"})
+            self.assertNotIn("base_url", event["model_route"])
+            self.assertNotIn("api_key_env", event["model_route"])
+            self.assertNotIn(FAKE_TEST_BEARER_TOKEN, raw)
+            self.assertNotIn(FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER, raw)
+            self.assertIn("<redacted:bearer-token>", raw)
+            self.assertIn("<redacted:local-path>", raw)
+
     def test_job_circuit_catalog_is_separate_from_runner(self) -> None:
         circuits = importlib.import_module("subconscious_job_circuits")
         runner_source = JOBS_RUNNER.read_text(encoding="utf-8")

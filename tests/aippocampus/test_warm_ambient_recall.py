@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -1755,6 +1756,17 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertGreaterEqual(job["prefix_cache_warmup_scouts"], 1)
         self.assertGreater(job["prefix_cache_warmup_delay"], 0)
         self.assertIn("<redacted:local-path>", job["prompt"])
+        expected_prompt_hash = hashlib.sha256(job["prompt"].encode("utf-8")).hexdigest()[:16]
+        self.assertEqual(job["prompt_hash"], expected_prompt_hash)
+        self.assertNotIn("prompt_sha1", job)
+        self.assertEqual(
+            job["privacy_boundary"],
+            {
+                "sanitized_prompt_stored": True,
+                "absolute_paths_are_private_process_pointers": True,
+                "public_output": False,
+            },
+        )
         self.assertNotIn(local_path, raw_job)
         self.assertNotIn("private", job["prompt"].casefold())
         self.assertNotIn("ambient.md", job["prompt"].casefold())

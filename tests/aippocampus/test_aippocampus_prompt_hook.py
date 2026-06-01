@@ -29,7 +29,12 @@ import build_concept_graph as concept_graph  # noqa: E402
 import dream_live_shadow_ab as dream_shadow  # noqa: E402
 from aippocampus_runtime.recall import prompt_cues as recall_cues  # noqa: E402
 from aippocampus_runtime.recall import semantic_cue_cache as cue_cache  # noqa: E402
-from tests.aippocampus.redaction_fixtures import FAKE_TEST_OPENAI_API_KEY  # noqa: E402
+from tests.aippocampus.redaction_fixtures import (  # noqa: E402
+    FAKE_TEST_BEARER_TOKEN,
+    FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER,
+    FAKE_TEST_OPENAI_API_KEY,
+    fake_test_windows_path,
+)
 
 
 class AmbientRecallHookTests(unittest.TestCase):
@@ -84,14 +89,21 @@ class AmbientRecallHookTests(unittest.TestCase):
 
     def test_debug_log_records_semantic_budget_diagnostics_for_skip(self) -> None:
         log_path = self.root / "prompt_hook_debug.jsonl"
+        local_path = fake_test_windows_path("prompt-hook-secret.txt")
         result = {
             "decision": "skip",
             "score": 0.0,
             "confidence": "low",
-            "query_terms": [],
+            "query_terms": [FAKE_TEST_OPENAI_API_KEY, local_path],
             "concept_expansions": [],
             "cognitive_map": [],
-            "candidates": [],
+            "candidates": [
+                {
+                    "thread_key": "thread:private",
+                    "title": f"candidate Bearer {FAKE_TEST_BEARER_TOKEN}",
+                    "score": 0.5,
+                }
+            ],
             "working_memory": [],
             "evidence": [],
             "semantic_gate": {
@@ -99,7 +111,7 @@ class AmbientRecallHookTests(unittest.TestCase):
                 "decision": "skip",
                 "confidence": 0.0,
                 "cached": False,
-                "query_aliases": [],
+                "query_aliases": [local_path],
                 "availability_reason": "foreground_budget_timeout",
                 "diagnostic": "semantic_timed_out_under_foreground_budget",
                 "elapsed_ms": 1949.33,
@@ -118,7 +130,13 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertEqual(semantic["availability_reason"], "foreground_budget_timeout")
         self.assertEqual(semantic["diagnostic"], "semantic_timed_out_under_foreground_budget")
         self.assertEqual(semantic["error_buckets"], {"read_timeout": 3})
-        self.assertNotIn("synthetic multilingual continuity cue", json.dumps(event))
+        encoded = json.dumps(event, ensure_ascii=False)
+        self.assertNotIn(FAKE_TEST_OPENAI_API_KEY, encoded)
+        self.assertNotIn(FAKE_TEST_BEARER_TOKEN, encoded)
+        self.assertNotIn(FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER, encoded)
+        self.assertIn("<redacted:api-key>", encoded)
+        self.assertIn("<redacted:bearer-token>", encoded)
+        self.assertIn("<redacted:local-path>", encoded)
 
     def test_prompt_hook_can_write_opt_in_dream_shadow_event(self) -> None:
         working_memory = self.root / "working_memory.jsonl"
@@ -244,6 +262,38 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertNotIn(FAKE_TEST_OPENAI_API_KEY, encoded)
         self.assertIn("<redacted:api-key>", encoded)
         self.assertIn("<redacted:api-key>", payload["query_terms"])
+
+    def test_public_hook_debug_payload_is_allowlisted(self) -> None:
+        private_result = {
+            "decision": "scent",
+            "score": 0.88,
+            "confidence": "medium",
+            "query_terms": [FAKE_TEST_OPENAI_API_KEY],
+            "candidates": [{"title": "private title", "thread_key": "session:private"}],
+            "evidence": [{"snippet": "private source wording"}],
+            "semantic_gate": {
+                "available": True,
+                "decision": "scent",
+                "confidence": 0.82,
+                "cached": False,
+                "query_aliases": [f"alias {FAKE_TEST_OPENAI_API_KEY}"],
+                "workers": [{"raw": "private worker output"}],
+                "errors": ["private semantic error"],
+            },
+            "ambient_recall": {"mode": "scent", "card_count": 1},
+            "elapsed_ms": 123.4,
+        }
+
+        public = hook.public_hook_debug_payload(private_result)
+
+        encoded = json.dumps(public, ensure_ascii=False)
+        self.assertEqual(public["decision"], "scent")
+        self.assertIn("<redacted:api-key>", encoded)
+        self.assertNotIn("candidates", public)
+        self.assertNotIn("evidence", public)
+        self.assertNotIn("private title", encoded)
+        self.assertNotIn("private source wording", encoded)
+        self.assertNotIn("private worker output", encoded)
 
     def test_prompt_hook_dry_run_logs_would_deliver_without_foreground_dream(self) -> None:
         working_memory = self._write_dream_working_memory()

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import sys
@@ -7,6 +9,7 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
@@ -200,6 +203,136 @@ class SemanticScopeRealHistorySmokeTests(unittest.TestCase):
         self.assertNotIn("private metaphor text", rendered)
         self.assertNotIn("Private Life Title", rendered)
         self.assertNotIn(str(self.root), rendered)
+
+    def test_public_json_projection_is_aggregate_only(self) -> None:
+        internal_result = {
+            "ok": False,
+            "stage2_semantic_sidecar_status": "live_model_partial_failure",
+            "claim_level": "failed_live_model_slice",
+            "cannot_claim": ["semantic_completeness"],
+            "live_model_used": True,
+            "sidecars_written": False,
+            "timeline_refreshed": False,
+            "privacy_boundary": {
+                "raw_text_emitted": False,
+                "snippets_emitted": False,
+                "titles_emitted": False,
+                "source_reference_details_emitted": False,
+                "absolute_paths_emitted": False,
+                "output_shape": "aggregate_counts_only",
+            },
+            "before": {"semantic_sidecar_rows": 0, "semantic_sidecar_threads": 0},
+            "after": {"semantic_sidecar_rows": 2, "semantic_sidecar_threads": 1},
+            "coverage_ratios": {"semantic_sidecar_thread_ratio": 0.5},
+            "job": {
+                "ok": False,
+                "job_count": 2,
+                "successful_job_count": 1,
+                "failure_count": 1,
+                "partial_failure": True,
+                "concurrency": 2,
+                "samples_per_job": 1,
+                "finding_count": 1,
+                "wrote": False,
+                "cache": {
+                    "route": {
+                        "api_key_env": "PRIVATE_MODEL_KEY_ENV",
+                        "base_url": "https://private-model.example/v1",
+                    }
+                },
+                "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+                "label_evidence": {
+                    "finding_count_with_labels": 1,
+                    "accepted_label_count": 2,
+                    "labels_with_sufficient_evidence": 2,
+                    "weak_or_missing_evidence_label_count": 0,
+                    "label_evidence_complete": True,
+                    "label_coverage": ["idea_seed", "personal_reflection"],
+                    "per_label_count": {"idea_seed": 1, "personal_reflection": 1},
+                },
+                "first_error": (
+                    "private failure with token-like material at "
+                    f"{self.root / 'thread-life' / 'clean-source' / 'messages.jsonl'}"
+                ),
+            },
+            "materialization": {
+                "ok": True,
+                "target_count": 1,
+                "row_count": 1,
+                "wrote": True,
+                "boundary": "Semantic scope labels are navigation hints.",
+                "raw_path": str(self.root / "semantic-scope-labels.jsonl"),
+            },
+            "candidate_coverage": {
+                "full_candidate_coverage_requested": True,
+                "candidate_turn_count": 3,
+                "evaluated_candidate_turn_count": 2,
+                "unevaluated_candidate_turn_count": 1,
+                "failed_batch_indexes": [2],
+                "source_turn_cap": 5000,
+            },
+            "timeline_refresh": {
+                "before_live_job": {"wrote": True, "path": str(self.timeline)},
+                "after_materialization": {"wrote": True, "path": str(self.timeline)},
+            },
+            "semantic_candidate_source": {
+                "candidate_turn_count": 3,
+                "sample_title": "Private Life Title",
+                "source_refs": [{"message_id": "life-u"}],
+            },
+            "thresholds": {"min_sidecar_rows": 1},
+        }
+
+        public = smoke.public_smoke_result(internal_result)
+
+        rendered = json.dumps(public, ensure_ascii=False)
+        self.assertTrue(public["job"]["cache"]["used"])
+        self.assertNotIn("PRIVATE_MODEL_KEY_ENV", rendered)
+        self.assertNotIn("private-model.example", rendered)
+        self.assertNotIn("private failure", rendered)
+        self.assertNotIn("messages.jsonl", rendered)
+        self.assertNotIn(str(self.root), rendered)
+        self.assertNotIn("Private Life Title", rendered)
+        self.assertNotIn("source_refs", rendered)
+        self.assertNotIn("first_error", rendered)
+        self.assertNotIn("failed_batch_indexes", rendered)
+        self.assertNotIn("raw_path", rendered)
+
+    def test_main_json_uses_public_projection(self) -> None:
+        internal_result = {
+            "ok": False,
+            "stage2_semantic_sidecar_status": "live_model_partial_failure",
+            "claim_level": "failed_live_model_slice",
+            "live_model_used": True,
+            "privacy_boundary": {"output_shape": "aggregate_counts_only"},
+            "job": {
+                "cache": {"route": {"api_key_env": "PRIVATE_MODEL_KEY_ENV"}},
+                "first_error": f"private failure at {self.root / 'messages.jsonl'}",
+            },
+            "semantic_candidate_source": {
+                "sample_title": "Private Life Title",
+                "source_refs": [{"message_id": "life-u"}],
+            },
+        }
+        stdout = io.StringIO()
+
+        with (
+            mock.patch.object(
+                smoke, "run_semantic_scope_real_history_smoke", return_value=internal_result
+            ),
+            mock.patch.object(sys, "argv", ["smoke_semantic_scope_real_history.py", "--json"]),
+            contextlib.redirect_stdout(stdout),
+        ):
+            exit_code = smoke.main()
+
+        self.assertEqual(exit_code, 1)
+        rendered = stdout.getvalue()
+        self.assertIn("live_model_partial_failure", rendered)
+        self.assertNotIn("PRIVATE_MODEL_KEY_ENV", rendered)
+        self.assertNotIn("private failure", rendered)
+        self.assertNotIn("messages.jsonl", rendered)
+        self.assertNotIn("Private Life Title", rendered)
+        self.assertNotIn("source_refs", rendered)
 
     def test_observe_only_can_require_semantic_sidecar_thread_count(self) -> None:
         clean = self._write_fixture()

@@ -14,7 +14,7 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from aippocampus_runtime.core import (
     cli_error_payload,
@@ -56,6 +56,75 @@ ALLOWED_EDGE_TYPES = {
     "supersedes",
     "related",
 }
+
+
+def public_count(value: Any) -> int:
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+def public_float(value: Any) -> float:
+    try:
+        return max(0.0, float(value))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def public_model_route(route: Any) -> dict[str, str]:
+    if not isinstance(route, Mapping):
+        return {}
+    provider = str(route.get("provider") or "").strip()
+    safe = "".join(char for char in provider[:48] if char.isalnum() or char in {"_", "-", "."})
+    return {"provider": safe or "unknown"}
+
+
+def public_cache(cache: Any) -> dict[str, Any]:
+    if not isinstance(cache, Mapping):
+        return {}
+    result: dict[str, Any] = {"available": bool(cache.get("available"))}
+    for key in ("hit_tokens", "miss_tokens"):
+        if key in cache:
+            result[key] = public_count(cache.get(key))
+    if "hit_rate" in cache:
+        result["hit_rate"] = public_float(cache.get("hit_rate"))
+    return result
+
+
+def public_usage(usage: Any) -> dict[str, int]:
+    if not isinstance(usage, Mapping):
+        return {}
+    keys = ("prompt_tokens", "completion_tokens", "total_tokens")
+    return {key: public_count(usage.get(key)) for key in keys if key in usage}
+
+
+def public_error(error: Any) -> dict[str, str] | None:
+    if not isinstance(error, Mapping):
+        return None
+    code = str(error.get("code") or "runtime_error")
+    safe = "".join(char for char in code[:80] if char.isalnum() or char in {"_", "-"})
+    return {"code": safe or "runtime_error"}
+
+
+def public_worker_payload(result: Mapping[str, Any]) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "ok": bool(result.get("ok")),
+        "dry_run": bool(result.get("dry_run")),
+        "turn_count": public_count(result.get("turn_count")),
+        "edge_count": public_count(result.get("edge_count")),
+        "wrote": bool(result.get("wrote")),
+        "cache": public_cache(result.get("cache")),
+        "usage": public_usage(result.get("usage")),
+        "model_route": public_model_route(result.get("model_route")),
+        "output_private_artifact": bool(result.get("output")),
+        "output_boundary": "worker_details_are_local_private_artifacts",
+    }
+    error = public_error(result.get("error"))
+    if error:
+        payload["error"] = error
+    return payload
+
 
 SYSTEM_PROMPT = """You are AIppocampus subconscious consolidation.
 Extract source-backed concept memory edges from clean conversation turns.
@@ -322,11 +391,15 @@ def append_staging_edges(
                 "batch_id": batch_id,
                 "status": "staging",
                 "source": source,
-                "model_route": model_route or {},
+                "model_route": public_model_route(model_route),
                 "usage": usage or {},
                 **edge,
             }
-            fh.write(json.dumps(event, ensure_ascii=False) + "\n")
+            # The edge JSONL is a local-private review queue, not a public graph.
+            # Keep source refs for auditability, but redact model-returned prose
+            # before it can persist secrets or machine-local paths.
+            safe_event = sanitize_external_model_payload(event)
+            fh.write(json.dumps(safe_event, ensure_ascii=False) + "\n")
 
 
 def run_worker(
@@ -450,6 +523,11 @@ def main() -> int:
     parser.add_argument("--timeout", type=int, default=60)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--no-write", action="store_true")
+    parser.add_argument(
+        "--include-prompt-preview",
+        action="store_true",
+        help="Print the private dry-run prompt preview for local debugging.",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
@@ -488,17 +566,19 @@ def main() -> int:
         if not args.json_output:
             raise
         result = cli_error_payload(exc)
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        print(json.dumps(public_worker_payload(result), ensure_ascii=False, indent=2))
         return cli_exit_code_for_error_code(result["error"]["code"])
     if args.json_output:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        print(json.dumps(public_worker_payload(result), ensure_ascii=False, indent=2))
     else:
         if result.get("dry_run"):
             print(f"dry run: {result['turn_count']} turn(s)")
-            print(result["prompt_preview"])
+            if args.include_prompt_preview:
+                print(result["prompt_preview"])
         else:
             print(f"subconscious edges: {result['edge_count']}")
-            print(f"output: {result['output']}")
+            if result.get("output"):
+                print("output: <local-private-artifact>")
     return 0
 
 

@@ -33,6 +33,46 @@ from redaction_fixtures import (  # noqa: E402
 
 
 class SubconsciousWorkerTests(unittest.TestCase):
+    def test_append_staging_edges_sanitizes_private_staging_event(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output = root / "subconscious_edges.jsonl"
+            local_path = fake_test_windows_path("subconscious-edge-secret.txt")
+
+            worker.append_staging_edges(
+                output,
+                [
+                    {
+                        "src": "runtime",
+                        "dst": "privacy boundary",
+                        "edge_type": "depends_on",
+                        "confidence": 0.82,
+                        "why": f"Bearer {FAKE_TEST_BEARER_TOKEN} in {local_path}",
+                        "source_refs": [{"thread_key": "thread:edge", "line": 7}],
+                    }
+                ],
+                model="deepseek-test",
+                batch_id="batch-edge",
+                usage={"total_tokens": 19},
+                model_route={
+                    "provider": "deepseek",
+                    "base_url": "https://api.deepseek.example/v1",
+                    "api_key_env": "DEEPSEEK_API_KEY",
+                },
+            )
+
+            raw = output.read_text(encoding="utf-8")
+            event = json.loads(raw)
+
+            self.assertEqual(event["source_refs"], [{"thread_key": "thread:edge", "line": 7}])
+            self.assertEqual(event["model_route"], {"provider": "deepseek"})
+            self.assertNotIn("base_url", event["model_route"])
+            self.assertNotIn("api_key_env", event["model_route"])
+            self.assertNotIn(FAKE_TEST_BEARER_TOKEN, raw)
+            self.assertNotIn(FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER, raw)
+            self.assertIn("<redacted:bearer-token>", raw)
+            self.assertIn("<redacted:local-path>", raw)
+
     def test_select_turns_and_validate_edges_are_source_backed(self) -> None:
         timeline = {
             "projects": {
@@ -319,6 +359,26 @@ class SubconsciousWorkerTests(unittest.TestCase):
 
         self.assertEqual(code, 0, stdout.getvalue())
         self.assertEqual(captured["authorization"], "Bearer right-local-key")
+
+    def test_default_dry_run_stdout_omits_prompt_preview(self) -> None:
+        private_result = {
+            "ok": True,
+            "dry_run": True,
+            "turn_count": 1,
+            "prompt_preview": "private prompt preview must stay out",
+        }
+        stdout = io.StringIO()
+        with (
+            patch.object(worker, "run_worker", return_value=private_result),
+            patch.object(sys, "argv", ["subconscious_worker.py", "--dry-run"]),
+            contextlib.redirect_stdout(stdout),
+        ):
+            code = worker.main()
+
+        self.assertEqual(code, 0)
+        rendered = stdout.getvalue()
+        self.assertIn("dry run: 1 turn(s)", rendered)
+        self.assertNotIn("private prompt preview", rendered)
 
 
 if __name__ == "__main__":

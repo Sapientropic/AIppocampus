@@ -82,6 +82,81 @@ class CliJsonContractTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["error"]["code"], "missing_api_key")
 
+    def test_jobs_json_uses_public_projection(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            private_result = {
+                "ok": True,
+                "job_count": 1,
+                "successful_job_count": 1,
+                "failure_count": 0,
+                "finding_count": 1,
+                "edge_count": 1,
+                "partial_failure": False,
+                "wrote": True,
+                "jobs_output": str(Path(tmp) / "subconscious_jobs.jsonl"),
+                "edges_output": str(Path(tmp) / "subconscious_edges.jsonl"),
+                "cache": {"available": True, "hit_tokens": 2, "miss_tokens": 3},
+                "model_route": {
+                    "provider": "deepseek",
+                    "base_url": "https://private-model.example/v1",
+                    "api_key_env": "PRIVATE_MODEL_KEY_ENV",
+                },
+                "jobs": [
+                    {
+                        "prompt_preview": "private prompt",
+                        "findings": [{"summary": "private finding"}],
+                        "final_attempts": [{"content": "private final"}],
+                    }
+                ],
+            }
+            with patch.object(jobs, "run_jobs_with_config", return_value=private_result):
+                code, payload = self.run_main_json(
+                    jobs,
+                    ["subconscious_jobs.py", "--registry-dir", tmp, "--json"],
+                )
+
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["job_count"], 1)
+        self.assertNotIn("jobs", payload)
+        self.assertNotIn("jobs_output", payload)
+        self.assertNotIn("private prompt", encoded)
+        self.assertNotIn("PRIVATE_MODEL_KEY_ENV", encoded)
+        self.assertNotIn("private-model.example", encoded)
+
+    def test_worker_json_uses_public_projection(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            private_result = {
+                "ok": True,
+                "dry_run": True,
+                "timeline": str(Path(tmp) / "project_timeline.json"),
+                "output": str(Path(tmp) / "subconscious_edges.jsonl"),
+                "turn_count": 2,
+                "edge_count": 1,
+                "prompt_preview": "private prompt preview",
+                "model_route": {
+                    "provider": "deepseek",
+                    "base_url": "https://private-model.example/v1",
+                    "api_key_env": "PRIVATE_MODEL_KEY_ENV",
+                },
+                "edges": [{"why": "private edge rationale"}],
+            }
+            with patch.object(worker, "run_worker", return_value=private_result):
+                code, payload = self.run_main_json(
+                    worker,
+                    ["subconscious_worker.py", "--registry-dir", tmp, "--json", "--dry-run"],
+                )
+
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(code, 0)
+        self.assertTrue(payload["dry_run"])
+        self.assertEqual(payload["turn_count"], 2)
+        self.assertNotIn("prompt_preview", payload)
+        self.assertNotIn("edges", payload)
+        self.assertNotIn("output", payload)
+        self.assertNotIn("private prompt", encoded)
+        self.assertNotIn("PRIVATE_MODEL_KEY_ENV", encoded)
+
 
 if __name__ == "__main__":
     unittest.main()

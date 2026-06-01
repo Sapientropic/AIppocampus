@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import sys
@@ -7,6 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
@@ -335,10 +338,7 @@ class OnboardCodexTests(unittest.TestCase):
         self.assertTrue(data["ok"])
         self.assertEqual(data["meta"]["provider"], "generic-jsonl")
         self.assertEqual(data["data"]["plan"]["would_register_count"], 1)
-        self.assertEqual(
-            data["data"]["plan"]["sample_candidates"][0]["thread_key"],
-            "generic-jsonl:session:generic-onboard",
-        )
+        self.assertNotIn("sample_candidates", data["data"]["plan"])
 
     def _run_onboard_facade(self, *args: str, env_extra: dict[str, str] | None = None) -> Any:
         import subprocess
@@ -382,6 +382,56 @@ class OnboardCodexTests(unittest.TestCase):
         )
         self.assertTrue((self.registry_dir / "project_timeline.json").exists())
         self.assertTrue((self.registry_dir / "semantic_triggers.jsonl").exists())
+
+    def test_cli_json_uses_public_onboarding_projection(self) -> None:
+        private_result = {
+            "ok": True,
+            "data": {
+                "stats_after": {
+                    "thread_count": 1,
+                    "clean_source_count": 1,
+                    "sqlite_index_count": 1,
+                    "graph_json_count": 1,
+                    "missing_artifacts": [str(self.rollout)],
+                },
+                "boundary": {"frontier": {"status": "smoke"}},
+                "frontier": {
+                    "status": "smoke",
+                    "sample_findings": [{"summary": "private frontier finding"}],
+                },
+                "plan": {"sample_candidates": [{"title": "private candidate"}]},
+            },
+            "next": {"commands": [{"script": str(self.rollout)}]},
+            "meta": {"provider": "codex", "duration_ms": 12},
+        }
+        stdout = io.StringIO()
+        with (
+            patch.object(onboard, "run_onboarding", return_value=private_result),
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "onboard_codex.py",
+                    "--cwd",
+                    str(self.cwd),
+                    "--registry-dir",
+                    str(self.registry_dir),
+                    "--json",
+                ],
+            ),
+            contextlib.redirect_stdout(stdout),
+        ):
+            code = onboard.main()
+
+        self.assertEqual(code, 0)
+        payload = json.loads(stdout.getvalue())
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["data"]["frontier_status"], "smoke")
+        self.assertNotIn("sample_findings", encoded)
+        self.assertNotIn("sample_candidates", encoded)
+        self.assertNotIn("private frontier", encoded)
+        self.assertNotIn(str(self.root), encoded)
 
     def test_repair_detects_and_rebuilds_sqlite_stale_against_clean_source(self) -> None:
         initial = registry.register_rollout_thread(

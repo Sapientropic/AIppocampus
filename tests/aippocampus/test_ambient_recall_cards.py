@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import sys
 import unittest
 from pathlib import Path
@@ -12,6 +13,13 @@ import ambient_recall_cards as cards  # noqa: E402
 
 
 class AmbientRecallCardTests(unittest.TestCase):
+    def test_card_ids_use_sha256_cache_fingerprints(self) -> None:
+        raw = "\n".join(["scent", "ambient", "route"])
+        self.assertEqual(
+            cards._stable_id(["scent", "ambient", "route"]),
+            "arc_" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:18],
+        )
+
     def test_evidence_decision_becomes_source_backed_card(self) -> None:
         result = {
             "decision": "evidence",

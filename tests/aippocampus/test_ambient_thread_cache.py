@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sys
@@ -22,6 +23,12 @@ class AmbientThreadCacheTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
+
+    def test_cache_fingerprints_use_sha256(self) -> None:
+        self.assertEqual(
+            cache._fingerprint("Thread A", prefix="atc"),
+            "atc_" + hashlib.sha256("thread a".encode("utf-8")).hexdigest()[:16],
+        )
 
     def test_thread_cache_reuses_cards_without_raw_prompt_or_workspace_text(self) -> None:
         cache_path = self.root / "ambient-thread-cache.json"

@@ -140,6 +140,8 @@ class GenericConversationProvider:
         session_id = (session_meta or {}).get("id")
         if session_id:
             return f"generic-jsonl:session:{session_id}"
+        # Transcript fallback keys are durable source ids for imported history.
+        # Keep stable until the registry can resolve old and new aliases.
         digest = hashlib.sha1(str(path.resolve()).casefold().encode("utf-8")).hexdigest()[:16]
         return f"generic-jsonl:transcript:{digest}"
 

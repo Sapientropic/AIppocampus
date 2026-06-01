@@ -13,7 +13,7 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from aippocampus_runtime.core import (
     cli_error_payload,
@@ -107,6 +107,81 @@ __all__ = [
     "validation_audit",
     "validate_findings",
 ]
+
+
+def public_count(value: Any) -> int:
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+def public_float(value: Any) -> float:
+    try:
+        return max(0.0, float(value))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def public_model_route(route: Any) -> dict[str, str]:
+    if not isinstance(route, Mapping):
+        return {}
+    provider = str(route.get("provider") or "").strip()
+    safe = "".join(char for char in provider[:48] if char.isalnum() or char in {"_", "-", "."})
+    return {"provider": safe or "unknown"}
+
+
+def public_cache(cache: Any) -> dict[str, Any]:
+    if not isinstance(cache, Mapping):
+        return {}
+    result: dict[str, Any] = {"available": bool(cache.get("available"))}
+    for key in ("hit_tokens", "miss_tokens"):
+        if key in cache:
+            result[key] = public_count(cache.get(key))
+    if "hit_rate" in cache:
+        result["hit_rate"] = public_float(cache.get("hit_rate"))
+    return result
+
+
+def public_usage(usage: Any) -> dict[str, int]:
+    if not isinstance(usage, Mapping):
+        return {}
+    keys = ("prompt_tokens", "completion_tokens", "total_tokens")
+    return {key: public_count(usage.get(key)) for key in keys if key in usage}
+
+
+def public_error(error: Any) -> dict[str, str] | None:
+    if not isinstance(error, Mapping):
+        return None
+    code = str(error.get("code") or "runtime_error")
+    safe = "".join(char for char in code[:80] if char.isalnum() or char in {"_", "-"})
+    return {"code": safe or "runtime_error"}
+
+
+def public_jobs_payload(result: Mapping[str, Any]) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "ok": bool(result.get("ok")),
+        "job_count": public_count(result.get("job_count")),
+        "successful_job_count": public_count(result.get("successful_job_count")),
+        "failure_count": public_count(result.get("failure_count")),
+        "partial_failure": bool(result.get("partial_failure")),
+        "requested_job_count": public_count(result.get("requested_job_count")),
+        "samples_per_job": public_count(result.get("samples_per_job")),
+        "concurrency": public_count(result.get("concurrency")),
+        "finding_count": public_count(result.get("finding_count")),
+        "edge_count": public_count(result.get("edge_count")),
+        "wrote": bool(result.get("wrote")),
+        "dry_run": bool(result.get("dry_run")),
+        "cache": public_cache(result.get("cache")),
+        "usage": public_usage(result.get("usage")),
+        "model_route": public_model_route(result.get("model_route")),
+        "output_private_artifacts": bool(result.get("jobs_output") or result.get("edges_output")),
+        "output_boundary": "job_details_are_local_private_artifacts",
+    }
+    error = public_error(result.get("error"))
+    if error:
+        payload["error"] = error
+    return payload
 
 
 def response_content(response: dict[str, Any]) -> str:
@@ -676,7 +751,7 @@ def main() -> int:
         if not args.json_output:
             raise
         result = cli_error_payload(exc)
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        print(json.dumps(public_jobs_payload(result), ensure_ascii=False, indent=2))
         return cli_exit_code_for_error_code(result["error"]["code"])
     if not result.get("ok") and not result.get("error"):
         first_error = next(
@@ -690,12 +765,13 @@ def main() -> int:
         if first_error:
             result["error"] = cli_error_payload_from_message(first_error)["error"]
     if args.json_output:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        print(json.dumps(public_jobs_payload(result), ensure_ascii=False, indent=2))
     else:
         print(f"jobs: {result['job_count']}")
         print(f"findings: {result['finding_count']}")
         print(f"concept edges: {result['edge_count']}")
-        print(f"jobs output: {result['jobs_output']}")
+        if result.get("jobs_output"):
+            print("jobs output: <local-private-artifact>")
     if result.get("ok"):
         return 0
     return cli_exit_code_for_error_code(

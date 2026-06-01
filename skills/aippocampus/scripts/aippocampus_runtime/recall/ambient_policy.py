@@ -465,12 +465,16 @@ def _policy_event(
             [str(value) for value in source_finding_ids or [] if str(value)],
             limit=12,
         ),
+        # Legacy policy event fingerprints are durable registry fields. Do not
+        # swap the digest in place; a future v2 needs dual-read/dual-write so
+        # old dismissals continue suppressing the same ambient cards.
         "target_text_fingerprint": (
             _hash_value(target_text_fingerprint, "target", hashlib.sha1)
             if target_text_fingerprint
             else ""
         ),
         "reason": compact_text(reason, 120),
+        # Same durable-event compatibility boundary as target_text_fingerprint.
         "thread_fingerprint": _hash_value(thread_id or "", "thread", hashlib.sha1),
         "workspace_fingerprint": workspace_fingerprint(workspace),
     }

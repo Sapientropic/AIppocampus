@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import sys
@@ -14,6 +16,7 @@ SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import question_confirmation_live as live  # noqa: E402
+from aippocampus_runtime.question import confirmation_live as live_owner  # noqa: E402
 from aippocampus_runtime.question.confirmation import (  # noqa: E402
     load_confirmation_decisions,
     normalize_confirmation,
@@ -79,6 +82,53 @@ class QuestionConfirmationLiveTests(unittest.TestCase):
         self.assertEqual(payload["wrote_count"], 0)
         self.assertFalse(self.output_path.exists())
         self.assertIn("live_external_model_confirmation", payload["cannot_claim"])
+
+    def test_cli_json_uses_public_confirmation_projection(self) -> None:
+        private_payload = {
+            "ok": True,
+            "status": "live_model_confirmation_completed",
+            "request_count": 1,
+            "artifact_count": 1,
+            "wrote_count": 0,
+            "output": str(self.output_path),
+            "route": {
+                "provider": "deepseek",
+                "base_url": "https://private-model.example/v1",
+                "api_key_env": "QUESTION_CONFIRMATION_TEST_KEY",
+            },
+            "api_key_env": "QUESTION_CONFIRMATION_TEST_KEY",
+            "usage": [{"prompt_tokens": 7, "total_tokens": 11}],
+            "artifacts": [
+                {
+                    "decision": "accept",
+                    "rationale": "private rationale with E:\\private\\notes.md",
+                    "request_contract": {"source_refs_included": False},
+                }
+            ],
+            "raw_text_emitted": False,
+            "can_claim": ["live_model_confirmation_artifacts_generated"],
+            "cannot_claim": ["real_user_calibration"],
+        }
+        stdout = io.StringIO()
+
+        with (
+            patch.object(live_owner, "run_question_confirmation_live", return_value=private_payload),
+            patch.object(sys, "argv", ["question_confirmation_live.py", "--json"]),
+            contextlib.redirect_stdout(stdout),
+        ):
+            code = live.main()
+
+        self.assertEqual(code, 0)
+        payload = json.loads(stdout.getvalue())
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(payload["artifact_count"], 1)
+        self.assertEqual(payload["model_route"], {"provider": "deepseek"})
+        self.assertNotIn("artifacts", payload)
+        self.assertNotIn("output", payload)
+        self.assertNotIn("api_key_env", encoded)
+        self.assertNotIn("private-model.example", encoded)
+        self.assertNotIn("private rationale", encoded)
+        self.assertNotIn("E:\\private", encoded)
 
     def test_missing_api_key_skips_live_call(self) -> None:
         self.write_requests()
