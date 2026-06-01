@@ -232,7 +232,7 @@
       }
 
       .band {
-        padding: clamp(62px, 8vw, 116px) clamp(20px, 5vw, 76px);
+        padding: clamp(52px, 7vw, 96px) clamp(20px, 5vw, 76px);
       }
 
       .band.warm {
@@ -320,6 +320,33 @@
         align-items: center;
       }
 
+      .intro-band {
+        padding-top: clamp(42px, 5vw, 72px);
+      }
+
+      .path-band {
+        padding-block: clamp(58px, 6vw, 86px);
+      }
+
+      .path-section {
+        grid-template-columns: minmax(250px, 0.66fr) minmax(0, 1.34fr);
+        align-items: center;
+      }
+
+      .path-copy {
+        display: grid;
+        gap: 20px;
+        align-content: center;
+      }
+
+      .path-copy h2 {
+        max-width: 8ch;
+      }
+
+      .path-copy .section-copy {
+        max-width: 360px;
+      }
+
       .return-section .image-frame {
         justify-self: end;
         width: min(100%, 620px);
@@ -356,21 +383,28 @@
       }
 
       .agent-box {
-        margin-top: 24px;
+        margin-top: 14px;
+        padding: 18px 20px 16px;
       }
 
       .agent-box strong {
         font-family: var(--font-ui);
       }
 
+      .agent-box p {
+        margin: 4px 0 0;
+      }
+
       pre {
         max-width: 100%;
-        margin: 16px 0 0;
+        margin: 14px 0 0;
         overflow-x: auto;
-        padding: 16px;
+        padding: 14px;
         background: #07101f;
         color: #fff6e8;
-        font-size: 0.91rem;
+        font-size: 0.86rem;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
       }
 
       code {
@@ -378,7 +412,7 @@
       }
 
       footer {
-        padding: 32px clamp(20px, 5vw, 76px) 46px;
+        padding: 28px clamp(20px, 5vw, 76px) 34px;
         background: var(--ink);
         color: #fff6e8;
         font-family: var(--font-ui);
@@ -401,6 +435,11 @@
         .section-grid,
         .link-list {
           grid-template-columns: 1fr;
+        }
+
+        .path-copy h2,
+        .path-copy .section-copy {
+          max-width: none;
         }
 
         .return-section .image-frame {
@@ -457,10 +496,6 @@
           width: 100%;
         }
 
-        pre {
-          white-space: pre-wrap;
-          overflow-wrap: anywhere;
-        }
       }
     </style>
   </head>
@@ -490,7 +525,7 @@
     </header>
 
     <main>
-      <section class="band">
+      <section class="band intro-band">
         <div class="section-grid">
           <h2>Memory should be able to show where it came from.</h2>
           <div class="principles">
@@ -538,9 +573,14 @@
         </div>
       </section>
 
-      <section class="band deep">
-        <div class="section-grid">
-          <h2>Start where you are.</h2>
+      <section class="band deep path-band">
+        <div class="section-grid path-section">
+          <div class="path-copy">
+            <h2>Start where you are.</h2>
+            <p class="section-copy">
+              A short path for humans, and a clean first probe for agents.
+            </p>
+          </div>
           <div class="links">
             <div class="link-list">
               <a href="https://github.com/Sapientropic/AIppocampus/blob/main/README.md">
