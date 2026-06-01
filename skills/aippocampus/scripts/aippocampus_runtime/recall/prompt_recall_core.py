@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.recall import prompt_cues
+from aippocampus_runtime.recall.prompt_recall_policy import PROMPT_RECALL_GATE_POLICY
 from aippocampus_runtime.recall.query_policy import CONCEPT_TRIGGERS
 from aippocampus_runtime.registry.api import (
     deep_search_entry,
@@ -24,89 +25,20 @@ from aippocampus_runtime.registry.api import (
     unique_preserve,
 )
 
-# Keep these assignments as compatibility re-exports for older installed hooks.
-# First-party code should import cue policy directly from
-# `aippocampus_runtime.recall.prompt_cues`; this list marks the compatibility
-# surface so it can be removed deliberately after the installer/runtime
-# migration window, not by casual cleanup.
-CUE_COMPAT_EXPORTS = (
-    "ASSOCIATIVE_CUES",
-    "CODE_SURFACE_CUES",
-    "CONCEPT_EXPANSION_MAX_TERMS",
-    "DECISION_CONTINUATION_CUES",
-    "EXPLICIT_RECALL_TERMS",
-    "IMPORTANCE_CUES",
-    "RECENCY_CUES",
-    "SEMANTIC_EVIDENCE_TERMS",
-    "SEMANTIC_GATE_ALIAS_DECISIONS",
-    "SEMANTIC_GATE_CUE_DECISIONS",
-    "WEAK_DEICTIC_TERMS",
-    "association_term_is_generic",
-    "concept_expansion_terms",
-    "evidence_content_terms",
-    "expand_query_terms",
-    "explicit_recall_terms",
-    "is_decision_continuation",
-    "matched_life_wide_cue_terms",
-    "matched_life_wide_timeline_cues",
-    "matched_terms",
-    "memory_boundary_context_intent",
-    "natural_evidence_intent",
-    "negative_evidence_intent",
-    "prompt_is_code_surface",
-    "prompt_is_secret_surface",
-    "semantic_gate_can_request_evidence",
-    "semantic_gate_is_memory_cue",
-    "semantic_gate_terms",
-    "should_run_semantic_gate",
-    "source_evidence_intent",
-    "working_memory_terms",
-)
-ASSOCIATIVE_CUES = prompt_cues.ASSOCIATIVE_CUES
-CODE_SURFACE_CUES = prompt_cues.CODE_SURFACE_CUES
-CONCEPT_EXPANSION_MAX_TERMS = prompt_cues.CONCEPT_EXPANSION_MAX_TERMS
-DECISION_CONTINUATION_CUES = prompt_cues.DECISION_CONTINUATION_CUES
-EXPLICIT_RECALL_TERMS = prompt_cues.EXPLICIT_RECALL_TERMS
-IMPORTANCE_CUES = prompt_cues.IMPORTANCE_CUES
-RECENCY_CUES = prompt_cues.RECENCY_CUES
-SEMANTIC_EVIDENCE_TERMS = prompt_cues.SEMANTIC_EVIDENCE_TERMS
-SEMANTIC_GATE_ALIAS_DECISIONS = prompt_cues.SEMANTIC_GATE_ALIAS_DECISIONS
-SEMANTIC_GATE_CUE_DECISIONS = prompt_cues.SEMANTIC_GATE_CUE_DECISIONS
-WEAK_DEICTIC_TERMS = prompt_cues.WEAK_DEICTIC_TERMS
-association_term_is_generic = prompt_cues.association_term_is_generic
-concept_expansion_terms = prompt_cues.concept_expansion_terms
-evidence_content_terms = prompt_cues.evidence_content_terms
-expand_query_terms = prompt_cues.expand_query_terms
-explicit_recall_terms = prompt_cues.explicit_recall_terms
-is_decision_continuation = prompt_cues.is_decision_continuation
-matched_life_wide_cue_terms = prompt_cues.matched_life_wide_cue_terms
-matched_life_wide_timeline_cues = prompt_cues.matched_life_wide_timeline_cues
-matched_terms = prompt_cues.matched_terms
-memory_boundary_context_intent = prompt_cues.memory_boundary_context_intent
-natural_evidence_intent = prompt_cues.natural_evidence_intent
-negative_evidence_intent = prompt_cues.negative_evidence_intent
-prompt_is_code_surface = prompt_cues.prompt_is_code_surface
-prompt_is_secret_surface = prompt_cues.prompt_is_secret_surface
-semantic_gate_can_request_evidence = prompt_cues.semantic_gate_can_request_evidence
-semantic_gate_is_memory_cue = prompt_cues.semantic_gate_is_memory_cue
-semantic_gate_terms = prompt_cues.semantic_gate_terms
-should_run_semantic_gate = prompt_cues.should_run_semantic_gate
-source_evidence_intent = prompt_cues.source_evidence_intent
-working_memory_terms = prompt_cues.working_memory_terms
-
+GATE_POLICY = PROMPT_RECALL_GATE_POLICY
 PROMPT_HOOK_SEMANTIC_TIMEOUT = int(os.environ.get("AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT", "12"))
-SCENT_THRESHOLD = 5.0
-EVIDENCE_THRESHOLD = 10.0
-DEFAULT_SEARCH_BUDGET = 3
-MAX_CONTEXT_CHARS = 1800
+SCENT_THRESHOLD = GATE_POLICY.scent_threshold
+EVIDENCE_THRESHOLD = GATE_POLICY.evidence_threshold
+DEFAULT_SEARCH_BUDGET = GATE_POLICY.default_search_budget
+MAX_CONTEXT_CHARS = GATE_POLICY.max_context_chars
 # Probe reranking opens source indexes for candidate threads, so the foreground
 # hook keeps this bounded. Deep, source-backed recall can still use explicit
 # search commands outside the UserPromptSubmit timeout.
-SCENT_PROBE_LIMIT = int(os.environ.get("AIPPOCAMPUS_PROMPT_PROBE_LIMIT", "8"))
-SCENT_PROBE_SCORE_MULTIPLIER = 2.4
-SCENT_PROBE_SCORE_CAP = 32.0
-EVIDENCE_LITE_MIN_PROBE_SCORE = 6.0
-LIFE_WIDE_TIMELINE_CANDIDATE_LIMIT = 3
+SCENT_PROBE_LIMIT = GATE_POLICY.scent_probe_limit
+SCENT_PROBE_SCORE_MULTIPLIER = GATE_POLICY.scent_probe_score_multiplier
+SCENT_PROBE_SCORE_CAP = GATE_POLICY.scent_probe_score_cap
+EVIDENCE_LITE_MIN_PROBE_SCORE = GATE_POLICY.evidence_lite_min_probe_score
+LIFE_WIDE_TIMELINE_CANDIDATE_LIMIT = GATE_POLICY.life_wide_timeline_candidate_limit
 
 
 def hook_input_from_stdin() -> dict[str, Any]:
@@ -188,9 +120,11 @@ def fuzzy_entry_score(entry: dict[str, Any], query_terms: list[str]) -> float:
 def score_candidates(
     prompt: str, registry: dict[str, Any], query_terms: list[str]
 ) -> list[dict[str, Any]]:
-    explicit = explicit_recall_terms(prompt)
-    associative = matched_terms(prompt, set(CONCEPT_TRIGGERS) | ASSOCIATIVE_CUES)
-    important = matched_terms(prompt, IMPORTANCE_CUES)
+    explicit = prompt_cues.explicit_recall_terms(prompt)
+    associative = prompt_cues.matched_terms(
+        prompt, set(CONCEPT_TRIGGERS) | prompt_cues.ASSOCIATIVE_CUES
+    )
+    important = prompt_cues.matched_terms(prompt, prompt_cues.IMPORTANCE_CUES)
 
     candidates: list[dict[str, Any]] = []
     for entry in registry.get("threads") or []:
@@ -199,11 +133,14 @@ def score_candidates(
             continue
         score = base
         if explicit:
-            score += 4.0
+            score += GATE_POLICY.explicit_recall_bonus
         if associative:
-            score += min(4.0, len(associative) * 1.5)
+            score += min(
+                GATE_POLICY.associative_cue_cap,
+                len(associative) * GATE_POLICY.associative_cue_weight,
+            )
         if important:
-            score += 2.5
+            score += GATE_POLICY.importance_cue_bonus
         candidates.append(candidate_summary(entry, score, query_terms))
     return sort_candidates(candidates)
 
@@ -227,11 +164,22 @@ def association_boost(match: dict[str, Any], total_threads: int) -> float:
     df = association_document_frequency(match, total_threads)
     n = max(total_threads, df, 1)
     idf = math.log((n + 1.0) / (df + 1.0)) + 1.0
-    status_bonus = 1.25 if match.get("status") == "verified" else 1.0
+    status_bonus = (
+        GATE_POLICY.association_verified_status_bonus
+        if match.get("status") == "verified"
+        else 1.0
+    )
     # A matched association is enough to produce a scent, but broad terms such
     # as a project name should not drown out rare source terms. IDF keeps the
     # gate open while moving ranking authority toward more specific memories.
-    return round(SCENT_THRESHOLD + min(8.0, confidence * idf * status_bonus * 2.5), 3)
+    return round(
+        GATE_POLICY.scent_threshold
+        + min(
+            GATE_POLICY.association_boost_cap,
+            confidence * idf * status_bonus * GATE_POLICY.association_boost_weight,
+        ),
+        3,
+    )
 
 
 def merge_association_candidates(
@@ -316,7 +264,7 @@ def merge_life_wide_timeline_candidates(
     prompt: str,
     query_terms: list[str],
 ) -> list[dict[str, Any]]:
-    labels, cue_terms = matched_life_wide_timeline_cues(prompt)
+    labels, cue_terms = prompt_cues.matched_life_wide_timeline_cues(prompt)
     if not labels:
         return candidates
     life_wide = timeline.get("life_wide") or {}
@@ -327,7 +275,7 @@ def merge_life_wide_timeline_candidates(
     by_thread = {entry.get("thread_key"): entry for entry in registry.get("threads") or []}
     by_key = {item.get("thread_key"): item for item in candidates}
     added_threads: set[str] = set()
-    recency_terms = matched_terms(prompt, RECENCY_CUES)
+    recency_terms = prompt_cues.matched_terms(prompt, prompt_cues.RECENCY_CUES)
     for label in labels:
         group = label_groups.get(label) or {}
         if not isinstance(group, dict):
@@ -353,7 +301,7 @@ def merge_life_wide_timeline_candidates(
                 + [str(value) for value in (turn.get("topic_terms") or [])[:3]],
                 limit=8,
             )
-            boost = SCENT_THRESHOLD + 4.0
+            boost = GATE_POLICY.scent_threshold + GATE_POLICY.life_wide_timeline_boost
             existing = by_key.get(thread_key)
             if existing:
                 existing["score"] = round(float(existing.get("score") or 0.0) + boost, 3)
@@ -400,7 +348,7 @@ def merge_timeline_candidates(
     cwd: Path,
     query_terms: list[str],
 ) -> list[dict[str, Any]]:
-    if not timeline or not matched_terms(prompt, RECENCY_CUES):
+    if not timeline or not prompt_cues.matched_terms(prompt, prompt_cues.RECENCY_CUES):
         return candidates
     by_thread = {entry.get("thread_key"): entry for entry in registry.get("threads") or []}
     by_key = {item.get("thread_key"): item for item in candidates}
@@ -415,13 +363,13 @@ def merge_timeline_candidates(
         entry = by_thread.get(thread_key)
         if not entry:
             continue
-        boost = EVIDENCE_THRESHOLD + 2.0
+        boost = GATE_POLICY.evidence_threshold + GATE_POLICY.project_timeline_evidence_boost
         existing = by_key.get(thread_key)
         if existing:
             existing["score"] = round(float(existing.get("score") or 0.0) + boost, 3)
             existing["matched_terms"] = unique_preserve(
                 list(existing.get("matched_terms") or [])
-                + matched_terms(prompt, RECENCY_CUES)
+                + prompt_cues.matched_terms(prompt, prompt_cues.RECENCY_CUES)
                 + [project.get("project_label") or ""],
                 limit=8,
             )
@@ -430,7 +378,7 @@ def merge_timeline_candidates(
         item = candidate_summary(entry, boost, query_terms)
         item["matched_terms"] = unique_preserve(
             list(item.get("matched_terms") or [])
-            + matched_terms(prompt, RECENCY_CUES)
+            + prompt_cues.matched_terms(prompt, prompt_cues.RECENCY_CUES)
             + [project.get("project_label") or ""],
             limit=8,
         )
@@ -455,7 +403,15 @@ def cognitive_map_terms(matches: list[dict[str, Any]]) -> list[str]:
 def cognitive_map_boost(match: dict[str, Any]) -> float:
     confidence = float(match.get("confidence") or 0.0)
     score = float(match.get("score") or 0.0)
-    return round(SCENT_THRESHOLD + min(12.0, confidence * 7.0 + score * 0.35), 3)
+    return round(
+        GATE_POLICY.scent_threshold
+        + min(
+            GATE_POLICY.cognitive_map_boost_cap,
+            confidence * GATE_POLICY.cognitive_map_confidence_weight
+            + score * GATE_POLICY.cognitive_map_score_weight,
+        ),
+        3,
+    )
 
 
 def merge_cognitive_map_candidates(
@@ -555,7 +511,9 @@ def should_suppress(
     semantic_memory_cue: bool = False,
     source_evidence_cue: bool = False,
 ) -> bool:
-    if prompt_is_secret_surface(prompt) and not memory_boundary_context_intent(prompt):
+    secret_surface = prompt_cues.prompt_is_secret_surface(prompt)
+    boundary_intent = prompt_cues.memory_boundary_context_intent(prompt)
+    if secret_surface and not boundary_intent:
         # Secret-adjacent surfaces are intentionally stricter than ordinary
         # code prompts. They often contain harmless placeholders in tests, but
         # the next paste can contain a real cookie/header/key; do not let
@@ -587,7 +545,7 @@ def should_suppress(
         # Cognitive-map routes come from the slower subconscious layer. The
         # foreground hook may use them as navigation scent, but not as evidence.
         return False
-    if prompt_is_code_surface(prompt):
+    if prompt_cues.prompt_is_code_surface(prompt):
         # Global prompt hooks are expensive socially, not computationally: a
         # normal "fix the button" task should not suddenly summon old personal
         # or philosophical memories unless the user also gave a memory cue.
