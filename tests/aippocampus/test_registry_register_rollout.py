@@ -25,6 +25,7 @@ import registry  # noqa: E402
 from conversation_sources import CodexConversationProvider  # noqa: E402
 
 REGISTRY = SCRIPTS / "registry.py"
+AIPPOCAMPUS_CLI = SCRIPTS / "aippocampus_cli.py"
 
 
 class RegisterRolloutTests(unittest.TestCase):
@@ -76,6 +77,36 @@ class RegisterRolloutTests(unittest.TestCase):
                     "message": "旧线程已经注册为可检索的 clean-source 原文参考。",
                 },
             }
+        )
+
+    def _write_generic_jsonl(self, path: Path, *, malformed: bool = False) -> None:
+        rows = [
+            {
+                "session_id": "generic-import-session",
+                "timestamp": "2026-05-30T04:10:00Z",
+                "cwd": str(self.cwd),
+                "role": "user",
+                "text": "generic import should register from an explicit path",
+                "turn_id": "t1",
+                "source_ref": "browser:session:generic-import-session#L1",
+                "provider_metadata": {"provider": "browser-test"},
+            },
+            {
+                "session_id": "generic-import-session",
+                "timestamp": "2026-05-30T04:10:01Z",
+                "cwd": str(self.cwd),
+                "role": "assistant",
+                "text": "clean source is built through the generic provider",
+                "turn_id": "t1",
+                "source_ref": "browser:session:generic-import-session#L2",
+                "provider_metadata": {"provider": "browser-test"},
+            },
+        ]
+        if malformed:
+            rows[1].pop("text")
+        path.write_text(
+            "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
+            encoding="utf-8",
         )
 
     def _copy_rollout_into_codex_sessions(self) -> Path:
@@ -169,6 +200,113 @@ class RegisterRolloutTests(unittest.TestCase):
         data = json.loads(proc.stdout)
         self.assertEqual(data["count"], 1)
         self.assertEqual(data["planned"][0]["thread_key"], "session:session-other")
+
+    def test_registry_cli_register_source_dry_run_validates_generic_jsonl(self) -> None:
+        transcript = self.root / "generic-import.jsonl"
+        self._write_generic_jsonl(transcript)
+
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(REGISTRY),
+                "--registry-dir",
+                str(self.registry_dir),
+                "register-source",
+                "--provider",
+                "generic-jsonl",
+                "--input",
+                str(transcript),
+                "--project",
+                "External Import",
+                "--dry-run",
+                "--json",
+            ],
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        data = json.loads(proc.stdout)
+        self.assertTrue(data["ok"])
+        self.assertTrue(data["dry_run"])
+        self.assertEqual(data["source_provider"], "generic-jsonl")
+        self.assertEqual(data["thread_key"], "generic-jsonl:session:generic-import-session")
+        self.assertEqual(data["message_count"], 2)
+        self.assertFalse((self.registry_dir / "threads.json").exists())
+
+    def test_aippocampus_import_conversation_registers_generic_jsonl(self) -> None:
+        transcript = self.root / "generic-import.jsonl"
+        self._write_generic_jsonl(transcript)
+
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(AIPPOCAMPUS_CLI),
+                "import",
+                "conversation",
+                "--registry-dir",
+                str(self.registry_dir),
+                "--format",
+                "generic-jsonl",
+                "--input",
+                str(transcript),
+                "--project",
+                "External Import",
+                "--json",
+            ],
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        data = json.loads(proc.stdout)
+        self.assertTrue(data["ok"])
+        self.assertFalse(data["dry_run"])
+        self.assertEqual(data["source_provider"], "generic-jsonl")
+        self.assertEqual(data["entry"]["source_provider"], "generic-jsonl")
+        self.assertEqual(data["entry"]["thread_key"], "generic-jsonl:session:generic-import-session")
+        clean_messages = Path(data["entry"]["paths"]["clean_source_messages_jsonl"])
+        self.assertTrue(clean_messages.exists())
+        self.assertIn("generic import should register", clean_messages.read_text(encoding="utf-8"))
+
+    def test_register_source_reports_generic_jsonl_line_diagnostics(self) -> None:
+        transcript = self.root / "bad-generic-import.jsonl"
+        self._write_generic_jsonl(transcript, malformed=True)
+
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(REGISTRY),
+                "--registry-dir",
+                str(self.registry_dir),
+                "register-source",
+                "--provider",
+                "generic-jsonl",
+                "--input",
+                str(transcript),
+                "--json",
+            ],
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
+        data = json.loads(proc.stdout)
+        self.assertFalse(data["ok"])
+        self.assertEqual(data["error"]["code"], "missing_required_fields")
+        self.assertEqual(data["error"]["class"], "validation_error")
+        self.assertEqual(data["error"]["line"], 2)
+        self.assertEqual(data["error"]["details"]["missing"], ["text"])
+        self.assertFalse((self.registry_dir / "threads.json").exists())
 
     def test_registry_cli_search_redacts_top_level_registry_path(self) -> None:
         registry.register_rollout_thread(

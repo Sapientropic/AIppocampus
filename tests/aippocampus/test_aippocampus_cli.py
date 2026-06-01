@@ -72,6 +72,36 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(import_invocation.module_name, "aippocampus_runtime.artifacts.import_bundle")
         self.assertEqual(import_invocation.script_name, "import_bundle.py")
 
+        conversation_import = facade.resolve_command(
+            [
+                "import",
+                "conversation",
+                "--registry-dir",
+                "registry",
+                "--format",
+                "generic-jsonl",
+                "--input",
+                "conversation.jsonl",
+                "--json",
+            ]
+        )
+        self.assertEqual(conversation_import.command, "import")
+        self.assertEqual(conversation_import.module_name, "aippocampus_runtime.registry.api")
+        self.assertEqual(conversation_import.script_name, "registry.py")
+        self.assertEqual(
+            conversation_import.args,
+            [
+                "--registry-dir",
+                "registry",
+                "register-source",
+                "--provider",
+                "generic-jsonl",
+                "--input",
+                "conversation.jsonl",
+                "--json",
+            ],
+        )
+
     def test_package_facade_default_runner_is_in_process(self) -> None:
         from aippocampus_runtime.cli import facade
 

@@ -210,6 +210,15 @@ REQUIRED_PUBLIC_API_CONTRACT_TERMS = {
     "`aippocampus_runtime.public` is deferred": (
         "public API doc missing deferred public facade decision"
     ),
+    "`aippocampus import conversation --format generic-jsonl --input <path>`": (
+        "public API doc missing provider-neutral conversation import command"
+    ),
+    "`registry.py register-source --provider generic-jsonl --input <path>`": (
+        "public API doc missing registry register-source command"
+    ),
+    "not a generic arbitrary-file ingest endpoint": (
+        "public API doc missing MCP/register-source boundary"
+    ),
 }
 
 REQUIRED_PUBLIC_CORE_SCHEMA_CONTRACT_TERMS = {
