@@ -680,7 +680,7 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
             print(payload["error"], flush=True)
-        return cli_exit_code_for_error_code(str(payload.get("code") or ""))
+        return cli_exit_code_for_error_code(payload["error"]["code"])
 
 
 if __name__ == "__main__":

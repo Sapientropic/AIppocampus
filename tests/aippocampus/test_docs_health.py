@@ -176,6 +176,37 @@ class DocsHealthTests(unittest.TestCase):
         self.assertIn("public API doc missing MCP control-plane boundary", issues)
         self.assertIn("public API doc missing future MCP write review bar", issues)
 
+    def test_public_api_contract_reports_missing_cli_json_error_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            guides = repo / "docs" / "guides"
+            guides.mkdir(parents=True)
+            (guides / "public-api.md").write_text(
+                "\n".join(
+                    [
+                        "### MCP Control-Plane Boundary",
+                        "Control-plane registration means",
+                        "memory-write API",
+                        "Future MCP write additions must prove",
+                        "privacy, provenance, idempotence",
+                        "### Environment Configuration Matrix",
+                        "| Variable / family | Group | Audience | Default / precedence | Sensitivity | Stability |",
+                        "`AIPPOCAMPUS_PROJECTS_TOKEN`",
+                        "### Python Import Stability Layers",
+                        "Stable automation surfaces",
+                        "Trusted-process runtime helpers",
+                        "Internal helper imports",
+                        "`aippocampus_runtime.public` is deferred",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            issues = docs_health.public_api_contract_issues(repo)
+
+        self.assertIn("public API doc missing CLI JSON error contract", issues)
+        self.assertIn("public API doc missing stable CLI error classes", issues)
+
     def test_public_core_schema_contract_covers_metadata_namespace_rules(self) -> None:
         repo_root = docs_health.find_repo_root(ROOT)
         self.assertIsNotNone(repo_root)

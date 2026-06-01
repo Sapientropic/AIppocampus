@@ -17,9 +17,11 @@ from aippocampus_runtime.cli import errors as _cli_errors
 from aippocampus_runtime.source import rollout as _rollout
 
 build_anchor_graph = _anchor_graph.build_anchor_graph
+cli_error_class_for_error_code = _cli_errors.cli_error_class_for_error_code
 cli_error_code_from_message = _cli_errors.cli_error_code_from_message
 cli_error_payload = _cli_errors.cli_error_payload
 cli_error_payload_from_message = _cli_errors.cli_error_payload_from_message
+cli_public_error_object = _cli_errors.cli_public_error_object
 cli_exit_code_for_error_code = _cli_errors.cli_exit_code_for_error_code
 compact_text = _text.compact_text
 deepseek_cache_metrics_from_usage = _safety.deepseek_cache_metrics_from_usage

@@ -229,8 +229,10 @@ class ImportCouplingTests(unittest.TestCase):
             core.deepseek_cache_metrics_from_usage,
             safety.deepseek_cache_metrics_from_usage,
         )
+        self.assertIs(core.cli_error_class_for_error_code, errors.cli_error_class_for_error_code)
         self.assertIs(core.cli_error_payload, errors.cli_error_payload)
         self.assertIs(core.cli_error_payload_from_message, errors.cli_error_payload_from_message)
+        self.assertIs(core.cli_public_error_object, errors.cli_public_error_object)
         self.assertIs(core.parse_anchor_file, anchor_graph.parse_anchor_file)
         self.assertIs(core.build_anchor_graph, anchor_graph.build_anchor_graph)
 
