@@ -84,6 +84,7 @@ pages; most detailed evidence pages are grouped by purpose: `readiness/`,
   public-safe community report intake, curation rules, and Discussion category
   setup boundary.
 - [`benchmark-evidence-map.md`](evidence/benchmark-evidence-map.md) - first-stop map for benchmark runners, smoke evidence surfaces, corpus records, and dated-result owners.
+- [`benchmarks/design/README.md`](evidence/benchmarks/design/README.md) - benchmark design rationale hub for evaluation philosophy, track-family boundaries, and external comparison analysis.
 - [`stage-0-5-readiness.md`](evidence/readiness/stage-0-5-readiness.md) - current evidence matrix for roadmap stages 0 through 5; it is a status snapshot, not the canonical roadmap.
 - [`public-readiness-verification.md`](evidence/readiness/public-readiness-verification.md) - dated verification ledger. It preserves command evidence but is not the canonical status page.
 - [`longmemeval.md`](evidence/benchmarks/longmemeval.md) - LongMemEval sources, dataset checksums, dedicated runner commands, retrieval-only results, and claim boundaries.
