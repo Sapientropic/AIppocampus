@@ -6,6 +6,9 @@ surface.
 
 For supported CLI, MCP, JSON, environment-variable, and import-stability
 expectations, see [public-api.md](public-api.md).
+The install guide shows common commands only; the full environment-variable
+matrix and Python import layer policy live in that public API document so the
+stability boundary has one owner.
 
 ## Agent One-Command Path
 

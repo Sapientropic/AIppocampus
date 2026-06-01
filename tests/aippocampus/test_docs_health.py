@@ -127,6 +127,29 @@ class DocsHealthTests(unittest.TestCase):
 
         self.assertEqual(result, [])
 
+    def test_public_api_contract_covers_env_matrix_and_python_import_layers(self) -> None:
+        repo_root = docs_health.find_repo_root(ROOT)
+        self.assertIsNotNone(repo_root)
+
+        result = docs_health.public_api_contract_issues(repo_root)
+
+        self.assertEqual(result, [])
+
+    def test_public_api_contract_reports_missing_env_matrix(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            guides = repo / "docs" / "guides"
+            guides.mkdir(parents=True)
+            (guides / "public-api.md").write_text(
+                "# Public API\n\n## Environment Variables\n\n`AIPPOCAMPUS_REGISTRY_DIR`\n",
+                encoding="utf-8",
+            )
+
+            issues = docs_health.public_api_contract_issues(repo)
+
+        self.assertIn("public API doc missing environment configuration matrix", issues)
+        self.assertIn("public API doc missing Python import stability layers", issues)
+
     def test_benchmark_evidence_map_reports_missing_runner(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
