@@ -61,6 +61,77 @@
     return String(value || "note").trim().replace(/\s+/g, "-").replace(/[^\p{L}\p{N}_-]+/gu, "") || "note";
   }
 
+  const generatedBodyAllowedTags = new Set([
+    "a", "blockquote", "br", "code", "div", "em", "h1", "h2", "h3", "h4", "h5", "h6",
+    "li", "ol", "p", "pre", "span", "strong", "table", "tbody", "td", "th", "thead", "tr", "ul"
+  ]);
+  const generatedBodyGlobalAttrs = new Set([
+    "class", "data-callout", "data-heading", "data-note", "data-publish-anchor",
+    "data-publish-anchor-aliases", "dir", "id"
+  ]);
+  const generatedBodyTagAttrs = {
+    a: new Set(["href"])
+  };
+  const generatedBodyUrlAttrs = new Set(["href"]);
+
+  function isSafeGeneratedBodyUrl(value) {
+    const trimmed = String(value || "").trim();
+    if (!trimmed) return false;
+    if (trimmed.startsWith("#")) return true;
+    if (trimmed.startsWith("//")) return false;
+    if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)) return true;
+    try {
+      const url = new URL(trimmed, document.baseURI);
+      return ["http:", "https:", "mailto:"].includes(url.protocol);
+    } catch {
+      return false;
+    }
+  }
+
+  function isGeneratedBodyAttrAllowed(tag, attrName, attrValue) {
+    const name = attrName.toLowerCase();
+    if (name.startsWith("on") || name === "style") return false;
+    if (!generatedBodyGlobalAttrs.has(name) && !generatedBodyTagAttrs[tag]?.has(name)) {
+      return false;
+    }
+    if (generatedBodyUrlAttrs.has(name)) return isSafeGeneratedBodyUrl(attrValue);
+    return true;
+  }
+
+  function generatedBodyAttrMarkup(tag, attrs = {}) {
+    return Object.entries(attrs || {}).map(([name, value]) => {
+      const attrName = String(name || "").toLowerCase();
+      const attrValue = String(value ?? "");
+      if (!isGeneratedBodyAttrAllowed(tag, attrName, attrValue)) return "";
+      return ` ${attrName}="${escapeHtml(attrValue)}"`;
+    }).join("");
+  }
+
+  function generatedBodyNodeText(node) {
+    if (!node || typeof node !== "object") return String(node ?? "");
+    if (Object.prototype.hasOwnProperty.call(node, "text")) return String(node.text ?? "");
+    return (Array.isArray(node.children) ? node.children : []).map(generatedBodyNodeText).join("");
+  }
+
+  function addClassValue(current, nextClass) {
+    const classes = new Set(String(current || "").split(/\s+/).filter(Boolean));
+    classes.add(nextClass);
+    return Array.from(classes).join(" ");
+  }
+
+  function renderGeneratedBodyNode(node) {
+    if (node === null || node === undefined) return "";
+    if (typeof node !== "object") return escapeHtml(node);
+    if (Object.prototype.hasOwnProperty.call(node, "text")) return escapeHtml(node.text);
+    const tag = String(node.tag || "").toLowerCase();
+    if (!generatedBodyAllowedTags.has(tag)) return escapeHtml(generatedBodyNodeText(node));
+    const attrs = node.attrs && typeof node.attrs === "object" ? node.attrs : {};
+    const children = (Array.isArray(node.children) ? node.children : []).map(renderGeneratedBodyNode).join("");
+    const attrMarkup = generatedBodyAttrMarkup(tag, attrs);
+    if (tag === "br") return `<br${attrMarkup}>`;
+    return `<${tag}${attrMarkup}>${children}</${tag}>`;
+  }
+
   function supportsSlidingPanes() {
     return window.matchMedia?.("(min-width: 1279px)")?.matches ?? true;
   }
@@ -79,44 +150,43 @@
     `;
   }
 
-  function publishBody(bodyHtml) {
-    const template = document.createElement("template");
-    template.innerHTML = bodyHtml || "";
-    const fragment = document.createElement("div");
-    Array.from(template.content.childNodes).forEach((node) => {
-      if (node.nodeType !== Node.ELEMENT_NODE) {
-        fragment.appendChild(node.cloneNode(true));
-        return;
-      }
-      const element = node.cloneNode(true);
-      const tag = element.tagName.toLowerCase();
-      if (/^h[1-6]$/.test(tag)) {
-        const level = tag.slice(1);
-        const title = element.textContent.trim();
-        element.classList.add("publish-article-heading");
-        element.setAttribute("data-heading", title);
-        element.setAttribute("dir", "auto");
-        element.id ||= slug(title);
-        element.setAttribute("data-publish-anchor", title);
-        element.setAttribute("data-publish-anchor-aliases", title);
-        const wrapper = document.createElement(`div`);
-        wrapper.className = `el-h${level}`;
-        wrapper.appendChild(element);
-        fragment.appendChild(wrapper);
-        return;
-      }
-      const wrapperMap = { p: "el-p", ul: "el-ul", ol: "el-ol", div: "el-div", blockquote: "el-blockquote", table: "el-table", pre: "el-pre" };
-      const wrapperClass = wrapperMap[tag];
-      if (wrapperClass) {
-        const wrapper = document.createElement("div");
-        wrapper.className = wrapperClass;
-        wrapper.appendChild(element);
-        fragment.appendChild(wrapper);
-        return;
-      }
-      fragment.appendChild(element);
-    });
-    return fragment.innerHTML;
+  function generatedBodyNodesFor(page) {
+    if (Array.isArray(page?.body_nodes)) return page.body_nodes;
+    return [{ tag: "p", attrs: {}, children: [{ text: String(page?.body || "") }] }];
+  }
+
+  function publishBodyNode(node) {
+    if (!node || typeof node !== "object" || Object.prototype.hasOwnProperty.call(node, "text")) {
+      return renderGeneratedBodyNode(node);
+    }
+    const tag = String(node.tag || "").toLowerCase();
+    if (/^h[1-6]$/.test(tag)) {
+      const level = tag.slice(1);
+      const title = generatedBodyNodeText(node).trim();
+      const attrs = node.attrs && typeof node.attrs === "object" ? node.attrs : {};
+      const headingNode = {
+        ...node,
+        attrs: {
+          ...attrs,
+          class: addClassValue(attrs.class, "publish-article-heading"),
+          "data-heading": title,
+          dir: "auto",
+          id: attrs.id || slug(title),
+          "data-publish-anchor": title,
+          "data-publish-anchor-aliases": title
+        }
+      };
+      return `<div class="el-h${level}">${renderGeneratedBodyNode(headingNode)}</div>`;
+    }
+    const wrapperMap = { p: "el-p", ul: "el-ul", ol: "el-ol", div: "el-div", blockquote: "el-blockquote", table: "el-table", pre: "el-pre" };
+    const wrapperClass = wrapperMap[tag];
+    const renderedNode = renderGeneratedBodyNode(node);
+    if (wrapperClass) return `<div class="${wrapperClass}">${renderedNode}</div>`;
+    return renderedNode;
+  }
+
+  function publishBody(page) {
+    return generatedBodyNodesFor(page).map(publishBodyNode).join("");
   }
 
   function pageMarkup(id) {
@@ -128,7 +198,7 @@
         <h1 class="page-header" id="${escapeHtml(slug(title))}" data-heading="${escapeHtml(title)}">${escapeHtml(title)}</h1>
       </div>
       ${publishHeading(1, title)}
-      ${publishBody(page?.body || "")}
+      ${publishBody(page)}
     `;
   }
 
