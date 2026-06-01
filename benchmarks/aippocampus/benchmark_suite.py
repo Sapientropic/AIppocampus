@@ -397,6 +397,28 @@ def collect_cannot_claim(tracks: dict[str, dict[str, Any]], *, quality_gate_ok: 
     return sorted(claims)
 
 
+def collect_cannot_claim_by_track(
+    tracks: dict[str, dict[str, Any]],
+) -> dict[str, list[str]]:
+    by_track: dict[str, list[str]] = {}
+    for name, payload in sorted(tracks.items()):
+        claims = sorted({str(item) for item in payload.get("cannot_claim") or []})
+        if claims:
+            by_track[name] = claims
+    return by_track
+
+
+def suite_level_cannot_claims(
+    config: BenchmarkSuiteConfig,
+    *,
+    quality_gate_ok: bool,
+) -> list[str]:
+    claims = set(profile_cannot_claims(config))
+    if not quality_gate_ok:
+        claims.add("all_benchmark_quality_targets_met")
+    return sorted(claims)
+
+
 def profile_cannot_claims(config: BenchmarkSuiteConfig) -> list[str]:
     metadata = PROFILE_METADATA_BY_NAME.get(config.profile) or {}
     claims = [str(item) for item in metadata.get("default_cannot_claim") or []]
@@ -991,11 +1013,18 @@ def run_benchmark_suite_with_config(config: BenchmarkSuiteConfig) -> dict[str, A
     }
     known_gaps = collect_known_gaps(tracks)
     rate_estimates = collect_rate_estimates(tracks)
+    cannot_claim_by_track = collect_cannot_claim_by_track(tracks)
+    suite_level_cannot_claim = suite_level_cannot_claims(
+        config,
+        quality_gate_ok=quality_gate_ok,
+    )
     cannot_claim = sorted(
-        set(
-            collect_cannot_claim(tracks, quality_gate_ok=quality_gate_ok)
-            + profile_cannot_claims(config)
-        )
+        {
+            claim
+            for claims in cannot_claim_by_track.values()
+            for claim in claims
+        }
+        | set(suite_level_cannot_claim)
     )
     return {
         "schema_version": SCHEMA_VERSION,
@@ -1012,6 +1041,8 @@ def run_benchmark_suite_with_config(config: BenchmarkSuiteConfig) -> dict[str, A
         "known_gaps": known_gaps,
         "rate_estimates": rate_estimates,
         "tracks": tracks,
+        "cannot_claim_by_track": cannot_claim_by_track,
+        "suite_level_cannot_claim": suite_level_cannot_claim,
         "privacy_boundary": privacy_boundary,
         "cannot_claim": cannot_claim,
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),

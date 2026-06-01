@@ -179,6 +179,15 @@ adapters. Its report includes `cannot_claim` entries for those omitted surfaces
 so the profile cannot be mistaken for Track B, private-history, or live-model
 quality evidence.
 
+Suite reports keep `cannot_claim` as a backward-compatible flat union of all
+claim boundaries, but readers should use `cannot_claim_by_track` and
+`suite_level_cannot_claim` to interpret source and scope. For example, Track A's
+`payload_fidelity` boundary means the gate-decision track does not validate
+Track C payload fidelity; it does not contradict
+`track_statuses.payload_fidelity=sufficient`. Track C can pass its
+synthetic/public-safe payload-fidelity slice while still carrying
+`real_history_payload_fidelity` as a track-local boundary.
+
 Threshold metadata intentionally explains the comparison boundary rather than
 just repeating numbers:
 
