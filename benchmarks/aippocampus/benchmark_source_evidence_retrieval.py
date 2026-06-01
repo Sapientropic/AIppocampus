@@ -38,6 +38,7 @@ from aippocampus_runtime.source.semantic_scope_labels import (
     write_semantic_scope_label_sidecar,
 )
 from aippocampuslib import compact_text
+from benchmark_statistics import binomial_rate_report
 from build_index import make_sqlite
 from retrieval import split_query_terms
 from subconscious_runtime import add_usage, call_chat_json, compact_usage
@@ -196,6 +197,7 @@ def sha1_text(value: str) -> str:
 def rank_metrics(cases: list[dict[str, Any]], key: str, thresholds: list[int]) -> dict[str, Any]:
     total = len(cases)
     metrics: dict[str, Any] = {"total_cases": total}
+    rate_estimates: dict[str, Any] = {}
     for threshold in sorted(set(thresholds)):
         hits = sum(
             1
@@ -205,10 +207,16 @@ def rank_metrics(cases: list[dict[str, Any]], key: str, thresholds: list[int]) -
         metrics[f"hit_top{threshold}"] = hits
         metrics[f"miss_top{threshold}"] = total - hits
         metrics[f"hit_rate_top{threshold}"] = safe_rate(hits, total)
+        rate_estimates[f"hit_rate_top{threshold}"] = binomial_rate_report(
+            f"hit_rate_top{threshold}",
+            numerator=hits,
+            denominator=total,
+        )
     metrics["mrr"] = round(
         sum(reciprocal_rank((case.get(key) or {}).get("rank")) for case in cases) / total,
         4,
     ) if total else 0.0
+    metrics["rate_estimates"] = rate_estimates
     return metrics
 
 
@@ -255,6 +263,7 @@ def summarize_fts5_payload(payload: dict[str, Any], *, top_k: int) -> dict[str, 
         "miss_top_k": fts5_metrics.get(f"miss_top{top_k}", 0),
         "hit_rate_top_k": fts5_metrics.get(f"hit_rate_top{top_k}", 0.0),
         f"hit_rate_top{top_k}": fts5_metrics.get(f"hit_rate_top{top_k}", 0.0),
+        "rate_estimates": fts5_metrics.get("rate_estimates") or {},
         "mrr": fts5_metrics.get("mrr", 0.0),
         "fts5": fts5_metrics,
         "miss_categories_top_k": (
@@ -279,6 +288,7 @@ def summarize_source_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "failed_count": int(payload.get("failed_count") or 0),
         "top_k": int(payload.get("top_k") or 0),
         "top_k_hit_rate": float(payload.get("top_k_hit_rate") or 0.0),
+        "rate_estimates": payload.get("rate_estimates") or {},
         "min_cases": int(payload.get("min_cases") or 0),
         "min_hit_rate": float(payload.get("min_hit_rate") or 0.0),
         "label_coverage": payload.get("label_coverage") or [],
@@ -704,6 +714,18 @@ def summarize_sharegpt_public_results(results: list[dict[str, Any]], *, top_k: i
         case_types[row["case_type"]] = case_types.get(row["case_type"], 0) + 1
     message_hits = sum(1 for row in results if row.get(f"message_hit_top{top_k}"))
     turn_hits = sum(1 for row in results if row.get(f"turn_hit_top{top_k}"))
+    rate_estimates = {
+        f"message_hit_rate_top{top_k}": binomial_rate_report(
+            f"message_hit_rate_top{top_k}",
+            numerator=message_hits,
+            denominator=total,
+        ),
+        f"turn_hit_rate_top{top_k}": binomial_rate_report(
+            f"turn_hit_rate_top{top_k}",
+            numerator=turn_hits,
+            denominator=total,
+        ),
+    }
     return {
         "total_cases": total,
         "case_types": case_types,
@@ -713,6 +735,7 @@ def summarize_sharegpt_public_results(results: list[dict[str, Any]], *, top_k: i
         f"turn_hit_top{top_k}": turn_hits,
         f"turn_miss_top{top_k}": total - turn_hits,
         f"turn_hit_rate_top{top_k}": safe_rate(turn_hits, total),
+        "rate_estimates": rate_estimates,
         "message_mrr": round(
             sum(reciprocal_rank(row.get("message_rank")) for row in results) / total,
             4,
@@ -1403,6 +1426,7 @@ def run_public_semantic_sidecar_benchmark(
         "passed_count": int(source_payload.get("passed_count") or 0),
         "failed_count": int(source_payload.get("failed_count") or 0),
         "top_k_hit_rate": float(source_payload.get("top_k_hit_rate") or 0.0),
+        "rate_estimates": source_payload.get("rate_estimates") or {},
         "warning_count": int(source_payload.get("warning_count") or 0),
         "label_coverage": source_payload.get("label_coverage") or [],
     }
@@ -2355,6 +2379,23 @@ def summarize_standard_retrieval_results(
         "evidence_context_mrr": evidence_context_mrr,
         "evidence_context_mrr_delta": round(evidence_context_mrr - evidence_mrr, 4),
         "warning_count": sum(int(row.get("warning_count") or 0) for row in results),
+    }
+    metrics["rate_estimates"] = {
+        f"session_hit_rate_top{top_k}": binomial_rate_report(
+            f"session_hit_rate_top{top_k}",
+            numerator=session_hits,
+            denominator=total,
+        ),
+        f"evidence_hit_rate_top{top_k}": binomial_rate_report(
+            f"evidence_hit_rate_top{top_k}",
+            numerator=line_hits,
+            denominator=len(line_cases),
+        ),
+        f"evidence_context_hit_rate_top{top_k}": binomial_rate_report(
+            f"evidence_context_hit_rate_top{top_k}",
+            numerator=context_hits,
+            denominator=len(line_cases),
+        ),
     }
     if reranker_cases:
         semantic_only_mrr = round(

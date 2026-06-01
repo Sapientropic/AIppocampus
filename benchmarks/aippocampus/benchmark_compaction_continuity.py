@@ -24,6 +24,7 @@ import _paths
 _paths.ensure_paths()
 
 import correction_reconsolidation as corr
+from benchmark_statistics import binomial_rate_report
 
 SCHEMA_VERSION = corr.SCHEMA_VERSION
 HOOK_STAGES = corr.HOOK_STAGES
@@ -655,6 +656,33 @@ def summarize_results(rows: list[dict[str, Any]]) -> dict[str, Any]:
     uncertain_confirmation_count = sum(
         1 for row in uncertain_rows if row.get("expected_action") == "confirm_when_relevant"
     )
+    rate_estimates = {
+        "accuracy": binomial_rate_report(
+            "accuracy",
+            numerator=correct_count,
+            denominator=total,
+        ),
+        "event_chain_valid_rate": binomial_rate_report(
+            "event_chain_valid_rate",
+            numerator=event_chain_valid_count,
+            denominator=len(source_cases),
+        ),
+        "source_fidelity": binomial_rate_report(
+            "source_fidelity",
+            numerator=source_fidelity_count,
+            denominator=len(source_cases),
+        ),
+        "correction_anchor_recall": binomial_rate_report(
+            "correction_anchor_recall",
+            numerator=anchor_recall_count,
+            denominator=len(expected_recall),
+        ),
+        "anti_nag_precision": binomial_rate_report(
+            "anti_nag_precision",
+            numerator=anti_nag_correct,
+            denominator=len(expected_silent),
+        ),
+    }
     return {
         "total_cases": total,
         "stage_coverage": stage_coverage,
@@ -664,6 +692,7 @@ def summarize_results(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "incorrect_count": total - correct_count,
         "all_cases_correct": correct_count == total if total else False,
         "accuracy": safe_rate(correct_count, total),
+        "rate_estimates": rate_estimates,
         "privacy_breach_count": privacy_count,
         "privacy_breach_rate": safe_rate(privacy_count, total),
         "raw_prompt_leakage_count": sum(1 for row in rows if row.get("raw_text_emitted")),

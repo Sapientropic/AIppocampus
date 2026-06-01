@@ -23,6 +23,8 @@ import _paths
 
 _paths.ensure_paths()
 
+from benchmark_statistics import binomial_rate_report, lower_bound_gate
+
 SCHEMA_VERSION = 1
 DEFAULT_DATASET = (
     _paths.REPO_ROOT
@@ -348,6 +350,23 @@ def summarize(event_rows: list[dict[str, Any]], prediction_rows: list[dict[str, 
     precision = safe_rate(true_positive_count, predicted_flag_count)
     recall = safe_rate(true_positive_count, len(positive_rows))
     f1 = round(2 * precision * recall / (precision + recall), 4) if precision + recall else 0.0
+    rate_estimates = {
+        "future_event_flag_recall": binomial_rate_report(
+            "future_event_flag_recall",
+            numerator=true_positive_count,
+            denominator=len(positive_rows),
+        ),
+        "future_event_flag_precision": binomial_rate_report(
+            "future_event_flag_precision",
+            numerator=true_positive_count,
+            denominator=predicted_flag_count,
+        ),
+        "anti_drift_pass_rate": binomial_rate_report(
+            "anti_drift_pass_rate",
+            numerator=sum(1 for row in non_flag_rows if not row["false_positive"]),
+            denominator=len(non_flag_rows),
+        ),
+    }
     return {
         "total_future_event_count": len(event_rows),
         "future_event_gold_count": len(positive_rows),
@@ -359,6 +378,7 @@ def summarize(event_rows: list[dict[str, Any]], prediction_rows: list[dict[str, 
         "future_event_flag_recall_rate": recall,
         "future_event_flag_precision": precision,
         "future_event_flag_f1": f1,
+        "rate_estimates": rate_estimates,
         "silent_dream_penalty_applies": True,
         "anti_drift_negative_count": len(non_flag_rows),
         "anti_drift_violation_count": sum(1 for row in non_flag_rows if row["false_positive"]),
@@ -388,6 +408,7 @@ def run_benchmark(
     min_recall: float = 1.0,
     min_precision: float = 1.0,
     max_false_positives: int = 0,
+    gate_statistic: str = "point",
 ) -> dict[str, Any]:
     started = time.perf_counter()
     dataset = load_dataset(dataset_path, require_cc0=require_cc0_dataset)
@@ -434,11 +455,30 @@ def run_benchmark(
                 "than source-backed recovery."
             ),
         }
-    ok = (
-        float(metrics["future_event_flag_recall_rate"]) >= float(min_recall)
-        and float(metrics["future_event_flag_precision"]) >= float(min_precision)
-        and int(metrics["false_positive_count"]) <= int(max_false_positives)
+    if gate_statistic not in {"point", "lower_bound"}:
+        raise ValueError("gate_statistic must be 'point' or 'lower_bound'")
+    gate_applied_to_status = gate_statistic == "lower_bound"
+    recall_gate = lower_bound_gate(
+        metrics["rate_estimates"]["future_event_flag_recall"],
+        threshold=min_recall,
+        applied_to_status=gate_applied_to_status,
     )
+    precision_gate = lower_bound_gate(
+        metrics["rate_estimates"]["future_event_flag_precision"],
+        threshold=min_precision,
+        applied_to_status=gate_applied_to_status,
+    )
+    if gate_applied_to_status:
+        rate_gate_ok = (
+            recall_gate["passes_lower_bound"]
+            and precision_gate["passes_lower_bound"]
+        )
+    else:
+        rate_gate_ok = (
+            recall_gate["passes_point_estimate"]
+            and precision_gate["passes_point_estimate"]
+        )
+    ok = bool(rate_gate_ok and int(metrics["false_positive_count"]) <= int(max_false_positives))
     row_licenses = sorted({str(row.get("license") or "") for row in dataset.rows})
     source_families = sorted({str(row.get("source_family") or "") for row in dataset.rows})
     has_rollout_sources = any("rollout" in source_family for source_family in source_families)
@@ -474,6 +514,7 @@ def run_benchmark(
             "min_recall": min_recall,
             "min_precision": min_precision,
             "max_false_positives": max_false_positives,
+            "gate_statistic": gate_statistic,
             "live_llm": False,
         },
         "dataset": {
@@ -488,6 +529,10 @@ def run_benchmark(
             "claim_boundary": claim_boundary,
         },
         "metrics": metrics,
+        "lower_bound_gates": {
+            "future_event_flag_recall": recall_gate,
+            "future_event_flag_precision": precision_gate,
+        },
         "contamination_control": {
             "closed_book_ablation_available": bool(closed_book_predictions_file),
             "closed_book": closed_book,
@@ -559,6 +604,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-recall", type=float, default=1.0)
     parser.add_argument("--min-precision", type=float, default=1.0)
     parser.add_argument("--max-false-positives", type=int, default=0)
+    parser.add_argument(
+        "--gate-statistic",
+        choices=["point", "lower_bound"],
+        default="point",
+        help="Use point estimates by default; lower_bound applies Wilson lower bounds to status.",
+    )
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--json", action="store_true", dest="json_output")
     return parser
@@ -575,6 +626,7 @@ def main() -> int:
         min_recall=args.min_recall,
         min_precision=args.min_precision,
         max_false_positives=args.max_false_positives,
+        gate_statistic=args.gate_statistic,
     )
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -24,7 +24,19 @@ def fake_gate_payload() -> dict:
     return {
         "kind": "aippocampus_memory_decision_gate_benchmark",
         "ok": True,
-        "metrics": {"total_cases": 2, "accuracy": 1.0, "macro_f1": 1.0},
+        "metrics": {
+            "total_cases": 2,
+            "accuracy": 1.0,
+            "macro_f1": 1.0,
+            "rate_estimates": {
+                "accuracy": {
+                    "numerator": 2,
+                    "denominator": 2,
+                    "point_estimate": 1.0,
+                    "confidence_interval": {"method": "wilson_score"},
+                }
+            },
+        },
         "cases": [{"case_id": "gate-a", "prompt_sha1": "abc"}],
         "privacy_boundary": {
             "raw_prompt_emitted": False,
@@ -63,6 +75,13 @@ def fake_retrieval_payload(*, ok: bool = False) -> dict:
                 "ok": True,
                 "total_cases": 2,
                 "hit_rate_top_k": 1.0,
+                "rate_estimates": {
+                    "hit_rate_top_k": {
+                        "numerator": 2,
+                        "denominator": 2,
+                        "confidence_interval": {"method": "wilson_score"},
+                    }
+                },
             },
             "source_evidence": {
                 "kind": "selected_source_evidence_recall_eval",
@@ -70,6 +89,13 @@ def fake_retrieval_payload(*, ok: bool = False) -> dict:
                 "status": "sufficient" if ok else "insufficient_recall_hits",
                 "case_count": 2,
                 "top_k_hit_rate": 0.5,
+                "rate_estimates": {
+                    "top_k_hit_rate": {
+                        "numerator": 1,
+                        "denominator": 2,
+                        "confidence_interval": {"method": "wilson_score"},
+                    }
+                },
             },
         },
         "cases": {"fts5": [{"case_id": "fts-a"}], "source_evidence": []},
@@ -331,6 +357,43 @@ class BenchmarkSuiteTests(unittest.TestCase):
         gate_run.assert_called_once()
         payload_run.assert_called_once()
         retrieval_run.assert_called_once()
+
+    def test_suite_collects_rate_estimates_for_public_readiness_review(self) -> None:
+        with (
+            patch.object(
+                suite.gate_benchmark,
+                "run_benchmark",
+                return_value=fake_gate_payload(),
+            ),
+            patch.object(
+                suite.payload_benchmark,
+                "run_benchmark",
+                return_value=fake_payload_payload(),
+            ),
+            patch.object(
+                suite.retrieval_benchmark,
+                "run_source_evidence_retrieval_benchmark",
+                return_value=fake_retrieval_payload(ok=True),
+            ),
+        ):
+            payload = suite.run_benchmark_suite(
+                include_deterministic_source_labels=False,
+            )
+
+        estimates = payload["rate_estimates"]
+        self.assertEqual(estimates["gate_decision.accuracy"]["denominator"], 2)
+        self.assertEqual(
+            estimates[
+                "source_evidence_retrieval.fts5_source_line.hit_rate_top_k"
+            ]["confidence_interval"]["method"],
+            "wilson_score",
+        )
+        self.assertEqual(
+            estimates[
+                "source_evidence_retrieval.source_evidence.top_k_hit_rate"
+            ]["numerator"],
+            1,
+        )
 
     def test_suite_can_add_deterministic_source_label_diagnostic_slice(self) -> None:
         deterministic_payload = {

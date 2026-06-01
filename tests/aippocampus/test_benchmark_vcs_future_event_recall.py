@@ -53,6 +53,13 @@ class VcsFutureEventRecallBenchmarkTests(unittest.TestCase):
         self.assertTrue(payload["dataset"]["future_event_gold_available"])
         self.assertEqual(payload["metrics"]["future_event_flag_recall_rate"], 1.0)
         self.assertEqual(payload["metrics"]["future_event_flag_precision"], 1.0)
+        self.assertEqual(
+            payload["metrics"]["rate_estimates"]["future_event_flag_recall"][
+                "confidence_interval"
+            ]["method"],
+            "wilson_score",
+        )
+        self.assertIn("future_event_flag_recall", payload["lower_bound_gates"])
         self.assertEqual(payload["metrics"]["false_negative_count"], 0)
         self.assertEqual(payload["metrics"]["false_positive_count"], 0)
         self.assertTrue(payload["metrics"]["silent_dream_penalty_applies"])
@@ -60,6 +67,15 @@ class VcsFutureEventRecallBenchmarkTests(unittest.TestCase):
         self.assertNotIn("Reject this Redis", dumped)
         self.assertNotIn("Merged PR 207", dumped)
         self.assertNotIn(str(REPO_ROOT), dumped)
+
+    def test_lower_bound_gate_mode_does_not_promote_small_perfect_fixture(self) -> None:
+        payload = benchmark.run_benchmark(gate_statistic="lower_bound")
+
+        self.assertFalse(payload["ok"])
+        recall_gate = payload["lower_bound_gates"]["future_event_flag_recall"]
+        self.assertTrue(recall_gate["passes_point_estimate"])
+        self.assertFalse(recall_gate["passes_lower_bound"])
+        self.assertTrue(recall_gate["applied_to_status"])
 
     def test_empty_baseline_is_penalized_for_false_negatives(self) -> None:
         payload = benchmark.run_benchmark(baseline="empty")
