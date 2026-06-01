@@ -505,6 +505,13 @@ def infer_triage(issue: IssueContext) -> TriageResult:
     )
 
 
+class GitHubRestError(RuntimeError):
+    def __init__(self, status: int, body: str) -> None:
+        self.status = status
+        self.body = body
+        super().__init__(f"GitHub REST HTTP {status}: {body}")
+
+
 class GitHubProjectClient:
     def __init__(self, token: str) -> None:
         self.token = token
@@ -548,7 +555,7 @@ class GitHubProjectClient:
                 body = response.read().decode("utf-8")
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"GitHub REST HTTP {exc.code}: {body}") from exc
+            raise GitHubRestError(exc.code, body) from exc
         return json.loads(body) if body else None
 
 
@@ -813,7 +820,17 @@ def apply_milestone_update(
     if not isinstance(milestone_number, int):
         return
     path = f"/repos/{urllib.parse.quote(repo, safe='/')}/issues/{issue_number}"
-    client.rest("PATCH", path, {"milestone": milestone_number})
+    try:
+        client.rest("PATCH", path, {"milestone": milestone_number})
+    except GitHubRestError as exc:
+        if exc.status != 403:
+            raise
+        # Project field triage can use a token with Projects access but without
+        # repository-admin milestone rights. Treat that as a visible skipped
+        # milestone update, not as a successful fill and not as a workflow
+        # failure that blocks ordinary issue intake.
+        milestone_update["skipped"] = "permission_denied"
+        milestone_update["error"] = "milestone_permission_denied"
 
 
 def is_actionable_milestone_update(milestone_update: dict[str, Any]) -> bool:
