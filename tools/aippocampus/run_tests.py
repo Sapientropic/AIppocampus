@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TEST_ROOT = REPO_ROOT / "tests" / "aippocampus"
+FALLBACK_TEST_TMPDIR = REPO_ROOT / ".aippocampus" / "test-tmp"
+TEMP_ENV_NAMES = ("TMPDIR", "TEMP", "TMP")
+TEMP_PROBE_PREFIX = "aippocampus-test-runner-"
 
 SLOW_MODULES = {
     "tests.aippocampus.test_aippocampus_prompt_hook",
@@ -45,6 +50,40 @@ def modules_for_tier(tier: str) -> list[str]:
     raise ValueError(f"unknown test tier: {tier}")
 
 
+def _probe_tempdir(parent: Path | None) -> None:
+    if parent is not None:
+        parent.mkdir(parents=True, exist_ok=True)
+        temp_context = tempfile.TemporaryDirectory(prefix=TEMP_PROBE_PREFIX, dir=str(parent))
+    else:
+        temp_context = tempfile.TemporaryDirectory(prefix=TEMP_PROBE_PREFIX)
+    with temp_context as tmp:
+        probe = Path(tmp) / "probe.txt"
+        probe.write_text("ok", encoding="utf-8")
+
+
+def ensure_usable_tempdir() -> Path:
+    try:
+        _probe_tempdir(None)
+        return Path(tempfile.gettempdir()).resolve()
+    except OSError as default_error:
+        fallback = FALLBACK_TEST_TMPDIR.resolve()
+        try:
+            _probe_tempdir(fallback)
+        except OSError as fallback_error:
+            raise RuntimeError(
+                "No usable temporary directory for the test runner. "
+                f"Default temp failed: {default_error}. "
+                f"Fallback {fallback} failed: {fallback_error}."
+            ) from fallback_error
+        # Keep unittest children on the verified fallback. Without this fail-fast
+        # probe, Python can retry every default candidate per test case and leave
+        # thousands of root-level temp probes when deletion is blocked.
+        for name in TEMP_ENV_NAMES:
+            os.environ[name] = str(fallback)
+        tempfile.tempdir = str(fallback)
+        return fallback
+
+
 def run_modules(modules: list[str], *, verbosity: int) -> bool:
     if str(REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(REPO_ROOT))
@@ -75,6 +114,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if not modules:
         print(f"no tests selected for tier: {args.tier}", file=sys.stderr)
+        return 2
+    try:
+        ensure_usable_tempdir()
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
         return 2
     return 0 if run_modules(modules, verbosity=max(1, args.verbose)) else 1
 

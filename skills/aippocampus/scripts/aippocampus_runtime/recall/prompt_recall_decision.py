@@ -725,12 +725,17 @@ def assess_prompt(
                 association_matches=association_matches,
             )
             candidates = _merge_semantic_trigger_source_candidates(candidates, registry, context.semantic_trigger_matches, query_terms)
-    if not candidates and (explicit or associative or natural_evidence or source_evidence):
+    semantic_memory_cue = semantic_gate_is_memory_cue(semantic_result)
+    if not candidates and (
+        explicit or associative or natural_evidence or source_evidence or semantic_memory_cue
+    ):
         # Metadata can miss memorable wording that only exists inside the
         # SQLite message index. When the user explicitly asks to recover prior
-        # speech, try a tiny recent-thread fallback before staying silent.
+        # speech, or when the semantic gate found a high-confidence route with
+        # query aliases, try a tiny recent-thread fallback before staying
+        # silent. This keeps semantic/subconscious routing useful without
+        # expanding static cue lists.
         candidates = fallback_search_candidates(registry, query_terms)
-    semantic_memory_cue = semantic_gate_is_memory_cue(semantic_result)
     timeline_memory_cue = any(item.get("life_wide_timeline_source") for item in candidates)
     positive_evidence_intent = bool((natural_evidence or source_evidence) and not negative_evidence)
     has_memory_cue = bool(
@@ -796,6 +801,15 @@ def assess_prompt(
         association_matches=association_matches, start=start, max_elapsed_ms=max_elapsed_ms,
         reasons=reasons,
     )
+    if (
+        decision == "skip"
+        and not suppressed
+        and semantic_gate_can_request_evidence(prompt, semantic_result)
+    ):
+        # A semantic evidence decision without a local source bridge is still a
+        # route hint. Surface it as scent so the foreground agent can continue
+        # with clean-source search, but do not promote it to evidence.
+        decision = "scent"
 
     semantic_bridge_diagnostic = _semantic_bridge_diagnostic(
         prompt=prompt,

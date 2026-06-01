@@ -213,6 +213,41 @@ def public_hook_debug_payload(result: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
+def semantic_route_hint_lines(result: dict[str, Any]) -> list[str]:
+    semantic_gate = result.get("semantic_gate")
+    if not isinstance(semantic_gate, dict) or not semantic_gate.get("available"):
+        return []
+    aliases = [
+        str(value)
+        for value in sanitize_external_model_payload(
+            semantic_gate.get("query_aliases") or semantic_gate.get("aliases") or []
+        )
+        if str(value).strip()
+    ][:6]
+    scopes = [
+        str(value)
+        for value in sanitize_external_model_payload(semantic_gate.get("memory_scope") or [])
+        if str(value).strip()
+    ][:4]
+    if not aliases and not scopes:
+        return []
+    if semantic_gate.get("decision") not in {"scent", "evidence"} and not result.get(
+        "semantic_bridge_diagnostic"
+    ):
+        return []
+    lines = ["Semantic recall route (not evidence; search clean source before facts):"]
+    parts: list[str] = []
+    if aliases:
+        parts.append("aliases: " + ", ".join(aliases))
+    if scopes:
+        parts.append("scope: " + ", ".join(scopes))
+    if parts:
+        lines.append("- " + " | ".join(parts))
+    if result.get("semantic_bridge_diagnostic"):
+        lines.append("- Local evidence bridge did not pass; keep this as navigation only.")
+    return lines
+
+
 def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHARS) -> str | None:
     decision = result.get("decision")
     if decision == "skip":
@@ -241,6 +276,7 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
             terms = ", ".join(item.get("matched_terms") or item.get("keywords") or [])
             tail = f" | terms: {terms}" if terms else ""
             lines.append(f"- {item.get('title')}: {anchors}{tail}")
+        lines.extend(semantic_route_hint_lines(result))
         lines.append(
             "Use only if it helps; do not mention recalled content as fact unless backed by retrieved evidence."
         )
