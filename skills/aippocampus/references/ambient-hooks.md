@@ -413,9 +413,15 @@ the model sees them:
 - credentialed URLs and connection-string secrets
 - private-key blocks
 
-The hook should hard-skip only when the prompt is mostly credential material or
-contains private-key blocks. Otherwise redact sensitive substrings and continue
-when recall is useful.
+Private-key block contents must never be sent to the model. Mixed prompts may
+continue after replacing the block with `<redacted:private-key-block>` when
+enough non-secret context remains; mostly credential/key material still
+hard-skips. Local paths are replaced with `<redacted:local-path>` plus bounded
+`<path-anchor ...>` hints such as file class and extension. Stable path hashes
+are emitted only for paths confirmed under the current project root and are
+derived from the project-relative path; external machine-local paths do not get
+a stable hash. These anchors are navigation hints only, not source truth and not
+permission to emit raw absolute paths.
 
 Do not write prompt text to hook debug logs. Optional logs may record decision,
 timing, candidate thread ids/titles, evidence line numbers, and query aliases.

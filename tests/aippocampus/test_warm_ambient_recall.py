@@ -1386,8 +1386,39 @@ class WarmAmbientRecallTests(unittest.TestCase):
 
         self.assertIn("prompt_trace", seen_payloads[0])
         self.assertIn("<redacted:local-path>", raw_payload)
+        self.assertIn("scope=external", raw_payload)
+        self.assertNotIn("hash=sha256:", raw_payload)
         self.assertNotIn(local_path.casefold(), raw_payload.casefold())
         self.assertNotIn("memory.md", raw_payload.casefold())
+
+    def test_build_payload_uses_project_path_anchors_without_raw_paths(self) -> None:
+        project_file = self.workspace / "src" / "warm_recall.ts"
+        payload, policy = warm.build_payload(
+            f"continue warm recall implementation at {project_file}",
+            cwd=self.workspace,
+            registry={
+                "threads": [
+                    {
+                        "thread_key": "session:old",
+                        "title": "Warm recall thread",
+                        "anchor_titles": ["warm recall"],
+                        "summary": f"Prior note points at {project_file}",
+                        "paths": {"workspace": str(self.workspace)},
+                    }
+                ]
+            },
+        )
+        raw_payload = json.dumps(payload, ensure_ascii=False)
+
+        self.assertTrue(policy["redacted"])
+        self.assertIn("<redacted:local-path>", raw_payload)
+        self.assertIn("<path-anchor", raw_payload)
+        self.assertIn("scope=project", raw_payload)
+        self.assertIn("class=typescript", raw_payload)
+        self.assertIn("ext=ts", raw_payload)
+        self.assertIn("hash=sha256:", raw_payload)
+        self.assertNotIn(str(self.workspace), raw_payload)
+        self.assertNotIn("warm_recall.ts", raw_payload)
 
     def test_build_payload_keeps_stable_contract_before_prompt_specific_fields(self) -> None:
         payload, _ = warm.build_payload("继续 ambient recall", cwd=self.workspace, registry={})

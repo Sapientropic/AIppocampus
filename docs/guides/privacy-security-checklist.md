@@ -42,7 +42,11 @@ bundle, demo, release, or plugin package.
 - Provider-specific fields such as DeepSeek `user_id`, `thinking`, and
   prefix-cache metrics must be gated by route capabilities.
 - Prompt-time external-model calls must pass through shared redaction.
-- Mostly-secret prompts should hard-skip external calls.
+- Mostly-secret prompts should hard-skip external calls. Mixed prompts may
+  continue only after credential/private-key material is removed; path anchors
+  may preserve file class and extension, but never raw absolute local paths.
+  Stable path hashes are allowed only for paths confirmed under the current
+  project root and derived from the project-relative path.
 - Missing API keys should return structured errors, not tracebacks.
 - Semantic sidecars from external-model jobs are navigation hints only; they
   must target existing clean-source message ids with source refs and must not

@@ -118,12 +118,21 @@ class AippocampusLibTests(unittest.TestCase):
         self.assertEqual(metrics["hit_rate"], 0.8)
 
     def test_safety_owner_preserves_redaction_and_transport_behavior(self) -> None:
+        project_path = REPO_ROOT / "skills" / "aippocampus" / "scripts" / "aippocampus_runtime" / "safety.py"
         sanitized, policy = safety.sanitize_external_model_text(
-            "token=sk-abcdefghijklmnopqrstuvwxyz and C:\\Users\\Name\\secret.txt"
+            f"token=sk-abcdefghijklmnopqrstuvwxyz and {project_path}",
+            project_root=REPO_ROOT,
         )
 
         self.assertIn("<redacted:api-key>", sanitized)
         self.assertIn("<redacted:local-path>", sanitized)
+        self.assertIn("<path-anchor", sanitized)
+        self.assertIn("scope=project", sanitized)
+        self.assertIn("class=python", sanitized)
+        self.assertIn("ext=py", sanitized)
+        self.assertIn("hash=sha256:", sanitized)
+        self.assertNotIn(str(REPO_ROOT), sanitized)
+        self.assertNotIn("safety.py", sanitized)
         self.assertTrue(policy["redacted"])
 
         with self.assertRaises(ValueError):
@@ -138,6 +147,70 @@ class AippocampusLibTests(unittest.TestCase):
             service_name="local model route",
             credential_label="API key",
         )
+
+    def test_external_path_anchor_does_not_create_stable_path_identity(self) -> None:
+        sanitized, policy = safety.sanitize_external_model_text(
+            "Check C:\\Users\\Name\\private\\memory_gate.py for recall behavior.",
+            project_root=REPO_ROOT,
+        )
+
+        self.assertTrue(policy["redacted"])
+        self.assertIn("<redacted:local-path>", sanitized)
+        self.assertIn("<path-anchor", sanitized)
+        self.assertIn("scope=external", sanitized)
+        self.assertIn("class=python", sanitized)
+        self.assertIn("ext=py", sanitized)
+        self.assertNotIn("hash=sha256:", sanitized)
+        self.assertNotIn("Users", sanitized)
+        self.assertNotIn("Name", sanitized)
+        self.assertNotIn("memory_gate.py", sanitized)
+
+    def test_project_path_anchor_recognizes_macos_private_var_alias(self) -> None:
+        sanitized, policy = safety.sanitize_external_model_text(
+            "Continue /var/folders/ab/cd/T/workspace/src/warm_recall.ts",
+            project_root="/private/var/folders/ab/cd/T/workspace",
+        )
+
+        self.assertTrue(policy["redacted"])
+        self.assertIn("<redacted:local-path>", sanitized)
+        self.assertIn("scope=project", sanitized)
+        self.assertIn("class=typescript", sanitized)
+        self.assertIn("ext=ts", sanitized)
+        self.assertIn("hash=sha256:", sanitized)
+        self.assertNotIn("/var/folders", sanitized)
+        self.assertNotIn("/private/var", sanitized)
+        self.assertNotIn("warm_recall.ts", sanitized)
+
+    def test_private_key_blocks_preserve_safe_context_or_hard_block_when_mostly_secret(self) -> None:
+        private_key_block = "\n".join(
+            [
+                "-----" + "BEGIN PRIVATE KEY" + "-----",
+                "abc123",
+                "-----" + "END PRIVATE KEY" + "-----",
+            ]
+        )
+
+        mixed, mixed_policy = safety.sanitize_external_model_text(
+            "Please continue AIppocampus semantic recall for redaction anchors.\n"
+            f"{private_key_block}\n"
+            "The safe task context is external-model path anchor design."
+        )
+
+        self.assertFalse(mixed_policy["hard_block"])
+        self.assertTrue(mixed_policy["redacted"])
+        self.assertIn("private_key_block", mixed_policy["redaction_types"])
+        self.assertIn("<redacted:private-key-block>", mixed)
+        self.assertIn("AIppocampus semantic recall", mixed)
+        self.assertIn("path anchor design", mixed)
+        self.assertNotIn("abc123", mixed)
+        self.assertNotIn("BEGIN PRIVATE KEY", mixed)
+
+        mostly_secret, mostly_secret_policy = safety.sanitize_external_model_text(
+            private_key_block
+        )
+
+        self.assertTrue(mostly_secret_policy["hard_block"])
+        self.assertEqual(mostly_secret, "<redacted:private-key-block>")
 
     def test_benchmark_sensitive_text_policy_reuses_runtime_safety_boundary(self) -> None:
         cases = {
