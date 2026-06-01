@@ -27,7 +27,12 @@ import _paths
 _paths.ensure_paths()
 
 from aippocampus_runtime.source.search import iter_clean_messages
-from aippocampuslib import compact_text, is_injected_instruction_text, now_utc
+from aippocampuslib import (
+    benchmark_text_is_sensitive,
+    compact_text,
+    is_injected_instruction_text,
+    now_utc,
+)
 from registry import load_registry as load_thread_registry
 from registry import registry_paths
 from retrieval import (
@@ -73,12 +78,6 @@ STOP_TERMS = {
     "would",
 }
 
-SECRET_OR_PATH_RE = re.compile(
-    r"(?i)(api[_-]?key|authorization|bearer\s+[a-z0-9._-]{8,}|password|secret|token)"
-    r"|([a-z]:\\[^ \n\r\t]+)"
-    r"|(https?://\S+)"
-    r"|([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})"
-)
 STRUCTURAL_NOISE_PREFIXES = (
     "System trigger. This message stays backstage",
     "This message stays backstage and is not visible",
@@ -144,7 +143,7 @@ class EvalCase:
 
 
 def looks_sensitive(text: str) -> bool:
-    return bool(SECRET_OR_PATH_RE.search(text))
+    return benchmark_text_is_sensitive(text)
 
 
 def is_benchmark_noise(text: str) -> bool:
@@ -327,6 +326,7 @@ def build_eval_cases(
         "sqlite_threads": 0,
         "eligible_threads": 0,
         "messages_scanned": 0,
+        "messages_skipped_sensitive": 0,
         "eligible_messages": 0,
     }
     for entry in registry.get("threads") or []:
@@ -343,6 +343,9 @@ def build_eval_cases(
         corpus["messages_scanned"] += len(messages)
         candidates: list[tuple[float, EvalCase]] = []
         for message in messages:
+            if looks_sensitive(str(message.get("text") or "")):
+                corpus["messages_skipped_sensitive"] += 1
+                continue
             variants = case_variants_from_message(
                 thread_key=str(entry.get("thread_key") or ""),
                 sqlite_path=sqlite_path,
@@ -610,6 +613,18 @@ def run_benchmark(
             "candidate_limit": candidate_limit,
             "include_private_text": include_private_text,
             "compare_production": compare_production,
+        },
+        "privacy_boundary": {
+            "raw_text_emitted": bool(include_private_text),
+            "snippets_emitted": bool(include_private_text),
+            "absolute_paths_emitted": bool(include_private_text),
+            "case_selection_filters_active": True,
+            "case_selection_filter_policy": (
+                "aippocampus_runtime.safety.benchmark_sensitive_text_policy"
+            ),
+            "case_selection_action": "skip_sensitive_candidates",
+            "include_private_text_scope": "local_debug_only",
+            "output_shape": "sanitized_fts5_recall_cases",
         },
         "corpus": corpus,
         "metrics": summarize_results(results, top_k=top_k),

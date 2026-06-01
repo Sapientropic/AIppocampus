@@ -12,7 +12,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import re
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -24,6 +23,7 @@ import _paths
 _paths.ensure_paths()
 
 import correction_reconsolidation as corr
+from aippocampuslib import benchmark_text_is_sensitive
 from benchmark_statistics import binomial_rate_report
 
 SCHEMA_VERSION = corr.SCHEMA_VERSION
@@ -37,12 +37,6 @@ HIGH_RISK_COVERAGE_CELLS = (
     ("PostCompact", "horizon_lost", "superseded"),
     ("PostCompact", "horizon_lost", "uncertain"),
 )
-SECRET_OR_PATH_RE = re.compile(
-    r"(?i)(api[_-]?key|authorization|bearer\s+[a-z0-9._-]{8,}|password|secret|token)"
-    r"|([a-z]:\\[^ \n\r\t]+)"
-    r"|([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})"
-)
-
 
 @dataclass(frozen=True)
 class FixtureEvent:
@@ -167,7 +161,7 @@ def sha1_text(value: str) -> str:
 
 
 def looks_sensitive(value: str) -> bool:
-    return bool(SECRET_OR_PATH_RE.search(value))
+    return benchmark_text_is_sensitive(value)
 
 
 def make_case(
@@ -853,6 +847,12 @@ def run_benchmark(
             "raw_correction_text_emitted": bool(include_private_text),
             "raw_source_refs_emitted": bool(include_private_text),
             "absolute_paths_emitted": False,
+            "case_selection_filters_active": True,
+            "case_selection_filter_policy": (
+                "aippocampus_runtime.safety.benchmark_sensitive_text_policy"
+            ),
+            "case_selection_action": "synthetic_cases_checked_for_sensitive_debug_text",
+            "include_private_text_scope": "local_debug_only",
             "case_ids_are_hashed": not include_private_text,
             "output_shape": "sanitized_compaction_continuity_aggregates",
         },

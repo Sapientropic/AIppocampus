@@ -75,6 +75,25 @@ EXTERNAL_MODEL_REDACTION_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
     ),
 ]
 
+BENCHMARK_PRIVATE_EMAIL_PATTERN = re.compile(
+    r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"
+)
+BENCHMARK_DATABASE_DSN_PATTERN = re.compile(
+    r"\b(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|redis|mssql|sqlserver)"
+    r"://[^\s\"'<>]+",
+    re.IGNORECASE,
+)
+BENCHMARK_DATABASE_KV_PATTERN = re.compile(
+    r"\b(?:Server|Data Source|Initial Catalog|Database|User ID|Uid|PWD|Password)\s*=",
+    re.IGNORECASE,
+)
+BENCHMARK_PRIVATE_HOST_PATTERN = re.compile(
+    r"\b(?:localhost|[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\."
+    r"(?:internal|intranet|corp|lan|local))(?:[:/][^\s\"'<>]*)?",
+    re.IGNORECASE,
+)
+BENCHMARK_IPV4_PATTERN = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+
 
 def sanitize_external_model_text(text: str) -> tuple[str, dict[str, Any]]:
     """Redact likely secrets before automatic external-model calls.
@@ -131,6 +150,60 @@ def sanitize_external_model_payload(value: Any) -> Any:
     if isinstance(value, dict):
         return {key: sanitize_external_model_payload(item) for key, item in value.items()}
     return value
+
+
+def _benchmark_private_ip_reasons(text: str) -> list[str]:
+    reasons: list[str] = []
+    for match in BENCHMARK_IPV4_PATTERN.finditer(text):
+        try:
+            address = ipaddress.ip_address(match.group(0))
+        except ValueError:
+            continue
+        if address.is_private or address.is_loopback or address.is_link_local:
+            reasons.append("private_ip_address")
+            break
+    return reasons
+
+
+def benchmark_sensitive_text_policy(text: str) -> dict[str, Any]:
+    """Classify text that must not be selected into publishable benchmark cases.
+
+    Benchmark case selection is deliberately stricter than prompt redaction:
+    external-model routes may redact and continue when safe context remains,
+    while public benchmark fixtures should skip obvious private material before
+    it becomes a case target. The returned policy stores only bounded reason
+    labels, never the matched text.
+    """
+
+    original = str(text or "")
+    _, redaction_policy = sanitize_external_model_text(original)
+    reasons: list[str] = []
+    if redaction_policy.get("hard_block"):
+        reasons.append("runtime_hard_block")
+    for label in redaction_policy.get("redaction_types") or []:
+        reasons.append(str(label))
+    if BENCHMARK_PRIVATE_EMAIL_PATTERN.search(original):
+        reasons.append("email_address")
+    if BENCHMARK_DATABASE_DSN_PATTERN.search(original) or BENCHMARK_DATABASE_KV_PATTERN.search(
+        original
+    ):
+        reasons.append("database_connection_string")
+    if BENCHMARK_PRIVATE_HOST_PATTERN.search(original):
+        reasons.append("private_hostname")
+    reasons.extend(_benchmark_private_ip_reasons(original))
+    unique_reasons = list(dict.fromkeys(reasons))
+    return {
+        "sensitive": bool(unique_reasons),
+        "policy": "aippocampus_runtime.safety.benchmark_sensitive_text_policy",
+        "uses_runtime_redaction": True,
+        "redaction_count": int(redaction_policy.get("redaction_count") or 0),
+        "hard_block": bool(redaction_policy.get("hard_block")),
+        "reason_categories": unique_reasons[:12],
+    }
+
+
+def benchmark_text_is_sensitive(text: str) -> bool:
+    return bool(benchmark_sensitive_text_policy(text)["sensitive"])
 
 
 def is_loopback_host(hostname: str | None) -> bool:

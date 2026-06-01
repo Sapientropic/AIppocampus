@@ -179,6 +179,7 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(aippocampuslib.codex_home, core.codex_home)
         self.assertIs(aippocampuslib.aippocampus_registry_dir, core.aippocampus_registry_dir)
         self.assertIs(aippocampuslib.sanitize_external_model_text, core.sanitize_external_model_text)
+        self.assertIs(aippocampuslib.benchmark_text_is_sensitive, core.benchmark_text_is_sensitive)
 
     def test_core_split_helpers_have_direct_package_owners_and_core_compat_exports(self) -> None:
         from aippocampus_runtime import anchor_graph, core, safety, text
@@ -219,6 +220,11 @@ class ImportCouplingTests(unittest.TestCase):
             self.assertNotIn(old_definition, core_source)
 
         self.assertIs(core.compact_text, text.compact_text)
+        self.assertIs(
+            core.benchmark_sensitive_text_policy,
+            safety.benchmark_sensitive_text_policy,
+        )
+        self.assertIs(core.benchmark_text_is_sensitive, safety.benchmark_text_is_sensitive)
         self.assertIs(core.sanitize_external_model_text, safety.sanitize_external_model_text)
         self.assertIs(core.sanitize_external_model_payload, safety.sanitize_external_model_payload)
         self.assertIs(
