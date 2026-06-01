@@ -81,7 +81,14 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
 - `benchmarks/aippocampus/benchmark_suite.py` runs the repeatable baseline
   suite across Track A, Track B, Track C, and the broader deterministic
   source-label diagnostic slice, with opt-in ShareGPT public Track B, standard
-  retrieval-QA Track B, and live semantic-gate tracks.
+  retrieval-QA Track B, and live semantic-gate tracks. Its top-level
+  `rate_estimates` summary collects the per-track binomial interval reports so
+  public-readiness review can inspect uncertainty without walking every nested
+  report.
+- `benchmarks/aippocampus/benchmark_statistics.py` owns the shared Wilson
+  binomial interval helper used by benchmark reports. The helper is reporting
+  infrastructure only: it does not make selected, synthetic, or biased samples
+  representative.
 - `benchmarks/aippocampus/benchmark_live_semantic_gate.py` runs the optional
   live semantic-gate slice over public ShareGPT coding clean-source cases. It
   uses the real prompt hook and configured DeepSeek-compatible backend, but
@@ -160,6 +167,33 @@ Default suite semantics:
   registry details stay out of default reports.
 - `--include-private-text` is a local-debug opt-in only and should not be used
   for public docs or committed artifacts.
+
+### Uncertainty And Gate Semantics
+
+Empirical benchmark reports should expose `rate_estimates` for key binomial
+rates. Each entry includes numerator, denominator, point estimate, and a
+Wilson-score confidence interval. This makes small-N reports visibly wide
+instead of letting a perfect point estimate read like a release-quality result.
+
+Confidence intervals do not repair sampling bias. Selected real-history slices,
+synthetic contract fixtures, public-corpus pilots, and opt-in semantic-sidecar
+pilots must keep their `claim_level`, `sample_size_warning`, and `cannot_claim`
+boundaries. A high point estimate with a wide lower bound is still diagnostic
+unless the owning track's design says the sample is release/public-readiness
+evidence.
+
+Default deterministic contract gates keep their existing point/count
+semantics. They answer "did this fixed contract fail today?" rather than
+"would this pass with statistical confidence?" Broader empirical gates may opt
+into lower-bound semantics when that is the product claim under review. The VCS
+future-event recall benchmark exposes this explicitly with
+`--gate-statistic lower_bound`; the default remains point-estimate gating so
+small fixtures do not silently become release blockers.
+
+MRR and rank-order metrics are still point estimates unless a runner exposes a
+dedicated bootstrap interval. Do not average Track A gate decisions, Track B
+retrieval, Track C payload fidelity, and Track D continuity into one headline
+confidence number; their sample construction and product meanings differ.
 
 ### Coding Decision-Shadow A-E Benchmark
 

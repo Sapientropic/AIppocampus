@@ -285,6 +285,32 @@ def collect_known_gaps(tracks: dict[str, dict[str, Any]]) -> dict[str, dict[str,
     return gaps
 
 
+def collect_rate_estimates(tracks: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    estimates: dict[str, dict[str, Any]] = {}
+    for name, payload in tracks.items():
+        collect_rate_estimates_from_payload(name, payload, estimates)
+    return estimates
+
+
+def collect_rate_estimates_from_payload(
+    path: str,
+    payload: Any,
+    estimates: dict[str, dict[str, Any]],
+) -> None:
+    if not isinstance(payload, dict):
+        return
+    rate_estimates = payload.get("rate_estimates")
+    if isinstance(rate_estimates, dict):
+        for metric_name, estimate in rate_estimates.items():
+            if isinstance(estimate, dict):
+                estimates[f"{path}.{metric_name}"] = estimate
+    for key, value in payload.items():
+        if key in {"cases", "rate_estimates"} or not isinstance(value, dict):
+            continue
+        child_path = path if key in {"metrics", "tracks"} else f"{path}.{key}"
+        collect_rate_estimates_from_payload(child_path, value, estimates)
+
+
 def deterministic_source_label_slice(
     *,
     registry_path: Path | None,
@@ -592,6 +618,7 @@ def run_benchmark_suite_with_config(config: BenchmarkSuiteConfig) -> dict[str, A
         name: track_status(name, payload) for name, payload in tracks.items()
     }
     known_gaps = collect_known_gaps(tracks)
+    rate_estimates = collect_rate_estimates(tracks)
     cannot_claim = sorted(
         set(
             collect_cannot_claim(tracks, quality_gate_ok=quality_gate_ok)
@@ -608,6 +635,7 @@ def run_benchmark_suite_with_config(config: BenchmarkSuiteConfig) -> dict[str, A
         "config": config.sanitized_payload_config(),
         "track_statuses": track_statuses,
         "known_gaps": known_gaps,
+        "rate_estimates": rate_estimates,
         "tracks": tracks,
         "privacy_boundary": privacy_boundary,
         "cannot_claim": cannot_claim,

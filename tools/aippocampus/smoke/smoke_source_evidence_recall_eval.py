@@ -31,6 +31,7 @@ from aippocampus_runtime.source.semantic_scope_labels import (
     semantic_labels_for_message,
 )
 from aippocampuslib import aippocampus_registry_dir
+from benchmark_statistics import binomial_rate_report
 from registry import deep_search_entry_result, entry_search_score, load_registry
 from retrieval import GENERIC_ANCHOR_TERMS, split_query_terms, unique_preserve
 
@@ -724,6 +725,14 @@ def run_source_evidence_recall_eval(
         int(result.get("warning_count") or 0) for _, result in results
     )
     hit_rate = round((passed_count / len(cases)) if cases else 0.0, 4)
+    rate_estimates = {
+        "top_k_hit_rate": binomial_rate_report(
+            "top_k_hit_rate",
+            numerator=passed_count,
+            denominator=len(cases),
+            threshold=min_hit_rate,
+        )
+    }
     sample_gate_ok = len(cases) >= min_cases
     quality_gate_ok = bool(cases) and hit_rate >= min_hit_rate
     return {
@@ -741,6 +750,7 @@ def run_source_evidence_recall_eval(
         "failed_count": max(0, len(cases) - passed_count),
         "top_k": max(1, int(top_k)),
         "top_k_hit_rate": hit_rate,
+        "rate_estimates": rate_estimates,
         "min_cases": int(min_cases),
         "min_hit_rate": float(min_hit_rate),
         "sample_gate_ok": sample_gate_ok,
@@ -757,6 +767,7 @@ def run_source_evidence_recall_eval(
             "min_cases": int(min_cases),
             "top_k_hit_rate": hit_rate,
             "min_hit_rate": float(min_hit_rate),
+            "rate_estimates": rate_estimates,
         },
         "label_coverage": labels,
         "warning_count": warning_count,

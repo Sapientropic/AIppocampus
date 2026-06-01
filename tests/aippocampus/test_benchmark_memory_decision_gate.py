@@ -37,6 +37,12 @@ class MemoryDecisionGateBenchmarkTests(unittest.TestCase):
         self.assertEqual(metrics["over_escalation_count"], 1)
         self.assertEqual(metrics["evidence_false_positive_count"], 2)
         self.assertGreater(metrics["weighted_false_positive_cost"], 0)
+        self.assertEqual(metrics["rate_estimates"]["accuracy"]["numerator"], 1)
+        self.assertEqual(metrics["rate_estimates"]["accuracy"]["denominator"], 4)
+        self.assertEqual(
+            metrics["rate_estimates"]["evidence_recall"]["confidence_interval"]["method"],
+            "wilson_score",
+        )
 
     def test_synthetic_gate_benchmark_is_sanitized_and_measures_current_behavior(self) -> None:
         payload = benchmark.run_benchmark(case_set="synthetic", include_private_text=False)
@@ -44,6 +50,8 @@ class MemoryDecisionGateBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_memory_decision_gate_benchmark")
         self.assertGreaterEqual(payload["metrics"]["total_cases"], 5)
         self.assertIn("macro_f1", payload["metrics"])
+        self.assertIn("rate_estimates", payload["metrics"])
+        self.assertIn("scent_or_evidence_recall", payload["metrics"]["rate_estimates"])
         self.assertGreaterEqual(payload["metrics"]["scent_or_evidence_recall"], 0.9)
         self.assertGreaterEqual(payload["metrics"]["evidence_recall"], 0.85)
         self.assertLessEqual(payload["metrics"]["evidence_false_positive_count"], 1)

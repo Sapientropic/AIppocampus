@@ -98,6 +98,15 @@ def fake_source_payload(*, ok: bool = True) -> dict:
         "failed_count": 1 if ok else 2,
         "top_k": 5,
         "top_k_hit_rate": 0.5 if ok else 0.0,
+        "rate_estimates": {
+            "top_k_hit_rate": {
+                "name": "top_k_hit_rate",
+                "numerator": 1 if ok else 0,
+                "denominator": 2,
+                "point_estimate": 0.5 if ok else 0.0,
+                "confidence_interval": {"method": "wilson_score"},
+            }
+        },
         "min_cases": 1,
         "min_hit_rate": 0.5,
         "label_coverage": ["casual_important"],
@@ -324,7 +333,14 @@ class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["privacy_boundary"]["raw_text_emitted"], False)
         self.assertEqual(payload["privacy_boundary"]["absolute_paths_emitted"], False)
         self.assertEqual(payload["tracks"]["fts5_source_line"]["hit_rate_top10"], 1.0)
+        self.assertIn("rate_estimates", payload["tracks"]["fts5_source_line"])
         self.assertEqual(payload["tracks"]["source_evidence"]["top_k_hit_rate"], 0.5)
+        self.assertEqual(
+            payload["tracks"]["source_evidence"]["rate_estimates"]["top_k_hit_rate"][
+                "denominator"
+            ],
+            2,
+        )
         self.assertEqual(
             payload["tracks"]["source_evidence"]["failure_diagnostics"]["failed_count"],
             1,
@@ -588,6 +604,12 @@ class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
         self.assertGreaterEqual(payload["metrics"]["total_cases"], 3)
         self.assertEqual(payload["metrics"]["message_hit_rate_top5"], 1.0)
         self.assertEqual(payload["metrics"]["turn_hit_rate_top5"], 1.0)
+        self.assertEqual(
+            payload["metrics"]["rate_estimates"]["message_hit_rate_top5"][
+                "confidence_interval"
+            ]["method"],
+            "wilson_score",
+        )
         self.assertIn("sharegpt_answer_source_evidence", payload["metrics"]["case_types"])
         self.assertIn("sharegpt_continuation_source_evidence", payload["metrics"]["case_types"])
         self.assertEqual(payload["privacy_boundary"]["raw_text_emitted"], False)
@@ -760,6 +782,7 @@ class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["metrics"]["question_count"], 1)
         self.assertEqual(payload["metrics"]["evidence_hit_rate_top5"], 1.0)
         self.assertEqual(payload["metrics"]["session_hit_rate_top5"], 1.0)
+        self.assertIn("session_hit_rate_top5", payload["metrics"]["rate_estimates"])
         self.assertEqual(payload["privacy_boundary"]["raw_text_emitted"], False)
         dumped = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn("mango tart", dumped)

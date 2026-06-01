@@ -210,11 +210,19 @@ class SourceEvidenceRecallEvalTests(unittest.TestCase):
         self.assertEqual(result["case_count"], 1)
         self.assertEqual(result["passed_count"], 1)
         self.assertEqual(result["top_k_hit_rate"], 1.0)
+        self.assertEqual(
+            result["rate_estimates"]["top_k_hit_rate"]["confidence_interval"]["method"],
+            "wilson_score",
+        )
         self.assertFalse(result["sample_gate_ok"])
         self.assertTrue(result["quality_gate_ok"])
         self.assertEqual(result["gate_diagnostics"]["sample_gap"], 1)
         self.assertEqual(result["gate_diagnostics"]["sample_status"], "insufficient_selected_cases")
         self.assertEqual(result["gate_diagnostics"]["quality_status"], "sufficient")
+        self.assertEqual(
+            result["gate_diagnostics"]["rate_estimates"]["top_k_hit_rate"]["denominator"],
+            1,
+        )
         self.assertIn("semantic_sidecar_sample_coverage", result["cannot_claim"])
         self.assertNotIn("selected_semantic_source_evidence_quality", result["cannot_claim"])
 

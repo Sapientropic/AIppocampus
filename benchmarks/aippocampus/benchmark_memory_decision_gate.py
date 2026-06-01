@@ -25,6 +25,7 @@ import _paths
 _paths.ensure_paths()
 
 import aippocampus_prompt_hook as hook
+from benchmark_statistics import binomial_rate_report
 from build_index import make_sqlite
 
 EXPECTED_LABELS = {"should_skip", "should_scent", "should_evidence"}
@@ -1667,6 +1668,14 @@ def safe_rate(numerator: int | float, denominator: int | float) -> float:
     return round(float(numerator) / float(denominator), 4) if denominator else 0.0
 
 
+def result_is_correct(row: dict[str, Any]) -> bool:
+    if "correct" in row:
+        return bool(row.get("correct"))
+    expected = str(row.get("expected") or "")
+    actual = normalize_actual_decision(row.get("actual"))
+    return EXPECTED_TO_ACTUAL.get(expected) == actual
+
+
 def f1_for_decision(results: list[dict[str, Any]], decision: str) -> dict[str, float]:
     label = {value: key for key, value in EXPECTED_TO_ACTUAL.items()}[decision]
     tp = sum(1 for row in results if row.get("expected") == label and row.get("actual") == decision)
@@ -1692,7 +1701,7 @@ def summarize_results(results: list[dict[str, Any]]) -> dict[str, Any]:
             confusion[expected][actual] += 1
         case_type = str(row.get("case_type") or "unknown")
         by_type[case_type] = by_type.get(case_type, 0) + 1
-    correct = sum(1 for row in results if row.get("correct"))
+    correct = sum(1 for row in results if result_is_correct(row))
     over_escalation = sum(
         1
         for row in results
@@ -1725,11 +1734,39 @@ def summarize_results(results: list[dict[str, Any]]) -> dict[str, Any]:
         else 0.0
     )
     semantic_calls = sum(1 for row in results if row.get("semantic_gate_called"))
+    rate_estimates = {
+        "accuracy": binomial_rate_report(
+            "accuracy",
+            numerator=correct,
+            denominator=total,
+        ),
+        "scent_or_evidence_recall": binomial_rate_report(
+            "scent_or_evidence_recall",
+            numerator=surface_hits,
+            denominator=len(should_surface),
+        ),
+        "evidence_recall": binomial_rate_report(
+            "evidence_recall",
+            numerator=evidence_hits,
+            denominator=len(should_evidence),
+        ),
+        "evidence_false_positive_rate": binomial_rate_report(
+            "evidence_false_positive_rate",
+            numerator=evidence_fp,
+            denominator=total,
+        ),
+        "over_escalation_rate": binomial_rate_report(
+            "over_escalation_rate",
+            numerator=over_escalation,
+            denominator=total,
+        ),
+    }
     return {
         "total_cases": total,
         "case_types": by_type,
         "correct_count": correct,
         "accuracy": safe_rate(correct, total),
+        "rate_estimates": rate_estimates,
         "confusion": confusion,
         "per_decision": per_decision,
         "macro_f1": macro_f1,

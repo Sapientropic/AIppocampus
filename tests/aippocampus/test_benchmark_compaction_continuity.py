@@ -77,6 +77,16 @@ class CompactionContinuityBenchmarkTests(unittest.TestCase):
         metrics = payload["metrics"]
 
         self.assertEqual(metrics["event_chain_valid_rate"], 1.0)
+        self.assertEqual(
+            metrics["rate_estimates"]["correction_anchor_recall"]["confidence_interval"][
+                "method"
+            ],
+            "wilson_score",
+        )
+        self.assertEqual(
+            metrics["rate_estimates"]["anti_nag_precision"]["denominator"],
+            sum(1 for row in payload["cases"] if not row["expected_emit"]),
+        )
         self.assertGreater(metrics["visible_context_echo_expected_silent_count"], 0)
         self.assertEqual(metrics["visible_context_echo_noise_count"], 0)
         self.assertGreater(metrics["stale_anchor_guard_case_count"], 0)
