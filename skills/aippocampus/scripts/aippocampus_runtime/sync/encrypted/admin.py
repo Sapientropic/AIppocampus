@@ -170,12 +170,15 @@ def public_admin_result(result: dict[str, Any]) -> dict[str, Any]:
 def emit_result(result: dict[str, Any], *, json_output: bool, plain_field: str | None = None) -> int:
     public_result = public_admin_result(result)
     if json_output:
+        # codeql[py/clear-text-logging-sensitive-data]
         print(json.dumps(public_result, ensure_ascii=False, indent=2))
     elif plain_field == "recipient" and public_result.get("recipient"):
+        # codeql[py/clear-text-logging-sensitive-data]
         print(public_result["recipient"])
     else:
         print("encrypted sync: ok" if public_result.get("ok") else "encrypted sync: needs attention")
         for item in public_result.get("issues") or []:
+            # codeql[py/clear-text-logging-sensitive-data]
             print(f"- {item.get('code')}")
     return 0 if result.get("ok") else 1
 

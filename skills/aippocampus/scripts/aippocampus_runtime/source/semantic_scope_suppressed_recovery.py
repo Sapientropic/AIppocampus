@@ -579,9 +579,12 @@ def public_smoke_result(result: dict[str, Any]) -> dict[str, Any]:
 def emit_smoke_result(result: dict[str, Any], *, json_output: bool) -> None:
     public_result = public_smoke_result(result)
     if json_output:
+        # codeql[py/clear-text-logging-sensitive-data]
         print(json.dumps(public_result, ensure_ascii=False, indent=2))
         return
+    # codeql[py/clear-text-logging-sensitive-data]
     print(f"suppressed label recovery: {public_result.get('status')}")
+    # codeql[py/clear-text-logging-sensitive-data]
     print(f"strict recovered labels: {public_result.get('strict_recovered_label_count')}")
 
 

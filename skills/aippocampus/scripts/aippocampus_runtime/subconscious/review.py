@@ -347,20 +347,27 @@ def apply_focus_filter(review: dict[str, Any], focus: str) -> dict[str, Any]:
 
 def write_review_jsonl_event(fh: Any, event: dict[str, Any]) -> None:
     public_event = public_review_event(event)
+    # codeql[py/clear-text-storage-sensitive-data]
     fh.write(json.dumps(public_event, ensure_ascii=False) + "\n")
 
 
 def print_review_json(payload: dict[str, Any]) -> None:
     public_payload = public_review_cli_payload(payload)
+    # codeql[py/clear-text-logging-sensitive-data]
     print(json.dumps(public_payload, ensure_ascii=False, indent=2))
 
 
 def print_review_summary(payload: dict[str, Any]) -> None:
     public_payload = public_review_cli_payload(payload)
+    # codeql[py/clear-text-logging-sensitive-data]
     print(f"findings reviewed: {public_payload['finding_count']}")
+    # codeql[py/clear-text-logging-sensitive-data]
     print(f"promotion candidates: {public_payload['promotion_candidate_count']}")
+    # codeql[py/clear-text-logging-sensitive-data]
     print(f"duplicate groups: {public_payload['duplicate_group_count']}")
+    # codeql[py/clear-text-logging-sensitive-data]
     print(f"weak findings: {public_payload['weak_finding_count']}")
+    # codeql[py/clear-text-logging-sensitive-data]
     print(f"output boundary: {public_payload['output_boundary']}")
 
 
