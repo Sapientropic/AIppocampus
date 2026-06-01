@@ -243,8 +243,12 @@ pretty = true
 files = [
     "skills/aippocampus/scripts/aippocampuslib.py",
     "skills/aippocampus/scripts/aippocampus_runtime/core.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/anchor_graph.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/safety.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/text.py",
     "skills/aippocampus/scripts/aippocampus_cli.py",
     "skills/aippocampus/scripts/aippocampus_runtime/cli/__init__.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/cli/errors.py",
     "skills/aippocampus/scripts/aippocampus_runtime/cli/facade.py",
     "skills/aippocampus/scripts/aippocampus_health.py",
     "skills/aippocampus/scripts/aippocampus_runtime/health.py",

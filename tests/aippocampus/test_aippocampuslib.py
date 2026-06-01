@@ -22,6 +22,8 @@ for _path in (
 
 import aippocampuslib  # noqa: E402
 import registry  # noqa: E402
+from aippocampus_runtime import anchor_graph, safety  # noqa: E402
+from aippocampus_runtime.cli import errors as cli_errors  # noqa: E402
 from conversation_sources import (  # noqa: E402
     ClaudeCodeConversationProvider,
     CodexConversationProvider,
@@ -114,6 +116,62 @@ class AippocampusLibTests(unittest.TestCase):
         self.assertEqual(metrics["hit_tokens"], 80)
         self.assertEqual(metrics["miss_tokens"], 20)
         self.assertEqual(metrics["hit_rate"], 0.8)
+
+    def test_safety_owner_preserves_redaction_and_transport_behavior(self) -> None:
+        sanitized, policy = safety.sanitize_external_model_text(
+            "token=sk-abcdefghijklmnopqrstuvwxyz and C:\\Users\\Name\\secret.txt"
+        )
+
+        self.assertIn("<redacted:api-key>", sanitized)
+        self.assertIn("<redacted:local-path>", sanitized)
+        self.assertTrue(policy["redacted"])
+
+        with self.assertRaises(ValueError):
+            safety.validate_private_credential_transport(
+                "http://example.com/api",
+                service_name="model route",
+                credential_label="API key",
+            )
+
+        safety.validate_private_credential_transport(
+            "http://127.0.0.1:8080/api",
+            service_name="local model route",
+            credential_label="API key",
+        )
+
+    def test_cli_error_owner_preserves_payload_shape(self) -> None:
+        payload = cli_errors.cli_error_payload_from_message("missing API key")
+
+        self.assertEqual(payload["ok"], False)
+        self.assertEqual(payload["error"]["code"], "missing_api_key")
+        self.assertEqual(cli_errors.cli_exit_code_for_error_code("missing_api_key"), 2)
+        self.assertIs(
+            aippocampuslib.cli_error_payload_from_message,
+            cli_errors.cli_error_payload_from_message,
+        )
+
+    def test_anchor_graph_owner_parses_and_builds_graph(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "anchors.md"
+            path.write_text(
+                "\n".join(
+                    [
+                        "## Recall boundary",
+                        "- Keywords: source refs, semantic labels",
+                        "- Preserved phrase: source-backed continuity needs evidence",
+                        "- Source: docs/architecture/runtime-script-map.md",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            anchors = anchor_graph.parse_anchor_file(path)
+            graph = anchor_graph.build_anchor_graph(anchors, "session-1")
+
+        self.assertEqual(anchors[0]["title"], "Recall boundary")
+        self.assertIn("source refs", anchors[0]["keywords"])
+        self.assertTrue(any(node["type"] == "quote" for node in graph["nodes"]))
+        self.assertIs(aippocampuslib.parse_anchor_file, anchor_graph.parse_anchor_file)
 
     def test_locate_rollout_searches_archived_sessions(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
