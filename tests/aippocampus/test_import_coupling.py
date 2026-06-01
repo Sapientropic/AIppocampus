@@ -752,9 +752,9 @@ class ImportCouplingTests(unittest.TestCase):
             "aippocampus_runtime.subconscious.validation_audit",
             "aippocampus_runtime.onboarding.frontier",
             "aippocampus_runtime.recall.semantic_recall_gate",
-            "semantic_scope_suppressed_recovery",
+            "aippocampus_runtime.source.semantic_scope_suppressed_recovery",
             "aippocampus_runtime.subconscious.jobs",
-            "subconscious_review",
+            "aippocampus_runtime.subconscious.review",
             "aippocampus_runtime.warm_ambient.recall",
         ]
         for source in worker_consumers:
@@ -1715,7 +1715,7 @@ class ImportCouplingTests(unittest.TestCase):
         for source in [
             "aippocampus_runtime.subconscious.validation_audit",
             "aippocampus_runtime.subconscious.jobs",
-            "subconscious_review",
+            "aippocampus_runtime.subconscious.review",
         ]:
             self.assertIn("aippocampus_runtime.subconscious.job_validation", edges[source])
             self.assertNotIn("subconscious_job_validation", edges[source])
@@ -2274,9 +2274,9 @@ class ImportCouplingTests(unittest.TestCase):
             "aippocampus_runtime.subconscious.agent",
             "aippocampus_runtime.subconscious.tool_loop",
             "aippocampus_runtime.recall.semantic_recall_gate",
-            "semantic_scope_suppressed_recovery",
+            "aippocampus_runtime.source.semantic_scope_suppressed_recovery",
             "aippocampus_runtime.subconscious.jobs",
-            "subconscious_review",
+            "aippocampus_runtime.subconscious.review",
             "aippocampus_runtime.warm_ambient.recall",
         ]
         for source in runtime_consumers:
