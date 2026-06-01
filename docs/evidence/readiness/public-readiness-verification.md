@@ -735,6 +735,57 @@ must be used before public-quality continuous-memory superiority claims.
   power, holdout scenario coverage, host-native compaction behavior, or private
   real-history generality.
 
+## 2026-06-02 - Continuous-memory scenario provenance and holdout controls
+
+The #409 slice extends
+`benchmarks/aippocampus/benchmark_continuous_memory_arms.py` with
+scenario-level provenance, holdout, and negative-control reporting for #378.
+
+- The report now uses schema version 2 and keeps all scenario metadata
+  sanitized. Rows expose `scenario_provenance`, `scenario_generated_by`,
+  `scenario_source_material`, `aippocampus_internals_visible`, and
+  `prompt_threshold_tuning_role`, but still hash case ids, source refs, source
+  windows, and memory packet text.
+- The current contract-smoke preview has 6 cases and 30 rows. Provenance slices
+  are reported separately: 4 `author_written_synthetic` cases and 2
+  `public_log_or_vcs_derived` + `holdout_blind` cases. The external/holdout
+  share is `0.3333`, above the registered `0.30` share gate, while
+  `external_written_synthetic` and `private_real_history_aggregate` remain
+  `0` for this public-safe slice.
+- Holdout cases use `holdout_excluded`; the report records
+  `holdout_used_for_prompt_or_threshold_tuning_count=0`.
+- The runner also exposes
+  `--scenario-selection-role prompt_threshold_tuning`; that selection returns
+  4 tuning-visible cases, excludes 2 holdout cases from rows/metrics, and keeps
+  `holdout_used_for_prompt_or_threshold_tuning_count=0`.
+- Public scenario metadata is guarded before JSON emission: report-visible
+  generator/source-material labels reject local path separators, URI/drive
+  separators, private raw-log labels, and secret-like strings.
+- Scenario-level negative controls now distinguish unnecessary memory
+  intervention from useful source-backed memory. The current report has 2
+  negative-control cases; `true_aippocampus_memory` records 2 memory
+  interventions but 0 harmful unnecessary interventions, while
+  `stale_wrong_memory` triggers 2 harmful unnecessary interventions.
+- The #409 controls do not turn the current contract smoke into public-quality
+  superiority evidence. The report still records
+  `primary_endpoint_winner=fresh_context_spec_loop`,
+  `continuous_memory_advantage_claim_allowed=false`, and the cannot-claim
+  boundary for public-quality #378 superiority from only
+  `author_written_synthetic` or tuning-visible diagnostic scenarios.
+- Verification commands passed during this slice:
+  `python -m unittest tests.aippocampus.test_benchmark_continuous_memory_arms -v`,
+  `python benchmarks/aippocampus/benchmark_continuous_memory_arms.py --json`,
+  `python benchmarks/aippocampus/benchmark_continuous_memory_arms.py --scenario-selection-role prompt_threshold_tuning --json`,
+  `python tools/aippocampus/docs/check_docs_health.py --json`,
+  `python -m ruff check benchmarks/aippocampus/benchmark_continuous_memory_arms.py tests/aippocampus/test_benchmark_continuous_memory_arms.py`,
+  `python -m compileall -q benchmarks/aippocampus/benchmark_continuous_memory_arms.py tests/aippocampus/test_benchmark_continuous_memory_arms.py`,
+  `python tools/aippocampus/run_tests.py --tier benchmark`,
+  `python -m ruff check skills plugins tests tools benchmarks benchmark_corpus`,
+  `git diff --check`, and `python tools/aippocampus/run_tests.py --tier fast`.
+- This does not claim live host-native compaction behavior, external-written
+  synthetic reviewer coverage, private real-history generality, competitor
+  superiority, or public-quality #378 advantage.
+
 ## Command Ledger
 
 ```powershell

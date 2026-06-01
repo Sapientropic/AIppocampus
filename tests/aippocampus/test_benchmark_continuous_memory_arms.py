@@ -46,7 +46,7 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
         metrics = payload["metrics"]
         by_arm = metrics["by_arm"]
 
-        self.assertEqual(metrics["case_count"], 4)
+        self.assertEqual(metrics["case_count"], 6)
         self.assertEqual(metrics["arm_count"], 5)
         self.assertEqual(metrics["memory_presence_effect"], 0.0)
         self.assertGreater(metrics["memory_correctness_effect"], 0.0)
@@ -216,6 +216,108 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
         self.assertEqual(decision["primary_endpoint_winner"], "fresh_context_spec_loop")
         self.assertIn("no demonstrated memory advantage", decision["decision_label"])
 
+    def test_report_tracks_scenario_provenance_holdouts_and_negative_controls(self) -> None:
+        payload = benchmark.run_benchmark()
+        controls = payload["scenario_controls"]
+        categories = controls["provenance_categories"]
+
+        self.assertIn("public_log_or_vcs_derived", payload["config"]["scenario_provenance"])
+        self.assertIn("holdout_blind", payload["config"]["scenario_provenance"])
+        self.assertEqual(categories["external_written_synthetic"]["case_count"], 0)
+        self.assertGreaterEqual(
+            controls["external_or_holdout_case_share"],
+            controls["public_quality_min_external_or_holdout_share"],
+        )
+        self.assertTrue(controls["public_quality_external_or_holdout_share_gate_passed"])
+        self.assertEqual(
+            controls["holdout_used_for_prompt_or_threshold_tuning_count"],
+            0,
+        )
+        self.assertGreaterEqual(controls["negative_control_case_count"], 2)
+        self.assertGreater(
+            controls["negative_control_unnecessary_intervention_by_arm"][
+                "stale_wrong_memory"
+            ],
+            0,
+        )
+        self.assertEqual(
+            controls["negative_control_unnecessary_intervention_by_arm"][
+                "true_aippocampus_memory"
+            ],
+            0,
+        )
+        self.assertEqual(
+            controls["negative_control_memory_intervention_by_arm"]["no_memory"],
+            0,
+        )
+        self.assertEqual(
+            controls["negative_control_memory_intervention_by_arm"][
+                "sham_unrelated_memory"
+            ],
+            0,
+        )
+        self.assertGreater(
+            controls["negative_control_memory_intervention_by_arm"][
+                "true_aippocampus_memory"
+            ],
+            0,
+        )
+        self.assertIn(
+            "only author_written_synthetic",
+            " ".join(payload["cannot_claim"]),
+        )
+
+    def test_prompt_threshold_tuning_selection_excludes_holdouts(self) -> None:
+        payload = benchmark.run_benchmark(
+            scenario_selection_role="prompt_threshold_tuning"
+        )
+        controls = payload["scenario_controls"]
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["config"]["scenario_selection_role"], "prompt_threshold_tuning")
+        self.assertEqual(payload["metrics"]["case_count"], 4)
+        self.assertNotIn("holdout_blind", payload["config"]["scenario_provenance"])
+        self.assertEqual(controls["available_case_count"], 6)
+        self.assertEqual(controls["selected_case_count"], 4)
+        self.assertEqual(controls["holdout_excluded_from_selection_count"], 2)
+        self.assertEqual(
+            controls["holdout_used_for_prompt_or_threshold_tuning_count"],
+            0,
+        )
+
+    def test_scenario_metadata_public_label_guard_rejects_paths_and_secrets(self) -> None:
+        for value in (
+            "C:" + "/" + "Us" + "ers/sdy/private-case.jsonl",
+            "/" + "home/sdy/private-case.jsonl",
+            "/" + "Us" + "ers/sdy/private-case.jsonl",
+            "Bear" + "er sk-" + "test",
+            "raw_" + "private_log_export",
+        ):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    benchmark.public_metadata_label(value, field="scenario_source_material")
+
+    def test_rows_record_scenario_generation_and_tuning_visibility(self) -> None:
+        payload = benchmark.run_benchmark()
+        rows = payload["rows"]
+        holdout_rows = [
+            row for row in rows if "holdout_blind" in row["scenario_provenance"]
+        ]
+
+        self.assertGreater(len(holdout_rows), 0)
+        for row in rows:
+            self.assertIn("scenario_generated_by", row)
+            self.assertIn("scenario_source_material", row)
+            self.assertIn("aippocampus_internals_visible", row)
+            self.assertIn("prompt_threshold_tuning_role", row)
+            self.assertNotIn("\\", row["scenario_source_material"])
+        self.assertTrue(
+            all(
+                row["prompt_threshold_tuning_role"] == "holdout_excluded"
+                for row in holdout_rows
+            )
+        )
+
     def test_docs_register_runner_and_claim_boundary(self) -> None:
         evidence_map = EVIDENCE_MAP.read_text(encoding="utf-8")
         benchmark_plan = BENCHMARK_PLAN.read_text(encoding="utf-8")
@@ -233,6 +335,10 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
         self.assertIn("net_value_under_equalized_cost", benchmark_plan)
         self.assertIn("#410 cost and harm ledger", benchmark_plan)
         self.assertIn("#407 pre-registration", benchmark_plan)
+        self.assertIn("#409 scenario provenance and holdout controls", benchmark_plan)
+        self.assertIn("public_log_or_vcs_derived", benchmark_plan)
+        self.assertIn("holdout_blind", benchmark_plan)
+        self.assertIn("holdout_excluded", benchmark_plan)
         self.assertIn("source_grounded_task_success_under_equalized_cost", benchmark_plan)
         self.assertIn("no demonstrated memory advantage", benchmark_plan)
         self.assertIn("not a public superiority claim", benchmark_plan)
