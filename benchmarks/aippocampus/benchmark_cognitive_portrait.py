@@ -25,6 +25,8 @@ import _paths
 
 _paths.ensure_paths()
 
+from aippocampuslib import benchmark_text_is_sensitive
+
 SCHEMA_VERSION = 1
 PORTRAIT_KIND = "aippocampus_cognitive_portrait"
 BENCHMARK_KIND = "aippocampus_cognitive_portrait_benchmark"
@@ -39,11 +41,6 @@ SOURCE_BACKED_FINDING_KINDS = {
     "question_link",
     "theme_candidate",
 }
-SECRET_OR_PATH_RE = re.compile(
-    r"(?i)(api[_-]?key|authorization|bearer\s+[a-z0-9._-]{8,}|password|secret|token)"
-    r"|([a-z]:\\[^ \n\r\t]+)"
-    r"|([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})"
-)
 RISKY_PROFILE_RE = re.compile(
     r"(?i)\b(the user|user|用户)\b.{0,48}\b(always|never|is|are|personality|identity|obsessed|"
     r"distrustful|prefers|likes|hates|本质|人格|总是|从不|喜欢|讨厌)\b"
@@ -76,7 +73,7 @@ def sha1_text(value: str) -> str:
 
 
 def contains_secret_or_local_path(value: str) -> bool:
-    return bool(SECRET_OR_PATH_RE.search(value))
+    return benchmark_text_is_sensitive(value)
 
 
 def small_sample_warning(
@@ -823,6 +820,12 @@ def run_benchmark(
             "absolute_paths_emitted": any(
                 contains_secret_or_local_path(context) for context in emitted_contexts
             ),
+            "case_selection_filters_active": True,
+            "case_selection_filter_policy": (
+                "aippocampus_runtime.safety.benchmark_sensitive_text_policy"
+            ),
+            "case_selection_action": "synthetic_cases_checked_for_sensitive_debug_text",
+            "include_private_text_scope": "local_debug_only",
             "output_shape": "sanitized_cognitive_portrait_benchmark",
         },
         "can_claim": [

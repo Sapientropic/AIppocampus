@@ -139,6 +139,37 @@ class AippocampusLibTests(unittest.TestCase):
             credential_label="API key",
         )
 
+    def test_benchmark_sensitive_text_policy_reuses_runtime_safety_boundary(self) -> None:
+        cases = {
+            "postgres://user:pass@db.internal:5432/app": {
+                "credential_url",
+                "database_connection_string",
+                "private_hostname",
+            },
+            "contact me at person@example.com": {"email_address"},
+            "service endpoint http://10.0.0.8:8080": {"private_ip_address"},
+            "token=super-secret and /home/sdy/private.txt": {
+                "secret_assignment",
+                "posix_local_path",
+            },
+        }
+
+        for text, expected_reasons in cases.items():
+            with self.subTest(text=text):
+                policy = safety.benchmark_sensitive_text_policy(text)
+                self.assertTrue(policy["sensitive"])
+                self.assertTrue(policy["uses_runtime_redaction"])
+                self.assertLessEqual(
+                    expected_reasons,
+                    set(policy["reason_categories"]),
+                )
+
+        normal_policy = safety.benchmark_sensitive_text_policy(
+            "The blue lighthouse recall marker belongs to this source message."
+        )
+        self.assertFalse(normal_policy["sensitive"])
+        self.assertEqual(normal_policy["reason_categories"], [])
+
     def test_cli_error_owner_preserves_payload_shape(self) -> None:
         payload = cli_errors.cli_error_payload_from_message("missing API key")
 

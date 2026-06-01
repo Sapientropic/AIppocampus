@@ -368,6 +368,15 @@ def aggregate_privacy_boundary(tracks: dict[str, dict[str, Any]]) -> dict[str, A
             truthy_boundary(payload, ("absolute_paths_emitted",))
             for payload in tracks.values()
         ),
+        "case_selection_filters_active": any(
+            truthy_boundary(payload, ("case_selection_filters_active",))
+            for payload in tracks.values()
+        ),
+        "case_selection_filter_policy": (
+            "aippocampus_runtime.safety.benchmark_sensitive_text_policy"
+        ),
+        "case_selection_action": "skip_sensitive_candidates_or_check_synthetic_debug_text",
+        "include_private_text_scope": "local_debug_only",
         "output_shape": "sanitized_aippocampus_benchmark_suite",
     }
 

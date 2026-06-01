@@ -102,6 +102,7 @@ def fake_retrieval_payload(*, ok: bool = False) -> dict:
         "privacy_boundary": {
             "raw_text_emitted": False,
             "absolute_paths_emitted": False,
+            "case_selection_filters_active": True,
         },
         "cannot_claim": ["selected_source_evidence_recall"],
     }
@@ -135,6 +136,7 @@ def fake_compaction_payload() -> dict:
         "privacy_boundary": {
             "raw_correction_text_emitted": False,
             "absolute_paths_emitted": False,
+            "case_selection_filters_active": True,
         },
         "cannot_claim": ["runtime_correction_event_capture"],
     }
@@ -283,6 +285,15 @@ class BenchmarkSuiteTests(unittest.TestCase):
         self.assertIn(
             "claim_boundary",
             threshold_metadata["standard_min_session_hit_rate"],
+        )
+        self.assertTrue(payload["privacy_boundary"]["case_selection_filters_active"])
+        self.assertEqual(
+            payload["privacy_boundary"]["case_selection_filter_policy"],
+            "aippocampus_runtime.safety.benchmark_sensitive_text_policy",
+        )
+        self.assertEqual(
+            payload["privacy_boundary"]["include_private_text_scope"],
+            "local_debug_only",
         )
 
     def test_suite_report_preserves_track_local_cannot_claim_sources(self) -> None:

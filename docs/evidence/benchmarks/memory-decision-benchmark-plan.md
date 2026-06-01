@@ -428,6 +428,12 @@ Default suite semantics:
   registry details stay out of default reports.
 - `--include-private-text` is a local-debug opt-in only and should not be used
   for public docs or committed artifacts.
+- Private real-history case selection delegates obvious sensitive-content
+  detection to `aippocampus_runtime.safety.benchmark_sensitive_text_policy`.
+  That policy skips candidates with credential/path/recipient/database/private
+  host signals; it is stricter than external-model prompt redaction because
+  benchmark fixtures should avoid selecting publishable targets from sensitive
+  text in the first place.
 
 ### Uncertainty And Gate Semantics
 

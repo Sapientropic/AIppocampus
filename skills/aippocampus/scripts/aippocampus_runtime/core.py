@@ -17,6 +17,8 @@ from aippocampus_runtime.cli import errors as _cli_errors
 from aippocampus_runtime.source import rollout as _rollout
 
 build_anchor_graph = _anchor_graph.build_anchor_graph
+benchmark_sensitive_text_policy = _safety.benchmark_sensitive_text_policy
+benchmark_text_is_sensitive = _safety.benchmark_text_is_sensitive
 cli_error_class_for_error_code = _cli_errors.cli_error_class_for_error_code
 cli_error_code_from_message = _cli_errors.cli_error_code_from_message
 cli_error_payload = _cli_errors.cli_error_payload

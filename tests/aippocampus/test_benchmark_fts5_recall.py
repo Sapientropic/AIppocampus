@@ -127,6 +127,40 @@ class Fts5RecallBenchmarkTests(unittest.TestCase):
         self.assertNotIn("snippet", public)
         self.assertIn("query_sha1", public)
 
+    def test_build_cases_skip_sensitive_candidates_with_shared_policy(self) -> None:
+        sensitive_text = (
+            "Connect with postgres://user:pass@db.internal:5432/app "
+            "and contact person@example.com for access."
+        )
+        write_jsonl(
+            self.clean / "messages.jsonl",
+            [
+                *self.messages,
+                {
+                    "message_id": "msg-sensitive",
+                    "turn_id": "turn-sensitive",
+                    "source_line": 30,
+                    "raw_start_line": 30,
+                    "raw_end_line": 30,
+                    "role": "user",
+                    "phase": "",
+                    "text": sensitive_text,
+                },
+            ],
+        )
+        registry = benchmark.load_registry(self.registry_path)
+
+        cases, corpus = benchmark.build_eval_cases(registry, sample_size=4, seed=7)
+
+        self.assertEqual(corpus["messages_skipped_sensitive"], 1)
+        self.assertNotIn("msg-sensitive", {case.expected_message_id for case in cases})
+        encoded = json.dumps(
+            [case.to_result_stub(include_private_text=False) for case in cases],
+            ensure_ascii=False,
+        )
+        self.assertNotIn("db.internal", encoded)
+        self.assertNotIn("person@example.com", encoded)
+
     def test_evaluate_case_marks_fts5_hit_rank(self) -> None:
         case = benchmark.EvalCase(
             case_id="case-hit",

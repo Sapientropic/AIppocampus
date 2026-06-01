@@ -18,6 +18,10 @@ bundle, demo, release, or plugin package.
   credential URLs.
 - Inspect scan hits manually. `FAKE_TEST_` fixtures are allowed; real private
   values are not.
+- Benchmark reports are sanitized candidates only when `--include-private-text`
+  is off and case-selection filters report the shared
+  `aippocampus_runtime.safety.benchmark_sensitive_text_policy` boundary.
+  Private-text debug output remains local-only.
 - Confirm `.aippocampus/`, registry exports, `thread-anchors.md`, logs, and
   archives remain gitignored.
 - Confirm public examples do not include `rollout.jsonl`.

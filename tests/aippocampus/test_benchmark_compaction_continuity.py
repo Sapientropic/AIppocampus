@@ -31,6 +31,11 @@ class CompactionContinuityBenchmarkTests(unittest.TestCase):
         self.assertGreaterEqual(payload["metrics"]["total_cases"], 10)
         self.assertEqual(payload["privacy_boundary"]["raw_correction_text_emitted"], False)
         self.assertEqual(payload["privacy_boundary"]["absolute_paths_emitted"], False)
+        self.assertTrue(payload["privacy_boundary"]["case_selection_filters_active"])
+        self.assertEqual(
+            payload["privacy_boundary"]["case_selection_filter_policy"],
+            "aippocampus_runtime.safety.benchmark_sensitive_text_policy",
+        )
         self.assertIn("live_codex_host_behavior", payload["cannot_claim"])
         self.assertIn("live_hook_capture", payload["cannot_claim"])
         case_types = {row["case_type"] for row in payload["cases"]}
@@ -197,6 +202,19 @@ class CompactionContinuityBenchmarkTests(unittest.TestCase):
         self.assertEqual(
             private_payload["privacy_boundary"]["raw_correction_text_emitted"],
             True,
+        )
+
+    def test_sensitive_debug_policy_catches_database_and_private_host_material(self) -> None:
+        self.assertTrue(
+            benchmark.looks_sensitive(
+                "Server=db.internal;Database=prod;User ID=app_user"
+            )
+        )
+        self.assertTrue(benchmark.looks_sensitive("http://10.0.0.8:8080/debug"))
+        self.assertFalse(
+            benchmark.looks_sensitive(
+                "ordinary source-backed correction text without credentials"
+            )
         )
 
     def test_cli_writes_sanitized_json_report(self) -> None:

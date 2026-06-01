@@ -49,6 +49,11 @@ class CognitivePortraitBenchmarkTests(unittest.TestCase):
             0,
         )
         self.assertFalse(payload["privacy_boundary"]["raw_context_emitted"])
+        self.assertTrue(payload["privacy_boundary"]["case_selection_filters_active"])
+        self.assertEqual(
+            payload["privacy_boundary"]["case_selection_filter_policy"],
+            "aippocampus_runtime.safety.benchmark_sensitive_text_policy",
+        )
         self.assertIn("live_model_behavioral_equivalence", payload["cannot_claim"])
         self.assertIn(
             "statistically_meaningful_cognitive_portrait_quality",
