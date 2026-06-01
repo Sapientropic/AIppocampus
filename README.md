@@ -229,9 +229,12 @@ External DeepSeek frontier extraction is explicit:
 
 ## Maintainer Checks
 
-The default CI path verifies Python 3.10 and 3.11 with docs health, Ruff, mypy,
-compile checks, and the fast deterministic test tier. Slower benchmark and smoke
-coverage stays explicit for release and readiness work.
+The default CI path verifies Ubuntu Python 3.10 and 3.11 with docs health, Ruff,
+mypy, compile checks, and the fast deterministic test tier. It also runs a
+macOS fast-tier gate on the runner's default TMPDIR as a path-identity guard for
+the recurring `/var` and `/private/var` regression family. Ubuntu green alone is
+not a cross-platform fast-tier claim. Slower benchmark and smoke coverage stays
+explicit for release and readiness work.
 
 From the repository root:
 
@@ -266,6 +269,11 @@ python tools/aippocampus/run_tests.py --tier full
 Use `--tier benchmark` or `--tier slow` when touching benchmark runners, smoke
 tools, plugin packaging, onboarding, object sync, or prompt-hook integration
 behavior.
+
+Runtime/package-owner or path-identity release slices should still run the
+manual macOS install smoke from the release checklist before making public
+readiness claims; the PR macOS gate is a regression guard, not a full
+install/distribution proof.
 
 The Stage 0-5 public-readiness smoke is broader than a fresh-clone install
 check. Some gates inspect the local AIppocampus registry under `$CODEX_HOME`; on

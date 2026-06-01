@@ -67,6 +67,43 @@ jobs:
       - name: Compile Python files
         run: python -m compileall -q skills plugins tests tools benchmarks benchmark_corpus
 
+  macos-path-identity:
+    name: macOS default TMPDIR path-identity smoke
+    runs-on: macos-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install smoke dependencies
+        run: |
+          python -m pip install ruff mypy coverage build
+          python -m pip install -e .
+
+      - name: Capture default macOS temp identity
+        shell: bash
+        run: |
+          python - <<'PY'
+          import pathlib
+          import tempfile
+
+          tempdir = pathlib.Path(tempfile.gettempdir())
+          print(f"default_tmpdir={tempdir}")
+          print(f"default_tmpdir_resolved={tempdir.resolve()}")
+          PY
+
+      - name: Fast tier on default macOS tempdir
+        shell: bash
+        run: |
+          # Covers recurring #140/#242/#402 /var and /private/var path-identity regressions.
+          python tools/aippocampus/run_tests.py --tier fast
+
   full-tests:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest

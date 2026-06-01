@@ -61,9 +61,11 @@ surface. Do not use fast-tier coverage to claim that cloud providers, physical
 device sync, prompt hooks, external-model routes, or private real-history packs
 were exercised.
 
-For runtime/package-owner or path-identity changes, also run the manual macOS
-install smoke on GitHub's default `TMPDIR` before making a release or public
-readiness claim:
+PR and push CI include a macOS fast-tier path-identity guard on GitHub's
+default `TMPDIR`, but that job is only a regression gate for the recurring
+`/var` and `/private/var` class. For runtime/package-owner or path-identity
+changes, also run the manual macOS install smoke before making a release or
+public readiness claim:
 
 ```sh
 gh workflow run macos-install-smoke.yml -f runner-label=macos-latest -f python-version=3.12

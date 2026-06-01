@@ -10,6 +10,8 @@ CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "aippocampus-ci.yml"
 INSTALL_GUIDE = REPO_ROOT / "docs" / "guides" / "install-guide.md"
 PYPROJECT = REPO_ROOT / "pyproject.toml"
 RELEASE_CHECKLIST = REPO_ROOT / "docs" / "guides" / "release-checklist.md"
+README = REPO_ROOT / "README.md"
+READINESS = REPO_ROOT / "docs" / "evidence" / "readiness" / "stage-0-5-readiness.md"
 
 
 class MacOSInstallSmokeWorkflowTests(unittest.TestCase):
@@ -56,6 +58,33 @@ class MacOSInstallSmokeWorkflowTests(unittest.TestCase):
         self.assertIn("aippocampus hooks status --codex-home .tmp/ci-codex-home --json", text)
         self.assertIn("aippocampus hooks install --codex-home .tmp/ci-codex-home --json", text)
         self.assertIn("python -m build --sdist --wheel", text)
+
+    def test_pr_ci_runs_macos_default_tmpdir_path_identity_gate(self) -> None:
+        text = CI_WORKFLOW.read_text(encoding="utf-8")
+
+        self.assertIn("macos-path-identity", text)
+        self.assertIn("runs-on: macos-latest", text)
+        self.assertIn('python-version: "3.12"', text)
+        self.assertIn("tempfile.gettempdir()", text)
+        self.assertIn(".resolve()", text)
+        self.assertIn("python tools/aippocampus/run_tests.py --tier fast", text)
+        self.assertIn("#402", text)
+        self.assertIn("#140", text)
+        self.assertIn("#242", text)
+        macos_job = text.split("macos-path-identity", 1)[1]
+        self.assertNotIn("TMPDIR:", macos_job)
+        self.assertNotIn("TEMP:", macos_job)
+        self.assertNotIn("TMP:", macos_job)
+
+    def test_readiness_docs_distinguish_ubuntu_ci_from_macos_path_gate(self) -> None:
+        readme = README.read_text(encoding="utf-8")
+        readiness = READINESS.read_text(encoding="utf-8")
+
+        for text in (readme, readiness):
+            self.assertIn("Ubuntu", text)
+            self.assertIn("macOS", text)
+            self.assertIn("default TMPDIR", text)
+            self.assertIn("path-identity", text)
 
     def test_macos_smoke_exercises_path_identity_regressions(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
