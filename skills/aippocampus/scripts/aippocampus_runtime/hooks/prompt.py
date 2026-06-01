@@ -9,11 +9,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.core import (
-    aippocampus_registry_dir,
-    now_utc,
-    sanitize_external_model_payload,
-)
+from aippocampus_runtime.core import aippocampus_registry_dir, now_utc, sanitize_external_model_payload
 
 DEFAULT_SEARCH_BUDGET_FALLBACK = 3
 PROMPT_HOOK_SEMANTIC_TIMEOUT_FALLBACK = float(os.environ.get("AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT", "2.5"))
@@ -147,10 +143,7 @@ def write_debug_log(
         "ambient_recall": ambient_summary,
         "elapsed_ms": result.get("elapsed_ms"),
     }
-    # Opt-in hook logs are local-private diagnostics, but their fields are
-    # prompt-derived. Redact the event at the final write boundary so recall
-    # scoring still sees the real prompt while persisted debug JSON stays safe
-    # to paste into issue triage.
+    # Redact only at the write boundary; recall scoring still uses raw terms.
     safe_event = sanitize_external_model_payload(event)
     with path.open("a", encoding="utf-8", newline="\n") as fh:
         fh.write(json.dumps(safe_event, ensure_ascii=False) + "\n")
