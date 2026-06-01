@@ -39,7 +39,10 @@ The origin essay is [未干的地图](docs/未干的地图.md). English readers 
 ## Quick Start
 
 This path checks a fresh clone without copying private memory data or enabling
-hooks:
+hooks. If you are deciding which AIppocampus surface another tool should depend
+on, start with the
+[10-minute public API path](docs/guides/public-api.md#ten-minute-public-path)
+before reading the advanced sync, hook, Dream, or benchmark material.
 
 ```sh
 git clone https://github.com/Sapientropic/AIppocampus.git
@@ -146,7 +149,8 @@ recognizable again.
 - Benchmark and smoke evidence:
   [Benchmark And Evidence Map](docs/evidence/benchmark-evidence-map.md).
 - Supported public surface:
-  [Public API](docs/guides/public-api.md) and
+  [Public API](docs/guides/public-api.md), including the
+  [10-minute path](docs/guides/public-api.md#ten-minute-public-path), and
   [Public Core Boundary](docs/guides/public-core-boundary.md).
 - Security and release hygiene:
   [SECURITY.md](SECURITY.md) and

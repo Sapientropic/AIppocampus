@@ -8,6 +8,61 @@ It complements [public-core-boundary.md](public-core-boundary.md), which owns
 licensing, adapter architecture, and minimal schema contracts. Do not mirror
 the schema details here.
 
+## Ten-Minute Public Path
+
+Use this path when an external user, agent host, or downstream script needs the
+smallest dependable AIppocampus surface before learning the research features.
+
+1. Verify the packaged CLI without cloning or writing local memory artifacts:
+
+   ```sh
+   uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus --help
+   ```
+
+2. Check whether the local provider has usable source without registering new
+   history:
+
+   ```sh
+   uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus onboard --provider codex --status --format json
+   ```
+
+3. In an installed checkout, inspect the MCP catalog:
+
+   ```sh
+   aippocampus mcp list-tools
+   ```
+
+4. After the current workspace has local provider history, or after the user has
+   intentionally registered or imported local history, run health and search
+   clean source through the stable CLI or MCP surfaces:
+
+   ```sh
+   aippocampus health --cwd "$PWD" --json
+   aippocampus search "remembered phrase or project cue" --cwd "$PWD" --json
+   ```
+
+5. Know where data lives before enabling writes. Generated memory artifacts use
+   the configured AIppocampus registry: `AIPPOCAMPUS_REGISTRY_DIR`, then
+   `AIPPOCAMPUS_HOME/registry`, then legacy Codex registry fallback. Project
+   repositories should not receive raw rollouts, registry exports, generated
+   indexes, sync bundles, or private local paths.
+
+This path intentionally does not require Dream, cognitive-map jobs, semantic
+gates, sync, plugin packaging, benchmark runners, or hook installation. Those
+surfaces can be useful, but they are not the 10-minute dependency story.
+
+## Which Layer Should I Depend On?
+
+| Need | Depend on | Stable enough today | Do not depend on |
+| --- | --- | --- | --- |
+| No-clone probe or install smoke | GitHub `uvx --from ... aippocampus ...` and documented repository checks | Documented CLI command names, documented flags, return code success/failure, and public-safe `--json` outputs where documented | `uvx aippocampus ...` until PyPI publication in #291 is verified; unsigned binary paths beyond the dated Windows x64 evidence |
+| Local operator status | `aippocampus health`, `aippocampus onboard --status`, and `memory_health` MCP | Documented status fields, additive JSON fields, and CLI JSON error classes | Human-readable prose, local absolute paths, or private registry internals |
+| Agent-host read tools | MCP `search_memory`, `latest_reply`, `get_turn_context`, `list_threads`, `register_thread`, `sync_status`, `memory_health` | Tool names, required input fields, additive output fields, JSON tool errors, and public-safe path redaction | Broad memory writes, hook install/uninstall, sync push/pull, or arbitrary file ingest through MCP |
+| Provider-neutral import | `aippocampus import conversation --format generic-jsonl` and `registry.py register-source --provider generic-jsonl` | Generic JSONL required fields, validation diagnostics, canonical source refs, and import manifests | Markdown import as a public claim, role-ambiguous transcripts, or host-private metadata as public identity |
+| Script or CI integration | CLI `--json`, public schemas, and `aippocampus_runtime.cli.facade.run_command(capture_output=True)` inside a trusted Python process | Same command names, JSON shapes, and return-code policy as the public CLI | A broad Python or TypeScript domain SDK; helper-module internals under `skills/aippocampus/scripts/` |
+| Cross-device transfer | Documented local-folder, object-storage, and encrypted sync commands | Documented command names, flags, sync manifests, privacy refusal rules, and `AIPPOCAMPUS_*` configuration names | Raw plaintext rollout sync, provider credentials in logs, or managed hosted-service behavior |
+| Research or roadmap work | Roadmap, evidence docs, benchmarks, and research notes | Evidence for the current implementation or design direction only | Public API stability for Dream, subconscious jobs, semantic caches, benchmark cache files, or cognitive-map artifacts |
+
 ## Stability Model
 
 AIppocampus uses additive public contracts:
@@ -197,6 +252,20 @@ For these tools:
 - `unsupported_mutation` is intentional. The MCP surface should not grow broad
   write APIs just to prove integration.
 
+The caller-facing MCP failure boundary is:
+
+- Missing or malformed tool names/arguments return JSON tool errors such as
+  `missing_query`, `malformed_params`, `malformed_arguments`,
+  `missing_tool_name`, or `unknown_tool`.
+- Missing registered source returns a diagnostic such as
+  `clean_source_unavailable` or a non-error empty listing such as
+  `status: "registry_missing"`; callers should treat this as "no local memory
+  source yet", not as proof that memory does not exist elsewhere.
+- Unsupported writes return `unsupported_mutation`. That is a deliberate
+  privacy and provenance boundary.
+- Tool results redact local paths by default. Local operators may request
+  private locators only through documented `include_private_paths` fields.
+
 `register_thread` is an explicit control-plane operation. It is not a general
 memory-write API.
 
@@ -377,6 +446,12 @@ tokens, cookies, local private paths, or private memory locations.
 AIppocampus does not currently publish a broad stable Python package API.
 Runtime code under `skills/aippocampus/scripts/` remains script-first unless a
 package owner is explicitly documented here or in a linked contract.
+
+SDK status: there is no general public Python SDK and no TypeScript SDK today.
+The supported dependency story is CLI, MCP, public schemas, import manifests,
+and the thin trusted-process Python command dispatcher documented below. Add a
+domain SDK only after a concrete downstream use case proves that those surfaces
+are insufficient.
 
 ### Python Import Stability Layers
 

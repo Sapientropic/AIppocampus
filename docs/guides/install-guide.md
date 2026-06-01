@@ -10,6 +10,14 @@ The install guide shows common commands only; the full environment-variable
 matrix and Python import layer policy live in that public API document so the
 stability boundary has one owner.
 
+For a new external user or agent host, follow the
+[10-minute public API path](public-api.md#ten-minute-public-path) first:
+package probe, read-only provider status, MCP tool list, then health and
+clean-source search once the current workspace has registered or imported
+source. Treat plugin packaging, hooks, sync, object storage, Dream, semantic
+jobs, and benchmarks as advanced surfaces unless that path proves the user
+actually needs them.
+
 ## Agent One-Command Path
 
 Agents that need to verify AIppocampus without cloning the repository can use
