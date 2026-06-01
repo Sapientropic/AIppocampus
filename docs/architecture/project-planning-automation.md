@@ -9,6 +9,11 @@ remain the source of truth.
 `tools/aippocampus/github/project_triage.py` runs during issue intake through
 `.github/workflows/project-triage.yml`.
 
+GitHub Actions should use the explicit `AIPPOCAMPUS_PROJECTS_TOKEN` secret. For
+local maintainer runs, the tool also accepts `GH_TOKEN` or the authenticated
+GitHub CLI keyring through `gh auth token`; this keeps local audits usable
+without copying a plaintext token into the shell environment.
+
 Use it for narrow, issue-local metadata:
 
 - fill missing Project fields such as `Status`, `Track`, `Kind`, `Stage`,
@@ -31,6 +36,9 @@ product direction from keywords.
 
 `tools/aippocampus/github/planning_audit.py` runs as the slower scheduled
 roadmap hygiene pass through `.github/workflows/planning-audit.yml`.
+
+It uses the same token lookup as project triage: explicit CI secret first, then
+`GH_TOKEN`, then local `gh auth token` for maintainer workstations.
 
 Use it for cross-issue and docs drift:
 
