@@ -54,6 +54,7 @@ SCRIPT_MODULES = {
     spec.script_name: spec.module_name for spec in COMMANDS.values()
 } | {
     "aippocampus_mcp_server.py": "aippocampus_runtime.mcp.server",
+    "registry.py": "aippocampus_runtime.registry.api",
     "sync_bundle.py": "aippocampus_runtime.sync.bundle",
     "sync_object_storage.py": "aippocampus_runtime.sync.object_storage.cli",
     "install_aippocampus_prompt_hook.py": "aippocampus_runtime.hooks.install_prompt",
@@ -143,10 +144,36 @@ def invocation_from_spec(command: str, spec: CommandSpec, rest: list[str]) -> Co
     )
 
 
+def _conversation_import_args(rest: list[str]) -> list[str]:
+    registry_args: list[str] = []
+    source_args: list[str] = ["register-source"]
+    index = 0
+    while index < len(rest):
+        item = rest[index]
+        if item == "--registry-dir" and index + 1 < len(rest):
+            registry_args.extend([item, rest[index + 1]])
+            index += 2
+            continue
+        if item == "--format" and index + 1 < len(rest):
+            source_args.extend(["--provider", rest[index + 1]])
+            index += 2
+            continue
+        source_args.append(item)
+        index += 1
+    return [*registry_args, *source_args]
+
+
 def resolve_command(argv: list[str]) -> CommandInvocation | None:
     if not argv:
         return None
     command, rest = argv[0], argv[1:]
+    if command == "import" and rest and rest[0] == "conversation":
+        return CommandInvocation(
+            command,
+            "registry.py",
+            module_name_for_script("registry.py"),
+            _conversation_import_args(rest[1:]),
+        )
     if command in COMMANDS:
         return invocation_from_spec(command, COMMANDS[command], rest)
     if command == "mcp":
@@ -243,6 +270,7 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  search              Search clean-source memory", file=target)
     print("  export              Export a portable AIppocampus bundle", file=target)
     print("  import              Import a portable AIppocampus bundle", file=target)
+    print("  import conversation Register an explicit provider transcript", file=target)
     print("  mcp list-tools      List MCP tool schemas", file=target)
     print("  sync                Local-folder sync status/push/pull/repair", file=target)
     print("  object-sync         Object-storage sync status/push/pull/repair", file=target)

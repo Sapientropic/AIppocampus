@@ -52,6 +52,8 @@ The CLI contract applies to documented operator commands, especially:
 - `search_clean_source.py`
 - `latest_reply.py` as a Codex raw-rollout audit compatibility command
 - `onboard.py --provider codex|claude-code|generic-jsonl|auto`
+- `aippocampus import conversation --format generic-jsonl --input <path>`
+- `registry.py register-source --provider generic-jsonl --input <path>`
 - `onboard_codex.py`
 - `aippocampus_mcp_server.py --list-tools`
 - `export_bundle.py` / `import_bundle.py`
@@ -144,7 +146,7 @@ The initial stable classes are:
 | `error.class` | Meaning | Current example codes | Exit class |
 | --- | --- | --- | --- |
 | `usage_error` | Caller selected an unsupported operation or malformed command shape. | `usage_error`, `unsupported_operation` | `2` |
-| `validation_error` | Caller input was present but invalid. | `invalid_json`, `validation_error` | `2` |
+| `validation_error` | Caller input was present but invalid. | `invalid_json`, `validation_error`, `missing_required_fields`, `unsupported_role`, `unknown_turn_id` | `2` |
 | `missing_prerequisite` | A required file, credential, provider, or local artifact is absent. | `missing_api_key`, `missing_file`, `missing_prerequisite` | `2` |
 | `privacy_block` | The command refused to expose or transport private data without an explicit safe mode. | `privacy_blocked` | `2` |
 | `runtime_error` | The command reached an unexpected runtime failure or an unclassified downstream error. | `runtime_error`, unknown future codes without a class | `1` |
@@ -227,6 +229,12 @@ source-backed auditability before they become public. They also need an explicit
 operator consent path, a repair/rollback story, and a machine-readable error
 contract that does not require callers to parse human prose.
 
+Explicit file or directory import is a separate provider-neutral CLI operation:
+use `aippocampus import conversation --format generic-jsonl --input <path>` or
+`registry.py register-source --provider generic-jsonl --input <path>` for an
+exported transcript. `register_thread` is for attaching/building the selected
+current provider session through the MCP control plane; it is not a generic arbitrary-file ingest endpoint.
+
 MCP JSON output defaults to public-safe local-path redaction for tool results
 that can be forwarded through host agents. Callers that are acting as local
 operators may pass `include_private_paths: true` where documented by the tool
@@ -273,6 +281,16 @@ preserved.
 Generic JSONL validation failures expose a machine-readable code, source line,
 message, and details, so import callers can report the exact malformed row
 without guessing from prose.
+
+To register an explicit file without relying on provider discovery environment
+variables:
+
+```sh
+aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --project "Project name" --json
+```
+
+Use `--dry-run` to validate and preview the target thread key without writing
+clean-source artifacts or registry rows.
 
 ## JSON And Schema Contracts
 
