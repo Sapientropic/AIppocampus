@@ -7,6 +7,9 @@ agents, plugin hosts, and scripts to depend on.
 It complements [public-core-boundary.md](public-core-boundary.md), which owns
 licensing, adapter architecture, and minimal schema contracts. Do not mirror
 the schema details here.
+For host-family support status, smoke evidence boundaries, and planned versus
+verified ecosystem claims, see
+[ecosystem-integration-matrix.md](ecosystem-integration-matrix.md).
 
 ## Ten-Minute Public Path
 
