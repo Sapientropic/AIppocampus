@@ -215,12 +215,14 @@ Run the bounded public semantic-sidecar Track B pilot:
 python benchmarks\aippocampus\benchmark_source_evidence_retrieval.py --allow-deterministic-labels --include-public-semantic-sidecar --public-semantic-output-dir .tmp\public-semantic-sidecar-20260529-wide --public-semantic-conversations 80 --public-semantic-max-messages 160 --public-semantic-max-candidates 48 --public-semantic-cases 40 --public-semantic-min-cases 3 --public-semantic-top-k 5 --public-semantic-max-tokens 16384 --public-semantic-timeout 90 --output .tmp\track-b-public-semantic-sidecar-wide-20260529.json
 ```
 
-Latest local pilot (2026-05-29): `status=sufficient`, bounded subset 80
-conversations / 160 messages / 48 label candidates, 3 reviewed
-`semantic-scope-labels.jsonl` rows, 3 selected public semantic-sidecar cases,
-3/3 top-5 hits. This is a public semantic-sidecar pilot only; it does not claim
-human-reviewed labels, unbounded public quality, or private real-history
-semantic-sidecar quality.
+Latest local pilot (2026-05-29): `status=diagnostic_only`,
+`claim_level=diagnostic_pilot`, bounded subset 80 conversations / 160 messages /
+48 label candidates, 3 reviewed `semantic-scope-labels.jsonl` rows, 3 selected
+public semantic-sidecar cases, and 3/3 top-5 hits. The report carries
+`minimum_empirical_case_count=50` plus `sample_size_warning`, so this remains a
+small-N public semantic-sidecar pilot. It does not claim human-reviewed labels,
+empirical public semantic-sidecar quality, unbounded public quality, or private
+real-history semantic-sidecar quality.
 
 Run the optional standard retrieval-QA Track B adapter:
 

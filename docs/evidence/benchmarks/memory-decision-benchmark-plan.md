@@ -95,10 +95,13 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
   structured-text cognitive portrait benchmark. It builds a compact prompt from
   source-backed question/frontier/link findings, compares it with fuller
   clean-source injection, and reports compression, source fidelity,
-  over-personalization risk, and fixture-level cue equivalence.
+  over-personalization risk, fixture-level cue equivalence, `claim_level`, and
+  `sample_size_warning`. The current 3-prompt fixture is a `contract_smoke`, not
+  empirical portrait-quality evidence.
 - `tests/aippocampus/test_benchmark_cognitive_portrait.py` checks that the
   reusable portrait artifact keeps source refs/back-pointers, records quote
-  fidelity loss, and keeps private debug text opt-in.
+  fidelity loss, keeps private debug text opt-in, and exposes the small-sample
+  cannot-claim boundary.
 - `benchmarks/aippocampus/benchmark_question_aware_real_history.py` runs the
   #139 private real-history structural proxy. It selects source-backed
   question/frontier/link/theme rows when present, emits sanitized packs with
@@ -221,6 +224,9 @@ Boundary:
   it does not mean human-reviewed
 - generated subset, registry, sidecar, and live report stay local under `.tmp/`
   unless a curated public fixture is deliberately promoted later
+- reports include `claim_level`, `minimum_empirical_case_count`, and
+  `sample_size_warning`; passing top-k hits below that density stays a
+  `diagnostic_pilot`, not an empirical benchmark claim
 - metrics include message-level hit and turn-level hit so sibling rows in the
   same user/assistant turn do not become false hard failures
 - default reports hash ids and queries and do not emit raw public conversation
@@ -316,12 +322,14 @@ Current smoke and diagnostic results from 2026-05-30:
   private real-history semantic-sidecar source-evidence slice.
 - Public semantic-sidecar Track B pilot over `sharegpt_all_multiturn`,
   bounded to 80 conversations / 160 clean-source messages / 48 label candidates:
-  `status=sufficient`, 3 reviewed `semantic-scope-labels.jsonl` rows, 3
-  selected public semantic-sidecar cases, 3/3 top-5 hits. The generated subset
+  `status=diagnostic_only`, `claim_level=diagnostic_pilot`, 3 reviewed
+  `semantic-scope-labels.jsonl` rows, 3 selected public semantic-sidecar cases,
+  3/3 top-5 hits, and `minimum_empirical_case_count=50`. The generated subset
   lives under `.tmp/public-semantic-sidecar-20260529-wide/` and the sanitized
   report is `.tmp/track-b-public-semantic-sidecar-wide-20260529.json`. This is
-  deliberately reported as `public_semantic_sidecar`; it does not upgrade or
-  replace the private real-history `semantic-sidecar-required` claim.
+  deliberately reported as `public_semantic_sidecar`; it does not upgrade to an
+  empirical public semantic-sidecar claim or replace the private real-history
+  `semantic-sidecar-required` claim.
 - Private real-history semantic-sidecar refresh:
   `smoke_semantic_scope_real_history.py --live --write-sidecars
   --full-candidate-coverage --full-candidate-source-turn-cap 160
@@ -505,9 +513,10 @@ Current smoke and diagnostic results from 2026-05-27:
   implemented as a separate optional wrapper track. Current 2026-05-29 pilot
   uses a bounded ShareGPT public registry subset with generated/reviewed
   `semantic-scope-labels.jsonl`; result is 3 reviewed sidecar rows, 3 selected
-  cases, 3/3 top-5 hits. Keep this as a public pilot until the sidecar-reviewed
-  public sample is materially larger; do not merge it into the private
-  `semantic-sidecar-required` metric.
+  cases, 3/3 top-5 hits, `claim_level=diagnostic_pilot`, and
+  `minimum_empirical_case_count=50`. Keep this as a public pilot until the
+  sidecar-reviewed public sample is materially larger; do not merge it into the
+  private `semantic-sidecar-required` metric.
 - Track B selected source-evidence track, deterministic source-label slice:
   sufficient, 100 selected cases, 97/100 top-5 hits, 0.97 hit rate. The
   remaining misses are 2 `rank_below_top_k` cases and 1
