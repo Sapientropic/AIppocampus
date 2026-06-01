@@ -1,0 +1,55 @@
+name: Planning audit
+
+"on":
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+    inputs:
+      repair:
+        description: "Apply only high-confidence safe repairs."
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  planning-audit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Audit issue planning metadata
+        env:
+          AIPPOCAMPUS_PROJECTS_TOKEN: ${{ secrets.AIPPOCAMPUS_PROJECTS_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          REPAIR: ${{ github.event.inputs.repair || 'false' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${AIPPOCAMPUS_PROJECTS_TOKEN:-}" ]]; then
+            echo "::warning::Set repository secret AIPPOCAMPUS_PROJECTS_TOKEN with GitHub Issues access to enable planning audit."
+            exit 0
+          fi
+
+          args=(
+            --repo "$GITHUB_REPOSITORY"
+            --repo-root "$GITHUB_WORKSPACE"
+            --json
+            --markdown-summary "$GITHUB_STEP_SUMMARY"
+          )
+          if [[ "$REPAIR" == "true" ]]; then
+            args+=(--repair)
+          else
+            args+=(--dry-run)
+          fi
+
+          python tools/aippocampus/github/planning_audit.py "${args[@]}"

@@ -39,6 +39,7 @@ maps.
 - [`architecture-overview.md`](architecture/architecture-overview.md) - public map of runtime layers and boundaries.
 - [`cognitive-runtime-architecture.md`](architecture/cognitive-runtime-architecture.md) - layered runtime architecture and cognitive-map direction.
 - [`runtime-script-map.md`](architecture/runtime-script-map.md) - maintainer map for high-risk runtime scripts, recall flow, entrypoints, callers, and tests.
+- [`project-planning-automation.md`](architecture/project-planning-automation.md) - boundary between issue intake triage and recurring roadmap drift audits.
 - [`provider-entrypoint-inventory.md`](architecture/provider-entrypoint-inventory.md) - classified inventory of remaining Codex-specific and provider-aware runtime entrypoints.
 - [`architecture-debt-register.md`](architecture/architecture-debt-register.md) - lightweight large-runtime-script debt register and guard budgets.
 - [`gb-scale-roadmap.md`](architecture/gb-scale-roadmap.md) - long-thread indexing, segmenting, retention, vector-index, and scale planning.
