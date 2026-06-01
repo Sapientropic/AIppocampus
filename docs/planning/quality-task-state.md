@@ -1,4 +1,5 @@
-state: active
+state: archived
+archive_note: "Historical 2026-05-31 issue-refinement handoff. Do not treat this file as the current queue; current executable work lives in GitHub open issues / Project after the relevant docs are checked. #144 package-boundary work closed through PR #318, while #104, #306, and #307 remain separate open sync/readiness owners."
 goal_anchor: "Codex Goal: refine AIppocampus open issues with Claude Code MCP live smoke, Windows binary packaging, and verified issue closeout"
 mode: Standard
 run_shape: continuous_until_stop
@@ -9,7 +10,7 @@ stop_condition: "Each targeted issue is implemented with evidence, explicitly de
 handoff_policy: after_deadline_closeout
 continuation_policy: continue_after_initial_plan_until_stop_condition
 intake_status: inferred_from_user_request
-gate_status: in_progress
+gate_status: archived
 artifact_index:
   - docs/planning/quality-task-state.md
   - README.md
@@ -30,7 +31,7 @@ blockers: []
 needs_human:
   - "Final product acceptance and any remote publishing/PR decision"
 residual_risk: "Claude Code MCP host/tool-call smoke passes on this Windows host, explicit Claude Code onboarding dry-run has been previewed without writing, Windows x64 PyInstaller artifact smoke passes, and the standalone binary has been re-smoked after the #224 CLI facade / warm_ambient package-owner slice through commit a5217d1. #104 still needs real provider credentials and an ephemeral object-store target; #148/#163/#168 are intentionally skipped for this pass; #158/#164 remain dependent on the skipped Dream/coding-continuity evidence tracks."
-next_action: "Continue only evidence-backed slices: either run #104 after a real provider target is available, or take another narrow #144/Dream package boundary only when the ownership seam is clear."
+next_action: "Historical next action archived. For current execution, select from open GitHub issues / Project after checking docs; #104 owns real-provider sync smoke when credentials exist, #306 owns encrypted sync v2 recovery, conflict, revocation, and manifest-hardening decisions, and #307 owns external install / UI readiness gaps."
 candidate_slices:
   - "issues-113-116-120-provider-mainline: provider contract, normalized clean source, Claude/generic import, onboarding status"
   - "issue-112-cli-facade: aippocampus command wrapper over existing scripts"

@@ -66,9 +66,16 @@ Acceptance criteria:
 - Plaintext cleanup requires explicit confirmation and reports every object it
   will delete.
 - Real-provider smoke remains green for every provider path explicitly claimed
-  by the readiness ledger. Broader GCS XML HMAC, S3-compatible, cloud-folder,
-  or long-running provider/client soak claims belong to issue #57 and require
-  fresh dated evidence before they are claimed.
+  by the readiness ledger. Issue #57 is the historical broader provider/client
+  claim-boundary issue and is closed; it does not by itself add broader GCS XML
+  HMAC, S3-compatible, cloud-folder, or long-running provider/client soak
+  evidence.
+- Current sync evidence is split rather than re-owned here: #104 owns
+  post-migration live provider sync smoke when real credentials and an
+  ephemeral provider target are available, while #306 owns encrypted sync v2
+  recovery, conflict, revocation, and manifest-hardening decisions. #307 owns
+  external install, Codex Desktop UI, and provider/client claim-matrix
+  readiness gaps.
 
 Non-goals for this follow-up:
 
