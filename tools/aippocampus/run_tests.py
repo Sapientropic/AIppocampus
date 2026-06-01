@@ -64,8 +64,13 @@ def _probe_tempdir(parent: Path | None) -> None:
 def ensure_usable_tempdir() -> Path:
     try:
         _probe_tempdir(None)
+        # Return the canonical spelling. macOS default temp paths are commonly
+        # exposed as /var/... while the same directory resolves through
+        # /private/var/...; downstream test cache keys should see one identity.
         return Path(tempfile.gettempdir()).resolve()
     except OSError as default_error:
+        # Keep the fallback canonical too, otherwise macOS callers can compare
+        # /var and /private/var spellings for the same tested directory.
         fallback = FALLBACK_TEST_TMPDIR.resolve()
         try:
             _probe_tempdir(fallback)
