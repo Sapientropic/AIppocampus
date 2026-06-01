@@ -246,6 +246,17 @@ python tools/aippocampus/run_tests.py --tier fast
 python tools/aippocampus/run_coverage.py --tier fast
 ```
 
+Ruff has two intentional profiles: the default hard gate in `pyproject.toml`
+(`E9/F/I/B`) for high-signal syntax, import, Pyflakes, and Bugbear checks; and
+an advisory debt report for broader rule discovery:
+
+```sh
+python -m ruff check skills plugins tests tools benchmarks benchmark_corpus --select ALL --statistics
+```
+
+The advisory report is for trend tracking and rule selection, not a release
+failure by itself.
+
 Use the full tier before making a repository-health or public-readiness claim:
 
 ```sh

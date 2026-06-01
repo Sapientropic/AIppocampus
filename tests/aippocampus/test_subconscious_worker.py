@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from urllib.request import Request
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
@@ -183,9 +184,9 @@ class SubconsciousWorkerTests(unittest.TestCase):
             def read(self) -> bytes:
                 return json.dumps({"choices": [{"message": {"content": "{}"}}]}).encode("utf-8")
 
-        def fake_urlopen(req: object, timeout: int) -> FakeResponse:
+        def fake_urlopen(req: Request, timeout: int) -> FakeResponse:
             del timeout
-            captured["body"] = json.loads(getattr(req, "data").decode("utf-8"))
+            captured["body"] = json.loads(req.data.decode("utf-8"))
             return FakeResponse()
 
         with patch("urllib.request.urlopen", fake_urlopen):
@@ -257,9 +258,9 @@ class SubconsciousWorkerTests(unittest.TestCase):
                         ensure_ascii=False,
                     ).encode("utf-8")
 
-            def fake_urlopen(req: object, timeout: int) -> FakeResponse:
+            def fake_urlopen(req: Request, timeout: int) -> FakeResponse:
                 del timeout
-                captured["body"] = json.loads(getattr(req, "data").decode("utf-8"))
+                captured["body"] = json.loads(req.data.decode("utf-8"))
                 return FakeResponse()
 
             with patch("urllib.request.urlopen", fake_urlopen), patch.dict(
@@ -317,7 +318,7 @@ class SubconsciousWorkerTests(unittest.TestCase):
                         ensure_ascii=False,
                     ).encode("utf-8")
 
-            def fake_urlopen(req: object, timeout: int) -> FakeResponse:
+            def fake_urlopen(req: Request, timeout: int) -> FakeResponse:
                 del timeout
                 captured["authorization"] = req.get_header("Authorization")
                 return FakeResponse()

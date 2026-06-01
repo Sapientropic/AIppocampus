@@ -30,6 +30,15 @@ python tools/aippocampus/run_tests.py --tier fast
 python tools/aippocampus/run_coverage.py --tier fast
 ```
 
+The Ruff hard gate is deliberately staged through `pyproject.toml`: `E9/F/I/B`
+must pass in normal CI and release checks. Use the advisory all-rule report
+below when choosing future lint hardening work; do not treat its full count as a
+release blocker without a separate rule-selection issue:
+
+```sh
+python -m ruff check skills plugins tests tools benchmarks benchmark_corpus --select ALL --statistics
+```
+
 Run the full tier before a repository-health, public-readiness, or release
 claim:
 

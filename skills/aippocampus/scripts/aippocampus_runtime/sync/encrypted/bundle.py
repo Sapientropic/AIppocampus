@@ -362,7 +362,9 @@ def decrypt_inner_manifest(
     try:
         inner = json.loads(inner_plain.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        raise EncryptedSyncError("invalid_manifest", f"invalid encrypted inner manifest: {exc}")
+        raise EncryptedSyncError(
+            "invalid_manifest", f"invalid encrypted inner manifest: {exc}"
+        ) from exc
     if not isinstance(inner, dict):
         raise EncryptedSyncError("invalid_manifest", "encrypted inner manifest must be an object")
     if inner.get("outer_manifest") != outer:
