@@ -102,6 +102,9 @@ published and verified.
 AIppocampus is the canonical public home for an external hippocampus for agents:
 a local-first memory and continuity system that keeps original conversation
 source available across projects, devices, and casual life-wide conversations.
+The hippocampus language is a design metaphor, not a biological claim; the
+[architecture overview](docs/architecture/architecture-overview.md#metaphor-discipline)
+maps each major metaphor to its runtime mechanism, current claim, and boundary.
 
 Project work is one surface. The deeper aim is continuity across work, reading,
 reflection, unfinished questions, and the small phrases that make a relationship
@@ -145,7 +148,8 @@ recognizable again.
   [community field-report boundary](docs/evidence/community-field-reports.md).
 - Agent-readable context: [docs/agent-context.md](docs/agent-context.md) and
   [llms.txt](llms.txt).
-- Runtime shape:
+- Runtime shape and metaphor boundaries:
+  [Architecture Overview](docs/architecture/architecture-overview.md) and
   [Cognitive Runtime Architecture](docs/architecture/cognitive-runtime-architecture.md).
 - Current claim boundary:
   [Stage 0-5 readiness](docs/evidence/readiness/stage-0-5-readiness.md).

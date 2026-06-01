@@ -22,7 +22,8 @@ Start here instead of scanning every Markdown file in the tree.
   [`guides/install-guide.md`](guides/install-guide.md).
 - Agent-readable context and recommendation boundary: [`agent-context.md`](agent-context.md).
 - Public-core license and adapter boundary: [`guides/public-core-boundary.md`](guides/public-core-boundary.md).
-- Architecture overview: [`architecture/architecture-overview.md`](architecture/architecture-overview.md).
+- Architecture overview and metaphor claim boundaries:
+  [`architecture/architecture-overview.md`](architecture/architecture-overview.md#metaphor-discipline).
 - Exploratory research index: [`research/README.md`](research/README.md).
 
 Keep long rules, status matrices, and command logs in one authoritative place.
@@ -42,7 +43,7 @@ It pairs with the root [`llms.txt`](../llms.txt), [`AGENTS.md`](../AGENTS.md),
 `architecture/` holds system design, runtime boundaries, and implementation
 maps.
 
-- [`architecture-overview.md`](architecture/architecture-overview.md) - public map of runtime layers and boundaries.
+- [`architecture-overview.md`](architecture/architecture-overview.md) - public map of runtime layers, boundaries, and claim-bounded metaphors.
 - [`cognitive-runtime-architecture.md`](architecture/cognitive-runtime-architecture.md) - layered runtime architecture and cognitive-map direction.
 - [`runtime-script-map.md`](architecture/runtime-script-map.md) - maintainer map for high-risk runtime scripts, recall flow, entrypoints, callers, and tests.
 - [`project-planning-automation.md`](architecture/project-planning-automation.md) - boundary between issue intake triage and recurring roadmap drift audits.

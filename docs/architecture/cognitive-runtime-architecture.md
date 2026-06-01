@@ -7,6 +7,8 @@ workers, job circuits, and routing layers cooperating over source-backed memory.
 This document defines the engineering metaphor behind that runtime. It is not a
 neuroscience claim. It is a design discipline for deciding when to use scripts,
 embeddings, fast LLMs, small agent shells, or a larger orchestration pipeline.
+The public cross-document boundary for these metaphors lives in the
+[architecture overview](architecture-overview.md#metaphor-discipline).
 
 ## Core Claim
 
