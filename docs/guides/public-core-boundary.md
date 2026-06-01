@@ -201,6 +201,41 @@ Required semantics:
   precise enough for audit and repair.
 - `labels` are navigation hints, not replacement truth.
 
+### Runtime Clean-Source Manifest
+
+Runtime clean-source directories also contain a private operator
+`manifest.json`. This manifest is not the portable import manifest, but its
+provider-neutral fields are stable enough for local automation:
+
+- `source_id`, `source_provider`, and `source_thread_key` identify the provider
+  source without treating local paths as identity.
+- `source_transcript`, `source_transcript_size`, `source_transcript_mtime`, and
+  `source_transcript_sha256` describe the private provider transcript used to
+  build the clean-source artifact.
+- `source_artifact` is the structured provider-neutral form of the same
+  transcript locator and integrity metadata. Its `path` is private and should be
+  redacted or bundle-relativized outside trusted local operator flows.
+- `source_rollout`, `source_rollout_size`, `source_rollout_mtime`, and
+  `source_rollout_sha256` are legacy compatibility aliases for the
+  `source_transcript*` fields. New integrations should read
+  `source_artifact` or `source_transcript*`; old consumers may keep reading the
+  rollout-named aliases during the compatibility window.
+
+The generated runtime files map back to the public schema as follows:
+
+- `messages.jsonl` rows are provider-normalized visible-message chunks. They
+  carry `source_id`, `source_ref`, `message_id`, raw line spans, text hashes,
+  `kind`, and `phase` as metadata for audit and navigation.
+- `turns.jsonl` rows are a join/navigation sidecar over message ids and turn
+  boundaries. They are useful for reconstruction but do not replace canonical
+  source refs.
+- `events.jsonl` rows are structured behavior provenance when a provider can
+  safely extract tool/test events without storing raw payload text.
+
+`kind` and `phase` are provider-normalized metadata fields, not Codex-only truth
+fields and not claims about the user's intent. Source text and source refs remain
+the audit authority.
+
 ### Source Ref
 
 ```json

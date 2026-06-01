@@ -239,9 +239,12 @@ Provider-neutral identity uses stable join keys such as `thread_key`,
 absolute paths are private locators for audit, repair, and generated artifact
 lookup; they are not identity and should not be forwarded as public evidence.
 
-Clean-source manifests may retain private `cwd`, `source_transcript`, and output
-paths for local operators. Public/MCP/sync projections should redact or bundle-
-relativize those paths while preserving source-backed ids and source refs.
+Clean-source manifests may retain private `cwd`, `source_transcript`,
+`source_artifact.path`, and output paths for local operators. Public/MCP/sync
+projections should redact or bundle-relativize those paths while preserving
+source-backed ids and source refs. Legacy `source_rollout*` manifest aliases are
+compatibility fields for old Codex consumers; new provider-neutral integrations
+should read `source_artifact` or `source_transcript*`.
 
 ## Generic JSONL Import
 

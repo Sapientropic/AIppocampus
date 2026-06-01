@@ -229,6 +229,7 @@ class DocsHealthTests(unittest.TestCase):
 
         self.assertIn("public core schema doc missing metadata namespace rules", issues)
         self.assertIn("public core schema doc missing metadata privacy boundary", issues)
+        self.assertIn("public core schema doc missing runtime clean-source manifest contract", issues)
 
     def test_benchmark_evidence_map_reports_missing_runner(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
