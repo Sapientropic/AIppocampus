@@ -195,6 +195,174 @@ class BenchmarkSuiteTests(unittest.TestCase):
         self.assertFalse(config.include_sharegpt_public_track_b)
         self.assertFalse(config.include_standard_public_track_b)
 
+    def test_profile_ladder_is_exposed_in_cli_help(self) -> None:
+        help_text = suite.build_arg_parser().format_help()
+
+        self.assertIn("ci-deterministic", help_text)
+        self.assertIn("local-calibration", help_text)
+        self.assertIn("live-semantic", help_text)
+        self.assertIn("private-full", help_text)
+        self.assertIn("release-evidence", help_text)
+        self.assertIn(
+            "memory-decision-benchmark-plan.md#benchmark-suite-profiles",
+            help_text,
+        )
+
+    def test_release_evidence_profile_stays_public_safe_by_default(self) -> None:
+        parser = suite.build_arg_parser()
+        args = parser.parse_args(["--profile", "release-evidence"])
+
+        config = suite.benchmark_suite_config_from_args(args)
+
+        self.assertEqual(config.profile, "release-evidence")
+        self.assertFalse(config.include_private_text)
+        self.assertFalse(config.include_live_semantic)
+        self.assertFalse(config.include_sharegpt_public_track_b)
+        self.assertFalse(config.include_standard_public_track_b)
+        self.assertTrue(config.include_track_b)
+        self.assertTrue(config.include_deterministic_source_labels)
+
+    def test_release_evidence_profile_allows_explicit_public_adapter_opt_in(self) -> None:
+        parser = suite.build_arg_parser()
+        args = parser.parse_args(
+            [
+                "--profile",
+                "release-evidence",
+                "--include-standard-public-track-b",
+                "--include-private-text",
+                "--include-live-semantic",
+            ]
+        )
+
+        config = suite.benchmark_suite_config_from_args(args)
+
+        self.assertEqual(config.profile, "release-evidence")
+        self.assertTrue(config.include_standard_public_track_b)
+        self.assertFalse(config.include_private_text)
+        self.assertFalse(config.include_live_semantic)
+
+    def test_suite_report_includes_profile_and_threshold_metadata(self) -> None:
+        with (
+            patch.object(
+                suite.gate_benchmark,
+                "run_benchmark",
+                return_value=fake_gate_payload(),
+            ),
+            patch.object(
+                suite.payload_benchmark,
+                "run_benchmark",
+                return_value=fake_payload_payload(),
+            ),
+            patch.object(
+                suite.compaction_benchmark,
+                "run_benchmark",
+                return_value=fake_compaction_payload(),
+            ),
+        ):
+            payload = suite.run_benchmark_suite(profile="public-fast")
+
+        profile_metadata = payload["profile_metadata"]
+        self.assertEqual(profile_metadata["selected_profile"]["name"], "public-fast")
+        self.assertEqual(
+            profile_metadata["docs"],
+            "docs/evidence/benchmarks/memory-decision-benchmark-plan.md"
+            "#benchmark-suite-profiles",
+        )
+        self.assertIn(
+            "ci-deterministic",
+            {profile["name"] for profile in profile_metadata["profile_ladder"]},
+        )
+        self.assertIn("public_fast_profile_track_b_quality", payload["cannot_claim"])
+
+        threshold_metadata = payload["threshold_metadata"]
+        self.assertEqual(
+            threshold_metadata["source_min_hit_rate"]["value"],
+            payload["config"]["source_min_hit_rate"],
+        )
+        self.assertIn("rationale", threshold_metadata["source_min_hit_rate"])
+        self.assertIn(
+            "claim_boundary",
+            threshold_metadata["standard_min_session_hit_rate"],
+        )
+
+    def test_suite_report_warns_when_profile_surface_is_narrowed(self) -> None:
+        with (
+            patch.object(
+                suite.gate_benchmark,
+                "run_benchmark",
+                return_value=fake_gate_payload(),
+            ),
+            patch.object(
+                suite.payload_benchmark,
+                "run_benchmark",
+                return_value=fake_payload_payload(),
+            ),
+            patch.object(
+                suite.compaction_benchmark,
+                "run_benchmark",
+                return_value=fake_compaction_payload(),
+            ),
+        ):
+            payload = suite.run_benchmark_suite(
+                profile="release-evidence",
+                include_track_b=False,
+            )
+
+        self.assertNotIn("source_evidence_retrieval", payload["tracks"])
+        self.assertIn(
+            "profile_expected_track_b_but_effective_config_skipped_it",
+            payload["claim_surface_warnings"],
+        )
+        self.assertNotIn(
+            "source_evidence_retrieval",
+            payload["profile_metadata"]["effective_surface"]["included_tracks"],
+        )
+
+    def test_suite_report_marks_optional_public_adapter_opt_in(self) -> None:
+        with (
+            patch.object(
+                suite.gate_benchmark,
+                "run_benchmark",
+                return_value=fake_gate_payload(),
+            ),
+            patch.object(
+                suite.payload_benchmark,
+                "run_benchmark",
+                return_value=fake_payload_payload(),
+            ),
+            patch.object(
+                suite.compaction_benchmark,
+                "run_benchmark",
+                return_value=fake_compaction_payload(),
+            ),
+            patch.object(
+                suite.retrieval_benchmark,
+                "run_source_evidence_retrieval_benchmark",
+                return_value=fake_retrieval_payload(ok=True),
+            ),
+        ):
+            payload = suite.run_benchmark_suite(
+                profile="release-evidence",
+                include_standard_public_track_b=True,
+            )
+
+        self.assertIn(
+            "optional_public_track_b_adapter_enabled",
+            payload["claim_surface_warnings"],
+        )
+        self.assertIn(
+            "release_profile_optional_public_corpus_quality_bounded_to_adapter_run",
+            payload["cannot_claim"],
+        )
+        self.assertNotIn(
+            "release_profile_optional_public_corpus_quality_without_opt_in",
+            payload["cannot_claim"],
+        )
+        self.assertIn(
+            "standard_public_track_b",
+            payload["profile_metadata"]["effective_surface"]["optional_surfaces"],
+        )
+
     def test_public_fast_profile_runs_only_deterministic_a_c_d_tracks(self) -> None:
         with (
             patch.object(
