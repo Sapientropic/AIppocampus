@@ -206,6 +206,11 @@ def schedule_warm_ambient_recall(
         "prompt_sha1": hashlib.sha1(str(prompt or "").encode("utf-8")).hexdigest()[:16],
         "prompt": sanitized_prompt,
         "secret_policy": secret_policy,
+        "privacy_boundary": {
+            "sanitized_prompt_stored": True,
+            "absolute_paths_are_private_process_pointers": True,
+            "public_output": False,
+        },
         "cwd": str(workspace),
         "thread_id": thread_id,
         "current_thread_key": current_thread_key,

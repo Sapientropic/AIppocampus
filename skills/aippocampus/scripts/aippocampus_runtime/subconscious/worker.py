@@ -391,11 +391,15 @@ def append_staging_edges(
                 "batch_id": batch_id,
                 "status": "staging",
                 "source": source,
-                "model_route": model_route or {},
+                "model_route": public_model_route(model_route),
                 "usage": usage or {},
                 **edge,
             }
-            fh.write(json.dumps(event, ensure_ascii=False) + "\n")
+            # The edge JSONL is a local-private review queue, not a public graph.
+            # Keep source refs for auditability, but redact model-returned prose
+            # before it can persist secrets or machine-local paths.
+            safe_event = sanitize_external_model_payload(event)
+            fh.write(json.dumps(safe_event, ensure_ascii=False) + "\n")
 
 
 def run_worker(

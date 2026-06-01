@@ -1139,6 +1139,10 @@ def run_warm_job_file(
         result_path = Path(str(result_path_value)).resolve()
         result_path.parent.mkdir(parents=True, exist_ok=True)
         tmp = result_path.with_suffix(result_path.suffix + ".tmp")
+        # Detached job files are local-private process envelopes; the companion
+        # result file is intentionally only this summary projection. Do not
+        # persist the full warm recall result here, because it may contain cards,
+        # traces, registry paths, and prompt-derived scout detail.
         tmp.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
         tmp.replace(result_path)
     return summary

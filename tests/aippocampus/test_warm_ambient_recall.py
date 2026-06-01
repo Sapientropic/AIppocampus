@@ -1755,6 +1755,14 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertGreaterEqual(job["prefix_cache_warmup_scouts"], 1)
         self.assertGreater(job["prefix_cache_warmup_delay"], 0)
         self.assertIn("<redacted:local-path>", job["prompt"])
+        self.assertEqual(
+            job["privacy_boundary"],
+            {
+                "sanitized_prompt_stored": True,
+                "absolute_paths_are_private_process_pointers": True,
+                "public_output": False,
+            },
+        )
         self.assertNotIn(local_path, raw_job)
         self.assertNotIn("private", job["prompt"].casefold())
         self.assertNotIn("ambient.md", job["prompt"].casefold())
