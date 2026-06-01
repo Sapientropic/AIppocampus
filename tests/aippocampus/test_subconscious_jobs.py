@@ -90,6 +90,28 @@ class SubconsciousJobsTests(unittest.TestCase):
             json.loads(circuits.jobs_initial_payload("concept_edges", "objective", [], 2, 1)),
         )
 
+    def test_job_circuit_dependency_contract_is_validated(self) -> None:
+        circuits = importlib.import_module("subconscious_job_circuits")
+
+        ordered = circuits.job_names("all")
+
+        self.assertLess(ordered.index("question_extraction"), ordered.index("question_tracking"))
+        self.assertLess(ordered.index("question_tracking"), ordered.index("theme_emergence"))
+        self.assertLess(ordered.index("question_tracking"), ordered.index("question_resolution"))
+        with patch.dict(
+            circuits.JOB_SPECS,
+            {
+                "bad_followup": {
+                    "purpose": "bad dependent job",
+                    "finding_kind": "bad",
+                    "depends_on": ["missing_producer"],
+                    "must_include": [],
+                }
+            },
+        ):
+            with self.assertRaisesRegex(ValueError, "bad_followup.*missing_producer"):
+                circuits.validate_job_dependency_contract()
+
     def test_job_sample_plan_is_separate_from_runner(self) -> None:
         plan = importlib.import_module("subconscious_job_plan")
         runner_source = JOBS_RUNNER.read_text(encoding="utf-8")
