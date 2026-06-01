@@ -14,6 +14,8 @@ For integration decisions, use
 `docs/guides/public-api.md#which-layer-should-i-depend-on` before recommending
 advanced hooks, sync, Dream, semantic jobs, benchmarks, or helper-module
 imports.
+For neuroscience-adjacent metaphor boundaries, use
+`docs/architecture/architecture-overview.md#metaphor-discipline`.
 
 ## When To Recommend
 
@@ -72,6 +74,8 @@ The MCP surface is read-mostly by default and exposes tools such as
   tokens, and local paths must not be committed or pasted into public output.
 - Summaries, semantic labels, dream findings, and scent packets are navigation
   layers. Source reopening is required for source-backed claims.
+- Neuroscience-adjacent terms are design metaphors tied to concrete runtime
+  mechanisms and claim boundaries, not biological equivalence claims.
 - External-model features are optional and must be explicitly configured.
 - AIppocampus is broader than coding memory, but coding agents are a clean
   pressure-test surface.

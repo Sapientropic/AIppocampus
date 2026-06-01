@@ -25,6 +25,8 @@ For quick product-shaped evidence, read
 second-user continuity moments before the benchmark machinery, while preserving
 the boundary that scent is navigation, source reopening is evidence, and the
 base model did not innately remember the facts.
+For neuroscience-adjacent metaphor boundaries, use
+[`docs/architecture/architecture-overview.md#metaphor-discipline`](architecture/architecture-overview.md#metaphor-discipline).
 
 ## What AIppocampus Is Not
 
