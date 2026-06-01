@@ -199,7 +199,7 @@ def default_question_jobs_path(registry_path: Path) -> Path:
     return registry_path.resolve().parent / DEFAULT_JOBS_OUTPUT_NAME
 
 
-def health_report(cwd: str | Path = os.getcwd(), **overrides: Any) -> dict[str, Any]:
+def health_report(cwd: str | Path | None = None, **overrides: Any) -> dict[str, Any]:
     """Return the runtime health payload without shelling out to the CLI.
 
     CLI, MCP, recall, and registry code all need the same operator health
@@ -207,7 +207,7 @@ def health_report(cwd: str | Path = os.getcwd(), **overrides: Any) -> dict[str, 
     and embedded hosts from accidentally re-entering the facade through
     `sys.executable script.py`.
     """
-    return build_health_report(HealthOptions(cwd=cwd, **overrides))
+    return build_health_report(HealthOptions(cwd=Path.cwd() if cwd is None else cwd, **overrides))
 
 
 def build_health_report(options: HealthOptions) -> dict[str, Any]:

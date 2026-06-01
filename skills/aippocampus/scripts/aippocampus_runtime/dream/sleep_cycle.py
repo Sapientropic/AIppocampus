@@ -72,13 +72,13 @@ class FileLock:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         try:
             self.fd = os.open(str(self.path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        except FileExistsError:
+        except FileExistsError as exc:
             try:
                 age = time.time() - self.path.stat().st_mtime
             except OSError:
                 age = 0
             if age <= self.stale_seconds:
-                raise RuntimeError("dream sleep-cycle writes already locked")
+                raise RuntimeError("dream sleep-cycle writes already locked") from exc
             try:
                 self.path.unlink()
             except OSError:

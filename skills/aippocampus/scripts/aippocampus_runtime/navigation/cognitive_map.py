@@ -303,7 +303,7 @@ def build_cognitive_map(
         region_ids = [id_for("cmg", region) for region in regions]
         landmark_ids = [id_for("cml", landmark) for landmark in landmarks]
 
-        for region, region_id in zip(regions, region_ids):
+        for region, region_id in zip(regions, region_ids, strict=True):
             existing = regions_by_id.get(region_id)
             if better_confidence(existing, confidence):
                 regions_by_id[region_id] = {
@@ -321,7 +321,7 @@ def build_cognitive_map(
                     list(existing.get("thread_keys") or []) + thread_keys, limit=20
                 )
 
-        for landmark, landmark_id in zip(landmarks, landmark_ids):
+        for landmark, landmark_id in zip(landmarks, landmark_ids, strict=True):
             existing = landmarks_by_id.get(landmark_id)
             aliases = unique_preserve(
                 compact_string_list(finding.get("aliases"), limit=12) + route_cues, limit=16

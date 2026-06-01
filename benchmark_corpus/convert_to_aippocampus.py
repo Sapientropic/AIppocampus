@@ -211,8 +211,6 @@ def convert_sharechat(subset: str = "chatgpt", max_convs: int = 0,
     conv_buffer: dict[str, list[dict]] = {}
     msg_count = 0
     conv_count = 0
-    skipped_lang = 0
-    skipped_short = 0
 
     all_messages = []
     all_turns = []
@@ -250,7 +248,6 @@ def convert_sharechat(subset: str = "chatgpt", max_convs: int = 0,
                 _process_sharechat_conv(u, conv_data, lang, min_turns,
                                         all_messages, all_turns)
                 conv_count += 1
-                skipped_lang, skipped_short  # tracked inside
             if done_urls:
                 print(f"  Processed {conv_count} conversations...",
                       file=sys.stderr)
@@ -369,7 +366,7 @@ def convert_sharegpt(input_path: str, max_convs: int = 0, min_turns: int = 1,
     for fp in files:
         print(f"  Processing {fp.name}...", file=sys.stderr)
         with open(fp, "r", encoding="utf-8") as f:
-            for line_idx, line in enumerate(f):
+            for line in f:
                 if not line.strip():
                     continue
                 try:

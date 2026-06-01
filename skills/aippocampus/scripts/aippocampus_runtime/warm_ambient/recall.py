@@ -1438,7 +1438,7 @@ def run_warm_ambient_recall(
 def main() -> int:
     cli_main = cast(
         Callable[[], int],
-        getattr(importlib.import_module("aippocampus_runtime.warm_ambient.cli"), "main"),
+        importlib.import_module("aippocampus_runtime.warm_ambient.cli").main,
     )
 
     return cli_main()

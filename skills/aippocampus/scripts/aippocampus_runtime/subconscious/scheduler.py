@@ -65,7 +65,7 @@ class FileLock:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         try:
             self.fd = os.open(str(self.path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        except FileExistsError:
+        except FileExistsError as exc:
             try:
                 age = time.time() - self.path.stat().st_mtime
             except OSError:
@@ -77,7 +77,7 @@ class FileLock:
                     pass
                 self.fd = os.open(str(self.path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
             else:
-                raise RuntimeError("subconscious scheduler already running")
+                raise RuntimeError("subconscious scheduler already running") from exc
         os.write(self.fd, json.dumps({"pid": os.getpid(), "created_at": now_utc()}).encode("utf-8"))
         return self
 

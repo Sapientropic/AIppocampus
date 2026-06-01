@@ -95,6 +95,10 @@ python -m mypy
 python tools/aippocampus/run_tests.py --tier fast
 ```
 
+That Ruff command is the staged hard gate from `pyproject.toml`; broader
+`--select ALL --statistics` output is advisory lint debt, not a normal install
+or CI failure gate.
+
 ### Remote macOS install smoke
 
 Maintainers can trigger the fresh-clone macOS install smoke from a Windows

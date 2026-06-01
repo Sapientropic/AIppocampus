@@ -164,7 +164,7 @@ def artifact_lease(
     while True:
         try:
             fd = os.open(str(lease_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        except FileExistsError:
+        except FileExistsError as exc:
             try:
                 age = time.time() - lease_path.stat().st_mtime
             except OSError:
@@ -178,7 +178,7 @@ def artifact_lease(
             raise RuntimeError(
                 f"artifact writer lease already held: {lease_path}. "
                 "Wait for the current writer or remove the stale lease after verification."
-            )
+            ) from exc
         else:
             with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
                 json.dump(payload, handle, ensure_ascii=False, indent=2)
