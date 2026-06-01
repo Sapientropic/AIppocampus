@@ -15,8 +15,7 @@ DEFAULT_SEARCH_BUDGET_FALLBACK = 3
 PROMPT_HOOK_SEMANTIC_TIMEOUT_FALLBACK = float(os.environ.get("AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT", "2.5"))
 PROMPT_HOOK_MAX_ELAPSED_MS_FALLBACK = int(os.environ.get("AIPPOCAMPUS_PROMPT_HOOK_BUDGET_MS", "4300"))
 _RUNTIME_EXPORTS = set(
-    "DEFAULT_SEARCH_BUDGET PROMPT_HOOK_SEMANTIC_TIMEOUT SCENT_THRESHOLD association_boost "
-    "ambient_debug_summary apply_dream_delivery_boundary assess_prompt context_for_hook "
+    "DEFAULT_SEARCH_BUDGET PROMPT_HOOK_SEMANTIC_TIMEOUT SCENT_THRESHOLD association_boost ambient_debug_summary apply_dream_delivery_boundary assess_prompt context_for_hook "
     "hook_input_from_stdin hook_stdout_payload merge_association_candidates "
     "public_hook_debug_payload".split()
 )
