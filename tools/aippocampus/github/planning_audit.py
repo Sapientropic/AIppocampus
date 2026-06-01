@@ -40,6 +40,16 @@ CLOSURE_EVIDENCE_RE = re.compile(
     r"duplicate|superseded|verification|verified|tests? passed|follow-up #|parent #)\b",
     re.IGNORECASE,
 )
+DISCUSSION_DOC_REF_RE = re.compile(
+    r"(?:^|[\s`'\"(<])(?P<path>docs/[^\s`'\"<>)]+)",
+    re.IGNORECASE,
+)
+DISCUSSION_COMMITMENT_RE = re.compile(
+    r"\b(implement|implementation|benchmark|product|roadmap|ship|publish|"
+    r"release|public|evidence|install|api|privacy|milestone)\b",
+    re.IGNORECASE,
+)
+IMPLEMENTATION_MAP_RE = re.compile(r"\bimplementation map\b", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -62,6 +72,21 @@ class IssueSnapshot:
         return not self.is_closed
 
 
+@dataclass(frozen=True)
+class DiscussionSnapshot:
+    number: int
+    title: str
+    body: str = ""
+    category: str = ""
+    url: str = ""
+    comments: tuple[str, ...] = ()
+    node_id: str | None = None
+
+    @property
+    def text(self) -> str:
+        return "\n".join([self.title, self.body, *self.comments])
+
+
 def issue_context(issue: IssueSnapshot) -> project_triage.IssueContext:
     return project_triage.IssueContext(
         number=issue.number,
@@ -70,6 +95,27 @@ def issue_context(issue: IssueSnapshot) -> project_triage.IssueContext:
         state=issue.state,
         labels=issue.labels,
         milestone=issue.milestone,
+    )
+
+
+def parse_github_discussion(raw: dict[str, Any]) -> DiscussionSnapshot | None:
+    comments: list[str] = []
+    raw_comments = raw.get("comments")
+    if isinstance(raw_comments, dict):
+        nodes = raw_comments.get("nodes") or []
+        for node in nodes:
+            if isinstance(node, dict) and isinstance(node.get("body"), str):
+                comments.append(node["body"])
+    category = raw.get("category")
+    category_name = category.get("name") if isinstance(category, dict) else ""
+    return DiscussionSnapshot(
+        number=int(raw["number"]),
+        title=str(raw.get("title") or ""),
+        body=str(raw.get("body") or ""),
+        category=str(category_name or ""),
+        url=str(raw.get("url") or ""),
+        comments=tuple(comments),
+        node_id=str(raw["id"]) if raw.get("id") else None,
     )
 
 
@@ -149,6 +195,122 @@ def doc_has_owner(rel_path: str, line: str, issues: list[IssueSnapshot]) -> bool
     return any(issue.is_open and rel_path in issue.body for issue in issues)
 
 
+def discussion_issue_refs(discussion: DiscussionSnapshot) -> set[int]:
+    return {int(match.group(1)) for match in ISSUE_REF_RE.finditer(discussion.text)}
+
+
+def discussion_doc_refs(discussion: DiscussionSnapshot) -> set[str]:
+    refs: set[str] = set()
+    for match in DISCUSSION_DOC_REF_RE.finditer(discussion.text):
+        refs.add(match.group("path").rstrip(".,;:").replace("\\", "/"))
+    return refs
+
+
+def discussion_has_implementation_map(discussion: DiscussionSnapshot) -> bool:
+    return bool(IMPLEMENTATION_MAP_RE.search(discussion.text))
+
+
+def issue_title_map(issues: list[IssueSnapshot]) -> dict[int, str]:
+    return {issue.number: issue.title for issue in issues}
+
+
+def implementation_map_comment(
+    discussion: DiscussionSnapshot,
+    issues: list[IssueSnapshot],
+) -> str:
+    titles = issue_title_map(issues)
+    lines = [
+        "Implementation map:",
+        "",
+        "This Discussion is narrative context; executable work stays in issues.",
+    ]
+    for issue_number in sorted(discussion_issue_refs(discussion)):
+        title = titles.get(issue_number, "linked issue")
+        lines.append(f"- #{issue_number} {title}")
+    return "\n".join(lines)
+
+
+def audit_discussions(
+    discussions: list[DiscussionSnapshot],
+    issues: list[IssueSnapshot],
+    *,
+    repo_root: Path | None = None,
+    generate_discussion_maps: bool = False,
+) -> dict[str, Any]:
+    safe_repairs: list[dict[str, Any]] = []
+    needs_human_review: list[dict[str, Any]] = []
+
+    open_issue_numbers = {issue.number for issue in issues if issue.is_open}
+    all_issue_numbers = {issue.number for issue in issues}
+
+    for discussion in discussions:
+        issue_refs = discussion_issue_refs(discussion)
+        doc_refs = discussion_doc_refs(discussion)
+        known_issue_refs = sorted(issue_refs & all_issue_numbers)
+        open_owner_refs = sorted(issue_refs & open_issue_numbers)
+
+        if not issue_refs and not doc_refs:
+            needs_human_review.append(
+                {
+                    "kind": "discussion_orphan",
+                    "discussion": discussion.number,
+                    "title": discussion.title,
+                    "category": discussion.category,
+                    "message": "discussion has no issue refs and no docs links",
+                }
+            )
+
+        if (
+            not open_owner_refs
+            and discussion.category.casefold() in {"ideas", "idea", "evidence", "announcements", "q&a"}
+            and DISCUSSION_COMMITMENT_RE.search(discussion.text)
+        ):
+            needs_human_review.append(
+                {
+                    "kind": "discussion_unowned_commitment",
+                    "discussion": discussion.number,
+                    "title": discussion.title,
+                    "category": discussion.category,
+                    "message": "discussion mentions implementation/product/evidence work without an open issue owner",
+                }
+            )
+
+        if repo_root:
+            for doc_ref in sorted(doc_refs):
+                if not (repo_root / doc_ref).exists():
+                    needs_human_review.append(
+                        {
+                            "kind": "discussion_stale_doc_link",
+                            "discussion": discussion.number,
+                            "title": discussion.title,
+                            "doc": doc_ref,
+                            "message": "discussion links to a docs path that is missing from the repository",
+                        }
+                    )
+
+        if len(known_issue_refs) >= 2 and not discussion_has_implementation_map(discussion):
+            review_item = {
+                "kind": "discussion_missing_implementation_map",
+                "discussion": discussion.number,
+                "title": discussion.title,
+                "issues": known_issue_refs,
+                "message": "discussion links several issues but has no compact implementation map comment",
+            }
+            needs_human_review.append(review_item)
+            if generate_discussion_maps:
+                safe_repairs.append(
+                    {
+                        "kind": "add_discussion_implementation_map_comment",
+                        "discussion": discussion.number,
+                        "discussion_id": discussion.node_id,
+                        "title": discussion.title,
+                        "body": implementation_map_comment(discussion, issues),
+                    }
+                )
+
+    return {"safe_repairs": safe_repairs, "needs_human_review": needs_human_review}
+
+
 def docs_unresolved_hits(repo_root: Path, issues: list[IssueSnapshot]) -> list[dict[str, Any]]:
     docs_dir = repo_root / "docs"
     if not docs_dir.exists():
@@ -185,6 +347,10 @@ def empty_summary() -> dict[str, int]:
         "stale_checklist_items": 0,
         "suspicious_recent_closures": 0,
         "docs_unowned_design_hits": 0,
+        "orphan_discussions": 0,
+        "discussion_unowned_commitments": 0,
+        "stale_discussion_links": 0,
+        "missing_discussion_maps": 0,
         "safe_repairs": 0,
         "needs_human_review": 0,
         "suggested_followups": 0,
@@ -197,6 +363,8 @@ def audit_issues(
     milestone_numbers: dict[str, int],
     repo_root: Path | None = None,
     recent_closed_days: int | None = None,
+    discussions: list[DiscussionSnapshot] | None = None,
+    generate_discussion_maps: bool = False,
 ) -> dict[str, Any]:
     summary = empty_summary()
     safe_repairs: list[dict[str, Any]] = []
@@ -282,6 +450,34 @@ def audit_issues(
         summary["docs_unowned_design_hits"] = len(doc_hits)
         needs_human_review.extend(doc_hits)
 
+    if discussions:
+        discussion_report = audit_discussions(
+            discussions,
+            issues,
+            repo_root=repo_root,
+            generate_discussion_maps=generate_discussion_maps,
+        )
+        safe_repairs.extend(discussion_report["safe_repairs"])
+        needs_human_review.extend(discussion_report["needs_human_review"])
+        summary["orphan_discussions"] = sum(
+            1 for item in discussion_report["needs_human_review"] if item["kind"] == "discussion_orphan"
+        )
+        summary["discussion_unowned_commitments"] = sum(
+            1
+            for item in discussion_report["needs_human_review"]
+            if item["kind"] == "discussion_unowned_commitment"
+        )
+        summary["stale_discussion_links"] = sum(
+            1
+            for item in discussion_report["needs_human_review"]
+            if item["kind"] == "discussion_stale_doc_link"
+        )
+        summary["missing_discussion_maps"] = sum(
+            1
+            for item in discussion_report["needs_human_review"]
+            if item["kind"] == "discussion_missing_implementation_map"
+        )
+
     summary["safe_repairs"] = len(safe_repairs)
     summary["needs_human_review"] = len(needs_human_review)
     summary["suggested_followups"] = len(suggested_followups)
@@ -306,6 +502,44 @@ def load_issues_file(path: Path) -> tuple[list[IssueSnapshot], dict[str, int]]:
         }
     issues = [issue for raw in raw_issues if (issue := parse_github_issue(raw))]
     return issues, milestone_numbers
+
+
+DISCUSSIONS_QUERY = """
+query($owner: String!, $repo: String!, $after: String) {
+  repository(owner: $owner, name: $repo) {
+    discussions(first: 100, after: $after, orderBy: {field: UPDATED_AT, direction: DESC}) {
+      nodes {
+        id
+        number
+        title
+        body
+        url
+        category { name }
+        comments(first: 50) { nodes { body } }
+      }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+}
+"""
+
+
+def fetch_repo_discussions(
+    client: project_triage.GitHubProjectClient,
+    repo: str,
+) -> list[DiscussionSnapshot]:
+    owner, name = repo.split("/", 1)
+    discussions: list[DiscussionSnapshot] = []
+    after: str | None = None
+    while True:
+        data = client.graphql(DISCUSSIONS_QUERY, {"owner": owner, "repo": name, "after": after})
+        page = data["repository"]["discussions"]
+        for raw in page["nodes"]:
+            if isinstance(raw, dict) and (discussion := parse_github_discussion(raw)):
+                discussions.append(discussion)
+        if not page["pageInfo"]["hasNextPage"]:
+            return discussions
+        after = page["pageInfo"]["endCursor"]
 
 
 def fetch_repo_issues(client: project_triage.GitHubProjectClient, repo: str) -> list[IssueSnapshot]:
@@ -349,11 +583,29 @@ def apply_safe_repairs(
             elif repair.get("kind") == "check_closed_child":
                 path = f"/repos/{quoted_repo}/issues/{int(repair['issue'])}"
                 client.rest("PATCH", path, {"body": repair["updated_body"]})
+            elif repair.get("kind") == "add_discussion_implementation_map_comment":
+                discussion_id = repair.get("discussion_id")
+                if not isinstance(discussion_id, str) or not discussion_id:
+                    applied_repair["skipped"] = "missing_discussion_id"
+                else:
+                    client.graphql(
+                        """
+                        mutation($discussion: ID!, $body: String!) {
+                          addDiscussionComment(input: {discussionId: $discussion, body: $body}) {
+                            comment { id }
+                          }
+                        }
+                        """,
+                        {"discussion": discussion_id, "body": repair["body"]},
+                    )
             else:
                 applied_repair["skipped"] = "unsupported_repair"
         except project_triage.GitHubRestError as exc:
             applied_repair["skipped"] = "permission_denied" if exc.status == 403 else "rest_error"
             applied_repair["error"] = exc.body
+        except Exception as exc:
+            applied_repair["skipped"] = "graphql_error"
+            applied_repair["error"] = str(exc)
         applied.append(applied_repair)
     return applied
 
@@ -381,6 +633,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY", DEFAULT_REPOSITORY))
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
     parser.add_argument("--issues-file", type=Path, help="Offline issue fixture JSON for dry-run audits.")
+    parser.add_argument("--discussions-file", type=Path, help="Offline Discussion fixture JSON.")
+    parser.add_argument("--skip-discussions", action="store_true", help="Audit issues/docs only.")
     parser.add_argument("--recent-closed-days", type=int, default=14)
     parser.add_argument("--dry-run", action="store_true", help="Do not apply safe repairs.")
     parser.add_argument("--repair", action="store_true", help="Apply only safe repairs.")
@@ -392,8 +646,18 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(list(argv or sys.argv[1:]))
     client = None
+    discussions: list[DiscussionSnapshot] = []
     if args.issues_file:
         issues, milestone_numbers = load_issues_file(args.issues_file)
+        if args.discussions_file:
+            raw_discussions = json.loads(args.discussions_file.read_text(encoding="utf-8"))
+            if isinstance(raw_discussions, dict):
+                raw_discussions = raw_discussions.get("discussions") or []
+            discussions = [
+                discussion
+                for raw in raw_discussions
+                if isinstance(raw, dict) and (discussion := parse_github_discussion(raw))
+            ]
     else:
         token = os.environ.get("AIPPOCAMPUS_PROJECTS_TOKEN") or os.environ.get("GH_TOKEN")
         if not token:
@@ -411,12 +675,20 @@ def main(argv: list[str] | None = None) -> int:
         client = project_triage.GitHubProjectClient(token)
         issues = fetch_repo_issues(client, args.repo)
         milestone_numbers = project_triage.open_milestone_numbers(client, args.repo)
+        if not args.skip_discussions:
+            try:
+                discussions = fetch_repo_discussions(client, args.repo)
+            except Exception as exc:
+                discussions = []
+                print(f"::warning::Discussion audit unavailable: {exc}", file=sys.stderr)
 
     report = audit_issues(
         issues,
         milestone_numbers=milestone_numbers,
         repo_root=args.repo_root,
         recent_closed_days=args.recent_closed_days,
+        discussions=discussions,
+        generate_discussion_maps=args.repair and not args.dry_run,
     )
     if args.repair and not args.dry_run:
         if client is None:

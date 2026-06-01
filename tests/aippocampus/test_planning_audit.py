@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -30,6 +32,25 @@ def issue(
         labels=labels,
         milestone=milestone,
         comments=comments,
+    )
+
+
+def discussion(
+    number: int,
+    title: str,
+    body: str = "",
+    *,
+    category: str = "Ideas",
+    comments: tuple[str, ...] = (),
+    node_id: str | None = "discussion-node",
+):
+    return planning_audit.DiscussionSnapshot(
+        number=number,
+        title=title,
+        body=body,
+        category=category,
+        comments=comments,
+        node_id=node_id,
     )
 
 
@@ -158,3 +179,160 @@ def test_docs_unresolved_hit_with_owner_issue_is_not_reported(tmp_path: Path) ->
 
     assert "docs_unowned_design_hit" not in kinds(report["needs_human_review"])
     assert report["summary"]["docs_unowned_design_hits"] == 0
+
+
+def test_discussion_without_issue_refs_or_docs_is_reported() -> None:
+    report = planning_audit.audit_issues(
+        [],
+        milestone_numbers={},
+        discussions=[
+            discussion(
+                74,
+                "Origin thought",
+                "This captures product direction but has no docs or issue pointer.",
+            )
+        ],
+    )
+
+    assert "discussion_orphan" in kinds(report["needs_human_review"])
+    assert report["summary"]["orphan_discussions"] == 1
+
+
+def test_discussion_with_issue_ref_is_not_orphan() -> None:
+    report = planning_audit.audit_issues(
+        [issue(381, "Prototype a local search-decision memory adapter")],
+        milestone_numbers={},
+        discussions=[
+            discussion(
+                75,
+                "Search decision memory",
+                "Implementation moved to #381.",
+            )
+        ],
+    )
+
+    assert "discussion_orphan" not in kinds(report["needs_human_review"])
+    assert report["summary"]["orphan_discussions"] == 0
+
+
+def test_discussion_stale_doc_link_is_reported(tmp_path: Path) -> None:
+    (tmp_path / "docs").mkdir()
+
+    report = planning_audit.audit_issues(
+        [],
+        milestone_numbers={},
+        repo_root=tmp_path,
+        discussions=[
+            discussion(
+                76,
+                "Public link cleanup",
+                "See docs/guides/missing-public-api.md before publishing.",
+                category="Announcements",
+            )
+        ],
+    )
+
+    item = next(item for item in report["needs_human_review"] if item["kind"] == "discussion_stale_doc_link")
+    assert item["discussion"] == 76
+    assert item["doc"] == "docs/guides/missing-public-api.md"
+    assert report["summary"]["stale_discussion_links"] == 1
+
+
+def test_discussion_missing_map_generates_single_compact_comment() -> None:
+    report = planning_audit.audit_issues(
+        [
+            issue(381, "Prototype a local search-decision memory adapter"),
+            issue(382, "Improve agent-facing discoverability without hollow marketing"),
+        ],
+        milestone_numbers={},
+        discussions=[
+            discussion(
+                380,
+                "Two orphan themes",
+                "Follow-up work now lives in #381 and #382.",
+                comments=("Earlier context only.",),
+                node_id="D_kwDOexample",
+            )
+        ],
+        generate_discussion_maps=True,
+    )
+
+    assert "discussion_missing_implementation_map" in kinds(report["needs_human_review"])
+    repair = next(
+        item
+        for item in report["safe_repairs"]
+        if item["kind"] == "add_discussion_implementation_map_comment"
+    )
+    assert repair["discussion"] == 380
+    assert repair["discussion_id"] == "D_kwDOexample"
+    assert "Implementation map:" in repair["body"]
+    assert "#381 Prototype a local search-decision memory adapter" in repair["body"]
+    assert "#382 Improve agent-facing discoverability without hollow marketing" in repair["body"]
+    assert "Follow-up work now lives" not in repair["body"]
+
+
+def test_discussion_existing_map_avoids_duplicate_comment() -> None:
+    report = planning_audit.audit_issues(
+        [
+            issue(381, "Prototype a local search-decision memory adapter"),
+            issue(382, "Improve agent-facing discoverability without hollow marketing"),
+        ],
+        milestone_numbers={},
+        discussions=[
+            discussion(
+                380,
+                "Two orphan themes",
+                "Follow-up work now lives in #381 and #382.",
+                comments=("Implementation map:\n- #381\n- #382",),
+            )
+        ],
+        generate_discussion_maps=True,
+    )
+
+    assert "discussion_missing_implementation_map" not in kinds(report["needs_human_review"])
+    assert report["safe_repairs"] == []
+
+
+def test_planning_audit_cli_reports_discussion_fixture(tmp_path: Path) -> None:
+    issues_file = tmp_path / "issues.json"
+    discussions_file = tmp_path / "discussions.json"
+    issues_file.write_text(json.dumps({"issues": [], "milestone_numbers": {}}), encoding="utf-8")
+    discussions_file.write_text(
+        json.dumps(
+            {
+                "discussions": [
+                    {
+                        "number": 74,
+                        "title": "Origin thought",
+                        "body": "Product direction without docs or issue owner.",
+                        "category": {"name": "Ideas"},
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    proc = subprocess.run(
+        [
+            sys.executable,
+            str(MODULE_PATH),
+            "--issues-file",
+            str(issues_file),
+            "--discussions-file",
+            str(discussions_file),
+            "--repo-root",
+            str(tmp_path),
+            "--json",
+        ],
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        check=False,
+    )
+
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    data = json.loads(proc.stdout)
+    assert data["summary"]["orphan_discussions"] == 1
+    assert data["needs_human_review"][0]["kind"] == "discussion_orphan"

@@ -35,14 +35,19 @@ Use it for cross-issue and docs drift:
 - report weak recently closed issue evidence without reopening anything;
 - scan active docs, excluding `docs/archive/**`, for unresolved planning
   language that lacks an open owner issue.
+- report GitHub Discussions that have no issue/doc refs, stale docs links, or
+  several linked issues but no compact implementation-map comment.
 
 Default scheduled runs are dry-run reports. Manual repair mode applies only the
 safe repairs above: missing high-confidence Milestones and exact closed-child
-checklist updates. Everything else stays in `needs_human_review`.
+checklist updates. It may also add at most one short implementation-map comment
+to a Discussion when the linked issues are exact matches and no map comment
+already exists. Everything else stays in `needs_human_review`.
 
 ## Boundary
 
 Planning automation is a clerk, not a product judge. It can surface drift and
 perform tiny mechanical repairs, but it must not create large batches of issues
 from research prose, overwrite human-set Milestones, duplicate docs into issue
-bodies, or treat planning metadata as source-backed evidence.
+bodies, or treat planning metadata as source-backed evidence. Discussions are
+narrative/context surfaces; issues remain the executable work queue.

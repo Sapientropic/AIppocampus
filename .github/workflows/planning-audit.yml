@@ -13,6 +13,7 @@ name: Planning audit
 permissions:
   contents: read
   issues: read
+  discussions: read
 
 jobs:
   planning-audit:
