@@ -20,6 +20,13 @@ with honest continuity instead of pretending there was never a break.
 
 > Source is the ground. Summaries are weather.
 
+For the felt product shape, start with
+[Magic Moments, Claim-Bounded](docs/evidence/magic-moments.md): real
+second-user examples where a new/projectless thread, a multilingual correction,
+an ambiguous automation cue, and a multi-day fuzzy self-reference became
+recoverable through source-backed continuity. The page shows the useful moments
+first, then states exactly what they do not prove.
+
 The engineering is practical: clean-source builders, registries, semantic
 workers, deterministic gates, MCP surfaces, sync bundles, and Codex plugin
 packaging. The reason for building them is older than the tooling. A long
@@ -128,6 +135,8 @@ recognizable again.
 
 - Philosophy and origin: [未干的地图](docs/未干的地图.md) and
   [The Unfinished Map](docs/the-unfinished-map.md).
+- Real user-visible continuity examples:
+  [Magic Moments, Claim-Bounded](docs/evidence/magic-moments.md).
 - Agent-readable context: [docs/agent-context.md](docs/agent-context.md) and
   [llms.txt](llms.txt).
 - Runtime shape:
