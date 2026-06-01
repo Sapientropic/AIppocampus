@@ -14,6 +14,7 @@ from typing import Any
 from aippocampus_runtime.core import compact_text, sanitize_external_model_text
 from aippocampus_runtime.recall.ambient_policy import policy_payload_for_working_memory
 from aippocampus_runtime.recall.fresh_thread_scent import fresh_thread_scent_packet_from_decision
+from aippocampus_runtime.recall.nudge_policy import safe_nudge_topic
 
 CARD_SCHEMA_VERSION = 1
 MAX_CARDS = 3
@@ -117,6 +118,7 @@ def _evidence_card(item: dict[str, Any], *, deep_archival: bool = False) -> dict
 
 def _candidate_card(item: dict[str, Any], *, support_level: str = SCENT) -> dict[str, Any]:
     theme = _theme_from_item(item, "related prior context")
+    nudge_theme = safe_nudge_topic(theme)
     terms = _clean_terms(item.get("matched_terms") or item.get("keywords") or [])
     return {
         "card_id": _stable_id([support_level, theme, item.get("thread_key"), ",".join(terms)]),
@@ -125,7 +127,7 @@ def _candidate_card(item: dict[str, Any], *, support_level: str = SCENT) -> dict
         "support_level": support_level,
         "visibility": ACTIVE_GENTLE_NUDGE,
         "suggested_use": "Treat this as resonance. Lightly continue from the theme only if it helps.",
-        "nudge": f"This may touch the old thread around {theme}.",
+        "nudge": f"This may touch the old thread around {nudge_theme}.",
         "key_line": str((item.get("anchors") or [""])[0] or ""),
         "matched_terms": terms,
         "source_refs": [],
@@ -176,6 +178,7 @@ def _working_memory_card(item: dict[str, Any]) -> dict[str, Any]:
 def _cognitive_map_card(item: dict[str, Any]) -> dict[str, Any]:
     labels = _clean_terms(item.get("landmark_labels") or item.get("matched_cues") or [], limit=4)
     theme = compact_text(", ".join(labels) or str(item.get("title") or "cognitive map route"), 140)
+    nudge_theme = safe_nudge_topic(theme)
     return {
         "card_id": _stable_id([SCENT, theme, item.get("route_id")]),
         "theme": theme,
@@ -183,7 +186,7 @@ def _cognitive_map_card(item: dict[str, Any]) -> dict[str, Any]:
         "support_level": SCENT,
         "visibility": ACTIVE_GENTLE_NUDGE,
         "suggested_use": "Use as wayfinding only; verify exact claims against clean source.",
-        "nudge": f"This may follow the route around {theme}.",
+        "nudge": f"This may follow the route around {nudge_theme}.",
         "key_line": "",
         "matched_terms": _clean_terms(item.get("matched_cues") or item.get("route_cues") or []),
         "source_refs": [],

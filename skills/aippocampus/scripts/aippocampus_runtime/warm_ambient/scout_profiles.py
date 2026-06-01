@@ -190,14 +190,14 @@ SCOUT_OUTPUT_PROFILES = {
     },
     "cross_domain_bridge": {
         "allowed_fields": ["decision", "confidence", "themes", "candidates"],
-        "candidate_fields": ["theme", "support_level", "matched_terms", "source_refs", "nudge"],
+        "candidate_fields": ["theme", "support_level", "matched_terms", "source_refs", "resonance_reason"],
         "query_alias_limit": 0,
         "negative_context_limit": 0,
         "theme_limit": 1,
     },
     "nudge_writer": {
         "allowed_fields": ["decision", "confidence", "candidates"],
-        "candidate_fields": ["theme", "support_level", "nudge", "matched_terms", "source_refs"],
+        "candidate_fields": ["theme", "support_level", "resonance_reason", "matched_terms", "source_refs"],
         "query_alias_limit": 0,
         "negative_context_limit": 0,
         "theme_limit": 0,
@@ -213,7 +213,7 @@ FAMILY_TASKS = {
     "user_style_preference": "Detect source-backed user expression habits, language preferences, pacing, and thinking style.",
     "trajectory_matcher": "Locate the current turn in project, life, or thread trajectory when source sidecars support it.",
     "cross_domain_bridge": "Map technical issues to non-technical ideas, and non-technical ideas back to concrete work.",
-    "nudge_writer": "Draft one or two quiet private nudges for the foreground agent to adapt.",
+    "nudge_writer": "Draft one or two quiet private resonance reasons for the foreground agent to adapt.",
     "semantic_expander": "Generate multilingual, metaphor, and query aliases for cold path and next-turn recall.",
 }
 
@@ -234,7 +234,7 @@ FAMILY_LENS_TASKS = {
     "user_style_preference": "Infer only source-backed expression habits and user preferences.",
     "trajectory_matcher": "Match current position in project/thread/life trajectory from available sidecars.",
     "cross_domain_bridge": "Bridge technical and non-technical domains without upgrading unsupported resonance.",
-    "nudge_writer": "Draft quiet private guidance only after the card is useful; keep wording tentative unless evidence-backed.",
+    "nudge_writer": "Draft quiet private resonance reasons only after the card is useful; keep wording tentative unless evidence-backed.",
     "semantic_expander": "Find query aliases, metaphors, and multilingual variants for next-turn/cold-path use.",
 }
 
