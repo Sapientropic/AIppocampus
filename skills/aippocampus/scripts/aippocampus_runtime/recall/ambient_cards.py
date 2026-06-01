@@ -36,7 +36,7 @@ DEFAULT_AVOID = [
 
 def _stable_id(parts: list[Any]) -> str:
     raw = "\n".join(str(part or "") for part in parts)
-    return "arc_" + hashlib.sha1(raw.encode("utf-8")).hexdigest()[:18]
+    return "arc_" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:18]
 
 
 def _safe_text(value: Any, chars: int) -> str:

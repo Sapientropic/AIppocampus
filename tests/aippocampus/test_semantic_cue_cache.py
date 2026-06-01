@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import sys
 import tempfile
 import unittest
@@ -20,6 +21,22 @@ from aippocampus_runtime.recall import semantic_cue_cache as cues  # noqa: E402
 
 
 class SemanticCueCacheTests(unittest.TestCase):
+    def test_semantic_cue_cache_keys_use_sha256(self) -> None:
+        prompt = "继续 外置海马体"
+        cue = "外置海马体"
+        route = "semantic_gate"
+        normalized_prompt = " ".join(prompt.split())
+        cue_material = f"{route}\n{cue.casefold()}"
+
+        self.assertEqual(
+            cues.prompt_hash(prompt),
+            hashlib.sha256(normalized_prompt.encode("utf-8")).hexdigest()[:16],
+        )
+        self.assertEqual(
+            cues.cue_key(cue, route),
+            "sc_" + hashlib.sha256(cue_material.encode("utf-8")).hexdigest()[:18],
+        )
+
     def test_repeated_source_backed_hits_promote_multilingual_aliases(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             cache_path = Path(tmp) / "semantic_cues.jsonl"

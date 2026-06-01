@@ -55,7 +55,8 @@ def default_ambient_residue_path(
 
 
 def _fingerprint(value: str, *, prefix: str) -> str:
-    return prefix + "_" + hashlib.sha1(str(value or "").casefold().encode("utf-8")).hexdigest()[:16]
+    digest = hashlib.sha256(str(value or "").casefold().encode("utf-8")).hexdigest()
+    return prefix + "_" + digest[:16]
 
 
 def cache_workspace_identity(workspace: str) -> str:

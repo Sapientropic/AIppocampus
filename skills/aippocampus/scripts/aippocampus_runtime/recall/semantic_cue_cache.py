@@ -58,12 +58,12 @@ def normalize_cue(value: Any) -> str:
 
 def prompt_hash(prompt: str) -> str:
     normalized = re.sub(r"\s+", " ", str(prompt or "")).strip()
-    return hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:16]
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
 
 
 def cue_key(cue: str, route: str) -> str:
     material = f"{route.strip().casefold()}\n{normalize_cue(cue).casefold()}"
-    return "sc_" + hashlib.sha1(material.encode("utf-8")).hexdigest()[:18]
+    return "sc_" + hashlib.sha256(material.encode("utf-8")).hexdigest()[:18]
 
 
 def detect_script(text: str) -> str:

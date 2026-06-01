@@ -108,8 +108,11 @@ def unique_preserve(items: list[str], limit: int | None = None) -> list[str]:
 
 def project_key_for(cwd: Path | None, label: str | None = None) -> str:
     if cwd:
+        # Registry project keys are long-lived join ids, not credential hashes.
+        # Keep the legacy suffix stable until a dual-read alias migration exists.
         digest = hashlib.sha1(str(cwd).casefold().encode("utf-8")).hexdigest()[:12]
         return f"project:{safe_slug(label or cwd.name or 'workspace')}:{digest}"
+    # Same compatibility boundary as the cwd-backed branch above.
     digest = hashlib.sha1((label or "unknown").casefold().encode("utf-8")).hexdigest()[:12]
     return f"project:{safe_slug(label or 'unknown')}:{digest}"
 

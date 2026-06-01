@@ -191,6 +191,8 @@ def reciprocal_rank(rank: Any) -> float:
 
 
 def sha1_text(value: str) -> str:
+    # Historical benchmark report ids keep the `sha1` field names for artifact
+    # comparability. They are public fixture handles, not credential hashes.
     return hashlib.sha1(value.encode("utf-8", errors="replace")).hexdigest()
 
 

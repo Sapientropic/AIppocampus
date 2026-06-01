@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import sys
 import tempfile
@@ -17,6 +18,10 @@ class PathIdentityTests(unittest.TestCase):
     def test_workspace_identity_preserves_plain_project_labels(self) -> None:
         self.assertEqual(core.workspace_identity("Project Alpha"), "Project Alpha")
         self.assertEqual(core.workspace_identity_key("Project Alpha"), "project alpha")
+        self.assertEqual(
+            core.workspace_fingerprint("Project Alpha"),
+            "workspace_" + hashlib.sha256("project alpha".encode("utf-8")).hexdigest()[:16],
+        )
 
     def test_workspace_identity_canonicalizes_absolute_path_spelling(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

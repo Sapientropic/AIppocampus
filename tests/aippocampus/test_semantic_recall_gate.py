@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import contextlib
 import io
 import json
@@ -92,6 +93,35 @@ class SemanticRecallGateTests(unittest.TestCase):
             else:
                 os.environ[name] = value
         self.tmp.cleanup()
+
+    def test_semantic_gate_cache_fingerprint_uses_sha256(self) -> None:
+        key = gate.cache_fingerprint(
+            prompt="继续 #144",
+            cwd=self.workspace,
+            registry_path=self.registry_path,
+            mode="auto",
+            model="deepseek-test",
+            base_url="https://api.example.invalid/v1",
+            workers=("contextualist",),
+            temperature=0.1,
+        )
+        stat = self.registry_path.stat()
+        parts = [
+            gate.PROMPT_VERSION,
+            gate.semantic_gate_mode("auto"),
+            "deepseek-test",
+            "https://api.example.invalid/v1",
+            "contextualist",
+            "0.1",
+            "继续 #144",
+            str(self.workspace.resolve()).casefold(),
+            f"{self.registry_path.resolve()}:{stat.st_mtime_ns}:{stat.st_size}",
+        ]
+
+        self.assertEqual(
+            key,
+            "sg_" + hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()[:24],
+        )
 
     def test_parallel_workers_merge_multilingual_aliases(self) -> None:
         def chat_fn(messages, api_key, model, base_url, max_tokens, timeout, temperature):

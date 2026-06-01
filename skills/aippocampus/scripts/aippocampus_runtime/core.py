@@ -133,7 +133,7 @@ def workspace_identity_key(workspace: str | Path) -> str:
 
 
 def workspace_fingerprint(workspace: str | Path, *, prefix: str = "workspace") -> str:
-    digest = hashlib.sha1(workspace_identity_key(workspace).encode("utf-8")).hexdigest()[:16]
+    digest = hashlib.sha256(workspace_identity_key(workspace).encode("utf-8")).hexdigest()[:16]
     return f"{prefix}_{digest}"
 
 
@@ -200,6 +200,8 @@ def thread_key_from_rollout(rollout: str | Path, meta: dict | None = None) -> st
 
 def workspace_thread_key(cwd: str | Path) -> str:
     cwd_path = canonical_path(cwd)
+    # Workspace fallback keys name existing registry directories. Keep the
+    # legacy suffix stable until `default_thread_store_dir` has dual lookup.
     digest = hashlib.sha1(workspace_identity_key(cwd_path).encode("utf-8")).hexdigest()[:12]
     return f"workspace:{safe_path_name(cwd_path.name, 'workspace')}:{digest}"
 

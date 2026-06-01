@@ -734,7 +734,7 @@ def cache_fingerprint(
                 parts.append(f"{resolved}:missing")
         except OSError:
             parts.append(str(path))
-    return "sg_" + hashlib.sha1("\n".join(parts).encode("utf-8")).hexdigest()[:24]
+    return "sg_" + hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()[:24]
 
 
 def read_cache(
