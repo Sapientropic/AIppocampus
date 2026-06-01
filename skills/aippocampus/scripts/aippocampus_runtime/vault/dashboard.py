@@ -20,7 +20,12 @@ def _load_dashboard_asset(filename: str) -> str:
 
 
 def json_script(data: dict | list) -> str:
-    return json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
+    return (
+        json.dumps(data, ensure_ascii=False)
+        .replace("&", "\\u0026")
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+    )
 
 
 def dashboard_anchor_title(anchor: dict, idx: int) -> str:
@@ -136,8 +141,8 @@ def dashboard_pane_data_v2(
 ) -> dict:
     status = "OK" if health.get("ok") else "Needs maintenance"
     checkpoint = checkpoint_state.get("last_candidate") or {}
-    messages = health.get("rollout", {}).get("message_count", 0)
-    anchor_count = health.get("anchors", {}).get("count", 0)
+    messages = html.escape(str(health.get("rollout", {}).get("message_count", 0)))
+    anchor_count = html.escape(str(health.get("anchors", {}).get("count", 0)))
     checkpoint_state_text = "需要巩固" if health.get("checkpoint", {}).get("due") else "已巩固"
     graphify_state = "需要刷新" if health.get("graphify", {}).get("stale") else "已同步"
 

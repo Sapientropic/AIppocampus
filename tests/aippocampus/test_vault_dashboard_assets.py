@@ -72,6 +72,33 @@ class VaultDashboardAssetTests(unittest.TestCase):
         self.assertIn(f"<style>{css}</style>", rendered)
         self.assertIn(f"<script>{script}</script>", rendered)
 
+    def test_json_script_escapes_html_delimiters(self) -> None:
+        rendered = packaged_dashboard.json_script(
+            {"body": "</script><img src=x onerror=alert(1)>", "safe": "ok"}
+        )
+
+        self.assertNotIn("</script", rendered.lower())
+        self.assertNotIn("<img", rendered.lower())
+        self.assertIn("\\u003c", rendered)
+
+    def test_dashboard_pane_data_escapes_dynamic_health_counts(self) -> None:
+        pages = packaged_dashboard.dashboard_pane_data_v2(
+            health={
+                "ok": True,
+                "anchors": {"count": "<img src=x onerror=alert(1)>"},
+                "rollout": {"message_count": "<svg onload=alert(2)>"},
+            },
+            anchors=[],
+            checkpoint_state={},
+            recent_messages=[],
+        )
+
+        health_body = pages["health"]["body"].lower()
+        self.assertNotIn("<img", health_body)
+        self.assertNotIn("<svg", health_body)
+        self.assertIn("&lt;img", health_body)
+        self.assertIn("&lt;svg", health_body)
+
 
 if __name__ == "__main__":
     unittest.main()
