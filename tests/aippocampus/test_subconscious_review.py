@@ -214,8 +214,8 @@ class SubconsciousReviewTests(unittest.TestCase):
                         {
                             "candidate_type": "project_memory",
                             "title": "Provider boundary",
-                            "summary": "External route provenance is explicit.",
-                            "recommendation": "Review before promotion.",
+                            "summary": f"External route provenance is explicit; api_key={FAKE_TEST_OPENAI_API_KEY}.",
+                            "recommendation": f"Review {fake_test_windows_path('candidate.txt')} before promotion.",
                             "confidence": 0.8,
                             "source_finding_ids": ["sf_one"],
                         }
@@ -233,6 +233,11 @@ class SubconsciousReviewTests(unittest.TestCase):
 
         self.assertEqual(row["source"], "external_model_subconscious_review")
         self.assertEqual(row["model_route"]["provider"], "local-test")
+        row_text = json.dumps(row, ensure_ascii=False)
+        self.assertNotIn(FAKE_TEST_OPENAI_API_KEY, row_text)
+        self.assertNotIn(FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER, row_text)
+        self.assertIn("<redacted:api-key>", row_text)
+        self.assertIn("<redacted:local-path>", row_text)
 
     def test_validate_review_requires_existing_source_findings(self) -> None:
         findings_by_id = {

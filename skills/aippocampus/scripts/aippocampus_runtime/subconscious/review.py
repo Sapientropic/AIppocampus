@@ -341,6 +341,48 @@ def apply_focus_filter(review: dict[str, Any], focus: str) -> dict[str, Any]:
     return review
 
 
+def sanitized_review_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Return scanner-visible public/staging output for review reports.
+
+    Review candidates are intentionally not formal memory, but they can contain
+    model-authored summaries and activation cues. Keep all write/print sinks on
+    this helper so package moves do not reopen CodeQL clear-text alerts.
+    """
+
+    sanitized = sanitize_external_model_payload(payload)
+    return sanitized if isinstance(sanitized, dict) else {}
+
+
+def write_review_jsonl_event(fh: Any, event: dict[str, Any]) -> None:
+    public_event = sanitized_review_payload(event)
+    # Event rows are sanitized staging metadata; raw source text, paths, and
+    # secret-like substrings are redacted before this sink.
+    # codeql[py/clear-text-storage-sensitive-data]
+    fh.write(json.dumps(public_event, ensure_ascii=False) + "\n")
+
+
+def print_review_json(payload: dict[str, Any]) -> None:
+    public_payload = sanitized_review_payload(payload)
+    # CLI JSON is the same sanitized report returned to tests and operators.
+    # codeql[py/clear-text-logging-sensitive-data]
+    print(json.dumps(public_payload, ensure_ascii=False, indent=2))
+
+
+def print_review_summary(payload: dict[str, Any]) -> None:
+    public_payload = sanitized_review_payload(payload)
+    # Non-JSON output renders sanitized counts and a redacted output path.
+    # codeql[py/clear-text-logging-sensitive-data]
+    print(f"findings reviewed: {public_payload['finding_count']}")
+    # codeql[py/clear-text-logging-sensitive-data]
+    print(f"promotion candidates: {public_payload['promotion_candidate_count']}")
+    # codeql[py/clear-text-logging-sensitive-data]
+    print(f"duplicate groups: {public_payload['duplicate_group_count']}")
+    # codeql[py/clear-text-logging-sensitive-data]
+    print(f"weak findings: {public_payload['weak_finding_count']}")
+    # codeql[py/clear-text-logging-sensitive-data]
+    print(f"output: {public_payload['output']}")
+
+
 def append_review_output(
     path: Path,
     review: dict[str, Any],
@@ -367,7 +409,7 @@ def append_review_output(
                 "usage": usage or {},
                 **candidate,
             }
-            fh.write(json.dumps(event, ensure_ascii=False) + "\n")
+            write_review_jsonl_event(fh, event)
         for group in review.get("duplicate_groups") or []:
             event = {
                 "schema_version": 1,
@@ -381,7 +423,7 @@ def append_review_output(
                 "model_route": model_route or {},
                 **group,
             }
-            fh.write(json.dumps(event, ensure_ascii=False) + "\n")
+            write_review_jsonl_event(fh, event)
         for weak in review.get("weak_findings") or []:
             event = {
                 "schema_version": 1,
@@ -395,7 +437,7 @@ def append_review_output(
                 "model_route": model_route or {},
                 **weak,
             }
-            fh.write(json.dumps(event, ensure_ascii=False) + "\n")
+            write_review_jsonl_event(fh, event)
 
 
 def run_review(
@@ -584,16 +626,12 @@ def main() -> int:
         if not args.json_output:
             raise
         result = cli_error_payload(exc)
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        print_review_json(result)
         return cli_exit_code_for_error_code(result["error"]["code"])
     if args.json_output:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        print_review_json(result)
     else:
-        print(f"findings reviewed: {result['finding_count']}")
-        print(f"promotion candidates: {result['promotion_candidate_count']}")
-        print(f"duplicate groups: {result['duplicate_group_count']}")
-        print(f"weak findings: {result['weak_finding_count']}")
-        print(f"output: {result['output']}")
+        print_review_summary(result)
     return 0
 
 

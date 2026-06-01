@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.core import aippocampus_registry_dir
+from aippocampus_runtime.core import aippocampus_registry_dir, sanitize_external_model_payload
 from aippocampus_runtime.sync.encrypted import keys as encrypted_sync_keys
 from aippocampus_runtime.sync.encrypted import migration as encrypted_sync_migration
 from aippocampus_runtime.sync.object_storage import cli as sync_object_storage
@@ -71,14 +71,32 @@ def provider_kwargs(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def sanitized_admin_result(result: dict[str, Any]) -> dict[str, Any]:
+    """Return public CLI output for credential-adjacent encrypted sync admin."""
+
+    sanitized = sanitize_external_model_payload(result)
+    return sanitized if isinstance(sanitized, dict) else {"ok": False}
+
+
 def emit_result(result: dict[str, Any], *, json_output: bool, plain_field: str | None = None) -> int:
+    public_result = sanitized_admin_result(result)
     if json_output:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-    elif plain_field and result.get(plain_field):
-        print(result[plain_field])
+        # `result` can be produced by credential-adjacent helpers, so all CLI
+        # output flows through the shared redactor before logging.
+        # codeql[py/clear-text-logging-sensitive-data]
+        print(json.dumps(public_result, ensure_ascii=False, indent=2))
+    elif plain_field and public_result.get(plain_field):
+        # Public recipients are safe to display; private age identities and
+        # provider credentials are never included in the sanitized result.
+        # codeql[py/clear-text-logging-sensitive-data]
+        print(public_result[plain_field])
     else:
-        print("encrypted sync: ok" if result.get("ok") else "encrypted sync: needs attention")
-        for item in result.get("issues") or []:
+        # Aggregate status is derived from the sanitized result only.
+        # codeql[py/clear-text-logging-sensitive-data]
+        print("encrypted sync: ok" if public_result.get("ok") else "encrypted sync: needs attention")
+        for item in public_result.get("issues") or []:
+            # Issue rows are sanitized before rendering.
+            # codeql[py/clear-text-logging-sensitive-data]
             print(f"- {item.get('code')}: {item.get('message') or item.get('path')}")
     return 0 if result.get("ok") else 1
 

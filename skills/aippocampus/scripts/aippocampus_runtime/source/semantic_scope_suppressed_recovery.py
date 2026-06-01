@@ -462,6 +462,26 @@ def run_suppressed_label_recovery_smoke(
     }
 
 
+def sanitized_smoke_result(result: dict[str, Any]) -> dict[str, Any]:
+    sanitized = sanitize_external_model_payload(result)
+    return sanitized if isinstance(sanitized, dict) else {}
+
+
+def emit_smoke_result(result: dict[str, Any], *, json_output: bool) -> None:
+    public_result = sanitized_smoke_result(result)
+    if json_output:
+        # Smoke output is sanitized model/source-review metadata, not raw
+        # source text. Keep this sink centralized for CodeQL diff scanning.
+        # codeql[py/clear-text-logging-sensitive-data]
+        print(json.dumps(public_result, ensure_ascii=False, indent=2))
+        return
+    # The non-JSON summary renders sanitized aggregate fields only.
+    # codeql[py/clear-text-logging-sensitive-data]
+    print(f"suppressed label recovery: {public_result.get('status')}")
+    # codeql[py/clear-text-logging-sensitive-data]
+    print(f"strict recovered labels: {public_result.get('strict_recovered_label_count')}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--registry")
@@ -494,11 +514,7 @@ def main() -> int:
         max_steps=args.max_steps,
         min_tool_steps=args.min_tool_steps,
     )
-    if args.json_output:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-    else:
-        print(f"suppressed label recovery: {result.get('status')}")
-        print(f"strict recovered labels: {result.get('strict_recovered_label_count')}")
+    emit_smoke_result(result, json_output=args.json_output)
     return 0 if result.get("ok") else 1
 
 
