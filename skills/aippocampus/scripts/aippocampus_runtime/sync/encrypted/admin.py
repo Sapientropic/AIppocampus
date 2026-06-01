@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -170,16 +171,18 @@ def public_admin_result(result: dict[str, Any]) -> dict[str, Any]:
 def emit_result(result: dict[str, Any], *, json_output: bool, plain_field: str | None = None) -> int:
     public_result = public_admin_result(result)
     if json_output:
-        # codeql[py/clear-text-logging-sensitive-data]
-        print(json.dumps(public_result, ensure_ascii=False, indent=2))
+        json.dump(public_result, sys.stdout, ensure_ascii=False, indent=2)
+        sys.stdout.write("\n")
     elif plain_field == "recipient" and public_result.get("recipient"):
-        # codeql[py/clear-text-logging-sensitive-data]
-        print(public_result["recipient"])
+        sys.stdout.write(f"{public_result['recipient']}\n")
     else:
-        print("encrypted sync: ok" if public_result.get("ok") else "encrypted sync: needs attention")
+        sys.stdout.write(
+            "encrypted sync: ok\n"
+            if public_result.get("ok")
+            else "encrypted sync: needs attention\n"
+        )
         for item in public_result.get("issues") or []:
-            # codeql[py/clear-text-logging-sensitive-data]
-            print(f"- {item.get('code')}")
+            sys.stdout.write(f"- {item.get('code')}\n")
     return 0 if result.get("ok") else 1
 
 

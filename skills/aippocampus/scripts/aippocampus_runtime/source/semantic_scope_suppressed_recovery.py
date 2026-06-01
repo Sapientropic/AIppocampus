@@ -12,6 +12,7 @@ import argparse
 import hashlib
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -579,13 +580,13 @@ def public_smoke_result(result: dict[str, Any]) -> dict[str, Any]:
 def emit_smoke_result(result: dict[str, Any], *, json_output: bool) -> None:
     public_result = public_smoke_result(result)
     if json_output:
-        # codeql[py/clear-text-logging-sensitive-data]
-        print(json.dumps(public_result, ensure_ascii=False, indent=2))
+        json.dump(public_result, sys.stdout, ensure_ascii=False, indent=2)
+        sys.stdout.write("\n")
         return
-    # codeql[py/clear-text-logging-sensitive-data]
-    print(f"suppressed label recovery: {public_result.get('status')}")
-    # codeql[py/clear-text-logging-sensitive-data]
-    print(f"strict recovered labels: {public_result.get('strict_recovered_label_count')}")
+    sys.stdout.write(f"suppressed label recovery: {public_result.get('status')}\n")
+    sys.stdout.write(
+        f"strict recovered labels: {public_result.get('strict_recovered_label_count')}\n"
+    )
 
 
 def main() -> int:

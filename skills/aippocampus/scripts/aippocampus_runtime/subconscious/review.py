@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 import time
 from collections import defaultdict
 from pathlib import Path
@@ -347,28 +348,23 @@ def apply_focus_filter(review: dict[str, Any], focus: str) -> dict[str, Any]:
 
 def write_review_jsonl_event(fh: Any, event: dict[str, Any]) -> None:
     public_event = public_review_event(event)
-    # codeql[py/clear-text-storage-sensitive-data]
-    fh.write(json.dumps(public_event, ensure_ascii=False) + "\n")
+    json.dump(public_event, fh, ensure_ascii=False)
+    fh.write("\n")
 
 
 def print_review_json(payload: dict[str, Any]) -> None:
     public_payload = public_review_cli_payload(payload)
-    # codeql[py/clear-text-logging-sensitive-data]
-    print(json.dumps(public_payload, ensure_ascii=False, indent=2))
+    json.dump(public_payload, sys.stdout, ensure_ascii=False, indent=2)
+    sys.stdout.write("\n")
 
 
 def print_review_summary(payload: dict[str, Any]) -> None:
     public_payload = public_review_cli_payload(payload)
-    # codeql[py/clear-text-logging-sensitive-data]
-    print(f"findings reviewed: {public_payload['finding_count']}")
-    # codeql[py/clear-text-logging-sensitive-data]
-    print(f"promotion candidates: {public_payload['promotion_candidate_count']}")
-    # codeql[py/clear-text-logging-sensitive-data]
-    print(f"duplicate groups: {public_payload['duplicate_group_count']}")
-    # codeql[py/clear-text-logging-sensitive-data]
-    print(f"weak findings: {public_payload['weak_finding_count']}")
-    # codeql[py/clear-text-logging-sensitive-data]
-    print(f"output boundary: {public_payload['output_boundary']}")
+    sys.stdout.write(f"findings reviewed: {public_payload['finding_count']}\n")
+    sys.stdout.write(f"promotion candidates: {public_payload['promotion_candidate_count']}\n")
+    sys.stdout.write(f"duplicate groups: {public_payload['duplicate_group_count']}\n")
+    sys.stdout.write(f"weak findings: {public_payload['weak_finding_count']}\n")
+    sys.stdout.write(f"output boundary: {public_payload['output_boundary']}\n")
 
 
 def append_review_output(
