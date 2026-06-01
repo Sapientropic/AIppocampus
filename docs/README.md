@@ -15,7 +15,9 @@ Start here instead of scanning every Markdown file in the tree.
 - Current claim boundary: [`evidence/readiness/stage-0-5-readiness.md`](evidence/readiness/stage-0-5-readiness.md).
 - Benchmark and smoke evidence map: [`evidence/benchmark-evidence-map.md`](evidence/benchmark-evidence-map.md).
 - Dated verification ledger: [`evidence/readiness/public-readiness-verification.md`](evidence/readiness/public-readiness-verification.md).
-- Public API and install surface: [`guides/public-api.md`](guides/public-api.md) and [`guides/install-guide.md`](guides/install-guide.md).
+- Public API 10-minute path and install surface:
+  [`guides/public-api.md`](guides/public-api.md) and
+  [`guides/install-guide.md`](guides/install-guide.md).
 - Agent-readable context and recommendation boundary: [`agent-context.md`](agent-context.md).
 - Public-core license and adapter boundary: [`guides/public-core-boundary.md`](guides/public-core-boundary.md).
 - Architecture overview: [`architecture/architecture-overview.md`](architecture/architecture-overview.md).
@@ -57,7 +59,7 @@ material.
 
 - [`install-guide.md`](guides/install-guide.md) - public skill, MCP, plugin, hook, and local-sync install paths.
 - [`claude-code-mcp.md`](guides/claude-code-mcp.md) - Claude Code MCP setup, provider onboarding states, and privacy boundary.
-- [`public-api.md`](guides/public-api.md) - supported CLI, MCP, JSON, environment-variable, and Python import stability boundary.
+- [`public-api.md`](guides/public-api.md) - 10-minute dependency path plus supported CLI, MCP, JSON, environment-variable, SDK, and Python import stability boundary.
 - [`public-core-boundary.md`](guides/public-core-boundary.md) - Apache-2.0 public-core license, adapter, schema, third-party asset, and relicensing boundary.
 - [`demo-scenarios.md`](guides/demo-scenarios.md) - public-safe demo flows using synthetic memory data.
 - [`privacy-security-checklist.md`](guides/privacy-security-checklist.md) - public-readiness privacy and security checklist.
