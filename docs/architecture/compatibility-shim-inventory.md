@@ -10,9 +10,9 @@ Current snapshot after the #144/#305 policy pass:
 
 | Bucket | Count | Meaning |
 |---|---:|---|
-| `keep_cli` | 22 | Documented CLI, hook, MCP, install, sync, onboarding, or operator paths. Keep until docs/installers publish a migration note. |
-| `temporary_compat` | 111 | Flat import shims for package owners. Remove once first-party imports, docs, hooks, and binary packaging no longer call the flat path. |
-| `legacy_bridge` | 3 | Single-implementation legacy paths for credential-adjacent or model-output-heavy flows. Move only with scanner-aware output contracts. |
+| `keep_cli` | 23 | Documented CLI, hook, MCP, install, sync, onboarding, or operator paths. Keep until docs/installers publish a migration note. |
+| `temporary_compat` | 113 | Flat import shims for package owners. Remove once first-party imports, docs, hooks, and binary packaging no longer call the flat path. |
+| `legacy_bridge` | 0 | No single-implementation legacy top-level script exceptions remain. |
 | `delete_now` | 0 | No current top-level script qualifies for immediate deletion without a migration check. |
 | `reexport_blocks` | 0 | The prompt-cue compatibility re-export block was removed; cue policy now lives in `aippocampus_runtime.recall.prompt_cues`. |
 

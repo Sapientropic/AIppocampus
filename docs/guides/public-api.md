@@ -57,7 +57,7 @@ The CLI contract applies to documented operator commands, especially:
 - `export_bundle.py` / `import_bundle.py`
 - `sync_bundle.py status|push|pull|repair`
 - `sync_object_storage.py status|push|pull|repair`
-- `aippocampus_runtime.sync.encrypted.admin` package bridge and the `encrypted_sync_admin.py` direct command: `key|migrate-to-encrypted|cleanup-plaintext|migrate-object-to-encrypted|cleanup-object-plaintext`
+- `aippocampus_runtime.sync.encrypted.admin` package owner and the `encrypted_sync_admin.py` direct command: `key|migrate-to-encrypted|cleanup-plaintext|migrate-object-to-encrypted|cleanup-object-plaintext`
 - `install_aippocampus_prompt_hook.py status|install|uninstall`
 - `install_aippocampus_lifecycle_hook.py status|install|uninstall`
 - `plugins/aippocampus/build_plugin_package.py`
