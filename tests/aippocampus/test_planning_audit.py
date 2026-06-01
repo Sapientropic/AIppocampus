@@ -181,6 +181,35 @@ def test_docs_unresolved_hit_with_owner_issue_is_not_reported(tmp_path: Path) ->
     assert report["summary"]["docs_unowned_design_hits"] == 0
 
 
+def test_docs_claim_boundary_is_not_reported_as_unresolved_work(tmp_path: Path) -> None:
+    note = tmp_path / "docs" / "evidence" / "report.md"
+    note.parent.mkdir(parents=True)
+    note.write_text(
+        "## Cannot Claim\n\n- No live semantic-model quality claim.\n",
+        encoding="utf-8",
+    )
+
+    report = planning_audit.audit_issues([], milestone_numbers={}, repo_root=tmp_path)
+
+    assert "docs_unowned_design_hit" not in kinds(report["needs_human_review"])
+    assert report["summary"]["docs_unowned_design_hits"] == 0
+
+
+def test_archived_state_doc_is_not_reported_as_current_unresolved_work(tmp_path: Path) -> None:
+    note = tmp_path / "docs" / "planning" / "old-state.md"
+    note.parent.mkdir(parents=True)
+    note.write_text(
+        'state: archived\n'
+        'stop_condition: "explicitly deferred with blocker/risk"\n',
+        encoding="utf-8",
+    )
+
+    report = planning_audit.audit_issues([], milestone_numbers={}, repo_root=tmp_path)
+
+    assert "docs_unowned_design_hit" not in kinds(report["needs_human_review"])
+    assert report["summary"]["docs_unowned_design_hits"] == 0
+
+
 def test_discussion_without_issue_refs_or_docs_is_reported() -> None:
     report = planning_audit.audit_issues(
         [],
