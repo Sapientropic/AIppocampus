@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from aippocampus_runtime.core import sanitize_external_model_payload
+from aippocampus_runtime.core import cli_public_error_object, sanitize_external_model_payload
 from aippocampus_runtime.registry.api import unique_preserve
 
 PROMPT_VERSION = "aippocampus-subconscious-review-v0"
@@ -34,11 +34,6 @@ PUBLIC_REVIEW_EVENT_KINDS = {
 MODEL_TEXT_OUTPUT_BOUNDARY = (
     "model_text_omitted; inspect source_finding_ids in source-backed jobs"
 )
-PUBLIC_ERROR_CODES = {
-    "missing_api_key",
-    "runtime_error",
-}
-
 
 def public_count(value: Any) -> int:
     try:
@@ -63,11 +58,6 @@ def public_identifier(value: Any, *, fallback: str = "", max_length: int = 96) -
     if not safe or any(marker in lowered for marker in ("secret", "token", "private")):
         return fallback
     return safe
-
-
-def public_error_code(value: Any) -> str:
-    code = public_identifier(value, fallback="runtime_error", max_length=80)
-    return code if code in PUBLIC_ERROR_CODES else "runtime_error"
 
 
 def public_finding_ids(values: Any, *, limit: int = 12) -> list[str]:
@@ -161,7 +151,8 @@ def public_review_cli_payload(payload: dict[str, Any]) -> dict[str, Any]:
         error = raw_error if isinstance(raw_error, dict) else {}
         return {
             "ok": False,
-            "error": {"code": public_error_code(error.get("code"))},
+            "error": cli_public_error_object(error)
+            or {"code": "runtime_error", "class": "runtime_error"},
             "output_boundary": MODEL_TEXT_OUTPUT_BOUNDARY,
         }
     return {

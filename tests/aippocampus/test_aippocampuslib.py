@@ -144,7 +144,16 @@ class AippocampusLibTests(unittest.TestCase):
 
         self.assertEqual(payload["ok"], False)
         self.assertEqual(payload["error"]["code"], "missing_api_key")
+        self.assertEqual(payload["error"]["class"], "missing_prerequisite")
         self.assertEqual(cli_errors.cli_exit_code_for_error_code("missing_api_key"), 2)
+        self.assertEqual(cli_errors.cli_error_class_for_error_code("invalid_json"), "validation_error")
+        self.assertEqual(cli_errors.cli_error_class_for_error_code("privacy_blocked"), "privacy_block")
+        self.assertEqual(cli_errors.cli_exit_code_for_error_code("privacy_blocked"), 2)
+        self.assertEqual(cli_errors.cli_exit_code_for_error_code("future_unknown_error"), 1)
+        self.assertEqual(
+            cli_errors.cli_public_error_object({"code": "private_token_code"}),
+            {"code": "runtime_error", "class": "runtime_error"},
+        )
         self.assertIs(
             aippocampuslib.cli_error_payload_from_message,
             cli_errors.cli_error_payload_from_message,

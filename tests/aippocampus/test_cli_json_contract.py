@@ -48,6 +48,7 @@ class CliJsonContractTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["error"]["code"], "missing_api_key")
+        self.assertEqual(payload["error"]["class"], "missing_prerequisite")
 
     def test_agent_missing_api_key_returns_json_error_without_traceback(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -59,6 +60,7 @@ class CliJsonContractTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["error"]["code"], "missing_api_key")
+        self.assertEqual(payload["error"]["class"], "missing_prerequisite")
 
     def test_review_missing_api_key_returns_json_error_without_traceback(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -70,6 +72,7 @@ class CliJsonContractTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["error"]["code"], "missing_api_key")
+        self.assertEqual(payload["error"]["class"], "missing_prerequisite")
 
     def test_jobs_all_samples_failed_promotes_top_level_error(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -81,6 +84,7 @@ class CliJsonContractTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["error"]["code"], "missing_api_key")
+        self.assertEqual(payload["error"]["class"], "missing_prerequisite")
 
     def test_jobs_json_uses_public_projection(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -19,6 +19,7 @@ from typing import Any, Mapping
 from aippocampus_runtime.core import (
     cli_error_payload,
     cli_exit_code_for_error_code,
+    cli_public_error_object,
     compact_text,
     now_utc,
     sanitize_external_model_payload,
@@ -102,9 +103,7 @@ def public_usage(usage: Any) -> dict[str, int]:
 def public_error(error: Any) -> dict[str, str] | None:
     if not isinstance(error, Mapping):
         return None
-    code = str(error.get("code") or "runtime_error")
-    safe = "".join(char for char in code[:80] if char.isalnum() or char in {"_", "-"})
-    return {"code": safe or "runtime_error"}
+    return cli_public_error_object(error)
 
 
 def public_worker_payload(result: Mapping[str, Any]) -> dict[str, Any]:

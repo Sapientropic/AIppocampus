@@ -114,6 +114,46 @@ For these commands:
   with `capture_output=True` to receive a `CommandResult` without launching a
   subprocess or polluting the caller's stdout/stderr.
 
+### CLI JSON Error Contract
+
+Documented `--json` outputs that fail should use this public-safe shape when a
+command owns structured errors:
+
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "missing_api_key",
+    "class": "missing_prerequisite",
+    "message": "Missing API key"
+  },
+  "data": null
+}
+```
+
+Stable fields for automation are:
+
+- `error.code`: specific machine-readable reason. Consumers may branch on
+  documented codes, but must tolerate new codes.
+- `error.class`: coarse stable failure class. Consumers should prefer this when
+  they only need retry/help behavior.
+- `error.message`: human-facing diagnostic. It is not a stable parse target.
+
+The initial stable classes are:
+
+| `error.class` | Meaning | Current example codes | Exit class |
+| --- | --- | --- | --- |
+| `usage_error` | Caller selected an unsupported operation or malformed command shape. | `usage_error`, `unsupported_operation` | `2` |
+| `validation_error` | Caller input was present but invalid. | `invalid_json`, `validation_error` | `2` |
+| `missing_prerequisite` | A required file, credential, provider, or local artifact is absent. | `missing_api_key`, `missing_file`, `missing_prerequisite` | `2` |
+| `privacy_block` | The command refused to expose or transport private data without an explicit safe mode. | `privacy_blocked` | `2` |
+| `runtime_error` | The command reached an unexpected runtime failure or an unclassified downstream error. | `runtime_error`, unknown future codes without a class | `1` |
+
+Exit code `2` is the stable caller/actionable failure class for documented JSON
+errors; exit code `1` is the stable runtime/unclassified failure class. Exact
+bespoke non-zero numbers remain out of contract until a future release
+documents them.
+
 The Python facade remains the default public runtime surface. Windows x64 has
 dated PyInstaller artifact smoke evidence, including the standalone binary as a
 Claude Code stdio MCP server through `aippocampus.exe mcp`; the current claim is

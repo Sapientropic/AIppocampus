@@ -165,6 +165,16 @@ REQUIRED_BENCHMARK_EVIDENCE_MAP_TERMS = {
 }
 
 REQUIRED_PUBLIC_API_CONTRACT_TERMS = {
+    "### CLI JSON Error Contract": (
+        "public API doc missing CLI JSON error contract"
+    ),
+    "`error.code`": "public API doc missing stable CLI error code field",
+    "`error.class`": "public API doc missing stable CLI error class field",
+    "`missing_prerequisite`": "public API doc missing stable CLI error classes",
+    "`validation_error`": "public API doc missing validation error class",
+    "`privacy_block`": "public API doc missing privacy error class",
+    "`runtime_error`": "public API doc missing runtime error class",
+    "Exit code `2`": "public API doc missing stable CLI exit class policy",
     "### MCP Control-Plane Boundary": (
         "public API doc missing MCP control-plane boundary"
     ),
