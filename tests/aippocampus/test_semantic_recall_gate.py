@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import sys
@@ -142,6 +144,75 @@ class SemanticRecallGateTests(unittest.TestCase):
         self.assertIn("海马体记忆", result["query_aliases"])
         self.assertIn("registered_threads", result["memory_scope"])
         self.assertEqual(result["anti_personalization_risk"], "low")
+
+    def test_public_cli_payload_omits_aliases_workers_and_raw_errors(self) -> None:
+        private_result = {
+            "available": True,
+            "decision": "scent",
+            "confidence": 0.82,
+            "cached": False,
+            "query_aliases": ["private alias", FAKE_TEST_OPENAI_API_KEY],
+            "memory_scope": ["registered_threads"],
+            "reasons": ["private reason with E:\\private\\notes.md"],
+            "workers": [{"raw": "private worker output"}],
+            "errors": ["private error with token=secret"],
+            "error_buckets": {"semantic_worker_error": 1},
+            "cache": {"available": True, "hit_tokens": 1},
+            "model_route": {
+                "provider": "deepseek",
+                "base_url": "https://private-model.example/v1",
+                "api_key_env": "PRIVATE_MODEL_KEY_ENV",
+            },
+        }
+
+        public = gate.public_semantic_gate_payload(private_result)
+
+        encoded = json.dumps(public, ensure_ascii=False)
+        self.assertEqual(public["decision"], "scent")
+        self.assertEqual(public["worker_count"], 1)
+        self.assertNotIn("query_aliases", public)
+        self.assertNotIn("workers", public)
+        self.assertNotIn("reasons", public)
+        self.assertNotIn("errors", public)
+        self.assertNotIn("private alias", encoded)
+        self.assertNotIn(FAKE_TEST_OPENAI_API_KEY, encoded)
+        self.assertNotIn("private-model.example", encoded)
+
+    def test_main_json_uses_public_semantic_gate_payload(self) -> None:
+        private_result = {
+            "available": True,
+            "decision": "scent",
+            "confidence": 0.82,
+            "cached": False,
+            "query_aliases": ["private alias"],
+            "workers": [{"raw": "private worker output"}],
+            "errors": ["private error"],
+        }
+        stdout = io.StringIO()
+        with (
+            patch.object(gate, "run_semantic_gate", return_value=private_result),
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "semantic_recall_gate.py",
+                    "--prompt",
+                    "private prompt",
+                    "--cwd",
+                    str(self.workspace),
+                    "--json",
+                ],
+            ),
+            contextlib.redirect_stdout(stdout),
+        ):
+            code = gate.main()
+
+        self.assertEqual(code, 0)
+        rendered = stdout.getvalue()
+        self.assertIn('"decision": "scent"', rendered)
+        self.assertNotIn("private alias", rendered)
+        self.assertNotIn("private worker output", rendered)
+        self.assertNotIn("private error", rendered)
 
     def test_semantic_gate_payload_keeps_stable_catalog_before_variable_prompt(self) -> None:
         payload = gate.catalog_payload(

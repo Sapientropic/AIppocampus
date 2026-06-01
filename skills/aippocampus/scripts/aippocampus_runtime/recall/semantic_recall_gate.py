@@ -24,7 +24,7 @@ import os
 import re
 import time
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 
 from aippocampus_runtime.core import (
     compact_text,
@@ -809,6 +809,77 @@ def error_buckets(errors: list[str]) -> dict[str, int]:
     return buckets
 
 
+def public_count(value: Any) -> int:
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+def public_confidence(value: Any) -> float:
+    try:
+        return round(min(1.0, max(0.0, float(value))), 4)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def public_model_route(route: Any) -> dict[str, str]:
+    if not isinstance(route, Mapping):
+        return {}
+    provider = str(route.get("provider") or "").strip()
+    safe = "".join(char for char in provider[:48] if char.isalnum() or char in {"_", "-", "."})
+    return {"provider": safe or "unknown"}
+
+
+def public_cache(cache: Any) -> dict[str, Any]:
+    if not isinstance(cache, Mapping):
+        return {}
+    result: dict[str, Any] = {"available": bool(cache.get("available"))}
+    for key in ("hit_tokens", "miss_tokens"):
+        if key in cache:
+            result[key] = public_count(cache.get(key))
+    return result
+
+
+def public_error_buckets(buckets: Any) -> dict[str, int]:
+    if not isinstance(buckets, Mapping):
+        return {}
+    allowed = {
+        "auth_error",
+        "read_timeout",
+        "overall_deadline",
+        "semantic_worker_error",
+    }
+    return {
+        str(key): public_count(value)
+        for key, value in buckets.items()
+        if str(key) in allowed
+    }
+
+
+def public_semantic_gate_payload(result: Mapping[str, Any]) -> dict[str, Any]:
+    workers_value = result.get("workers")
+    workers = workers_value if isinstance(workers_value, list) else []
+    return {
+        "available": bool(result.get("available")),
+        "decision": str(result.get("decision") or "skip")
+        if str(result.get("decision") or "skip") in VALID_DECISIONS
+        else "skip",
+        "confidence": public_confidence(result.get("confidence")),
+        "cached": bool(result.get("cached")),
+        "availability_reason": str(result.get("availability_reason") or "")
+        if result.get("availability_reason")
+        else None,
+        "diagnostic": str(result.get("diagnostic") or "") if result.get("diagnostic") else None,
+        "error_buckets": public_error_buckets(result.get("error_buckets")),
+        "worker_count": public_count(result.get("worker_count") or len(workers)),
+        "cache": public_cache(result.get("cache")),
+        "model_route": public_model_route(result.get("model_route")),
+        "elapsed_ms": public_count(result.get("elapsed_ms")),
+        "output_boundary": "semantic_gate_private_worker_details_omitted",
+    }
+
+
 def unavailable_result(
     reason: str,
     *,
@@ -1135,17 +1206,15 @@ def main() -> int:
         temperature=args.temperature,
         use_cache=not args.no_cache,
     )
+    public_result = public_semantic_gate_payload(result)
     if args.json_output:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        print(json.dumps(public_result, ensure_ascii=False, indent=2))
     else:
         print(
-            f"semantic gate: {result.get('decision')} confidence={result.get('confidence')} cached={result.get('cached')}"
+            "semantic gate: "
+            f"{public_result.get('decision')} confidence={public_result.get('confidence')} "
+            f"cached={public_result.get('cached')}"
         )
-        query_aliases = result.get("query_aliases")
-        if isinstance(query_aliases, list) and query_aliases:
-            print("aliases: " + ", ".join(str(alias) for alias in query_aliases[:12]))
-        for reason in result.get("reasons") or []:
-            print(f"- {reason}")
     return 0
 
 

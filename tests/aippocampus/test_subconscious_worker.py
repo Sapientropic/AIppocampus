@@ -320,6 +320,26 @@ class SubconsciousWorkerTests(unittest.TestCase):
         self.assertEqual(code, 0, stdout.getvalue())
         self.assertEqual(captured["authorization"], "Bearer right-local-key")
 
+    def test_default_dry_run_stdout_omits_prompt_preview(self) -> None:
+        private_result = {
+            "ok": True,
+            "dry_run": True,
+            "turn_count": 1,
+            "prompt_preview": "private prompt preview must stay out",
+        }
+        stdout = io.StringIO()
+        with (
+            patch.object(worker, "run_worker", return_value=private_result),
+            patch.object(sys, "argv", ["subconscious_worker.py", "--dry-run"]),
+            contextlib.redirect_stdout(stdout),
+        ):
+            code = worker.main()
+
+        self.assertEqual(code, 0)
+        rendered = stdout.getvalue()
+        self.assertIn("dry run: 1 turn(s)", rendered)
+        self.assertNotIn("private prompt preview", rendered)
+
 
 if __name__ == "__main__":
     unittest.main()

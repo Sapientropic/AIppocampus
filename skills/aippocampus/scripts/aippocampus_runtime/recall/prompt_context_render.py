@@ -179,15 +179,37 @@ def public_hook_debug_payload(result: dict[str, Any]) -> dict[str, Any]:
     upstream into query generation; that would silently change recall behavior.
     """
 
-    payload = dict(result)
-    payload["query_terms"] = sanitize_external_model_payload(payload.get("query_terms") or [])
-    semantic_gate = payload.get("semantic_gate")
-    if isinstance(semantic_gate, dict):
-        projected_gate = dict(semantic_gate)
-        for key in ("query_aliases", "aliases"):
-            if key in projected_gate:
-                projected_gate[key] = sanitize_external_model_payload(projected_gate.get(key))
-        payload["semantic_gate"] = projected_gate
+    payload = {
+        "decision": result.get("decision"),
+        "score": result.get("score"),
+        "confidence": result.get("confidence"),
+        "query_terms": sanitize_external_model_payload(result.get("query_terms") or []),
+        "concept_expansion_count": len(result.get("concept_expansions") or []),
+        "candidate_count": len(result.get("candidates") or []),
+        "evidence_count": len(result.get("evidence") or []),
+        "working_memory": [],
+        "working_memory_count": len(result.get("working_memory") or []),
+        "ambient_recall": ambient_debug_summary(result),
+        "elapsed_ms": result.get("elapsed_ms"),
+    }
+    raw_semantic_gate = result.get("semantic_gate")
+    if isinstance(raw_semantic_gate, dict):
+        aliases = raw_semantic_gate.get("query_aliases") or raw_semantic_gate.get("aliases") or []
+        payload["semantic_gate"] = {
+            "available": bool(raw_semantic_gate.get("available")),
+            "decision": raw_semantic_gate.get("decision"),
+            "confidence": raw_semantic_gate.get("confidence"),
+            "cached": bool(raw_semantic_gate.get("cached")),
+            "query_aliases": sanitize_external_model_payload(aliases),
+            "availability_reason": raw_semantic_gate.get("availability_reason"),
+            "diagnostic": raw_semantic_gate.get("diagnostic"),
+            "elapsed_ms": raw_semantic_gate.get("elapsed_ms"),
+            "timeout": raw_semantic_gate.get("timeout"),
+            "budget": raw_semantic_gate.get("budget"),
+            "error_buckets": raw_semantic_gate.get("error_buckets") or {},
+            "worker_count": raw_semantic_gate.get("worker_count")
+            or len(raw_semantic_gate.get("workers") or []),
+        }
     return payload
 
 

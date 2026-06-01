@@ -17,7 +17,8 @@ PROMPT_HOOK_MAX_ELAPSED_MS_FALLBACK = int(os.environ.get("AIPPOCAMPUS_PROMPT_HOO
 _RUNTIME_EXPORTS = set(
     "DEFAULT_SEARCH_BUDGET PROMPT_HOOK_SEMANTIC_TIMEOUT SCENT_THRESHOLD association_boost "
     "ambient_debug_summary apply_dream_delivery_boundary assess_prompt context_for_hook "
-    "hook_input_from_stdin hook_stdout_payload merge_association_candidates".split()
+    "hook_input_from_stdin hook_stdout_payload merge_association_candidates "
+    "public_hook_debug_payload".split()
 )
 _RUNTIME_CACHE: dict[str, Any] | None = None
 

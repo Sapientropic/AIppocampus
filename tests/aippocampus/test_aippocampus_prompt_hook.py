@@ -245,6 +245,38 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertIn("<redacted:api-key>", encoded)
         self.assertIn("<redacted:api-key>", payload["query_terms"])
 
+    def test_public_hook_debug_payload_is_allowlisted(self) -> None:
+        private_result = {
+            "decision": "scent",
+            "score": 0.88,
+            "confidence": "medium",
+            "query_terms": [FAKE_TEST_OPENAI_API_KEY],
+            "candidates": [{"title": "private title", "thread_key": "session:private"}],
+            "evidence": [{"snippet": "private source wording"}],
+            "semantic_gate": {
+                "available": True,
+                "decision": "scent",
+                "confidence": 0.82,
+                "cached": False,
+                "query_aliases": [f"alias {FAKE_TEST_OPENAI_API_KEY}"],
+                "workers": [{"raw": "private worker output"}],
+                "errors": ["private semantic error"],
+            },
+            "ambient_recall": {"mode": "scent", "card_count": 1},
+            "elapsed_ms": 123.4,
+        }
+
+        public = hook.public_hook_debug_payload(private_result)
+
+        encoded = json.dumps(public, ensure_ascii=False)
+        self.assertEqual(public["decision"], "scent")
+        self.assertIn("<redacted:api-key>", encoded)
+        self.assertNotIn("candidates", public)
+        self.assertNotIn("evidence", public)
+        self.assertNotIn("private title", encoded)
+        self.assertNotIn("private source wording", encoded)
+        self.assertNotIn("private worker output", encoded)
+
     def test_prompt_hook_dry_run_logs_would_deliver_without_foreground_dream(self) -> None:
         working_memory = self._write_dream_working_memory()
         shadow_log = self.root / "dry-run-shadow.jsonl"
