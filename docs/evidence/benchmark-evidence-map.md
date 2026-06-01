@@ -75,7 +75,7 @@ snapshot or dated verification ledger.
 | Dream live shadow A/B reminder evidence | `docs/evidence/dream/dream-live-shadow-ab-2026-05-30.md` | Dated aggregate run for explicit recall-reminder frequency, shadow assignment, nearest-prior exposure attribution, and delivered-vs-shadow claim boundaries. |
 | Dream benchmark-corpus shadow evidence | `docs/evidence/dream/dream-live-shadow-benchmark-corpus-2026-05-31.md` | Dated public-corpus negative-control run for explicit reminder frequency and potential dream-only over-personalization activation. |
 | Question extraction axis coverage evidence | `docs/evidence/question/question-extraction-axis-coverage-2026-05-31.md` | Dated live no-write aggregate field-presence run for GitHub #153 and its prompt/repair/telemetry fix boundary. |
-| Raw / generated artifacts | `.tmp/` or `benchmark_corpus/reports/` | Local JSON outputs and case packs. Keep them gitignored unless a small public subset is deliberately promoted. |
+| Raw / generated artifacts | `.tmp/` or `benchmark_corpus/reports/` | Local JSON outputs, historical benchmark snapshots, run-history diff artifacts, and case packs. Keep them gitignored unless a small public subset is deliberately promoted. |
 
 ## Benchmark Runners
 
@@ -86,6 +86,7 @@ benchmark runner should be added here and linked to its dated evidence owner.
 | --- | --- | --- |
 | Shared benchmark uncertainty helper | `benchmarks/aippocampus/benchmark_statistics.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md` |
 | One-command baseline suite, profile ladder, and threshold metadata | `benchmarks/aippocampus/benchmark_suite.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `docs/evidence/readiness/public-readiness-verification.md` |
+| Benchmark run-history diff and regression guardrail | `benchmarks/aippocampus/benchmark_run_history_diff.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `.tmp/` or `benchmark_corpus/reports/` |
 | Track A memory decision gate | `benchmarks/aippocampus/benchmark_memory_decision_gate.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `docs/evidence/benchmarks/memory-pain-fixture-report.md` |
 | Track B source-evidence retrieval wrapper | `benchmarks/aippocampus/benchmark_source_evidence_retrieval.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `benchmark_corpus/README.md` |
 | Coding decision-shadow Tracks A-E | `benchmarks/aippocampus/benchmark_coding_decision_shadow.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `docs/research/agent-coding-context-analysis.md` |

@@ -197,6 +197,70 @@ but misses a threshold, keep `quality_gate_ok=false`, preserve `known_gaps`, and
 use the result as regression evidence rather than as a product-quality
 certificate.
 
+### Run-History Diff Guardrails
+
+`benchmarks/aippocampus/benchmark_run_history_diff.py` compares two saved
+`benchmark_suite.py` JSON reports and emits a diagnostic artifact with
+`status=no_regression`, `warning`, or `regression`:
+
+```powershell
+python benchmarks\aippocampus\benchmark_run_history_diff.py --baseline .tmp\prior-suite.json --current .tmp\current-suite.json --json
+```
+
+The comparator only treats runs as comparable when the benchmark-suite schema,
+selected profile, `profile_metadata.effective_surface`, and key config fields
+match. Profile changes, Track B / Track D switches, optional public adapter
+changes, seed/top-k/ranking/dataset changes, private-text boundaries, and live
+semantic surface changes are warnings about incomparable surfaces, not metric
+regressions.
+
+The comparable identity also includes track statuses, public adapter
+status/corpus fingerprints such as `corpus_path_sha1`, threshold metadata, and
+per-metric gate thresholds for metrics present in both runs. It deliberately
+excludes absolute local paths and raw text fields from the diff artifact. If a
+rate metric disappears or appears inside an otherwise comparable surface, the
+diff emits a warning (`metric_missing_in_current` or `metric_new_in_current`)
+instead of silently comparing only the intersection.
+
+Trend status is separate from `quality_gate_ok`. A current run can still clear
+its point-in-time threshold while receiving `status=regression` because it
+dropped materially from the previous comparable run. Conversely, a run with
+`quality_gate_ok=false` can still be useful as a baseline snapshot if the diff
+shows the same known gap and no additional trend regression.
+
+The first diff policy is intentionally conservative:
+
+- higher-is-better rate estimates warn on absolute drops of at least `0.03` and
+  regress on drops of at least `0.05`, unless the sample size changed enough to
+  make a sample-size warning more honest than a regression claim;
+- lower-is-better rates such as false-positive, false-negative, over-escalation,
+  error, miss, failure, and privacy-breach rates regress when they increase;
+- Wilson lower-bound drops are warnings, not proof that sampling bias was
+  solved;
+- privacy boundary fields moving from safe to unsafe, such as
+  `raw_text_emitted=false` to `true`, are direct regressions;
+- sample-size shrinkage is a warning, not a healthy pass;
+- live semantic metric drops are warning-only until the project defines a
+  stable provider/model comparison policy;
+- `elapsed_ms` increases are warnings only because local machine, cache, and
+  provider conditions can dominate single-run timing.
+
+Historical suite JSON and diff artifacts remain local/generated evidence under
+`.tmp/` or `benchmark_corpus/reports/` unless a small public-safe summary is
+deliberately promoted into docs. The comparator never rewrites old reports and
+does not replace the dated public-readiness ledger.
+
+Cannot-claim boundaries:
+
+- a run-history diff is diagnostic trend evidence, not proof of overall product
+  quality;
+- different profiles, corpora, seeds, public adapters, private-text settings, or
+  live providers are not directly ranked;
+- confidence intervals make small-N uncertainty visible but do not repair sample
+  construction bias;
+- live semantic deltas are warning-only until a stable provider/model policy is
+  explicitly defined.
+
 ### Continuous-Memory Attribution Arms
 
 Issue #408 adds a diagnostic arm runner for the broader #378 question: when a
