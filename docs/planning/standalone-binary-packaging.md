@@ -11,6 +11,39 @@ post-package-refactor binary MCP re-smokes and a content-level
 other platform until its artifact is built, smoke-tested, and linked from the
 dated evidence ledger.
 
+## Current Platform Decision
+
+As of 2026-06-01, the standalone binary claim is intentionally narrow:
+
+| Platform | Status | Public claim |
+| --- | --- | --- |
+| Windows x64 | Smoke-tested first platform | Maintainer-built PyInstaller path only. |
+| macOS arm64 | Deferred for standalone binary support | Use Python/source or GitHub `uvx --from`. |
+| macOS x64 / Intel Mac | Dropped from initial standalone binary claims | Use Python/source or GitHub `uvx --from`. |
+| Linux x64 | Deferred for standalone binary support | Use Python/source or GitHub `uvx --from`. |
+
+Evidence and next gates:
+
+- Windows x64 evidence is recorded in
+  `docs/evidence/readiness/public-readiness-verification.md`. It proves a
+  maintainer-built `aippocampus.exe` artifact path, including MCP stdio smoke.
+  It is not a signed installer, updater, marketplace download, or broad
+  end-user binary distribution claim.
+- macOS arm64 needs a real artifact built on macOS arm64, the full matrix below,
+  Gatekeeper/quarantine notes, and dated ledger evidence before support can be
+  claimed. The existing `macOS Install Smoke` workflow is a package/source
+  install smoke, not a standalone-binary smoke.
+- macOS x64 is intentionally outside the initial binary claim. Reopen it only
+  if user demand or release requirements justify a separate Intel Mac artifact
+  and runner.
+- Linux x64 needs a clean container or VM build with no repository checkout on
+  `PYTHONPATH`, the full matrix below, and dated ledger evidence before support
+  can be claimed.
+
+Public docs should point here for binary status instead of mirroring the full
+matrix. If a platform is not marked smoke-tested above, the fallback is the
+Python/source or `uvx --from` install path, not an implied standalone download.
+
 ## Candidate Tooling
 
 | Candidate | Why consider it | Main risk |

@@ -35,6 +35,19 @@ Do not document `uvx aippocampus ...` as the public path until the PyPI package
 has been published and verified. The GitHub form above is the current
 one-command public probe.
 
+## Standalone Binary Status
+
+The default public install path is still Python/source or the GitHub
+`uvx --from` probe above. Windows x64 has dated maintainer smoke evidence for a
+PyInstaller standalone binary, but AIppocampus does not yet claim signed
+downloads, installer/update UX, or Python-free standalone binaries for macOS or
+Linux.
+
+The current support/defer/drop matrix lives in
+[standalone-binary-packaging.md](../planning/standalone-binary-packaging.md).
+Use that matrix before recommending a binary path. For macOS and Linux today,
+recommend the Python/source install or GitHub `uvx --from` path instead.
+
 ## Skill-Only Install
 
 ### macOS shell setup

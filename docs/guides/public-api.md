@@ -160,8 +160,8 @@ The Python facade remains the default public runtime surface. Windows x64 has
 dated PyInstaller artifact smoke evidence, including the standalone binary as a
 Claude Code stdio MCP server through `aippocampus.exe mcp`; the current claim is
 limited to that verified Windows path. Signed downloads, installer/update UX,
-macOS/Linux artifacts, and a cross-platform binary support matrix remain future
-work tracked by the
+and macOS/Linux Python-free artifacts are not public claims. The current
+support/defer/drop matrix is tracked by the
 [standalone binary packaging plan](../planning/standalone-binary-packaging.md).
 
 Repo-maintenance commands under `tools/aippocampus/` and
