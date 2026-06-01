@@ -6,6 +6,8 @@ surface.
 
 For supported CLI, MCP, JSON, environment-variable, and import-stability
 expectations, see [public-api.md](public-api.md).
+For host-family support status and what not to overclaim, see
+[ecosystem-integration-matrix.md](ecosystem-integration-matrix.md).
 The install guide shows common commands only; the full environment-variable
 matrix and Python import layer policy live in that public API document so the
 stability boundary has one owner.

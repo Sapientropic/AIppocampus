@@ -22,6 +22,8 @@ Start here instead of scanning every Markdown file in the tree.
   [`guides/install-guide.md`](guides/install-guide.md).
 - Agent-readable context and recommendation boundary: [`agent-context.md`](agent-context.md).
 - Public-core license and adapter boundary: [`guides/public-core-boundary.md`](guides/public-core-boundary.md).
+- Ecosystem support matrix and claim boundary:
+  [`guides/ecosystem-integration-matrix.md`](guides/ecosystem-integration-matrix.md).
 - Architecture overview and metaphor claim boundaries:
   [`architecture/architecture-overview.md`](architecture/architecture-overview.md#metaphor-discipline).
 - Exploratory research index: [`research/README.md`](research/README.md).
@@ -64,6 +66,7 @@ material.
 - [`claude-code-mcp.md`](guides/claude-code-mcp.md) - Claude Code MCP setup, provider onboarding states, and privacy boundary.
 - [`public-api.md`](guides/public-api.md) - 10-minute dependency path plus supported CLI, MCP, JSON, environment-variable, SDK, and Python import stability boundary.
 - [`public-core-boundary.md`](guides/public-core-boundary.md) - Apache-2.0 public-core license, adapter, schema, third-party asset, and relicensing boundary.
+- [`ecosystem-integration-matrix.md`](guides/ecosystem-integration-matrix.md) - ecosystem support status by host family, with smoke status and overclaim boundaries.
 - [`demo-scenarios.md`](guides/demo-scenarios.md) - public-safe demo flows using synthetic memory data.
 - [`privacy-security-checklist.md`](guides/privacy-security-checklist.md) - public-readiness privacy and security checklist.
 - [`release-checklist.md`](guides/release-checklist.md) - repeatable release, tag, coverage, and public-boundary gates.

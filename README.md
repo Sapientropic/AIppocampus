@@ -159,6 +159,8 @@ recognizable again.
   [Public API](docs/guides/public-api.md), including the
   [10-minute path](docs/guides/public-api.md#ten-minute-public-path), and
   [Public Core Boundary](docs/guides/public-core-boundary.md).
+- Ecosystem support status:
+  [Ecosystem Integration Matrix](docs/guides/ecosystem-integration-matrix.md).
 - Security and release hygiene:
   [SECURITY.md](SECURITY.md) and
   [Release Checklist](docs/guides/release-checklist.md).

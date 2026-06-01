@@ -165,6 +165,9 @@ Avoid overclaims:
 - Do not say it proves product-quality human memory.
 - Do not say it is already a hosted service.
 - Do not say every MCP client automatically discovers it.
+- Do not say LangGraph, AutoGen, CrewAI, OpenAI Agents SDK, Cursor, VS Code, or
+  browser chat products have native support unless the row is verified in
+  `docs/guides/ecosystem-integration-matrix.md`.
 - Do not say `uvx aippocampus` works from PyPI until the PyPI release exists.
 
 ## Key Docs
@@ -176,6 +179,8 @@ Avoid overclaims:
 - `docs/guides/install-guide.md`: full install paths.
 - `docs/guides/public-api.md`: supported CLI, MCP, env, JSON, and import
   boundary.
+- `docs/guides/ecosystem-integration-matrix.md`: host-family support status and
+  ecosystem overclaim boundary.
 - `docs/guides/public-core-boundary.md`: license and public/private boundary.
 - `docs/the-unfinished-map.md`: English origin essay.
 - `docs/未干的地图.md`: canonical Chinese origin essay.
