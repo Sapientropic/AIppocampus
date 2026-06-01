@@ -1,0 +1,75 @@
+title: "[Field Report] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Share a real AIppocampus run, demo, benchmark attempt, screenshot, log excerpt, or reproduction note.
+
+        Community field reports are not official benchmark claims by default. Please keep private conversations, local paths, credentials, and raw exports out of the report.
+  - type: textarea
+    id: tested
+    attributes:
+      label: What I tested
+      description: What behavior, workflow, benchmark, or integration did you try?
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      value: |
+        - OS:
+        - AIppocampus version / commit:
+        - Host agent:
+        - Model:
+        - Dataset / thread type:
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps
+      description: Include commands, fixtures, settings, or enough reproduction detail for another person to understand the run.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Result
+      description: What happened? Summaries are fine; attach only public-safe screenshots or redacted logs.
+    validations:
+      required: true
+  - type: textarea
+    id: surprise
+    attributes:
+      label: What surprised me
+      description: What felt better, worse, stranger, or more useful than expected?
+  - type: dropdown
+    id: reproducibility
+    attributes:
+      label: Reproducibility
+      options:
+        - Yes, others can reproduce it
+        - Partial / needs setup context
+        - No, this is a one-off observation
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I removed private raw conversations, local paths, credentials, cookies, tokens, and private registry exports.
+          required: true
+        - label: Any screenshots or logs are public-safe or redacted.
+          required: true
+  - type: textarea
+    id: claim_boundary
+    attributes:
+      label: Claim boundary
+      value: |
+        This shows:
+
+        This does not show:
+    validations:
+      required: true
