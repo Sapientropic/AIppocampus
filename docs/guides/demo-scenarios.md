@@ -92,6 +92,12 @@ evidence is intentional:
 python ./tools/aippocampus/smoke/smoke_codex_long_session_continuity.py --turn-count 50 --json
 ```
 
+For long manual runs, add `--progress-jsonl .tmp/live-continuity-progress.jsonl`
+to get append-only progress rows while the host is working. The progress file is
+a local/private diagnostic artifact: rows contain phase names, hashes, counts,
+timings, and booleans only, never raw prompts, assistant output, rollout paths,
+local paths, credentials, or raw thread ids.
+
 Expected result: the smoke reports `status=passed` only after real Codex turns,
 a real `thread/compact/start` boundary, completed `preCompact` / `postCompact`
 host hooks, post-compaction recall of the corrected synthetic state, and a
