@@ -83,20 +83,20 @@ def emit_result(result: dict[str, Any], *, json_output: bool, plain_field: str |
     if json_output:
         # `result` can be produced by credential-adjacent helpers, so all CLI
         # output flows through the shared redactor before logging.
-        # codeql[py/clear-text-logging-sensitive-data]
+        # lgtm[py/clear-text-logging-sensitive-data]
         print(json.dumps(public_result, ensure_ascii=False, indent=2))
     elif plain_field and public_result.get(plain_field):
         # Public recipients are safe to display; private age identities and
         # provider credentials are never included in the sanitized result.
-        # codeql[py/clear-text-logging-sensitive-data]
+        # lgtm[py/clear-text-logging-sensitive-data]
         print(public_result[plain_field])
     else:
         # Aggregate status is derived from the sanitized result only.
-        # codeql[py/clear-text-logging-sensitive-data]
+        # lgtm[py/clear-text-logging-sensitive-data]
         print("encrypted sync: ok" if public_result.get("ok") else "encrypted sync: needs attention")
         for item in public_result.get("issues") or []:
             # Issue rows are sanitized before rendering.
-            # codeql[py/clear-text-logging-sensitive-data]
+            # lgtm[py/clear-text-logging-sensitive-data]
             print(f"- {item.get('code')}: {item.get('message') or item.get('path')}")
     return 0 if result.get("ok") else 1
 
@@ -275,3 +275,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
