@@ -16,56 +16,76 @@
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://www.aippocampus.com/" />
-    <meta property="og:image" content="https://www.aippocampus.com/assets/frosted-daisy-sunrise.jpg" />
+    <meta property="og:image" content="https://www.aippocampus.com/assets/aippocampus-readme-hero.jpg" />
     <link rel="canonical" href="https://www.aippocampus.com/" />
-    <link rel="preload" href="assets/frosted-daisy-sunrise.jpg" as="image" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" href="/assets/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="preload" href="assets/aippocampus-readme-hero.jpg" as="image" />
+    <meta name="theme-color" content="#070f1f" />
     <style>
       :root {
         color-scheme: light;
-        --ink: #071833;
-        --ink-soft: #30415e;
-        --paper: #fffaf2;
-        --paper-warm: #f6ead9;
-        --gold: #e9a91e;
-        --blue: #0f4b75;
-        --line: rgba(7, 24, 51, 0.16);
-        --shadow: rgba(7, 24, 51, 0.18);
-        font-family:
-          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --ink: #111827;
+        --ink-soft: #35415a;
+        --paper: #fff8ef;
+        --paper-warm: #f3e4d0;
+        --paper-deep: #e7d0b1;
+        --gold: #d69525;
+        --blue: #123a59;
+        --midnight: #070b15;
+        --line: rgba(17, 24, 39, 0.16);
+        --shadow: rgba(17, 24, 39, 0.22);
+        --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+        --font-body: Charter, "Iowan Old Style", "Sitka Text", Georgia, serif;
+        --font-ui: Optima, "Avenir Next", Candara, "Segoe UI", sans-serif;
       }
 
       * {
         box-sizing: border-box;
       }
 
+      html {
+        scroll-behavior: smooth;
+      }
+
       body {
         margin: 0;
         background: var(--paper);
         color: var(--ink);
-        font-size: 17px;
-        line-height: 1.6;
+        font-family: var(--font-body);
+        font-size: 18px;
+        line-height: 1.62;
+        text-rendering: optimizeLegibility;
       }
 
       a {
         color: inherit;
-        text-decoration-thickness: 0.08em;
+        text-decoration-thickness: 0.07em;
         text-underline-offset: 0.22em;
       }
 
+      img {
+        display: block;
+        max-width: 100%;
+      }
+
       .hero {
-        min-height: 88svh;
+        min-height: 90svh;
         position: relative;
         display: flex;
         align-items: stretch;
         overflow: hidden;
-        background: #142847;
+        background: var(--midnight);
       }
 
       .hero::before {
         content: "";
         position: absolute;
         inset: 0;
-        background-image: url("assets/frosted-daisy-sunrise.jpg");
+        background-image: url("assets/aippocampus-readme-hero.jpg");
         background-position: center;
         background-size: cover;
         transform: scale(1.01);
@@ -75,7 +95,9 @@
         content: "";
         position: absolute;
         inset: 0;
-        background: rgba(5, 16, 33, 0.42);
+        background:
+          linear-gradient(90deg, rgba(5, 8, 16, 0.82) 0%, rgba(5, 8, 16, 0.5) 38%, rgba(5, 8, 16, 0.08) 74%),
+          linear-gradient(0deg, rgba(5, 8, 16, 0.36), rgba(5, 8, 16, 0.06) 44%, rgba(5, 8, 16, 0.25));
       }
 
       .nav,
@@ -94,20 +116,22 @@
         align-items: center;
         gap: 24px;
         padding: 24px clamp(20px, 5vw, 76px);
-        color: #fff9ec;
+        color: #fff6e8;
+        font-family: var(--font-ui);
       }
 
       .mark {
-        font-weight: 800;
+        font-weight: 700;
         letter-spacing: 0.08em;
         text-transform: uppercase;
+        text-decoration: none;
       }
 
       .nav-links {
         display: flex;
         gap: 20px;
         align-items: center;
-        font-size: 0.93rem;
+        font-size: 0.92rem;
       }
 
       .nav-links a {
@@ -120,32 +144,57 @@
       }
 
       .hero-content {
-        width: min(720px, calc(100% - 40px));
+        width: min(760px, calc(100% - 40px));
         margin: auto auto 8vh clamp(20px, 5vw, 76px);
-        color: #fff9ec;
+        color: #fff6e8;
+      }
+
+      .kicker {
+        margin: 0 0 18px;
+        color: #ffe4a6;
+        font-family: var(--font-ui);
+        font-size: 0.84rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3 {
+        font-family: var(--font-display);
+        font-weight: 600;
+        letter-spacing: 0;
       }
 
       h1 {
         margin: 0;
         max-width: 10ch;
-        font-size: clamp(4rem, 12vw, 9.5rem);
+        font-size: clamp(4.3rem, 12.6vw, 10rem);
         line-height: 0.86;
-        letter-spacing: 0;
       }
 
       .lede {
-        max-width: 620px;
+        max-width: 640px;
         margin: 28px 0 0;
-        font-size: clamp(1.2rem, 2.2vw, 1.65rem);
-        line-height: 1.35;
-        color: #fff4d7;
+        font-size: clamp(1.22rem, 2.25vw, 1.75rem);
+        line-height: 1.36;
+        color: #fff0cf;
+      }
+
+      .quote-line {
+        max-width: 540px;
+        margin: 20px 0 0;
+        color: #f8d58e;
+        font-size: 1.05rem;
+        font-style: italic;
       }
 
       .actions {
         display: flex;
         flex-wrap: wrap;
         gap: 14px;
-        margin-top: 32px;
+        margin-top: 34px;
       }
 
       .button {
@@ -153,19 +202,29 @@
         align-items: center;
         justify-content: center;
         min-height: 48px;
-        padding: 12px 18px;
-        border: 1px solid rgba(255, 249, 236, 0.56);
-        background: rgba(255, 249, 236, 0.12);
-        color: #fff9ec;
-        text-decoration: none;
+        padding: 12px 19px;
+        border: 1px solid rgba(255, 246, 232, 0.58);
+        background: rgba(255, 246, 232, 0.12);
+        color: #fff6e8;
+        font-family: var(--font-ui);
         font-weight: 700;
+        text-decoration: none;
         backdrop-filter: blur(10px);
+        transition:
+          background-color 160ms ease,
+          border-color 160ms ease,
+          transform 160ms ease;
+      }
+
+      .button:hover {
+        transform: translateY(-1px);
+        background: rgba(255, 246, 232, 0.18);
       }
 
       .button.primary {
-        background: #fff9ec;
+        background: #fff6e8;
         color: var(--ink);
-        border-color: #fff9ec;
+        border-color: #fff6e8;
       }
 
       main {
@@ -173,11 +232,15 @@
       }
 
       .band {
-        padding: clamp(58px, 8vw, 112px) clamp(20px, 5vw, 76px);
+        padding: clamp(62px, 8vw, 116px) clamp(20px, 5vw, 76px);
       }
 
       .band.warm {
         background: var(--paper-warm);
+      }
+
+      .band.deep {
+        background: var(--paper-deep);
       }
 
       .section-grid {
@@ -189,23 +252,28 @@
         align-items: start;
       }
 
+      .section-grid > * {
+        min-width: 0;
+      }
+
       h2 {
         margin: 0;
-        font-size: clamp(2rem, 4vw, 4rem);
+        font-size: clamp(2.15rem, 4.1vw, 4.35rem);
         line-height: 0.98;
-        letter-spacing: 0;
       }
 
       .section-copy {
         margin: 0;
         color: var(--ink-soft);
-        font-size: 1.05rem;
+        font-size: 1.08rem;
       }
 
       .principles,
-      .links {
+      .links,
+      .story-copy {
         display: grid;
         gap: 18px;
+        min-width: 0;
       }
 
       .principle {
@@ -217,6 +285,44 @@
         display: block;
         margin-bottom: 4px;
         color: var(--ink);
+        font-family: var(--font-ui);
+      }
+
+      .image-led {
+        align-items: center;
+      }
+
+      .image-stack {
+        display: grid;
+        gap: 16px;
+      }
+
+      .image-frame {
+        margin: 0;
+        overflow: hidden;
+        box-shadow: 0 24px 70px -48px var(--shadow);
+      }
+
+      .image-frame img {
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        object-fit: cover;
+      }
+
+      .image-frame figcaption {
+        padding: 11px 0 0;
+        color: rgba(17, 24, 39, 0.7);
+        font-family: var(--font-ui);
+        font-size: 0.86rem;
+      }
+
+      .return-section {
+        align-items: center;
+      }
+
+      .return-section .image-frame {
+        justify-self: end;
+        width: min(100%, 620px);
       }
 
       .link-list {
@@ -228,16 +334,24 @@
       .link-list a,
       .agent-box {
         border: 1px solid var(--line);
-        background: rgba(255, 255, 255, 0.44);
+        background: rgba(255, 255, 255, 0.42);
         padding: 18px;
         text-decoration: none;
         box-shadow: 0 14px 40px -34px var(--shadow);
+        min-width: 0;
+      }
+
+      .link-list a {
+        font-family: var(--font-ui);
+        font-weight: 700;
       }
 
       .link-list span {
         display: block;
         color: var(--ink-soft);
-        font-size: 0.92rem;
+        font-family: var(--font-body);
+        font-size: 0.96rem;
+        font-weight: 400;
         margin-top: 5px;
       }
 
@@ -245,12 +359,17 @@
         margin-top: 24px;
       }
 
+      .agent-box strong {
+        font-family: var(--font-ui);
+      }
+
       pre {
+        max-width: 100%;
         margin: 16px 0 0;
         overflow-x: auto;
         padding: 16px;
-        background: #071833;
-        color: #fff9ec;
+        background: #07101f;
+        color: #fff6e8;
         font-size: 0.91rem;
       }
 
@@ -261,7 +380,8 @@
       footer {
         padding: 32px clamp(20px, 5vw, 76px) 46px;
         background: var(--ink);
-        color: #fff9ec;
+        color: #fff6e8;
+        font-family: var(--font-ui);
       }
 
       footer div {
@@ -274,7 +394,18 @@
       }
 
       footer a {
-        color: #fff9ec;
+        color: #fff6e8;
+      }
+
+      @media (max-width: 900px) {
+        .section-grid,
+        .link-list {
+          grid-template-columns: 1fr;
+        }
+
+        .return-section .image-frame {
+          justify-self: stretch;
+        }
       }
 
       @media (max-width: 780px) {
@@ -284,28 +415,51 @@
 
         .nav {
           align-items: flex-start;
+          padding-top: 20px;
         }
 
         .nav-links {
           gap: 12px;
-          font-size: 0.88rem;
+          font-size: 0.86rem;
         }
 
         .hero {
-          min-height: 82svh;
+          min-height: 84svh;
+        }
+
+        .hero::before {
+          background-position: 48% center;
+        }
+
+        .hero::after {
+          background:
+            linear-gradient(90deg, rgba(5, 8, 16, 0.82) 0%, rgba(5, 8, 16, 0.5) 64%, rgba(5, 8, 16, 0.18)),
+            linear-gradient(0deg, rgba(5, 8, 16, 0.36), rgba(5, 8, 16, 0.04) 48%, rgba(5, 8, 16, 0.18));
         }
 
         .hero-content {
           margin-bottom: 6vh;
         }
 
-        .section-grid,
-        .link-list {
-          grid-template-columns: 1fr;
+        h1 {
+          font-size: clamp(3rem, 13vw, 3.75rem);
         }
 
-        h1 {
-          font-size: clamp(2.7rem, 12.2vw, 3.35rem);
+        .lede {
+          font-size: 1.15rem;
+        }
+
+        .actions {
+          gap: 10px;
+        }
+
+        .button {
+          width: 100%;
+        }
+
+        pre {
+          white-space: pre-wrap;
+          overflow-wrap: anywhere;
         }
       }
     </style>
@@ -321,11 +475,13 @@
         </div>
       </nav>
       <section class="hero-content" aria-labelledby="site-title">
+        <p class="kicker">Source-backed continuity</p>
         <h1 id="site-title">AIppocampus</h1>
         <p class="lede">
-          A local-first, source-backed continuity layer for long-running relationships
-          with AI agents.
+          A local-first memory layer for agents that need a way back to the
+          source, not a story about having remembered.
         </p>
+        <p class="quote-line">Source is the ground. Summaries are weather.</p>
         <div class="actions">
           <a class="button primary" href="https://github.com/Sapientropic/AIppocampus">Read the repo</a>
           <a class="button" href="https://github.com/Sapientropic/AIppocampus/wiki">Open the wiki</a>
@@ -360,6 +516,29 @@
       </section>
 
       <section class="band warm">
+        <div class="section-grid image-led">
+          <div class="image-stack">
+            <figure class="image-frame">
+              <img
+                src="assets/community-crystal-heart.jpg"
+                alt="Hands holding a crystal anatomical heart lit from within."
+                loading="lazy"
+              />
+              <figcaption>The project keeps care and evidence in the same pair of hands.</figcaption>
+            </figure>
+          </div>
+          <div class="story-copy">
+            <h2>Continuity is a human problem before it is an engineering one.</h2>
+            <p class="section-copy">
+              The work began with the feeling that a bright new session can still be
+              strangely newborn. AIppocampus gives a future agent a way to return to
+              the thread honestly, with the path, the source, and the limits still visible.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="band deep">
         <div class="section-grid">
           <h2>Start where you are.</h2>
           <div class="links">
@@ -393,15 +572,25 @@
       </section>
 
       <section class="band">
-        <div class="section-grid">
-          <h2>Not innate memory. Not a cloud profile. A way back.</h2>
-          <p class="section-copy">
-            AIppocampus is early, careful infrastructure for continuity across threads,
-            projects, devices, and ordinary life context. It is broader than coding
-            memory, though coding agents are a clean pressure test. The public project
-            keeps claim boundaries explicit: source-backed recall is not the same thing
-            as a model magically remembering you.
-          </p>
+        <div class="section-grid return-section">
+          <div class="story-copy">
+            <h2>Not innate memory. Not a cloud profile. A way back.</h2>
+            <p class="section-copy">
+              AIppocampus is early, careful infrastructure for continuity across threads,
+              projects, devices, and ordinary life context. It is broader than coding
+              memory, though coding agents are a clean pressure test. The public project
+              keeps claim boundaries explicit: source-backed recall is not the same thing
+              as a model magically remembering you.
+            </p>
+          </div>
+          <figure class="image-frame">
+            <img
+              src="assets/community-lantern.jpg"
+              alt="Two travelers holding a lantern beside a long road at dusk."
+              loading="lazy"
+            />
+            <figcaption>The way back should stay lit.</figcaption>
+          </figure>
         </div>
       </section>
     </main>
