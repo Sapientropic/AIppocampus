@@ -12,6 +12,8 @@ Start here instead of scanning every Markdown file in the tree.
 - Product requirements: [`roadmap.md`](roadmap.md).
 - Real user-visible continuity examples:
   [`evidence/magic-moments.md`](evidence/magic-moments.md).
+- Community evidence and field-report intake:
+  [`evidence/community-field-reports.md`](evidence/community-field-reports.md).
 - Current claim boundary: [`evidence/readiness/stage-0-5-readiness.md`](evidence/readiness/stage-0-5-readiness.md).
 - Benchmark and smoke evidence map: [`evidence/benchmark-evidence-map.md`](evidence/benchmark-evidence-map.md).
 - Dated verification ledger: [`evidence/readiness/public-readiness-verification.md`](evidence/readiness/public-readiness-verification.md).
@@ -77,6 +79,9 @@ pages; most detailed evidence pages are grouped by purpose: `readiness/`,
 - [`magic-moments.md`](evidence/magic-moments.md) - short, claim-bounded
   second-user live-use examples that show the felt product value before the
   benchmark wall.
+- [`community-field-reports.md`](evidence/community-field-reports.md) -
+  public-safe community report intake, curation rules, and Discussion category
+  setup boundary.
 - [`benchmark-evidence-map.md`](evidence/benchmark-evidence-map.md) - first-stop map for benchmark runners, smoke evidence surfaces, corpus records, and dated-result owners.
 - [`stage-0-5-readiness.md`](evidence/readiness/stage-0-5-readiness.md) - current evidence matrix for roadmap stages 0 through 5; it is a status snapshot, not the canonical roadmap.
 - [`public-readiness-verification.md`](evidence/readiness/public-readiness-verification.md) - dated verification ledger. It preserves command evidence but is not the canonical status page.

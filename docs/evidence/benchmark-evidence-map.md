@@ -6,8 +6,11 @@ another command ledger. Keep the latest claim boundary in
 [`readiness/stage-0-5-readiness.md`](readiness/stage-0-5-readiness.md),
 dated command evidence in
 [`readiness/public-readiness-verification.md`](readiness/public-readiness-verification.md),
-and benchmark design details in
+benchmark design details in
 [`benchmarks/memory-decision-benchmark-plan.md`](benchmarks/memory-decision-benchmark-plan.md).
+Community reports belong in
+[`community-field-reports.md`](community-field-reports.md) until a maintainer
+promotes a public-safe result into the official evidence flow.
 
 ## Folder Layout
 
@@ -18,6 +21,8 @@ and benchmark design details in
 - `dream/` holds dream-worker shadow A/B and benchmark-corpus measurement
   records.
 - `question/` holds question-extraction and question-tracking evidence records.
+- `community-field-reports.md` defines how user-submitted reports are collected,
+  labeled, and kept separate from official claims.
 
 ## Reading Order
 
@@ -55,6 +60,9 @@ and benchmark design details in
    [`dream/dream-live-shadow-benchmark-corpus-2026-05-31.md`](dream/dream-live-shadow-benchmark-corpus-2026-05-31.md).
 15. Need live question-extraction axis-coverage evidence for GitHub #153:
    [`question/question-extraction-axis-coverage-2026-05-31.md`](question/question-extraction-axis-coverage-2026-05-31.md).
+16. Need community-submitted runs, demos, known gaps, or field-report intake:
+   [`community-field-reports.md`](community-field-reports.md) and the public
+   [`/evidence/`](https://www.aippocampus.com/evidence/) page.
 
 Research notes may include calibration context, but they are not claim ledgers.
 Use them for background only until a result is linked back to the readiness
@@ -75,6 +83,7 @@ snapshot or dated verification ledger.
 | Dream live shadow A/B reminder evidence | `docs/evidence/dream/dream-live-shadow-ab-2026-05-30.md` | Dated aggregate run for explicit recall-reminder frequency, shadow assignment, nearest-prior exposure attribution, and delivered-vs-shadow claim boundaries. |
 | Dream benchmark-corpus shadow evidence | `docs/evidence/dream/dream-live-shadow-benchmark-corpus-2026-05-31.md` | Dated public-corpus negative-control run for explicit reminder frequency and potential dream-only over-personalization activation. |
 | Question extraction axis coverage evidence | `docs/evidence/question/question-extraction-axis-coverage-2026-05-31.md` | Dated live no-write aggregate field-presence run for GitHub #153 and its prompt/repair/telemetry fix boundary. |
+| Community field reports | `docs/evidence/community-field-reports.md`, the public `/evidence/` page, and GitHub Discussions | Public-safe user and contributor reports. These are community signals until reviewed and promoted into official benchmark evidence, readiness ledgers, or known-gap docs. |
 | Raw / generated artifacts | `.tmp/` or `benchmark_corpus/reports/` | Local JSON outputs, historical benchmark snapshots, run-history diff artifacts, and case packs. Keep them gitignored unless a small public subset is deliberately promoted. |
 
 ## Benchmark Runners

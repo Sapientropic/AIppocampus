@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Evidence and field reports
+    url: https://github.com/Sapientropic/AIppocampus/discussions/categories/show-and-tell
+    about: Share public-safe runs, demos, screenshots, logs, and reproduction notes without turning them into official claims by default.
   - name: Ideas and discussion
     url: https://github.com/Sapientropic/AIppocampus/discussions
     about: Use Discussions for broad product direction, philosophy, and early proposals.

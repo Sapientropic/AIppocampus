@@ -140,6 +140,9 @@ recognizable again.
   [The Unfinished Map](docs/the-unfinished-map.md).
 - Real user-visible continuity examples:
   [Magic Moments, Claim-Bounded](docs/evidence/magic-moments.md).
+- Evidence and field reports:
+  [public evidence surface](https://www.aippocampus.com/evidence/) and
+  [community field-report boundary](docs/evidence/community-field-reports.md).
 - Agent-readable context: [docs/agent-context.md](docs/agent-context.md) and
   [llms.txt](llms.txt).
 - Runtime shape:
