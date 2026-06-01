@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "kind": "aippocampus_public_benchmark_corpus_manifest",
-  "updated_at": "2026-05-30",
+  "updated_at": "2026-06-01",
   "source_family": "ShareGPT-style public JSONL conversations",
   "redistribution_note": "The full raw and generated clean-source corpora are large local artifacts. Verify upstream license terms before redistributing a full derived corpus.",
   "local_inputs": {
@@ -73,7 +73,19 @@
       "report_policy": ".tmp/ is ignored by default; keep generated subset, sidecar, registry, and live report local unless a future curated subset is deliberately promoted",
       "latest_local_result": {
         "date": "2026-05-29",
-        "status": "sufficient",
+        "status": "diagnostic_only",
+        "claim_level": "diagnostic_pilot",
+        "minimum_empirical_case_count": 50,
+        "selection_method": "bounded ShareGPT clean-source subset with source-backed semantic sidecar rows",
+        "sample_size_warning": {
+          "sample_case_count": 3,
+          "minimum_empirical_case_count": 50,
+          "claim_level": "diagnostic_pilot",
+          "selection_method": "bounded ShareGPT clean-source subset with source-backed semantic sidecar rows",
+          "cannot_claim": [
+            "empirical_public_semantic_sidecar_quality_below_minimum_case_count"
+          ]
+        },
         "bounded_subset": {
           "conversation_count": 80,
           "message_count": 160,
@@ -83,7 +95,7 @@
         "selected_case_count": 3,
         "top5_hit_rate": 1.0
       },
-      "claim_boundary": "public semantic-sidecar pilot only; does not claim human-reviewed labels, unbounded public semantic-sidecar quality, or private real-history source-evidence quality"
+      "claim_boundary": "public semantic-sidecar diagnostic pilot only; does not claim human-reviewed labels, empirical public semantic-sidecar quality below the minimum case count, unbounded public semantic-sidecar quality, or private real-history source-evidence quality"
     }
   ]
 }

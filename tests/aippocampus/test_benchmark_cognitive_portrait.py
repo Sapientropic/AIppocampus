@@ -24,6 +24,19 @@ class CognitivePortraitBenchmarkTests(unittest.TestCase):
 
         self.assertEqual(payload["kind"], "aippocampus_cognitive_portrait_benchmark")
         self.assertTrue(payload["quality_gate_ok"])
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["status"], "contract_smoke")
+        self.assertEqual(payload["claim_level"], "contract_smoke")
+        self.assertEqual(payload["sample_case_count"], 3)
+        self.assertGreater(payload["minimum_empirical_case_count"], payload["sample_case_count"])
+        self.assertEqual(
+            payload["sample_size_warning"]["sample_case_count"],
+            payload["sample_case_count"],
+        )
+        self.assertIn(
+            "statistically_meaningful_cognitive_portrait_quality",
+            payload["sample_size_warning"]["cannot_claim"],
+        )
         self.assertLess(
             payload["metrics"]["portrait_context_approx_tokens"],
             payload["metrics"]["full_context_approx_tokens"],
@@ -37,6 +50,10 @@ class CognitivePortraitBenchmarkTests(unittest.TestCase):
         )
         self.assertFalse(payload["privacy_boundary"]["raw_context_emitted"])
         self.assertIn("live_model_behavioral_equivalence", payload["cannot_claim"])
+        self.assertIn(
+            "statistically_meaningful_cognitive_portrait_quality",
+            payload["cannot_claim"],
+        )
 
     def test_portrait_artifact_keeps_source_refs_and_back_pointers(self) -> None:
         payload = benchmark.run_benchmark()

@@ -28,6 +28,11 @@ _paths.ensure_paths()
 SCHEMA_VERSION = 1
 PORTRAIT_KIND = "aippocampus_cognitive_portrait"
 BENCHMARK_KIND = "aippocampus_cognitive_portrait_benchmark"
+# This is a claim boundary, not a statistical power claim. The fixture can
+# catch contract regressions with three deterministic prompts, but it must not
+# be read as empirical portrait-quality evidence until the case pack is much
+# denser and source-backed.
+MINIMUM_EMPIRICAL_PROMPT_CASE_COUNT = 30
 SOURCE_BACKED_FINDING_KINDS = {
     "question_candidate",
     "frontier_marker",
@@ -72,6 +77,25 @@ def sha1_text(value: str) -> str:
 
 def contains_secret_or_local_path(value: str) -> bool:
     return bool(SECRET_OR_PATH_RE.search(value))
+
+
+def small_sample_warning(
+    *,
+    sample_case_count: int,
+    minimum_empirical_case_count: int,
+    claim_level: str,
+    selection_method: str,
+    cannot_claim: list[str],
+) -> dict[str, Any] | None:
+    if sample_case_count >= minimum_empirical_case_count:
+        return None
+    return {
+        "sample_case_count": sample_case_count,
+        "minimum_empirical_case_count": minimum_empirical_case_count,
+        "claim_level": claim_level,
+        "selection_method": selection_method,
+        "cannot_claim": cannot_claim,
+    }
 
 
 def approx_token_count(text: str) -> int:
@@ -716,6 +740,35 @@ def run_benchmark(
         and len(equivalent_expected) == len(expected_equivalence_cases)
         and len(observed_loss_cases) == len(expected_loss_cases)
     )
+    sample_case_count = len(fixture.prompt_cases)
+    if not quality_gate_ok:
+        claim_level = "diagnostic_only"
+    elif sample_case_count >= MINIMUM_EMPIRICAL_PROMPT_CASE_COUNT:
+        claim_level = "empirical_benchmark"
+    else:
+        claim_level = "contract_smoke"
+    if claim_level == "empirical_benchmark":
+        status = "sufficient"
+    elif quality_gate_ok:
+        status = "contract_smoke"
+    else:
+        status = "diagnostic_only"
+    cannot_claim = [
+        "live_model_behavioral_equivalence",
+        "cross_model_activation_steering",
+        "private_real_history_portrait_quality",
+        "personality_or_identity_inference_validity",
+    ]
+    warning_cannot_claim = ["statistically_meaningful_cognitive_portrait_quality"]
+    sample_warning = small_sample_warning(
+        sample_case_count=sample_case_count,
+        minimum_empirical_case_count=MINIMUM_EMPIRICAL_PROMPT_CASE_COUNT,
+        claim_level=claim_level,
+        selection_method="fixed deterministic source-backed prompt fixture",
+        cannot_claim=warning_cannot_claim,
+    )
+    if sample_warning:
+        cannot_claim.extend(warning_cannot_claim)
     emitted_contexts = [portrait_context, full_context, unsafe_summary] if include_private_text else []
     payload: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
@@ -723,7 +776,12 @@ def run_benchmark(
         "created_at": now_utc(),
         "ok": True,
         "quality_gate_ok": quality_gate_ok,
-        "status": "sufficient" if quality_gate_ok else "diagnostic_only",
+        "status": status,
+        "claim_level": claim_level,
+        "sample_case_count": sample_case_count,
+        "minimum_empirical_case_count": MINIMUM_EMPIRICAL_PROMPT_CASE_COUNT,
+        "selection_method": "fixed deterministic source-backed prompt fixture",
+        "sample_size_warning": sample_warning,
         "metrics": {
             "full_context_approx_tokens": full_tokens,
             "portrait_context_approx_tokens": portrait_tokens,
@@ -771,12 +829,7 @@ def run_benchmark(
             "deterministic_structured_portrait_fixture_compares_compact_prompt_to_full_source_context",
             "portrait_items_keep_source_ref_back_pointers_in_the_checked_fixture",
         ],
-        "cannot_claim": [
-            "live_model_behavioral_equivalence",
-            "cross_model_activation_steering",
-            "private_real_history_portrait_quality",
-            "personality_or_identity_inference_validity",
-        ],
+        "cannot_claim": sorted(set(cannot_claim)),
     }
     if include_private_text:
         payload["debug_contexts"] = {

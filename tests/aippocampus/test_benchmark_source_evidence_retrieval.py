@@ -206,10 +206,24 @@ def fake_standard_public_payload(*, ok: bool = True) -> dict:
 
 
 def fake_public_semantic_sidecar_payload(*, ok: bool = True) -> dict:
-    status = "sufficient" if ok else "insufficient_recall_hits"
+    status = "diagnostic_only" if ok else "insufficient_recall_hits"
+    claim_level = "diagnostic_pilot" if ok else "diagnostic_only"
     return {
         "ok": ok,
         "status": status,
+        "claim_level": claim_level,
+        "sample_case_count": 2,
+        "minimum_empirical_case_count": 50,
+        "selection_method": "bounded ShareGPT clean-source semantic-sidecar pilot",
+        "sample_size_warning": {
+            "sample_case_count": 2,
+            "minimum_empirical_case_count": 50,
+            "claim_level": claim_level,
+            "selection_method": "bounded ShareGPT clean-source semantic-sidecar pilot",
+            "cannot_claim": [
+                "empirical_public_semantic_sidecar_quality_below_minimum_case_count"
+            ],
+        },
         "kind": "public_semantic_sidecar_source_evidence",
         "config": {
             "conversations": 2,
@@ -240,7 +254,10 @@ def fake_public_semantic_sidecar_payload(*, ok: bool = True) -> dict:
             "raw_text_emitted": False,
             "absolute_paths_emitted": False,
         },
-        "cannot_claim": ["private_real_history_source_evidence_quality"],
+        "cannot_claim": [
+            "private_real_history_source_evidence_quality",
+            "empirical_public_semantic_sidecar_quality_below_minimum_case_count",
+        ],
     }
 
 
@@ -255,6 +272,31 @@ class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
     def test_selected_source_evidence_defaults_use_100_case_slice(self) -> None:
         self.assertEqual(benchmark.DEFAULT_SOURCE_MAX_CASES, 100)
         self.assertEqual(benchmark.DEFAULT_SOURCE_MIN_CASES, 50)
+
+    def test_sharegpt_manifest_marks_tiny_semantic_sidecar_pilot_diagnostic(self) -> None:
+        manifest = json.loads(
+            (REPO_ROOT / "benchmark_corpus" / "sharegpt_manifest.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        semantic_entry = next(
+            item
+            for item in manifest["benchmark_entrypoints"]
+            if item["track"] == "Track B public semantic-sidecar pilot"
+        )
+        result = semantic_entry["latest_local_result"]
+
+        self.assertEqual(result["status"], "diagnostic_only")
+        self.assertEqual(result["claim_level"], "diagnostic_pilot")
+        self.assertEqual(result["selected_case_count"], 3)
+        self.assertGreater(
+            result["minimum_empirical_case_count"],
+            result["selected_case_count"],
+        )
+        self.assertIn(
+            "empirical_public_semantic_sidecar_quality_below_minimum_case_count",
+            result["sample_size_warning"]["cannot_claim"],
+        )
 
     def test_track_b_report_wraps_existing_real_history_evals_without_private_text(self) -> None:
         with (
@@ -432,7 +474,24 @@ class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
         self.assertTrue(payload["ok"])
         self.assertTrue(payload["config"]["include_public_semantic_sidecar"])
         self.assertIn("public_semantic_sidecar", payload["tracks"])
-        self.assertEqual(payload["tracks"]["public_semantic_sidecar"]["metrics"]["top_k_hit_rate"], 1.0)
+        self.assertEqual(
+            payload["tracks"]["public_semantic_sidecar"]["status"],
+            "diagnostic_only",
+        )
+        self.assertEqual(
+            payload["tracks"]["public_semantic_sidecar"]["claim_level"],
+            "diagnostic_pilot",
+        )
+        self.assertEqual(
+            payload["tracks"]["public_semantic_sidecar"]["sample_size_warning"][
+                "minimum_empirical_case_count"
+            ],
+            50,
+        )
+        self.assertEqual(
+            payload["tracks"]["public_semantic_sidecar"]["metrics"]["top_k_hit_rate"],
+            1.0,
+        )
         self.assertIn("public_semantic_sidecar", payload["cases"])
         self.assertEqual(payload["cases"]["public_semantic_sidecar"][0]["case_id"], "public-semantic-a")
         public_semantic_run.assert_called_once()
@@ -620,7 +679,22 @@ class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
 
         self.assertEqual(payload["kind"], "public_semantic_sidecar_source_evidence")
         self.assertTrue(payload["ok"])
-        self.assertEqual(payload["status"], "sufficient")
+        self.assertEqual(payload["status"], "diagnostic_only")
+        self.assertEqual(payload["claim_level"], "diagnostic_pilot")
+        self.assertEqual(payload["sample_case_count"], 1)
+        self.assertGreater(payload["minimum_empirical_case_count"], payload["sample_case_count"])
+        self.assertEqual(
+            payload["sample_size_warning"]["sample_case_count"],
+            payload["sample_case_count"],
+        )
+        self.assertIn(
+            "empirical_public_semantic_sidecar_quality_below_minimum_case_count",
+            payload["sample_size_warning"]["cannot_claim"],
+        )
+        self.assertIn(
+            "empirical_public_semantic_sidecar_quality_below_minimum_case_count",
+            payload["cannot_claim"],
+        )
         self.assertEqual(payload["artifacts"]["sidecar_row_count"], 1)
         self.assertEqual(payload["artifacts"]["reviewed_sidecar_row_count"], 1)
         self.assertEqual(payload["metrics"]["case_count"], 1)
