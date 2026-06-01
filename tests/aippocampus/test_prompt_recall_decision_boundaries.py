@@ -20,8 +20,8 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-from aippocampus_runtime.recall import prompt_recall_decision as decision  # noqa: E402
 from aippocampus_runtime.recall import prompt_cues  # noqa: E402
+from aippocampus_runtime.recall import prompt_recall_decision as decision  # noqa: E402
 
 
 class PromptRecallDecisionBoundaryTests(unittest.TestCase):
