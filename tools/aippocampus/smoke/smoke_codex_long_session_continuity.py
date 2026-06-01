@@ -21,6 +21,7 @@ import shutil
 import sys
 import time
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -44,11 +45,38 @@ STATUS_SKIPPED = "skipped_host_unavailable"
 STATUS_FAILED = "failed"
 DEFAULT_TURN_COUNT = 50
 POLL_INTERVAL_SECONDS = 2.0
+PROGRESS_PRIVACY_BOUNDARY = "sanitized_progress_no_raw_prompt_or_source_text"
 
 LOCAL_PATH_RE = re.compile(r"(?i)([a-z]:\\[^\n\r\t]+|\\\\[^\\\n\r\t]+\\[^\\\n\r\t]+)")
 SECRET_VALUE_RE = re.compile(
     r"(?i)(bearer\s+[a-z0-9._-]{8,}|api[_-]?key\s*[:=]\s*\S+|"
     r"token\s*[:=]\s*\S+|AGE-SECRET-KEY-[A-Z0-9-]+|sk-[a-z0-9_-]{20,})"
+)
+SAFE_PROGRESS_TOKEN_RE = re.compile(r"[^A-Za-z0-9_.:-]+")
+PROGRESS_TEXT_FIELDS = frozenset({"phase", "status", "failure_code"})
+PROGRESS_INT_FIELDS = frozenset(
+    {
+        "turn_index",
+        "completed_pre_compact_turn_count",
+        "completed_total_turn_count",
+        "target_pre_compact_turn_count",
+    }
+)
+PROGRESS_BOOL_FIELDS = frozenset(
+    {
+        "archived",
+        "clean_source_verified",
+        "compact_turn_completed",
+        "compaction_observed",
+        "context_compaction_item_observed",
+        "correction_event_observed",
+        "host_available",
+        "post_compact_hook_completed",
+        "pre_compact_hook_completed",
+        "recall_turn_completed",
+        "report_output_written",
+        "thread_started",
+    }
 )
 
 
@@ -61,6 +89,90 @@ class SmokeFailure(RuntimeError):
 
 def sha1_text(value: str) -> str:
     return hashlib.sha1(value.encode("utf-8", errors="replace")).hexdigest()
+
+
+def utc_timestamp() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def safe_progress_token(value: object) -> str:
+    text = LOCAL_PATH_RE.sub("local_path", str(value))
+    text = SECRET_VALUE_RE.sub("secret", text)
+    text = SAFE_PROGRESS_TOKEN_RE.sub("_", text).strip("_.:-")
+    return (text or "unknown")[:80]
+
+
+class ProgressRecorder:
+    """Append-only public-safe progress rows for the slow live smoke.
+
+    The recorder deliberately whitelists field names instead of sanitizing an
+    arbitrary dict. That keeps prompts, assistant text, rollout paths, raw
+    thread ids, credentials, and other tempting debug payloads from becoming
+    "almost sanitized" public artifacts by accident.
+    """
+
+    def __init__(self, path: str | Path, *, run_id: str, target_turn_count: int) -> None:
+        self.path = Path(path)
+        self.run_id_sha1 = sha1_text(run_id)[:16]
+        self.thread_id_sha1: str | None = None
+        self.target_turn_count = max(2, int(target_turn_count))
+        self.started_at = time.monotonic()
+
+    def set_thread_id(self, thread_id: str | None) -> None:
+        self.thread_id_sha1 = sha1_text(str(thread_id))[:16] if thread_id else None
+
+    def set_thread_id_sha1(self, thread_id_sha1: object) -> None:
+        text = str(thread_id_sha1 or "")
+        if re.fullmatch(r"[a-f0-9]{16,40}", text):
+            self.thread_id_sha1 = text[:16]
+
+    def record(self, event: str, **fields: object) -> None:
+        row: dict[str, Any] = {
+            "schema_version": SCHEMA_VERSION,
+            "event": safe_progress_token(event),
+            "timestamp": utc_timestamp(),
+            "run_id_sha1": self.run_id_sha1,
+            "thread_id_sha1": self.thread_id_sha1,
+            "target_pre_compact_turn_count": self.target_turn_count,
+            "elapsed_ms": max(0, int((time.monotonic() - self.started_at) * 1000)),
+            "privacy_boundary": PROGRESS_PRIVACY_BOUNDARY,
+        }
+        row.update(self._allowed_fields(fields))
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with self.path.open("a", encoding="utf-8", newline="\n") as handle:
+            handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+
+    def record_failure(
+        self,
+        event: str,
+        *,
+        phase: str,
+        failure: BaseException,
+        **fields: object,
+    ) -> None:
+        if isinstance(failure, SmokeFailure):
+            failure_code = failure.code
+        else:
+            failure_code = type(failure).__name__
+        self.record(event, phase=phase, failure_code=failure_code, **fields)
+
+    @staticmethod
+    def _allowed_fields(fields: dict[str, object]) -> dict[str, Any]:
+        allowed: dict[str, Any] = {}
+        for key, value in fields.items():
+            if key in PROGRESS_TEXT_FIELDS:
+                allowed[key] = safe_progress_token(value)
+            elif key in PROGRESS_BOOL_FIELDS:
+                allowed[key] = bool(value)
+            elif key in PROGRESS_INT_FIELDS and not isinstance(value, bool):
+                if isinstance(value, int):
+                    allowed[key] = value
+                elif isinstance(value, str):
+                    try:
+                        allowed[key] = int(value)
+                    except ValueError:
+                        continue
+        return allowed
 
 
 def sanitize_error_message(value: object, *, max_chars: int = 500) -> str:
@@ -519,6 +631,8 @@ def validate_report(report: dict[str, Any]) -> tuple[bool, list[dict[str, str]]]
 def classify_unavailable(exc: BaseException, *, thread_started: bool) -> bool:
     if thread_started:
         return False
+    if isinstance(exc, FileNotFoundError):
+        return True
     text = str(exc).casefold()
     return any(
         needle in text
@@ -542,6 +656,7 @@ def run_real_long_session_smoke(
     run_id: str | None = None,
     turn_timeout: float = 180.0,
     compact_timeout: float = 240.0,
+    progress_jsonl: str | Path | None = None,
     keep_artifacts: bool = False,
 ) -> dict[str, Any]:
     repo_root = Path(repo_root).resolve()
@@ -554,6 +669,13 @@ def run_real_long_session_smoke(
     codex_home: Path | None = None
     archived = False
     temp_root = repo_root / ".tmp" / f"aippocampus-live-continuity-{safe_run_id_segment(run_id)}"
+    progress = (
+        ProgressRecorder(progress_jsonl, run_id=run_id, target_turn_count=target_turn_count)
+        if progress_jsonl
+        else None
+    )
+    current_phase = "host_init"
+    current_turn_index: int | None = None
 
     try:
         codex = codex_host.resolve_codex_command(codex_command)
@@ -577,7 +699,10 @@ def run_real_long_session_smoke(
         result["codex_user_agent"] = init_result.get("userAgent")
         if init_result.get("codexHome"):
             codex_home = Path(str(init_result["codexHome"]))
+        if progress is not None:
+            progress.record("host_initialized", phase=current_phase, host_available=True)
 
+        current_phase = "thread_start"
         thread = client.request(
             "thread/start",
             {
@@ -596,8 +721,22 @@ def run_real_long_session_smoke(
             raise SmokeFailure("thread_start_missing_id", "thread/start did not return an id")
         result["host"]["thread_started"] = True
         result["host"]["thread_id_sha1"] = sha1_text(thread_id)[:16]
+        if progress is not None:
+            progress.set_thread_id(thread_id)
+            progress.record("thread_started", phase=current_phase, thread_started=True)
 
+        current_phase = "setup_turn"
+        current_turn_index = 0
         run_turn(client, thread_id, setup_prompt(obsolete_token), timeout=turn_timeout)
+        if progress is not None:
+            progress.record(
+                "setup_turn_completed",
+                phase=current_phase,
+                completed_pre_compact_turn_count=1,
+                completed_total_turn_count=1,
+            )
+        current_phase = "correction_turn"
+        current_turn_index = 1
         correction_turn = run_turn(
             client,
             thread_id,
@@ -608,14 +747,33 @@ def run_real_long_session_smoke(
             corrected_token in text and obsolete_token in text for text in user_texts(correction_turn)
         )
         result["scenario"]["correction_event_observed"] = correction_observed
+        if progress is not None:
+            progress.record(
+                "correction_turn_completed",
+                phase=current_phase,
+                completed_pre_compact_turn_count=2,
+                completed_total_turn_count=2,
+                correction_event_observed=correction_observed,
+            )
 
         for index in range(2, target_turn_count):
+            current_phase = "filler_turn"
+            current_turn_index = index
             run_turn(
                 client,
                 thread_id,
                 filler_prompt(index, corrected_token),
                 timeout=turn_timeout,
             )
+            if progress is not None:
+                progress.record(
+                    "filler_turn_completed",
+                    phase=current_phase,
+                    turn_index=index,
+                    completed_pre_compact_turn_count=index + 1,
+                    completed_total_turn_count=index + 1,
+                )
+        current_turn_index = None
 
         before_compact_turns = thread_turns_with_retry(client, thread_id)
         before_ids = {str(turn.get("id") or "") for turn in before_compact_turns}
@@ -623,7 +781,14 @@ def run_real_long_session_smoke(
         result["scenario"]["completed_pre_compact_turn_count"] = pre_completed
         result["evidence"]["turn_count"]["pre_compact_completed"] = pre_completed
 
+        current_phase = "compaction"
         notification_start = len(client.notifications)
+        if progress is not None:
+            progress.record(
+                "compaction_started",
+                phase=current_phase,
+                completed_pre_compact_turn_count=pre_completed,
+            )
         compaction_evidence = run_compaction(
             client,
             thread_id,
@@ -631,6 +796,29 @@ def run_real_long_session_smoke(
             notification_start=notification_start,
             timeout=compact_timeout,
         )
+        if progress is not None:
+            if compaction_evidence.get("pre_compact_hook_completed"):
+                progress.record(
+                    "precompact_hook_completed",
+                    phase=current_phase,
+                    pre_compact_hook_completed=True,
+                )
+            if compaction_evidence.get("post_compact_hook_completed"):
+                progress.record(
+                    "postcompact_hook_completed",
+                    phase=current_phase,
+                    post_compact_hook_completed=True,
+                )
+            progress.record(
+                "compaction_completed",
+                phase=current_phase,
+                compact_turn_completed=compaction_evidence.get("compact_turn_completed"),
+                context_compaction_item_observed=compaction_evidence.get(
+                    "context_compaction_item_observed"
+                ),
+                pre_compact_hook_completed=compaction_evidence.get("pre_compact_hook_completed"),
+                post_compact_hook_completed=compaction_evidence.get("post_compact_hook_completed"),
+            )
         result["evidence"]["compaction_boundary"].update(compaction_evidence)
         result["scenario"]["compaction_observed"] = all(
             bool(compaction_evidence.get(key))
@@ -642,8 +830,11 @@ def run_real_long_session_smoke(
             )
         )
 
+        current_phase = "recall"
         recall_turn = run_turn(client, thread_id, recall_prompt(), timeout=turn_timeout)
         result["scenario"]["recall_turn_completed"] = True
+        if progress is not None:
+            progress.record("recall_turn_completed", phase=current_phase, recall_turn_completed=True)
         recall_text = assistant_final_text(recall_turn)
         result["evidence"]["correction_survival"] = correction_survival_evidence(
             recall_text,
@@ -656,6 +847,7 @@ def run_real_long_session_smoke(
         result["scenario"]["completed_total_turn_count"] = total_completed
         result["evidence"]["turn_count"]["total_completed"] = total_completed
 
+        current_phase = "archive"
         archive = client.request(
             "thread/archive",
             {"threadId": thread_id},
@@ -668,9 +860,18 @@ def run_real_long_session_smoke(
                 "thread_archive_failed",
                 error_message(archive, "thread/archive failed"),
             )
+        if progress is not None:
+            progress.record("thread_archived", phase=current_phase, archived=True)
+        current_phase = "clean_source_rebuild"
         if codex_home is None:
             raise SmokeFailure("codex_home_missing", "initialize did not report codexHome")
         rollout = find_rollout_by_thread_id(codex_home, thread_id)
+        if progress is not None:
+            progress.record(
+                "clean_source_rebuild_started",
+                phase=current_phase,
+                completed_total_turn_count=total_completed,
+            )
         clean_manifest = build_clean_source.build_clean_source(
             repo_root,
             rollout=rollout,
@@ -687,6 +888,12 @@ def run_real_long_session_smoke(
             clean_evidence.get(key) is True
             for key in ("built_from_real_rollout", "correction_message_found", "recall_answer_found")
         ) and not clean_evidence.get("stale_recall_answer_found")
+        if progress is not None:
+            progress.record(
+                "clean_source_rebuild_completed",
+                phase=current_phase,
+                clean_source_verified=result["scenario"]["clean_source_verified"],
+            )
 
         ok, validation_failures = validate_report(result)
         result["failures"] = validation_failures
@@ -702,6 +909,16 @@ def run_real_long_session_smoke(
         skipped = classify_unavailable(exc, thread_started=bool(thread_id))
         result["status"] = STATUS_SKIPPED if skipped else STATUS_FAILED
         result["ok"] = False
+        if progress is not None:
+            progress_fields: dict[str, object] = {"status": result["status"]}
+            if current_turn_index is not None:
+                progress_fields["turn_index"] = current_turn_index
+            progress.record_failure(
+                "smoke_skipped" if skipped else "smoke_failed",
+                phase=current_phase,
+                failure=exc,
+                **progress_fields,
+            )
         return result
     finally:
         if client is not None:
@@ -729,21 +946,43 @@ def main() -> int:
     parser.add_argument("--compact-timeout", type=float, default=240.0)
     parser.add_argument("--keep-artifacts", action="store_true")
     parser.add_argument("--output")
+    parser.add_argument(
+        "--progress-jsonl",
+        help=(
+            "Optional append-only public-safe progress JSONL path for diagnosing "
+            "slow/live host, turn, compaction, hook, recall, archive, and clean-source phases."
+        ),
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
+    run_id = args.run_id or uuid.uuid4().hex[:10]
 
     result = run_real_long_session_smoke(
         args.repo_root,
         codex_command=args.codex_command,
         target_turn_count=args.turn_count,
-        run_id=args.run_id,
+        run_id=run_id,
         turn_timeout=args.turn_timeout,
         compact_timeout=args.compact_timeout,
+        progress_jsonl=args.progress_jsonl,
         keep_artifacts=args.keep_artifacts,
     )
     payload = json.dumps(result, ensure_ascii=False, indent=2)
     if args.output:
         Path(args.output).write_text(payload + "\n", encoding="utf-8")
+    if args.progress_jsonl:
+        progress = ProgressRecorder(
+            args.progress_jsonl,
+            run_id=run_id,
+            target_turn_count=args.turn_count,
+        )
+        progress.set_thread_id_sha1((result.get("host") or {}).get("thread_id_sha1"))
+        progress.record(
+            "report_written",
+            phase="report",
+            status=result["status"],
+            report_output_written=bool(args.output),
+        )
     if args.json_output:
         print(payload)
     else:
