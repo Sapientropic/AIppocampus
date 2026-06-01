@@ -5,12 +5,51 @@ from __future__ import annotations
 
 import html
 import json
+import re
+from html.parser import HTMLParser
 from pathlib import Path
+from typing import Any
 
 from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.vault.utils import DEFAULT_SITE_TITLE
 
 _DASHBOARD_ASSET_DIR = Path(__file__).with_name("dashboard_assets")
+_BODY_NODE_ALLOWED_TAGS = {
+    "a",
+    "blockquote",
+    "br",
+    "code",
+    "div",
+    "em",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "li",
+    "ol",
+    "p",
+    "pre",
+    "span",
+    "strong",
+    "table",
+    "tbody",
+    "td",
+    "th",
+    "thead",
+    "tr",
+    "ul",
+}
+_BODY_NODE_VOID_TAGS = {"br"}
+_BODY_NODE_GLOBAL_ATTRS = {
+    "class",
+    "data-callout",
+    "data-heading",
+    "data-note",
+    "id",
+}
+_BODY_NODE_TAG_ATTRS = {"a": {"href"}}
 
 
 def _load_dashboard_asset(filename: str) -> str:
@@ -26,6 +65,89 @@ def json_script(data: dict | list) -> str:
         .replace("<", "\\u003c")
         .replace(">", "\\u003e")
     )
+
+
+def _safe_generated_body_url(value: str) -> bool:
+    text = str(value or "").strip()
+    if not text:
+        return False
+    if text.startswith("#"):
+        return True
+    if text.startswith("//"):
+        return False
+    match = re.match(r"^([a-zA-Z][a-zA-Z0-9+.-]*):", text)
+    if not match:
+        return True
+    return match.group(1).casefold() in {"http", "https", "mailto"}
+
+
+def _body_node_attrs(tag: str, attrs: list[tuple[str, str | None]]) -> dict[str, str]:
+    allowed = _BODY_NODE_GLOBAL_ATTRS | _BODY_NODE_TAG_ATTRS.get(tag, set())
+    result: dict[str, str] = {}
+    for raw_name, raw_value in attrs:
+        name = raw_name.casefold()
+        value = raw_value or ""
+        if name.startswith("on") or name == "style" or name not in allowed:
+            continue
+        if name == "href" and not _safe_generated_body_url(value):
+            continue
+        result[name] = value
+    return result
+
+
+class _DashboardBodyNodeParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.nodes: list[dict[str, Any]] = []
+        self._stack: list[dict[str, Any]] = []
+
+    def _children(self) -> list[dict[str, Any]]:
+        if not self._stack:
+            return self.nodes
+        return self._stack[-1]["children"]
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag = tag.casefold()
+        if tag not in _BODY_NODE_ALLOWED_TAGS:
+            return
+        node: dict[str, Any] = {
+            "tag": tag,
+            "attrs": _body_node_attrs(tag, attrs),
+            "children": [],
+        }
+        self._children().append(node)
+        if tag not in _BODY_NODE_VOID_TAGS:
+            self._stack.append(node)
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag = tag.casefold()
+        if tag not in _BODY_NODE_ALLOWED_TAGS:
+            return
+        self._children().append(
+            {
+                "tag": tag,
+                "attrs": _body_node_attrs(tag, attrs),
+                "children": [],
+            }
+        )
+
+    def handle_endtag(self, tag: str) -> None:
+        tag = tag.casefold()
+        for idx in range(len(self._stack) - 1, -1, -1):
+            if self._stack[idx].get("tag") == tag:
+                del self._stack[idx:]
+                return
+
+    def handle_data(self, data: str) -> None:
+        if data:
+            self._children().append({"text": data})
+
+
+def dashboard_body_nodes(body_html: str) -> list[dict[str, Any]]:
+    parser = _DashboardBodyNodeParser()
+    parser.feed(body_html)
+    parser.close()
+    return parser.nodes
 
 
 def dashboard_anchor_title(anchor: dict, idx: int) -> str:
@@ -158,7 +280,7 @@ def dashboard_pane_data_v2(
         for msg in recent_messages[-5:]
     )
 
-    pages = {
+    pages: dict[str, dict[str, Any]] = {
         "now": {
             "title": "现在",
             "outline": ["从这里进入", "现在在追的线索", "建议的走法"],
@@ -278,6 +400,8 @@ def dashboard_pane_data_v2(
                 ]
             ),
         }
+    for page in pages.values():
+        page["body_nodes"] = dashboard_body_nodes(str(page.get("body") or ""))
     return pages
 
 

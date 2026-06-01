@@ -55,6 +55,12 @@ class VaultDashboardAssetTests(unittest.TestCase):
         self.assertEqual(vault_dashboard.dashboard_interaction_script_v2(), script)
         self.assertEqual(vault_dashboard.dashboard_css_v2(), css)
 
+    def test_dashboard_runtime_uses_structured_body_nodes(self) -> None:
+        script = (ASSETS / "dashboard_v2.js").read_text(encoding="utf-8")
+
+        self.assertIn("body_nodes", script)
+        self.assertNotIn("template.innerHTML = String(bodyHtml", script)
+
     def test_html_dashboard_v2_inlines_asset_contents(self) -> None:
         script = (ASSETS / "dashboard_v2.js").read_text(encoding="utf-8")
         css = (ASSETS / "dashboard_v2.css").read_text(encoding="utf-8")
@@ -98,6 +104,18 @@ class VaultDashboardAssetTests(unittest.TestCase):
         self.assertNotIn("<svg", health_body)
         self.assertIn("&lt;img", health_body)
         self.assertIn("&lt;svg", health_body)
+
+    def test_dashboard_pane_data_includes_structured_body_nodes(self) -> None:
+        pages = packaged_dashboard.dashboard_pane_data_v2(
+            health={"ok": True},
+            anchors=[],
+            checkpoint_state={},
+            recent_messages=[],
+        )
+
+        self.assertIsInstance(pages["now"]["body_nodes"], list)
+        self.assertIsInstance(pages["health"]["body_nodes"], list)
+        self.assertEqual(pages["now"]["body_nodes"][0]["tag"], "div")
 
 
 if __name__ == "__main__":
