@@ -176,6 +176,29 @@ class DocsHealthTests(unittest.TestCase):
         self.assertIn("public API doc missing MCP control-plane boundary", issues)
         self.assertIn("public API doc missing future MCP write review bar", issues)
 
+    def test_public_core_schema_contract_covers_metadata_namespace_rules(self) -> None:
+        repo_root = docs_health.find_repo_root(ROOT)
+        self.assertIsNotNone(repo_root)
+
+        result = docs_health.public_core_schema_contract_issues(repo_root)
+
+        self.assertEqual(result, [])
+
+    def test_public_core_schema_contract_reports_missing_metadata_namespace_rules(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            guides = repo / "docs" / "guides"
+            guides.mkdir(parents=True)
+            (guides / "public-core-boundary.md").write_text(
+                "# Public Core\n\n## Minimal Public Schema Contract\n\nmetadata: {}\n",
+                encoding="utf-8",
+            )
+
+            issues = docs_health.public_core_schema_contract_issues(repo)
+
+        self.assertIn("public core schema doc missing metadata namespace rules", issues)
+        self.assertIn("public core schema doc missing metadata privacy boundary", issues)
+
     def test_benchmark_evidence_map_reports_missing_runner(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)

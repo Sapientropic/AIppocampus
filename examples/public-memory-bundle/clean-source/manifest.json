@@ -10,6 +10,10 @@
     "turns_jsonl": "clean-source/turns.jsonl",
     "semantic_scope_labels_jsonl": "clean-source/semantic-scope-labels.jsonl"
   },
+  "metadata_contract": {
+    "schema": "docs/guides/public-core-boundary.md#metadata-namespace-and-extension-rules",
+    "boundary": "This public example omits provider/private metadata payloads; adapter metadata extensions must use namespaced metadata rather than changing top-level field meanings."
+  },
   "cleaning_policy": {
     "rewrites_text": false,
     "drops": [

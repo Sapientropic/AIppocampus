@@ -122,7 +122,14 @@ meaning should not be silently reused for a different concept.
   "role": "user",
   "created_at": "2026-05-29T00:00:00Z",
   "text": "visible conversation text",
-  "metadata": {}
+  "metadata": {
+    "core": {"schema_version": "aippocampus.metadata.core.v1"},
+    "provider": {
+      "namespace": "codex",
+      "schema_version": "codex.source_event_metadata.v1"
+    },
+    "extensions": {}
+  }
 }
 ```
 
@@ -135,6 +142,35 @@ Required semantics:
   intentionally publishes it.
 - `metadata` must not contain credentials or host-private absolute paths unless
   an explicit private export mode says so.
+
+### Metadata Namespace And Extension Rules
+
+Public schemas may carry a `metadata` object so adapters can preserve useful
+host context without corrupting the core event meaning. The namespace contract is
+small on purpose:
+
+- `metadata.core` is reserved for AIppocampus-owned public metadata. It may add
+  optional fields, but it must not change the semantics of top-level fields.
+- `metadata.provider` belongs to the adapter that produced the event. It should
+  include a stable `namespace` such as `codex`, `claude_code`, or
+  `generic_jsonl`, plus a provider-local `schema_version` when the payload is
+  more than a flat hint.
+- `metadata.extensions` is for third-party or downstream adapter extensions.
+  Keys should be stable extension ids such as a package name, URI, or reverse
+  DNS-style namespace. Extension payloads should include their own
+  `schema_version` when consumers might branch on the contents.
+
+Metadata must not override or reinterpret top-level public fields. If
+`metadata.provider.role` conflicts with top-level `role`, or a model-generated
+metadata label conflicts with the source text, the top-level field and source
+refs win. Model-generated labels remain navigation, not source truth.
+
+Public metadata must not contain credentials, tokens, cookies, raw auth headers,
+secret-bearing environment values, or host-private absolute paths. Raw host ids
+that are not safe to share should be redacted, hashed, bundle-relative, or left
+out. Private export mode may include local locators only when the export is
+explicitly marked private and intended for the original owner or trusted local
+operator.
 
 ### Clean-Source Chunk
 

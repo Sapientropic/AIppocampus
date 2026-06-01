@@ -241,6 +241,9 @@ The stable public data schemas are owned by
 - Source ref
 - Import manifest
 
+Provider-specific `metadata` and third-party extension rules also live there;
+this document only points to the schema owner.
+
 Generated indexes, registry rows, sidecar metrics, cognitive-map artifacts,
 subconscious job rows, and debug/provenance envelopes are not stable public
 schemas unless a future document promotes a subset.
