@@ -229,6 +229,17 @@ REQUIRED_PUBLIC_CORE_SCHEMA_CONTRACT_TERMS = {
     "labels remain navigation": (
         "public core schema doc missing model-label truth boundary"
     ),
+    "### Runtime Clean-Source Manifest": (
+        "public core schema doc missing runtime clean-source manifest contract"
+    ),
+    "`source_artifact`": "public core schema doc missing provider-neutral source artifact",
+    "`source_transcript_size`": (
+        "public core schema doc missing provider-neutral transcript metadata"
+    ),
+    "`source_rollout`": "public core schema doc missing legacy rollout alias boundary",
+    "`messages.jsonl`": "public core schema doc missing clean-source message mapping",
+    "`turns.jsonl`": "public core schema doc missing clean-source turn mapping",
+    "`kind` and `phase`": "public core schema doc missing provider-normalized metadata boundary",
 }
 
 BENCHMARK_EVIDENCE_EXCLUDED_SCRIPT_NAMES = {"_paths.py"}

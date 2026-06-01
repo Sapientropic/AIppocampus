@@ -204,6 +204,26 @@ class BuildCleanSourceTests(unittest.TestCase):
         )
         self.assertIn("message_id", result["identity_policy"]["stable_join_keys"])
         self.assertEqual(result["artifact_scope"], "global_thread_store")
+        self.assertEqual(result["source_transcript"], str(self.rollout))
+        self.assertEqual(result["source_transcript_size"], self.rollout.stat().st_size)
+        self.assertEqual(result["source_transcript_mtime"], self.rollout.stat().st_mtime)
+        self.assertIsNone(result["source_transcript_sha256"])
+        self.assertEqual(
+            result["source_artifact"],
+            {
+                "kind": "provider_transcript",
+                "provider": "codex",
+                "path": str(self.rollout),
+                "size": self.rollout.stat().st_size,
+                "mtime": self.rollout.stat().st_mtime,
+                "sha256": None,
+            },
+        )
+        self.assertEqual(result["source_rollout"], result["source_transcript"])
+        self.assertEqual(result["source_rollout_size"], result["source_transcript_size"])
+        self.assertEqual(result["source_rollout_mtime"], result["source_transcript_mtime"])
+        self.assertEqual(result["source_rollout_sha256"], result["source_transcript_sha256"])
+        self.assertEqual(result["legacy_field_aliases"]["source_rollout"], "source_transcript")
         self.assertEqual(result["message_count"], 4)
         self.assertEqual(result["turn_count"], 2)
         messages_path = Path(result["outputs"]["messages_jsonl"])
@@ -408,6 +428,13 @@ class BuildCleanSourceTests(unittest.TestCase):
 
         self.assertEqual(result["source_provider"], "generic-jsonl")
         self.assertEqual(result["source_thread_key"], "generic-jsonl:session:generic-clean")
+        self.assertEqual(result["source_artifact"]["provider"], "generic-jsonl")
+        self.assertEqual(result["source_artifact"]["path"], str(transcript))
+        self.assertEqual(result["source_rollout"], result["source_transcript"])
+        self.assertEqual(
+            result["legacy_field_aliases"]["source_rollout_sha256"],
+            "source_transcript_sha256",
+        )
         self.assertIn("source_ref", result["identity_policy"]["stable_join_keys"])
         messages = [
             json.loads(line)

@@ -454,6 +454,15 @@ def build_clean_source(
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
 
     stat = source_path.stat()
+    source_sha256 = file_sha256(source_path) if hash_source else None
+    source_artifact = {
+        "kind": "provider_transcript",
+        "provider": active_provider.name,
+        "path": str(source_path),
+        "size": stat.st_size,
+        "mtime": stat.st_mtime,
+        "sha256": source_sha256,
+    }
     manifest: dict[str, Any] = {
         "schema_version": CLEAN_SOURCE_SCHEMA_VERSION,
         "kind": "aippocampus_clean_source",
@@ -469,10 +478,20 @@ def build_clean_source(
         "source_provider": active_provider.name,
         "source_thread_key": source_thread_key,
         "source_transcript": str(source_path),
+        "source_transcript_size": stat.st_size,
+        "source_transcript_mtime": stat.st_mtime,
+        "source_transcript_sha256": source_sha256,
+        "source_artifact": source_artifact,
+        "legacy_field_aliases": {
+            "source_rollout": "source_transcript",
+            "source_rollout_size": "source_transcript_size",
+            "source_rollout_mtime": "source_transcript_mtime",
+            "source_rollout_sha256": "source_transcript_sha256",
+        },
         "source_rollout": str(source_path),
         "source_rollout_size": stat.st_size,
         "source_rollout_mtime": stat.st_mtime,
-        "source_rollout_sha256": file_sha256(source_path) if hash_source else None,
+        "source_rollout_sha256": source_sha256,
         "session_meta": meta,
         "message_count": len(clean_messages),
         "turn_count": len(clean_turns),
