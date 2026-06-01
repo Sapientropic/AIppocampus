@@ -610,6 +610,33 @@ Closeout interpretation for #55:
   model partial failure. None of that authorizes lexical expansion or lower
   materializer gates.
 
+Stage 2 #308 report-hardening update:
+
+- `python .\tools\aippocampus\smoke\smoke_semantic_scope_source_review.py --max-cases 96 --min-cases 64 --json`:
+  passed in observe-only mode and now emits `per_label_floors` plus
+  `review_buckets`. The selected pool still covers 96 public-safe hashed cases
+  across `idea_seed`, `life_context`, `open_question`, `personal_reflection`,
+  `preference`, `reading_notes`, and `technical_work`, while
+  `relationship_continuity` has no currently materialized strict review case.
+  Because this mode does not call a live reviewer, all 96 selected cases remain
+  `unreviewed`, and `cannot_claim` still includes fresh live model review and
+  selected source-review pass.
+- `python .\skills\aippocampus\scripts\semantic_scope_suppressed_recovery.py --max-cases 12 --json`:
+  passed in observe-only mode and now emits `recovery_buckets` plus
+  `per_label_recovery`. The current suppressed pool contains 8 cases / 11
+  candidate labels across `relationship_continuity`, `reading_notes`,
+  `idea_seed`, `preference`, `life_context`, `technical_work`, and
+  `open_question`; all remain `unreviewed` in observe-only output, and
+  `strict_gate_relaxed=false`.
+- Current Stage 2 wording distinguishes the old 5-row strict sidecar survival
+  evidence, the 24-case green live source-review slice, and the broader 96-case
+  diagnostic run with one live model partial failure. The broader run is not a
+  green gate unless rerun cleanly.
+- Follow-up #320 tracks systematic evidence improvement for high-risk
+  still-suppressed label families. That follow-up must improve source-backed
+  semantic evidence or classify labels as unsafe to restore; it must not use
+  lexical expansion or lower materializer thresholds as a shortcut.
+
 Release-gate and client-surface evidence for #56:
 
 - `python .\plugins\aippocampus\smoke_plugin_install.py --repo-root . --json`:

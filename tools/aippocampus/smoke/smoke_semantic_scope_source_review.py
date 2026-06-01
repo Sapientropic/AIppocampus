@@ -453,18 +453,68 @@ def review_status(
     return "sufficient"
 
 
-def per_label_review_stats(review_results: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+def per_label_case_counts(cases: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for label in SCOPE_LABEL_ORDER:
+        count = sum(1 for case in cases if label in (case.get("labels") or []))
+        if count:
+            counts[label] = count
+    return counts
+
+
+def per_label_review_floors(
+    cases: list[dict[str, Any]], *, min_label_pass_rate: float
+) -> dict[str, dict[str, Any]]:
+    counts = per_label_case_counts(cases)
+    return {
+        label: {
+            "selected_case_count": int(counts.get(label) or 0),
+            "min_selected_cases": 1,
+            "min_pass_rate": float(min_label_pass_rate),
+            "selection_floor_met": int(counts.get(label) or 0) >= 1,
+        }
+        for label in SCOPE_LABEL_ORDER
+    }
+
+
+def review_buckets(
+    review_results: list[dict[str, Any]], *, selected_case_count: int
+) -> dict[str, int]:
+    accepted = sum(1 for item in review_results if item.get("passed"))
+    model_failure = sum(1 for item in review_results if item.get("error"))
+    ambiguous_or_human_review = sum(
+        1
+        for item in review_results
+        if not item.get("passed") and not item.get("error") and item.get("needs_human_review")
+    )
+    rejected = max(0, len(review_results) - accepted - ambiguous_or_human_review - model_failure)
+    return {
+        "accepted": accepted,
+        "rejected": rejected,
+        "ambiguous_or_human_review": ambiguous_or_human_review,
+        "model_failure": model_failure,
+        "needs_human_review": ambiguous_or_human_review,
+        "unreviewed": max(0, int(selected_case_count) - len(review_results)),
+    }
+
+
+def per_label_review_stats(
+    review_results: list[dict[str, Any]], *, min_label_pass_rate: float
+) -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
     for label in SCOPE_LABEL_ORDER:
         items = [item for item in review_results if label in (item.get("labels") or [])]
         if not items:
             continue
         passed_count = sum(1 for item in items if item.get("passed"))
+        pass_rate = passed_count / len(items)
         out[label] = {
             "case_count": len(items),
             "passed_count": passed_count,
             "failed_count": max(0, len(items) - passed_count),
-            "pass_rate": round(passed_count / len(items), 4),
+            "pass_rate": round(pass_rate, 4),
+            "min_pass_rate": float(min_label_pass_rate),
+            "status": "accepted" if pass_rate >= float(min_label_pass_rate) else "below_floor",
         }
     return out
 
@@ -548,7 +598,13 @@ def run_semantic_scope_source_review(
             "case_count": len(cases),
             "passed_count": 0,
             "pass_rate": 0.0,
+            "min_cases": int(min_cases),
+            "min_pass_rate": float(min_pass_rate),
             "per_label": {},
+            "per_label_floors": per_label_review_floors(
+                cases, min_label_pass_rate=min_label_pass_rate
+            ),
+            "review_buckets": review_buckets([], selected_case_count=len(cases)),
             "failed_label_categories": [],
             "min_label_pass_rate": float(min_label_pass_rate),
             "label_coverage": sorted(
@@ -570,7 +626,13 @@ def run_semantic_scope_source_review(
             "case_count": len(cases),
             "passed_count": 0,
             "pass_rate": 0.0,
+            "min_cases": int(min_cases),
+            "min_pass_rate": float(min_pass_rate),
             "per_label": {},
+            "per_label_floors": per_label_review_floors(
+                cases, min_label_pass_rate=min_label_pass_rate
+            ),
+            "review_buckets": review_buckets([], selected_case_count=len(cases)),
             "failed_label_categories": [],
             "min_label_pass_rate": float(min_label_pass_rate),
             "label_coverage": sorted(
@@ -641,7 +703,9 @@ def run_semantic_scope_source_review(
         len(cases), passed_count, min_cases=min_cases, min_pass_rate=min_pass_rate
     )
     pass_rate = round((passed_count / len(cases)) if cases else 0.0, 4)
-    per_label = per_label_review_stats(review_results)
+    per_label = per_label_review_stats(
+        review_results, min_label_pass_rate=min_label_pass_rate
+    )
     return {
         "ok": status == "sufficient" and failures == 0,
         "status": status if failures == 0 else "live_model_partial_failure",
@@ -667,6 +731,10 @@ def run_semantic_scope_source_review(
         "usage": usage_total,
         "cache": deepseek_cache_metrics_from_usage(usage_total),
         "per_label": per_label,
+        "per_label_floors": per_label_review_floors(
+            cases, min_label_pass_rate=min_label_pass_rate
+        ),
+        "review_buckets": review_buckets(review_results, selected_case_count=len(cases)),
         "failed_label_categories": failed_label_categories(
             per_label, min_label_pass_rate=min_label_pass_rate
         ),

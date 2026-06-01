@@ -88,10 +88,13 @@ navigation map lives in `docs/evidence/benchmark-evidence-map.md`.
   empty-evidence sidecar candidates, inspected clean source through a tool, and
   recovered 3 labels from the currently available 8 suppressed cases / 11
   candidate labels through the unchanged strict materializer
-  (`strict_gate_relaxed=false`). A broader 96-case live source-review smoke now
-  passes 84 cases (`pass_rate=0.875`) with every covered label category above
-  the 0.65 per-label floor and no failed label category; the remaining
-  individual misses stay as ambiguous row evidence instead of relaxing gates.
+  (`strict_gate_relaxed=false`). The latest broader 96-case source-review run
+  is diagnostic rather than a green gate: it selected enough cases and kept
+  every reviewed label category above the 0.65 per-label floor, but a live model
+  partial failure kept the run at `claim_level=diagnostic_only`. The smoke now
+  reports per-label selection floors plus accepted / rejected / human-review /
+  model-failure buckets so the old 5-row strict-survival evidence cannot be
+  mistaken for global Stage 2 correctness.
   These are navigation layers over original text, not summary replacements.
 - Stage 4 now has a first local MCP server at
   `skills/aippocampus/scripts/aippocampus_mcp_server.py`, including a
@@ -166,7 +169,8 @@ navigation map lives in `docs/evidence/benchmark-evidence-map.md`.
   Pro-agent recovery and 96-case source-review smokes prove better selected
   coverage, but high-risk suppressed labels such as
   `relationship_continuity` and `life_context` still need stronger
-  source-backed model findings before being restored. Current
+  source-backed model findings before being restored; follow-up #320 owns that
+  evidence-improvement track. Current
   labels, timeline groups, semantic sidecars, real-registry aggregate smoke,
   dynamic semantic sidecar smoke, recall eval prompts, source-review samples,
   and ambient scents are navigation hints only.
