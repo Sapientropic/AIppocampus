@@ -38,7 +38,8 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["config"]["uses_private_history"], False)
         self.assertIn("author_written_synthetic", payload["config"]["scenario_provenance"])
         self.assertIn("full #378 continuous-memory superiority", payload["cannot_claim"])
-        self.assertIn("complete #410 cost and harm ledger", payload["cannot_claim"])
+        self.assertIn("exact dollar accounting for every local operation", payload["cannot_claim"])
+        self.assertNotIn("complete #410 cost and harm ledger", payload["cannot_claim"])
 
     def test_attribution_metrics_separate_presence_correctness_stale_and_oracle(self) -> None:
         payload = benchmark.run_benchmark()
@@ -97,6 +98,92 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
             payload["interpretation_notes"],
         )
 
+    def test_report_includes_public_safe_full_cost_ledger(self) -> None:
+        payload = benchmark.run_benchmark()
+        ledger = payload["cost_harm_ledger"]
+        cost = ledger["cost"]
+        by_arm = cost["by_arm"]
+        baselines = cost["comparison_baselines"]
+
+        self.assertEqual(ledger["schema_version"], 1)
+        self.assertEqual(cost["accounting_basis"], "public_synthetic_cost_units")
+        self.assertEqual(cost["background_jobs_counted"], True)
+        self.assertEqual(cost["unavailable_required_components"], [])
+        for component in (
+            "foreground_tokens",
+            "background_tokens",
+            "background_api_calls",
+            "wall_clock_latency_ms",
+            "indexing_maintenance_ms",
+            "storage_growth_bytes",
+            "source_reopen_count",
+            "retry_recovery_count",
+            "human_correction_count",
+            "human_correction_minutes",
+        ):
+            self.assertIn(component, cost["component_status"])
+
+        true_cost = by_arm["true_aippocampus_memory"]
+        no_memory_cost = by_arm["no_memory"]
+        self.assertGreater(true_cost["background_cost_units"], 0)
+        self.assertGreater(true_cost["source_reopen_count"], 0)
+        self.assertGreater(true_cost["storage_growth_bytes"], 0)
+        self.assertGreater(
+            true_cost["amortized_cost_per_successful_slice"],
+            true_cost["foreground_cost_per_successful_slice"],
+        )
+        self.assertEqual(no_memory_cost["background_cost_units"], 0)
+        self.assertIn("fresh_context_spec_loop", baselines)
+        self.assertLess(
+            baselines["fresh_context_spec_loop"]["amortized_cost_per_successful_slice"],
+            true_cost["amortized_cost_per_successful_slice"],
+        )
+
+    def test_harm_ledger_weights_severe_false_positives_over_event_rate(self) -> None:
+        payload = benchmark.run_benchmark()
+        harm = payload["cost_harm_ledger"]["harm"]
+        by_arm = harm["by_arm"]
+
+        self.assertLessEqual(harm["overall_false_positive_rate"], 0.25)
+        self.assertGreater(by_arm["stale_wrong_memory"]["harm_weighted_false_positive_cost"], 0)
+        self.assertGreater(
+            by_arm["stale_wrong_memory"]["harm_weighted_false_positive_cost"],
+            by_arm["no_memory"]["harm_weighted_false_positive_cost"]
+            + by_arm["sham_unrelated_memory"]["harm_weighted_false_positive_cost"],
+        )
+        self.assertTrue(harm["severe_false_positive_dominates_score"])
+        self.assertGreater(
+            harm["max_single_false_positive_cost"],
+            harm["average_false_positive_cost"],
+        )
+        self.assertGreater(
+            by_arm["stale_wrong_memory"]["max_downstream_turns_affected"],
+            by_arm["true_aippocampus_memory"]["max_downstream_turns_affected"],
+        )
+
+    def test_net_value_allows_cost_or_safety_to_beat_memory_lift(self) -> None:
+        payload = benchmark.run_benchmark()
+        ledger = payload["cost_harm_ledger"]
+        net = ledger["net_value_under_equalized_cost"]
+        by_arm = net["by_arm"]
+
+        self.assertEqual(net["decision_rule"]["forces_memory_arm_win"], False)
+        self.assertEqual(net["decision_rule"]["allows_fresh_context_cost_win"], True)
+        self.assertEqual(net["decision_rule"]["excludes_oracle_from_fair_cost_winner"], True)
+        self.assertEqual(
+            net["lowest_amortized_cost_per_successful_slice_fair_strategy"],
+            "fresh_context_spec_loop",
+        )
+        self.assertEqual(net["highest_net_value_fair_strategy"], "fresh_context_spec_loop")
+        self.assertLess(
+            by_arm["stale_wrong_memory"]["net_value_units"],
+            by_arm["no_memory"]["net_value_units"],
+        )
+        self.assertGreater(
+            by_arm["true_aippocampus_memory"]["success_value_units"],
+            by_arm["no_memory"]["success_value_units"],
+        )
+
     def test_docs_register_runner_and_claim_boundary(self) -> None:
         evidence_map = EVIDENCE_MAP.read_text(encoding="utf-8")
         benchmark_plan = BENCHMARK_PLAN.read_text(encoding="utf-8")
@@ -109,6 +196,10 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
         self.assertIn("oracle_memory", benchmark_plan)
         self.assertIn("memory_presence_effect", benchmark_plan)
         self.assertIn("memory_correctness_effect", benchmark_plan)
+        self.assertIn("amortized_cost_per_successful_slice", benchmark_plan)
+        self.assertIn("harm_weighted_false_positive_cost", benchmark_plan)
+        self.assertIn("net_value_under_equalized_cost", benchmark_plan)
+        self.assertIn("#410 cost and harm ledger", benchmark_plan)
         self.assertIn("not a public superiority claim", benchmark_plan)
 
     def test_cli_emits_json_and_can_write_report(self) -> None:

@@ -123,7 +123,11 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
   `stale_wrong_memory`, and `oracle_memory` arms on public-safe synthetic
   coding-continuity cases, then reports `memory_presence_effect`,
   `memory_correctness_effect`, `stale_memory_harm`, `oracle_headroom`, and
-  source-reopen obedience by arm. This runner is diagnostic and not a public superiority claim.
+  source-reopen obedience by arm. Its #410 `cost_harm_ledger` also separates
+  foreground-only cost from amortized memory cost, severity-weights stale
+  memory false positives, and keeps a separate `fresh_context_spec_loop`
+  comparison baseline so a fair non-memory strategy can win on cost or safety.
+  This runner is diagnostic and not a public superiority claim.
 
 This slice is a smoke gate, not a real-history quality claim. It proves the
 benchmark runner can catch skip/scent/evidence mistakes and can report sanitized
@@ -182,10 +186,34 @@ Reports must keep these effects separate:
 - `source_reopen_obedience_by_arm`: whether strong memory-shaped claims were
   source-reopened or safely abstained when source support was missing.
 
-This is enough to prove the attribution-control contract exists. It does not
-prove full #378 continuous-memory superiority, live host-native compaction
-behavior, private real-history generality, answer-generation quality, or the
-complete #410 cost and harm ledger.
+The #410 cost and harm ledger lives under `cost_harm_ledger`. It uses
+public-synthetic units rather than exact billing data:
+
+- `foreground_cost_per_successful_slice` counts visible prompt/context tokens,
+  fixture latency, and source reopen work.
+- `background_cost_per_successful_slice` counts modeled memory-prep tokens,
+  optional background calls, indexing/maintenance time, and storage growth.
+- `amortized_cost_per_successful_slice` adds foreground, background, recovery,
+  and human-correction proxies so memory cannot look cheap only because its
+  preparation was offscreen.
+- `harm_weighted_false_positive_cost` squares stale false-positive severity and
+  adds downstream-turn, wrong-constraint, rejected-route, project-contamination,
+  risky-before-source-reopen, privacy, and rollback/rework weights.
+- `net_value_under_equalized_cost` keeps success, cost, and harm separate. It
+  excludes `oracle_memory` from fair cost winners and compares memory arms with
+  a `fresh_context_spec_loop` baseline; reports must allow that baseline to win
+  when memory overhead or harm outweighs recall lift.
+
+`no_memory` remains a diagnostic attribution arm with no recall context. It is
+not the same thing as a fresh-context/spec-loop workflow, so reports keep
+`fresh_context_spec_loop` in `comparison_baselines` rather than folding it into
+the attribution arm list.
+
+This is enough to prove the public-synthetic attribution and #410 ledger
+contracts exist. It does not prove full #378 continuous-memory superiority,
+exact dollar accounting for every local operation, live host-native cost
+telemetry, live host-native compaction behavior, private real-history
+generality, answer-generation quality, or competitor superiority.
 
 ### Repeatable Baseline Command
 
