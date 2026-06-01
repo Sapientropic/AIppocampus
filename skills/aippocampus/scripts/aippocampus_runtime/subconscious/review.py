@@ -39,6 +39,10 @@ from aippocampus_runtime.subconscious.jobs import (
 from aippocampus_runtime.subconscious.jobs import (
     default_jobs_output_path,
 )
+from aippocampus_runtime.subconscious.review_public_output import (
+    public_review_cli_payload,
+    public_review_event,
+)
 from aippocampus_runtime.subconscious.runtime import (
     DEFAULT_TEMPERATURE,
     call_chat_json,
@@ -341,46 +345,23 @@ def apply_focus_filter(review: dict[str, Any], focus: str) -> dict[str, Any]:
     return review
 
 
-def sanitized_review_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    """Return scanner-visible public/staging output for review reports.
-
-    Review candidates are intentionally not formal memory, but they can contain
-    model-authored summaries and activation cues. Keep all write/print sinks on
-    this helper so package moves do not reopen CodeQL clear-text alerts.
-    """
-
-    sanitized = sanitize_external_model_payload(payload)
-    return sanitized if isinstance(sanitized, dict) else {}
-
-
 def write_review_jsonl_event(fh: Any, event: dict[str, Any]) -> None:
-    public_event = sanitized_review_payload(event)
-    # Event rows are sanitized staging metadata; raw source text, paths, and
-    # secret-like substrings are redacted before this sink.
-    # lgtm[py/clear-text-storage-sensitive-data]
+    public_event = public_review_event(event)
     fh.write(json.dumps(public_event, ensure_ascii=False) + "\n")
 
 
 def print_review_json(payload: dict[str, Any]) -> None:
-    public_payload = sanitized_review_payload(payload)
-    # CLI JSON is the same sanitized report returned to tests and operators.
-    # lgtm[py/clear-text-logging-sensitive-data]
+    public_payload = public_review_cli_payload(payload)
     print(json.dumps(public_payload, ensure_ascii=False, indent=2))
 
 
 def print_review_summary(payload: dict[str, Any]) -> None:
-    public_payload = sanitized_review_payload(payload)
-    # Non-JSON output renders sanitized counts and a redacted output path.
-    # lgtm[py/clear-text-logging-sensitive-data]
+    public_payload = public_review_cli_payload(payload)
     print(f"findings reviewed: {public_payload['finding_count']}")
-    # lgtm[py/clear-text-logging-sensitive-data]
     print(f"promotion candidates: {public_payload['promotion_candidate_count']}")
-    # lgtm[py/clear-text-logging-sensitive-data]
     print(f"duplicate groups: {public_payload['duplicate_group_count']}")
-    # lgtm[py/clear-text-logging-sensitive-data]
     print(f"weak findings: {public_payload['weak_finding_count']}")
-    # lgtm[py/clear-text-logging-sensitive-data]
-    print(f"output: {public_payload['output']}")
+    print(f"output boundary: {public_payload['output_boundary']}")
 
 
 def append_review_output(

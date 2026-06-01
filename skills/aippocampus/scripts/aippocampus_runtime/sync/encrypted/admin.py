@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.core import aippocampus_registry_dir, sanitize_external_model_payload
+from aippocampus_runtime.core import aippocampus_registry_dir
 from aippocampus_runtime.sync.encrypted import keys as encrypted_sync_keys
 from aippocampus_runtime.sync.encrypted import migration as encrypted_sync_migration
 from aippocampus_runtime.sync.object_storage import cli as sync_object_storage
@@ -71,33 +71,112 @@ def provider_kwargs(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def sanitized_admin_result(result: dict[str, Any]) -> dict[str, Any]:
-    """Return public CLI output for credential-adjacent encrypted sync admin."""
+def public_count(value: Any) -> int:
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
 
-    sanitized = sanitize_external_model_payload(result)
-    return sanitized if isinstance(sanitized, dict) else {"ok": False}
+
+def public_token(value: Any, *, fallback: str = "", max_length: int = 96) -> str:
+    text = str(value or "").strip()
+    safe = "".join(
+        char for char in text[:max_length] if char.isalnum() or char in {"_", "-", ":", "."}
+    )
+    lowered = safe.casefold()
+    if not safe or any(marker in lowered for marker in ("secret", "token", "private")):
+        return fallback
+    return safe
+
+
+def public_recipient(value: Any) -> str:
+    text = str(value or "").strip()
+    lowered = text.casefold()
+    if not lowered.startswith("age1") or "secret" in lowered:
+        return ""
+    return public_token(text, max_length=160)
+
+
+def public_issue(issue: Any) -> dict[str, Any]:
+    if not isinstance(issue, dict):
+        return {"code": "unknown"}
+    return {
+        "code": public_token(issue.get("code"), fallback="unknown"),
+        "has_message": bool(issue.get("message")),
+        "has_path": bool(issue.get("path")),
+    }
+
+
+def public_admin_result(result: dict[str, Any]) -> dict[str, Any]:
+    """Return public CLI output for credential-adjacent encrypted sync admin.
+
+    Admin helpers deal with identity files, local paths, object-store
+    credentials, and public age recipients. Keep the command result useful while
+    projecting it onto a small whitelist before any print sink.
+    """
+
+    public: dict[str, Any] = {
+        "ok": bool(result.get("ok")),
+        "encrypted": bool(result.get("encrypted")),
+    }
+    recipient = public_recipient(result.get("recipient"))
+    if recipient:
+        public["recipient"] = recipient
+    for key in (
+        "device_id",
+        "device_name",
+        "role",
+        "recipient_hash",
+        "recipient_match",
+        "status",
+        "reason",
+    ):
+        value = public_token(result.get(key), fallback="")
+        if value:
+            public[key] = value
+    for key in (
+        "trusted_recipient_count",
+        "revoked_recipient_count",
+        "remaining_trusted_recipient_count",
+        "required_recipient_count",
+        "key_epoch",
+    ):
+        if key in result:
+            public[key] = public_count(result.get(key))
+    for key in (
+        "identity_available",
+        "created",
+        "dry_run",
+        "requires_reencrypt",
+        "recovery_configured",
+    ):
+        if key in result:
+            public[key] = bool(result.get(key))
+    issues = [public_issue(item) for item in result.get("issues") or []]
+    if issues:
+        public["issues"] = issues
+    recovery_state = result.get("recovery_state")
+    if isinstance(recovery_state, dict):
+        public["recovery_state"] = {
+            "configured": bool(recovery_state.get("configured")),
+            "recovery_recipient_count": public_count(
+                recovery_state.get("recovery_recipient_count")
+            ),
+        }
+    public["output_boundary"] = "credential-adjacent details omitted from CLI output"
+    return public
 
 
 def emit_result(result: dict[str, Any], *, json_output: bool, plain_field: str | None = None) -> int:
-    public_result = sanitized_admin_result(result)
+    public_result = public_admin_result(result)
     if json_output:
-        # `result` can be produced by credential-adjacent helpers, so all CLI
-        # output flows through the shared redactor before logging.
-        # lgtm[py/clear-text-logging-sensitive-data]
         print(json.dumps(public_result, ensure_ascii=False, indent=2))
-    elif plain_field and public_result.get(plain_field):
-        # Public recipients are safe to display; private age identities and
-        # provider credentials are never included in the sanitized result.
-        # lgtm[py/clear-text-logging-sensitive-data]
-        print(public_result[plain_field])
+    elif plain_field == "recipient" and public_result.get("recipient"):
+        print(public_result["recipient"])
     else:
-        # Aggregate status is derived from the sanitized result only.
-        # lgtm[py/clear-text-logging-sensitive-data]
         print("encrypted sync: ok" if public_result.get("ok") else "encrypted sync: needs attention")
         for item in public_result.get("issues") or []:
-            # Issue rows are sanitized before rendering.
-            # lgtm[py/clear-text-logging-sensitive-data]
-            print(f"- {item.get('code')}: {item.get('message') or item.get('path')}")
+            print(f"- {item.get('code')}")
     return 0 if result.get("ok") else 1
 
 

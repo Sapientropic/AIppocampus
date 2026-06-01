@@ -22,6 +22,7 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 import subconscious_review as review  # noqa: E402
+from aippocampus_runtime.subconscious import review_public_output  # noqa: E402
 from redaction_fixtures import (  # noqa: E402
     FAKE_TEST_BEARER_TOKEN,
     FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER,
@@ -233,11 +234,14 @@ class SubconsciousReviewTests(unittest.TestCase):
 
         self.assertEqual(row["source"], "external_model_subconscious_review")
         self.assertEqual(row["model_route"]["provider"], "local-test")
+        self.assertEqual(row["content_boundary"], review_public_output.MODEL_TEXT_OUTPUT_BOUNDARY)
+        self.assertEqual(row["source_finding_ids"], ["sf_one"])
+        self.assertEqual(row["candidate_type"], "project_memory")
         row_text = json.dumps(row, ensure_ascii=False)
         self.assertNotIn(FAKE_TEST_OPENAI_API_KEY, row_text)
         self.assertNotIn(FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER, row_text)
-        self.assertIn("<redacted:api-key>", row_text)
-        self.assertIn("<redacted:local-path>", row_text)
+        self.assertNotIn("External route provenance", row_text)
+        self.assertNotIn("candidate.txt", row_text)
 
     def test_validate_review_requires_existing_source_findings(self) -> None:
         findings_by_id = {

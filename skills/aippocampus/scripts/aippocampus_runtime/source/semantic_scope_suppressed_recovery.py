@@ -44,6 +44,17 @@ from aippocampus_runtime.subconscious.runtime import add_usage, call_chat_json, 
 from aippocampus_runtime.subconscious.worker import DEFAULT_BASE_URL
 
 PROMPT_KIND = "semantic_scope_suppressed_label_recovery"
+PUBLIC_RECOVERY_STATUSES = {
+    "observe_only",
+    "live_model_missing_api_key",
+    "sufficient",
+    "insufficient_recovered_labels",
+}
+PUBLIC_CLAIM_LEVELS = {
+    "diagnostic_only",
+    "blocked_live_model",
+    "pro_agent_suppressed_label_recovery",
+}
 
 
 def case_hash(*values: Any) -> str:
@@ -462,23 +473,115 @@ def run_suppressed_label_recovery_smoke(
     }
 
 
-def sanitized_smoke_result(result: dict[str, Any]) -> dict[str, Any]:
-    sanitized = sanitize_external_model_payload(result)
-    return sanitized if isinstance(sanitized, dict) else {}
+def public_count(value: Any) -> int:
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+def public_token(value: Any, *, allowed: set[str] | None = None, fallback: str = "unknown") -> str:
+    text = str(value or "").strip()
+    safe = "".join(char for char in text[:80] if char.isalnum() or char in {"_", "-", "."})
+    if not safe:
+        return fallback
+    if allowed is not None and safe not in allowed:
+        return fallback
+    return safe
+
+
+def public_label_list(values: Any, *, limit: int = 24) -> list[str]:
+    labels: list[str] = []
+    for value in values or []:
+        label = public_token(value, fallback="")
+        if label:
+            labels.append(label)
+    return sorted(set(labels))[:limit]
+
+
+def public_model_route(route: Any) -> dict[str, Any]:
+    if not isinstance(route, dict):
+        return {}
+    return {
+        "provider": public_token(route.get("provider"), fallback="unknown"),
+        "route": public_token(route.get("route"), fallback="unknown"),
+    }
+
+
+def public_usage(usage: Any) -> dict[str, Any]:
+    if not isinstance(usage, dict):
+        return {}
+    out: dict[str, Any] = {}
+    for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+        if key in usage:
+            out[key] = public_count(usage.get(key))
+    return out
+
+
+def public_cache(cache: Any) -> dict[str, Any]:
+    if not isinstance(cache, dict):
+        return {}
+    return {
+        "available": bool(cache.get("available")),
+        "kind": public_token(cache.get("kind"), fallback="unknown"),
+    }
+
+
+def public_privacy_boundary(boundary: Any) -> dict[str, Any]:
+    if not isinstance(boundary, dict):
+        return {}
+    return {
+        "raw_text_emitted": bool(boundary.get("raw_text_emitted")),
+        "snippets_emitted": bool(boundary.get("snippets_emitted")),
+        "titles_emitted": bool(boundary.get("titles_emitted")),
+        "source_reference_details_emitted": bool(
+            boundary.get("source_reference_details_emitted")
+        ),
+        "absolute_paths_emitted": bool(boundary.get("absolute_paths_emitted")),
+        "case_ids_are_hashed": bool(boundary.get("case_ids_are_hashed")),
+        "strict_gate_relaxed": bool(boundary.get("strict_gate_relaxed")),
+        "external_model_call_requires_live_flag": bool(
+            boundary.get("external_model_call_requires_live_flag")
+        ),
+    }
+
+
+def public_smoke_result(result: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "ok": bool(result.get("ok")),
+        "status": public_token(
+            result.get("status"),
+            allowed=PUBLIC_RECOVERY_STATUSES,
+            fallback="unknown",
+        ),
+        "claim_level": public_token(
+            result.get("claim_level"),
+            allowed=PUBLIC_CLAIM_LEVELS,
+            fallback="diagnostic_only",
+        ),
+        "live_model_used": bool(result.get("live_model_used")),
+        "model_route": public_model_route(result.get("model_route")),
+        "case_count": public_count(result.get("case_count")),
+        "candidate_label_count": public_count(result.get("candidate_label_count")),
+        "strict_recovered_label_count": public_count(
+            result.get("strict_recovered_label_count")
+        ),
+        "strict_gate_relaxed": bool(result.get("strict_gate_relaxed")),
+        "label_coverage": public_label_list(result.get("label_coverage")),
+        "recovered_label_coverage": public_label_list(result.get("recovered_label_coverage")),
+        "usage": public_usage(result.get("usage")),
+        "cache": public_cache(result.get("cache")),
+        "privacy_boundary": public_privacy_boundary(result.get("privacy_boundary")),
+        "output_boundary": "case details omitted from CLI output; source-backed jobs remain local",
+    }
 
 
 def emit_smoke_result(result: dict[str, Any], *, json_output: bool) -> None:
-    public_result = sanitized_smoke_result(result)
+    public_result = public_smoke_result(result)
     if json_output:
-        # Smoke output is sanitized model/source-review metadata, not raw
-        # source text. Keep this sink centralized for CodeQL diff scanning.
-        # lgtm[py/clear-text-logging-sensitive-data]
         print(json.dumps(public_result, ensure_ascii=False, indent=2))
         return
-    # The non-JSON summary renders sanitized aggregate fields only.
-    # lgtm[py/clear-text-logging-sensitive-data]
     print(f"suppressed label recovery: {public_result.get('status')}")
-    # lgtm[py/clear-text-logging-sensitive-data]
     print(f"strict recovered labels: {public_result.get('strict_recovered_label_count')}")
 
 
