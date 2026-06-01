@@ -77,6 +77,11 @@ STAGE_RE = re.compile(r"\bStage\s+([0-7])\b", re.IGNORECASE)
 SOURCE_PATH_RE = re.compile(
     r"^(?:\.github|benchmarks|benchmark_corpus|docs|plugins|skills|sources|tests|tools)/"
 )
+SOURCE_DOC_REFERENCE_RE = re.compile(
+    r"(?:(?:^|[\s`'\"(<])(?:docs|skills/aippocampus/references)/"
+    r"[^\s`'\"<>)]+|(?:^|[\s`'\"(<])references/[^\s`'\"<>)]+)",
+    re.IGNORECASE,
+)
 SOURCE_ISSUE_PREFIX_RE = re.compile(r"^GitHub issue #(\d+)\b")
 MANUAL_SOURCE_MARKER_RE = re.compile(r"(?i)\b(?:manual|human)\b|owner\s+triage|do not overwrite")
 
@@ -103,6 +108,7 @@ class TriageResult:
     milestone: str | None
     confidence: str
     reasons: tuple[str, ...]
+    warnings: tuple[str, ...] = ()
 
     def field_values(self) -> dict[str, str]:
         values: dict[str, str] = {
@@ -434,6 +440,69 @@ def infer_milestone(
     return None, None
 
 
+def has_source_doc_reference(issue: IssueContext) -> bool:
+    return bool(SOURCE_DOC_REFERENCE_RE.search(issue.body or ""))
+
+
+def needs_source_doc_reference(
+    issue: IssueContext,
+    *,
+    track: str | None,
+    kind: str | None,
+    parents: list[int],
+) -> bool:
+    """Return whether an issue is likely to need canonical docs before coding.
+
+    This is deliberately a warning heuristic, not a quality gate. The goal is
+    to catch new design/benchmark issues before agents treat them as isolated
+    task tickets and forget the research documents that own the deeper boundary.
+    """
+
+    if issue.state.upper() == "CLOSED":
+        return False
+
+    text = _text(issue)
+    if track == "Benchmarks & Research" or any(parent in {216, 228} for parent in parents):
+        return True
+    if kind in {"Umbrella", "Research"} and track in {"Life-wide memory", "Benchmarks & Research"}:
+        return True
+    if _contains(
+        text,
+        "benchmark",
+        "fixture",
+        "scoring",
+        "recall-discrimination",
+        "confidence interval",
+        "compaction",
+        "dream",
+        "journey",
+        "subconscious",
+        "ambient recall",
+        "cognitive map",
+        "source-backed map",
+        "fresh-thread",
+    ):
+        return True
+    return False
+
+
+def source_doc_warnings(
+    issue: IssueContext,
+    *,
+    track: str | None,
+    kind: str | None,
+    parents: list[int],
+) -> tuple[str, ...]:
+    if not needs_source_doc_reference(issue, track=track, kind=kind, parents=parents):
+        return ()
+    if has_source_doc_reference(issue):
+        return ()
+    return (
+        "missing_source_docs: design/benchmark issue should link canonical "
+        "docs/... or skills/aippocampus/references/... context before implementation",
+    )
+
+
 def infer_source(issue: IssueContext, parents: list[int]) -> str:
     source_parts = [f"GitHub issue #{issue.number}"]
     if parents:
@@ -475,6 +544,7 @@ def infer_triage(issue: IssueContext) -> TriageResult:
     milestone, milestone_reason = infer_milestone(issue, parents, track, kind, stage)
     if milestone_reason:
         reasons.append(f"milestone={milestone_reason}")
+    warnings = source_doc_warnings(issue, track=track, kind=kind, parents=parents)
 
     complete_route = bool(track and kind and stage)
     if issue.state.upper() == "CLOSED":
@@ -502,6 +572,7 @@ def infer_triage(issue: IssueContext) -> TriageResult:
         milestone=milestone,
         confidence=confidence,
         reasons=tuple(reasons),
+        warnings=warnings,
     )
 
 
@@ -936,6 +1007,7 @@ def triage_item(
         "title": issue.title,
         "confidence": triage.confidence,
         "reasons": triage.reasons,
+        "warnings": triage.warnings,
         "milestone": triage.milestone,
         "current_milestone": issue.milestone,
         "milestone_update": milestone_update,
@@ -1004,6 +1076,7 @@ def triage_single_issue(
         "title": issue.title,
         "confidence": triage.confidence,
         "reasons": triage.reasons,
+        "warnings": triage.warnings,
         "milestone": triage.milestone,
         "current_milestone": issue.milestone,
         "milestone_update": milestone_update,
@@ -1014,6 +1087,20 @@ def triage_single_issue(
         "repair_managed_fields": repair_managed_fields,
         "dry_run": dry_run,
     }
+
+
+def _github_annotation_escape(value: object) -> str:
+    text = str(value)
+    return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+
+def emit_github_action_warnings(results: list[dict[str, Any]]) -> None:
+    for result in results:
+        issue_number = result.get("issue")
+        for warning in result.get("warnings") or []:
+            title = _github_annotation_escape(f"AIppocampus issue #{issue_number} source docs")
+            message = _github_annotation_escape(warning)
+            print(f"::warning title={title}::{message}", file=sys.stderr)
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -1131,6 +1218,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         raise RuntimeError("Pass --issue-number, --all-missing, --repair-managed-fields, or --assign-milestones.")
 
+    emit_github_action_warnings(results)
     print(json.dumps({"ok": True, "results": results}, ensure_ascii=False, indent=2))
     return 0
 

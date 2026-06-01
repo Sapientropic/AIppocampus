@@ -119,6 +119,30 @@ def test_benchmark_parent_overrides_semantic_sidecar_life_wide_keywords() -> Non
     assert result.kind == "Smoke"
     assert result.stage == "Research"
     assert result.priority == "P1"
+    assert result.warnings == (
+        "missing_source_docs: design/benchmark issue should link canonical "
+        "docs/... or skills/aippocampus/references/... context before implementation",
+    )
+
+
+def test_design_benchmark_issue_with_source_docs_has_no_warning() -> None:
+    result = project_triage.infer_triage(
+        issue(
+            218,
+            "Replace first-N ShareGPT benchmark slices with seeded stratified sampling",
+            "Parent: #216\n\n## Source\n\n- `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`",
+        )
+    )
+
+    assert result.track == "Benchmarks & Research"
+    assert result.warnings == ()
+
+
+def test_ordinary_ambiguous_issue_without_docs_does_not_warn() -> None:
+    result = project_triage.infer_triage(issue(99, "Something vague"))
+
+    assert result.status == "Inbox"
+    assert result.warnings == ()
 
 
 def test_hard_negative_issue_does_not_treat_later_as_priority_later() -> None:
