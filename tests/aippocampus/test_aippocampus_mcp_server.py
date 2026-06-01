@@ -468,6 +468,24 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(payload["error"]["code"], "unsupported_mutation")
         self.assertEqual(payload["error"]["details"]["requested_tool"], "delete_memory")
 
+    def test_unsupported_mutation_tool_family_uses_stable_error_code(self) -> None:
+        mutating_tools = ["store_memory", "write_memory", "sync_push", "install_hook"]
+        for index, tool_name in enumerate(mutating_tools):
+            with self.subTest(tool_name=tool_name):
+                response = mcp.handle_request(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 550 + index,
+                        "method": "tools/call",
+                        "params": {"name": tool_name, "arguments": {}},
+                    }
+                )
+
+                self.assertTrue(response["result"]["isError"])
+                payload = self.tool_payload(response)
+                self.assertEqual(payload["error"]["code"], "unsupported_mutation")
+                self.assertEqual(payload["error"]["details"]["requested_tool"], tool_name)
+
     def test_tools_call_rejects_malformed_arguments(self) -> None:
         response = mcp.handle_request(
             {

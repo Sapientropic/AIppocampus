@@ -165,6 +165,19 @@ REQUIRED_BENCHMARK_EVIDENCE_MAP_TERMS = {
 }
 
 REQUIRED_PUBLIC_API_CONTRACT_TERMS = {
+    "### MCP Control-Plane Boundary": (
+        "public API doc missing MCP control-plane boundary"
+    ),
+    "Control-plane registration means": (
+        "public API doc missing MCP control-plane definition"
+    ),
+    "memory-write API": "public API doc missing MCP memory-write non-goal",
+    "Future MCP write additions must prove": (
+        "public API doc missing future MCP write review bar"
+    ),
+    "privacy, provenance, idempotence": (
+        "public API doc missing MCP write review criteria"
+    ),
     "### Environment Configuration Matrix": (
         "public API doc missing environment configuration matrix"
     ),
