@@ -202,6 +202,25 @@ REQUIRED_PUBLIC_API_CONTRACT_TERMS = {
     ),
 }
 
+REQUIRED_PUBLIC_CORE_SCHEMA_CONTRACT_TERMS = {
+    "### Metadata Namespace And Extension Rules": (
+        "public core schema doc missing metadata namespace rules"
+    ),
+    "`metadata.core`": "public core schema doc missing core metadata namespace",
+    "`metadata.provider`": "public core schema doc missing provider metadata namespace",
+    "`metadata.extensions`": "public core schema doc missing extension metadata namespace",
+    "must not override or reinterpret top-level public fields": (
+        "public core schema doc missing top-level field override guard"
+    ),
+    "Extension payloads should include": (
+        "public core schema doc missing extension version guidance"
+    ),
+    "Private export mode": "public core schema doc missing metadata privacy boundary",
+    "labels remain navigation": (
+        "public core schema doc missing model-label truth boundary"
+    ),
+}
+
 BENCHMARK_EVIDENCE_EXCLUDED_SCRIPT_NAMES = {"_paths.py"}
 LLM_CALL_CONTRACT_EXCLUDED_SCRIPT_NAMES = {"model_client.py"}
 
@@ -449,6 +468,20 @@ def public_api_contract_issues(repo_root: Path) -> list[str]:
     return issues
 
 
+def public_core_schema_contract_issues(repo_root: Path) -> list[str]:
+    issues: list[str] = []
+    rel_path = "docs/guides/public-core-boundary.md"
+    public_core = repo_root / rel_path
+    if not public_core.exists():
+        return [f"missing public core schema contract doc: {rel_path}"]
+
+    text = public_core.read_text(encoding="utf-8")
+    for term, issue in REQUIRED_PUBLIC_CORE_SCHEMA_CONTRACT_TERMS.items():
+        if term not in text:
+            issues.append(issue)
+    return issues
+
+
 def windows_context_from_recent_lines(lines: list[str], fence_start_line: int) -> bool:
     recent = "\n".join(lines[max(0, fence_start_line - 5) : fence_start_line - 1]).casefold()
     return "windows" in recent or "powershell" in recent
@@ -530,6 +563,7 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
     issues.extend(llm_call_contract_issues(repo_root))
     issues.extend(benchmark_evidence_map_issues(repo_root))
     issues.extend(public_api_contract_issues(repo_root))
+    issues.extend(public_core_schema_contract_issues(repo_root))
 
     gitignore = repo_root / ".gitignore"
     if not gitignore.exists():
