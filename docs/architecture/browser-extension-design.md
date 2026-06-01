@@ -187,7 +187,7 @@ CLI 版 AIppocampus 的架构是「确定性优先，LLM 仅用于模糊地带�
 
 | 来源 | 内容 | 用途 |
 |------|------|------|
-| `aippocampuslib.py` | `sanitize_external_model_text()` 7 种正则脱敏 | 搜索结果返回前脱敏 |
+| `aippocampus_runtime/safety.py` | `sanitize_external_model_text()` 脱敏策略 | 搜索结果返回前脱敏 |
 | `aippocampuslib.py` | `is_injected_instruction_text()` 9 种注入检测 | 过滤系统指令 |
 | `retrieval.py` | `split_query_terms()` CJK 分词 + `STOP_TERMS` | 中文搜索分词 |
 | `retrieval.py` | `phase_weight()` 阶段权重 | 搜索排序信号 |

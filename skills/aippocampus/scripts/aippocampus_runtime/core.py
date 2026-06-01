@@ -4,17 +4,27 @@
 from __future__ import annotations
 
 import hashlib
-import ipaddress
 import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
-from urllib.parse import SplitResult, urlsplit
 
+from aippocampus_runtime import anchor_graph as _anchor_graph
+from aippocampus_runtime import safety as _safety
+from aippocampus_runtime import text as _text
+from aippocampus_runtime.cli import errors as _cli_errors
 from aippocampus_runtime.source import rollout as _rollout
 
+build_anchor_graph = _anchor_graph.build_anchor_graph
+cli_error_code_from_message = _cli_errors.cli_error_code_from_message
+cli_error_payload = _cli_errors.cli_error_payload
+cli_error_payload_from_message = _cli_errors.cli_error_payload_from_message
+cli_exit_code_for_error_code = _cli_errors.cli_exit_code_for_error_code
+compact_text = _text.compact_text
+deepseek_cache_metrics_from_usage = _safety.deepseek_cache_metrics_from_usage
 INJECTED_INSTRUCTION_PREFIXES = _rollout.INJECTED_INSTRUCTION_PREFIXES
+is_loopback_host = _safety.is_loopback_host
 empty_turn = _rollout.empty_turn
 extract_message = _rollout.extract_message
 is_injected_instruction_text = _rollout.is_injected_instruction_text
@@ -22,7 +32,12 @@ iter_jsonl = _rollout.iter_jsonl
 iter_messages = _rollout.iter_messages
 message_phase = _rollout.message_phase
 normalize_rollout = _rollout.normalize_rollout
+parse_anchor_file = _anchor_graph.parse_anchor_file
+sanitize_external_model_payload = _safety.sanitize_external_model_payload
+sanitize_external_model_text = _safety.sanitize_external_model_text
 tool_payload_kind = _rollout.tool_payload_kind
+validate_http_endpoint_url = _safety.validate_http_endpoint_url
+validate_private_credential_transport = _safety.validate_private_credential_transport
 
 
 def now_utc() -> str:
@@ -256,301 +271,9 @@ def resolve_artifact_path(value: str | Path | None, cwd: str | Path, default_pat
     return path if path.is_absolute() else Path(cwd).resolve() / path
 
 
-def compact_text(text: str, max_chars: int) -> str:
-    text = re.sub(r"\s+", " ", text).strip()
-    if len(text) <= max_chars:
-        return text
-    half = max_chars // 2
-    return text[:half].rstrip() + " ... " + text[-half:].lstrip()
-
-
-KEY_BLOCK_BOUNDARY = "-----"
-GENERIC_PRIVATE_KEY_BLOCK = (
-    rf"{KEY_BLOCK_BOUNDARY}BEGIN [A-Z ]*PRIVATE KEY{KEY_BLOCK_BOUNDARY}"
-    rf".*?"
-    rf"{KEY_BLOCK_BOUNDARY}END [A-Z ]*PRIVATE KEY{KEY_BLOCK_BOUNDARY}"
-)
-OPENSSH_PRIVATE_KEY_BLOCK = (
-    rf"{KEY_BLOCK_BOUNDARY}BEGIN OPENSSH PRIVATE KEY{KEY_BLOCK_BOUNDARY}"
-    rf".*?"
-    rf"{KEY_BLOCK_BOUNDARY}END OPENSSH PRIVATE KEY{KEY_BLOCK_BOUNDARY}"
-)
-
-EXTERNAL_MODEL_HARD_SECRET_PATTERNS = [
-    re.compile(pattern, re.IGNORECASE | re.DOTALL)
-    for pattern in [
-        GENERIC_PRIVATE_KEY_BLOCK,
-        OPENSSH_PRIVATE_KEY_BLOCK,
-    ]
-]
-
-EXTERNAL_MODEL_REDACTION_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
-    (
-        "openai_api_key",
-        re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b", re.IGNORECASE),
-        "<redacted:api-key>",
-    ),
-    (
-        "bearer_token",
-        re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]{20,}", re.IGNORECASE),
-        "Bearer <redacted:bearer-token>",
-    ),
-    (
-        "credential_url",
-        re.compile(r"\b([A-Za-z][A-Za-z0-9+.-]*://)[^@\s:/]+:[^@\s]+@"),
-        r"\1<redacted:credentials>@",
-    ),
-    (
-        "secret_assignment",
-        re.compile(
-            r"\b(api[_-]?key|secret|token|password|passwd|cookie|authorization)\b\s*[:=]\s*"
-            r"(\"[^\"]*\"|'[^']*'|(?!(?:<redacted:))[^\s,;&]+)",
-            re.IGNORECASE,
-        ),
-        r"\1=<redacted:secret>",
-    ),
-    (
-        "json_escaped_windows_local_path",
-        re.compile(r"(?<![\w])(?:[A-Za-z]:\\\\[^\"'\s<>]+)"),
-        "<redacted:local-path>",
-    ),
-    (
-        "windows_local_path",
-        re.compile(r"(?<![\w])(?:[A-Za-z]:\\(?:[^\\/:*?\"<>|\r\n\t ]+\\?)+[^\\/:*?\"<>|\r\n\t ]*)"),
-        "<redacted:local-path>",
-    ),
-    (
-        "posix_local_path",
-        re.compile(r"(?<![\w:/])/(?:Users|home|root|tmp|var|mnt|Volumes|private)/(?:[^\s\"'<>]+)"),
-        "<redacted:local-path>",
-    ),
-]
-
-
-def sanitize_external_model_text(text: str) -> tuple[str, dict[str, Any]]:
-    """Redact likely secrets before automatic external-model calls.
-
-    Clean source can include pasted credentials or machine-local paths. This
-    helper is intentionally shared by all DeepSeek-compatible routes so new
-    workers do not accidentally bypass the prompt-hook privacy boundary.
-    """
-
-    original = str(text or "")
-    hard_matches = [
-        pattern.pattern
-        for pattern in EXTERNAL_MODEL_HARD_SECRET_PATTERNS
-        if pattern.search(original)
-    ]
-    if hard_matches:
-        return "", {
-            "redacted": True,
-            "redaction_count": 0,
-            "redaction_types": ["private_key_block"],
-            "hard_block": True,
-            "reason": "private key block detected",
-        }
-
-    sanitized = original
-    redaction_types: list[str] = []
-    redaction_count = 0
-    for label, pattern, replacement in EXTERNAL_MODEL_REDACTION_PATTERNS:
-        sanitized, count = pattern.subn(replacement, sanitized)
-        if count:
-            redaction_types.append(label)
-            redaction_count += count
-
-    remaining = re.sub(r"<redacted:[^>]+>", " ", sanitized)
-    remaining = re.sub(r"\s+", " ", remaining).strip()
-    hard_block = bool(redaction_count and len(remaining) < 12)
-    return sanitized, {
-        "redacted": bool(redaction_count),
-        "redaction_count": redaction_count,
-        "redaction_types": list(dict.fromkeys(redaction_types))[:8],
-        "hard_block": hard_block,
-        "reason": "prompt mostly secret/credential material after redaction" if hard_block else "",
-    }
-
-
-def sanitize_external_model_payload(value: Any) -> Any:
-    if isinstance(value, str):
-        sanitized, _ = sanitize_external_model_text(value)
-        return sanitized
-    if isinstance(value, list):
-        return [sanitize_external_model_payload(item) for item in value]
-    if isinstance(value, tuple):
-        return tuple(sanitize_external_model_payload(item) for item in value)
-    if isinstance(value, dict):
-        return {key: sanitize_external_model_payload(item) for key, item in value.items()}
-    return value
-
-
-def is_loopback_host(hostname: str | None) -> bool:
-    if not hostname:
-        return False
-    host = hostname.rstrip(".").casefold()
-    if host == "localhost" or host.endswith(".localhost"):
-        return True
-    try:
-        return ipaddress.ip_address(host).is_loopback
-    except ValueError:
-        return False
-
-
-def validate_http_endpoint_url(endpoint_url: str, *, service_name: str) -> SplitResult:
-    parsed = urlsplit(endpoint_url)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise ValueError(f"{service_name} must be an http(s) URL")
-    if parsed.username or parsed.password:
-        raise ValueError(f"{service_name} must not include credentials")
-    return parsed
-
-
-def validate_private_credential_transport(
-    endpoint_url: str, *, service_name: str, credential_label: str
-) -> None:
-    parsed = validate_http_endpoint_url(endpoint_url, service_name=service_name)
-    # Local model proxies and dev object stores commonly use plain HTTP. Keep
-    # that loopback path usable, but never let bearer-style credentials travel
-    # over network HTTP because the receiving service may still look legitimate.
-    if parsed.scheme == "http" and not is_loopback_host(parsed.hostname):
-        raise ValueError(
-            f"{credential_label} for {service_name} requires HTTPS unless endpoint is loopback"
-        )
-
-
-def deepseek_cache_metrics_from_usage(usage: dict[str, Any] | None) -> dict[str, Any]:
-    usage = usage if isinstance(usage, dict) else {}
-    hit = int(usage.get("prompt_cache_hit_tokens") or 0)
-    miss = int(usage.get("prompt_cache_miss_tokens") or 0)
-    total = hit + miss
-    return {
-        "available": "prompt_cache_hit_tokens" in usage or "prompt_cache_miss_tokens" in usage,
-        "hit_tokens": hit,
-        "miss_tokens": miss,
-        "hit_rate": round(hit / total, 4) if total else 0.0,
-    }
-
-
-def cli_error_code_from_message(message: str) -> str:
-    low = str(message or "").casefold()
-    if "missing deepseek api key" in low or "missing api key" in low or (
-        "missing" in low and "api key" in low
-    ):
-        return "missing_api_key"
-    if "no such file" in low or "cannot find the file" in low or "filenotfounderror" in low:
-        return "missing_file"
-    if "jsondecodeerror" in low or "invalid json" in low:
-        return "invalid_json"
-    return "runtime_error"
-
-
-def cli_exit_code_for_error_code(code: str) -> int:
-    return 2 if code in {"missing_api_key", "missing_file", "invalid_json"} else 1
-
-
-def cli_error_payload(exc: BaseException) -> dict[str, Any]:
-    message = compact_text(f"{type(exc).__name__}: {exc}", 800)
-    code = cli_error_code_from_message(message)
-    return {
-        "ok": False,
-        "error": {
-            "code": code,
-            "message": message,
-        },
-        "data": None,
-    }
-
-
-def cli_error_payload_from_message(message: str) -> dict[str, Any]:
-    clean_message = compact_text(str(message or ""), 800)
-    return {
-        "ok": False,
-        "error": {
-            "code": cli_error_code_from_message(clean_message),
-            "message": clean_message,
-        },
-        "data": None,
-    }
-
-
 def file_sha256(path: Path, chunk_size: int = 1024 * 1024) -> str:
     h = hashlib.sha256()
     with path.open("rb") as f:
         for chunk in iter(lambda: f.read(chunk_size), b""):
             h.update(chunk)
     return h.hexdigest()
-
-
-def parse_anchor_file(path: Path) -> list[dict]:
-    if not path.exists():
-        return []
-    anchors: list[dict] = []
-    current: dict | None = None
-
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        line = raw.strip()
-        if line.startswith("## "):
-            if current:
-                anchors.append(current)
-            current = {
-                "title": line[3:].strip(),
-                "keywords": [],
-                "notes": [],
-                "quotes": [],
-                "sources": [],
-            }
-            continue
-        if not current or not line.startswith("- "):
-            continue
-        body = line[2:]
-        key, sep, value = body.partition(":")
-        value = value.strip() if sep else body.strip()
-        low = key.strip().casefold()
-        if low == "keywords":
-            current["keywords"].extend([x.strip() for x in re.split(r"[,，]", value) if x.strip()])
-        elif low == "note":
-            current["notes"].append(value)
-        elif low == "preserved phrase":
-            current["quotes"].append(value)
-        elif low == "source":
-            current["sources"].append(value)
-        else:
-            current.setdefault("fields", {})[key.strip()] = value
-
-    if current:
-        anchors.append(current)
-    return anchors
-
-
-def build_anchor_graph(anchors: list[dict], session_id: str | None = None) -> dict:
-    nodes: dict[str, dict] = {}
-    edges: list[dict] = []
-
-    thread_id = f"thread:{session_id or 'unknown'}"
-    nodes[thread_id] = {"id": thread_id, "type": "thread", "label": session_id or "unknown thread"}
-
-    def add_node(node_id: str, node_type: str, label: str) -> None:
-        nodes.setdefault(node_id, {"id": node_id, "type": node_type, "label": label})
-
-    def add_edge(src: str, dst: str, rel: str) -> None:
-        edges.append({"source": src, "target": dst, "type": rel})
-
-    for idx, anchor in enumerate(anchors, start=1):
-        title = anchor.get("title") or f"Anchor {idx}"
-        topic_id = f"topic:{hashlib.sha1(title.encode('utf-8')).hexdigest()[:12]}"
-        add_node(topic_id, "topic", title)
-        add_edge(thread_id, topic_id, "HAS_TOPIC")
-        for keyword in anchor.get("keywords", []):
-            key_id = f"keyword:{hashlib.sha1(keyword.casefold().encode('utf-8')).hexdigest()[:12]}"
-            add_node(key_id, "keyword", keyword)
-            add_edge(topic_id, key_id, "HAS_KEYWORD")
-        for source in anchor.get("sources", []):
-            src_id = f"source:{hashlib.sha1(source.encode('utf-8')).hexdigest()[:12]}"
-            add_node(src_id, "source", source)
-            add_edge(topic_id, src_id, "CITES")
-        for quote in anchor.get("quotes", []):
-            quote_id = f"quote:{hashlib.sha1(quote.encode('utf-8')).hexdigest()[:12]}"
-            add_node(quote_id, "quote", compact_text(quote, 120))
-            add_edge(topic_id, quote_id, "PRESERVES")
-
-    return {"nodes": list(nodes.values()), "edges": edges}

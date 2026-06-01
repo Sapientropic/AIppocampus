@@ -1,6 +1,6 @@
 # Provider Entrypoint Inventory
 
-Last audited: 2026-05-31.
+Last audited: 2026-06-01.
 
 This inventory classifies the remaining runtime surfaces that mention Codex raw
 rollouts or Codex home helpers. It is the companion record for issue #122. The
@@ -12,7 +12,7 @@ audit/host integration paths.
 
 | Surface | Classification | Boundary |
 | --- | --- | --- |
-| `aippocampus_runtime/core.py` plus `aippocampuslib.py` compatibility shim | Shared compatibility helpers | Re-exports legacy Codex rollout parser helpers from `aippocampus_runtime/source/rollout.py` and owns provider-neutral registry storage/home helpers. New public raw-source logic should use `conversation_sources/` or source package owners instead of adding more helpers here. |
+| `aippocampus_runtime/core.py` plus `aippocampuslib.py` compatibility shim | Shared compatibility helpers | Re-exports legacy Codex rollout parser helpers from `aippocampus_runtime/source/rollout.py` and owns provider-neutral registry storage/home helpers. Text compaction, external-model safety/credential transport, CLI error payloads, and anchor graph helpers are re-exported for compatibility only; new code should import `aippocampus_runtime.text`, `aippocampus_runtime.safety`, `aippocampus_runtime.cli.errors`, or `aippocampus_runtime.anchor_graph` directly. New public raw-source logic should use `conversation_sources/` or source package owners instead of adding more helpers here. |
 | `conversation_sources/codex.py` | Codex provider implementation | The only provider module that should know Codex `sessions/` and `archived_sessions/` layout. |
 | `aippocampus_runtime/source/rollout.py` | Codex rollout parser owner | Parses Codex event/response JSONL into the legacy normalized message/turn schema for audit, clean-source, and index consumers. It does not discover rollout files or decide artifact storage; `core.py` and `aippocampuslib.py` only re-export these helpers for compatibility. |
 | `aippocampus_runtime/onboarding/facade.py` plus `onboard.py` compatibility shim | Provider-aware public entrypoint | Accepts `--provider codex\|claude-code\|generic-jsonl`; `auto` remains conservative and lists other providers separately. |

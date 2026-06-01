@@ -180,6 +180,60 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(aippocampuslib.aippocampus_registry_dir, core.aippocampus_registry_dir)
         self.assertIs(aippocampuslib.sanitize_external_model_text, core.sanitize_external_model_text)
 
+    def test_core_split_helpers_have_direct_package_owners_and_core_compat_exports(self) -> None:
+        from aippocampus_runtime import anchor_graph, core, safety, text
+        from aippocampus_runtime.cli import errors
+
+        package_paths = [
+            SCRIPTS / "aippocampus_runtime" / "anchor_graph.py",
+            SCRIPTS / "aippocampus_runtime" / "safety.py",
+            SCRIPTS / "aippocampus_runtime" / "text.py",
+            SCRIPTS / "aippocampus_runtime" / "cli" / "errors.py",
+        ]
+        for path in package_paths:
+            self.assertTrue(path.exists(), path)
+
+        top_level_edges = same_dir_import_edges(top_level_only=True)
+        all_edges = same_dir_import_edges()
+        for owner in [
+            "aippocampus_runtime.anchor_graph",
+            "aippocampus_runtime.safety",
+            "aippocampus_runtime.text",
+            "aippocampus_runtime.cli.errors",
+        ]:
+            self.assertIn(owner, top_level_edges["aippocampus_runtime.core"])
+            self.assertNotIn("aippocampus_runtime.core", all_edges[owner])
+
+        core_source = (SCRIPTS / "aippocampus_runtime" / "core.py").read_text(
+            encoding="utf-8"
+        )
+        for old_definition in [
+            "def compact_text(",
+            "def sanitize_external_model_text(",
+            "def sanitize_external_model_payload(",
+            "def validate_private_credential_transport(",
+            "def cli_error_payload(",
+            "def parse_anchor_file(",
+            "def build_anchor_graph(",
+        ]:
+            self.assertNotIn(old_definition, core_source)
+
+        self.assertIs(core.compact_text, text.compact_text)
+        self.assertIs(core.sanitize_external_model_text, safety.sanitize_external_model_text)
+        self.assertIs(core.sanitize_external_model_payload, safety.sanitize_external_model_payload)
+        self.assertIs(
+            core.validate_private_credential_transport,
+            safety.validate_private_credential_transport,
+        )
+        self.assertIs(
+            core.deepseek_cache_metrics_from_usage,
+            safety.deepseek_cache_metrics_from_usage,
+        )
+        self.assertIs(core.cli_error_payload, errors.cli_error_payload)
+        self.assertIs(core.cli_error_payload_from_message, errors.cli_error_payload_from_message)
+        self.assertIs(core.parse_anchor_file, anchor_graph.parse_anchor_file)
+        self.assertIs(core.build_anchor_graph, anchor_graph.build_anchor_graph)
+
     def test_rollout_parser_has_source_owner_and_core_compat_exports(self) -> None:
         import aippocampuslib
         from aippocampus_runtime import core
