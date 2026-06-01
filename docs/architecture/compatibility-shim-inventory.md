@@ -18,3 +18,8 @@ Current snapshot after the #144/#305 policy pass:
 
 This file is only a short human pointer. Do not mirror the full 136-script list
 here; use the tool output when planning a deletion batch.
+
+Temporary compatibility shims must not grow a second API surface. Long manual
+export lists are guarded in `tests/aippocampus/test_compat_shim_inventory.py`;
+use a module-alias shim or a tiny `globals().update(...)` mirror unless a
+documented installer/hook fallback needs explicit local logic.

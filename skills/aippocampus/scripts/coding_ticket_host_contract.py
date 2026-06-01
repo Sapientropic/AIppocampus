@@ -3,50 +3,15 @@
 
 from __future__ import annotations
 
-from aippocampus_runtime.coding.host_contract import (
-    CONTRACT_KIND,
-    CORE_AI_FIELDS,
-    DECISION_KIND,
-    FEEDBACK_OUTCOMES,
-    HOST_DECISION_FIELDS,
-    HOST_RUNTIME_INPUTS,
-    REQUIRED_AI_FIELDS,
-    SAFE_THIN_SOURCE_USES,
-    SCHEMA_VERSION,
-    TICKET_KIND,
-    TUNING_KIND,
-    VISIBILITIES,
-    describe_host_contract,
-    host_decision_for_ticket,
-    main,
-    normalize_ticket,
-    simulate_host_consumption,
-    tune_activation_from_feedback,
-    validate_ticket_contract,
-)
+import sys
+from typing import TYPE_CHECKING
 
-__all__ = [
-    "CONTRACT_KIND",
-    "CORE_AI_FIELDS",
-    "DECISION_KIND",
-    "FEEDBACK_OUTCOMES",
-    "HOST_DECISION_FIELDS",
-    "HOST_RUNTIME_INPUTS",
-    "REQUIRED_AI_FIELDS",
-    "SAFE_THIN_SOURCE_USES",
-    "SCHEMA_VERSION",
-    "TICKET_KIND",
-    "TUNING_KIND",
-    "VISIBILITIES",
-    "describe_host_contract",
-    "host_decision_for_ticket",
-    "main",
-    "normalize_ticket",
-    "simulate_host_consumption",
-    "tune_activation_from_feedback",
-    "validate_ticket_contract",
-]
+if TYPE_CHECKING:
+    from aippocampus_runtime.coding.host_contract import *  # noqa: F403
 
+from aippocampus_runtime.coding import host_contract as _impl
+
+sys.modules[__name__] = _impl
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(_impl.main())

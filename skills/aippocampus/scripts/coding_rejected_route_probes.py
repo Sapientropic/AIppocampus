@@ -3,38 +3,12 @@
 
 from __future__ import annotations
 
-from aippocampus_runtime.coding.rejected_route_probes import (
-    ELIGIBLE_EVENT_TYPES,
-    PROBE_FAMILY,
-    PROBE_KIND,
-    build_rejected_route_probe,
-    build_rejected_route_probes,
-    event_is_rejected_route,
-    format_utc,
-    future_utc,
-    normalize_source_refs,
-    parse_utc,
-    public_fixture_summary,
-    rejected_route_surface,
-    run_rejected_route_fixture,
-    source_ref_key,
-    stable_id,
-)
+import sys
+from typing import TYPE_CHECKING
 
-__all__ = [
-    "ELIGIBLE_EVENT_TYPES",
-    "PROBE_FAMILY",
-    "PROBE_KIND",
-    "build_rejected_route_probe",
-    "build_rejected_route_probes",
-    "event_is_rejected_route",
-    "format_utc",
-    "future_utc",
-    "normalize_source_refs",
-    "parse_utc",
-    "public_fixture_summary",
-    "rejected_route_surface",
-    "run_rejected_route_fixture",
-    "source_ref_key",
-    "stable_id",
-]
+if TYPE_CHECKING:
+    from aippocampus_runtime.coding.rejected_route_probes import *  # noqa: F403
+
+from aippocampus_runtime.coding import rejected_route_probes as _impl
+
+sys.modules[__name__] = _impl

@@ -3,50 +3,15 @@
 
 from __future__ import annotations
 
-from aippocampus_runtime.dream.retrospective_lifecycle import (
-    ELIGIBLE_DREAM_FUNCTIONS,
-    LIFECYCLE_KIND,
-    REGISTRY_LATER_ROW_FILES,
-    SUMMARY_KIND,
-    eligible_later_rows_for_probe,
-    evidence_kind_counts,
-    is_retrospective_probe,
-    iter_jsonl,
-    lifecycle_item,
-    load_registry_rows,
-    main,
-    probe_created_at,
-    probe_id,
-    public_lifecycle_summary,
-    review_due,
-    row_created_at,
-    row_mentions_project,
-    run_retrospective_lifecycle,
-    term_overlap_without_target,
-)
+import sys
+from typing import TYPE_CHECKING
 
-__all__ = [
-    "ELIGIBLE_DREAM_FUNCTIONS",
-    "LIFECYCLE_KIND",
-    "REGISTRY_LATER_ROW_FILES",
-    "SUMMARY_KIND",
-    "eligible_later_rows_for_probe",
-    "evidence_kind_counts",
-    "is_retrospective_probe",
-    "iter_jsonl",
-    "lifecycle_item",
-    "load_registry_rows",
-    "main",
-    "probe_created_at",
-    "probe_id",
-    "public_lifecycle_summary",
-    "review_due",
-    "row_created_at",
-    "row_mentions_project",
-    "run_retrospective_lifecycle",
-    "term_overlap_without_target",
-]
+if TYPE_CHECKING:
+    from aippocampus_runtime.dream.retrospective_lifecycle import *  # noqa: F403
 
+from aippocampus_runtime.dream import retrospective_lifecycle as _impl
+
+sys.modules[__name__] = _impl
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(_impl.main())

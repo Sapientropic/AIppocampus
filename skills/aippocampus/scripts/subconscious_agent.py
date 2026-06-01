@@ -3,24 +3,15 @@
 
 from __future__ import annotations
 
-from aippocampus_runtime.subconscious.agent import (
-    PROMPT_VERSION as PROMPT_VERSION,
-)
-from aippocampus_runtime.subconscious.agent import AgentRunConfig as AgentRunConfig
-from aippocampus_runtime.subconscious.agent import (
-    agent_initial_payload as agent_initial_payload,
-)
-from aippocampus_runtime.subconscious.agent import (
-    agent_run_config_from_args as agent_run_config_from_args,
-)
-from aippocampus_runtime.subconscious.agent import main as main
-from aippocampus_runtime.subconscious.agent import run_agent as run_agent
-from aippocampus_runtime.subconscious.agent import (
-    run_agent_with_config as run_agent_with_config,
-)
-from aippocampus_runtime.subconscious.agent import (
-    validate_agent_edges as validate_agent_edges,
-)
+import sys
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from aippocampus_runtime.subconscious.agent import *  # noqa: F403
+
+from aippocampus_runtime.subconscious import agent as _impl
+
+sys.modules[__name__] = _impl
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(_impl.main())
