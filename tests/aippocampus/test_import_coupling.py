@@ -1828,7 +1828,7 @@ class ImportCouplingTests(unittest.TestCase):
             SCRIPTS / "aippocampus_runtime" / "recall" / "prompt_recall_core.py"
         ).read_text(encoding="utf-8")
         cues_source = cues_path.read_text(encoding="utf-8")
-        self.assertIn("CUE_COMPAT_EXPORTS", core_source)
+        self.assertNotIn("CUE_COMPAT_EXPORTS", core_source)
         self.assertNotIn("def matched_terms", core_source)
         self.assertIn("def matched_terms", cues_source)
         self.assertNotIn("CODE_SURFACE_CUES = {", core_source)

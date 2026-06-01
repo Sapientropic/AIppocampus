@@ -7,6 +7,10 @@ import re
 from typing import Any
 
 from aippocampus_runtime.recall.prompt_cues import semantic_gate_can_request_evidence
+from aippocampus_runtime.recall.prompt_recall_policy import (
+    PROMPT_RECALL_GATE_POLICY,
+    PromptRecallGatePolicy,
+)
 from aippocampus_runtime.registry.api import unique_preserve
 
 _VAGUE_CROSS_PROJECT_REFERENT_PATTERNS = [
@@ -24,14 +28,16 @@ def explicit_evidence_request_is_ambiguous(
     prompt: str,
     candidates: list[dict[str, Any]],
     *,
-    scent_threshold: float,
+    scent_threshold: float | None = None,
+    policy: PromptRecallGatePolicy = PROMPT_RECALL_GATE_POLICY,
 ) -> bool:
+    threshold = policy.scent_threshold if scent_threshold is None else scent_threshold
     if len(candidates) < 2:
         return False
     strong = [
         candidate
         for candidate in candidates[:3]
-        if float(candidate.get("score") or 0.0) >= scent_threshold
+        if float(candidate.get("score") or 0.0) >= threshold
     ]
     if len(strong) < 2:
         return False
@@ -63,7 +69,7 @@ def explicit_evidence_request_is_ambiguous(
     # the prompt did not name a project, source evidence would be guesswork.
     # Keep the ambient hint as scent and let the foreground model ask/follow up
     # instead of surfacing the wrong source-backed snippet.
-    return abs(scores[0] - scores[1]) <= max(6.0, min(scores) * 0.15)
+    return abs(scores[0] - scores[1]) <= policy.cross_project_tie_margin(min(scores))
 
 
 def semantic_evidence_request_is_vague_cross_project(

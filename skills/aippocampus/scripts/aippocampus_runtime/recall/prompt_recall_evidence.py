@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Any
 
 from aippocampus_runtime.recall.prompt_cues import evidence_content_terms
+from aippocampus_runtime.recall.prompt_recall_policy import PROMPT_EVIDENCE_POLICY
 from aippocampus_runtime.registry.api import deep_search_entry, unique_preserve
 
 
@@ -15,17 +16,29 @@ def collect_evidence(
     limit = max(0, budget)
     content_terms = evidence_content_terms(query_terms)
     pool: list[tuple[float, int, int, dict[str, Any]]] = []
-    for candidate_index, candidate in enumerate(candidates[:3]):
+    for candidate_index, candidate in enumerate(
+        candidates[: PROMPT_EVIDENCE_POLICY.candidate_scan_limit]
+    ):
         if limit <= 0:
             break
         entry = candidate.get("_entry") or {}
-        _, hits = deep_search_entry(entry, query_terms, max_hits=max(limit * 4, 4))
+        _, hits = deep_search_entry(
+            entry,
+            query_terms,
+            max_hits=max(
+                limit * PROMPT_EVIDENCE_POLICY.hit_scan_multiplier,
+                PROMPT_EVIDENCE_POLICY.min_hit_scan,
+            ),
+        )
         for hit_index, hit in enumerate(hits):
             if not hit.get("line") or not hit.get("snippet"):
                 continue
             snippet_low = str(hit.get("snippet") or "").casefold()
             hit_score = float(hit.get("score") or 0.0)
-            clean_source_high_confidence = hit.get("source") == "clean_source" and hit_score >= 50
+            clean_source_high_confidence = (
+                hit.get("source") == "clean_source"
+                and hit_score >= PROMPT_EVIDENCE_POLICY.clean_source_high_confidence_score
+            )
             if (
                 content_terms
                 and not clean_source_high_confidence
@@ -103,13 +116,13 @@ def _evidence_hit_is_process_noise(hit: dict[str, Any]) -> bool:
 def _evidence_hit_quality(hit: dict[str, Any]) -> float:
     score = float(hit.get("rank_score") or hit.get("score") or 0.0)
     if hit.get("source") == "clean_source":
-        score += 20.0
+        score += PROMPT_EVIDENCE_POLICY.clean_source_quality_bonus
     if hit.get("phase") == "final_answer" or hit.get("is_final"):
-        score += 80.0
+        score += PROMPT_EVIDENCE_POLICY.final_answer_quality_bonus
     elif hit.get("role") == "user":
-        score += 35.0
+        score += PROMPT_EVIDENCE_POLICY.user_quality_bonus
     if _evidence_hit_is_process_noise(hit):
-        score -= 1000.0
+        score -= PROMPT_EVIDENCE_POLICY.process_noise_penalty
     return score
 
 
