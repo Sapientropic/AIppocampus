@@ -6,10 +6,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import time
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime import core as runtime_core
+from aippocampus_runtime.hooks.debug_log import write_debug_log
+from aippocampus_runtime.hooks.skip_telemetry import write_skip_telemetry
 
 DEFAULT_SEARCH_BUDGET_FALLBACK = 3
 PROMPT_HOOK_SEMANTIC_TIMEOUT_FALLBACK = float(os.environ.get("AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT", "2.5"))
@@ -80,74 +82,8 @@ def __getattr__(name: str) -> Any:
     raise AttributeError(name)
 
 
-def write_debug_log(
-    result: dict[str, Any],
-    *,
-    hook_input: dict[str, Any] | None = None,
-    log_path: Path | None = None,
-    include_skip: bool = False,
-) -> None:
-    if result.get("decision") == "skip" and not include_skip:
-        return
-    path = log_path or (runtime_core.aippocampus_registry_dir() / "aippocampus_prompt_hook.jsonl")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    ambient_summary = _load_runtime()["ambient_debug_summary"](result)
-    semantic_gate = result.get("semantic_gate") or {}
-    semantic_debug_keys = ("available", "decision", "confidence", "cached", "query_aliases", "availability_reason", "diagnostic", "elapsed_ms", "timeout", "budget", "error_buckets")
-    event = {
-        "timestamp": runtime_core.now_utc(),
-        "session_id": (hook_input or {}).get("session_id"),
-        "turn_id": (hook_input or {}).get("turn_id"),
-        "decision": result.get("decision"),
-        "score": result.get("score"),
-        "confidence": result.get("confidence"),
-        "query_terms": result.get("query_terms"),
-        "concept_expansions": [
-            {"term": item.get("term"), "score": item.get("score"), "depth": item.get("depth")}
-            for item in result.get("concept_expansions", [])[:5]
-        ],
-        "cognitive_map": [
-            {
-                "route_id": item.get("route_id"),
-                "landmarks": item.get("landmark_labels"),
-                "matched_cues": item.get("matched_cues"),
-                "thread_keys": item.get("thread_keys"),
-                "score": item.get("score"),
-            }
-            for item in result.get("cognitive_map", [])[:4]
-        ],
-        "candidate_threads": [
-            {
-                "thread_key": item.get("thread_key"),
-                "title": item.get("title"),
-                "score": item.get("score"),
-            }
-            for item in result.get("candidates", [])[:3]
-        ],
-        "working_memory": [
-            {"title": item.get("title"), "route": item.get("route"), "score": item.get("score")}
-            for item in result.get("working_memory", [])[:3]
-        ],
-        "semantic_gate": {**{key: semantic_gate.get(key) for key in semantic_debug_keys}, "aliases": semantic_gate.get("query_aliases")}
-        if semantic_gate
-        else None,
-        "evidence": [
-            {
-                "thread_key": item.get("thread_key"),
-                "line": item.get("line"),
-                "phase": item.get("phase"),
-            }
-            for item in result.get("evidence", [])[:5]
-        ],
-        "ambient_recall": ambient_summary,
-        "elapsed_ms": result.get("elapsed_ms"),
-    }
-    # Redact only at the write boundary; recall scoring still uses raw terms.
-    safe_event = runtime_core.sanitize_external_model_payload(event)
-    with path.open("a", encoding="utf-8", newline="\n") as fh:
-        fh.write(json.dumps(safe_event, ensure_ascii=False) + "\n")
-
 def main(argv: list[str] | None = None) -> int:
+    main_start = time.perf_counter()
     parser = argparse.ArgumentParser()
     parser.add_argument("--prompt", help="Dry-run prompt text. If omitted, read Codex hook JSON from stdin.")
     parser.add_argument("--cwd", help="Workspace cwd override for dry runs.")
@@ -186,13 +122,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--log", action="store_true")
     parser.add_argument("--log-skip", action="store_true")
+    parser.add_argument("--skip-telemetry-path")
+    parser.add_argument("--no-skip-telemetry", action="store_true")
     _add_dream_delivery_arguments(parser)
     parser.add_argument("--strict", action="store_true")
     args = parser.parse_args(argv)
 
     hook_input: dict[str, Any] = {}
+    runtime_load_ms = 0.0
     try:
+        runtime_load_start = time.perf_counter()
         runtime = _load_runtime()
+        runtime_load_ms = round((time.perf_counter() - runtime_load_start) * 1000, 2)
         if args.prompt is None:
             hook_input = runtime["hook_input_from_stdin"]()
             prompt = str(hook_input.get("prompt") or "")
@@ -238,6 +179,20 @@ def main(argv: list[str] | None = None) -> int:
             max_dream_hypotheses=1,
             reason=str(dream_delivery["reason"]),
         )
+        try:
+            # Diagnostic telemetry must never block Codex prompt submission.
+            write_skip_telemetry(
+                result,
+                hook_input=hook_input,
+                telemetry_path=Path(args.skip_telemetry_path) if args.skip_telemetry_path else None,
+                enabled=False if args.no_skip_telemetry else None,
+                hook_budget_ms=args.max_elapsed_ms,
+                semantic_timeout=args.semantic_timeout,
+                runtime_load_ms=runtime_load_ms,
+                hook_total_ms=round((time.perf_counter() - main_start) * 1000, 2),
+            )
+        except Exception:
+            pass
         if args.log or args.log_skip:
             write_debug_log(result, hook_input=hook_input, include_skip=args.log_skip)
         if args.json_output:
