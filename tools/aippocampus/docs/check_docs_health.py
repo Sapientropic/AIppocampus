@@ -164,6 +164,31 @@ REQUIRED_BENCHMARK_EVIDENCE_MAP_TERMS = {
     ),
 }
 
+REQUIRED_PUBLIC_API_CONTRACT_TERMS = {
+    "### Environment Configuration Matrix": (
+        "public API doc missing environment configuration matrix"
+    ),
+    "| Variable / family | Group | Audience | Default / precedence | Sensitivity | Stability |": (
+        "public API doc missing environment matrix columns"
+    ),
+    "`AIPPOCAMPUS_PROJECTS_TOKEN`": (
+        "public API doc missing project automation token classification"
+    ),
+    "### Python Import Stability Layers": (
+        "public API doc missing Python import stability layers"
+    ),
+    "Stable automation surfaces": (
+        "public API doc missing stable automation surface import guidance"
+    ),
+    "Trusted-process runtime helpers": (
+        "public API doc missing trusted-process runtime helper boundary"
+    ),
+    "Internal helper imports": "public API doc missing internal helper import boundary",
+    "`aippocampus_runtime.public` is deferred": (
+        "public API doc missing deferred public facade decision"
+    ),
+}
+
 BENCHMARK_EVIDENCE_EXCLUDED_SCRIPT_NAMES = {"_paths.py"}
 LLM_CALL_CONTRACT_EXCLUDED_SCRIPT_NAMES = {"model_client.py"}
 
@@ -397,6 +422,20 @@ def benchmark_evidence_map_issues(repo_root: Path) -> list[str]:
     return issues
 
 
+def public_api_contract_issues(repo_root: Path) -> list[str]:
+    issues: list[str] = []
+    rel_path = "docs/guides/public-api.md"
+    public_api = repo_root / rel_path
+    if not public_api.exists():
+        return [f"missing public API contract doc: {rel_path}"]
+
+    text = public_api.read_text(encoding="utf-8")
+    for term, issue in REQUIRED_PUBLIC_API_CONTRACT_TERMS.items():
+        if term not in text:
+            issues.append(issue)
+    return issues
+
+
 def windows_context_from_recent_lines(lines: list[str], fence_start_line: int) -> bool:
     recent = "\n".join(lines[max(0, fence_start_line - 5) : fence_start_line - 1]).casefold()
     return "windows" in recent or "powershell" in recent
@@ -477,6 +516,7 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
     issues.extend(dream_phase1_contract_issues(repo_root))
     issues.extend(llm_call_contract_issues(repo_root))
     issues.extend(benchmark_evidence_map_issues(repo_root))
+    issues.extend(public_api_contract_issues(repo_root))
 
     gitignore = repo_root / ".gitignore"
     if not gitignore.exists():

@@ -221,53 +221,45 @@ summary, label, or model-organized output when they need evidence.
 
 ## Environment Variables
 
-Public environment variables use the `AIPPOCAMPUS_*` prefix. Important supported
-groups are:
+Public environment variables use the `AIPPOCAMPUS_*` prefix. This section is
+the canonical public matrix for environment configuration; install docs may
+show examples, but should not mirror this whole list. "Public" means documented
+and stable enough to configure. It does not mean the variable value is safe to
+publish.
 
-- Storage and discovery: `AIPPOCAMPUS_REGISTRY_DIR`, `AIPPOCAMPUS_HOME`,
-  legacy `THREAD_MEMORY_REGISTRY_DIR`, and legacy `CODEX_HOME`.
-- Vault projection: `AIPPOCAMPUS_VAULT`, `AIPPOCAMPUS_STYLE_SOURCE`,
-  `AIPPOCAMPUS_SCRIPT_SOURCE`, `AIPPOCAMPUS_SITE_MARK`,
-  `AIPPOCAMPUS_SITE_TITLE`.
-- Object storage sync: `AIPPOCAMPUS_OBJECT_STORE_URL`,
-  `AIPPOCAMPUS_OBJECT_PREFIX`, `AIPPOCAMPUS_OBJECT_STORE_TOKEN`,
-  `AIPPOCAMPUS_OBJECT_PROVIDER`, `AIPPOCAMPUS_OBJECT_BUCKET`,
-  `AIPPOCAMPUS_OBJECT_REGION`, `AIPPOCAMPUS_OBJECT_ACCOUNT_ID`,
-  `AIPPOCAMPUS_OBJECT_ACCESS_KEY_ID`,
-  `AIPPOCAMPUS_OBJECT_SECRET_ACCESS_KEY`,
-  `AIPPOCAMPUS_OBJECT_SESSION_TOKEN`.
-- Encrypted sync: `AIPPOCAMPUS_AGE_BIN`.
-- Hook budgets and semantic recall: `AIPPOCAMPUS_PROMPT_HOOK_BUDGET_MS`,
-  `AIPPOCAMPUS_LIFECYCLE_HOOK_BUDGET_MS`, and
-  `AIPPOCAMPUS_SEMANTIC_GATE`.
-- Warm ambient recall operator limits:
-  `AIPPOCAMPUS_WARM_RECALL_TIMEOUT`,
-  `AIPPOCAMPUS_WARM_RECALL_CATALOG_LIMIT`,
-  `AIPPOCAMPUS_WARM_RECALL_MAX_WORKERS`,
-  `AIPPOCAMPUS_WARM_RECALL_BACKGROUND`,
-  `AIPPOCAMPUS_DETACHED_WARM_TIMEOUT`,
-  `AIPPOCAMPUS_DETACHED_WARM_PREFIX_CACHE_WARMUP_SCOUTS`, and
-  `AIPPOCAMPUS_DETACHED_WARM_PREFIX_CACHE_WARMUP_DELAY`.
-  Product-tuning values such as temperature, quorum, thinking mode, and
-  foreground prefix-cache warmup should use explicit CLI flags or
-  `WarmRecallConfig`, not ambient import-time env defaults.
-- Optional external models: `AIPPOCAMPUS_DEEPSEEK_FLASH_MODEL`,
-  `AIPPOCAMPUS_DEEPSEEK_PRO_MODEL`, `AIPPOCAMPUS_DEEPSEEK_BASE_URL`, and
-  `DEEPSEEK_API_KEY`.
-- Optional provider-portability smoke/config: `AIPPOCAMPUS_OPENAI_COMPAT_ROUTE`,
-  `AIPPOCAMPUS_OPENAI_COMPAT_PROVIDER`, `AIPPOCAMPUS_OPENAI_COMPAT_MODEL`,
-  `AIPPOCAMPUS_OPENAI_COMPAT_BASE_URL`,
-  `AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV`,
-  `AIPPOCAMPUS_OPENAI_COMPAT_CONCURRENCY`,
-  `AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_JSON`,
-  `AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_USER_ID`,
-  `AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_THINKING`, and
-  `AIPPOCAMPUS_OPENAI_COMPAT_CACHE_METRICS_KIND`.
+### Environment Configuration Matrix
 
-Legacy `DEEPSEEK_*` model override variables may remain as compatibility
-fallbacks. New public configuration should prefer `AIPPOCAMPUS_*`.
+| Variable / family | Group | Audience | Default / precedence | Sensitivity | Stability |
+| --- | --- | --- | --- | --- | --- |
+| `AIPPOCAMPUS_REGISTRY_DIR` | Storage and discovery | End users, agents, operators | Exact registry root; first registry lookup choice | Local private path | Public configuration |
+| `AIPPOCAMPUS_HOME` | Storage and discovery | End users, agents, operators | Uses `AIPPOCAMPUS_HOME/registry` after exact registry vars | Local private path | Public configuration |
+| `THREAD_MEMORY_REGISTRY_DIR` | Legacy storage | Existing installs and compatibility scripts | Legacy exact registry root after `AIPPOCAMPUS_REGISTRY_DIR` | Local private path | Compatibility fallback; avoid in new docs |
+| `CODEX_HOME` | Codex install and legacy storage | Codex users and hook installers | Skill/home discovery; generated registry fallback when no `AIPPOCAMPUS_*` storage var is set | Local private path | Compatibility fallback, not the preferred non-Codex storage API |
+| `AIPPOCAMPUS_GENERIC_IMPORT_DIR` | Generic JSONL onboarding | Integrators testing provider-neutral import | Optional default import file/dir when CLI args omit a source | Local private path | Public convenience configuration |
+| `AIPPOCAMPUS_VAULT`, `AIPPOCAMPUS_STYLE_SOURCE`, `AIPPOCAMPUS_SCRIPT_SOURCE`, `AIPPOCAMPUS_SITE_MARK`, `AIPPOCAMPUS_SITE_TITLE` | Vault projection | Local operators publishing their own memory view | Optional; CLI defaults apply when unset | Local path/content branding may be private | Public operator configuration |
+| `AIPPOCAMPUS_OBJECT_STORE_URL`, `AIPPOCAMPUS_OBJECT_PREFIX`, `AIPPOCAMPUS_OBJECT_PROVIDER`, `AIPPOCAMPUS_OBJECT_BUCKET`, `AIPPOCAMPUS_OBJECT_REGION`, `AIPPOCAMPUS_OBJECT_ACCOUNT_ID` | Object-storage sync | Operators configuring HTTP, S3-compatible, R2, or GCS XML sync | CLI flags override; provider defaults apply where documented | Endpoint/account/prefix may reveal infrastructure | Public sync configuration |
+| `AIPPOCAMPUS_OBJECT_STORE_TOKEN`, `AIPPOCAMPUS_OBJECT_ACCESS_KEY_ID`, `AIPPOCAMPUS_OBJECT_SECRET_ACCESS_KEY`, `AIPPOCAMPUS_OBJECT_SESSION_TOKEN` | Object-storage credentials | Operators configuring managed object storage | Read only when the selected provider needs credentials | Secret credential material | Public variable names; values must never be logged or published |
+| `AIPPOCAMPUS_AGE_BIN`, `AIPPOCAMPUS_AGE_KEYGEN_BIN` | Encrypted sync tooling | Operators whose GUI shell does not inherit `PATH` | Preferred before `PATH` lookup for the relevant `age` binary | Local executable path | Public operator configuration |
+| `AIPPOCAMPUS_PROMPT_HOOK_BUDGET_MS`, `AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT`, `AIPPOCAMPUS_LIFECYCLE_HOOK_BUDGET_MS`, `AIPPOCAMPUS_SEMANTIC_GATE` | Hook budgets and semantic recall | Local operators tuning hook latency and semantic gating | Built-in conservative defaults when unset | Timing policy may reveal local workflow shape | Public operator configuration |
+| `AIPPOCAMPUS_SEMANTIC_TIMEOUT`, `AIPPOCAMPUS_SEMANTIC_TEMPERATURE`, `AIPPOCAMPUS_SEMANTIC_CACHE_TTL`, `AIPPOCAMPUS_SEMANTIC_CATALOG_LIMIT`, `AIPPOCAMPUS_SEMANTIC_TRIGGER_LIMIT` | Semantic recall diagnostics | Trusted local operators and repo tests | Used by semantic recall helpers when explicit config is absent | May affect private prompt/model behavior | Diagnostic/operator configuration; prefer explicit config in new integrations |
+| `AIPPOCAMPUS_WARM_RECALL_TIMEOUT`, `AIPPOCAMPUS_WARM_RECALL_CATALOG_LIMIT`, `AIPPOCAMPUS_WARM_RECALL_MAX_WORKERS`, `AIPPOCAMPUS_WARM_RECALL_BACKGROUND`, `AIPPOCAMPUS_DETACHED_WARM_TIMEOUT`, `AIPPOCAMPUS_DETACHED_WARM_PREFIX_CACHE_WARMUP_SCOUTS`, `AIPPOCAMPUS_DETACHED_WARM_PREFIX_CACHE_WARMUP_DELAY` | Warm ambient recall limits | Local operators tuning background recall cost and latency | Built-in defaults; explicit CLI/config should own product tuning | Timing/concurrency policy may reveal local workflow shape | Public operator configuration for limits only |
+| `AIPPOCAMPUS_DEEPSEEK_FLASH_MODEL`, `AIPPOCAMPUS_DEEPSEEK_PRO_MODEL`, `AIPPOCAMPUS_DEEPSEEK_BASE_URL`, `DEEPSEEK_API_KEY` | Optional DeepSeek route | Operators enabling optional external-model work | DeepSeek defaults where unset; legacy `DEEPSEEK_*` model vars may remain fallback-only | `DEEPSEEK_API_KEY` is secret; base URL/model may reveal provider choice | Public optional route configuration; external-model features remain optional |
+| `AIPPOCAMPUS_OPENAI_COMPAT_ROUTE`, `AIPPOCAMPUS_OPENAI_COMPAT_PROVIDER`, `AIPPOCAMPUS_OPENAI_COMPAT_MODEL`, `AIPPOCAMPUS_OPENAI_COMPAT_BASE_URL`, `AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV`, `AIPPOCAMPUS_OPENAI_COMPAT_CONCURRENCY`, `AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_JSON`, `AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_USER_ID`, `AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_THINKING`, `AIPPOCAMPUS_OPENAI_COMPAT_CACHE_METRICS_KIND` | Optional OpenAI-compatible route | Operators testing provider portability | Only active when a complete compatible route is configured | API-key variable name and base URL may reveal provider setup; referenced key value is secret | Public optional route configuration |
+| `AIPPOCAMPUS_SUBCONSCIOUS_HOOK`, `AIPPOCAMPUS_SUBCONSCIOUS_CONCURRENCY`, `AIPPOCAMPUS_SUBCONSCIOUS_JOB_CONCURRENCY`, `AIPPOCAMPUS_SUBCONSCIOUS_SAMPLES_PER_JOB` | Subconscious/background jobs | Trusted local operators and repo-maintenance smokes | Conservative defaults; jobs still require explicit commands or hook conditions | May reveal private background-work policy | Diagnostic/operator configuration, not a broad hosted-service API |
+| `AIPPOCAMPUS_DREAM_DELIVERY_MODE`, `AIPPOCAMPUS_DREAM_SHADOW_AB`, `AIPPOCAMPUS_DREAM_SHADOW_AB_SALT`, `AIPPOCAMPUS_DREAM_ROLLOUT_RATE` | Dream/research delivery policy | Trusted local operators evaluating research features | Defaults keep research surfaces conservative unless explicitly enabled | Salt/rollout policy may reveal experiment setup | Experimental diagnostic configuration |
+| `AIPPOCAMPUS_PROJECTS_TOKEN`, `GH_TOKEN`, `GITHUB_REPOSITORY`, `AIPPOCAMPUS_PROJECT_OWNER`, `AIPPOCAMPUS_PROJECT_NUMBER` | GitHub Project triage and planning audit | Repository maintainers and GitHub Actions | Workflow token/env defaults where available; personal token only when Projects write access is needed | Tokens are secret; repo/project ids are public or repo-maintenance metadata | Public maintenance configuration, not end-user runtime API |
 
-Generated registry storage resolves in this order:
+Common installs should stay small:
+
+- Fresh local use can start with no AIppocampus-specific env vars.
+- Non-Codex or shared local storage should set `AIPPOCAMPUS_HOME` or
+  `AIPPOCAMPUS_REGISTRY_DIR`.
+- Sync needs only the relevant local-folder or object-storage variables plus
+  encryption settings when raw/private data is included.
+- External-model and background-job variables are optional. Do not set them just
+  to use clean-source search, MCP, import/export, or local sync.
+
+Registry storage precedence remains explicit:
 
 1. `AIPPOCAMPUS_REGISTRY_DIR`: exact registry root.
 2. `THREAD_MEMORY_REGISTRY_DIR`: legacy exact registry root.
@@ -280,20 +272,37 @@ Codex skill installation and Codex hook configuration may still use
 `CODEX_HOME`; generated memory storage should prefer the `AIPPOCAMPUS_*`
 variables for new non-Codex setups.
 
+Product-tuning values such as warm-recall temperature, quorum, thinking mode,
+and foreground prefix-cache warmup should use explicit CLI flags or structured
+runtime config such as `WarmRecallConfig`, not ambient import-time env defaults.
+
 Never log or publish environment variable values that contain credentials,
 tokens, cookies, local private paths, or private memory locations.
 
 ## Python Import Policy
 
-AIppocampus does not currently publish a stable Python package API. Runtime code
-under `skills/aippocampus/scripts/` remains script-first.
+AIppocampus does not currently publish a broad stable Python package API.
+Runtime code under `skills/aippocampus/scripts/` remains script-first unless a
+package owner is explicitly documented here or in a linked contract.
 
-Downstream callers should prefer:
+### Python Import Stability Layers
 
-- documented CLI commands,
-- the MCP surface,
-- documented public schemas, or
-- adapter/import-manifest files.
+| Layer | What is stable | Use when | Not a promise |
+| --- | --- | --- | --- |
+| Stable automation surfaces | Documented CLI commands, MCP tool names/input schemas, documented `--json` fields, and public schemas in [public-core-boundary.md](public-core-boundary.md) | Downstream callers, agent hosts, CI, and user scripts need integration that survives releases | A general Python SDK or stability for helper-module internals |
+| Trusted-process runtime helpers | Documented package owners such as `aippocampus_runtime.hooks.*`, `aippocampus_runtime.onboarding.*`, `aippocampus_runtime.artifacts.*`, `aippocampus_runtime.sync.encrypted.admin`, and `aippocampus_runtime.cli.facade.run_command` | Repo-owned tools, plugin packaging, local diagnostics, and trusted operators need in-process execution without subprocess output pollution | Compatibility outside the documented owner module, raw private diagnostics as public schemas, or use across an untrusted process boundary |
+| Internal helper imports | No compatibility promise; imports may move as the runtime package replaces flat scripts | Maintainers are refactoring inside this repository with tests in the same change | Downstream API stability |
+
+The current in-process composability helper is
+`aippocampus_runtime.cli.facade.run_command(capture_output=True)`. It gives
+trusted Python callers a `CommandResult` while preserving the same command
+names, JSON shapes, and return-code policy as the public CLI. It is a command
+dispatcher/result API, not a domain SDK.
+
+`aippocampus_runtime.public` is deferred. Add it only when a concrete downstream
+use case cannot be served cleanly by CLI, MCP, public schemas, import manifests,
+or `run_command`, and after that use case defines a smaller stable contract than
+"everything under `aippocampus_runtime`".
 
 Repo-owned docs, smoke, and benchmark tools use a transitional checkout-only
 bootstrap in `tools/aippocampus/repo_paths.py`. The small `_paths.py` files under
