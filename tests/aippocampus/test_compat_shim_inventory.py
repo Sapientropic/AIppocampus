@@ -68,6 +68,11 @@ class CompatibilityShimInventoryTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertNotIn("CUE_COMPAT_EXPORTS", core_source)
 
+    def test_temporary_compat_shims_do_not_keep_long_manual_export_surfaces(self) -> None:
+        report = inventory.build_inventory(ROOT)
+
+        self.assertEqual(report.manual_export_surfaces, [])
+
 
 if __name__ == "__main__":
     unittest.main()

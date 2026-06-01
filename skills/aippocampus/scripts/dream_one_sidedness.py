@@ -3,38 +3,15 @@
 
 from __future__ import annotations
 
-from aippocampus_runtime.dream.one_sidedness import (
-    DREAM_FINDING_KIND,
-    GATE_KIND,
-    OPPOSITE_TRIGRAM,
-    SCHEMA_VERSION,
-    VOICE_ID,
-    build_opposite_hexagram_probe,
-    compute_opposite_arc,
-    evaluate_one_sidedness_gate,
-    main,
-    merge_refs,
-    normalize_arc,
-    normalize_source_refs,
-    stable_digest,
-)
+import sys
+from typing import TYPE_CHECKING
 
-__all__ = [
-    "DREAM_FINDING_KIND",
-    "GATE_KIND",
-    "OPPOSITE_TRIGRAM",
-    "SCHEMA_VERSION",
-    "VOICE_ID",
-    "build_opposite_hexagram_probe",
-    "compute_opposite_arc",
-    "evaluate_one_sidedness_gate",
-    "main",
-    "merge_refs",
-    "normalize_arc",
-    "normalize_source_refs",
-    "stable_digest",
-]
+if TYPE_CHECKING:
+    from aippocampus_runtime.dream.one_sidedness import *  # noqa: F403
 
+from aippocampus_runtime.dream import one_sidedness as _impl
+
+sys.modules[__name__] = _impl
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(_impl.main())
