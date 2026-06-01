@@ -1813,7 +1813,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
         themes = [card["theme"] for card in cache_cards]
 
         self.assertEqual(summary["status"], "written")
-        self.assertEqual(summary["active_recall_lock"]["state"], "ready")
+        self.assertEqual(summary["active_recall_lock"]["state"], "pending")
         self.assertEqual(summary["active_recall_lock"]["support_level"], "scent")
         self.assertEqual(summary["observed_scout_result_count"], 2)
         self.assertEqual(summary["accepted_scout_count"], 2)

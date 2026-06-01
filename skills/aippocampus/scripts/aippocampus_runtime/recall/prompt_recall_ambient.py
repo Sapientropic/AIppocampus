@@ -291,6 +291,8 @@ def _attach_active_recall_lock(
         "lock_id": lock.get("lock_id"),
         "state": lock.get("state"),
         "support_level": "scent",
+        "candidate_ref_count": lock.get("candidate_ref_count", 0),
+        "reopenable_ref_count": lock.get("reopenable_ref_count", 0),
         "source_reopen_required": True,
         "suggested_next": lock.get("suggested_next"),
         "diagnostics": lock.get("diagnostics") or {},

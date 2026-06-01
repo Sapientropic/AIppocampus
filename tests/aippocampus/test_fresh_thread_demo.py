@@ -88,6 +88,13 @@ class FreshThreadDemoTests(unittest.TestCase):
                         "read_current_repo_first",
                     },
                 )
+                if flow["flow_id"] == "negative_project_fact_bleed":
+                    self.assertTrue(
+                        all(
+                            turn["reason"] == "current_checkout_required_read_current_repo_first"
+                            for turn in active["turns"]
+                        )
+                    )
 
     def test_expected_arm_outputs_are_explicit_for_no_memory_hook_and_active_recall(self) -> None:
         report = demo.run_fresh_thread_demo()

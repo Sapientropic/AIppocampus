@@ -85,6 +85,8 @@ class ActiveRecallLockTests(unittest.TestCase):
         self.assertEqual(result["state"], "ready")
         self.assertEqual(result["support_level"], "scent")
         self.assertTrue(result["source_reopen_required"])
+        self.assertEqual(result["candidate_ref_count"], 1)
+        self.assertEqual(result["reopenable_ref_count"], 1)
         self.assertNotIn("SECRET_TOKEN", raw)
         self.assertNotIn("private/workspace", raw.replace("\\", "/"))
         self.assertNotIn("DO NOT STORE SOURCE TEXT", raw)
@@ -179,6 +181,47 @@ class ActiveRecallLockTests(unittest.TestCase):
         self.assertNotIn("snippet", json.dumps(ready))
         self.assertEqual(reopened["support_level"], "evidence")
         self.assertEqual(reopened["matches"][0]["text"], "Source-backed line that only reopen may show.")
+
+    def test_thread_only_refs_do_not_mark_lock_ready(self) -> None:
+        path = self.root / "active-recall-locks.json"
+        lock = locks.start_or_update_recall_lock(
+            path,
+            prompt="book series cue",
+            thread_id="thread-a",
+            workspace=str(self.root),
+            topic_epoch="epoch-topic",
+            registry_path=self.registry,
+            candidate_refs=[{"thread_key": "session:old"}],
+            route_reasons=["soft_hypothesis_thread_route"],
+        )
+        reopened = locks.reopen_lock_sources(
+            path,
+            lock_id=lock["lock_id"],
+            registry_path=self.registry,
+        )
+
+        self.assertEqual(lock["state"], "pending")
+        self.assertEqual(lock["candidate_ref_count"], 1)
+        self.assertEqual(lock["reopenable_ref_count"], 0)
+        self.assertFalse(reopened["ok"])
+        self.assertEqual(reopened["state"], "pending")
+        self.assertEqual(reopened["errors"][0]["code"], "lock_not_ready")
+
+    def test_legacy_ready_lock_without_reopenable_refs_is_downgraded_on_read(self) -> None:
+        path = self.root / "active-recall-locks.json"
+        lock = locks.start_or_update_recall_lock(
+            path,
+            prompt="legacy route",
+            thread_id="thread-a",
+            workspace=str(self.root),
+            topic_epoch="epoch-topic",
+            registry_path=self.registry,
+            candidate_refs=[{"thread_key": "session:old"}],
+            state="ready",
+        )
+
+        self.assertEqual(lock["state"], "pending")
+        self.assertTrue(lock["diagnostics"]["ready_downgraded_no_reopenable_refs"])
 
 
 if __name__ == "__main__":

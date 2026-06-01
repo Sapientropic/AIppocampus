@@ -90,6 +90,68 @@ class FreshThreadActionPolicyTests(unittest.TestCase):
         self.assertFalse(action["source_refs_allowed"])
         self.assertEqual(action["candidate_refs"][0]["source_id"], "clean:frontend-taste")
 
+    def test_ready_lock_without_reopenable_refs_is_not_used_as_ready(self) -> None:
+        packet = fresh_thread_scent_packet_from_decision(
+            {
+                "decision": "scent",
+                "confidence": "medium",
+                "sensitivity": "safe",
+                "candidates": [{"source_id": "clean:book-thread", "thread_key": "session:books"}],
+            }
+        )
+
+        action = fresh_thread_action_from_packet(
+            packet,
+            task_context={"memory_may_change_answer": True},
+            active_recall_lock={
+                "state": "ready",
+                "lock_id": "lock_books",
+                "candidate_ref_count": 1,
+                "reopenable_ref_count": 0,
+            },
+        )
+
+        self.assertEqual(action["agent_action"], "active_recall")
+        self.assertEqual(action["lock_handling"], "wait_or_probe_lock")
+        self.assertEqual(action["lock_id"], "lock_books")
+
+    def test_current_checkout_fact_context_suppresses_old_project_recall(self) -> None:
+        packet = fresh_thread_scent_packet_from_decision(
+            {
+                "decision": "evidence",
+                "confidence": "high",
+                "evidence": [
+                    {
+                        "source_id": "clean:old-project-test-command",
+                        "thread_key": "session:old-repo",
+                        "message_id": "msg-old",
+                        "line": 4,
+                    }
+                ],
+            }
+        )
+
+        action = fresh_thread_action_from_packet(
+            packet,
+            task_context={
+                "current_checkout_required": True,
+                "memory_may_change_answer": True,
+                "specific_memory_claim": True,
+            },
+            active_recall_lock={
+                "state": "ready",
+                "lock_id": "lock_old_repo",
+                "reopenable_ref_count": 1,
+            },
+        )
+
+        self.assertEqual(action["agent_action"], "ignore")
+        self.assertEqual(action["reason"], "current_checkout_required_read_current_repo_first")
+        self.assertFalse(action["should_call_active_recall"])
+        self.assertFalse(action["source_refs_allowed"])
+        self.assertEqual(action["candidate_refs"], [])
+        self.assertEqual(action["lock_handling"], "none")
+
     def test_packet_suggestion_alone_does_not_force_active_recall(self) -> None:
         packet = fresh_thread_scent_packet_from_decision(
             {

@@ -52,6 +52,18 @@ The fixture data is synthetic and public-safe. It uses structured upstream
 decision packets as input, so semantic judgement remains upstream of the runner
 instead of being hard-coded as prompt-word checks.
 
+## Issue #302 Boundary Hardening
+
+The #302 follow-up keeps this demo labeled as synthetic, while runtime tests now
+cover the two real-history failure shapes that motivated the issue:
+
+- `test_active_recall_lock.py` checks that thread-only refs do not advertise a
+  ready active-recall lock.
+- `test_aippocampus_prompt_hook.py` checks that a current-repo factual
+  source-backed prompt does not use old-project clean-source evidence.
+- `test_fresh_thread_demo.py` checks that the synthetic project-fact negative
+  control routes to `current_checkout_required_read_current_repo_first`.
+
 ## Local Result
 
 The local deterministic run reported:

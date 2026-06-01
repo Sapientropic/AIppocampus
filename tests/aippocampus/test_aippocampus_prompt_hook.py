@@ -2464,6 +2464,39 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertEqual(result["decision"], "evidence")
         self.assertTrue(result["evidence"])
 
+    def test_current_checkout_fact_prompt_does_not_use_old_project_source_evidence(self) -> None:
+        messages = self._write_clean_thread_rows(
+            "session:old-project-test-command",
+            [
+                {
+                    "source_line": 58,
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": "OldProject 的测试命令是 pytest -q；这只适用于旧仓库。",
+                }
+            ],
+        )
+        registry_path = self._write_clean_registry(
+            thread_key="session:old-project-test-command",
+            title="OldProject test command",
+            keywords=["source-backed evidence", "测试命令", "pytest"],
+            summary="OldProject used pytest -q as its test command.",
+            messages_path=messages,
+            project_label="OldProject",
+        )
+
+        result = hook.assess_prompt(
+            "请给这个 repo 的 source-backed evidence：测试命令是什么？",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            search_budget=2,
+        )
+
+        self.assertEqual(result["decision"], "skip")
+        self.assertFalse(result["evidence"])
+        self.assertIn("current checkout required", " ".join(result["reasons"]))
+        self.assertIsNone(hook.context_for_hook(result))
+
     def test_russian_natural_recall_can_recover_source_evidence_without_semantic_gate(self) -> None:
         messages = self._write_clean_thread_rows(
             "session:russian-natural-evidence",

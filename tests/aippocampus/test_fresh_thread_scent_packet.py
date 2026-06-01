@@ -50,6 +50,8 @@ class FreshThreadScentPacketTests(unittest.TestCase):
                 "freshness",
                 "route_reason",
                 "candidate_refs",
+                "candidate_ref_count",
+                "reopenable_ref_count",
                 "suggested_action",
                 "when_not_to_use",
                 "source_boundary",
@@ -59,6 +61,8 @@ class FreshThreadScentPacketTests(unittest.TestCase):
             packet["candidate_refs"],
             [{"thread_key": "session:old-thread", "message_id": "msg-7", "line": 42}],
         )
+        self.assertEqual(packet["candidate_ref_count"], 1)
+        self.assertEqual(packet["reopenable_ref_count"], 1)
         self.assertTrue(packet["source_boundary"]["navigation_only_until_source_reopened"])
 
     def test_packet_redacts_raw_prompt_snippets_secrets_and_local_paths(self) -> None:

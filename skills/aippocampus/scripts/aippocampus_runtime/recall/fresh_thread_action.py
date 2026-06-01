@@ -81,11 +81,27 @@ def _lock_id_for_state(active_recall_lock: dict[str, Any] | None, state: str) ->
     return _clean_lock_id(active_recall_lock.get("lock_id"))
 
 
+def _lock_reopenable_ref_count(active_recall_lock: dict[str, Any] | None) -> int | None:
+    if not isinstance(active_recall_lock, dict):
+        return None
+    raw = active_recall_lock.get("reopenable_ref_count")
+    if raw is None and isinstance(active_recall_lock.get("diagnostics"), dict):
+        raw = active_recall_lock["diagnostics"].get("reopenable_ref_count")
+    if raw is None:
+        return None
+    try:
+        return max(0, int(raw))
+    except (TypeError, ValueError):
+        return None
+
+
 def _lock_handling(action: str, active_recall_lock: dict[str, Any] | None) -> tuple[str, str]:
     if action != ACTIVE_RECALL:
         return "none", ""
     state = _lock_state(active_recall_lock)
     if state == "ready":
+        if _lock_reopenable_ref_count(active_recall_lock) == 0:
+            return "wait_or_probe_lock", _lock_id_for_state(active_recall_lock, state)
         return "use_ready_lock", _lock_id_for_state(active_recall_lock, state)
     if state == "pending":
         return "wait_or_probe_lock", _lock_id_for_state(active_recall_lock, state)
@@ -248,6 +264,9 @@ def fresh_thread_action_from_packet(
     allow_gentle_hypothesis = _context_flag(context, "allow_gentle_hypothesis")
     route_suppressed_by_activation = _context_flag(context, "route_suppressed_by_activation")
     prior_scent_without_new_anchor = _context_flag(context, "prior_scent_without_new_anchor")
+    current_checkout_required = _context_flag(context, "current_checkout_required") or _context_flag(
+        context, "current_repo_fact_query"
+    )
 
     if support_level == "suppressed" or sensitivity == "suppress" or freshness == "superseded":
         return _base_result(
@@ -263,6 +282,16 @@ def fresh_thread_action_from_packet(
         return _base_result(
             action=IGNORE,
             reason="activation_state_suppressed_route",
+            packet=packet,
+            context=context,
+            active_recall_lock=active_recall_lock,
+            specific_memory_claim=False,
+        )
+
+    if current_checkout_required:
+        return _base_result(
+            action=IGNORE,
+            reason="current_checkout_required_read_current_repo_first",
             packet=packet,
             context=context,
             active_recall_lock=active_recall_lock,

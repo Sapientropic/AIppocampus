@@ -351,6 +351,8 @@ def fresh_thread_demo_flows() -> tuple[DemoFlow, ...]:
                         source_id="clean:demo:portable-engineering-style",
                     ),
                     topic_epoch="negative-coding",
+                    hook_task_context={"current_checkout_required": True},
+                    active_task_context={"current_checkout_required": True},
                     expected_note="Memory may tune habits, but repository facts must come from the current checkout.",
                 ),
             ),
