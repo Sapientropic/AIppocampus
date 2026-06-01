@@ -285,6 +285,46 @@ class BenchmarkSuiteTests(unittest.TestCase):
             threshold_metadata["standard_min_session_hit_rate"],
         )
 
+    def test_suite_report_preserves_track_local_cannot_claim_sources(self) -> None:
+        gate_payload = fake_gate_payload()
+        gate_payload["cannot_claim"] = [
+            "real_history_gate_quality",
+            "payload_fidelity",
+        ]
+        with (
+            patch.object(
+                suite.gate_benchmark,
+                "run_benchmark",
+                return_value=gate_payload,
+            ),
+            patch.object(
+                suite.payload_benchmark,
+                "run_benchmark",
+                return_value=fake_payload_payload(),
+            ),
+            patch.object(
+                suite.compaction_benchmark,
+                "run_benchmark",
+                return_value=fake_compaction_payload(),
+            ),
+        ):
+            payload = suite.run_benchmark_suite(profile="public-fast")
+
+        self.assertIn("payload_fidelity", payload["cannot_claim"])
+        self.assertEqual(
+            payload["cannot_claim_by_track"]["gate_decision"],
+            ["payload_fidelity", "real_history_gate_quality"],
+        )
+        self.assertEqual(
+            payload["cannot_claim_by_track"]["payload_fidelity"],
+            ["real_history_payload_fidelity"],
+        )
+        self.assertIn(
+            "public_fast_profile_track_b_quality",
+            payload["suite_level_cannot_claim"],
+        )
+        self.assertNotIn("payload_fidelity", payload["suite_level_cannot_claim"])
+
     def test_suite_report_warns_when_profile_surface_is_narrowed(self) -> None:
         with (
             patch.object(
@@ -514,6 +554,11 @@ class BenchmarkSuiteTests(unittest.TestCase):
         self.assertTrue(payload["ok"])
         self.assertFalse(payload["quality_gate_ok"])
         self.assertEqual(payload["status"], "baseline_captured_with_known_gaps")
+        self.assertIn("all_benchmark_quality_targets_met", payload["cannot_claim"])
+        self.assertIn(
+            "all_benchmark_quality_targets_met",
+            payload["suite_level_cannot_claim"],
+        )
         self.assertEqual(
             payload["track_statuses"]["source_evidence_retrieval"],
             "diagnostic_only",
