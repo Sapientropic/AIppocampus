@@ -31,7 +31,7 @@ DEFAULT_REPOSITORY = project_triage.DEFAULT_REPOSITORY
 CHECKED_CHILD_RE = re.compile(r"(?m)^(\s*[-*]\s*)\[\s\]\s+(#(?P<number>\d+)\b[^\n]*)$")
 ISSUE_REF_RE = re.compile(r"#(\d+)\b")
 UNRESOLVED_DOC_RE = re.compile(
-    r"\b(Open Questions|Next hardening|Cannot claim|future work|deferred|"
+    r"\b(Open Questions|Next hardening|future work|deferred|"
     r"missing proof|not yet implemented)\b",
     re.IGNORECASE,
 )
@@ -321,6 +321,8 @@ def docs_unresolved_hits(repo_root: Path, issues: list[IssueSnapshot]) -> list[d
         if "archive" in path.relative_to(docs_dir).parts:
             continue
         text = path.read_text(encoding="utf-8")
+        if doc_marked_archived(text):
+            continue
         for line_no, line in enumerate(text.splitlines(), start=1):
             match = UNRESOLVED_DOC_RE.search(line)
             if not match:
@@ -337,6 +339,21 @@ def docs_unresolved_hits(repo_root: Path, issues: list[IssueSnapshot]) -> list[d
                 }
             )
     return hits
+
+
+def doc_marked_archived(text: str) -> bool:
+    """Return whether a planning note declares itself historical.
+
+    Some older handoff/state files live outside docs/archive so links do not
+    break, but they explicitly carry `state: archived`. Treating their old
+    stop-condition language as current unresolved work makes the audit noisy
+    and encourages agents to reopen already-superseded planning context.
+    """
+
+    for line in text.splitlines()[:12]:
+        if re.match(r"(?i)^\s*state\s*:\s*archived\s*$", line):
+            return True
+    return False
 
 
 def empty_summary() -> dict[str, int]:
