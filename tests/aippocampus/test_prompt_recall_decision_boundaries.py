@@ -5,6 +5,7 @@ import inspect
 import json
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -20,6 +21,7 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 from aippocampus_runtime.recall import prompt_recall_decision as decision  # noqa: E402
+from aippocampus_runtime.recall import prompt_cues  # noqa: E402
 
 
 class PromptRecallDecisionBoundaryTests(unittest.TestCase):
@@ -231,6 +233,52 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
             expected_without_elapsed,
         )
         self.assertIsInstance(result["elapsed_ms"], float)
+
+    def test_current_checkout_fact_cue_is_live_source_boundary(self) -> None:
+        self.assertTrue(
+            prompt_cues.current_checkout_live_fact_intent(
+                "请给这个 repo 的 source-backed evidence：测试命令是什么？"
+            )
+        )
+        self.assertFalse(
+            prompt_cues.current_checkout_live_fact_intent(
+                "上次关于当前 repo 的测试命令结论是什么？"
+            )
+        )
+
+    def test_current_checkout_fact_blocks_old_history_evidence_upgrade(self) -> None:
+        reasons: list[str] = []
+
+        evidence = decision._source_intent_evidence(
+            prompt="请给这个 repo 的 source-backed evidence：测试命令是什么？",
+            candidates=[
+                {
+                    "thread_key": "session:old-project",
+                    "title": "Old project test command",
+                    "score": 0.9,
+                }
+            ],
+            query_terms=["pytest", "测试命令"],
+            search_budget=2,
+            explicit=[],
+            important=[],
+            semantic_result={
+                "available": True,
+                "decision": "evidence",
+                "confidence": 0.96,
+                "intent": "source_recall",
+                "query_aliases": ["pytest test command"],
+            },
+            natural_evidence=[],
+            source_evidence=["source-backed"],
+            ambiguous_evidence_request=False,
+            start=time.perf_counter(),
+            max_elapsed_ms=None,
+            reasons=reasons,
+        )
+
+        self.assertEqual(evidence, [])
+        self.assertIn("current checkout required: read current repo first", reasons)
 
     def test_assess_prompt_keeps_orchestration_below_boundary(self) -> None:
         source = inspect.getsource(decision.assess_prompt)
