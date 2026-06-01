@@ -21,6 +21,11 @@ Related implementation surfaces:
   no-advantage rule for continuous-memory superiority claims. Public
   longitudinal fixtures can feed that registered design later, but they do not
   override the decision rule after results are known.
+- #409 / `benchmarks/aippocampus/benchmark_continuous_memory_arms.py` now uses
+  this page's public VCS hard-event discipline as a provenance source for
+  `public_log_or_vcs_derived` + `holdout_blind` continuous-memory scenarios.
+  These scenarios remain sanitized contract controls: the local React VCS
+  fixtures and raw PR metadata are not checked in as a redistributable corpus.
 
 Latest dated measurement:
 [`public-longitudinal-users-measurement-2026-05-31.md`](public-longitudinal-users-measurement-2026-05-31.md).

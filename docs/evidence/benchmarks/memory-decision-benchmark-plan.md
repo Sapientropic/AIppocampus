@@ -129,7 +129,11 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
   comparison baseline so a fair non-memory strategy can win on cost or safety.
   Its #407 `preregistration` block fixes the primary endpoint, paired
   seed/repeat strategy, lower-bound decision rule, and no-advantage rule before
-  any public-quality #378 superiority claim.
+  any public-quality #378 superiority claim. Its #409 scenario provenance and
+  holdout controls record per-case generation context, report provenance
+  slices separately, exclude `holdout_blind` cases from prompt/threshold
+  tuning through `holdout_excluded`, and add scenario-level negative controls
+  that penalize unnecessary memory intervention.
   This runner is diagnostic and not a public superiority claim.
 
 This slice is a smoke gate, not a real-history quality claim. It proves the
@@ -168,7 +172,7 @@ python benchmarks\aippocampus\benchmark_continuous_memory_arms.py --json
 ```
 
 The runner intentionally stays outside the default `public-fast` suite for now.
-It uses four author-written synthetic coding-continuity cases and five arms:
+It uses six public-safe coding-continuity cases and five arms:
 
 - `no_memory`: the baseline has no recall context.
 - `true_aippocampus_memory`: production-shaped route handles require source
@@ -212,11 +216,39 @@ not the same thing as a fresh-context/spec-loop workflow, so reports keep
 `fresh_context_spec_loop` in `comparison_baselines` rather than folding it into
 the attribution arm list.
 
-This is enough to prove the public-synthetic attribution and #410 ledger
-contracts exist. It does not prove full #378 continuous-memory superiority,
-exact dollar accounting for every local operation, live host-native cost
-telemetry, live host-native compaction behavior, private real-history
-generality, answer-generation quality, or competitor superiority.
+The #409 scenario provenance and holdout controls live under
+`scenario_controls`, with row-level sanitized scenario metadata:
+
+- Provenance categories are fixed as `author_written_synthetic`,
+  `external_written_synthetic`, `public_log_or_vcs_derived`,
+  `private_real_history_aggregate`, and `holdout_blind`.
+- At least 30% of a public-quality #378 suite must come from
+  `external_written_synthetic`, `public_log_or_vcs_derived`, or
+  `holdout_blind` scenarios. The current contract smoke includes two
+  `public_log_or_vcs_derived` + `holdout_blind` cases, so this share gate can
+  pass, but it still lacks public-quality repeat power.
+- Holdout scenarios must use `holdout_excluded` and must not be used for
+  prompt or threshold tuning. The runner exposes
+  `--scenario-selection-role prompt_threshold_tuning` for that path; it
+  physically excludes `holdout_blind` cases from rows and metrics rather than
+  relying only on labels.
+- Scenario scripts record a sanitized generator/source-material label and
+  whether AIppocampus internals were visible to the scenario author. Public
+  report metadata rejects path separators, URI/drive separators, and
+  secret-like/private labels before JSON emission.
+- Scenario-level negative controls count unnecessary memory interventions,
+  including expired-memory reuse and same-token public VCS anti-drift
+  contamination. Reports keep `negative_control_memory_intervention_by_arm`
+  separate from the harmful
+  `negative_control_unnecessary_intervention_by_arm` so ordinary no-memory
+  failure is not misread as memory intervention. These controls are separate
+  from the stale wrong arm, which remains an adversarial diagnostic stressor.
+
+This is enough to prove the public-safe attribution, #409 scenario-control, and
+#410 ledger contracts exist. It does not prove full #378 continuous-memory
+superiority, exact dollar accounting for every local operation, live
+host-native cost telemetry, live host-native compaction behavior, private
+real-history generality, answer-generation quality, or competitor superiority.
 
 The #407 pre-registration contract lives under `preregistration`. It is the
 rule for future public-quality #378 claims, not a claim that the current
@@ -229,14 +261,16 @@ contract smoke has enough power:
   work or unsafe stale recall.
 - Public-quality minimums: at least 3 scenario families and at least 5 paired
   repeats per scenario x arm, with the same task/seed pairs across arms where
-  feasible.
+  feasible. At least 30% of cases must come from external-written,
+  public-log/VCS-derived, or holdout sources before public-quality superiority
+  claims.
 - Required fair arms: `fresh_context_spec_loop`, `true_aippocampus_memory`,
   `sham_unrelated_memory`, and `stale_wrong_memory`; `oracle_memory` stays an
   upper bound and is excluded from the fair winner.
 - Seed rule:
   `sha256(preregistration_id + scenario_family + case_id + repeat_index)`.
-  The current contract smoke remains deterministic author-written cases with
-  no random seed.
+  The current contract smoke remains deterministic public-safe cases with no
+  random seed.
 - Confidence rule: continuous-memory advantage requires the paired
   `lower_bound` for true AIppocampus memory over `fresh_context_spec_loop` to
   be greater than 0 after hard gates pass. Binary success and harm rates should

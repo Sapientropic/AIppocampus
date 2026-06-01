@@ -12,13 +12,14 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 ARM_ORDER = (
     "no_memory",
     "true_aippocampus_memory",
@@ -39,6 +40,29 @@ COST_COMPONENTS = (
     "human_correction_minutes",
 )
 SUCCESS_VALUE_UNIT = 10.0
+SCENARIO_PROVENANCE_CATEGORIES = (
+    "author_written_synthetic",
+    "external_written_synthetic",
+    "public_log_or_vcs_derived",
+    "private_real_history_aggregate",
+    "holdout_blind",
+)
+PUBLIC_QUALITY_EXTERNAL_OR_HOLDOUT_PROVENANCE = (
+    "external_written_synthetic",
+    "public_log_or_vcs_derived",
+    "holdout_blind",
+)
+PUBLIC_QUALITY_MIN_EXTERNAL_OR_HOLDOUT_SHARE = 0.30
+HOLDOUT_TUNING_ROLE = "holdout_excluded"
+TUNING_VISIBLE_ROLE = "tuning_visible"
+SCENARIO_SELECTION_ROLES = ("report", "prompt_threshold_tuning", "holdout")
+MEMORY_INTERVENTION_PACKET_SHAPES = (
+    "source_backed_route_handle",
+    "matched_format_plausible_wrong_route_handle",
+)
+PRIVATE_LABEL_PATTERN = re.compile(
+    r"(?i)(bearer\s+|api[_-]?key|raw_private|secret|cookie|token)"
+)
 
 
 @dataclass(frozen=True)
@@ -100,6 +124,12 @@ class AttributionCase:
     source_ref: str
     source_window: str
     specs: tuple[ArmSpec, ...]
+    scenario_provenance: tuple[str, ...] = ("author_written_synthetic",)
+    scenario_generated_by: str = "aippocampus_benchmark_author"
+    scenario_source_material: str = "public_safe_author_written_contract_fixture"
+    aippocampus_internals_visible: bool = True
+    prompt_threshold_tuning_role: str = TUNING_VISIBLE_ROLE
+    negative_control_kind: str | None = None
 
     def spec_for_arm(self, arm: str) -> ArmSpec:
         for spec in self.specs:
@@ -114,6 +144,28 @@ def now_utc() -> str:
 
 def sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8", errors="replace")).hexdigest()
+
+
+def public_metadata_label(value: str, *, field: str) -> str:
+    """Validate report-visible scenario labels before they can become public JSON.
+
+    Scenario provenance will eventually include local/private review material.
+    Keep this guard intentionally conservative so future fixture authors cannot
+    accidentally smuggle paths, raw private-source hints, or secret-shaped text
+    into a report field that docs describe as sanitized metadata.
+    """
+    candidate = value.strip()
+    if not candidate:
+        raise ValueError(f"{field} must be a non-empty public metadata label")
+    if len(candidate) > 160:
+        raise ValueError(f"{field} is too long for a public metadata label")
+    if any(separator in candidate for separator in ("\\", "/", "\n", "\r", "\t")):
+        raise ValueError(f"{field} must not contain path separators or control chars")
+    if ":" in candidate:
+        raise ValueError(f"{field} must not contain URI or drive separators")
+    if PRIVATE_LABEL_PATTERN.search(candidate):
+        raise ValueError(f"{field} looks private or secret-like")
+    return candidate
 
 
 def safe_rate(numerator: int | float, denominator: int | float) -> float:
@@ -345,6 +397,7 @@ def fixture_cases() -> list[AttributionCase]:
                 stale_risky_action_before_reopen=False,
                 stale_rework_minutes=12,
             ),
+            negative_control_kind="expired_memory_should_not_intervene",
         ),
         AttributionCase(
             case_id="incomplete-handoff-needs-reopen",
@@ -373,6 +426,92 @@ def fixture_cases() -> list[AttributionCase]:
                 stale_rework_minutes=18,
             ),
         ),
+        AttributionCase(
+            case_id="public-vcs-temporal-override-chain",
+            case_family="public_vcs_temporal_override",
+            expected_behavior="prefer_current_counterfactual_source",
+            source_ref=(
+                "public-vcs://react-real-vcs-adversarial-v2/"
+                "temporal-override-chain#aggregate"
+            ),
+            source_window=(
+                "Sanitized aggregate says temporal override cases require the "
+                "later effective source rather than the older public outcome."
+            ),
+            specs=_common_specs(
+                correct_packet="Route handle says a later source supersedes the older public outcome.",
+                sham_packet="Route handle says an unrelated UI polish trace may be nearby.",
+                stale_packet="Route handle says the original public outcome remains authoritative.",
+                oracle_packet="Source says the later effective source supersedes the older public outcome.",
+                expected_behavior="prefer_current_counterfactual_source",
+                no_memory_behavior="follow_older_public_outcome",
+                no_memory_success=False,
+                no_memory_harm=2,
+                sham_behavior="follow_older_public_outcome",
+                sham_success=False,
+                sham_harm=2,
+                stale_harm=4,
+                stale_downstream_turns=3,
+                stale_wrong_constraint_adopted=True,
+                stale_risky_action_before_reopen=True,
+                stale_rework_minutes=20,
+            ),
+            scenario_provenance=("public_log_or_vcs_derived", "holdout_blind"),
+            scenario_generated_by="public_vcs_fixture_adapter",
+            scenario_source_material=(
+                "react-real-vcs-adversarial-v2 temporal_override_chain aggregate"
+            ),
+            aippocampus_internals_visible=False,
+            prompt_threshold_tuning_role=HOLDOUT_TUNING_ROLE,
+        ),
+        AttributionCase(
+            case_id="public-vcs-lexical-near-miss-anti-drift",
+            case_family="public_vcs_anti_drift_negative",
+            expected_behavior="suppress_unrelated_same_token_memory",
+            source_ref=(
+                "public-vcs://react-real-vcs-adversarial-v2/"
+                "lexical-near-miss-anti-drift#aggregate"
+            ),
+            source_window=(
+                "Sanitized aggregate says same-token non-flag events require "
+                "suppression rather than memory intervention."
+            ),
+            specs=_common_specs(
+                correct_packet=(
+                    "Route handle finds a similar old event but source support "
+                    "is insufficient for the current non-flag task."
+                ),
+                sham_packet="Route handle says an unrelated benchmark report may be nearby.",
+                stale_packet="Route handle says a same-token old rejection applies here.",
+                oracle_packet="Source says this is a non-flag anti-drift event; suppress memory.",
+                expected_behavior="suppress_unrelated_same_token_memory",
+                no_memory_behavior="suppress_unrelated_same_token_memory",
+                no_memory_success=True,
+                no_memory_harm=0,
+                sham_behavior="suppress_unrelated_same_token_memory",
+                sham_success=True,
+                sham_harm=0,
+                true_behavior="suppress_unrelated_same_token_memory",
+                true_success=True,
+                true_source_hit=False,
+                true_abstained_on_missing_source=True,
+                stale_behavior="apply_unrelated_same_token_memory",
+                stale_harm=4,
+                stale_downstream_turns=3,
+                stale_wrong_constraint_adopted=True,
+                stale_project_contamination=True,
+                stale_risky_action_before_reopen=True,
+                stale_rework_minutes=16,
+            ),
+            scenario_provenance=("public_log_or_vcs_derived", "holdout_blind"),
+            scenario_generated_by="public_vcs_fixture_adapter",
+            scenario_source_material=(
+                "react-real-vcs-adversarial-v2 lexical_near_miss_anti_drift aggregate"
+            ),
+            aippocampus_internals_visible=False,
+            prompt_threshold_tuning_role=HOLDOUT_TUNING_ROLE,
+            negative_control_kind="unrelated_same_token_memory_should_not_intervene",
+        ),
     ]
 
 
@@ -383,6 +522,19 @@ def evaluate_case(case: AttributionCase, arm: str) -> dict[str, Any]:
     return {
         "case_id_sha1": sha256_text(case.case_id)[:16],
         "case_family": case.case_family,
+        "scenario_provenance": list(case.scenario_provenance),
+        "scenario_generated_by": public_metadata_label(
+            case.scenario_generated_by,
+            field="scenario_generated_by",
+        ),
+        "scenario_source_material": public_metadata_label(
+            case.scenario_source_material,
+            field="scenario_source_material",
+        ),
+        "aippocampus_internals_visible": case.aippocampus_internals_visible,
+        "prompt_threshold_tuning_role": case.prompt_threshold_tuning_role,
+        "scenario_is_negative_control": bool(case.negative_control_kind),
+        "scenario_negative_control_kind": case.negative_control_kind,
         "arm": arm,
         "expected_behavior": case.expected_behavior,
         "actual_behavior": spec.actual_behavior,
@@ -475,6 +627,254 @@ def summarize_rows(rows: list[dict[str, Any]], *, case_count: int) -> dict[str, 
             oracle["success_rate"] - true_memory["success_rate"]
         ),
         "source_reopen_obedience_by_arm": source_reopen_obedience_by_arm,
+    }
+
+
+def scenario_provenance_for_cases(cases: Sequence[AttributionCase]) -> list[str]:
+    present = {
+        provenance
+        for case in cases
+        for provenance in case.scenario_provenance
+    }
+    known = [
+        provenance
+        for provenance in SCENARIO_PROVENANCE_CATEGORIES
+        if provenance in present
+    ]
+    unknown = sorted(present - set(SCENARIO_PROVENANCE_CATEGORIES))
+    return known + unknown
+
+
+def select_cases_for_role(
+    cases: Sequence[AttributionCase],
+    scenario_selection_role: str,
+) -> list[AttributionCase]:
+    if scenario_selection_role not in SCENARIO_SELECTION_ROLES:
+        raise ValueError(
+            "unknown scenario selection role: "
+            f"{scenario_selection_role!r}; expected one of {SCENARIO_SELECTION_ROLES}"
+        )
+    if scenario_selection_role == "prompt_threshold_tuning":
+        # Holdout isolation must be executable, not only documented. Any future
+        # prompt/threshold tuning caller should use this role so blind cases are
+        # physically absent from rows, metrics, and ad-hoc tuning scripts.
+        return [
+            case
+            for case in cases
+            if case.prompt_threshold_tuning_role == TUNING_VISIBLE_ROLE
+            and "holdout_blind" not in case.scenario_provenance
+        ]
+    if scenario_selection_role == "holdout":
+        return [
+            case
+            for case in cases
+            if case.prompt_threshold_tuning_role == HOLDOUT_TUNING_ROLE
+            or "holdout_blind" in case.scenario_provenance
+        ]
+    return list(cases)
+
+
+def row_has_memory_intervention(row: dict[str, Any]) -> bool:
+    return row["memory_packet_shape"] in MEMORY_INTERVENTION_PACKET_SHAPES
+
+
+def row_has_unnecessary_memory_intervention(row: dict[str, Any]) -> bool:
+    if not row["scenario_is_negative_control"] or not row_has_memory_intervention(row):
+        return False
+    harm = row["harm_components"]
+    if harm["memory_false_positive"]:
+        return True
+    if row["abstained_on_missing_source"]:
+        return False
+    return bool(int(row["harm_score"]) > 0 or not row["success"])
+
+
+def summarize_scenario_slices(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    by_provenance: dict[str, dict[str, Any]] = {}
+    for provenance in SCENARIO_PROVENANCE_CATEGORIES:
+        provenance_rows = [
+            row for row in rows if provenance in row["scenario_provenance"]
+        ]
+        by_arm = {
+            arm: {
+                "row_count": len([row for row in provenance_rows if row["arm"] == arm]),
+                "success_rate": safe_rate(
+                    sum(
+                        1
+                        for row in provenance_rows
+                        if row["arm"] == arm and row["success"]
+                    ),
+                    len([row for row in provenance_rows if row["arm"] == arm]),
+                ),
+            }
+            for arm in ARM_ORDER
+        }
+        by_provenance[provenance] = {
+            "case_count": len({row["case_id_sha1"] for row in provenance_rows}),
+            "row_count": len(provenance_rows),
+            "by_arm": by_arm,
+        }
+
+    by_family: dict[str, dict[str, Any]] = {}
+    for family in sorted({row["case_family"] for row in rows}):
+        family_rows = [row for row in rows if row["case_family"] == family]
+        by_family[family] = {
+            "case_count": len({row["case_id_sha1"] for row in family_rows}),
+            "row_count": len(family_rows),
+            "is_negative_control": any(
+                row["scenario_is_negative_control"] for row in family_rows
+            ),
+            "provenance": sorted(
+                {
+                    provenance
+                    for row in family_rows
+                    for provenance in row["scenario_provenance"]
+                }
+            ),
+        }
+
+    negative_rows = [row for row in rows if row["scenario_is_negative_control"]]
+    return {
+        "by_scenario_provenance": by_provenance,
+        "by_scenario_family": by_family,
+        "negative_controls": {
+            "case_count": len({row["case_id_sha1"] for row in negative_rows}),
+            "row_count": len(negative_rows),
+            "memory_intervention_by_arm": {
+                arm: sum(
+                    1
+                    for row in negative_rows
+                    if row["arm"] == arm and row_has_memory_intervention(row)
+                )
+                for arm in ARM_ORDER
+            },
+            "unnecessary_intervention_by_arm": {
+                arm: sum(
+                    1
+                    for row in negative_rows
+                    if row["arm"] == arm and row_has_unnecessary_memory_intervention(row)
+                )
+                for arm in ARM_ORDER
+            },
+        },
+    }
+
+
+def build_scenario_controls(
+    available_cases: Sequence[AttributionCase],
+    cases: Sequence[AttributionCase],
+    rows: list[dict[str, Any]],
+    *,
+    scenario_selection_role: str,
+) -> dict[str, Any]:
+    case_count = len(cases)
+    available_holdout_count = sum(
+        1
+        for case in available_cases
+        if case.prompt_threshold_tuning_role == HOLDOUT_TUNING_ROLE
+        or "holdout_blind" in case.scenario_provenance
+    )
+    selected_holdout_count = sum(
+        1
+        for case in cases
+        if case.prompt_threshold_tuning_role == HOLDOUT_TUNING_ROLE
+        or "holdout_blind" in case.scenario_provenance
+    )
+    provenance_categories: dict[str, dict[str, Any]] = {}
+    for provenance in SCENARIO_PROVENANCE_CATEGORIES:
+        matching = [case for case in cases if provenance in case.scenario_provenance]
+        provenance_categories[provenance] = {
+            "case_count": len(matching),
+            "case_share": safe_rate(len(matching), case_count),
+            "holdout_excluded_case_count": sum(
+                1
+                for case in matching
+                if case.prompt_threshold_tuning_role == HOLDOUT_TUNING_ROLE
+            ),
+            "internals_visible_case_count": sum(
+                1 for case in matching if case.aippocampus_internals_visible
+            ),
+        }
+
+    external_or_holdout_cases = [
+        case
+        for case in cases
+        if any(
+            provenance in PUBLIC_QUALITY_EXTERNAL_OR_HOLDOUT_PROVENANCE
+            for provenance in case.scenario_provenance
+        )
+    ]
+    holdout_cases = [
+        case for case in cases if "holdout_blind" in case.scenario_provenance
+    ]
+    negative_rows = [row for row in rows if row["scenario_is_negative_control"]]
+    negative_case_count = len({row["case_id_sha1"] for row in negative_rows})
+    memory_intervention_by_arm = {
+        arm: sum(
+            1
+            for row in negative_rows
+            if row["arm"] == arm and row_has_memory_intervention(row)
+        )
+        for arm in ARM_ORDER
+    }
+    unnecessary_by_arm = {
+        arm: sum(
+            1
+            for row in negative_rows
+            if row["arm"] == arm and row_has_unnecessary_memory_intervention(row)
+        )
+        for arm in ARM_ORDER
+    }
+    external_or_holdout_share = safe_rate(len(external_or_holdout_cases), case_count)
+    return {
+        "schema_version": 1,
+        "scenario_selection_role": scenario_selection_role,
+        "available_case_count": len(available_cases),
+        "selected_case_count": case_count,
+        "holdout_excluded_from_selection_count": (
+            available_holdout_count - selected_holdout_count
+            if scenario_selection_role == "prompt_threshold_tuning"
+            else 0
+        ),
+        "provenance_categories": provenance_categories,
+        "reported_provenance_slices": list(SCENARIO_PROVENANCE_CATEGORIES),
+        "external_or_holdout_case_count": len(external_or_holdout_cases),
+        "external_or_holdout_case_share": external_or_holdout_share,
+        "public_quality_min_external_or_holdout_share": (
+            PUBLIC_QUALITY_MIN_EXTERNAL_OR_HOLDOUT_SHARE
+        ),
+        "public_quality_external_or_holdout_share_gate_passed": (
+            external_or_holdout_share >= PUBLIC_QUALITY_MIN_EXTERNAL_OR_HOLDOUT_SHARE
+        ),
+        "holdout_case_count": len(holdout_cases),
+        "holdout_used_for_prompt_or_threshold_tuning_count": (
+            selected_holdout_count
+            if scenario_selection_role == "prompt_threshold_tuning"
+            else 0
+        ),
+        "holdout_tuning_policy": (
+            "holdout_blind scenarios must stay holdout_excluded for prompt and "
+            "threshold tuning"
+        ),
+        "negative_control_case_count": negative_case_count,
+        "negative_control_kinds": sorted(
+            {
+                case.negative_control_kind
+                for case in cases
+                if case.negative_control_kind
+            }
+        ),
+        "negative_control_memory_intervention_by_arm": memory_intervention_by_arm,
+        "negative_control_unnecessary_intervention_by_arm": unnecessary_by_arm,
+        "negative_control_policy": (
+            "scenario-level controls can penalize unnecessary memory "
+            "intervention, old-project contamination, and stale same-token reuse"
+        ),
+        "public_quality_note": (
+            "The 30% provenance share gate can pass in this contract smoke, "
+            "but public-quality advantage still requires the preregistered "
+            "primary endpoint, repeat counts, hard gates, and lower-bound rule."
+        ),
     }
 
 
@@ -883,6 +1283,9 @@ def build_preregistration(cost_harm_ledger: dict[str, Any]) -> dict[str, Any]:
         "public_quality_minimums": {
             "scenario_families": 3,
             "repeats_per_scenario_arm": 5,
+            "external_or_holdout_scenario_share": (
+                PUBLIC_QUALITY_MIN_EXTERNAL_OR_HOLDOUT_SHARE
+            ),
             "arms_required": [
                 "fresh_context_spec_loop",
                 "true_aippocampus_memory",
@@ -891,13 +1294,38 @@ def build_preregistration(cost_harm_ledger: dict[str, Any]) -> dict[str, Any]:
             ],
             "oracle_role": "upper_bound_only_excluded_from_fair_winner",
         },
+        "scenario_provenance_policy": {
+            "categories": list(SCENARIO_PROVENANCE_CATEGORIES),
+            "report_each_slice_separately": True,
+            "public_quality_non_self_derived_sources": list(
+                PUBLIC_QUALITY_EXTERNAL_OR_HOLDOUT_PROVENANCE
+            ),
+            "author_written_only_claim_level": "diagnostic_contract_smoke_only",
+            "scenario_scripts_record_generation_context": True,
+        },
+        "holdout_policy": {
+            "holdout_blind_prompt_threshold_tuning_role": HOLDOUT_TUNING_ROLE,
+            "holdout_used_for_prompt_or_threshold_tuning_allowed": False,
+            "blind_or_holdout_scenarios_reported_as_slices": True,
+        },
+        "negative_control_policy": {
+            "scenario_level_negative_controls_required": True,
+            "penalize_unnecessary_memory_intervention": True,
+            "examples": [
+                "memory_should_not_help",
+                "old_project_fact_pollutes_current_work",
+                "fresh_context_spec_loop_should_plausibly_win",
+            ],
+        },
         "seed_repeat_strategy": {
             "same_task_seed_pairs_across_arms": True,
             "public_quality_min_repeats_per_scenario_arm": 5,
             "seed_derivation": (
                 "sha256(preregistration_id + scenario_family + case_id + repeat_index)"
             ),
-            "contract_smoke_seed_policy": "deterministic_author_written_cases_no_random_seed",
+            "contract_smoke_seed_policy": (
+                "deterministic_public_safe_cases_no_random_seed"
+            ),
         },
         "confidence_rule": {
             "primary_rule": (
@@ -945,15 +1373,27 @@ def build_preregistration(cost_harm_ledger: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def run_benchmark(*, arms: Sequence[str] | None = None) -> dict[str, Any]:
+def run_benchmark(
+    *,
+    arms: Sequence[str] | None = None,
+    scenario_selection_role: str = "report",
+) -> dict[str, Any]:
     started = time.perf_counter()
     selected_arms = tuple(arms or ARM_ORDER)
     unknown = sorted(set(selected_arms) - set(ARM_ORDER))
     if unknown:
         raise ValueError(f"unknown arm(s): {', '.join(unknown)}")
-    cases = fixture_cases()
+    available_cases = fixture_cases()
+    cases = select_cases_for_role(available_cases, scenario_selection_role)
     rows = [evaluate_case(case, arm) for case in cases for arm in selected_arms]
     metrics = summarize_rows(rows, case_count=len(cases))
+    metrics.update(summarize_scenario_slices(rows))
+    scenario_controls = build_scenario_controls(
+        available_cases,
+        cases,
+        rows,
+        scenario_selection_role=scenario_selection_role,
+    )
     cost_harm_ledger = build_cost_harm_ledger(rows, metrics=metrics)
     preregistration = build_preregistration(cost_harm_ledger)
     required_arms_present = set(ARM_ORDER) <= set(selected_arms)
@@ -963,7 +1403,23 @@ def run_benchmark(*, arms: Sequence[str] | None = None) -> dict[str, Any]:
         and metrics["stale_memory_harm"] > 0.0
         and metrics["oracle_headroom"] > 0.0
     )
-    ok = bool(required_arms_present and attribution_controls_present)
+    if scenario_selection_role == "prompt_threshold_tuning":
+        scenario_controls_present = (
+            scenario_controls["selected_case_count"] > 0
+            and scenario_controls["holdout_used_for_prompt_or_threshold_tuning_count"] == 0
+            and scenario_controls["holdout_excluded_from_selection_count"] > 0
+        )
+    else:
+        scenario_controls_present = (
+            scenario_controls["public_quality_external_or_holdout_share_gate_passed"]
+            and scenario_controls["holdout_used_for_prompt_or_threshold_tuning_count"] == 0
+            and scenario_controls["negative_control_case_count"] >= 2
+        )
+    ok = bool(
+        required_arms_present
+        and attribution_controls_present
+        and scenario_controls_present
+    )
     return {
         "kind": "aippocampus_continuous_memory_arms_benchmark",
         "schema_version": SCHEMA_VERSION,
@@ -973,13 +1429,20 @@ def run_benchmark(*, arms: Sequence[str] | None = None) -> dict[str, Any]:
         "arms": list(selected_arms),
         "config": {
             "scenario_family": "continuous_agent_memory_attribution",
-            "scenario_provenance": ["author_written_synthetic"],
+            "scenario_selection_role": scenario_selection_role,
+            "scenario_provenance": scenario_provenance_for_cases(cases),
+            "scenario_provenance_categories": list(SCENARIO_PROVENANCE_CATEGORIES),
+            "holdout_prompt_threshold_tuning_role": HOLDOUT_TUNING_ROLE,
+            "public_quality_min_external_or_holdout_share": (
+                PUBLIC_QUALITY_MIN_EXTERNAL_OR_HOLDOUT_SHARE
+            ),
             "uses_live_model": False,
             "uses_private_history": False,
             "uses_oracle_for_true_memory_scoring": False,
             "default_suite_member": False,
         },
         "metrics": metrics,
+        "scenario_controls": scenario_controls,
         "cost_harm_ledger": cost_harm_ledger,
         "preregistration": preregistration,
         "rows": rows,
@@ -990,7 +1453,10 @@ def run_benchmark(*, arms: Sequence[str] | None = None) -> dict[str, Any]:
             "absolute_paths_in_report": False,
             "case_ids_are_hashed": True,
             "cost_harm_ledger_contains_raw_private_inputs": False,
-            "output_shape": "sanitized_memory_arm_attribution_and_cost_harm_report",
+            "scenario_metadata_contains_raw_private_inputs": False,
+            "output_shape": (
+                "sanitized_memory_arm_attribution_cost_harm_and_scenario_control_report"
+            ),
         },
         "interpretation_notes": [
             "memory_presence_effect isolates formatting and nearby-token effects.",
@@ -998,10 +1464,12 @@ def run_benchmark(*, arms: Sequence[str] | None = None) -> dict[str, Any]:
             "stale wrong arm is an adversarial diagnostic stressor, not a product mode",
             "oracle_memory is an upper-bound arm and must not leak into true-memory scoring.",
             "cost and harm ledger uses public synthetic units, not exact billing data.",
+            "scenario provenance, holdout, and negative-control slices are reported separately for #409.",
         ],
         "cannot_claim": [
             "full #378 continuous-memory superiority",
             "public-quality continuous-memory advantage before the preregistered primary endpoint passes",
+            "public-quality #378 superiority from only author_written_synthetic or tuning-visible diagnostic scenarios",
             "exact dollar accounting for every local operation",
             "live host-native cost telemetry",
             "live host-native compaction behavior",
@@ -1032,11 +1500,23 @@ def print_human_summary(payload: dict[str, Any]) -> None:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--arm", action="append", choices=ARM_ORDER)
+    parser.add_argument(
+        "--scenario-selection-role",
+        choices=SCENARIO_SELECTION_ROLES,
+        default="report",
+        help=(
+            "Use report for the full evidence slice, prompt_threshold_tuning "
+            "to exclude holdouts, or holdout for blind-slice diagnostics."
+        ),
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
 
-    payload = run_benchmark(arms=args.arm)
+    payload = run_benchmark(
+        arms=args.arm,
+        scenario_selection_role=args.scenario_selection_role,
+    )
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(
