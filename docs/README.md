@@ -67,6 +67,7 @@ material.
 - [`demo-scenarios.md`](guides/demo-scenarios.md) - public-safe demo flows using synthetic memory data.
 - [`privacy-security-checklist.md`](guides/privacy-security-checklist.md) - public-readiness privacy and security checklist.
 - [`release-checklist.md`](guides/release-checklist.md) - repeatable release, tag, coverage, and public-boundary gates.
+- [`community-channel-launch.md`](guides/community-channel-launch.md) - go/no-go checklist and moderation/privacy boundary before linking a general community channel.
 - [`object-storage-providers.md`](guides/object-storage-providers.md) - S3/R2/GCS XML provider setup and object-storage pitfalls.
 
 ### Evidence
