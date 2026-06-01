@@ -577,15 +577,19 @@ def public_smoke_result(result: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def write_stdout_line(text: str) -> None:
+    os.write(1, f"{text}\n".encode("utf-8"))
+
+
 def emit_smoke_result(result: dict[str, Any], *, json_output: bool) -> None:
     public_result = public_smoke_result(result)
     if json_output:
         json.dump(public_result, sys.stdout, ensure_ascii=False, indent=2)
         sys.stdout.write("\n")
         return
-    sys.stdout.write(f"suppressed label recovery: {public_result.get('status')}\n")
-    sys.stdout.write(
-        f"strict recovered labels: {public_result.get('strict_recovered_label_count')}\n"
+    write_stdout_line(f"suppressed label recovery: {public_result.get('status')}")
+    write_stdout_line(
+        f"strict recovered labels: {public_result.get('strict_recovered_label_count')}"
     )
 
 

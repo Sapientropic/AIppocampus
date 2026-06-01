@@ -168,21 +168,25 @@ def public_admin_result(result: dict[str, Any]) -> dict[str, Any]:
     return public
 
 
+def write_stdout_line(text: str) -> None:
+    os.write(1, f"{text}\n".encode("utf-8"))
+
+
 def emit_result(result: dict[str, Any], *, json_output: bool, plain_field: str | None = None) -> int:
     public_result = public_admin_result(result)
     if json_output:
         json.dump(public_result, sys.stdout, ensure_ascii=False, indent=2)
         sys.stdout.write("\n")
     elif plain_field == "recipient" and public_result.get("recipient"):
-        sys.stdout.write(f"{public_result['recipient']}\n")
+        write_stdout_line(str(public_result["recipient"]))
     else:
-        sys.stdout.write(
-            "encrypted sync: ok\n"
+        write_stdout_line(
+            "encrypted sync: ok"
             if public_result.get("ok")
-            else "encrypted sync: needs attention\n"
+            else "encrypted sync: needs attention"
         )
         for item in public_result.get("issues") or []:
-            sys.stdout.write(f"- {item.get('code')}\n")
+            write_stdout_line(f"- {item.get('code')}")
     return 0 if result.get("ok") else 1
 
 

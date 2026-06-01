@@ -358,13 +358,17 @@ def print_review_json(payload: dict[str, Any]) -> None:
     sys.stdout.write("\n")
 
 
+def write_stdout_line(text: str) -> None:
+    os.write(1, f"{text}\n".encode("utf-8"))
+
+
 def print_review_summary(payload: dict[str, Any]) -> None:
     public_payload = public_review_cli_payload(payload)
-    sys.stdout.write(f"findings reviewed: {public_payload['finding_count']}\n")
-    sys.stdout.write(f"promotion candidates: {public_payload['promotion_candidate_count']}\n")
-    sys.stdout.write(f"duplicate groups: {public_payload['duplicate_group_count']}\n")
-    sys.stdout.write(f"weak findings: {public_payload['weak_finding_count']}\n")
-    sys.stdout.write(f"output boundary: {public_payload['output_boundary']}\n")
+    write_stdout_line(f"findings reviewed: {public_payload['finding_count']}")
+    write_stdout_line(f"promotion candidates: {public_payload['promotion_candidate_count']}")
+    write_stdout_line(f"duplicate groups: {public_payload['duplicate_group_count']}")
+    write_stdout_line(f"weak findings: {public_payload['weak_finding_count']}")
+    write_stdout_line(f"output boundary: {public_payload['output_boundary']}")
 
 
 def append_review_output(
