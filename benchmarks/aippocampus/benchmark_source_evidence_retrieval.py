@@ -71,6 +71,13 @@ DEFAULT_PUBLIC_SEMANTIC_MIN_HIT_RATE = 0.75
 DEFAULT_PUBLIC_SEMANTIC_MIN_CONFIDENCE = 0.45
 DEFAULT_PUBLIC_SEMANTIC_TIMEOUT = 60
 DEFAULT_PUBLIC_SEMANTIC_MAX_TOKENS = 8192
+# The semantic-sidecar min_cases default is a smoke floor. This separate
+# evidence-density floor prevents tiny reviewed pilots from being promoted to
+# empirical benchmark claims merely because their top-k hits passed.
+DEFAULT_PUBLIC_SEMANTIC_MINIMUM_EMPIRICAL_CASE_COUNT = 50
+PUBLIC_SEMANTIC_SELECTION_METHOD = (
+    "bounded ShareGPT clean-source subset with source-backed semantic sidecar rows"
+)
 DEFAULT_STANDARD_CORPUS_ROOT = (_paths.REPO_ROOT / "benchmark_corpus").resolve()
 DEFAULT_STANDARD_DATASET = "locomo"
 DEFAULT_STANDARD_QA_CASES = 100
@@ -1150,6 +1157,13 @@ def summarize_public_semantic_source_payload(payload: dict[str, Any]) -> dict[st
         "kind": payload.get("kind") or "public_semantic_sidecar_source_evidence",
         "status": payload.get("status"),
         "ok": bool(payload.get("ok")),
+        "claim_level": payload.get("claim_level"),
+        "sample_case_count": int(payload.get("sample_case_count") or 0),
+        "minimum_empirical_case_count": int(
+            payload.get("minimum_empirical_case_count") or 0
+        ),
+        "selection_method": payload.get("selection_method"),
+        "sample_size_warning": payload.get("sample_size_warning"),
         "config": payload.get("config") or {},
         "corpus": payload.get("corpus") or {},
         "artifacts": payload.get("artifacts") or {},
@@ -1161,14 +1175,49 @@ def summarize_public_semantic_source_payload(payload: dict[str, Any]) -> dict[st
     }
 
 
-def public_semantic_status(source_payload: dict[str, Any], *, sidecar_rows: int) -> str:
+def public_semantic_status(
+    source_payload: dict[str, Any],
+    *,
+    sidecar_rows: int,
+    sample_case_count: int,
+    minimum_empirical_case_count: int,
+) -> str:
     if int(sidecar_rows) <= 0:
         return "insufficient_sidecar_rows"
     if str(source_payload.get("status") or "").startswith("insufficient_selected_cases"):
         return "insufficient_selected_cases"
     if not source_payload.get("ok"):
         return str(source_payload.get("status") or "diagnostic_only")
+    if int(sample_case_count) < int(minimum_empirical_case_count):
+        return "diagnostic_only"
     return "sufficient"
+
+
+def public_semantic_claim_level(status: str) -> str:
+    if status == "sufficient":
+        return "empirical_benchmark"
+    if status == "diagnostic_only":
+        return "diagnostic_pilot"
+    return "diagnostic_only"
+
+
+def public_semantic_sample_size_warning(
+    *,
+    sample_case_count: int,
+    minimum_empirical_case_count: int,
+    claim_level: str,
+) -> dict[str, Any] | None:
+    if sample_case_count >= minimum_empirical_case_count:
+        return None
+    return {
+        "sample_case_count": sample_case_count,
+        "minimum_empirical_case_count": minimum_empirical_case_count,
+        "claim_level": claim_level,
+        "selection_method": PUBLIC_SEMANTIC_SELECTION_METHOD,
+        "cannot_claim": [
+            "empirical_public_semantic_sidecar_quality_below_minimum_case_count"
+        ],
+    }
 
 
 def skipped_public_semantic_sidecar_payload(
@@ -1186,6 +1235,11 @@ def skipped_public_semantic_sidecar_payload(
         "generated_at": now_utc(),
         "status": status,
         "ok": True,
+        "claim_level": "not_run",
+        "sample_case_count": 0,
+        "minimum_empirical_case_count": DEFAULT_PUBLIC_SEMANTIC_MINIMUM_EMPIRICAL_CASE_COUNT,
+        "selection_method": PUBLIC_SEMANTIC_SELECTION_METHOD,
+        "sample_size_warning": None,
         "config": config,
         "corpus": {
             "corpus_dir_sha1": sha1_text(str(corpus_dir))[:16],
@@ -1256,6 +1310,7 @@ def run_public_semantic_sidecar_benchmark(
         "timeout": int(timeout),
         "max_tokens": int(max_tokens),
         "include_private_text": bool(include_private_text),
+        "minimum_empirical_case_count": DEFAULT_PUBLIC_SEMANTIC_MINIMUM_EMPIRICAL_CASE_COUNT,
     }
     try:
         conversations_payload = load_sharegpt_conversations(
@@ -1329,9 +1384,22 @@ def run_public_semantic_sidecar_benchmark(
         require_semantic_sidecar=True,
         ranking="dynamic_source",
     )
-    status = public_semantic_status(source_payload, sidecar_rows=len(sidecar_rows))
+    sample_case_count = int(source_payload.get("case_count") or 0)
+    status = public_semantic_status(
+        source_payload,
+        sidecar_rows=len(sidecar_rows),
+        sample_case_count=sample_case_count,
+        minimum_empirical_case_count=DEFAULT_PUBLIC_SEMANTIC_MINIMUM_EMPIRICAL_CASE_COUNT,
+    )
+    claim_level = public_semantic_claim_level(status)
+    sample_warning = public_semantic_sample_size_warning(
+        sample_case_count=sample_case_count,
+        minimum_empirical_case_count=DEFAULT_PUBLIC_SEMANTIC_MINIMUM_EMPIRICAL_CASE_COUNT,
+        claim_level=claim_level,
+    )
+    quality_gate_ok = bool(source_payload.get("ok")) and len(sidecar_rows) > 0
     metrics = {
-        "case_count": int(source_payload.get("case_count") or 0),
+        "case_count": sample_case_count,
         "passed_count": int(source_payload.get("passed_count") or 0),
         "failed_count": int(source_payload.get("failed_count") or 0),
         "top_k_hit_rate": float(source_payload.get("top_k_hit_rate") or 0.0),
@@ -1365,7 +1433,13 @@ def run_public_semantic_sidecar_benchmark(
         "kind": "public_semantic_sidecar_source_evidence",
         "generated_at": now_utc(),
         "status": status,
-        "ok": status == "sufficient",
+        "ok": quality_gate_ok,
+        "quality_gate_ok": quality_gate_ok,
+        "claim_level": claim_level,
+        "sample_case_count": sample_case_count,
+        "minimum_empirical_case_count": DEFAULT_PUBLIC_SEMANTIC_MINIMUM_EMPIRICAL_CASE_COUNT,
+        "selection_method": PUBLIC_SEMANTIC_SELECTION_METHOD,
+        "sample_size_warning": sample_warning,
         "config": config,
         "corpus": {
             "corpus_dir_sha1": sha1_text(str(resolved_corpus_dir))[:16],
@@ -1400,6 +1474,11 @@ def run_public_semantic_sidecar_benchmark(
             "private_real_history_source_evidence_quality",
             "human_reviewed_semantic_labels",
             "unbounded_public_semantic_sidecar_quality",
+            *(
+                sample_warning.get("cannot_claim", [])
+                if isinstance(sample_warning, dict)
+                else []
+            ),
         ],
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
     }
@@ -2920,7 +2999,8 @@ def print_human_summary(payload: dict[str, Any]) -> None:
             f"- public semantic sidecar top-{int(config.get('top_k') or 0)}: "
             f"{metrics.get('passed_count', 0)} hit / {metrics.get('failed_count', 0)} miss "
             f"({metrics.get('top_k_hit_rate', 0.0):.2%}); "
-            f"sidecar rows {artifacts.get('reviewed_sidecar_row_count', 0)}"
+            f"sidecar rows {artifacts.get('reviewed_sidecar_row_count', 0)}; "
+            f"claim {public_semantic.get('claim_level') or 'unknown'}"
         )
 
 
