@@ -666,6 +666,39 @@ Release-gate and client-surface evidence for #56:
   third-party fresh-clone or second-user install review, and human interactive
   Desktop UI marketplace/plugin click-through.
 
+## 2026-06-01 - Continuous-memory cost and harm ledger
+
+The #410 slice adds the public-synthetic `cost_harm_ledger` to
+`benchmarks/aippocampus/benchmark_continuous_memory_arms.py`, extending the
+#408 attribution arms for #378.
+
+- The report now separates foreground-only cost from amortized memory cost,
+  counts modeled background prep instead of hiding it, and keeps
+  `fresh_context_spec_loop` as a fair comparison baseline rather than treating
+  the `no_memory` diagnostic arm as fresh-context/spec-loop.
+- The harm ledger weights stale-memory false positives by severity,
+  downstream turns, wrong constraints, rejected routes, current-project
+  contamination, risky action before source reopen, privacy severity, and
+  rollback/rework cost.
+- The verified public-synthetic result reports
+  `claim_level=public_synthetic_cost_harm_contract`,
+  `amortized_cost_per_successful_slice=7.875` for
+  `true_aippocampus_memory`, `3.07` for `fresh_context_spec_loop`,
+  `harm_weighted_false_positive_cost=149.0` for `stale_wrong_memory`, and
+  `highest_net_value_fair_strategy=fresh_context_spec_loop`.
+- Verification commands passed:
+  `python -m unittest tests.aippocampus.test_benchmark_continuous_memory_arms -v`,
+  `python benchmarks/aippocampus/benchmark_continuous_memory_arms.py --json`,
+  `python tools/aippocampus/docs/check_docs_health.py --json`,
+  `python -m compileall -q benchmarks/aippocampus/benchmark_continuous_memory_arms.py tests/aippocampus/test_benchmark_continuous_memory_arms.py`,
+  `python tools/aippocampus/run_tests.py --tier benchmark`,
+  `python -m ruff check skills plugins tests tools benchmarks benchmark_corpus`,
+  `git diff --check`, and `python tools/aippocampus/run_tests.py --tier fast`.
+- This does not claim full #378 continuous-memory superiority, exact dollar
+  accounting, live host-native cost telemetry, live compaction behavior,
+  private real-history generality, answer-generation quality, or competitor
+  superiority.
+
 ## Command Ledger
 
 ```powershell
