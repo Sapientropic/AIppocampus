@@ -217,6 +217,149 @@ def test_architecture_debt_issue_gets_architecture_slice_milestone() -> None:
     assert result.milestone == "Architecture Debt Slice 2026-06"
 
 
+def test_public_readiness_issue_gets_distribution_milestone() -> None:
+    result = project_triage.infer_triage(
+        issue(
+            382,
+            "Improve agent-facing discoverability without hollow marketing",
+            "Public readiness work across README, install guide, agent discovery, and distribution surfaces.",
+            labels=("documentation", "enhancement"),
+        )
+    )
+
+    assert result.status == "Ready"
+    assert result.track == "Public readiness"
+    assert result.kind == "Docs"
+    assert result.stage == "Stage 1"
+    assert result.milestone == "Public Readiness & Distribution"
+
+
+def test_project_planning_automation_gets_distribution_milestone() -> None:
+    result = project_triage.infer_triage(
+        issue(
+            383,
+            "Extend planning audit to catch orphan Discussions and missing implementation maps",
+            "Project triage and planning audit should keep roadmap metadata and implementation maps current.",
+            labels=("documentation", "enhancement"),
+        )
+    )
+
+    assert result.status == "Ready"
+    assert result.track == "Public readiness"
+    assert result.kind == "Implementation"
+    assert result.stage == "Stage 1"
+    assert result.milestone == "Public Readiness & Distribution"
+
+
+def test_public_schema_privacy_issue_stays_in_distribution_milestone() -> None:
+    result = project_triage.infer_triage(
+        issue(
+            338,
+            "Define public schema metadata namespace and extension rules",
+            "Public API schema metadata and privacy extension rules for the public contract.",
+            labels=("documentation", "enhancement"),
+        )
+    )
+
+    assert result.track == "Public readiness"
+    assert result.milestone == "Public Readiness & Distribution"
+
+
+def test_web_chat_import_issue_gets_public_distribution_milestone() -> None:
+    result = project_triage.infer_triage(
+        issue(
+            370,
+            "Bridge browser/web-chat captures into generic JSONL clean-source import",
+            "Browser-local export to generic JSONL clean-source import for provider-neutral conversation intake.",
+            labels=("enhancement",),
+        )
+    )
+
+    assert result.status == "Ready"
+    assert result.track == "Public readiness"
+    assert result.kind == "Implementation"
+    assert result.stage == "Stage 1"
+    assert result.milestone == "Public Readiness & Distribution"
+
+
+def test_cognitive_runtime_issue_gets_runtime_continuity_milestone() -> None:
+    result = project_triage.infer_triage(
+        issue(
+            381,
+            "Prototype a local search-decision memory adapter",
+            "Local search-decision memory adapter for critical agent operations and source-backed runtime continuity.",
+            labels=("enhancement",),
+        )
+    )
+
+    assert result.status == "Ready"
+    assert result.track == "Life-wide memory"
+    assert result.kind == "Implementation"
+    assert result.stage == "Stage 2"
+    assert result.milestone == "Cognitive Runtime Continuity"
+
+
+def test_segmented_index_issue_gets_sync_scale_milestone() -> None:
+    result = project_triage.infer_triage(
+        issue(
+            376,
+            "Add long-lived single-thread segment build/search scale soak",
+            "Segmented index build/search scale soak for shard boundaries and non-blocking fanout budgets.",
+            labels=("enhancement",),
+        )
+    )
+
+    assert result.status == "Ready"
+    assert result.track == "GB/TB scale"
+    assert result.kind == "Implementation"
+    assert result.stage == "Cross-stage"
+    assert result.milestone == "Sync & Scale Infrastructure"
+
+
+def test_security_privacy_issue_gets_hardening_milestone() -> None:
+    result = project_triage.infer_triage(
+        issue(
+            352,
+            "Refine external-model redaction granularity and project-safe path anchors",
+            "Privacy and security hardening for external-model redaction, raw output, and project-safe path anchors.",
+            labels=("enhancement",),
+        )
+    )
+
+    assert result.status == "Ready"
+    assert result.track == "External models"
+    assert result.kind == "Implementation"
+    assert result.stage == "Stage 6"
+    assert result.milestone == "Security & Privacy Hardening"
+
+
+def test_codeql_raw_private_issue_gets_security_milestone() -> None:
+    result = project_triage.infer_triage(
+        issue(
+            326,
+            "CodeQL follow-up: harden raw/private CLI output surfaces",
+            "Security review follow-up for raw/private CLI output and privacy-security boundaries.",
+            labels=("bug",),
+        )
+    )
+
+    assert result.milestone == "Security & Privacy Hardening"
+
+
+def test_benchmark_privacy_issue_keeps_benchmark_milestone() -> None:
+    result = project_triage.infer_triage(
+        issue(
+            357,
+            "Unify benchmark sensitive-content filtering with runtime privacy policy",
+            "Benchmark report hardening should align sensitive-content filtering with the runtime privacy boundary.",
+            labels=("enhancement",),
+        )
+    )
+
+    assert result.track == "Benchmarks & Research"
+    assert result.milestone == "Benchmark Evidence Hardening"
+
+
 def test_architecture_debt_issue_routes_to_cross_stage_implementation() -> None:
     result = project_triage.infer_triage(
         issue(
@@ -291,6 +434,34 @@ def test_milestone_update_preserves_existing_manual_milestone() -> None:
         "current": "Human chosen milestone",
         "planned": "Architecture Debt Slice 2026-06",
         "skipped": "existing_milestone",
+    }
+
+
+def test_milestone_update_skips_low_confidence_inferred_milestone() -> None:
+    triage = project_triage.infer_triage(
+        issue(
+            326,
+            "CodeQL follow-up: harden raw/private CLI output surfaces",
+            "Security review follow-up for raw/private CLI output and privacy-security boundaries.",
+            labels=("bug",),
+        )
+    )
+
+    update = project_triage.planned_milestone_update(
+        issue(
+            326,
+            "CodeQL follow-up: harden raw/private CLI output surfaces",
+            "Security review follow-up for raw/private CLI output and privacy-security boundaries.",
+            labels=("bug",),
+        ),
+        triage,
+        {"Security & Privacy Hardening": 8},
+    )
+
+    assert triage.confidence == "low"
+    assert update == {
+        "planned": "Security & Privacy Hardening",
+        "skipped": "low_confidence",
     }
 
 
