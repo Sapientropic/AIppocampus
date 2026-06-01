@@ -20,6 +20,12 @@ Core rule:
 Source is the ground. Summaries are weather.
 ```
 
+For quick product-shaped evidence, read
+[`docs/evidence/magic-moments.md`](evidence/magic-moments.md). It shows real
+second-user continuity moments before the benchmark machinery, while preserving
+the boundary that scent is navigation, source reopening is evidence, and the
+base model did not innately remember the facts.
+
 ## What AIppocampus Is Not
 
 AIppocampus is not:
@@ -140,6 +146,7 @@ chooses to publish or sync them.
 Use the dated evidence docs before making public claims:
 
 - `docs/evidence/readiness/stage-0-5-readiness.md`
+- `docs/evidence/magic-moments.md`
 - `docs/evidence/benchmark-evidence-map.md`
 - `docs/evidence/readiness/public-readiness-verification.md`
 
