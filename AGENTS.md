@@ -81,6 +81,8 @@ planning material:
   fields or milestones were filled. The script fills missing fields
   conservatively, only assigns a Milestone when none exists, and avoids
   overwriting human-edited Project metadata.
+- Use `docs/architecture/project-planning-automation.md` for the boundary
+  between issue-local triage and recurring roadmap drift audits.
 - Keep Project views simple: inbox, roadmap by track/stage, current work, and
   evidence gaps. Automation is optional and should follow the existing issue
   labels/filters instead of inventing a parallel workflow.
