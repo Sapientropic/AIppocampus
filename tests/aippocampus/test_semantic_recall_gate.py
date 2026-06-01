@@ -575,6 +575,100 @@ class SemanticRecallGateTests(unittest.TestCase):
         self.assertEqual(result["decision"], "skip")
         self.assertTrue(result["secret_policy"]["hard_block"])
 
+    def test_mixed_private_key_prompt_preserves_safe_context_after_redaction(self) -> None:
+        seen_prompts: list[str] = []
+
+        def chat_fn(messages, api_key, model, base_url, max_tokens, timeout, temperature):
+            seen_prompts.append(messages[-1]["content"])
+            return fake_response(
+                {
+                    "decision": "scent",
+                    "confidence": 0.78,
+                    "query_aliases": ["path anchor redaction"],
+                    "anti_personalization_risk": "low",
+                    "reason": "safe surrounding context remains useful.",
+                }
+            )
+
+        private_key_block = "\n".join(
+            [
+                "-----" + "BEGIN PRIVATE KEY" + "-----",
+                "abc",
+                "-----" + "END PRIVATE KEY" + "-----",
+            ]
+        )
+        prompt = (
+            "Continue the AIppocampus external-model redaction design and "
+            "project-safe path anchor work.\n"
+            f"{private_key_block}\n"
+            "Keep source-backed recall useful without leaking credential material."
+        )
+
+        result = gate.run_semantic_gate(
+            prompt,
+            cwd=self.workspace,
+            registry=self.registry,
+            registry_path=self.registry_path,
+            api_key="test-key",
+            use_cache=False,
+            chat_fn=chat_fn,
+        )
+
+        encoded_prompts = "\n".join(seen_prompts)
+        self.assertTrue(result["available"])
+        self.assertTrue(result["secret_policy"]["redacted"])
+        self.assertFalse(result["secret_policy"]["hard_block"])
+        self.assertIn("<redacted:private-key-block>", encoded_prompts)
+        self.assertIn("project-safe path anchor", encoded_prompts)
+        self.assertNotIn("BEGIN PRIVATE KEY", encoded_prompts)
+        self.assertNotIn("abc", encoded_prompts)
+
+    def test_model_payload_uses_project_safe_path_anchors_for_prompt_and_catalog(self) -> None:
+        seen_prompts: list[str] = []
+
+        def chat_fn(messages, api_key, model, base_url, max_tokens, timeout, temperature):
+            seen_prompts.append(messages[-1]["content"])
+            return fake_response(
+                {
+                    "decision": "scent",
+                    "confidence": 0.74,
+                    "query_aliases": ["project path anchor"],
+                    "anti_personalization_risk": "low",
+                    "reason": "path anchors preserve safe structure.",
+                }
+            )
+
+        project_file = self.workspace / "src" / "memory_gate.py"
+        registry = {
+            **self.registry,
+            "threads": [
+                {
+                    **self.registry["threads"][0],
+                    "summary": f"Related implementation lives near {project_file}",
+                }
+            ],
+        }
+
+        result = gate.run_semantic_gate(
+            f"Continue the redaction work around {project_file}",
+            cwd=self.workspace,
+            registry=registry,
+            registry_path=self.registry_path,
+            api_key="test-key",
+            use_cache=False,
+            chat_fn=chat_fn,
+        )
+
+        encoded_prompts = "\n".join(seen_prompts)
+        self.assertTrue(result["available"])
+        self.assertIn("<redacted:local-path>", encoded_prompts)
+        self.assertIn("<path-anchor", encoded_prompts)
+        self.assertIn("scope=project", encoded_prompts)
+        self.assertIn("class=python", encoded_prompts)
+        self.assertIn("hash=sha256:", encoded_prompts)
+        self.assertNotIn(str(self.workspace), encoded_prompts)
+        self.assertNotIn("memory_gate.py", encoded_prompts)
+
     def test_prompt_relevant_triggers_do_not_match_when_not_to_use_only_terms(self) -> None:
         trigger_path = self.root / "semantic_triggers.jsonl"
         trigger_path.write_text(

@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import ipaddress
 import re
-from typing import Any
+from pathlib import Path, PurePosixPath, PureWindowsPath
+from typing import Any, Callable
 from urllib.parse import SplitResult, urlsplit
 
 KEY_BLOCK_BOUNDARY = "-----"
@@ -19,15 +21,164 @@ OPENSSH_PRIVATE_KEY_BLOCK = (
     rf"{KEY_BLOCK_BOUNDARY}END OPENSSH PRIVATE KEY{KEY_BLOCK_BOUNDARY}"
 )
 
-EXTERNAL_MODEL_HARD_SECRET_PATTERNS = [
-    re.compile(pattern, re.IGNORECASE | re.DOTALL)
-    for pattern in [
-        GENERIC_PRIVATE_KEY_BLOCK,
-        OPENSSH_PRIVATE_KEY_BLOCK,
-    ]
-]
+PATH_CLASS_BY_EXTENSION = {
+    "bat": "script",
+    "c": "source",
+    "cfg": "config",
+    "conf": "config",
+    "cpp": "source",
+    "cs": "source",
+    "css": "style",
+    "csv": "data",
+    "go": "source",
+    "h": "source",
+    "hpp": "source",
+    "html": "markup",
+    "ini": "config",
+    "java": "source",
+    "js": "javascript",
+    "json": "data",
+    "jsx": "javascript",
+    "log": "log",
+    "md": "markdown",
+    "ps1": "script",
+    "py": "python",
+    "rs": "rust",
+    "sh": "script",
+    "sql": "sql",
+    "toml": "config",
+    "ts": "typescript",
+    "tsx": "typescript",
+    "txt": "text",
+    "yaml": "config",
+    "yml": "config",
+}
+SAFE_PATH_EXTENSION_RE = re.compile(r"^[A-Za-z0-9]{1,12}$")
+MACOS_PRIVATE_VAR_PREFIX = "/private/var/"
+MACOS_VAR_PREFIX = "/var/"
 
-EXTERNAL_MODEL_REDACTION_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
+
+def _path_anchor_extension(raw_path: str) -> str:
+    normalized = raw_path.replace("\\\\", "\\").replace("\\", "/")
+    filename = normalized.rsplit("/", 1)[-1].strip()
+    if "." not in filename:
+        return ""
+    ext = filename.rsplit(".", 1)[-1].casefold()
+    return ext if SAFE_PATH_EXTENSION_RE.fullmatch(ext) else ""
+
+
+def _relative_windows_path(raw_path: str, project_root: str) -> str | None:
+    try:
+        path = PureWindowsPath(raw_path.replace("\\\\", "\\"))
+        root = PureWindowsPath(project_root.replace("\\\\", "\\"))
+    except Exception:
+        return None
+    if not path.is_absolute() or not root.is_absolute():
+        return None
+    path_parts = [part.casefold() for part in path.parts]
+    root_parts = [part.casefold() for part in root.parts]
+    if len(path_parts) <= len(root_parts) or path_parts[: len(root_parts)] != root_parts:
+        return None
+    return "/".join(path.parts[len(root.parts) :])
+
+
+def _macos_var_path_spellings(path: str) -> tuple[str, ...]:
+    # GitHub macOS runners and Python temp APIs can expose the same workspace as
+    # /var/... or /private/var/.... Keep that known host alias from turning a
+    # project-local path into an external identity, while still using lexical
+    # comparison instead of resolving arbitrary user-supplied paths.
+    if path.startswith(MACOS_PRIVATE_VAR_PREFIX):
+        return (path, path.removeprefix("/private"))
+    if path.startswith(MACOS_VAR_PREFIX):
+        return (path, f"/private{path}")
+    return (path,)
+
+
+def _relative_posix_path_once(raw_path: str, project_root: str) -> str | None:
+    try:
+        path = PurePosixPath(raw_path)
+        root = PurePosixPath(project_root)
+    except Exception:
+        return None
+    if not path.is_absolute() or not root.is_absolute():
+        return None
+    path_parts = list(path.parts)
+    root_parts = list(root.parts)
+    if len(path_parts) <= len(root_parts) or path_parts[: len(root_parts)] != root_parts:
+        return None
+    return "/".join(path.parts[len(root.parts) :])
+
+
+def _relative_posix_path(raw_path: str, project_root: str) -> str | None:
+    for path_text in _macos_var_path_spellings(raw_path):
+        for root_text in _macos_var_path_spellings(project_root):
+            relative_path = _relative_posix_path_once(path_text, root_text)
+            if relative_path:
+                return relative_path
+    return None
+
+
+def _project_relative_path(raw_path: str, project_root: str | Path | None) -> str | None:
+    if not project_root:
+        return None
+    root_text = str(project_root)
+    normalized = raw_path.replace("\\\\", "\\")
+    if re.match(r"^[A-Za-z]:[\\/]", normalized) or re.match(r"^[A-Za-z]:[\\/]", root_text):
+        return _relative_windows_path(normalized, root_text)
+    if normalized.startswith("/") and str(root_text).startswith("/"):
+        return _relative_posix_path(normalized, root_text)
+    return None
+
+
+def _local_path_anchor(
+    raw_path: str,
+    *,
+    kind: str,
+    project_root: str | Path | None = None,
+) -> str:
+    ext = _path_anchor_extension(raw_path)
+    path_class = PATH_CLASS_BY_EXTENSION.get(ext, "unknown")
+    relative_path = _project_relative_path(raw_path, project_root)
+    scope = "project" if relative_path else "external"
+    parts = [
+        "<redacted:local-path><path-anchor",
+        f"scope={scope}",
+        f"kind={kind}",
+        f"class={path_class}",
+    ]
+    if ext:
+        parts.append(f"ext={ext}")
+    if relative_path:
+        digest = hashlib.sha256(
+            relative_path.casefold().encode("utf-8", errors="replace")
+        ).hexdigest()[:16]
+        parts.append(f"hash=sha256:{digest}")
+    return " ".join(parts) + ">"
+
+
+PathAnchorReplacement = Callable[[re.Match[str], str | Path | None], str]
+
+
+def _path_anchor_replacement(kind: str) -> PathAnchorReplacement:
+    def replace(match: re.Match[str], project_root: str | Path | None = None) -> str:
+        return _local_path_anchor(match.group(0), kind=kind, project_root=project_root)
+
+    return replace
+
+
+EXTERNAL_MODEL_REDACTION_PATTERNS: list[
+    tuple[str, re.Pattern[str], str | PathAnchorReplacement]
+] = [
+    (
+        "private_key_block",
+        re.compile(GENERIC_PRIVATE_KEY_BLOCK, re.IGNORECASE | re.DOTALL),
+        "<redacted:private-key-block>",
+    ),
+    (
+        "private_key_block",
+        re.compile(OPENSSH_PRIVATE_KEY_BLOCK, re.IGNORECASE | re.DOTALL),
+        "<redacted:private-key-block>",
+    ),
     (
         "openai_api_key",
         re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b", re.IGNORECASE),
@@ -55,7 +206,7 @@ EXTERNAL_MODEL_REDACTION_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
     (
         "json_escaped_windows_local_path",
         re.compile(r"(?<![\w])(?:[A-Za-z]:\\\\[^\"'\s<>]+)"),
-        "<redacted:local-path>",
+        _path_anchor_replacement("windows_json_escaped"),
     ),
     (
         "windows_local_path",
@@ -63,7 +214,7 @@ EXTERNAL_MODEL_REDACTION_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
             r"(?<![\w])(?:[A-Za-z]:\\(?:[^\\/:*?\"<>|\r\n\t ]+\\?)+"
             r"[^\\/:*?\"<>|\r\n\t ]*)"
         ),
-        "<redacted:local-path>",
+        _path_anchor_replacement("windows"),
     ),
     (
         "posix_local_path",
@@ -71,7 +222,7 @@ EXTERNAL_MODEL_REDACTION_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
             r"(?<![\w:/])/(?:Users|home|root|tmp|var|mnt|Volumes|private)/"
             r"(?:[^\s\"'<>]+)"
         ),
-        "<redacted:local-path>",
+        _path_anchor_replacement("posix"),
     ),
 ]
 
@@ -95,7 +246,11 @@ BENCHMARK_PRIVATE_HOST_PATTERN = re.compile(
 BENCHMARK_IPV4_PATTERN = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 
 
-def sanitize_external_model_text(text: str) -> tuple[str, dict[str, Any]]:
+def sanitize_external_model_text(
+    text: str,
+    *,
+    project_root: str | Path | None = None,
+) -> tuple[str, dict[str, Any]]:
     """Redact likely secrets before automatic external-model calls.
 
     Clean source can include pasted credentials or machine-local paths. This
@@ -104,30 +259,28 @@ def sanitize_external_model_text(text: str) -> tuple[str, dict[str, Any]]:
     """
 
     original = str(text or "")
-    hard_matches = [
-        pattern.pattern
-        for pattern in EXTERNAL_MODEL_HARD_SECRET_PATTERNS
-        if pattern.search(original)
-    ]
-    if hard_matches:
-        return "", {
-            "redacted": True,
-            "redaction_count": 0,
-            "redaction_types": ["private_key_block"],
-            "hard_block": True,
-            "reason": "private key block detected",
-        }
-
     sanitized = original
     redaction_types: list[str] = []
     redaction_count = 0
     for label, pattern, replacement in EXTERNAL_MODEL_REDACTION_PATTERNS:
-        sanitized, count = pattern.subn(replacement, sanitized)
+        if isinstance(replacement, str):
+            sanitized, count = pattern.subn(replacement, sanitized)
+        else:
+            path_replacement = replacement
+
+            def replace_path(
+                match: re.Match[str],
+                repl: PathAnchorReplacement = path_replacement,
+            ) -> str:
+                return repl(match, project_root)
+
+            sanitized, count = pattern.subn(replace_path, sanitized)
         if count:
             redaction_types.append(label)
             redaction_count += count
 
     remaining = re.sub(r"<redacted:[^>]+>", " ", sanitized)
+    remaining = re.sub(r"<path-anchor[^>]+>", " ", remaining)
     remaining = re.sub(r"\s+", " ", remaining).strip()
     hard_block = bool(redaction_count and len(remaining) < 12)
     return sanitized, {
@@ -139,16 +292,23 @@ def sanitize_external_model_text(text: str) -> tuple[str, dict[str, Any]]:
     }
 
 
-def sanitize_external_model_payload(value: Any) -> Any:
+def sanitize_external_model_payload(
+    value: Any,
+    *,
+    project_root: str | Path | None = None,
+) -> Any:
     if isinstance(value, str):
-        sanitized, _ = sanitize_external_model_text(value)
+        sanitized, _ = sanitize_external_model_text(value, project_root=project_root)
         return sanitized
     if isinstance(value, list):
-        return [sanitize_external_model_payload(item) for item in value]
+        return [sanitize_external_model_payload(item, project_root=project_root) for item in value]
     if isinstance(value, tuple):
-        return tuple(sanitize_external_model_payload(item) for item in value)
+        return tuple(sanitize_external_model_payload(item, project_root=project_root) for item in value)
     if isinstance(value, dict):
-        return {key: sanitize_external_model_payload(item) for key, item in value.items()}
+        return {
+            key: sanitize_external_model_payload(item, project_root=project_root)
+            for key, item in value.items()
+        }
     return value
 
 

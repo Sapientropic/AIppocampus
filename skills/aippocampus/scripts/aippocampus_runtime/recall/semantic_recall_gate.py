@@ -29,6 +29,7 @@ from typing import Any, Callable, Mapping
 from aippocampus_runtime.core import (
     compact_text,
     now_utc,
+    sanitize_external_model_payload,
     sanitize_external_model_text,
 )
 from aippocampus_runtime.model.routing import (
@@ -129,7 +130,11 @@ def semantic_gate_enabled(
     return bool(key)
 
 
-def sanitize_prompt_for_semantic_gate(prompt: str) -> tuple[str, dict[str, Any]]:
+def sanitize_prompt_for_semantic_gate(
+    prompt: str,
+    *,
+    project_root: Path | str | None = None,
+) -> tuple[str, dict[str, Any]]:
     """Redact likely credentials before sending prompt text to a semantic model.
 
     The prompt hook is automatic, so credential handling must be stricter than a
@@ -139,7 +144,7 @@ def sanitize_prompt_for_semantic_gate(prompt: str) -> tuple[str, dict[str, Any]]
     credentials after redaction.
     """
 
-    return sanitize_external_model_text(prompt)
+    return sanitize_external_model_text(prompt, project_root=project_root)
 
 
 def prompt_may_contain_secret(prompt: str) -> bool:
@@ -956,8 +961,11 @@ def run_semantic_gate(
 ) -> dict[str, Any]:
     start = time.perf_counter()
     prompt = str(prompt or "").strip()
-    sanitized_prompt, secret_policy = sanitize_prompt_for_semantic_gate(prompt)
     cwd_path = Path(cwd).resolve()
+    sanitized_prompt, secret_policy = sanitize_prompt_for_semantic_gate(
+        prompt,
+        project_root=cwd_path,
+    )
     registry_path_obj = Path(registry_path).resolve() if registry_path else None
     triggers_path = (
         Path(semantic_triggers_path).resolve()
@@ -1060,6 +1068,7 @@ def run_semantic_gate(
         semantic_triggers_path=triggers_path,
         semantic_cues_path=cues_path,
     )
+    payload = sanitize_external_model_payload(payload, project_root=cwd_path)
     parsed_workers: list[dict[str, Any]] = []
     errors: list[str] = []
     worker_names = tuple(worker for worker in workers if worker in set(DEFAULT_WORKERS))

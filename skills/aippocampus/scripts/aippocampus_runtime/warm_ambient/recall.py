@@ -306,17 +306,17 @@ def build_payload(
     prompt_trace: list[dict[str, Any]] | None = None,
     max_catalog_items: int = DEFAULT_MAX_CATALOG_ITEMS,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    sanitized_prompt, secret_policy = sanitize_external_model_text(prompt)
+    cwd_path = Path(cwd).resolve()
+    sanitized_prompt, secret_policy = sanitize_external_model_text(prompt, project_root=cwd_path)
     registry_obj = registry
     if registry_obj is None:
         path = _registry_path_from_args(registry_path, registry_dir)
         registry_obj = load_registry(path)
-    prompt_terms = split_query_terms([sanitized_prompt])[:16]
     payload = {
         "prompt_version": PROMPT_VERSION,
         "task": "propose_warm_ambient_recall_hints",
         "memory_catalog": _catalog_from_registry(registry_obj, limit=max_catalog_items),
-        "workspace_name": _safe_text(Path(cwd).resolve().name, 120),
+        "workspace_name": _safe_text(cwd_path.name, 120),
         "output_contract": {
             "decision": "skip|background_only|scent|candidate|evidence",
             "confidence": 0.0,
@@ -325,9 +325,9 @@ def build_payload(
         },
         "prompt": compact_text(sanitized_prompt, 1200),
         "prompt_trace": _clean_prompt_trace(prompt_trace or []),
-        "prompt_terms": prompt_terms,
+        "prompt_terms": split_query_terms([sanitized_prompt])[:16],
     }
-    return sanitize_external_model_payload(payload), secret_policy
+    return sanitize_external_model_payload(payload, project_root=cwd_path), secret_policy
 
 
 def model_scout_fn(
@@ -1212,7 +1212,7 @@ def run_warm_ambient_recall(
         prefix_cache_warmup_scouts=prefix_cache_warmup_scouts,
         prefix_cache_warmup_delay=prefix_cache_warmup_delay,
     )
-    _, secret_policy = sanitize_external_model_text(prompt)
+    _, secret_policy = sanitize_external_model_text(prompt, project_root=cwd_path)
     if not prompt:
         return unavailable_result("empty prompt", secret_policy=secret_policy)
     if secret_policy.get("hard_block"):
