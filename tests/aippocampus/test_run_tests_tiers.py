@@ -79,6 +79,7 @@ class RunTestsTierTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             fallback = Path(tmp) / "runner-temp"
+            fallback_identity = fallback.resolve()
             previous_tempdir = getattr(run_tests.tempfile, "tempdir", None)
             with (
                 mock.patch.object(run_tests, "_probe_tempdir", side_effect=fake_probe),
@@ -91,10 +92,10 @@ class RunTestsTierTests(unittest.TestCase):
                 finally:
                     run_tests.tempfile.tempdir = previous_tempdir
 
-            self.assertEqual(selected, fallback)
-            self.assertEqual(calls, [None, fallback])
+            self.assertEqual(selected, fallback_identity)
+            self.assertEqual(calls, [None, fallback_identity])
             for name in run_tests.TEMP_ENV_NAMES:
-                self.assertEqual(selected_env[name], str(fallback))
+                self.assertEqual(selected_env[name], str(fallback_identity))
 
     def test_slow_module_overrides_match_real_test_modules(self) -> None:
         discovered = set(run_tests.discover_modules())
