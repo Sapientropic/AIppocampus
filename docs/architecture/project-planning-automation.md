@@ -48,6 +48,9 @@ Use it for cross-issue and docs drift:
 - safely repair exact unchecked checklist items when the referenced child issue
   is closed;
 - report weak recently closed issue evidence without reopening anything;
+  closing PR references, exact verification comments, duplicate/not-planned
+  rationale, and transferred follow-up owners count as evidence, but vague
+  "done enough" comments do not;
 - scan active docs, excluding `docs/archive/**`, for unresolved planning
   language that lacks an open owner issue;
 - report GitHub Discussions that have no issue/doc refs, stale docs links, or
