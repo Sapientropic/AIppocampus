@@ -699,6 +699,42 @@ The #410 slice adds the public-synthetic `cost_harm_ledger` to
   private real-history generality, answer-generation quality, or competitor
   superiority.
 
+## 2026-06-01 - Continuous-memory pre-registration
+
+The #407 slice adds a `preregistration` block to
+`benchmarks/aippocampus/benchmark_continuous_memory_arms.py`, extending the
+#378/#408/#410 report with the pre-registered endpoint and decision rule that
+must be used before public-quality continuous-memory superiority claims.
+
+- The primary endpoint is
+  `source_grounded_task_success_under_equalized_cost`, chosen because it joins
+  task success, source support, equalized cost, and severe false positives
+  rather than allowing post-hoc metric selection.
+- The report records public-quality minimums of at least 3 scenario families
+  and at least 5 paired repeats per scenario x arm, with same task/seed pairs
+  across arms where feasible.
+- The confidence rule requires a paired `lower_bound` advantage for
+  `true_aippocampus_memory` over `fresh_context_spec_loop` after hard gates
+  pass; secondary metrics remain exploratory unless named in the primary
+  decision rule before the run.
+- The current contract-smoke preview reports
+  `primary_endpoint_winner=fresh_context_spec_loop`,
+  `continuous_memory_advantage_claim_allowed=false`, and decision label
+  `no demonstrated memory advantage`.
+- Verification commands passed:
+  `python -m unittest tests.aippocampus.test_benchmark_continuous_memory_arms -v`,
+  `python benchmarks/aippocampus/benchmark_continuous_memory_arms.py --json`,
+  `python tools/aippocampus/docs/check_docs_health.py --json`,
+  `python -m ruff check benchmarks/aippocampus/benchmark_continuous_memory_arms.py tests/aippocampus/test_benchmark_continuous_memory_arms.py`,
+  `git diff --check`,
+  `python -m compileall -q benchmarks/aippocampus/benchmark_continuous_memory_arms.py tests/aippocampus/test_benchmark_continuous_memory_arms.py`,
+  `python tools/aippocampus/run_tests.py --tier benchmark`,
+  `python -m ruff check skills plugins tests tools benchmarks benchmark_corpus`,
+  and `python tools/aippocampus/run_tests.py --tier fast`.
+- This does not claim public-quality #378 superiority, adequate statistical
+  power, holdout scenario coverage, host-native compaction behavior, or private
+  real-history generality.
+
 ## Command Ledger
 
 ```powershell

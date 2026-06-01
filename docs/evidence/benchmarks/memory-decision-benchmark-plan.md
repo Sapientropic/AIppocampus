@@ -127,6 +127,9 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
   foreground-only cost from amortized memory cost, severity-weights stale
   memory false positives, and keeps a separate `fresh_context_spec_loop`
   comparison baseline so a fair non-memory strategy can win on cost or safety.
+  Its #407 `preregistration` block fixes the primary endpoint, paired
+  seed/repeat strategy, lower-bound decision rule, and no-advantage rule before
+  any public-quality #378 superiority claim.
   This runner is diagnostic and not a public superiority claim.
 
 This slice is a smoke gate, not a real-history quality claim. It proves the
@@ -214,6 +217,45 @@ contracts exist. It does not prove full #378 continuous-memory superiority,
 exact dollar accounting for every local operation, live host-native cost
 telemetry, live host-native compaction behavior, private real-history
 generality, answer-generation quality, or competitor superiority.
+
+The #407 pre-registration contract lives under `preregistration`. It is the
+rule for future public-quality #378 claims, not a claim that the current
+contract smoke has enough power:
+
+- Primary endpoint:
+  `source_grounded_task_success_under_equalized_cost`.
+- Why this endpoint: it combines task success, source support, equalized cost,
+  and severe false positives so the memory arm cannot win by hiding background
+  work or unsafe stale recall.
+- Public-quality minimums: at least 3 scenario families and at least 5 paired
+  repeats per scenario x arm, with the same task/seed pairs across arms where
+  feasible.
+- Required fair arms: `fresh_context_spec_loop`, `true_aippocampus_memory`,
+  `sham_unrelated_memory`, and `stale_wrong_memory`; `oracle_memory` stays an
+  upper bound and is excluded from the fair winner.
+- Seed rule:
+  `sha256(preregistration_id + scenario_family + case_id + repeat_index)`.
+  The current contract smoke remains deterministic author-written cases with
+  no random seed.
+- Confidence rule: continuous-memory advantage requires the paired
+  `lower_bound` for true AIppocampus memory over `fresh_context_spec_loop` to
+  be greater than 0 after hard gates pass. Binary success and harm rates should
+  expose Wilson lower bounds; net-value deltas should use paired bootstrap or a
+  stricter registered equivalent.
+- Secondary metrics, including `memory_presence_effect`,
+  `memory_correctness_effect`, `stale_memory_harm`, `oracle_headroom`,
+  `source_reopen_obedience_by_arm`, `harm_weighted_false_positive_cost`, and
+  `amortized_cost_per_successful_slice`, are exploratory unless named in the
+  primary decision rule before the run.
+- No-advantage rule: if the primary endpoint does not beat the baseline under
+  the registered lower-bound rule, the report must say
+  `no demonstrated memory advantage` even when secondary metrics favor
+  AIppocampus.
+
+The current public-synthetic report exposes the pre-registration decision as a
+contract-smoke preview. With the #410 ledger values, `fresh_context_spec_loop`
+is the current fair-strategy winner, so
+`continuous_memory_advantage_claim_allowed=false`.
 
 ### Repeatable Baseline Command
 

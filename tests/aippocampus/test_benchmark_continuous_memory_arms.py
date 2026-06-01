@@ -184,6 +184,38 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
             by_arm["no_memory"]["success_value_units"],
         )
 
+    def test_report_pre_registers_primary_endpoint_and_decision_rule(self) -> None:
+        payload = benchmark.run_benchmark()
+        preregistration = payload["preregistration"]
+        primary = preregistration["primary_endpoint"]
+        seed_strategy = preregistration["seed_repeat_strategy"]
+        decision = preregistration["current_report_decision"]
+
+        self.assertEqual(preregistration["status"], "pre_registered_design_contract")
+        self.assertEqual(
+            primary["name"],
+            "source_grounded_task_success_under_equalized_cost",
+        )
+        self.assertIn("source support", primary["why_chosen"])
+        self.assertIn("severe false positives", primary["why_chosen"])
+        self.assertEqual(seed_strategy["same_task_seed_pairs_across_arms"], True)
+        self.assertGreaterEqual(
+            seed_strategy["public_quality_min_repeats_per_scenario_arm"],
+            5,
+        )
+        self.assertGreaterEqual(
+            preregistration["public_quality_minimums"]["scenario_families"],
+            3,
+        )
+        self.assertIn("lower_bound", preregistration["confidence_rule"]["primary_rule"])
+        self.assertEqual(
+            preregistration["secondary_metrics_policy"],
+            "exploratory_unless_named_in_primary_decision_rule",
+        )
+        self.assertEqual(decision["continuous_memory_advantage_claim_allowed"], False)
+        self.assertEqual(decision["primary_endpoint_winner"], "fresh_context_spec_loop")
+        self.assertIn("no demonstrated memory advantage", decision["decision_label"])
+
     def test_docs_register_runner_and_claim_boundary(self) -> None:
         evidence_map = EVIDENCE_MAP.read_text(encoding="utf-8")
         benchmark_plan = BENCHMARK_PLAN.read_text(encoding="utf-8")
@@ -200,6 +232,9 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
         self.assertIn("harm_weighted_false_positive_cost", benchmark_plan)
         self.assertIn("net_value_under_equalized_cost", benchmark_plan)
         self.assertIn("#410 cost and harm ledger", benchmark_plan)
+        self.assertIn("#407 pre-registration", benchmark_plan)
+        self.assertIn("source_grounded_task_success_under_equalized_cost", benchmark_plan)
+        self.assertIn("no demonstrated memory advantage", benchmark_plan)
         self.assertIn("not a public superiority claim", benchmark_plan)
 
     def test_cli_emits_json_and_can_write_report(self) -> None:

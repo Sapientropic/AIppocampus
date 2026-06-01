@@ -848,6 +848,103 @@ def build_cost_harm_ledger(
     }
 
 
+def build_preregistration(cost_harm_ledger: dict[str, Any]) -> dict[str, Any]:
+    net_value = cost_harm_ledger["net_value_under_equalized_cost"]
+    fair_winner = net_value["highest_net_value_fair_strategy"]
+    claim_allowed = fair_winner == "true_aippocampus_memory"
+    decision_label = (
+        "candidate continuous memory advantage"
+        if claim_allowed
+        else "no demonstrated memory advantage"
+    )
+    return {
+        "id": "aippocampus-continuous-memory-v1",
+        "status": "pre_registered_design_contract",
+        "applies_to": "public_quality_continuous_memory_claims_for_#378",
+        "current_report_role": "contract_smoke_preview_not_public_quality_evidence",
+        "primary_endpoint": {
+            "name": "source_grounded_task_success_under_equalized_cost",
+            "why_chosen": (
+                "Combines task success with source support, equalized cost, "
+                "and severe false positives so memory cannot win by hiding "
+                "background work or stale unsafe recall."
+            ),
+            "point_estimate_field": (
+                "cost_harm_ledger.net_value_under_equalized_cost."
+                "highest_net_value_fair_strategy"
+            ),
+            "hard_gates": [
+                "privacy_breach_count == 0",
+                "raw_prompt_or_source_leak_count == 0",
+                "source_reopen_obedience_rate passes for source-required memory claims",
+                "no severe stale-memory harm gate breach",
+            ],
+        },
+        "public_quality_minimums": {
+            "scenario_families": 3,
+            "repeats_per_scenario_arm": 5,
+            "arms_required": [
+                "fresh_context_spec_loop",
+                "true_aippocampus_memory",
+                "sham_unrelated_memory",
+                "stale_wrong_memory",
+            ],
+            "oracle_role": "upper_bound_only_excluded_from_fair_winner",
+        },
+        "seed_repeat_strategy": {
+            "same_task_seed_pairs_across_arms": True,
+            "public_quality_min_repeats_per_scenario_arm": 5,
+            "seed_derivation": (
+                "sha256(preregistration_id + scenario_family + case_id + repeat_index)"
+            ),
+            "contract_smoke_seed_policy": "deterministic_author_written_cases_no_random_seed",
+        },
+        "confidence_rule": {
+            "primary_rule": (
+                "continuous memory advantage requires the paired lower_bound "
+                "for true_aippocampus_memory over fresh_context_spec_loop to "
+                "be greater than 0 after hard gates pass"
+            ),
+            "interval_methods": [
+                "paired_bootstrap_for_net_value_delta",
+                "wilson_lower_bound_for_binary_success_and_harm_rates",
+            ],
+            "contract_smoke_rule": "point_preview_only_no_public_quality_claim",
+        },
+        "secondary_endpoints": [
+            "memory_presence_effect",
+            "memory_correctness_effect",
+            "stale_memory_harm",
+            "oracle_headroom",
+            "source_reopen_obedience_by_arm",
+            "harm_weighted_false_positive_cost",
+            "amortized_cost_per_successful_slice",
+        ],
+        "secondary_metrics_policy": (
+            "exploratory_unless_named_in_primary_decision_rule"
+        ),
+        "multiple_comparison_handling": (
+            "secondary metrics are descriptive unless promoted before a run; "
+            "do not select a positive headline from the metric grid after seeing results"
+        ),
+        "no_advantage_rule": (
+            "If the primary endpoint does not beat the baseline under the "
+            "registered lower-bound rule, reports must say no demonstrated "
+            "memory advantage even when secondary metrics favor AIppocampus."
+        ),
+        "current_report_decision": {
+            "evaluated_as": "contract_smoke_preview",
+            "primary_endpoint_winner": fair_winner,
+            "continuous_memory_advantage_claim_allowed": bool(claim_allowed),
+            "decision_label": decision_label,
+            "reason": (
+                f"{fair_winner} wins the current fair-strategy net-value preview; "
+                "contract smoke reports cannot satisfy the public-quality lower-bound rule."
+            ),
+        },
+    }
+
+
 def run_benchmark(*, arms: Sequence[str] | None = None) -> dict[str, Any]:
     started = time.perf_counter()
     selected_arms = tuple(arms or ARM_ORDER)
@@ -858,6 +955,7 @@ def run_benchmark(*, arms: Sequence[str] | None = None) -> dict[str, Any]:
     rows = [evaluate_case(case, arm) for case in cases for arm in selected_arms]
     metrics = summarize_rows(rows, case_count=len(cases))
     cost_harm_ledger = build_cost_harm_ledger(rows, metrics=metrics)
+    preregistration = build_preregistration(cost_harm_ledger)
     required_arms_present = set(ARM_ORDER) <= set(selected_arms)
     attribution_controls_present = (
         metrics["memory_presence_effect"] == 0.0
@@ -883,6 +981,7 @@ def run_benchmark(*, arms: Sequence[str] | None = None) -> dict[str, Any]:
         },
         "metrics": metrics,
         "cost_harm_ledger": cost_harm_ledger,
+        "preregistration": preregistration,
         "rows": rows,
         "privacy_boundary": {
             "public_safe_synthetic_fixtures": True,
@@ -902,6 +1001,7 @@ def run_benchmark(*, arms: Sequence[str] | None = None) -> dict[str, Any]:
         ],
         "cannot_claim": [
             "full #378 continuous-memory superiority",
+            "public-quality continuous-memory advantage before the preregistered primary endpoint passes",
             "exact dollar accounting for every local operation",
             "live host-native cost telemetry",
             "live host-native compaction behavior",
