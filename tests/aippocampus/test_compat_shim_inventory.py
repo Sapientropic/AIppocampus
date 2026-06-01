@@ -70,27 +70,8 @@ class CompatibilityShimInventoryTests(unittest.TestCase):
 
     def test_temporary_compat_shims_do_not_keep_long_manual_export_surfaces(self) -> None:
         report = inventory.build_inventory(ROOT)
-        scripts = ROOT / "skills" / "aippocampus" / "scripts"
-        offenders: list[str] = []
 
-        for item in report.temporary_compat:
-            path = scripts / item.script
-            source = path.read_text(encoding="utf-8")
-            if "sys.modules[__name__]" in source:
-                continue
-            if "globals().update(" in source:
-                continue
-            if item.script == "aippocampuslib.py":
-                continue
-            non_comment_lines = [
-                line
-                for line in source.splitlines()
-                if line.strip() and not line.strip().startswith("#")
-            ]
-            if len(non_comment_lines) > 20:
-                offenders.append(item.script)
-
-        self.assertEqual(offenders, [])
+        self.assertEqual(report.manual_export_surfaces, [])
 
 
 if __name__ == "__main__":

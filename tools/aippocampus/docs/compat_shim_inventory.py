@@ -41,6 +41,10 @@ KEEP_CLI_SCRIPTS = {
 }
 
 LEGACY_BRIDGES: set[str] = set()
+LOCAL_LOGIC_COMPAT_EXCEPTIONS = {
+    "aippocampuslib.py",
+}
+MANUAL_EXPORT_LINE_LIMIT = 20
 
 KEEP_CLI_REMOVAL_CONDITION = (
     "Keep while README, SKILL.md, install hooks, MCP/binary entrypoints, or "
@@ -70,6 +74,7 @@ class InventoryReport:
     delete_now: list[InventoryItem]
     legacy_bridge: list[InventoryItem]
     reexport_blocks: list[InventoryItem]
+    manual_export_surfaces: list[InventoryItem]
     unbucketed: list[str]
 
     def as_dict(self) -> dict[str, object]:
@@ -82,6 +87,14 @@ def _scripts_dir(repo_root: Path) -> Path:
 
 def _is_compat_shim(source: str) -> bool:
     return "Compatibility shim" in source or "module alias compatibility shim" in source
+
+
+def _non_comment_line_count(source: str) -> int:
+    return sum(1 for line in source.splitlines() if line.strip() and not line.strip().startswith("#"))
+
+
+def _is_alias_or_dynamic_mirror(source: str) -> bool:
+    return "sys.modules[__name__]" in source or "globals().update(" in source
 
 
 def _classify_top_level_script(path: Path) -> InventoryItem:
@@ -136,6 +149,34 @@ def _reexport_blocks(repo_root: Path) -> list[InventoryItem]:
     return blocks
 
 
+def _manual_export_surfaces(repo_root: Path, items: list[InventoryItem]) -> list[InventoryItem]:
+    scripts_dir = _scripts_dir(repo_root)
+    surfaces: list[InventoryItem] = []
+    for item in items:
+        if item.bucket != "temporary_compat":
+            continue
+        if item.script in LOCAL_LOGIC_COMPAT_EXCEPTIONS:
+            continue
+        path = scripts_dir / item.script
+        source = path.read_text(encoding="utf-8")
+        if _is_alias_or_dynamic_mirror(source):
+            continue
+        if _non_comment_line_count(source) <= MANUAL_EXPORT_LINE_LIMIT:
+            continue
+        surfaces.append(
+            InventoryItem(
+                script=item.script,
+                bucket="temporary_compat",
+                reason="long manual export shim can become a second API surface",
+                removal_condition=(
+                    "Collapse to a module-alias shim or tiny globals mirror unless "
+                    "a documented installer/hook fallback needs explicit local logic."
+                ),
+            )
+        )
+    return surfaces
+
+
 def build_inventory(repo_root: Path) -> InventoryReport:
     repo_root = repo_root.resolve()
     items = [
@@ -158,6 +199,7 @@ def build_inventory(repo_root: Path) -> InventoryReport:
         delete_now=buckets["delete_now"],
         legacy_bridge=buckets["legacy_bridge"],
         reexport_blocks=_reexport_blocks(repo_root),
+        manual_export_surfaces=_manual_export_surfaces(repo_root, items),
         unbucketed=sorted(set(top_level_scripts) - bucketed_names),
     )
 
@@ -181,6 +223,7 @@ def main(argv: list[str] | None = None) -> int:
             bucket = getattr(report, bucket_name)
             print(f"{bucket_name}: {len(bucket)}")
         print(f"reexport_blocks: {len(report.reexport_blocks)}")
+        print(f"manual_export_surfaces: {len(report.manual_export_surfaces)}")
         if report.unbucketed:
             print("unbucketed: " + ", ".join(report.unbucketed))
     return 1 if report.unbucketed else 0
