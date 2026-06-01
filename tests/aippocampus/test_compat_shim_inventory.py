@@ -30,11 +30,12 @@ class CompatibilityShimInventoryTests(unittest.TestCase):
         self.assertEqual(len(bucketed), report.top_level_script_count)
         self.assertEqual(report.unbucketed, [])
 
-    def test_public_hooks_and_legacy_bridges_are_not_delete_now(self) -> None:
+    def test_public_hooks_and_former_legacy_bridges_are_not_delete_now(self) -> None:
         report = inventory.build_inventory(ROOT)
         keep_cli = {item.script: item for item in report.keep_cli}
         legacy_bridge = {item.script: item for item in report.legacy_bridge}
         delete_now = {item.script for item in report.delete_now}
+        temporary_compat = {item.script: item for item in report.temporary_compat}
 
         for script in (
             "aippocampus_cli.py",
@@ -46,14 +47,10 @@ class CompatibilityShimInventoryTests(unittest.TestCase):
             self.assertTrue(keep_cli[script].removal_condition)
             self.assertNotIn(script, delete_now)
 
-        self.assertEqual(
-            set(legacy_bridge),
-            {
-                "encrypted_sync_admin.py",
-                "semantic_scope_suppressed_recovery.py",
-                "subconscious_review.py",
-            },
-        )
+        self.assertEqual(set(legacy_bridge), set())
+        self.assertIn("encrypted_sync_admin.py", keep_cli)
+        self.assertIn("semantic_scope_suppressed_recovery.py", temporary_compat)
+        self.assertIn("subconscious_review.py", temporary_compat)
 
     def test_prompt_cue_reexports_are_no_longer_compat_surface(self) -> None:
         report = inventory.build_inventory(ROOT)

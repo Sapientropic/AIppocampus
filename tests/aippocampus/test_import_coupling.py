@@ -569,26 +569,27 @@ class ImportCouplingTests(unittest.TestCase):
             SCRIPTS / "aippocampus_runtime" / "sync" / "encrypted" / "object_storage.py",
         ]
         shim_paths = [
+            SCRIPTS / "encrypted_sync_admin.py",
             SCRIPTS / "encrypted_sync_bundle.py",
             SCRIPTS / "encrypted_sync_crypto.py",
             SCRIPTS / "encrypted_sync_keys.py",
             SCRIPTS / "encrypted_sync_migration.py",
             SCRIPTS / "encrypted_sync_object_storage.py",
         ]
-        legacy_bridge_path = SCRIPTS / "encrypted_sync_admin.py"
 
-        for path in package_paths + shim_paths + [legacy_bridge_path]:
+        for path in package_paths + shim_paths:
             self.assertTrue(path.exists(), path)
         for path in shim_paths:
             self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
-        self.assertNotIn("Compatibility shim", legacy_bridge_path.read_text(encoding="utf-8"))
 
         edges = same_dir_import_edges(top_level_only=True)
-        admin_edges = edges["encrypted_sync_admin"]
-        self.assertIn("encrypted_sync_admin", edges["aippocampus_runtime.sync.encrypted.admin"])
-        self.assertNotIn("aippocampus_runtime.sync.encrypted.admin", admin_edges)
+        admin_shim_edges = edges["encrypted_sync_admin"]
+        admin_edges = edges["aippocampus_runtime.sync.encrypted.admin"]
+        self.assertIn("aippocampus_runtime.sync.encrypted.admin", admin_shim_edges)
+        self.assertNotIn("encrypted_sync_admin", admin_edges)
         self.assertIn("aippocampus_runtime.sync.encrypted.keys", admin_edges)
         self.assertIn("aippocampus_runtime.sync.encrypted.migration", admin_edges)
+        self.assertNotIn("aippocampuslib", admin_edges)
         self.assertNotIn("encrypted_sync_keys", admin_edges)
         self.assertNotIn("encrypted_sync_migration", admin_edges)
         self.assertIs(encrypted_sync_admin, admin)
@@ -2510,8 +2511,6 @@ class ImportCouplingTests(unittest.TestCase):
             "semantic_scope_source_review_core": (
                 "aippocampus_runtime.source.semantic_scope_source_review_core"
             ),
-        }
-        legacy_bridges = {
             "encrypted_sync_admin": "aippocampus_runtime.sync.encrypted.admin",
             "semantic_scope_suppressed_recovery": (
                 "aippocampus_runtime.source.semantic_scope_suppressed_recovery"
@@ -2531,36 +2530,16 @@ class ImportCouplingTests(unittest.TestCase):
             self.assertNotIn(flat_name, edges[owner_name])
             self.assertIs(importlib.import_module(flat_name), importlib.import_module(owner_name))
 
-        for flat_name, owner_name in legacy_bridges.items():
-            flat_path = SCRIPTS / f"{flat_name}.py"
-            owner_path = SCRIPTS / (owner_name.replace(".", "/") + ".py")
-
-            self.assertTrue(flat_path.exists(), flat_path)
-            self.assertTrue(owner_path.exists(), owner_path)
-            # These model-output/credential-adjacent scripts keep one legacy
-            # implementation and expose package import aliases. Do not copy the
-            # full body into the package path without a scanner-aware sanitizer
-            # contract; that recreates a second security-analysis surface.
-            self.assertNotIn("Compatibility shim", flat_path.read_text(encoding="utf-8"))
-            self.assertIn(flat_name, edges[owner_name])
-            self.assertNotIn(owner_name, edges[flat_name])
-            self.assertIs(importlib.import_module(flat_name), importlib.import_module(owner_name))
-
-    def test_top_level_scripts_are_only_compatibility_surfaces_or_legacy_bridges(
+    def test_top_level_scripts_are_only_compatibility_surfaces(
         self,
     ) -> None:
-        legacy_bridge_files = {
-            "encrypted_sync_admin.py",
-            "semantic_scope_suppressed_recovery.py",
-            "subconscious_review.py",
-        }
         real_flat_scripts = []
         for path in sorted(SCRIPTS.glob("*.py")):
             source = path.read_text(encoding="utf-8")
             if "Compatibility shim" not in source and "module alias compatibility shim" not in source:
                 real_flat_scripts.append(path.name)
 
-        self.assertEqual(real_flat_scripts, sorted(legacy_bridge_files))
+        self.assertEqual(real_flat_scripts, [])
 
     def test_ops_reports_have_package_owners_and_compat_shims(self) -> None:
         import cold_archive

@@ -40,11 +40,7 @@ KEEP_CLI_SCRIPTS = {
     "sync_vault.py",
 }
 
-LEGACY_BRIDGES = {
-    "encrypted_sync_admin.py",
-    "semantic_scope_suppressed_recovery.py",
-    "subconscious_review.py",
-}
+LEGACY_BRIDGES: set[str] = set()
 
 KEEP_CLI_REMOVAL_CONDITION = (
     "Keep while README, SKILL.md, install hooks, MCP/binary entrypoints, or "
@@ -56,11 +52,6 @@ TEMPORARY_COMPAT_REMOVAL_CONDITION = (
     "aippocampus_runtime package owner and no install/hook/binary path calls "
     "this flat module."
 )
-LEGACY_BRIDGE_REMOVAL_CONDITION = (
-    "Move only when the model-output or credential-adjacent CLI surface has a "
-    "scanner-aware sanitized output contract; do not duplicate the legacy body."
-)
-
 
 @dataclass(frozen=True)
 class InventoryItem:
@@ -100,7 +91,7 @@ def _classify_top_level_script(path: Path) -> InventoryItem:
             script=path.name,
             bucket="legacy_bridge",
             reason="single implementation is intentionally still at a legacy direct path",
-            removal_condition=LEGACY_BRIDGE_REMOVAL_CONDITION,
+            removal_condition="No legacy direct-path implementation exceptions should remain.",
         )
     if path.name in KEEP_CLI_SCRIPTS:
         return InventoryItem(
