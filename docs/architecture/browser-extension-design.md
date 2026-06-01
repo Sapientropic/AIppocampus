@@ -281,8 +281,26 @@ browser-extension local MVP 验证 prompt 层虚拟 `memory_search`，不把
 当前原型入口：`examples/browser-memory-companion/claude-memory-search.user.js`。
 它是本地显式捕获 / 可见 handoff 原型，不是发布版扩展。
 
+### Browser-local search vs durable registry import
+
+The current userscript has two deliberately separate surfaces:
+
+- browser-local search: captured turns stay in `localStorage`, search is local,
+  and results are shown as visible handoff text for user review;
+- durable import: the user explicitly clicks `Export generic JSONL`, reviews the
+  private local file, and then runs the existing AIppocampus
+  `import conversation --format generic-jsonl` path.
+
+Do not collapse these surfaces into automatic background sync. The export must
+remain redacted, bounded, and visible; it must not include cookies, hidden DOM,
+thinking text, internal web API payloads, credentials, or machine-local paths.
+Assistant-only captures are skipped instead of being forced into an orphan
+generic JSONL row, because the durable registry path should reject ambiguous
+conversation structure rather than guessing at turn ownership.
+
 1. **显式开启捕获**：用户对当前站点 / 当前会话开启后，才把消息片段存入
-   IndexedDB
+   browser-local storage（当前 userscript 用 `localStorage`；正式扩展再迁到
+   IndexedDB）
 2. **Prompt 层虚拟工具**：在对话开头注入 memory_search 工具定义
 3. **Tool call 解析**：从 Claude 流式响应中提取 `<memory_search>` 标签
 4. **本地搜索**：MiniSearch 索引 + CJK 分词（移植自 retrieval.py）

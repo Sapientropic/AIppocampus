@@ -17,6 +17,13 @@ Use it for narrow, issue-local metadata:
 - warn when a likely design, benchmark, semantic, or subconscious issue lacks a
   canonical `docs/...` or `skills/aippocampus/references/...` source pointer.
 
+Milestone inference should cover the current open roadmap buckets, including
+public readiness/distribution, benchmark evidence, ambient recall warmth,
+cognitive runtime continuity, sync/scale infrastructure, security/privacy, and
+architecture debt. Specific parents and benchmark/source-evidence routes should
+win over broad privacy or runtime keywords so the automation does not move work
+out of its owning track just because an issue mentions safety boundaries.
+
 It should not rewrite human-owned Project metadata, reopen issues, or decide
 product direction from keywords.
 
@@ -34,15 +41,20 @@ Use it for cross-issue and docs drift:
   is closed;
 - report weak recently closed issue evidence without reopening anything;
 - scan active docs, excluding `docs/archive/**`, for unresolved planning
-  language that lacks an open owner issue.
+  language that lacks an open owner issue;
+- report GitHub Discussions that have no issue/doc refs, stale docs links, or
+  several linked issues but no compact implementation-map comment.
 
 Default scheduled runs are dry-run reports. Manual repair mode applies only the
 safe repairs above: missing high-confidence Milestones and exact closed-child
-checklist updates. Everything else stays in `needs_human_review`.
+checklist updates. It may also add at most one short implementation-map comment
+to a Discussion when the linked issues are exact matches and no map comment
+already exists. Everything else stays in `needs_human_review`.
 
 ## Boundary
 
 Planning automation is a clerk, not a product judge. It can surface drift and
 perform tiny mechanical repairs, but it must not create large batches of issues
 from research prose, overwrite human-set Milestones, duplicate docs into issue
-bodies, or treat planning metadata as source-backed evidence.
+bodies, or treat planning metadata as source-backed evidence. Discussions are
+narrative/context surfaces; issues remain the executable work queue.

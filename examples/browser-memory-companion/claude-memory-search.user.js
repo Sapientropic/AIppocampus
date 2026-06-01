@@ -25,6 +25,7 @@
   const MAX_QUERY_RESULTS = 5;
   const MAX_RESULT_CHARS = 720;
   const MAX_HANDOFF_CHARS = 2400;
+  const MAX_EXPORT_TEXT_CHARS = 12000;
 
   const REDACTION_PATTERNS = [
     {
@@ -138,6 +139,142 @@
     return {
       text: `${text.slice(0, keep).trimEnd()}${marker}${text.slice(-keep).trimStart()}`,
       truncated: true,
+    };
+  }
+
+  function stableSlug(value, fallback) {
+    const text = normalizeText(value)
+      .toLowerCase()
+      .replace(/^https?:\/\//, "")
+      .replace(/[^a-z0-9_.-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 120);
+    return text || fallback || "local";
+  }
+
+  function hostFrom(value) {
+    const text = normalizeText(value);
+    if (!text) {
+      return "";
+    }
+    try {
+      return stableSlug(new URL(text).host, "");
+    } catch (_) {
+      return stableSlug(text.split(/[/:#?]/)[0], "");
+    }
+  }
+
+  function exportHost(records, options) {
+    return (
+      hostFrom(options && options.host) ||
+      hostFrom(options && options.locationHref) ||
+      hostFrom(records[0] && records[0].source) ||
+      "browser-local"
+    );
+  }
+
+  function exportSessionId(records, options) {
+    const explicit = stableSlug(options && options.sessionId, "");
+    if (explicit) {
+      return explicit;
+    }
+    const locationText = normalizeText(options && options.locationHref);
+    if (locationText) {
+      try {
+        const url = new URL(locationText);
+        const lastPath = url.pathname.split("/").filter(Boolean).pop();
+        if (lastPath) {
+          return stableSlug(`${url.host}-${lastPath}`, "browser-local-session");
+        }
+        return stableSlug(url.host, "browser-local-session");
+      } catch (_) {
+        return stableSlug(locationText, "browser-local-session");
+      }
+    }
+    const first = records[0] || {};
+    return stableSlug(`${exportHost(records, options)}-${first.source || "manual-capture"}`, "browser-local-session");
+  }
+
+  function rowForExport(record, role, text, context) {
+    const sanitized = sanitizeText(text);
+    const bounded = truncateMiddle(sanitized.text, context.maxTextChars);
+    const source = sanitizeText(record.source || "browser-local").text || "browser-local";
+    const row = {
+      session_id: context.sessionId,
+      timestamp: normalizeText(record.capturedAt),
+      role,
+      text: bounded.text,
+      turn_id: context.turnId,
+      source_ref: `browser:${context.host}:conversation:${context.sessionId}#turn:${context.turnId}:${role}`,
+      provider_metadata: {
+        provider: "browser-memory-companion",
+        host: context.host,
+        source,
+        export_version: "generic-jsonl-v1",
+        source_boundary: "browser-local-visible-capture",
+        redacted: sanitized.redacted,
+        redaction_types: sanitized.redactionTypes,
+        truncated: bounded.truncated,
+      },
+    };
+    return row;
+  }
+
+  function exportGenericJsonlRows(store, options) {
+    const records = Array.isArray(store && store.records) ? store.records : [];
+    const host = exportHost(records, options || {});
+    const sessionId = exportSessionId(records, options || {});
+    const maxTextChars = Number(options && options.maxTextChars) || MAX_EXPORT_TEXT_CHARS;
+    const rows = [];
+    const skipped = [];
+    records.forEach((record, index) => {
+      const userText = normalizeText(record && record.userText);
+      const assistantText = normalizeText(record && record.assistantText);
+      if (!userText && !assistantText) {
+        skipped.push({ id: record && record.id, index, reason: "empty_turn" });
+        return;
+      }
+      if (!userText && assistantText) {
+        skipped.push({ id: record && record.id, index, reason: "missing_user_text" });
+        return;
+      }
+      const turnId = stableSlug((record && record.id) || `turn-${index + 1}`, `turn-${index + 1}`);
+      const context = {
+        host,
+        maxTextChars,
+        sessionId,
+        turnId,
+      };
+      rows.push(rowForExport(record, "user", userText, context));
+      if (assistantText) {
+        rows.push(rowForExport(record, "assistant", assistantText, context));
+      }
+    });
+    return { rows, sessionId, skipped };
+  }
+
+  function exportGenericJsonl(store, options) {
+    if (!options || !options.enabled) {
+      return {
+        exported: false,
+        reason: "export_disabled",
+        jsonl: "",
+        rowCount: 0,
+        sessionId: "",
+        skipped: [],
+      };
+    }
+    const result = exportGenericJsonlRows(store, options);
+    const jsonl = result.rows.length
+      ? `${result.rows.map((row) => JSON.stringify(row)).join("\n")}\n`
+      : "";
+    return {
+      exported: result.rows.length > 0,
+      reason: result.rows.length > 0 ? "" : "no_exportable_rows",
+      jsonl,
+      rowCount: result.rows.length,
+      sessionId: result.sessionId,
+      skipped: result.skipped,
     };
   }
 
@@ -309,6 +446,7 @@
       '<textarea data-aippocampus-assistant rows="3" style="width:100%;box-sizing:border-box;margin-top:4px" ' +
       'placeholder="Assistant turn to capture after explicit consent"></textarea>' +
       '<button type="button" data-aippocampus-capture style="margin-top:6px">Capture local turn</button>' +
+      '<button type="button" data-aippocampus-export style="margin-top:6px;margin-left:6px">Export generic JSONL</button>' +
       '<textarea data-aippocampus-query rows="2" style="width:100%;box-sizing:border-box" ' +
       'placeholder=\'<memory_search query="..." />\'></textarea>' +
       '<button type="button" data-aippocampus-run style="margin-top:6px">Run visible search</button>' +
@@ -332,6 +470,34 @@
       output.textContent = result.captured
         ? "Captured local turn. It remains in browser localStorage on this device."
         : `Capture skipped: ${result.reason}`;
+    });
+    panel.querySelector("[data-aippocampus-export]").addEventListener("click", () => {
+      const result = exportGenericJsonl(store, {
+        enabled: checkbox.checked,
+        host: win.location && win.location.host,
+        locationHref: win.location && win.location.href,
+      });
+      if (!result.exported) {
+        output.textContent = `Export skipped: ${result.reason}`;
+        return;
+      }
+      if (!win.Blob || !win.URL || !win.URL.createObjectURL) {
+        output.textContent = result.jsonl;
+        return;
+      }
+      const blob = new win.Blob([result.jsonl], { type: "application/x-ndjson;charset=utf-8" });
+      const url = win.URL.createObjectURL(blob);
+      const anchor = doc.createElement("a");
+      anchor.href = url;
+      anchor.download = `aippocampus-browser-memory-${result.sessionId}.jsonl`;
+      anchor.style.display = "none";
+      doc.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      win.setTimeout(() => win.URL.revokeObjectURL(url), 0);
+      output.textContent =
+        `Exported ${result.rowCount} generic JSONL rows. ` +
+        "Import with aippocampus import conversation --format generic-jsonl.";
     });
     panel.querySelector("[data-aippocampus-run]").addEventListener("click", () => {
       const request = parseMemorySearchRequest(queryBox.value);
@@ -357,6 +523,8 @@
     buildVisibleHandoff,
     captureTurn,
     createMemoryStore,
+    exportGenericJsonl,
+    exportGenericJsonlRows,
     installBrowserPrototype,
     parseMemorySearchRequest,
     sanitizeText,

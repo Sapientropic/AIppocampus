@@ -35,6 +35,10 @@ MILESTONE_BENCHMARK_EVIDENCE = "Benchmark Evidence Hardening"
 MILESTONE_AMBIENT = "Ambient Recall Warmth Pass"
 MILESTONE_ARCHITECTURE = "Architecture Debt Slice 2026-06"
 MILESTONE_STAGE2 = "Stage 2 Evidence Refresh"
+MILESTONE_PUBLIC_DISTRIBUTION = "Public Readiness & Distribution"
+MILESTONE_COGNITIVE_RUNTIME = "Cognitive Runtime Continuity"
+MILESTONE_SYNC_SCALE = "Sync & Scale Infrastructure"
+MILESTONE_SECURITY_PRIVACY = "Security & Privacy Hardening"
 
 PARENT_TRACK: dict[int, str] = {
     2: "Benchmarks & Research",
@@ -215,6 +219,39 @@ def infer_track(issue: IssueContext, parents: list[int]) -> tuple[str | None, st
         return "Benchmarks & Research", "benchmark/research keywords"
     if _contains(
         text,
+        "public-readiness",
+        "public readiness",
+        "public install",
+        "release-readiness",
+        "release readiness",
+        "agent-facing discoverability",
+        "agent discovery",
+        "distribution",
+        "pypi",
+        "mcp registry",
+        "planning audit",
+        "project triage",
+        "project planning",
+        "milestone automation",
+        "public api",
+        "public schema",
+        "schema metadata",
+        "cli json",
+    ):
+        return "Public readiness", "public-readiness keywords"
+    if _contains(
+        text,
+        "browser/web-chat",
+        "browser-local",
+        "web chat",
+        "generic jsonl clean-source import",
+        "conversation import",
+        "conversation intake",
+        "clean-source import",
+    ):
+        return "Public readiness", "conversation-import keywords"
+    if _contains(
+        text,
         "topic-epoch",
         "topic epoch",
         "warm ambient",
@@ -225,9 +262,25 @@ def infer_track(issue: IssueContext, parents: list[int]) -> tuple[str | None, st
         "repo familiarity",
         "decision-shadow",
         "dream",
+        "journey",
+        "correction",
+        "reconsolidation",
+        "agency affordance",
+        "subconscious",
+        "search-decision",
+        "memory integrity",
+        "critical agent operations",
     ):
         return "Life-wide memory", "memory-continuity keywords"
-    if _contains(text, "deepseek", "external model", "provider-neutral", "offline provider", "local/offline"):
+    if _contains(
+        text,
+        "deepseek",
+        "external model",
+        "external-model",
+        "provider-neutral",
+        "offline provider",
+        "local/offline",
+    ):
         return "External models", "external-model keywords"
     if _contains(text, "cross-device", "object-storage", "object storage", "encrypted sync", " sync "):
         return "Sync", "sync keywords"
@@ -237,8 +290,6 @@ def infer_track(issue: IssueContext, parents: list[int]) -> tuple[str | None, st
         return "Life-wide memory", "life-wide keywords"
     if _contains(text, "gb/tb", "multi-gb", "vector", "registry query", "fanout", "index"):
         return "GB/TB scale", "scale/search keywords"
-    if _contains(text, "public-readiness", "public install", "release-readiness", "release readiness"):
-        return "Public readiness", "public-readiness keywords"
     if _contains(text, "docs cleanup", "archive", "stale doc", "ruff", "subpackages", "compatibility shims"):
         return "Docs cleanup", "docs-cleanup keywords"
     return None, None
@@ -323,7 +374,15 @@ def infer_kind(issue: IssueContext) -> tuple[str | None, str | None]:
         "replace",
         "tighten",
         "redact",
+        "redaction",
+        "refine",
+        "hardening",
         "prototype",
+        "bridge",
+        "export",
+        "import",
+        "intake",
+        "capture",
         "bug",
     ):
         return "Implementation", "implementation keywords"
@@ -395,6 +454,19 @@ def infer_milestone(
     ):
         return MILESTONE_AMBIENT, "ambient-recall keywords"
 
+    if _contains(
+        text,
+        "codeql",
+        "raw/private",
+        "private cli output",
+        "local-private",
+        "privacy-security",
+        "security hardening",
+        "project-safe path",
+        "path anchor",
+    ) and track != "Benchmarks & Research":
+        return MILESTONE_SECURITY_PRIVACY, "security/privacy keywords"
+
     if 228 in parents:
         return MILESTONE_HIPPOCAMPAL, "parent #228"
 
@@ -419,6 +491,7 @@ def infer_milestone(
         "longmemeval",
         "memoryagentbench",
         "benchmark evidence",
+        "benchmark sensitive-content",
         "external benchmark adapter",
         "react vcs",
         "live retrieval",
@@ -434,8 +507,21 @@ def infer_milestone(
         "pro-agent",
         "suppressed-label",
         "stage 2 evidence",
-    ) or (track == "Life-wide memory" and stage == "Stage 2" and kind in {"Smoke", "Implementation"}):
+        "high-risk life-wide",
+    ):
         return MILESTONE_STAGE2, "stage-2 evidence keywords"
+
+    if track == "Public readiness":
+        return MILESTONE_PUBLIC_DISTRIBUTION, "public-readiness track"
+
+    if track in {"GB/TB scale", "Sync"}:
+        return MILESTONE_SYNC_SCALE, "sync/scale track"
+
+    if track == "Life-wide memory" and stage == "Stage 2" and kind in {"Smoke", "Implementation", "Research"}:
+        return MILESTONE_COGNITIVE_RUNTIME, "cognitive-runtime track"
+
+    if track == "External models" and _contains(text, "security", "privacy", "redaction", "redact"):
+        return MILESTONE_SECURITY_PRIVACY, "security/privacy keywords"
 
     return None, None
 
@@ -867,6 +953,11 @@ def planned_milestone_update(
         return {
             "planned": triage.milestone,
             "skipped": "closed_issue",
+        }
+    if triage.confidence != "high":
+        return {
+            "planned": triage.milestone,
+            "skipped": "low_confidence",
         }
 
     milestone_number = milestone_numbers.get(triage.milestone)
