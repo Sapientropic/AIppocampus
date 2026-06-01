@@ -284,6 +284,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/source/clean_source.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/latest_reply.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/locate_rollout.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/source/operation_integrity.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/registry_paths.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/search.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/semantic_scope_builder.py",

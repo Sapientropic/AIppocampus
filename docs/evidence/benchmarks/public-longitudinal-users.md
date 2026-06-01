@@ -188,6 +188,12 @@ timestamp, source refs, and input/observation hashes. Raw stdout, full diffs,
 screenshots, local paths, full shell commands, and secrets remain audit/source
 material, not default recall payload.
 
+Continuous-agent benchmark tracks should read the critical-operation integrity
+diagnostic over clean-source `events.jsonl` and count uncovered operation
+families as explicit coverage gaps. They should not reopen raw rollout payloads
+or treat assistant narration as operation fact support unless a row joins back
+to a behavior-backed event or curated event sidecar.
+
 ## Flagship Longitudinal Tracks
 
 The real public longitudinal benchmark should target the places where ordinary

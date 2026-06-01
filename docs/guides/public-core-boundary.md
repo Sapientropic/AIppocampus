@@ -236,6 +236,11 @@ The generated runtime files map back to the public schema as follows:
 fields and not claims about the user's intent. Source text and source refs remain
 the audit authority.
 
+The installable reference `skills/aippocampus/references/retrieval-and-storage.md`
+owns the critical-operation integrity contract over `events.jsonl`. Public
+consumers should treat its diagnostic as a coverage/gap report, not as license
+to reopen raw payloads or infer operation facts from assistant narration.
+
 ### Source Ref
 
 ```json

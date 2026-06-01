@@ -51,6 +51,50 @@ Assistant narration may provide context in `messages.jsonl`, but a rejected
 route only becomes source-backed when the behavior lane has a matching
 tool/test/edit trace or a later curated event sidecar.
 
+### Critical Operation Integrity
+
+The critical-operation integrity contract is the layer above `events.jsonl`.
+It says which operation facts must eventually be source-backed before
+AIppocampus, benchmarks, or continuous-agent workflows may treat them as
+reliable operation memory. The contract version is
+`aippocampus-critical-operation-integrity-v1`, implemented as the read-only
+diagnostic module `aippocampus_runtime.source.operation_integrity`.
+
+The diagnostic reads a clean-source directory and reports coverage or gaps. It
+does not reopen raw rollout payloads by default, and a gap does not block
+ordinary recall. Instead, a gap means downstream code must avoid claiming that
+operation family is covered, and must reopen source or raw audit material before
+making a strong operation claim.
+
+Mandatory event families:
+
+| Family | Facts that must be captured | Never store raw | Current source |
+|---|---|---|---|
+| `file_edit_write_attempt` | event id, source join, privacy-safe path identity, generated-file classification, status | raw diffs, file contents, absolute paths, full tool args | explicit event rows only |
+| `test_check_command_result` | event id, source join, command family, target class, exit status, failure family when failed | full shell command, stdout/stderr, local paths, env vars, secrets | legacy clean-source tool events or explicit event rows |
+| `user_correction_or_superseding_decision` | event id, source join, decision kind, scope, status or successor | raw prompt payloads, broad personality summaries, unsupported model judgement | explicit event rows only |
+| `source_reopen_before_risky_action` | event id, source join, reopened source ref, risk family, status | reopened source text beyond the cited ref, raw search payloads | explicit event rows only |
+| `tool_failure_changed_plan` | event id, source join, tool family, failure family, plan-change ref | raw tool output, stack traces, full commands | explicit event rows only |
+| `explicit_user_constraint` | event id, source join, constraint kind, scope, expiry or supersession | unconstrained user-profile summaries, local machine paths, private prompt dumps | explicit event rows only |
+
+Each report classifies a family as:
+
+- `covered`: at least one event row has the required source-backed facts.
+- `partial`: a row exists, but required facts are missing.
+- `missing`: no event row for that family exists in the clean-source build.
+
+Safe recall may use `covered` facts with their `source_ref`, `event_id`,
+`turn_index`, `call_ref`, and hash joins. `partial` and `missing` families must
+stay visible as gaps. Semantic summaries, assistant narration, and benchmark
+gold labels must not be upgraded into operation facts unless they join back to
+a source-backed event row or curated sidecar event.
+
+Run the diagnostic from an installed package or the script root:
+
+```powershell
+python -m aippocampus_runtime.source.operation_integrity --clean-source-dir "<clean-source>" --json
+```
+
 `scope_labels` are conservative lexical hints over clean visible text. They
 support filtering and future timeline sidecars, but they are not summaries and
 must not be treated as stronger evidence than the quoted source. Search can
