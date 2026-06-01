@@ -1070,6 +1070,44 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertEqual(semantic_result["decision"], "scent")
         self.assertIn("semantic gate", " ".join(str(reason) for reason in semantic_result["reasons"]))
 
+    def test_semantic_positive_can_bridge_to_sqlite_when_registry_metadata_misses(self) -> None:
+        registry_path = self._write_single_thread_registry(
+            title="Unlabeled external project handoff",
+            keywords=["handoff"],
+            summary="A sparse registry row whose clean source has richer recall terms.",
+        )
+
+        def fake_semantic_gate(prompt: str, **kwargs) -> dict:
+            return {
+                "available": True,
+                "decision": "evidence",
+                "confidence": 0.9,
+                "intent": "recall",
+                "query_aliases": ["raw history", "触发式召回"],
+                "memory_scope": ["registered_threads"],
+                "anti_personalization_risk": "low",
+                "reasons": ["semantic route found source terms absent from metadata"],
+                "workers": [],
+                "errors": [],
+                "cached": False,
+                "model_route": {"provider": "test-provider", "model": "test-model"},
+                "cache_diagnostics": {"lookup": "disabled"},
+            }
+
+        result = hook.assess_prompt(
+            "那个外部项目后来到底卡在哪里？",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            semantic_gate_fn=fake_semantic_gate,
+            search_budget=0,
+        )
+
+        self.assertEqual(result["decision"], "scent")
+        self.assertTrue(result["candidates"])
+        self.assertTrue(result["candidates"][0]["fallback"])
+        self.assertGreater(result["candidates"][0]["probe_score"], 0)
+        self.assertIn("semantic gate", " ".join(str(reason) for reason in result["reasons"]))
+
     def test_short_english_associative_cues_require_token_boundaries(self) -> None:
         matches = recall_cues.matched_terms(
             "Rewrite the paragraphs while leveraging the background examples.",
@@ -2353,12 +2391,19 @@ class AmbientRecallHookTests(unittest.TestCase):
             search_budget=1,
         )
 
+        self.assertEqual(result["decision"], "scent")
         self.assertFalse(result["evidence"])
         self.assertEqual(
             result["semantic_bridge_diagnostic"],
             "semantic_evidence_without_source_bridge",
         )
         self.assertIn("semantic evidence did not bridge", " ".join(result["reasons"]))
+        payload = hook.hook_stdout_payload(result)
+        self.assertIsNotNone(payload)
+        context = payload["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("Semantic recall route", context)
+        self.assertIn("missing clean-source topic", context)
+        self.assertIn("not evidence", context)
 
     def test_vague_cross_project_semantic_evidence_stays_scent(self) -> None:
         def fake_semantic_gate(prompt: str, **kwargs) -> dict:

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TOOLS = REPO_ROOT / "tools" / "aippocampus"
@@ -33,6 +36,7 @@ FAST_REVIEWED_SENSITIVE_MODULES = {
     "tests.aippocampus.test_install_prompt_hook",
     "tests.aippocampus.test_macos_install_smoke_workflow",
     "tests.aippocampus.test_memory_pain_prompt_hook_smoke",
+    "tests.aippocampus.test_multilingual_prompt_hook_smoke",
     "tests.aippocampus.test_question_confirmation_live_smoke",
     "tests.aippocampus.test_question_tracking_scale_smoke",
     "tests.aippocampus.test_semantic_paraphrase_reuse_smoke",
@@ -43,6 +47,55 @@ FAST_REVIEWED_SENSITIVE_MODULES = {
 
 
 class RunTestsTierTests(unittest.TestCase):
+    def test_main_preflights_tempdir_before_loading_tests(self) -> None:
+        events: list[str] = []
+
+        with (
+            mock.patch.object(
+                run_tests,
+                "ensure_usable_tempdir",
+                side_effect=lambda: events.append("tempdir"),
+                create=True,
+            ),
+            mock.patch.object(run_tests, "modules_for_tier", return_value=["tests.fake"]),
+            mock.patch.object(
+                run_tests,
+                "run_modules",
+                side_effect=lambda modules, verbosity: events.append("run") or True,
+            ),
+        ):
+            exit_code = run_tests.main(["--tier", "fast"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(events, ["tempdir", "run"])
+
+    def test_tempdir_preflight_uses_fallback_when_default_temp_is_unusable(self) -> None:
+        calls: list[Path | None] = []
+
+        def fake_probe(path: Path | None) -> None:
+            calls.append(path)
+            if path is None:
+                raise OSError("delete denied")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            fallback = Path(tmp) / "runner-temp"
+            previous_tempdir = getattr(run_tests.tempfile, "tempdir", None)
+            with (
+                mock.patch.object(run_tests, "_probe_tempdir", side_effect=fake_probe),
+                mock.patch.object(run_tests, "FALLBACK_TEST_TMPDIR", fallback),
+                mock.patch.dict(os.environ, {}, clear=False),
+            ):
+                try:
+                    selected = run_tests.ensure_usable_tempdir()
+                    selected_env = {name: os.environ[name] for name in run_tests.TEMP_ENV_NAMES}
+                finally:
+                    run_tests.tempfile.tempdir = previous_tempdir
+
+            self.assertEqual(selected, fallback)
+            self.assertEqual(calls, [None, fallback])
+            for name in run_tests.TEMP_ENV_NAMES:
+                self.assertEqual(selected_env[name], str(fallback))
+
     def test_slow_module_overrides_match_real_test_modules(self) -> None:
         discovered = set(run_tests.discover_modules())
 

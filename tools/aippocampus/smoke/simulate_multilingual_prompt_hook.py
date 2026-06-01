@@ -225,6 +225,60 @@ def write_seeded_semantic_fixture(root: Path, cwd: Path) -> tuple[Path, Path]:
     return registry_path, cues_path
 
 
+def claim_boundary(
+    *,
+    seeded_semantic_cues: bool,
+    semantic_gate: str,
+) -> dict[str, Any]:
+    if seeded_semantic_cues:
+        return {
+            "claim_level": "seeded_semantic_cue_reuse_smoke",
+            "coverage_mode": "seeded_semantic_cue_reuse",
+            "cannot_claim": [
+                "cold_natural_multilingual_recall_quality",
+                "sleep_time_trigger_generation_quality",
+            ],
+        }
+    if semantic_gate == "off":
+        return {
+            "claim_level": "unseeded_local_fallback_smoke",
+            "coverage_mode": "unseeded_local_fallback",
+            "cannot_claim": [
+                "seeded_cue_cache_reuse_quality",
+                "live_semantic_gate_quality",
+                "cold_model_multilingual_recall_quality",
+            ],
+        }
+    return {
+        "claim_level": "unseeded_foreground_semantic_smoke",
+        "coverage_mode": "unseeded_foreground_semantic",
+        "cannot_claim": ["seeded_cue_cache_reuse_quality"],
+    }
+
+
+def summarize_rows(
+    rows: list[dict[str, Any]],
+    *,
+    seeded_semantic_cues: bool,
+    semantic_gate: str,
+) -> dict[str, Any]:
+    boundary = claim_boundary(
+        seeded_semantic_cues=seeded_semantic_cues,
+        semantic_gate=semantic_gate,
+    )
+    passed = sum(1 for row in rows if row.get("ok"))
+    return {
+        "passed": passed,
+        "total": len(rows),
+        "semantic_gate": semantic_gate,
+        "seeded_semantic_cues": bool(seeded_semantic_cues),
+        "coverage_mode": boundary["coverage_mode"],
+        "claim_boundary": boundary,
+        "cannot_claim": boundary["cannot_claim"],
+        "rows": rows,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cwd", default=os.getcwd())
@@ -257,13 +311,12 @@ def main() -> int:
             )
             for case in cases
         ]
-    passed = sum(1 for row in rows if row.get("ok"))
-    result = {
-        "passed": passed,
-        "total": len(rows),
-        "seeded_semantic_cues": bool(args.seed_semantic_cues),
-        "rows": rows,
-    }
+    result = summarize_rows(
+        rows,
+        seeded_semantic_cues=bool(args.seed_semantic_cues),
+        semantic_gate=args.semantic_gate,
+    )
+    passed = int(result["passed"])
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
