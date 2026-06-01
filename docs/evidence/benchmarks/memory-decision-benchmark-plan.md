@@ -117,6 +117,13 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
   lookup boundaries. The current 2026-05-30 registry run proves source-faithful
   pack formation but reports scaffold regression, so it is not an answer-quality
   or token-savings claim.
+- `benchmarks/aippocampus/benchmark_continuous_memory_arms.py` runs the #408
+  continuous-memory attribution controls for #378. It compares
+  `no_memory`, `true_aippocampus_memory`, `sham_unrelated_memory`,
+  `stale_wrong_memory`, and `oracle_memory` arms on public-safe synthetic
+  coding-continuity cases, then reports `memory_presence_effect`,
+  `memory_correctness_effect`, `stale_memory_harm`, `oracle_headroom`, and
+  source-reopen obedience by arm. This runner is diagnostic and not a public superiority claim.
 
 This slice is a smoke gate, not a real-history quality claim. It proves the
 benchmark runner can catch skip/scent/evidence mistakes and can report sanitized
@@ -140,6 +147,45 @@ semantic checks, Track B source-evidence retrieval, and optional public-corpus
 adapters. Its report includes `cannot_claim` entries for those omitted surfaces
 so the profile cannot be mistaken for Track B, private-history, or live-model
 quality evidence.
+
+### Continuous-Memory Attribution Arms
+
+Issue #408 adds a diagnostic arm runner for the broader #378 question: when a
+continuous agent appears to improve, did correct source-backed memory help, or
+did the model merely benefit from extra nearby structured text?
+
+Run the public-safe attribution slice directly:
+
+```powershell
+python benchmarks\aippocampus\benchmark_continuous_memory_arms.py --json
+```
+
+The runner intentionally stays outside the default `public-fast` suite for now.
+It uses four author-written synthetic coding-continuity cases and five arms:
+
+- `no_memory`: the baseline has no recall context.
+- `true_aippocampus_memory`: production-shaped route handles require source
+  reopen and may still abstain when the source is incomplete.
+- `sham_unrelated_memory`: same nearby memory-shaped format, but unrelated, so
+  any lift is a memory-presence effect rather than memory correctness.
+- `stale_wrong_memory`: matched-format plausible wrong memory used as an
+  adversarial diagnostic stressor, not a product mode.
+- `oracle_memory`: minimal source-grounded context used only as an upper-bound
+  arm and never as input to true-memory scoring.
+
+Reports must keep these effects separate:
+
+- `memory_presence_effect`: sham vs no-memory.
+- `memory_correctness_effect`: true memory vs sham.
+- `stale_memory_harm`: stale-wrong harm against no-memory.
+- `oracle_headroom`: oracle memory against true memory.
+- `source_reopen_obedience_by_arm`: whether strong memory-shaped claims were
+  source-reopened or safely abstained when source support was missing.
+
+This is enough to prove the attribution-control contract exists. It does not
+prove full #378 continuous-memory superiority, live host-native compaction
+behavior, private real-history generality, answer-generation quality, or the
+complete #410 cost and harm ledger.
 
 ### Repeatable Baseline Command
 
