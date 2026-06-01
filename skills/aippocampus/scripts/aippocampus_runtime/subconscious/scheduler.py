@@ -5,6 +5,12 @@ The lifecycle hook may call this script frequently, so this file must stay
 cheap in `--maybe-start` mode. It only decides whether a project has enough new
 clean-source material, records a small state file, and starts a detached worker.
 The expensive DeepSeek jobs run in the detached `--run-due` process.
+
+Coordination is intentionally local-process best effort. The lock files and
+project leases protect ordinary same-machine hook/worker overlap on local
+filesystems; they are not a distributed scheduler, NFS lock protocol, or
+multi-host queue. Keep hook failures fail-open unless `--strict` is explicitly
+requested by an operator.
 """
 
 from __future__ import annotations
@@ -60,26 +66,53 @@ class FileLock:
         self.path = path
         self.stale_seconds = stale_seconds
         self.fd: int | None = None
+        self.recovered_stale_lock = False
+        self.stale_age_seconds: int | None = None
 
     def __enter__(self) -> "FileLock":
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            self.fd = os.open(str(self.path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        except FileExistsError as exc:
+        last_exists: FileExistsError | None = None
+        for _attempt in range(2):
             try:
-                age = time.time() - self.path.stat().st_mtime
-            except OSError:
-                age = 0
-            if age > self.stale_seconds:
+                self.fd = os.open(str(self.path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            except FileExistsError as exc:
+                last_exists = exc
+                try:
+                    age = max(0.0, time.time() - self.path.stat().st_mtime)
+                except OSError:
+                    age = 0.0
+                if age <= self.stale_seconds:
+                    raise RuntimeError(
+                        "subconscious scheduler already running: "
+                        f"active local lock {self.path.name} "
+                        f"age={age:.1f}s threshold={self.stale_seconds}s"
+                    ) from exc
                 try:
                     self.path.unlink()
-                except OSError:
+                except FileNotFoundError:
                     pass
-                self.fd = os.open(str(self.path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            else:
-                raise RuntimeError("subconscious scheduler already running") from exc
-        os.write(self.fd, json.dumps({"pid": os.getpid(), "created_at": now_utc()}).encode("utf-8"))
-        return self
+                except OSError as unlink_exc:
+                    raise RuntimeError(
+                        "subconscious scheduler already running: "
+                        f"stale local lock {self.path.name} could not be removed"
+                    ) from unlink_exc
+                self.recovered_stale_lock = True
+                self.stale_age_seconds = int(age)
+                continue
+            payload: dict[str, Any] = {"pid": os.getpid(), "created_at": now_utc()}
+            if self.recovered_stale_lock:
+                payload.update(
+                    {
+                        "recovered_stale_lock": True,
+                        "stale_age_seconds": self.stale_age_seconds,
+                        "stale_threshold_seconds": self.stale_seconds,
+                    }
+                )
+            os.write(self.fd, json.dumps(payload).encode("utf-8"))
+            return self
+        raise RuntimeError(
+            "subconscious scheduler already running: stale local lock recovery raced"
+        ) from last_exists
 
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
         if self.fd is not None:

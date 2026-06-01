@@ -10,6 +10,7 @@ touching the execution loop.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from typing import Any
 
 from aippocampus_runtime.core import sanitize_external_model_payload
@@ -202,9 +203,67 @@ JOB_SPECS: dict[str, dict[str, Any]] = {
 }
 
 
+def validate_job_dependency_contract(
+    specs: Mapping[str, Mapping[str, Any]] | None = None,
+) -> None:
+    """Fail fast when dependent job metadata drifts.
+
+    Deterministic follow-up jobs may run from existing staging rows when
+    requested directly, but the catalog still needs a valid dependency graph so
+    `--job all` cannot silently put a consumer before its producer.
+    """
+    job_specs = specs or JOB_SPECS
+    for job, spec in job_specs.items():
+        depends_on = spec.get("depends_on") or []
+        if not isinstance(depends_on, list):
+            raise ValueError(f"{job} depends_on must be a list")
+        for dependency in depends_on:
+            if dependency not in job_specs:
+                raise ValueError(f"{job} depends_on unknown job {dependency}")
+            if dependency == job:
+                raise ValueError(f"{job} cannot depend on itself")
+
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(job: str, trail: list[str]) -> None:
+        if job in visited:
+            return
+        if job in visiting:
+            raise ValueError("job dependency cycle: " + " -> ".join([*trail, job]))
+        visiting.add(job)
+        for dependency in job_specs[job].get("depends_on") or []:
+            visit(str(dependency), [*trail, job])
+        visiting.remove(job)
+        visited.add(job)
+
+    for job in job_specs:
+        visit(job, [])
+
+
+def ordered_job_names(specs: Mapping[str, Mapping[str, Any]] | None = None) -> list[str]:
+    job_specs = specs or JOB_SPECS
+    validate_job_dependency_contract(job_specs)
+    ordered: list[str] = []
+    visited: set[str] = set()
+
+    def visit(job: str) -> None:
+        if job in visited:
+            return
+        for dependency in job_specs[job].get("depends_on") or []:
+            visit(str(dependency))
+        visited.add(job)
+        ordered.append(job)
+
+    for job in job_specs:
+        visit(job)
+    return ordered
+
+
 def job_names(value: str) -> list[str]:
+    validate_job_dependency_contract()
     if value == "all":
-        return list(JOB_SPECS)
+        return ordered_job_names()
     if value not in JOB_SPECS:
         raise ValueError(f"unknown job {value!r}; expected one of: {', '.join(JOB_SPECS)}")
     return [value]
@@ -213,6 +272,7 @@ def job_names(value: str) -> list[str]:
 def jobs_initial_payload(
     job: str, objective: str, turns: list[dict[str, Any]], max_steps: int, min_tool_steps: int
 ) -> str:
+    validate_job_dependency_contract()
     spec = JOB_SPECS[job]
     # DeepSeek caches exact completed prefixes. Put the stable circuit contract
     # before source turns so different source batches can still reuse the

@@ -176,6 +176,13 @@ not the place for fresh deep inference. The LLM worker is not the place for
 final truth. The deterministic builder is not the place to invent semantic
 routes.
 
+`subconscious_scheduler.py` is a local best-effort coordinator, not a
+distributed scheduler. Its lock files and project leases are meant to prevent
+ordinary same-machine hook and detached-worker overlap on local filesystems.
+They are not an NFS-safe lock protocol, multi-host queue, or historical access
+revocation mechanism. Foreground hook mode must stay cheap and fail-open; use
+strict failures only for explicit operator diagnostics.
+
 ## Near-User Layers Need Semantics
 
 The closer a behavior is to the user's lived intent, the less acceptable it is

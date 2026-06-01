@@ -186,6 +186,30 @@ class SubconsciousSchedulerTests(unittest.TestCase):
         self.assertFalse(result["started"])
         self.assertEqual(result["skipped"], "leased_projects")
 
+    def test_file_lock_reports_active_local_lock_without_recovery(self) -> None:
+        lock_path = self.root / "active.lock"
+
+        with scheduler.FileLock(lock_path, stale_seconds=60):
+            with self.assertRaisesRegex(RuntimeError, "active local lock"):
+                with scheduler.FileLock(lock_path, stale_seconds=60):
+                    self.fail("second lock should not acquire while first lock is active")
+
+        self.assertFalse(lock_path.exists())
+
+    def test_file_lock_recovers_stale_lock_with_diagnostic_payload(self) -> None:
+        lock_path = self.root / "stale.lock"
+        lock_path.write_text('{"pid": 999999, "created_at": "old"}', encoding="utf-8")
+        stale_time = time.time() - 20
+        os.utime(lock_path, (stale_time, stale_time))
+
+        with scheduler.FileLock(lock_path, stale_seconds=1):
+            payload = json.loads(lock_path.read_text(encoding="utf-8"))
+
+        self.assertTrue(payload["recovered_stale_lock"])
+        self.assertGreaterEqual(payload["stale_age_seconds"], 1)
+        self.assertEqual(payload["stale_threshold_seconds"], 1)
+        self.assertFalse(lock_path.exists())
+
     def test_concurrent_maybe_start_launches_one_detached_worker(self) -> None:
         state_file = self.root / "subconscious_state.json"
         launches = 0
