@@ -1,10 +1,10 @@
 # AIppocampus Memory Decision Benchmark Plan
 
-Status: repeatable baseline suite and `public-fast` fresh-clone profile
-implemented; current source-evidence recall has improved, live semantic-gate
-smoke is opt-in, semantic-sidecar coverage remains a known gap, and
-deterministic synthetic Track D compaction-continuity testing is implemented as
-a measurement surface.
+Status: repeatable baseline suite, named profile ladder, threshold metadata,
+and `public-fast` fresh-clone profile implemented; current source-evidence
+recall has improved, live semantic-gate smoke is opt-in, semantic-sidecar
+coverage remains a known gap, and deterministic synthetic Track D
+compaction-continuity testing is implemented as a measurement surface.
 
 This document defines the benchmark direction for AIppocampus memory decisions.
 It complements the existing FTS5/source-evidence checks; it does not replace
@@ -142,11 +142,31 @@ metrics; the next slice still needs broader private real-history gate cases,
 budget curves, larger live semantic-model verification, and a first Track D
 compaction-continuity runner.
 
-### Public-Fast Profile
+### Benchmark Suite Profiles
 
-Run this from a fresh clone when you need the deterministic public benchmark
-surface without private registry data, live model calls, or external dataset
-downloads:
+`benchmark_suite.py` exposes named profiles so benchmark runs can be compared by
+claim surface instead of by an opaque pile of flags. The CLI help links here,
+and each JSON report includes `profile_metadata`, `threshold_metadata`, and
+`claim_surface_warnings` so later run-history comparison can reject mismatched
+surfaces before interpreting score deltas.
+
+Profiles are presets plus safety boundaries. Maintainers may still use explicit
+flags for narrow experiments, but those runs should be treated as mixed claim
+surfaces unless the report metadata says otherwise.
+
+| Profile | Intended use | Default included surface | Default exclusions / claim boundary |
+| --- | --- | --- | --- |
+| `public-fast` | Fresh-clone public smoke and quick local confidence. | Track A gate decision, Track C payload fidelity, Track D compaction continuity. | Forcibly excludes private text, live semantic calls, Track B, and optional public-corpus adapters; cannot claim Track B, live-model, private-history, or large external-dataset quality. |
+| `ci-deterministic` | Deterministic CI-oriented baseline where Track B diagnostics are allowed. | Tracks A/C/D, Track B source-evidence retrieval, deterministic source-label diagnostic slice. | Excludes private text, live semantic calls, and optional public-corpus adapters. |
+| `local-calibration` | Maintainer local calibration with deterministic Track B enabled. | Tracks A/C/D and deterministic Track B surfaces. | Excludes private text and live semantic calls by default; registry/data availability affects interpretation. |
+| `live-semantic` | Explicit provider-backed semantic calibration. | Tracks A/C/D, Track B, and `live_semantic_gate`. | Uses live model/provider behavior, so results are provider-, prompt-, and date-dependent; still excludes private text by default. |
+| `private-full` | Maintainer-only private-history regression. | Tracks A/C/D and Track B with private text allowed. | Not public-release evidence until rerun or summarized through sanitized outputs. |
+| `release-evidence` | Public-safe release evidence with stable metadata. | Tracks A/C/D and deterministic Track B surfaces. | Excludes private text, live semantic calls, and optional public-corpus adapters by default; those need explicit opt-in and dated evidence notes. |
+| `baseline` | Backward-compatible default baseline capture. | Current default suite surface. | Useful for continuity, but prefer a named non-legacy profile for new evidence comparison. |
+
+Run `public-fast` from a fresh clone when you need the deterministic public
+benchmark surface without private registry data, live model calls, or external
+dataset downloads:
 
 ```powershell
 python benchmarks\aippocampus\benchmark_suite.py --profile public-fast --json
@@ -158,6 +178,24 @@ semantic checks, Track B source-evidence retrieval, and optional public-corpus
 adapters. Its report includes `cannot_claim` entries for those omitted surfaces
 so the profile cannot be mistaken for Track B, private-history, or live-model
 quality evidence.
+
+Threshold metadata intentionally explains the comparison boundary rather than
+just repeating numbers:
+
+| Metadata key | Meaning | Claim boundary |
+| --- | --- | --- |
+| `fts5_min_cases` | Minimum deterministic source-line cases for the Track B FTS5 baseline. | Sample-count floor only; not a quality pass by itself. |
+| `source_min_cases` | Minimum selected source-evidence cases. | Avoids tiny selected slices, but does not repair selection bias. |
+| `source_min_hit_rate` | Diagnostic selected source-evidence top-k hit-rate floor. | Bounded retrieval diagnostic; not broad private real-history quality. |
+| `live_semantic_min_cases` | Minimum optional live semantic cases. | Live provider smoke only; model/provider dependent. |
+| `live_semantic_min_surface_recall` | Optional live semantic surface-recall threshold. | Local live slice threshold, not a guarantee for future semantic prompts. |
+| `standard_min_questions` | Minimum LoCoMo/LongMemEval public retrieval-QA questions. | Public-control retrieval only; no answer-generation claim. |
+| `standard_min_session_hit_rate` | Expected answer-session retrieval floor for standard public QA. | Session retrieval only; not SOTA, not LongMemEval-V2, and not answer quality. |
+
+Do not lower thresholds to make a profile pass. If a run captures a baseline
+but misses a threshold, keep `quality_gate_ok=false`, preserve `known_gaps`, and
+use the result as regression evidence rather than as a product-quality
+certificate.
 
 ### Continuous-Memory Attribution Arms
 

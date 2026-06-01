@@ -32,7 +32,175 @@ import benchmark_source_evidence_retrieval as retrieval_benchmark
 SCHEMA_VERSION = 1
 BASELINE_PROFILE = "baseline"
 PUBLIC_FAST_PROFILE = "public-fast"
-PROFILE_CHOICES = (BASELINE_PROFILE, PUBLIC_FAST_PROFILE)
+CI_DETERMINISTIC_PROFILE = "ci-deterministic"
+LOCAL_CALIBRATION_PROFILE = "local-calibration"
+LIVE_SEMANTIC_PROFILE = "live-semantic"
+PRIVATE_FULL_PROFILE = "private-full"
+RELEASE_EVIDENCE_PROFILE = "release-evidence"
+PROFILE_CHOICES = (
+    BASELINE_PROFILE,
+    PUBLIC_FAST_PROFILE,
+    CI_DETERMINISTIC_PROFILE,
+    LOCAL_CALIBRATION_PROFILE,
+    LIVE_SEMANTIC_PROFILE,
+    PRIVATE_FULL_PROFILE,
+    RELEASE_EVIDENCE_PROFILE,
+)
+PROFILE_DOCS = (
+    "docs/evidence/benchmarks/memory-decision-benchmark-plan.md"
+    "#benchmark-suite-profiles"
+)
+PROFILE_LADDER: tuple[dict[str, Any], ...] = (
+    {
+        "name": PUBLIC_FAST_PROFILE,
+        "stage": "fresh_clone_public_smoke",
+        "runtime_cost": "fast",
+        "purpose": "deterministic public A/C/D smoke that should run from a fresh clone",
+        "included_tracks": ["gate_decision", "payload_fidelity", "compaction_continuity"],
+        "excluded_surfaces": [
+            "private_text",
+            "live_semantic",
+            "track_b_source_evidence",
+            "optional_public_corpus_track_b",
+        ],
+        "privacy_boundary": "public_safe_no_registry_no_live_models",
+        "dependencies": ["repository fixtures only"],
+        "default_cannot_claim": [
+            "public_fast_profile_track_b_quality",
+            "public_fast_profile_live_semantic_quality",
+            "public_fast_profile_private_real_history_quality",
+            "public_fast_profile_large_external_dataset_quality",
+        ],
+    },
+    {
+        "name": CI_DETERMINISTIC_PROFILE,
+        "stage": "ci_deterministic_baseline",
+        "runtime_cost": "medium",
+        "purpose": "deterministic CI-oriented baseline with Track B diagnostics",
+        "included_tracks": [
+            "gate_decision",
+            "payload_fidelity",
+            "compaction_continuity",
+            "source_evidence_retrieval",
+            "source_evidence_deterministic_labels",
+        ],
+        "excluded_surfaces": [
+            "private_text",
+            "live_semantic",
+            "optional_public_corpus_track_b",
+        ],
+        "privacy_boundary": "sanitized_no_private_text_no_live_models",
+        "dependencies": ["local deterministic fixtures and sanitized registry metadata"],
+        "default_cannot_claim": [
+            "ci_profile_live_semantic_quality",
+            "ci_profile_private_real_history_quality",
+            "ci_profile_optional_public_corpus_quality",
+        ],
+    },
+    {
+        "name": LOCAL_CALIBRATION_PROFILE,
+        "stage": "maintainer_local_calibration",
+        "runtime_cost": "medium",
+        "purpose": "maintainer calibration run with deterministic Track B surfaces enabled",
+        "included_tracks": [
+            "gate_decision",
+            "payload_fidelity",
+            "compaction_continuity",
+            "source_evidence_retrieval",
+            "source_evidence_deterministic_labels",
+        ],
+        "excluded_surfaces": ["private_text", "live_semantic"],
+        "privacy_boundary": "sanitized_local_diagnostics",
+        "dependencies": ["local registry or generated sanitized benchmark data"],
+        "default_cannot_claim": [
+            "local_calibration_profile_live_semantic_quality",
+            "local_calibration_profile_private_text_quality",
+        ],
+    },
+    {
+        "name": LIVE_SEMANTIC_PROFILE,
+        "stage": "optional_live_semantic_calibration",
+        "runtime_cost": "slow_or_provider_dependent",
+        "purpose": "explicit live semantic-model calibration beside deterministic tracks",
+        "included_tracks": [
+            "gate_decision",
+            "payload_fidelity",
+            "compaction_continuity",
+            "source_evidence_retrieval",
+            "live_semantic_gate",
+        ],
+        "excluded_surfaces": ["private_text"],
+        "privacy_boundary": "sanitized_but_uses_live_model_calls",
+        "dependencies": ["configured live semantic provider", "local benchmark corpus"],
+        "default_cannot_claim": [
+            "live_semantic_profile_private_real_history_quality",
+            "all_future_semantic_prompts_correct",
+        ],
+    },
+    {
+        "name": PRIVATE_FULL_PROFILE,
+        "stage": "maintainer_private_regression",
+        "runtime_cost": "slow",
+        "purpose": "explicit local private-history regression run for maintainers",
+        "included_tracks": [
+            "gate_decision",
+            "payload_fidelity",
+            "compaction_continuity",
+            "source_evidence_retrieval",
+            "source_evidence_deterministic_labels",
+        ],
+        "excluded_surfaces": ["public_release_claims_without_sanitization"],
+        "privacy_boundary": "may_emit_private_text_when_runner_flags_allow_it",
+        "dependencies": ["local private registry", "maintainer-only output handling"],
+        "default_cannot_claim": [
+            "public_release_evidence_without_sanitized_rerun",
+            "model_independent_memory_superiority",
+        ],
+    },
+    {
+        "name": RELEASE_EVIDENCE_PROFILE,
+        "stage": "public_release_evidence",
+        "runtime_cost": "medium_to_slow",
+        "purpose": "public-safe release evidence run with explicit claim boundaries",
+        "included_tracks": [
+            "gate_decision",
+            "payload_fidelity",
+            "compaction_continuity",
+            "source_evidence_retrieval",
+            "source_evidence_deterministic_labels",
+        ],
+        "excluded_surfaces": [
+            "private_text",
+            "live_semantic",
+            "optional_public_corpus_track_b_by_default",
+        ],
+        "privacy_boundary": "public_safe_sanitized_release_report",
+        "dependencies": ["sanitized benchmark inputs", "dated verification ledger"],
+        "default_cannot_claim": [
+            "release_profile_private_real_history_quality",
+            "release_profile_live_semantic_quality_without_live_run",
+            "release_profile_optional_public_corpus_quality_without_opt_in",
+        ],
+    },
+    {
+        "name": BASELINE_PROFILE,
+        "stage": "legacy_default_baseline",
+        "runtime_cost": "medium",
+        "purpose": "backward-compatible default baseline capture",
+        "included_tracks": [
+            "gate_decision",
+            "payload_fidelity",
+            "compaction_continuity",
+            "source_evidence_retrieval",
+            "source_evidence_deterministic_labels",
+        ],
+        "excluded_surfaces": ["live_semantic", "private_text_by_default"],
+        "privacy_boundary": "sanitized_unless_flags_explicitly_expand_surface",
+        "dependencies": ["local deterministic fixtures and current default registry path"],
+        "default_cannot_claim": [],
+    },
+)
+PROFILE_METADATA_BY_NAME = {profile["name"]: profile for profile in PROFILE_LADDER}
 
 
 @dataclass(frozen=True)
@@ -230,32 +398,236 @@ def collect_cannot_claim(tracks: dict[str, dict[str, Any]], *, quality_gate_ok: 
 
 
 def profile_cannot_claims(config: BenchmarkSuiteConfig) -> list[str]:
-    if config.profile != PUBLIC_FAST_PROFILE:
-        return []
-    return [
-        "public_fast_profile_track_b_quality",
-        "public_fast_profile_live_semantic_quality",
-        "public_fast_profile_private_real_history_quality",
-        "public_fast_profile_large_external_dataset_quality",
-    ]
+    metadata = PROFILE_METADATA_BY_NAME.get(config.profile) or {}
+    claims = [str(item) for item in metadata.get("default_cannot_claim") or []]
+    if config.profile == RELEASE_EVIDENCE_PROFILE and (
+        config.include_sharegpt_public_track_b or config.include_standard_public_track_b
+    ):
+        claims = [
+            claim
+            for claim in claims
+            if claim != "release_profile_optional_public_corpus_quality_without_opt_in"
+        ]
+        claims.append(
+            "release_profile_optional_public_corpus_quality_bounded_to_adapter_run"
+        )
+    return sorted(set(claims))
+
+
+def profile_metadata(config: BenchmarkSuiteConfig) -> dict[str, Any]:
+    selected = PROFILE_METADATA_BY_NAME.get(config.profile) or {
+        "name": config.profile,
+        "stage": "custom",
+        "purpose": "custom profile surface",
+        "included_tracks": [],
+        "excluded_surfaces": [],
+        "privacy_boundary": "custom",
+        "dependencies": [],
+        "default_cannot_claim": [],
+    }
+    return {
+        "docs": PROFILE_DOCS,
+        "selected_profile": dict(selected),
+        "effective_surface": effective_profile_surface(config),
+        "profile_ladder": [dict(item) for item in PROFILE_LADDER],
+    }
+
+
+def effective_profile_surface(config: BenchmarkSuiteConfig) -> dict[str, Any]:
+    included_tracks = ["gate_decision", "payload_fidelity"]
+    if config.include_track_d:
+        included_tracks.append("compaction_continuity")
+    if config.include_track_b:
+        included_tracks.append("source_evidence_retrieval")
+        if config.include_deterministic_source_labels:
+            included_tracks.append("source_evidence_deterministic_labels")
+    if config.include_live_semantic:
+        included_tracks.append("live_semantic_gate")
+
+    optional_surfaces: list[str] = []
+    if config.include_sharegpt_public_track_b:
+        optional_surfaces.append("sharegpt_public_track_b")
+    if config.include_standard_public_track_b:
+        optional_surfaces.append("standard_public_track_b")
+
+    return {
+        "included_tracks": included_tracks,
+        "optional_surfaces": optional_surfaces,
+        "private_text_enabled": bool(config.include_private_text),
+        "live_semantic_enabled": bool(config.include_live_semantic),
+        "registry_path_provided": config.registry_path is not None,
+    }
+
+
+def threshold_metadata(config: BenchmarkSuiteConfig) -> dict[str, dict[str, Any]]:
+    return {
+        "fts5_min_cases": {
+            "value": int(config.fts5_min_cases),
+            "owner": "Track B FTS5 source-line baseline",
+            "source": "benchmark_source_evidence_retrieval.DEFAULT_FTS5_MIN_CASES",
+            "rationale": (
+                "Require enough deterministic source-line cases to make a "
+                "baseline capture meaningful without turning this into a "
+                "full private-history quality claim."
+            ),
+            "claim_boundary": "sample-count floor only; not a quality pass by itself",
+        },
+        "source_min_cases": {
+            "value": int(config.source_min_cases),
+            "owner": "Track B selected source-evidence recall",
+            "source": "benchmark_source_evidence_retrieval.DEFAULT_SOURCE_MIN_CASES",
+            "rationale": (
+                "Avoid treating tiny selected slices as stable source-evidence "
+                "recall evidence."
+            ),
+            "claim_boundary": "case-count floor only; does not repair selection bias",
+        },
+        "source_min_hit_rate": {
+            "value": float(config.source_min_hit_rate),
+            "owner": "Track B selected source-evidence recall",
+            "source": "benchmark_source_evidence_retrieval.DEFAULT_SOURCE_MIN_HIT_RATE",
+            "rationale": (
+                "Keep the diagnostic source-evidence gate visibly above casual "
+                "keyword-hit behavior while preserving known-gap reporting."
+            ),
+            "claim_boundary": (
+                "supports bounded retrieval diagnostics, not broad private "
+                "real-history memory quality"
+            ),
+        },
+        "live_semantic_min_cases": {
+            "value": int(config.live_semantic_min_cases),
+            "owner": "optional live semantic gate",
+            "source": "benchmark_live_semantic_gate.DEFAULT_MIN_LIVE_CASES",
+            "rationale": (
+                "Prevent a provider-backed smoke from passing on too few "
+                "semantic cases."
+            ),
+            "claim_boundary": "live provider smoke only; model/provider dependent",
+        },
+        "live_semantic_min_surface_recall": {
+            "value": float(config.live_semantic_min_surface_recall),
+            "owner": "optional live semantic gate",
+            "source": "benchmark_live_semantic_gate.DEFAULT_MIN_SURFACE_RECALL",
+            "rationale": (
+                "Gate whether the configured semantic worker recalls the expected "
+                "surface evidence on the local slice."
+            ),
+            "claim_boundary": (
+                "local live slice threshold, not a guarantee for all future "
+                "semantic prompts"
+            ),
+        },
+        "standard_min_questions": {
+            "value": int(config.standard_min_questions),
+            "owner": "optional standard public retrieval-QA Track B adapter",
+            "source": "benchmark_source_evidence_retrieval.DEFAULT_STANDARD_QA_MIN_CASES",
+            "rationale": (
+                "Make LoCoMo/LongMemEval retrieval-QA reports distinguish skipped "
+                "or undersized runs from usable public-control slices."
+            ),
+            "claim_boundary": "public-control retrieval only; no answer-generation claim",
+        },
+        "standard_min_session_hit_rate": {
+            "value": float(config.standard_min_session_hit_rate),
+            "owner": "optional standard public retrieval-QA Track B adapter",
+            "source": (
+                "benchmark_source_evidence_retrieval."
+                "DEFAULT_STANDARD_QA_MIN_SESSION_HIT_RATE"
+            ),
+            "rationale": (
+                "Keep the public retrieval-QA adapter honest about whether it "
+                "retrieved the expected answer sessions before any future answer "
+                "usefulness layer is considered."
+            ),
+            "claim_boundary": (
+                "session retrieval threshold only; not SOTA, not LongMemEval-V2, "
+                "and not answer quality"
+            ),
+        },
+    }
+
+
+def claim_surface_warnings(config: BenchmarkSuiteConfig) -> list[str]:
+    warnings: list[str] = []
+    nominal_tracks = set(
+        (PROFILE_METADATA_BY_NAME.get(config.profile) or {}).get("included_tracks") or []
+    )
+    effective_tracks = set(effective_profile_surface(config)["included_tracks"])
+    if "source_evidence_retrieval" in nominal_tracks and not config.include_track_b:
+        warnings.append("profile_expected_track_b_but_effective_config_skipped_it")
+    if "compaction_continuity" in nominal_tracks and not config.include_track_d:
+        warnings.append("profile_expected_track_d_but_effective_config_skipped_it")
+    if "live_semantic_gate" in nominal_tracks and not config.include_live_semantic:
+        warnings.append("profile_expected_live_semantic_but_effective_config_skipped_it")
+    if "source_evidence_deterministic_labels" in nominal_tracks and (
+        "source_evidence_retrieval" in effective_tracks
+        and "source_evidence_deterministic_labels" not in effective_tracks
+    ):
+        warnings.append(
+            "profile_expected_deterministic_source_labels_but_effective_config_skipped_it"
+        )
+    if config.include_private_text and config.profile != PRIVATE_FULL_PROFILE:
+        warnings.append("private_text_enabled_outside_private_full_profile")
+    if config.include_live_semantic and config.profile != LIVE_SEMANTIC_PROFILE:
+        warnings.append("live_semantic_enabled_outside_live_semantic_profile")
+    if config.include_sharegpt_public_track_b or config.include_standard_public_track_b:
+        warnings.append("optional_public_track_b_adapter_enabled")
+        if config.profile not in {LOCAL_CALIBRATION_PROFILE, RELEASE_EVIDENCE_PROFILE}:
+            warnings.append(
+                "optional_public_track_b_enabled_outside_release_or_calibration_profile"
+            )
+    return sorted(warnings)
 
 
 def normalize_config_for_profile(config: BenchmarkSuiteConfig) -> BenchmarkSuiteConfig:
-    if config.profile != PUBLIC_FAST_PROFILE:
+    if config.profile == PUBLIC_FAST_PROFILE:
+        # The public-fast profile is the fresh-clone deterministic contract.
+        # Keep it free of private registries, raw text, live models, large
+        # downloads, and optional Track B adapters even if a caller accidentally
+        # passes those flags.
+        return replace(
+            config,
+            registry_path=None,
+            include_private_text=False,
+            include_track_b=False,
+            include_deterministic_source_labels=False,
+            include_live_semantic=False,
+            include_sharegpt_public_track_b=False,
+            include_standard_public_track_b=False,
+        )
+    if config.profile == CI_DETERMINISTIC_PROFILE:
+        return replace(
+            config,
+            registry_path=None,
+            include_private_text=False,
+            include_live_semantic=False,
+            include_sharegpt_public_track_b=False,
+            include_standard_public_track_b=False,
+        )
+    if config.profile == LOCAL_CALIBRATION_PROFILE:
         return config
-    # The public-fast profile is the fresh-clone deterministic contract. Keep it
-    # free of private registries, raw text, live models, large downloads, and
-    # optional Track B adapters even if a caller accidentally passes those flags.
-    return replace(
-        config,
-        registry_path=None,
-        include_private_text=False,
-        include_track_b=False,
-        include_deterministic_source_labels=False,
-        include_live_semantic=False,
-        include_sharegpt_public_track_b=False,
-        include_standard_public_track_b=False,
-    )
+    if config.profile == LIVE_SEMANTIC_PROFILE:
+        return replace(
+            config,
+            include_private_text=False,
+            include_live_semantic=True,
+        )
+    if config.profile == PRIVATE_FULL_PROFILE:
+        return replace(
+            config,
+            include_private_text=True,
+            include_track_b=True,
+            include_deterministic_source_labels=True,
+        )
+    if config.profile == RELEASE_EVIDENCE_PROFILE:
+        return replace(
+            config,
+            registry_path=None,
+            include_private_text=False,
+            include_live_semantic=False,
+        )
+    return config
 
 
 def collect_known_gaps(tracks: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -633,6 +1005,9 @@ def run_benchmark_suite_with_config(config: BenchmarkSuiteConfig) -> dict[str, A
         "ok": bool(baseline_captured),
         "quality_gate_ok": bool(quality_gate_ok),
         "config": config.sanitized_payload_config(),
+        "profile_metadata": profile_metadata(config),
+        "threshold_metadata": threshold_metadata(config),
+        "claim_surface_warnings": claim_surface_warnings(config),
         "track_statuses": track_statuses,
         "known_gaps": known_gaps,
         "rate_estimates": rate_estimates,
@@ -658,12 +1033,29 @@ def print_human_summary(payload: dict[str, Any]) -> None:
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser()
+    profile_names = ", ".join(PROFILE_CHOICES)
+    parser = argparse.ArgumentParser(
+        description=(
+            "Run the repeatable AIppocampus benchmark baseline suite. "
+            "Profiles define claim surfaces; individual flags are overrides."
+        ),
+        epilog=(
+            f"Profile ladder: {profile_names}. "
+            f"Profile and threshold rationale: {PROFILE_DOCS}"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument(
         "--profile",
         choices=PROFILE_CHOICES,
         default=BASELINE_PROFILE,
-        help="Use public-fast for the deterministic fresh-clone A/C/D profile.",
+        help=(
+            "Named benchmark surface. Use public-fast for fresh clones, "
+            "ci-deterministic for deterministic CI, live-semantic for explicit "
+            "provider-backed calibration, private-full for maintainer-only "
+            "private-history runs, and release-evidence for public release "
+            "evidence."
+        ),
     )
     parser.add_argument("--registry", type=Path, default=None)
     parser.add_argument("--include-private-text", action="store_true")
