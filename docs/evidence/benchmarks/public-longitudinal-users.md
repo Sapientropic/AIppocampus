@@ -16,6 +16,11 @@ Related implementation surfaces:
 - #171 / `benchmarks/aippocampus/benchmark_suite.py --profile public-fast`
   remains the fresh-clone deterministic profile and keeps omitted surfaces in
   `cannot_claim`.
+- #407 / `benchmarks/aippocampus/benchmark_continuous_memory_arms.py` owns the
+  pre-registered #378 primary endpoint, paired seed/repeat strategy, and
+  no-advantage rule for continuous-memory superiority claims. Public
+  longitudinal fixtures can feed that registered design later, but they do not
+  override the decision rule after results are known.
 
 Latest dated measurement:
 [`public-longitudinal-users-measurement-2026-05-31.md`](public-longitudinal-users-measurement-2026-05-31.md).
