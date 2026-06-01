@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import io
 import json
 import os
@@ -137,6 +138,181 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertIn("<redacted:api-key>", encoded)
         self.assertIn("<redacted:bearer-token>", encoded)
         self.assertIn("<redacted:local-path>", encoded)
+
+    def test_default_skip_telemetry_records_aggregate_without_raw_prompt(self) -> None:
+        telemetry_path = self.root / "prompt_hook_skip_telemetry.json"
+        local_path = fake_test_windows_path("prompt-hook-secret.txt")
+        result = {
+            "decision": "skip",
+            "score": 0.0,
+            "confidence": "low",
+            "query_terms": [FAKE_TEST_OPENAI_API_KEY, local_path],
+            "reasons": ["no ambient recall cue"],
+            "ambient_recall": {
+                "cache_status": {"status": "miss"},
+                "warm_background": {"status": "skipped", "spawned": False},
+            },
+            "semantic_gate": {
+                "available": False,
+                "decision": "skip",
+                "availability_reason": "foreground_budget_timeout",
+                "diagnostic": "semantic_timed_out_under_foreground_budget",
+                "cached": False,
+                "timeout": 0.87,
+                "budget": {"requested_timeout": 20.0, "effective_timeout": 0.87},
+                "error_buckets": {"read_timeout": 3},
+            },
+            "elapsed_ms": 4232.23,
+        }
+
+        hook.write_skip_telemetry(
+            result,
+            hook_input={"session_id": "test-session", "prompt": FAKE_TEST_OPENAI_API_KEY},
+            telemetry_path=telemetry_path,
+            hook_budget_ms=4300,
+            semantic_timeout=2.5,
+        )
+
+        telemetry = json.loads(telemetry_path.read_text(encoding="utf-8"))
+        self.assertEqual(telemetry["skip_events"], 1)
+        self.assertEqual(telemetry["skip_reason_counts"]["foreground_budget_timeout"], 1)
+        self.assertEqual(telemetry["semantic_diagnostic_counts"]["semantic_timed_out_under_foreground_budget"], 1)
+        self.assertEqual(telemetry["cache_status_counts"]["miss"], 1)
+        self.assertIn("startup_import_io", telemetry["latency_ms"]["buckets"])
+        encoded = json.dumps(telemetry, ensure_ascii=False)
+        self.assertNotIn(FAKE_TEST_OPENAI_API_KEY, encoded)
+        self.assertNotIn(FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER, encoded)
+        self.assertNotIn("test-session", encoded)
+
+    def test_prompt_hook_main_writes_skip_telemetry_by_default_without_log_skip(self) -> None:
+        telemetry_path = self.root / "main-skip-telemetry.json"
+        result = {
+            "decision": "skip",
+            "score": 0.0,
+            "confidence": "low",
+            "query_terms": [FAKE_TEST_OPENAI_API_KEY],
+            "reasons": ["suppressed ordinary code-surface prompt"],
+            "candidates": [],
+            "evidence": [],
+            "working_memory": [],
+            "semantic_gate": None,
+            "ambient_recall": {"cache_status": {"status": "disabled"}},
+            "elapsed_ms": 12.5,
+        }
+        runtime = {
+            "assess_prompt": lambda *args, **kwargs: result,
+            "apply_dream_delivery_boundary": lambda value, **kwargs: value,
+            "public_hook_debug_payload": lambda value: {"decision": value["decision"], "elapsed_ms": value["elapsed_ms"]},
+            "hook_stdout_payload": lambda value: None,
+            "hook_input_from_stdin": lambda: {},
+        }
+
+        stdout = io.StringIO()
+        with (
+            patch.object(hook, "_load_runtime", return_value=runtime),
+            patch.object(
+                hook,
+                "_prepare_dream_delivery",
+                return_value={
+                    "mode": "off",
+                    "event": None,
+                    "allow_dream": False,
+                    "dream_hypothesis_limit": 0,
+                    "reason": "off",
+                },
+            ),
+            contextlib.redirect_stdout(stdout),
+        ):
+            code = hook.main(
+                [
+                    "--prompt",
+                    f"fix hover style {FAKE_TEST_OPENAI_API_KEY}",
+                    "--cwd",
+                    str(self.workspace),
+                    "--json",
+                    "--skip-telemetry-path",
+                    str(telemetry_path),
+                ]
+            )
+
+        self.assertEqual(code, 0)
+        telemetry = json.loads(telemetry_path.read_text(encoding="utf-8"))
+        self.assertEqual(telemetry["skip_events"], 1)
+        self.assertEqual(telemetry["skip_reason_counts"]["suppressed_code_surface"], 1)
+        self.assertNotIn(FAKE_TEST_OPENAI_API_KEY, telemetry_path.read_text(encoding="utf-8"))
+
+    def test_prompt_hook_skip_telemetry_can_be_disabled(self) -> None:
+        telemetry_path = self.root / "disabled-skip-telemetry.json"
+        result = {
+            "decision": "skip",
+            "score": 0.0,
+            "confidence": "low",
+            "query_terms": [],
+            "reasons": ["no ambient recall cue"],
+            "semantic_gate": None,
+            "elapsed_ms": 1.0,
+        }
+
+        hook.write_skip_telemetry(
+            result,
+            telemetry_path=telemetry_path,
+            enabled=False,
+        )
+
+        self.assertFalse(telemetry_path.exists())
+
+    def test_prompt_hook_telemetry_failure_fails_open(self) -> None:
+        result = {
+            "decision": "skip",
+            "score": 0.0,
+            "confidence": "low",
+            "query_terms": [],
+            "reasons": ["no ambient recall cue"],
+            "candidates": [],
+            "evidence": [],
+            "working_memory": [],
+            "semantic_gate": None,
+            "ambient_recall": {"cache_status": {"status": "disabled"}},
+            "elapsed_ms": 1.25,
+        }
+        runtime = {
+            "assess_prompt": lambda *args, **kwargs: result,
+            "apply_dream_delivery_boundary": lambda value, **kwargs: value,
+            "public_hook_debug_payload": lambda value: {"decision": value["decision"], "elapsed_ms": value["elapsed_ms"]},
+            "hook_stdout_payload": lambda value: None,
+            "hook_input_from_stdin": lambda: {},
+        }
+
+        stdout = io.StringIO()
+        with (
+            patch.object(hook, "_load_runtime", return_value=runtime),
+            patch.object(
+                hook,
+                "_prepare_dream_delivery",
+                return_value={
+                    "mode": "off",
+                    "event": None,
+                    "allow_dream": False,
+                    "dream_hypothesis_limit": 0,
+                    "reason": "off",
+                },
+            ),
+            patch.object(hook, "write_skip_telemetry", side_effect=RuntimeError("telemetry disk gone")),
+            contextlib.redirect_stdout(stdout),
+        ):
+            code = hook.main(
+                [
+                    "--prompt",
+                    "普通 hover 样式微调",
+                    "--cwd",
+                    str(self.workspace),
+                    "--json",
+                ]
+            )
+
+        self.assertEqual(code, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["decision"], "skip")
 
     def test_prompt_hook_can_write_opt_in_dream_shadow_event(self) -> None:
         working_memory = self.root / "working_memory.jsonl"

@@ -13,6 +13,7 @@ for _path in (SMOKE, SCRIPTS):
     sys.path.insert(0, str(_path))
 
 import simulate_prompt_hook as smoke  # noqa: E402
+import smoke_prompt_hook_latency as latency_smoke  # noqa: E402
 
 
 class SimulatePromptHookSmokeTests(unittest.TestCase):
@@ -46,6 +47,34 @@ class SimulatePromptHookSmokeTests(unittest.TestCase):
         self.assertGreaterEqual(result["case_count"], 4)
         self.assertIn("evidence", {row["decision"] for row in result["rows"]})
         self.assertIn("skip", {row["decision"] for row in result["rows"]})
+
+    def test_latency_probe_summary_separates_startup_overhead_from_recall_work(self) -> None:
+        rows = [
+            {
+                "wall_ms": 120.0,
+                "hook_elapsed_ms": 20.0,
+                "startup_import_io_ms": 100.0,
+                "decision": "skip",
+                "prompt": "secret raw prompt",
+            },
+            {
+                "wall_ms": 240.0,
+                "hook_elapsed_ms": 40.0,
+                "startup_import_io_ms": 200.0,
+                "decision": "skip",
+                "source_text": "private source text",
+            },
+        ]
+
+        report = latency_smoke.summarize_latency_rows(rows)
+
+        self.assertEqual(report["run_count"], 2)
+        self.assertEqual(report["wall_ms"]["p50"], 120.0)
+        self.assertEqual(report["hook_elapsed_ms"]["p95"], 40.0)
+        self.assertEqual(report["startup_import_io_ms"]["max"], 200.0)
+        encoded = json.dumps(report, ensure_ascii=False)
+        self.assertNotIn("secret raw prompt", encoded)
+        self.assertNotIn("private source text", encoded)
 
 
 if __name__ == "__main__":

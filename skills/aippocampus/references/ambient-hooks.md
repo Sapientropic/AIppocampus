@@ -396,6 +396,13 @@ Useful commands:
 
 - `python ...\semantic_recall_gate.py --prompt "那个脑内续接器现在怎么样了？" --cwd "$PWD" --json`
 - `python ...\semantic_trigger_router.py --json`
+- `python tools\aippocampus\smoke\smoke_prompt_hook_latency.py --runs 5 --json`
+
+The latency smoke wraps the prompt hook in subprocesses and reports only
+sanitized timing buckets. Read `wall_ms` beside `hook_elapsed_ms` and
+`startup_import_io_ms` to separate Python startup/import/I/O overhead from the
+recall work that the hook reports internally. This is especially important on
+Windows before changing foreground budgets.
 
 ## Redaction And Logging
 
@@ -412,6 +419,17 @@ when recall is useful.
 
 Do not write prompt text to hook debug logs. Optional logs may record decision,
 timing, candidate thread ids/titles, evidence line numbers, and query aliases.
+
+The prompt hook records a small local aggregate skip-telemetry file by default:
+`aippocampus_prompt_hook_skip_telemetry.json` under the active AIppocampus
+registry directory. This is not a prompt log. It stores counts for skip reason
+buckets, semantic availability diagnostics, cache status, warm-background
+status, platform/Python version, configured budgets, and coarse latency
+buckets. It must not store raw prompts, session ids, query aliases, source
+snippets, or thread titles. Use `--log-skip` only for explicit deep debugging
+when a sanitized per-event row is needed. Set
+`AIPPOCAMPUS_PROMPT_SKIP_TELEMETRY=0` or pass `--no-skip-telemetry` to disable
+even the aggregate file.
 
 ## Lifecycle Hook
 
