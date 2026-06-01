@@ -158,6 +158,35 @@ For these tools:
 `register_thread` is an explicit control-plane operation. It is not a general
 memory-write API.
 
+### MCP Control-Plane Boundary
+
+Control-plane registration means attaching an existing local conversation source
+to the AIppocampus registry so later read tools can find source-backed memory.
+For the current public MCP surface, `register_thread` may:
+
+- create or update a registry thread record for the selected provider,
+  workspace, and registry root;
+- optionally build generated clean-source/index artifacts from existing
+  provider-visible history when `build_index` is true; and
+- return operational status and locators, with local paths redacted unless the
+  caller explicitly requests `include_private_paths`.
+
+It must not accept arbitrary user-authored memory facts, rewrite source events,
+delete or overwrite existing memory artifacts, install hooks, push/pull/repair
+sync state, or mutate model-organized summaries. Those behaviors are memory
+writes or operator mutations, not control-plane registration.
+
+Calls for unsupported mutating tools such as `store_memory`, `write_memory`,
+`delete_memory`, `sync_push`, `sync_pull`, `install_hook`, or `uninstall_hook`
+must fail as MCP tool errors with `error.code: "unsupported_mutation"` rather
+than silently becoming broad write APIs. Unknown non-mutating tool names should
+remain `unknown_tool`.
+
+Future MCP write additions must prove privacy, provenance, idempotence, and
+source-backed auditability before they become public. They also need an explicit
+operator consent path, a repair/rollback story, and a machine-readable error
+contract that does not require callers to parse human prose.
+
 MCP JSON output defaults to public-safe local-path redaction for tool results
 that can be forwarded through host agents. Callers that are acting as local
 operators may pass `include_private_paths: true` where documented by the tool
