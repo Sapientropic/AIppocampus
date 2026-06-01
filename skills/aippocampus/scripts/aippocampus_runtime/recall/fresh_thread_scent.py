@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from aippocampus_runtime.question.source_refs import source_ref_key
+
 SUPPORT_LEVELS = {"silent_scent", "soft_hypothesis", "source_required", "suppressed"}
 CONFIDENCE_BUCKETS = {"low", "medium", "high"}
 SENSITIVITY_BUCKETS = {"safe", "caution", "suppress"}
@@ -92,6 +94,17 @@ def _candidate_refs(result: dict[str, Any]) -> list[dict[str, Any]]:
     return refs[:MAX_CANDIDATE_REFS]
 
 
+def _is_reopenable_ref(ref: dict[str, Any]) -> bool:
+    if not isinstance(ref, dict):
+        return False
+    thread_key, message_id, turn_anchor, line = source_ref_key(ref)
+    return bool(thread_key and (message_id or turn_anchor or line))
+
+
+def _reopenable_ref_count(refs: list[dict[str, Any]]) -> int:
+    return sum(1 for ref in refs if _is_reopenable_ref(ref))
+
+
 def _support_level(
     result: dict[str, Any],
     *,
@@ -163,6 +176,8 @@ def fresh_thread_scent_packet_from_decision(result: dict[str, Any]) -> dict[str,
         "freshness": freshness,
         "route_reason": _route_reason(support_level, suggested_action),
         "candidate_refs": candidate_refs,
+        "candidate_ref_count": len(candidate_refs),
+        "reopenable_ref_count": _reopenable_ref_count(candidate_refs),
         "suggested_action": suggested_action,
         "when_not_to_use": _when_not_to_use(support_level),
         "source_boundary": {

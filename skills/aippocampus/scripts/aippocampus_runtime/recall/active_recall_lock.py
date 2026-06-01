@@ -23,6 +23,7 @@ from aippocampus_runtime.core import (
     workspace_fingerprint,
     workspace_identity,
 )
+from aippocampus_runtime.question.source_refs import source_ref_key
 from aippocampus_runtime.recall.ambient_cache import default_ambient_cache_path
 from aippocampus_runtime.registry.api import load_registry
 from aippocampus_runtime.source.search import iter_clean_messages
@@ -236,6 +237,17 @@ def _merge_refs(left: list[dict[str, Any]], right: list[dict[str, Any]]) -> list
     return _clean_candidate_refs([*left, *right])
 
 
+def _is_reopenable_ref(ref: dict[str, Any]) -> bool:
+    if not isinstance(ref, dict):
+        return False
+    thread_key, message_id, turn_anchor, line = source_ref_key(ref)
+    return bool(thread_key and (message_id or turn_anchor or line))
+
+
+def reopenable_ref_count(refs: list[dict[str, Any]] | None) -> int:
+    return sum(1 for ref in refs or [] if _is_reopenable_ref(ref))
+
+
 def _future_pair(ttl_seconds: int) -> tuple[str, float]:
     expires = time.time() + max(1, ttl_seconds)
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(expires)), expires
@@ -251,8 +263,15 @@ def _public_lock(entry: dict[str, Any], *, now: float | None = None) -> dict[str
         state = "expired"
     if state not in LOCK_STATES:
         state = "failed"
-    age_ms = max(0, int((current - float(entry.get("created_unix") or current)) * 1000))
     diagnostics = dict(entry.get("diagnostics") or {})
+    candidate_refs = [
+        dict(ref) for ref in entry.get("candidate_refs") or [] if isinstance(ref, dict)
+    ]
+    ref_count = reopenable_ref_count(candidate_refs)
+    if state == "ready" and ref_count == 0:
+        state = "pending"
+        diagnostics["ready_downgraded_no_reopenable_refs"] = True
+    age_ms = max(0, int((current - float(entry.get("created_unix") or current)) * 1000))
     diagnostics["lock_age_ms"] = age_ms
     if invalidated_by:
         diagnostics["invalidated_by"] = invalidated_by
@@ -262,9 +281,9 @@ def _public_lock(entry: dict[str, Any], *, now: float | None = None) -> dict[str
         "lock_id": entry.get("lock_id"),
         "state": state,
         "support_level": "scent",
-        "candidate_refs": [
-            dict(ref) for ref in entry.get("candidate_refs") or [] if isinstance(ref, dict)
-        ],
+        "candidate_refs": candidate_refs,
+        "candidate_ref_count": len(candidate_refs),
+        "reopenable_ref_count": ref_count,
         "query_aliases": list(entry.get("query_aliases") or []),
         "route_reasons": list(entry.get("route_reasons") or []),
         "conflict_flags": list(entry.get("conflict_flags") or []),
@@ -325,7 +344,9 @@ def start_or_update_recall_lock(
         registry_freshness=registry_fp,
         query_aliases=aliases,
     )
-    requested_state = state if state in LOCK_STATES else ("ready" if refs else "pending")
+    requested_state = (
+        state if state in LOCK_STATES else ("ready" if reopenable_ref_count(refs) else "pending")
+    )
     now = now_utc()
     now_unix = time.time()
     expires_at, expires_unix = _future_pair(ttl_seconds)
@@ -356,10 +377,14 @@ def start_or_update_recall_lock(
             key: _safe_text(value, 160) if isinstance(value, str) else value
             for key, value in (diagnostics or {}).items()
         }
+        has_reopenable_refs = reopenable_ref_count(merged_refs) > 0
         final_state = requested_state
-        if old.get("state") == "ready" and final_state == "pending":
+        if final_state == "ready" and not has_reopenable_refs:
+            final_state = "pending"
+            new_diagnostics["ready_downgraded_no_reopenable_refs"] = True
+        if old.get("state") == "ready" and final_state == "pending" and has_reopenable_refs:
             final_state = "ready"
-        if merged_refs and final_state == "pending" and state != "pending":
+        if has_reopenable_refs and final_state == "pending" and state != "pending":
             final_state = "ready"
         entry = {
             "lock_id": lock_id,
@@ -428,11 +453,14 @@ def enrich_recall_lock(
             }
             return _public_lock(failed, now=now_unix)
         entry = dict(entry)
+        entry["candidate_refs"] = _merge_refs(entry.get("candidate_refs") or [], refs)
+        has_reopenable_refs = reopenable_ref_count(entry.get("candidate_refs") or []) > 0
         if state in LOCK_STATES:
             entry["state"] = state
         else:
-            entry["state"] = "ready" if refs or entry.get("candidate_refs") else "pending"
-        entry["candidate_refs"] = _merge_refs(entry.get("candidate_refs") or [], refs)
+            entry["state"] = "ready" if has_reopenable_refs else "pending"
+        if entry["state"] == "ready" and not has_reopenable_refs:
+            entry["state"] = "pending"
         entry["query_aliases"] = _unique_text(
             [*(entry.get("query_aliases") or []), *aliases],
             limit=DEFAULT_MAX_ALIASES,
@@ -482,6 +510,8 @@ def read_recall_lock(
             "state": "missing",
             "support_level": "scent",
             "candidate_refs": [],
+            "candidate_ref_count": 0,
+            "reopenable_ref_count": 0,
             "query_aliases": [],
             "route_reasons": [],
             "conflict_flags": [],
@@ -538,13 +568,15 @@ def _message_matches_ref(message: dict[str, Any], ref: dict[str, Any]) -> bool:
     message_id = str(message.get("message_id") or message.get("id") or "")
     if ref.get("message_id") and str(ref.get("message_id")) == message_id:
         return True
-    turn = str(message.get("turn_id") or message.get("turn_index") or "")
-    if (ref.get("turn_id") or ref.get("turn_index")) and str(
-        ref.get("turn_id") or ref.get("turn_index")
-    ) == turn:
+    turn_id = str(message.get("turn_id") or "")
+    if ref.get("turn_id") and str(ref.get("turn_id")) == turn_id:
+        return True
+    turn_index = str(message.get("turn_index") or "")
+    if ref.get("turn_index") and str(ref.get("turn_index")) == turn_index:
         return True
     line = str(message.get("source_line") or "")
-    return bool(ref.get("line") and str(ref.get("line")) == line)
+    ref_line = ref.get("line") or ref.get("source_line")
+    return bool(ref_line and str(ref_line) == line)
 
 
 def reopen_lock_sources(
@@ -555,7 +587,7 @@ def reopen_lock_sources(
     max_matches: int = 8,
 ) -> dict[str, Any]:
     lock = read_recall_lock(path, lock_id)
-    if lock.get("state") in {"missing", "expired", "failed"}:
+    if lock.get("state") != "ready":
         return {
             "kind": "aippocampus_active_recall_reopen",
             "schema_version": LOCK_SCHEMA_VERSION,

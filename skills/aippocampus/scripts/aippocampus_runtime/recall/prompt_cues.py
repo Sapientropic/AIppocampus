@@ -138,6 +138,32 @@ EXACT_WORDING_TOPIC_TERMS = {
     "这句",
 }
 
+CURRENT_CHECKOUT_SCOPE_PATTERNS = [
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in [
+        r"\b(current|this|new)\s+(repo|repository|checkout|workspace|project|codebase)\b",
+        r"\b(repo|repository|checkout|workspace|project|codebase)\s+(right\s+now|currently)\b",
+        r"(当前|现在|这个|这个新|本).{0,8}(仓库|项目|工程|代码库|checkout|repo|repository)",
+    ]
+]
+
+CURRENT_CHECKOUT_FACT_PATTERNS = [
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in [
+        r"\b(test|tests|pytest|unit tests?|build|lint|typecheck|config|configuration|script|entrypoint|command|dependency|dependencies)\b",
+        r"(怎么|如何|怎样|哪里|哪个|什么|运行|测试|构建|配置|命令|脚本|入口|依赖)",
+    ]
+]
+
+PRIOR_HISTORY_MARKER_PATTERNS = [
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in [
+        r"(之前|前面|刚才|上次|以前|早前|旧线程|旧项目|老项目)",
+        r"\b(last time|previously|earlier|prior|old thread|old project)\b",
+        r"(раньше|ранее|до этого|прошлый раз|предыдущий)",
+    ]
+]
+
 WEAK_DEICTIC_TERMS = {
     "之前",
     "前面",
@@ -394,6 +420,50 @@ def prompt_is_secret_surface(prompt: str) -> bool:
     return any(pattern.search(text) for pattern in SECRET_SURFACE_PATTERNS)
 
 
+def current_checkout_fact_intent(prompt: str) -> bool:
+    """Return whether the prompt asks for facts about the current checkout.
+
+    This is a source-boundary guard, not a semantic memory classifier. When it
+    fires, old project memories may still inform portable preferences, but they
+    must not be promoted as evidence for facts that should be read from the
+    files and config in the checkout currently under the agent's hands.
+    """
+
+    text = str(prompt or "").strip()
+    if not text:
+        return False
+    if not any(pattern.search(text) for pattern in CURRENT_CHECKOUT_SCOPE_PATTERNS):
+        return False
+    return prompt_is_code_surface(text) or any(
+        pattern.search(text) for pattern in CURRENT_CHECKOUT_FACT_PATTERNS
+    )
+
+
+def current_checkout_live_fact_intent(prompt: str) -> bool:
+    """Return whether local files/config must outrank old memory evidence.
+
+    This deliberately keys on an explicit current-checkout surface first. It is
+    not trying to infer the user's whole semantic intent from a frozen label
+    list; it only prevents a narrow failure mode where source-backed history
+    about another project gets treated as proof for facts that should be read
+    from the checkout currently open in front of the agent.
+    """
+
+    if not current_checkout_fact_intent(prompt):
+        return False
+    text = str(prompt or "").strip()
+    if any(pattern.search(text) for pattern in PRIOR_HISTORY_MARKER_PATTERNS):
+        return False
+    prior_history_terms = {
+        "之前说过",
+        "你之前说过",
+        "我之前说过",
+        "最后回复",
+        "最后的消息",
+    }
+    return not bool(set(explicit_recall_terms(prompt)) & prior_history_terms)
+
+
 def memory_boundary_context_intent(prompt: str) -> bool:
     text = str(prompt or "").strip()
     if not text:
@@ -629,6 +699,8 @@ def semantic_gate_can_request_evidence(prompt: str, result: dict[str, Any] | Non
         return False
     if negative_evidence_intent(prompt):
         return False
+    if current_checkout_live_fact_intent(prompt):
+        return False
     if float(result.get("confidence") or 0.0) < 0.5:
         return False
     # DeepSeek may understand vague status prompts semantically, but the hook
@@ -719,6 +791,11 @@ def should_run_semantic_gate(
         # to get pasted by accident. Keep them on the deterministic local path:
         # a safe memory-boundary prompt may still surface scent locally, but it
         # must not be sent to an external semantic model.
+        return False
+    if current_checkout_live_fact_intent(prompt):
+        # The current checkout boundary is a live-source problem, not a memory
+        # classification problem. Let the foreground agent inspect the repo
+        # files/config instead of spending semantic recall budget.
         return False
     if prompt_is_code_surface(prompt) and not (
         explicit or associative or important or working_memory_matches

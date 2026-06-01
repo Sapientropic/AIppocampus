@@ -521,6 +521,11 @@ def should_suppress(
         return True
     if explicit:
         return False
+    if prompt_cues.current_checkout_live_fact_intent(prompt):
+        # Current checkout fact prompts must be answered from live files/config.
+        # Historical source-backed recall may still help when the user asks for
+        # prior wording, but it must not impersonate evidence for this repo.
+        return True
     if source_evidence_cue and candidates:
         # Evidence requests, including natural phrasing like "上次那个 bug
         # 怎么说", may mention codey nouns because the old source itself is

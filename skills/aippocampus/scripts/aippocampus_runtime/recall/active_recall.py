@@ -109,6 +109,13 @@ def _lock_path_from_args(args: argparse.Namespace, registry_path: Path | None) -
     )
 
 
+def _safe_nonnegative_int(value: Any) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
 def _lock_probe_payload(*, mode: str, lock: dict[str, Any]) -> dict[str, Any]:
     state = str(lock.get("state") or "missing")
     if state == "ready":
@@ -124,6 +131,8 @@ def _lock_probe_payload(*, mode: str, lock: dict[str, Any]) -> dict[str, Any]:
             "state": state,
             "lock_id": lock.get("lock_id"),
             "route_handle": True,
+            "candidate_ref_count": _safe_nonnegative_int(lock.get("candidate_ref_count")),
+            "reopenable_ref_count": _safe_nonnegative_int(lock.get("reopenable_ref_count")),
         },
         "candidate_refs": lock.get("candidate_refs") or [],
         "query_aliases": lock.get("query_aliases") or [],

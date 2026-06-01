@@ -17,6 +17,7 @@ from aippocampus_runtime.recall.ambient_policy import policy_update_for_prompt
 from aippocampus_runtime.recall.prompt_cues import (
     CONCEPT_EXPANSION_MAX_TERMS,
     concept_expansion_terms,
+    current_checkout_live_fact_intent,
     expand_query_terms,
     is_decision_continuation,
     natural_evidence_intent,
@@ -322,6 +323,9 @@ def _source_intent_evidence(
     natural_wants_evidence = bool(natural_evidence or source_evidence)
     if negative_evidence_intent(prompt):
         reasons.append("evidence withheld: user requested scent-only context")
+        return []
+    if current_checkout_live_fact_intent(prompt):
+        reasons.append("current checkout required: read current repo first")
         return []
     has_evidence_intent = bool(explicit or semantic_wants_evidence or natural_wants_evidence)
     if not (candidates and search_budget > 0 and has_evidence_intent and not ambiguous_evidence_request):
@@ -660,6 +664,7 @@ def assess_prompt(
     natural_evidence = natural_evidence_intent(prompt)
     source_evidence = source_evidence_intent(prompt)
     negative_evidence = negative_evidence_intent(prompt)
+    current_checkout_live_fact = current_checkout_live_fact_intent(prompt)
     semantic_result, semantic_gate_reuse = run_semantic_gate_for_context(
         prompt=prompt, context=context, semantic_cache_path=semantic_cache_path,
         semantic_gate_mode=semantic_gate_mode, semantic_timeout=semantic_timeout,
@@ -768,6 +773,8 @@ def assess_prompt(
         source_evidence=source_evidence,
         suppressed=suppressed,
     )
+    if current_checkout_live_fact:
+        reasons.append("current checkout required: read current repo first")
     ambiguous_evidence_request = _ambiguous_evidence_request(
         prompt=prompt,
         candidates=candidates,
