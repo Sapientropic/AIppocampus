@@ -35,6 +35,7 @@ from aippocampus_runtime.navigation.project_timeline import (
     build_project_timeline,
     save_project_timeline,
 )
+from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
 from aippocampus_runtime.source.semantic_scope_builder import (
     build_semantic_scope_labels_for_registry,
 )
@@ -62,6 +63,57 @@ DEFAULT_FULL_CANDIDATE_SOURCE_TURN_CAP = 5000
 DEFAULT_CANDIDATE_BATCH_SIZE = 24
 SEMANTIC_CANDIDATE_PROJECT_KEY = "stage2_life_wide_semantic_candidates"
 SEMANTIC_CANDIDATE_PROJECT_LABEL = "Stage 2 life-wide semantic candidates"
+PUBLIC_SMOKE_STATUSES = {
+    "insufficient_dynamic_sidecar_rows",
+    "insufficient_dynamic_sidecar_threads",
+    "insufficient_timeline_semantic_turns",
+    "sufficient",
+    "live_model_missing_api_key",
+    "live_model_failed",
+    "live_model_partial_failure",
+    "live_model_no_findings",
+    "live_model_findings_observed",
+    "materialization_empty",
+    "incomplete_candidate_coverage",
+}
+PUBLIC_CLAIM_LEVELS = {
+    "blocked_live_model",
+    "diagnostic_only",
+    "dynamic_semantic_sidecar_slice",
+    "failed_live_model_slice",
+    "fresh_live_model_findings_observed",
+    "observed_dynamic_semantic_sidecar_slice",
+}
+PUBLIC_CANNOT_CLAIMS = (
+    "full_history_refresh",
+    "semantic_completeness",
+    "label_correctness_without_clean_source_review",
+    "fresh_live_model_run",
+    "fresh_sidecar_write",
+    "stage2_semantic_readiness",
+)
+PUBLIC_DYNAMIC_COUNT_KEYS = (
+    "semantic_sidecar_threads",
+    "semantic_sidecar_rows",
+    "messages_with_semantic_scope_labels",
+    "timeline_latest_turns_with_semantic_scope_labels",
+)
+PUBLIC_COVERAGE_RATIO_KEYS = (
+    "labeled_message_ratio",
+    "life_labeled_thread_ratio",
+    "scope_labeled_thread_ratio",
+    "semantic_sidecar_thread_ratio",
+    "source_backed_timeline_turn_ratio",
+    "semantic_timeline_turn_ratio",
+)
+PUBLIC_USAGE_KEYS = (
+    "prompt_tokens",
+    "completion_tokens",
+    "total_tokens",
+    "prompt_cache_hit_tokens",
+    "prompt_cache_miss_tokens",
+)
+PUBLIC_SCOPE_LABELS = set(SCOPE_LABEL_ORDER)
 
 
 def dynamic_counts(life_smoke: dict[str, Any]) -> dict[str, int]:
@@ -185,6 +237,266 @@ def compact_materialize_result(result: dict[str, Any] | None) -> dict[str, Any] 
         "row_count": int(result.get("row_count") or 0),
         "wrote": bool(result.get("wrote")),
         "boundary": "Semantic scope labels are navigation hints; clean source remains the source of truth.",
+    }
+
+
+def public_count(value: Any) -> int:
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+def public_float(value: Any) -> float:
+    try:
+        return max(0.0, float(value))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def public_token(value: Any, *, allowed: set[str], fallback: str = "unknown") -> str:
+    text = str(value or "").strip()
+    return text if text in allowed else fallback
+
+
+def public_claims(values: Any) -> list[str]:
+    present = {str(value) for value in values or []}
+    return [claim for claim in PUBLIC_CANNOT_CLAIMS if claim in present]
+
+
+def public_dynamic_counts(counts: Any) -> dict[str, int]:
+    if not isinstance(counts, dict):
+        return {key: 0 for key in PUBLIC_DYNAMIC_COUNT_KEYS}
+    return {key: public_count(counts.get(key)) for key in PUBLIC_DYNAMIC_COUNT_KEYS}
+
+
+def public_coverage_ratios(ratios: Any) -> dict[str, Any]:
+    if not isinstance(ratios, dict):
+        ratios = {}
+    return {
+        **{key: public_float(ratios.get(key)) for key in PUBLIC_COVERAGE_RATIO_KEYS},
+        "semantic_sidecar_row_count": public_count(ratios.get("semantic_sidecar_row_count")),
+    }
+
+
+def public_usage(usage: Any) -> dict[str, int]:
+    if not isinstance(usage, dict):
+        return {}
+    return {key: public_count(usage.get(key)) for key in PUBLIC_USAGE_KEYS if key in usage}
+
+
+def public_cache_presence(cache: Any) -> dict[str, bool]:
+    return {"used": isinstance(cache, dict) and bool(cache)}
+
+
+def public_label_list(values: Any) -> list[str]:
+    return sorted(
+        {str(value) for value in values or [] if str(value) in PUBLIC_SCOPE_LABELS}
+    )
+
+
+def public_label_counts(values: Any) -> dict[str, int]:
+    if not isinstance(values, dict):
+        return {}
+    return {
+        label: public_count(values.get(label))
+        for label in SCOPE_LABEL_ORDER
+        if label in values
+    }
+
+
+def public_label_evidence(metrics: Any) -> dict[str, Any]:
+    if not isinstance(metrics, dict):
+        return {}
+    return {
+        "finding_count_with_labels": public_count(metrics.get("finding_count_with_labels")),
+        "accepted_label_count": public_count(metrics.get("accepted_label_count")),
+        "labels_with_sufficient_evidence": public_count(
+            metrics.get("labels_with_sufficient_evidence")
+        ),
+        "weak_or_missing_evidence_label_count": public_count(
+            metrics.get("weak_or_missing_evidence_label_count")
+        ),
+        "label_evidence_complete": bool(metrics.get("label_evidence_complete")),
+        "label_coverage": public_label_list(metrics.get("label_coverage")),
+        "per_label_count": public_label_counts(metrics.get("per_label_count")),
+    }
+
+
+def public_job_result(job: Any) -> dict[str, Any] | None:
+    if not isinstance(job, dict):
+        return None
+    return {
+        "ok": bool(job.get("ok")),
+        "job_count": public_count(job.get("job_count")),
+        "successful_job_count": public_count(job.get("successful_job_count")),
+        "failure_count": public_count(job.get("failure_count")),
+        "partial_failure": bool(job.get("partial_failure")),
+        "concurrency": public_count(job.get("concurrency")),
+        "samples_per_job": public_count(job.get("samples_per_job")),
+        "finding_count": public_count(job.get("finding_count")),
+        "wrote": bool(job.get("wrote")),
+        "cache": public_cache_presence(job.get("cache")),
+        "usage": public_usage(job.get("usage")),
+        "label_evidence": public_label_evidence(job.get("label_evidence")),
+    }
+
+
+def public_materialization(result: Any) -> dict[str, Any] | None:
+    if not isinstance(result, dict):
+        return None
+    return {
+        "ok": bool(result.get("ok")),
+        "target_count": public_count(result.get("target_count")),
+        "row_count": public_count(result.get("row_count")),
+        "wrote": bool(result.get("wrote")),
+        "boundary": "semantic_scope_labels_are_navigation_hints_clean_source_is_truth",
+    }
+
+
+def public_candidate_coverage(coverage: Any) -> dict[str, Any] | None:
+    if not isinstance(coverage, dict):
+        return None
+    return {
+        "full_candidate_coverage_requested": bool(
+            coverage.get("full_candidate_coverage_requested")
+        ),
+        "candidate_turn_count": public_count(coverage.get("candidate_turn_count")),
+        "evaluated_candidate_turn_count": public_count(
+            coverage.get("evaluated_candidate_turn_count")
+        ),
+        "unevaluated_candidate_turn_count": public_count(
+            coverage.get("unevaluated_candidate_turn_count")
+        ),
+        "candidate_batch_size": public_count(coverage.get("candidate_batch_size")),
+        "batch_count": public_count(coverage.get("batch_count")),
+        "successful_batch_count": public_count(coverage.get("successful_batch_count")),
+        "failed_batch_count": public_count(coverage.get("failed_batch_count")),
+        "source_turn_cap": public_count(coverage.get("source_turn_cap")),
+        "full_candidate_coverage_passed": bool(
+            coverage.get("full_candidate_coverage_passed")
+        ),
+        "boundary": (
+            "coverage_counts_only_selected_candidate_turns_were_sent_to_semantic_model"
+        ),
+    }
+
+
+def public_timeline_refresh_item(item: Any) -> dict[str, Any] | None:
+    if not isinstance(item, dict):
+        return None
+    return {
+        "wrote": bool(item.get("wrote")),
+        "project_count": public_count(item.get("project_count")),
+        "life_label_count": public_count(item.get("life_label_count")),
+    }
+
+
+def public_timeline_refresh(refresh: Any) -> dict[str, Any] | None:
+    if not isinstance(refresh, dict):
+        return None
+    return {
+        "before_live_job": public_timeline_refresh_item(refresh.get("before_live_job")),
+        "after_materialization": public_timeline_refresh_item(
+            refresh.get("after_materialization")
+        ),
+    }
+
+
+def public_semantic_candidate_source(metrics: Any) -> dict[str, int]:
+    if not isinstance(metrics, dict):
+        return {}
+    return {
+        "candidate_turn_count": public_count(metrics.get("candidate_turn_count")),
+        "candidate_thread_count": public_count(metrics.get("candidate_thread_count")),
+        "skipped_already_semantic": public_count(metrics.get("skipped_already_semantic")),
+        "skipped_without_refs": public_count(metrics.get("skipped_without_refs")),
+        "limit_applied": public_count(metrics.get("limit_applied")),
+    }
+
+
+def public_thresholds(thresholds: Any) -> dict[str, Any]:
+    if not isinstance(thresholds, dict):
+        thresholds = {}
+    return {
+        "min_sidecar_rows": public_count(thresholds.get("min_sidecar_rows")),
+        "min_sidecar_threads": public_count(thresholds.get("min_sidecar_threads")),
+        "min_timeline_turns": public_count(thresholds.get("min_timeline_turns")),
+        "require_labels": bool(thresholds.get("require_labels")),
+        "full_candidate_coverage": bool(thresholds.get("full_candidate_coverage")),
+        "candidate_batch_size": public_count(thresholds.get("candidate_batch_size")),
+        "full_candidate_source_turn_cap": public_count(
+            thresholds.get("full_candidate_source_turn_cap")
+        ),
+    }
+
+
+def public_privacy_boundary(boundary: Any) -> dict[str, Any]:
+    if not isinstance(boundary, dict):
+        boundary = {}
+    return {
+        "raw_text_emitted": bool(boundary.get("raw_text_emitted")),
+        "snippets_emitted": bool(boundary.get("snippets_emitted")),
+        "titles_emitted": bool(boundary.get("titles_emitted")),
+        "source_reference_details_emitted": bool(
+            boundary.get("source_reference_details_emitted")
+        ),
+        "absolute_paths_emitted": bool(boundary.get("absolute_paths_emitted")),
+        "external_model_call_requires_live_flag": bool(
+            boundary.get("external_model_call_requires_live_flag")
+        ),
+        "live_mode_missing_api_key_fails": bool(
+            boundary.get("live_mode_missing_api_key_fails")
+        ),
+        "live_mode_partial_failure_fails": bool(
+            boundary.get("live_mode_partial_failure_fails")
+        ),
+        "output_shape": public_token(
+            boundary.get("output_shape"),
+            allowed={"aggregate_counts_only"},
+            fallback="aggregate_counts_only",
+        ),
+    }
+
+
+def public_smoke_result(result: dict[str, Any]) -> dict[str, Any]:
+    """Project internal smoke details into the public CLI output contract.
+
+    The internal smoke result may keep local diagnostics such as model-route
+    configuration, failure text, source refs, and sidecar paths for tests and
+    debugger use. The CLI is an evidence surface, so it exposes only allowlisted
+    aggregate fields instead of trying to redact arbitrary semantic content.
+    """
+
+    return {
+        "ok": bool(result.get("ok")),
+        "stage2_semantic_sidecar_status": public_token(
+            result.get("stage2_semantic_sidecar_status"),
+            allowed=PUBLIC_SMOKE_STATUSES,
+            fallback="unknown",
+        ),
+        "claim_level": public_token(
+            result.get("claim_level"),
+            allowed=PUBLIC_CLAIM_LEVELS,
+            fallback="diagnostic_only",
+        ),
+        "cannot_claim": public_claims(result.get("cannot_claim")),
+        "live_model_used": bool(result.get("live_model_used")),
+        "sidecars_written": bool(result.get("sidecars_written")),
+        "timeline_refreshed": bool(result.get("timeline_refreshed")),
+        "privacy_boundary": public_privacy_boundary(result.get("privacy_boundary")),
+        "before": public_dynamic_counts(result.get("before")),
+        "after": public_dynamic_counts(result.get("after")),
+        "coverage_ratios": public_coverage_ratios(result.get("coverage_ratios")),
+        "job": public_job_result(result.get("job")),
+        "materialization": public_materialization(result.get("materialization")),
+        "candidate_coverage": public_candidate_coverage(result.get("candidate_coverage")),
+        "timeline_refresh": public_timeline_refresh(result.get("timeline_refresh")),
+        "semantic_candidate_source": public_semantic_candidate_source(
+            result.get("semantic_candidate_source")
+        ),
+        "thresholds": public_thresholds(result.get("thresholds")),
+        "output_boundary": "public_cli_json_omits_private_diagnostics",
     }
 
 
@@ -946,11 +1258,15 @@ def main() -> int:
         candidate_batch_size=args.candidate_batch_size,
         full_candidate_source_turn_cap=args.full_candidate_source_turn_cap,
     )
+    public_result = public_smoke_result(result)
     if args.json_output:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        print(json.dumps(public_result, ensure_ascii=False, indent=2))
     else:
-        print(f"semantic scope real-history smoke: {result.get('stage2_semantic_sidecar_status')}")
-        print(f"ok: {result.get('ok')}")
+        print(
+            "semantic scope real-history smoke: "
+            f"{public_result.get('stage2_semantic_sidecar_status')}"
+        )
+        print(f"ok: {public_result.get('ok')}")
     return 0 if result.get("ok") else 1
 
 
