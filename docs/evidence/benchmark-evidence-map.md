@@ -6,7 +6,9 @@ another command ledger. Keep the latest claim boundary in
 [`readiness/stage-0-5-readiness.md`](readiness/stage-0-5-readiness.md),
 dated command evidence in
 [`readiness/public-readiness-verification.md`](readiness/public-readiness-verification.md),
-benchmark design details in
+benchmark design rationale in
+[`benchmarks/design/README.md`](benchmarks/design/README.md), and detailed
+runner methodology in
 [`benchmarks/memory-decision-benchmark-plan.md`](benchmarks/memory-decision-benchmark-plan.md).
 Community reports belong in
 [`community-field-reports.md`](community-field-reports.md) until a maintainer
@@ -16,8 +18,8 @@ promotes a public-safe result into the official evidence flow.
 
 - `readiness/` holds claim-boundary snapshots and release/public-readiness
   verification ledgers.
-- `benchmarks/` holds benchmark methodology, public benchmark evidence, and
-  public-safe fixture reports.
+- `benchmarks/` holds benchmark design, methodology, public benchmark evidence,
+  and public-safe fixture reports.
 - `dream/` holds dream-worker shadow A/B and benchmark-corpus measurement
   records.
 - `question/` holds question-extraction and question-tracking evidence records.
@@ -30,37 +32,41 @@ promotes a public-safe result into the official evidence flow.
    [`readiness/stage-0-5-readiness.md`](readiness/stage-0-5-readiness.md).
 2. Need the dated commands and summarized results behind those claims:
    [`readiness/public-readiness-verification.md`](readiness/public-readiness-verification.md).
-3. Need benchmark methodology, track boundaries, and current diagnostic notes:
+3. Need to understand why the benchmarks are shaped this way:
+   [`benchmarks/design/benchmark-design-rationale.md`](benchmarks/design/benchmark-design-rationale.md).
+4. Need benchmark methodology, track boundaries, and current diagnostic notes:
    [`benchmarks/memory-decision-benchmark-plan.md`](benchmarks/memory-decision-benchmark-plan.md).
-4. Need LongMemEval source, commands, and published retrieval-only results:
+5. Need external benchmark and memory-system comparison boundaries:
+   [`benchmarks/design/external-benchmark-map.md`](benchmarks/design/external-benchmark-map.md).
+6. Need LongMemEval source, commands, and published retrieval-only results:
    [`benchmarks/longmemeval.md`](benchmarks/longmemeval.md).
-5. Need public corpus commands and local report boundaries:
+7. Need public corpus commands and local report boundaries:
    [`benchmark_corpus/README.md`](../../benchmark_corpus/README.md) and
    [`benchmark_corpus/sharegpt_manifest.json`](../../benchmark_corpus/sharegpt_manifest.json).
-6. Need the public longitudinal pseudo-user benchmark for coding implicit
+8. Need the public longitudinal pseudo-user benchmark for coding implicit
    knowledge:
    [`benchmarks/public-longitudinal-users.md`](benchmarks/public-longitudinal-users.md).
-7. Need the latest dated public-longitudinal-users measurement report:
+9. Need the latest dated public-longitudinal-users measurement report:
    [`benchmarks/public-longitudinal-users-measurement-2026-05-31.md`](benchmarks/public-longitudinal-users-measurement-2026-05-31.md).
-8. Need the first real public VCS hard-event smoke:
+10. Need the first real public VCS hard-event smoke:
    [`benchmarks/react-real-vcs-smoke-2026-05-31.md`](benchmarks/react-real-vcs-smoke-2026-05-31.md).
-9. Need the 100+ gold real React VCS measurement with anti-drift negatives
+11. Need the 100+ gold real React VCS measurement with anti-drift negatives
    and counterfactual controls:
    [`benchmarks/react-real-vcs-100-gold-2026-05-31.md`](benchmarks/react-real-vcs-100-gold-2026-05-31.md).
-10. Need the sharper React VCS adversarial controls for source authority,
+12. Need the sharper React VCS adversarial controls for source authority,
    keyword drift, behavior-only support, and abstention:
    [`benchmarks/react-real-vcs-adversarial-v2-2026-05-31.md`](benchmarks/react-real-vcs-adversarial-v2-2026-05-31.md).
-11. Need public-safe memory-pain fixture evidence:
+13. Need public-safe memory-pain fixture evidence:
    [`benchmarks/memory-pain-fixture-report.md`](benchmarks/memory-pain-fixture-report.md).
-12. Need public-safe fresh-thread recall demo evidence:
+14. Need public-safe fresh-thread recall demo evidence:
    [`benchmarks/fresh-thread-recall-demo-2026-05-31.md`](benchmarks/fresh-thread-recall-demo-2026-05-31.md).
-13. Need explicit recall-reminder shadow A/B evidence:
+15. Need explicit recall-reminder shadow A/B evidence:
    [`dream/dream-live-shadow-ab-2026-05-30.md`](dream/dream-live-shadow-ab-2026-05-30.md).
-14. Need public-corpus negative-control dream shadow evidence:
+16. Need public-corpus negative-control dream shadow evidence:
    [`dream/dream-live-shadow-benchmark-corpus-2026-05-31.md`](dream/dream-live-shadow-benchmark-corpus-2026-05-31.md).
-15. Need live question-extraction axis-coverage evidence for GitHub #153:
+17. Need live question-extraction axis-coverage evidence for GitHub #153:
    [`question/question-extraction-axis-coverage-2026-05-31.md`](question/question-extraction-axis-coverage-2026-05-31.md).
-16. Need community-submitted runs, demos, known gaps, or field-report intake:
+18. Need community-submitted runs, demos, known gaps, or field-report intake:
    [`community-field-reports.md`](community-field-reports.md) and the public
    [`/evidence/`](https://www.aippocampus.com/evidence/) page.
 
@@ -74,7 +80,9 @@ snapshot or dated verification ledger.
 | --- | --- | --- |
 | Current claim boundary | `docs/evidence/readiness/stage-0-5-readiness.md` | Can-claim / cannot-claim status and missing proof. |
 | Dated command ledger | `docs/evidence/readiness/public-readiness-verification.md` | Summarized commands, dates, pass/fail interpretation, and scope notes. |
-| Benchmark design | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md` | Track definitions, report shape, non-goals, and diagnostic interpretation. |
+| Benchmark design rationale | `docs/evidence/benchmarks/design/README.md` and `docs/evidence/benchmarks/design/benchmark-design-rationale.md` | Evaluation philosophy, track-family why, evidence-layer separation, and external-comparison boundaries. |
+| Benchmark runner methodology | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md` | Track definitions, report shape, non-goals, and diagnostic interpretation. |
+| External benchmark analysis | `docs/evidence/benchmarks/design/external-benchmark-map.md` | Layer-aware external benchmark and memory-system comparison candidates, blockers, and cannot-claim boundaries. |
 | LongMemEval evidence | `docs/evidence/benchmarks/longmemeval.md` and `benchmark_corpus/longmemeval_manifest.json` | Official sources, dataset checksums, dedicated runner commands, dated retrieval-only results, and claim boundaries. |
 | Public longitudinal user evidence | `docs/evidence/benchmarks/public-longitudinal-users.md`, `docs/evidence/benchmarks/public-longitudinal-users-measurement-2026-05-31.md`, `docs/evidence/benchmarks/react-real-vcs-smoke-2026-05-31.md`, `docs/evidence/benchmarks/react-real-vcs-100-gold-2026-05-31.md`, `docs/evidence/benchmarks/react-real-vcs-adversarial-v2-2026-05-31.md`, `benchmark_corpus/public_longitudinal_users/`, and `benchmark_corpus/locomo_manifest.json` | Public synthetic coding implicit-knowledge scoring-contract smoke, LoCoMo same-conversation control users, deterministic scorers, VCS future-event recall roadmap, dated measurements, real public VCS hard-event smoke, 100+ gold React VCS measurement with anti-drift/counterfactual controls, sharper React VCS adversarial controls, and external-prediction contracts. |
 | Corpus setup | `benchmark_corpus/README.md` and `benchmark_corpus/sharegpt_manifest.json` | Public corpus conversion commands, ignored local outputs, and corpus-specific claim boundaries. |
