@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 from pathlib import Path
 
@@ -14,6 +15,45 @@ SPEC.loader.exec_module(project_triage)
 
 def issue(number: int, title: str, body: str = "", labels: tuple[str, ...] = ()):
     return project_triage.IssueContext(number=number, title=title, body=body, labels=labels)
+
+
+def test_github_token_prefers_explicit_project_token(monkeypatch) -> None:
+    monkeypatch.setenv("AIPPOCAMPUS_PROJECTS_TOKEN", "project-token")
+    monkeypatch.setenv("GH_TOKEN", "gh-env-token")
+
+    def fail_if_called(*_args, **_kwargs):  # pragma: no cover - defensive guard.
+        raise AssertionError("gh CLI should not be called when env token exists")
+
+    monkeypatch.setattr(project_triage.subprocess, "run", fail_if_called)
+
+    assert project_triage.github_token() == "project-token"
+
+
+def test_github_token_uses_gh_cli_when_env_missing(monkeypatch) -> None:
+    monkeypatch.delenv("AIPPOCAMPUS_PROJECTS_TOKEN", raising=False)
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+
+    def fake_run(args, **kwargs):
+        assert args == ["gh", "auth", "token"]
+        assert kwargs["capture_output"] is True
+        assert kwargs["text"] is True
+        return subprocess.CompletedProcess(args, 0, stdout="local-token\n", stderr="")
+
+    monkeypatch.setattr(project_triage.subprocess, "run", fake_run)
+
+    assert project_triage.github_token() == "local-token"
+
+
+def test_github_token_returns_none_when_gh_cli_unavailable(monkeypatch) -> None:
+    monkeypatch.delenv("AIPPOCAMPUS_PROJECTS_TOKEN", raising=False)
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+
+    def missing_gh(*_args, **_kwargs):
+        raise OSError("gh is missing")
+
+    monkeypatch.setattr(project_triage.subprocess, "run", missing_gh)
+
+    assert project_triage.github_token() is None
 
 
 def test_sync_child_issue_gets_full_ready_fields() -> None:

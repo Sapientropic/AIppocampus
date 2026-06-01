@@ -11,6 +11,7 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
 import urllib.error
 import urllib.parse
@@ -88,6 +89,37 @@ SOURCE_DOC_REFERENCE_RE = re.compile(
 )
 SOURCE_ISSUE_PREFIX_RE = re.compile(r"^GitHub issue #(\d+)\b")
 MANUAL_SOURCE_MARKER_RE = re.compile(r"(?i)\b(?:manual|human)\b|owner\s+triage|do not overwrite")
+
+
+def github_token() -> str | None:
+    """Return a GitHub token without requiring local agents to duplicate secrets.
+
+    CI and scheduled automation should still pass an explicit env token. Local
+    Codex/Desktop runs often already have `gh` authenticated in the OS keyring
+    but no `GH_TOKEN` in the process environment; falling back to `gh auth token`
+    keeps those scripts usable without persisting a plaintext token.
+    """
+
+    env_token = os.environ.get("AIPPOCAMPUS_PROJECTS_TOKEN") or os.environ.get("GH_TOKEN")
+    if env_token:
+        return env_token
+    try:
+        completed = subprocess.run(
+            ["gh", "auth", "token"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if completed.returncode != 0:
+        return None
+    for line in completed.stdout.splitlines():
+        token = line.strip()
+        if token:
+            return token
+    return None
 
 
 @dataclass(frozen=True)
@@ -1231,14 +1263,18 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(list(argv or sys.argv[1:]))
-    token = os.environ.get("AIPPOCAMPUS_PROJECTS_TOKEN") or os.environ.get("GH_TOKEN")
+    token = github_token()
     if not token:
         print(
             json.dumps(
                 {
                     "ok": False,
                     "error": "missing_token",
-                    "message": "Set AIPPOCAMPUS_PROJECTS_TOKEN or GH_TOKEN with GitHub Projects write access.",
+                    "message": (
+                        "Set AIPPOCAMPUS_PROJECTS_TOKEN or GH_TOKEN with GitHub "
+                        "Projects write access, or run `gh auth login` for local "
+                        "maintainer use."
+                    ),
                 },
                 ensure_ascii=False,
             )

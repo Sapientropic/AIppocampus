@@ -659,14 +659,17 @@ def main(argv: list[str] | None = None) -> int:
                 if isinstance(raw, dict) and (discussion := parse_github_discussion(raw))
             ]
     else:
-        token = os.environ.get("AIPPOCAMPUS_PROJECTS_TOKEN") or os.environ.get("GH_TOKEN")
+        token = project_triage.github_token()
         if not token:
             print(
                 json.dumps(
                     {
                         "ok": False,
                         "error": "missing_token",
-                        "message": "Set AIPPOCAMPUS_PROJECTS_TOKEN or GH_TOKEN for planning audit.",
+                        "message": (
+                            "Set AIPPOCAMPUS_PROJECTS_TOKEN or GH_TOKEN for planning "
+                            "audit, or run `gh auth login` for local maintainer use."
+                        ),
                     },
                     ensure_ascii=False,
                 )
@@ -692,9 +695,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     if args.repair and not args.dry_run:
         if client is None:
-            token = os.environ.get("AIPPOCAMPUS_PROJECTS_TOKEN") or os.environ.get("GH_TOKEN")
+            token = project_triage.github_token()
             if not token:
-                raise RuntimeError("Repair mode requires AIPPOCAMPUS_PROJECTS_TOKEN or GH_TOKEN")
+                raise RuntimeError(
+                    "Repair mode requires AIPPOCAMPUS_PROJECTS_TOKEN, GH_TOKEN, "
+                    "or local `gh auth login`."
+                )
             client = project_triage.GitHubProjectClient(token)
         report["applied_repairs"] = apply_safe_repairs(client, args.repo, report["safe_repairs"])
     else:
