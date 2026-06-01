@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AIppocampus - source-backed continuity for AI agents</title>
+    <meta
+      name="description"
+      content="AIppocampus is a local-first, source-backed continuity layer for long-running relationships with AI agents."
+    />
+    <meta name="robots" content="index,follow" />
+    <meta property="og:title" content="AIppocampus" />
+    <meta
+      property="og:description"
+      content="A local-first, source-backed continuity layer for long-running relationships with AI agents."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://www.aippocampus.com/" />
+    <meta property="og:image" content="https://www.aippocampus.com/assets/frosted-daisy-sunrise.jpg" />
+    <link rel="canonical" href="https://www.aippocampus.com/" />
+    <link rel="preload" href="assets/frosted-daisy-sunrise.jpg" as="image" />
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #071833;
+        --ink-soft: #30415e;
+        --paper: #fffaf2;
+        --paper-warm: #f6ead9;
+        --gold: #e9a91e;
+        --blue: #0f4b75;
+        --line: rgba(7, 24, 51, 0.16);
+        --shadow: rgba(7, 24, 51, 0.18);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font-size: 17px;
+        line-height: 1.6;
+      }
+
+      a {
+        color: inherit;
+        text-decoration-thickness: 0.08em;
+        text-underline-offset: 0.22em;
+      }
+
+      .hero {
+        min-height: 88svh;
+        position: relative;
+        display: flex;
+        align-items: stretch;
+        overflow: hidden;
+        background: #142847;
+      }
+
+      .hero::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image: url("assets/frosted-daisy-sunrise.jpg");
+        background-position: center;
+        background-size: cover;
+        transform: scale(1.01);
+      }
+
+      .hero::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: rgba(5, 16, 33, 0.42);
+      }
+
+      .nav,
+      .hero-content {
+        position: relative;
+        z-index: 1;
+      }
+
+      .nav {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 24px;
+        padding: 24px clamp(20px, 5vw, 76px);
+        color: #fff9ec;
+      }
+
+      .mark {
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .nav-links {
+        display: flex;
+        gap: 20px;
+        align-items: center;
+        font-size: 0.93rem;
+      }
+
+      .nav-links a {
+        text-decoration: none;
+        opacity: 0.88;
+      }
+
+      .nav-links a:hover {
+        opacity: 1;
+      }
+
+      .hero-content {
+        width: min(720px, calc(100% - 40px));
+        margin: auto auto 8vh clamp(20px, 5vw, 76px);
+        color: #fff9ec;
+      }
+
+      h1 {
+        margin: 0;
+        max-width: 10ch;
+        font-size: clamp(4rem, 12vw, 9.5rem);
+        line-height: 0.86;
+        letter-spacing: 0;
+      }
+
+      .lede {
+        max-width: 620px;
+        margin: 28px 0 0;
+        font-size: clamp(1.2rem, 2.2vw, 1.65rem);
+        line-height: 1.35;
+        color: #fff4d7;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        margin-top: 32px;
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 48px;
+        padding: 12px 18px;
+        border: 1px solid rgba(255, 249, 236, 0.56);
+        background: rgba(255, 249, 236, 0.12);
+        color: #fff9ec;
+        text-decoration: none;
+        font-weight: 700;
+        backdrop-filter: blur(10px);
+      }
+
+      .button.primary {
+        background: #fff9ec;
+        color: var(--ink);
+        border-color: #fff9ec;
+      }
+
+      main {
+        background: var(--paper);
+      }
+
+      .band {
+        padding: clamp(58px, 8vw, 112px) clamp(20px, 5vw, 76px);
+      }
+
+      .band.warm {
+        background: var(--paper-warm);
+      }
+
+      .section-grid {
+        width: min(1180px, 100%);
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+        gap: clamp(34px, 6vw, 90px);
+        align-items: start;
+      }
+
+      h2 {
+        margin: 0;
+        font-size: clamp(2rem, 4vw, 4rem);
+        line-height: 0.98;
+        letter-spacing: 0;
+      }
+
+      .section-copy {
+        margin: 0;
+        color: var(--ink-soft);
+        font-size: 1.05rem;
+      }
+
+      .principles,
+      .links {
+        display: grid;
+        gap: 18px;
+      }
+
+      .principle {
+        border-top: 1px solid var(--line);
+        padding-top: 18px;
+      }
+
+      .principle strong {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--ink);
+      }
+
+      .link-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .link-list a,
+      .agent-box {
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.44);
+        padding: 18px;
+        text-decoration: none;
+        box-shadow: 0 14px 40px -34px var(--shadow);
+      }
+
+      .link-list span {
+        display: block;
+        color: var(--ink-soft);
+        font-size: 0.92rem;
+        margin-top: 5px;
+      }
+
+      .agent-box {
+        margin-top: 24px;
+      }
+
+      pre {
+        margin: 16px 0 0;
+        overflow-x: auto;
+        padding: 16px;
+        background: #071833;
+        color: #fff9ec;
+        font-size: 0.91rem;
+      }
+
+      code {
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      }
+
+      footer {
+        padding: 32px clamp(20px, 5vw, 76px) 46px;
+        background: var(--ink);
+        color: #fff9ec;
+      }
+
+      footer div {
+        width: min(1180px, 100%);
+        margin: 0 auto;
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        flex-wrap: wrap;
+      }
+
+      footer a {
+        color: #fff9ec;
+      }
+
+      @media (max-width: 780px) {
+        body {
+          font-size: 16px;
+        }
+
+        .nav {
+          align-items: flex-start;
+        }
+
+        .nav-links {
+          gap: 12px;
+          font-size: 0.88rem;
+        }
+
+        .hero {
+          min-height: 82svh;
+        }
+
+        .hero-content {
+          margin-bottom: 6vh;
+        }
+
+        .section-grid,
+        .link-list {
+          grid-template-columns: 1fr;
+        }
+
+        h1 {
+          font-size: clamp(2.7rem, 12.2vw, 3.35rem);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="hero">
+      <nav class="nav" aria-label="Primary navigation">
+        <a class="mark" href="/">AIppocampus</a>
+        <div class="nav-links">
+          <a href="https://github.com/Sapientropic/AIppocampus">GitHub</a>
+          <a href="https://github.com/Sapientropic/AIppocampus/wiki">Wiki</a>
+          <a href="/llms.txt">For agents</a>
+        </div>
+      </nav>
+      <section class="hero-content" aria-labelledby="site-title">
+        <h1 id="site-title">AIppocampus</h1>
+        <p class="lede">
+          A local-first, source-backed continuity layer for long-running relationships
+          with AI agents.
+        </p>
+        <div class="actions">
+          <a class="button primary" href="https://github.com/Sapientropic/AIppocampus">Read the repo</a>
+          <a class="button" href="https://github.com/Sapientropic/AIppocampus/wiki">Open the wiki</a>
+        </div>
+      </section>
+    </header>
+
+    <main>
+      <section class="band">
+        <div class="section-grid">
+          <h2>Memory should be able to show where it came from.</h2>
+          <div class="principles">
+            <p class="section-copy">
+              AIppocampus helps an agent recover prior source instead of pretending the
+              model itself remembered. Summaries, scents, and semantic maps can help
+              with navigation, but source remains the ground.
+            </p>
+            <div class="principle">
+              <strong>Source first</strong>
+              Clean source and explicit references outrank generated summaries.
+            </div>
+            <div class="principle">
+              <strong>Quiet by default</strong>
+              Memory should surface when it helps, not turn every prompt into a personal profile.
+            </div>
+            <div class="principle">
+              <strong>Local first</strong>
+              Conversation source, registry rows, indexes, and sync bundles are private by default.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="band warm">
+        <div class="section-grid">
+          <h2>Start where you are.</h2>
+          <div class="links">
+            <div class="link-list">
+              <a href="https://github.com/Sapientropic/AIppocampus/blob/main/README.md">
+                README
+                <span>The practical project entrypoint.</span>
+              </a>
+              <a href="https://github.com/Sapientropic/AIppocampus/wiki">
+                Wiki
+                <span>A friendly path through install, privacy, and reading routes.</span>
+              </a>
+              <a href="https://github.com/Sapientropic/AIppocampus/blob/main/docs/guides/install-guide.md">
+                Install guide
+                <span>Local setup and first checks.</span>
+              </a>
+              <a href="https://github.com/Sapientropic/AIppocampus/discussions">
+                Discussions
+                <span>Questions, ideas, evidence, and the human thread behind the work.</span>
+              </a>
+            </div>
+            <div class="agent-box">
+              <strong>Agent probe</strong>
+              <p class="section-copy">
+                Agents should inspect the public CLI before recommending deeper setup.
+              </p>
+              <pre><code>uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus --help</code></pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="band">
+        <div class="section-grid">
+          <h2>Not innate memory. Not a cloud profile. A way back.</h2>
+          <p class="section-copy">
+            AIppocampus is early, careful infrastructure for continuity across threads,
+            projects, devices, and ordinary life context. It is broader than coding
+            memory, though coding agents are a clean pressure test. The public project
+            keeps claim boundaries explicit: source-backed recall is not the same thing
+            as a model magically remembering you.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div>
+        <span>AIppocampus</span>
+        <span>
+          <a href="https://github.com/Sapientropic/AIppocampus/blob/main/docs/the-unfinished-map.md"
+            >The Unfinished Map</a
+          >
+        </span>
+      </div>
+    </footer>
+  </body>
+</html>
