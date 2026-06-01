@@ -350,6 +350,59 @@ def run_recovery_case(
     }
 
 
+def per_label_recovery_stats(
+    cases: list[dict[str, Any]], results: list[dict[str, Any]] | None = None
+) -> dict[str, dict[str, Any]]:
+    candidate_counts = {
+        label: sum(1 for case in cases if label in (case.get("labels") or []))
+        for label in SCOPE_LABEL_ORDER
+    }
+    recovered_counts = {
+        label: sum(
+            1
+            for item in results or []
+            if label in (item.get("strict_recovered_labels") or [])
+        )
+        for label in SCOPE_LABEL_ORDER
+    }
+    reviewed = results is not None
+    out: dict[str, dict[str, Any]] = {}
+    for label in SCOPE_LABEL_ORDER:
+        candidate_count = int(candidate_counts.get(label) or 0)
+        recovered_count = int(recovered_counts.get(label) or 0)
+        if not candidate_count and not recovered_count:
+            continue
+        still_suppressed = max(0, candidate_count - recovered_count) if reviewed else 0
+        if not reviewed:
+            status = "unreviewed"
+        elif recovered_count:
+            status = "recovered"
+        else:
+            status = "still_suppressed"
+        out[label] = {
+            "candidate_label_count": candidate_count,
+            "strict_recovered_label_count": recovered_count,
+            "strict_suppressed_label_count": still_suppressed,
+            "status": status,
+        }
+    return out
+
+
+def recovery_buckets(
+    *, candidate_label_count: int, strict_recovered_label_count: int, reviewed: bool
+) -> dict[str, int]:
+    candidate_count = max(0, int(candidate_label_count))
+    recovered_count = max(0, int(strict_recovered_label_count))
+    return {
+        "candidate_label_count": candidate_count,
+        "strict_recovered_label_count": recovered_count,
+        "strict_suppressed_label_count": max(0, candidate_count - recovered_count)
+        if reviewed
+        else 0,
+        "unreviewed_label_count": 0 if reviewed else candidate_count,
+    }
+
+
 def run_suppressed_label_recovery_smoke(
     *,
     registry_path: str | Path | None = None,
@@ -390,6 +443,7 @@ def run_suppressed_label_recovery_smoke(
         "external_model_call_requires_live_flag": True,
     }
     if not live:
+        candidate_label_count = sum(len(case.get("labels") or []) for case in cases)
         return {
             "ok": len(cases) > 0,
             "status": "observe_only",
@@ -397,9 +451,15 @@ def run_suppressed_label_recovery_smoke(
             "live_model_used": False,
             "model_route": route.as_dict(),
             "case_count": len(cases),
-            "candidate_label_count": sum(len(case.get("labels") or []) for case in cases),
+            "candidate_label_count": candidate_label_count,
             "strict_recovered_label_count": 0,
             "strict_gate_relaxed": False,
+            "per_label_recovery": per_label_recovery_stats(cases),
+            "recovery_buckets": recovery_buckets(
+                candidate_label_count=candidate_label_count,
+                strict_recovered_label_count=0,
+                reviewed=False,
+            ),
             "label_coverage": sorted(
                 {label for case in cases for label in case.get("labels") or []}
             ),
@@ -408,6 +468,7 @@ def run_suppressed_label_recovery_smoke(
         }
     api_key = os.environ.get(api_key_env)
     if not api_key:
+        candidate_label_count = sum(len(case.get("labels") or []) for case in cases)
         return {
             "ok": False,
             "status": "live_model_missing_api_key",
@@ -415,9 +476,15 @@ def run_suppressed_label_recovery_smoke(
             "live_model_used": False,
             "model_route": route.as_dict(),
             "case_count": len(cases),
-            "candidate_label_count": sum(len(case.get("labels") or []) for case in cases),
+            "candidate_label_count": candidate_label_count,
             "strict_recovered_label_count": 0,
             "strict_gate_relaxed": False,
+            "per_label_recovery": per_label_recovery_stats(cases),
+            "recovery_buckets": recovery_buckets(
+                candidate_label_count=candidate_label_count,
+                strict_recovered_label_count=0,
+                reviewed=False,
+            ),
             "label_coverage": sorted(
                 {label for case in cases for label in case.get("labels") or []}
             ),
@@ -444,6 +511,7 @@ def run_suppressed_label_recovery_smoke(
     usage_total: dict[str, Any] = {}
     for item in results:
         add_usage(usage_total, item.get("usage") or {})
+    candidate_label_count = sum(len(case.get("labels") or []) for case in cases)
     recovered_count = sum(int(item.get("strict_recovered_label_count") or 0) for item in results)
     status = (
         "sufficient"
@@ -459,9 +527,15 @@ def run_suppressed_label_recovery_smoke(
         "live_model_used": True,
         "model_route": route.as_dict(),
         "case_count": len(cases),
-        "candidate_label_count": sum(len(case.get("labels") or []) for case in cases),
+        "candidate_label_count": candidate_label_count,
         "strict_recovered_label_count": recovered_count,
         "strict_gate_relaxed": False,
+        "per_label_recovery": per_label_recovery_stats(cases, results),
+        "recovery_buckets": recovery_buckets(
+            candidate_label_count=candidate_label_count,
+            strict_recovered_label_count=recovered_count,
+            reviewed=True,
+        ),
         "label_coverage": sorted({label for case in cases for label in case.get("labels") or []}),
         "recovered_label_coverage": sorted(
             {label for item in results for label in item.get("strict_recovered_labels") or []}
@@ -528,6 +602,45 @@ def public_cache(cache: Any) -> dict[str, Any]:
     }
 
 
+def public_recovery_buckets(buckets: Any) -> dict[str, int]:
+    if not isinstance(buckets, dict):
+        return {}
+    return {
+        "candidate_label_count": public_count(buckets.get("candidate_label_count")),
+        "strict_recovered_label_count": public_count(
+            buckets.get("strict_recovered_label_count")
+        ),
+        "strict_suppressed_label_count": public_count(
+            buckets.get("strict_suppressed_label_count")
+        ),
+        "unreviewed_label_count": public_count(buckets.get("unreviewed_label_count")),
+    }
+
+
+def public_per_label_recovery(stats: Any) -> dict[str, dict[str, Any]]:
+    if not isinstance(stats, dict):
+        return {}
+    allowed_status = {"unreviewed", "recovered", "still_suppressed"}
+    out: dict[str, dict[str, Any]] = {}
+    for label in SCOPE_LABEL_ORDER:
+        item = stats.get(label)
+        if not isinstance(item, dict):
+            continue
+        out[label] = {
+            "candidate_label_count": public_count(item.get("candidate_label_count")),
+            "strict_recovered_label_count": public_count(
+                item.get("strict_recovered_label_count")
+            ),
+            "strict_suppressed_label_count": public_count(
+                item.get("strict_suppressed_label_count")
+            ),
+            "status": public_token(
+                item.get("status"), allowed=allowed_status, fallback="unreviewed"
+            ),
+        }
+    return out
+
+
 def public_privacy_boundary(boundary: Any) -> dict[str, Any]:
     if not isinstance(boundary, dict):
         return {}
@@ -568,6 +681,10 @@ def public_smoke_result(result: dict[str, Any]) -> dict[str, Any]:
             result.get("strict_recovered_label_count")
         ),
         "strict_gate_relaxed": bool(result.get("strict_gate_relaxed")),
+        "recovery_buckets": public_recovery_buckets(result.get("recovery_buckets")),
+        "per_label_recovery": public_per_label_recovery(
+            result.get("per_label_recovery")
+        ),
         "label_coverage": public_label_list(result.get("label_coverage")),
         "recovered_label_coverage": public_label_list(result.get("recovered_label_coverage")),
         "usage": public_usage(result.get("usage")),
@@ -631,4 +748,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

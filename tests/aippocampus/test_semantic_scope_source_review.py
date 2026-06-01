@@ -158,6 +158,38 @@ class SemanticScopeSourceReviewTests(unittest.TestCase):
         self.assertEqual(result["passed_count"], 1)
         self.assertEqual(result["cache"]["hit_rate"], 0.8)
         self.assertIn("personal_reflection", result["label_coverage"])
+        self.assertEqual(result["review_buckets"]["accepted"], 1)
+        self.assertEqual(result["review_buckets"]["model_failure"], 0)
+        self.assertEqual(result["review_buckets"]["unreviewed"], 0)
+        self.assertGreaterEqual(
+            result["per_label_floors"]["personal_reflection"]["min_pass_rate"], 0.65
+        )
+        self.assertNotIn("lighthouse", rendered)
+        self.assertNotIn("Private Life Title", rendered)
+        self.assertNotIn("msg_life", rendered)
+        self.assertNotIn(str(self.root), rendered)
+
+    def test_observe_only_reports_label_floors_without_review_claim(self) -> None:
+        self._write_fixture()
+
+        result = review.run_semantic_scope_source_review(
+            registry_path=self.registry,
+            live=False,
+            max_cases=2,
+            min_cases=1,
+        )
+
+        rendered = json.dumps(result, ensure_ascii=False)
+        self.assertTrue(result["ok"], rendered)
+        self.assertEqual(result["status"], "observe_only")
+        self.assertEqual(result["review_buckets"]["accepted"], 0)
+        self.assertEqual(result["review_buckets"]["model_failure"], 0)
+        self.assertEqual(result["review_buckets"]["unreviewed"], 2)
+        self.assertEqual(result["per_label_floors"]["personal_reflection"]["selected_case_count"], 1)
+        self.assertEqual(result["per_label_floors"]["idea_seed"]["selected_case_count"], 1)
+        self.assertFalse(result["per_label_floors"]["life_context"]["selection_floor_met"])
+        self.assertIn("fresh_live_model_review", result["cannot_claim"])
+        self.assertEqual(result["cases"], [])
         self.assertNotIn("lighthouse", rendered)
         self.assertNotIn("Private Life Title", rendered)
         self.assertNotIn("msg_life", rendered)
@@ -203,8 +235,13 @@ class SemanticScopeSourceReviewTests(unittest.TestCase):
 
         self.assertEqual(result["case_count"], 2)
         self.assertEqual(result["per_label"]["idea_seed"]["pass_rate"], 1.0)
+        self.assertEqual(result["per_label"]["idea_seed"]["status"], "accepted")
         self.assertEqual(result["per_label"]["personal_reflection"]["pass_rate"], 0.0)
+        self.assertEqual(result["per_label"]["personal_reflection"]["status"], "below_floor")
         self.assertIn("personal_reflection", result["failed_label_categories"])
+        self.assertEqual(result["review_buckets"]["accepted"], 1)
+        self.assertEqual(result["review_buckets"]["rejected"], 1)
+        self.assertEqual(result["review_buckets"]["ambiguous_or_human_review"], 0)
 
     def test_live_missing_api_key_fails_instead_of_observe_fallback(self) -> None:
         self._write_fixture()

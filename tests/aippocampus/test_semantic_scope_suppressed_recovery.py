@@ -182,7 +182,40 @@ class SemanticScopeSuppressedRecoveryTests(unittest.TestCase):
         self.assertEqual(result["candidate_label_count"], 2)
         self.assertEqual(result["strict_recovered_label_count"], 2)
         self.assertFalse(result["strict_gate_relaxed"])
+        self.assertEqual(result["recovery_buckets"]["strict_recovered_label_count"], 2)
+        self.assertEqual(result["recovery_buckets"]["strict_suppressed_label_count"], 0)
+        self.assertEqual(
+            result["per_label_recovery"]["relationship_continuity"]["status"],
+            "recovered",
+        )
+        self.assertEqual(result["per_label_recovery"]["open_question"]["status"], "recovered")
         self.assertGreaterEqual(result["cases"][0]["tool_step_count"], 1)
+        self.assertNotIn("continuity with what", rendered)
+        self.assertNotIn("msg_soft", rendered)
+
+    def test_observe_only_public_report_keeps_suppressed_labels_unreviewed(self) -> None:
+        self._write_fixture()
+
+        result = recovery.run_suppressed_label_recovery_smoke(
+            registry_path=self.registry,
+            jobs_output_path=self.jobs,
+            live=False,
+            max_cases=1,
+        )
+        public = recovery.public_smoke_result(result)
+        rendered = json.dumps(public, ensure_ascii=False)
+
+        self.assertTrue(public["ok"], rendered)
+        self.assertEqual(public["status"], "observe_only")
+        self.assertEqual(public["recovery_buckets"]["candidate_label_count"], 2)
+        self.assertEqual(public["recovery_buckets"]["unreviewed_label_count"], 2)
+        self.assertEqual(
+            public["per_label_recovery"]["relationship_continuity"]["status"],
+            "unreviewed",
+        )
+        self.assertEqual(public["per_label_recovery"]["open_question"]["status"], "unreviewed")
+        self.assertEqual(public["strict_recovered_label_count"], 0)
+        self.assertEqual(public["cases"] if "cases" in public else [], [])
         self.assertNotIn("continuity with what", rendered)
         self.assertNotIn("msg_soft", rendered)
 
