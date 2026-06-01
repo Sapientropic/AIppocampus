@@ -270,6 +270,47 @@ def test_milestone_update_preserves_existing_manual_milestone() -> None:
     }
 
 
+def test_single_issue_milestone_permission_error_is_reported(monkeypatch) -> None:
+    class MilestoneDeniedClient:
+        def rest(self, method: str, path: str, payload: dict | None = None):
+            raise project_triage.GitHubRestError(
+                403,
+                '{"message":"Must have admin rights to Repository."}',
+            )
+
+    triage_issue = issue(
+        266,
+        "Split aippocampus_runtime/core.py before it becomes hidden architecture debt",
+        "core.py mixes path tools, rollout parsing, text processing, redaction, CLI, and graph building.",
+    )
+    item = {"id": "item-id", "fieldValues": {"nodes": []}}
+    monkeypatch.setattr(
+        project_triage,
+        "ensure_issue_item",
+        lambda *args, **kwargs: (item, triage_issue),
+    )
+    monkeypatch.setattr(project_triage, "apply_updates", lambda *args, **kwargs: None)
+
+    report = project_triage.triage_single_issue(
+        MilestoneDeniedClient(),
+        "project-id",
+        {},
+        [],
+        "Sapientropic/AIppocampus",
+        266,
+        dry_run=False,
+        assign_milestones=True,
+        milestone_numbers={"Architecture Debt Slice 2026-06": 5},
+    )
+
+    assert report["milestone_update"] == {
+        "planned": "Architecture Debt Slice 2026-06",
+        "milestone_number": 5,
+        "skipped": "permission_denied",
+        "error": "milestone_permission_denied",
+    }
+
+
 def test_external_benchmark_adapter_assessment_is_research_not_smoke() -> None:
     result = project_triage.infer_triage(
         issue(
