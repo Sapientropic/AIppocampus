@@ -188,6 +188,13 @@ timestamp, source refs, and input/observation hashes. Raw stdout, full diffs,
 screenshots, local paths, full shell commands, and secrets remain audit/source
 material, not default recall payload.
 
+The behavior lane also carries bounded breadcrumbs for benchmark substrate:
+`tool_intent`, `command_family`, `test_target_class`, `failure_family`,
+`path_categories`, safe `path_fingerprints`, and generated-file flags. These
+fields let fixture builders preserve the difference between "a test/check
+actually failed against this category of target" and "the assistant later
+narrated that a route was bad," without exposing private commands or paths.
+
 Continuous-agent benchmark tracks should read the critical-operation integrity
 diagnostic over clean-source `events.jsonl` and count uncovered operation
 families as explicit coverage gaps. They should not reopen raw rollout payloads

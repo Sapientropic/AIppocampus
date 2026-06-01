@@ -143,6 +143,17 @@ def _safe_sha256(value: object) -> str | None:
     return text if HEX_64_RE.match(text) and not _looks_private(text) else None
 
 
+def _safe_scalar_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    items: list[str] = []
+    for item in value:
+        safe = _safe_scalar(item)
+        if isinstance(safe, str):
+            items.append(safe)
+    return items
+
+
 def _int_or_none(value: object) -> int | None:
     if isinstance(value, bool):
         return None
@@ -216,7 +227,7 @@ def _failure_family(row: dict[str, Any], exit_status: int | None) -> str:
 
 
 def _target_class(row: dict[str, Any]) -> str:
-    explicit = _safe_scalar(row.get("target_class"))
+    explicit = _safe_scalar(row.get("test_target_class") or row.get("target_class"))
     if isinstance(explicit, str):
         return explicit
     command_class = str(row.get("command_class") or "").casefold()
@@ -266,6 +277,8 @@ def _test_fact(row: dict[str, Any]) -> dict[str, Any]:
             "failure_family": _failure_family(row, exit_status),
             "input_sha256": _safe_sha256(row.get("input_sha256")),
             "observation_sha256": _safe_sha256(row.get("observation_sha256")),
+            "path_categories": _safe_scalar_list(row.get("path_categories")),
+            "generated_file": row.get("generated_file") if isinstance(row.get("generated_file"), bool) else None,
         }
     )
     return {key: value for key, value in fact.items() if value not in (None, "", [])}
@@ -287,10 +300,15 @@ def _explicit_fact(row: dict[str, Any], family: str) -> dict[str, Any]:
         "plan_change_ref",
         "constraint_kind",
         "expiry_or_supersession",
+        "generated_file_reason",
     ):
         value = _safe_scalar(row.get(key))
         if value not in (None, "", []):
             fact[key] = value
+    for key in ("path_categories", "path_fingerprints"):
+        values = _safe_scalar_list(row.get(key))
+        if values:
+            fact[key] = values
     return fact
 
 
@@ -312,6 +330,10 @@ def _missing_required_fact_names(spec: OperationFamilySpec, fact: dict[str, Any]
             if not any(fact.get(key) for key in ("source_ref", "source_line", "event_id")):
                 missing.append(field)
             continue
+        if field == "path_identity":
+            if not any(fact.get(key) for key in ("path_identity", "path_sha256", "path_fingerprints")):
+                missing.append(field)
+            continue
         if field == "failure_family_when_failed":
             if fact.get("exit_status") not in (None, 0) and not fact.get("failure_family"):
                 missing.append(field)
@@ -328,17 +350,32 @@ def _missing_required_fact_names(spec: OperationFamilySpec, fact: dict[str, Any]
 def _privacy_issue_for_event(row: dict[str, Any]) -> dict[str, Any] | None:
     checked_keys = (
         "source_ref",
+        "command_family",
+        "tool_intent",
         "path_identity",
         "path_sha256",
         "target_class",
+        "test_target_class",
+        "failure_family",
         "scope",
         "reopened_source_ref",
         "plan_change_ref",
         "constraint_kind",
         "expiry_or_supersession",
+        "generated_file_reason",
     )
     for key in checked_keys:
         if key in row and _looks_private(row.get(key)):
+            return {
+                "code": "private_value_in_public_integrity_field",
+                "field": key,
+                "event_id": _safe_scalar(row.get("event_id") or row.get("id")) or "unknown",
+            }
+    for key in ("path_categories", "path_fingerprints", "path_extensions"):
+        value = row.get(key)
+        if not isinstance(value, list):
+            continue
+        if any(_looks_private(item) for item in value):
             return {
                 "code": "private_value_in_public_integrity_field",
                 "field": key,

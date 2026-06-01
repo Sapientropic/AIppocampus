@@ -254,10 +254,16 @@ def _clean_behavior_events(
         )
         status = str(event.get("status") or "observed")
         command_class = str(event.get("command_class") or "tool")
+        command_family = str(event.get("command_family") or command_class)
         tool_name = str(event.get("tool_name") or "tool")
-        text = f"{tool_name} {status}; command_class={command_class}; event={hard_event_kind}"
+        text = (
+            f"{tool_name} {status}; command_class={command_class}; "
+            f"command_family={command_family}; event={hard_event_kind}"
+        )
         if event.get("exit_code") is not None:
             text += f"; exit_code={event.get('exit_code')}"
+        if event.get("failure_family"):
+            text += f"; failure_family={event.get('failure_family')}"
         row = {
             "id": event_id,
             "event_id": event_id,
@@ -276,12 +282,24 @@ def _clean_behavior_events(
             "tool_name": tool_name,
             "call_ref": event.get("call_ref"),
             "command_class": command_class,
+            "tool_intent": event.get("tool_intent"),
+            "command_family": command_family,
+            "target_class": event.get("target_class"),
+            "test_target_class": event.get("test_target_class"),
+            "failure_family": event.get("failure_family"),
+            "critical_operation_family": event.get("critical_operation_family"),
             "exit_code": event.get("exit_code"),
             "status": status,
             "behavior_backed": bool(event.get("behavior_backed")),
             "input_sha256": event.get("input_sha256"),
             "observation_sha256": event.get("observation_sha256"),
             "input_field_names": event.get("input_field_names") or [],
+            "path_count": event.get("path_count"),
+            "path_categories": event.get("path_categories") or [],
+            "path_extensions": event.get("path_extensions") or [],
+            "path_fingerprints": event.get("path_fingerprints") or [],
+            "generated_file": event.get("generated_file"),
+            "generated_file_reason": event.get("generated_file_reason"),
             "text": text,
         }
         clean_events.append(
@@ -543,6 +561,7 @@ def build_clean_source(
             "drops": [
                 "tool payload text from messages.jsonl",
                 "raw tool stdout, full command text, and full tool arguments from events.jsonl",
+                "absolute paths and secret-shaped path segments from event breadcrumbs",
                 "duplicate visible messages",
                 "injected AGENTS instructions",
                 "routine commentary when final_answer exists",
@@ -554,8 +573,21 @@ def build_clean_source(
             "default_file": "events.jsonl",
             "purpose": "source-backed behavior traces for tool/test failures and rollout decision shadows",
             "raw_payload_policy": "hash_only",
+            "bounded_breadcrumb_fields": [
+                "tool_intent",
+                "command_family",
+                "target_class",
+                "test_target_class",
+                "failure_family",
+                "path_categories",
+                "path_extensions",
+                "path_fingerprints",
+                "generated_file",
+                "generated_file_reason",
+                "critical_operation_family",
+            ],
             "join_keys": ["source_id", "source_ref", "event_id", "turn_index", "call_ref"],
-            "boundary": "events.jsonl is structured provenance; messages.jsonl remains visible conversational source.",
+            "boundary": "events.jsonl is structured provenance; derived breadcrumbs are bounded enums, counts, hashes, or booleans, not raw process transcript text.",
         },
         "scope_label_policy": {
             "version": SCOPE_LABEL_POLICY_VERSION,

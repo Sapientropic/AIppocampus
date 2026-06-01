@@ -81,11 +81,16 @@ class OperationIntegrityTests(unittest.TestCase):
                 "tool_name": "functions.shell_command",
                 "call_ref": "abc123",
                 "command_class": "test",
+                "command_family": "python_pytest",
+                "test_target_class": "focused_test_path",
                 "exit_code": 1,
                 "status": "failed",
+                "failure_family": "assertion_failure",
                 "behavior_backed": True,
                 "input_sha256": "a" * 64,
                 "observation_sha256": "b" * 64,
+                "path_categories": ["test", "source"],
+                "generated_file": False,
                 "text": "python C:\\Users\\Administrator\\secret\\tests\\test_token.py",
                 "raw_command": "python tests\\aippocampus\\test_secret.py",
                 "stdout": "SECRET_TOKEN=abc123",
@@ -100,10 +105,12 @@ class OperationIntegrityTests(unittest.TestCase):
         fact = family["facts"][0]
         self.assertEqual(fact["event_id"], "evt_test_failure")
         self.assertEqual(fact["source_ref"], "codex:session:demo#L12")
-        self.assertEqual(fact["command_family"], "test")
-        self.assertEqual(fact["target_class"], "unknown_test_target")
+        self.assertEqual(fact["command_family"], "python_pytest")
+        self.assertEqual(fact["target_class"], "focused_test_path")
         self.assertEqual(fact["exit_status"], 1)
-        self.assertEqual(fact["failure_family"], "nonzero_exit")
+        self.assertEqual(fact["failure_family"], "assertion_failure")
+        self.assertEqual(fact["path_categories"], ["test", "source"])
+        self.assertEqual(fact["generated_file"], False)
         self.assertEqual(fact["confidence"], "behavior_backed")
         self.assertEqual(fact["input_sha256"], "a" * 64)
         self.assertEqual(fact["observation_sha256"], "b" * 64)
@@ -126,7 +133,8 @@ class OperationIntegrityTests(unittest.TestCase):
                 "source_id": "src_test",
                 "source_ref": "codex:session:demo#L20",
                 "critical_operation_family": "file_edit_write_attempt",
-                "path_identity": "repo:skills/aippocampus/scripts/example.py",
+                "path_fingerprints": ["sha256:abc123def4567890"],
+                "path_categories": ["source"],
                 "generated_file": False,
                 "status": "succeeded",
                 "behavior_backed": True,
@@ -138,11 +146,32 @@ class OperationIntegrityTests(unittest.TestCase):
         family = self.family(report, "file_edit_write_attempt")
         self.assertEqual(family["status"], "covered")
         self.assertEqual(
-            family["facts"][0]["path_identity"], "repo:skills/aippocampus/scripts/example.py"
+            family["facts"][0]["path_fingerprints"], ["sha256:abc123def4567890"]
         )
         serialized = json.dumps(report, ensure_ascii=False)
         self.assertNotIn("C:\\Users", serialized)
         self.assertEqual(report["privacy"]["issues"], [])
+
+    def test_privacy_scan_checks_new_breadcrumb_lists(self) -> None:
+        self.write_events(
+            {
+                "event_id": "evt_bad_breadcrumb",
+                "source_id": "src_test",
+                "source_ref": "codex:session:demo#L25",
+                "critical_operation_family": "file_edit_write_attempt",
+                "path_fingerprints": ["sha256:abc123def4567890", "C:\\Users\\Administrator\\secret.py"],
+                "path_categories": ["source"],
+                "generated_file": False,
+                "status": "succeeded",
+                "behavior_backed": True,
+            }
+        )
+
+        report = diagnose_clean_source(self.clean_source)
+
+        self.assertEqual(report["privacy"]["issues"][0]["field"], "path_fingerprints")
+        serialized = json.dumps(report, ensure_ascii=False)
+        self.assertNotIn("secret.py", serialized)
 
 
 if __name__ == "__main__":

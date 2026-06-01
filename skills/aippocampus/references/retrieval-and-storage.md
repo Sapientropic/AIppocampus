@@ -44,12 +44,18 @@ forensic audit, missing tool output, storage accounting, or source repair.
 `events.jsonl` is a behavior lane, not a second message stream. It stores
 deterministic traces such as tool call requested/observed, coarse
 `command_class`, exit code when visible, `tool_call_failed` /
-`tool_call_succeeded`, source refs, and hashes of inputs or observations. This
-lets benchmark and Dream-adjacent code cite behavior-backed rejected routes
-without putting terminal output or private command text into daily recall.
-Assistant narration may provide context in `messages.jsonl`, but a rejected
-route only becomes source-backed when the behavior lane has a matching
-tool/test/edit trace or a later curated event sidecar.
+`tool_call_succeeded`, source refs, hashes of inputs or observations, and
+bounded breadcrumbs such as `tool_intent`, `command_family`,
+`test_target_class`, `failure_family`, `path_categories`,
+`path_fingerprints`, and `generated_file`. These breadcrumbs are derived enums,
+counts, booleans, or one-way hashes over safe repo-relative path tokens. They
+must not contain raw command text, stdout/stderr, full tool arguments, absolute
+paths, or secret-shaped material. This lets benchmark and Dream-adjacent code
+cite behavior-backed rejected routes without putting terminal output or private
+command text into daily recall. Assistant narration may provide context in
+`messages.jsonl`, but a rejected route only becomes source-backed when the
+behavior lane has a matching tool/test/edit trace or a later curated event
+sidecar.
 
 ### Critical Operation Integrity
 
@@ -70,8 +76,8 @@ Mandatory event families:
 
 | Family | Facts that must be captured | Never store raw | Current source |
 |---|---|---|---|
-| `file_edit_write_attempt` | event id, source join, privacy-safe path identity, generated-file classification, status | raw diffs, file contents, absolute paths, full tool args | explicit event rows only |
-| `test_check_command_result` | event id, source join, command family, target class, exit status, failure family when failed | full shell command, stdout/stderr, local paths, env vars, secrets | legacy clean-source tool events or explicit event rows |
+| `file_edit_write_attempt` | event id, source join, privacy-safe path identity or `path_fingerprints`, generated-file classification, status | raw diffs, file contents, absolute paths, full tool args | behavior-event breadcrumbs or explicit event rows |
+| `test_check_command_result` | event id, source join, command family, target class, exit status, failure family when failed | full shell command, stdout/stderr, local paths, env vars, secrets | behavior-event breadcrumbs or explicit event rows |
 | `user_correction_or_superseding_decision` | event id, source join, decision kind, scope, status or successor | raw prompt payloads, broad personality summaries, unsupported model judgement | explicit event rows only |
 | `source_reopen_before_risky_action` | event id, source join, reopened source ref, risk family, status | reopened source text beyond the cited ref, raw search payloads | explicit event rows only |
 | `tool_failure_changed_plan` | event id, source join, tool family, failure family, plan-change ref | raw tool output, stack traces, full commands | explicit event rows only |
