@@ -15,7 +15,7 @@ import os
 import re
 import sys
 import urllib.parse
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -40,6 +40,30 @@ CLOSURE_EVIDENCE_RE = re.compile(
     r"duplicate|superseded|verification|verified|tests? passed|follow-up #|parent #)\b",
     re.IGNORECASE,
 )
+PR_EVIDENCE_RE = re.compile(
+    r"(?i)\b(?:prs?|pull requests?)\s*#?\d+\b|/pull/\d+\b|"
+    r"\b(?:implemented|landed|merged|closed)\s+(?:as|by|in|via)?\s*#\d+\b|"
+    r"#\d+\s+via\s+#\d+\b|\bvia\s+#\d+\b"
+)
+CLOSURE_CONTEXT_RE = re.compile(
+    r"(?i)\b(closing|closed|close as|completed|implemented|landed|merged|"
+    r"evidence checked|verification|verified|all tracked child slices)\b"
+)
+VERIFICATION_ARTIFACT_RE = re.compile(
+    r"(?i)`[^`]*(?:python|git|gh|curl|npm|uvx|ruff|mypy)[^`]*`|"
+    r"\b(?:ci|codeql|checks?) passed\b|\btests? passed\b|"
+    r"\bhttp\s+20\d\b|\blive smoke\b|\bmerged\b.*#\d+|"
+    r"#\d+\s+via\s+#\d+\b|/pull/\d+\b"
+)
+DUPLICATE_EVIDENCE_RE = re.compile(
+    r"(?i)\bduplicate\s+of\s+#\d+\b|"
+    r"\b(?:carried|carrying|transferred|moved)\b[^\n#]{0,120}#\d+\b|"
+    r"\b(?:surviving|broader)\s+(?:owner|issue)\b[^\n#]{0,120}#\d+\b"
+)
+NOT_PLANNED_EVIDENCE_RE = re.compile(
+    r"(?i)\b(not planned|wontfix|won't fix|out of scope|not implementing)\b"
+)
+RATIONALE_RE = re.compile(r"(?i)\b(reason|rationale|because|out of scope|non-goal|duplicate)\b")
 DISCUSSION_DOC_REF_RE = re.compile(
     r"(?:^|[\s`'\"(<])(?P<path>docs/[^\s`'\"<>)]+)",
     re.IGNORECASE,
@@ -62,6 +86,9 @@ class IssueSnapshot:
     milestone: str | None = None
     comments: tuple[str, ...] = ()
     closed_at: str | None = None
+    state_reason: str | None = None
+    closed_by_pull_requests: tuple[int, ...] = ()
+    closed_by_pull_request_urls: tuple[str, ...] = ()
 
     @property
     def is_closed(self) -> bool:
@@ -132,11 +159,8 @@ def parse_github_issue(raw: dict[str, Any]) -> IssueSnapshot | None:
     milestone_title = None
     if isinstance(milestone, dict) and isinstance(milestone.get("title"), str):
         milestone_title = milestone["title"]
-    raw_comments = raw.get("comments_text")
-    if not isinstance(raw_comments, list):
-        # The REST issues endpoint exposes comments as a count, not bodies.
-        raw_comments = []
-    comments = tuple(str(comment) for comment in raw_comments)
+    comments = comment_bodies_from_raw(raw)
+    closed_by_pull_requests, closed_by_pull_request_urls = closed_pr_refs_from_raw(raw)
     return IssueSnapshot(
         number=int(raw["number"]),
         title=str(raw.get("title") or ""),
@@ -146,6 +170,9 @@ def parse_github_issue(raw: dict[str, Any]) -> IssueSnapshot | None:
         milestone=milestone_title,
         comments=comments,
         closed_at=str(raw["closed_at"]) if raw.get("closed_at") else None,
+        state_reason=_string_or_none(raw.get("state_reason") or raw.get("stateReason")),
+        closed_by_pull_requests=closed_by_pull_requests,
+        closed_by_pull_request_urls=closed_by_pull_request_urls,
     )
 
 
@@ -170,9 +197,115 @@ def replace_closed_child_checklist(
     return CHECKED_CHILD_RE.sub(replace, body), repairs
 
 
+def _string_or_none(value: Any) -> str | None:
+    text = str(value).strip() if value is not None else ""
+    return text or None
+
+
+def comment_bodies_from_raw(raw: dict[str, Any]) -> tuple[str, ...]:
+    raw_comments = raw.get("comments_text")
+    if isinstance(raw_comments, list):
+        return tuple(str(comment) for comment in raw_comments)
+
+    raw_comments = raw.get("comments")
+    if isinstance(raw_comments, dict):
+        nodes = raw_comments.get("nodes") or []
+        return tuple(
+            str(node["body"])
+            for node in nodes
+            if isinstance(node, dict) and isinstance(node.get("body"), str)
+        )
+    if isinstance(raw_comments, list):
+        bodies: list[str] = []
+        for comment in raw_comments:
+            if isinstance(comment, dict) and isinstance(comment.get("body"), str):
+                bodies.append(comment["body"])
+            elif isinstance(comment, str):
+                bodies.append(comment)
+        return tuple(bodies)
+
+    # The REST issues endpoint exposes comments as a count, not bodies.
+    return ()
+
+
+def closed_pr_refs_from_raw(raw: dict[str, Any]) -> tuple[tuple[int, ...], tuple[str, ...]]:
+    candidates = (
+        raw.get("closedByPullRequestsReferences")
+        or raw.get("closed_by_pull_requests")
+        or raw.get("closed_by_pull_request_refs")
+        or raw.get("closed_by_pull_request_references")
+    )
+    if isinstance(candidates, dict):
+        candidates = candidates.get("nodes") or []
+    if not isinstance(candidates, list):
+        return (), ()
+
+    numbers: list[int] = []
+    urls: list[str] = []
+    for item in candidates:
+        if not isinstance(item, dict):
+            continue
+        if item.get("merged") is False:
+            continue
+        try:
+            number = int(item["number"])
+        except (KeyError, TypeError, ValueError):
+            number = 0
+        if number:
+            numbers.append(number)
+        url = _string_or_none(item.get("url"))
+        if url:
+            urls.append(url)
+    return tuple(dict.fromkeys(numbers)), tuple(dict.fromkeys(urls))
+
+
+def _state_reason(issue: IssueSnapshot) -> str:
+    return (issue.state_reason or "").upper()
+
+
+def _has_duplicate_closure_evidence(issue: IssueSnapshot, text: str) -> bool:
+    return _state_reason(issue) == "DUPLICATE" and bool(DUPLICATE_EVIDENCE_RE.search(text))
+
+
+def _has_not_planned_closure_evidence(issue: IssueSnapshot, text: str) -> bool:
+    return _state_reason(issue) == "NOT_PLANNED" and bool(
+        NOT_PLANNED_EVIDENCE_RE.search(text) and RATIONALE_RE.search(text)
+    )
+
+
+def _has_concrete_closure_comment(comment_text: str) -> bool:
+    if not comment_text.strip():
+        return False
+    has_context = bool(CLOSURE_CONTEXT_RE.search(comment_text))
+    has_artifact = bool(
+        PR_EVIDENCE_RE.search(comment_text) or VERIFICATION_ARTIFACT_RE.search(comment_text)
+    )
+    if has_context and has_artifact:
+        return True
+    return bool(DUPLICATE_EVIDENCE_RE.search(comment_text))
+
+
 def closure_has_evidence(issue: IssueSnapshot) -> bool:
-    text = "\n".join([issue.body, *issue.comments])
-    return bool(CLOSURE_EVIDENCE_RE.search(text))
+    if issue.closed_by_pull_requests or issue.closed_by_pull_request_urls:
+        return True
+
+    comment_text = "\n".join(issue.comments)
+    combined_text = "\n".join([issue.body, comment_text])
+    if _has_duplicate_closure_evidence(issue, combined_text):
+        return True
+    if _has_not_planned_closure_evidence(issue, combined_text):
+        return True
+    if _has_concrete_closure_comment(comment_text):
+        return True
+
+    # Backward-compatible narrow fallback for explicit body/comment closure
+    # statements. Keep it last so vague issue-body acceptance criteria such as
+    # "verification needed" do not count as closure proof.
+    if CLOSURE_EVIDENCE_RE.search(comment_text) and (
+        PR_EVIDENCE_RE.search(comment_text) or VERIFICATION_ARTIFACT_RE.search(comment_text)
+    ):
+        return True
+    return False
 
 
 def closed_recently(issue: IssueSnapshot, recent_closed_days: int | None) -> bool:
@@ -559,7 +692,119 @@ def fetch_repo_discussions(
         after = page["pageInfo"]["endCursor"]
 
 
-def fetch_repo_issues(client: project_triage.GitHubProjectClient, repo: str) -> list[IssueSnapshot]:
+def _closure_evidence_targets(
+    issues: list[IssueSnapshot],
+    recent_closed_days: int | None,
+) -> list[IssueSnapshot]:
+    return [
+        issue
+        for issue in issues
+        if closed_recently(issue, recent_closed_days)
+        and not issue.closed_by_pull_requests
+        and not issue.closed_by_pull_request_urls
+    ]
+
+
+def _chunks(items: list[IssueSnapshot], size: int) -> list[list[IssueSnapshot]]:
+    return [items[index : index + size] for index in range(0, len(items), size)]
+
+
+def _merge_ints(*groups: tuple[int, ...]) -> tuple[int, ...]:
+    values: list[int] = []
+    for group in groups:
+        values.extend(group)
+    return tuple(dict.fromkeys(value for value in values if value))
+
+
+def _merge_strings(*groups: tuple[str, ...]) -> tuple[str, ...]:
+    values: list[str] = []
+    for group in groups:
+        values.extend(group)
+    return tuple(dict.fromkeys(value for value in values if value))
+
+
+def enrich_recent_closed_issue_evidence(
+    client: project_triage.GitHubProjectClient,
+    repo: str,
+    issues: list[IssueSnapshot],
+    *,
+    recent_closed_days: int | None,
+) -> list[IssueSnapshot]:
+    """Attach exact closure evidence that the REST issues list omits.
+
+    The scheduled audit starts from REST because it is simple and stable for
+    broad issue enumeration, but REST list rows only expose comment counts and
+    do not include GitHub's `closedByPullRequestsReferences`. Fetching only
+    recently closed issues keeps the heartbeat cheap while preventing
+    PR-linked or explicitly documented closures from flooding human review.
+    """
+
+    targets = _closure_evidence_targets(issues, recent_closed_days)
+    if not targets:
+        return issues
+
+    owner, name = repo.split("/", 1)
+    evidence_by_number: dict[int, IssueSnapshot] = {}
+    for chunk in _chunks(targets, 25):
+        field_lines = []
+        aliases: list[tuple[str, IssueSnapshot]] = []
+        for index, issue in enumerate(chunk):
+            alias = f"i{index}"
+            aliases.append((alias, issue))
+            field_lines.append(
+                f"""
+                {alias}: issue(number: {issue.number}) {{
+                  stateReason
+                  closedByPullRequestsReferences(first: 10) {{
+                    nodes {{ number url merged }}
+                  }}
+                  comments(last: 20) {{
+                    nodes {{ body }}
+                  }}
+                }}
+                """
+            )
+        query = (
+            "query($owner: String!, $repo: String!) { "
+            "repository(owner: $owner, name: $repo) { "
+            + "\n".join(field_lines)
+            + " } }"
+        )
+        try:
+            data = client.graphql(query, {"owner": owner, "repo": name})
+        except Exception as exc:
+            print(f"::warning::Closure evidence enrichment unavailable: {exc}", file=sys.stderr)
+            continue
+        repository = data.get("repository") if isinstance(data, dict) else None
+        if not isinstance(repository, dict):
+            continue
+        for alias, issue in aliases:
+            raw = repository.get(alias)
+            if not isinstance(raw, dict):
+                continue
+            numbers, urls = closed_pr_refs_from_raw(raw)
+            comments = comment_bodies_from_raw(raw)
+            evidence_by_number[issue.number] = replace(
+                issue,
+                comments=_merge_strings(issue.comments, comments),
+                state_reason=issue.state_reason
+                or _string_or_none(raw.get("stateReason") or raw.get("state_reason")),
+                closed_by_pull_requests=_merge_ints(issue.closed_by_pull_requests, numbers),
+                closed_by_pull_request_urls=_merge_strings(
+                    issue.closed_by_pull_request_urls,
+                    urls,
+                ),
+            )
+
+    return [evidence_by_number.get(issue.number, issue) for issue in issues]
+
+
+def fetch_repo_issues(
+    client: project_triage.GitHubProjectClient,
+    repo: str,
+    *,
+    recent_closed_days: int | None = None,
+) -> list[IssueSnapshot]:
     issues: list[IssueSnapshot] = []
     quoted_repo = urllib.parse.quote(repo, safe="/")
     page = 1
@@ -571,7 +816,12 @@ def fetch_repo_issues(client: project_triage.GitHubProjectClient, repo: str) -> 
         parsed = [issue for raw in payload if isinstance(raw, dict) and (issue := parse_github_issue(raw))]
         issues.extend(parsed)
         if len(payload) < 100:
-            return issues
+            return enrich_recent_closed_issue_evidence(
+                client,
+                repo,
+                issues,
+                recent_closed_days=recent_closed_days,
+            )
         page += 1
 
 
@@ -693,7 +943,11 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 2
         client = project_triage.GitHubProjectClient(token)
-        issues = fetch_repo_issues(client, args.repo)
+        issues = fetch_repo_issues(
+            client,
+            args.repo,
+            recent_closed_days=args.recent_closed_days,
+        )
         milestone_numbers = project_triage.open_milestone_numbers(client, args.repo)
         if not args.skip_discussions:
             try:

@@ -4,7 +4,9 @@ import importlib.util
 import json
 import subprocess
 import sys
+import unittest
 from pathlib import Path
+from typing import Any
 
 MODULE_PATH = Path(__file__).resolve().parents[2] / "tools" / "aippocampus" / "github" / "planning_audit.py"
 SPEC = importlib.util.spec_from_file_location("planning_audit", MODULE_PATH)
@@ -23,6 +25,10 @@ def issue(
     labels: tuple[str, ...] = (),
     milestone: str | None = None,
     comments: tuple[str, ...] = (),
+    closed_at: str | None = None,
+    state_reason: str | None = None,
+    closed_by_pull_requests: tuple[int, ...] = (),
+    closed_by_pull_request_urls: tuple[str, ...] = (),
 ):
     return planning_audit.IssueSnapshot(
         number=number,
@@ -32,6 +38,10 @@ def issue(
         labels=labels,
         milestone=milestone,
         comments=comments,
+        closed_at=closed_at,
+        state_reason=state_reason,
+        closed_by_pull_requests=closed_by_pull_requests,
+        closed_by_pull_request_urls=closed_by_pull_request_urls,
     )
 
 
@@ -56,6 +66,194 @@ def discussion(
 
 def kinds(items: list[dict[str, object]]) -> set[str]:
     return {str(item["kind"]) for item in items}
+
+
+class PlanningAuditClosureEvidenceTests(unittest.TestCase):
+    def report_for(self, *issues: Any) -> dict[str, Any]:
+        return planning_audit.audit_issues(
+            list(issues),
+            milestone_numbers={},
+            recent_closed_days=None,
+        )
+
+    def assert_not_flagged_weak(self, report: dict, issue_number: int) -> None:
+        weak_items = [
+            item
+            for item in report["needs_human_review"]
+            if item["kind"] == "weak_closed_issue_evidence"
+            and item["issue"] == issue_number
+        ]
+        self.assertEqual(weak_items, [])
+
+    def test_structured_closing_pr_reference_is_adequate_evidence(self) -> None:
+        report = self.report_for(
+            issue(
+                419,
+                "Add sanitized progress JSONL",
+                state="CLOSED",
+                closed_at="2026-06-01T20:02:40Z",
+                closed_by_pull_requests=(421,),
+            )
+        )
+
+        self.assertEqual(report["summary"]["suspicious_recent_closures"], 0)
+        self.assert_not_flagged_weak(report, 419)
+
+    def test_exact_closure_comment_with_prs_and_verification_is_evidence(self) -> None:
+        report = self.report_for(
+            issue(
+                382,
+                "Improve agent-facing discoverability",
+                state="CLOSED",
+                closed_at="2026-06-01T13:06:16Z",
+                comments=(
+                    "Closing as completed after repo + live-site verification.\n\n"
+                    "Evidence checked:\n"
+                    "- PRs #386, #387, and #389 are merged.\n"
+                    "- `python tools/aippocampus/release/check_agent_discovery_release.py --json` passes.\n"
+                    "- Live smoke returned HTTP 200 for https://www.aippocampus.com/.",
+                ),
+            )
+        )
+
+        self.assertEqual(report["summary"]["suspicious_recent_closures"], 0)
+        self.assert_not_flagged_weak(report, 382)
+
+    def test_duplicate_with_surviving_owner_is_evidence(self) -> None:
+        report = self.report_for(
+            issue(
+                343,
+                "Add retention and compaction policy",
+                state="CLOSED",
+                state_reason="DUPLICATE",
+                closed_at="2026-06-01T13:12:55Z",
+                comments=(
+                    "Closing as a duplicate of #367 after carrying the #343-specific "
+                    "acceptance details into that broader owner.",
+                ),
+            )
+        )
+
+        self.assertEqual(report["summary"]["suspicious_recent_closures"], 0)
+        self.assert_not_flagged_weak(report, 343)
+
+    def test_not_planned_with_rationale_is_evidence(self) -> None:
+        report = self.report_for(
+            issue(
+                45,
+                "Skip obsolete import shape",
+                state="CLOSED",
+                state_reason="NOT_PLANNED",
+                comments=(
+                    "Closing as not planned because the proposed Markdown import "
+                    "cannot preserve role boundaries or stable source refs.",
+                ),
+            )
+        )
+
+        self.assertEqual(report["summary"]["suspicious_recent_closures"], 0)
+        self.assert_not_flagged_weak(report, 45)
+
+    def test_not_planned_without_rationale_still_needs_human_review(self) -> None:
+        report = self.report_for(
+            issue(
+                46,
+                "Skip unclear thing",
+                state="CLOSED",
+                state_reason="NOT_PLANNED",
+                comments=("Not planned.",),
+            )
+        )
+
+        self.assertEqual(report["summary"]["suspicious_recent_closures"], 1)
+        self.assertIn("weak_closed_issue_evidence", kinds(report["needs_human_review"]))
+
+    def test_vague_closed_comment_still_needs_human_review(self) -> None:
+        report = self.report_for(
+            issue(
+                44,
+                "Close me somehow",
+                state="CLOSED",
+                comments=("Looks done enough.",),
+            )
+        )
+
+        self.assertEqual(report["summary"]["suspicious_recent_closures"], 1)
+        self.assertIn("weak_closed_issue_evidence", kinds(report["needs_human_review"]))
+
+    def test_parse_github_issue_accepts_gh_issue_view_closure_fields(self) -> None:
+        parsed = planning_audit.parse_github_issue(
+            {
+                "number": 419,
+                "title": "Add sanitized progress JSONL",
+                "body": "",
+                "state": "closed",
+                "stateReason": "COMPLETED",
+                "closed_at": "2026-06-01T20:02:40Z",
+                "labels": [],
+                "comments": [{"body": "Implemented in PR #421."}],
+                "closedByPullRequestsReferences": [
+                    {
+                        "number": 421,
+                        "url": "https://github.com/Sapientropic/AIppocampus/pull/421",
+                    }
+                ],
+            }
+        )
+
+        self.assertIsNotNone(parsed)
+        assert parsed is not None
+        self.assertEqual(parsed.state_reason, "COMPLETED")
+        self.assertEqual(parsed.comments, ("Implemented in PR #421.",))
+        self.assertEqual(parsed.closed_by_pull_requests, (421,))
+        self.assertTrue(planning_audit.closure_has_evidence(parsed))
+
+    def test_graphql_enrichment_adds_pr_refs_and_comment_bodies(self) -> None:
+        class FakeClient:
+            def graphql(self, query: str, variables: dict[str, object]) -> dict:
+                self.query = query
+                self.variables = variables
+                return {
+                    "repository": {
+                        "i0": {
+                            "stateReason": "COMPLETED",
+                            "closedByPullRequestsReferences": {
+                                "nodes": [
+                                    {
+                                        "number": 421,
+                                        "url": "https://github.com/Sapientropic/AIppocampus/pull/421",
+                                        "merged": True,
+                                    }
+                                ]
+                            },
+                            "comments": {
+                                "nodes": [
+                                    {"body": "Implemented in PR #421 with tests passed."}
+                                ]
+                            },
+                        }
+                    }
+                }
+
+        client = FakeClient()
+        enriched = planning_audit.enrich_recent_closed_issue_evidence(
+            client,
+            "Sapientropic/AIppocampus",
+            [
+                issue(
+                    419,
+                    "Add sanitized progress JSONL",
+                    state="CLOSED",
+                    closed_at="2026-06-01T20:02:40Z",
+                )
+            ],
+            recent_closed_days=None,
+        )
+
+        self.assertEqual(enriched[0].closed_by_pull_requests, (421,))
+        self.assertEqual(enriched[0].comments, ("Implemented in PR #421 with tests passed.",))
+        self.assertTrue(planning_audit.closure_has_evidence(enriched[0]))
+        self.assertEqual(client.variables["owner"], "Sapientropic")
 
 
 def test_missing_milestone_high_confidence_issue_becomes_safe_repair() -> None:
