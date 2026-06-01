@@ -115,7 +115,7 @@ def _unique_preserve(items: list[str], limit: int | None = None) -> list[str]:
 
 def _stable_id(parts: list[Any]) -> str:
     raw = "\n".join(str(part or "") for part in parts)
-    return "warc_" + hashlib.sha1(raw.encode("utf-8")).hexdigest()[:18]
+    return "warc_" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:18]
 
 
 def _is_distinctive_trace_term(term: str) -> bool:

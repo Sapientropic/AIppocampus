@@ -49,6 +49,7 @@ from aippocampus_runtime.recall.ambient_cards import (
     SILENT_TUNING,
     SOURCE_BACKED_RECALL_CARD,
 )
+from aippocampus_runtime.recall.nudge_policy import safe_model_nudge_text
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.registry.api import load_registry, registry_paths, unique_preserve
 from aippocampus_runtime.subconscious.runtime import add_usage, call_chat_json, compact_usage
@@ -387,7 +388,7 @@ def _clean_candidate(
         "theme",
         "support_level",
         "visibility",
-        "resonance",
+        "resonance", "resonance_reason",
         "suggested_use",
         "nudge",
         "key_line",
@@ -431,7 +432,17 @@ def _clean_candidate(
             or ("Use only with the attached source refs." if support == EVIDENCE else "Treat as provisional resonance."),
             220,
         ),
-        "nudge": _safe_text(candidate.get("nudge"), 220) if "nudge" in candidate_fields else "",
+        "nudge": (
+            safe_model_nudge_text(
+                candidate.get("resonance_reason") or candidate.get("nudge"),
+                theme=theme,
+                support_level=support,
+                visibility=visibility,
+                has_source_refs=bool(refs),
+            )
+            if {"resonance_reason", "nudge"} & candidate_fields
+            else ""
+        ),
         "key_line": key_line,
         "matched_terms": _clean_list(
             (candidate.get("matched_terms") if "matched_terms" in candidate_fields else [])
