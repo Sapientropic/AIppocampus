@@ -554,7 +554,13 @@ class BuildCleanSourceTests(unittest.TestCase):
                     "name": "functions.shell_command",
                     "call_id": "call-test-fail",
                     "arguments": json.dumps(
-                        {"command": "python tests\\aippocampus\\test_secret.py"},
+                        {
+                            "command": (
+                                "python tests\\aippocampus\\test_secret.py "
+                                "C:\\Users\\Administrator\\secret\\tests\\test_token.py "
+                                "API_KEY=super-secret"
+                            )
+                        },
                         ensure_ascii=False,
                     ),
                 },
@@ -567,7 +573,11 @@ class BuildCleanSourceTests(unittest.TestCase):
                 "payload": {
                     "type": "function_call_output",
                     "call_id": "call-test-fail",
-                    "output": "Exit code: 1\nWall time: 0.1s\nSECRET_PATH\\test_secret.py failed",
+                    "output": (
+                        "Exit code: 1\nWall time: 0.1s\n"
+                        "Traceback from C:\\Users\\Administrator\\secret\\tests\\test_token.py\n"
+                        "SECRET_PATH\\test_secret.py failed with API_KEY=super-secret"
+                    ),
                 },
             }
         )
@@ -583,11 +593,27 @@ class BuildCleanSourceTests(unittest.TestCase):
         failed = next(item for item in events if item.get("status") == "failed")
         self.assertEqual(failed["hard_event_kind"], "tool_call_failed")
         self.assertEqual(failed["command_class"], "test")
+        self.assertEqual(failed["tool_intent"], "test_check")
+        self.assertEqual(failed["command_family"], "python_unittest")
+        self.assertEqual(failed["test_target_class"], "focused_test_path")
+        self.assertEqual(failed["failure_family"], "python_exception")
+        self.assertEqual(failed["critical_operation_family"], "test_check_command_result")
         self.assertEqual(failed["exit_code"], 1)
         self.assertEqual(failed["tool_name"], "functions.shell_command")
+        self.assertIn("test", failed["path_categories"])
+        self.assertIn("source", failed["path_categories"])
+        self.assertEqual(failed["path_extensions"], ["py"])
+        self.assertGreaterEqual(failed["path_count"], 1)
+        self.assertTrue(
+            all(str(item).startswith("sha256:") for item in failed.get("path_fingerprints", []))
+        )
         serialized = json.dumps(events, ensure_ascii=False)
         self.assertNotIn("test_secret.py", serialized)
+        self.assertNotIn("test_token.py", serialized)
+        self.assertNotIn("C:\\Users", serialized)
         self.assertNotIn("SECRET_PATH", serialized)
+        self.assertNotIn("API_KEY", serialized)
+        self.assertNotIn("Traceback from", serialized)
         self.assertNotIn("python tests", serialized)
 
 

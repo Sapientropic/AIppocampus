@@ -298,21 +298,21 @@ def score_predictions(
 
     known_event_ids = set(dataset.events_by_id)
     for prediction in predictions:
-        event = dataset.events_by_id.get(prediction.event_id)
+        maybe_event = dataset.events_by_id.get(prediction.event_id)
         unknown_event_id = prediction.event_id not in known_event_ids
         non_flag_event = prediction.event_id in dataset.non_flag_event_ids
         flag_worthy = prediction.event_id in dataset.flag_worthy_event_ids
         required_sources = (
-            set(as_string_list(event.get("required_past_source_ids"))) if event else set()
+            set(as_string_list(maybe_event.get("required_past_source_ids"))) if maybe_event else set()
         )
         predicted_sources = set(prediction.past_source_ids)
-        source_supported = required_sources <= predicted_sources if event else False
+        source_supported = required_sources <= predicted_sources if maybe_event else False
         prediction_rows.append(
             {
                 "prediction_id": prediction.prediction_id,
                 "event_id": prediction.event_id,
                 "decision": prediction.decision,
-                "family": prediction.family or (event.get("family") if event else None),
+                "family": prediction.family or (maybe_event.get("family") if maybe_event else None),
                 "known_event_id": not unknown_event_id,
                 "flag_worthy_event": flag_worthy,
                 "non_flag_event": non_flag_event,

@@ -123,7 +123,7 @@ def normalized_past_source(row: dict[str, Any]) -> dict[str, Any]:
     source_id = first_value(source.get("source_id"), row.get("past_source_id"))
     if not source_id:
         raise ValueError("past_source.source_id or past_source_id is required")
-    result = {
+    result: dict[str, Any] = {
         "source_id": source_id,
         "kind": first_value(source.get("kind"), row.get("past_kind"), default="vcs_source"),
         "timestamp": first_value(source.get("timestamp"), row.get("past_timestamp")),
@@ -143,17 +143,31 @@ def normalized_past_source(row: dict[str, Any]) -> dict[str, Any]:
     for optional_key in (
         "tool_name",
         "command_class",
+        "tool_intent",
+        "command_family",
+        "target_class",
+        "test_target_class",
+        "failure_family",
+        "path_categories",
+        "path_extensions",
+        "path_fingerprints",
+        "generated_file",
+        "generated_file_reason",
         "exit_code",
         "artifact_sha1",
         "diff_sha1",
         "observation_sha1",
     ):
         raw_optional_value = source.get(optional_key, row.get(optional_key))
-        optional_value = first_value(raw_optional_value)
-        if optional_value:
+        optional_value = (
+            raw_optional_value
+            if isinstance(raw_optional_value, list | bool)
+            else first_value(raw_optional_value)
+        )
+        if is_present(optional_value):
             if optional_key == "exit_code":
                 try:
-                    result[optional_key] = int(raw_optional_value)
+                    result[optional_key] = int(str(raw_optional_value))
                 except (TypeError, ValueError):
                     result[optional_key] = optional_value
             else:
@@ -338,6 +352,16 @@ def past_source_from_clean_event(event: dict[str, Any]) -> dict[str, Any]:
         "source_ref",
         "tool_name",
         "command_class",
+        "tool_intent",
+        "command_family",
+        "target_class",
+        "test_target_class",
+        "failure_family",
+        "path_categories",
+        "path_extensions",
+        "path_fingerprints",
+        "generated_file",
+        "generated_file_reason",
         "exit_code",
         "input_sha256",
         "observation_sha256",

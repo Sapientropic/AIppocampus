@@ -138,11 +138,21 @@ class VcsFutureEventFixtureBuilderTests(unittest.TestCase):
                             "event_kind": "tool_call_observed",
                             "tool_name": "functions.shell_command",
                             "command_class": "test",
+                            "tool_intent": "test_check",
+                            "command_family": "python_pytest",
+                            "test_target_class": "focused_test_path",
+                            "failure_family": "assertion_failure",
+                            "path_categories": ["test", "source"],
+                            "path_fingerprints": ["sha256:abc123def4567890"],
+                            "generated_file": False,
                             "exit_code": 1,
                             "behavior_backed": True,
                             "source_ref": "codex:session:test#L12",
                             "text": "functions.shell_command failed; command_class=test",
                             "observation_sha256": "abc123",
+                            "raw_command": "python tests\\aippocampus\\test_secret.py",
+                            "stdout": "SECRET_TOKEN=abc123",
+                            "path": "C:\\Users\\Administrator\\secret\\test_secret.py",
                         },
                         {
                             "event_id": "evt_narrative_only",
@@ -193,7 +203,19 @@ class VcsFutureEventFixtureBuilderTests(unittest.TestCase):
         source = dataset.rows[0]["past_window"][0]
         self.assertTrue(source["behavior_backed"])
         self.assertEqual(source["command_class"], "test")
+        self.assertEqual(source["command_family"], "python_pytest")
+        self.assertEqual(source["test_target_class"], "focused_test_path")
+        self.assertEqual(source["failure_family"], "assertion_failure")
+        self.assertEqual(source["path_categories"], ["test", "source"])
+        self.assertEqual(source["path_fingerprints"], ["sha256:abc123def4567890"])
+        self.assertEqual(source["generated_file"], False)
         self.assertEqual(source["exit_code"], 1)
+        serialized = json.dumps(dataset.rows, ensure_ascii=False)
+        self.assertNotIn("raw_command", serialized)
+        self.assertNotIn("stdout", serialized)
+        self.assertNotIn("SECRET_TOKEN", serialized)
+        self.assertNotIn("C:\\Users", serialized)
+        self.assertNotIn("test_secret.py", serialized)
 
 
 if __name__ == "__main__":

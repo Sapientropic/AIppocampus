@@ -240,6 +240,9 @@ The installable reference `skills/aippocampus/references/retrieval-and-storage.m
 owns the critical-operation integrity contract over `events.jsonl`. Public
 consumers should treat its diagnostic as a coverage/gap report, not as license
 to reopen raw payloads or infer operation facts from assistant narration.
+`events.jsonl` breadcrumbs such as command family, target class, failure family,
+path category, generated-file flag, and safe path fingerprint are bounded
+metadata only; they are not raw process transcript fields.
 
 ### Source Ref
 
