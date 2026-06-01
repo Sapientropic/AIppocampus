@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.core import aippocampus_registry_dir, now_utc, sanitize_external_model_payload
+from aippocampus_runtime import core as runtime_core
 
 DEFAULT_SEARCH_BUDGET_FALLBACK = 3
 PROMPT_HOOK_SEMANTIC_TIMEOUT_FALLBACK = float(os.environ.get("AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT", "2.5"))
@@ -90,13 +90,13 @@ def write_debug_log(
 ) -> None:
     if result.get("decision") == "skip" and not include_skip:
         return
-    path = log_path or (aippocampus_registry_dir() / "aippocampus_prompt_hook.jsonl")
+    path = log_path or (runtime_core.aippocampus_registry_dir() / "aippocampus_prompt_hook.jsonl")
     path.parent.mkdir(parents=True, exist_ok=True)
     ambient_summary = _load_runtime()["ambient_debug_summary"](result)
     semantic_gate = result.get("semantic_gate") or {}
     semantic_debug_keys = ("available", "decision", "confidence", "cached", "query_aliases", "availability_reason", "diagnostic", "elapsed_ms", "timeout", "budget", "error_buckets")
     event = {
-        "timestamp": now_utc(),
+        "timestamp": runtime_core.now_utc(),
         "session_id": (hook_input or {}).get("session_id"),
         "turn_id": (hook_input or {}).get("turn_id"),
         "decision": result.get("decision"),
@@ -144,7 +144,7 @@ def write_debug_log(
         "elapsed_ms": result.get("elapsed_ms"),
     }
     # Redact only at the write boundary; recall scoring still uses raw terms.
-    safe_event = sanitize_external_model_payload(event)
+    safe_event = runtime_core.sanitize_external_model_payload(event)
     with path.open("a", encoding="utf-8", newline="\n") as fh:
         fh.write(json.dumps(safe_event, ensure_ascii=False) + "\n")
 
