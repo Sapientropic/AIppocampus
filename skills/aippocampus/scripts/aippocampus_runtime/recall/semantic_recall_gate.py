@@ -67,6 +67,7 @@ DEFAULT_WORKERS = ("gate", "alias", "scope")
 
 VALID_DECISIONS = {"skip", "background_only", "scent", "evidence"}
 DECISION_RANK = {"skip": 0, "background_only": 1, "scent": 2, "evidence": 3}
+HIGH_RISK_MAX_DECISION = "scent"
 
 
 ChatFn = Callable[..., dict[str, Any]]
@@ -659,17 +660,23 @@ def run_worker(
 
 def merge_workers(workers: list[dict[str, Any]], errors: list[str]) -> dict[str, Any]:
     decision = "skip"
+    winning_worker = ""
+    winning_worker_decision = "skip"
     confidence_values: list[float] = []
     aliases: list[str] = []
     scopes: list[str] = []
     negatives: list[str] = []
     reasons: list[str] = []
     risk = "medium"
+    risk_worker = ""
+    risk_worker_decision = ""
     intents: list[str] = []
     for row in workers:
         row_decision = str(row.get("decision") or "skip")
-        if DECISION_RANK.get(row_decision, 0) > DECISION_RANK.get(decision, 0):
+        if not winning_worker or DECISION_RANK.get(row_decision, 0) > DECISION_RANK.get(decision, 0):
             decision = row_decision
+            winning_worker = str(row.get("worker") or "")
+            winning_worker_decision = row_decision
         confidence_values.append(float(row.get("confidence") or 0.0))
         aliases.extend(row.get("query_aliases") or [])
         scopes.extend(row.get("memory_scope") or [])
@@ -680,9 +687,21 @@ def merge_workers(workers: list[dict[str, Any]], errors: list[str]) -> dict[str,
             intents.append(str(row.get("intent")))
         if row.get("anti_personalization_risk") == "high":
             risk = "high"
+            if not risk_worker:
+                risk_worker = str(row.get("worker") or "")
+                risk_worker_decision = row_decision
         elif risk != "high" and row.get("anti_personalization_risk") == "low":
             risk = "low"
     confidence = max(confidence_values or [0.0])
+    decision_before_risk_cap = decision
+    decision_cap_reason = ""
+    if risk == "high" and DECISION_RANK.get(decision, 0) > DECISION_RANK[HIGH_RISK_MAX_DECISION]:
+        decision = HIGH_RISK_MAX_DECISION
+        decision_cap_reason = "high_anti_personalization_risk"
+        reasons.append(
+            "capped semantic evidence by high anti-personalization risk from "
+            f"{risk_worker or 'worker'}"
+        )
     if risk == "high" and decision == "scent" and confidence < 0.82:
         decision = "background_only"
         reasons.append("downgraded by high anti-personalization risk")
@@ -700,6 +719,13 @@ def merge_workers(workers: list[dict[str, Any]], errors: list[str]) -> dict[str,
         "memory_scope": unique_preserve(scopes, limit=8),
         "negative_contexts": unique_preserve(negatives, limit=8),
         "anti_personalization_risk": risk,
+        "winning_worker": winning_worker,
+        "winning_worker_decision": winning_worker_decision,
+        "risk_worker": risk_worker,
+        "risk_worker_decision": risk_worker_decision,
+        "decision_capped": bool(decision_cap_reason),
+        "decision_before_risk_cap": decision_before_risk_cap if decision_cap_reason else None,
+        "decision_cap_reason": decision_cap_reason,
         "reasons": unique_preserve(reasons + errors, limit=8),
     }
 
@@ -851,6 +877,7 @@ def public_error_buckets(buckets: Any) -> dict[str, int]:
         return {}
     allowed = {
         "auth_error",
+        "foreground_budget",
         "read_timeout",
         "overall_deadline",
         "semantic_worker_error",
@@ -935,6 +962,45 @@ def unavailable_result(
     }
 
 
+def foreground_budget_unavailable_result(
+    reason: str,
+    *,
+    diagnostic: str,
+    deadline_seconds: float | None,
+    elapsed_ms: float = 0.0,
+    model_route: dict[str, Any] | None = None,
+    cache: dict[str, Any] | None = None,
+    cache_diagnostics: dict[str, Any] | None = None,
+    timeout: float | None = None,
+    temperature: float | None = None,
+    worker_count: int | None = None,
+) -> dict[str, Any]:
+    result = unavailable_result(
+        reason,
+        elapsed_ms=elapsed_ms,
+        model_route=model_route,
+        cache=cache,
+        cache_diagnostics=cache_diagnostics,
+        timeout=timeout,
+        temperature=temperature,
+        worker_count=worker_count,
+    )
+    result.update(
+        {
+            "availability_reason": "foreground_budget_skipped",
+            "diagnostic": diagnostic,
+            "error_buckets": {"foreground_budget": 1},
+            "deadline": {
+                "seconds": deadline_seconds,
+                "exceeded": True,
+                "unfinished_workers": [],
+            },
+            "foreground": True,
+        }
+    )
+    return result
+
+
 def run_semantic_gate(
     prompt: str,
     *,
@@ -956,6 +1022,7 @@ def run_semantic_gate(
     temperature: float = DEFAULT_TEMPERATURE,
     workers: tuple[str, ...] = DEFAULT_WORKERS,
     deadline_seconds: float | None = None,
+    foreground: bool = False,
     use_cache: bool = True,
     chat_fn: ChatFn = call_chat_json,
 ) -> dict[str, Any]:
@@ -1025,6 +1092,33 @@ def run_semantic_gate(
         result["secret_policy"] = secret_policy
         return result
 
+    deadline = float(deadline_seconds) if deadline_seconds and deadline_seconds > 0 else None
+    try:
+        worker_timeout_seconds = float(timeout)
+    except (TypeError, ValueError):
+        worker_timeout_seconds = DEFAULT_TIMEOUT
+    if foreground:
+        # Foreground hooks are latency fail-open surfaces. They may use semantic
+        # workers as a source-backed search hint, but only when both the overall
+        # wall-clock deadline and the per-worker socket timeout are explicit.
+        # Background/operator callers keep the quality-first default timeout.
+        if deadline is None:
+            return foreground_budget_unavailable_result(
+                "semantic foreground gate requires an explicit overall deadline",
+                diagnostic="semantic_foreground_deadline_required",
+                deadline_seconds=None,
+                elapsed_ms=(time.perf_counter() - start) * 1000,
+                **unavailable_metadata,
+            )
+        if worker_timeout_seconds > deadline:
+            return foreground_budget_unavailable_result(
+                "semantic foreground worker timeout exceeds overall deadline",
+                diagnostic="semantic_foreground_timeout_exceeds_deadline",
+                deadline_seconds=deadline,
+                elapsed_ms=(time.perf_counter() - start) * 1000,
+                **unavailable_metadata,
+            )
+
     cache = (
         Path(cache_path).resolve()
         if cache_path
@@ -1047,6 +1141,7 @@ def run_semantic_gate(
         cached = read_cache(cache, cache_key)
         if cached:
             cached.setdefault("model_route", route_payload)
+            cached["foreground"] = bool(foreground)
             cached["cache_diagnostics"] = {
                 **(cached.get("cache_diagnostics") or {}),
                 "lookup": "hit",
@@ -1074,13 +1169,12 @@ def run_semantic_gate(
     worker_names = tuple(worker for worker in workers if worker in set(DEFAULT_WORKERS))
     if route.provider != "deepseek" and capabilities:
         worker_names = worker_names[: max(1, int(capabilities.safe_default_concurrency or 1))]
-    deadline = float(deadline_seconds) if deadline_seconds and deadline_seconds > 0 else None
     worker_kwargs: dict[str, Any] = {
         "payload": payload,
         "api_key": str(key_value),
         "model": resolved_model,
         "base_url": resolved_base_url,
-        "timeout": timeout,
+        "timeout": worker_timeout_seconds,
         "temperature": temperature,
         "chat_fn": chat_fn,
         "service_name": route_service_name(route),
@@ -1129,6 +1223,7 @@ def run_semantic_gate(
         "usage": usage_total,
         "timeout": timeout,
         "deadline": {"seconds": deadline, "exceeded": deadline_exceeded, "unfinished_workers": unfinished_workers},
+        "foreground": bool(foreground),
         "temperature": temperature,
         "worker_count": len(worker_names),
         "cache": route_cache_metrics(route, usage_total),

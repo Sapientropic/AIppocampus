@@ -175,6 +175,44 @@ class SemanticRecallGateTests(unittest.TestCase):
         self.assertIn("registered_threads", result["memory_scope"])
         self.assertEqual(result["anti_personalization_risk"], "low")
 
+    def test_merge_workers_caps_evidence_when_scope_worker_reports_high_risk(self) -> None:
+        merged = gate.merge_workers(
+            [
+                {
+                    "worker": "gate",
+                    "decision": "evidence",
+                    "intent": "recall",
+                    "confidence": 0.91,
+                    "query_aliases": ["exact wording"],
+                    "memory_scope": ["registered_threads"],
+                    "negative_contexts": [],
+                    "anti_personalization_risk": "low",
+                    "reason": "The prompt asks for exact prior wording.",
+                },
+                {
+                    "worker": "scope",
+                    "decision": "scent",
+                    "intent": "recall",
+                    "confidence": 0.88,
+                    "query_aliases": [],
+                    "memory_scope": ["cross_project"],
+                    "negative_contexts": ["generic product work should not become personal memory"],
+                    "anti_personalization_risk": "high",
+                    "reason": "Cross-project scope is ambiguous and high risk.",
+                },
+            ],
+            [],
+        )
+
+        self.assertEqual(merged["decision"], "scent")
+        self.assertEqual(merged["anti_personalization_risk"], "high")
+        self.assertTrue(merged["decision_capped"])
+        self.assertEqual(merged["decision_before_risk_cap"], "evidence")
+        self.assertEqual(merged["decision_cap_reason"], "high_anti_personalization_risk")
+        self.assertEqual(merged["winning_worker"], "gate")
+        self.assertEqual(merged["risk_worker"], "scope")
+        self.assertIn("capped", " ".join(merged["reasons"]))
+
     def test_public_cli_payload_omits_aliases_workers_and_raw_errors(self) -> None:
         private_result = {
             "available": True,
@@ -846,6 +884,62 @@ class SemanticRecallGateTests(unittest.TestCase):
 
         self.assertFalse(result["available"])
         self.assertEqual(result["error_buckets"], {"read_timeout": 3})
+
+    def test_foreground_gate_requires_explicit_deadline_before_calling_model(self) -> None:
+        calls = {"count": 0}
+
+        def chat_fn(*args, **kwargs):
+            calls["count"] += 1
+            raise AssertionError("foreground gate without a deadline must fail open")
+
+        result = gate.run_semantic_gate(
+            "脑内续接器",
+            cwd=self.workspace,
+            registry=self.registry,
+            registry_path=self.registry_path,
+            api_key="test-key",
+            use_cache=False,
+            foreground=True,
+            chat_fn=chat_fn,
+        )
+
+        self.assertEqual(calls["count"], 0)
+        self.assertFalse(result["available"])
+        self.assertEqual(result["decision"], "skip")
+        self.assertEqual(result["availability_reason"], "foreground_budget_skipped")
+        self.assertEqual(result["diagnostic"], "semantic_foreground_deadline_required")
+        self.assertEqual(result["error_buckets"], {"foreground_budget": 1})
+        self.assertEqual(result["deadline"]["seconds"], None)
+        self.assertEqual(result["deadline"]["exceeded"], True)
+
+    def test_foreground_gate_requires_worker_timeout_within_deadline(self) -> None:
+        calls = {"count": 0}
+
+        def chat_fn(*args, **kwargs):
+            calls["count"] += 1
+            raise AssertionError("foreground worker timeout must be bounded before model call")
+
+        result = gate.run_semantic_gate(
+            "脑内续接器",
+            cwd=self.workspace,
+            registry=self.registry,
+            registry_path=self.registry_path,
+            api_key="test-key",
+            use_cache=False,
+            foreground=True,
+            timeout=3.0,
+            deadline_seconds=1.0,
+            chat_fn=chat_fn,
+        )
+
+        self.assertEqual(calls["count"], 0)
+        self.assertFalse(result["available"])
+        self.assertEqual(result["decision"], "skip")
+        self.assertEqual(result["availability_reason"], "foreground_budget_skipped")
+        self.assertEqual(result["diagnostic"], "semantic_foreground_timeout_exceeds_deadline")
+        self.assertEqual(result["error_buckets"], {"foreground_budget": 1})
+        self.assertEqual(result["deadline"]["seconds"], 1.0)
+        self.assertEqual(result["deadline"]["exceeded"], True)
 
     def test_overall_deadline_returns_before_slow_workers_finish(self) -> None:
         def chat_fn(messages, api_key, model, base_url, max_tokens, timeout, temperature):

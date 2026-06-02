@@ -127,6 +127,7 @@ def run_semantic_gate_for_prompt(
                 mode=semantic_gate_mode,
                 timeout=effective_timeout,
                 deadline_seconds=budgeted_timeout,
+                foreground=True,
             )
             result.setdefault("budget", budget)
             if not result.get("available"):

@@ -453,6 +453,12 @@ variables for new non-Codex setups.
 Product-tuning values such as warm-recall temperature, quorum, thinking mode,
 and foreground prefix-cache warmup should use explicit CLI flags or structured
 runtime config such as `WarmRecallConfig`, not ambient import-time env defaults.
+For foreground prompt integrations, prefer the packaged prompt wrapper over
+calling the semantic gate directly. Direct Python callers that mark a call as
+foreground must provide an explicit wall-clock deadline and a worker timeout
+within that deadline; otherwise the gate fails open without an external model
+call. Background and operator semantic recall can still use the longer
+quality-first defaults.
 
 Never log or publish environment variable values that contain credentials,
 tokens, cookies, local private paths, or private memory locations.

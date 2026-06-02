@@ -2197,10 +2197,12 @@ class AmbientRecallHookTests(unittest.TestCase):
             json.dumps({"schema_version": 1, "threads": []}, ensure_ascii=False),
             encoding="utf-8",
         )
-        seen: dict[str, float] = {}
+        seen: dict[str, float | bool] = {}
 
         def fake_semantic_gate(prompt: str, **kwargs) -> dict:
             seen["timeout"] = float(kwargs["timeout"])
+            seen["deadline_seconds"] = float(kwargs["deadline_seconds"])
+            seen["foreground"] = bool(kwargs["foreground"])
             return {
                 "available": False,
                 "decision": "skip",
@@ -2227,6 +2229,8 @@ class AmbientRecallHookTests(unittest.TestCase):
 
         self.assertIn("timeout", seen)
         self.assertLessEqual(seen["timeout"], 1.8)
+        self.assertEqual(seen["deadline_seconds"], result["semantic_gate"]["budget"]["overall_deadline_seconds"])
+        self.assertTrue(seen["foreground"])
         self.assertEqual(result["semantic_gate"]["available"], False)
         self.assertEqual(result["semantic_gate"]["budget"]["requested_timeout"], 3)
         self.assertEqual(result["semantic_gate"]["budget"]["effective_timeout"], seen["timeout"])
