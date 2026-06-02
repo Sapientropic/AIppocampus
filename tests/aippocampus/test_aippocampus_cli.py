@@ -33,6 +33,7 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0)
         self.assertIn("health", proc.stdout)
         self.assertIn("mcp list-tools", proc.stdout)
+        self.assertIn("smoke recall-funnel", proc.stdout)
         self.assertIn("storage gc", proc.stdout)
         self.assertIn("hooks", proc.stdout)
 
@@ -72,6 +73,20 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(import_invocation.command, "import")
         self.assertEqual(import_invocation.module_name, "aippocampus_runtime.artifacts.import_bundle")
         self.assertEqual(import_invocation.script_name, "import_bundle.py")
+
+        smoke_invocation = facade.resolve_command(
+            ["smoke", "recall-funnel", "progressive recall", "--json"]
+        )
+        self.assertEqual(smoke_invocation.command, "smoke")
+        self.assertEqual(
+            smoke_invocation.module_name,
+            "aippocampus_runtime.ops.recall_funnel_smoke",
+        )
+        self.assertEqual(smoke_invocation.script_name, "recall_funnel_smoke.py")
+        self.assertEqual(
+            smoke_invocation.args,
+            ["recall-funnel", "progressive recall", "--json"],
+        )
 
         storage_invocation = facade.resolve_command(["storage", "gc", "--dry-run", "--json"])
         self.assertEqual(storage_invocation.command, "storage")

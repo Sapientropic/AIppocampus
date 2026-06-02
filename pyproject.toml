@@ -372,6 +372,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/ops/cold_archive.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/graphify_corpus.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/maintenance.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/ops/recall_funnel_smoke.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/retention_report.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/rollout_size_audit.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/storage_capacity_report.py",
