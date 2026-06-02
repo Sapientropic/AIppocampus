@@ -149,15 +149,23 @@ theme-emergence slice, plus first question-index scale/sidecar evaluation:
   eligible rows, 2 sanitized packs, source-ref fidelity 1.0, no private text
   emitted, token ratio 3.7005, and term-coverage delta -0.4412. It is a
   structural proxy, not answer-quality or user-visible recall proof.
-- Open cleanup queue: umbrella #133, with focused follow-ups #134 through #139.
-- Designed/deferred: real-user / private real-history calibration beyond
-  selected fixtures and the one sanitized no-write external-provider smoke for
-  #134, broader resolution extraction from non-explicit final-answer or fuzzy follow-up
-  evidence (#135), enabling the question index as a default tracking prefilter
-  (#138), full theme calibration / LLM naming beyond deterministic #136, full
-  ambient recall calibration beyond the first working-memory cap/dismissal
-  slice (#137), live/private answer-quality validation beyond the first #139
-  structural proxy, and predictive / generative replay (#127).
+- Closed first-slice queue: umbrella #133 and focused #134 through #139 are
+  implementation evidence for the first deterministic/question-health/theme/
+  ambient/sidecar/structural slices. Do not route remaining work back there.
+- Current follow-up owner: #248 owns unresolved design/runtime gaps after that
+  closeout, including extraction gates, default prefilter adoption,
+  answer-quality validation, broader calibration, and theme resonance.
+- Adjacent user-visible symptoms: #201 and #281 cover places where vague or
+  fresh-thread recall still feels too much like manual source search.
+- Designed/deferred under #248: real-user / private real-history calibration
+  beyond selected fixtures and the one sanitized no-write external-provider
+  smoke for #134, broader resolution extraction from non-explicit final-answer
+  or fuzzy follow-up evidence (#135), enabling the question index as a default
+  tracking prefilter (#138), full theme calibration / LLM naming beyond
+  deterministic #136, full ambient recall calibration beyond the first
+  working-memory cap/dismissal slice (#137), live/private answer-quality
+  validation beyond the first #139 structural proxy, and predictive /
+  generative replay (#127).
 
 Do not read later architecture sections as current behavior until matching
 `JOB_SPECS`, tests, and scheduler support exist in code.

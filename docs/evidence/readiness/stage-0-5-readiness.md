@@ -174,6 +174,12 @@ navigation map lives in `docs/evidence/benchmark-evidence-map.md`.
   labels, timeline groups, semantic sidecars, real-registry aggregate smoke,
   dynamic semantic sidecar smoke, recall eval prompts, source-review samples,
   and ambient scents are navigation hints only.
+- Question tracking, theme emergence, and question-aware recall have first
+  deterministic / structural slices, but they are not yet a full
+  question-continuity product surface. The closed #133/#134-#139 queue is
+  first-slice evidence; follow-up #248 owns the remaining extraction-gate,
+  default-prefilter, answer-quality, broader calibration, and theme-resonance
+  gaps.
 - Benchmark evidence now includes a deterministic #406 Codex-style
   `host_native_continuous_no_aippocampus` contract arm, but it is not live
   host telemetry and does not prove
