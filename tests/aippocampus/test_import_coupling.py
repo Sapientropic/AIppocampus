@@ -268,23 +268,20 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(normalized.empty_turn, turns.empty_turn)
         self.assertIs(normalized.message_digest, turns.message_digest)
 
-    def test_privacy_projection_has_package_owner_and_compat_shim(self) -> None:
-        import privacy_projection
+    def test_privacy_projection_uses_package_owner_only(self) -> None:
         from aippocampus_runtime import privacy
 
         package_path = SCRIPTS / "aippocampus_runtime" / "privacy.py"
-        shim_path = SCRIPTS / "privacy_projection.py"
 
         self.assertTrue(package_path.exists(), package_path)
-        self.assertTrue(shim_path.exists(), shim_path)
-        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+        self.assertFalse((SCRIPTS / "privacy_projection.py").exists())
+        self.assertNotIn("privacy_projection", pyproject_py_modules())
 
         edges = same_dir_import_edges()
-        self.assertIn("aippocampus_runtime.privacy", edges["privacy_projection"])
         for source in ["aippocampus_runtime.mcp.server", "aippocampus_runtime.registry.api"]:
             self.assertIn("aippocampus_runtime.privacy", edges[source])
             self.assertNotIn("privacy_projection", edges[source])
-        self.assertIs(privacy_projection.redact_private_paths, privacy.redact_private_paths)
+        self.assertTrue(callable(privacy.redact_private_paths))
 
     def test_mcp_server_has_package_owner_and_compat_shim(self) -> None:
         import aippocampus_mcp_server

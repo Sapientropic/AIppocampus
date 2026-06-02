@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 ROOT = Path(__file__).resolve().parents[2]
 TOOLS = ROOT / "tools" / "aippocampus" / "docs"
@@ -10,6 +11,14 @@ if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
 
 import compat_shim_inventory as inventory  # noqa: E402
+
+
+def write_fixture_script(repo_root: Path, script_name: str, source: str) -> None:
+    scripts_dir = repo_root / "skills" / "aippocampus" / "scripts"
+    scripts_dir.mkdir(parents=True, exist_ok=True)
+    path = scripts_dir / script_name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(source, encoding="utf-8")
 
 
 class CompatibilityShimInventoryTests(unittest.TestCase):
@@ -72,6 +81,111 @@ class CompatibilityShimInventoryTests(unittest.TestCase):
         report = inventory.build_inventory(ROOT)
 
         self.assertEqual(report.manual_export_surfaces, [])
+
+    def test_unreferenced_package_owner_shim_is_delete_now_candidate(self) -> None:
+        with TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            write_fixture_script(
+                repo_root,
+                "unused_helper.py",
+                '''#!/usr/bin/env python3
+"""Compatibility shim for packaged unused helper."""
+
+from __future__ import annotations
+
+import sys
+
+from aippocampus_runtime.unused import helper as _impl
+
+sys.modules[__name__] = _impl
+''',
+            )
+            write_fixture_script(
+                repo_root,
+                "aippocampus_runtime/unused/helper.py",
+                "def main() -> int:\n    return 0\n",
+            )
+            (repo_root / "pyproject.toml").write_text(
+                '[tool.setuptools]\npy-modules = ["unused_helper"]\n',
+                encoding="utf-8",
+            )
+
+            report = inventory.build_inventory(repo_root)
+            delete_now = {item.script: item for item in report.delete_now}
+
+            self.assertIn("unused_helper.py", delete_now)
+            self.assertIn("only remaining flat-module exposure", delete_now["unused_helper.py"].reason)
+
+    def test_first_party_import_keeps_package_owner_shim_temporary(self) -> None:
+        with TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            write_fixture_script(
+                repo_root,
+                "shared_helper.py",
+                '''#!/usr/bin/env python3
+"""Compatibility shim for packaged shared helper."""
+
+from __future__ import annotations
+
+import sys
+
+from aippocampus_runtime.shared import helper as _impl
+
+sys.modules[__name__] = _impl
+''',
+            )
+            write_fixture_script(
+                repo_root,
+                "aippocampus_runtime/shared/helper.py",
+                "def value() -> int:\n    return 1\n",
+            )
+            write_fixture_script(
+                repo_root,
+                "aippocampus_runtime/consumer.py",
+                "import shared_helper\n\nVALUE = shared_helper.value()\n",
+            )
+
+            report = inventory.build_inventory(repo_root)
+            temporary = {item.script: item for item in report.temporary_compat}
+
+            self.assertIn("shared_helper.py", temporary)
+            self.assertIn("first-party import", temporary["shared_helper.py"].reason)
+
+    def test_documented_direct_invocation_keeps_package_owner_shim_temporary(self) -> None:
+        with TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            write_fixture_script(
+                repo_root,
+                "documented_helper.py",
+                '''#!/usr/bin/env python3
+"""Compatibility shim for packaged documented helper."""
+
+from __future__ import annotations
+
+import sys
+
+from aippocampus_runtime.documented import helper as _impl
+
+sys.modules[__name__] = _impl
+''',
+            )
+            write_fixture_script(
+                repo_root,
+                "aippocampus_runtime/documented/helper.py",
+                "def main() -> int:\n    return 0\n",
+            )
+            docs_dir = repo_root / "docs"
+            docs_dir.mkdir(parents=True)
+            (docs_dir / "guide.md").write_text(
+                "Use `documented_helper.py` for local diagnostics.\n",
+                encoding="utf-8",
+            )
+
+            report = inventory.build_inventory(repo_root)
+            temporary = {item.script: item for item in report.temporary_compat}
+
+            self.assertIn("documented_helper.py", temporary)
+            self.assertIn("documented direct invocation", temporary["documented_helper.py"].reason)
 
 
 if __name__ == "__main__":
