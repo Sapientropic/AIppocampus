@@ -26,6 +26,18 @@ SCHEMA_VERSION = 1
 DEFAULT_DATASET = locomo.DEFAULT_DATASET
 DEFAULT_ANSWER_MODEL = "deterministic_oracle_fixture"
 DETERMINISTIC_JUDGE_MODEL = "deterministic_locomo_answer_usefulness_v1"
+NEGATION_TOKENS = {"no", "not", "never", "none", "without", "n't"}
+LIGHT_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "of",
+    "on",
+    "the",
+    "to",
+    "was",
+    "were",
+}
 
 
 @dataclass(frozen=True)
@@ -46,6 +58,57 @@ def answer_matches_gold(answer_text: str, gold_answer: str) -> bool:
     answer = normalize_answer(answer_text)
     gold = normalize_answer(gold_answer)
     return bool(answer and gold and gold in answer)
+
+
+def answer_tokens(text: str) -> list[str]:
+    return re.findall(r"[a-z0-9]+", normalize_answer(text))
+
+
+def stem_token(token: str) -> str:
+    for suffix in ("ing", "ed", "es", "s"):
+        if len(token) > len(suffix) + 3 and token.endswith(suffix):
+            return token[: -len(suffix)]
+    return token
+
+
+def content_tokens(text: str) -> list[str]:
+    return [
+        stem_token(token)
+        for token in answer_tokens(text)
+        if token and token not in LIGHT_STOPWORDS
+    ]
+
+
+def has_negation_trap(answer_text: str, gold_answer: str) -> bool:
+    tokens = answer_tokens(answer_text)
+    gold = set(content_tokens(gold_answer))
+    if not tokens or not gold:
+        return False
+    stemmed_tokens = [stem_token(token) for token in tokens]
+    for index, token in enumerate(stemmed_tokens):
+        if token not in gold:
+            continue
+        window = tokens[max(0, index - 4) : min(len(tokens), index + 2)]
+        if any(item in NEGATION_TOKENS for item in window):
+            return True
+    return False
+
+
+def answer_quality(answer_text: str, gold_answer: str) -> dict[str, Any]:
+    gold_tokens = set(content_tokens(gold_answer))
+    predicted_tokens = set(content_tokens(answer_text))
+    overlap = gold_tokens & predicted_tokens
+    token_overlap_rate = locomo.safe_rate(len(overlap), len(gold_tokens))
+    strong_match = bool(gold_tokens and token_overlap_rate >= 0.8)
+    negation_trap = bool(strong_match and has_negation_trap(answer_text, gold_answer))
+    return {
+        "legacy_substring_match": answer_matches_gold(answer_text, gold_answer),
+        "token_overlap_rate": token_overlap_rate,
+        "strong_match": strong_match,
+        "negation_trap": negation_trap,
+        "gold_token_count": len(gold_tokens),
+        "overlap_token_count": len(overlap),
+    }
 
 
 def bool_value(value: Any) -> bool:
@@ -136,10 +199,12 @@ def score_case(case: locomo.LocomoCase, prediction: AnswerPrediction) -> dict[st
     citations = set(prediction.citation_ids)
     missing = sorted(expected - retrieved)
     context_sufficient = not missing
+    quality = answer_quality(prediction.answer_text, case.answer)
     answer_correct = bool(
         context_sufficient
         and not prediction.refused
-        and answer_matches_gold(prediction.answer_text, case.answer)
+        and quality["strong_match"]
+        and not quality["negation_trap"]
     )
     correct_source_citation = bool(context_sufficient and expected.issubset(citations))
     expected_refusal = not context_sufficient
@@ -160,6 +225,7 @@ def score_case(case: locomo.LocomoCase, prediction: AnswerPrediction) -> dict[st
         "extra_retrieved_evidence_ids": sorted(retrieved - expected),
         "source_evidence_recall": locomo.safe_rate(len(expected & retrieved), len(expected)),
         "context_sufficient": context_sufficient,
+        "answer_quality": quality,
         "answer_correct": answer_correct,
         "correct_source_citation": correct_source_citation,
         "expected_refusal": expected_refusal,
@@ -171,6 +237,7 @@ def score_case(case: locomo.LocomoCase, prediction: AnswerPrediction) -> dict[st
 def summarize_cases(rows: list[dict[str, Any]]) -> dict[str, Any]:
     total = len(rows)
     insufficient = [row for row in rows if row["expected_refusal"]]
+    quality_rows = [row.get("answer_quality") or {} for row in rows]
     return {
         "case_count": total,
         "full_evidence_recall_rate": locomo.safe_rate(
@@ -191,6 +258,15 @@ def summarize_cases(rows: list[dict[str, Any]]) -> dict[str, Any]:
             sum(1 for row in rows if row["answer_correct"]),
             total,
         ),
+        "legacy_substring_gold_match_rate": locomo.safe_rate(
+            sum(1 for row in quality_rows if row.get("legacy_substring_match")),
+            total,
+        ),
+        "token_overlap_strong_match_rate": locomo.safe_rate(
+            sum(1 for row in quality_rows if row.get("strong_match")),
+            total,
+        ),
+        "negation_trap_count": sum(1 for row in quality_rows if row.get("negation_trap")),
         "correct_source_citation_rate": locomo.safe_rate(
             sum(1 for row in rows if row["correct_source_citation"]),
             total,

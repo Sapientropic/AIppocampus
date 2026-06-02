@@ -220,6 +220,16 @@ class VcsFutureEventRecallBenchmarkTests(unittest.TestCase):
         self.assertGreaterEqual(payload["metrics"]["false_positive_count"], 2)
         self.assertGreaterEqual(payload["metrics"]["source_support_failure_count"], 1)
         self.assertEqual(payload["metrics"]["unknown_event_false_positive_count"], 1)
+        self.assertEqual(payload["metrics"]["future_event_flag_precision"], 0.25)
+        self.assertEqual(payload["metrics"]["diagnostic_event_identity_precision"], 0.5)
+        self.assertEqual(
+            payload["precision_contract"]["primary_metric"],
+            "future_event_flag_precision",
+        )
+        self.assertEqual(
+            payload["precision_contract"]["diagnostic_metric"],
+            "diagnostic_event_identity_precision",
+        )
 
     def test_adversarial_controls_catch_stale_behavior_and_abstention_failures(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -261,6 +271,18 @@ class VcsFutureEventRecallBenchmarkTests(unittest.TestCase):
                             "flag_worthy": False,
                             "text": "Similar vocabulary, unrelated route.",
                             "required_past_source_ids": [],
+                            "anti_drift_family_under_test": "reopen_condition",
+                            "anti_drift_contrast_family": "rejected_route",
+                        },
+                        {
+                            "event_id": "cross-family-route",
+                            "family": "anti_drift_negative",
+                            "hard_event_kind": "pull_request_merged",
+                            "flag_worthy": False,
+                            "text": "A merge event should not activate rejected-route memory.",
+                            "required_past_source_ids": [],
+                            "anti_drift_family_under_test": "rejected_route",
+                            "anti_drift_contrast_family": "reopen_condition",
                         },
                     ],
                 },
@@ -310,6 +332,12 @@ class VcsFutureEventRecallBenchmarkTests(unittest.TestCase):
                     "past_source_ids": [],
                 },
                 {
+                    "prediction_id": "cross-family-fp",
+                    "event_id": "cross-family-route",
+                    "decision": "flag",
+                    "past_source_ids": [],
+                },
+                {
                     "prediction_id": "narrative-source",
                     "event_id": "route-failed-again",
                     "decision": "flag",
@@ -335,9 +363,87 @@ class VcsFutureEventRecallBenchmarkTests(unittest.TestCase):
         self.assertTrue(by_event["current-route-reopened"]["false_negative"])
         self.assertTrue(by_event["route-failed-again"]["false_negative"])
         self.assertTrue(by_event["near-miss-revert"]["false_positive"])
+        self.assertTrue(by_event["cross-family-route"]["false_positive"])
         self.assertEqual(payload["metrics"]["source_support_failure_count"], 2)
-        self.assertEqual(payload["metrics"]["false_positive_count"], 1)
+        self.assertEqual(payload["metrics"]["false_positive_count"], 2)
         self.assertEqual(payload["metrics"]["anti_drift_pass_rate"], 0.0)
+        self.assertEqual(payload["anti_drift_controls"]["negative_cross_family_count"], 2)
+        self.assertEqual(
+            payload["anti_drift_controls"]["negative_cross_family_violation_count"], 2
+        )
+
+    def test_candidate_discovery_bias_and_source_degradation_are_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = Path(tmp) / "validity-controls.jsonl"
+            row = {
+                "dataset_id": "unit_validity_controls",
+                "schema_version": 1,
+                "license": "CC0-1.0",
+                "project_id": "validity",
+                "source_family": "unit_validity",
+                "candidate_discovery_bias": {
+                    "available": True,
+                    "source_surface_mix": {"title": {"count": 1, "proportion": 1.0}},
+                    "query_term_hit_mix_by_family": {"revert": 1},
+                    "manual_decision_counts": {"included": 1},
+                    "sampled_miss_rate": {"available": True, "sample_count": 1, "miss_count": 0, "rate": 0.0},
+                },
+                "past_window": [
+                    {
+                        "source_id": "redacted-source",
+                        "kind": "pull_request_review",
+                        "text": "[redacted but source id retained]",
+                    },
+                    {
+                        "source_id": "partial-source",
+                        "kind": "pull_request_review",
+                        "text": "Only partial support survived.",
+                    },
+                ],
+                "future_window": [
+                    {
+                        "event_id": "redacted-event",
+                        "family": "reopen_condition",
+                        "hard_event_kind": "pull_request_merged",
+                        "flag_worthy": True,
+                        "text": "Redacted source still has a source id.",
+                        "required_past_source_ids": ["redacted-source"],
+                        "source_degradation": "redacted_source",
+                    },
+                    {
+                        "event_id": "partial-event",
+                        "family": "workaround_rationale",
+                        "hard_event_kind": "commit_reverted",
+                        "flag_worthy": True,
+                        "text": "Partial source should not count as full support.",
+                        "required_past_source_ids": ["partial-source"],
+                        "source_degradation": "partial_support",
+                    },
+                    {
+                        "event_id": "missing-source-event",
+                        "family": "tacit_constraint",
+                        "hard_event_kind": "issue_reopened",
+                        "flag_worthy": True,
+                        "text": "The candidate mentions a source id that is not redistributable.",
+                        "required_past_source_ids": ["missing-public-source"],
+                        "source_degradation": "missing_source_id",
+                    },
+                ],
+            }
+            fixture.write_text(json.dumps(row, ensure_ascii=False) + "\n", encoding="utf-8")
+
+            payload = benchmark.run_benchmark(dataset_path=fixture)
+
+        self.assertTrue(payload["candidate_discovery_bias"]["available"])
+        degradation = payload["source_degradation_controls"]
+        self.assertEqual(degradation["counts_by_state"]["redacted_source"], 1)
+        self.assertEqual(degradation["counts_by_state"]["partial_support"], 1)
+        self.assertEqual(degradation["counts_by_state"]["missing_source_id"], 1)
+        self.assertEqual(degradation["full_support_blocked_count"], 2)
+        by_event = {row["event_id"]: row for row in payload["events"]}
+        self.assertTrue(by_event["redacted-event"]["true_positive"])
+        self.assertFalse(by_event["partial-event"]["source_supported"])
+        self.assertFalse(by_event["missing-source-event"]["source_supported"])
 
 
 if __name__ == "__main__":

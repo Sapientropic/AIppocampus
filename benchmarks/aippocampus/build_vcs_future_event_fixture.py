@@ -18,7 +18,7 @@ import argparse
 import hashlib
 import json
 import time
-from collections import OrderedDict
+from collections import Counter, OrderedDict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -41,6 +41,11 @@ ALLOWED_FAMILIES = {
     "stale_assumption_corrected",
     "anti_drift_negative",
 }
+CANONICAL_DISCOVERY_QUERY_FAMILIES = ("again", "reland", "revert", "workaround")
+SYNONYM_DISCOVERY_TERMS = ("backout", "patch", "rollback", "undo")
+SAFE_DISCOVERY_LABEL_CHARS = set(
+    "abcdefghijklmnopqrstuvwxyz0123456789_- "
+)
 
 
 def now_utc() -> str:
@@ -81,6 +86,170 @@ def as_string_list(value: Any) -> list[str]:
     if isinstance(value, list | tuple | set):
         return [str(item) for item in value if str(item)]
     return [str(value)]
+
+
+def safe_discovery_label(value: Any, *, default: str = "unknown") -> str:
+    text = compact_optional_text(value).casefold()
+    if not text:
+        return default
+    if len(text) > 80:
+        return "redacted_label"
+    if any(ch in text for ch in ("\\", "/", ":", "@")):
+        return "redacted_label"
+    if not set(text) <= SAFE_DISCOVERY_LABEL_CHARS:
+        return "redacted_label"
+    return text
+
+
+def discovery_metadata(row: dict[str, Any]) -> dict[str, Any]:
+    nested_meta = nested(row, "candidate_discovery")
+    if not nested_meta and not any(
+        key in row
+        for key in (
+            "source_surface",
+            "source_surfaces",
+            "query_term",
+            "query_terms",
+            "manual_decision",
+            "candidate_decision",
+            "manual_reason_code",
+            "sampled_miss",
+            "missed_by_narrow_query",
+        )
+    ):
+        return {}
+    meta = dict(nested_meta)
+    for key in (
+        "source_surface",
+        "source_surfaces",
+        "query_term",
+        "query_terms",
+        "manual_decision",
+        "candidate_decision",
+        "manual_reason_code",
+        "reason_code",
+        "sampled_miss",
+        "missed_by_narrow_query",
+    ):
+        if key not in meta and key in row:
+            meta[key] = row[key]
+    return meta
+
+
+def event_family_for_row(row: dict[str, Any]) -> str:
+    event = nested(row, "future_event")
+    return safe_discovery_label(first_value(event.get("family"), row.get("family")))
+
+
+def proportion_counts(counter: Counter[str]) -> dict[str, dict[str, Any]]:
+    total = sum(counter.values())
+    return {
+        key: {"count": count, "proportion": round(count / total, 4) if total else 0.0}
+        for key, count in sorted(counter.items())
+    }
+
+
+def summarize_candidate_discovery_bias(
+    input_rows: list[dict[str, Any]],
+    *,
+    audit_rows: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Summarize license-safe candidate-discovery metadata.
+
+    This reports how benchmark candidates were found and reviewed; it must not
+    infer gold from raw PR bodies or emit reviewer text. Keep it as audit
+    telemetry, not a coverage proof.
+    """
+    records = [row for row in [*input_rows, *(audit_rows or [])] if discovery_metadata(row)]
+    surface_counts: Counter[str] = Counter()
+    query_counts: Counter[str] = Counter()
+    decision_counts: Counter[str] = Counter()
+    reason_counts: Counter[str] = Counter()
+    family_counts: Counter[str] = Counter()
+    sampled_count = 0
+    sampled_miss_count = 0
+
+    for row in records:
+        meta = discovery_metadata(row)
+        surfaces = as_string_list(
+            meta.get("source_surfaces")
+            or meta.get("source_surface")
+            or meta.get("search_surfaces")
+            or meta.get("surface")
+        )
+        for surface in surfaces or ["unknown"]:
+            surface_counts[safe_discovery_label(surface)] += 1
+
+        query_terms = as_string_list(
+            meta.get("query_terms")
+            or meta.get("query_term")
+            or meta.get("matched_terms")
+            or meta.get("query_family")
+        )
+        for query_term in query_terms or ["unknown"]:
+            query_counts[safe_discovery_label(query_term)] += 1
+
+        decision = safe_discovery_label(
+            first_value(
+                meta.get("manual_decision"),
+                meta.get("candidate_decision"),
+                default="unknown",
+            )
+        )
+        decision_counts[decision] += 1
+
+        reason_code = safe_discovery_label(
+            first_value(meta.get("manual_reason_code"), meta.get("reason_code"))
+        )
+        if reason_code != "unknown":
+            reason_counts[reason_code] += 1
+
+        family_counts[event_family_for_row(row)] += 1
+
+        sampled_miss_value = meta.get("sampled_miss", meta.get("missed_by_narrow_query"))
+        if sampled_miss_value is not None:
+            sampled_count += 1
+            sampled_miss_count += int(
+                as_bool(sampled_miss_value, field_name="candidate_discovery.sampled_miss")
+            )
+
+    observed_required = sorted(
+        family for family in CANONICAL_DISCOVERY_QUERY_FAMILIES if query_counts.get(family, 0) > 0
+    )
+    observed_synonyms = sorted(
+        synonym for synonym in SYNONYM_DISCOVERY_TERMS if query_counts.get(synonym, 0) > 0
+    )
+    return {
+        "available": bool(records),
+        "record_count": len(records),
+        "source_surface_mix": proportion_counts(surface_counts),
+        "query_term_hit_mix_by_family": dict(sorted(query_counts.items())),
+        "manual_decision_counts": dict(sorted(decision_counts.items())),
+        "manual_reason_code_counts": dict(sorted(reason_counts.items())),
+        "event_family_balance": proportion_counts(family_counts),
+        "synonym_coverage": {
+            "required_families": list(CANONICAL_DISCOVERY_QUERY_FAMILIES),
+            "observed_required_families": observed_required,
+            "missing_required_families": [
+                family
+                for family in CANONICAL_DISCOVERY_QUERY_FAMILIES
+                if family not in observed_required
+            ],
+            "synonym_terms": list(SYNONYM_DISCOVERY_TERMS),
+            "observed_synonym_terms": observed_synonyms,
+        },
+        "sampled_miss_rate": {
+            "available": sampled_count > 0,
+            "sample_count": sampled_count,
+            "miss_count": sampled_miss_count,
+            "rate": round(sampled_miss_count / sampled_count, 4) if sampled_count else 0.0,
+        },
+        "claim_boundary": (
+            "Candidate discovery bias is audit telemetry for the curated gold "
+            "universe. It is not a wild-corpus coverage claim and must not emit "
+            "raw PR bodies, review text, local paths, or non-redistributable snippets."
+        ),
+    }
 
 
 def as_bool(value: Any, *, field_name: str) -> bool:
@@ -204,12 +373,19 @@ def normalized_future_event(row: dict[str, Any]) -> dict[str, Any]:
     expected_signal = first_value(event.get("expected_signal"), row.get("expected_signal"))
     public_url = first_value(event.get("public_url"), row.get("event_public_url"))
     source_dataset_id = first_value(event.get("source_dataset_id"), row.get("source_dataset_id"))
+    source_degradation = first_value(event.get("source_degradation"), row.get("source_degradation"))
     if expected_signal:
         result["expected_signal"] = compact_optional_text(expected_signal)
     if public_url:
         result["public_url"] = public_url
     if source_dataset_id:
         result["source_dataset_id"] = source_dataset_id
+    if source_degradation:
+        result["source_degradation"] = source_degradation
+    for anti_drift_key in ("anti_drift_family_under_test", "anti_drift_contrast_family"):
+        anti_drift_value = first_value(event.get(anti_drift_key), row.get(anti_drift_key))
+        if anti_drift_value:
+            result[anti_drift_key] = anti_drift_value
     return {key: value for key, value in result.items() if is_present(value)}
 
 
@@ -253,6 +429,7 @@ def build_fixture_rows(
     license_id: str = DEFAULT_LICENSE,
     source_family: str = DEFAULT_SOURCE_FAMILY,
     allow_non_cc0_output: bool = False,
+    candidate_discovery_audit_rows: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     if not input_rows:
         raise ValueError("input rows are empty")
@@ -305,6 +482,10 @@ def build_fixture_rows(
             merge_list_keys={"required_past_source_ids"},
         )
 
+    candidate_discovery_bias = summarize_candidate_discovery_bias(
+        input_rows,
+        audit_rows=candidate_discovery_audit_rows,
+    )
     output_rows: list[dict[str, Any]] = []
     for project_id in sorted(projects):
         project = projects[project_id]
@@ -313,6 +494,7 @@ def build_fixture_rows(
             for key, value in project.items()
             if key not in {"past_window", "future_window"} and is_present(value)
         }
+        row["candidate_discovery_bias"] = candidate_discovery_bias
         row["past_window"] = [
             project["past_window"][source_id] for source_id in sorted(project["past_window"])
         ]
@@ -404,6 +586,9 @@ def event_link_rows_from_clean_events(
                 "expected_signal",
                 "event_public_url",
                 "public_url",
+                "anti_drift_family_under_test",
+                "anti_drift_contrast_family",
+                "source_degradation",
             }
         }
         required_sources = as_string_list(
@@ -424,6 +609,7 @@ def event_link_rows_from_clean_events(
                     "project_id": first_value(link.get("project_id"), default="rollout-project"),
                     "project_label": first_value(link.get("project_label")),
                     "source_family": first_value(link.get("source_family"), default=source_family),
+                    "candidate_discovery": nested(link, "candidate_discovery"),
                     "past_source": past_source_from_clean_event(clean_event),
                     "future_event": future_event,
                 }
@@ -440,6 +626,7 @@ def build_fixture_from_clean_events(
     license_id: str = DEFAULT_LICENSE,
     source_family: str = "agent_rollout_behavior_clean_source",
     allow_non_cc0_output: bool = False,
+    candidate_discovery_audit_path: Path | str | None = None,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     clean_events_path = Path(clean_source_events_path).resolve()
@@ -447,6 +634,11 @@ def build_fixture_from_clean_events(
     destination = Path(output_path).resolve()
     clean_events = load_clean_source_events(clean_events_path)
     link_rows = read_json_or_jsonl(links)
+    audit_rows = (
+        read_json_or_jsonl(Path(candidate_discovery_audit_path).resolve())
+        if candidate_discovery_audit_path
+        else None
+    )
     normalized_rows = event_link_rows_from_clean_events(
         clean_events=clean_events,
         link_rows=link_rows,
@@ -460,6 +652,7 @@ def build_fixture_from_clean_events(
         license_id=license_id,
         source_family=source_family,
         allow_non_cc0_output=allow_non_cc0_output,
+        candidate_discovery_audit_rows=audit_rows,
     )
     write_jsonl(destination, output_rows)
     dataset = recall.load_dataset(
@@ -488,6 +681,10 @@ def build_fixture_from_clean_events(
             "flag_worthy_event_count": len(dataset.flag_worthy_event_ids),
             "non_flag_future_event_count": len(dataset.non_flag_event_ids),
         },
+        "candidate_discovery_bias": summarize_candidate_discovery_bias(
+            normalized_rows,
+            audit_rows=audit_rows,
+        ),
         "claim_boundary": (
             "This builder links curated clean-source behavior events to hard "
             "future labels. The links remain human/program-curated gold; the "
@@ -505,17 +702,24 @@ def build_fixture(
     license_id: str = DEFAULT_LICENSE,
     source_family: str = DEFAULT_SOURCE_FAMILY,
     allow_non_cc0_output: bool = False,
+    candidate_discovery_audit_path: Path | str | None = None,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     source_path = Path(input_path).resolve()
     destination = Path(output_path).resolve()
     input_rows = read_json_or_jsonl(source_path)
+    audit_rows = (
+        read_json_or_jsonl(Path(candidate_discovery_audit_path).resolve())
+        if candidate_discovery_audit_path
+        else None
+    )
     output_rows = build_fixture_rows(
         input_rows,
         dataset_id=dataset_id,
         license_id=license_id,
         source_family=source_family,
         allow_non_cc0_output=allow_non_cc0_output,
+        candidate_discovery_audit_rows=audit_rows,
     )
     write_jsonl(destination, output_rows)
     dataset = recall.load_dataset(
@@ -542,6 +746,10 @@ def build_fixture(
             "flag_worthy_event_count": len(dataset.flag_worthy_event_ids),
             "non_flag_future_event_count": len(dataset.non_flag_event_ids),
         },
+        "candidate_discovery_bias": summarize_candidate_discovery_bias(
+            input_rows,
+            audit_rows=audit_rows,
+        ),
         "claim_boundary": (
             "This builder only converts curated public VCS event-link rows into "
             "the recall benchmark schema. It does not prove wild-corpus quality, "
@@ -579,6 +787,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--license", dest="license_id", default=DEFAULT_LICENSE)
     parser.add_argument("--source-family", default=DEFAULT_SOURCE_FAMILY)
     parser.add_argument(
+        "--candidate-discovery-audit",
+        type=Path,
+        default=None,
+        help=(
+            "Optional sanitized JSON/JSONL audit rows for excluded candidates "
+            "and sampled misses. Do not include raw PR/review text."
+        ),
+    )
+    parser.add_argument(
         "--allow-non-cc0-output",
         action="store_true",
         help=(
@@ -604,6 +821,7 @@ def main() -> int:
             license_id=args.license_id,
             source_family=args.source_family,
             allow_non_cc0_output=args.allow_non_cc0_output,
+            candidate_discovery_audit_path=args.candidate_discovery_audit,
         )
     else:
         if not args.input:
@@ -615,6 +833,7 @@ def main() -> int:
             license_id=args.license_id,
             source_family=args.source_family,
             allow_non_cc0_output=args.allow_non_cc0_output,
+            candidate_discovery_audit_path=args.candidate_discovery_audit,
         )
     if args.json_output:
         print(json.dumps(payload, ensure_ascii=False, indent=2))

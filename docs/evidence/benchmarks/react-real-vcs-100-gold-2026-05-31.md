@@ -13,6 +13,17 @@ The fixtures stay local under `.tmp/react-real-vcs-100-gold/` because the normal
 
 Selected gold events: `105` total, with `45` `rejected_route`, `35` `workaround_rationale`, and `25` `reopen_condition`. Anti-drift negatives are matched one-for-one with the same family distribution.
 
+## Candidate Discovery Bias
+
+Candidate discovery is now treated as an auditable benchmark artifact, not as a prelude hidden behind the final score. This dated React run predates the new `candidate_discovery_bias` builder audit rows, so the committed report can only reconstruct a partial bias ledger from the recorded query counts and selected-event counts:
+
+- source surface mix: `169` title-search candidates and `265` broader GitHub search-surface candidates;
+- query-term hit mix: `169` `revert`, `143` `workaround`, `10` `reland`, and `112` `again`/`revert` candidates;
+- selected gold family balance: `45` `rejected_route`, `35` `workaround_rationale`, and `25` `reopen_condition`;
+- manual exclusion reasons and sampled miss rate: unavailable for this legacy run because no sanitized audit ledger was archived.
+
+This means the `100/105` source-window score below is a deterministic source-support contract result over the selected gold universe. It is not a claim that the candidate-discovery process found every natural React engineering-history event that should matter. Future VCS fixture builds should pass sanitized discovery audit rows, including excluded candidates and sampled misses, through `build_vcs_future_event_fixture.py --candidate-discovery-audit`.
+
 ## Commands
 
 ```powershell
@@ -33,6 +44,14 @@ The empty, closed-book, parametric public-memory, and overactive sanity-control 
 ## Uncertainty Semantics
 
 Headline binomial rates below include `95%` Wilson confidence intervals and `n`. These intervals expose uncertainty around the deterministic controls; they do not make the curated React fixture a population-quality claim. A perfect `105/105` point estimate renders as `100.00% (95% Wilson CI 96.47%-100.00%, n=105)`, and `0/105` anti-drift violations render as `0.00% observed; 95% Wilson upper bound 3.53% (n=105)`.
+
+## Precision Semantics
+
+The headline `future_event_flag_precision` is the source-backed contract metric: a flag is a true positive only when it names a flag-worthy event and supplies the required source ids. The runner also exposes `diagnostic_event_identity_precision` for debugging predictions that find the right event id but fail the source-support contract. That diagnostic must not replace the headline precision gate.
+
+This React run used full source ids only. Truncated, redacted, missing-source-id, and partial-support degradation cases are covered by the current runner/tests and should be reported in future degradation-specific dated measurements before making source-robustness claims.
+
+The report includes `105` anti-drift negatives, but the fixture predates the machine tags `anti_drift_family_under_test` and `anti_drift_contrast_family`. Future adversarial reports should tag negative cross-family controls separately so cross-family false activations do not hide inside the aggregate false-positive total.
 
 ## Base Arm Results
 
