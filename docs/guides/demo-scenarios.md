@@ -197,15 +197,17 @@ python ./benchmarks/aippocampus/benchmark_fresh_thread_recall_demo.py --json --o
 
 Expected result: the runtime demo prints turn-by-turn scent, action,
 activation, lock-handling, and source-reopen progression for public-safe
-synthetic flows. The benchmark wrapper reports 4 positive flows, 4 negative
-controls, and three arms: `no_memory`, `hook_only`, and `active_recall`.
-Privacy, unsupported-evidence, and negative-control gates should pass.
+synthetic flows. The benchmark wrapper reports 5 positive flows, 5 negative
+controls, turn-depth distribution, multi-turn coverage, wrong-recall
+correction coverage, threshold-edge coverage, and three arms: `no_memory`,
+`hook_only`, and `active_recall`. Privacy, unsupported-evidence,
+negative-control, multi-turn, correction, and threshold gates should pass.
 
 Cannot claim: real-history fresh-thread recall quality, live semantic-model
-quality, competitor superiority, or production coverage for private emotional,
-family, design, or coding memories. The fixtures model upstream
-semantic/subconscious output; the runner must not be read as a prompt-keyword
-classifier.
+quality, live correction-extraction quality, competitor superiority, or
+production coverage for private emotional, family, design, or coding memories.
+The fixtures model upstream semantic/subconscious output; the runner must not
+be read as a prompt-keyword classifier.
 
 ## Scenario 7: Inspect MCP Tools
 

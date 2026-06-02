@@ -92,12 +92,19 @@ def candidate_ref_from_message(thread_key: str, row: dict[str, Any]) -> dict[str
     return ref
 
 
-def select_reopenable_refs(registry: dict[str, Any], *, limit: int = 3) -> dict[str, Any]:
+def select_reopenable_refs(
+    registry: dict[str, Any],
+    *,
+    limit: int = 3,
+    minimum_sample_count: int = 2,
+) -> dict[str, Any]:
     selected: list[dict[str, Any]] = []
     bad_rows = 0
     clean_source_paths = 0
     clean_source_paths_found = 0
     message_rows_seen = 0
+    eligible_clean_source_rows = 0
+    eligible_reopenable_threads = 0
 
     for entry in list_value(registry.get("threads")):
         if not isinstance(entry, dict):
@@ -115,23 +122,33 @@ def select_reopenable_refs(registry: dict[str, Any], *, limit: int = 3) -> dict[
         rows, row_errors = iter_jsonl(messages_path)
         bad_rows += row_errors
         message_rows_seen += len(rows)
+        thread_ref: dict[str, Any] | None = None
         for row in rows:
             ref = candidate_ref_from_message(thread_key, row)
             if ref:
-                selected.append(ref)
-                break
-        if len(selected) >= limit:
-            break
+                eligible_clean_source_rows += 1
+                if thread_ref is None:
+                    thread_ref = ref
+        if thread_ref is not None:
+            eligible_reopenable_threads += 1
+            if len(selected) < max(0, limit):
+                selected.append(thread_ref)
 
     return {
         "selected_refs": selected,
         "stats": {
             "thread_count": len(list_value(registry.get("threads"))),
+            "sample_limit": max(0, limit),
+            "minimum_sample_count": max(0, minimum_sample_count),
             "clean_source_message_path_count": clean_source_paths,
             "clean_source_message_path_found_count": clean_source_paths_found,
             "clean_source_message_rows_seen": message_rows_seen,
+            "eligible_clean_source_row_count": eligible_clean_source_rows,
+            "eligible_reopenable_thread_count": eligible_reopenable_threads,
             "bad_clean_source_message_rows": bad_rows,
             "selected_reopenable_thread_count": len(selected),
+            "sampled_reopenable_ref_count": len(selected),
+            "sample_gap": max(0, minimum_sample_count - len(selected)),
         },
     }
 
@@ -221,6 +238,97 @@ def run_thread_only_lock_boundary_check(
     }
 
 
+def _status_for_batch(results: list[dict[str, Any]]) -> str:
+    statuses = [str(result.get("status") or "") for result in results]
+    if not statuses or any(status == "insufficient_real_history" for status in statuses):
+        return "insufficient_real_history"
+    if any(status == "failed" for status in statuses):
+        return "failed"
+    return "passed"
+
+
+def _lock_state_counts(results: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for result in results:
+        state = str(result.get("lock_state") or "")
+        if not state:
+            continue
+        counts[state] = counts.get(state, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def run_ready_lock_reopenability_batch(
+    *,
+    registry_path: Path,
+    cwd: Path,
+    refs: list[dict[str, Any]],
+) -> dict[str, Any]:
+    results = [
+        run_ready_lock_reopenability_check(
+            registry_path=registry_path,
+            cwd=cwd,
+            ref=ref,
+        )
+        for ref in refs
+    ]
+    status = _status_for_batch(results)
+    return {
+        "status": status,
+        "sample_count": len(results),
+        "passed_count": sum(1 for result in results if result.get("status") == "passed"),
+        "failed_count": sum(1 for result in results if result.get("status") == "failed"),
+        "insufficient_count": sum(
+            1 for result in results if result.get("status") == "insufficient_real_history"
+        ),
+        "lock_state_counts": _lock_state_counts(results),
+        "reopen_ok_count": sum(1 for result in results if result.get("reopen_ok")),
+        "total_match_count": sum(int_count(result.get("match_count")) for result in results),
+        "total_reopenable_ref_count": sum(
+            int_count(result.get("reopenable_ref_count")) for result in results
+        ),
+    }
+
+
+def run_thread_only_lock_boundary_batch(
+    *,
+    registry_path: Path,
+    cwd: Path,
+    refs: list[dict[str, Any]],
+) -> dict[str, Any]:
+    results = [
+        run_thread_only_lock_boundary_check(
+            registry_path=registry_path,
+            cwd=cwd,
+            ref=ref,
+        )
+        for ref in refs
+    ]
+    status = _status_for_batch(results)
+    error_codes = sorted(
+        {
+            str(code)
+            for result in results
+            for code in list_value(result.get("error_codes"))
+            if code
+        }
+    )
+    return {
+        "status": status,
+        "sample_count": len(results),
+        "passed_count": sum(1 for result in results if result.get("status") == "passed"),
+        "failed_count": sum(1 for result in results if result.get("status") == "failed"),
+        "insufficient_count": sum(
+            1 for result in results if result.get("status") == "insufficient_real_history"
+        ),
+        "lock_state_counts": _lock_state_counts(results),
+        "reopen_ok_count": sum(1 for result in results if result.get("reopen_ok")),
+        "total_reopenable_ref_count": sum(
+            int_count(result.get("reopenable_ref_count")) for result in results
+        ),
+        "error_code_hashes": error_codes[:8],
+    }
+
+
 def run_current_repo_fact_negative_control(
     *,
     registry_path: Path,
@@ -254,22 +362,34 @@ def run_fresh_thread_real_history_smoke(
     *,
     registry_path: Path,
     cwd: Path,
+    sample_limit: int = 3,
+    min_sampled_refs: int = 2,
 ) -> dict[str, Any]:
     registry = load_registry(registry_path)
-    selected = select_reopenable_refs(registry, limit=1)
-    refs = list_value(selected.get("selected_refs"))
-    ref = refs[0] if refs and isinstance(refs[0], dict) else None
+    selected = select_reopenable_refs(
+        registry,
+        limit=sample_limit,
+        minimum_sample_count=min_sampled_refs,
+    )
+    refs = [ref for ref in list_value(selected.get("selected_refs")) if isinstance(ref, dict)]
+    sample_coverage_status = (
+        "insufficient_real_history"
+        if not refs
+        else "insufficient_sample_coverage"
+        if len(refs) < max(0, min_sampled_refs)
+        else "passed"
+    )
 
     checks = {
-        "ready_lock_reopenability": run_ready_lock_reopenability_check(
+        "ready_lock_reopenability": run_ready_lock_reopenability_batch(
             registry_path=registry_path,
             cwd=cwd,
-            ref=ref,
+            refs=refs,
         ),
-        "thread_only_lock_boundary": run_thread_only_lock_boundary_check(
+        "thread_only_lock_boundary": run_thread_only_lock_boundary_batch(
             registry_path=registry_path,
             cwd=cwd,
-            ref=ref,
+            refs=refs,
         ),
         "current_repo_fact_negative_control": run_current_repo_fact_negative_control(
             registry_path=registry_path,
@@ -279,19 +399,43 @@ def run_fresh_thread_real_history_smoke(
     statuses = [str(check.get("status") or "") for check in checks.values()]
     insufficient = any(status == "insufficient_real_history" for status in statuses)
     failed = any(status == "failed" for status in statuses)
-    status = "insufficient_real_history" if insufficient else "failed" if failed else "passed"
+    status = (
+        "insufficient_real_history"
+        if insufficient or sample_coverage_status == "insufficient_real_history"
+        else "failed"
+        if failed
+        else "insufficient_sample_coverage"
+        if sample_coverage_status == "insufficient_sample_coverage"
+        else "passed"
+    )
     ok = status == "passed"
+    stats = dict_value(selected.get("stats"))
+    sample_batch_fingerprint = stable_hash(
+        json.dumps(
+            {
+                "refs": refs,
+                "stats": stats,
+            },
+            sort_keys=True,
+            ensure_ascii=False,
+        )
+    )
     return {
         "kind": SMOKE_KIND,
         "privacy": "aggregate_hash_only",
         "privacy_boundary": PRIVACY_BOUNDARY,
         "ok": ok,
         "status": status,
-        "registry": selected["stats"],
-        "registry_fingerprint": stable_hash(json.dumps(selected["stats"], sort_keys=True)),
+        "sample_coverage_status": sample_coverage_status,
+        "registry": stats,
+        "registry_fingerprint": stable_hash(json.dumps(stats, sort_keys=True)),
+        "sample_batch_fingerprint": sample_batch_fingerprint,
         "checks": checks,
         "can_claim": (
-            ["real-history fresh-thread recall boundary passed"]
+            [
+                "real-history fresh-thread recall boundary passed",
+                "multi-ref real-history fresh-thread coverage sampled",
+            ]
             if ok
             else []
         ),
@@ -299,6 +443,11 @@ def run_fresh_thread_real_history_smoke(
             []
             if ok
             else ["real-history fresh-thread recall boundary passed"]
+        )
+        + (
+            []
+            if sample_coverage_status == "passed"
+            else ["multi-ref real-history fresh-thread coverage"]
         )
         + [
             "private real-history recall quality",
@@ -309,11 +458,13 @@ def run_fresh_thread_real_history_smoke(
 
 
 def print_table(result: dict[str, Any]) -> None:
+    registry = dict_value(result.get("registry"))
     print(
         "fresh-thread real-history smoke: "
         f"{result.get('status')} | "
-        f"threads={dict_value(result.get('registry')).get('thread_count', 0)} | "
-        f"selected={dict_value(result.get('registry')).get('selected_reopenable_thread_count', 0)}"
+        f"threads={registry.get('thread_count', 0)} | "
+        f"sampled={registry.get('sampled_reopenable_ref_count', 0)} | "
+        f"eligible_rows={registry.get('eligible_clean_source_row_count', 0)}"
     )
     for name, check in dict_value(result.get("checks")).items():
         print(f"- {name}: {dict_value(check).get('status')}")
@@ -323,6 +474,8 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--registry")
     parser.add_argument("--cwd", default=os.getcwd())
+    parser.add_argument("--sample-limit", type=int, default=3)
+    parser.add_argument("--min-sampled-refs", type=int, default=2)
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--strict", action="store_true")
     args = parser.parse_args()
@@ -335,6 +488,8 @@ def main() -> int:
     result = run_fresh_thread_real_history_smoke(
         registry_path=registry_path,
         cwd=Path(args.cwd).resolve(),
+        sample_limit=args.sample_limit,
+        min_sampled_refs=args.min_sampled_refs,
     )
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
