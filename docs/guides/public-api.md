@@ -105,12 +105,14 @@ The public API does not include every helper module or every script under
 
 The CLI contract applies to documented operator commands, especially:
 
-- `aippocampus health|search|onboard|export|import|mcp|sync|object-sync|hooks`
+- `aippocampus health|search|onboard|export|import|mcp|storage|sync|object-sync|hooks`
 - `aippocampus_health.py`
 - `search_clean_source.py`
 - `latest_reply.py` as a Codex raw-rollout audit compatibility command
 - `onboard.py --provider codex|claude-code|generic-jsonl|auto`
 - `aippocampus import conversation --format generic-jsonl --input <path>`
+- `aippocampus storage gc --dry-run` as the no-mutation storage governance plan
+  over capacity data and existing retention JSON
 - `registry.py register-source --provider generic-jsonl --input <path>`
 - `onboard_codex.py`
 - `aippocampus_mcp_server.py --list-tools`

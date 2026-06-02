@@ -224,13 +224,14 @@ installers are not claimed by the provider contract.
 | `aippocampus_runtime/subconscious/theme_emergence.py` plus `theme_emergence.py` compatibility shim | Deterministic Phase 3 theme candidates over recurring source-backed question links and concept-graph neighbors. | Imported by deterministic job runner; optional CLI for no-write diagnostics. | `subconscious_jobs.jsonl`, `concept_index.sqlite`, question-link source refs, frontier-marker rows. | Runtime internal |
 | `aippocampus_runtime/question/health.py` and `question_health.py` compatibility shim | Derived aggregate question lifecycle and health stats for source-backed subconscious job rows, with explicit local-detail mode. | `aippocampus_health.py --question-stats`, manual diagnostics. | `subconscious_jobs.jsonl`, optional registry clean-source ref resolution. | Repo maintenance |
 | `aippocampus_runtime/subconscious/question_resolution.py` plus `question_resolution.py` compatibility shim | Deterministic explicit user follow-up resolution signal extraction for tracked questions. | Deterministic `subconscious_jobs.py` follow-up after `question_tracking`, plus manual diagnostics; feeds packaged question health through append-only `question_resolution_signal` rows. | Registry clean-source user turns, tracked question rows, compact source refs; no raw follow-up text in emitted signals. | Runtime internal |
-| `aippocampus_runtime/ops/{storage_capacity_report,rollout_size_audit,retention_report,cold_archive}.py` plus top-level compatibility shims | Storage, retention, and capacity diagnostics. | Manual readiness / GB-scale work. | Registry and generated-artifact accounting. | Repo maintenance |
+| `aippocampus_runtime/ops/{storage_capacity_report,rollout_size_audit,retention_report,cold_archive,storage_governance}.py` plus top-level compatibility shims for the older direct report/archive scripts | Storage, retention, capacity diagnostics, and the first dry-run governance bridge for rebuildable-cache cleanup planning. | Manual readiness / GB-scale work. | Registry and generated-artifact accounting; `storage_governance.py` consumes capacity data and existing retention JSON without reading message bodies or adding a top-level shim. | Repo maintenance |
 
 These diagnostics are deliberately outside the core recall path. They can read
 registry, clean-source manifests, raw rollout audit paths, and generated
 sidecars to answer operator questions, but foreground prompt recall should not
 import them or wait on them. The user-facing cleanup sequence remains
-`retention_report.py --write` before `cold_archive.py`.
+`retention_report.py --write` before `cold_archive.py`; `aippocampus storage gc --dry-run`
+can then turn that evidence into an auditable no-mutation plan.
 
 ## MCP Surface
 

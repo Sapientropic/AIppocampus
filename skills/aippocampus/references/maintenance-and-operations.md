@@ -155,6 +155,16 @@ manual cleanup outside the script.
 For smaller/private migration, prefer `export_bundle.py --no-raw` when raw
 history is not needed.
 
+Use `aippocampus storage gc --dry-run --json` as the governance bridge after
+capacity/retention evidence exists. The dry-run command may generate the
+registry-scale capacity report because that report only stats files and reads
+manifests, but it does not generate a retention report implicitly. If no
+existing `retention_report.json` is found or passed with `--retention-report`,
+the command reports aggregate rebuildable bytes from capacity data and marks
+path-level candidates as unavailable. Apply mode is deliberately deferred until
+source/archive checks, live writer/export leases, active-thread exclusion, and
+eviction-manifest semantics are deterministic.
+
 Codex Desktop's own thread archive is a different mechanism: the app may move
 raw rollout JSONL files from `$CODEX_HOME/sessions/` into
 `$CODEX_HOME/archived_sessions/`. AIppocampus scans that directory read-only so
@@ -195,6 +205,7 @@ Audit and archive commands:
 
 - `python ...\rollout_size_audit.py --cwd "$PWD"`
 - `python ...\storage_capacity_report.py --json`
+- `aippocampus storage gc --dry-run --json`
 - `python tools\aippocampus\smoke\smoke_synthetic_scale_capacity.py --json`
 - `python ...\retention_report.py --cwd "$PWD" --write`
 - `python ...\cold_archive.py --cwd "$PWD"`

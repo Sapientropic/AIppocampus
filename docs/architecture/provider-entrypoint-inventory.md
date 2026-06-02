@@ -1,6 +1,6 @@
 # Provider Entrypoint Inventory
 
-Last audited: 2026-06-01.
+Last audited: 2026-06-02.
 
 This inventory classifies the remaining runtime surfaces that mention Codex raw
 rollouts or Codex home helpers. It is the companion record for issue #122. The
@@ -38,6 +38,7 @@ audit/host integration paths.
 | `aippocampus_runtime/ops/rollout_size_audit.py` plus `rollout_size_audit.py` compatibility shim | Codex-only raw audit/debug tool | Audits raw Codex rollout size/path behavior. |
 | `aippocampus_runtime/ops/cold_archive.py` plus `cold_archive.py` compatibility shim | Codex-only raw audit/archive tool | Optional raw rollout archive path; not daily recall. |
 | `aippocampus_runtime/ops/retention_report.py` plus `retention_report.py` compatibility shim | Codex-only raw audit/report tool | Uses raw Codex rollout unless an explicit rollout is supplied. |
+| `aippocampus_runtime/ops/storage_governance.py` | Registry-first storage governance facade with Codex-current-thread retention discovery | `aippocampus storage gc --dry-run` can generate capacity evidence from registry/manifests without reading message bodies. It uses Codex current-thread discovery only to find an already-written default `retention_report.json`; operators can pass `--retention-report` for explicit/non-Codex evidence. No top-level compatibility shim is added. |
 | `aippocampus_runtime/artifacts/export_bundle.py` plus `export_bundle.py` compatibility shim | Codex-current-thread export helper | Exports generated artifacts for a current Codex thread unless explicit paths are supplied. The package owner calls the packaged index builder in-process; the top-level script is compatibility only. |
 
 ## Guardrail
