@@ -246,6 +246,32 @@ class SemanticRecallGateTests(unittest.TestCase):
         self.assertNotIn(FAKE_TEST_OPENAI_API_KEY, encoded)
         self.assertNotIn("private-model.example", encoded)
 
+    def test_public_payload_includes_safe_cache_diagnostics(self) -> None:
+        private_result = {
+            "available": True,
+            "decision": "scent",
+            "confidence": 0.82,
+            "cached": True,
+            "cache_diagnostics": {
+                "lookup": "hit",
+                "cache_key": "sg_" + "a" * 24,
+                "semantic_cues_in_cache_key": True,
+                "path": str(self.root / "private" / "semantic_recall_cache.json"),
+                "prompt": "private prompt text",
+                "telemetry": {"hits": 2, "misses": 1},
+            },
+        }
+
+        public = gate.public_semantic_gate_payload(private_result)
+        encoded = json.dumps(public, ensure_ascii=False)
+
+        self.assertEqual(public["cache_diagnostics"]["lookup"], "hit")
+        self.assertEqual(public["cache_diagnostics"]["cache_key"], "sg_" + "a" * 24)
+        self.assertTrue(public["cache_diagnostics"]["semantic_cues_in_cache_key"])
+        self.assertEqual(public["cache_diagnostics"]["telemetry"], {"hits": 2, "misses": 1})
+        self.assertNotIn("private prompt text", encoded)
+        self.assertNotIn(str(self.root), encoded)
+
     def test_main_json_uses_public_semantic_gate_payload(self) -> None:
         private_result = {
             "available": True,
@@ -775,6 +801,139 @@ class SemanticRecallGateTests(unittest.TestCase):
         self.assertEqual(second["cache_diagnostics"]["lookup"], "hit")
         self.assertTrue(second["cache_diagnostics"]["semantic_cues_in_cache_key"])
         self.assertEqual(calls["count"], 3)
+
+    def test_expired_cache_entry_reports_expiration_and_telemetry_without_prompt_text(self) -> None:
+        cache = self.root / "semantic_recall_cache.json"
+        route = gate.resolve_model_route(None)
+        key = gate.cache_fingerprint(
+            prompt="脑内续接器",
+            cwd=self.workspace,
+            registry_path=self.registry_path,
+            semantic_triggers_path=gate.default_semantic_triggers_path(
+                registry_path=self.registry_path
+            ),
+            semantic_cues_path=gate.default_semantic_cues_path(registry_path=self.registry_path),
+            mode="auto",
+            model=route.model,
+            base_url=route.base_url,
+            temperature=gate.DEFAULT_TEMPERATURE,
+        )
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "entries": {
+                        key: {
+                            "created_at": "2026-01-01T00:00:00Z",
+                            "created_unix": time.time() - gate.DEFAULT_CACHE_TTL_SECONDS - 10,
+                            "result": {
+                                "available": True,
+                                "decision": "scent",
+                                "confidence": 0.8,
+                                "query_aliases": ["private exact alias"],
+                            },
+                        }
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        def chat_fn(messages, api_key, model, base_url, max_tokens, timeout, temperature):
+            return fake_response(
+                {
+                    "decision": "scent",
+                    "confidence": 0.8,
+                    "query_aliases": ["AIppocampus"],
+                    "anti_personalization_risk": "low",
+                    "reason": "expired cache rerun",
+                }
+            )
+
+        result = gate.run_semantic_gate(
+            "脑内续接器",
+            cwd=self.workspace,
+            registry=self.registry,
+            registry_path=self.registry_path,
+            cache_path=cache,
+            api_key="test-key",
+            chat_fn=chat_fn,
+        )
+        report = gate.semantic_cache_report(cache)
+        encoded = json.dumps(report, ensure_ascii=False)
+
+        self.assertFalse(result["cached"])
+        self.assertEqual(result["cache_diagnostics"]["lookup"], "expired")
+        self.assertEqual(report["telemetry"]["expired"], 1)
+        self.assertEqual(report["telemetry"]["misses"], 1)
+        self.assertNotIn("private exact alias", encoded)
+        self.assertNotIn("脑内续接器", encoded)
+
+    def test_cache_eviction_keeps_high_value_semantic_cue_result_over_new_churn(self) -> None:
+        cache = self.root / "semantic_recall_cache.json"
+        high_value = {
+            "available": True,
+            "decision": "scent",
+            "confidence": 0.93,
+            "query_aliases": ["source-backed cue alias"],
+            "cache_diagnostics": {"semantic_cues_in_cache_key": True},
+        }
+        low_value = {
+            "available": True,
+            "decision": "background_only",
+            "confidence": 0.2,
+            "query_aliases": [],
+            "cache_diagnostics": {"semantic_cues_in_cache_key": False},
+        }
+
+        gate.write_cache(cache, "sg_high_value_cue", high_value, max_entries=2)
+        gate.write_cache(cache, "sg_low_churn_1", low_value, max_entries=2)
+        gate.write_cache(cache, "sg_low_churn_2", low_value, max_entries=2)
+        payload = json.loads(cache.read_text(encoding="utf-8"))
+
+        self.assertIn("sg_high_value_cue", payload["entries"])
+        self.assertIn("sg_low_churn_2", payload["entries"])
+        self.assertNotIn("sg_low_churn_1", payload["entries"])
+        self.assertEqual(payload["telemetry"]["evictions"], 1)
+        self.assertEqual(payload["telemetry"]["eviction_reasons"], {"low_value_churn": 1})
+
+    def test_main_cache_report_json_omits_prompt_and_alias_text(self) -> None:
+        cache = self.root / "semantic_recall_cache.json"
+        gate.write_cache(
+            cache,
+            "sg_report",
+            {
+                "available": True,
+                "decision": "scent",
+                "confidence": 0.8,
+                "query_aliases": ["private alias should not render"],
+                "cache_diagnostics": {"semantic_cues_in_cache_key": True},
+            },
+        )
+        stdout = io.StringIO()
+        with (
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "semantic_recall_gate.py",
+                    "--cache-report",
+                    "--cache",
+                    str(cache),
+                    "--json",
+                ],
+            ),
+            contextlib.redirect_stdout(stdout),
+        ):
+            code = gate.main()
+
+        rendered = stdout.getvalue()
+        self.assertEqual(code, 0)
+        self.assertIn('"entry_count"', rendered)
+        self.assertIn('"telemetry"', rendered)
+        self.assertNotIn("private alias should not render", rendered)
 
     def test_semantic_cue_cache_changes_invalidate_gate_result_cache(self) -> None:
         calls = {"count": 0}

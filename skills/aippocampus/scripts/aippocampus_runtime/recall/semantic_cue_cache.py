@@ -351,6 +351,50 @@ def record_semantic_cue_misses(
     return {"path": str(path), "updated_count": updated}
 
 
+def _net_hit_bucket(value: int) -> str:
+    if value <= 0:
+        return "0"
+    if value == 1:
+        return "1"
+    if value <= 4:
+        return "2_4"
+    return "5_plus"
+
+
+def semantic_cue_cache_report(path: Path | None) -> dict[str, Any]:
+    rows = all_semantic_cues(path) if path else []
+    status_counts: dict[str, int] = {}
+    net_hit_buckets: dict[str, int] = {}
+    active_count = 0
+    source_backed_count = 0
+    false_positive_total = 0
+    for row in rows:
+        status = str(row.get("status") or "unknown")
+        status_counts[status] = status_counts.get(status, 0) + 1
+        hit_count = int(row.get("hit_count") or 0)
+        false_positive_count = int(row.get("false_positive_count") or 0)
+        false_positive_total += false_positive_count
+        net = hit_count - false_positive_count
+        bucket = _net_hit_bucket(net)
+        net_hit_buckets[bucket] = net_hit_buckets.get(bucket, 0) + 1
+        if cue_is_active(row):
+            active_count += 1
+        if row.get("source_refs"):
+            source_backed_count += 1
+    return {
+        "kind": "aippocampus_semantic_cue_cache_report",
+        "schema_version": SEMANTIC_CUE_SCHEMA_VERSION,
+        "entry_count": len(rows),
+        "active_count": active_count,
+        "staging_count": status_counts.get("staging", 0),
+        "source_backed_count": source_backed_count,
+        "false_positive_count": false_positive_total,
+        "status_counts": status_counts,
+        "net_hit_buckets": net_hit_buckets,
+        "output_boundary": "semantic_cue_cache_report_counts_only",
+    }
+
+
 def semantic_cue_triggers(path: Path | None, *, limit: int = 64) -> list[dict[str, Any]]:
     if not path:
         return []

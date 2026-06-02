@@ -165,6 +165,12 @@ For these commands:
   `provenance_counts` and `support_level_counts` are allowed public-safe
   aggregate diagnostics. Per-card provenance/debug envelopes are not public
   schemas and must not be treated as source-backed evidence.
+- `semantic_recall_gate.py --cache-report --json` is an additive trusted-local
+  operator diagnostic for the exact semantic result cache. Its public-safe
+  projection may include counts, telemetry counters, value-class buckets, and
+  hashed cache keys, but must not emit raw prompt text, cue text, source
+  snippets, or local paths. Treat the report as cache economics and routing
+  health only, not as a source-backed memory or downstream API schema.
 - Prompt hook `status --last --json` / `aippocampus hooks prompt status --last --json`
   exposes a public-safe audit projection for the latest prompt hook run. Stable
   automation fields are `status`, `source`, `privacy_boundary`, and
@@ -517,6 +523,10 @@ These are internal, experimental, or best-effort unless promoted elsewhere:
   compatibility shims such as `retrieval_score_fusion.py`; their outputs are
   policy diagnostics and ranking hints, not stable public schemas or source
   truth.
+- Semantic result-cache and semantic-cue-cache reports are trusted-local
+  diagnostics. They may be public-safe in content, but their helper-level field
+  shapes are additive implementation details unless a facade command documents
+  them.
 - Debug output, trace fields, timing metrics, and local absolute paths.
 - Research notes under `docs/research/`.
 - External provider pricing, rate limits, model IDs, and cache behavior.

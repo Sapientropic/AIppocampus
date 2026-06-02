@@ -28,7 +28,6 @@ from typing import Any, Callable, Mapping
 
 from aippocampus_runtime.core import (
     compact_text,
-    now_utc,
     sanitize_external_model_payload,
     sanitize_external_model_text,
 )
@@ -44,6 +43,18 @@ from aippocampus_runtime.recall.semantic_cue_cache import (
     default_semantic_cues_path,
     semantic_cue_triggers,
 )
+from aippocampus_runtime.recall.semantic_result_cache import (
+    CACHE_TELEMETRY_KEYS,
+    read_cache,
+    semantic_cache_report,
+    write_cache,
+)
+from aippocampus_runtime.recall.semantic_result_cache import (
+    DEFAULT_CACHE_TTL_SECONDS as _RESULT_CACHE_TTL_SECONDS,
+)
+from aippocampus_runtime.recall.semantic_result_cache import (
+    DEFAULT_MAX_CACHE_ENTRIES as _RESULT_CACHE_MAX_ENTRIES,
+)
 from aippocampus_runtime.registry.api import load_registry, registry_paths, unique_preserve
 from aippocampus_runtime.subconscious.runtime import add_usage, call_chat_json, compact_usage
 from aippocampus_runtime.subconscious.worker import clamp_confidence, parse_model_json
@@ -54,8 +65,8 @@ DEFAULT_CACHE_NAME = "semantic_recall_cache.json"
 DEFAULT_TRIGGERS_NAME = "semantic_triggers.jsonl"
 DEFAULT_TIMEOUT = int(os.environ.get("AIPPOCAMPUS_SEMANTIC_TIMEOUT", "12"))
 DEFAULT_TEMPERATURE = float(os.environ.get("AIPPOCAMPUS_SEMANTIC_TEMPERATURE", "0.2"))
-DEFAULT_MAX_CACHE_ENTRIES = 256
-DEFAULT_CACHE_TTL_SECONDS = int(os.environ.get("AIPPOCAMPUS_SEMANTIC_CACHE_TTL", str(24 * 60 * 60)))
+DEFAULT_CACHE_TTL_SECONDS = _RESULT_CACHE_TTL_SECONDS
+DEFAULT_MAX_CACHE_ENTRIES = _RESULT_CACHE_MAX_ENTRIES
 # Foreground semantic recall is quality-first. A limit of 0 means "send the full
 # compact catalog"; env limits are explicit debug/perf overrides, not product
 # defaults, because truncating the catalog silently turns into recall loss.
@@ -768,55 +779,6 @@ def cache_fingerprint(
     return "sg_" + hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()[:24]
 
 
-def read_cache(
-    path: Path, key: str, *, ttl_seconds: int = DEFAULT_CACHE_TTL_SECONDS
-) -> dict[str, Any] | None:
-    data = load_json(path)
-    entry = (data.get("entries") or {}).get(key) if isinstance(data.get("entries"), dict) else None
-    if not isinstance(entry, dict):
-        return None
-    created = float(entry.get("created_unix") or 0.0)
-    if ttl_seconds > 0 and created and time.time() - created > ttl_seconds:
-        return None
-    result = entry.get("result")
-    if isinstance(result, dict):
-        result = dict(result)
-        result["cached"] = True
-        return result
-    return None
-
-
-def write_cache(
-    path: Path, key: str, result: dict[str, Any], *, max_entries: int = DEFAULT_MAX_CACHE_ENTRIES
-) -> None:
-    data = load_json(path)
-    raw_entries = data.get("entries")
-    entries: dict[str, Any] = dict(raw_entries) if isinstance(raw_entries, dict) else {}
-    slim = dict(result)
-    slim.pop("elapsed_ms", None)
-    slim.pop("cached", None)
-    entries[key] = {"created_at": now_utc(), "created_unix": time.time(), "result": slim}
-    if len(entries) > max_entries:
-        kept = sorted(
-            entries.items(),
-            key=lambda item: float((item[1] or {}).get("created_unix") or 0.0),
-            reverse=True,
-        )[:max_entries]
-        entries = dict(kept)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(
-        json.dumps(
-            {"schema_version": SCHEMA_VERSION, "updated_at": now_utc(), "entries": entries},
-            ensure_ascii=False,
-            indent=2,
-        ),
-        encoding="utf-8",
-        newline="\n",
-    )
-    tmp.replace(path)
-
-
 def error_bucket(message: str) -> str:
     text = str(message or "").casefold()
     if "overall deadline" in text:
@@ -872,6 +834,28 @@ def public_cache(cache: Any) -> dict[str, Any]:
     return result
 
 
+def public_cache_diagnostics(diagnostics: Any) -> dict[str, Any]:
+    if not isinstance(diagnostics, Mapping):
+        return {}
+    result: dict[str, Any] = {}
+    lookup = str(diagnostics.get("lookup") or "")
+    if lookup in {"disabled", "hit", "miss", "expired", "write_error"}:
+        result["lookup"] = lookup
+    cache_key = str(diagnostics.get("cache_key") or "")
+    if re.fullmatch(r"sg_[0-9a-f]{24}", cache_key):
+        result["cache_key"] = cache_key
+    if "semantic_cues_in_cache_key" in diagnostics:
+        result["semantic_cues_in_cache_key"] = bool(diagnostics.get("semantic_cues_in_cache_key"))
+    telemetry = diagnostics.get("telemetry")
+    if isinstance(telemetry, Mapping):
+        result["telemetry"] = {
+            str(key): public_count(value)
+            for key, value in telemetry.items()
+            if str(key) in CACHE_TELEMETRY_KEYS
+        }
+    return result
+
+
 def public_error_buckets(buckets: Any) -> dict[str, int]:
     if not isinstance(buckets, Mapping):
         return {}
@@ -906,6 +890,7 @@ def public_semantic_gate_payload(result: Mapping[str, Any]) -> dict[str, Any]:
         "error_buckets": public_error_buckets(result.get("error_buckets")),
         "worker_count": public_count(result.get("worker_count") or len(workers)),
         "cache": public_cache(result.get("cache")),
+        "cache_diagnostics": public_cache_diagnostics(result.get("cache_diagnostics")),
         "model_route": public_model_route(result.get("model_route")),
         "elapsed_ms": public_count(result.get("elapsed_ms")),
         "output_boundary": "semantic_gate_private_worker_details_omitted",
@@ -1137,20 +1122,22 @@ def run_semantic_gate(
         temperature=temperature,
     )
     cache_lookup = "disabled"
+    cache_lookup_diagnostics: dict[str, Any] = {}
     if use_cache and cache:
-        cached = read_cache(cache, cache_key)
+        cached = read_cache(cache, cache_key, diagnostics=cache_lookup_diagnostics)
+        cache_lookup = str(cache_lookup_diagnostics.get("lookup") or "miss")
         if cached:
             cached.setdefault("model_route", route_payload)
             cached["foreground"] = bool(foreground)
             cached["cache_diagnostics"] = {
                 **(cached.get("cache_diagnostics") or {}),
-                "lookup": "hit",
+                "lookup": cache_lookup,
                 "cache_key": cache_key,
                 "semantic_cues_in_cache_key": bool(cues_path),
+                "telemetry": cache_lookup_diagnostics.get("telemetry") or {},
             }
             cached["elapsed_ms"] = round((time.perf_counter() - start) * 1000, 2)
             return cached
-        cache_lookup = "miss"
 
     if registry is None:
         registry = load_registry(registry_path_obj) if registry_path_obj else {"threads": []}
@@ -1232,6 +1219,7 @@ def run_semantic_gate(
             "lookup": cache_lookup,
             "cache_key": cache_key,
             "semantic_cues_in_cache_key": bool(cues_path),
+            "telemetry": cache_lookup_diagnostics.get("telemetry") or {},
         },
         "secret_policy": secret_policy,
         "cached": False,
@@ -1268,7 +1256,7 @@ def run_semantic_gate(
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--prompt", required=True)
+    parser.add_argument("--prompt")
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument("--registry")
     parser.add_argument("--associations")
@@ -1282,12 +1270,32 @@ def main() -> int:
     parser.add_argument("--base-url")
     parser.add_argument("--api-key-env")
     parser.add_argument("--no-cache", action="store_true")
+    parser.add_argument("--cache-report", action="store_true")
     parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT)
     parser.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE)
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
     registry_path = Path(args.registry).resolve() if args.registry else registry_paths()[0]
+    if args.cache_report:
+        cache_path = (
+            Path(args.cache).resolve()
+            if args.cache
+            else default_cache_path(registry_path=registry_path)
+        )
+        report = semantic_cache_report(cache_path)
+        if args.json_output:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(
+                "semantic cache: "
+                f"entries={report['entry_count']} active={report['active_entry_count']} "
+                f"hits={report['telemetry']['hits']} misses={report['telemetry']['misses']} "
+                f"evictions={report['telemetry']['evictions']}"
+            )
+        return 0
+    if not args.prompt:
+        parser.error("--prompt is required unless --cache-report is used")
     result = run_semantic_gate(
         args.prompt,
         cwd=Path(args.cwd),
