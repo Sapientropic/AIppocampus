@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -29,6 +31,34 @@ class SourceEvidenceRecallEvalTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
+
+    def test_direct_help_bootstraps_benchmark_imports_without_pythonpath(self) -> None:
+        env = dict(os.environ)
+        env.pop("PYTHONPATH", None)
+
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(
+                    REPO_ROOT
+                    / "tools"
+                    / "aippocampus"
+                    / "smoke"
+                    / "smoke_source_evidence_recall_eval.py"
+                ),
+                "--help",
+            ],
+            cwd=REPO_ROOT,
+            env=env,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("--allow-deterministic-labels", proc.stdout)
 
     def _write_fixture(self, *, with_sidecar: bool = True) -> Path:
         clean = self.root / "thread-life" / "clean-source"
