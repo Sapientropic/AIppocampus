@@ -236,6 +236,110 @@ class KnowledgeSourceSchemaTests(unittest.TestCase):
         self.assertFalse(blocked["promotion_eligible"])
         self.assertIn("claim_scope_exceeds_source_scope", blocked["blocker_codes"])
 
+    def test_update_events_keep_old_sources_auditable_and_gate_activation(self) -> None:
+        payload = load_fixture()
+
+        report = knowledge_schema.validate_knowledge_registry(payload, high_stakes=True)
+
+        self.assertTrue(report["ok"], report)
+        lifecycle = report["lifecycle"]
+        self.assertEqual(lifecycle["update_event_count"], 4)
+        self.assertTrue(lifecycle["old_sources_auditable"])
+        self.assertIn("ksrc-official-guideline-old", lifecycle["source_ids_preserved"])
+        self.assertEqual(
+            lifecycle["sources"]["ksrc-official-guideline-old"]["effective_status"],
+            "superseded",
+        )
+        self.assertEqual(
+            lifecycle["sources"]["ksrc-retracted-advisory"]["effective_status"],
+            "retracted",
+        )
+        self.assertFalse(
+            lifecycle["sources"]["ksrc-candidate-guideline-update"]["activation_eligible"]
+        )
+        self.assertIn(
+            "update_review_required",
+            lifecycle["events"]["kevt-candidate-update"]["blocker_codes"],
+        )
+
+    def test_active_claims_are_downgraded_by_supersession_and_retraction_events(self) -> None:
+        payload = load_fixture()
+        sources = {item["source_id"]: item for item in payload["sources"]}
+        old_claim = {
+            **claim_by_id(payload, "claim-official-span"),
+            "claim_id": "claim-old-active-span",
+            "source_id": "ksrc-official-guideline-old",
+            "superseded_by": None,
+            "promotion_status": "activated",
+        }
+        retracted_claim = {
+            **claim_by_id(payload, "claim-official-span"),
+            "claim_id": "claim-retracted-active-span",
+            "source_id": "ksrc-retracted-advisory",
+            "claim_scope": ["synthetic-safety"],
+            "promotion_status": "activated",
+            "superseded_by": None,
+        }
+
+        lifecycle = knowledge_schema.evaluate_knowledge_lifecycle(
+            {
+                "sources": payload["sources"],
+                "claims": [old_claim, retracted_claim],
+                "update_events": payload["update_events"],
+            },
+            high_stakes=True,
+        )
+
+        self.assertTrue(lifecycle["ok"], lifecycle)
+        self.assertEqual(
+            lifecycle["claims"]["claim-old-active-span"]["effective_promotion_status"],
+            "superseded",
+        )
+        self.assertIn(
+            "source_superseded",
+            lifecycle["claims"]["claim-old-active-span"]["lifecycle_reasons"],
+        )
+        self.assertEqual(
+            lifecycle["claims"]["claim-retracted-active-span"]["effective_promotion_status"],
+            "blocked",
+        )
+        self.assertIn(
+            "source_retracted",
+            lifecycle["claims"]["claim-retracted-active-span"]["lifecycle_reasons"],
+        )
+        self.assertIn("ksrc-official-guideline-old", sources)
+        self.assertIn("ksrc-retracted-advisory", sources)
+
+    def test_high_stakes_update_activation_requires_review_signature(self) -> None:
+        payload = load_fixture()
+        sources = {item["source_id"]: item for item in payload["sources"]}
+        unsigned_event = {
+            "schema_version": "aippocampus.knowledge_update_event.v1",
+            "event_id": "kevt-unsigned-activation",
+            "old_source_id": "ksrc-official-guideline-old",
+            "new_source_id": "ksrc-official-guideline-like",
+            "diff_type": "superseded",
+            "impact_scope": ["synthetic-safety"],
+            "affected_claims": ["claim-old-active-span"],
+            "requires_review": True,
+            "review_status": "reviewed",
+            "reviewer": None,
+            "review_signed_at": None,
+            "activated_at": "2026-06-01T00:00:00Z",
+            "rollback_source_id": "ksrc-official-guideline-old",
+            "created_at": "2026-06-01T00:00:00Z",
+        }
+
+        report = knowledge_schema.validate_knowledge_update_event(
+            unsigned_event,
+            sources=sources,
+            high_stakes=True,
+        )
+
+        self.assertFalse(report["activation_eligible"])
+        self.assertIn("missing_reviewer", report["blocker_codes"])
+        self.assertIn("missing_review_signed_at", report["blocker_codes"])
+
 
 if __name__ == "__main__":
     unittest.main()

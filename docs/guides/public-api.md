@@ -448,6 +448,7 @@ The stable public data schemas are owned by
 - Source ref
 - Knowledge source manifest
 - Knowledge claim record
+- Knowledge update event
 - Import manifest
 
 Provider-specific `metadata` and third-party extension rules also live there;

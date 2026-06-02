@@ -377,6 +377,28 @@ Required semantics:
 - Superseded, conflicted, uncertain, or unreviewed claims remain auditable but
   must not be activated.
 
+### Knowledge Update Event
+
+Knowledge update events are append-only lifecycle overlays for governed source
+changes. They are the public record shape for added, changed, superseded,
+retracted, and rollback source versions. The detailed state machine, rollback
+boundary, and high-stakes review-gate behavior are owned by
+[knowledge-source-lifecycle.md](../architecture/knowledge-source-lifecycle.md).
+
+Required semantics:
+
+- `schema_version` is `aippocampus.knowledge_update_event.v1`.
+- `event_id`, `diff_type`, `impact_scope`, `affected_claims`,
+  `requires_review`, and `created_at` are required.
+- `old_source_id`, `new_source_id`, and `rollback_source_id` must resolve when
+  the selected `diff_type` needs them.
+- `affected_claims` is always present and may be empty for source additions.
+- In high-stakes mode, candidate updates may be written as audit events, but
+  activation requires explicit review/signature metadata and an
+  activation-eligible new source.
+- Supersession, retraction, and rollback are lifecycle overlays. They never
+  delete source history or silently rewrite promoted claims.
+
 ### Import Manifest
 
 ```json
