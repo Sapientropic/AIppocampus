@@ -845,6 +845,19 @@ rank below top-5. These results do not yet prove real-history gate quality, live
 semantic-model quality, full semantic completeness, or end-to-end payload
 fidelity on private real-history prompts.
 
+- #400 LoCoMo answer-usefulness prototype:
+  `benchmark_locomo_answer_usefulness.py` adds a second-stage public
+  retrieval-QA scorer over LoCoMo. It keeps Track B source-evidence retrieval,
+  context gathering, answer generation, source citation, and unsupported
+  inference refusal as separate report layers. The runner consumes external
+  answer predictions with retrieved context ids, answer text, citation ids, and
+  refusal flags; it also ships a deterministic contract baseline for CI. Gold
+  answers and gold evidence ids stay out of answer-generation inputs, while the
+  deterministic judge can use them only for scoring. This is product-layer
+  usefulness telemetry under fixed answer-model/evaluator settings, not a
+  replacement for retrieval-only Track B metrics and not a SOTA or competitor
+  comparison.
+
 ## Non-Goals
 
 - Do not use this as a MemPalace/CraniMem comparison unless explicit adapters
