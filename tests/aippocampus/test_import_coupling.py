@@ -2148,21 +2148,25 @@ class ImportCouplingTests(unittest.TestCase):
             packaged_fresh_thread_demo.run_fresh_thread_demo,
         )
 
-    def test_prompt_recall_stack_has_package_owner_and_compat_shims(self) -> None:
+    def test_prompt_recall_stack_has_package_owner_and_remaining_compat_shims(
+        self,
+    ) -> None:
         package_modules = {
             "prompt_context_render": "prompt_context_render",
             "prompt_cues": "prompt_cues",
             "prompt_recall_ambient": "prompt_recall_ambient",
-            "prompt_recall_ambiguity": "prompt_recall_ambiguity",
             "prompt_recall_budget": "prompt_recall_budget",
-            "prompt_recall_context": "prompt_recall_context",
             "prompt_recall_core": "prompt_recall_core",
             "prompt_recall_decision": "prompt_recall_decision",
             "prompt_recall_evidence": "prompt_recall_evidence",
-            "prompt_recall_semantic": "prompt_recall_semantic",
             "semantic_cue_cache": "semantic_cue_cache",
             "semantic_recall_gate": "semantic_recall_gate",
             "semantic_trigger_router": "semantic_trigger_router",
+        }
+        deleted_package_only_modules = {
+            "prompt_recall_ambiguity": "prompt_recall_ambiguity",
+            "prompt_recall_context": "prompt_recall_context",
+            "prompt_recall_semantic": "prompt_recall_semantic",
         }
         for shim, package_name in package_modules.items():
             package_path = SCRIPTS / "aippocampus_runtime" / "recall" / f"{package_name}.py"
@@ -2170,15 +2174,20 @@ class ImportCouplingTests(unittest.TestCase):
             self.assertTrue(package_path.exists(), package_path)
             self.assertTrue(shim_path.exists(), shim_path)
             self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+        py_modules = pyproject_py_modules()
+        for shim, package_name in deleted_package_only_modules.items():
+            package_path = SCRIPTS / "aippocampus_runtime" / "recall" / f"{package_name}.py"
+            shim_path = SCRIPTS / f"{shim}.py"
+            self.assertTrue(package_path.exists(), package_path)
+            self.assertFalse(shim_path.exists(), shim_path)
+            self.assertNotIn(shim, py_modules)
 
         import prompt_context_render
         import prompt_cues
         import prompt_recall_ambient
-        import prompt_recall_context
         import prompt_recall_core
         import prompt_recall_decision
         import prompt_recall_evidence
-        import prompt_recall_semantic
         import semantic_cue_cache
         import semantic_recall_gate
         import semantic_trigger_router
@@ -2190,6 +2199,9 @@ class ImportCouplingTests(unittest.TestCase):
         )
         from aippocampus_runtime.recall import (
             prompt_recall_ambient as packaged_ambient,
+        )
+        from aippocampus_runtime.recall import (
+            prompt_recall_ambiguity as packaged_ambiguity,
         )
         from aippocampus_runtime.recall import (
             prompt_recall_context as packaged_context,
@@ -2217,10 +2229,10 @@ class ImportCouplingTests(unittest.TestCase):
         )
 
         edges = same_dir_import_edges()
-        flat_prompt_modules = set(package_modules)
+        flat_prompt_modules = set(package_modules) | set(deleted_package_only_modules)
         package_prompt_modules = {
             f"aippocampus_runtime.recall.{package_name}"
-            for package_name in package_modules.values()
+            for package_name in [*package_modules.values(), *deleted_package_only_modules.values()]
         }
 
         for source in [
@@ -2233,7 +2245,8 @@ class ImportCouplingTests(unittest.TestCase):
             "semantic_recall_gate",
             "semantic_trigger_router",
         ]:
-            self.assertFalse(flat_prompt_modules & edges[source], source)
+            if source in edges:
+                self.assertFalse(flat_prompt_modules & edges[source], source)
         for source in package_prompt_modules:
             self.assertFalse(flat_prompt_modules & edges[source], source)
 
@@ -2256,17 +2269,12 @@ class ImportCouplingTests(unittest.TestCase):
             prompt_recall_ambient.attach_ambient_recall,
             packaged_ambient.attach_ambient_recall,
         )
-        self.assertIs(
-            prompt_recall_context.build_recall_decision_context,
-            packaged_context.build_recall_decision_context,
-        )
+        self.assertTrue(callable(packaged_ambiguity.explicit_evidence_request_is_ambiguous))
+        self.assertTrue(callable(packaged_context.build_recall_decision_context))
         self.assertIs(prompt_recall_core.score_candidates, packaged_core.score_candidates)
         self.assertIs(prompt_recall_decision.assess_prompt, packaged_decision.assess_prompt)
         self.assertIs(prompt_recall_evidence.collect_evidence, packaged_evidence.collect_evidence)
-        self.assertIs(
-            prompt_recall_semantic.run_semantic_gate_for_context,
-            packaged_semantic.run_semantic_gate_for_context,
-        )
+        self.assertTrue(callable(packaged_semantic.run_semantic_gate_for_context))
         self.assertIs(
             semantic_cue_cache.record_semantic_cue_hits,
             packaged_cue_cache.record_semantic_cue_hits,
