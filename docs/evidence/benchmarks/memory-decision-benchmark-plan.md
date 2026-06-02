@@ -62,7 +62,10 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
   opt-in ShareGPT public-corpus source-evidence slice with message-level and
   turn-level hit metrics, an opt-in bounded public semantic-sidecar pilot, and
   an opt-in standard retrieval-QA adapter for LoCoMo and LongMemEval V1
-  source/session recall metrics.
+  source/session recall metrics. Reports carry a Track B query-origin taxonomy
+  and separate source-derived sanity arms from non-source-derived question-text
+  arms so FTS5/source-label checks cannot be over-read as natural user-query
+  recall.
 - `benchmarks/aippocampus/benchmark_coding_decision_shadow.py` runs the
   deterministic coding-agent decision-shadow tracks A-E from
   `docs/research/agent-coding-context-analysis.md`: original source refs,
@@ -672,9 +675,12 @@ Current smoke and diagnostic results from 2026-05-30:
   row is often adjacent to a higher-ranked source row from the same answer
   session, so product-visible evidence is stronger than strict single-row MRR.
   These are retrieval-only numbers using question text as query, not
-  answer-generation accuracy. LongMemEval V2 currently has local question and
-  trajectory files but no explicit source-evidence refs in this adapter, so it
-  reports `skipped_no_source_evidence_refs` rather than inventing R@K.
+  answer-generation accuracy. They are the current deterministic
+  non-source-derived Track B arm because the query comes from public dataset
+  questions rather than from the target source line. LongMemEval V2 currently
+  has local question and trajectory files but no explicit source-evidence refs
+  in this adapter, so it reports `skipped_no_source_evidence_refs` rather than
+  inventing R@K.
 - Standard retrieval-QA semantic line-reranker smoke:
   the optional top-session/top-context second stage keeps the first-stage FTS5
   session/context boundary fixed, sends only bounded candidate source lines to
@@ -800,7 +806,10 @@ Current smoke and diagnostic results from 2026-05-27:
   smoke evidence, but not stratified samples of the full coding corpus.
 - existing real-history FTS5/source baseline after the 2026-05-29 rerun: 959
   registry threads, 810 eligible threads, 9,699 messages scanned, 97/100 FTS5
-  top-10 hits, and 98/100 production-hybrid top-10 hits
+  top-10 hits, and 98/100 production-hybrid top-10 hits. This is a
+  source-derived sparse-query sanity line for index health and stale-SQLite
+  detection; by itself it does not claim natural user-query, paraphrase, or
+  cross-language recall.
 - synthetic Track C payload benchmark: first run caught a false positive where a
   parked-memory trap prompt woke an unrelated active working-memory row via the
   generic action term `mutation`; after tightening working-memory trigger noise,
@@ -808,7 +817,9 @@ Current smoke and diagnostic results from 2026-05-27:
   breaches 0, parked-memory injections 0, evidence-without-source 0
 - Track B unified retrieval wrapper, FTS5 source-line track: 100 real-history
   cases, FTS5 R@1 0.86, R@3 0.96, R@5 0.97, R@10 0.97, MRR 0.9073; production
-  hybrid R@10 0.98, MRR 0.8898
+  hybrid R@10 0.98, MRR 0.8898. In the unified report this track is classified
+  as `source_derived_sparse`, and its hit rates must be reported beside, not
+  averaged into, non-source-derived query arms.
 - Track B selected source-evidence track, semantic-sidecar-required slice after
   the bounded 2026-05-29 private sidecar refresh:
   sufficient, 100 selected cases, 97/100 top-5 hits, 0.97 hit rate. The 3 misses
@@ -1059,6 +1070,20 @@ same suite as the decision benchmarks so regressions are visible together.
 Case labels must identify an expected source message or line range. Query text
 may be exact, normalized, paraphrased, multilingual, or generated from source
 terms, but the expected answer is still the clean-source source ref.
+
+Every arm must report `query_origin` and `claim_boundary`. The current taxonomy
+groups `source_derived_exact` and `source_derived_sparse` into
+`source_derived`; these arms measure index/source-label sanity and stale-source
+diagnostics, not natural user-query recall. It groups
+`human_or_fixture_question`, `human_or_fixture_paraphrase`, `cross_language`,
+`degraded_cue`, and `adversarial_near_miss` into `non_source_derived`; these
+arms can support user-like source-navigation claims only within their fixture
+and dataset boundary. The wrapper must report source-derived and
+non-source-derived hit rates separately, and reports that only ran
+source-derived arms must keep `natural_user_query_recall`,
+`semantic_generalized_memory_recall`, and
+`paraphrase_or_cross_language_recall` in `cannot_claim`. This is the Track B
+boundary for #216, #301, and #355.
 
 Metrics:
 
