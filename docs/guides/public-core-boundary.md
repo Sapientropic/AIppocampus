@@ -265,6 +265,118 @@ Required semantics:
 - `text_sha256` is for integrity checks. It is not a global public identity for
   private memory.
 
+### Knowledge Source Manifest
+
+Knowledge-source manifests are the governed source-eligibility layer for
+future high-impact knowledge features. They are not generic RAG chunk metadata:
+they decide whether a source is eligible to support promoted claims, while clean
+source and source refs remain the audit authority.
+
+```json
+{
+  "schema_version": "aippocampus.knowledge_source_manifest.v1",
+  "source_id": "ksrc-official-guideline-like",
+  "source_type": "official_guideline_like",
+  "publisher": "Synthetic Public Safety Board",
+  "authority_level": "official_primary",
+  "jurisdiction_scope": ["synthetic-jurisdiction"],
+  "domain_scope": ["synthetic-safety"],
+  "effective_date": "2026-01-01",
+  "last_verified_at": "2026-06-01T00:00:00Z",
+  "license": "CC0-1.0-synthetic",
+  "access_policy": "public_fixture",
+  "privacy_class": "public",
+  "content_hash_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "ingest_status": "active",
+  "taint_labels": [],
+  "provenance_chain": [
+    {"kind": "synthetic_fixture", "ref": "fixture:official-guideline-like"}
+  ],
+  "superseded_by": null,
+  "retracted_status": "not_retracted"
+}
+```
+
+Required semantics:
+
+- `schema_version`, `source_id`, `source_type`, `publisher`,
+  `authority_level`, `ingest_status`, and `privacy_class` are required for a
+  valid manifest record.
+- High-stakes activation eligibility additionally requires integrity,
+  provenance, scope, freshness, licensing/access, and jurisdiction metadata:
+  `content_hash_sha256`, `provenance_chain`, `domain_scope`,
+  `jurisdiction_scope`, `effective_date`, `last_verified_at`, `license`, and
+  `access_policy`.
+- `ingest_status` separates storage from truth. `quarantined` and `candidate`
+  material may be kept for audit or navigation but must not support activated
+  claims. `retired`, `retracted`, and `superseded` sources remain auditable but
+  inactive.
+- Model summaries, extracted triples, dream findings, low-quality web pages,
+  raw uploads, and unreviewed notes are candidate/navigation material unless a
+  later reviewed source manifest promotes the underlying source span.
+- Conversation turns can be active source artifacts for conversation-memory
+  claims, but they do not become legal, medical, financial, or general-world
+  authority just because the user said something.
+- `taint_labels` such as `generated`, `untrusted`, `copied_web`, or
+  `missing_provenance` block activation until the material is reviewed through
+  a stronger source manifest.
+
+### Knowledge Claim Record
+
+Knowledge-claim records are assertion-level promotion records. A document,
+chunk, summary, or model output does not become a promoted fact wholesale; each
+activated claim must point back to a reviewed source span.
+
+```json
+{
+  "schema_version": "aippocampus.knowledge_claim.v1",
+  "claim_id": "claim-official-span",
+  "source_id": "ksrc-official-guideline-like",
+  "source_anchor": {
+    "section_anchor": "sec-guideline-duty",
+    "span_id": "sec-guideline-duty:p1",
+    "char_start": 0,
+    "char_end": 120
+  },
+  "claim_text": "Synthetic operators must verify current source before high-impact advice.",
+  "claim_scope": ["synthetic-safety"],
+  "authority_level": "official_primary",
+  "jurisdiction_scope": ["synthetic-jurisdiction"],
+  "effective_date_scope": {"valid_from": "2026-01-01", "valid_to": null},
+  "review_status": "reviewed",
+  "reviewed_by": "synthetic-reviewer:source-governance",
+  "review_signed_at": "2026-06-01T00:00:00Z",
+  "extraction_provenance": "human_reviewed_span",
+  "promotion_status": "activated",
+  "confidence": {"level": "high", "basis": "reviewed official fixture span"},
+  "conflict_status": "none",
+  "conflict_set_id": null,
+  "superseded_by": null,
+  "uncertainty_notes": "Synthetic fixture claim only."
+}
+```
+
+Required semantics:
+
+- `schema_version`, `claim_id`, `source_id`, `source_anchor`, `claim_text`,
+  `claim_scope`, `authority_level`, `jurisdiction_scope`,
+  `effective_date_scope`, `review_status`, `extraction_provenance`, and
+  `promotion_status` are required.
+- Activated high-stakes claims require an assertion-level span
+  (`section_anchor`, `span_id`, `char_start`, and `char_end`), not a
+  whole-document blessing.
+- Activated high-stakes claims require `review_status: "reviewed"`,
+  `reviewed_by`, `review_signed_at`, non-low `confidence`, and a cleared
+  `conflict_status` such as `none` or `resolved`.
+- Claim domain and jurisdiction scopes must stay within the source manifest's
+  scopes. Conversation-memory evidence cannot be promoted into unrelated
+  professional advice domains.
+- Generated summaries or triples may help navigation, but claims derived only
+  from generated artifacts must remain candidate, uncertain, or blocked until a
+  reviewed source span supports them.
+- Superseded, conflicted, uncertain, or unreviewed claims remain auditable but
+  must not be activated.
+
 ### Import Manifest
 
 ```json
