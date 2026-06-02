@@ -60,7 +60,7 @@ surfaces can be useful, but they are not the 10-minute dependency story.
 | --- | --- | --- | --- |
 | No-clone probe or install smoke | GitHub `uvx --from ... aippocampus ...` and documented repository checks | Documented CLI command names, documented flags, return code success/failure, and public-safe `--json` outputs where documented | `uvx aippocampus ...` until PyPI publication in #291 is verified; unsigned binary paths beyond the dated Windows x64 evidence |
 | Local operator status | `aippocampus health`, `aippocampus onboard --status`, and `memory_health` MCP | Documented status fields, additive JSON fields, and CLI JSON error classes | Human-readable prose, local absolute paths, or private registry internals |
-| Agent-host read tools | MCP `search_memory`, `latest_reply`, `get_turn_context`, `list_threads`, `register_thread`, `sync_status`, `memory_health` | Tool names, required input fields, additive output fields, JSON tool errors, and public-safe path redaction | Broad memory writes, hook install/uninstall, sync push/pull, or arbitrary file ingest through MCP |
+| Agent-host read tools | MCP `search_memory`, `recall_context`, `recall_deepen`, `latest_reply`, `get_turn_context`, `list_threads`, `register_thread`, `sync_status`, `memory_health` | Tool names, required input fields, additive output fields, JSON tool errors, and public-safe path redaction | Broad memory writes, hook install/uninstall, sync push/pull, or arbitrary file ingest through MCP |
 | Provider-neutral import | `aippocampus import conversation --format generic-jsonl` and `registry.py register-source --provider generic-jsonl` | Generic JSONL required fields, validation diagnostics, canonical source refs, and import manifests | Markdown import as a public claim, role-ambiguous transcripts, or host-private metadata as public identity |
 | Script or CI integration | CLI `--json`, public schemas, and `aippocampus_runtime.cli.facade.run_command(capture_output=True)` inside a trusted Python process | Same command names, JSON shapes, and return-code policy as the public CLI | A broad Python or TypeScript domain SDK; helper-module internals under `skills/aippocampus/scripts/` |
 | Cross-device transfer | Documented local-folder, object-storage, and encrypted sync commands | Documented command names, flags, sync manifests, privacy refusal rules, and `AIPPOCAMPUS_*` configuration names | Raw plaintext rollout sync, provider credentials in logs, or managed hosted-service behavior |
@@ -261,6 +261,8 @@ The current MCP tool catalog is read-mostly and intentionally small. The public
 tool names are:
 
 - `search_memory`
+- `recall_context`
+- `recall_deepen`
 - `latest_reply`
 - `get_turn_context`
 - `list_threads`
@@ -291,6 +293,15 @@ The caller-facing MCP failure boundary is:
   privacy and provenance boundary.
 - Tool results redact local paths by default. Local operators may request
   private locators only through documented `include_private_paths` fields.
+
+`recall_context` and `recall_deepen` are the progressive recall navigation
+tools. `recall_context` accepts a fuzzy intent or query and returns small route
+handles, related source-window candidates, scope labels, evidence levels, and
+the next tool to call. It does not return a final answer or factual memory
+claim. `recall_deepen` consumes a route handle or ambient navigation seed and
+opens the next source-backed layer when the handle is still fresh and
+reopenable. Stale, malformed, or non-reopenable handles fail as MCP tool errors
+instead of silently becoming evidence.
 
 `register_thread` is an explicit control-plane operation. It is not a general
 memory-write API.

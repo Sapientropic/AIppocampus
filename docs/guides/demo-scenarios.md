@@ -130,8 +130,9 @@ clean-source turns.
 python ./skills/aippocampus/scripts/aippocampus_mcp_server.py --list-tools
 ```
 
-Expected result: `search_memory` and `get_turn_context` are available for
-recovering project context from clean source.
+Expected result: `search_memory`, `recall_context`, `recall_deepen`, and
+`get_turn_context` are available for recovering project context from clean
+source.
 
 Cannot claim: that every project thread has already been onboarded.
 
@@ -212,9 +213,9 @@ classifier.
 python ./skills/aippocampus/scripts/aippocampus_mcp_server.py --list-tools
 ```
 
-Expected result: the tool list includes `search_memory`, `latest_reply`,
-`get_turn_context`, `list_threads`, `register_thread`, `sync_status`, and
-`memory_health`.
+Expected result: the tool list includes `search_memory`, `recall_context`,
+`recall_deepen`, `latest_reply`, `get_turn_context`, `list_threads`,
+`register_thread`, `sync_status`, and `memory_health`.
 
 ## Scenario 8: Build A Plugin Package
 

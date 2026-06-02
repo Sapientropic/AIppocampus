@@ -317,13 +317,31 @@ behavior is `skip`, not personalized query expansion.
 
 `scripts/aippocampus_mcp_server.py` is the local MCP surface for agent clients
 that should not shell out through skill instructions for every read. It exposes
-`search_memory`, `latest_reply`, `get_turn_context`, `list_threads`,
-`register_thread`, `sync_status`, and `memory_health`.
+`search_memory`, `recall_context`, `recall_deepen`, `latest_reply`,
+`get_turn_context`, `list_threads`, `register_thread`, `sync_status`, and
+`memory_health`.
 
 Default MCP tools read clean source, registry rows, or health metadata. The
 only mutating tool is `register_thread`, and it is explicit. `sync_status`
 reports real local-folder sync state when the caller supplies `sync_dir`;
 without one, it reports capability truth instead of pretending sync is active.
+
+`recall_context` and `recall_deepen` are the agent-facing progressive recall
+funnel between hook-time scent and low-level source reopen. `recall_context`
+turns a fuzzy cue into compact route handles, source-window candidates, scope
+labels, and evidence levels. It must not include raw prompt text, raw private
+paths, raw tool payloads, or source claims that have not been reopened.
+`recall_deepen` consumes those handles, ambient navigation seeds, or active
+recall lock handles and opens clean source only when the handle is still fresh
+and reopenable. Handles carry source-artifact freshness so a changed
+clean-source file forces the agent to rerun `recall_context` rather than using
+old navigation as evidence.
+
+The navigation packet may expose small benchmark-oriented counters such as
+funnel stage, handle count, source reopen success, and stale-handle detection.
+Those counters are operational observations for future comparisons against
+direct `search_memory` and hook-card-only baselines; they are not answer-quality
+or benchmark-lift claims by themselves.
 
 ## Cognitive Map
 

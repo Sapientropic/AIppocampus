@@ -189,8 +189,9 @@ Or through the GitHub `uvx --from` path:
 uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus mcp list-tools
 ```
 
-The initial MCP layer is read-mostly. It exposes clean-source and registry
-tools plus explicit `register_thread` and `sync_status`.
+The MCP layer is read-mostly. It exposes clean-source and registry tools,
+progressive recall navigation through `recall_context` / `recall_deepen`, plus
+explicit `register_thread` and `sync_status`.
 
 Direct script commands remain supported when the facade is not installed:
 
@@ -217,9 +218,11 @@ Tool errors use stable JSON payloads inside MCP `content` text:
 Common client-facing codes include `missing_query`, `malformed_params`,
 `malformed_arguments`, `missing_tool_name`, `unknown_tool`,
 `unsupported_mutation`, `clean_source_unavailable`, `missing_turn_selector`,
-`message_not_found`, `turn_not_found`, `health_check_failed`, and
-`tool_failed`. `unsupported_mutation` is intentional: the plugin should not add
-broad write APIs merely to prove MCP integration.
+`message_not_found`, `turn_not_found`, `missing_intent`,
+`missing_recall_handle`, `malformed_recall_handle`, `stale_recall_handle`,
+`source_ref_not_found`, `active_recall_lock_not_reopenable`,
+`health_check_failed`, and `tool_failed`. `unsupported_mutation` is intentional:
+the plugin should not add broad write APIs merely to prove MCP integration.
 
 `list_threads` reports a missing registry as a non-error
 `status: "registry_missing"` with an empty `threads` list. That distinguishes a

@@ -35,6 +35,13 @@ PRIVATE_PATH_KEYS = {
     "workspace",
 }
 
+PUBLIC_NON_PATH_KEYS = {
+    # MCP recall navigation uses "path" in the workflow sense: which tool to
+    # call next to reopen source. It is not a local filesystem locator, and
+    # redacting it would hide the agent-facing progressive-recall contract.
+    "source_reopen_path",
+}
+
 
 def redact_private_paths(value):
     """Return a public projection that keeps identity but removes local locators."""
@@ -55,6 +62,8 @@ def redact_private_paths(value):
 
 def _is_private_path_key(key: str, value=None) -> bool:
     normalized = key.casefold()
+    if normalized in PUBLIC_NON_PATH_KEYS:
+        return False
     if normalized == "source":
         return isinstance(value, str) and _looks_like_path(value)
     return (

@@ -142,8 +142,9 @@ Goal: agents can use memory without shelling out through skill instructions for
 every operation.
 
 - Provide a local MCP server for read-mostly memory tools:
-  `search_memory`, `latest_reply`, `get_turn_context`, `list_threads`,
-  `register_thread`, `sync_status`, and `memory_health`.
+  `search_memory`, `recall_context`, `recall_deepen`, `latest_reply`,
+  `get_turn_context`, `list_threads`, `register_thread`, `sync_status`, and
+  `memory_health`.
 - Keep mutating tools narrow and explicit.
 - Default tools should search clean source and registry, not raw rollout.
 - Raw/audit tools should be opt-in and clearly labeled.
