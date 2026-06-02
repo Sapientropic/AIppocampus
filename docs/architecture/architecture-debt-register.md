@@ -27,9 +27,9 @@ This queue is intentionally small. It ranks modules that are at or near their
 guard budgets by product/runtime risk and next owner boundary, not by LOC alone.
 It is not a quality score and should not replace the full register below.
 
-| Path | Current `script_line_count()` | Guard budget | Priority | Next split boundary | Why not split in #502 |
+| Path | Current `script_line_count()` | Guard budget | Priority | Next split boundary | Current split status / deferral reason |
 | --- | ---: | ---: | --- | --- | --- |
-| `skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_decision.py` | 790 | 836 | P0 foreground-risk | Staged foreground decision pipeline: context/budget preparation, candidate assembly, semantic-gate invocation, source-evidence collection, final projection, and ambient/dream sidecar projection. | #500 owns the behavior-preserving extraction and must freeze golden foreground recall-decision fixtures before moving code. Splitting here would bypass that fixture gate. |
+| `skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_decision.py` | 607 | 836 | P0 foreground-risk | Remaining staged foreground decision pipeline: candidate assembly, semantic-gate invocation/skip diagnostics, final hook-result projection, and ambient/dream sidecar projection. | #500 froze golden foreground projection fixtures and moved source-evidence/final skip-scent-evidence projection into `prompt_recall_projection.py`. Next splits should target candidate assembly or hook-result projection only with fixture coverage. |
 | `skills/aippocampus/scripts/aippocampus_runtime/recall/semantic_recall_gate.py` | 1194 | 1200 | P1 foreground-budget-risk | Separate deterministic foreground-budget arbitration or prompt construction/model response parsing from semantic gate decisions. | This issue adds no semantic-gate behavior. A real split should accompany a focused semantic-gate change with source/evidence tests, not a debt-register refresh. |
 | `skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/recall.py` | 1415 | 1415 | P2 background-runtime-risk | Split batch/quorum bookkeeping or job/cache summary projection before adding more warm runtime orchestration. | Recent helper splits already moved config and scout attribution out. Without new warm-runtime behavior, another extraction would be speculative and could duplicate established owner boundaries. |
 | `skills/aippocampus/scripts/aippocampus_runtime/dream/live_shadow_ab.py` | 1240 | 1340 | P3 opt-in-eval-risk | Split replay adapters, semantic relevance gating, delivery policy, or model-route binding before adding richer live outcome analysis. | It is below budget and opt-in/evaluation-facing. Split when a live-shadow feature touches one of those boundaries. |
@@ -48,11 +48,11 @@ Split before raising when a module is at or over budget and the change adds a
 new stage, IO surface, CLI projection, provider/host concern, retry policy, or
 foreground user-visible behavior that can be extracted behind existing tests.
 
-For #502 specifically, the safe action is debt-governance only: current counts,
-priority order, next split boundaries, and extraction deferral are recorded
+For #502 specifically, the safe action was debt-governance only: current counts,
+priority order, next split boundaries, and extraction deferral were recorded
 here. The first executable extraction is #500 for
-`prompt_recall_decision.py`, because that path needs golden foreground
-recall-decision fixtures before movement.
+`prompt_recall_decision.py`; that issue froze golden foreground
+recall-decision fixtures before moving source-evidence/final projection policy.
 
 | Path | Guard budget | Primary responsibility | Next boundary to consider |
 | --- | ---: | --- | --- |
@@ -65,7 +65,7 @@ recall-decision fixtures before movement.
 | `skills/aippocampus/scripts/aippocampus_runtime/navigation/concept_graph.py` | 720 | Concept graph extraction and graph artifact construction | Separate graph schema/write layer from extraction heuristics if graph consumers multiply. |
 | `skills/aippocampus/scripts/aippocampus_runtime/subconscious/scheduler.py` | 800 | Background job scheduling, queue eligibility, local lock/lease diagnostics, lifecycle timing, and public-safe CLI projection | Split local coordination lock/lease helpers or eligibility policy from scheduler IO if more scheduler coordination cases land after #344. |
 | `skills/aippocampus/scripts/aippocampus_runtime/sync/bundle.py` | 780 | Local-folder sync bundle manifest, chunk copy, conflict preservation, and path repair policy | Split path repair and conflict handling into focused helpers if additional sync backends start copying this policy. |
-| `skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_decision.py` | 836 | Foreground recall decision orchestration across cues, semantic gate, budget diagnostics, source-ref cue fallback candidates, evidence, dream delivery limiting, and ambient attach | Extract candidate assembly or evidence decision only after adding golden recall-decision fixtures; do not push more policy into the hook glue. |
+| `skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_decision.py` | 836 | Foreground recall decision orchestration across context/cues, semantic gate, budget diagnostics, source-ref cue fallback candidates, suppression, dream delivery limiting, semantic cue cache, and ambient attach; source-evidence/final skip-scent-evidence projection lives in `prompt_recall_projection.py` | Extract candidate assembly, semantic-gate skip diagnostics, or hook-result projection only with focused foreground fixtures; do not push more policy into the hook glue. |
 | `skills/aippocampus/scripts/aippocampus_runtime/recall/active_recall_lock.py` | 805 | Short-lived active-recall route-lock storage, schema-v2 freshness/version/consumer timing gates, privacy-safe public lock projection, reopenable source-ref readiness checks, and clean-source reopen execution | Lifecycle/ROI helpers now live in `aippocampus_runtime/recall/active_recall_lock_lifecycle.py`; if this owner grows again, split clean-source reopen execution or public projection before raising this guard. Do not let thread-only refs become ready evidence handles or let lock ROI become public quality proof. |
 | `skills/aippocampus/scripts/aippocampus_runtime/subconscious/jobs.py` | 740 | Subconscious job circuit runner, tool-loop wiring, provider route metadata, sample ordering, deterministic follow-up ordering, append-only staging writes, and public-safe CLI projection. | Split semantic runner execution from deterministic follow-up orchestration if more non-model jobs join `--job all`; `subconscious_jobs.py` remains only the compatibility shim and public direct-script path. |
 | `skills/aippocampus/scripts/aippocampus_runtime/subconscious/candidate_router.py` | 660 | Promotion-candidate routing, source-strength scoring, working-memory foreground matching, hook-safe stripping, and dream-hypothesis foreground gates. | Split foreground match/gate policy from candidate routing if more candidate-specific live-use rules land after the dream-hypothesis gate; `memory_candidate_router.py` remains only the compatibility shim. |
