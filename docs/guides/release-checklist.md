@@ -5,6 +5,11 @@ plugin package, or broad public-readiness claim. The detailed evidence ledger
 lives in `docs/evidence/readiness/public-readiness-verification.md`; this page is the
 repeatable gate list.
 
+Release tags, package metadata, registry metadata, release notes, and
+public-readiness claims always use the strict PR lane in
+[`CONTRIBUTING.md`](../../CONTRIBUTING.md#maintainer-shipping-lanes). Do not
+route them through a maintainer light lane only because the diff is small.
+
 ## Version And Scope
 
 - Pick the tag name and release scope before running verification.

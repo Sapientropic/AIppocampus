@@ -81,6 +81,12 @@ AIppocampus uses additive public contracts:
 When a behavior is only supported by tests, smoke tools, or an issue comment, it
 is evidence for the current implementation, not a public API promise.
 
+Changes that alter public API stability promises, CLI/MCP schema meanings,
+documented return-code behavior, ecosystem support status, or `can claim` /
+`cannot claim` boundaries use the strict PR lane defined in
+[`CONTRIBUTING.md`](../../CONTRIBUTING.md#maintainer-shipping-lanes), even when
+the edit looks like copy.
+
 ## Supported Public Surfaces
 
 The supported public surfaces are:
