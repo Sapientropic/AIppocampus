@@ -148,6 +148,35 @@ class AippocampusCliTests(unittest.TestCase):
         )
         self.assertEqual(prompt_hook_status.args, ["status", "--last", "--json"])
 
+    def test_onboard_status_text_points_to_first_recall_modes(self) -> None:
+        from aippocampus_runtime.onboarding import facade as onboard_facade
+
+        report = {
+            "ok": True,
+            "data": {
+                "providers": [
+                    {
+                        "provider": "codex",
+                        "state": "write_enabled",
+                        "detected": True,
+                        "transcript_count": 2,
+                        "current_cwd_match": False,
+                        "blockers": [],
+                    }
+                ],
+                "auto": {"default_provider": "codex", "why": "safe default"},
+                "storage": {"path": "registry", "source": "AIPPOCAMPUS_HOME"},
+            },
+        }
+
+        output = onboard_facade.render_status_text(report)
+
+        self.assertIn("First recall", output)
+        self.assertIn("exact phrase", output)
+        self.assertIn("project cue", output)
+        self.assertIn("time cue", output)
+        self.assertIn("aippocampus search", output)
+
     def test_package_facade_default_runner_is_in_process(self) -> None:
         from aippocampus_runtime.cli import facade
 

@@ -142,6 +142,14 @@ def render_status_text(report: dict) -> str:
     if storage:
         legacy = " legacy fallback" if storage.get("legacy_fallback") else ""
         lines.append(f"registry: {storage.get('path')} ({storage.get('source')}{legacy})")
+    lines.append("")
+    lines.append("First recall")
+    lines.append('- exact phrase: aippocampus search "distinctive old phrase"')
+    lines.append('- project cue: aippocampus search "repo, feature, object, or topic"')
+    lines.append('- time cue: aippocampus search "recent, last month, or a known date"')
+    lines.append(
+        "Boundary: project/time cues are candidate navigation until a source-backed snippet appears."
+    )
     return "\n".join(lines)
 
 

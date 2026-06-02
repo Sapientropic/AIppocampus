@@ -23,25 +23,31 @@ smallest dependable AIppocampus surface before learning the research features.
    ```
 
 2. Check whether the local provider has usable source without registering new
-   history:
+   history. Human-readable output is the default; add `--format json` only for
+   automation:
 
    ```sh
-   uvx aippocampus onboard --provider codex --status --format json
+   uvx aippocampus onboard --provider codex --status
    ```
 
-3. In an installed checkout, inspect the MCP catalog:
+3. After explicit user consent, register local history and search for the first
+   source-backed snippet:
 
    ```sh
-   aippocampus mcp list-tools
+   uvx aippocampus onboard --provider codex --all
+   uvx aippocampus search "a distinctive old phrase"
    ```
 
-4. After the current workspace has local provider history, or after the user has
-   intentionally registered or imported local history, run health and search
-   clean source through the stable CLI or MCP surfaces:
+   Use an exact phrase when possible. If the user only remembers a vague cue,
+   search a project cue or time cue, but treat that as candidate navigation
+   until a source-backed snippet appears.
+
+4. In an installed checkout, inspect the MCP catalog or run health checks when
+   the host needs those surfaces:
 
    ```sh
    aippocampus health --cwd "$PWD" --json
-   aippocampus search "remembered phrase or project cue" --cwd "$PWD" --json
+   aippocampus mcp list-tools
    ```
 
 5. Know where data lives before enabling writes. Generated memory artifacts use

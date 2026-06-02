@@ -44,13 +44,17 @@ def score_message(message: dict[str, Any], terms: list[str]) -> float:
     text = str(message.get("text") or "")
     low = text.casefold()
     score = 0.0
+    matched = False
     for term in terms:
         needle = term.casefold()
         if not needle:
             continue
         count = low.count(needle)
         if count:
+            matched = True
             score += 8.0 + count * min(len(term), 20)
+    if not matched:
+        return 0.0
     if message.get("is_final") or message.get("phase") == "final_answer":
         score += 18.0
     elif message.get("role") == "user":
@@ -169,6 +173,75 @@ def search_clean_source(
     }
 
 
+def source_label_for_match(match: dict[str, Any]) -> str:
+    for key in ("source_ref", "source_id"):
+        value = match.get(key)
+        if value:
+            return compact_text(str(value), 80)
+    source_line = match.get("source_line")
+    return f"clean source line {source_line}" if source_line else "clean source"
+
+
+def date_for_match(match: dict[str, Any]) -> str:
+    timestamp = str(match.get("timestamp") or "").strip()
+    return timestamp[:10] if timestamp else "unknown date"
+
+
+def turn_for_match(match: dict[str, Any]) -> str:
+    for key in ("turn_index", "turn_id"):
+        value = match.get(key)
+        if value is not None and str(value).strip():
+            return f"turn {value}"
+    source_line = match.get("source_line")
+    return f"line {source_line}" if source_line else "unknown turn"
+
+
+def first_recall_mode_lines() -> list[str]:
+    return [
+        "- exact phrase: search distinctive old wording when you remember it.",
+        "- project cue: search a repo, feature, object, person, or topic name.",
+        "- time cue: search a remembered period such as recent, last month, or a known date.",
+    ]
+
+
+def render_human_search_result(result: dict[str, Any]) -> str:
+    terms = result.get("query_terms") or []
+    query = " ".join(str(term) for term in terms).strip() or "(empty query)"
+    matches = list(result.get("matches") or [])
+    lines: list[str] = []
+    if matches:
+        lines.append("Source-backed snippets")
+        lines.append(f"query: {query}")
+        for index, match in enumerate(matches, start=1):
+            source = source_label_for_match(match)
+            date = date_for_match(match)
+            turn = turn_for_match(match)
+            role = str(match.get("role") or "unknown")
+            phase = str(match.get("phase") or "none")
+            score = match.get("score")
+            lines.append(f"{index}. Source: {source} · {date} · {turn}")
+            lines.append(f"   role={role} · phase={phase} · score={score}")
+            lines.append(f'   "{match.get("snippet")}"')
+        lines.append(
+            "Next: reopen source before quoting beyond these snippets, or refine with "
+            "a project cue / time cue if this is not the thread you meant."
+        )
+    else:
+        lines.append(f"No source-backed snippet found for: {query}")
+        lines.append("Possible routes, not yet evidence:")
+        lines.extend(first_recall_mode_lines())
+        lines.append(
+            "Next: refine the cue, search an exact phrase, or run "
+            "`aippocampus onboard --status` to check whether local history is registered."
+        )
+        lines.append(
+            "Boundary: candidate routes are navigation only until a source-backed snippet appears."
+        )
+    for warning in result.get("warnings") or []:
+        lines.append(f"warning: {warning.get('code')}: {warning.get('message')}")
+    return "\n".join(lines)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("patterns", nargs="+")
@@ -200,15 +273,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
-        print(f"clean source: {result['source']}")
-        for match in result["matches"]:
-            print(
-                f"- line {match.get('source_line')} | {match.get('role')} | "
-                f"phase={match.get('phase') or '(none)'} | score={match.get('score')}"
-            )
-            print(f"  {match.get('snippet')}")
-        for warning in result.get("warnings") or []:
-            print(f"warning: {warning.get('code')}: {warning.get('message')}")
+        print(render_human_search_result(result))
     return 0 if result["matches"] else 1
 
 

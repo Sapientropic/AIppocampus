@@ -822,6 +822,31 @@ host-native continuous baseline for #378.
   host-native compaction behavior, cross-host baseline coverage, private
   real-history generality, or public-quality #378 advantage.
 
+## 2026-06-03 - First-recall onboarding receipt smoke
+
+The #470 slice moves the first-user path toward a 5-minute source-backed recall
+receipt instead of a maintainer-check-first flow.
+
+- A fresh temporary virtual environment installed the current checkout with
+  `python -m pip install -e .`.
+- The installed `aippocampus --help` command passed.
+- `aippocampus search lighthouse --clean-source-dir examples/public-memory-bundle/clean-source`
+  returned human-readable `Source-backed snippets` with `Source` metadata and a
+  next-step boundary.
+- `aippocampus search zzznonexistentcue --clean-source-dir examples/public-memory-bundle/clean-source`
+  returned exit code 1 and the human-readable
+  `Possible routes, not yet evidence` no-result guidance instead of a spurious
+  source-backed snippet.
+- `aippocampus onboard --status --format text` returned the `First recall`
+  exact-phrase, project-cue, and time-cue next steps.
+- A read-only `uvx aippocampus --help` public package probe passed separately.
+  That probe verifies the public package command is reachable, not that the
+  current checkout's new human-output wording is already in the published
+  package.
+- This does not claim interactive Desktop UI readiness, hook installation
+  readiness, MCP Registry marketplace UI readiness, or full all-client support;
+  those remain under #307 and the Stage 0-5 readiness boundary.
+
 ## Command Ledger
 
 ```powershell

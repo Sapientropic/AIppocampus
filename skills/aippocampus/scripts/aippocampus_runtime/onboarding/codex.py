@@ -162,7 +162,11 @@ def _repair_candidate_matches_provider(item: dict[str, Any], provider_name: str)
 
 
 def build_next_hints(*, dry_run: bool, frontier_mode: str) -> list[str]:
-    hints: list[str] = []
+    hints: list[str] = [
+        'aippocampus search "distinctive old phrase"',
+        'aippocampus search "project cue or known old term"',
+        'aippocampus search "recent or last month"',
+    ]
     if dry_run:
         hints.append("python scripts/onboard_codex.py --all --format json")
     if frontier_mode == "off":
@@ -414,6 +418,12 @@ def print_text(result: dict[str, Any]) -> None:
     print(f"graph.json: {stats.get('graph_json_count', 0)}")
     frontier = (data.get("boundary") or {}).get("frontier") or {}
     print(f"frontier: {public_frontier_status(frontier.get('status'))}")
+    print()
+    print("First recall")
+    print('- exact phrase: aippocampus search "distinctive old phrase"')
+    print('- project cue: aippocampus search "repo, feature, object, or topic"')
+    print('- time cue: aippocampus search "recent, last month, or a known date"')
+    print("Boundary: project/time cues are candidate navigation until a source-backed snippet appears.")
 
 
 def public_count(value: Any) -> int:

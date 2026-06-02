@@ -433,6 +433,32 @@ class OnboardCodexTests(unittest.TestCase):
         self.assertNotIn("private frontier", encoded)
         self.assertNotIn(str(self.root), encoded)
 
+    def test_text_closeout_suggests_first_recall_query_modes(self) -> None:
+        result = {
+            "ok": True,
+            "data": {
+                "stats_after": {
+                    "thread_count": 1,
+                    "clean_source_count": 1,
+                    "sqlite_index_count": 1,
+                    "graph_json_count": 0,
+                },
+                "boundary": {"frontier": {"status": "not_run"}},
+            },
+            "next": [],
+        }
+        stdout = io.StringIO()
+
+        with contextlib.redirect_stdout(stdout):
+            onboard.print_text(result)
+
+        output = stdout.getvalue()
+        self.assertIn("First recall", output)
+        self.assertIn("exact phrase", output)
+        self.assertIn("project cue", output)
+        self.assertIn("time cue", output)
+        self.assertIn("aippocampus search", output)
+
     def test_repair_detects_and_rebuilds_sqlite_stale_against_clean_source(self) -> None:
         initial = registry.register_rollout_thread(
             self.rollout,
