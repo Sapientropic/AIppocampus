@@ -184,6 +184,34 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
             by_arm["no_memory"]["success_value_units"],
         )
 
+    def test_fresh_context_spec_loop_is_realistic_baseline_not_oracle_upper_bound(self) -> None:
+        payload = benchmark.run_benchmark()
+        framing = payload["benchmark_framing"]
+        baselines = payload["cost_harm_ledger"]["cost"]["comparison_baselines"]
+        fresh_context = baselines["fresh_context_spec_loop"]
+        primary = payload["preregistration"]["primary_endpoint"]
+
+        self.assertEqual(
+            framing["baseline_arms"]["fresh_context_spec_loop"]["normalized_role"],
+            "realistic_fresh_context_handoff_loop",
+        )
+        self.assertEqual(
+            framing["baseline_arms"]["oracle_fresh_context_spec_loop"]["role"],
+            "upper_bound_no_harm_control",
+        )
+        self.assertFalse(framing["baseline_arms"]["oracle_fresh_context_spec_loop"]["primary_opponent"])
+        self.assertEqual(fresh_context["framing_role"], "realistic_fresh_context_handoff_loop")
+        self.assertFalse(fresh_context["complete_spec_upper_bound"])
+        self.assertEqual(primary["scope"], "context_loss_or_instability")
+        self.assertIn(
+            "complete_spec_short_task_current_prompt_sufficient",
+            primary["does_not_apply_when"],
+        )
+        self.assertIn(
+            "memory_useful_when_current_prompt_contains_full_correct_context",
+            payload["cannot_claim"],
+        )
+
     def test_report_pre_registers_primary_endpoint_and_decision_rule(self) -> None:
         payload = benchmark.run_benchmark()
         preregistration = payload["preregistration"]
