@@ -294,6 +294,12 @@ Default answers:
 - deterministic builders materialize validated sidecars only
 - local source remains the authority
 
+Fresh semantic workers are allowed in foreground hooks only behind an explicit
+fail-open deadline and a per-worker timeout within that deadline. Their output
+remains routing scent until local source search reopens clean source; high-risk
+worker disagreement must cap semantic escalation rather than silently becoming
+evidence.
+
 ## Relationship To Question Tracking
 
 `question_extraction` should not be a script-only phrase detector. It is close

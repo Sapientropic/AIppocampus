@@ -356,6 +356,11 @@ scent/cache pass, not as the full recall budget; explicit `active_recall.py`,
 commands can spend longer when the user asks for source-backed memory. The
 implementation owner lives under `aippocampus_runtime.recall`; do not add new
 foreground-recall policy to the top-level compatibility shims.
+Foreground Python callers should use `run_semantic_gate_for_prompt` or pass
+`foreground=True` with both `deadline_seconds` and a per-worker `timeout` no
+larger than that deadline. Missing or looser foreground budgets fail open with a
+`foreground_budget` diagnostic and no external model call. Standalone/background
+semantic-gate callers intentionally keep the quality-first default.
 
 When an explicit memory cue already has local association or working-memory
 overlap, the prompt hook skips the external semantic gate and goes straight to
@@ -395,6 +400,11 @@ command. The semantic gate runs small parallel workers:
 
 The semantic gate only proposes queries and scope. Evidence still has to come
 from local source search.
+Worker disagreement is resolved conservatively: if any worker reports high
+anti-personalization risk, the aggregate semantic decision is capped below
+`evidence` and the private result records the winning worker, risk worker, and
+cap reason. A later source bridge may still find evidence, but the semantic
+gate itself must not silently escalate high-risk scope disagreements.
 
 When semantic-gate aliases repeatedly lead to local source-backed candidates,
 the hook may record them in `$CODEX_HOME/aippocampus-registry/semantic_cues.jsonl`.
