@@ -12,7 +12,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+from aippocampus_runtime import health  # noqa: E402
 from aippocampus_runtime.ops import storage_governance  # noqa: E402
+from aippocampus_runtime.recall import index_builder, rollout_search  # noqa: E402
 
 
 class StorageGovernanceTests(unittest.TestCase):
@@ -28,7 +30,38 @@ class StorageGovernanceTests(unittest.TestCase):
         self.segment.mkdir(parents=True)
 
         self.raw_rollout = self.root / "rollout.jsonl"
-        self.raw_rollout.write_text("raw bytes with private phrase\n", encoding="utf-8")
+        self.raw_rollout.write_text(
+            "\n".join(
+                json.dumps(row, ensure_ascii=False)
+                for row in [
+                    {
+                        "type": "session_meta",
+                        "payload": {"id": "session-one", "cwd": str(self.root)},
+                    },
+                    {
+                        "type": "event_msg",
+                        "timestamp": "2026-06-01T00:00:00Z",
+                        "payload": {
+                            "type": "user_message",
+                            "message": "storage governance rebuild verification phrase",
+                        },
+                    },
+                    {
+                        "type": "event_msg",
+                        "timestamp": "2026-06-01T00:00:01Z",
+                        "payload": {
+                            "type": "agent_message",
+                            "phase": "final_answer",
+                            "message": "storage governance answer",
+                        },
+                    },
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        self.anchors = self.root / "thread-anchors.md"
+        self.anchors.write_text("# Anchors\n- source ref stays reopenable\n", encoding="utf-8")
 
         (self.registry / "threads.json").write_text(
             json.dumps(
@@ -60,7 +93,11 @@ class StorageGovernanceTests(unittest.TestCase):
             json.dumps({"kind": "aippocampus_index"}), encoding="utf-8"
         )
         (self.index / "messages.jsonl").write_bytes(b"indexed-message-cache")
-        (self.index / "source_index.sqlite").write_bytes(b"x" * 31)
+        self.sqlite = self.index / "source_index.sqlite"
+        self.sqlite.write_bytes(b"x" * 31)
+        (self.index / "source_index.sqlite-wal").write_bytes(b"wal")
+        (self.index / "source_index.sqlite-shm").write_bytes(b"shm")
+        (self.index / "source_index.sqlite-journal").write_bytes(b"journal")
         (self.segment / "source_index.sqlite").write_bytes(b"y" * 17)
         (self.index / "segments" / "manifest.json").write_text(
             json.dumps({"segment_count": 1}), encoding="utf-8"
@@ -72,7 +109,7 @@ class StorageGovernanceTests(unittest.TestCase):
                 {
                     "schema_version": 1,
                     "rollout": {"size_bytes": self.raw_rollout.stat().st_size},
-                    "anchors": {"exists": True, "count": 2},
+                    "anchors": {"exists": True, "count": 2, "path": str(self.anchors)},
                     "index_dir": str(self.index),
                     "items": [
                         {
@@ -117,6 +154,15 @@ class StorageGovernanceTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
+    def _retention_payload(self) -> dict:
+        return json.loads(self.retention_path.read_text(encoding="utf-8"))
+
+    def _write_retention_payload(self, payload: dict) -> None:
+        self.retention_path.write_text(
+            json.dumps(payload, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
     def test_dry_run_uses_existing_reports_without_leaking_private_text_or_paths(self) -> None:
         plan = storage_governance.build_plan(
             self.root,
@@ -158,15 +204,219 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertNotIn(str(self.root), payload)
         self.assertEqual(plan["candidates"][0]["source_report"]["kind"], "storage_capacity_report")
 
-    def test_apply_mode_is_explicitly_unsupported_and_does_not_plan_deletion(self) -> None:
-        with patch("sys.stdout", new=StringIO()) as stdout:
-            code = storage_governance.main(["gc", "--apply", "--json"])
+    def test_apply_rebuildable_main_sqlite_writes_manifest_and_preserves_sources(self) -> None:
+        result = storage_governance.apply_plan(
+            self.root,
+            registry_dir=self.registry,
+            retention_report_path=self.retention_path,
+            class_filter="rebuildable",
+            include_active=True,
+            include_paths=True,
+        )
+        payload = json.dumps(result, ensure_ascii=False)
 
-        self.assertEqual(code, 2)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["mode"], "apply")
+        self.assertEqual(result["metrics"]["eviction_applied_count"], 1)
+        self.assertFalse(self.sqlite.exists())
+        for suffix in ("-wal", "-shm", "-journal"):
+            self.assertFalse((self.index / f"source_index.sqlite{suffix}").exists())
+        self.assertTrue(self.raw_rollout.exists())
+        self.assertTrue((self.clean / "messages.jsonl").exists())
+        self.assertTrue(self.anchors.exists())
+        self.assertNotIn("private phrase", payload)
+
+        manifest_path = Path(result["applied"][0]["manifest"])
+        self.assertTrue(manifest_path.exists())
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        self.assertEqual(manifest["kind"], "aippocampus_storage_eviction_manifest")
+        self.assertEqual(manifest["candidate_id"], "retention:rebuildable-main-sqlite")
+        self.assertEqual(manifest["eviction_status"], "applied")
+        self.assertEqual(manifest["evicted_paths"][0]["relative_path"], "source_index.sqlite")
+        self.assertEqual(manifest["source_preconditions"]["raw_or_archive_source"]["status"], "passed")
+        self.assertIn("build_index.py", manifest["rebuild_command"])
+
+    def test_apply_health_then_documented_rebuild_path_restores_index(self) -> None:
+        apply_result = storage_governance.apply_plan(
+            self.root,
+            registry_dir=self.registry,
+            retention_report_path=self.retention_path,
+            class_filter="rebuildable",
+            include_active=True,
+            include_paths=True,
+        )
+
+        with patch.object(health, "locate_rollout", return_value=self.raw_rollout):
+            degraded = health.build_health_report(
+                health.HealthOptions(
+                    cwd=self.root,
+                    index_dir=self.index,
+                    clean_source_dir=self.clean,
+                    anchors=self.anchors,
+                    graphify_corpus=self.root / "graphify-corpus",
+                    segments_dir=self.root / "segments",
+                    checkpoint_state=self.root / "checkpoint_state.json",
+                    registry_dir=self.registry,
+                )
+            )
+        self.assertTrue(degraded["index"]["intentional_eviction"]["detected"])
+        self.assertIn(
+            "source_index.sqlite intentionally evicted as rebuildable cache",
+            degraded["index"]["reasons"],
+        )
+
+        with patch("sys.stdout", new=StringIO()):
+            rebuild_code = index_builder.main(
+                [
+                    "--cwd",
+                    str(self.root),
+                    "--rollout",
+                    str(self.raw_rollout),
+                    "--output-dir",
+                    str(self.index),
+                    "--anchors",
+                    str(self.anchors),
+                    "--no-rag-cache",
+                    "--json",
+                ]
+            )
+
+        with patch.object(health, "locate_rollout", return_value=self.raw_rollout):
+            restored = health.build_health_report(
+                health.HealthOptions(
+                    cwd=self.root,
+                    index_dir=self.index,
+                    clean_source_dir=self.clean,
+                    anchors=self.anchors,
+                    graphify_corpus=self.root / "graphify-corpus",
+                    segments_dir=self.root / "segments",
+                    checkpoint_state=self.root / "checkpoint_state.json",
+                    registry_dir=self.registry,
+                )
+            )
+
+        self.assertTrue(apply_result["ok"])
+        self.assertEqual(rebuild_code, 0)
+        self.assertTrue(self.sqlite.exists())
+        search_hits = rollout_search.search_index_literal(
+            self.sqlite,
+            ["storage governance rebuild verification phrase"],
+            limit=5,
+            snippet_chars=200,
+        )
+        self.assertFalse(restored["index"]["intentional_eviction"]["detected"])
+        self.assertNotIn(
+            "source_index.sqlite intentionally evicted as rebuildable cache",
+            restored["index"]["reasons"],
+        )
+        self.assertNotIn("source_index.sqlite is missing", restored["index"]["reasons"])
+        self.assertEqual(len(search_hits), 1)
+        self.assertIn("storage governance rebuild verification phrase", search_hits[0]["snippet"])
+
+    def test_apply_blocks_raw_or_missing_source_precondition(self) -> None:
+        payload = self._retention_payload()
+        payload["rollout"] = {"size_bytes": 0}
+        self._write_retention_payload(payload)
+
+        result = storage_governance.apply_plan(
+            self.root,
+            registry_dir=self.registry,
+            retention_report_path=self.retention_path,
+            class_filter="rebuildable",
+            include_active=True,
+        )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["blocked"][0]["reason_code"], "precondition_failed")
+        self.assertTrue(self.sqlite.exists())
+
+    def test_apply_blocks_active_thread_without_include_active(self) -> None:
+        result = storage_governance.apply_plan(
+            self.root,
+            registry_dir=self.registry,
+            retention_report_path=self.retention_path,
+            class_filter="rebuildable",
+        )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["blocked"][0]["reason_code"], "precondition_failed")
+        self.assertIn("active_thread_exclusion", result["blocked"][0]["failed_preconditions"])
+        self.assertTrue(self.sqlite.exists())
+
+    def test_apply_blocks_non_stale_writer_or_export_lease(self) -> None:
+        (self.index / ".index-publish.lock").write_text("writer active\n", encoding="utf-8")
+
+        result = storage_governance.apply_plan(
+            self.root,
+            registry_dir=self.registry,
+            retention_report_path=self.retention_path,
+            class_filter="rebuildable",
+            include_active=True,
+        )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["blocked"][0]["reason_code"], "active_lease")
+        self.assertTrue(self.sqlite.exists())
+
+    def test_apply_blocks_target_outside_retention_index_dir(self) -> None:
+        outside = self.root / "other-index" / "source_index.sqlite"
+        outside.parent.mkdir()
+        outside.write_bytes(b"do not delete")
+        payload = self._retention_payload()
+        for item in payload["items"]:
+            if item["id"] == "rebuildable-main-sqlite":
+                item["path"] = str(outside)
+        self._write_retention_payload(payload)
+
+        result = storage_governance.apply_plan(
+            self.root,
+            registry_dir=self.registry,
+            retention_report_path=self.retention_path,
+            class_filter="rebuildable",
+            include_active=True,
+        )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["blocked"][0]["reason_code"], "unsafe_target_path")
+        self.assertTrue(self.sqlite.exists())
+        self.assertTrue(outside.exists())
+
+    def test_apply_rejects_capacity_aggregate_candidates_without_path_level_evidence(self) -> None:
+        result = storage_governance.apply_plan(
+            self.root,
+            registry_dir=self.registry,
+            class_filter="rebuildable",
+            include_active=True,
+        )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["blocked"][0]["reason_code"], "path_level_retention_required")
+        self.assertTrue(self.sqlite.exists())
+
+    def test_apply_cli_returns_json_result(self) -> None:
+        with patch("sys.stdout", new=StringIO()) as stdout:
+            code = storage_governance.main(
+                [
+                    "gc",
+                    "--apply",
+                    "--cwd",
+                    str(self.root),
+                    "--registry-dir",
+                    str(self.registry),
+                    "--retention-report",
+                    str(self.retention_path),
+                    "--class",
+                    "rebuildable",
+                    "--include-active",
+                    "--json",
+                ]
+            )
+
+        self.assertEqual(code, 0)
         payload = json.loads(stdout.getvalue())
-        self.assertEqual(payload["error"]["code"], "storage_gc_apply_not_implemented")
-        self.assertEqual(payload["error"]["class"], "usage_error")
-        self.assertIsNone(payload["data"])
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["mode"], "apply")
+        self.assertEqual(payload["metrics"]["eviction_applied_count"], 1)
 
 
 if __name__ == "__main__":

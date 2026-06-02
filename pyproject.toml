@@ -402,6 +402,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/ops/rollout_size_audit.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/storage_capacity_report.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/storage_governance_contract.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/ops/storage_eviction.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/storage_governance.py",
     "skills/aippocampus/scripts/cold_archive.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/__init__.py",

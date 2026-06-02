@@ -25,6 +25,7 @@ from aippocampus_runtime.core import (
     resolve_artifact_path,
 )
 from aippocampus_runtime.ops import storage_capacity_report
+from aippocampus_runtime.ops.storage_eviction import apply_rebuildable_evictions
 from aippocampus_runtime.ops.storage_governance_contract import (
     CLASS_ALL,
     CLASS_REBUILDABLE,
@@ -220,6 +221,11 @@ def _candidate_from_retention_item(
             "item_id": item.get("id"),
             "action": action,
             "safety": item.get("safety"),
+            "owner_index": _path_projection(
+                retention_report.get("index_dir"),
+                roots=roots,
+                include_paths=include_paths,
+            ),
         },
         "evidence": list(item.get("evidence") or []),
         "preconditions": _retention_preconditions(
@@ -495,14 +501,96 @@ def build_plan(
                     if retention_report is None
                     else None
                 ),
-                "Apply mode is intentionally not implemented in this dry-run slice.",
+                (
+                    "Apply v1 only evicts path-level retention-report rebuildable main SQLite "
+                    "caches; capacity aggregates and other candidate classes remain plan-only."
+                ),
             ]
             if item
         ],
         "next_steps": [
             "Review candidate preconditions before any manual cleanup.",
             "Run retention_report.py --write when path-level candidates are needed.",
-            "Implement apply mode only after source/archive, lease, active-thread, and eviction-manifest checks are deterministic.",
+            "Use --apply only for rebuildable cache candidates with deterministic source, lease, active-thread, and manifest checks.",
+        ],
+    }
+
+
+def apply_plan(
+    cwd: str | Path | None = None,
+    *,
+    registry_dir: str | Path | None = None,
+    capacity_report_path: str | Path | None = None,
+    retention_report_path: str | Path | None = None,
+    class_filter: str = CLASS_REBUILDABLE,
+    include_active: bool = False,
+    include_paths: bool = False,
+    top: int = 12,
+    planner_query: str | None = None,
+    fanout_budget: int = 64,
+) -> dict[str, Any]:
+    plan = build_plan(
+        cwd,
+        registry_dir=registry_dir,
+        capacity_report_path=capacity_report_path,
+        retention_report_path=retention_report_path,
+        class_filter=class_filter,
+        include_active=include_active,
+        include_paths=True,
+        top=top,
+        planner_query=planner_query,
+        fanout_budget=fanout_budget,
+    )
+    outcome = apply_rebuildable_evictions(
+        plan,
+        include_active=include_active,
+        include_paths=include_paths,
+    )
+    metrics = dict(plan["metrics"])
+    metrics.update(
+        {
+            "eviction_applied_count": len(outcome["applied"]),
+            "eviction_blocked_count": len(outcome["blocked"]),
+            "reclaimed_bytes": outcome["reclaimed_bytes"],
+            "reclaimed_human": outcome["reclaimed_human"],
+            "post_eviction_recall_surface_ok": bool(outcome["applied"]) and not outcome["blocked"],
+            "post_eviction_recall_surface_status": (
+                "intentional_rebuildable_degraded"
+                if outcome["applied"]
+                else "not_changed"
+            ),
+        }
+    )
+    warnings = list(plan.get("warnings", []))
+    if class_filter == CLASS_ALL:
+        warnings.append("Apply mode only evicts supported rebuildable cache candidates; other classes are blocked.")
+    if outcome["blocked"]:
+        warnings.append("One or more candidates were not evicted because apply preconditions failed.")
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "created_at": now_utc(),
+        "mode": "apply",
+        "requested_class": class_filter,
+        "apply_supported": True,
+        "ok": bool(outcome["applied"]) and not outcome["blocked"],
+        "privacy": {
+            "reads_clean_source_message_bodies": False,
+            "reads_raw_rollout_bodies": False,
+            "reads_json_manifests": True,
+            "loads_existing_retention_report": plan["privacy"]["loads_existing_retention_report"],
+            "absolute_paths_included": include_paths,
+        },
+        "report_sources": _redact_report_sources(
+            plan["report_sources"],
+            include_paths=include_paths,
+        ),
+        "metrics": metrics,
+        "applied": outcome["applied"],
+        "blocked": outcome["blocked"],
+        "warnings": warnings,
+        "next_steps": [
+            "Run health/maintenance after apply; intentional rebuildable eviction should report degraded-but-rebuildable state.",
+            "Rebuild evicted caches from the manifest rebuild_command before relying on generated-cache search performance.",
         ],
     }
 
@@ -537,6 +625,33 @@ def render_text(plan: dict[str, Any]) -> str:
         lines.extend(f"- {warning}" for warning in plan["warnings"])
     lines.extend(["", "Next steps:"])
     lines.extend(f"- {step}" for step in plan["next_steps"])
+    lines.append("")
+    return "\n".join(lines)
+
+
+def render_apply_text(result: dict[str, Any]) -> str:
+    metrics = result["metrics"]
+    lines = [
+        "AIppocampus storage governance apply",
+        f"- Requested class: {result['requested_class']}",
+        f"- Applied: {metrics['eviction_applied_count']}",
+        f"- Blocked: {metrics['eviction_blocked_count']}",
+        f"- Reclaimed: {metrics['reclaimed_human']}",
+        "",
+        "Applied:",
+    ]
+    if not result["applied"]:
+        lines.append("- none")
+    for item in result["applied"]:
+        manifest = item.get("manifest") or item.get("manifest_label")
+        lines.append(f"- {item['candidate_id']}: {item['human_bytes']} (manifest: {manifest})")
+    if result["blocked"]:
+        lines.extend(["", "Blocked:"])
+        for item in result["blocked"]:
+            lines.append(f"- {item['candidate_id']}: {item['reason_code']}")
+    if result["warnings"]:
+        lines.extend(["", "Warnings:"])
+        lines.extend(f"- {warning}" for warning in result["warnings"])
     lines.append("")
     return "\n".join(lines)
 
@@ -586,21 +701,40 @@ def main(argv: list[str] | None = None) -> int:
         parser.print_help()
         return 2
     if args.apply:
-        message = (
-            "storage gc apply mode is not implemented in this dry-run governance slice; "
-            "no files were changed"
-        )
-        if args.json_output:
-            print(
-                json.dumps(
-                    _error_payload("storage_gc_apply_not_implemented", message),
-                    ensure_ascii=False,
-                    indent=2,
-                )
+        try:
+            result = apply_plan(
+                args.cwd,
+                registry_dir=args.registry_dir,
+                capacity_report_path=args.capacity_report,
+                retention_report_path=args.retention_report,
+                class_filter=args.class_filter,
+                include_active=args.include_active,
+                include_paths=args.include_paths,
+                top=args.top,
+                planner_query=args.planner_query,
+                fanout_budget=args.fanout_budget,
             )
+        except ValueError as exc:
+            if args.json_output:
+                print(
+                    json.dumps(
+                        _error_payload(
+                            "storage_gc_invalid_report",
+                            str(exc),
+                            error_class="validation_error",
+                        ),
+                        ensure_ascii=False,
+                        indent=2,
+                    )
+                )
+            else:
+                print(str(exc), file=sys.stderr)
+            return 2
+        if args.json_output:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
-            print(message, file=sys.stderr)
-        return 2
+            print(render_apply_text(result))
+        return 0 if result["ok"] else 2
 
     try:
         plan = build_plan(

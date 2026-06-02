@@ -171,6 +171,153 @@ class AippocampusHealthTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
         self.assertEqual(payload["thread_count"], 0)
 
+    def test_health_reports_intentional_storage_eviction_not_corruption(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            rollout = workspace / "rollout.jsonl"
+            rollout.write_text('{"type":"event_msg","payload":{"type":"user_message","message":"hi"}}\n', encoding="utf-8")
+            anchors = workspace / "thread-anchors.md"
+            anchors.write_text("# Anchors\n- still present\n", encoding="utf-8")
+            index_dir = root / "index"
+            index_dir.mkdir()
+            manifest_path = index_dir / "manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "created_at": "2026-06-01T00:00:00Z",
+                        "message_count": 1,
+                        "source_rollout_size": rollout.stat().st_size,
+                        "last_message_line": 1,
+                        "rag": {"enabled": True},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (index_dir / "messages.jsonl").write_text("{}\n", encoding="utf-8")
+            evictions = index_dir / "evictions"
+            evictions.mkdir()
+            eviction_manifest = evictions / "storage-gc-test.json"
+            eviction_manifest.write_text(
+                json.dumps(
+                    {
+                        "kind": "aippocampus_storage_eviction_manifest",
+                        "schema_version": 1,
+                        "eviction_status": "applied",
+                        "evicted_at": "2026-06-02T00:00:00Z",
+                        "candidate_id": "retention:rebuildable-main-sqlite",
+                        "tier": "rebuildable_cache",
+                        "evicted_paths": [{"relative_path": "source_index.sqlite"}],
+                        "rebuild_command": "python ...\\build_index.py --cwd <workspace>",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            clean = root / "clean-source"
+            clean.mkdir()
+            clean_manifest = {
+                "schema_version": 2,
+                "upgrade_contract": {"source_backed": True},
+                "source_rollout_size": rollout.stat().st_size,
+                "message_count": 1,
+                "turn_count": 1,
+            }
+            (clean / "manifest.json").write_text(json.dumps(clean_manifest), encoding="utf-8")
+            (clean / "messages.jsonl").write_text("{}\n", encoding="utf-8")
+            (clean / "turns.jsonl").write_text("{}\n", encoding="utf-8")
+            graphify = root / "graphify-corpus"
+            graphify.mkdir()
+            (graphify / "corpus_manifest.json").write_text(
+                json.dumps({"source_index_manifest_sha256": health.file_sha256(manifest_path)}),
+                encoding="utf-8",
+            )
+            segments = root / "segments"
+            checkpoint = root / "checkpoint_state.json"
+
+            with mock.patch.object(health, "locate_rollout", return_value=rollout):
+                payload = health.build_health_report(
+                    health.HealthOptions(
+                        cwd=workspace,
+                        index_dir=index_dir,
+                        clean_source_dir=clean,
+                        graphify_corpus=graphify,
+                        segments_dir=segments,
+                        checkpoint_state=checkpoint,
+                        anchors=anchors,
+                    )
+                )
+
+        self.assertTrue(payload["index"]["intentional_eviction"]["detected"])
+        self.assertTrue(payload["index"]["intentional_eviction"]["rebuildable"])
+        self.assertEqual(
+            payload["index"]["intentional_eviction"]["manifest"],
+            str(eviction_manifest),
+        )
+        self.assertIn("build_index.py", payload["index"]["intentional_eviction"]["rebuild_command"])
+        self.assertIn(
+            "source_index.sqlite intentionally evicted as rebuildable cache",
+            payload["index"]["reasons"],
+        )
+        self.assertNotIn("source_index.sqlite is missing", payload["index"]["reasons"])
+
+    def test_health_ignores_eviction_manifest_older_than_index_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            rollout = workspace / "rollout.jsonl"
+            rollout.write_text('{"type":"event_msg","payload":{"type":"user_message","message":"hi"}}\n', encoding="utf-8")
+            anchors = workspace / "thread-anchors.md"
+            anchors.write_text("# Anchors\n- still present\n", encoding="utf-8")
+            index_dir = root / "index"
+            index_dir.mkdir()
+            (index_dir / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "created_at": "2026-06-03T00:00:00Z",
+                        "message_count": 1,
+                        "source_rollout_size": rollout.stat().st_size,
+                        "last_message_line": 1,
+                        "rag": {"enabled": True},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (index_dir / "messages.jsonl").write_text("{}\n", encoding="utf-8")
+            evictions = index_dir / "evictions"
+            evictions.mkdir()
+            (evictions / "storage-gc-old.json").write_text(
+                json.dumps(
+                    {
+                        "kind": "aippocampus_storage_eviction_manifest",
+                        "schema_version": 1,
+                        "eviction_status": "applied",
+                        "evicted_at": "2026-06-02T00:00:00Z",
+                        "candidate_id": "retention:rebuildable-main-sqlite",
+                        "tier": "rebuildable_cache",
+                        "evicted_paths": [{"relative_path": "source_index.sqlite"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with mock.patch.object(health, "locate_rollout", return_value=rollout):
+                payload = health.build_health_report(
+                    health.HealthOptions(
+                        cwd=workspace,
+                        index_dir=index_dir,
+                        clean_source_dir=root / "clean-source",
+                        graphify_corpus=root / "graphify-corpus",
+                        segments_dir=root / "segments",
+                        checkpoint_state=root / "checkpoint_state.json",
+                        anchors=anchors,
+                    )
+                )
+
+        self.assertFalse(payload["index"]["intentional_eviction"]["detected"])
+        self.assertIn("source_index.sqlite is missing", payload["index"]["reasons"])
+
 
 if __name__ == "__main__":
     unittest.main()

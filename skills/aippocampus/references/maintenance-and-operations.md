@@ -161,9 +161,14 @@ registry-scale capacity report because that report only stats files and reads
 manifests, but it does not generate a retention report implicitly. If no
 existing `retention_report.json` is found or passed with `--retention-report`,
 the command reports aggregate rebuildable bytes from capacity data and marks
-path-level candidates as unavailable. Apply mode is deliberately deferred until
-source/archive checks, live writer/export leases, active-thread exclusion, and
-eviction-manifest semantics are deterministic.
+path-level candidates as unavailable. `aippocampus storage gc --apply --class
+rebuildable` has a narrow v1 apply path for the main `source_index.sqlite`
+cache only when a retention report supplies path-level evidence. It checks
+raw/archive source evidence, anchor or registry refs, live writer/export
+leases, active-thread opt-in, and last-known-good pointer state, then writes an
+eviction manifest under `index/evictions/` with rebuild instructions. Capacity
+aggregate candidates, segment indexes, Graphify corpus caches, review
+artifacts, and source files remain plan-only/manual.
 
 Codex Desktop's own thread archive is a different mechanism: the app may move
 raw rollout JSONL files from `$CODEX_HOME/sessions/` into
@@ -206,6 +211,7 @@ Audit and archive commands:
 - `python ...\rollout_size_audit.py --cwd "$PWD"`
 - `python ...\storage_capacity_report.py --json`
 - `aippocampus storage gc --dry-run --json`
+- `aippocampus storage gc --apply --class rebuildable --retention-report "<retention_report.json>" --json`
 - `python tools\aippocampus\smoke\smoke_synthetic_scale_capacity.py --json`
 - `python ...\retention_report.py --cwd "$PWD" --write`
 - `python ...\cold_archive.py --cwd "$PWD"`

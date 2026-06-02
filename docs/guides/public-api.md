@@ -129,6 +129,10 @@ The CLI contract applies to documented operator commands, especially:
   diagnostic over `recall_context` / first reopenable `recall_deepen` route
 - `aippocampus storage gc --dry-run` as the no-mutation storage governance plan
   over capacity data and existing retention JSON
+- `aippocampus storage gc --apply --class rebuildable` as the explicit
+  path-level rebuildable-cache eviction path for retention-report-backed main
+  SQLite caches; capacity aggregates and source/review artifacts remain outside
+  apply v1
 - `registry.py register-source --provider generic-jsonl --input <path>`
 - `onboard_codex.py`
 - `aippocampus_mcp_server.py --list-tools`
