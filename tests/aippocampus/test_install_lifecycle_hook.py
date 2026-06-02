@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import sys
@@ -93,6 +95,19 @@ class InstallMemoryMaintenanceHookTests(unittest.TestCase):
         ]
         self.assertEqual(prompt_commands, ["python aippocampus_prompt_hook.py"])
 
+    def test_status_reports_codex_host_integration_boundary(self) -> None:
+        result = installer.status(self.hooks_json, self.script)
+
+        self.assertEqual(
+            result["host_integration"],
+            {
+                "host": "codex",
+                "config_surface": "codex_hooks_json",
+                "provider_neutral": False,
+                "unsupported_hosts": ["claude-code", "generic-jsonl"],
+            },
+        )
+
     def test_uninstall_removes_only_maintenance_hooks(self) -> None:
         installer.install(self.hooks_json, self.script, timeout=12)
 
@@ -106,6 +121,26 @@ class InstallMemoryMaintenanceHookTests(unittest.TestCase):
         self.assertNotIn("SessionStart", data)
         self.assertNotIn("PreCompact", data)
         self.assertNotIn("PostCompact", data)
+
+    def test_text_cli_labels_lifecycle_installer_as_codex_only(self) -> None:
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = installer.main(
+                [
+                    "status",
+                    "--hooks-json",
+                    str(self.hooks_json),
+                    "--script",
+                    str(self.script),
+                ]
+            )
+
+        self.assertEqual(code, 0)
+        text = stdout.getvalue()
+        self.assertIn("Codex lifecycle hooks not installed", text)
+        self.assertIn("host: codex", text)
+        self.assertIn("config surface: codex_hooks_json", text)
+        self.assertIn("provider-neutral: false", text)
 
 
 if __name__ == "__main__":

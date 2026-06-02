@@ -383,6 +383,52 @@ SAFE_ENV_DOC_TERMS = {
     ),
 }
 
+HOST_HOOK_BOUNDARY_DOC_TERMS = {
+    "docs/architecture/provider-entrypoint-inventory.md": {
+        "## Host Integration Matrix": "provider inventory missing host integration matrix",
+        "configuration-mutating installers": (
+            "provider inventory missing configuration-mutating installer classification"
+        ),
+        "Claude Code hook support: not yet claimable": (
+            "provider inventory missing Claude Code hook not-claimable boundary"
+        ),
+    },
+    "docs/architecture/runtime-script-map.md": {
+        "Codex-only hook installer boundary": (
+            "runtime script map missing Codex-only hook installer boundary"
+        ),
+    },
+    "docs/guides/claude-code-mcp.md": {
+        "AIppocampus does not ship a Claude Code hook installer": (
+            "Claude Code MCP guide missing explicit no Claude Code hook installer claim"
+        ),
+        "official Claude Code hooks contract": (
+            "Claude Code MCP guide missing official hook contract follow-up boundary"
+        ),
+    },
+    ".claude/skills/aippocampus/SKILL.md": {
+        "AIppocampus does not currently provide a Claude Code hook installer": (
+            "Claude Code project skill missing no-hook-installation boundary"
+        ),
+    },
+    "docs/guides/public-api.md": {
+        "Provider support is not host hook support": (
+            "public API doc missing provider-support-vs-hook-support boundary"
+        ),
+        "Codex-only hook installers": (
+            "public API doc missing Codex-only hook installer boundary"
+        ),
+    },
+}
+
+HOST_HOOK_HELPER_FILES = (
+    "skills/aippocampus/scripts/aippocampus_runtime/hooks/install_prompt.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/hooks/install_lifecycle.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/hooks/diagnose.py",
+)
+
+HOST_HOOK_METADATA_TERMS = ("host_boundary", "add_host_integration")
+
 PUBLIC_DOC_COMMAND_LINT_FILES = {
     "README.md",
     "docs/guides/install-guide.md",
@@ -891,6 +937,48 @@ def safe_environment_issues(repo_root: Path) -> list[str]:
     return issues
 
 
+def host_hook_boundary_issues(repo_root: Path) -> list[str]:
+    issues: list[str] = []
+
+    for rel_path, terms in HOST_HOOK_BOUNDARY_DOC_TERMS.items():
+        path = repo_root / rel_path
+        if not path.exists():
+            issues.append(f"missing host hook boundary doc: {rel_path}")
+            continue
+        text = path.read_text(encoding="utf-8")
+        for term, issue in terms.items():
+            if term not in text:
+                issues.append(issue)
+
+    host_boundary = (
+        repo_root
+        / "skills"
+        / "aippocampus"
+        / "scripts"
+        / "aippocampus_runtime"
+        / "hooks"
+        / "host_boundary.py"
+    )
+    if not host_boundary.exists():
+        issues.append("missing hook host boundary helper: aippocampus_runtime/hooks/host_boundary.py")
+    else:
+        text = host_boundary.read_text(encoding="utf-8")
+        for term in ('HOOK_HOST = "codex"', 'HOOK_CONFIG_SURFACE = "codex_hooks_json"'):
+            if term not in text:
+                issues.append(f"hook host boundary helper missing metadata term: {term}")
+
+    for rel_path in HOST_HOOK_HELPER_FILES:
+        path = repo_root / rel_path
+        if not path.exists():
+            issues.append(f"missing hook helper for host metadata: {rel_path}")
+            continue
+        text = path.read_text(encoding="utf-8")
+        if any(term not in text for term in HOST_HOOK_METADATA_TERMS):
+            issues.append(f"hook helper missing host integration metadata: {rel_path}")
+
+    return issues
+
+
 def windows_context_from_recent_lines(lines: list[str], fence_start_line: int) -> bool:
     recent = "\n".join(lines[max(0, fence_start_line - 5) : fence_start_line - 1]).casefold()
     return "windows" in recent or "powershell" in recent
@@ -976,6 +1064,7 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
     issues.extend(python_version_contract_issues(repo_root))
     issues.extend(dependency_contract_issues(repo_root))
     issues.extend(safe_environment_issues(repo_root))
+    issues.extend(host_hook_boundary_issues(repo_root))
 
     gitignore = repo_root / ".gitignore"
     if not gitignore.exists():

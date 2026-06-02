@@ -90,6 +90,32 @@ class HookDiagnosticsTests(unittest.TestCase):
         self.assertEqual(result["handlers"][0]["risk"], "would_timeout")
         self.assertFalse(result["handlers"][0]["timed_out"])
 
+    def test_diagnose_reports_codex_host_diagnostic_boundary(self) -> None:
+        hooks_json = self.root / "hooks.json"
+        hooks_json.write_text(json.dumps({"hooks": {}}, ensure_ascii=False), encoding="utf-8")
+
+        result = diagnose.diagnose(
+            hooks_json=hooks_json,
+            cwd=self.root,
+            events={"UserPromptSubmit"},
+            run=False,
+            prompt="diagnostic prompt",
+            last_assistant_message="diagnostic run",
+            max_seconds=2.0,
+            padding_seconds=1.0,
+            warn_ratio=0.8,
+        )
+
+        self.assertEqual(
+            result["host_integration"],
+            {
+                "host": "codex",
+                "config_surface": "codex_hooks_json",
+                "provider_neutral": False,
+                "unsupported_hosts": ["claude-code", "generic-jsonl"],
+            },
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

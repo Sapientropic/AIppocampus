@@ -273,6 +273,20 @@ General recall should use clean-source search, provider-aware onboarding, MCP
 tools, or registry paths; raw Codex audit helpers are not generic
 cross-agent-provider APIs.
 
+### Host Hook Boundary
+
+Provider support is not host hook support. `aippocampus onboard --provider
+claude-code`, `aippocampus import conversation --format generic-jsonl`, and MCP
+registry operations prove transcript registration or clean-source access only.
+They do not install, diagnose, or run host hooks.
+
+Codex-only hook installers are exposed through `aippocampus hooks ...`,
+`install_aippocampus_prompt_hook.py`, and `install_aippocampus_lifecycle_hook.py`.
+Their JSON/status output includes `host_integration.host = "codex"` and
+`host_integration.config_surface = "codex_hooks_json"`. Claude Code hook support
+is not a public AIppocampus claim until a dedicated Claude Code installer,
+status command, privacy note, and host smoke are documented.
+
 ## MCP Contract
 
 The current MCP tool catalog is read-mostly and intentionally small. The public

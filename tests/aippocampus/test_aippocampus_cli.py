@@ -36,7 +36,7 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("mcp list-tools", proc.stdout)
         self.assertIn("smoke recall-funnel", proc.stdout)
         self.assertIn("storage gc", proc.stdout)
-        self.assertIn("hooks", proc.stdout)
+        self.assertIn("hooks [kind]        Codex prompt/lifecycle hook status/install/uninstall", proc.stdout)
 
     def test_top_level_script_is_compatibility_shim_for_package_facade(self) -> None:
         import aippocampus_cli

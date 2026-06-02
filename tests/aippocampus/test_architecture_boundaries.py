@@ -235,6 +235,14 @@ class ArchitectureBoundaryTests(unittest.TestCase):
 
         self.assertEqual(missing, [])
 
+    def test_registry_paths_owner_does_not_depend_on_core_codex_home(self) -> None:
+        path = SCRIPTS / "aippocampus_runtime" / "registry" / "paths.py"
+        text = path.read_text(encoding="utf-8")
+
+        self.assertNotIn("from aippocampus_runtime.core import", text)
+        self.assertNotIn("import aippocampus_runtime.core", text)
+        self.assertNotIn("codex_home()", text)
+
     def test_prompt_hook_exits_zero_when_split_helper_install_lags(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)

@@ -107,6 +107,19 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         self.assertIn("--max-elapsed-ms 6200", hook["command"])
         self.assertIn("--semantic-timeout 1.25", hook["command"])
 
+    def test_status_reports_codex_host_integration_boundary(self) -> None:
+        result = installer.status(self.hooks_json, self.script)
+
+        self.assertEqual(
+            result["host_integration"],
+            {
+                "host": "codex",
+                "config_surface": "codex_hooks_json",
+                "provider_neutral": False,
+                "unsupported_hosts": ["claude-code", "generic-jsonl"],
+            },
+        )
+
     def test_uninstall_removes_only_ambient_hook(self) -> None:
         installer.install(self.hooks_json, self.script, timeout=5)
         data = self.read_hooks()
@@ -297,6 +310,26 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         self.assertTrue(payload["path_redacted"])
         self.assertNotIn("private cached theme", encoded)
         self.assertNotIn(str(self.codex_home), encoded)
+
+    def test_text_cli_labels_prompt_installer_as_codex_only(self) -> None:
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = installer.main(
+                [
+                    "status",
+                    "--hooks-json",
+                    str(self.hooks_json),
+                    "--script",
+                    str(self.script),
+                ]
+            )
+
+        self.assertEqual(code, 0)
+        text = stdout.getvalue()
+        self.assertIn("Codex prompt hook not installed", text)
+        self.assertIn("host: codex", text)
+        self.assertIn("config surface: codex_hooks_json", text)
+        self.assertIn("provider-neutral: false", text)
 
 
 if __name__ == "__main__":

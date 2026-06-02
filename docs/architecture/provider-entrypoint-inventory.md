@@ -3,16 +3,18 @@
 Last audited: 2026-06-02.
 
 This inventory classifies the remaining runtime surfaces that mention Codex raw
-rollouts or Codex home helpers. It is the companion record for issue #122. The
-goal is not to erase the Codex provider; it is to keep public surfaces honest
-about whether they are provider-aware, clean-source/registry-only, or Codex-only
-audit/host integration paths.
+rollouts, Codex home helpers, or host hook configuration. It is the companion
+record for issue #122 and issue #501. The goal is not to erase the Codex
+provider; it is to keep public surfaces honest about whether they are
+provider-aware, clean-source/registry-only, or Codex-only audit/host integration
+paths.
 
 ## Classification
 
 | Surface | Classification | Boundary |
 | --- | --- | --- |
-| `aippocampus_runtime/core.py` plus `aippocampuslib.py` compatibility shim | Shared compatibility helpers | Re-exports legacy Codex rollout parser helpers from `aippocampus_runtime/source/rollout.py` and owns provider-neutral registry storage/home helpers. Text compaction, external-model safety/credential transport, CLI error payloads, and anchor graph helpers are re-exported for compatibility only; new code should import `aippocampus_runtime.text`, `aippocampus_runtime.safety`, `aippocampus_runtime.cli.errors`, or `aippocampus_runtime.anchor_graph` directly. New public raw-source logic should use `conversation_sources/` or source package owners instead of adding more helpers here. |
+| `aippocampus_runtime/core.py` plus `aippocampuslib.py` compatibility shim | Shared compatibility helpers | Re-exports legacy Codex rollout parser helpers from `aippocampus_runtime/source/rollout.py` and registry path helpers from `aippocampus_runtime/registry/paths.py`. Text compaction, external-model safety/credential transport, CLI error payloads, and anchor graph helpers are re-exported for compatibility only; new code should import `aippocampus_runtime.text`, `aippocampus_runtime.safety`, `aippocampus_runtime.cli.errors`, `aippocampus_runtime.anchor_graph`, or `aippocampus_runtime.registry.paths` directly. New public raw-source logic should use `conversation_sources/` or source package owners instead of adding more helpers here. |
+| `aippocampus_runtime/registry/paths.py` | Provider-neutral registry storage helper | Owns `AIPPOCAMPUS_REGISTRY_DIR`, `AIPPOCAMPUS_HOME/registry`, and legacy Codex registry fallback resolution without importing the Codex raw-source helpers from `core.py`. |
 | `conversation_sources/codex.py` | Codex provider implementation | The only provider module that should know Codex `sessions/` and `archived_sessions/` layout. |
 | `aippocampus_runtime/source/rollout.py` | Codex rollout parser owner | Parses Codex event/response JSONL into the legacy normalized message/turn schema for audit, clean-source, and index consumers. It does not discover rollout files or decide artifact storage; `core.py` and `aippocampuslib.py` only re-export these helpers for compatibility. |
 | `aippocampus_runtime/onboarding/facade.py` plus `onboard.py` compatibility shim | Provider-aware public entrypoint | Accepts `--provider codex\|claude-code\|generic-jsonl`; `auto` remains conservative and lists other providers separately. |
@@ -40,6 +42,18 @@ audit/host integration paths.
 | `aippocampus_runtime/ops/retention_report.py` plus `retention_report.py` compatibility shim | Codex-only raw audit/report tool | Uses raw Codex rollout unless an explicit rollout is supplied. |
 | `aippocampus_runtime/ops/storage_governance.py` | Registry-first storage governance facade with Codex-current-thread retention discovery | `aippocampus storage gc --dry-run` can generate capacity evidence from registry/manifests without reading message bodies. It uses Codex current-thread discovery only to find an already-written default `retention_report.json`; operators can pass `--retention-report` for explicit/non-Codex evidence. No top-level compatibility shim is added. |
 | `aippocampus_runtime/artifacts/export_bundle.py` plus `export_bundle.py` compatibility shim | Codex-current-thread export helper | Exports generated artifacts for a current Codex thread unless explicit paths are supplied. The package owner calls the packaged index builder in-process; the top-level script is compatibility only. |
+
+## Host Integration Matrix
+
+Conversation-provider support means AIppocampus can normalize visible transcript
+source into clean source. Host hook support means AIppocampus can install,
+diagnose, or run a host-specific hook contract. These are separate claims.
+
+| Host/provider | Conversation provider | Clean-source, registry, MCP surfaces | Host hook handlers | configuration-mutating installers | Host diagnostics | Boundary |
+| --- | --- | --- | --- | --- | --- | --- |
+| `codex` | Yes: Codex rollout provider. | Yes: clean source, registry, MCP, onboarding, and current-thread maintenance paths. | Yes: `aippocampus_runtime/hooks/prompt.py` and `aippocampus_runtime/hooks/lifecycle.py` implement Codex hook handlers. | Yes: `install_prompt.py` and `install_lifecycle.py` mutate Codex `hooks.json` after explicit operator command. | Yes: `diagnose.py` inspects Codex `hooks.json` and emulates Codex hook stdin. | Codex hook install/status/uninstall remains opt-in Codex host integration, not a provider-neutral AIppocampus install. |
+| `claude-code` | Yes: Claude Code transcript parser and explicit onboarding. | Yes: clean-source registration and MCP/project-skill surfaces. | No shipped AIppocampus Claude Code hook handler. | No shipped AIppocampus Claude Code hook installer. | MCP host smokes only; no hook diagnostic claim. | Claude Code hook support: not yet claimable until a dedicated installer/status/privacy/smoke targets the official Claude Code hooks contract. |
+| `generic-jsonl` | Yes: explicit visible-message import provider. | Yes: clean-source registration/import surfaces. | No host hook handler. | No host hook installer. | Import validation only. | Generic import proves transcript ingestion, not host automation. |
 
 ## Guardrail
 
