@@ -245,6 +245,10 @@ class BenchmarkSuiteConfig:
     sharegpt_public_max_cases: int = retrieval_benchmark.DEFAULT_SHAREGPT_PUBLIC_CASES
     sharegpt_public_min_cases: int = retrieval_benchmark.DEFAULT_SHAREGPT_PUBLIC_MIN_CASES
     sharegpt_public_top_k: int = retrieval_benchmark.DEFAULT_SHAREGPT_PUBLIC_TOP_K
+    sharegpt_public_sampling_mode: str = retrieval_benchmark.sharegpt_sampling.SEEDED_STRATIFIED
+    sharegpt_public_seed: int = (
+        retrieval_benchmark.sharegpt_sampling.DEFAULT_SHAREGPT_SAMPLE_SEED
+    )
     include_standard_public_track_b: bool = False
     standard_dataset: str = retrieval_benchmark.DEFAULT_STANDARD_DATASET
     standard_corpus_path: Path | None = None
@@ -311,6 +315,12 @@ class BenchmarkSuiteConfig:
             "sharegpt_public_max_cases": int(self.sharegpt_public_max_cases),
             "sharegpt_public_min_cases": int(self.sharegpt_public_min_cases),
             "sharegpt_public_top_k": int(self.sharegpt_public_top_k),
+            "sharegpt_public_sampling_mode": (
+                retrieval_benchmark.sharegpt_sampling.canonical_sampling_mode(
+                    self.sharegpt_public_sampling_mode
+                )
+            ),
+            "sharegpt_public_seed": int(self.sharegpt_public_seed),
             "include_standard_public_track_b": bool(self.include_standard_public_track_b),
             "standard_dataset": self.standard_dataset,
             "standard_max_questions": int(self.standard_max_questions),
@@ -785,6 +795,10 @@ def run_benchmark_suite(
     sharegpt_public_max_cases: int = retrieval_benchmark.DEFAULT_SHAREGPT_PUBLIC_CASES,
     sharegpt_public_min_cases: int = retrieval_benchmark.DEFAULT_SHAREGPT_PUBLIC_MIN_CASES,
     sharegpt_public_top_k: int = retrieval_benchmark.DEFAULT_SHAREGPT_PUBLIC_TOP_K,
+    sharegpt_public_sampling_mode: str = retrieval_benchmark.sharegpt_sampling.SEEDED_STRATIFIED,
+    sharegpt_public_seed: int = (
+        retrieval_benchmark.sharegpt_sampling.DEFAULT_SHAREGPT_SAMPLE_SEED
+    ),
     include_standard_public_track_b: bool = False,
     standard_dataset: str = retrieval_benchmark.DEFAULT_STANDARD_DATASET,
     standard_corpus_path: Path | None = None,
@@ -850,6 +864,8 @@ def run_benchmark_suite(
             sharegpt_public_max_cases=sharegpt_public_max_cases,
             sharegpt_public_min_cases=sharegpt_public_min_cases,
             sharegpt_public_top_k=sharegpt_public_top_k,
+            sharegpt_public_sampling_mode=sharegpt_public_sampling_mode,
+            sharegpt_public_seed=sharegpt_public_seed,
             include_standard_public_track_b=include_standard_public_track_b,
             standard_dataset=standard_dataset,
             standard_corpus_path=standard_corpus_path,
@@ -905,6 +921,8 @@ def run_benchmark_suite_with_config(config: BenchmarkSuiteConfig) -> dict[str, A
     sharegpt_public_max_cases = config.sharegpt_public_max_cases
     sharegpt_public_min_cases = config.sharegpt_public_min_cases
     sharegpt_public_top_k = config.sharegpt_public_top_k
+    sharegpt_public_sampling_mode = config.sharegpt_public_sampling_mode
+    sharegpt_public_seed = config.sharegpt_public_seed
     include_standard_public_track_b = config.include_standard_public_track_b
     standard_dataset = config.standard_dataset
     standard_corpus_path = config.standard_corpus_path
@@ -959,6 +977,8 @@ def run_benchmark_suite_with_config(config: BenchmarkSuiteConfig) -> dict[str, A
                 sharegpt_public_max_cases=sharegpt_public_max_cases,
                 sharegpt_public_min_cases=sharegpt_public_min_cases,
                 sharegpt_public_top_k=sharegpt_public_top_k,
+                sharegpt_public_sampling_mode=sharegpt_public_sampling_mode,
+                sharegpt_public_seed=sharegpt_public_seed,
                 include_standard_public=include_standard_public_track_b,
                 standard_dataset=standard_dataset,
                 standard_corpus_path=standard_corpus_path,
@@ -1213,6 +1233,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=retrieval_benchmark.DEFAULT_SHAREGPT_PUBLIC_TOP_K,
     )
     parser.add_argument(
+        "--sharegpt-public-sampling-mode",
+        choices=["seeded-stratified", "first-n"],
+        default="seeded-stratified",
+        help="ShareGPT public Track B sampling. Use first-n only for explicit smoke/debug runs.",
+    )
+    parser.add_argument(
+        "--sharegpt-public-seed",
+        type=int,
+        default=retrieval_benchmark.sharegpt_sampling.DEFAULT_SHAREGPT_SAMPLE_SEED,
+    )
+    parser.add_argument(
         "--standard-dataset",
         choices=sorted(retrieval_benchmark.STANDARD_DATASET_PATHS),
         default=retrieval_benchmark.DEFAULT_STANDARD_DATASET,
@@ -1316,6 +1347,8 @@ def benchmark_suite_config_from_args(args: argparse.Namespace) -> BenchmarkSuite
         sharegpt_public_max_cases=args.sharegpt_public_cases,
         sharegpt_public_min_cases=args.sharegpt_public_min_cases,
         sharegpt_public_top_k=args.sharegpt_public_top_k,
+        sharegpt_public_sampling_mode=args.sharegpt_public_sampling_mode,
+        sharegpt_public_seed=args.sharegpt_public_seed,
         include_standard_public_track_b=args.include_standard_public_track_b,
         standard_dataset=args.standard_dataset,
         standard_corpus_path=args.standard_corpus_path,

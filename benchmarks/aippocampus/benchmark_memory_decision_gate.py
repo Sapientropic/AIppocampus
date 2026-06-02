@@ -25,6 +25,7 @@ import _paths
 _paths.ensure_paths()
 
 import aippocampus_prompt_hook as hook
+import sharegpt_sampling
 from benchmark_statistics import binomial_rate_report
 from build_index import make_sqlite
 
@@ -234,6 +235,7 @@ class SyntheticFixture:
     other_workspace: Path | None = None
     semantic_triggers_path: Path | None = None
     semantic_triggers_ablated_path: Path | None = None
+    sharegpt_sampling: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -1046,55 +1048,18 @@ def conversation_has_min_turns(rows: list[dict[str, Any]]) -> bool:
 def group_sharegpt_conversations(
     corpus_dir: Path,
     max_conversations: int,
+    *,
+    sampling_mode: str | None = None,
+    seed: int = sharegpt_sampling.DEFAULT_SHAREGPT_SAMPLE_SEED,
 ) -> list[list[dict[str, Any]]]:
-    messages_path = corpus_dir / "messages.jsonl"
-    if not messages_path.exists():
-        raise FileNotFoundError(f"ShareGPT clean-source messages not found: {messages_path}")
-    conversations: list[list[dict[str, Any]]] = []
-    seen_source_ids: set[str] = set()
-    current_source_id = ""
-    current_rows: list[dict[str, Any]] = []
-    target_count = max(1, int(max_conversations))
-
-    def flush_current() -> None:
-        nonlocal current_source_id, current_rows
-        if not current_source_id:
-            return
-        seen_source_ids.add(current_source_id)
-        rows = normalize_sharegpt_conversation(current_rows)
-        if conversation_has_min_turns(rows):
-            conversations.append(rows)
-        current_source_id = ""
-        current_rows = []
-
-    # The converter writes messages grouped by conversation. Stream the file so
-    # a small P1 smoke run does not load a 500MB+ corpus artifact into memory.
-    with messages_path.open("r", encoding="utf-8") as handle:
-        for line in handle:
-            if len(conversations) >= target_count:
-                break
-            if not line.strip():
-                continue
-            try:
-                message = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if not isinstance(message, dict):
-                continue
-            source_id = str(message.get("source_id") or "")
-            if not source_id:
-                continue
-            if source_id in seen_source_ids:
-                continue
-            if current_source_id and source_id != current_source_id:
-                flush_current()
-                if len(conversations) >= target_count:
-                    break
-            current_source_id = source_id
-            current_rows.append(message)
-    if len(conversations) < target_count:
-        flush_current()
-    return conversations
+    return sharegpt_sampling.sample_sharegpt_conversations(
+        corpus_dir,
+        max_conversations,
+        normalize_rows=normalize_sharegpt_conversation,
+        is_eligible=conversation_has_min_turns,
+        sampling_mode=sampling_mode,
+        seed=seed,
+    ).conversations
 
 
 def build_sharegpt_coding_fixture(
@@ -1102,8 +1067,18 @@ def build_sharegpt_coding_fixture(
     *,
     corpus_dir: Path,
     max_conversations: int,
+    sampling_mode: str | None = None,
+    seed: int = sharegpt_sampling.DEFAULT_SHAREGPT_SAMPLE_SEED,
 ) -> SyntheticFixture:
-    conversations = group_sharegpt_conversations(corpus_dir, max_conversations)
+    sample = sharegpt_sampling.sample_sharegpt_conversations(
+        corpus_dir,
+        max_conversations,
+        normalize_rows=normalize_sharegpt_conversation,
+        is_eligible=conversation_has_min_turns,
+        sampling_mode=sampling_mode,
+        seed=seed,
+    )
+    conversations = sample.conversations
     if not conversations:
         raise ValueError(f"No multi-turn ShareGPT conversations found in {corpus_dir}")
     workspace = root / "workspace"
@@ -1204,6 +1179,7 @@ def build_sharegpt_coding_fixture(
         registry_path=registry_path,
         working_memory_path=working_memory_path,
         cases=cases,
+        sharegpt_sampling=sample.report,
     )
 
 
@@ -2048,6 +2024,8 @@ def run_benchmark(
     include_private_text: bool = False,
     sharegpt_corpus_dir: str | Path | None = None,
     sharegpt_conversations: int = 20,
+    sharegpt_sampling_mode: str = sharegpt_sampling.SEEDED_STRATIFIED,
+    sharegpt_seed: int = sharegpt_sampling.DEFAULT_SHAREGPT_SAMPLE_SEED,
 ) -> dict[str, Any]:
     if case_set not in {"synthetic", "sharegpt-coding"}:
         raise ValueError("case_set must be 'synthetic' or 'sharegpt-coding'")
@@ -2062,6 +2040,8 @@ def run_benchmark(
                 Path(tmp),
                 corpus_dir=Path(sharegpt_corpus_dir or DEFAULT_SHAREGPT_CORPUS_DIR),
                 max_conversations=sharegpt_conversations,
+                sampling_mode=sharegpt_sampling_mode,
+                seed=sharegpt_seed,
             )
             case_source = "sharegpt_coding_public_real"
             case_ids_are_hashed = True
@@ -2085,9 +2065,16 @@ def run_benchmark(
             "sharegpt_conversations": int(sharegpt_conversations)
             if case_set == "sharegpt-coding"
             else None,
+            "sharegpt_sampling_mode": sharegpt_sampling.canonical_sampling_mode(
+                sharegpt_sampling_mode
+            )
+            if case_set == "sharegpt-coding"
+            else None,
+            "sharegpt_seed": int(sharegpt_seed) if case_set == "sharegpt-coding" else None,
             "include_private_text": include_private_text,
             "live_llm": False,
         },
+        "sharegpt_sampling": fixture.sharegpt_sampling if case_set == "sharegpt-coding" else None,
         "metrics": metrics,
         "harder_case_bank": harder_case_bank,
         "semantic_trigger_alias_ablation": summarize_semantic_trigger_alias_ablation(
@@ -2134,6 +2121,12 @@ def run_benchmark(
             "payload_fidelity",
             "external_baseline_comparison",
             "competitor_superiority",
+            *(
+                ["seeded_stratified_population_sampling"]
+                if case_set == "sharegpt-coding"
+                and (fixture.sharegpt_sampling or {}).get("method") == sharegpt_sampling.FIRST_N
+                else []
+            ),
         ],
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
         "ok": source_mismatch_count == 0,
@@ -2166,6 +2159,17 @@ def main() -> int:
     parser.add_argument("--cases", type=int, default=None, help="Limit the number of cases.")
     parser.add_argument("--sharegpt-corpus-dir", type=Path, default=None)
     parser.add_argument("--sharegpt-conversations", type=int, default=20)
+    parser.add_argument(
+        "--sharegpt-sampling-mode",
+        choices=["seeded-stratified", "first-n"],
+        default="seeded-stratified",
+        help="ShareGPT conversation sampling. Use first-n only for explicit smoke/debug runs.",
+    )
+    parser.add_argument(
+        "--sharegpt-seed",
+        type=int,
+        default=sharegpt_sampling.DEFAULT_SHAREGPT_SAMPLE_SEED,
+    )
     parser.add_argument("--include-private-text", action="store_true")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
@@ -2177,6 +2181,8 @@ def main() -> int:
         include_private_text=args.include_private_text,
         sharegpt_corpus_dir=args.sharegpt_corpus_dir,
         sharegpt_conversations=args.sharegpt_conversations,
+        sharegpt_sampling_mode=args.sharegpt_sampling_mode,
+        sharegpt_seed=args.sharegpt_seed,
     )
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

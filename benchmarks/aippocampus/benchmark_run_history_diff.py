@@ -57,6 +57,8 @@ KEY_CONFIG_FIELDS = (
     "sharegpt_public_max_cases",
     "sharegpt_public_min_cases",
     "sharegpt_public_top_k",
+    "sharegpt_public_sampling_mode",
+    "sharegpt_public_seed",
     "standard_dataset",
     "standard_max_questions",
     "standard_min_questions",

@@ -619,6 +619,186 @@ class MemoryDecisionGateBenchmarkTests(unittest.TestCase):
             self.assertIn(case["expected"], benchmark.EXPECTED_LABELS)
             self.assertIn(case["actual"], benchmark.ACTUAL_DECISIONS)
 
+    def test_sharegpt_coding_sampling_is_seeded_and_reports_population(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            corpus = Path(tmp) / "sharegpt"
+            corpus.mkdir()
+            rows = []
+            for conv_index in range(6):
+                source_id = f"src_demo_{conv_index}"
+                rows.extend(
+                    [
+                        {
+                            "message_id": f"{source_id}_m1",
+                            "turn_id": f"{source_id}_t1",
+                            "source_id": source_id,
+                            "source_line": 1,
+                            "role": "user",
+                            "turn_index": 1,
+                            "text": f"How do I debug Rust async parser issue {conv_index}?",
+                            "_meta": {
+                                "source_file": "sharegpt-sample.jsonl",
+                                "category": "program and code",
+                            },
+                        },
+                        {
+                            "message_id": f"{source_id}_m2",
+                            "turn_id": f"{source_id}_t1",
+                            "source_id": source_id,
+                            "source_line": 2,
+                            "role": "assistant",
+                            "phase": "final_answer",
+                            "turn_index": 1,
+                            "is_final": True,
+                            "text": f"Use owned parser buffers and explicit lifetimes {conv_index}.",
+                            "_meta": {
+                                "source_file": "sharegpt-sample.jsonl",
+                                "category": "program and code",
+                            },
+                        },
+                        {
+                            "message_id": f"{source_id}_m3",
+                            "turn_id": f"{source_id}_t2",
+                            "source_id": source_id,
+                            "source_line": 3,
+                            "role": "user",
+                            "turn_index": 2,
+                            "text": f"Continue the parser explanation {conv_index}.",
+                            "_meta": {
+                                "source_file": "sharegpt-sample.jsonl",
+                                "category": "program and code",
+                            },
+                        },
+                        {
+                            "message_id": f"{source_id}_m4",
+                            "turn_id": f"{source_id}_t2",
+                            "source_id": source_id,
+                            "source_line": 4,
+                            "role": "assistant",
+                            "phase": "final_answer",
+                            "turn_index": 2,
+                            "is_final": True,
+                            "text": f"Return owned tokens from the parser task {conv_index}.",
+                            "_meta": {
+                                "source_file": "sharegpt-sample.jsonl",
+                                "category": "program and code",
+                            },
+                        },
+                    ]
+                )
+            (corpus / "messages.jsonl").write_text(
+                "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
+                encoding="utf-8",
+            )
+
+            first = benchmark.run_benchmark(
+                case_set="sharegpt-coding",
+                sharegpt_corpus_dir=corpus,
+                sharegpt_conversations=2,
+                sharegpt_seed=218,
+            )
+            repeated = benchmark.run_benchmark(
+                case_set="sharegpt-coding",
+                sharegpt_corpus_dir=corpus,
+                sharegpt_conversations=2,
+                sharegpt_seed=218,
+            )
+            different_seed = benchmark.run_benchmark(
+                case_set="sharegpt-coding",
+                sharegpt_corpus_dir=corpus,
+                sharegpt_conversations=2,
+                sharegpt_seed=219,
+            )
+
+        sampling = first["sharegpt_sampling"]
+        self.assertEqual(sampling["method"], "seeded_stratified")
+        self.assertEqual(sampling["seed"], 218)
+        self.assertTrue(sampling["population_scan_complete"])
+        self.assertEqual(sampling["eligible_population_count"], 6)
+        self.assertEqual(sampling["selected_conversation_count"], 2)
+        self.assertEqual(len(sampling["selected_conversation_ids"]), 2)
+        self.assertEqual(
+            sampling["selected_conversation_ids"],
+            repeated["sharegpt_sampling"]["selected_conversation_ids"],
+        )
+        self.assertNotEqual(
+            sampling["selected_conversation_ids"],
+            different_seed["sharegpt_sampling"]["selected_conversation_ids"],
+        )
+        self.assertEqual(sampling["strata"][0]["eligible_conversations"], 6)
+        self.assertEqual(sampling["strata"][0]["selected_conversations"], 2)
+        dumped = json.dumps(first, ensure_ascii=False)
+        self.assertNotIn("Rust async parser issue", dumped)
+        self.assertNotIn("sharegpt-sample.jsonl", dumped)
+
+    def test_sharegpt_coding_first_n_is_explicit_smoke_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            corpus = Path(tmp) / "sharegpt"
+            corpus.mkdir()
+            rows = []
+            for conv_index in range(3):
+                source_id = f"src_first_{conv_index}"
+                rows.extend(
+                    [
+                        {
+                            "message_id": f"{source_id}_m1",
+                            "turn_id": f"{source_id}_t1",
+                            "source_id": source_id,
+                            "source_line": 1,
+                            "role": "user",
+                            "turn_index": 1,
+                            "text": f"How do I debug TypeScript issue {conv_index}?",
+                        },
+                        {
+                            "message_id": f"{source_id}_m2",
+                            "turn_id": f"{source_id}_t1",
+                            "source_id": source_id,
+                            "source_line": 2,
+                            "role": "assistant",
+                            "phase": "final_answer",
+                            "turn_index": 1,
+                            "is_final": True,
+                            "text": f"Use a discriminated union {conv_index}.",
+                        },
+                        {
+                            "message_id": f"{source_id}_m3",
+                            "turn_id": f"{source_id}_t2",
+                            "source_id": source_id,
+                            "source_line": 3,
+                            "role": "user",
+                            "turn_index": 2,
+                            "text": f"Continue TypeScript issue {conv_index}.",
+                        },
+                        {
+                            "message_id": f"{source_id}_m4",
+                            "turn_id": f"{source_id}_t2",
+                            "source_id": source_id,
+                            "source_line": 4,
+                            "role": "assistant",
+                            "phase": "final_answer",
+                            "turn_index": 2,
+                            "is_final": True,
+                            "text": f"Keep exhaustive checks {conv_index}.",
+                        },
+                    ]
+                )
+            (corpus / "messages.jsonl").write_text(
+                "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
+                encoding="utf-8",
+            )
+
+            payload = benchmark.run_benchmark(
+                case_set="sharegpt-coding",
+                sharegpt_corpus_dir=corpus,
+                sharegpt_conversations=1,
+                sharegpt_sampling_mode="first-n",
+            )
+
+        sampling = payload["sharegpt_sampling"]
+        self.assertEqual(sampling["method"], "first_n")
+        self.assertFalse(sampling["population_scan_complete"])
+        self.assertIn("seeded_stratified_population_sampling", payload["cannot_claim"])
+
 
 if __name__ == "__main__":
     unittest.main()
