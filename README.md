@@ -211,6 +211,8 @@ Then restart Codex or reload skills if your runtime requires it.
 The skill entrypoint is [skills/aippocampus/SKILL.md](skills/aippocampus/SKILL.md).
 The public API and stability boundary is
 [docs/guides/public-api.md](docs/guides/public-api.md).
+The runtime and tooling dependency taxonomy lives in
+[docs/guides/dependency-contract.md](docs/guides/dependency-contract.md).
 
 ## Use Inside A Codex Workspace
 
@@ -270,7 +272,8 @@ From the repository root:
 ```sh
 python -m venv .venv
 . .venv/bin/activate
-python -m pip install --upgrade pip ruff mypy coverage
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
 python tools/aippocampus/docs/check_docs_health.py --json
 python -m ruff check skills plugins tests tools benchmarks benchmark_corpus
 python -m mypy

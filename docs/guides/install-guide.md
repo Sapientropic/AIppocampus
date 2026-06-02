@@ -11,6 +11,8 @@ For host-family support status and what not to overclaim, see
 The install guide shows common commands only; the full environment-variable
 matrix and Python import layer policy live in that public API document so the
 stability boundary has one owner.
+The runtime and tooling dependency taxonomy lives in
+[dependency-contract.md](dependency-contract.md).
 
 For a new external user or agent host, follow the
 [10-minute public API path](public-api.md#ten-minute-public-path) first:
@@ -76,7 +78,8 @@ Use a repo-local virtual environment for verification tools:
 ```sh
 python -m venv .venv
 . .venv/bin/activate
-python -m pip install --upgrade pip ruff mypy
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
 ```
 
 Copy the installable skill package into Codex home:

@@ -63,6 +63,7 @@ def write_minimal_repo(repo: Path, *, marker: str | None = None, version: str = 
                 "workflow_dispatch",
                 "release_tag",
                 "pypa/gh-action-pypi-publish",
+                'python -m pip install -e ".[release]"',
                 "Check tag matches package version",
                 'git", "rev-list", "-n", "1", tag',
                 "check-jsonschema",

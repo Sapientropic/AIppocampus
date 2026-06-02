@@ -53,8 +53,9 @@ class MacOSInstallSmokeWorkflowTests(unittest.TestCase):
         text = CI_WORKFLOW.read_text(encoding="utf-8")
 
         self.assertIn("permissions:\n  contents: read", text)
-        self.assertIn("python -m pip install ruff mypy coverage build", text)
-        self.assertIn("python -m pip install -e .", text)
+        self.assertIn("cache: pip", text)
+        self.assertIn("cache-dependency-path: pyproject.toml", text)
+        self.assertIn('python -m pip install -e ".[dev]"', text)
         self.assertIn("aippocampus hooks status --codex-home .tmp/ci-codex-home --json", text)
         self.assertIn("aippocampus hooks install --codex-home .tmp/ci-codex-home --json", text)
         self.assertIn("python -m build --sdist --wheel", text)

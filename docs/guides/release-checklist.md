@@ -26,6 +26,7 @@ Run from the repository root:
 ```sh
 uv run --python 3.12 python -c 'import aippocampus_runtime; print("uv-run-ok")'
 python -m pip install -e .
+python -m pip install -e ".[release]"
 python -m build --sdist --wheel
 python tools/aippocampus/docs/check_docs_health.py --json
 python tools/aippocampus/release/check_agent_discovery_release.py --json

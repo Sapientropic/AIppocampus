@@ -300,6 +300,37 @@ PYTHON_VERSION_WORKFLOW_TERMS = {
     ),
 }
 
+DEPENDENCY_CONTRACT_REQUIRED_OPTIONAL_EXTRAS = {
+    "dev": ["build==1.3.0", "coverage==7.14.1", "mypy==2.1.0", "ruff==0.15.12"],
+    "release": ["build==1.3.0", "check-jsonschema==0.37.2", "twine==6.2.0"],
+    "benchmark": [],
+    "openai-agents": ["openai-agents>=0.17.4,<1"],
+    "openai-agents-smoke": ["openai-agents==0.17.4"],
+}
+
+DEPENDENCY_CONTRACT_DOC_TERMS = {
+    "dependencies = []": "dependency contract doc missing empty runtime dependency contract",
+    "`openai-agents` is the user-facing optional integration extra": (
+        "dependency contract doc missing user-facing optional integration boundary"
+    ),
+    "CI uses `openai-agents-smoke`, an exact-pinned smoke extra": (
+        "dependency contract doc missing exact-pinned OpenAI Agents smoke boundary"
+    ),
+    "`benchmark` is intentionally empty": (
+        "dependency contract doc missing deterministic benchmark dependency boundary"
+    ),
+    "Use the exact-pinned `dev` extra": (
+        "dependency contract doc missing contributor tooling install path"
+    ),
+    "Use the exact-pinned `release` extra": (
+        "dependency contract doc missing release tooling install path"
+    ),
+    "exact-pinned `setuptools` backend": (
+        "dependency contract doc missing build backend reproducibility boundary"
+    ),
+    "setup-python` pip caching": "dependency contract doc missing CI caching boundary",
+}
+
 PUBLIC_DOC_COMMAND_LINT_FILES = {
     "README.md",
     "docs/guides/install-guide.md",
@@ -619,6 +650,109 @@ def python_version_contract_issues(repo_root: Path) -> list[str]:
     return issues
 
 
+def dependency_contract_issues(repo_root: Path) -> list[str]:
+    issues: list[str] = []
+
+    pyproject_path = repo_root / "pyproject.toml"
+    if not pyproject_path.exists():
+        return ["missing pyproject.toml for dependency contract"]
+    try:
+        pyproject = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+    except tomllib.TOMLDecodeError as exc:
+        return [f"cannot parse pyproject.toml for dependency contract: {exc}"]
+
+    project = pyproject.get("project", {})
+    if project.get("dependencies") != []:
+        issues.append("pyproject.toml must declare current runtime dependencies as []")
+
+    optional = project.get("optional-dependencies", {})
+    for extra, expected in DEPENDENCY_CONTRACT_REQUIRED_OPTIONAL_EXTRAS.items():
+        actual = optional.get(extra)
+        if actual != expected:
+            issues.append(f"pyproject.toml optional dependency {extra!r} must be {expected!r}")
+
+    build_requires = pyproject.get("build-system", {}).get("requires")
+    if build_requires != ["setuptools==82.0.1"]:
+        issues.append("pyproject.toml build-system requires must pin setuptools==82.0.1")
+
+    contract = repo_root / "docs" / "guides" / "dependency-contract.md"
+    if not contract.exists():
+        issues.append("missing dependency contract doc: docs/guides/dependency-contract.md")
+    else:
+        text = contract.read_text(encoding="utf-8")
+        for term, issue in DEPENDENCY_CONTRACT_DOC_TERMS.items():
+            if term not in text:
+                issues.append(issue)
+
+    docs_readme = repo_root / "docs" / "README.md"
+    if docs_readme.exists() and "guides/dependency-contract.md" not in docs_readme.read_text(
+        encoding="utf-8"
+    ):
+        issues.append("docs README missing dependency contract pointer")
+
+    readme = repo_root / "README.md"
+    if readme.exists():
+        readme_text = readme.read_text(encoding="utf-8")
+        if "docs/guides/dependency-contract.md" not in readme_text:
+            issues.append("README missing dependency contract pointer")
+        if 'python -m pip install -e ".[dev]"' not in readme_text:
+            issues.append("README missing dev extra contributor install path")
+        if re.search(r"pip install --upgrade pip\s+ruff", readme_text):
+            issues.append("README must not use floating Ruff/mypy/coverage install")
+
+    install_guide = repo_root / "docs" / "guides" / "install-guide.md"
+    if install_guide.exists():
+        install_text = install_guide.read_text(encoding="utf-8")
+        if "dependency-contract.md" not in install_text:
+            issues.append("install guide missing dependency contract pointer")
+        if 'python -m pip install -e ".[dev]"' not in install_text:
+            issues.append("install guide missing dev extra contributor install path")
+        if re.search(r"pip install --upgrade pip\s+ruff", install_text):
+            issues.append("install guide must not use floating Ruff/mypy install")
+
+    release_checklist = repo_root / "docs" / "guides" / "release-checklist.md"
+    if release_checklist.exists() and 'python -m pip install -e ".[release]"' not in (
+        release_checklist.read_text(encoding="utf-8")
+    ):
+        issues.append("release checklist missing release extra install path")
+
+    ci_workflow = repo_root / ".github" / "workflows" / "aippocampus-ci.yml"
+    if ci_workflow.exists():
+        ci_text = ci_workflow.read_text(encoding="utf-8")
+        for term in [
+            'python -m pip install -e ".[dev]"',
+            'python -m pip install -e ".[benchmark]"',
+            'python -m pip install -e ".[openai-agents-smoke]"',
+            "cache: pip",
+            "cache-dependency-path: pyproject.toml",
+        ]:
+            if term not in ci_text:
+                issues.append(f"aippocampus CI missing dependency reproducibility term: {term}")
+        if re.search(r"python -m pip install ruff mypy coverage build", ci_text):
+            issues.append("aippocampus CI must not use floating dev tool install")
+
+    publish_workflow = repo_root / ".github" / "workflows" / "publish-agent-discovery.yml"
+    if publish_workflow.exists():
+        publish_text = publish_workflow.read_text(encoding="utf-8")
+        for term in [
+            'python -m pip install -e ".[release]"',
+            "cache: pip",
+            "cache-dependency-path: pyproject.toml",
+        ]:
+            if term not in publish_text:
+                issues.append(f"publish workflow missing dependency reproducibility term: {term}")
+        if "python -m pip install --upgrade build twine check-jsonschema" in publish_text:
+            issues.append("publish workflow must not use floating release tool install")
+
+    coverage_script = repo_root / "tools" / "aippocampus" / "run_coverage.py"
+    if coverage_script.exists() and 'python -m pip install -e ".[dev]"' not in (
+        coverage_script.read_text(encoding="utf-8")
+    ):
+        issues.append("run_coverage.py should point missing coverage users to the dev extra")
+
+    return issues
+
+
 def windows_context_from_recent_lines(lines: list[str], fence_start_line: int) -> bool:
     recent = "\n".join(lines[max(0, fence_start_line - 5) : fence_start_line - 1]).casefold()
     return "windows" in recent or "powershell" in recent
@@ -702,6 +836,7 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
     issues.extend(public_api_contract_issues(repo_root))
     issues.extend(public_core_schema_contract_issues(repo_root))
     issues.extend(python_version_contract_issues(repo_root))
+    issues.extend(dependency_contract_issues(repo_root))
 
     gitignore = repo_root / ".gitignore"
     if not gitignore.exists():
