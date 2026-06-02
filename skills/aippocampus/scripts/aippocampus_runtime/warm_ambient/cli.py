@@ -10,6 +10,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from aippocampus_runtime.model.routing import DEFAULT_DEEPSEEK_API_KEY_ENV
+from aippocampus_runtime.recall.ambient_cards import count_cards_by_field
 from aippocampus_runtime.subconscious.worker import DEFAULT_BASE_URL, DEFAULT_MODEL
 from aippocampus_runtime.warm_ambient import recall
 from aippocampus_runtime.warm_ambient.config import warm_recall_config_from_env
@@ -60,6 +61,16 @@ PUBLIC_SCOUT_ERROR_KINDS = {
     "timeout",
     "unknown",
 }
+PUBLIC_PROVENANCE_CLASSES = {
+    "cached_warm_card",
+    "cognitive_map_route",
+    "deterministic_cue",
+    "source_backed_reopen",
+    "warm_scout_proposal",
+    "working_memory_model",
+    "working_memory_source",
+}
+PUBLIC_SUPPORT_LEVELS = {"scent", "candidate", "evidence"}
 
 
 def _public_status(value: object) -> str:
@@ -115,6 +126,13 @@ def _public_count_map(value: object, allowed: set[str]) -> dict[str, int]:
 def _card_count(result: Mapping[str, Any]) -> int:
     cards = result.get("cards")
     return len(cards) if isinstance(cards, list) else _public_int(result.get("card_count"))
+
+
+def _card_count_map(result: Mapping[str, Any], field: str, allowed: set[str]) -> dict[str, int]:
+    cards = result.get("cards")
+    if not isinstance(cards, list):
+        return {}
+    return _public_count_map(count_cards_by_field(cards, field), allowed)
 
 
 def _public_cache(value: object) -> dict[str, Any]:
@@ -197,6 +215,12 @@ def _public_cli_payload(result: Mapping[str, Any]) -> dict[str, Any]:
         "failed_scout_count": _public_int(result.get("failed_scout_count")),
         "trace_fallback_card_count": _public_int(result.get("trace_fallback_card_count")),
         "card_count": _card_count(result),
+        "provenance_counts": _card_count_map(
+            result, "provenance_class", PUBLIC_PROVENANCE_CLASSES
+        ),
+        "support_level_counts": _card_count_map(
+            result, "support_level", PUBLIC_SUPPORT_LEVELS
+        ),
         "current_thread_echo_count": _public_int(result.get("current_thread_echo_count")),
         "scout_error_kinds": _public_count_map(
             result.get("scout_error_kinds"),

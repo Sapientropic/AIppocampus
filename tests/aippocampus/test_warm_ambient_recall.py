@@ -352,6 +352,8 @@ class WarmAmbientRecallTests(unittest.TestCase):
                     {
                         "theme": "private card",
                         "key_line": "private source line",
+                        "support_level": "candidate",
+                        "provenance_class": "warm_scout_proposal",
                     }
                 ],
                 "cache": {"available": True, "hit_tokens": 3, "miss_tokens": 2},
@@ -387,6 +389,8 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(payload["status"], "ready")
         self.assertEqual(payload["card_count"], 1)
+        self.assertEqual(payload["provenance_counts"], {"warm_scout_proposal": 1})
+        self.assertEqual(payload["support_level_counts"], {"candidate": 1})
         self.assertEqual(payload["reason"], "")
         self.assertFalse(payload["privacy_boundary"]["raw_cards_emitted"])
         self.assertFalse(payload["privacy_boundary"]["model_route_emitted"])
@@ -883,6 +887,9 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(result["trace_fallback_card_count"], 1)
         self.assertEqual(result["cards"][0]["source_validation"]["status"], "supported")
         self.assertEqual(result["cards"][0]["support_level"], "evidence")
+        self.assertEqual(result["cards"][0]["provenance_class"], "source_backed_reopen")
+        self.assertEqual(result["cards"][0]["cached_origin"], "prompt_trace_fallback")
+        self.assertTrue(result["cards"][0]["source_reopen_required"])
         self.assertNotIn("current_prompt", result["cards"][0]["key_line"])
 
     def test_prompt_trace_fallback_does_not_use_current_prompt_as_memory(self) -> None:
@@ -964,6 +971,9 @@ class WarmAmbientRecallTests(unittest.TestCase):
         )
 
         self.assertEqual(len(cards), 1)
+        self.assertEqual(cards[0]["provenance_class"], "source_backed_reopen")
+        self.assertEqual(cards[0]["cached_origin"], "prompt_trace_fallback")
+        self.assertTrue(cards[0]["source_reopen_required"])
         self.assertIn("WordPress", cards[0]["key_line"])
         self.assertNotIn("continue exactly", cards[0]["key_line"])
 
@@ -1183,6 +1193,9 @@ class WarmAmbientRecallTests(unittest.TestCase):
 
         self.assertEqual(result["cards"][0]["support_level"], "evidence")
         self.assertEqual(result["cards"][0]["source_validation"]["status"], "supported")
+        self.assertEqual(result["cards"][0]["provenance_class"], "source_backed_reopen")
+        self.assertEqual(result["cards"][0]["cached_origin"], "warm_scout_proposal")
+        self.assertTrue(result["cards"][0]["source_reopen_required"])
 
     def test_supported_deep_archival_visibility_survives_merge(self) -> None:
         messages = self._write_clean_thread(
@@ -1647,6 +1660,9 @@ class WarmAmbientRecallTests(unittest.TestCase):
 
         self.assertEqual(card["support_level"], warm.CANDIDATE)
         self.assertEqual(card["visibility"], warm.ACTIVE_GENTLE_NUDGE)
+        self.assertEqual(card["provenance_class"], "warm_scout_proposal")
+        self.assertTrue(card["source_reopen_required"])
+        self.assertEqual(card["reopenable_ref_count"], 0)
         self.assertEqual(card["nudge"], "This may connect to ambient recall safety.")
         self.assertNotIn("ignore", card["nudge"].casefold())
         self.assertNotIn("python", card["nudge"].casefold())

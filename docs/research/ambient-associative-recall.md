@@ -169,6 +169,7 @@ turn N:
 late warm results:
   deterministic validation
   serial cache update
+  optional active-recall lock enrichment
   optional residue export for source-backed unused resonance
 
 turn N+1:
@@ -177,7 +178,9 @@ turn N+1:
 ```
 
 This makes high concurrency useful without requiring the current prompt to wait
-for the full scout batch.
+for the full scout batch. Late results must flow through next-turn cache,
+active-recall lock enrichment, or an explicit later pull; they should not
+silently revise the current-turn foreground context after the hook has returned.
 
 ## High-Concurrency DeepSeek Scouts
 
@@ -333,10 +336,17 @@ ambient_recall:
   confidence: high
   cards:
     - theme: "new thread continuity"
+      provenance_class: cached_warm_card
+      cached_origin: warm_scout_proposal
       nudge: "This is close to the fear that a new window can inherit rules but lose the road that made them matter."
       key_line: "知识可以打包，那个瞬间打包不了。"
       source_refs: ["..."]
       visibility: active_gentle_nudge
+      source_reopen_required: true
+      reopenable_ref_count: 1
+      cache_status:
+        status: hit
+        topic_epoch: epoch_...
       expand_if: "User asks whether AIppocampus solves this grief."
   avoid:
     - "Do not claim innate memory."
@@ -344,7 +354,10 @@ ambient_recall:
 ```
 
 The agent then writes naturally. It may ignore the card when the current task
-would be better served without it.
+would be better served without it. `provenance_class` tells the agent whether a
+card came from deterministic cues, warm scouts, cache replay, cognitive-map
+wayfinding, working memory, or a source-backed reopen path. It does not replace
+`support_level`, `visibility`, or local source validation.
 
 ## Active Gentle Nudge Style
 

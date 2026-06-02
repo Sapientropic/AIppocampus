@@ -20,6 +20,9 @@ from aippocampus_runtime.recall.ambient_cards import (
     CANDIDATE,
     EVIDENCE,
     SOURCE_BACKED_RECALL_CARD,
+    SOURCE_BACKED_REOPEN,
+    WARM_SCOUT_PROPOSAL,
+    with_card_provenance,
 )
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.source.search import iter_clean_messages
@@ -253,21 +256,25 @@ def prompt_trace_fallback_cards(
             continue
         key_line = compact_text(text, 180)
         cards.append(
-            {
-                "card_id": _stable_id(
-                    ["prompt_trace_fallback", key_line, json.dumps(refs, sort_keys=True)]
-                ),
-                "theme": compact_text("prior trace: " + ", ".join(shared[:4]), 100),
-                "resonance": "medium",
-                "support_level": EVIDENCE,
-                "visibility": SOURCE_BACKED_RECALL_CARD,
-                "suggested_use": "Use as source-backed prior context when it helps the current turn.",
-                "nudge": "Prior prompt trace contains source-backed context related to this request.",
-                "key_line": key_line,
-                "matched_terms": shared,
-                "source_refs": refs,
-                "expand_if": "Open clean source before presenting exact prior wording.",
-            }
+            with_card_provenance(
+                {
+                    "card_id": _stable_id(
+                        ["prompt_trace_fallback", key_line, json.dumps(refs, sort_keys=True)]
+                    ),
+                    "theme": compact_text("prior trace: " + ", ".join(shared[:4]), 100),
+                    "resonance": "medium",
+                    "support_level": EVIDENCE,
+                    "visibility": SOURCE_BACKED_RECALL_CARD,
+                    "suggested_use": "Use as source-backed prior context when it helps the current turn.",
+                    "nudge": "Prior prompt trace contains source-backed context related to this request.",
+                    "key_line": key_line,
+                    "matched_terms": shared,
+                    "source_refs": refs,
+                    "expand_if": "Open clean source before presenting exact prior wording.",
+                },
+                SOURCE_BACKED_REOPEN,
+                cached_origin="prompt_trace_fallback",
+            )
         )
         if len(cards) >= limit:
             break
@@ -383,6 +390,24 @@ def calibrate_cards(
             clean["support_level"] = CANDIDATE
             clean["visibility"] = ACTIVE_GENTLE_NUDGE
             clean["suggested_use"] = "Treat as provisional resonance until clean source support is verified."
+            clean = with_card_provenance(
+                clean,
+                str(clean.get("provenance_class") or WARM_SCOUT_PROPOSAL),
+            )
+        elif clean.get("support_level") == EVIDENCE and validation.get("status") == "supported":
+            cached_origin = str(
+                clean.get("cached_origin") or clean.get("provenance_class") or WARM_SCOUT_PROPOSAL
+            )
+            clean = with_card_provenance(
+                clean,
+                SOURCE_BACKED_REOPEN,
+                cached_origin=cached_origin,
+            )
+        else:
+            clean = with_card_provenance(
+                clean,
+                str(clean.get("provenance_class") or WARM_SCOUT_PROPOSAL),
+            )
         calibrated.append(clean)
     return calibrated, {
         "current_thread_echo_count": echo_count,

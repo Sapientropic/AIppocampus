@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Any
 
 from aippocampus_runtime.core import compact_text, sanitize_external_model_payload
+from aippocampus_runtime.recall.ambient_cards import count_cards_by_field
 
 MAX_CONTEXT_CHARS = 1800
 DREAM_HYPOTHESIS_TYPE = "dream_hypothesis"
@@ -165,6 +166,8 @@ def ambient_debug_summary(result: dict[str, Any]) -> dict[str, Any] | None:
         else None,
         "visibility_counts": visibility_counts,
         "source_validation_statuses": validation_statuses,
+        "provenance_counts": count_cards_by_field(cards, "provenance_class"),
+        "support_level_counts": count_cards_by_field(cards, "support_level"),
     }
 
 
@@ -332,12 +335,26 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
         for card in ambient_cards[:3]:
             support = str(card.get("support_level") or "scent")
             visibility = str(card.get("visibility") or ambient.get("mode") or "silent_tuning")
+            provenance = str(card.get("provenance_class") or "")
             theme = compact_text(str(card.get("theme") or ""), 120)
             suggested_use = compact_text(str(card.get("suggested_use") or ""), 180)
+            if provenance == "cached_warm_card":
+                provenance_note = "cached warm candidate"
+            elif provenance == "warm_scout_proposal":
+                provenance_note = "warm scout proposal"
+            elif provenance == "cognitive_map_route":
+                provenance_note = "wayfinding route"
+            elif provenance == "source_backed_reopen":
+                provenance_note = "source-backed reopen candidate"
+            else:
+                provenance_note = "navigation hint"
             source_note = " source-backed refs available" if support == "evidence" else ""
             if visibility == "deep_archival_recall":
                 source_note += " deep archival requested"
-            lines.append(f"- {visibility}/{support}: {theme}.{source_note} Use: {suggested_use}")
+            lines.append(
+                f"- {provenance_note} {visibility}/{support}: {theme}."
+                f"{source_note} Use: {suggested_use}"
+            )
         lines.append("Let these cards tune the answer; do not paste them verbatim.")
     if result.get("reasons"):
         lines.append("Why: " + "; ".join(str(reason) for reason in result.get("reasons", [])[:3]))
