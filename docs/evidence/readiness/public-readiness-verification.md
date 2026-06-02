@@ -786,6 +786,42 @@ scenario-level provenance, holdout, and negative-control reporting for #378.
   synthetic reviewer coverage, private real-history generality, competitor
   superiority, or public-quality #378 advantage.
 
+## 2026-06-02 - Continuous-memory host-native baseline contract
+
+The #406 slice extends
+`benchmarks/aippocampus/benchmark_continuous_memory_arms.py` with a
+host-native continuous baseline for #378.
+
+- The report now distinguishes `bare_continuous_no_memory` from
+  `host_native_continuous_no_aippocampus`. The former is the old no-context
+  diagnostic arm; the latter is a Codex-style same-thread compaction/summary
+  contract with AIppocampus hook recall, MCP recall tools, active recall, and
+  registry memory injection disabled.
+- The current contract-smoke preview still uses 6 public-safe cases, now across
+  6 arms, and bumps the report contract to `schema_version=3`. It reports
+  `host_native_compaction_lift_over_bare_continuous` and includes
+  `host_native_continuous_no_aippocampus` in `comparison_baselines` with
+  `documented_host_family=codex`,
+  `host_version_or_build=record_at_live_run_when_available`,
+  `compaction_settings=host_default_same_thread_summary_or_compaction_contract`,
+  `aippocampus_memory_surfaces_disabled=true`, and
+  `host_native_compaction_enabled=true`.
+- This is a deterministic baseline contract, not live host telemetry. The
+  report keeps `uses_live_host_native_compaction=false` and
+  `live_measurement_status=not_measured_in_this_diagnostic_runner`.
+- Verification commands passed during this slice:
+  `python -m unittest tests.aippocampus.test_benchmark_continuous_memory_arms -v`,
+  `python benchmarks/aippocampus/benchmark_continuous_memory_arms.py --json`,
+  `python tools/aippocampus/docs/check_docs_health.py --json`,
+  `python -m ruff check benchmarks/aippocampus/benchmark_continuous_memory_arms.py tests/aippocampus/test_benchmark_continuous_memory_arms.py`,
+  `python -m compileall -q benchmarks/aippocampus/benchmark_continuous_memory_arms.py tests/aippocampus/test_benchmark_continuous_memory_arms.py`,
+  `git diff --check`, `python tools/aippocampus/run_tests.py --tier fast`, and
+  `python tools/aippocampus/run_tests.py --tier benchmark`.
+- This does not claim
+  `AIppocampus_has_beaten_realistic_host_native_continuous_workflows`, live
+  host-native compaction behavior, cross-host baseline coverage, private
+  real-history generality, or public-quality #378 advantage.
+
 ## Command Ledger
 
 ```powershell

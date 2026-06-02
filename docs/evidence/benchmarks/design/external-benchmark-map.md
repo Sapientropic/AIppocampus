@@ -33,7 +33,7 @@ If two systems are tested on different layers, report them separately.
 | Mem0 | External memory-system comparison candidate and source of public pain-taxonomy signals. | Pain categories are summarized in [`../../../research/memory-system-pain-taxonomy.md`](../../../research/memory-system-pain-taxonomy.md); no adapter baseline is implemented. | Analysis only. | Competitor superiority or current adapter parity. |
 | Zep / Graphiti | External graph-memory comparison candidate and source of scale/structured-extraction pain signals. | Pain categories are summarized in [`../../../research/memory-system-pain-taxonomy.md`](../../../research/memory-system-pain-taxonomy.md); no adapter baseline is implemented. | Analysis only. | Graph-memory superiority, scale win, or API compatibility. |
 | Letta | External agent-memory and compaction comparison candidate. | Pain categories inform compaction-continuity fixtures; no direct adapter baseline is implemented. | Analysis only. | Host-native compaction superiority or failure claims beyond cited public signals. |
-| Host-native compaction baselines | Real users often get host summaries or compaction without AIppocampus. | #406 owns adding at least one host-native continuous baseline to #378. | Planned. | AIppocampus has beaten realistic host-native continuous workflows. |
+| Host-native compaction baselines | Real users often get host summaries or compaction without AIppocampus. | #406 adds the first Codex-style `host_native_continuous_no_aippocampus` deterministic contract arm to #378, with AIppocampus hook/MCP/active-recall/registry surfaces disabled. | Contract implemented; live host telemetry missing. | AIppocampus has beaten realistic host-native continuous workflows, cross-host baseline coverage, or live host-native compaction behavior. |
 
 ## Adapter Readiness Checklist
 
@@ -57,5 +57,6 @@ Before adding a new external adapter result, document:
 - Mem0 / Zep / Graphiti: add only after install/license review and a fair
   source-evidence or pain-fixture adapter exists.
 - Host-native compaction: keep separate from bare continuous-context baselines
-  and report when the host-native baseline wins.
-
+  and report when the host-native baseline wins. The current #406 contract arm
+  names the Codex-style host path; future live runs still need exact host
+  version/build and measured compaction behavior before external claims.

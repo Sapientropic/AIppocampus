@@ -21,6 +21,11 @@ Related implementation surfaces:
   no-advantage rule for continuous-memory superiority claims. Public
   longitudinal fixtures can feed that registered design later, but they do not
   override the decision rule after results are known.
+- #406 / `benchmarks/aippocampus/benchmark_continuous_memory_arms.py` keeps the
+  public longitudinal slices from being compared only against a bare continuous
+  context strawman: `host_native_continuous_no_aippocampus` is the first
+  Codex-style host-native compaction contract arm, while live host telemetry
+  remains a separate evidence requirement.
 - #409 / `benchmarks/aippocampus/benchmark_continuous_memory_arms.py` now uses
   this page's public VCS hard-event discipline as a provenance source for
   `public_log_or_vcs_derived` + `holdout_blind` continuous-memory scenarios.
@@ -391,6 +396,8 @@ It cannot claim:
 - tacit/workaround/reopen performance on wild VCS histories;
 - LoCoMo performance as evidence for cross-conversation user memory or coding
   tacit-constraint recall;
+- AIppocampus superiority over realistic host-native continuous workflows or
+  live host-native compaction behavior;
 - a single headline score that validates the AIppocampus wedge.
 
 ## Current Implementation Slice
