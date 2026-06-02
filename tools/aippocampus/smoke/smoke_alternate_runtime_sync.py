@@ -36,7 +36,7 @@ import sync_bundle
 # scans can still flag accidental local absolute paths elsewhere.
 WINDOWS_PATH_MARKERS = tuple(f"{drive}:" + "\\" for drive in ("C", "D", "E")) + ("\\Users\\",)
 DEFAULT_DOCKER_IMAGE = os.environ.get(
-    "AIPPOCAMPUS_ALTERNATE_RUNTIME_DOCKER_IMAGE", "python:3.11-slim"
+    "AIPPOCAMPUS_ALTERNATE_RUNTIME_DOCKER_IMAGE", "python:3.12-slim"
 )
 
 

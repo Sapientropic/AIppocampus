@@ -188,7 +188,7 @@ frames, not runtime contracts, but they explain the taste behind the machinery:
 
 ## Install As A Codex Skill
 
-AIppocampus supports Python 3.10 and newer. On macOS, the system Python is often
+AIppocampus supports Python 3.12 and newer. On macOS, the system Python is often
 too old and may not provide a `python` command. Homebrew Python 3.12 is a safe
 starting point:
 
@@ -251,7 +251,7 @@ External DeepSeek frontier extraction is explicit:
 
 ## Maintainer Checks
 
-The default CI path verifies Ubuntu Python 3.10 and 3.11 with docs health, Ruff,
+The default CI path verifies Ubuntu Python 3.12 and 3.13 with docs health, Ruff,
 mypy, compile checks, and the fast deterministic test tier. It also runs a
 macOS fast-tier gate on the runner's default TMPDIR as a path-identity guard for
 the recurring `/var` and `/private/var` regression family. Ubuntu green alone is

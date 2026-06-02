@@ -19,7 +19,7 @@ from typing import Any
 
 try:
     import tomllib
-except ModuleNotFoundError:  # pragma: no cover - Python 3.10 fallback.
+except ModuleNotFoundError:  # pragma: no cover - defensive fallback for stripped runtimes.
     tomllib = None  # type: ignore[assignment]
 
 
