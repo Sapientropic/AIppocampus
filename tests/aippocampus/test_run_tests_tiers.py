@@ -32,6 +32,7 @@ FAST_REVIEWED_SENSITIVE_MODULES = {
     "tests.aippocampus.test_codex_long_session_smoke",
     "tests.aippocampus.test_cross_agent_continuity_smoke",
     "tests.aippocampus.test_diagnose_hooks",
+    "tests.aippocampus.test_fresh_thread_real_history_smoke",
     "tests.aippocampus.test_generic_jsonl_integration_smoke",
     "tests.aippocampus.test_install_lifecycle_hook",
     "tests.aippocampus.test_install_prompt_hook",
