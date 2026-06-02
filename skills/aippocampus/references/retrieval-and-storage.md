@@ -249,6 +249,11 @@ instead of growing `ALIASES` or `ASSOCIATIVE_CUES` with semantic proxy phrases.
 `aippocampus_runtime.recall.semantic_trigger_router` writes reviewed seed
 triggers plus source-backed promotion candidates into `semantic_triggers.jsonl`;
 the top-level `semantic_trigger_router.py` remains a compatibility command.
+Reviewed seed rows are allowed only as public, scent-only routing hints: active
+seeds need review metadata plus source refs or an explicit reviewed-seed
+rationale, and the router reports skipped seeds, dropped aliases, and promoted
+candidate counts. Legacy trigger ids are retained in `legacy_trigger_ids` when
+rows are migrated to the longer SHA-256 `st_...` form.
 The provider-aware `onboard.py` wrapper refreshes that sidecar during
 onboarding so a fresh registry has the data path before the foreground hook
 needs it.

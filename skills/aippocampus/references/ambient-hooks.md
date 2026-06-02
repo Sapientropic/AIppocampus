@@ -421,7 +421,13 @@ sidecar data. `aippocampus_runtime.recall.semantic_trigger_router` also ships a
 small reviewed seed sidecar for AIppocampus-specific memory architecture terms,
 and onboarding refreshes it into the private registry's
 `semantic_triggers.jsonl`. Keep future domain-semantic additions there or in
-reviewed promotion candidates, not in Python phrase lists.
+reviewed promotion candidates, not in Python phrase lists. Active reviewed seed
+rows must carry `reviewed_at`, `review_note`, a `reviewer` or `review_source`,
+and either source refs or a reviewed-seed rationale explaining why public
+AIppocampus vocabulary is allowed without source refs. The router migrates
+legacy trigger ids to longer SHA-256 ids, retains legacy ids for compatibility,
+canonicalizes aliases, drops semi-generic phrases, caps per-trigger aliases, and
+reports aggregate alias/seed diagnostics.
 
 The local pre-gate avoids unnecessary external calls. Obvious code-surface
 prompts such as "fix dashboard hover and run tests" should not call the semantic
