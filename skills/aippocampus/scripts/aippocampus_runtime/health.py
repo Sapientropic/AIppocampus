@@ -27,6 +27,7 @@ from aippocampus_runtime.core import (
     parse_anchor_file,
     resolve_artifact_path,
 )
+from aippocampus_runtime.ops.storage_eviction import latest_intentional_eviction
 from aippocampus_runtime.question.constants import DEFAULT_DORMANT_AFTER_DAYS
 from aippocampus_runtime.registry.store import registry_paths
 from aippocampus_runtime.source.rollout import iter_messages
@@ -460,6 +461,20 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
     stable_sqlite_path = index_dir / "source_index.sqlite"
     sqlite_path = resolve_sqlite_index_path(stable_sqlite_path)
     manifest = load_json(manifest_path)
+    index_intentional_eviction = {"detected": False}
+    if not sqlite_path.exists():
+        candidate_eviction = latest_intentional_eviction(index_dir, "source_index.sqlite")
+        eviction_time = parse_timestamp(candidate_eviction.get("evicted_at"))
+        manifest_time = parse_timestamp(manifest.get("created_at"))
+        if (
+            candidate_eviction.get("detected")
+            and eviction_time is not None
+            and manifest_time is not None
+            and manifest_time > eviction_time
+        ):
+            index_intentional_eviction = {"detected": False}
+        else:
+            index_intentional_eviction = candidate_eviction
 
     index_reasons: list[str] = []
     if not manifest:
@@ -467,7 +482,12 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
     if not messages_path.exists():
         index_reasons.append("messages.jsonl is missing")
     if not sqlite_path.exists():
-        index_reasons.append("source_index.sqlite is missing")
+        if index_intentional_eviction.get("detected") and index_intentional_eviction.get(
+            "rebuildable"
+        ):
+            index_reasons.append("source_index.sqlite intentionally evicted as rebuildable cache")
+        else:
+            index_reasons.append("source_index.sqlite is missing")
     indexed_messages = int(manifest.get("message_count") or 0)
     indexed_bytes = int(manifest.get("source_rollout_size") or 0)
     indexed_last_line = manifest.get("last_message_line")
@@ -704,6 +724,7 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
             "manifest": str(manifest_path),
             "sqlite": str(sqlite_path),
             "stable_sqlite": str(stable_sqlite_path),
+            "intentional_eviction": index_intentional_eviction,
             "exists": bool(manifest),
             "stale": index_stale,
             "reasons": index_reasons,

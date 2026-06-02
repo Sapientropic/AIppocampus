@@ -90,7 +90,11 @@ Completed foundation:
 - `aippocampus storage gc --dry-run` starts the storage governance bridge: it
   reports protected source bytes, reclaimable rebuildable/review bytes, and
   candidate safety preconditions from capacity data plus existing retention JSON
-  without reading message bodies or deleting files. Apply mode remains deferred.
+  without reading message bodies or deleting files. `--apply --class
+  rebuildable` now has a narrow path-level retention-report v1 for the main
+  `source_index.sqlite` cache, with source/ref/lease/active-thread/pointer
+  checks and an eviction manifest; capacity aggregates and broader cache classes
+  remain plan-only.
 
 ## Target architecture
 
@@ -199,9 +203,12 @@ Completed foundation:
    `search_segments.py`; continue tuning with real recall failures.
 5. Add optional compressed raw archive and retention policy. Done:
    `cold_archive.py` plus `retention_report.py`; cleanup remains manual and
-   evidence-first. A first dry-run-only governance bridge now lives behind
-   `aippocampus storage gc --dry-run`; eviction apply mode still needs
-   deterministic source/archive, lease, active-thread, and manifest checks.
+   evidence-first. A first governance bridge now lives behind `aippocampus
+   storage gc`: dry-run covers capacity plus existing retention evidence, and
+   apply v1 covers path-level retention-report eviction of the main rebuildable
+   SQLite cache with deterministic source/archive, lease, active-thread,
+   pointer, and manifest checks. Segment/Graphify/cache-family expansion remains
+   later work.
 6. Add vector index via Protocol interface. Done for the first local slice:
    `aippocampus_runtime.question.vector_index` defines `QuestionVectorIndex`
    and `LocalQuestionVectorIndex` with add / search / remove / write / load
