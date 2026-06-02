@@ -73,6 +73,7 @@ PYTHON_REFERENCE_ROOTS = (
 )
 DOC_REFERENCE_ROOTS = (
     "docs",
+    "skills/aippocampus/SKILL.md",
     "skills/aippocampus/references",
 )
 DIRECT_PATH_REFERENCE_ROOTS = (
