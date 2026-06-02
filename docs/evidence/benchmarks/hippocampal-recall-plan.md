@@ -377,6 +377,22 @@ Correct sequence:
 If source reopen fails, evidence must fail even when the natural-language answer
 sounds plausible.
 
+### Search-Decision Adapter Bridge
+
+`scripts/search_decision_adapter.py` is an adapter surface for external-search
+moments, not a new benchmark score. Map its behavior onto this plan:
+
+- before search, degraded-cue classification belongs to H1 pattern completion;
+- before/during search, abstaining on merely similar prompts belongs to H2
+  pattern separation and `unsupported_skip` / `multi_candidate_scent`;
+- after search, `extension` / `correction` / `replacement` /
+  `disposable_residue` belongs to H5 consolidation handoff, because an external
+  result still needs explicit import or review before it changes memory truth.
+
+Do not report adapter success as proof that AIppocampus beat a web search
+engine. The adapter measures whether local source-backed memory improves the
+query and handoff boundary around external search.
+
 ## Ambiguity And Abstention
 
 Some degraded cues are genuinely ambiguous. The fixture must not force every

@@ -292,6 +292,27 @@ builds. Registry deep search keeps those hits auditable but demotes them with a
 structural `search_noise` marker so repeated tool/skill instructions do not
 outrank real user turns or assistant final answers.
 
+## Search-Decision Adapter
+
+`scripts/search_decision_adapter.py` is a narrow local contract for #381-style
+external-search decisions. It does not call Google, browser search, Perplexity,
+or any remote authority ranker. It only accepts the current prompt plus
+source-backed candidate rows and returns:
+
+- `before_search`: `skip` / `scent` / `candidate` / `evidence` routing for
+  whether old source can safely clarify the search intent.
+- `during_search`: a query expansion packet only when candidate source refs are
+  present. Expansion terms are navigation hints, not recalled facts.
+- `after_search`: `extension`, `correction`, `replacement`, or
+  `disposable_residue` classification. External search results are not
+  long-term truth unless the user explicitly imports or reviews them through a
+  provenance-bearing path.
+
+This adapter should reuse existing query policy, clean-source refs, and ambient
+support levels instead of adding a separate score layer. If a prompt only looks
+related through broad words such as browser/search/local/permission, the correct
+behavior is `skip`, not personalized query expansion.
+
 ## MCP Access Layer
 
 `scripts/aippocampus_mcp_server.py` is the local MCP surface for agent clients

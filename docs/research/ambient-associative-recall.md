@@ -163,6 +163,13 @@ source-backed reopen attempt. The full lifecycle contract lives in
 `skills/aippocampus/references/ambient-hooks.md`; this research doc should not
 mirror the field list beyond the navigation-only, source-reopen boundary.
 
+The search-decision adapter is another consumer of the same navigation-only
+material. It can turn source-ref-backed recall candidates into query expansion
+for an external search, but it must keep `skip` / `scent` / `candidate` /
+`evidence` calibration intact. Search-result residue can become a future dream
+or import candidate only after explicit review; unsourced one-off search trails
+remain disposable by default.
+
 After an exact `thread_id + workspace + topic_epoch` miss, the foreground hook
 may perform a narrow related-cache lookup over the newest same-thread,
 same-workspace entries. This lookup is pattern completion over hashed stable
