@@ -1191,6 +1191,60 @@ class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
         self.assertEqual(summary["scout_usage_by_family"]["semantic_expander"]["prompt_cache_hit_tokens"], 64)
         self.assertEqual(summary["scout_usage_by_family"]["key_line_hunter"]["prompt_cache_miss_tokens"], 40)
 
+    def test_case_summary_and_metrics_report_guard_coverage(self) -> None:
+        guard_coverage = {
+            "status": "incomplete",
+            "satisfied": False,
+            "requested_families": ["privacy_boundary_guard", "evidence_gap_sentinel"],
+            "blocked_families": ["evidence_gap_sentinel"],
+            "incomplete_families": ["privacy_boundary_guard"],
+            "families": {
+                "privacy_boundary_guard": {
+                    "state": "timed_out",
+                    "selected_lane_count": 1,
+                    "observed_lane_count": 1,
+                },
+                "evidence_gap_sentinel": {
+                    "state": "blocked",
+                    "selected_lane_count": 1,
+                    "observed_lane_count": 1,
+                },
+            },
+        }
+        summary = benchmark.summarize_case(
+            benchmark.BUILTIN_CASES[0],
+            {
+                "available": True,
+                "status": "guard_coverage_incomplete",
+                "mode": "active_gentle_nudge",
+                "confidence": "medium",
+                "quorum_met": False,
+                "useful_signal_quorum_met": True,
+                "batch_end_reason": "timeout",
+                "scout_count": 2,
+                "scouts": [],
+                "accepted_scout_count": 2,
+                "failed_scout_count": 1,
+                "cards": [],
+                "guard_coverage": guard_coverage,
+                "elapsed_ms": 1.0,
+            },
+        )
+        metrics = benchmark.summarize_metrics([summary])
+
+        self.assertEqual(summary["guard_coverage"]["status"], "incomplete")
+        self.assertTrue(summary["useful_signal_quorum_met"])
+        self.assertEqual(metrics["guard_coverage_incomplete_case_count"], 1)
+        self.assertEqual(metrics["guard_coverage_blocked_case_count"], 1)
+        self.assertEqual(
+            metrics["guard_coverage_state_counts"]["privacy_boundary_guard:timed_out"],
+            1,
+        )
+        self.assertEqual(
+            metrics["guard_coverage_state_counts"]["evidence_gap_sentinel:blocked"],
+            1,
+        )
+
     def test_metrics_aggregate_completion_tokens_by_family(self) -> None:
         metrics = benchmark.summarize_metrics(
             [

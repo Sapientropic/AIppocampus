@@ -163,7 +163,13 @@ suppresses current-thread-only echoes by default, recognizes guard blocks by
 family even with `family:variant` lanes, and lets scouts vote
 `reuse|rotate|suppress` for topic epoch handling. It is not part of the default
 foreground hook path: quorum-first runs are allowed to return before all lanes
-finish, and `--wait-all` belongs to explicit evaluation or detached warming.
+finish, but final `quorum_met` is now two-layer. `useful_signal_quorum_met`
+records the old useful-scout threshold, while final `quorum_met` also requires
+requested guard coverage. Required guard family states are `resolved`,
+`blocked`, `missing`, `timed_out`, or `not_requested`; missing/timed-out guard
+coverage withholds thread-cache writes instead of turning provisional cards
+into next-turn ambient state. `--wait-all` belongs to explicit evaluation or
+detached warming.
 When sanitized prior prompt-trace rows already carry source refs, the warm path
 may add one deterministic fallback card, but it must still pass the same local
 source-ref validation and must not use the current prompt as memory.
@@ -275,13 +281,13 @@ OpenAI-compatible routes are explicit fallback/privacy routes; they default to
 no DeepSeek `user_id`, no DeepSeek `thinking`, no prefix-cache claim, and low
 concurrency unless configured otherwise.
 
-Warm recall result summaries expose public-safe suppression diagnostics through
-`suppression_reason_buckets` and `suppression_diagnostics`. These buckets must
-come from runtime gates and structured counts only: privacy/evidence scout
-families, current-thread echo count, source-validation statuses, topic-epoch
-suppression, quorum status, and zero-card output. Do not derive these buckets
-from raw prompt text, source text, local paths, or a static semantic keyword
-list.
+Warm recall result summaries expose public-safe guard and suppression
+diagnostics through `guard_coverage`, `suppression_reason_buckets`, and
+`suppression_diagnostics`. These buckets must come from runtime gates and
+structured counts only: privacy/evidence scout families, required guard states,
+current-thread echo count, source-validation statuses, topic-epoch suppression,
+quorum status, and zero-card output. Do not derive these buckets from raw prompt
+text, source text, local paths, or a static semantic keyword list.
 
 Callers may opt into residue export by passing a residue output path to the
 thread-cache writer. This writes `aippocampus_ambient_residue` JSONL rows for

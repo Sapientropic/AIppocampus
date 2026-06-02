@@ -64,6 +64,8 @@ SCOUT_PRIORITY = {
     "semantic_expander": "P1",
 }
 
+REQUIRED_GUARD_FAMILIES = ("privacy_boundary_guard", "evidence_gap_sentinel")
+
 LEGACY_SCOUT_ALIASES = {
     "query_expansion": "semantic_expander",
     "life_wide_cue_classifier": "intent_mode_classifier",
