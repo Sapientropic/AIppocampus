@@ -19,6 +19,7 @@ sys.path.insert(0, str(SCRIPTS))
 import ambient_warm_scheduler as warm_scheduler  # noqa: E402
 import warm_ambient_recall as warm  # noqa: E402
 from aippocampus_runtime.warm_ambient import source_validation  # noqa: E402
+from aippocampus_runtime.warm_ambient.scout_attribution import merge_scout_origins  # noqa: E402
 
 
 class WarmAmbientRecallTests(unittest.TestCase):
@@ -58,6 +59,21 @@ class WarmAmbientRecallTests(unittest.TestCase):
             source_validation._stable_id(["prompt_trace_fallback", "ambient", "source"]),
             "warc_" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:18],
         )
+
+    def test_scout_origin_merge_treats_scalar_legacy_fields_as_single_values(self) -> None:
+        existing = {"source_scouts": "key_line_hunter:direct"}
+        incoming = {
+            "source_scout": "deep_theme_matcher:direct",
+            "source_scouts": ["deep_theme_matcher:direct"],
+        }
+
+        merge_scout_origins(existing, incoming)
+
+        self.assertEqual(
+            existing["source_scouts"],
+            ["key_line_hunter:direct", "deep_theme_matcher:direct"],
+        )
+        self.assertEqual(existing["source_scout"], "deep_theme_matcher:direct")
 
     def test_default_scout_lanes_are_adjusted_10_families_times_5_variants(self) -> None:
         calls: list[str] = []
@@ -1409,6 +1425,42 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(result["cards"][0]["provenance_class"], "source_backed_reopen")
         self.assertEqual(result["cards"][0]["cached_origin"], "warm_scout_proposal")
         self.assertTrue(result["cards"][0]["source_reopen_required"])
+        self.assertEqual(result["cards"][0]["source_scout"], "key_line_hunter:direct")
+        self.assertEqual(result["cards"][0]["source_scouts"], ["key_line_hunter:direct"])
+        self.assertEqual(result["cards"][0]["source_scout_families"], ["key_line_hunter"])
+
+    def test_scout_rows_mark_completion_after_useful_quorum_cutoff(self) -> None:
+        def scout_fn(scout, payload, **kwargs):
+            del payload, kwargs
+            return {
+                "decision": "candidate",
+                "confidence": 0.75,
+                "candidates": [
+                    {
+                        "theme": f"{scout} useful cue",
+                        "support_level": "candidate",
+                    }
+                ],
+            }
+
+        result = warm.run_warm_ambient_recall(
+            "继续 warm ambient late ROI",
+            cwd=self.workspace,
+            thread_id="thread-a",
+            cache_path=self.cache_path,
+            api_key="test-key",
+            scout_fn=scout_fn,
+            scouts=("key_line_hunter:direct", "deep_theme_matcher:direct"),
+            quorum=1,
+            timeout=0.5,
+            wait_all=True,
+            no_write=True,
+        )
+
+        self.assertEqual(result["scouts"][0]["observed_index"], 1)
+        self.assertFalse(result["scouts"][0]["completed_after_quorum_cutoff"])
+        self.assertEqual(result["scouts"][1]["observed_index"], 2)
+        self.assertTrue(result["scouts"][1]["completed_after_quorum_cutoff"])
 
     def test_supported_deep_archival_visibility_survives_merge(self) -> None:
         messages = self._write_clean_thread(

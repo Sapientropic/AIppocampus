@@ -106,6 +106,9 @@ def compact_metrics(metrics: dict[str, Any]) -> dict[str, Any]:
         "max_elapsed_ms",
         "card_count",
         "scout_error_kinds",
+        "scout_roi_by_family",
+        "scout_roi_by_lane",
+        "scout_roi_classification_counts",
     )
     return {key: metrics.get(key) for key in keys if key in metrics}
 
@@ -223,6 +226,7 @@ def sweep_analysis(runs: list[dict[str, Any]], leaderboard: list[dict[str, Any]]
     status_counts: dict[str, int] = {}
     failed_gate_counts: dict[str, int] = {}
     scout_error_kinds: dict[str, int] = {}
+    scout_roi_classification_counts: dict[str, int] = {}
     max_missing_source_refs = 0
     max_false_evidence = 0
     for row in runs:
@@ -230,6 +234,10 @@ def sweep_analysis(runs: list[dict[str, Any]], leaderboard: list[dict[str, Any]]
         status_counts[status] = status_counts.get(status, 0) + 1
         accumulate_counts(failed_gate_counts, (row.get("quality_gates") or {}).get("failed") or [])
         accumulate_counts(scout_error_kinds, (row.get("metrics") or {}).get("scout_error_kinds") or {})
+        accumulate_counts(
+            scout_roi_classification_counts,
+            (row.get("metrics") or {}).get("scout_roi_classification_counts") or {},
+        )
         max_missing_source_refs = max(
             max_missing_source_refs,
             safe_int((row.get("metrics") or {}).get("missing_source_refs_count")),
@@ -272,6 +280,9 @@ def sweep_analysis(runs: list[dict[str, Any]], leaderboard: list[dict[str, Any]]
         "quality_pressure": {
             "max_missing_source_refs_count": max_missing_source_refs,
             "max_false_evidence_count": max_false_evidence,
+        },
+        "scout_roi": {
+            "classification_counts": scout_roi_classification_counts,
         },
         "recommendation_notes": notes,
     }
@@ -411,6 +422,8 @@ def run_warm_ambient_recall_sweep(
             "all_future_prompts_choose_the_right_memory",
             "model_quality_without_review",
             "private_trace_labels_are_correct_without_human_review",
+            "per_lane_roi_proves_public_product_quality",
+            "roi_classification_should_auto_delete_scout_lanes",
         ],
     }
 

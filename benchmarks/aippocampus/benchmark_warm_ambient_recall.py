@@ -367,6 +367,237 @@ def summarize_scout_usage_by_family(scouts: list[dict[str, Any]]) -> dict[str, d
     return by_family
 
 
+ROI_COUNTER_KEYS = (
+    "scout_count",
+    "useful_result_count",
+    "card_candidate_count",
+    "accepted_card_count",
+    "evidence_candidate_count",
+    "accepted_evidence_count",
+    "blocker_count",
+    "late_useful_result_count",
+    "unobserved_count",
+    "error_count",
+    "timeout_count",
+    "prompt_tokens",
+    "completion_tokens",
+    "total_tokens",
+    "prompt_cache_hit_tokens",
+    "prompt_cache_miss_tokens",
+)
+ROI_RATE_FIELDS = (
+    ("useful_result_rate", "useful_result_count"),
+    ("card_candidate_rate", "card_candidate_count"),
+    ("accepted_card_rate", "accepted_card_count"),
+    ("evidence_candidate_rate", "evidence_candidate_count"),
+    ("accepted_evidence_rate", "accepted_evidence_count"),
+    ("blocker_rate", "blocker_count"),
+    ("late_useful_result_rate", "late_useful_result_count"),
+    ("unobserved_rate", "unobserved_count"),
+    ("error_rate", "error_count"),
+    ("timeout_rate", "timeout_count"),
+)
+def _empty_roi_bucket() -> dict[str, Any]:
+    return {key: 0 for key in ROI_COUNTER_KEYS}
+
+
+def _safe_rate(count: int, total: int) -> float:
+    return round(count / total, 4) if total else 0.0
+
+
+def _roi_int(value: Any) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _row_timeout(row: dict[str, Any]) -> bool:
+    text = " ".join(
+        [
+            str(row.get("error_kind") or ""),
+            str(row.get("reason") or ""),
+        ]
+    ).casefold()
+    return "timeout" in text or "timed out" in text
+
+
+def _roi_classification(bucket: dict[str, Any]) -> str:
+    if (
+        int(bucket.get("blocker_count") or 0) > 0
+        and int(bucket.get("card_candidate_count") or 0) == 0
+        and int(bucket.get("evidence_candidate_count") or 0) == 0
+    ):
+        return "diagnostic_only"
+    if (
+        int(bucket.get("useful_result_count") or 0) > 0
+        or int(bucket.get("card_candidate_count") or 0) > 0
+        or int(bucket.get("accepted_card_count") or 0) > 0
+        or int(bucket.get("evidence_candidate_count") or 0) > 0
+        or int(bucket.get("accepted_evidence_count") or 0) > 0
+        or int(bucket.get("late_useful_result_count") or 0) > 0
+    ):
+        return "keep"
+    return "watch"
+
+
+def _finalize_roi_bucket(bucket: dict[str, Any]) -> dict[str, Any]:
+    scout_count = int(bucket.get("scout_count") or 0)
+    configured_count = scout_count + int(bucket.get("unobserved_count") or 0)
+    finalized = {key: int(bucket.get(key) or 0) for key in ROI_COUNTER_KEYS}
+    for rate_name, count_name in ROI_RATE_FIELDS:
+        denominator = configured_count if count_name == "unobserved_count" else scout_count
+        finalized[rate_name] = _safe_rate(int(finalized.get(count_name) or 0), denominator)
+    cache_total = finalized["prompt_cache_hit_tokens"] + finalized["prompt_cache_miss_tokens"]
+    finalized["prompt_cache_hit_rate"] = _safe_rate(
+        finalized["prompt_cache_hit_tokens"], cache_total
+    )
+    finalized["classification"] = _roi_classification(finalized)
+    return finalized
+
+
+def _bump_roi_bucket(bucket: dict[str, Any], row: dict[str, Any], *, late_useful: bool) -> None:
+    usage = row.get("usage") if isinstance(row.get("usage"), dict) else {}
+    candidates = row.get("candidates") if isinstance(row.get("candidates"), list) else []
+    evidence_count = sum(
+        1 for card in candidates if str((card or {}).get("support_level") or "").casefold() == "evidence"
+    )
+    bucket["scout_count"] += 1
+    if row.get("useful"):
+        bucket["useful_result_count"] += 1
+    bucket["card_candidate_count"] += len(candidates)
+    bucket["evidence_candidate_count"] += evidence_count
+    if row.get("ok") and row.get("block"):
+        bucket["blocker_count"] += 1
+    if late_useful:
+        bucket["late_useful_result_count"] += 1
+    if not row.get("ok"):
+        bucket["error_count"] += 1
+        if _row_timeout(row):
+            bucket["timeout_count"] += 1
+    for key in (
+        "prompt_tokens",
+        "completion_tokens",
+        "total_tokens",
+        "prompt_cache_hit_tokens",
+        "prompt_cache_miss_tokens",
+    ):
+        bucket[key] += _usage_int(usage, key)
+
+
+def _lane_family(lane: str) -> str:
+    return str(lane or "").split(":", 1)[0] or "unknown"
+
+
+def _card_source_lanes(card: dict[str, Any]) -> list[str]:
+    lanes = [
+        str(item or "").strip()
+        for item in card.get("source_scouts") or []
+        if str(item or "").strip()
+    ]
+    if not lanes and str(card.get("source_scout") or "").strip():
+        lanes = [str(card.get("source_scout")).strip()]
+    return list(dict.fromkeys(lanes))
+
+
+def _add_accepted_card_contributions(
+    *,
+    cards: list[dict[str, Any]],
+    by_lane: dict[str, dict[str, Any]],
+    by_family: dict[str, dict[str, Any]],
+) -> None:
+    for card in cards:
+        if not isinstance(card, dict):
+            continue
+        lanes = _card_source_lanes(card)
+        if not lanes:
+            continue
+        is_evidence = str(card.get("support_level") or "").casefold() == "evidence"
+        for lane in lanes:
+            family = _lane_family(lane)
+            lane_bucket = by_lane.setdefault(lane, _empty_roi_bucket())
+            family_bucket = by_family.setdefault(family, _empty_roi_bucket())
+            lane_bucket["accepted_card_count"] += 1
+            family_bucket["accepted_card_count"] += 1
+            if is_evidence:
+                lane_bucket["accepted_evidence_count"] += 1
+                family_bucket["accepted_evidence_count"] += 1
+
+
+def summarize_scout_roi(
+    scouts: list[dict[str, Any]],
+    *,
+    useful_quorum: int,
+    cards: list[dict[str, Any]] | None = None,
+    configured_scouts: list[str] | tuple[str, ...] | None = None,
+) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    by_lane: dict[str, dict[str, Any]] = {}
+    by_family: dict[str, dict[str, Any]] = {}
+    observed_lanes: set[str] = set()
+    useful_seen = 0
+    quorum = max(1, int(useful_quorum or warm.DEFAULT_QUORUM))
+    for row in scouts:
+        lane = str(row.get("scout") or "").strip() or "unknown"
+        family = str(row.get("scout_family") or "").strip() or lane.split(":", 1)[0] or "unknown"
+        observed_lanes.add(lane)
+        late_marker = row.get("completed_after_quorum_cutoff")
+        late_useful = (
+            bool(row.get("useful"))
+            and bool(late_marker)
+            if late_marker is not None
+            else bool(row.get("useful")) and useful_seen >= quorum
+        )
+        _bump_roi_bucket(by_lane.setdefault(lane, _empty_roi_bucket()), row, late_useful=late_useful)
+        _bump_roi_bucket(
+            by_family.setdefault(family, _empty_roi_bucket()), row, late_useful=late_useful
+        )
+        if row.get("useful"):
+            useful_seen += 1
+    for scout in configured_scouts or []:
+        lane = str(scout or "").strip()
+        if not lane or lane in observed_lanes:
+            continue
+        family = _lane_family(lane)
+        by_lane.setdefault(lane, _empty_roi_bucket())["unobserved_count"] += 1
+        by_family.setdefault(family, _empty_roi_bucket())["unobserved_count"] += 1
+    _add_accepted_card_contributions(
+        cards=cards or [], by_lane=by_lane, by_family=by_family
+    )
+    return (
+        {key: _finalize_roi_bucket(value) for key, value in sorted(by_lane.items())},
+        {key: _finalize_roi_bucket(value) for key, value in sorted(by_family.items())},
+    )
+
+
+def aggregate_scout_roi(
+    cases: list[dict[str, Any]],
+    key: str,
+) -> dict[str, dict[str, Any]]:
+    buckets: dict[str, dict[str, Any]] = {}
+    for case in cases:
+        table = case.get(key) if isinstance(case.get(key), dict) else {}
+        for label, row in table.items():
+            if not isinstance(row, dict):
+                continue
+            bucket = buckets.setdefault(str(label), _empty_roi_bucket())
+            for counter in ROI_COUNTER_KEYS:
+                bucket[counter] += _roi_int(row.get(counter))
+    return {
+        label: _finalize_roi_bucket(bucket)
+        for label, bucket in sorted(buckets.items())
+    }
+
+
+def scout_roi_classification_counts(table: dict[str, dict[str, Any]]) -> dict[str, int]:
+    counts = {"keep": 0, "watch": 0, "diagnostic_only": 0}
+    for row in table.values():
+        name = str((row or {}).get("classification") or "watch")
+        if name not in counts:
+            name = "watch"
+        counts[name] += 1
+    return {key: value for key, value in counts.items() if value}
+
+
 def sha1_text(text: str) -> str:
     return hashlib.sha1(text.encode("utf-8")).hexdigest()[:16]
 
@@ -496,7 +727,12 @@ def deterministic_scout_fn(scout: str, payload: dict[str, Any], **kwargs: Any) -
     return {"decision": "skip", "confidence": 0.1}
 
 
-def summarize_case(case: WarmBenchmarkCase, result: dict[str, Any]) -> dict[str, Any]:
+def summarize_case(
+    case: WarmBenchmarkCase,
+    result: dict[str, Any],
+    *,
+    useful_quorum: int | None = None,
+) -> dict[str, Any]:
     validation_statuses: dict[str, int] = {}
     for card in result.get("cards") or []:
         status = str((card.get("source_validation") or {}).get("status") or "missing")
@@ -512,6 +748,13 @@ def summarize_case(case: WarmBenchmarkCase, result: dict[str, Any]) -> dict[str,
     cache_hit_tokens = cache["hit_tokens"] if "hit_tokens" in cache else cache.get("prompt_cache_tokens")
     cache_miss_tokens = cache["miss_tokens"] if "miss_tokens" in cache else cache.get("prompt_cache_miss_tokens")
     scout_usage_by_family = summarize_scout_usage_by_family(result.get("scouts") or [])
+    resolved_quorum = int(useful_quorum or result.get("quorum") or warm.DEFAULT_QUORUM)
+    scout_roi_by_lane, scout_roi_by_family = summarize_scout_roi(
+        result.get("scouts") or [],
+        useful_quorum=resolved_quorum,
+        cards=result.get("cards") or [],
+        configured_scouts=result.get("configured_scouts") or [],
+    )
     summary = {
         "case_id": case.case_id,
         "prompt_sha1": sha1_text(case.prompt),
@@ -521,6 +764,7 @@ def summarize_case(case: WarmBenchmarkCase, result: dict[str, Any]) -> dict[str,
         "confidence": result.get("confidence"),
         "quorum_met": bool(result.get("quorum_met")),
         "useful_signal_quorum_met": bool(result.get("useful_signal_quorum_met")),
+        "quorum": resolved_quorum,
         "batch_end_reason": result.get("batch_end_reason"),
         "configured_scout_count": int(result.get("scout_count") or 0),
         "max_workers": int(result.get("max_workers") or 0),
@@ -548,6 +792,8 @@ def summarize_case(case: WarmBenchmarkCase, result: dict[str, Any]) -> dict[str,
             "miss_tokens": cache_miss_tokens,
         },
         "scout_usage_by_family": scout_usage_by_family,
+        "scout_roi_by_lane": scout_roi_by_lane,
+        "scout_roi_by_family": scout_roi_by_family,
     }
     expectation_failures: list[str] = []
     if case.expected_available is not None and summary["available"] != case.expected_available:
@@ -672,7 +918,7 @@ def run_warm_ambient_recall_benchmark(
                 no_write=True,
                 scout_fn=warm.model_scout_fn if live else deterministic_scout_fn,
             )
-            return summarize_case(case, result)
+            return summarize_case(case, result, useful_quorum=quorum)
 
         def record_case(index: int, summary: dict[str, Any]) -> None:
             with progress_lock:
@@ -745,6 +991,8 @@ def run_warm_ambient_recall_benchmark(
             "cannot_claim": [
                 "all_future_prompts_choose_the_right_memory",
                 "model_quality_without_review",
+                "per_lane_roi_proves_public_product_quality",
+                "roi_classification_should_auto_delete_scout_lanes",
             ],
         }
     finally:
@@ -781,6 +1029,8 @@ def summarize_metrics(cases: list[dict[str, Any]]) -> dict[str, Any]:
     guard_coverage_state_counts: dict[str, int] = {}
     guard_coverage_incomplete_cases = 0
     guard_coverage_blocked_cases = 0
+    scout_roi_by_lane = aggregate_scout_roi(cases, "scout_roi_by_lane")
+    scout_roi_by_family = aggregate_scout_roi(cases, "scout_roi_by_family")
     prompt_tokens = 0
     completion_tokens = 0
     total_tokens = 0
@@ -847,6 +1097,9 @@ def summarize_metrics(cases: list[dict[str, Any]]) -> dict[str, Any]:
         "guard_coverage_incomplete_case_count": guard_coverage_incomplete_cases,
         "guard_coverage_blocked_case_count": guard_coverage_blocked_cases,
         "guard_coverage_state_counts": dict(sorted(guard_coverage_state_counts.items())),
+        "scout_roi_by_lane": scout_roi_by_lane,
+        "scout_roi_by_family": scout_roi_by_family,
+        "scout_roi_classification_counts": scout_roi_classification_counts(scout_roi_by_lane),
     }
 
 
