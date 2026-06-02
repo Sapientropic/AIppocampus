@@ -20,7 +20,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-SERVER_NAME = "io.github.sapientropic/aippocampus"
+SERVER_NAME = "io.github.Sapientropic/aippocampus"
 PACKAGE_NAME = "aippocampus"
 GITHUB_UVX_HELP = (
     "uvx --from git+https://github.com/Sapientropic/AIppocampus.git "

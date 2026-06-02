@@ -10,6 +10,11 @@ on:
         description: "Existing release tag to publish, for example v0.1.0"
         required: true
         type: string
+      skip_pypi:
+        description: "Skip PyPI upload when the package version is already published"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   publish:
@@ -23,11 +28,13 @@ jobs:
       id-token: write
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+      SKIP_PYPI: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_pypi || false }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_pypi && github.ref || (github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref) }}
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -46,17 +53,21 @@ jobs:
           from pathlib import Path
 
           tag = os.environ["RELEASE_TAG"]
+          skip_pypi = os.environ.get("SKIP_PYPI", "false").lower() == "true"
           version = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
           expected = f"v{version}"
           if tag != expected:
               raise SystemExit(f"tag {tag!r} does not match package version {expected!r}")
           tag_commit = subprocess.check_output(["git", "rev-list", "-n", "1", tag], text=True).strip()
           head_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-          if tag_commit != head_commit:
+          if tag_commit != head_commit and not skip_pypi:
               raise SystemExit(
                   f"checked-out commit {head_commit} does not match {tag} commit {tag_commit}"
               )
-          print(f"tag {tag} matches pyproject version {version}")
+          if tag_commit != head_commit:
+              print(f"tag {tag} matches version {version}; using current ref for MCP-only repair")
+          else:
+              print(f"tag {tag} matches pyproject version {version}")
           PY
 
       - name: Docs health
@@ -81,6 +92,7 @@ jobs:
           aippocampus mcp list-tools
 
       - name: Publish package to PyPI
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_pypi) }}
         uses: pypa/gh-action-pypi-publish@release/v1
 
       - name: Install MCP publisher

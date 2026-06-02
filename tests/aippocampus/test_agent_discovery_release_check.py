@@ -12,7 +12,7 @@ import check_agent_discovery_release as release_check  # noqa: E402
 
 
 def write_minimal_repo(repo: Path, *, marker: str | None = None, version: str = "0.1.0") -> None:
-    marker = marker if marker is not None else "<!-- mcp-name: io.github.sapientropic/aippocampus -->"
+    marker = marker if marker is not None else "<!-- mcp-name: io.github.Sapientropic/aippocampus -->"
     (repo / "README.md").write_text(f"# AIppocampus\n\n{marker}\n", encoding="utf-8")
     (repo / "AGENTS.md").write_text("# Agents\n", encoding="utf-8")
     (repo / "CLAUDE.md").write_text(
@@ -90,7 +90,7 @@ def write_minimal_repo(repo: Path, *, marker: str | None = None, version: str = 
     (repo / "server.json").write_text(
         f"""\
 {{
-  "name": "io.github.sapientropic/aippocampus",
+  "name": "io.github.Sapientropic/aippocampus",
   "description": "Local-first, source-backed continuity for AI agents via stdio MCP.",
   "version": "{version}",
   "packages": [
