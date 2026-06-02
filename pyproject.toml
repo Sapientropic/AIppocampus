@@ -391,6 +391,8 @@ files = [
     "skills/aippocampus/scripts/onboard_codex.py",
     "skills/aippocampus/scripts/onboard_frontier.py",
     "skills/aippocampus/scripts/onboard_status.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/knowledge/__init__.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/knowledge/schema.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/activation_authority_audit.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/cold_archive.py",

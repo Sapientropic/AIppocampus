@@ -104,6 +104,10 @@ The supported public surfaces are:
   `skills/aippocampus/scripts/aippocampus_mcp_server.py --list-tools`.
 - The source-event, clean-source chunk, source-ref, and import-manifest schemas
   documented in [public-core-boundary.md](public-core-boundary.md).
+- The knowledge-source manifest and knowledge-claim record schemas documented
+  in [public-core-boundary.md](public-core-boundary.md). These define source
+  eligibility and claim promotion records, not a public knowledge-ingest,
+  ranking, or answer-generation API.
 - The Codex plugin package source under `plugins/aippocampus/`, including its
   MCP config and packaged skill surface.
 - The documented local-folder, HTTP object-storage, and encrypted sync commands.
@@ -442,6 +446,8 @@ The stable public data schemas are owned by
 - Canonical source event
 - Clean-source chunk
 - Source ref
+- Knowledge source manifest
+- Knowledge claim record
 - Import manifest
 
 Provider-specific `metadata` and third-party extension rules also live there;
