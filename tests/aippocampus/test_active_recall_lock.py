@@ -230,6 +230,178 @@ class ActiveRecallLockTests(unittest.TestCase):
         self.assertEqual(lock["state"], "pending")
         self.assertTrue(lock["diagnostics"]["ready_downgraded_no_reopenable_refs"])
 
+    def test_sidecar_freshness_vector_invalidates_lock_when_source_changes(self) -> None:
+        path = self.root / "active-recall-locks.json"
+        sidecar = self.root / "semantic-sidecar.json"
+        sidecar.write_text('{"version": 1}', encoding="utf-8")
+        created = locks.start_or_update_recall_lock(
+            path,
+            prompt="semantic sidecar route",
+            thread_id="thread-a",
+            workspace=str(self.root),
+            topic_epoch="epoch-topic",
+            registry_path=self.registry,
+            freshness_sources=[{"kind": "semantic_sidecar", "path": sidecar}],
+            candidate_refs=[{"thread_key": "session:old", "message_id": "msg-1"}],
+        )
+
+        sidecar.write_text('{"version": 22}', encoding="utf-8")
+        changed = locks.read_recall_lock(
+            path,
+            created["lock_id"],
+            topic_epoch="epoch-topic",
+            registry_freshness_fingerprint=created["registry_freshness_fingerprint"],
+            freshness_sources=[{"kind": "semantic_sidecar", "path": sidecar}],
+        )
+        raw = path.read_text(encoding="utf-8")
+
+        self.assertEqual(changed["state"], "expired")
+        self.assertIn("freshness_vector_changed", changed["diagnostics"]["invalidated_by"])
+        self.assertIn("semantic_sidecar", changed["freshness_vector"])
+        self.assertNotIn(str(sidecar), raw)
+
+    def test_enrichment_generation_tracks_read_timing_and_supersession(self) -> None:
+        path = self.root / "active-recall-locks.json"
+        pending = locks.start_or_update_recall_lock(
+            path,
+            prompt="semantic route",
+            thread_id="thread-a",
+            workspace=str(self.root),
+            topic_epoch="epoch-topic",
+            registry_path=self.registry,
+            state="pending",
+        )
+        first_read = locks.read_recall_lock(path, pending["lock_id"])
+        ready = locks.enrich_recall_lock(
+            path,
+            lock_id=pending["lock_id"],
+            candidate_refs=[{"thread_key": "session:old", "message_id": "msg-1", "line": 42}],
+        )
+        second_read = locks.read_recall_lock(path, pending["lock_id"])
+
+        self.assertEqual(pending["lock_version"], 1)
+        self.assertEqual(pending["enrichment_generation"], 0)
+        self.assertEqual(first_read["consumer_metrics"]["read_count"], 1)
+        self.assertEqual(first_read["consumer_metrics"]["first_read_state"], "pending")
+        self.assertEqual(ready["lock_version"], 2)
+        self.assertEqual(ready["enrichment_generation"], 1)
+        self.assertEqual(ready["state_transition"], "pending->ready")
+        self.assertTrue(ready["enrichment_timing"]["completed_after_first_read"])
+        self.assertFalse(ready["enrichment_timing"]["completed_after_expiry"])
+        self.assertEqual(second_read["consumer_metrics"]["read_count"], 2)
+        self.assertTrue(second_read["consumer_metrics"]["read_generation_superseded"])
+
+    def test_lock_roi_summary_distinguishes_useful_reads_from_wasted_prewarm(self) -> None:
+        path = self.root / "active-recall-locks.json"
+        useful = locks.start_or_update_recall_lock(
+            path,
+            prompt="useful lock SECRET_TOKEN=abc123",
+            thread_id="thread-a",
+            workspace=str(self.root),
+            topic_epoch="epoch-topic",
+            registry_path=self.registry,
+            candidate_refs=[{"thread_key": "session:old", "message_id": "msg-1", "line": 42}],
+        )
+        wasted = locks.start_or_update_recall_lock(
+            path,
+            prompt="wasted speculative prewarm",
+            thread_id="thread-b",
+            workspace=str(self.root),
+            topic_epoch="epoch-other",
+            registry_path=self.registry,
+            state="pending",
+            ttl_seconds=1,
+        )
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["entries"][wasted["lock_id"]]["expires_unix"] = time.time() - 10
+        path.write_text(json.dumps(data), encoding="utf-8")
+
+        locks.read_recall_lock(path, useful["lock_id"])
+        reopened = locks.reopen_lock_sources(
+            path,
+            lock_id=useful["lock_id"],
+            registry_path=self.registry,
+        )
+        summary = locks.summarize_lock_roi(path)
+        encoded = json.dumps(summary, ensure_ascii=False)
+
+        self.assertTrue(reopened["ok"])
+        self.assertEqual(summary["lock_count"], 2)
+        self.assertEqual(summary["lock_pull_count"], 1)
+        self.assertEqual(summary["lock_reopen_attempt_count"], 1)
+        self.assertEqual(summary["source_backed_hit_count"], 1)
+        self.assertEqual(summary["expired_before_consumption_count"], 1)
+        self.assertEqual(summary["never_read_count"], 1)
+        self.assertIn("lock_pull_rate", summary["rates"])
+        self.assertNotIn("SECRET_TOKEN", encoded)
+        self.assertNotIn("Source-backed line", encoded)
+        self.assertNotIn(str(self.root), encoded)
+
+    def test_reopen_rejects_stale_freshness_before_opening_source(self) -> None:
+        path = self.root / "active-recall-locks.json"
+        sidecar = self.root / "semantic-sidecar.json"
+        sidecar.write_text('{"version": 1}', encoding="utf-8")
+        lock = locks.start_or_update_recall_lock(
+            path,
+            prompt="stale reopen route",
+            thread_id="thread-a",
+            workspace=str(self.root),
+            topic_epoch="epoch-topic",
+            registry_path=self.registry,
+            freshness_sources=[{"kind": "semantic_sidecar", "path": sidecar}],
+            candidate_refs=[{"thread_key": "session:old", "message_id": "msg-1"}],
+        )
+
+        sidecar.write_text('{"version": 22}', encoding="utf-8")
+        reopened = locks.reopen_lock_sources(
+            path,
+            lock_id=lock["lock_id"],
+            registry_path=self.registry,
+            topic_epoch="epoch-topic",
+            freshness_sources=[{"kind": "semantic_sidecar", "path": sidecar}],
+        )
+        encoded = json.dumps(reopened, ensure_ascii=False)
+
+        self.assertFalse(reopened["ok"])
+        self.assertEqual(reopened["state"], "expired")
+        self.assertEqual(reopened["errors"][0]["code"], "lock_stale")
+        self.assertNotIn("Source-backed line", encoded)
+
+    def test_reopen_rejects_superseded_expected_lock_version(self) -> None:
+        path = self.root / "active-recall-locks.json"
+        lock = locks.start_or_update_recall_lock(
+            path,
+            prompt="generation route",
+            thread_id="thread-a",
+            workspace=str(self.root),
+            topic_epoch="epoch-topic",
+            registry_path=self.registry,
+            candidate_refs=[{"thread_key": "session:old", "message_id": "msg-1"}],
+        )
+        updated = locks.enrich_recall_lock(
+            path,
+            lock_id=lock["lock_id"],
+            route_reasons=["later generation changed route diagnostics"],
+        )
+
+        stale = locks.reopen_lock_sources(
+            path,
+            lock_id=lock["lock_id"],
+            registry_path=self.registry,
+            expected_lock_version=lock["lock_version"],
+        )
+        current = locks.reopen_lock_sources(
+            path,
+            lock_id=lock["lock_id"],
+            registry_path=self.registry,
+            expected_lock_version=updated["lock_version"],
+        )
+
+        self.assertFalse(stale["ok"])
+        self.assertEqual(stale["state"], "superseded")
+        self.assertEqual(stale["errors"][0]["code"], "lock_generation_superseded")
+        self.assertTrue(current["ok"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -18,6 +18,7 @@ from aippocampus_runtime.recall.active_recall_lock import (
     registry_freshness_fingerprint,
     reopen_lock_sources,
     start_or_update_recall_lock,
+    summarize_lock_roi,
 )
 from aippocampus_runtime.recall.life_cues import (
     life_wide_recall_terms,
@@ -130,6 +131,9 @@ def _lock_probe_payload(*, mode: str, lock: dict[str, Any]) -> dict[str, Any]:
         "lock": {
             "state": state,
             "lock_id": lock.get("lock_id"),
+            "lock_version": _safe_nonnegative_int(lock.get("lock_version")),
+            "enrichment_generation": _safe_nonnegative_int(lock.get("enrichment_generation")),
+            "state_transition": lock.get("state_transition"),
             "route_handle": True,
             "candidate_ref_count": _safe_nonnegative_int(lock.get("candidate_ref_count")),
             "reopenable_ref_count": _safe_nonnegative_int(lock.get("reopenable_ref_count")),
@@ -141,6 +145,10 @@ def _lock_probe_payload(*, mode: str, lock: dict[str, Any]) -> dict[str, Any]:
         "source_reopen_required": True,
         "suggested_next": suggested_next,
         "diagnostics": lock.get("diagnostics") or {},
+        "freshness_vector": lock.get("freshness_vector") or {},
+        "consumer_metrics": lock.get("consumer_metrics") or {},
+        "enrichment_timing": lock.get("enrichment_timing") or {},
+        "roi_metrics": lock.get("roi_metrics") or {},
         "source_boundary": {
             "lock_is_navigation_only": True,
             "probe_read_returns_no_facts": True,
@@ -214,13 +222,21 @@ def active_recall_reopen_lock(
     lock_id: str,
     registry_path: Path | None,
     max_matches: int,
+    topic_epoch: str | None = None,
+    expected_lock_version: int | None = None,
 ) -> dict[str, Any]:
     return reopen_lock_sources(
         lock_path,
         lock_id=lock_id,
         registry_path=registry_path,
+        topic_epoch=topic_epoch,
+        expected_lock_version=expected_lock_version,
         max_matches=max_matches,
     )
+
+
+def active_recall_lock_metrics(*, lock_path: Path) -> dict[str, Any]:
+    return summarize_lock_roi(lock_path)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -238,11 +254,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--search", choices=["auto", "always", "never"], default="auto")
     parser.add_argument(
         "--mode",
-        choices=["legacy", "probe", "read", "reopen"],
+        choices=["legacy", "probe", "read", "reopen", "metrics"],
         default="legacy",
         help=(
             "legacy keeps the old search decision flow; probe/read expose "
-            "navigation-only locks; reopen opens clean source by lock id."
+            "navigation-only locks; reopen opens clean source by lock id; "
+            "metrics reports public-safe aggregate lock ROI."
         ),
     )
     parser.add_argument("--use-lock", action="store_true", dest="use_lock")
@@ -251,6 +268,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--lock-path")
     parser.add_argument("--thread-id")
     parser.add_argument("--topic-epoch")
+    parser.add_argument("--expected-lock-version", type=int)
     parser.add_argument("--max", type=int, default=8)
     parser.add_argument("--context", type=int, default=1)
     parser.add_argument("--json", action="store_true", dest="json_output")
@@ -260,6 +278,17 @@ def main(argv: list[str] | None = None) -> int:
     prompt = read_prompt(args)
     registry_path = _registry_path_from_args(args)
     lock_path = _lock_path_from_args(args, registry_path)
+    if args.mode == "metrics":
+        result = active_recall_lock_metrics(lock_path=lock_path)
+        if args.json_output:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print(f"locks: {result.get('lock_count', 0)}")
+            print(f"pulls: {result.get('lock_pull_count', 0)}")
+            print(f"reopens: {result.get('lock_reopen_attempt_count', 0)}")
+            print(f"source hits: {result.get('source_backed_hit_count', 0)}")
+        return 0
+
     if args.mode == "reopen":
         if not args.lock_id:
             raise SystemExit("active_recall.py --mode reopen requires --lock-id")
@@ -267,6 +296,8 @@ def main(argv: list[str] | None = None) -> int:
             lock_path=lock_path,
             lock_id=args.lock_id,
             registry_path=registry_path,
+            topic_epoch=args.topic_epoch,
+            expected_lock_version=args.expected_lock_version,
             max_matches=args.max,
         )
         if args.json_output:
