@@ -166,8 +166,88 @@ class FreshThreadActionPolicyTests(unittest.TestCase):
 
         self.assertEqual(packet["suggested_action"], "active_recall")
         self.assertEqual(action["agent_action"], "ask_light_question")
+        self.assertEqual(action["packet_action_hint"], "active_recall")
+        self.assertFalse(action["packet_action_hint_authoritative"])
+        self.assertIn(
+            "final_policy_requires_task_context_or_source_before_active_recall",
+            action["hint_divergence_reason"],
+        )
         self.assertFalse(action["should_call_active_recall"])
         self.assertEqual(action["lock_handling"], "none")
+
+    def test_task_context_flags_report_provenance_instead_of_magic_truth(self) -> None:
+        packet = fresh_thread_scent_packet_from_decision(
+            {
+                "decision": "scent",
+                "confidence": "medium",
+                "sensitivity": "safe",
+                "candidates": [{"source_id": "clean:design", "thread_key": "session:design"}],
+            }
+        )
+
+        action = fresh_thread_action_from_packet(
+            packet,
+            task_context={
+                "memory_may_change_answer": True,
+                "activation_update": "confirmed",
+                "current_checkout_required": False,
+                "future_unreviewed_flag": True,
+            },
+        )
+        contract = action["task_context_contract"]
+
+        self.assertTrue(contract["semantic_flags_are_upstream_judgement"])
+        self.assertFalse(contract["policy_parses_raw_prompt"])
+        self.assertEqual(
+            contract["known_flag_provenance"]["memory_may_change_answer"],
+            "foreground_agent_or_reviewed_sidecar_judgement",
+        )
+        self.assertEqual(
+            contract["known_flag_provenance"]["activation_update"],
+            "fresh_thread_activation_state",
+        )
+        self.assertEqual(
+            contract["known_flag_provenance"]["current_checkout_required"],
+            "deterministic_repo_or_source_check",
+        )
+        self.assertEqual(contract["observed_flags"]["memory_may_change_answer"], True)
+        self.assertIn("future_unreviewed_flag", contract["unknown_flags"])
+
+    def test_canonical_advisory_action_takes_precedence_over_legacy_alias(self) -> None:
+        packet = {
+            "support_level": "soft_hypothesis",
+            "confidence": "high",
+            "sensitivity": "safe",
+            "freshness": "current",
+            "advisory_action": "ask_light_question",
+            "suggested_action": "active_recall",
+            "candidate_refs": [{"source_id": "clean:design", "thread_key": "session:design"}],
+        }
+
+        action = fresh_thread_action_from_packet(packet)
+
+        self.assertEqual(action["packet_action_hint"], "ask_light_question")
+        self.assertEqual(action["agent_action"], "ask_light_question")
+        self.assertEqual(action["hint_divergence_reason"], "final_policy_aligned_with_packet_hint")
+
+    def test_legacy_suggested_action_alias_still_feeds_hint_when_canonical_is_absent(self) -> None:
+        packet = {
+            "support_level": "soft_hypothesis",
+            "confidence": "medium",
+            "sensitivity": "safe",
+            "freshness": "current",
+            "suggested_action": "active_recall",
+            "candidate_refs": [{"source_id": "clean:design", "thread_key": "session:design"}],
+        }
+
+        action = fresh_thread_action_from_packet(
+            packet,
+            task_context={"memory_may_change_answer": True},
+        )
+
+        self.assertEqual(action["packet_action_hint"], "active_recall")
+        self.assertEqual(action["agent_action"], "active_recall")
+        self.assertFalse(action["packet_action_hint_authoritative"])
 
     def test_specific_memory_claim_requires_source_reopen_when_refs_exist(self) -> None:
         packet = fresh_thread_scent_packet_from_decision(
@@ -192,6 +272,9 @@ class FreshThreadActionPolicyTests(unittest.TestCase):
         )
 
         self.assertEqual(action["agent_action"], "source_reopen")
+        self.assertEqual(action["packet_action_hint"], "source_reopen")
+        self.assertFalse(action["packet_action_hint_authoritative"])
+        self.assertEqual(action["hint_divergence_reason"], "final_policy_aligned_with_packet_hint")
         self.assertTrue(action["requires_source_reopen"])
         self.assertTrue(action["source_refs_allowed"])
         self.assertFalse(action["should_call_active_recall"])

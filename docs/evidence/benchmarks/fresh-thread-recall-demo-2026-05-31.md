@@ -52,6 +52,11 @@ The fixture data is synthetic and public-safe. It uses structured upstream
 decision packets as input, so semantic judgement remains upstream of the runner
 instead of being hard-coded as prompt-word checks.
 
+The demo's task-context flags are also synthetic upstream fixtures. They
+exercise the action contract after a foreground, sidecar, activation, or
+deterministic repo/source layer supplies flags; they do not evaluate live prompt
+semantic classification quality.
+
 ## Issue #302 Boundary Hardening
 
 The #302 follow-up keeps this demo labeled as synthetic, while runtime tests now

@@ -47,6 +47,22 @@ DEFAULT_WHEN_NOT_TO_USE = [
     "Do not personalize broad prompts unless memory would change the current answer, plan, or action.",
 ]
 
+TASK_CONTEXT_FLAG_PROVENANCE = {
+    "memory_may_change_answer": "foreground_agent_or_reviewed_sidecar_judgement",
+    "specific_memory_claim": "foreground_agent_or_reviewed_sidecar_judgement",
+    "broad_or_sensitive_prompt": "foreground_agent_or_reviewed_sidecar_judgement",
+    "allow_gentle_hypothesis": "foreground_agent_judgement",
+    "user_confirmed_memory_theme": "fresh_thread_activation_or_foreground_user_anchor",
+    "route_suppressed_by_activation": "fresh_thread_activation_state",
+    "prior_scent_without_new_anchor": "fresh_thread_activation_state",
+    "current_checkout_required": "deterministic_repo_or_source_check",
+    "current_repo_fact_query": "deterministic_repo_or_source_check",
+    "activation_state": "fresh_thread_activation_state",
+    "activation_update": "fresh_thread_activation_state",
+    "activation_invalidation": "fresh_thread_activation_state",
+    "activation_source_reopened": "fresh_thread_activation_state",
+}
+
 
 def _bucket(value: Any, allowed: set[str], default: str) -> str:
     text = str(value or "").strip()
@@ -59,6 +75,37 @@ def _context_flag(context: dict[str, Any], key: str) -> bool:
 
 def _activation_update(context: dict[str, Any]) -> str:
     return _bucket(context.get("activation_update"), ACTIVATION_UPDATES, "none")
+
+
+def _packet_action_hint(packet: dict[str, Any]) -> str:
+    hint = str(packet.get("advisory_action") or packet.get("suggested_action") or "").strip()
+    return hint if hint in AGENT_ACTIONS else ""
+
+
+def _hint_divergence_reason(action: str, hint: str, reason: str) -> str:
+    if not hint:
+        return "packet_did_not_provide_action_hint"
+    if action == hint:
+        return "final_policy_aligned_with_packet_hint"
+    if action == IGNORE:
+        return f"final_policy_suppressed_packet_hint:{reason}"
+    if action == SOURCE_REOPEN:
+        return f"final_policy_required_source_before_hint:{reason}"
+    if hint == ACTIVE_RECALL:
+        return f"final_policy_requires_task_context_or_source_before_active_recall:{reason}"
+    return f"final_policy_overrode_packet_hint:{reason}"
+
+
+def _task_context_contract(context: dict[str, Any]) -> dict[str, Any]:
+    observed = {key: context[key] for key in sorted(context) if key in TASK_CONTEXT_FLAG_PROVENANCE}
+    return {
+        "semantic_flags_are_upstream_judgement": True,
+        "policy_parses_raw_prompt": False,
+        "policy_uses_static_phrase_lists": False,
+        "known_flag_provenance": dict(sorted(TASK_CONTEXT_FLAG_PROVENANCE.items())),
+        "observed_flags": observed,
+        "unknown_flags": sorted(key for key in context if key not in TASK_CONTEXT_FLAG_PROVENANCE),
+    }
 
 
 def _clean_lock_id(value: Any) -> str:
@@ -181,11 +228,15 @@ def _base_result(
     candidate_refs = _candidate_refs(packet, expose=expose_refs)
     lock_handling, lock_id = _lock_handling(action, active_recall_lock)
     source_refs_allowed = action == SOURCE_REOPEN
+    packet_action_hint = _packet_action_hint(packet)
     return {
         "kind": "aippocampus_fresh_thread_action_policy",
         "schema_version": ACTION_SCHEMA_VERSION,
         "agent_action": action,
         "reason": reason,
+        "packet_action_hint": packet_action_hint,
+        "packet_action_hint_authoritative": False,
+        "hint_divergence_reason": _hint_divergence_reason(action, packet_action_hint, reason),
         "allowed_surface": _allowed_surface(action),
         "should_call_active_recall": action == ACTIVE_RECALL,
         "requires_source_reopen": requires_source_reopen,
@@ -205,6 +256,7 @@ def _base_result(
             "prompt_text_serialized": False,
             "raw_snippets_serialized": False,
         },
+        "task_context_contract": _task_context_contract(context),
         "when_not_to_use": list(DEFAULT_WHEN_NOT_TO_USE),
     }
 
@@ -233,10 +285,12 @@ def fresh_thread_action_from_packet(
 ) -> dict[str, Any]:
     """Choose the foreground agent action for a #282 fresh-thread scent packet.
 
-    `task_context` carries explicit agent judgement flags such as
+    `task_context` carries explicit upstream flags such as
     `memory_may_change_answer`, `specific_memory_claim`,
     `broad_or_sensitive_prompt`, `allow_gentle_hypothesis`, and
-    `user_confirmed_memory_theme`. This keeps semantic judgement out of this
+    `user_confirmed_memory_theme`. Those flags come from foreground agent
+    judgement, activation state, reviewed sidecars, active recall locks, or
+    deterministic repo/source checks. This keeps semantic judgement out of this
     deterministic policy layer.
     """
 
@@ -393,7 +447,7 @@ _SOFT_DESIGN_PACKET = {
     "confidence": "medium",
     "sensitivity": "safe",
     "freshness": "current",
-    "suggested_action": "active_recall",
+    "advisory_action": "active_recall",
     "candidate_refs": [{"source_id": "clean:demo:design", "thread_key": "session:design"}],
 }
 
@@ -402,7 +456,7 @@ _CONFIRMED_THEME_PACKET = {
     "confidence": "high",
     "sensitivity": "safe",
     "freshness": "current",
-    "suggested_action": "active_recall",
+    "advisory_action": "active_recall",
     "candidate_refs": [{"source_id": "clean:demo:theme", "thread_key": "session:theme"}],
 }
 
@@ -411,7 +465,7 @@ _SOURCE_REQUIRED_PACKET = {
     "confidence": "high",
     "sensitivity": "safe",
     "freshness": "current",
-    "suggested_action": "source_reopen",
+    "advisory_action": "source_reopen",
     "candidate_refs": [
         {"source_id": "clean:demo:profile", "thread_key": "session:profile", "line": 12}
     ],
