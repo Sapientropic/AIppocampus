@@ -669,6 +669,11 @@ class BenchmarkSuiteTests(unittest.TestCase):
             payload["track_statuses"]["source_evidence_deterministic_labels"],
             "insufficient_recall_hits",
         )
+        self.assertTrue(
+            payload["tracks"]["source_evidence_deterministic_labels"]["selection"][
+                "deterministic_label_fallback"
+            ]
+        )
         source_run.assert_called_once()
         self.assertFalse(source_run.call_args.kwargs["require_semantic_sidecar"])
 

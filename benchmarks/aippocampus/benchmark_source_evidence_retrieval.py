@@ -456,7 +456,10 @@ def summarize_source_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "warning_count": int(payload.get("warning_count") or 0),
         "ranking": payload.get("ranking"),
         "prompt_kind": payload.get("prompt_kind"),
+        "selection": payload.get("selection") or {},
+        "selection_explanation": payload.get("selection_explanation") or {},
         "failure_diagnostics": payload.get("failure_diagnostics") or {},
+        "cannot_claim": payload.get("cannot_claim") or [],
         "query_origin": query_origin(
             "source_derived_sparse",
             query_author="selected source-evidence evaluator",
@@ -3250,6 +3253,14 @@ def print_human_summary(payload: dict[str, Any]) -> None:
         f"{source['passed_count']} hit / {source['failed_count']} miss "
         f"({source['top_k_hit_rate']:.2%})"
     )
+    selection_explanation = source.get("selection_explanation") or {}
+    if selection_explanation:
+        print(
+            "- selected source evidence selection: "
+            f"{selection_explanation.get('mode')} "
+            f"selected={selection_explanation.get('selected_case_count')} "
+            f"min={selection_explanation.get('min_cases')}"
+        )
     sharegpt_public = payload["tracks"].get("sharegpt_public_source_evidence")
     if sharegpt_public:
         metrics = sharegpt_public.get("metrics") or {}
@@ -3313,7 +3324,14 @@ def main() -> int:
         default="dynamic_source",
     )
     parser.add_argument("--source-max-term-frequency", type=int, default=8)
-    parser.add_argument("--allow-deterministic-labels", action="store_true")
+    parser.add_argument(
+        "--allow-deterministic-labels",
+        action="store_true",
+        help=(
+            "Use deterministic clean-source labels as a source-evidence wiring baseline; "
+            "this cannot claim semantic-sidecar sample coverage."
+        ),
+    )
     parser.add_argument("--include-sharegpt-public", action="store_true")
     parser.add_argument("--sharegpt-public-corpus-dir", type=Path, default=None)
     parser.add_argument(

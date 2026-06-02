@@ -150,6 +150,21 @@ check: source-evidence readiness gates use the configured AIppocampus registry,
 so a new machine without enough registered clean source may get diagnostic-only
 coverage rather than an overall pass.
 
+For the source-evidence selection slice directly, run:
+
+```sh
+python ./tools/aippocampus/smoke/smoke_source_evidence_recall_eval.py --json
+```
+
+By default this is a semantic-sidecar-required smoke: it only selects
+non-technical life-wide clean-source turns that already have dynamic semantic
+scope labels. If it reports `insufficient_selected_cases`, that usually means
+the registry has too few semantic-sidecar rows for this claim, not that clean
+source search is broken. Rerun with `--allow-deterministic-labels` only as a
+wiring baseline; fallback results can check deterministic label/search behavior,
+but they must not be used as evidence that semantic-sidecar selected coverage is
+ready.
+
 ## First Onboarding
 
 Register existing Codex sessions and build clean-source indexes:
