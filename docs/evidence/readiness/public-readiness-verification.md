@@ -460,8 +460,8 @@ Stage 3 sync evidence for #36/#38:
   locators, preserved a Mac-side local edit under `.sync-conflicts/`, kept raw
   rollouts excluded by default, then pushed the Mac target bundle back to
   Windows and verified the reverse conflict path preserved the Windows source.
-  The Mac system Python 3.9 run exposed a `Path.write_text(newline=...)`
-  compatibility bug in path repair; `sync_bundle.save_json` now uses
+  A legacy Mac system-Python run exposed a `Path.write_text(newline=...)`
+  path-repair regression; `sync_bundle.save_json` now uses
   `Path.open(..., newline="\n")`, and
   `test_pull_path_repair_works_on_python39_path_write_text_signature` covers the
   regression.

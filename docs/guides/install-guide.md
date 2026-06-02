@@ -63,7 +63,7 @@ recommend the Python/source install or GitHub `uvx --from` path instead.
 ### macOS shell setup
 
 macOS can ship with an older `/usr/bin/python3` and no unversioned `python`
-command. Install Python 3.10 or newer before running repository checks; the
+command. Install Python 3.12 or newer before running repository checks; the
 commands below use Homebrew Python 3.12:
 
 ```sh
