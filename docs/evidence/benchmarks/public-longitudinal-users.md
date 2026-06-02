@@ -99,6 +99,24 @@ ids, and question/answer hashes, but no dialogue text, question text, or answer
 text. The current local snapshot has 10 users, 272 sessions, 5,882 dialogue
 turns, 1,986 QA cases, and 1,973 evidence-linked cases.
 
+#400 adds a separate LoCoMo answer-usefulness prototype on top of that
+retrieval layer:
+
+```powershell
+python benchmarks\aippocampus\benchmark_locomo_answer_usefulness.py --json
+python benchmarks\aippocampus\benchmark_locomo_answer_usefulness.py --predictions .tmp\locomo-answer-predictions.jsonl --answer-model <fixed-answer-model-name> --json
+```
+
+This second-stage runner scores `source_evidence_retrieval`,
+`context_gathering`, `answer_generation`, `source_citation`, and
+`unsupported_inference_refusal` as separate report layers. The answer model
+input should come from the local LoCoMo case pack and must not receive gold
+answers or gold evidence ids. The deterministic judge can see gold labels for
+scoring, but its output is benchmark telemetry, not source truth. Keep this as
+a prototype for product-layer usefulness under fixed answer-model/evaluator
+settings; do not fold it into Track B retrieval-only metrics or use it for
+SOTA, LongMemEval-V2, or external-system superiority claims.
+
 Public conversation corpora remain valuable, but they should not be the
 positive coding source:
 

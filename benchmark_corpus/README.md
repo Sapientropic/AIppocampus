@@ -148,6 +148,28 @@ long-dialogue retrieval control, not as proof of cross-conversation user memory;
 keep temporal override, project contamination, coding tacit-constraint, and
 rejected-route claims on the VCS / rollout hard-event track.
 
+Run the #400 LoCoMo answer-usefulness prototype after a system has produced
+answers from a bounded local case pack:
+
+```powershell
+python benchmarks\aippocampus\benchmark_locomo_answer_usefulness.py --max-samples 2 --max-cases 20 --json
+python benchmarks\aippocampus\benchmark_locomo_answer_usefulness.py --predictions .tmp\locomo-answer-predictions.jsonl --answer-model <fixed-answer-model-name> --json
+```
+
+Prediction rows are intentionally second-stage: they include retrieved context
+ids, answer text, citation ids, and refusal, but the case pack still keeps gold
+answers and gold evidence ids out of the answer-generation input:
+
+```json
+{"case_id":"locomo:conv-26:qa:0001","arm":"retrieved_context","retrieved_evidence_ids":["D1:3"],"answer_text":"...","citation_ids":["D1:3"],"refused":false}
+```
+
+The report keeps `source_evidence_retrieval`, `context_gathering`,
+`answer_generation`, `source_citation`, and `unsupported_inference_refusal`
+metrics side by side. It is a prototype product-layer scorer with a fixed
+answer model / deterministic evaluator boundary, not a replacement for Track B
+retrieval-only metrics and not a LoCoMo leaderboard claim.
+
 Run the VCS future-event recall scaffold:
 
 ```powershell

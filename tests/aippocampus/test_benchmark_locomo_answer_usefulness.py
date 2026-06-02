@@ -1,0 +1,151 @@
+from __future__ import annotations
+
+import json
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
+sys.path.insert(0, str(BENCHMARKS))
+
+import benchmark_locomo_answer_usefulness as benchmark  # noqa: E402
+
+
+def write_fixture(path: Path) -> None:
+    rows = [
+        {
+            "sample_id": "conv-test",
+            "conversation": {
+                "speaker_a": "A",
+                "speaker_b": "B",
+                "session_1_date_time": "2024-01-01T10:00:00Z",
+                "session_1": [
+                    {
+                        "dia_id": "D1:1",
+                        "speaker": "A",
+                        "text": "The hidden park meeting was on Monday.",
+                    },
+                    {
+                        "dia_id": "D1:2",
+                        "speaker": "B",
+                        "text": "Bring the blue notebook.",
+                    },
+                ],
+            },
+            "qa": [
+                {
+                    "question": "When was the hidden park meeting?",
+                    "answer": "Monday",
+                    "evidence": ["D1:1"],
+                    "category": 2,
+                },
+                {
+                    "question": "What should be brought?",
+                    "answer": "The blue notebook",
+                    "evidence": ["D1:2"],
+                    "category": 3,
+                },
+            ],
+            "event_summary": {},
+            "observation": {},
+            "session_summary": {},
+        }
+    ]
+    path.write_text(json.dumps(rows), encoding="utf-8")
+
+
+class LocomoAnswerUsefulnessBenchmarkTests(unittest.TestCase):
+    def test_default_contract_reports_all_layers_and_stays_sanitized(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dataset = Path(tmp) / "locomo10.json"
+            write_fixture(dataset)
+
+            payload = benchmark.run_benchmark(dataset_path=dataset)
+
+        self.assertEqual(payload["kind"], "aippocampus_locomo_answer_usefulness_benchmark")
+        self.assertEqual(payload["status"], "answer_usefulness_contract_scored")
+        self.assertTrue(payload["ok"], payload)
+        self.assertEqual(payload["evaluation"]["answer_model"], "deterministic_oracle_fixture")
+        self.assertEqual(
+            payload["evaluation"]["judge_model"],
+            "deterministic_locomo_answer_usefulness_v1",
+        )
+        self.assertEqual(payload["layers"]["source_evidence_retrieval"]["metric"], "full_evidence_recall_rate")
+        self.assertEqual(payload["layers"]["context_gathering"]["metric"], "context_sufficient_rate")
+        self.assertEqual(payload["layers"]["answer_generation"]["metric"], "answer_correct_rate")
+        self.assertEqual(payload["layers"]["source_citation"]["metric"], "correct_source_citation_rate")
+        self.assertEqual(
+            payload["layers"]["unsupported_inference_refusal"]["metric"],
+            "unsupported_inference_refusal_rate",
+        )
+        self.assertEqual(payload["arms"]["retrieved_context"]["metrics"]["answer_correct_rate"], 1.0)
+        self.assertEqual(
+            payload["arms"]["empty_context"]["metrics"]["unsupported_inference_refusal_rate"],
+            1.0,
+        )
+        self.assertIn("answer_generation_quality_depends_on_fixed_answer_model", payload["cannot_claim"])
+        dumped = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn("hidden park meeting", dumped)
+        self.assertNotIn("blue notebook", dumped)
+        self.assertNotIn(str(REPO_ROOT), dumped)
+
+    def test_prediction_file_scores_answer_citation_and_refusal_separately(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dataset = Path(tmp) / "locomo10.json"
+            predictions = Path(tmp) / "answers.jsonl"
+            write_fixture(dataset)
+            predictions.write_text(
+                "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "case_id": "locomo:conv-test:qa:0001",
+                                "arm": "retrieved_context",
+                                "retrieved_evidence_ids": ["D1:1"],
+                                "answer_text": "The meeting was on Monday.",
+                                "citation_ids": ["D1:1"],
+                                "refused": False,
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "case_id": "locomo:conv-test:qa:0002",
+                                "arm": "retrieved_context",
+                                "retrieved_evidence_ids": [],
+                                "answer_text": "Bring a red folder.",
+                                "citation_ids": [],
+                                "refused": False,
+                            }
+                        ),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            payload = benchmark.run_benchmark(
+                dataset_path=dataset,
+                predictions_file=predictions,
+                answer_model="fixture-answer-model",
+            )
+
+        metrics = payload["arms"]["retrieved_context"]["metrics"]
+        self.assertEqual(metrics["full_evidence_recall_rate"], 0.5)
+        self.assertEqual(metrics["context_sufficient_rate"], 0.5)
+        self.assertEqual(metrics["answer_correct_rate"], 0.5)
+        self.assertEqual(metrics["correct_source_citation_rate"], 0.5)
+        self.assertEqual(metrics["unsupported_inference_refusal_rate"], 0.0)
+        self.assertEqual(payload["evaluation"]["answer_model"], "fixture-answer-model")
+        by_case = {
+            row["case_id"]: row
+            for row in payload["arms"]["retrieved_context"]["cases"]
+        }
+        self.assertTrue(by_case["locomo:conv-test:qa:0001"]["answer_correct"])
+        self.assertFalse(by_case["locomo:conv-test:qa:0002"]["context_sufficient"])
+        self.assertFalse(by_case["locomo:conv-test:qa:0002"]["unsupported_inference_refused"])
+
+
+if __name__ == "__main__":
+    unittest.main()
