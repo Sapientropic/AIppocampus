@@ -97,6 +97,8 @@ class AippocampusMcpServerTests(unittest.TestCase):
             names,
             {
                 "search_memory",
+                "recall_context",
+                "recall_deepen",
                 "latest_reply",
                 "get_turn_context",
                 "list_threads",
@@ -150,6 +152,230 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertFalse(response["result"].get("isError", False))
         self.assertEqual(payload["matches"][0]["message_id"], "msg_final")
         self.assertIn("不是摘要替代事实", payload["matches"][0]["snippet"])
+
+    def test_recall_context_returns_navigation_handle_without_raw_prompt_or_paths(self) -> None:
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 301,
+                "method": "tools/call",
+                "params": {
+                    "name": "recall_context",
+                    "arguments": {
+                        "intent": f"继续 {self.cwd} 里的 SECRET_TOKEN=abc123 clean source 记忆",
+                        "cwd": str(self.cwd),
+                        "max": 3,
+                    },
+                },
+            }
+        )
+
+        payload = self.tool_payload(response)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertFalse(response["result"].get("isError", False))
+        self.assertEqual(payload["kind"], "aippocampus_recall_context")
+        self.assertEqual(payload["support_level"], "navigation")
+        self.assertEqual(payload["source_boundary"]["navigation_only_not_fact"], True)
+        self.assertEqual(payload["routes"][0]["evidence_level"], "needs_reopen")
+        self.assertEqual(payload["routes"][0]["source_refs"][0]["message_id"], "msg_final")
+        self.assertEqual(payload["routes"][0]["suggested_next"]["tool"], "recall_deepen")
+        self.assertTrue(str(payload["routes"][0]["handle"]).startswith("aippo-nav:"))
+        self.assertNotIn(str(self.cwd), encoded)
+        self.assertNotIn("SECRET_TOKEN", encoded)
+        self.assertNotIn("继续", encoded)
+
+    def test_recall_deepen_reopens_context_handle_with_source_boundary(self) -> None:
+        context_response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 302,
+                "method": "tools/call",
+                "params": {
+                    "name": "recall_context",
+                    "arguments": {"intent": "clean source continuity", "cwd": str(self.cwd)},
+                },
+            }
+        )
+        handle = self.tool_payload(context_response)["routes"][0]["handle"]
+
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 303,
+                "method": "tools/call",
+                "params": {
+                    "name": "recall_deepen",
+                    "arguments": {"handle": handle, "cwd": str(self.cwd)},
+                },
+            }
+        )
+
+        payload = self.tool_payload(response)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertFalse(response["result"].get("isError", False))
+        self.assertEqual(payload["kind"], "aippocampus_recall_deepen")
+        self.assertEqual(payload["support_level"], "evidence")
+        self.assertEqual(payload["evidence_level"], "source_backed")
+        self.assertEqual(payload["source_refs"][0]["message_id"], "msg_final")
+        self.assertEqual(payload["source_reopen_path"]["tool"], "get_turn_context")
+        self.assertIn("不是摘要替代事实", payload["source_window"]["messages"][1]["text"])
+        self.assertNotIn(str(self.cwd), encoded)
+
+    def test_recall_deepen_accepts_ambient_navigation_seed_handle(self) -> None:
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 304,
+                "method": "tools/call",
+                "params": {
+                    "name": "recall_deepen",
+                    "arguments": {
+                        "cwd": str(self.cwd),
+                        "handle": {
+                            "kind": "recall_context_seed",
+                            "handle": {
+                                "kind": "source_ref",
+                                "source_refs": [{"message_id": "msg_user", "turn_id": "turn_1"}],
+                            },
+                            "suggested_tool": "recall_deepen",
+                            "boundary": "navigation_only_not_fact",
+                        },
+                    },
+                },
+            }
+        )
+
+        payload = self.tool_payload(response)
+        self.assertFalse(response["result"].get("isError", False))
+        self.assertEqual(payload["source_refs"][0]["message_id"], "msg_user")
+        self.assertEqual(payload["source_reopen_path"]["arguments"]["message_id"], "msg_user")
+
+    def test_recall_deepen_reports_malformed_handle_as_tool_error(self) -> None:
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 305,
+                "method": "tools/call",
+                "params": {
+                    "name": "recall_deepen",
+                    "arguments": {"handle": "not-a-navigation-handle", "cwd": str(self.cwd)},
+                },
+            }
+        )
+
+        self.assertTrue(response["result"]["isError"])
+        payload = self.tool_payload(response)
+        self.assertEqual(payload["error"]["code"], "malformed_recall_handle")
+
+    def test_recall_deepen_rejects_stale_context_handle_before_source_reopen(self) -> None:
+        context_response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 306,
+                "method": "tools/call",
+                "params": {
+                    "name": "recall_context",
+                    "arguments": {"intent": "clean source continuity", "cwd": str(self.cwd)},
+                },
+            }
+        )
+        handle = self.tool_payload(context_response)["routes"][0]["handle"]
+        with (self.clean / "messages.jsonl").open("a", encoding="utf-8", newline="\n") as f:
+            f.write(
+                json.dumps(
+                    {
+                        "message_id": "msg_later",
+                        "turn_id": "turn_2",
+                        "source_line": 9,
+                        "role": "assistant",
+                        "phase": "final_answer",
+                        "turn_index": 2,
+                        "is_final": True,
+                        "text": "Later source should stale the old navigation handle.",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 307,
+                "method": "tools/call",
+                "params": {
+                    "name": "recall_deepen",
+                    "arguments": {"handle": handle, "cwd": str(self.cwd)},
+                },
+            }
+        )
+
+        self.assertTrue(response["result"]["isError"])
+        payload = self.tool_payload(response)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(payload["error"]["code"], "stale_recall_handle")
+        self.assertNotIn("Later source", encoded)
+
+    def test_recall_deepen_redacts_local_paths_inside_source_window_text(self) -> None:
+        self.messages.append(
+            {
+                "message_id": "msg_path",
+                "turn_id": "turn_path",
+                "source_id": "src_test",
+                "source_line": 12,
+                "role": "assistant",
+                "phase": "final_answer",
+                "turn_index": 3,
+                "is_final": True,
+                "text": r"Path boundary example lives at E:\private\workspace\secret.txt.",
+            }
+        )
+        with (self.clean / "messages.jsonl").open("w", encoding="utf-8", newline="\n") as f:
+            for item in self.messages:
+                f.write(json.dumps(item, ensure_ascii=False) + "\n")
+        with (self.clean / "turns.jsonl").open("a", encoding="utf-8", newline="\n") as f:
+            f.write(
+                json.dumps(
+                    {
+                        "turn_id": "turn_path",
+                        "turn_index": 3,
+                        "message_ids": ["msg_path"],
+                        "assistant_phase": "final_answer",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+        context_response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 308,
+                "method": "tools/call",
+                "params": {
+                    "name": "recall_context",
+                    "arguments": {"intent": "Path boundary example", "cwd": str(self.cwd)},
+                },
+            }
+        )
+        handle = self.tool_payload(context_response)["routes"][0]["handle"]
+
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 309,
+                "method": "tools/call",
+                "params": {
+                    "name": "recall_deepen",
+                    "arguments": {"handle": handle, "cwd": str(self.cwd)},
+                },
+            }
+        )
+
+        payload = self.tool_payload(response)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertFalse(response["result"].get("isError", False))
+        self.assertNotIn(r"E:\private\workspace\secret.txt", encoded)
+        self.assertIn("<redacted:local-path>", encoded)
 
     def test_search_memory_clamps_requested_limit_on_server_side(self) -> None:
         response = mcp.handle_request(

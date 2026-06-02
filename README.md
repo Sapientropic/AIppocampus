@@ -305,9 +305,9 @@ diagnostic-only coverage rather than a readiness pass.
 ## MCP And Plugin Preview
 
 The local MCP server is read-mostly by default. It exposes clean-source and
-registry-backed tools such as `search_memory`, `latest_reply`,
-`get_turn_context`, `list_threads`, `register_thread`, `sync_status`, and
-`memory_health`:
+registry-backed tools such as `search_memory`, `recall_context`,
+`recall_deepen`, `latest_reply`, `get_turn_context`, `list_threads`,
+`register_thread`, `sync_status`, and `memory_health`:
 
 ```sh
 python ./skills/aippocampus/scripts/aippocampus_mcp_server.py --list-tools

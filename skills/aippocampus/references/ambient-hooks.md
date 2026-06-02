@@ -87,6 +87,16 @@ Action policy examples:
   `ignore` and must not steer answer content, tone, or source reopening unless
   the user supplies a clearer low-risk memory intent.
 
+#394 progressive MCP navigation can consume hook material without treating the
+hook card as the whole memory surface. Ambient cards or future action-time
+attention hints may carry a `navigation_seed` shaped like
+`{"kind":"recall_context_seed","handle":"...","suggested_tool":"recall_deepen","boundary":"navigation_only_not_fact"}`.
+The seed is a route handle only. It should be small, source-ref oriented, and
+safe to deepen through MCP `recall_deepen`; it must not carry raw prompt text,
+raw tool payloads, local filesystem paths, or final memory claims. #435-style
+attention hints can use the same handle shape when a prepared cache wants the
+foreground agent to reopen source before its next action.
+
 #277 active recall locks are navigation handles, not evidence. A ready lock can
 make `active_recall` cheaper; a pending lock can be probed or waited on by the
 agent; expired or failed locks should be ignored and restarted only if memory

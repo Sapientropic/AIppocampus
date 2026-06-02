@@ -12,6 +12,13 @@ from typing import Any
 
 from aippocampus_runtime import core
 from aippocampus_runtime import health as aippocampus_health
+from aippocampus_runtime.mcp.recall_navigation import (
+    RecallNavigationError,
+    navigation_error_payload,
+    recall_context_packet,
+    recall_deepen_packet,
+)
+from aippocampus_runtime.mcp.tool_catalog import TOOLS
 from aippocampus_runtime.privacy import LOCAL_PATH_REDACTION, redact_private_paths
 from aippocampus_runtime.registry import api as registry
 from aippocampus_runtime.source import latest_reply as latest_reply_module
@@ -25,94 +32,6 @@ SERVER_NAME = "aippocampus"
 SERVER_VERSION = "0.1.0"
 DEFAULT_PROTOCOL_VERSION = "2025-11-25"
 
-
-def tool_schema(
-    name: str, description: str, properties: dict[str, Any], required: list[str] | None = None
-) -> dict[str, Any]:
-    return {
-        "name": name,
-        "description": description,
-        "inputSchema": {
-            "type": "object",
-            "properties": properties,
-            "required": required or [],
-            "additionalProperties": False,
-        },
-    }
-
-
-TOOLS: list[dict[str, Any]] = [
-    tool_schema(
-        "search_memory",
-        "Search clean-source AIppocampus memory for the current or supplied workspace.",
-        {
-            "query": {"type": "string"},
-            "cwd": {"type": "string"},
-            "max": {"type": "integer", "minimum": 1, "maximum": 25},
-            "clean_source_dir": {"type": "string"},
-            "include_private_paths": {"type": "boolean"},
-        },
-        ["query"],
-    ),
-    tool_schema(
-        "latest_reply",
-        "Return the latest assistant final answer for a workspace rollout.",
-        {
-            "cwd": {"type": "string"},
-            "rollout": {"type": "string"},
-            "include_private_paths": {"type": "boolean"},
-        },
-    ),
-    tool_schema(
-        "get_turn_context",
-        "Return clean-source messages for a turn, message id, or turn index.",
-        {
-            "cwd": {"type": "string"},
-            "turn_id": {"type": "string"},
-            "message_id": {"type": "string"},
-            "turn_index": {"type": "integer"},
-            "clean_source_dir": {"type": "string"},
-            "include_private_paths": {"type": "boolean"},
-        },
-    ),
-    tool_schema(
-        "list_threads",
-        "List machine-wide registered AIppocampus threads.",
-        {
-            "registry_dir": {"type": "string"},
-            "max": {"type": "integer", "minimum": 1, "maximum": 100},
-            "include_private_paths": {"type": "boolean"},
-        },
-    ),
-    tool_schema(
-        "register_thread",
-        "Explicitly register the current workspace thread in the machine-wide registry.",
-        {
-            "cwd": {"type": "string"},
-            "registry_dir": {"type": "string"},
-            "build_index": {"type": "boolean"},
-            "provider": {"type": "string", "enum": list(PROVIDER_CHOICES)},
-            "include_private_paths": {"type": "boolean"},
-        },
-    ),
-    tool_schema(
-        "sync_status",
-        "Report current local bundle/sync capability without pushing or pulling data.",
-        {
-            "cwd": {"type": "string"},
-            "sync_dir": {"type": "string"},
-            "object_store_url": {"type": "string"},
-            "object_prefix": {"type": "string"},
-            "token_env": {"type": "string"},
-            "include_private_paths": {"type": "boolean"},
-        },
-    ),
-    tool_schema(
-        "memory_health",
-        "Run the local AIppocampus health check for a workspace.",
-        {"cwd": {"type": "string"}, "include_private_paths": {"type": "boolean"}},
-    ),
-]
 
 UNSUPPORTED_MUTATION_TOOLS = {
     "delete_memory",
@@ -241,6 +160,64 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
     )
     result["limit"] = limit
     return text_result(public_payload(arguments, result))
+
+
+def registry_dir_arg(arguments: dict[str, Any]) -> Path | None:
+    return Path(str(arguments["registry_dir"])).resolve() if arguments.get("registry_dir") else None
+
+
+def call_recall_context(arguments: dict[str, Any]) -> dict[str, Any]:
+    intent = str(arguments.get("intent") or arguments.get("query") or "").strip()
+    if not intent:
+        return tool_error(
+            "missing_intent",
+            "recall_context requires a non-empty intent or query.",
+            arguments=arguments,
+        )
+    source_dir = clean_source_dir_for(arguments)
+    required = ["messages.jsonl"]
+    if missing_files(source_dir, required):
+        return clean_source_unavailable(source_dir, required, arguments)
+    try:
+        payload = recall_context_packet(
+            intent=intent,
+            cwd=cwd_arg(arguments),
+            clean_source_dir=source_dir,
+            registry_dir=registry_dir_arg(arguments),
+            max_routes=int_range(arguments.get("max"), default=5, minimum=1, maximum=25),
+        )
+    except RecallNavigationError as exc:
+        return text_result(public_payload(arguments, navigation_error_payload(exc)), is_error=True)
+    return text_result(public_payload(arguments, payload))
+
+
+def call_recall_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
+    if "handle" not in arguments:
+        return tool_error(
+            "missing_recall_handle",
+            "recall_deepen requires a recall_context handle or navigation seed.",
+            arguments=arguments,
+            required=["handle"],
+        )
+    source_dir = clean_source_dir_for(arguments)
+    required = ["messages.jsonl"]
+    if missing_files(source_dir, required):
+        return clean_source_unavailable(source_dir, required, arguments)
+    registry_dir = registry_dir_arg(arguments)
+    registry_path = registry.registry_paths(registry_dir)[0]
+    lock_path = Path(str(arguments["lock_path"])).resolve() if arguments.get("lock_path") else None
+    try:
+        payload = recall_deepen_packet(
+            handle=arguments.get("handle"),
+            clean_source_dir=source_dir,
+            registry_path=registry_path if registry_path.exists() else None,
+            registry_dir=registry_dir,
+            lock_path=lock_path,
+            max_matches=int_range(arguments.get("max"), default=5, minimum=1, maximum=25),
+        )
+    except RecallNavigationError as exc:
+        return text_result(public_payload(arguments, navigation_error_payload(exc)), is_error=True)
+    return text_result(public_payload(arguments, payload))
 
 
 def call_latest_reply(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -467,6 +444,8 @@ def call_memory_health(arguments: dict[str, Any]) -> dict[str, Any]:
 
 TOOL_CALLS = {
     "search_memory": call_search_memory,
+    "recall_context": call_recall_context,
+    "recall_deepen": call_recall_deepen,
     "latest_reply": call_latest_reply,
     "get_turn_context": call_get_turn_context,
     "list_threads": call_list_threads,
