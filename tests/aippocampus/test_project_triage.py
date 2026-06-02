@@ -274,6 +274,24 @@ def test_public_readiness_issue_gets_distribution_milestone() -> None:
     assert result.milestone == "Public Readiness & Distribution"
 
 
+def test_open_source_infrastructure_umbrella_stays_public_readiness_despite_benchmark_refs() -> None:
+    result = project_triage.infer_triage(
+        issue(
+            397,
+            "Umbrella: graduate AIppocampus into adoptable open-source infrastructure",
+            "Adoption clarity needs a 10-minute mental model, public API convergence, "
+            "ecosystem integration, and benchmark/readiness docs references.",
+            labels=("documentation", "enhancement"),
+        )
+    )
+
+    assert result.status == "Ready"
+    assert result.track == "Public readiness"
+    assert result.kind == "Umbrella"
+    assert result.stage == "Stage 1"
+    assert result.milestone == "Public Readiness & Distribution"
+
+
 def test_project_planning_automation_gets_distribution_milestone() -> None:
     result = project_triage.infer_triage(
         issue(
@@ -337,6 +355,24 @@ def test_cognitive_runtime_issue_gets_runtime_continuity_milestone() -> None:
     assert result.kind == "Implementation"
     assert result.stage == "Stage 2"
     assert result.milestone == "Cognitive Runtime Continuity"
+
+
+def test_active_recall_lock_issue_stays_runtime_despite_benchmark_source_docs() -> None:
+    result = project_triage.infer_triage(
+        issue(
+            403,
+            "Harden active recall lock lifecycle, freshness, and ROI telemetry",
+            "Active recall lock hardening.\n\n## Source docs\n\n"
+            "- `docs/research/ambient-associative-recall.md`\n"
+            "- `docs/evidence/benchmarks/fresh-thread-recall-demo-2026-05-31.md`",
+            labels=("documentation", "enhancement"),
+        )
+    )
+
+    assert result.status == "Ready"
+    assert result.track == "Life-wide memory"
+    assert result.stage == "Stage 2"
+    assert result.milestone == "Ambient Recall Warmth Pass"
 
 
 def test_segmented_index_issue_gets_sync_scale_milestone() -> None:
@@ -427,6 +463,37 @@ def test_benchmark_parent_beats_hippocampal_keyword_for_external_adapter() -> No
     )
 
     assert result.milestone == "Benchmark Evidence Hardening"
+
+
+def test_continuous_memory_benchmark_child_routes_to_benchmark_evidence() -> None:
+    result = project_triage.infer_triage(
+        issue(
+            408,
+            "Add placebo, stale-wrong, and oracle memory arms to #378",
+            "Parent: #378\n\n## Source docs\n\n- `docs/evidence/benchmark-evidence-map.md`",
+        )
+    )
+
+    assert result.status == "Ready"
+    assert result.track == "Benchmarks & Research"
+    assert result.stage == "Research"
+    assert result.milestone == "Benchmark Evidence Hardening"
+    assert result.warnings == ()
+
+
+def test_infrastructure_umbrella_child_routes_to_public_readiness() -> None:
+    result = project_triage.infer_triage(
+        issue(
+            399,
+            "Build an ecosystem integration matrix beyond Codex and Claude Code",
+            "Parent: #397\n\n## Source docs\n\n- `docs/roadmap.md`",
+        )
+    )
+
+    assert result.status == "Ready"
+    assert result.track == "Public readiness"
+    assert result.stage == "Stage 1"
+    assert result.milestone == "Public Readiness & Distribution"
 
 
 def test_milestone_update_only_fills_missing_open_issue_milestone() -> None:

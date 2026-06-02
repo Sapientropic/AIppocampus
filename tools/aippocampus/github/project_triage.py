@@ -55,6 +55,8 @@ PARENT_TRACK: dict[int, str] = {
     164: "Life-wide memory",
     216: "Benchmarks & Research",
     228: "Benchmarks & Research",
+    378: "Benchmarks & Research",
+    397: "Public readiness",
 }
 
 PARENT_STAGE: dict[int, str] = {
@@ -71,6 +73,8 @@ PARENT_STAGE: dict[int, str] = {
     164: "Stage 2",
     216: "Research",
     228: "Research",
+    378: "Research",
+    397: "Stage 1",
 }
 
 PARENT_RE = re.compile(r"(?im)^\s*Parent:\s*#(\d+)\b")
@@ -247,10 +251,16 @@ def infer_track(issue: IssueContext, parents: list[int]) -> tuple[str | None, st
         "typed policy",
     ):
         return "Docs cleanup", "architecture-debt keywords"
-    if _contains(text, "mem0", "zep", "graphiti", "letta", "arc-agi", "benchmark"):
+    if _contains(text, "mem0", "zep", "graphiti", "letta", "arc-agi"):
         return "Benchmarks & Research", "benchmark/research keywords"
     if _contains(
         text,
+        "adoptable open-source infrastructure",
+        "open-source infrastructure",
+        "adoption clarity",
+        "10-minute mental model",
+        "stable surface",
+        "ecosystem integration",
         "public-readiness",
         "public readiness",
         "public install",
@@ -296,6 +306,9 @@ def infer_track(issue: IssueContext, parents: list[int]) -> tuple[str | None, st
         "dream",
         "journey",
         "correction",
+        "active recall",
+        "recall lock",
+        "progressive recall",
         "reconsolidation",
         "agency affordance",
         "subconscious",
@@ -324,6 +337,8 @@ def infer_track(issue: IssueContext, parents: list[int]) -> tuple[str | None, st
         return "GB/TB scale", "scale/search keywords"
     if _contains(text, "docs cleanup", "archive", "stale doc", "ruff", "subpackages", "compatibility shims"):
         return "Docs cleanup", "docs-cleanup keywords"
+    if _contains(text, "benchmark"):
+        return "Benchmarks & Research", "benchmark/research keywords"
     return None, None
 
 
@@ -483,6 +498,8 @@ def infer_milestone(
         "ambient cache",
         "vague recall",
         "same-session paraphrases",
+        "active recall",
+        "recall lock",
     ):
         return MILESTONE_AMBIENT, "ambient-recall keywords"
 
@@ -504,6 +521,12 @@ def infer_milestone(
 
     if 216 in parents:
         return MILESTONE_BENCHMARK_EVIDENCE, "parent #216"
+
+    if 378 in parents:
+        return MILESTONE_BENCHMARK_EVIDENCE, "parent #378"
+
+    if 397 in parents:
+        return MILESTONE_PUBLIC_DISTRIBUTION, "parent #397"
 
     if _contains(
         text,
