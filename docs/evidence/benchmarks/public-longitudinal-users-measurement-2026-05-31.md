@@ -18,14 +18,18 @@ python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset ben
 
 The empty baselines are expected to exit non-zero. They are negative controls that verify silent systems miss recall obligations instead of passing by saying nothing.
 
+## Uncertainty Semantics
+
+Headline binomial rates below include `95%` Wilson confidence intervals and `n`. Rows with `n < 30` are explicitly marked as low-inference contract-smoke evidence: they are useful scoring-contract checks, not population-quality claims. Zero false-positive / anti-drift rows report an upper confidence bound instead of implying that false positives are impossible.
+
 ## Results
 
 | Track | Positive control | Negative control | Key count | Boundary |
 | --- | --- | --- | ---: | --- |
-| LoCoMo same-conversation control | full recall 100.00%, exact 100.00% | empty recall 0.00%, missing ids 2789 | 1973 cases | Same-dialogue evidence retrieval only. |
-| Synthetic coding pseudo-users | score 100.00%, decisions 100.00% | empty score 30.00%, decisions 0.00% | 15 cases | Contract smoke, not flagship recall evidence. |
-| VCS future events | recall 100.00%, precision 100.00% | empty recall 0.00%, false negatives 6 | 6 gold events | Hard-event recall scaffold. |
-| Rollout behavior events | recall 100.00%, precision 100.00% | empty recall 0.00%, false negatives 3 | 3 gold events | Behavior-backed rollout scaffold. |
+| LoCoMo same-conversation control | full recall 100.00% (95% Wilson CI 99.81%-100.00%, n=1973), exact 100.00% (95% Wilson CI 99.81%-100.00%, n=1973); extra-evidence case rate 0.00% observed; 95% Wilson upper bound 0.19% (n=1973) | empty recall 0.00% (95% Wilson CI 0.00%-0.19%, n=1973), missing ids 2789 | 1973 cases | Same-dialogue evidence retrieval only. |
+| Synthetic coding pseudo-users | accuracy 100.00% (95% Wilson CI 79.61%-100.00%, n=15), decisions 100.00% (95% Wilson CI 79.61%-100.00%, n=15); anti-drift pass 100.00% (95% Wilson CI 43.85%-100.00%, n=3); source-event FP 0.00% observed; 95% Wilson upper bound 20.39% (n=15); low-inference contract-smoke | empty score 30.00%, decisions 0.00% (95% Wilson CI 0.00%-20.39%, n=15); anti-drift pass 100.00% (95% Wilson CI 43.85%-100.00%, n=3) | 15 cases | Contract smoke, not flagship recall evidence. |
+| VCS future events | recall 100.00% (95% Wilson CI 60.97%-100.00%, n=6), precision 100.00% (95% Wilson CI 60.97%-100.00%, n=6); anti-drift violation 0.00% observed; 95% Wilson upper bound 56.15% (n=3); low-inference contract-smoke | empty recall 0.00% (95% Wilson CI 0.00%-39.03%, n=6), false negatives 6 | 6 gold events | Hard-event recall scaffold. |
+| Rollout behavior events | recall 100.00% (95% Wilson CI 43.85%-100.00%, n=3), precision 100.00% (95% Wilson CI 43.85%-100.00%, n=3); anti-drift violation 0.00% observed; 95% Wilson upper bound 56.15% (n=3); low-inference contract-smoke | empty recall 0.00% (95% Wilson CI 0.00%-56.15%, n=3), false negatives 3 | 3 gold events | Behavior-backed rollout scaffold. |
 
 ## LoCoMo Replication Smoke
 

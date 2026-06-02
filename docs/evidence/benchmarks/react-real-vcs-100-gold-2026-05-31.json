@@ -57,7 +57,77 @@
       "anti_drift_negative_count": 105,
       "anti_drift_violation_count": 0,
       "anti_drift_pass_rate": 1.0,
-      "source_support_failure_count": 0
+      "source_support_failure_count": 0,
+      "rate_estimates": {
+        "future_event_flag_recall": {
+          "name": "future_event_flag_recall",
+          "numerator": 105,
+          "denominator": 105,
+          "point_estimate": 1.0,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 105,
+            "total_count": 105,
+            "point_estimate": 1.0,
+            "lower": 0.9647,
+            "upper": 1.0,
+            "defined": true
+          },
+          "defined": true
+        },
+        "future_event_flag_precision": {
+          "name": "future_event_flag_precision",
+          "numerator": 105,
+          "denominator": 105,
+          "point_estimate": 1.0,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 105,
+            "total_count": 105,
+            "point_estimate": 1.0,
+            "lower": 0.9647,
+            "upper": 1.0,
+            "defined": true
+          },
+          "defined": true
+        },
+        "anti_drift_pass_rate": {
+          "name": "anti_drift_pass_rate",
+          "numerator": 105,
+          "denominator": 105,
+          "point_estimate": 1.0,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 105,
+            "total_count": 105,
+            "point_estimate": 1.0,
+            "lower": 0.9647,
+            "upper": 1.0,
+            "defined": true
+          },
+          "defined": true
+        },
+        "anti_drift_violation_rate": {
+          "name": "anti_drift_violation_rate",
+          "numerator": 0,
+          "denominator": 105,
+          "point_estimate": 0.0,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 0,
+            "total_count": 105,
+            "point_estimate": 0.0,
+            "lower": 0.0,
+            "upper": 0.0353,
+            "defined": true
+          },
+          "defined": true
+        }
+      }
     },
     "empty": {
       "ok": false,
@@ -70,7 +140,77 @@
       "anti_drift_negative_count": 105,
       "anti_drift_violation_count": 0,
       "anti_drift_pass_rate": 1.0,
-      "source_support_failure_count": 0
+      "source_support_failure_count": 0,
+      "rate_estimates": {
+        "future_event_flag_recall": {
+          "name": "future_event_flag_recall",
+          "numerator": 0,
+          "denominator": 105,
+          "point_estimate": 0.0,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 0,
+            "total_count": 105,
+            "point_estimate": 0.0,
+            "lower": 0.0,
+            "upper": 0.0353,
+            "defined": true
+          },
+          "defined": true
+        },
+        "future_event_flag_precision": {
+          "name": "future_event_flag_precision",
+          "numerator": 0,
+          "denominator": 0,
+          "point_estimate": 0.0,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 0,
+            "total_count": 0,
+            "point_estimate": 0.0,
+            "lower": 0.0,
+            "upper": 0.0,
+            "defined": false
+          },
+          "defined": false
+        },
+        "anti_drift_pass_rate": {
+          "name": "anti_drift_pass_rate",
+          "numerator": 105,
+          "denominator": 105,
+          "point_estimate": 1.0,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 105,
+            "total_count": 105,
+            "point_estimate": 1.0,
+            "lower": 0.9647,
+            "upper": 1.0,
+            "defined": true
+          },
+          "defined": true
+        },
+        "anti_drift_violation_rate": {
+          "name": "anti_drift_violation_rate",
+          "numerator": 0,
+          "denominator": 105,
+          "point_estimate": 0.0,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 0,
+            "total_count": 105,
+            "point_estimate": 0.0,
+            "lower": 0.0,
+            "upper": 0.0353,
+            "defined": true
+          },
+          "defined": true
+        }
+      }
     },
     "closed_book_source_stripped": {
       "ok": false,
@@ -83,7 +223,77 @@
       "anti_drift_negative_count": 105,
       "anti_drift_violation_count": 0,
       "anti_drift_pass_rate": 1.0,
-      "source_support_failure_count": 105
+      "source_support_failure_count": 105,
+      "rate_estimates": {
+        "future_event_flag_recall": {
+          "name": "future_event_flag_recall",
+          "numerator": 0,
+          "denominator": 105,
+          "point_estimate": 0.0,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 0,
+            "total_count": 105,
+            "point_estimate": 0.0,
+            "lower": 0.0,
+            "upper": 0.0353,
+            "defined": true
+          },
+          "defined": true
+        },
+        "future_event_flag_precision": {
+          "name": "future_event_flag_precision",
+          "numerator": 0,
+          "denominator": 105,
+          "point_estimate": 0.0,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 0,
+            "total_count": 105,
+            "point_estimate": 0.0,
+            "lower": 0.0,
+            "upper": 0.0353,
+            "defined": true
+          },
+          "defined": true
+        },
+        "anti_drift_pass_rate": {
+          "name": "anti_drift_pass_rate",
+          "numerator": 105,
+          "denominator": 105,
+          "point_estimate": 1.0,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 105,
+            "total_count": 105,
+            "point_estimate": 1.0,
+            "lower": 0.9647,
+            "upper": 1.0,
+            "defined": true
+          },
+          "defined": true
+        },
+        "anti_drift_violation_rate": {
+          "name": "anti_drift_violation_rate",
+          "numerator": 0,
+          "denominator": 105,
+          "point_estimate": 0.0,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 0,
+            "total_count": 105,
+            "point_estimate": 0.0,
+            "lower": 0.0,
+            "upper": 0.0353,
+            "defined": true
+          },
+          "defined": true
+        }
+      }
     },
     "overactive_all_flags_sanity": {
       "ok": false,
@@ -96,7 +306,77 @@
       "anti_drift_negative_count": 105,
       "anti_drift_violation_count": 105,
       "anti_drift_pass_rate": 0.0,
-      "source_support_failure_count": 0
+      "source_support_failure_count": 0,
+      "rate_estimates": {
+        "future_event_flag_recall": {
+          "name": "future_event_flag_recall",
+          "numerator": 105,
+          "denominator": 105,
+          "point_estimate": 1.0,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 105,
+            "total_count": 105,
+            "point_estimate": 1.0,
+            "lower": 0.9647,
+            "upper": 1.0,
+            "defined": true
+          },
+          "defined": true
+        },
+        "future_event_flag_precision": {
+          "name": "future_event_flag_precision",
+          "numerator": 105,
+          "denominator": 210,
+          "point_estimate": 0.5,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 105,
+            "total_count": 210,
+            "point_estimate": 0.5,
+            "lower": 0.433,
+            "upper": 0.567,
+            "defined": true
+          },
+          "defined": true
+        },
+        "anti_drift_pass_rate": {
+          "name": "anti_drift_pass_rate",
+          "numerator": 0,
+          "denominator": 105,
+          "point_estimate": 0.0,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 0,
+            "total_count": 105,
+            "point_estimate": 0.0,
+            "lower": 0.0,
+            "upper": 0.0353,
+            "defined": true
+          },
+          "defined": true
+        },
+        "anti_drift_violation_rate": {
+          "name": "anti_drift_violation_rate",
+          "numerator": 105,
+          "denominator": 105,
+          "point_estimate": 1.0,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 105,
+            "total_count": 105,
+            "point_estimate": 1.0,
+            "lower": 0.9647,
+            "upper": 1.0,
+            "defined": true
+          },
+          "defined": true
+        }
+      }
     },
     "counterfactual_source_backed": {
       "ok": true,
@@ -109,7 +389,77 @@
       "anti_drift_negative_count": 105,
       "anti_drift_violation_count": 0,
       "anti_drift_pass_rate": 1.0,
-      "source_support_failure_count": 0
+      "source_support_failure_count": 0,
+      "rate_estimates": {
+        "future_event_flag_recall": {
+          "name": "future_event_flag_recall",
+          "numerator": 105,
+          "denominator": 105,
+          "point_estimate": 1.0,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 105,
+            "total_count": 105,
+            "point_estimate": 1.0,
+            "lower": 0.9647,
+            "upper": 1.0,
+            "defined": true
+          },
+          "defined": true
+        },
+        "future_event_flag_precision": {
+          "name": "future_event_flag_precision",
+          "numerator": 105,
+          "denominator": 105,
+          "point_estimate": 1.0,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 105,
+            "total_count": 105,
+            "point_estimate": 1.0,
+            "lower": 0.9647,
+            "upper": 1.0,
+            "defined": true
+          },
+          "defined": true
+        },
+        "anti_drift_pass_rate": {
+          "name": "anti_drift_pass_rate",
+          "numerator": 105,
+          "denominator": 105,
+          "point_estimate": 1.0,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 105,
+            "total_count": 105,
+            "point_estimate": 1.0,
+            "lower": 0.9647,
+            "upper": 1.0,
+            "defined": true
+          },
+          "defined": true
+        },
+        "anti_drift_violation_rate": {
+          "name": "anti_drift_violation_rate",
+          "numerator": 0,
+          "denominator": 105,
+          "point_estimate": 0.0,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 0,
+            "total_count": 105,
+            "point_estimate": 0.0,
+            "lower": 0.0,
+            "upper": 0.0353,
+            "defined": true
+          },
+          "defined": true
+        }
+      }
     },
     "counterfactual_empty": {
       "ok": false,
@@ -122,7 +472,77 @@
       "anti_drift_negative_count": 105,
       "anti_drift_violation_count": 0,
       "anti_drift_pass_rate": 1.0,
-      "source_support_failure_count": 0
+      "source_support_failure_count": 0,
+      "rate_estimates": {
+        "future_event_flag_recall": {
+          "name": "future_event_flag_recall",
+          "numerator": 0,
+          "denominator": 105,
+          "point_estimate": 0.0,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 0,
+            "total_count": 105,
+            "point_estimate": 0.0,
+            "lower": 0.0,
+            "upper": 0.0353,
+            "defined": true
+          },
+          "defined": true
+        },
+        "future_event_flag_precision": {
+          "name": "future_event_flag_precision",
+          "numerator": 0,
+          "denominator": 0,
+          "point_estimate": 0.0,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 0,
+            "total_count": 0,
+            "point_estimate": 0.0,
+            "lower": 0.0,
+            "upper": 0.0,
+            "defined": false
+          },
+          "defined": false
+        },
+        "anti_drift_pass_rate": {
+          "name": "anti_drift_pass_rate",
+          "numerator": 105,
+          "denominator": 105,
+          "point_estimate": 1.0,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 105,
+            "total_count": 105,
+            "point_estimate": 1.0,
+            "lower": 0.9647,
+            "upper": 1.0,
+            "defined": true
+          },
+          "defined": true
+        },
+        "anti_drift_violation_rate": {
+          "name": "anti_drift_violation_rate",
+          "numerator": 0,
+          "denominator": 105,
+          "point_estimate": 0.0,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 0,
+            "total_count": 105,
+            "point_estimate": 0.0,
+            "lower": 0.0,
+            "upper": 0.0353,
+            "defined": true
+          },
+          "defined": true
+        }
+      }
     },
     "counterfactual_parametric_public_memory": {
       "ok": false,
@@ -135,7 +555,77 @@
       "anti_drift_negative_count": 105,
       "anti_drift_violation_count": 0,
       "anti_drift_pass_rate": 1.0,
-      "source_support_failure_count": 105
+      "source_support_failure_count": 105,
+      "rate_estimates": {
+        "future_event_flag_recall": {
+          "name": "future_event_flag_recall",
+          "numerator": 0,
+          "denominator": 105,
+          "point_estimate": 0.0,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 0,
+            "total_count": 105,
+            "point_estimate": 0.0,
+            "lower": 0.0,
+            "upper": 0.0353,
+            "defined": true
+          },
+          "defined": true
+        },
+        "future_event_flag_precision": {
+          "name": "future_event_flag_precision",
+          "numerator": 0,
+          "denominator": 105,
+          "point_estimate": 0.0,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 0,
+            "total_count": 105,
+            "point_estimate": 0.0,
+            "lower": 0.0,
+            "upper": 0.0353,
+            "defined": true
+          },
+          "defined": true
+        },
+        "anti_drift_pass_rate": {
+          "name": "anti_drift_pass_rate",
+          "numerator": 105,
+          "denominator": 105,
+          "point_estimate": 1.0,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 105,
+            "total_count": 105,
+            "point_estimate": 1.0,
+            "lower": 0.9647,
+            "upper": 1.0,
+            "defined": true
+          },
+          "defined": true
+        },
+        "anti_drift_violation_rate": {
+          "name": "anti_drift_violation_rate",
+          "numerator": 0,
+          "denominator": 105,
+          "point_estimate": 0.0,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 0,
+            "total_count": 105,
+            "point_estimate": 0.0,
+            "lower": 0.0,
+            "upper": 0.0353,
+            "defined": true
+          },
+          "defined": true
+        }
+      }
     },
     "counterfactual_overactive_all_flags_sanity": {
       "ok": false,
@@ -148,7 +638,77 @@
       "anti_drift_negative_count": 105,
       "anti_drift_violation_count": 105,
       "anti_drift_pass_rate": 0.0,
-      "source_support_failure_count": 0
+      "source_support_failure_count": 0,
+      "rate_estimates": {
+        "future_event_flag_recall": {
+          "name": "future_event_flag_recall",
+          "numerator": 105,
+          "denominator": 105,
+          "point_estimate": 1.0,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 105,
+            "total_count": 105,
+            "point_estimate": 1.0,
+            "lower": 0.9647,
+            "upper": 1.0,
+            "defined": true
+          },
+          "defined": true
+        },
+        "future_event_flag_precision": {
+          "name": "future_event_flag_precision",
+          "numerator": 105,
+          "denominator": 210,
+          "point_estimate": 0.5,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 105,
+            "total_count": 210,
+            "point_estimate": 0.5,
+            "lower": 0.433,
+            "upper": 0.567,
+            "defined": true
+          },
+          "defined": true
+        },
+        "anti_drift_pass_rate": {
+          "name": "anti_drift_pass_rate",
+          "numerator": 0,
+          "denominator": 105,
+          "point_estimate": 0.0,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 0,
+            "total_count": 105,
+            "point_estimate": 0.0,
+            "lower": 0.0,
+            "upper": 0.0353,
+            "defined": true
+          },
+          "defined": true
+        },
+        "anti_drift_violation_rate": {
+          "name": "anti_drift_violation_rate",
+          "numerator": 105,
+          "denominator": 105,
+          "point_estimate": 1.0,
+          "confidence_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "success_count": 105,
+            "total_count": 105,
+            "point_estimate": 1.0,
+            "lower": 0.9647,
+            "upper": 1.0,
+            "defined": true
+          },
+          "defined": true
+        }
+      }
     }
   },
   "source_over_closed_book_lift": {
@@ -726,5 +1286,11 @@
     "live_model_quality",
     "private_real_history_continuity_quality",
     "soft_semantic_reopen_support_without_hard_events"
-  ]
+  ],
+  "uncertainty": {
+    "method": "wilson_score",
+    "confidence_level": 0.95,
+    "small_sample_threshold": 30,
+    "claim_boundary": "Confidence intervals expose binomial uncertainty around these deterministic controls; they do not make the curated React fixture a population-quality claim."
+  }
 }

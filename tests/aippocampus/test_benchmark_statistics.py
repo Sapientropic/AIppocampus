@@ -50,3 +50,35 @@ class BenchmarkStatisticsTests(unittest.TestCase):
         self.assertEqual(report["numerator"], 3)
         self.assertEqual(report["denominator"], 3)
         self.assertEqual(report["point_estimate"], 1.0)
+
+    def test_large_all_success_markdown_includes_ci_and_n(self) -> None:
+        report = stats.binomial_rate_report("react_vcs_recall", numerator=105, denominator=105)
+
+        self.assertEqual(report["confidence_interval"]["lower"], 0.9647)
+        self.assertEqual(
+            stats.format_rate_report_markdown(report),
+            "100.00% (95% Wilson CI 96.47%-100.00%, n=105)",
+        )
+
+    def test_small_all_success_markdown_marks_low_inference(self) -> None:
+        report = stats.binomial_rate_report("rollout_contract_smoke", numerator=3, denominator=3)
+        warning = stats.sample_size_warning(report)
+
+        self.assertTrue(warning["low_inference"])
+        self.assertEqual(report["confidence_interval"]["lower"], 0.4385)
+        self.assertEqual(
+            stats.format_rate_report_markdown(report, include_low_inference_warning=True),
+            (
+                "100.00% (95% Wilson CI 43.85%-100.00%, n=3); "
+                "low-inference contract-smoke evidence (n < 30)"
+            ),
+        )
+
+    def test_zero_event_upper_bound_markdown_exposes_nonzero_bound(self) -> None:
+        report = stats.binomial_rate_report("anti_drift_violation_rate", numerator=0, denominator=105)
+
+        self.assertEqual(report["confidence_interval"]["upper"], 0.0353)
+        self.assertEqual(
+            stats.format_zero_event_upper_bound_markdown(report),
+            "0.00% observed; 95% Wilson upper bound 3.53% (n=105)",
+        )

@@ -59,6 +59,16 @@ class PublicLongitudinalUsersBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["metrics"]["forbidden_claim_violation_count"], 0)
         self.assertEqual(payload["metrics"]["source_event_false_positive_count"], 0)
         self.assertEqual(payload["metrics"]["anti_drift_pass_rate"], 1.0)
+        rate_estimates = payload["metrics"]["rate_estimates"]
+        self.assertEqual(rate_estimates["accuracy"]["denominator"], payload["metrics"]["total_cases"])
+        self.assertEqual(rate_estimates["accuracy"]["confidence_interval"]["lower"], 0.7961)
+        self.assertEqual(rate_estimates["anti_drift_pass_rate"]["denominator"], 3)
+        self.assertEqual(rate_estimates["anti_drift_pass_rate"]["confidence_interval"]["lower"], 0.4385)
+        self.assertEqual(rate_estimates["source_event_false_positive_case_rate"]["numerator"], 0)
+        self.assertGreater(
+            rate_estimates["source_event_false_positive_case_rate"]["confidence_interval"]["upper"],
+            0,
+        )
         self.assertFalse(payload["privacy_boundary"]["fixture_contains_private_user_data"])
         self.assertFalse(payload["privacy_boundary"]["raw_prompt_emitted"])
         dumped = json.dumps(payload, ensure_ascii=False)

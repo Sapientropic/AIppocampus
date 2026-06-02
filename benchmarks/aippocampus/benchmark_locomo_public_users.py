@@ -25,6 +25,8 @@ import _paths
 
 _paths.ensure_paths()
 
+from benchmark_statistics import binomial_rate_report
+
 SCHEMA_VERSION = 1
 DEFAULT_DATASET = (_paths.REPO_ROOT / "benchmark_corpus" / "locomo" / "locomo10.json").resolve()
 SESSION_KEY_RE = re.compile(r"^session_(\d+)$")
@@ -422,25 +424,42 @@ def summarize_results(
 
     source_event_count = sum(len(events) for events in dataset.source_events_by_user.values())
     session_count = sum(len(iter_session_items(sample)) for sample in dataset.samples)
+    scored_case_count = len(results)
+    full_recall_count = sum(1 for row in results if row["full_evidence_recall"])
+    exact_match_count = sum(1 for row in results if row["exact_evidence_match"])
+    false_positive_case_count = sum(1 for row in results if row["extra_evidence_ids"])
+    rate_estimates = {
+        "full_evidence_recall_rate": binomial_rate_report(
+            "full_evidence_recall_rate",
+            numerator=full_recall_count,
+            denominator=scored_case_count,
+        ),
+        "exact_evidence_match_rate": binomial_rate_report(
+            "exact_evidence_match_rate",
+            numerator=exact_match_count,
+            denominator=scored_case_count,
+        ),
+        # The raw false-positive id count has no natural binomial denominator.
+        # Use case-level incidence so reports can expose a Wilson upper bound.
+        "false_positive_evidence_case_rate": binomial_rate_report(
+            "false_positive_evidence_case_rate",
+            numerator=false_positive_case_count,
+            denominator=scored_case_count,
+        ),
+    }
     return {
         "sample_count": len(dataset.samples),
         "longitudinal_public_user_count": len(dataset.samples),
         "session_count": session_count,
         "source_event_count": source_event_count,
         "qa_case_count": dataset.qa_case_count,
-        "scored_case_count": len(results),
+        "scored_case_count": scored_case_count,
         "skipped_case_count": dataset.skipped_case_count,
         "provided_prediction_count": len(predictions),
         "missing_prediction_count": sum(1 for row in results if not row["predicted_evidence_ids"]),
         "extra_prediction_case_count": len(set(predictions) - {str(case.case_id) for case in dataset.cases}),
-        "full_evidence_recall_rate": safe_rate(
-            sum(1 for row in results if row["full_evidence_recall"]),
-            len(results),
-        ),
-        "exact_evidence_match_rate": safe_rate(
-            sum(1 for row in results if row["exact_evidence_match"]),
-            len(results),
-        ),
+        "full_evidence_recall_rate": safe_rate(full_recall_count, scored_case_count),
+        "exact_evidence_match_rate": safe_rate(exact_match_count, scored_case_count),
         "mean_evidence_recall": round(
             sum(float(row["evidence_recall"]) for row in results) / len(results),
             4,
@@ -454,7 +473,9 @@ def summarize_results(
         if results
         else 0.0,
         "false_positive_evidence_id_count": sum(len(row["extra_evidence_ids"]) for row in results),
+        "false_positive_evidence_case_count": false_positive_case_count,
         "missing_evidence_id_count": sum(len(row["missing_evidence_ids"]) for row in results),
+        "rate_estimates": rate_estimates,
         "by_category": by_category,
         "headline_score_allowed": False,
         "track_role": "public_longitudinal_conversation_control",
