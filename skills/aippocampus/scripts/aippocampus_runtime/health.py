@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib
 import json
 import os
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path, PureWindowsPath
 from typing import Any, Mapping
 
@@ -59,6 +61,86 @@ def load_json(path: Path) -> dict:
     if not path.exists():
         return {}
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def load_json_fail_open(path: Path) -> dict[str, Any]:
+    try:
+        data = load_json(path)
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def safe_stat_size(path: Path | None, default: int = 0) -> int:
+    if path is None:
+        return default
+    try:
+        return path.stat().st_size if path.exists() else default
+    except OSError:
+        return default
+
+
+def parse_timestamp(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        text = value.replace("Z", "+00:00")
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def age_seconds_since(value: Any, *, now: datetime | None = None) -> int | None:
+    parsed = parse_timestamp(value)
+    if parsed is None:
+        return None
+    current = now or datetime.now(timezone.utc)
+    return max(0, int((current - parsed).total_seconds()))
+
+
+def ratio(numerator: int, denominator: int) -> float:
+    if denominator <= 0:
+        return 0.0
+    return round(float(max(0, numerator)) / float(denominator), 4)
+
+
+def activity_class(
+    *,
+    message_delta: int,
+    byte_delta: int,
+    stale_age_seconds: int | None,
+    max_stale_messages: int,
+    max_stale_bytes: int,
+) -> str:
+    if message_delta <= 0 and byte_delta <= 0:
+        return "quiet"
+    if stale_age_seconds is None:
+        return "unknown"
+    # Activity classification is advisory. It should help operators spot fast
+    # growing threads without changing the existing absolute stale thresholds.
+    if stale_age_seconds <= 3600 and (
+        message_delta >= max_stale_messages or byte_delta >= max_stale_bytes
+    ):
+        return "high_activity"
+    if stale_age_seconds >= 24 * 3600 and (
+        message_delta < max_stale_messages and byte_delta < max_stale_bytes
+    ):
+        return "quiet"
+    return "normal"
+
+
+def privacy_ref(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8", errors="replace")).hexdigest()[:12]
 
 
 def question_health_stats(*args: Any, **kwargs: Any) -> dict[str, Any]:
@@ -210,6 +292,132 @@ def health_report(cwd: str | Path | None = None, **overrides: Any) -> dict[str, 
     return build_health_report(HealthOptions(cwd=Path.cwd() if cwd is None else cwd, **overrides))
 
 
+def registry_health_report(
+    *,
+    registry_dir: str | Path | None = None,
+    top: int = 10,
+    include_paths: bool = False,
+) -> dict[str, Any]:
+    """Return a privacy-safe registry-wide health rollup.
+
+    The aggregate view is intentionally manifest-only: it reads registry rows
+    and generated health/index manifests, not raw rollout or clean-source text.
+    Default output uses stable hashed refs instead of local paths or titles so
+    "fleet health" does not become a new private-history disclosure surface.
+    """
+    registry_root_dir = (
+        Path(registry_dir).resolve() if registry_dir else registry_paths(None)[0].parent
+    )
+    registry_path, _registry_md = registry_paths(registry_root_dir)
+    registry = load_json_fail_open(registry_path)
+    threads = [item for item in registry.get("threads") or [] if isinstance(item, dict)]
+    action_counts: dict[str, int] = {}
+    severity_counts: dict[str, int] = {}
+    status_counts = {"ok": 0, "needs_maintenance": 0, "unknown": 0}
+    high_risk_threads: list[dict[str, Any]] = []
+    total_rollout_bytes = 0
+    total_index_bytes = 0
+    total_clean_source_bytes = 0
+
+    for entry in threads:
+        thread_key = str(entry.get("thread_key") or entry.get("id") or "")
+        paths = entry.get("paths") or {}
+        thread_store = paths.get("registry_thread_store")
+        thread_dir = Path(thread_store) if thread_store else None
+        if thread_dir and not thread_dir.is_absolute():
+            thread_dir = registry_root_dir / thread_dir
+        if thread_key and (thread_dir is None or not thread_dir.exists()):
+            candidate = registry_root_dir / "threads" / (thread_key.replace(":", "-") or "")
+            thread_dir = candidate if candidate.exists() else None
+
+        index_manifest = load_json_fail_open(thread_dir / "index" / "manifest.json") if thread_dir else {}
+        clean_manifest = (
+            load_json_fail_open(thread_dir / "clean-source" / "manifest.json") if thread_dir else {}
+        )
+        segments_manifest = (
+            load_json_fail_open(thread_dir / "segments" / "manifest.json") if thread_dir else {}
+        )
+        health = entry.get("health") if isinstance(entry.get("health"), dict) else {}
+        actions = [
+            action_item
+            for action_item in health.get("recommended_actions") or []
+            if isinstance(action_item, dict)
+        ]
+        if health.get("ok") is True:
+            status_counts["ok"] += 1
+        elif health.get("ok") is False:
+            status_counts["needs_maintenance"] += 1
+        else:
+            status_counts["unknown"] += 1
+        for action_item in actions:
+            action_id = str(action_item.get("id") or "unknown")
+            severity = str(action_item.get("severity") or "unknown")
+            action_counts[action_id] = action_counts.get(action_id, 0) + 1
+            severity_counts[severity] = severity_counts.get(severity, 0) + 1
+
+        rollout_size = safe_int(entry.get("rollout_size"))
+        total_rollout_bytes += rollout_size
+        if thread_dir:
+            total_index_bytes += safe_stat_size(
+                resolve_sqlite_index_path(thread_dir / "index" / "source_index.sqlite")
+            )
+            total_clean_source_bytes += sum(
+                safe_stat_size(thread_dir / "clean-source" / filename)
+                for filename in ("manifest.json", "messages.jsonl", "turns.jsonl", "events.jsonl")
+            )
+        message_count = safe_int(entry.get("message_count"))
+        indexed_message_count = safe_int(index_manifest.get("message_count"))
+        message_delta = max(0, message_count - indexed_message_count)
+        stale_age = age_seconds_since(index_manifest.get("created_at"))
+
+        risk = (
+            len(actions) * 1000
+            + message_delta * 10
+            + safe_int(entry.get("rollout_size")) // max(1, 1024 * 1024)
+            + ((stale_age or 0) // 3600)
+        )
+        if risk > 0:
+            row: dict[str, Any] = {
+                "thread_ref": privacy_ref(thread_key or str(thread_dir or "")),
+                "health_ok": health.get("ok") if "ok" in health else None,
+                "message_count": message_count,
+                "rollout_size": rollout_size,
+                "index_message_delta": message_delta,
+                "index_stale_age_seconds": stale_age,
+                "recommended_action_ids": [str(item.get("id") or "unknown") for item in actions],
+                "has_clean_source": bool(clean_manifest),
+                "has_index": bool(index_manifest),
+                "has_segments": bool(segments_manifest),
+                "risk_score": risk,
+            }
+            if include_paths:
+                row["thread_key"] = thread_key
+                row["thread_dir"] = str(thread_dir) if thread_dir else None
+            high_risk_threads.append(row)
+
+    high_risk_threads.sort(key=lambda item: int(item.get("risk_score") or 0), reverse=True)
+    return {
+        "ok": status_counts["needs_maintenance"] == 0 and status_counts["unknown"] == 0,
+        "registry": str(registry_path) if include_paths else None,
+        "thread_count": len(threads),
+        "status_counts": status_counts,
+        "recommended_action_counts": dict(sorted(action_counts.items())),
+        "severity_counts": dict(sorted(severity_counts.items())),
+        "storage": {
+            "rollout_bytes": total_rollout_bytes,
+            "clean_source_bytes": total_clean_source_bytes,
+            "generated_index_bytes": total_index_bytes,
+            "index_amplification_ratio": ratio(total_index_bytes, total_clean_source_bytes),
+        },
+        "top_threads": high_risk_threads[: max(0, top)],
+        "privacy": {
+            "default_identifiers": "sha256 thread refs only",
+            "message_bodies_read": False,
+            "paths_included": include_paths,
+        },
+    }
+
+
 def build_health_report(options: HealthOptions) -> dict[str, Any]:
     cwd = Path(options.cwd).resolve()
     rollout = locate_rollout(cwd, codex_home())
@@ -240,6 +448,7 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         if options.jobs_output
         else default_question_jobs_path(registry_path)
     )
+    now = datetime.now(timezone.utc)
     rollout_stat = rollout.stat()
     current_message_count, last_line = count_messages(rollout)
     current_anchor_count = len(parse_anchor_file(anchors))
@@ -274,6 +483,14 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         index_reasons.append("rag-lite chunk cache is missing from index manifest")
 
     index_stale = bool(index_reasons)
+    index_stale_age_seconds = age_seconds_since(manifest.get("created_at"), now=now)
+    index_activity_class = activity_class(
+        message_delta=message_delta,
+        byte_delta=byte_delta,
+        stale_age_seconds=index_stale_age_seconds,
+        max_stale_messages=options.max_stale_messages,
+        max_stale_bytes=options.max_stale_bytes,
+    )
 
     clean_manifest_path = clean_source_dir / "manifest.json"
     clean_messages_path = clean_source_dir / "messages.jsonl"
@@ -299,6 +516,16 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
     if clean_manifest and clean_byte_delta >= options.max_stale_bytes:
         clean_reasons.append(f"{clean_byte_delta} new rollout bytes since clean-source build")
     clean_source_stale = bool(clean_reasons)
+    clean_source_stale_age_seconds = age_seconds_since(clean_manifest.get("created_at"), now=now)
+    clean_source_message_count = safe_int(clean_manifest.get("message_count")) if clean_manifest else 0
+    clean_source_message_delta = max(0, current_message_count - clean_source_message_count)
+    clean_source_activity_class = activity_class(
+        message_delta=clean_source_message_delta,
+        byte_delta=clean_byte_delta,
+        stale_age_seconds=clean_source_stale_age_seconds,
+        max_stale_messages=options.max_stale_messages,
+        max_stale_bytes=options.max_stale_bytes,
+    )
 
     corpus_manifest_path = graphify_corpus / "corpus_manifest.json"
     corpus_manifest = load_json(corpus_manifest_path)
@@ -354,6 +581,14 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
                 "segment sqlite file(s) missing: " + ", ".join(missing_segment_indexes[:6])
             )
     segments_stale = bool(segments_reasons)
+    segments_stale_age_seconds = age_seconds_since(segments_manifest.get("created_at"), now=now)
+    segments_activity_class = activity_class(
+        message_delta=segments_message_delta,
+        byte_delta=segments_byte_delta,
+        stale_age_seconds=segments_stale_age_seconds,
+        max_stale_messages=options.max_stale_messages,
+        max_stale_bytes=options.max_stale_bytes,
+    )
 
     checkpoint = load_json(checkpoint_state)
     captured_count = int(checkpoint.get("last_captured_message_count") or 0)
@@ -471,11 +706,16 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
             "exists": bool(manifest),
             "stale": index_stale,
             "reasons": index_reasons,
+            "last_indexed_at": manifest.get("created_at"),
+            "stale_age_seconds": index_stale_age_seconds,
             "indexed_message_count": indexed_messages,
             "indexed_last_message_line": indexed_last_line,
             "current_last_message_line": last_line,
             "message_delta": message_delta,
             "byte_delta": byte_delta,
+            "unindexed_message_ratio": ratio(message_delta, current_message_count),
+            "unindexed_byte_ratio": ratio(byte_delta, rollout_stat.st_size),
+            "activity_class": index_activity_class,
             "rag": rag_manifest,
         },
         "clean_source": {
@@ -484,9 +724,15 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
             "exists": bool(clean_manifest),
             "stale": clean_source_stale,
             "reasons": clean_reasons,
-            "message_count": int(clean_manifest.get("message_count") or 0) if clean_manifest else 0,
-            "turn_count": int(clean_manifest.get("turn_count") or 0) if clean_manifest else 0,
+            "last_built_at": clean_manifest.get("created_at"),
+            "stale_age_seconds": clean_source_stale_age_seconds,
+            "message_count": clean_source_message_count,
+            "message_delta": clean_source_message_delta,
+            "turn_count": safe_int(clean_manifest.get("turn_count")) if clean_manifest else 0,
             "byte_delta": clean_byte_delta,
+            "unindexed_message_ratio": ratio(clean_source_message_delta, current_message_count),
+            "unindexed_byte_ratio": ratio(clean_byte_delta, rollout_stat.st_size),
+            "activity_class": clean_source_activity_class,
         },
         "checkpoint": {
             "state": str(checkpoint_state),
@@ -509,11 +755,16 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
             "exists": bool(segments_manifest),
             "stale": segments_stale,
             "reasons": segments_reasons,
+            "last_built_at": segments_manifest.get("created_at"),
+            "stale_age_seconds": segments_stale_age_seconds,
             "segment_count": int(segments_manifest.get("segment_count") or 0)
             if segments_manifest
             else 0,
             "message_delta": segments_message_delta,
             "byte_delta": segments_byte_delta,
+            "unindexed_message_ratio": ratio(segments_message_delta, current_message_count),
+            "unindexed_byte_ratio": ratio(segments_byte_delta, rollout_stat.st_size),
+            "activity_class": segments_activity_class,
         },
         "question_stats": question_stats,
         "recommended_actions": actions,
@@ -525,6 +776,22 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cwd", default=os.getcwd())
+    parser.add_argument(
+        "--registry-wide",
+        action="store_true",
+        help="Report privacy-safe aggregate health for every registry thread.",
+    )
+    parser.add_argument(
+        "--registry-wide-top",
+        type=int,
+        default=10,
+        help="Number of high-risk registry thread refs to include.",
+    )
+    parser.add_argument(
+        "--include-paths",
+        action="store_true",
+        help="Local maintainer diagnostic: include registry paths and thread keys.",
+    )
     parser.add_argument(
         "--index-dir",
         default=None,
@@ -618,6 +885,49 @@ def options_from_args(args: argparse.Namespace) -> HealthOptions:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
+    if args.registry_wide:
+        registry_wide_dir = (
+            Path(args.registry).resolve().parent
+            if args.registry and not args.registry_dir
+            else args.registry_dir
+        )
+        result = registry_health_report(
+            registry_dir=registry_wide_dir,
+            top=args.registry_wide_top,
+            include_paths=args.include_paths,
+        )
+        if args.json_output:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print("registry memory health: " + ("OK" if result["ok"] else "needs maintenance"))
+            print(f"threads: {result['thread_count']}")
+            status_counts = result.get("status_counts") or {}
+            print(
+                "status: "
+                f"ok={status_counts.get('ok', 0)} "
+                f"needs={status_counts.get('needs_maintenance', 0)} "
+                f"unknown={status_counts.get('unknown', 0)}"
+            )
+            action_counts = result.get("recommended_action_counts") or {}
+            if action_counts:
+                print("recommended actions:")
+                for action_id, count in action_counts.items():
+                    print(f"- {action_id}: {count}")
+            else:
+                print("no registry recommendations recorded")
+            top_threads = result.get("top_threads") or []
+            if top_threads:
+                print("highest-risk thread refs:")
+                for item in top_threads:
+                    print(
+                        f"- {item['thread_ref']}: "
+                        f"{', '.join(item.get('recommended_action_ids') or []) or 'no action'} "
+                        f"(delta={item.get('index_message_delta', 0)})"
+                    )
+        if args.exit_code and not result["ok"]:
+            return 2
+        return 0
+
     result = build_health_report(options_from_args(args))
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
