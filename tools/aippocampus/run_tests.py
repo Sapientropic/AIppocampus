@@ -28,6 +28,7 @@ SLOW_MODULES = {
 
 BENCHMARK_SMOKE_MODULES = {
     "tests.aippocampus.test_benchmark_locomo_public_users",
+    "tests.aippocampus.test_benchmark_knowledge_pollution",
     "tests.aippocampus.test_benchmark_public_longitudinal_users",
     "tests.aippocampus.test_benchmark_published_reports",
     "tests.aippocampus.test_benchmark_statistics",

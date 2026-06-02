@@ -22,6 +22,10 @@ bundle, demo, release, or plugin package.
   is off and case-selection filters report the shared
   `aippocampus_runtime.safety.benchmark_sensitive_text_policy` boundary.
   Private-text debug output remains local-only.
+- Knowledge pollution / privacy-partition benchmark reports must keep
+  capability-contract fixtures public-safe by default: emit ids, hashes, gate
+  codes, and metrics only; do not emit raw source text, synthetic private text,
+  external-tool payload text, or absolute local paths.
 - Confirm `.aippocampus/`, registry exports, `thread-anchors.md`, logs, and
   archives remain gitignored.
 - Confirm private `.env` files remain gitignored and `.env.example` contains
