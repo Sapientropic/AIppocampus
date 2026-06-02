@@ -99,13 +99,15 @@ Source:
 
 ## Try A Public-Safe Path
 
-The current honest install probe uses GitHub directly while PyPI and MCP
-Registry publication remain tracked in
-[#291](https://github.com/Sapientropic/AIppocampus/issues/291):
+The current honest install probe uses the PyPI package:
 
 ```sh
-uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus --help
+uvx aippocampus --help
 ```
+
+MCP Registry publication remains tracked in
+[#291](https://github.com/Sapientropic/AIppocampus/issues/291) until the release
+readiness probe passes against the public registry.
 
 For no-private-data demos, start with
 [`docs/guides/demo-scenarios.md`](../guides/demo-scenarios.md). For the

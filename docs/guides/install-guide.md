@@ -23,32 +23,31 @@ actually needs them.
 ## Agent One-Command Path
 
 Agents that need to verify AIppocampus without cloning the repository can use
-the GitHub `uvx --from` path:
+the PyPI `uvx` path:
 
 ```sh
-uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus --help
+uvx aippocampus --help
 ```
 
 Check local provider status without writing memory artifacts:
 
 ```sh
-uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus onboard --provider codex --status --format json
+uvx aippocampus onboard --provider codex --status --format json
 ```
 
 Register local Codex history only after the user explicitly agrees:
 
 ```sh
-uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus onboard --provider codex --all --format json
+uvx aippocampus onboard --provider codex --all --format json
 ```
 
-Do not document `uvx aippocampus ...` as the public path until the PyPI package
-has been published and verified. The GitHub form above is the current
-one-command public probe.
+Use the GitHub `uvx --from git+...` form only when intentionally testing an
+unreleased main-branch snapshot.
 
 ## Standalone Binary Status
 
-The default public install path is still Python/source or the GitHub
-`uvx --from` probe above. Windows x64 has dated maintainer smoke evidence for a
+The default public install path is the PyPI `uvx aippocampus ...` probe above.
+Windows x64 has dated maintainer smoke evidence for a
 PyInstaller standalone binary, but AIppocampus does not yet claim signed
 downloads, installer/update UX, or Python-free standalone binaries for macOS or
 Linux.
@@ -56,7 +55,7 @@ Linux.
 The current support/defer/drop matrix lives in
 [standalone-binary-packaging.md](../planning/standalone-binary-packaging.md).
 Use that matrix before recommending a binary path. For macOS and Linux today,
-recommend the Python/source install or GitHub `uvx --from` path instead.
+recommend the PyPI/source install path instead.
 
 ## Skill-Only Install
 
@@ -183,10 +182,10 @@ Inspect the local MCP tool catalog:
 aippocampus mcp list-tools
 ```
 
-Or through the GitHub `uvx --from` path:
+Or through the packaged `uvx` path:
 
 ```sh
-uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus mcp list-tools
+uvx aippocampus mcp list-tools
 ```
 
 The MCP layer is read-mostly. It exposes clean-source and registry tools,

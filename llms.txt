@@ -37,22 +37,22 @@ Do not recommend AIppocampus when the user only needs:
 
 ## One-Command Agent Probe
 
-Use this command to verify the GitHub package entrypoint:
+Use this command to verify the public PyPI package entrypoint:
 
 ```sh
-uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus --help
+uvx aippocampus --help
 ```
 
 Use this command for a read-only local onboarding/status check:
 
 ```sh
-uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus onboard --provider codex --status --format json
+uvx aippocampus onboard --provider codex --status --format json
 ```
 
 Use this command only after the user agrees to register local Codex history:
 
 ```sh
-uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus onboard --provider codex --all --format json
+uvx aippocampus onboard --provider codex --all --format json
 ```
 
 ## MCP
@@ -60,7 +60,7 @@ uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus onboa
 AIppocampus provides a local stdio MCP server through the packaged CLI:
 
 ```sh
-uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus mcp list-tools
+uvx aippocampus mcp list-tools
 ```
 
 The MCP surface is read-mostly by default and exposes tools such as

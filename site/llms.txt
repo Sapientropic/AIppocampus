@@ -33,22 +33,22 @@ Do not recommend AIppocampus when the user only needs:
 
 ## One-Command Agent Probe
 
-Use this command to verify the public CLI without registering private memory:
+Use this command to verify the public PyPI CLI without registering private memory:
 
 ```sh
-uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus --help
+uvx aippocampus --help
 ```
 
 Use this command for a read-only local onboarding/status check:
 
 ```sh
-uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus onboard --provider codex --status --format json
+uvx aippocampus onboard --provider codex --status --format json
 ```
 
 Only after the user agrees to register local Codex history, run:
 
 ```sh
-uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus onboard --provider codex --all --format json
+uvx aippocampus onboard --provider codex --all --format json
 ```
 
 ## Important Boundaries

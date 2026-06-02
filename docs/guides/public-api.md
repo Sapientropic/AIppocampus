@@ -19,14 +19,14 @@ smallest dependable AIppocampus surface before learning the research features.
 1. Verify the packaged CLI without cloning or writing local memory artifacts:
 
    ```sh
-   uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus --help
+   uvx aippocampus --help
    ```
 
 2. Check whether the local provider has usable source without registering new
    history:
 
    ```sh
-   uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus onboard --provider codex --status --format json
+   uvx aippocampus onboard --provider codex --status --format json
    ```
 
 3. In an installed checkout, inspect the MCP catalog:
@@ -58,7 +58,7 @@ surfaces can be useful, but they are not the 10-minute dependency story.
 
 | Need | Depend on | Stable enough today | Do not depend on |
 | --- | --- | --- | --- |
-| No-clone probe or install smoke | GitHub `uvx --from ... aippocampus ...` and documented repository checks | Documented CLI command names, documented flags, return code success/failure, and public-safe `--json` outputs where documented | `uvx aippocampus ...` until PyPI publication in #291 is verified; unsigned binary paths beyond the dated Windows x64 evidence |
+| No-clone probe or install smoke | PyPI `uvx aippocampus ...` and documented repository checks | Documented CLI command names, documented flags, return code success/failure, and public-safe `--json` outputs where documented | Unreleased GitHub `uvx --from git+...` snapshots as stable release evidence; unsigned binary paths beyond the dated Windows x64 evidence |
 | Local operator status | `aippocampus health`, `aippocampus onboard --status`, and `memory_health` MCP | Documented status fields, additive JSON fields, and CLI JSON error classes | Human-readable prose, local absolute paths, or private registry internals |
 | Agent-host read tools | MCP `search_memory`, `recall_context`, `recall_deepen`, `latest_reply`, `get_turn_context`, `list_threads`, `register_thread`, `sync_status`, `memory_health` | Tool names, required input fields, additive output fields, JSON tool errors, and public-safe path redaction | Broad memory writes, hook install/uninstall, sync push/pull, or arbitrary file ingest through MCP |
 | Provider-neutral import | `aippocampus import conversation --format generic-jsonl` and `registry.py register-source --provider generic-jsonl` | Generic JSONL required fields, validation diagnostics, canonical source refs, and import manifests | Markdown import as a public claim, role-ambiguous transcripts, or host-private metadata as public identity |
@@ -123,15 +123,15 @@ The CLI contract applies to documented operator commands, especially:
 - `plugins/aippocampus/build_plugin_package.py`
 - documented plugin smoke commands
 
-The clone-free GitHub `uvx --from` entrypoint is also a documented agent-facing
+The clone-free PyPI `uvx` entrypoint is also a documented agent-facing
 install/probe path:
 
 ```sh
-uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus --help
+uvx aippocampus --help
 ```
 
-The shorter PyPI form, `uvx aippocampus ...`, is not a public claim until the
-package is published on PyPI and verified in a fresh environment.
+The GitHub `uvx --from git+...` form remains useful for unreleased main-branch
+snapshots, but it is not the release evidence path.
 
 The hook scripts and installers above are direct-path compatibility shims over
 `aippocampus_runtime.hooks.*` package owners. Keep invoking the documented
