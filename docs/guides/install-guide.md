@@ -295,12 +295,17 @@ Install hooks only after reviewing the privacy boundary:
 
 ```sh
 python "${CODEX_HOME}/skills/aippocampus/scripts/install_aippocampus_prompt_hook.py" status --json
+python "${CODEX_HOME}/skills/aippocampus/scripts/install_aippocampus_prompt_hook.py" status --last --json
 python "${CODEX_HOME}/skills/aippocampus/scripts/install_aippocampus_lifecycle_hook.py" status --json
 ```
 
 Use `install` or `uninstall` on those scripts when you intentionally want to
 change hook state. Prompt-time external-model routes remain optional and depend
-on explicit environment configuration.
+on explicit environment configuration. Prompt hook `--last` reads the local
+sanitized last-status projection written by the hook, not the verbose debug
+JSONL, so it can show the latest `no_memory` / `scent` / `candidate` /
+`source_backed_evidence` surface without exposing prompt text, raw cards,
+snippets, session ids, secrets, or local paths.
 
 ## Local Sync
 

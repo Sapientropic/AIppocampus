@@ -255,6 +255,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_health.py",
     "skills/aippocampus/scripts/aippocampus_runtime/health.py",
     "skills/aippocampus/scripts/aippocampus_runtime/hooks/__init__.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/hooks/debug_log.py",
     "skills/aippocampus/scripts/aippocampus_runtime/hooks/diagnose.py",
     "skills/aippocampus/scripts/aippocampus_runtime/hooks/install_lifecycle.py",
     "skills/aippocampus/scripts/aippocampus_runtime/hooks/install_prompt.py",

@@ -165,6 +165,16 @@ For these commands:
   `provenance_counts` and `support_level_counts` are allowed public-safe
   aggregate diagnostics. Per-card provenance/debug envelopes are not public
   schemas and must not be treated as source-backed evidence.
+- Prompt hook `status --last --json` / `aippocampus hooks prompt status --last --json`
+  exposes a public-safe audit projection for the latest prompt hook run. Stable
+  automation fields are `status`, `source`, `privacy_boundary`, and
+  `last_prompt_hook` fields for `event_id`, `memory_surface`, card/support
+  counts, source-reopen count, cache status, topic-epoch presence, and
+  warm-background status. The projection is intentionally stricter than verbose
+  debug JSONL: it must not include raw prompt text, raw cards, source
+  snippets/titles, session or turn ids, secrets, topic-epoch values, or local
+  paths. Human-readable status text is not a stable parse target, and
+  `scent`/`candidate` memory surfaces are not evidence.
 - Exit code `0` means the command completed successfully. Non-zero means invalid
   arguments, missing prerequisites, failed validation, failed smoke, or another
   command-specific hard failure.

@@ -318,13 +318,21 @@ Run hook status before installing anything:
 
 ```sh
 python "${CODEX_HOME}/skills/aippocampus/scripts/install_aippocampus_prompt_hook.py" status --json
+python "${CODEX_HOME}/skills/aippocampus/scripts/install_aippocampus_prompt_hook.py" status --last --json
 ```
 
-Expected result: status is observable without enabling the hook. Installing a
-prompt hook is an explicit user action because it can surface private clean
-source in future prompts.
+Expected result: status is observable without enabling the hook. `--last`
+reports either that no prompt-hook audit status exists yet, or a sanitized
+`last_prompt_hook` object whose `memory_surface` is `no_memory`, `scent`,
+`candidate`, or `source_backed_evidence`. The audit object may include counts,
+cache/warm status, topic-epoch presence, source-reopen counts, and a redacted
+event id; it must not include raw prompt text, raw cards, snippets, source
+titles, session/turn ids, secrets, topic-epoch values, or local paths.
+Installing a prompt hook is an explicit user action because it can surface
+private clean source in future prompts.
 
-Cannot claim: that hooks are enabled by plugin install alone.
+Cannot claim: that hooks are enabled by plugin install alone, or that a visible
+`scent`/`candidate` audit status is source-backed evidence.
 
 ## Scenario 12: Raw Audit Opt-In
 
