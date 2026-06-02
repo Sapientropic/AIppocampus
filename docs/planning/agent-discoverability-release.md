@@ -27,7 +27,7 @@ Registry.
 2. Ensure the package README on PyPI includes the exact marker:
 
    ```html
-   <!-- mcp-name: io.github.sapientropic/aippocampus -->
+   <!-- mcp-name: io.github.Sapientropic/aippocampus -->
    ```
 
 3. Validate `server.json` against the current official schema.

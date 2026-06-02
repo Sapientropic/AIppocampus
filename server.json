@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.sapientropic/aippocampus",
+  "name": "io.github.Sapientropic/aippocampus",
   "title": "AIppocampus",
   "description": "Local-first, source-backed continuity for AI agents via stdio MCP.",
   "repository": {

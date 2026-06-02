@@ -4,7 +4,7 @@
 
 <h1 align="center">AIppocampus</h1>
 
-<!-- mcp-name: io.github.sapientropic/aippocampus -->
+<!-- mcp-name: io.github.Sapientropic/aippocampus -->
 
 <p align="center">
   <em>A source-backed continuity layer for long-running relationships with AI agents.</em>
