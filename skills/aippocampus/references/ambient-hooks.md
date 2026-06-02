@@ -97,11 +97,34 @@ candidate refs are not enough.
 The runtime owner is `aippocampus_runtime.recall.active_recall_lock`. Lock
 artifacts live beside the ambient thread cache as `active_recall_locks.json`.
 They store prompt/workspace/thread fingerprints, topic epoch, registry freshness,
-candidate refs, aliases, route reasons, conflict flags, TTL, and diagnostics.
-They must not store raw prompts, raw source snippets, absolute workspace paths,
-or model-generated factual claims. `active_recall.py --mode probe|read` returns
-only scent/navigation data; `--mode reopen` is the source-backed step that opens
-clean source by lock id.
+public-safe freshness-vector fingerprints, candidate refs, aliases, route
+reasons, conflict flags, TTL, generation/version fields, consumer timing, and
+aggregate ROI counters. They must not store raw prompts, raw source snippets,
+absolute workspace paths, or model-generated factual claims. `active_recall.py
+--mode probe|read` returns only scent/navigation data; `--mode reopen` is the
+source-backed step that opens clean source by lock id; `--mode metrics` reports
+public-safe aggregate lock ROI without prompts, source snippets, or local paths.
+
+Active recall lock schema v2 makes lifecycle state observable without changing
+the evidence boundary. `lock_version`, `enrichment_generation`,
+`state_transition`, and consumer metrics let an agent detect whether it read a
+pending generation, whether a later enrichment superseded that read, and
+whether an expected version is too stale to reopen. `freshness_vector` compares
+registry and optional navigation-sidecar stat fingerprints by source kind only,
+not by raw path; topic epoch, registry changes, TTL expiry, version mismatch,
+or freshness-vector changes must stop source reopen until the caller restarts
+or rereads the route. Lock ROI summaries are aggregate counters/rates for
+pulls, reopen attempts, source-backed hits, stale/wrong routes, pending reads,
+expired-before-consumption, and never-read speculative locks. These metrics are
+tuning evidence only: they do not prove public memory quality and do not turn
+aliases, route reasons, or candidate refs into facts.
+
+Enrichment policy is explicit. Use speculative enrichment only for cheap scent
+or candidate-ref routes where latency would otherwise hide useful recall. Use
+lazy-on-pull for broad, thread-only, low-confidence, or sensitive routes so
+foreground hooks stay cheap and private. Use hybrid mode when the foreground
+creates a pending lock and detached warm recall may later enrich it; consumers
+must check the current version/freshness before reopening.
 
 `fresh_thread_activation.py` owns the #283 progressive activation overlay that
 keeps a scent from haunting later turns. It produces a compact

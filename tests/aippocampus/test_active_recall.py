@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import io
 import json
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -192,6 +194,9 @@ class ActiveRecallTests(unittest.TestCase):
         self.assertEqual(probe["support_level"], "scent")
         self.assertEqual(ready["support_level"], "scent")
         self.assertEqual(read["lock"]["state"], "ready")
+        self.assertEqual(read["lock"]["lock_version"], ready["lock_version"])
+        self.assertEqual(read["lock"]["enrichment_generation"], ready["enrichment_generation"])
+        self.assertEqual(read["consumer_metrics"]["read_count"], 1)
         self.assertTrue(read["source_reopen_required"])
         self.assertNotIn("SECRET_TOKEN", raw_read)
         self.assertNotIn("abc123", raw_read)
@@ -201,6 +206,38 @@ class ActiveRecallTests(unittest.TestCase):
             reopened["matches"][0]["text"],
             "Only reopen may reveal this sourced sentence.",
         )
+
+    def test_metrics_mode_reports_public_safe_lock_roi(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            lock_path = root / "active_recall_locks.json"
+            lock = active_recall_lock.start_or_update_recall_lock(
+                lock_path,
+                prompt="继续 SECRET_TOKEN=abc123 的旧判断",
+                thread_id="thread-a",
+                workspace=root,
+                topic_epoch="epoch-a",
+                registry_path=None,
+                state="pending",
+            )
+            active_recall_lock.read_recall_lock(lock_path, str(lock["lock_id"]))
+
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                code = packaged_active_recall.main(
+                    ["--mode", "metrics", "--lock-path", str(lock_path), "--json"]
+                )
+            payload = json.loads(stdout.getvalue())
+            raw_payload = stdout.getvalue()
+
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["kind"], "aippocampus_active_recall_lock_roi")
+        self.assertEqual(payload["lock_count"], 1)
+        self.assertEqual(payload["lock_pull_count"], 1)
+        self.assertTrue(payload["source_boundary"]["aggregate_counts_only"])
+        self.assertNotIn("SECRET_TOKEN", raw_payload)
+        self.assertNotIn("abc123", raw_payload)
+        self.assertNotIn(str(root), raw_payload)
 
 
 if __name__ == "__main__":

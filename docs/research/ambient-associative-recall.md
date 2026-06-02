@@ -140,6 +140,7 @@ Recommended cache layers:
 |---|---|---|---|
 | Exact prompt cache | Prompt fingerprint plus semantic cue hash. | Prior semantic-gate or scout result. | Fast repeat protection, already close to the existing semantic gate cache. |
 | Thread ambient cache | `thread_id + workspace + topic_epoch`. | 3-8 current ambient recall cards, active negative contexts, mode, confidence, source-ref fingerprints, query aliases, topic decision, visibility bias. | Makes continuity immediate after the first warming pass in a multi-turn agent session. |
+| Active recall lock | `prompt/thread/workspace/topic/freshness` route hash. | Navigation-only lock id, candidate refs, query aliases, route reasons, version/generation, freshness-vector fingerprints, consumer timing, and aggregate ROI counters. | Lets the foreground agent pull or reopen a route when useful without treating hook scent, aliases, or model output as facts. |
 | Topic trajectory cache | Rolling topic hash, without raw prompt text. | Current theme, drift markers, likely next search aliases, visibility bias. | Still intentionally folded into the thread cache for now; split it only if real traces prove the metadata needs its own lifecycle. |
 | Clean-source validation pass | Candidate `source_refs` plus prompt/card terms. | Per-card validation status and source-ref fingerprints in the thread cache. | Keeps evidence checks source-backed without adding a second ambient-memory store. |
 
@@ -154,6 +155,13 @@ Thread ambient cache is a soft working surface, not memory truth. It should be
 small, expiring, source-ref-fingerprinted, and safe to discard. It must not log
 raw prompt text. When the thread changes topic, the topic epoch should rotate so
 old cards stop coloring unrelated work.
+
+Active recall locks are also soft route handles. Their schema tracks freshness,
+generation, and aggregate consumer/ROI counters so the agent can distinguish a
+pending partial read, a superseded enriched generation, an expired route, and a
+source-backed reopen attempt. The full lifecycle contract lives in
+`skills/aippocampus/references/ambient-hooks.md`; this research doc should not
+mirror the field list beyond the navigation-only, source-reopen boundary.
 
 After an exact `thread_id + workspace + topic_epoch` miss, the foreground hook
 may perform a narrow related-cache lookup over the newest same-thread,
@@ -425,7 +433,8 @@ Design constraints:
 - Use stale-but-safe cached cards rather than blocking the user for fresh
   DeepSeek output.
 - Record latency, thread-cache hit rate, prompt-cache hit rate, scout failure
-  rate, late-result usefulness, and visibility decisions.
+  rate, active-lock pull/reopen/source-hit rates, late-result usefulness, and
+  visibility decisions.
 
 The cache should make common themes feel immediate after a thread has warmed up.
 DeepSeek concurrency should improve recall diversity and freshness without

@@ -24,11 +24,22 @@ from aippocampus_runtime.core import (
     workspace_identity,
 )
 from aippocampus_runtime.question.source_refs import source_ref_key
+from aippocampus_runtime.recall.active_recall_lock_lifecycle import (
+    bump_roi_metrics,
+    freshness_vector,
+    summarize_lock_roi_entries,
+)
+from aippocampus_runtime.recall.active_recall_lock_lifecycle import (
+    nonnegative_int as _nonnegative_int,
+)
+from aippocampus_runtime.recall.active_recall_lock_lifecycle import (
+    roi_metrics as _roi_metrics,
+)
 from aippocampus_runtime.recall.ambient_cache import default_ambient_cache_path
 from aippocampus_runtime.registry.api import load_registry
 from aippocampus_runtime.source.search import iter_clean_messages
 
-LOCK_SCHEMA_VERSION = 1
+LOCK_SCHEMA_VERSION = 2
 DEFAULT_LOCK_NAME = "active_recall_locks.json"
 DEFAULT_TTL_SECONDS = 20 * 60
 DEFAULT_MAX_ENTRIES = 128
@@ -253,6 +264,19 @@ def _future_pair(ttl_seconds: int) -> tuple[str, float]:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(expires)), expires
 
 
+def _bump_lock_roi(path: Path, lock_id: str, **deltas: int) -> dict[str, int]:
+    def mutate(data: dict[str, Any]) -> dict[str, int]:
+        entry = (data.setdefault("entries", {}) or {}).get(lock_id)
+        if not isinstance(entry, dict):
+            return _roi_metrics()
+        metrics = bump_roi_metrics(entry.get("roi_metrics"), **deltas)
+        entry["roi_metrics"] = metrics
+        data["entries"][lock_id] = entry
+        return metrics
+
+    return _with_store_writer(path, mutate)
+
+
 def _public_lock(entry: dict[str, Any], *, now: float | None = None) -> dict[str, Any]:
     current = time.time() if now is None else now
     state = str(entry.get("state") or "pending")
@@ -275,10 +299,21 @@ def _public_lock(entry: dict[str, Any], *, now: float | None = None) -> dict[str
     diagnostics["lock_age_ms"] = age_ms
     if invalidated_by:
         diagnostics["invalidated_by"] = invalidated_by
+    lock_version = max(1, int(entry.get("lock_version") or 1))
+    enrichment_generation = max(0, int(entry.get("enrichment_generation") or 0))
+    consumer_metrics = dict(entry.get("consumer_metrics") or {})
+    first_generation = int(consumer_metrics.get("first_read_generation") or 0)
+    consumer_metrics["read_generation_superseded"] = (
+        bool(consumer_metrics.get("read_count")) and first_generation < enrichment_generation
+    )
+    roi_metrics = _roi_metrics(entry.get("roi_metrics"))
     return {
         "kind": "aippocampus_active_recall_lock",
         "schema_version": LOCK_SCHEMA_VERSION,
         "lock_id": entry.get("lock_id"),
+        "lock_version": lock_version,
+        "enrichment_generation": enrichment_generation,
+        "state_transition": entry.get("state_transition") or f"{state}->{state}",
         "state": state,
         "support_level": "scent",
         "candidate_refs": candidate_refs,
@@ -299,6 +334,10 @@ def _public_lock(entry: dict[str, Any], *, now: float | None = None) -> dict[str
         "prompt_fingerprint": entry.get("prompt_fingerprint"),
         "topic_epoch": entry.get("topic_epoch"),
         "registry_freshness_fingerprint": entry.get("registry_freshness_fingerprint"),
+        "freshness_vector": dict(entry.get("freshness_vector") or {}),
+        "consumer_metrics": consumer_metrics,
+        "enrichment_timing": dict(entry.get("enrichment_timing") or {}),
+        "roi_metrics": roi_metrics,
         "created_at": entry.get("created_at"),
         "updated_at": entry.get("updated_at"),
         "expires_at": entry.get("expires_at"),
@@ -329,6 +368,7 @@ def start_or_update_recall_lock(
     route_reasons: list[str] | None = None,
     conflict_flags: list[str] | None = None,
     diagnostics: dict[str, Any] | None = None,
+    freshness_sources: list[dict[str, Any]] | None = None,
     state: str | None = None,
     ttl_seconds: int = DEFAULT_TTL_SECONDS,
 ) -> dict[str, Any]:
@@ -343,6 +383,10 @@ def start_or_update_recall_lock(
         topic_epoch=topic_epoch,
         registry_freshness=registry_fp,
         query_aliases=aliases,
+    )
+    vector = freshness_vector(
+        registry_freshness_fingerprint_value=registry_fp,
+        freshness_sources=freshness_sources,
     )
     requested_state = (
         state if state in LOCK_STATES else ("ready" if reopenable_ref_count(refs) else "pending")
@@ -386,10 +430,18 @@ def start_or_update_recall_lock(
             final_state = "ready"
         if has_reopenable_refs and final_state == "pending" and state != "pending":
             final_state = "ready"
+        old_state = str(old.get("state") or "missing")
+        old_version = int(old.get("lock_version") or 0)
+        enrichment_generation = int(old.get("enrichment_generation") or 0)
+        consumer_metrics = dict(old.get("consumer_metrics") or {})
+        roi_metrics = dict(old.get("roi_metrics") or {})
         entry = {
             "lock_id": lock_id,
             "kind": "aippocampus_active_recall_lock",
             "schema_version": LOCK_SCHEMA_VERSION,
+            "lock_version": old_version + 1,
+            "enrichment_generation": enrichment_generation,
+            "state_transition": f"{old_state}->{final_state}",
             "state": final_state,
             "support_level": "scent",
             "prompt_fingerprint": _prompt_fingerprint(prompt),
@@ -397,11 +449,15 @@ def start_or_update_recall_lock(
             "workspace_fingerprint": workspace_fingerprint(workspace),
             "topic_epoch": topic_epoch,
             "registry_freshness_fingerprint": registry_fp,
+            "freshness_vector": vector,
             "candidate_refs": merged_refs,
             "query_aliases": merged_aliases,
             "route_reasons": merged_route_reasons,
             "conflict_flags": merged_conflicts,
             "source_reopen_required": True,
+            "consumer_metrics": consumer_metrics,
+            "enrichment_timing": dict(old.get("enrichment_timing") or {}),
+            "roi_metrics": _roi_metrics(roi_metrics),
             "created_at": created_at,
             "created_unix": created_unix,
             "updated_at": now,
@@ -442,6 +498,9 @@ def enrich_recall_lock(
         if not isinstance(entry, dict):
             failed = {
                 "lock_id": lock_id,
+                "lock_version": 1,
+                "enrichment_generation": 0,
+                "state_transition": "missing->failed",
                 "state": "failed",
                 "support_level": "scent",
                 "candidate_refs": [],
@@ -449,10 +508,16 @@ def enrich_recall_lock(
                 "route_reasons": ["lock_missing_for_enrichment"],
                 "conflict_flags": [],
                 "source_reopen_required": True,
+                "consumer_metrics": {},
+                "enrichment_timing": {},
+                "roi_metrics": _roi_metrics(),
                 "diagnostics": {"reason": "missing_lock"},
             }
             return _public_lock(failed, now=now_unix)
         entry = dict(entry)
+        old_state = str(entry.get("state") or "pending")
+        old_expires_unix = float(entry.get("expires_unix") or 0.0)
+        old_consumer_metrics = dict(entry.get("consumer_metrics") or {})
         entry["candidate_refs"] = _merge_refs(entry.get("candidate_refs") or [], refs)
         has_reopenable_refs = reopenable_ref_count(entry.get("candidate_refs") or []) > 0
         if state in LOCK_STATES:
@@ -461,6 +526,9 @@ def enrich_recall_lock(
             entry["state"] = "ready" if has_reopenable_refs else "pending"
         if entry["state"] == "ready" and not has_reopenable_refs:
             entry["state"] = "pending"
+        entry["lock_version"] = int(entry.get("lock_version") or 0) + 1
+        entry["enrichment_generation"] = int(entry.get("enrichment_generation") or 0) + 1
+        entry["state_transition"] = f"{old_state}->{entry['state']}"
         entry["query_aliases"] = _unique_text(
             [*(entry.get("query_aliases") or []), *aliases],
             limit=DEFAULT_MAX_ALIASES,
@@ -481,6 +549,13 @@ def enrich_recall_lock(
             for key, value in (diagnostics or {}).items()
         }
         entry["diagnostics"] = {**dict(entry.get("diagnostics") or {}), **safe_diagnostics}
+        first_read_unix = float(old_consumer_metrics.get("first_read_unix") or 0.0)
+        entry["enrichment_timing"] = {
+            "completed_after_first_read": bool(first_read_unix and now_unix > first_read_unix),
+            "completed_after_expiry": bool(old_expires_unix and now_unix > old_expires_unix),
+        }
+        entry["consumer_metrics"] = old_consumer_metrics
+        entry["roi_metrics"] = _roi_metrics(entry.get("roi_metrics"))
         entry["updated_at"] = now
         entry["updated_unix"] = now_unix
         entry["expires_at"] = expires_at
@@ -499,14 +574,20 @@ def read_recall_lock(
     *,
     topic_epoch: str | None = None,
     registry_freshness_fingerprint: str | None = None,
+    freshness_sources: list[dict[str, Any]] | None = None,
+    record_consumer_read: bool = True,
 ) -> dict[str, Any]:
-    data = _load_store(Path(path))
+    target = Path(path)
+    data = _load_store(target)
     entry = (data.get("entries") or {}).get(lock_id)
     if not isinstance(entry, dict):
         return {
             "kind": "aippocampus_active_recall_lock",
             "schema_version": LOCK_SCHEMA_VERSION,
             "lock_id": lock_id,
+            "lock_version": 0,
+            "enrichment_generation": 0,
+            "state_transition": "missing->missing",
             "state": "missing",
             "support_level": "scent",
             "candidate_refs": [],
@@ -517,24 +598,81 @@ def read_recall_lock(
             "conflict_flags": [],
             "source_reopen_required": True,
             "suggested_next": "active_recall --mode probe --use-lock",
+            "freshness_vector": {},
+            "consumer_metrics": {"read_count": 0},
+            "enrichment_timing": {},
+            "roi_metrics": _roi_metrics(),
             "diagnostics": {"lock_age_ms": 0},
         }
-    public = _public_lock(entry)
-    invalidated_by = list((public.get("diagnostics") or {}).get("invalidated_by") or [])
-    if topic_epoch is not None and entry.get("topic_epoch") != topic_epoch:
-        invalidated_by.append("topic_epoch_changed")
-    if (
-        registry_freshness_fingerprint is not None
-        and entry.get("registry_freshness_fingerprint") != registry_freshness_fingerprint
-    ):
-        invalidated_by.append("registry_freshness_changed")
-    if invalidated_by:
-        public["state"] = "expired"
-        public["diagnostics"] = {
-            **dict(public.get("diagnostics") or {}),
-            "invalidated_by": sorted(set(invalidated_by)),
-        }
-    return public
+
+    def project(entry_value: dict[str, Any]) -> dict[str, Any]:
+        public = _public_lock(entry_value)
+        invalidated_by = list((public.get("diagnostics") or {}).get("invalidated_by") or [])
+        if topic_epoch is not None and entry_value.get("topic_epoch") != topic_epoch:
+            invalidated_by.append("topic_epoch_changed")
+        if (
+            registry_freshness_fingerprint is not None
+            and entry_value.get("registry_freshness_fingerprint") != registry_freshness_fingerprint
+        ):
+            invalidated_by.append("registry_freshness_changed")
+        if freshness_sources is not None:
+            current_vector = freshness_vector(
+                registry_freshness_fingerprint_value=(
+                    registry_freshness_fingerprint
+                    or str(entry_value.get("registry_freshness_fingerprint") or "")
+                ),
+                freshness_sources=freshness_sources,
+            )
+            stored_vector = dict(entry_value.get("freshness_vector") or {})
+            changed_keys = [
+                key
+                for key, value in current_vector.items()
+                if stored_vector.get(key) != value
+            ]
+            if changed_keys:
+                invalidated_by.append("freshness_vector_changed")
+                public["diagnostics"] = {
+                    **dict(public.get("diagnostics") or {}),
+                    "freshness_vector_changed_keys": sorted(changed_keys),
+                }
+        if invalidated_by:
+            public["state"] = "expired"
+            public["diagnostics"] = {
+                **dict(public.get("diagnostics") or {}),
+                "invalidated_by": sorted(set(invalidated_by)),
+            }
+        return public
+
+    if not record_consumer_read:
+        return project(entry)
+
+    def mutate(data: dict[str, Any]) -> dict[str, Any]:
+        entries = data.setdefault("entries", {})
+        stored = entries.get(lock_id)
+        if not isinstance(stored, dict):
+            return project(entry)
+        stored = dict(stored)
+        public_before = project(stored)
+        metrics = dict(stored.get("consumer_metrics") or {})
+        read_count = int(metrics.get("read_count") or 0) + 1
+        now = now_utc()
+        now_unix = time.time()
+        generation = int(stored.get("enrichment_generation") or 0)
+        if not metrics.get("first_read_at"):
+            metrics["first_read_at"] = now
+            metrics["first_read_unix"] = now_unix
+            metrics["first_read_state"] = public_before.get("state")
+            metrics["first_read_generation"] = generation
+        metrics["read_count"] = read_count
+        metrics["last_read_at"] = now
+        metrics["last_read_unix"] = now_unix
+        metrics["last_read_state"] = public_before.get("state")
+        metrics["last_read_generation"] = generation
+        stored["consumer_metrics"] = metrics
+        entries[lock_id] = stored
+        return project(stored)
+
+    return _with_store_writer(target, mutate)
 
 
 def find_recall_lock(
@@ -584,10 +722,50 @@ def reopen_lock_sources(
     *,
     lock_id: str,
     registry_path: Path | str | None,
+    topic_epoch: str | None = None,
+    freshness_sources: list[dict[str, Any]] | None = None,
+    expected_lock_version: int | None = None,
     max_matches: int = 8,
 ) -> dict[str, Any]:
-    lock = read_recall_lock(path, lock_id)
+    target = Path(path)
+    registry_fp = registry_freshness_fingerprint(registry_path) if registry_path else None
+    lock = read_recall_lock(
+        target,
+        lock_id,
+        topic_epoch=topic_epoch,
+        registry_freshness_fingerprint=registry_fp,
+        freshness_sources=freshness_sources,
+    )
+    if expected_lock_version is not None and _nonnegative_int(lock.get("lock_version")) != max(
+        0, int(expected_lock_version)
+    ):
+        _bump_lock_roi(target, lock_id, reopen_attempt_count=1, wrong_or_stale_route_count=1)
+        return {
+            "kind": "aippocampus_active_recall_reopen",
+            "schema_version": LOCK_SCHEMA_VERSION,
+            "lock_id": lock_id,
+            "ok": False,
+            "state": "superseded",
+            "support_level": "scent",
+            "source_reopen_required": True,
+            "matches": [],
+            "errors": [
+                {
+                    "code": "lock_generation_superseded",
+                    "expected_lock_version": max(0, int(expected_lock_version)),
+                    "actual_lock_version": _nonnegative_int(lock.get("lock_version")),
+                }
+            ],
+            "source_boundary": {
+                "clean_source_reopened": False,
+                "lock_material_was_navigation_only": True,
+            },
+        }
     if lock.get("state") != "ready":
+        is_stale = lock.get("state") == "expired" and bool(
+            (lock.get("diagnostics") or {}).get("invalidated_by")
+        )
+        _bump_lock_roi(target, lock_id, reopen_attempt_count=1, wrong_or_stale_route_count=1)
         return {
             "kind": "aippocampus_active_recall_reopen",
             "schema_version": LOCK_SCHEMA_VERSION,
@@ -597,9 +775,16 @@ def reopen_lock_sources(
             "support_level": "scent",
             "source_reopen_required": True,
             "matches": [],
-            "errors": [{"code": "lock_not_ready", "state": lock.get("state")}],
+            "errors": [
+                {
+                    "code": "lock_stale" if is_stale else "lock_not_ready",
+                    "state": lock.get("state"),
+                    "invalidated_by": (lock.get("diagnostics") or {}).get("invalidated_by") or [],
+                }
+            ],
         }
     if registry_path is None:
+        _bump_lock_roi(target, lock_id, reopen_attempt_count=1, wrong_or_stale_route_count=1)
         return {
             "kind": "aippocampus_active_recall_reopen",
             "schema_version": LOCK_SCHEMA_VERSION,
@@ -648,6 +833,13 @@ def reopen_lock_sources(
             break
         if len(matches) >= max_matches:
             break
+    _bump_lock_roi(
+        target,
+        lock_id,
+        reopen_attempt_count=1,
+        source_backed_hit_count=1 if matches else 0,
+        wrong_or_stale_route_count=0 if matches else 1,
+    )
     return {
         "kind": "aippocampus_active_recall_reopen",
         "schema_version": LOCK_SCHEMA_VERSION,
@@ -663,3 +855,17 @@ def reopen_lock_sources(
             "lock_material_was_navigation_only": True,
         },
     }
+
+
+def summarize_lock_roi(path: Path | str) -> dict[str, Any]:
+    data = _load_store(Path(path))
+    entries = [
+        entry
+        for entry in (data.get("entries") or {}).values()
+        if isinstance(entry, dict)
+    ]
+    return summarize_lock_roi_entries(
+        entries,
+        public_lock=_public_lock,
+        schema_version=LOCK_SCHEMA_VERSION,
+    )

@@ -73,6 +73,11 @@ Use deterministic cells for:
 - monotonic counters, timestamps, and state transitions
 - "write or do not write" decisions after validation
 
+Active recall locks are in this layer: they are route gates with freshness
+vectors, versions, consumer counters, and source-reopen handles. They are not
+semantic findings, and lock ROI counters are tuning diagnostics rather than
+public memory-quality claims.
+
 Deterministic cells should be boring, fast, and testable. They should not try to
 understand subtle user meaning. A hard-coded phrase list can suppress obvious
 noise or catch explicit commands, but it must not become the main mechanism for
