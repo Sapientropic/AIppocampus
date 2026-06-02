@@ -181,6 +181,10 @@ For these commands:
   snippets/titles, session or turn ids, secrets, topic-epoch values, or local
   paths. Human-readable status text is not a stable parse target, and
   `scent`/`candidate` memory surfaces are not evidence.
+- Verbose prompt-hook debug JSON may include a public-safe
+  `scent_threshold_policy` block with base/effective thresholds, adjustment
+  reason codes, and a risk boundary. It is route telemetry only, not a stable
+  source-backed evidence schema.
 - Exit code `0` means the command completed successfully. Non-zero means invalid
   arguments, missing prerequisites, failed validation, failed smoke, or another
   command-specific hard failure.

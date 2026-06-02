@@ -356,6 +356,19 @@ scent/cache pass, not as the full recall budget; explicit `active_recall.py`,
 commands can spend longer when the user asks for source-backed memory. The
 implementation owner lives under `aippocampus_runtime.recall`; do not add new
 foreground-recall policy to the top-level compatibility shims.
+
+`prompt_recall_threshold.py` owns the #359 context-aware scent-threshold
+diagnostic. It is a routing policy, not a source or evidence policy. A same
+thread continuation with a stable topic epoch may lower the effective
+`scent` threshold a little, and exact semantic-result reuse may lower it even
+less. Broad fresh personal prompts, secret surfaces, and current-repo factual
+prompts must not receive that lowering. The private hook result and public-safe
+debug payload may expose `base_threshold`, `effective_threshold`, compact
+`adjustments` reason codes, and `risk_boundary`; they must not include raw
+prompt text or turn a low-risk scent into evidence. This connects the #201
+vague-recall pain and the #281 fresh-thread goal without dumping more memory
+into every prompt.
+
 Foreground Python callers should use `run_semantic_gate_for_prompt` or pass
 `foreground=True` with both `deadline_seconds` and a per-worker `timeout` no
 larger than that deadline. Missing or looser foreground budgets fail open with a

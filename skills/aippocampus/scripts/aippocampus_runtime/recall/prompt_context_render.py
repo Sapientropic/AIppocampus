@@ -175,6 +175,43 @@ def ambient_debug_summary(result: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+SCENT_THRESHOLD_DEBUG_REASONS = {
+    "same_thread_decision_continuation",
+    "semantic_reuse_hit",
+}
+SCENT_THRESHOLD_RISK_BOUNDARIES = {"normal", "current_repo_fact", "privacy_sensitive"}
+
+
+def _debug_float(value: Any) -> float | None:
+    try:
+        return round(float(value), 3)
+    except (TypeError, ValueError):
+        return None
+
+
+def scent_threshold_debug_summary(policy: Any) -> dict[str, Any] | None:
+    if not isinstance(policy, dict):
+        return None
+    adjustments: list[dict[str, Any]] = []
+    for row in policy.get("adjustments") or []:
+        if not isinstance(row, dict):
+            continue
+        reason = str(row.get("reason") or "").strip()
+        if reason not in SCENT_THRESHOLD_DEBUG_REASONS:
+            continue
+        delta = _debug_float(row.get("delta")) or 0.0
+        adjustments.append({"reason": reason, "delta": delta})
+    risk_boundary = str(policy.get("risk_boundary") or "").strip()
+    if risk_boundary not in SCENT_THRESHOLD_RISK_BOUNDARIES:
+        risk_boundary = "unknown"
+    return {
+        "base_threshold": _debug_float(policy.get("base_threshold")),
+        "effective_threshold": _debug_float(policy.get("effective_threshold")),
+        "adjustments": adjustments,
+        "risk_boundary": risk_boundary,
+    }
+
+
 def public_hook_debug_payload(result: dict[str, Any]) -> dict[str, Any]:
     """Project hook debug JSON without leaking prompt-derived credential text.
 
@@ -197,6 +234,9 @@ def public_hook_debug_payload(result: dict[str, Any]) -> dict[str, Any]:
         "working_memory": [],
         "working_memory_count": len(result.get("working_memory") or []),
         "ambient_recall": ambient_debug_summary(result),
+        "scent_threshold_policy": scent_threshold_debug_summary(
+            result.get("scent_threshold_policy")
+        ),
         "elapsed_ms": result.get("elapsed_ms"),
     }
     raw_semantic_gate = result.get("semantic_gate")

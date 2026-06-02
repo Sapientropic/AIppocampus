@@ -67,6 +67,7 @@ from aippocampus_runtime.recall.prompt_recall_evidence import (
     strip_semantic_gate,
 )
 from aippocampus_runtime.recall.prompt_recall_semantic import run_semantic_gate_for_context
+from aippocampus_runtime.recall.prompt_recall_threshold import scent_threshold_policy
 from aippocampus_runtime.recall.query_policy import semantic_trigger_terms
 from aippocampus_runtime.recall.semantic_cue_cache import (
     default_semantic_cues_path,
@@ -196,6 +197,8 @@ def _merge_semantic_trigger_source_candidates(
     registry: dict[str, Any],
     semantic_trigger_matches: list[dict[str, Any]],
     query_terms: list[str],
+    *,
+    scent_threshold: float = SCENT_THRESHOLD,
 ) -> list[dict[str, Any]]:
     """Let reviewed/learned cue refs wake their source thread without a model call.
 
@@ -220,14 +223,14 @@ def _merge_semantic_trigger_source_candidates(
             existing = by_key.get(thread_key)
             if existing:
                 existing["score"] = round(
-                    max(float(existing.get("score") or 0.0), SCENT_THRESHOLD), 3
+                    max(float(existing.get("score") or 0.0), scent_threshold), 3
                 )
                 existing["matched_terms"] = unique_preserve(
                     list(existing.get("matched_terms") or []) + trigger_terms,
                     limit=8,
                 )
                 continue
-            item = candidate_summary(entry, SCENT_THRESHOLD, query_terms)
+            item = candidate_summary(entry, scent_threshold, query_terms)
             item["matched_terms"] = unique_preserve(trigger_terms, limit=8)
             item["semantic_trigger_source"] = True
             candidates.append(item)
@@ -363,12 +366,13 @@ def _ambiguous_evidence_request(
     source_evidence: list[str],
     natural_evidence: list[str],
     semantic_result: dict[str, Any] | None,
+    scent_threshold: float,
     reasons: list[str],
 ) -> bool:
     ambiguous = bool(
         explicit
         and explicit_evidence_request_is_ambiguous(
-            prompt, candidates, scent_threshold=SCENT_THRESHOLD
+            prompt, candidates, scent_threshold=scent_threshold
         )
     )
     if ambiguous:
@@ -416,6 +420,7 @@ def _choose_decision_evidence(
     suppressed: bool,
     top_score: float,
     working_score: float,
+    scent_threshold: float,
     semantic_result: dict[str, Any] | None,
     natural_evidence: list[str],
     source_evidence: list[str],
@@ -431,8 +436,8 @@ def _choose_decision_evidence(
         and has_memory_cue
         and (candidates or working_memory_matches)
         and (
-            top_score >= SCENT_THRESHOLD
-            or working_score >= SCENT_THRESHOLD
+            top_score >= scent_threshold
+            or working_score >= scent_threshold
             or explicit
             or associative
             or cognitive_map_matches
@@ -671,6 +676,7 @@ def assess_prompt(
         semantic_gate_fn=semantic_gate_fn, use_semantic_gate=use_semantic_gate,
         start=start, max_elapsed_ms=max_elapsed_ms,
     )
+    threshold_policy = scent_threshold_policy(prompt=prompt, thread_id=thread_id, topic_epoch=topic_epoch, semantic_gate_reuse=semantic_gate_reuse, current_checkout_live_fact=current_checkout_live_fact)
     seed_terms = unique_preserve(
         (expand_query_terms(prompt) if prompt else [])
         + cognitive_map_terms(cognitive_map_matches)
@@ -696,7 +702,7 @@ def assess_prompt(
         cognitive_map_matches=cognitive_map_matches,
         association_matches=association_matches,
     )
-    candidates = _merge_semantic_trigger_source_candidates(candidates, registry, context.semantic_trigger_matches, query_terms)
+    candidates = _merge_semantic_trigger_source_candidates(candidates, registry, context.semantic_trigger_matches, query_terms, scent_threshold=float(threshold_policy["effective_threshold"]))
     if (
         not candidates
         and use_concept_graph
@@ -724,7 +730,7 @@ def assess_prompt(
                 cognitive_map_matches=cognitive_map_matches,
                 association_matches=association_matches,
             )
-            candidates = _merge_semantic_trigger_source_candidates(candidates, registry, context.semantic_trigger_matches, query_terms)
+            candidates = _merge_semantic_trigger_source_candidates(candidates, registry, context.semantic_trigger_matches, query_terms, scent_threshold=float(threshold_policy["effective_threshold"]))
     semantic_memory_cue = semantic_gate_is_memory_cue(semantic_result)
     if not candidates and (
         explicit or associative or natural_evidence or source_evidence or semantic_memory_cue
@@ -787,6 +793,7 @@ def assess_prompt(
         source_evidence=source_evidence,
         natural_evidence=natural_evidence,
         semantic_result=semantic_result,
+        scent_threshold=float(threshold_policy["effective_threshold"]),
         reasons=reasons,
     )
 
@@ -796,7 +803,7 @@ def assess_prompt(
         associative=associative, important=important, cognitive_map_matches=cognitive_map_matches,
         semantic_memory_cue=semantic_memory_cue, positive_evidence_intent=positive_evidence_intent,
         has_memory_cue=has_memory_cue, suppressed=suppressed, top_score=top_score,
-        working_score=working_score, semantic_result=semantic_result, natural_evidence=natural_evidence,
+        working_score=working_score, scent_threshold=float(threshold_policy["effective_threshold"]), semantic_result=semantic_result, natural_evidence=natural_evidence,
         source_evidence=source_evidence, ambiguous_evidence_request=ambiguous_evidence_request,
         association_matches=association_matches, start=start, max_elapsed_ms=max_elapsed_ms,
         reasons=reasons,
@@ -817,12 +824,10 @@ def assess_prompt(
         evidence=evidence,
         reasons=reasons,
     )
-
     semantic_cue_cache = _record_semantic_cue_hits(
         prompt=prompt, semantic_result=semantic_result, semantic_cues_path=semantic_cues_path,
         registry_path=path, evidence=evidence, candidates=candidates, suppressed=suppressed,
     )
-    elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
     result = {
         "decision": decision,
         "score": round(max(top_score, working_score), 3),
@@ -838,9 +843,10 @@ def assess_prompt(
         "ambient_policy": context.ambient_policy_diagnostics,
         "semantic_gate": strip_semantic_gate(semantic_result),
         "semantic_gate_reuse": semantic_gate_reuse,
+        "scent_threshold_policy": threshold_policy,
         "semantic_bridge_diagnostic": semantic_bridge_diagnostic,
         "semantic_cue_cache": semantic_cue_cache,
-        "elapsed_ms": elapsed_ms, "deep_archival_requested": _deep_archival_requested(prompt),
+        "elapsed_ms": round((time.perf_counter() - start) * 1000, 2), "deep_archival_requested": _deep_archival_requested(prompt),
     }
     return attach_ambient_recall(
         result, prompt=prompt, thread_id=thread_id, workspace=str(cwd_path), registry_path=path,

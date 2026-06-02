@@ -610,6 +610,20 @@ class AmbientRecallHookTests(unittest.TestCase):
                 "workers": [{"raw": "private worker output"}],
                 "errors": ["private semantic error"],
             },
+            "scent_threshold_policy": {
+                "base_threshold": 5.0,
+                "effective_threshold": 4.25,
+                "adjustments": [
+                    {
+                        "reason": "same_thread_decision_continuation",
+                        "delta": -0.75,
+                        "raw_prompt": "private prompt text",
+                    },
+                    {"reason": "private prompt text", "delta": -1.0},
+                ],
+                "risk_boundary": "normal",
+                "raw_prompt": "private prompt text",
+            },
             "ambient_recall": {"mode": "scent", "card_count": 1},
             "elapsed_ms": 123.4,
         }
@@ -624,6 +638,12 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertNotIn("private title", encoded)
         self.assertNotIn("private source wording", encoded)
         self.assertNotIn("private worker output", encoded)
+        self.assertEqual(public["scent_threshold_policy"]["effective_threshold"], 4.25)
+        self.assertEqual(
+            public["scent_threshold_policy"]["adjustments"][0]["reason"],
+            "same_thread_decision_continuation",
+        )
+        self.assertNotIn("private prompt text", encoded)
 
     def test_prompt_hook_dry_run_logs_would_deliver_without_foreground_dream(self) -> None:
         working_memory = self._write_dream_working_memory()
@@ -3594,6 +3614,82 @@ class AmbientRecallHookTests(unittest.TestCase):
         context = hook.context_for_hook(result)
         self.assertIn("Soft working memory", context)
         self.assertIn("Ask the user only if", context)
+
+    def test_same_thread_continuation_can_lower_scent_threshold_for_weak_route(self) -> None:
+        registry_path = self.root / "threshold-registry" / "threads.json"
+        registry_path.parent.mkdir()
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:threshold",
+                            "title": "Quiet support",
+                            "summary": "qa",
+                            "paths": {"workspace": str(self.workspace)},
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        result = hook.assess_prompt(
+            "qa 现在怎么看，这个很重要",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            thread_id="thread-123",
+            topic_epoch="epoch-stable",
+            use_thread_cache=False,
+            search_budget=0,
+        )
+
+        self.assertEqual(result["decision"], "scent")
+        self.assertLess(
+            result["scent_threshold_policy"]["effective_threshold"],
+            result["scent_threshold_policy"]["base_threshold"],
+        )
+        self.assertEqual(
+            result["scent_threshold_policy"]["adjustments"][0]["reason"],
+            "same_thread_decision_continuation",
+        )
+
+    def test_broad_fresh_personal_prompt_does_not_lower_scent_threshold(self) -> None:
+        registry_path = self.root / "fresh-personal-registry" / "threads.json"
+        registry_path.parent.mkdir()
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:threshold",
+                            "title": "Quiet support",
+                            "summary": "qa",
+                            "paths": {"workspace": str(self.workspace)},
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        result = hook.assess_prompt(
+            "我压力有点大，qa 很重要",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            search_budget=0,
+        )
+
+        self.assertEqual(result["decision"], "skip")
+        self.assertEqual(
+            result["scent_threshold_policy"]["effective_threshold"],
+            result["scent_threshold_policy"]["base_threshold"],
+        )
+        self.assertEqual(result["scent_threshold_policy"]["risk_boundary"], "privacy_sensitive")
 
     def test_dream_hypothesis_working_memory_renders_uncertainty_boundary(self) -> None:
         registry_path = self.root / "dream-registry" / "threads.json"
