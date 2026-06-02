@@ -16,6 +16,44 @@ If a file grows past its budget, either split a real responsibility out or raise
 the budget here with a concrete reason. Do not raise budgets as a routine way to
 make tests pass.
 
+## Near-Budget Split Priority Queue
+
+Last counted: 2026-06-03.
+Counting method: `script_line_count()` from
+`tests/aippocampus/test_architecture_boundaries.py`: nonblank lines excluding
+lines whose first non-space character is `#`.
+
+This queue is intentionally small. It ranks modules that are at or near their
+guard budgets by product/runtime risk and next owner boundary, not by LOC alone.
+It is not a quality score and should not replace the full register below.
+
+| Path | Current `script_line_count()` | Guard budget | Priority | Next split boundary | Why not split in #502 |
+| --- | ---: | ---: | --- | --- | --- |
+| `skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_decision.py` | 790 | 836 | P0 foreground-risk | Staged foreground decision pipeline: context/budget preparation, candidate assembly, semantic-gate invocation, source-evidence collection, final projection, and ambient/dream sidecar projection. | #500 owns the behavior-preserving extraction and must freeze golden foreground recall-decision fixtures before moving code. Splitting here would bypass that fixture gate. |
+| `skills/aippocampus/scripts/aippocampus_runtime/recall/semantic_recall_gate.py` | 1194 | 1200 | P1 foreground-budget-risk | Separate deterministic foreground-budget arbitration or prompt construction/model response parsing from semantic gate decisions. | This issue adds no semantic-gate behavior. A real split should accompany a focused semantic-gate change with source/evidence tests, not a debt-register refresh. |
+| `skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/recall.py` | 1415 | 1415 | P2 background-runtime-risk | Split batch/quorum bookkeeping or job/cache summary projection before adding more warm runtime orchestration. | Recent helper splits already moved config and scout attribution out. Without new warm-runtime behavior, another extraction would be speculative and could duplicate established owner boundaries. |
+| `skills/aippocampus/scripts/aippocampus_runtime/dream/live_shadow_ab.py` | 1240 | 1340 | P3 opt-in-eval-risk | Split replay adapters, semantic relevance gating, delivery policy, or model-route binding before adding richer live outcome analysis. | It is below budget and opt-in/evaluation-facing. Split when a live-shadow feature touches one of those boundaries. |
+
+## Guard Budget Change Policy
+
+Raise a guard budget only when the added code is still inside the same owner
+boundary, the split candidate would be artificial or duplicate an existing
+helper, and the PR records the reason here with a follow-up owner if pressure is
+still rising.
+
+Do not raise budgets as a routine way to make tests pass; budget changes need a
+real owner-boundary reason.
+
+Split before raising when a module is at or over budget and the change adds a
+new stage, IO surface, CLI projection, provider/host concern, retry policy, or
+foreground user-visible behavior that can be extracted behind existing tests.
+
+For #502 specifically, the safe action is debt-governance only: current counts,
+priority order, next split boundaries, and extraction deferral are recorded
+here. The first executable extraction is #500 for
+`prompt_recall_decision.py`, because that path needs golden foreground
+recall-decision fixtures before movement.
+
 | Path | Guard budget | Primary responsibility | Next boundary to consider |
 | --- | ---: | --- | --- |
 | `skills/aippocampus/scripts/aippocampus_runtime/health.py` | 920 | Single-thread runtime health contract, privacy-safe registry-wide rollup, stale age/ratio/activity diagnostics, question-health aggregation, and CLI projection | Split registry-wide aggregation or diagnostic projection into a focused helper before adding storage GC governance, scheduler orchestration, or richer per-project queue planning. Keep raw/clean-source body access out of health; storage cleanup belongs to a separate dry-run/apply governance owner. |

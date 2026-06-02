@@ -218,6 +218,47 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             {"missing": [], "stale": [], "over_budget": {}},
         )
 
+    def test_debt_register_records_near_budget_split_priority_queue(self) -> None:
+        text = DEBT_REGISTER.read_text(encoding="utf-8")
+        near_budget_paths = [
+            "skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_decision.py",
+            "skills/aippocampus/scripts/aippocampus_runtime/recall/semantic_recall_gate.py",
+            "skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/recall.py",
+            "skills/aippocampus/scripts/aippocampus_runtime/dream/live_shadow_ab.py",
+        ]
+
+        self.assertIn("## Near-Budget Split Priority Queue", text)
+        self.assertIn("Counting method: `script_line_count()`", text)
+        self.assertIn("Last counted: 2026-06-03", text)
+        for path in near_budget_paths:
+            count = script_line_count(REPO_ROOT / path)
+            self.assertRegex(
+                text,
+                rf"\|\s*`{re.escape(path)}`\s*\|\s*{count}\s*\|",
+                msg=f"{path} current count missing from near-budget queue",
+            )
+        positions = [text.index(f"`{path}`") for path in near_budget_paths]
+        self.assertEqual(positions, sorted(positions))
+        for phrase in (
+            "#500 owns the behavior-preserving extraction",
+            "A real split should accompany a focused semantic-gate change",
+            "another extraction would be speculative",
+            "Split when a live-shadow feature touches one of those boundaries",
+        ):
+            self.assertIn(phrase, text)
+
+    def test_debt_register_defines_budget_raise_policy(self) -> None:
+        text = DEBT_REGISTER.read_text(encoding="utf-8")
+
+        for phrase in (
+            "## Guard Budget Change Policy",
+            "Raise a guard budget only when",
+            "Split before raising when",
+            "Do not raise budgets as a routine way to make tests pass",
+            "#500",
+        ):
+            self.assertIn(phrase, text)
+
     def test_codex_default_call_sites_are_classified_in_provider_inventory(self) -> None:
         inventory = PROVIDER_ENTRYPOINT_INVENTORY.read_text(encoding="utf-8")
         markers = (
