@@ -8,14 +8,18 @@ import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Iterable
 
 from aippocampus_runtime import anchor_graph as _anchor_graph
 from aippocampus_runtime import safety as _safety
 from aippocampus_runtime import text as _text
 from aippocampus_runtime.cli import errors as _cli_errors
+from aippocampus_runtime.registry import paths as _registry_paths
 from aippocampus_runtime.source import rollout as _rollout
 
+aippocampus_home = _registry_paths.aippocampus_home
+aippocampus_registry_resolution = _registry_paths.aippocampus_registry_resolution
+aippocampus_registry_dir = _registry_paths.aippocampus_registry_dir
 build_anchor_graph = _anchor_graph.build_anchor_graph
 benchmark_sensitive_text_policy = _safety.benchmark_sensitive_text_policy
 benchmark_text_is_sensitive = _safety.benchmark_text_is_sensitive
@@ -55,62 +59,11 @@ def codex_home() -> Path:
     return Path.home() / ".codex"
 
 
-def aippocampus_home() -> Path | None:
-    env = os.environ.get("AIPPOCAMPUS_HOME")
-    return Path(env) if env else None
-
-
 def safe_path_name(value: str, fallback: str = "item") -> str:
     value = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "-", str(value)).strip()
     value = re.sub(r"\s+", "-", value)
     value = value.rstrip(".- ")
     return value[:120] or fallback
-
-
-def aippocampus_registry_resolution(home: Path | None = None) -> dict[str, Any]:
-    """Resolve generated AIppocampus registry storage without moving data.
-
-    `AIPPOCAMPUS_REGISTRY_DIR` is the exact provider-neutral registry root.
-    `AIPPOCAMPUS_HOME` is an optional broader home concept whose registry lives
-    under `registry/`. Legacy Codex homes remain a fallback only, so existing
-    users keep their data while new non-Codex setups can avoid `CODEX_HOME`.
-    """
-
-    env = os.environ.get("AIPPOCAMPUS_REGISTRY_DIR")
-    if env:
-        return {
-            "path": str(Path(env)),
-            "source": "AIPPOCAMPUS_REGISTRY_DIR",
-            "legacy_fallback": False,
-        }
-    legacy_env = os.environ.get("THREAD_MEMORY_REGISTRY_DIR")
-    if legacy_env:
-        return {
-            "path": str(Path(legacy_env)),
-            "source": "THREAD_MEMORY_REGISTRY_DIR",
-            "legacy_fallback": True,
-        }
-    aippo_home = aippocampus_home()
-    if aippo_home:
-        return {
-            "path": str(aippo_home / "registry"),
-            "source": "AIPPOCAMPUS_HOME/registry",
-            "legacy_fallback": False,
-        }
-    legacy_home = home or codex_home()
-    return {
-        "path": str(legacy_home / "aippocampus-registry"),
-        "source": (
-            "CODEX_HOME/aippocampus-registry"
-            if os.environ.get("CODEX_HOME") or home
-            else "default_CODEX_HOME/aippocampus-registry"
-        ),
-        "legacy_fallback": True,
-    }
-
-
-def aippocampus_registry_dir(home: Path | None = None) -> Path:
-    return Path(str(aippocampus_registry_resolution(home)["path"]))
 
 
 def canonical_path(path: str | Path) -> Path:

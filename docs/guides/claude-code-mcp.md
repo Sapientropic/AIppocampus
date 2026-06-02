@@ -111,7 +111,12 @@ MCP tool results redact local paths unless a local operator explicitly requests
 
 ## Hooks
 
-Do not reuse Codex hook installers as Claude Code hook support. If Claude Code
-hooks are added later, they need their own opt-in installer, status command, and
-privacy notes. This guide only claims MCP setup and explicit transcript
-onboarding.
+AIppocampus does not ship a Claude Code hook installer. Do not reuse Codex hook
+installers as Claude Code hook support: current `aippocampus hooks ...` commands
+mutate Codex `hooks.json` and report `host_integration.host = "codex"`.
+
+Claude Code does have its own upstream hook settings and event schemas; the
+official Claude Code hooks contract is the follow-up source to target if this
+project later adds Claude Code hooks. That future work needs its own opt-in
+installer, status command, privacy notes, and host smoke. This guide only claims
+MCP setup and explicit transcript onboarding.

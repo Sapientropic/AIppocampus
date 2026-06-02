@@ -286,7 +286,10 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  storage gc          Plan storage cleanup from existing evidence", file=target)
     print("  sync                Local-folder sync status/push/pull/repair", file=target)
     print("  object-sync         Object-storage sync status/push/pull/repair", file=target)
-    print("  hooks [kind]        Prompt or lifecycle hook status/install/uninstall", file=target)
+    print(
+        "  hooks [kind]        Codex prompt/lifecycle hook status/install/uninstall",
+        file=target,
+    )
     print("", file=target)
     print("All commands run packaged entrypoints and preserve their output and exit code.", file=target)
 

@@ -19,6 +19,10 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import codex_home, now_utc
+from aippocampus_runtime.hooks.host_boundary import (
+    add_host_integration,
+    host_integration_text_lines,
+)
 
 DEFAULT_EVENTS = ("UserPromptSubmit", "Stop")
 DEFAULT_DIAGNOSTIC_PROMPT = (
@@ -226,15 +230,17 @@ def diagnose(
                 result["risk"] = "ok"
         rows.append(result)
 
-    return {
-        "kind": "aippocampus_hook_diagnostic",
-        "created_at": now_utc(),
-        "hooks_json": str(hooks_json),
-        "cwd": str(cwd),
-        "events": sorted(events),
-        "summary": summary,
-        "handlers": rows,
-    }
+    return add_host_integration(
+        {
+            "kind": "aippocampus_hook_diagnostic",
+            "created_at": now_utc(),
+            "hooks_json": str(hooks_json),
+            "cwd": str(cwd),
+            "events": sorted(events),
+            "summary": summary,
+            "handlers": rows,
+        }
+    )
 
 
 def print_text(result: dict[str, Any]) -> None:
@@ -248,6 +254,8 @@ def print_text(result: dict[str, Any]) -> None:
         f"slow={summary.get('slow', 0)}"
     )
     print(f"hooks: {result.get('hooks_json')}")
+    for line in host_integration_text_lines():
+        print(line)
     for item in result.get("handlers") or []:
         label = f"{item.get('event')}[{item.get('group_index')}:{item.get('handler_index')}]"
         risk = item.get("risk")

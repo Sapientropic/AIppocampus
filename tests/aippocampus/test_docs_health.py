@@ -408,6 +408,59 @@ class DocsHealthTests(unittest.TestCase):
             issues,
         )
 
+    def test_host_hook_boundary_contract_covers_provider_and_claude_code_docs(self) -> None:
+        repo_root = docs_health.find_repo_root(ROOT)
+        assert repo_root is not None
+
+        result = docs_health.host_hook_boundary_issues(repo_root)
+
+        self.assertEqual(result, [])
+
+    def test_host_hook_boundary_reports_missing_boundary_docs_and_code_markers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            (repo / "docs" / "architecture").mkdir(parents=True)
+            (repo / "docs" / "guides").mkdir(parents=True)
+            (repo / ".claude" / "skills" / "aippocampus").mkdir(parents=True)
+            hooks = repo / "skills" / "aippocampus" / "scripts" / "aippocampus_runtime" / "hooks"
+            hooks.mkdir(parents=True)
+            (repo / "docs" / "architecture" / "provider-entrypoint-inventory.md").write_text(
+                "# Provider Entrypoint Inventory\n", encoding="utf-8"
+            )
+            (repo / "docs" / "architecture" / "runtime-script-map.md").write_text(
+                "# Runtime Script Map\n", encoding="utf-8"
+            )
+            (repo / "docs" / "guides" / "claude-code-mcp.md").write_text(
+                "# Claude Code\n", encoding="utf-8"
+            )
+            (repo / "docs" / "guides" / "public-api.md").write_text(
+                "# Public API\n", encoding="utf-8"
+            )
+            (repo / ".claude" / "skills" / "aippocampus" / "SKILL.md").write_text(
+                "# AIppocampus\n", encoding="utf-8"
+            )
+            for name in ("install_prompt.py", "install_lifecycle.py", "diagnose.py"):
+                (hooks / name).write_text("# hook helper\n", encoding="utf-8")
+
+            issues = docs_health.host_hook_boundary_issues(repo)
+
+        self.assertIn("provider inventory missing host integration matrix", issues)
+        self.assertIn("runtime script map missing Codex-only hook installer boundary", issues)
+        self.assertIn(
+            "Claude Code MCP guide missing explicit no Claude Code hook installer claim",
+            issues,
+        )
+        self.assertIn(
+            "Claude Code project skill missing no-hook-installation boundary",
+            issues,
+        )
+        self.assertIn("public API doc missing provider-support-vs-hook-support boundary", issues)
+        self.assertIn(
+            "hook helper missing host integration metadata: "
+            "skills/aippocampus/scripts/aippocampus_runtime/hooks/install_prompt.py",
+            issues,
+        )
+
     def test_benchmark_evidence_map_reports_missing_runner(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)

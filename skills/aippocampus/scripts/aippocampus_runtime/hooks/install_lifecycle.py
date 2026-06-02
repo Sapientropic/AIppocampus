@@ -11,6 +11,10 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import codex_home
+from aippocampus_runtime.hooks.host_boundary import (
+    add_host_integration,
+    host_integration_text_lines,
+)
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
 DEFAULT_TIMEOUT_SECONDS = 20
@@ -131,13 +135,15 @@ def install(
         changed = True
     else:
         changed = False
-    return {
-        "changed": changed,
-        "installed": True,
-        "path": str(path),
-        "events": list(EVENTS),
-        "command": target["command"],
-    }
+    return add_host_integration(
+        {
+            "changed": changed,
+            "installed": True,
+            "path": str(path),
+            "events": list(EVENTS),
+            "command": target["command"],
+        }
+    )
 
 
 def uninstall(path: Path, script: Path) -> dict[str, Any]:
@@ -157,7 +163,9 @@ def uninstall(path: Path, script: Path) -> dict[str, Any]:
                 hooks.pop(event, None)
     if changed:
         save_hooks(path, data)
-    return {"changed": changed, "installed": False, "path": str(path), "events": list(EVENTS)}
+    return add_host_integration(
+        {"changed": changed, "installed": False, "path": str(path), "events": list(EVENTS)}
+    )
 
 
 def status(path: Path, script: Path) -> dict[str, Any]:
@@ -172,11 +180,13 @@ def status(path: Path, script: Path) -> dict[str, Any]:
                     commands.append(str(handler.get("command") or ""))
         if commands:
             installed_events[event] = commands
-    return {
-        "installed": set(installed_events) == set(EVENTS),
-        "path": str(path),
-        "events": installed_events,
-    }
+    return add_host_integration(
+        {
+            "installed": set(installed_events) == set(EVENTS),
+            "path": str(path),
+            "events": installed_events,
+        }
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -208,9 +218,11 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         print(
-            f"thread-memory maintenance hooks {'installed' if result.get('installed') else 'not installed'}"
+            f"Codex lifecycle hooks {'installed' if result.get('installed') else 'not installed'}"
         )
         print(f"hooks: {result.get('path')}")
+        for line in host_integration_text_lines():
+            print(line)
         if result.get("changed") is not None:
             print(f"changed: {result.get('changed')}")
     return 0

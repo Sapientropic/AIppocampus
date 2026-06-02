@@ -12,6 +12,10 @@ from typing import Any
 
 from aippocampus_runtime.core import codex_home
 from aippocampus_runtime.hooks.debug_log import prompt_hook_audit_status
+from aippocampus_runtime.hooks.host_boundary import (
+    add_host_integration,
+    host_integration_text_lines,
+)
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
 DEFAULT_HOOK_TIMEOUT_SECONDS = 5
@@ -144,12 +148,14 @@ def install(
         ]
         if existing:
             if len(existing) == 1 and existing[0] == target:
-                return {
-                    "changed": False,
-                    "installed": True,
-                    "path": str(path),
-                    "command": target["command"],
-                }
+                return add_host_integration(
+                    {
+                        "changed": False,
+                        "installed": True,
+                        "path": str(path),
+                        "command": target["command"],
+                    }
+                )
             group["hooks"] = [
                 handler
                 for handler in handlers
@@ -173,7 +179,9 @@ def install(
     handlers.append(target)
     changed = True
     save_hooks(path, data)
-    return {"changed": changed, "installed": True, "path": str(path), "command": target["command"]}
+    return add_host_integration(
+        {"changed": changed, "installed": True, "path": str(path), "command": target["command"]}
+    )
 
 
 def uninstall(path: Path, script: Path) -> dict[str, Any]:
@@ -181,7 +189,7 @@ def uninstall(path: Path, script: Path) -> dict[str, Any]:
     hooks = data.setdefault("hooks", {})
     groups = hooks.get("UserPromptSubmit")
     if not isinstance(groups, list):
-        return {"changed": False, "installed": False, "path": str(path)}
+        return add_host_integration({"changed": False, "installed": False, "path": str(path)})
 
     changed = False
     kept_groups: list[dict[str, Any]] = []
@@ -211,7 +219,7 @@ def uninstall(path: Path, script: Path) -> dict[str, Any]:
         changed = True
     if changed:
         save_hooks(path, data)
-    return {"changed": changed, "installed": False, "path": str(path)}
+    return add_host_integration({"changed": changed, "installed": False, "path": str(path)})
 
 
 def status(
@@ -231,7 +239,9 @@ def status(
             if isinstance(handler, dict) and is_ambient_handler(handler, script):
                 installed = True
                 commands.append(str(handler.get("command") or ""))
-    result: dict[str, Any] = {"installed": installed, "path": str(path), "commands": commands}
+    result: dict[str, Any] = add_host_integration(
+        {"installed": installed, "path": str(path), "commands": commands}
+    )
     if include_last:
         result["path"] = path.name
         result["path_redacted"] = True
@@ -299,8 +309,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
-        print(f"ambient recall hook {'installed' if result.get('installed') else 'not installed'}")
+        print(f"Codex prompt hook {'installed' if result.get('installed') else 'not installed'}")
         print(f"hooks: {result.get('path')}")
+        for line in host_integration_text_lines():
+            print(line)
         if result.get("changed") is not None:
             print(f"changed: {result.get('changed')}")
         if result.get("command"):

@@ -91,7 +91,7 @@ Current package pilots:
 |---|---|---|
 | `aippocampus_runtime/artifacts/` | `artifact_publish.py`, `export_bundle.py`, `import_bundle.py` | Generated artifact leases, SQLite publish, last-known-good pointer helpers, and portable bundle export/import APIs shared by build/search/sync paths. |
 | `aippocampus_runtime/cli/` | `aippocampus_cli.py` | Public `aippocampus` command facade and child-script dispatch policy. |
-| `aippocampus_runtime/core.py` | `aippocampuslib.py` | Shared runtime helpers for provider-neutral storage defaults, raw-source compatibility re-exports, file hashing, and generated artifact path defaults. Text compaction, redaction/credential transport guards, CLI error payloads, and thread-anchor graph helpers live in direct owner modules and are re-exported here only for import compatibility. |
+| `aippocampus_runtime/core.py` | `aippocampuslib.py` | Shared runtime helpers for raw-source compatibility re-exports, file hashing, and generated artifact path defaults. Provider-neutral registry storage defaults live in `aippocampus_runtime/registry/paths.py` and are re-exported here only for import compatibility. Text compaction, redaction/credential transport guards, CLI error payloads, and thread-anchor graph helpers live in direct owner modules and are re-exported here only for import compatibility. |
 | `aippocampus_runtime/{text,safety,anchor_graph}.py` and `aippocampus_runtime/cli/errors.py` | none | Direct owners for compact text helpers, external-model redaction/HTTP credential transport/cache metric helpers, thread-anchor parsing/graph construction, and CLI error payload shaping. These are package APIs, not subprocess-backed facades. |
 | `aippocampus_runtime/health.py` | `aippocampus_health.py` | Runtime readiness, registry artifact health, optional question stats, and maintenance-action rendering shared by CLI, MCP, and frozen binaries without subprocess script dispatch. |
 | `aippocampus_runtime/privacy.py` | none | Public-safe projection helpers that redact local paths from registry/MCP payloads without changing private source truth. |
@@ -202,11 +202,16 @@ installers are not claimed by the provider contract.
 
 ## Hook Paths
 
+Codex-only hook installer boundary: the current hook handlers, installers, and
+diagnostics target Codex hook events and Codex `hooks.json`. Conversation
+provider support for `claude-code` or `generic-jsonl` does not imply host hook
+installation support for those providers.
+
 | Script or group | Purpose | Invocation route | Key dependencies | Status |
 |---|---|---|---|---|
 | `aippocampus_runtime/hooks/prompt.py` plus `aippocampus_prompt_hook.py` compatibility shim | Foreground prompt hook that emits skip/scent/evidence under a strict budget. | Opt-in Codex `UserPromptSubmit` hook; direct script path remains stable for Codex hook configs. | Packaged prompt recall modules, Dream delivery boundary, registry/search modules. | Public entrypoint |
 | `aippocampus_runtime/hooks/lifecycle.py` plus `aippocampus_lifecycle_hook.py` compatibility shim | Lifecycle hook for deterministic maintenance around Codex session events. | Opt-in Codex lifecycle hook; direct script path remains stable for Codex hook configs. | Clean source, registry, maintenance helpers. | Public entrypoint |
-| `aippocampus_runtime/hooks/install_prompt.py`, `aippocampus_runtime/hooks/install_lifecycle.py`, and `aippocampus_runtime/hooks/diagnose.py` plus `install_aippocampus_prompt_hook.py` / `install_aippocampus_lifecycle_hook.py` / `diagnose_hooks.py` compatibility shims | Install and diagnose hook wiring. | CLI/install docs. | Codex config paths, hook command validation. | Public entrypoint |
+| `aippocampus_runtime/hooks/install_prompt.py`, `aippocampus_runtime/hooks/install_lifecycle.py`, and `aippocampus_runtime/hooks/diagnose.py` plus `install_aippocampus_prompt_hook.py` / `install_aippocampus_lifecycle_hook.py` / `diagnose_hooks.py` compatibility shims | Install and diagnose Codex hook wiring. | CLI/install docs for Codex host integration only. | Codex config paths, hook command validation, and `host_integration` JSON metadata. | Public entrypoint |
 | `aippocampus_runtime/recall/prompt_*`, `aippocampus_runtime/recall/semantic_*`, and top-level compatibility shims (`prompt_cues.py`, `prompt_context_render.py`, `prompt_recall_*.py`, `semantic_cue_cache.py`, `semantic_recall_gate.py`, `semantic_trigger_router.py`) | Prompt recall cue policy, life-wide/profile cue catalogs, named skip/scent/evidence gate policy, context-aware scent-threshold diagnostics, ambient cards/cache/policy, budget, rendering, query policy, source-evidence assembly, optional semantic gate/result-cache/cue-cache, and trigger routing. | Called by prompt hook, active recall, scheduler, and smokes. | Registry/search, timeline, semantic cue cache, model route metadata. | Runtime internal |
 
 ## Registry, Retrieval, And Indexing
