@@ -162,8 +162,9 @@ recognizable again.
 - Ecosystem support status:
   [Ecosystem Integration Matrix](docs/guides/ecosystem-integration-matrix.md).
 - Security and release hygiene:
-  [SECURITY.md](SECURITY.md) and
-  [Release Checklist](docs/guides/release-checklist.md).
+  [SECURITY.md](SECURITY.md),
+  [Release Checklist](docs/guides/release-checklist.md), and
+  [maintainer shipping lanes](CONTRIBUTING.md#maintainer-shipping-lanes).
 - Full documentation map: [docs/README.md](docs/README.md).
 
 ## Reading For The Soul
@@ -250,6 +251,11 @@ External DeepSeek frontier extraction is explicit:
   `--frontier-project *` only for an intentional whole-machine frontier pass.
 
 ## Maintainer Checks
+
+For tiny maintainer changes, first classify the work through
+[Maintainer Shipping Lanes](CONTRIBUTING.md#maintainer-shipping-lanes). Public
+claims, release metadata, privacy/security wording, runtime behavior, and API
+stability promises stay in the strict PR lane even when the diff looks small.
 
 The default CI path verifies Ubuntu Python 3.12 and 3.13 with docs health, Ruff,
 mypy, compile checks, and the fast deterministic test tier. It also runs a

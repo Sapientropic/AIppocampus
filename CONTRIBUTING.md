@@ -57,6 +57,67 @@ For public-readiness changes, also run a secret/local-path scan and inspect any
 hits. Test fixtures with `FAKE_TEST_` markers are acceptable; real credentials
 or private paths are not.
 
+## Maintainer Shipping Lanes
+
+Use this section as the canonical lane policy for tiny maintainer changes.
+README, release, and public-API docs should link here instead of repeating the
+rules.
+
+Start every lane decision with this claim-impact checklist. If the change
+affects any item below, keep it in the strict PR lane unless a maintainer
+explicitly records why existing evidence already covers the impact:
+
+- install, support, adoption, or fresh-user success claims
+- benchmark, smoke, readiness, or evidence interpretation
+- privacy, security, source-backed guarantees, or private-data handling
+- public API stability promises, CLI/MCP schema meaning, or documented return
+  code behavior
+- third-party ecosystem support status
+- `can claim` / `cannot claim` boundaries
+- release tags, package metadata, registry metadata, or release notes consumed
+  by users or agents
+
+**Strict PR lane**: use the normal branch, PR, CI, review/watch, and merge path
+for runtime behavior, hooks, sync, registry, search ranking, benchmark scoring,
+release tags, published package metadata, public evidence claims, privacy or
+security wording, external-model behavior, and any claim-impact checklist hit.
+Release/public-readiness changes also use the release checklist.
+
+**Maintainer light lane**: allowed only for tiny, reversible edits with no
+claim-impact hit, such as typo fixes, docs formatting, small site copy/layout
+cleanup that does not change claims, issue/project metadata cleanup, or wording
+that restates already-verified evidence without widening it. Run at least:
+
+```sh
+python tools/aippocampus/docs/check_docs_health.py --json
+git diff --check
+```
+
+Also inspect the diff for private paths and secret-like strings when the edit
+touches public docs or assets. The preferred ruleset stance is narrow owner or
+maintainer bypass for this lane only when GitHub branch protection permits it;
+if no bypass is available, use a tiny PR instead. Do not use the light lane for
+runtime code, release metadata, public-claim wording, or anything that needs CI
+to prove behavior.
+
+**Small-code auto-PR lane**: use a PR, but keep it lightweight and let CI do the
+review gate. This fits tiny tooling fixes, test-only guards, local maintenance
+scripts outside the shipped runtime path, or checker/parser compatibility fixes
+that do not alter public behavior. A minimal `gh` flow is:
+
+```sh
+git switch -c sapientropic/<short-topic>
+git add <files>
+git commit -m "<clear change>"
+git push -u origin HEAD
+gh pr create --base main --fill
+gh pr merge --auto --merge --delete-branch
+```
+
+Run focused local tests before opening the PR, and do not skip CI for code. If a
+small-code change later touches public contracts, release evidence, runtime
+behavior, or privacy/security boundaries, move it back to the strict PR lane.
+
 ## Test Debt Policy
 
 - A test belongs in the fast tier only if it is deterministic, cheap, and blocks
