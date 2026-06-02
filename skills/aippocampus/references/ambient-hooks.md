@@ -94,6 +94,13 @@ would change the answer, plan, or action. Any specific memory-backed claim still
 requires clean-source reopen; scent packets, route reasons, locks, aliases, and
 candidate refs are not enough.
 
+`search_decision_adapter.py` applies the same boundary to external-search
+workflows. It may decide that a degraded prompt is a cue into old source and
+may return a source-ref-backed query expansion packet, but that packet remains
+navigation material. Search terms, scent/candidate support, and candidate refs
+must not be presented as remembered facts; after-search results are classified
+for explicit import/review rather than written into memory automatically.
+
 The runtime owner is `aippocampus_runtime.recall.active_recall_lock`. Lock
 artifacts live beside the ambient thread cache as `active_recall_locks.json`.
 They store prompt/workspace/thread fingerprints, topic epoch, registry freshness,

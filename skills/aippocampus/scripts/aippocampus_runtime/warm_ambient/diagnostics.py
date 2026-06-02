@@ -153,7 +153,8 @@ def guard_coverage_status(
 def guard_coverage_incomplete(coverage: dict[str, Any] | None) -> bool:
     if not isinstance(coverage, dict):
         return False
-    families = coverage.get("families") if isinstance(coverage.get("families"), dict) else {}
+    raw_families = coverage.get("families")
+    families = raw_families if isinstance(raw_families, dict) else {}
     return any(
         (details or {}).get("state") in INCOMPLETE_GUARD_STATES
         for details in families.values()

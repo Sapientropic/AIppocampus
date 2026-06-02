@@ -298,6 +298,15 @@ Assistant-only captures are skipped instead of being forced into an orphan
 generic JSONL row, because the durable registry path should reject ambiguous
 conversation structure rather than guessing at turn ownership.
 
+`scripts/search_decision_adapter.py` may sit in front of a future
+`memory_search` bridge as a local decision contract: before search it can tell
+the agent whether the prompt is new, a degraded cue into old source, or a weak
+scent that should stay quiet; during search it can return source-ref-backed
+query expansion terms; after search it can classify the result as extension,
+correction, replacement, or disposable residue. It must not read browser history
+directly, upload search trails, or turn browser-local captures/search results
+into durable truth without the explicit export/import path above.
+
 1. **显式开启捕获**：用户对当前站点 / 当前会话开启后，才把消息片段存入
    browser-local storage（当前 userscript 用 `localStorage`；正式扩展再迁到
    IndexedDB）
