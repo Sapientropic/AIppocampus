@@ -747,7 +747,9 @@ def deterministic_source_label_slice(
     summary = retrieval_benchmark.summarize_source_payload(payload)
     summary["cannot_claim"] = payload.get("cannot_claim") or []
     summary["selection"] = {
+        **(summary.get("selection") or {}),
         "require_semantic_sidecar": False,
+        "deterministic_label_fallback": True,
         "purpose": "broader deterministic source-label diagnostic baseline",
     }
     return summary

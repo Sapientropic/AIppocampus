@@ -59,6 +59,7 @@ class SourceEvidenceRecallEvalTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("--allow-deterministic-labels", proc.stdout)
+        self.assertIn("cannot claim semantic-sidecar coverage", proc.stdout)
 
     def _write_fixture(self, *, with_sidecar: bool = True) -> Path:
         clean = self.root / "thread-life" / "clean-source"
@@ -197,6 +198,9 @@ class SourceEvidenceRecallEvalTests(unittest.TestCase):
         self.assertEqual(result["top_k_hit_rate"], 1.0)
         self.assertEqual(result["ranking"], "dynamic_source")
         self.assertIn("corpus rarity", result["selection"]["boundary"])
+        self.assertEqual(result["selection"]["mode"], "semantic_sidecar_required")
+        self.assertEqual(result["selection_explanation"]["mode"], "semantic_sidecar_required")
+        self.assertIn("dynamic semantic_scope_labels", result["selection_explanation"]["selector"])
         self.assertEqual(result["cases"][0]["prompt_kind"], "fuzzy_life_wide_source_evidence")
         self.assertTrue(result["cases"][0]["expected_evidence"].startswith("evidence:"))
         self.assertIn("personal_reflection", result["label_coverage"])
@@ -222,6 +226,9 @@ class SourceEvidenceRecallEvalTests(unittest.TestCase):
         self.assertFalse(result["sample_gate_ok"])
         self.assertFalse(result["quality_gate_ok"])
         self.assertIn("semantic_sidecar_sample_coverage", result["cannot_claim"])
+        self.assertEqual(result["selection_explanation"]["mode"], "semantic_sidecar_required")
+        self.assertEqual(result["selection_explanation"]["selected_case_count"], 0)
+        self.assertIn("--allow-deterministic-labels", result["selection_explanation"]["next_action"])
 
     def test_eval_separates_selected_case_quality_from_sample_size(self) -> None:
         self._write_fixture(with_sidecar=True)
@@ -253,8 +260,40 @@ class SourceEvidenceRecallEvalTests(unittest.TestCase):
             result["gate_diagnostics"]["rate_estimates"]["top_k_hit_rate"]["denominator"],
             1,
         )
+        self.assertEqual(result["selection_explanation"]["sample_gap"], 1)
         self.assertIn("semantic_sidecar_sample_coverage", result["cannot_claim"])
         self.assertNotIn("selected_semantic_source_evidence_quality", result["cannot_claim"])
+
+    def test_deterministic_label_fallback_cannot_claim_semantic_sidecar_coverage(
+        self,
+    ) -> None:
+        self._write_fixture(with_sidecar=True)
+
+        result = recall_eval.run_source_evidence_recall_eval(
+            registry_path=self.registry,
+            max_cases=1,
+            min_cases=1,
+            top_k=3,
+            min_hit_rate=1.0,
+            require_semantic_sidecar=False,
+        )
+        rendered = json.dumps(result, ensure_ascii=False)
+
+        self.assertTrue(result["ok"], rendered)
+        self.assertEqual(result["status"], "sufficient")
+        self.assertEqual(result["selection"]["mode"], "deterministic_label_fallback")
+        self.assertTrue(result["selection"]["deterministic_label_fallback"])
+        self.assertEqual(
+            result["selection_explanation"]["mode"], "deterministic_label_fallback"
+        )
+        self.assertIn(
+            "deterministic_label_fallback_is_not_semantic_sidecar_evidence",
+            result["cannot_claim"],
+        )
+        self.assertIn("selected_semantic_source_evidence", result["cannot_claim"])
+        self.assertIn("semantic_sidecar_sample_coverage", result["cannot_claim"])
+        self.assertNotIn("lighthouse", rendered)
+        self.assertNotIn(str(self.root), rendered)
 
     def test_dynamic_source_uses_turn_scope_when_terms_live_on_sibling_message(
         self,

@@ -777,20 +777,90 @@ def eval_status(case_count: int, passed_count: int, *, min_cases: int, min_hit_r
 
 
 def cannot_claim(
-    status: str, *, sample_gate_ok: bool | None = None, quality_gate_ok: bool | None = None
+    status: str,
+    *,
+    require_semantic_sidecar: bool = True,
+    sample_gate_ok: bool | None = None,
+    quality_gate_ok: bool | None = None,
 ) -> list[str]:
     claims = [
         "global_recall_quality",
         "semantic_completeness",
         "clean_source_truth_without_opening_evidence",
     ]
-    if status != "sufficient":
+    if status != "sufficient" or not require_semantic_sidecar:
         claims.append("selected_semantic_source_evidence")
-    if sample_gate_ok is False:
+    if sample_gate_ok is False or not require_semantic_sidecar:
         claims.append("semantic_sidecar_sample_coverage")
     if quality_gate_ok is False:
         claims.append("selected_semantic_source_evidence_quality")
+    if not require_semantic_sidecar:
+        claims.append("deterministic_label_fallback_is_not_semantic_sidecar_evidence")
     return claims
+
+
+def selection_explanation(
+    *,
+    require_semantic_sidecar: bool,
+    case_count: int,
+    min_cases: int,
+    status: str,
+) -> dict[str, Any]:
+    sample_gap = max(0, int(min_cases) - int(case_count))
+    if require_semantic_sidecar:
+        next_action = (
+            "Semantic sidecar-selected sample is large enough; read quality diagnostics next."
+            if sample_gap == 0
+            else (
+                "Build or refresh semantic scope sidecars for more clean-source turns, or rerun "
+                "with --allow-deterministic-labels only as a wiring baseline."
+            )
+        )
+        return {
+            "mode": "semantic_sidecar_required",
+            "selected_case_count": int(case_count),
+            "min_cases": int(min_cases),
+            "sample_gap": sample_gap,
+            "status": status,
+            "selector": (
+                "Selects non-technical life-wide turns only when the turn already has "
+                "dynamic semantic_scope_labels from the semantic sidecar."
+            ),
+            "fallback_flag": "--allow-deterministic-labels",
+            "fallback_meaning": (
+                "The fallback widens selection to deterministic clean-source labels and "
+                "topic terms; it checks recall/search wiring, not semantic-sidecar coverage."
+            ),
+            "claim_boundary": (
+                "A sufficient result supports this selected semantic-sidecar slice only; "
+                "it is not global recall quality or semantic completeness."
+            ),
+            "next_action": next_action,
+        }
+    return {
+        "mode": "deterministic_label_fallback",
+        "selected_case_count": int(case_count),
+        "min_cases": int(min_cases),
+        "sample_gap": sample_gap,
+        "status": status,
+        "selector": (
+            "Selects the same non-technical life-wide clean-source surface without requiring "
+            "dynamic semantic_scope_labels."
+        ),
+        "fallback_flag": "--allow-deterministic-labels",
+        "fallback_meaning": (
+            "This mode is useful when a machine has too few semantic sidecar rows, but a pass "
+            "only proves deterministic label/search wiring."
+        ),
+        "claim_boundary": (
+            "Do not claim selected semantic-sidecar source-evidence coverage from fallback "
+            "results, even when hit-rate and sample gates pass."
+        ),
+        "next_action": (
+            "Run again without --allow-deterministic-labels before making semantic-sidecar "
+            "coverage claims."
+        ),
+    }
 
 
 def run_source_evidence_recall_eval(
@@ -864,6 +934,12 @@ def run_source_evidence_recall_eval(
     }
     sample_gate_ok = len(cases) >= min_cases
     quality_gate_ok = bool(cases) and hit_rate >= min_hit_rate
+    selection_note = selection_explanation(
+        require_semantic_sidecar=require_semantic_sidecar,
+        case_count=len(cases),
+        min_cases=min_cases,
+        status=status,
+    )
     return {
         "ok": status == "sufficient",
         "status": status,
@@ -871,7 +947,10 @@ def run_source_evidence_recall_eval(
         if status == "sufficient"
         else "diagnostic_only",
         "cannot_claim": cannot_claim(
-            status, sample_gate_ok=sample_gate_ok, quality_gate_ok=quality_gate_ok
+            status,
+            require_semantic_sidecar=require_semantic_sidecar,
+            sample_gate_ok=sample_gate_ok,
+            quality_gate_ok=quality_gate_ok,
         ),
         "prompt_kind": PROMPT_KIND,
         "case_count": len(cases),
@@ -919,7 +998,9 @@ def run_source_evidence_recall_eval(
             "output_shape": "sanitized_eval_aggregates",
         },
         "selection": {
+            "mode": selection_note["mode"],
             "require_semantic_sidecar": bool(require_semantic_sidecar),
+            "deterministic_label_fallback": not bool(require_semantic_sidecar),
             "max_cases": int(max_cases),
             "max_term_frequency": int(max_term_frequency),
             "max_turns_per_thread": int(max_turns_per_thread),
@@ -929,6 +1010,7 @@ def run_source_evidence_recall_eval(
                 "this is not a lexical-rule expansion path."
             ),
         },
+        "selection_explanation": selection_note,
     }
 
 
@@ -946,7 +1028,14 @@ def main() -> int:
     parser.add_argument(
         "--ranking", choices=["dynamic_source", "registry"], default="dynamic_source"
     )
-    parser.add_argument("--allow-deterministic-labels", action="store_true")
+    parser.add_argument(
+        "--allow-deterministic-labels",
+        action="store_true",
+        help=(
+            "Use deterministic clean-source labels as a wiring baseline when semantic-sidecar "
+            "sample coverage is too small; this cannot claim semantic-sidecar coverage."
+        ),
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
@@ -970,6 +1059,13 @@ def main() -> int:
         print(
             f"cases: {result.get('case_count')} passed: {result.get('passed_count')} hit_rate: {result.get('top_k_hit_rate')}"
         )
+        explanation = dict_value(result.get("selection_explanation"))
+        if explanation:
+            print(
+                f"selection: {explanation.get('mode')} "
+                f"selected={explanation.get('selected_case_count')} min={explanation.get('min_cases')}"
+            )
+            print(f"next: {explanation.get('next_action')}")
     return 0 if result.get("ok") else 1
 
 

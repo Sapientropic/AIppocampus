@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -112,6 +113,18 @@ def fake_source_payload(*, ok: bool = True) -> dict:
         "label_coverage": ["casual_important"],
         "warning_count": 0,
         "ranking": "dynamic_source",
+        "selection": {
+            "mode": "semantic_sidecar_required",
+            "require_semantic_sidecar": True,
+            "deterministic_label_fallback": False,
+        },
+        "selection_explanation": {
+            "mode": "semantic_sidecar_required",
+            "selected_case_count": 2,
+            "min_cases": 1,
+            "sample_gap": 0,
+            "next_action": "Semantic sidecar-selected sample is large enough; read quality diagnostics next.",
+        },
         "cases": [
             {
                 "case_id": "evidence:a",
@@ -305,6 +318,27 @@ class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
         self.assertEqual(benchmark.DEFAULT_SOURCE_MAX_CASES, 100)
         self.assertEqual(benchmark.DEFAULT_SOURCE_MIN_CASES, 50)
 
+    def test_track_b_help_explains_deterministic_label_fallback_boundary(self) -> None:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(REPO_ROOT / "benchmarks" / "aippocampus" / "benchmark_source_evidence_retrieval.py"),
+                "--help",
+            ],
+            cwd=REPO_ROOT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("--allow-deterministic-labels", proc.stdout)
+        normalized_help = " ".join(proc.stdout.split())
+        self.assertIn("cannot claim", normalized_help)
+        self.assertIn("sidecar sample coverage", normalized_help)
+
     def test_sharegpt_manifest_marks_tiny_semantic_sidecar_pilot_diagnostic(self) -> None:
         manifest = json.loads(
             (REPO_ROOT / "benchmark_corpus" / "sharegpt_manifest.json").read_text(
@@ -379,6 +413,18 @@ class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
         self.assertEqual(
             payload["tracks"]["source_evidence"]["failure_diagnostics"]["failed_count"],
             1,
+        )
+        self.assertEqual(
+            payload["tracks"]["source_evidence"]["selection"]["mode"],
+            "semantic_sidecar_required",
+        )
+        self.assertEqual(
+            payload["tracks"]["source_evidence"]["selection_explanation"]["sample_gap"],
+            0,
+        )
+        self.assertEqual(
+            payload["tracks"]["source_evidence"]["cannot_claim"],
+            ["global_recall_quality"],
         )
         self.assertNotIn("query", payload["cases"]["fts5"][1])
         self.assertNotIn("snippet", payload["cases"]["fts5"][1])
