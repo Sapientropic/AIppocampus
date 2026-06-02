@@ -53,6 +53,10 @@ def _child_process_env_visibility(env_var: str) -> dict[str, Any]:
     return {"checked": True, "visible": proc.returncode == 0, "exit_code": proc.returncode}
 
 
+def _env_var_is_visible(env_var: str) -> bool:
+    return bool(env_var and os.environ.get(env_var))
+
+
 def _public_route(route: ModelRoute, *, requested_route: str) -> dict[str, Any]:
     capabilities = route.capabilities.as_dict() if route.capabilities else {}
     return {
@@ -135,7 +139,7 @@ def build_provider_doctor_report(
 
     resolved_api_key_env = str(api_key_env or route.api_key_env or "").strip()
     public_env_name = _public_token(resolved_api_key_env, fallback="API_KEY_ENV")
-    current_visible = bool(resolved_api_key_env and os.environ.get(resolved_api_key_env))
+    current_visible = _env_var_is_visible(resolved_api_key_env)
     child_visibility = (
         _child_process_env_visibility(resolved_api_key_env)
         if check_child_process and resolved_api_key_env
@@ -170,7 +174,7 @@ def build_provider_doctor_report(
             "does_not_read_dotenv_or_credential_store": True,
             "actual_installed_hook_process_checked": False,
             "semantic_gate_enabled_for_route": semantic_gate_enabled(
-                api_key=os.environ.get(resolved_api_key_env) if resolved_api_key_env else None,
+                api_key="present" if current_visible else None,
                 api_key_env=resolved_api_key_env or "DEEPSEEK_API_KEY",
             ),
             "warm_background_enabled": warm_background_enabled(),
