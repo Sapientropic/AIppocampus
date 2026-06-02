@@ -16,7 +16,10 @@ SUPPORT_LEVELS = {"silent_scent", "soft_hypothesis", "source_required", "suppres
 CONFIDENCE_BUCKETS = {"low", "medium", "high"}
 SENSITIVITY_BUCKETS = {"safe", "caution", "suppress"}
 FRESHNESS_BUCKETS = {"current", "possibly_stale", "superseded", "unknown"}
-SUGGESTED_ACTIONS = {"ask_light_question", "active_recall", "source_reopen", "ignore"}
+ADVISORY_ACTIONS = {"ask_light_question", "active_recall", "source_reopen", "ignore"}
+# Public compatibility name for older cards/tests that imported the old packet
+# vocabulary. Do not treat this alias as permission to make it the final action.
+SUGGESTED_ACTIONS = ADVISORY_ACTIONS
 
 PACKET_SCHEMA_VERSION = 1
 MAX_CANDIDATE_REFS = 3
@@ -124,7 +127,7 @@ def _support_level(
     return "silent_scent"
 
 
-def _suggested_action(support_level: str, confidence: str) -> str:
+def _advisory_action(support_level: str, confidence: str) -> str:
     if support_level in {"suppressed", "silent_scent"}:
         return "ignore"
     if support_level == "source_required":
@@ -132,14 +135,14 @@ def _suggested_action(support_level: str, confidence: str) -> str:
     return "ask_light_question" if confidence == "low" else "active_recall"
 
 
-def _route_reason(support_level: str, suggested_action: str) -> str:
+def _route_reason(support_level: str, advisory_action: str) -> str:
     if support_level == "suppressed":
         return "privacy_or_staleness_boundary"
     if support_level == "source_required":
         return "candidate_source_refs_may_matter_before_specific_claim"
-    if suggested_action == "active_recall":
+    if advisory_action == "active_recall":
         return "possible_resonance_without_source_reopen"
-    if suggested_action == "ask_light_question":
+    if advisory_action == "ask_light_question":
         return "weak_resonance_needs_user_anchor"
     return "no_actionable_fresh_thread_memory_signal"
 
@@ -166,7 +169,7 @@ def fresh_thread_scent_packet_from_decision(result: dict[str, Any]) -> dict[str,
     )
     if support_level == "suppressed":
         candidate_refs = []
-    suggested_action = _suggested_action(support_level, confidence)
+    advisory_action = _advisory_action(support_level, confidence)
     return {
         "kind": "aippocampus_fresh_thread_scent_packet",
         "schema_version": PACKET_SCHEMA_VERSION,
@@ -174,16 +177,21 @@ def fresh_thread_scent_packet_from_decision(result: dict[str, Any]) -> dict[str,
         "confidence": confidence,
         "sensitivity": "suppress" if support_level == "suppressed" else sensitivity,
         "freshness": freshness,
-        "route_reason": _route_reason(support_level, suggested_action),
+        "route_reason": _route_reason(support_level, advisory_action),
         "candidate_refs": candidate_refs,
         "candidate_ref_count": len(candidate_refs),
         "reopenable_ref_count": _reopenable_ref_count(candidate_refs),
-        "suggested_action": suggested_action,
+        "advisory_action": advisory_action,
+        # Back-compat alias for older cards and reports. The action policy owns
+        # final decisions and may intentionally diverge from this packet hint.
+        "suggested_action": advisory_action,
         "when_not_to_use": _when_not_to_use(support_level),
         "source_boundary": {
             "navigation_only_until_source_reopened": True,
             "route_reason_is_not_source_fact": True,
             "candidate_refs_are_ids_only": True,
+            "advisory_action_is_not_final_agent_action": True,
+            "final_action_owned_by_fresh_thread_action_policy": True,
         },
     }
 

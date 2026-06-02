@@ -15,7 +15,10 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Literal, Sequence
 
-from aippocampus_runtime.recall.fresh_thread_action import fresh_thread_action_from_packet
+from aippocampus_runtime.recall.fresh_thread_action import (
+    TASK_CONTEXT_FLAG_PROVENANCE,
+    fresh_thread_action_from_packet,
+)
 from aippocampus_runtime.recall.fresh_thread_activation import (
     advance_fresh_thread_activation,
     fresh_thread_activation_context,
@@ -397,6 +400,21 @@ def _lock_for_turn(turn: DemoTurn, arm: DemoArm) -> dict[str, Any] | None:
     return None
 
 
+def _demo_task_context_contract(action: dict[str, Any]) -> dict[str, Any]:
+    """Keep per-turn report rows readable while preserving the boundary proof."""
+
+    contract = action["task_context_contract"]
+    return {
+        "semantic_flags_are_upstream_judgement": contract[
+            "semantic_flags_are_upstream_judgement"
+        ],
+        "policy_parses_raw_prompt": contract["policy_parses_raw_prompt"],
+        "policy_uses_static_phrase_lists": contract["policy_uses_static_phrase_lists"],
+        "observed_flags": contract["observed_flags"],
+        "unknown_flags": contract["unknown_flags"],
+    }
+
+
 def _no_memory_turn(turn: DemoTurn) -> dict[str, Any]:
     return {
         "turn_id": turn.turn_id,
@@ -469,6 +487,7 @@ def _run_flow_arm(flow: DemoFlow, arm: DemoArm) -> dict[str, Any]:
                 "turn_id": turn.turn_id,
                 "public_prompt": turn.public_prompt,
                 "packet_support_level": packet["support_level"],
+                "packet_advisory_action": packet["advisory_action"],
                 "packet_suggested_action": packet["suggested_action"],
                 "agent_action": action["agent_action"],
                 "reason": action["reason"],
@@ -478,6 +497,7 @@ def _run_flow_arm(flow: DemoFlow, arm: DemoArm) -> dict[str, Any]:
                 "source_refs_allowed": action["source_refs_allowed"],
                 "candidate_ref_count": len(action["candidate_refs"]),
                 "lock_handling": action["lock_handling"],
+                "task_context_contract": _demo_task_context_contract(action),
                 "activation_state": str((state or {}).get("state") or ""),
                 "activation_update": action["activation_update"],
                 "expected_note": turn.expected_note,
@@ -523,6 +543,12 @@ def run_fresh_thread_demo(
         "positive_flow_count": sum(1 for flow in flows if flow["kind"] == "positive_demo"),
         "negative_control_count": sum(1 for flow in flows if flow["kind"] == "negative_control"),
         "arm_count": len(selected_arms),
+        "synthetic_task_context_fixture_turn_count": sum(
+            1
+            for flow in _selected_flows(flow_ids)
+            for turn in flow.turns
+            if turn.hook_task_context or turn.active_task_context
+        ),
     }
     report = {
         "kind": "aippocampus_fresh_thread_demo_report",
@@ -535,10 +561,19 @@ def run_fresh_thread_demo(
             "benchmark_proof": False,
             "uses_private_history": False,
             "uses_live_model": False,
+            "synthetic_task_context_fixtures": True,
+            "semantic_classification_quality_proof": False,
             "statement": (
                 "This runner demonstrates the public-safe product contract over synthetic "
-                "fixtures. It does not measure real-history recall quality or competitor baselines."
+                "fixtures. It does not measure real-history recall quality, live semantic "
+                "classification quality, or competitor baselines."
             ),
+        },
+        "task_context_contract": {
+            "semantic_flags_are_upstream_judgement": True,
+            "policy_parses_raw_prompt": False,
+            "policy_uses_static_phrase_lists": False,
+            "known_flag_provenance": dict(sorted(TASK_CONTEXT_FLAG_PROVENANCE.items())),
         },
         "metrics": metrics,
         "flows": flows,

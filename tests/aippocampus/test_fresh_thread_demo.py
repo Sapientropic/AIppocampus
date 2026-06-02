@@ -47,10 +47,13 @@ class FreshThreadDemoTests(unittest.TestCase):
         self.assertEqual(report["arms"], ["no_memory", "hook_only", "active_recall"])
         self.assertFalse(report["claim_boundary"]["benchmark_proof"])
         self.assertTrue(report["claim_boundary"]["demo_proof"])
+        self.assertTrue(report["claim_boundary"]["synthetic_task_context_fixtures"])
+        self.assertFalse(report["claim_boundary"]["semantic_classification_quality_proof"])
         self.assertIn("#285", report["claim_boundary"]["issue"])
         self.assertEqual(report["metrics"]["flow_count"], 8)
         self.assertEqual(report["metrics"]["positive_flow_count"], 4)
         self.assertEqual(report["metrics"]["negative_control_count"], 4)
+        self.assertGreaterEqual(report["metrics"]["synthetic_task_context_fixture_turn_count"], 1)
 
     def test_active_recall_arm_shows_progression_and_source_reopen(self) -> None:
         report = demo.run_fresh_thread_demo()
@@ -58,7 +61,12 @@ class FreshThreadDemoTests(unittest.TestCase):
 
         stress_turns = flows["stress_cue"]["arms"]["active_recall"]["turns"]
         self.assertEqual(stress_turns[0]["packet_support_level"], "soft_hypothesis")
+        self.assertEqual(stress_turns[0]["packet_advisory_action"], "ask_light_question")
         self.assertEqual(stress_turns[0]["agent_action"], "use_silently")
+        self.assertTrue(
+            stress_turns[0]["task_context_contract"]["semantic_flags_are_upstream_judgement"]
+        )
+        self.assertFalse(stress_turns[0]["task_context_contract"]["policy_parses_raw_prompt"])
         self.assertEqual(stress_turns[0]["activation_state"], "scent_emitted")
         self.assertEqual(stress_turns[1]["agent_action"], "active_recall")
         self.assertEqual(stress_turns[1]["lock_handling"], "use_ready_lock")

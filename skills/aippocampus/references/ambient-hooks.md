@@ -44,10 +44,17 @@ skip clean-source reopen.
 fresh-thread product goal with #277-style active recall locks. The packet fields are:
 `support_level` (`silent_scent | soft_hypothesis | source_required |
 suppressed`), coarse `confidence`, `sensitivity`, `freshness`, `route_reason`,
-source-id-only `candidate_refs`, `suggested_action`, `when_not_to_use`, and a
-`source_boundary` block. The packet is navigation material until source is
-reopened. It must not contain raw prompts, raw snippets, secrets, local paths,
-or user-facing memory narration.
+source-id-only `candidate_refs`, canonical `advisory_action`, compatibility
+`suggested_action`, `when_not_to_use`, and a `source_boundary` block. The packet
+is navigation material until source is reopened. It must not contain raw
+prompts, raw snippets, secrets, local paths, or user-facing memory narration.
+
+`advisory_action` is the canonical packet hint. `suggested_action` remains as a
+compatibility alias for older cards and reports, but both are advisory
+baselines only. They are allowed to be wrong for the current foreground task.
+`fresh_thread_action.py` owns the final `agent_action`, and every action result
+records the packet hint, whether it was authoritative (`false`), and why the
+final policy aligned with or diverged from it.
 
 Public-safe first-turn demo cues such as "我觉得压力好大", "帮我妈妈挑个礼物",
 "我想建个网站", and a fresh coding workspace with no `AGENTS.md` may produce
@@ -60,13 +67,29 @@ superseded cues should stay `silent_scent` or `suppressed`.
 that packet. The hook prepares terrain; the foreground agent chooses one of
 `ignore`, `use_silently`, `ask_light_question`,
 `mention_soft_hypothesis`, `active_recall`, or `source_reopen` after considering
-the current task. The packet's `suggested_action` is advisory; it must not force
-lookup when the agent cannot say memory would change the answer, plan, or
-action. This layer must not parse the raw prompt with a static semantic word
-list. Subconscious/semantic judgement enters as packet fields, reviewed
-sidecars, active recall locks, or explicit agent context such as
-`memory_may_change_answer`, `specific_memory_claim`,
+the current task. The packet's `advisory_action` (or legacy `suggested_action`
+alias) is advisory; it must not force lookup when the agent cannot say memory
+would change the answer, plan, or action. This layer must not parse the raw
+prompt with a static semantic word list. Subconscious/semantic judgement enters
+as packet fields, reviewed sidecars, active recall locks, or explicit agent
+context such as `memory_may_change_answer`, `specific_memory_claim`,
 `broad_or_sensitive_prompt`, and `user_confirmed_memory_theme`.
+
+`task_context` is not a hidden prompt parser. Each flag belongs to one of these
+provenance buckets:
+
+- foreground agent or reviewed-sidecar judgement:
+  `memory_may_change_answer`, `specific_memory_claim`,
+  `broad_or_sensitive_prompt`, and `allow_gentle_hypothesis`;
+- activation state: `user_confirmed_memory_theme`,
+  `route_suppressed_by_activation`, `prior_scent_without_new_anchor`,
+  `activation_state`, `activation_update`, `activation_invalidation`, and
+  `activation_source_reopened`;
+- deterministic repo/source checks: `current_checkout_required` and
+  `current_repo_fact_query`.
+
+Future flags must either fit one of those buckets or appear as unknown
+provenance in the action-policy output until their owner is documented.
 
 Action policy examples:
 
@@ -177,7 +200,8 @@ activation state modules over synthetic upstream decision packets across
 not a semantic classifier: fixture inputs model reviewed sidecar or hook output,
 so future semantic improvements still belong in the semantic/subconscious
 layers. Treat its output as demo proof only; real-history quality, live model
-quality, and benchmark claims need their own evidence.
+quality, semantic classification quality, and benchmark claims need their own
+evidence.
 
 When the hook receives a thread/session id, `ambient_thread_cache.py` may store
 up to a few compact cards under a hashed `thread_id + workspace + topic_epoch`

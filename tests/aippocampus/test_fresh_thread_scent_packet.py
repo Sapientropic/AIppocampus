@@ -38,6 +38,7 @@ class FreshThreadScentPacketTests(unittest.TestCase):
         self.assertEqual(packet["confidence"], "medium")
         self.assertEqual(packet["sensitivity"], "caution")
         self.assertEqual(packet["freshness"], "unknown")
+        self.assertEqual(packet["advisory_action"], "active_recall")
         self.assertEqual(packet["suggested_action"], "active_recall")
         self.assertEqual(
             set(packet),
@@ -52,6 +53,7 @@ class FreshThreadScentPacketTests(unittest.TestCase):
                 "candidate_refs",
                 "candidate_ref_count",
                 "reopenable_ref_count",
+                "advisory_action",
                 "suggested_action",
                 "when_not_to_use",
                 "source_boundary",
@@ -64,6 +66,8 @@ class FreshThreadScentPacketTests(unittest.TestCase):
         self.assertEqual(packet["candidate_ref_count"], 1)
         self.assertEqual(packet["reopenable_ref_count"], 1)
         self.assertTrue(packet["source_boundary"]["navigation_only_until_source_reopened"])
+        self.assertTrue(packet["source_boundary"]["advisory_action_is_not_final_agent_action"])
+        self.assertTrue(packet["source_boundary"]["final_action_owned_by_fresh_thread_action_policy"])
 
     def test_packet_redacts_raw_prompt_snippets_secrets_and_local_paths(self) -> None:
         local_path = "E:" + "\\private\\gift-notes.md"
@@ -88,6 +92,7 @@ class FreshThreadScentPacketTests(unittest.TestCase):
         serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)
 
         self.assertEqual(payload["support_level"], "source_required")
+        self.assertEqual(payload["advisory_action"], "source_reopen")
         self.assertEqual(payload["suggested_action"], "source_reopen")
         self.assertIn("clean:family:msg-9", serialized)
         self.assertNotIn("帮我妈妈", serialized)
@@ -109,6 +114,7 @@ class FreshThreadScentPacketTests(unittest.TestCase):
 
         self.assertEqual(packet["support_level"], "suppressed")
         self.assertEqual(packet["sensitivity"], "suppress")
+        self.assertEqual(packet["advisory_action"], "ignore")
         self.assertEqual(packet["suggested_action"], "ignore")
         self.assertEqual(packet["candidate_refs"], [])
         self.assertIn("Do not use suppressed packets", " ".join(packet["when_not_to_use"]))
@@ -145,6 +151,7 @@ class FreshThreadScentPacketTests(unittest.TestCase):
                 serialized = json.dumps(packet, ensure_ascii=False, sort_keys=True)
 
                 self.assertEqual(packet["support_level"], "soft_hypothesis")
+                self.assertEqual(packet["advisory_action"], expected_action)
                 self.assertEqual(packet["suggested_action"], expected_action)
                 self.assertIn(source_id, serialized)
                 self.assertNotIn(prompt, serialized)
