@@ -59,6 +59,15 @@ class VcsFutureEventRecallBenchmarkTests(unittest.TestCase):
             ]["method"],
             "wilson_score",
         )
+        anti_drift_violation_rate = payload["metrics"]["rate_estimates"][
+            "anti_drift_violation_rate"
+        ]
+        self.assertEqual(anti_drift_violation_rate["numerator"], 0)
+        self.assertEqual(
+            anti_drift_violation_rate["denominator"],
+            payload["metrics"]["anti_drift_negative_count"],
+        )
+        self.assertGreater(anti_drift_violation_rate["confidence_interval"]["upper"], 0)
         self.assertIn("future_event_flag_recall", payload["lower_bound_gates"])
         self.assertEqual(payload["metrics"]["false_negative_count"], 0)
         self.assertEqual(payload["metrics"]["false_positive_count"], 0)

@@ -350,6 +350,7 @@ def summarize(event_rows: list[dict[str, Any]], prediction_rows: list[dict[str, 
     precision = safe_rate(true_positive_count, predicted_flag_count)
     recall = safe_rate(true_positive_count, len(positive_rows))
     f1 = round(2 * precision * recall / (precision + recall), 4) if precision + recall else 0.0
+    anti_drift_violation_count = sum(1 for row in non_flag_rows if row["false_positive"])
     rate_estimates = {
         "future_event_flag_recall": binomial_rate_report(
             "future_event_flag_recall",
@@ -364,6 +365,11 @@ def summarize(event_rows: list[dict[str, Any]], prediction_rows: list[dict[str, 
         "anti_drift_pass_rate": binomial_rate_report(
             "anti_drift_pass_rate",
             numerator=sum(1 for row in non_flag_rows if not row["false_positive"]),
+            denominator=len(non_flag_rows),
+        ),
+        "anti_drift_violation_rate": binomial_rate_report(
+            "anti_drift_violation_rate",
+            numerator=anti_drift_violation_count,
             denominator=len(non_flag_rows),
         ),
     }
@@ -381,7 +387,7 @@ def summarize(event_rows: list[dict[str, Any]], prediction_rows: list[dict[str, 
         "rate_estimates": rate_estimates,
         "silent_dream_penalty_applies": True,
         "anti_drift_negative_count": len(non_flag_rows),
-        "anti_drift_violation_count": sum(1 for row in non_flag_rows if row["false_positive"]),
+        "anti_drift_violation_count": anti_drift_violation_count,
         "anti_drift_pass_rate": safe_rate(
             sum(1 for row in non_flag_rows if not row["false_positive"]),
             len(non_flag_rows),

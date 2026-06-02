@@ -30,14 +30,18 @@ python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset .tm
 
 The empty, closed-book, parametric public-memory, and overactive sanity-control arms are expected to exit non-zero. They are measured as separate arms and must not be merged into the source-window score.
 
+## Uncertainty Semantics
+
+Headline binomial rates below include `95%` Wilson confidence intervals and `n`. These intervals expose uncertainty around the deterministic controls; they do not make the curated React fixture a population-quality claim. A perfect `105/105` point estimate renders as `100.00% (95% Wilson CI 96.47%-100.00%, n=105)`, and `0/105` anti-drift violations render as `0.00% observed; 95% Wilson upper bound 3.53% (n=105)`.
+
 ## Base Arm Results
 
-| Arm | Predicted flags | Recall | Precision | F1 | False negatives | False positives | Anti-drift negatives | Anti-drift pass | Source-support failures |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Source-window | 105 | 100.00% | 100.00% | 100.00% | 0 | 0 | 105 | 100.00% | 0 |
-| Empty | 0 | 0.00% | 0.00% | 0.00% | 105 | 0 | 105 | 100.00% | 0 |
-| Closed-book source-stripped | 105 | 0.00% | 0.00% | 0.00% | 105 | 0 | 105 | 100.00% | 105 |
-| Overactive all-flags sanity control | 210 | 100.00% | 50.00% | 66.67% | 0 | 105 | 105 | 0.00% | 0 |
+| Arm | Predicted flags | Recall | Precision | F1 | False negatives | False positives | Anti-drift negatives | Anti-drift violation rate | Anti-drift pass | Source-support failures |
+| --- | ---: | --- | --- | ---: | ---: | ---: | ---: | --- | --- | ---: |
+| Source-window | 105 | 100.00% (95% Wilson CI 96.47%-100.00%, n=105) | 100.00% (95% Wilson CI 96.47%-100.00%, n=105) | 100.00% | 0 | 0 | 105 | 0.00% observed; 95% Wilson upper bound 3.53% (n=105) | 100.00% (95% Wilson CI 96.47%-100.00%, n=105) | 0 |
+| Empty | 0 | 0.00% (95% Wilson CI 0.00%-3.53%, n=105) | undefined (n=0) | 0.00% | 105 | 0 | 105 | 0.00% observed; 95% Wilson upper bound 3.53% (n=105) | 100.00% (95% Wilson CI 96.47%-100.00%, n=105) | 0 |
+| Closed-book source-stripped | 105 | 0.00% (95% Wilson CI 0.00%-3.53%, n=105) | 0.00% (95% Wilson CI 0.00%-3.53%, n=105) | 0.00% | 105 | 0 | 105 | 0.00% observed; 95% Wilson upper bound 3.53% (n=105) | 100.00% (95% Wilson CI 96.47%-100.00%, n=105) | 105 |
+| Overactive all-flags sanity control | 210 | 100.00% (95% Wilson CI 96.47%-100.00%, n=105) | 50.00% (95% Wilson CI 43.30%-56.70%, n=210) | 66.67% | 0 | 105 | 105 | 100.00% (95% Wilson CI 96.47%-100.00%, n=105) | 0.00% (95% Wilson CI 0.00%-3.53%, n=105) | 0 |
 
 Source-over-closed-book lift: recall `1.00`, precision `1.00`, F1 `1.00`, false-negative reduction `105`.
 
@@ -45,12 +49,12 @@ Source-over-closed-book lift: recall `1.00`, precision `1.00`, F1 `1.00`, false-
 
 The counterfactual fixture keeps the public event ids but replaces the required local source ids and local rationales. A source-backed system must follow the counterfactual source ids. A parametric public-memory control that keeps pointing to the original public source ids scores as unsupported.
 
-| Arm | Predicted flags | Recall | Precision | F1 | False negatives | False positives | Anti-drift negatives | Anti-drift pass | Source-support failures |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Counterfactual source-backed | 105 | 100.00% | 100.00% | 100.00% | 0 | 0 | 105 | 100.00% | 0 |
-| Counterfactual empty | 0 | 0.00% | 0.00% | 0.00% | 105 | 0 | 105 | 100.00% | 0 |
-| Parametric public-memory control | 105 | 0.00% | 0.00% | 0.00% | 105 | 0 | 105 | 100.00% | 105 |
-| Counterfactual overactive sanity control | 210 | 100.00% | 50.00% | 66.67% | 0 | 105 | 105 | 0.00% | 0 |
+| Arm | Predicted flags | Recall | Precision | F1 | False negatives | False positives | Anti-drift negatives | Anti-drift violation rate | Anti-drift pass | Source-support failures |
+| --- | ---: | --- | --- | ---: | ---: | ---: | ---: | --- | --- | ---: |
+| Counterfactual source-backed | 105 | 100.00% (95% Wilson CI 96.47%-100.00%, n=105) | 100.00% (95% Wilson CI 96.47%-100.00%, n=105) | 100.00% | 0 | 0 | 105 | 0.00% observed; 95% Wilson upper bound 3.53% (n=105) | 100.00% (95% Wilson CI 96.47%-100.00%, n=105) | 0 |
+| Counterfactual empty | 0 | 0.00% (95% Wilson CI 0.00%-3.53%, n=105) | undefined (n=0) | 0.00% | 105 | 0 | 105 | 0.00% observed; 95% Wilson upper bound 3.53% (n=105) | 100.00% (95% Wilson CI 96.47%-100.00%, n=105) | 0 |
+| Parametric public-memory control | 105 | 0.00% (95% Wilson CI 0.00%-3.53%, n=105) | 0.00% (95% Wilson CI 0.00%-3.53%, n=105) | 0.00% | 105 | 0 | 105 | 0.00% observed; 95% Wilson upper bound 3.53% (n=105) | 100.00% (95% Wilson CI 96.47%-100.00%, n=105) | 105 |
+| Counterfactual overactive sanity control | 210 | 100.00% (95% Wilson CI 96.47%-100.00%, n=105) | 50.00% (95% Wilson CI 43.30%-56.70%, n=210) | 66.67% | 0 | 105 | 105 | 100.00% (95% Wilson CI 96.47%-100.00%, n=105) | 0.00% (95% Wilson CI 0.00%-3.53%, n=105) | 0 |
 
 Counterfactual source-over-parametric lift: recall `1.00`, precision `1.00`, F1 `1.00`, false-negative reduction `105`.
 

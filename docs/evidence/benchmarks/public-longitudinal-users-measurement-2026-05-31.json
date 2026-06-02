@@ -15,13 +15,104 @@
         "full_evidence_recall_rate": 1.0,
         "exact_evidence_match_rate": 1.0,
         "missing_evidence_id_count": 0,
-        "false_positive_evidence_id_count": 0
+        "false_positive_evidence_id_count": 0,
+        "false_positive_evidence_case_count": 0,
+        "rate_estimates": {
+          "full_evidence_recall_rate": {
+            "name": "full_evidence_recall_rate",
+            "numerator": 1973,
+            "denominator": 1973,
+            "point_estimate": 1.0,
+            "confidence_interval": {
+              "method": "wilson_score",
+              "confidence_level": 0.95,
+              "success_count": 1973,
+              "total_count": 1973,
+              "point_estimate": 1.0,
+              "lower": 0.9981,
+              "upper": 1.0,
+              "defined": true
+            },
+            "defined": true
+          },
+          "exact_evidence_match_rate": {
+            "name": "exact_evidence_match_rate",
+            "numerator": 1973,
+            "denominator": 1973,
+            "point_estimate": 1.0,
+            "confidence_interval": {
+              "method": "wilson_score",
+              "confidence_level": 0.95,
+              "success_count": 1973,
+              "total_count": 1973,
+              "point_estimate": 1.0,
+              "lower": 0.9981,
+              "upper": 1.0,
+              "defined": true
+            },
+            "defined": true
+          },
+          "false_positive_evidence_case_rate": {
+            "name": "false_positive_evidence_case_rate",
+            "numerator": 0,
+            "denominator": 1973,
+            "point_estimate": 0.0,
+            "confidence_interval": {
+              "method": "wilson_score",
+              "confidence_level": 0.95,
+              "success_count": 0,
+              "total_count": 1973,
+              "point_estimate": 0.0,
+              "lower": 0.0,
+              "upper": 0.0019,
+              "defined": true
+            },
+            "defined": true
+          }
+        }
       },
       "empty": {
         "ok": false,
         "full_evidence_recall_rate": 0.0,
         "exact_evidence_match_rate": 0.0,
-        "missing_evidence_id_count": 2789
+        "missing_evidence_id_count": 2789,
+        "scored_case_count": 1973,
+        "rate_estimates": {
+          "full_evidence_recall_rate": {
+            "name": "full_evidence_recall_rate",
+            "numerator": 0,
+            "denominator": 1973,
+            "point_estimate": 0.0,
+            "confidence_interval": {
+              "method": "wilson_score",
+              "confidence_level": 0.95,
+              "success_count": 0,
+              "total_count": 1973,
+              "point_estimate": 0.0,
+              "lower": 0.0,
+              "upper": 0.0019,
+              "defined": true
+            },
+            "defined": true
+          },
+          "exact_evidence_match_rate": {
+            "name": "exact_evidence_match_rate",
+            "numerator": 0,
+            "denominator": 1973,
+            "point_estimate": 0.0,
+            "confidence_interval": {
+              "method": "wilson_score",
+              "confidence_level": 0.95,
+              "success_count": 0,
+              "total_count": 1973,
+              "point_estimate": 0.0,
+              "lower": 0.0,
+              "upper": 0.0019,
+              "defined": true
+            },
+            "defined": true
+          }
+        }
       },
       "artifact_smoke": {
         "ok": true,
@@ -42,14 +133,197 @@
         "overall_score": 1.0,
         "decision_accuracy": 1.0,
         "anti_drift_pass_rate": 1.0,
-        "reopen_decision_accuracy": 1.0
+        "reopen_decision_accuracy": 1.0,
+        "correct_count": 15,
+        "accuracy": 1.0,
+        "source_event_false_positive_count": 0,
+        "anti_drift_case_count": 3,
+        "reopen_case_count": 3,
+        "rate_estimates": {
+          "accuracy": {
+            "name": "accuracy",
+            "numerator": 15,
+            "denominator": 15,
+            "point_estimate": 1.0,
+            "confidence_interval": {
+              "method": "wilson_score",
+              "confidence_level": 0.95,
+              "success_count": 15,
+              "total_count": 15,
+              "point_estimate": 1.0,
+              "lower": 0.7961,
+              "upper": 1.0,
+              "defined": true
+            },
+            "defined": true
+          },
+          "decision_accuracy": {
+            "name": "decision_accuracy",
+            "numerator": 15,
+            "denominator": 15,
+            "point_estimate": 1.0,
+            "confidence_interval": {
+              "method": "wilson_score",
+              "confidence_level": 0.95,
+              "success_count": 15,
+              "total_count": 15,
+              "point_estimate": 1.0,
+              "lower": 0.7961,
+              "upper": 1.0,
+              "defined": true
+            },
+            "defined": true
+          },
+          "source_event_false_positive_case_rate": {
+            "name": "source_event_false_positive_case_rate",
+            "numerator": 0,
+            "denominator": 15,
+            "point_estimate": 0.0,
+            "confidence_interval": {
+              "method": "wilson_score",
+              "confidence_level": 0.95,
+              "success_count": 0,
+              "total_count": 15,
+              "point_estimate": 0.0,
+              "lower": 0.0,
+              "upper": 0.2039,
+              "defined": true
+            },
+            "defined": true
+          },
+          "anti_drift_pass_rate": {
+            "name": "anti_drift_pass_rate",
+            "numerator": 3,
+            "denominator": 3,
+            "point_estimate": 1.0,
+            "confidence_interval": {
+              "method": "wilson_score",
+              "confidence_level": 0.95,
+              "success_count": 3,
+              "total_count": 3,
+              "point_estimate": 1.0,
+              "lower": 0.4385,
+              "upper": 1.0,
+              "defined": true
+            },
+            "defined": true
+          },
+          "reopen_decision_accuracy": {
+            "name": "reopen_decision_accuracy",
+            "numerator": 3,
+            "denominator": 3,
+            "point_estimate": 1.0,
+            "confidence_interval": {
+              "method": "wilson_score",
+              "confidence_level": 0.95,
+              "success_count": 3,
+              "total_count": 3,
+              "point_estimate": 1.0,
+              "lower": 0.4385,
+              "upper": 1.0,
+              "defined": true
+            },
+            "defined": true
+          }
+        },
+        "sample_size_warnings": {
+          "accuracy": {
+            "low_inference": true,
+            "threshold": 30,
+            "denominator": 15,
+            "evidence_kind": "contract-smoke",
+            "message": "n < 30: treat this as low-inference contract-smoke evidence, not population-quality evidence."
+          },
+          "decision_accuracy": {
+            "low_inference": true,
+            "threshold": 30,
+            "denominator": 15,
+            "evidence_kind": "contract-smoke",
+            "message": "n < 30: treat this as low-inference contract-smoke evidence, not population-quality evidence."
+          },
+          "source_event_false_positive_case_rate": {
+            "low_inference": true,
+            "threshold": 30,
+            "denominator": 15,
+            "evidence_kind": "contract-smoke",
+            "message": "n < 30: treat this as low-inference contract-smoke evidence, not population-quality evidence."
+          },
+          "anti_drift_pass_rate": {
+            "low_inference": true,
+            "threshold": 30,
+            "denominator": 3,
+            "evidence_kind": "contract-smoke",
+            "message": "n < 30: treat this as low-inference contract-smoke evidence, not population-quality evidence."
+          },
+          "reopen_decision_accuracy": {
+            "low_inference": true,
+            "threshold": 30,
+            "denominator": 3,
+            "evidence_kind": "contract-smoke",
+            "message": "n < 30: treat this as low-inference contract-smoke evidence, not population-quality evidence."
+          }
+        }
       },
       "empty": {
         "ok": false,
         "overall_score": 0.3,
         "decision_accuracy": 0.0,
         "anti_drift_pass_rate": 1.0,
-        "missing_prediction_count": 0
+        "missing_prediction_count": 0,
+        "total_cases": 15,
+        "anti_drift_case_count": 3,
+        "rate_estimates": {
+          "decision_accuracy": {
+            "name": "decision_accuracy",
+            "numerator": 0,
+            "denominator": 15,
+            "point_estimate": 0.0,
+            "confidence_interval": {
+              "method": "wilson_score",
+              "confidence_level": 0.95,
+              "success_count": 0,
+              "total_count": 15,
+              "point_estimate": 0.0,
+              "lower": 0.0,
+              "upper": 0.2039,
+              "defined": true
+            },
+            "defined": true
+          },
+          "anti_drift_pass_rate": {
+            "name": "anti_drift_pass_rate",
+            "numerator": 3,
+            "denominator": 3,
+            "point_estimate": 1.0,
+            "confidence_interval": {
+              "method": "wilson_score",
+              "confidence_level": 0.95,
+              "success_count": 3,
+              "total_count": 3,
+              "point_estimate": 1.0,
+              "lower": 0.4385,
+              "upper": 1.0,
+              "defined": true
+            },
+            "defined": true
+          }
+        },
+        "sample_size_warnings": {
+          "decision_accuracy": {
+            "low_inference": true,
+            "threshold": 30,
+            "denominator": 15,
+            "evidence_kind": "contract-smoke",
+            "message": "n < 30: treat this as low-inference contract-smoke evidence, not population-quality evidence."
+          },
+          "anti_drift_pass_rate": {
+            "low_inference": true,
+            "threshold": 30,
+            "denominator": 3,
+            "evidence_kind": "contract-smoke",
+            "message": "n < 30: treat this as low-inference contract-smoke evidence, not population-quality evidence."
+          }
+        }
       },
       "claim_boundary": "checked-in public synthetic pseudo-users with explicit source events and gold labels. This is a scoring-contract smoke; the flagship recall track should use VCS-derived hard future events such as merge/reject/reopen/revert/supersede/removal."
     },
@@ -61,13 +335,198 @@
         "future_event_flag_recall_rate": 1.0,
         "future_event_flag_precision": 1.0,
         "false_negative_count": 0,
-        "false_positive_count": 0
+        "false_positive_count": 0,
+        "predicted_flag_count": 6,
+        "true_positive_count": 6,
+        "anti_drift_negative_count": 3,
+        "anti_drift_violation_count": 0,
+        "anti_drift_pass_rate": 1.0,
+        "rate_estimates": {
+          "future_event_flag_recall": {
+            "name": "future_event_flag_recall",
+            "numerator": 6,
+            "denominator": 6,
+            "point_estimate": 1.0,
+            "confidence_interval": {
+              "method": "wilson_score",
+              "confidence_level": 0.95,
+              "success_count": 6,
+              "total_count": 6,
+              "point_estimate": 1.0,
+              "lower": 0.6097,
+              "upper": 1.0,
+              "defined": true
+            },
+            "defined": true
+          },
+          "future_event_flag_precision": {
+            "name": "future_event_flag_precision",
+            "numerator": 6,
+            "denominator": 6,
+            "point_estimate": 1.0,
+            "confidence_interval": {
+              "method": "wilson_score",
+              "confidence_level": 0.95,
+              "success_count": 6,
+              "total_count": 6,
+              "point_estimate": 1.0,
+              "lower": 0.6097,
+              "upper": 1.0,
+              "defined": true
+            },
+            "defined": true
+          },
+          "anti_drift_pass_rate": {
+            "name": "anti_drift_pass_rate",
+            "numerator": 3,
+            "denominator": 3,
+            "point_estimate": 1.0,
+            "confidence_interval": {
+              "method": "wilson_score",
+              "confidence_level": 0.95,
+              "success_count": 3,
+              "total_count": 3,
+              "point_estimate": 1.0,
+              "lower": 0.4385,
+              "upper": 1.0,
+              "defined": true
+            },
+            "defined": true
+          },
+          "anti_drift_violation_rate": {
+            "name": "anti_drift_violation_rate",
+            "numerator": 0,
+            "denominator": 3,
+            "point_estimate": 0.0,
+            "confidence_interval": {
+              "method": "wilson_score",
+              "confidence_level": 0.95,
+              "success_count": 0,
+              "total_count": 3,
+              "point_estimate": 0.0,
+              "lower": 0.0,
+              "upper": 0.5615,
+              "defined": true
+            },
+            "defined": true
+          }
+        },
+        "sample_size_warnings": {
+          "future_event_flag_recall": {
+            "low_inference": true,
+            "threshold": 30,
+            "denominator": 6,
+            "evidence_kind": "contract-smoke",
+            "message": "n < 30: treat this as low-inference contract-smoke evidence, not population-quality evidence."
+          },
+          "future_event_flag_precision": {
+            "low_inference": true,
+            "threshold": 30,
+            "denominator": 6,
+            "evidence_kind": "contract-smoke",
+            "message": "n < 30: treat this as low-inference contract-smoke evidence, not population-quality evidence."
+          },
+          "anti_drift_pass_rate": {
+            "low_inference": true,
+            "threshold": 30,
+            "denominator": 3,
+            "evidence_kind": "contract-smoke",
+            "message": "n < 30: treat this as low-inference contract-smoke evidence, not population-quality evidence."
+          },
+          "anti_drift_violation_rate": {
+            "low_inference": true,
+            "threshold": 30,
+            "denominator": 3,
+            "evidence_kind": "contract-smoke",
+            "message": "n < 30: treat this as low-inference contract-smoke evidence, not population-quality evidence."
+          }
+        }
       },
       "empty": {
         "ok": false,
         "future_event_flag_recall_rate": 0.0,
         "false_negative_count": 6,
-        "false_positive_count": 0
+        "false_positive_count": 0,
+        "future_event_gold_count": 6,
+        "anti_drift_negative_count": 3,
+        "anti_drift_violation_count": 0,
+        "anti_drift_pass_rate": 1.0,
+        "rate_estimates": {
+          "future_event_flag_recall": {
+            "name": "future_event_flag_recall",
+            "numerator": 0,
+            "denominator": 6,
+            "point_estimate": 0.0,
+            "confidence_interval": {
+              "method": "wilson_score",
+              "confidence_level": 0.95,
+              "success_count": 0,
+              "total_count": 6,
+              "point_estimate": 0.0,
+              "lower": 0.0,
+              "upper": 0.3903,
+              "defined": true
+            },
+            "defined": true
+          },
+          "anti_drift_pass_rate": {
+            "name": "anti_drift_pass_rate",
+            "numerator": 3,
+            "denominator": 3,
+            "point_estimate": 1.0,
+            "confidence_interval": {
+              "method": "wilson_score",
+              "confidence_level": 0.95,
+              "success_count": 3,
+              "total_count": 3,
+              "point_estimate": 1.0,
+              "lower": 0.4385,
+              "upper": 1.0,
+              "defined": true
+            },
+            "defined": true
+          },
+          "anti_drift_violation_rate": {
+            "name": "anti_drift_violation_rate",
+            "numerator": 0,
+            "denominator": 3,
+            "point_estimate": 0.0,
+            "confidence_interval": {
+              "method": "wilson_score",
+              "confidence_level": 0.95,
+              "success_count": 0,
+              "total_count": 3,
+              "point_estimate": 0.0,
+              "lower": 0.0,
+              "upper": 0.5615,
+              "defined": true
+            },
+            "defined": true
+          }
+        },
+        "sample_size_warnings": {
+          "future_event_flag_recall": {
+            "low_inference": true,
+            "threshold": 30,
+            "denominator": 6,
+            "evidence_kind": "contract-smoke",
+            "message": "n < 30: treat this as low-inference contract-smoke evidence, not population-quality evidence."
+          },
+          "anti_drift_pass_rate": {
+            "low_inference": true,
+            "threshold": 30,
+            "denominator": 3,
+            "evidence_kind": "contract-smoke",
+            "message": "n < 30: treat this as low-inference contract-smoke evidence, not population-quality evidence."
+          },
+          "anti_drift_violation_rate": {
+            "low_inference": true,
+            "threshold": 30,
+            "denominator": 3,
+            "evidence_kind": "contract-smoke",
+            "message": "n < 30: treat this as low-inference contract-smoke evidence, not population-quality evidence."
+          }
+        }
       },
       "claim_boundary": "V1 is a VCS-shaped public contract fixture. It proves recall-aware scoring semantics, not wild MSR/Gerrit/SATD corpus performance."
     },
@@ -79,13 +538,198 @@
         "future_event_flag_recall_rate": 1.0,
         "future_event_flag_precision": 1.0,
         "false_negative_count": 0,
-        "false_positive_count": 0
+        "false_positive_count": 0,
+        "predicted_flag_count": 3,
+        "true_positive_count": 3,
+        "anti_drift_negative_count": 3,
+        "anti_drift_violation_count": 0,
+        "anti_drift_pass_rate": 1.0,
+        "rate_estimates": {
+          "future_event_flag_recall": {
+            "name": "future_event_flag_recall",
+            "numerator": 3,
+            "denominator": 3,
+            "point_estimate": 1.0,
+            "confidence_interval": {
+              "method": "wilson_score",
+              "confidence_level": 0.95,
+              "success_count": 3,
+              "total_count": 3,
+              "point_estimate": 1.0,
+              "lower": 0.4385,
+              "upper": 1.0,
+              "defined": true
+            },
+            "defined": true
+          },
+          "future_event_flag_precision": {
+            "name": "future_event_flag_precision",
+            "numerator": 3,
+            "denominator": 3,
+            "point_estimate": 1.0,
+            "confidence_interval": {
+              "method": "wilson_score",
+              "confidence_level": 0.95,
+              "success_count": 3,
+              "total_count": 3,
+              "point_estimate": 1.0,
+              "lower": 0.4385,
+              "upper": 1.0,
+              "defined": true
+            },
+            "defined": true
+          },
+          "anti_drift_pass_rate": {
+            "name": "anti_drift_pass_rate",
+            "numerator": 3,
+            "denominator": 3,
+            "point_estimate": 1.0,
+            "confidence_interval": {
+              "method": "wilson_score",
+              "confidence_level": 0.95,
+              "success_count": 3,
+              "total_count": 3,
+              "point_estimate": 1.0,
+              "lower": 0.4385,
+              "upper": 1.0,
+              "defined": true
+            },
+            "defined": true
+          },
+          "anti_drift_violation_rate": {
+            "name": "anti_drift_violation_rate",
+            "numerator": 0,
+            "denominator": 3,
+            "point_estimate": 0.0,
+            "confidence_interval": {
+              "method": "wilson_score",
+              "confidence_level": 0.95,
+              "success_count": 0,
+              "total_count": 3,
+              "point_estimate": 0.0,
+              "lower": 0.0,
+              "upper": 0.5615,
+              "defined": true
+            },
+            "defined": true
+          }
+        },
+        "sample_size_warnings": {
+          "future_event_flag_recall": {
+            "low_inference": true,
+            "threshold": 30,
+            "denominator": 3,
+            "evidence_kind": "contract-smoke",
+            "message": "n < 30: treat this as low-inference contract-smoke evidence, not population-quality evidence."
+          },
+          "future_event_flag_precision": {
+            "low_inference": true,
+            "threshold": 30,
+            "denominator": 3,
+            "evidence_kind": "contract-smoke",
+            "message": "n < 30: treat this as low-inference contract-smoke evidence, not population-quality evidence."
+          },
+          "anti_drift_pass_rate": {
+            "low_inference": true,
+            "threshold": 30,
+            "denominator": 3,
+            "evidence_kind": "contract-smoke",
+            "message": "n < 30: treat this as low-inference contract-smoke evidence, not population-quality evidence."
+          },
+          "anti_drift_violation_rate": {
+            "low_inference": true,
+            "threshold": 30,
+            "denominator": 3,
+            "evidence_kind": "contract-smoke",
+            "message": "n < 30: treat this as low-inference contract-smoke evidence, not population-quality evidence."
+          }
+        }
       },
       "empty": {
         "ok": false,
         "future_event_flag_recall_rate": 0.0,
         "false_negative_count": 3,
-        "false_positive_count": 0
+        "false_positive_count": 0,
+        "future_event_gold_count": 3,
+        "anti_drift_negative_count": 3,
+        "anti_drift_violation_count": 0,
+        "anti_drift_pass_rate": 1.0,
+        "rate_estimates": {
+          "future_event_flag_recall": {
+            "name": "future_event_flag_recall",
+            "numerator": 0,
+            "denominator": 3,
+            "point_estimate": 0.0,
+            "confidence_interval": {
+              "method": "wilson_score",
+              "confidence_level": 0.95,
+              "success_count": 0,
+              "total_count": 3,
+              "point_estimate": 0.0,
+              "lower": 0.0,
+              "upper": 0.5615,
+              "defined": true
+            },
+            "defined": true
+          },
+          "anti_drift_pass_rate": {
+            "name": "anti_drift_pass_rate",
+            "numerator": 3,
+            "denominator": 3,
+            "point_estimate": 1.0,
+            "confidence_interval": {
+              "method": "wilson_score",
+              "confidence_level": 0.95,
+              "success_count": 3,
+              "total_count": 3,
+              "point_estimate": 1.0,
+              "lower": 0.4385,
+              "upper": 1.0,
+              "defined": true
+            },
+            "defined": true
+          },
+          "anti_drift_violation_rate": {
+            "name": "anti_drift_violation_rate",
+            "numerator": 0,
+            "denominator": 3,
+            "point_estimate": 0.0,
+            "confidence_interval": {
+              "method": "wilson_score",
+              "confidence_level": 0.95,
+              "success_count": 0,
+              "total_count": 3,
+              "point_estimate": 0.0,
+              "lower": 0.0,
+              "upper": 0.5615,
+              "defined": true
+            },
+            "defined": true
+          }
+        },
+        "sample_size_warnings": {
+          "future_event_flag_recall": {
+            "low_inference": true,
+            "threshold": 30,
+            "denominator": 3,
+            "evidence_kind": "contract-smoke",
+            "message": "n < 30: treat this as low-inference contract-smoke evidence, not population-quality evidence."
+          },
+          "anti_drift_pass_rate": {
+            "low_inference": true,
+            "threshold": 30,
+            "denominator": 3,
+            "evidence_kind": "contract-smoke",
+            "message": "n < 30: treat this as low-inference contract-smoke evidence, not population-quality evidence."
+          },
+          "anti_drift_violation_rate": {
+            "low_inference": true,
+            "threshold": 30,
+            "denominator": 3,
+            "evidence_kind": "contract-smoke",
+            "message": "n < 30: treat this as low-inference contract-smoke evidence, not population-quality evidence."
+          }
+        }
       },
       "claim_boundary": "V1 is a hard-event public contract fixture. It proves recall-aware scoring semantics over deterministic rollout behavior traces, not live agent quality or private real-history continuity."
     }
@@ -102,5 +746,11 @@
     "cross_conversation_longitudinal_memory_from_locomo",
     "coding_tacit_constraint_quality_from_locomo",
     "wild_vcs_corpus_quality"
-  ]
+  ],
+  "uncertainty": {
+    "method": "wilson_score",
+    "confidence_level": 0.95,
+    "small_sample_threshold": 30,
+    "claim_boundary": "Confidence intervals expose binomial uncertainty around each track headline rate; small contract-smoke rows remain low-inference and cannot support population-quality claims."
+  }
 }

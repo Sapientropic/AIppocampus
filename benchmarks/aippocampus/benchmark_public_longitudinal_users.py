@@ -29,6 +29,8 @@ import _paths
 
 _paths.ensure_paths()
 
+from benchmark_statistics import binomial_rate_report
+
 SCHEMA_VERSION = 1
 TRACK_ROLE = "scoring_contract_smoke"
 NEXT_FLAGSHIP_TRACK = "vcs_future_event_recall"
@@ -386,6 +388,50 @@ def summarize_results(results: list[dict[str, Any]], dataset: PublicLongitudinal
     expected_surface = [row for row in results if row["expected_decision"] in {"surface", "reopen"}]
     expected_suppress = [row for row in results if row["expected_decision"] == "suppress"]
     source_required = [row for row in results if row["expected_source_event_ids"]]
+    decision_correct_count = sum(1 for row in results if row["decision_correct"])
+    source_event_recall_count = sum(
+        1 for row in source_required if not row["missing_source_event_ids"]
+    )
+    source_event_false_positive_count = sum(
+        1 for row in results if row["extra_source_event_ids"]
+    )
+    anti_drift_pass_count = sum(
+        1 for row in expected_suppress if not row["anti_drift_violation"]
+    )
+    reopen_case_count = sum(1 for row in results if row["expected_decision"] == "reopen")
+    reopen_decision_correct_count = sum(
+        1
+        for row in results
+        if row["expected_decision"] == "reopen" and row["decision_correct"]
+    )
+    rate_estimates = {
+        "accuracy": binomial_rate_report("accuracy", numerator=correct, denominator=total),
+        "decision_accuracy": binomial_rate_report(
+            "decision_accuracy",
+            numerator=decision_correct_count,
+            denominator=total,
+        ),
+        "source_event_full_recall_rate": binomial_rate_report(
+            "source_event_full_recall_rate",
+            numerator=source_event_recall_count,
+            denominator=len(source_required),
+        ),
+        "source_event_false_positive_case_rate": binomial_rate_report(
+            "source_event_false_positive_case_rate",
+            numerator=source_event_false_positive_count,
+            denominator=total,
+        ),
+        "anti_drift_pass_rate": binomial_rate_report(
+            "anti_drift_pass_rate",
+            numerator=anti_drift_pass_count,
+            denominator=len(expected_suppress),
+        ),
+        "reopen_decision_accuracy": binomial_rate_report(
+            "reopen_decision_accuracy",
+            numerator=reopen_decision_correct_count,
+            denominator=reopen_case_count,
+        ),
+    }
     return {
         "total_cases": total,
         "pseudo_user_count": len({row["user_id"] for row in results}),
@@ -404,40 +450,26 @@ def summarize_results(results: list[dict[str, Any]], dataset: PublicLongitudinal
         )
         if total
         else 0.0,
-        "decision_accuracy": safe_rate(
-            sum(1 for row in results if row["decision_correct"]),
-            total,
-        ),
+        "decision_accuracy": safe_rate(decision_correct_count, total),
         "required_claim_full_recall_rate": safe_rate(
             sum(1 for row in expected_surface if row["required_claims_present"]),
             len(expected_surface),
         ),
-        "source_event_full_recall_rate": safe_rate(
-            sum(1 for row in source_required if not row["missing_source_event_ids"]),
-            len(source_required),
-        ),
-        "source_event_false_positive_count": sum(
-            1 for row in results if row["extra_source_event_ids"]
-        ),
+        "source_event_full_recall_rate": safe_rate(source_event_recall_count, len(source_required)),
+        "source_event_false_positive_count": source_event_false_positive_count,
         "forbidden_claim_violation_count": sum(
             1 for row in results if row["forbidden_claim_violation"]
         ),
         "unknown_claim_id_count": sum(len(row["unknown_claim_ids"]) for row in results),
         "extra_known_claim_count": sum(len(row["extra_known_claim_ids"]) for row in results),
         "anti_drift_case_count": len(expected_suppress),
-        "anti_drift_pass_rate": safe_rate(
-            sum(1 for row in expected_suppress if not row["anti_drift_violation"]),
-            len(expected_suppress),
-        ),
-        "reopen_case_count": sum(1 for row in results if row["expected_decision"] == "reopen"),
+        "anti_drift_pass_rate": safe_rate(anti_drift_pass_count, len(expected_suppress)),
+        "reopen_case_count": reopen_case_count,
         "reopen_decision_accuracy": safe_rate(
-            sum(
-                1
-                for row in results
-                if row["expected_decision"] == "reopen" and row["decision_correct"]
-            ),
-            sum(1 for row in results if row["expected_decision"] == "reopen"),
+            reopen_decision_correct_count,
+            reopen_case_count,
         ),
+        "rate_estimates": rate_estimates,
         "by_probe_type": by_probe_type,
         "aggregation_boundary": (
             "Use by_probe_type / family metrics for interpretation. The synthetic "

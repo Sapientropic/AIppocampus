@@ -82,6 +82,17 @@ class LocomoPublicUsersBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["metrics"]["scored_case_count"], 2)
         self.assertEqual(payload["metrics"]["full_evidence_recall_rate"], 1.0)
         self.assertEqual(payload["metrics"]["exact_evidence_match_rate"], 1.0)
+        rate_estimates = payload["metrics"]["rate_estimates"]
+        self.assertEqual(rate_estimates["full_evidence_recall_rate"]["denominator"], 2)
+        self.assertEqual(
+            rate_estimates["full_evidence_recall_rate"]["confidence_interval"]["method"],
+            "wilson_score",
+        )
+        self.assertEqual(rate_estimates["false_positive_evidence_case_rate"]["numerator"], 0)
+        self.assertGreater(
+            rate_estimates["false_positive_evidence_case_rate"]["confidence_interval"]["upper"],
+            0,
+        )
         dumped = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn("hidden park meeting", dumped)
         self.assertNotIn("blue notebook", dumped)
@@ -138,6 +149,11 @@ class LocomoPublicUsersBenchmarkTests(unittest.TestCase):
         self.assertEqual(by_case["locomo:conv-test:qa:0001"]["extra_evidence_ids"], ["D2:1"])
         self.assertEqual(by_case["locomo:conv-test:qa:0002"]["missing_evidence_ids"], ["D1:2"])
         self.assertEqual(payload["metrics"]["false_positive_evidence_id_count"], 1)
+        self.assertEqual(payload["metrics"]["false_positive_evidence_case_count"], 1)
+        self.assertEqual(
+            payload["metrics"]["rate_estimates"]["false_positive_evidence_case_rate"]["denominator"],
+            2,
+        )
 
     def test_public_text_mode_is_explicit(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
