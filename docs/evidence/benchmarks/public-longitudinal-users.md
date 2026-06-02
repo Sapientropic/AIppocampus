@@ -170,6 +170,37 @@ families, only brittle events count: literal merge/reject/reopen/revert/
 supersede/removal. Soft "seems related" cases should be discarded rather than
 sent to an LLM judge.
 
+Fixture construction must also report candidate-discovery bias. A perfect
+source-window score over a narrow candidate universe can still overstate
+natural engineering-history coverage. VCS fixture builders should carry
+license-safe discovery metadata such as source surface (`title`, `body`,
+`comment`, `label`, `commit-message`), query-term family (`revert`,
+`workaround`, `reland`, `again`, plus synonym expansions such as `undo`,
+`rollback`, `backout`, and `patch`), manual inclusion/exclusion reason codes,
+family balance, and sampled miss rate. These are audit telemetry, not source
+truth: do not emit raw PR bodies, review text, search payloads, local paths, or
+non-redistributable snippets.
+
+Precision reporting must keep the source-backed contract separate from
+diagnostic precision. `future_event_flag_precision` requires both a flag-worthy
+event id and the required source support. A diagnostic event-identity precision
+may help debug predictions that found the right public event id while missing
+source support, but it must not become the headline quality gate.
+
+Negative anti-drift controls should be labeled when they contrast event
+families. Use `anti_drift_family_under_test` for the memory family that should
+stay quiet and `anti_drift_contrast_family` for the tempting but wrong family.
+The benchmark runner reports `negative_cross_family_count` and
+`negative_cross_family_violation_count` so cross-family false activations do not
+hide inside a generic false-positive total.
+
+Source degradation should be explicit instead of hidden inside generic false
+negatives. Datasets may include `truncated_source`, `redacted_source`,
+`missing_source_id`, and `partial_support` controls. Redacted or truncated
+sources can still be source ids when the benchmark contract says enough support
+remains; `missing_source_id` and `partial_support` cannot satisfy full
+source-backed support by themselves.
+
 Hard public outcomes also create a contamination risk: a pretrained model may
 already know a famous PR was later reverted or merged. The benchmark should
 measure that risk instead of pretending it is absent. Every public VCS report

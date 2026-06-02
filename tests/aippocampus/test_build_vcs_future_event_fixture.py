@@ -36,6 +36,13 @@ class VcsFutureEventFixtureBuilderTests(unittest.TestCase):
                     "required_past_source_ids": ["review-1"],
                     "expected_signal": "Reopen the old cache-daemon route.",
                 },
+                "candidate_discovery": {
+                    "source_surfaces": ["title", "body"],
+                    "query_terms": ["revert", "rollback"],
+                    "manual_decision": "included",
+                    "manual_reason_code": "gold_future_event",
+                    "sampled_miss": False,
+                },
             },
             {
                 "project_id": "repo-a",
@@ -52,6 +59,14 @@ class VcsFutureEventFixtureBuilderTests(unittest.TestCase):
                 "flag_worthy": "true",
                 "event_text": "Reverted removal of debounce_epoch after watcher batching regressed.",
                 "required_past_source_ids": "review-2",
+                "candidate_discovery": {
+                    "source_surface": "comment",
+                    "query_terms": ["workaround", "patch"],
+                    "manual_decision": "included",
+                    "manual_reason": "raw reviewer wording must not be emitted",
+                    "manual_reason_code": "behavior_backed_route",
+                    "sampled_miss": False,
+                },
             },
             {
                 "project_id": "repo-a",
@@ -65,6 +80,13 @@ class VcsFutureEventFixtureBuilderTests(unittest.TestCase):
                 "event_timestamp": "2026-03-03T00:00:00Z",
                 "flag_worthy": False,
                 "event_text": "Merged a doc example with a debounce_epoch variable name.",
+                "candidate_discovery": {
+                    "source_surfaces": ["label"],
+                    "query_terms": ["again"],
+                    "manual_decision": "excluded",
+                    "manual_reason_code": "lexical_near_miss",
+                    "sampled_miss": True,
+                },
             },
         ]
         with tempfile.TemporaryDirectory() as tmp:
@@ -86,7 +108,23 @@ class VcsFutureEventFixtureBuilderTests(unittest.TestCase):
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["metrics"]["project_count"], 1)
         self.assertEqual(payload["metrics"]["flag_worthy_event_count"], 2)
+        bias = payload["candidate_discovery_bias"]
+        self.assertTrue(bias["available"])
+        self.assertEqual(bias["source_surface_mix"]["title"]["count"], 1)
+        self.assertEqual(bias["source_surface_mix"]["body"]["count"], 1)
+        self.assertEqual(bias["source_surface_mix"]["comment"]["count"], 1)
+        self.assertEqual(bias["query_term_hit_mix_by_family"]["revert"], 1)
+        self.assertEqual(bias["query_term_hit_mix_by_family"]["rollback"], 1)
+        self.assertEqual(bias["query_term_hit_mix_by_family"]["workaround"], 1)
+        self.assertEqual(bias["manual_decision_counts"]["included"], 2)
+        self.assertEqual(bias["manual_decision_counts"]["excluded"], 1)
+        self.assertEqual(bias["manual_reason_code_counts"]["lexical_near_miss"], 1)
+        self.assertEqual(bias["sampled_miss_rate"]["sample_count"], 3)
+        self.assertEqual(bias["sampled_miss_rate"]["miss_count"], 1)
+        self.assertEqual(bias["synonym_coverage"]["missing_required_families"], ["reland"])
+        self.assertNotIn("raw reviewer wording", json.dumps(bias, ensure_ascii=False))
         self.assertEqual(dataset.dataset_id, "unit_vcs_future_events")
+        self.assertIn("candidate_discovery_bias", dataset.rows[0])
         self.assertEqual(len(dataset.rows[0]["past_window"]), 2)
         self.assertEqual(len(dataset.events_by_id), 3)
         self.assertIn("pr-11-merged", dataset.non_flag_event_ids)
@@ -197,6 +235,7 @@ class VcsFutureEventFixtureBuilderTests(unittest.TestCase):
 
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["metrics"]["clean_source_event_count"], 2)
+        self.assertFalse(payload["candidate_discovery_bias"]["available"])
         self.assertEqual(dataset.dataset_id, "unit_rollout_events")
         event = dataset.events_by_id["evt_failed_again"]
         self.assertEqual(event["required_past_source_ids"], ["evt_failed_test"])

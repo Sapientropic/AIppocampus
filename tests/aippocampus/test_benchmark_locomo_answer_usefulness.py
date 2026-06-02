@@ -146,6 +146,58 @@ class LocomoAnswerUsefulnessBenchmarkTests(unittest.TestCase):
         self.assertFalse(by_case["locomo:conv-test:qa:0002"]["context_sufficient"])
         self.assertFalse(by_case["locomo:conv-test:qa:0002"]["unsupported_inference_refused"])
 
+    def test_deterministic_answer_quality_reports_token_overlap_and_negation_traps(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dataset = Path(tmp) / "locomo10.json"
+            predictions = Path(tmp) / "answers.jsonl"
+            write_fixture(dataset)
+            predictions.write_text(
+                "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "case_id": "locomo:conv-test:qa:0001",
+                                "arm": "retrieved_context",
+                                "retrieved_evidence_ids": ["D1:1"],
+                                "answer_text": "The meeting was not on Monday.",
+                                "citation_ids": ["D1:1"],
+                                "refused": False,
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "case_id": "locomo:conv-test:qa:0002",
+                                "arm": "retrieved_context",
+                                "retrieved_evidence_ids": ["D1:2"],
+                                "answer_text": "A blue notebook was brought.",
+                                "citation_ids": ["D1:2"],
+                                "refused": False,
+                            }
+                        ),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            payload = benchmark.run_benchmark(dataset_path=dataset, predictions_file=predictions)
+
+        metrics = payload["arms"]["retrieved_context"]["metrics"]
+        self.assertEqual(metrics["legacy_substring_gold_match_rate"], 0.5)
+        self.assertEqual(metrics["negation_trap_count"], 1)
+        self.assertEqual(metrics["answer_correct_rate"], 0.5)
+        self.assertEqual(metrics["token_overlap_strong_match_rate"], 1.0)
+        by_case = {
+            row["case_id"]: row
+            for row in payload["arms"]["retrieved_context"]["cases"]
+        }
+        self.assertFalse(by_case["locomo:conv-test:qa:0001"]["answer_correct"])
+        self.assertTrue(by_case["locomo:conv-test:qa:0001"]["answer_quality"]["negation_trap"])
+        self.assertTrue(by_case["locomo:conv-test:qa:0002"]["answer_quality"]["strong_match"])
+        dumped = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn("Monday", dumped)
+        self.assertNotIn("blue notebook", dumped)
+
 
 if __name__ == "__main__":
     unittest.main()

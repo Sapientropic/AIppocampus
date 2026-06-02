@@ -47,6 +47,14 @@ HARD_EVENT_KINDS = {
     "edit_reverted",
     "route_abandoned",
 }
+SOURCE_DEGRADATION_STATES = {
+    "full_source",
+    "truncated_source",
+    "redacted_source",
+    "missing_source_id",
+    "partial_support",
+}
+FULL_SUPPORT_BLOCKING_DEGRADATIONS = {"missing_source_id", "partial_support"}
 
 
 @dataclass(frozen=True)
@@ -57,6 +65,7 @@ class VcsFutureEventDataset:
     events_by_id: dict[str, dict[str, Any]]
     flag_worthy_event_ids: set[str]
     non_flag_event_ids: set[str]
+    candidate_discovery_bias: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -103,6 +112,11 @@ def normalize_decision(value: Any) -> str:
     return decision if decision in FLAG_DECISIONS else "unknown"
 
 
+def normalize_source_degradation(value: Any) -> str:
+    state = str(value or "full_source").strip().lower()
+    return state if state in SOURCE_DEGRADATION_STATES else "full_source"
+
+
 def read_json_or_jsonl(path: Path) -> list[dict[str, Any]]:
     text = path.read_text(encoding="utf-8").strip()
     if not text:
@@ -136,6 +150,7 @@ def load_dataset(
     events_by_id: dict[str, dict[str, Any]] = {}
     flag_worthy_event_ids: set[str] = set()
     non_flag_event_ids: set[str] = set()
+    candidate_discovery_bias: dict[str, Any] = {"available": False}
     errors: list[str] = []
 
     for row_number, row in enumerate(rows, start=1):
@@ -151,6 +166,9 @@ def load_dataset(
             errors.append(f"row {row_number}: missing license")
         elif require_cc0 and license_id.upper() != "CC0-1.0":
             errors.append(f"row {row_number}: fixture rows must be CC0-1.0")
+        row_bias = row.get("candidate_discovery_bias")
+        if isinstance(row_bias, dict) and row_bias.get("available"):
+            candidate_discovery_bias = dict(row_bias)
 
         row_source_ids: set[str] = set()
         row_sources_by_id: dict[str, dict[str, Any]] = {}
@@ -176,8 +194,9 @@ def load_dataset(
             hard_event_kind = str(event.get("hard_event_kind") or "")
             if hard_event_kind not in HARD_EVENT_KINDS:
                 errors.append(f"row {row_number}: unsupported hard_event_kind {hard_event_kind!r}")
+            source_degradation = normalize_source_degradation(event.get("source_degradation"))
             missing_sources = set(as_string_list(event.get("required_past_source_ids"))) - row_source_ids
-            if missing_sources:
+            if missing_sources and source_degradation != "missing_source_id":
                 errors.append(
                     f"row {row_number}: event {event_id} references missing past sources "
                     f"{sorted(missing_sources)}"
@@ -195,6 +214,7 @@ def load_dataset(
                     )
             enriched = dict(event)
             enriched["project_id"] = project_id
+            enriched["source_degradation"] = source_degradation
             events_by_id[event_id] = enriched
             if bool(event.get("flag_worthy")):
                 flag_worthy_event_ids.add(event_id)
@@ -211,7 +231,16 @@ def load_dataset(
         events_by_id=events_by_id,
         flag_worthy_event_ids=flag_worthy_event_ids,
         non_flag_event_ids=non_flag_event_ids,
+        candidate_discovery_bias=candidate_discovery_bias,
     )
+
+
+def source_support_allowed(event: dict[str, Any] | None) -> bool:
+    if event is None:
+        return False
+    return normalize_source_degradation(
+        event.get("source_degradation")
+    ) not in FULL_SUPPORT_BLOCKING_DEGRADATIONS
 
 
 def load_predictions(path: Path) -> list[Prediction]:
@@ -271,7 +300,7 @@ def score_predictions(
         best_prediction = event_predictions[0] if event_predictions else None
         required_sources = set(as_string_list(event.get("required_past_source_ids")))
         predicted_sources = set(best_prediction.past_source_ids) if best_prediction else set()
-        source_supported = required_sources <= predicted_sources
+        source_supported = required_sources <= predicted_sources and source_support_allowed(event)
         flagged = bool(event_predictions)
         true_positive = flag_worthy and flagged and source_supported
         false_negative = flag_worthy and not true_positive
@@ -288,6 +317,9 @@ def score_predictions(
                 "predicted_past_source_ids": sorted(predicted_sources),
                 "flagged": flagged,
                 "source_supported": source_supported if flagged else False,
+                "source_degradation": normalize_source_degradation(event.get("source_degradation")),
+                "anti_drift_family_under_test": event.get("anti_drift_family_under_test"),
+                "anti_drift_contrast_family": event.get("anti_drift_contrast_family"),
                 "true_positive": true_positive,
                 "false_negative": false_negative,
                 "false_positive": false_positive,
@@ -306,7 +338,11 @@ def score_predictions(
             set(as_string_list(maybe_event.get("required_past_source_ids"))) if maybe_event else set()
         )
         predicted_sources = set(prediction.past_source_ids)
-        source_supported = required_sources <= predicted_sources if maybe_event else False
+        source_supported = (
+            required_sources <= predicted_sources and source_support_allowed(maybe_event)
+            if maybe_event
+            else False
+        )
         prediction_rows.append(
             {
                 "prediction_id": prediction.prediction_id,
@@ -317,6 +353,9 @@ def score_predictions(
                 "flag_worthy_event": flag_worthy,
                 "non_flag_event": non_flag_event,
                 "source_supported": source_supported,
+                "source_degradation": normalize_source_degradation(
+                    maybe_event.get("source_degradation") if maybe_event else None
+                ),
                 "unknown_event_false_positive": unknown_event_id and prediction.decision == "flag",
                 "non_flag_false_positive": non_flag_event and prediction.decision == "flag",
                 "missing_required_sources": sorted(required_sources - predicted_sources),
@@ -335,6 +374,11 @@ def summarize(event_rows: list[dict[str, Any]], prediction_rows: list[dict[str, 
         1 for row in prediction_rows if row["unknown_event_false_positive"]
     )
     predicted_flag_count = sum(1 for row in prediction_rows if row["decision"] == "flag")
+    identity_true_positive_count = sum(
+        1
+        for row in prediction_rows
+        if row["decision"] == "flag" and row["known_event_id"] and row["flag_worthy_event"]
+    )
     family_counts: dict[str, dict[str, Any]] = {}
     for row in positive_rows:
         family = str(row.get("family") or "unknown")
@@ -348,6 +392,10 @@ def summarize(event_rows: list[dict[str, Any]], prediction_rows: list[dict[str, 
     for bucket in family_counts.values():
         bucket["recall"] = safe_rate(bucket["true_positive_count"], bucket["gold_event_count"])
     precision = safe_rate(true_positive_count, predicted_flag_count)
+    diagnostic_event_identity_precision = safe_rate(
+        identity_true_positive_count,
+        predicted_flag_count,
+    )
     recall = safe_rate(true_positive_count, len(positive_rows))
     f1 = round(2 * precision * recall / (precision + recall), 4) if precision + recall else 0.0
     anti_drift_violation_count = sum(1 for row in non_flag_rows if row["false_positive"])
@@ -383,6 +431,7 @@ def summarize(event_rows: list[dict[str, Any]], prediction_rows: list[dict[str, 
         "false_positive_count": false_positive_count,
         "future_event_flag_recall_rate": recall,
         "future_event_flag_precision": precision,
+        "diagnostic_event_identity_precision": diagnostic_event_identity_precision,
         "future_event_flag_f1": f1,
         "rate_estimates": rate_estimates,
         "silent_dream_penalty_applies": True,
@@ -401,6 +450,59 @@ def summarize(event_rows: list[dict[str, Any]], prediction_rows: list[dict[str, 
             if row["flag_worthy_event"] and not row["source_supported"]
         ),
         "by_family": family_counts,
+    }
+
+
+def source_degradation_controls(event_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    counts: dict[str, int] = {}
+    for row in event_rows:
+        state = normalize_source_degradation(row.get("source_degradation"))
+        counts[state] = counts.get(state, 0) + 1
+    return {
+        "available": any(state != "full_source" for state in counts),
+        "counts_by_state": dict(sorted(counts.items())),
+        "full_support_blocking_states": sorted(FULL_SUPPORT_BLOCKING_DEGRADATIONS),
+        "full_support_blocked_count": sum(
+            count
+            for state, count in counts.items()
+            if state in FULL_SUPPORT_BLOCKING_DEGRADATIONS
+        ),
+        "claim_boundary": (
+            "Source-degradation controls test scorer behavior under retained, "
+            "redacted, partial, or missing support. Partial support and missing "
+            "source ids cannot satisfy the source-backed contract by themselves."
+        ),
+    }
+
+
+def anti_drift_controls(event_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    negative_rows = [row for row in event_rows if not row["flag_worthy"]]
+    cross_family_rows = [
+        row
+        for row in negative_rows
+        if row.get("anti_drift_family_under_test")
+        and row.get("anti_drift_contrast_family")
+        and row.get("anti_drift_family_under_test") != row.get("anti_drift_contrast_family")
+    ]
+    same_family_rows = [
+        row
+        for row in negative_rows
+        if row.get("anti_drift_family_under_test")
+        and row.get("anti_drift_contrast_family")
+        and row.get("anti_drift_family_under_test") == row.get("anti_drift_contrast_family")
+    ]
+    return {
+        "negative_count": len(negative_rows),
+        "negative_cross_family_count": len(cross_family_rows),
+        "negative_same_family_count": len(same_family_rows),
+        "negative_cross_family_violation_count": sum(
+            1 for row in cross_family_rows if row["false_positive"]
+        ),
+        "claim_boundary": (
+            "Negative cross-family anti-drift rows prove that similar public "
+            "events from another family are penalized when flagged. They are "
+            "separate from positive family-cross-contamination checks."
+        ),
     }
 
 
@@ -535,6 +637,22 @@ def run_benchmark(
             "claim_boundary": claim_boundary,
         },
         "metrics": metrics,
+        "precision_contract": {
+            "primary_metric": "future_event_flag_precision",
+            "primary_definition": (
+                "true positives require a flag-worthy event, all required "
+                "past source ids, and no full-support-blocking source degradation"
+            ),
+            "diagnostic_metric": "diagnostic_event_identity_precision",
+            "diagnostic_definition": (
+                "known flag-worthy event ids among predicted flags, ignoring "
+                "required-source support; useful for debugging but not for the "
+                "source-backed quality gate"
+            ),
+        },
+        "candidate_discovery_bias": dataset.candidate_discovery_bias,
+        "source_degradation_controls": source_degradation_controls(event_rows),
+        "anti_drift_controls": anti_drift_controls(event_rows),
         "lower_bound_gates": {
             "future_event_flag_recall": recall_gate,
             "future_event_flag_precision": precision_gate,

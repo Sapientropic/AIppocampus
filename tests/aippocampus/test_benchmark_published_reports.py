@@ -16,6 +16,7 @@ class PublishedBenchmarkReportsTests(unittest.TestCase):
             )
         )
         source_window = report["arms"]["source_window"]["rate_estimates"]
+        candidate_bias = report["candidate_discovery_bias"]
 
         recall = source_window["future_event_flag_recall"]
         self.assertEqual(recall["denominator"], 105)
@@ -24,12 +25,32 @@ class PublishedBenchmarkReportsTests(unittest.TestCase):
         violation_rate = source_window["anti_drift_violation_rate"]
         self.assertEqual(violation_rate["numerator"], 0)
         self.assertEqual(violation_rate["confidence_interval"]["upper"], 0.0353)
+        self.assertTrue(candidate_bias["available"])
+        self.assertEqual(candidate_bias["query_candidate_count"], 434)
+        self.assertEqual(candidate_bias["query_term_hit_mix_by_family"]["revert"], 169)
+        self.assertEqual(
+            candidate_bias["manual_reason_code_counts"]["unavailable_legacy_report"],
+            329,
+        )
+        self.assertFalse(candidate_bias["sampled_miss_rate"]["available"])
+        self.assertEqual(
+            report["precision_contract"]["diagnostic_metric"],
+            "diagnostic_event_identity_precision",
+        )
+        self.assertEqual(
+            report["source_degradation_controls"]["counts_by_state"]["full_source"],
+            210,
+        )
+        self.assertFalse(report["anti_drift_controls"]["legacy_cross_family_tags_available"])
 
         markdown = (BENCHMARK_REPORTS / "react-real-vcs-100-gold-2026-05-31.md").read_text(
             encoding="utf-8",
         )
         self.assertIn("95% Wilson CI 96.47%-100.00%, n=105", markdown)
         self.assertIn("95% Wilson upper bound 3.53% (n=105)", markdown)
+        self.assertIn("Candidate Discovery Bias", markdown)
+        self.assertIn("manual exclusion reasons and sampled miss rate: unavailable", markdown)
+        self.assertIn("anti_drift_family_under_test", markdown)
 
     def test_public_longitudinal_report_marks_small_contract_smokes(self) -> None:
         report = json.loads(
