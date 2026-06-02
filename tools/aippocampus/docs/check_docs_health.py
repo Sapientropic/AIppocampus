@@ -8,6 +8,7 @@ import ast
 import json
 import re
 import sys
+import tomllib
 from pathlib import Path
 from typing import Any
 
@@ -264,6 +265,41 @@ REQUIRED_PUBLIC_READINESS_DOCS = [
     "docs/evidence/readiness/public-readiness-verification.md",
 ]
 
+# Python support is a public install and contributor claim. Keep the contract
+# checked here so metadata, docs, and CI do not drift into false compatibility.
+CANONICAL_PYTHON_FLOOR = "3.12"
+CANONICAL_PYTHON_REQUIRES = ">=3.12"
+SUPPORTED_PUBLIC_PYTHON_VERSIONS = ("3.12", "3.13")
+UNSUPPORTED_PUBLIC_PYTHON_VERSION_CLAIMS = ("3.10", "3.11")
+
+PYTHON_VERSION_DOC_TERMS = {
+    "README.md": (
+        "AIppocampus supports Python 3.12 and newer",
+        "Homebrew Python 3.12",
+    ),
+    "CONTRIBUTING.md": (
+        "public Python support floor is Python 3.12",
+        "Python 3.10 and Python 3.11",
+        "unsupported public targets",
+    ),
+    "docs/guides/install-guide.md": (
+        "Install Python 3.12 or newer",
+        "Homebrew Python 3.12",
+    ),
+}
+
+PYTHON_VERSION_WORKFLOW_TERMS = {
+    ".github/workflows/aippocampus-ci.yml": (
+        'python-version: ["3.12", "3.13"]',
+        'python-version: "3.12"',
+    ),
+    ".github/workflows/macos-install-smoke.yml": (
+        'default: "3.12"',
+        '- "3.12"',
+        '- "3.13"',
+    ),
+}
+
 PUBLIC_DOC_COMMAND_LINT_FILES = {
     "README.md",
     "docs/guides/install-guide.md",
@@ -512,6 +548,77 @@ def public_core_schema_contract_issues(repo_root: Path) -> list[str]:
     return issues
 
 
+def python_version_contract_issues(repo_root: Path) -> list[str]:
+    issues: list[str] = []
+
+    pyproject_path = repo_root / "pyproject.toml"
+    if not pyproject_path.exists():
+        return ["missing pyproject.toml for Python version contract"]
+    try:
+        pyproject = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+    except tomllib.TOMLDecodeError as exc:
+        return [f"cannot parse pyproject.toml for Python version contract: {exc}"]
+
+    project = pyproject.get("project", {})
+    requires_python = project.get("requires-python")
+    if requires_python != CANONICAL_PYTHON_REQUIRES:
+        issues.append(
+            "pyproject.toml requires-python must stay "
+            f"{CANONICAL_PYTHON_REQUIRES!r}; found {requires_python!r}"
+        )
+
+    classifiers = [str(item) for item in project.get("classifiers", [])]
+    for version in SUPPORTED_PUBLIC_PYTHON_VERSIONS:
+        classifier = f"Programming Language :: Python :: {version}"
+        if classifier not in classifiers:
+            issues.append(f"pyproject.toml missing Python classifier: {classifier}")
+    for version in UNSUPPORTED_PUBLIC_PYTHON_VERSION_CLAIMS:
+        classifier = f"Programming Language :: Python :: {version}"
+        if classifier in classifiers:
+            issues.append(
+                "pyproject.toml must not advertise unsupported Python classifier: "
+                f"{classifier}"
+            )
+
+    tool = pyproject.get("tool", {})
+    ruff_target = tool.get("ruff", {}).get("target-version")
+    if ruff_target != "py312":
+        issues.append(f"ruff target-version must stay 'py312'; found {ruff_target!r}")
+    mypy_python_version = tool.get("mypy", {}).get("python_version")
+    if mypy_python_version != CANONICAL_PYTHON_FLOOR:
+        issues.append(
+            "mypy python_version must stay "
+            f"{CANONICAL_PYTHON_FLOOR!r}; found {mypy_python_version!r}"
+        )
+
+    for rel_path, terms in PYTHON_VERSION_DOC_TERMS.items():
+        path = repo_root / rel_path
+        if not path.exists():
+            issues.append(f"missing Python support contract doc: {rel_path}")
+            continue
+        text = path.read_text(encoding="utf-8")
+        for term in terms:
+            if term not in text:
+                issues.append(f"{rel_path} missing Python support contract term: {term}")
+        if re.search(r"supports Python 3\.1[01]\b|Python 3\.1[01] and newer", text):
+            issues.append(f"{rel_path} must not advertise Python 3.10/3.11 as supported")
+
+    for rel_path, terms in PYTHON_VERSION_WORKFLOW_TERMS.items():
+        path = repo_root / rel_path
+        if not path.exists():
+            issues.append(f"missing Python support workflow: {rel_path}")
+            continue
+        text = path.read_text(encoding="utf-8")
+        for term in terms:
+            if term not in text:
+                issues.append(f"{rel_path} missing Python support workflow term: {term}")
+        for version in UNSUPPORTED_PUBLIC_PYTHON_VERSION_CLAIMS:
+            if re.search(rf'["\']{re.escape(version)}["\']', text):
+                issues.append(f"{rel_path} must not run unsupported Python {version}")
+
+    return issues
+
+
 def windows_context_from_recent_lines(lines: list[str], fence_start_line: int) -> bool:
     recent = "\n".join(lines[max(0, fence_start_line - 5) : fence_start_line - 1]).casefold()
     return "windows" in recent or "powershell" in recent
@@ -594,6 +701,7 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
     issues.extend(benchmark_evidence_map_issues(repo_root))
     issues.extend(public_api_contract_issues(repo_root))
     issues.extend(public_core_schema_contract_issues(repo_root))
+    issues.extend(python_version_contract_issues(repo_root))
 
     gitignore = repo_root / ".gitignore"
     if not gitignore.exists():

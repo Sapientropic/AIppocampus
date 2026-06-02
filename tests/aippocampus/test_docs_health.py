@@ -231,6 +231,77 @@ class DocsHealthTests(unittest.TestCase):
         self.assertIn("public core schema doc missing metadata privacy boundary", issues)
         self.assertIn("public core schema doc missing runtime clean-source manifest contract", issues)
 
+    def test_python_version_contract_covers_metadata_docs_and_ci(self) -> None:
+        repo_root = docs_health.find_repo_root(ROOT)
+        self.assertIsNotNone(repo_root)
+
+        result = docs_health.python_version_contract_issues(repo_root)
+
+        self.assertEqual(result, [])
+
+    def test_python_version_contract_reports_stale_contributing_floor(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            (repo / "README.md").write_text(
+                "AIppocampus supports Python 3.12 and newer. Homebrew Python 3.12\n",
+                encoding="utf-8",
+            )
+            (repo / "CONTRIBUTING.md").write_text(
+                "AIppocampus supports Python 3.10 and newer.\n",
+                encoding="utf-8",
+            )
+            guides = repo / "docs" / "guides"
+            guides.mkdir(parents=True)
+            (guides / "install-guide.md").write_text(
+                "Install Python 3.12 or newer. Homebrew Python 3.12\n",
+                encoding="utf-8",
+            )
+            (repo / ".github" / "workflows").mkdir(parents=True)
+            (repo / ".github" / "workflows" / "aippocampus-ci.yml").write_text(
+                'python-version: ["3.12", "3.13"]\npython-version: "3.12"\n',
+                encoding="utf-8",
+            )
+            (repo / ".github" / "workflows" / "macos-install-smoke.yml").write_text(
+                'default: "3.12"\n- "3.12"\n- "3.13"\n',
+                encoding="utf-8",
+            )
+            (repo / "pyproject.toml").write_text(
+                "\n".join(
+                    [
+                        "[project]",
+                        'requires-python = ">=3.12"',
+                        "classifiers = [",
+                        '    "Programming Language :: Python :: 3.12",',
+                        '    "Programming Language :: Python :: 3.13",',
+                        "]",
+                        "",
+                        "[tool.ruff]",
+                        'target-version = "py312"',
+                        "",
+                        "[tool.mypy]",
+                        'python_version = "3.12"',
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            issues = docs_health.python_version_contract_issues(repo)
+
+        self.assertIn(
+            "CONTRIBUTING.md missing Python support contract term: "
+            "public Python support floor is Python 3.12",
+            issues,
+        )
+        self.assertIn(
+            "CONTRIBUTING.md missing Python support contract term: "
+            "unsupported public targets",
+            issues,
+        )
+        self.assertIn(
+            "CONTRIBUTING.md must not advertise Python 3.10/3.11 as supported",
+            issues,
+        )
+
     def test_benchmark_evidence_map_reports_missing_runner(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
