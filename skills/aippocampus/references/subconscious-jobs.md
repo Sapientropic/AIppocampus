@@ -39,7 +39,7 @@ but they must not rewrite source, delete source, or directly write formal memory
   `semantic_triggers.jsonl`, so the prompt hook can use data-driven semantic
   cues instead of expanding hard-coded phrase lists. It also merges the
   reviewed seed triggers in `references/reviewed-semantic-triggers.seed.jsonl`;
-  keep that seed compact and AIppocampus-specific.
+  keep that seed compact, reviewed, source-conscious, and AIppocampus-specific.
 - `build_cognitive_map.py`: deterministic materializer for DeepSeek-proposed
   landmarks, regions, and routes. It never creates routes from registry
   keywords alone.

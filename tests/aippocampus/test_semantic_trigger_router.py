@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 import tempfile
@@ -65,9 +66,29 @@ class SemanticTriggerRouterTests(unittest.TestCase):
         rows = [json.loads(line) for line in self.output.read_text(encoding="utf-8").splitlines()]
 
         self.assertEqual(result["trigger_count"], 1)
+        self.assertEqual(result["promoted_candidate_count"], 1)
         self.assertEqual(rows[0]["kind"], "aippocampus_semantic_trigger")
         self.assertIn("AIppocampus semantic recall gate", rows[0]["aliases"])
         self.assertEqual(rows[0]["source_refs"][0]["line"], 42)
+
+    def test_trigger_key_uses_longer_sha256_identity(self) -> None:
+        candidate = {
+            "candidate_type": "hook_trigger",
+            "title": "AIppocampus semantic recall gate",
+            "source_finding_ids": ["finding-b", "finding-a"],
+        }
+        material = "\n".join(
+            [
+                "hook_trigger",
+                "aippocampus semantic recall gate",
+                "finding-a|finding-b",
+            ]
+        )
+
+        self.assertEqual(
+            router.trigger_key(candidate),
+            "st_" + hashlib.sha256(material.encode("utf-8")).hexdigest()[:24],
+        )
 
     def test_activation_cues_drive_natural_friction_trigger_aliases(self) -> None:
         self.write_candidates(
@@ -104,6 +125,46 @@ class SemanticTriggerRouterTests(unittest.TestCase):
         self.assertEqual(rows[0]["activation_cues"][0], "最近让我很烦")
         self.assertNotIn("source-backed hook", " ".join(rows[0]["aliases"]).casefold())
 
+    def test_fallback_aliases_drop_semigeneric_phrases_and_canonical_duplicates(self) -> None:
+        self.write_candidates(
+            [
+                {
+                    "kind": "aippocampus_promotion_candidate",
+                    "status": "staging",
+                    "candidate_type": "hook_trigger",
+                    "title": "External Hippocampus",
+                    "summary": (
+                        "Project memory and source backed memory are too broad, "
+                        "but external hippocampus is a specific routing cue."
+                    ),
+                    "recommendation": "Use external hippocampus when the prompt asks for recall.",
+                    "concepts": [
+                        "External Hippocampus",
+                        "external hippocampus.",
+                        "project memory",
+                        "source backed memory",
+                    ],
+                    "confidence": 0.86,
+                    "source_refs": [
+                        {"thread_key": "session:a", "title": "AIppocampus", "line": 42}
+                    ],
+                }
+            ]
+        )
+
+        result = router.build_semantic_triggers(
+            candidates_path=self.candidates,
+            output_path=self.output,
+            seed_triggers_path=None,
+        )
+        rows = [json.loads(line) for line in self.output.read_text(encoding="utf-8").splitlines()]
+
+        canonical_aliases = [alias.casefold() for alias in rows[0]["aliases"]]
+        self.assertEqual(canonical_aliases.count("external hippocampus"), 1)
+        self.assertNotIn("project memory", canonical_aliases)
+        self.assertNotIn("source backed memory", canonical_aliases)
+        self.assertGreater(result["dropped_alias_count"], 0)
+
     def test_reviewed_seed_triggers_are_written_to_semantic_trigger_sidecar(self) -> None:
         seed = self.root / "reviewed-seed.jsonl"
         seed.write_text(
@@ -118,6 +179,12 @@ class SemanticTriggerRouterTests(unittest.TestCase):
                     "aliases": ["external hippocampus", "外置海马体"],
                     "when_to_use": "Use when the user asks to continue AIppocampus memory work.",
                     "when_not_to_use": "Do not use for plain implementation tasks.",
+                    "reviewed_at": "2026-06-02T00:00:00Z",
+                    "reviewer": "AIppocampus maintainers",
+                    "review_note": "Checked against the AIppocampus ambient-hook contract.",
+                    "reviewed_seed_rationale": (
+                        "Public AIppocampus architecture terms from the canonical docs."
+                    ),
                     "confidence": 0.88,
                 },
                 ensure_ascii=False,
@@ -138,6 +205,100 @@ class SemanticTriggerRouterTests(unittest.TestCase):
         self.assertEqual(result["trigger_count"], 1)
         self.assertEqual(rows[0]["source"], "reviewed_seed")
         self.assertIn("external hippocampus", rows[0]["aliases"])
+
+    def test_active_seed_requires_review_metadata_and_source_or_rationale(self) -> None:
+        seed = self.root / "reviewed-seed.jsonl"
+        rows = [
+            {
+                "schema_version": 1,
+                "kind": "aippocampus_semantic_trigger",
+                "trigger_id": "seed_missing_review",
+                "status": "active",
+                "source": "reviewed_seed",
+                "title": "Missing review metadata",
+                "aliases": ["external hippocampus"],
+                "confidence": 0.88,
+            },
+            {
+                "schema_version": 1,
+                "kind": "aippocampus_semantic_trigger",
+                "trigger_id": "seed_external_hippocampus_legacy",
+                "status": "active",
+                "source": "reviewed_seed",
+                "title": "External hippocampus recall continuity",
+                "aliases": ["external hippocampus"],
+                "when_to_use": "Use when the user asks to continue AIppocampus memory work.",
+                "when_not_to_use": "Do not use for plain implementation tasks.",
+                "reviewed_at": "2026-06-02T00:00:00Z",
+                "reviewer": "AIppocampus maintainers",
+                "review_note": "Checked against the AIppocampus ambient-hook contract.",
+                "reviewed_seed_rationale": (
+                    "Seeded AIppocampus architecture terms are public product vocabulary."
+                ),
+                "confidence": 0.88,
+            },
+        ]
+        seed.write_text(
+            "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
+            encoding="utf-8",
+        )
+        self.write_candidates([])
+
+        result = router.build_semantic_triggers(
+            candidates_path=self.candidates,
+            output_path=self.output,
+            seed_triggers_path=seed,
+        )
+        written = [
+            json.loads(line) for line in self.output.read_text(encoding="utf-8").splitlines()
+        ]
+
+        self.assertEqual(result["seed_trigger_count"], 1)
+        self.assertEqual(result["skipped_missing_review_or_source_count"], 1)
+        self.assertEqual(result["skipped_seed_reasons"], {"missing_reviewed_at": 1})
+        self.assertEqual(len(written), 1)
+        self.assertEqual(written[0]["title"], "External hippocampus recall continuity")
+
+    def test_seed_trigger_ids_migrate_to_sha256_with_legacy_id_retained(self) -> None:
+        seed = self.root / "reviewed-seed.jsonl"
+        seed.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "kind": "aippocampus_semantic_trigger",
+                    "trigger_id": "seed_external_hippocampus_legacy",
+                    "status": "active",
+                    "source": "reviewed_seed",
+                    "title": "External hippocampus recall continuity",
+                    "aliases": ["external hippocampus"],
+                    "when_to_use": "Use when the user asks to continue AIppocampus memory work.",
+                    "when_not_to_use": "Do not use for plain implementation tasks.",
+                    "reviewed_at": "2026-06-02T00:00:00Z",
+                    "reviewer": "AIppocampus maintainers",
+                    "review_note": "Checked against the AIppocampus ambient-hook contract.",
+                    "reviewed_seed_rationale": (
+                        "Seeded AIppocampus architecture terms are public product vocabulary."
+                    ),
+                    "confidence": 0.88,
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        self.write_candidates([])
+
+        router.build_semantic_triggers(
+            candidates_path=self.candidates,
+            output_path=self.output,
+            seed_triggers_path=seed,
+        )
+        written = [
+            json.loads(line) for line in self.output.read_text(encoding="utf-8").splitlines()
+        ]
+
+        self.assertRegex(written[0]["trigger_id"], r"^st_[0-9a-f]{24}$")
+        self.assertIn("seed_external_hippocampus_legacy", written[0]["legacy_trigger_ids"])
 
     def test_low_confidence_or_unsourced_candidate_is_not_foreground_trigger(self) -> None:
         self.write_candidates(
@@ -165,6 +326,7 @@ class SemanticTriggerRouterTests(unittest.TestCase):
             candidates_path=self.candidates, output_path=self.output
         )
         self.assertEqual(result["trigger_count"], 0)
+        self.assertEqual(result["promoted_candidate_count"], 0)
         self.assertEqual(self.output.read_text(encoding="utf-8"), "")
 
 

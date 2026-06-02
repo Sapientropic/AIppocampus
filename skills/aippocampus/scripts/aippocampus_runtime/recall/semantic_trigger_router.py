@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -34,17 +35,24 @@ from aippocampus_runtime.subconscious.candidate_router import (
 TRIGGER_SCHEMA_VERSION = 1
 TRIGGER_TYPES = {"hook_trigger", "project_memory", "concept_edge"}
 MIN_CONFIDENCE = 0.62
+TRIGGER_ID_DIGEST_LENGTH = 24
+MAX_PROMOTED_ALIASES = 16
+MAX_SEED_ALIASES = 24
 DEFAULT_SEED_TRIGGERS_PATH = (
     Path(__file__).resolve().parents[3] / "references" / "reviewed-semantic-triggers.seed.jsonl"
 )
 GENERIC_ALIASES = {
     "memory",
+    "recall",
     "project",
     "candidate",
     "trigger",
+    "cue",
     "source",
+    "backed",
     "decision",
     "context",
+    "routing",
     "记忆",
     "项目",
     "候选",
@@ -52,21 +60,50 @@ GENERIC_ALIASES = {
     "来源",
     "决策",
 }
+SEMI_GENERIC_ALIAS_PHRASES = {
+    "memory continuity",
+    "memory context",
+    "memory project",
+    "project context",
+    "project memory",
+    "project recall",
+    "recall context",
+    "source backed memory",
+    "source memory",
+    "trigger context",
+    "项目记忆",
+    "项目上下文",
+    "记忆项目",
+}
 
 
 def default_seed_triggers_path() -> Path:
     return DEFAULT_SEED_TRIGGERS_PATH
 
 
+def _hash_id(parts: list[str]) -> str:
+    raw = "\n".join(parts)
+    return "st_" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:TRIGGER_ID_DIGEST_LENGTH]
+
+
 def trigger_key(candidate: dict[str, Any]) -> str:
-    raw = "\n".join(
+    return _hash_id(
         [
             str(candidate.get("candidate_type") or ""),
             normalize_term(str(candidate.get("title") or "")).casefold(),
             "|".join(sorted(str(value) for value in candidate.get("source_finding_ids") or [])),
         ]
     )
-    return "st_" + hashlib.sha1(raw.encode("utf-8")).hexdigest()[:18]
+
+
+def seed_trigger_key(trigger: dict[str, Any], aliases: list[str]) -> str:
+    return _hash_id(
+        [
+            "reviewed_seed",
+            normalize_term(str(trigger.get("title") or trigger.get("concept") or "")).casefold(),
+            "|".join(_alias_key(alias) for alias in aliases),
+        ]
+    )
 
 
 def source_refs(candidate: dict[str, Any]) -> list[dict[str, Any]]:
@@ -101,14 +138,60 @@ def source_refs(candidate: dict[str, Any]) -> list[dict[str, Any]]:
     return refs[:8]
 
 
-def alias_candidates(candidate: dict[str, Any]) -> list[str]:
+def _alias_key(alias: str) -> str:
+    normalized = normalize_term(alias).casefold()
+    normalized = normalized.replace("source-backed", "source backed")
+    normalized = re.sub(r"[-_/]+", " ", normalized)
+    return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _drop_alias(alias: str) -> bool:
+    key = _alias_key(alias)
+    if not key:
+        return True
+    if key in GENERIC_ALIASES or key in SEMI_GENERIC_ALIAS_PHRASES:
+        return True
+    if len(alias) > 72 or source_text_is_noise(alias) or term_is_noise(alias):
+        return True
+    return False
+
+
+def clean_aliases(
+    aliases: list[str], *, limit: int, diagnostics: dict[str, Any] | None = None
+) -> list[str]:
+    clean: list[str] = []
+    seen: set[str] = set()
+    dropped = 0
+    for raw in aliases:
+        alias = normalize_term(str(raw or ""))
+        key = _alias_key(alias)
+        if _drop_alias(alias) or key in seen:
+            dropped += 1
+            continue
+        if len(clean) >= limit:
+            dropped += 1
+            continue
+        seen.add(key)
+        clean.append(alias)
+    if diagnostics is not None:
+        diagnostics["dropped_alias_count"] = int(diagnostics.get("dropped_alias_count") or 0) + dropped
+    return clean
+
+
+def alias_candidates(
+    candidate: dict[str, Any], *, diagnostics: dict[str, Any] | None = None
+) -> list[str]:
     activation_terms = activation_cue_terms_for(candidate, limit=24)
     if activation_terms:
         # Model/subconscious-authored activation cues are the semantic route
         # surface. Title/summary prose remains human-readable context, not a
         # prompt matcher, because fuzzy frustration/annoyance judgment belongs
         # in the sidecar that produced these cues.
-        return activation_terms
+        return clean_aliases(
+            activation_terms,
+            limit=MAX_SEED_ALIASES,
+            diagnostics=diagnostics,
+        )
     text = "\n".join(
         [
             str(candidate.get("title") or ""),
@@ -120,18 +203,52 @@ def alias_candidates(candidate: dict[str, Any]) -> list[str]:
     aliases.append(str(candidate.get("title") or ""))
     aliases.extend(split_query_terms([text]))
     aliases.extend(str(value) for value in candidate.get("concepts") or [])
-    clean: list[str] = []
-    for alias in aliases:
-        alias = normalize_term(alias)
-        if not alias or alias.casefold() in GENERIC_ALIASES:
-            continue
-        if len(alias) > 72 or source_text_is_noise(alias) or term_is_noise(alias):
-            continue
-        clean.append(alias)
-    return unique_preserve(clean, limit=16)
+    return clean_aliases(
+        aliases,
+        limit=MAX_PROMOTED_ALIASES,
+        diagnostics=diagnostics,
+    )
 
 
-def iter_seed_triggers(path: Path | None) -> list[dict[str, Any]]:
+def _seed_review_skip_reason(row: dict[str, Any]) -> str | None:
+    if not row.get("reviewed_at"):
+        return "missing_reviewed_at"
+    if not (row.get("reviewer") or row.get("review_source")):
+        return "missing_reviewer_or_review_source"
+    if not row.get("review_note"):
+        return "missing_review_note"
+    seed_refs = [ref for ref in row.get("source_refs") or [] if isinstance(ref, dict)]
+    if not seed_refs and not row.get("reviewed_seed_rationale"):
+        return "missing_source_refs_or_seed_rationale"
+    return None
+
+
+def _record_skipped_seed(diagnostics: dict[str, Any] | None, reason: str) -> None:
+    if diagnostics is None:
+        return
+    diagnostics["skipped_seed_count"] = int(diagnostics.get("skipped_seed_count") or 0) + 1
+    if reason == "missing_source_refs_or_seed_rationale" or reason.startswith("missing_"):
+        diagnostics["skipped_missing_review_or_source_count"] = int(
+            diagnostics.get("skipped_missing_review_or_source_count") or 0
+        ) + 1
+    reasons = diagnostics.setdefault("skipped_seed_reasons", {})
+    if isinstance(reasons, dict):
+        reasons[reason] = int(reasons.get(reason) or 0) + 1
+
+
+def _migrate_trigger_id(row: dict[str, Any], new_id: str) -> None:
+    old_id = str(row.get("trigger_id") or "")
+    legacy_ids = [str(value) for value in row.get("legacy_trigger_ids") or [] if value]
+    if old_id and old_id != new_id:
+        legacy_ids.insert(0, old_id)
+    row["trigger_id"] = new_id
+    if legacy_ids:
+        row["legacy_trigger_ids"] = unique_preserve(legacy_ids, limit=8)
+
+
+def iter_seed_triggers(
+    path: Path | None, *, diagnostics: dict[str, Any] | None = None
+) -> list[dict[str, Any]]:
     if not path or not path.exists():
         return []
     rows: list[dict[str, Any]] = []
@@ -140,28 +257,31 @@ def iter_seed_triggers(path: Path | None) -> list[dict[str, Any]]:
             continue
         if row.get("status") != "active":
             continue
-        aliases = [
-            normalize_term(str(alias or ""))
-            for alias in (row.get("aliases") or [])
-            if normalize_term(str(alias or ""))
-        ]
+        skip_reason = _seed_review_skip_reason(row)
+        if skip_reason:
+            _record_skipped_seed(diagnostics, skip_reason)
+            continue
+        aliases = clean_aliases(
+            [str(alias or "") for alias in row.get("aliases") or []],
+            limit=MAX_SEED_ALIASES,
+            diagnostics=diagnostics,
+        )
         if not aliases:
+            _record_skipped_seed(diagnostics, "no_aliases_after_hygiene")
             continue
         trigger = dict(row)
         trigger.setdefault("schema_version", TRIGGER_SCHEMA_VERSION)
         trigger.setdefault("source", "reviewed_seed")
-        trigger.setdefault("trigger_id", "seed_" + hashlib.sha1(
-            (str(trigger.get("title") or "") + "\n" + "|".join(aliases))
-            .casefold()
-            .encode("utf-8")
-        ).hexdigest()[:18])
+        _migrate_trigger_id(trigger, seed_trigger_key(trigger, aliases))
         trigger["aliases"] = unique_preserve(aliases, limit=24)
         trigger["confidence"] = round(float(trigger.get("confidence") or 0.8), 4)
         rows.append(trigger)
     return rows
 
 
-def route_candidate(candidate: dict[str, Any]) -> dict[str, Any] | None:
+def route_candidate(
+    candidate: dict[str, Any], *, diagnostics: dict[str, Any] | None = None
+) -> dict[str, Any] | None:
     if candidate.get("kind") != "aippocampus_promotion_candidate":
         return None
     if candidate.get("status") not in {None, "staging", "active"}:
@@ -173,9 +293,13 @@ def route_candidate(candidate: dict[str, Any]) -> dict[str, Any] | None:
     refs = source_refs(candidate)
     if not refs:
         return None
-    aliases = alias_candidates(candidate)
+    aliases = alias_candidates(candidate, diagnostics=diagnostics)
     if not aliases:
         return None
+    if diagnostics is not None:
+        diagnostics["promoted_candidate_count"] = (
+            int(diagnostics.get("promoted_candidate_count") or 0) + 1
+        )
     return {
         "schema_version": TRIGGER_SCHEMA_VERSION,
         "kind": "aippocampus_semantic_trigger",
@@ -203,11 +327,18 @@ def build_semantic_triggers(
 ) -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
     by_key: dict[str, dict[str, Any]] = {}
-    seed_triggers = iter_seed_triggers(seed_triggers_path)
+    diagnostics: dict[str, Any] = {
+        "promoted_candidate_count": 0,
+        "dropped_alias_count": 0,
+        "skipped_seed_count": 0,
+        "skipped_missing_review_or_source_count": 0,
+        "skipped_seed_reasons": {},
+    }
+    seed_triggers = iter_seed_triggers(seed_triggers_path, diagnostics=diagnostics)
     for trigger in seed_triggers:
         by_key[str(trigger.get("trigger_id"))] = trigger
     for candidate in iter_jsonl(candidates_path):
-        routed = route_candidate(candidate)
+        routed = route_candidate(candidate, diagnostics=diagnostics)
         if not routed:
             continue
         key = str(routed.get("trigger_id"))
@@ -230,6 +361,13 @@ def build_semantic_triggers(
         "source_candidates": str(candidates_path),
         "seed_triggers": str(seed_triggers_path) if seed_triggers_path else None,
         "seed_trigger_count": len(seed_triggers),
+        "promoted_candidate_count": diagnostics["promoted_candidate_count"],
+        "dropped_alias_count": diagnostics["dropped_alias_count"],
+        "skipped_seed_count": diagnostics["skipped_seed_count"],
+        "skipped_missing_review_or_source_count": diagnostics[
+            "skipped_missing_review_or_source_count"
+        ],
+        "skipped_seed_reasons": diagnostics["skipped_seed_reasons"],
         "trigger_count": len(rows),
         "output": str(output_path),
     }
