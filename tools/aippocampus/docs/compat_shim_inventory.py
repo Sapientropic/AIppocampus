@@ -214,6 +214,18 @@ def _flat_import_targets(source: str, flat_modules: set[str]) -> set[str]:
             top_level = node.module.split(".", maxsplit=1)[0]
             if top_level in flat_modules:
                 targets.add(top_level)
+        elif isinstance(node, ast.Call) and node.args:
+            first_arg = node.args[0]
+            if not isinstance(first_arg, ast.Constant) or not isinstance(first_arg.value, str):
+                continue
+            module_name = first_arg.value.split(".", maxsplit=1)[0]
+            if module_name not in flat_modules:
+                continue
+            func = node.func
+            if isinstance(func, ast.Attribute) and func.attr == "import_module":
+                targets.add(module_name)
+            elif isinstance(func, ast.Name) and func.id == "import_module":
+                targets.add(module_name)
     return targets
 
 

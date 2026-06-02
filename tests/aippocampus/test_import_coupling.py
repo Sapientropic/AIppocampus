@@ -1276,8 +1276,7 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(reflection_space.run_fixture_smoke, space.run_fixture_smoke)
         self.assertIs(reflection_space.main, space.main)
 
-    def test_subconscious_job_storage_has_package_owner_and_compat_shim(self) -> None:
-        import subconscious_job_storage
+    def test_subconscious_job_storage_is_package_owner_only(self) -> None:
         from aippocampus_runtime.subconscious import job_storage
 
         package_paths = [
@@ -1288,43 +1287,32 @@ class ImportCouplingTests(unittest.TestCase):
 
         for path in package_paths:
             self.assertTrue(path.exists(), path)
-        self.assertTrue(shim_path.exists(), shim_path)
-        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+        self.assertFalse(shim_path.exists(), shim_path)
+        self.assertNotIn("subconscious_job_storage", pyproject_py_modules())
 
         edges = same_dir_import_edges(top_level_only=True)
         self.assertIn("aippocampus_runtime.subconscious.job_storage", edges["aippocampus_runtime.subconscious.jobs"])
         self.assertNotIn("subconscious_job_storage", edges["aippocampus_runtime.subconscious.jobs"])
 
-        self.assertIs(
-            subconscious_job_storage.append_job_findings,
-            job_storage.append_job_findings,
-        )
-        self.assertIs(
-            subconscious_job_storage.concept_findings_to_edges,
-            job_storage.concept_findings_to_edges,
-        )
+        self.assertTrue(callable(job_storage.append_job_findings))
+        self.assertTrue(callable(job_storage.concept_findings_to_edges))
 
-    def test_subconscious_job_plan_has_package_owner_and_compat_shim(self) -> None:
-        import subconscious_job_plan
+    def test_subconscious_job_plan_is_package_owner_only(self) -> None:
         from aippocampus_runtime.subconscious import job_plan
 
         package_path = SCRIPTS / "aippocampus_runtime" / "subconscious" / "job_plan.py"
         shim_path = SCRIPTS / "subconscious_job_plan.py"
 
         self.assertTrue(package_path.exists(), package_path)
-        self.assertTrue(shim_path.exists(), shim_path)
-        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+        self.assertFalse(shim_path.exists(), shim_path)
+        self.assertNotIn("subconscious_job_plan", pyproject_py_modules())
 
         edges = same_dir_import_edges(top_level_only=True)
         self.assertIn("aippocampus_runtime.subconscious.job_plan", edges["aippocampus_runtime.subconscious.jobs"])
         self.assertNotIn("subconscious_job_plan", edges["aippocampus_runtime.subconscious.jobs"])
 
-        self.assertIs(subconscious_job_plan.JobRunTask, job_plan.JobRunTask)
-        self.assertIs(subconscious_job_plan.plan_job_run_tasks, job_plan.plan_job_run_tasks)
-        self.assertIs(
-            subconscious_job_plan.run_tasks_in_sample_waves,
-            job_plan.run_tasks_in_sample_waves,
-        )
+        self.assertTrue(callable(job_plan.plan_job_run_tasks))
+        self.assertTrue(callable(job_plan.run_tasks_in_sample_waves))
 
     def test_subconscious_jobs_config_has_package_owner_and_compat_shim(self) -> None:
         import subconscious_jobs_config
@@ -1663,29 +1651,22 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIn("search_rollout_payload(", active_recall_source)
         self.assertIn("search_segments_payload(", active_recall_source)
 
-    def test_subconscious_validation_audit_has_package_owner_and_compat_shim(self) -> None:
-        import subconscious_validation_audit
+    def test_subconscious_validation_audit_is_package_owner_only(self) -> None:
         from aippocampus_runtime.subconscious import validation_audit
 
         package_path = SCRIPTS / "aippocampus_runtime" / "subconscious" / "validation_audit.py"
         shim_path = SCRIPTS / "subconscious_validation_audit.py"
 
         self.assertTrue(package_path.exists(), package_path)
-        self.assertTrue(shim_path.exists(), shim_path)
-        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+        self.assertFalse(shim_path.exists(), shim_path)
+        self.assertNotIn("subconscious_validation_audit", pyproject_py_modules())
 
         edges = same_dir_import_edges(top_level_only=True)
         self.assertIn("aippocampus_runtime.subconscious.validation_audit", edges["aippocampus_runtime.subconscious.jobs"])
         self.assertNotIn("subconscious_validation_audit", edges["aippocampus_runtime.subconscious.jobs"])
 
-        self.assertIs(
-            subconscious_validation_audit.validation_audit,
-            validation_audit.validation_audit,
-        )
-        self.assertIs(
-            subconscious_validation_audit.validation_rejection_reason,
-            validation_audit.validation_rejection_reason,
-        )
+        self.assertTrue(callable(validation_audit.validation_audit))
+        self.assertTrue(callable(validation_audit.validation_rejection_reason))
 
     def test_subconscious_deterministic_jobs_have_package_owner_and_compat_shim(self) -> None:
         import subconscious_deterministic_jobs
@@ -1713,7 +1694,6 @@ class ImportCouplingTests(unittest.TestCase):
 
     def test_subconscious_job_contracts_have_package_owner_and_compat_shims(self) -> None:
         import subconscious_job_circuits
-        import subconscious_job_validation
         import subconscious_question_diagnostics
         from aippocampus_runtime.subconscious import (
             job_circuits,
@@ -1729,6 +1709,8 @@ class ImportCouplingTests(unittest.TestCase):
         shim_paths = [
             SCRIPTS / "subconscious_question_diagnostics.py",
             SCRIPTS / "subconscious_job_circuits.py",
+        ]
+        deleted_shim_paths = [
             SCRIPTS / "subconscious_job_validation.py",
         ]
 
@@ -1736,6 +1718,9 @@ class ImportCouplingTests(unittest.TestCase):
             self.assertTrue(path.exists(), path)
         for path in shim_paths:
             self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+        for path in deleted_shim_paths:
+            self.assertFalse(path.exists(), path)
+        self.assertNotIn("subconscious_job_validation", pyproject_py_modules())
 
         edges = same_dir_import_edges(top_level_only=True)
         self.assertIn(
@@ -1777,10 +1762,7 @@ class ImportCouplingTests(unittest.TestCase):
 
         self.assertIs(subconscious_job_circuits.JOB_SPECS, job_circuits.JOB_SPECS)
         self.assertIs(subconscious_job_circuits.job_names, job_circuits.job_names)
-        self.assertIs(
-            subconscious_job_validation.validate_findings,
-            job_validation.validate_findings,
-        )
+        self.assertTrue(callable(job_validation.validate_findings))
         self.assertIs(
             subconscious_question_diagnostics.question_extraction_quality_diagnostics,
             question_diagnostics.question_extraction_quality_diagnostics,
