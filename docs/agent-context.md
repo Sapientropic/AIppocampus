@@ -76,19 +76,25 @@ uvx aippocampus --help
 Read-only local status/onboarding check:
 
 ```sh
-uvx aippocampus onboard --provider codex --status --format json
+uvx aippocampus onboard --provider codex --status
 ```
 
 Register local Codex history, only after user confirmation:
 
 ```sh
-uvx aippocampus onboard --provider codex --all --format json
+uvx aippocampus onboard --provider codex --all
+uvx aippocampus search "a distinctive old phrase"
 ```
 
 This command scans local agent transcript history, registers missing source,
 builds clean-source and SQLite/RAG-lite artifacts, and refreshes navigation
 sidecars. It writes local memory artifacts, so do not run it without user
 consent.
+
+For the first recall, try an exact phrase first. If the user only remembers a
+vague cue, search a project cue or a time cue and label the result as candidate
+navigation until a source-backed snippet appears. Add `--format json` only for
+automation.
 
 ## MCP Usage
 

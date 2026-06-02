@@ -103,11 +103,26 @@ The current honest install probe uses the PyPI package:
 
 ```sh
 uvx aippocampus --help
+uvx aippocampus onboard --provider codex --status
 ```
 
-MCP Registry publication remains tracked in
-[#291](https://github.com/Sapientropic/AIppocampus/issues/291) until the release
-readiness probe passes against the public registry.
+After explicit consent to register local history, the first useful proof is a
+source-backed search receipt:
+
+```sh
+uvx aippocampus onboard --provider codex --all
+uvx aippocampus search "a distinctive old phrase"
+```
+
+If the user does not remember exact wording, use a project cue or time cue as
+candidate navigation only. Do not present a vague-cue route as evidence until
+AIppocampus returns a source-backed snippet.
+
+PyPI and MCP Registry publication evidence is captured in
+[#291](https://github.com/Sapientropic/AIppocampus/issues/291). Broader
+all-client readiness claims still require the separate external install/UI
+readiness track in
+[#307](https://github.com/Sapientropic/AIppocampus/issues/307).
 
 For no-private-data demos, start with
 [`docs/guides/demo-scenarios.md`](../guides/demo-scenarios.md). For the

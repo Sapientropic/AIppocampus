@@ -19,16 +19,15 @@ The runtime and tooling dependency taxonomy lives in
 
 For a new external user or agent host, follow the
 [10-minute public API path](public-api.md#ten-minute-public-path) first:
-package probe, read-only provider status, MCP tool list, then health and
-clean-source search once the current workspace has registered or imported
-source. Treat plugin packaging, hooks, sync, object storage, Dream, semantic
-jobs, and benchmarks as advanced surfaces unless that path proves the user
-actually needs them.
+package probe, read-only provider status, explicit onboarding only with user
+consent, then clean-source search for a first source-backed snippet. Treat
+plugin packaging, hooks, sync, object storage, Dream, semantic jobs, and
+benchmarks as advanced surfaces unless that path proves the user actually needs
+them.
 
-## Agent One-Command Path
+## First Recall Path
 
-Agents that need to verify AIppocampus without cloning the repository can use
-the PyPI `uvx` path:
+Start with the PyPI `uvx` path:
 
 ```sh
 uvx aippocampus --help
@@ -37,17 +36,22 @@ uvx aippocampus --help
 Check local provider status without writing memory artifacts:
 
 ```sh
-uvx aippocampus onboard --provider codex --status --format json
+uvx aippocampus onboard --provider codex --status
 ```
 
 Register local Codex history only after the user explicitly agrees:
 
 ```sh
-uvx aippocampus onboard --provider codex --all --format json
+uvx aippocampus onboard --provider codex --all
+uvx aippocampus search "a distinctive old phrase"
 ```
 
-Use the GitHub `uvx --from git+...` form only when intentionally testing an
-unreleased main-branch snapshot.
+Try an exact phrase first. If the wording is fuzzy, use a project cue
+(`repo / feature / object / topic`) or a time cue (`recent`, `last month`, or a
+known period). Those cues are candidate navigation until search returns a
+source-backed snippet with source/date/turn metadata. Use `--format json` only
+for automation. Use the GitHub `uvx --from git+...` form only when intentionally
+testing an unreleased main-branch snapshot.
 
 ## Standalone Binary Status
 
@@ -101,7 +105,8 @@ intentionally discarding local memory artifacts. New non-Codex setups should
 prefer `AIPPOCAMPUS_REGISTRY_DIR` or `AIPPOCAMPUS_HOME`; existing Codex installs
 continue to use `$CODEX_HOME/aippocampus-registry/` as a legacy fallback.
 
-Verify the package from the repository:
+Maintainer verification from a repository checkout, not required for a first
+recall:
 
 ```sh
 python tools/aippocampus/docs/check_docs_health.py --json
@@ -186,27 +191,38 @@ ready.
 
 ## First Onboarding
 
-Register existing Codex sessions and build clean-source indexes:
-
-```sh
-aippocampus onboard --provider codex --all --format json
-```
-
-Use `--dry-run` before broad imports when you want a preview. Generated memory
-artifacts default to the configured AIppocampus registry
-(`AIPPOCAMPUS_REGISTRY_DIR`, `AIPPOCAMPUS_HOME/registry`, then legacy
-`$CODEX_HOME/aippocampus-registry`) rather than the active project repository.
-`onboard_codex.py` remains available as the Codex-only compatibility entrypoint.
-
-Check provider readiness before writing:
+Preview provider readiness before writing:
 
 ```sh
 aippocampus onboard --status --cwd "$PWD"
 ```
 
+Then register existing Codex sessions and build clean-source indexes only after
+user consent:
+
+```sh
+aippocampus onboard --provider codex --all
+aippocampus search "a distinctive old phrase"
+```
+
+Use `--dry-run` before broad imports when you want a preview, and use
+`--format json` for agent/operator automation. Generated memory artifacts
+default to the configured AIppocampus registry
+(`AIPPOCAMPUS_REGISTRY_DIR`, `AIPPOCAMPUS_HOME/registry`, then legacy
+`$CODEX_HOME/aippocampus-registry`) rather than the active project repository.
+`onboard_codex.py` remains available as the Codex-only compatibility entrypoint.
+
 `auto` keeps Codex as the safest default and lists other detected providers
 separately. `claude-code` and `generic-jsonl` require explicit provider
 selection before they write clean source.
+
+First recall query modes:
+
+- Exact phrase: search distinctive old wording when the user remembers it.
+- Project cue: search a repo, feature, object, person, or topic name.
+- Time cue: search a remembered period such as `recent`, `last month`, or a known date.
+
+Project/time cues are candidate navigation until a source-backed snippet appears.
 
 ## MCP Mode
 

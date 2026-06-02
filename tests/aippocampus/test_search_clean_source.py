@@ -91,6 +91,56 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertEqual(result["matches"][0]["scope_labels"], ["technical_work"])
         self.assertIn("AIppocampus 是清洗后的原文记忆库", result["matches"][0]["snippet"])
 
+    def test_human_search_output_leads_with_source_backed_snippet_receipt(self) -> None:
+        stdout = io.StringIO()
+        with (
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "search_clean_source.py",
+                    "原文记忆库",
+                    "--cwd",
+                    str(self.cwd),
+                ],
+            ),
+            contextlib.redirect_stdout(stdout),
+        ):
+            code = search.main()
+
+        output = stdout.getvalue()
+        self.assertEqual(code, 0)
+        self.assertIn("Source-backed snippets", output)
+        self.assertIn("Source:", output)
+        self.assertIn("turn 1", output)
+        self.assertIn("AIppocampus 是清洗后的原文记忆库", output)
+        self.assertIn("Next:", output)
+
+    def test_human_search_no_result_gives_vague_cue_refinements_without_evidence_claim(self) -> None:
+        stdout = io.StringIO()
+        with (
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "search_clean_source.py",
+                    "不存在的旧短语",
+                    "--cwd",
+                    str(self.cwd),
+                ],
+            ),
+            contextlib.redirect_stdout(stdout),
+        ):
+            code = search.main()
+
+        output = stdout.getvalue()
+        self.assertEqual(code, 1)
+        self.assertIn("No source-backed snippet found", output)
+        self.assertIn("Possible routes, not yet evidence", output)
+        self.assertIn("exact phrase", output)
+        self.assertIn("project cue", output)
+        self.assertIn("time cue", output)
+
     def test_filters_by_scope_label(self) -> None:
         result = search.search_clean_source(
             self.cwd, ["长期问题"], scope_labels=["life_context"], limit=5

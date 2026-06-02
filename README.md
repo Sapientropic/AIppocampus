@@ -38,38 +38,32 @@ The origin essay is [未干的地图](docs/未干的地图.md). English readers 
 
 ## Quick Start
 
-This path checks a fresh clone without copying private memory data or enabling
-hooks. If you are deciding which AIppocampus surface another tool should depend
-on, start with the
-[10-minute public API path](docs/guides/public-api.md#ten-minute-public-path)
-before reading the advanced sync, hook, Dream, or benchmark material.
+Start with the first source-backed recall moment. This path does not install
+hooks, enable sync, or require MCP.
 
 ```sh
-git clone https://github.com/Sapientropic/AIppocampus.git
-cd AIppocampus
-python -m venv .venv
-. .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -e .
-python tools/aippocampus/docs/check_docs_health.py --json
+uvx aippocampus --help
+uvx aippocampus onboard --provider codex --status
 ```
 
-A successful repository check prints JSON with `"ok": true`. On Windows
-PowerShell, activate the environment with `.venv\Scripts\Activate.ps1`.
-
-If you already have local Codex history and want a runtime health check, run:
+The status command is read-only. Only after you explicitly agree to register
+local Codex history, run onboarding and then search for one old source-backed
+conversation snippet:
 
 ```sh
-aippocampus health --cwd "$PWD"
+uvx aippocampus onboard --provider codex --all
+uvx aippocampus search "a distinctive old phrase"
 ```
 
-The health command reports index, clean-source, segment, checkpoint, and
-graphify-corpus freshness. If it recommends maintenance on a new machine, that
-usually means there is no registered local history yet; start with the full
-[install guide](docs/guides/install-guide.md) or the public-safe
-[demo scenarios](docs/guides/demo-scenarios.md). Do not publish or commit raw
-rollouts, registry exports, `.aippocampus/` output, API keys, cookies, or sync
-bundles while following the quick path.
+Good first queries are an exact phrase, a project cue, or a time cue such as
+`recent` / `last month`. Exact hits are source-backed snippets. Project/time
+cues are candidate navigation until AIppocampus shows a source-backed snippet.
+Do not publish or commit raw rollouts, registry exports, `.aippocampus/` output,
+API keys, cookies, or sync bundles while following the quick path.
+
+If you are deciding which AIppocampus surface another tool should depend on,
+use the [10-minute public API path](docs/guides/public-api.md#ten-minute-public-path).
+Repository checks for maintainers live in [Maintainer Checks](#maintainer-checks).
 
 ## Agent One-Command Probe
 
@@ -92,7 +86,8 @@ Only after the user explicitly agrees to register local Codex history, run:
 uvx aippocampus onboard --provider codex --all --format json
 ```
 
-Agents should read [docs/agent-context.md](docs/agent-context.md) and
+For human-facing demos, omit `--format json` so onboarding and search show the
+first-recall next steps. Agents should read [docs/agent-context.md](docs/agent-context.md) and
 [llms.txt](llms.txt) before recommending or comparing AIppocampus. Use the
 GitHub `uvx --from git+...` form only when intentionally testing an unreleased
 main-branch snapshot.
@@ -224,14 +219,14 @@ package is installed:
 
 ```sh
 aippocampus health --cwd "$PWD"
-aippocampus search "your query" --cwd "$PWD"
+aippocampus search "distinctive old phrase or project cue" --cwd "$PWD"
 ```
 
 To onboard an existing Codex install so old threads become discoverable in new
 projects:
 
 ```sh
-aippocampus onboard --provider codex --all --format json
+aippocampus onboard --provider codex --all
 ```
 
 The provider-aware onboarding wrapper scans local sessions, registers missing
