@@ -1074,6 +1074,10 @@ def build_fresh_context_spec_loop_baseline(case_count: int) -> tuple[dict[str, A
                 case_count,
             ),
             "baseline_role": "fresh_context_spec_loop",
+            "framing_role": "realistic_fresh_context_handoff_loop",
+            "primary_opponent": True,
+            "complete_spec_upper_bound": False,
+            "oracle_upper_bound_control": "oracle_fresh_context_spec_loop",
             "modeled_from": "public synthetic source-rebuild baseline for #410",
         }
     )
@@ -1086,6 +1090,49 @@ def build_fresh_context_spec_loop_baseline(case_count: int) -> tuple[dict[str, A
         ),
     }
     return cost_summary, net_summary
+
+
+def benchmark_framing() -> dict[str, Any]:
+    return {
+        "primary_endpoint": {
+            "scope": "context_loss_or_instability",
+            "applies_when": [
+                "handoff_or_spec_loop_is_incomplete",
+                "post_compaction_horizon_lost",
+                "stale_or_superseded_state",
+                "operation_facts_not_carried_forward",
+            ],
+            "does_not_apply_when": [
+                "complete_spec_short_task_current_prompt_sufficient",
+            ],
+        },
+        "baseline_arms": {
+            "fresh_context_spec_loop": {
+                "normalized_role": "realistic_fresh_context_handoff_loop",
+                "role": "primary_reset_baseline",
+                "primary_opponent": True,
+                "complete_spec_upper_bound": False,
+            },
+            "realistic_fresh_context_handoff_loop": {
+                "role": "primary_reset_baseline",
+                "legacy_report_key": "fresh_context_spec_loop",
+                "primary_opponent": True,
+            },
+            "oracle_fresh_context_spec_loop": {
+                "role": "upper_bound_no_harm_control",
+                "primary_opponent": False,
+                "expected_short_task_winner": "fresh_context_or_memory_silence",
+                "fair_winner_eligible": False,
+            },
+        },
+        "no_harm_endpoint": {
+            "name": "no_harm_when_spec_complete",
+            "interpretation": (
+                "Complete fresh context winning a short complete-spec task is expected; "
+                "memory should be judged by restraint, stale-route avoidance, and cost."
+            ),
+        },
+    }
 
 
 def comparable_cost_per_success(
@@ -1264,6 +1311,10 @@ def build_preregistration(cost_harm_ledger: dict[str, Any]) -> dict[str, Any]:
         "current_report_role": "contract_smoke_preview_not_public_quality_evidence",
         "primary_endpoint": {
             "name": "source_grounded_task_success_under_equalized_cost",
+            "scope": "context_loss_or_instability",
+            "does_not_apply_when": [
+                "complete_spec_short_task_current_prompt_sufficient",
+            ],
             "why_chosen": (
                 "Combines task success with source support, equalized cost, "
                 "and severe false positives so memory cannot win by hiding "
@@ -1442,6 +1493,7 @@ def run_benchmark(
             "default_suite_member": False,
         },
         "metrics": metrics,
+        "benchmark_framing": benchmark_framing(),
         "scenario_controls": scenario_controls,
         "cost_harm_ledger": cost_harm_ledger,
         "preregistration": preregistration,
@@ -1468,6 +1520,7 @@ def run_benchmark(
         ],
         "cannot_claim": [
             "full #378 continuous-memory superiority",
+            "memory_useful_when_current_prompt_contains_full_correct_context",
             "public-quality continuous-memory advantage before the preregistered primary endpoint passes",
             "public-quality #378 superiority from only author_written_synthetic or tuning-visible diagnostic scenarios",
             "exact dollar accounting for every local operation",

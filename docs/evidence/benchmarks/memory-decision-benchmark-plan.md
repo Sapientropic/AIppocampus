@@ -137,13 +137,20 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
   slices separately, exclude `holdout_blind` cases from prompt/threshold
   tuning through `holdout_excluded`, and add scenario-level negative controls
   that penalize unnecessary memory intervention.
+  Its #453 fresh-context framing treats complete-spec fresh context as an
+  upper-bound / no-harm control, not the primary opponent. The primary endpoint
+  is context loss or instability: incomplete handoffs, post-compaction horizon
+  loss, stale/superseded state, and operation facts that were not carried
+  forward. The implemented Track D report also exposes
+  `metrics.no_harm_when_spec_complete` so a complete short-task prompt rewards
+  memory silence rather than noisy retrieval.
   This runner is diagnostic and not a public superiority claim.
 
 This slice is a smoke gate, not a real-history quality claim. It proves the
-benchmark runner can catch skip/scent/evidence mistakes and can report sanitized
-metrics; the next slice still needs broader private real-history gate cases,
-budget curves, larger live semantic-model verification, and a first Track D
-compaction-continuity runner.
+benchmark runners can catch skip/scent/evidence mistakes, report sanitized
+metrics, and exercise deterministic Track D compaction-continuity behavior. The
+next slices still need broader private real-history gate cases, budget curves,
+larger live semantic-model verification, and host-native baseline evidence.
 
 ### Benchmark Suite Profiles
 
@@ -329,6 +336,26 @@ public-synthetic units rather than exact billing data:
 not the same thing as a fresh-context/spec-loop workflow, so reports keep
 `fresh_context_spec_loop` in `comparison_baselines` rather than folding it into
 the attribution arm list.
+
+Fresh-context/spec-loop baselines must be named by role:
+
+- `oracle_fresh_context_spec_loop` or
+  `complete_spec_fresh_context_upper_bound` means every iteration receives the
+  complete correct task context. This is an upper-bound and no-harm control. It
+  is expected to win many short complete-spec tasks, and that is not an
+  AIppocampus failure.
+- `realistic_fresh_context_handoff_loop` means the reset workflow carries an
+  incomplete, lossy, compressed, stale, or missing handoff. This is the primary
+  reset baseline for #378-style memory value.
+
+Reports must keep the endpoints separate. Primary #378 value is measured under
+context loss or instability: silent constraint loss, known-bad-route repetition,
+operation-fact reopen/repetition, stale summary overhang, human corrections,
+source reopen before risky action, and cost per successful slice. The
+complete-spec endpoint is a no-harm gate: AIppocampus should not inject
+irrelevant or stale memory when the current prompt already contains the full
+correct spec. `cannot_claim` should include that the benchmark does not prove
+memory is useful when the current prompt already carries the full task context.
 
 The #409 scenario provenance and holdout controls live under
 `scenario_controls`, with row-level sanitized scenario metadata:
@@ -1366,6 +1393,8 @@ Default JSON reports should include:
 - git/worktree metadata when safe
 - config, seed, budget, and model-mode fields
 - aggregate metrics
+- benchmark framing when a report compares memory, reset, oracle, or no-harm
+  control arms
 - per-case sanitized ids and labels
 - hashed thread/case ids for private runs
 - no raw prompt text, snippets, titles, source refs, or absolute paths unless an
@@ -1433,6 +1462,13 @@ matrix so sparse combination coverage stays visible instead of being hidden by
 the broad axis lists. High-risk post-compaction horizon-lost cells are split
 out as missing or sparse diagnostics so stale/superseded/refuted/uncertain
 anchor behavior remains easy to audit.
+
+Track D reports now also include `benchmark_framing` and
+`metrics.no_harm_when_spec_complete` for the #453 boundary. The synthetic
+complete-spec case expects memory silence: if the current prompt already
+contains the full correct task context, a fresh-context/spec-loop win is
+expected and should be reported as no-harm evidence, not as AIppocampus losing
+the primary #378 endpoint.
 
 Reusable existing pieces:
 

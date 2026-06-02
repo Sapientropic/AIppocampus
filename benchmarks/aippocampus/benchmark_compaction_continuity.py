@@ -37,6 +37,7 @@ HIGH_RISK_COVERAGE_CELLS = (
     ("PostCompact", "horizon_lost", "superseded"),
     ("PostCompact", "horizon_lost", "uncertain"),
 )
+SPEC_COMPLETE_NO_HARM_CASE_TYPES = {"spec_complete_short_task_no_harm"}
 
 @dataclass(frozen=True)
 class FixtureEvent:
@@ -229,6 +230,21 @@ def fixture_cases() -> list[TrackDCase]:
             adjudication_status="uncertain",
             correction_text="User corrects the agent's default route before work begins.",
             source_ref="thread:track-d-demo#line:11",
+            anchor_relevant=True,
+            visible_context_has_source=True,
+            expected_emit=False,
+        ),
+        make_case(
+            case_id="track_d_spec_complete_no_harm",
+            case_type="spec_complete_short_task_no_harm",
+            hook_stage="UserPromptSubmit",
+            compaction_state="visible",
+            adjudication_status="valid_adopted",
+            correction_text=(
+                "The current prompt already contains the complete correct spec; "
+                "external memory should stay silent."
+            ),
+            source_ref="thread:track-d-demo#line:14",
             anchor_relevant=True,
             visible_context_has_source=True,
             expected_emit=False,
@@ -771,6 +787,95 @@ def coverage_summary(rows: list[dict[str, Any]]) -> dict[str, list[str]]:
     }
 
 
+def no_harm_when_spec_complete(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    cases = [
+        row
+        for row in rows
+        if str(row.get("case_type") or "") in SPEC_COMPLETE_NO_HARM_CASE_TYPES
+    ]
+    unwanted_memory_injection_count = sum(1 for row in cases if row.get("emitted_anchor"))
+    stale_memory_false_positive_count = sum(
+        1
+        for row in cases
+        if row.get("false_anchor")
+        or row.get("stale_route_retry")
+        or row.get("visible_context_echo_noise")
+    )
+    return {
+        "case_count": len(cases),
+        "unwanted_memory_injection_count": unwanted_memory_injection_count,
+        "stale_memory_false_positive_count": stale_memory_false_positive_count,
+        "silence_rate": safe_rate(
+            len(cases) - unwanted_memory_injection_count,
+            len(cases),
+        ),
+        "ok": bool(cases)
+        and unwanted_memory_injection_count == 0
+        and stale_memory_false_positive_count == 0,
+        "interpretation": (
+            "Complete-spec short tasks are no-harm controls: success means "
+            "AIppocampus stays quiet unless memory prevents a concrete high-cost mistake."
+        ),
+    }
+
+
+def benchmark_framing() -> dict[str, Any]:
+    return {
+        "primary_endpoint": {
+            "name": "context_loss_or_instability",
+            "applies_when": [
+                "handoff_or_spec_loop_is_incomplete",
+                "post_compaction_horizon_lost",
+                "state_is_stale_or_superseded",
+                "operation_facts_are_missing_or_costly_to_reopen",
+            ],
+            "core_metrics": [
+                "known_bad_route_repetition_rate",
+                "operation_fact_reopen_rate",
+                "stale_summary_overhang_rate",
+                "human_correction_count",
+                "source_reopen_before_risky_action",
+                "cost_per_successful_slice",
+            ],
+        },
+        "secondary_endpoint": {
+            "name": "fresh_context_spec_loop_quality",
+            "interpretation": (
+                "Fresh-context/spec-loop wins on cost, reliability, or safety are "
+                "reported transparently and are not treated as benchmark failure."
+            ),
+        },
+        "no_harm_endpoint": {
+            "name": "no_harm_when_spec_complete",
+            "metric_path": "metrics.no_harm_when_spec_complete",
+            "success_condition": (
+                "No memory injection or stale route revival when the current prompt "
+                "already carries the full correct task context."
+            ),
+        },
+        "baseline_arms": {
+            "oracle_fresh_context_spec_loop": {
+                "role": "upper_bound_no_harm_control",
+                "primary_opponent": False,
+                "expected_short_task_winner": "fresh_context_or_memory_silence",
+            },
+            "realistic_fresh_context_handoff_loop": {
+                "role": "primary_reset_baseline",
+                "primary_opponent": True,
+                "applies_when": "handoff_or_summary_is_incomplete_lossy_or_stale",
+            },
+            "continuous_agent_with_aippocampus": {
+                "role": "memory_layer_under_test",
+                "primary_opponent": False,
+            },
+            "bare_continuous_no_memory": {
+                "role": "context_degradation_control",
+                "primary_opponent": False,
+            },
+        },
+    }
+
+
 def run_benchmark(
     *,
     include_private_text: bool = False,
@@ -787,6 +892,7 @@ def run_benchmark(
         for case in cases
     ]
     metrics = summarize_results(rows)
+    metrics["no_harm_when_spec_complete"] = no_harm_when_spec_complete(rows)
     coverage = coverage_summary(rows)
     coverage_density = coverage_density_summary(rows)
     required_stage_coverage = set(HOOK_STAGES) <= set(coverage["hook_stages"])
@@ -804,6 +910,7 @@ def run_benchmark(
         and metrics["source_fidelity"] == 1.0
         and metrics["correction_anchor_recall"] == 1.0
         and metrics["anti_nag_precision"] == 1.0
+        and metrics["no_harm_when_spec_complete"]["ok"]
     )
     all_cases_correct = metrics["correct_count"] == metrics["total_cases"]
     regression_free = regression_counters_free and all_cases_correct
@@ -840,6 +947,7 @@ def run_benchmark(
             "reason": "case_limit" if diagnostic_subset else None,
         },
         "metrics": metrics,
+        "benchmark_framing": benchmark_framing(),
         "coverage": coverage,
         "coverage_density": coverage_density,
         "cases": rows,
@@ -857,9 +965,11 @@ def run_benchmark(
             "output_shape": "sanitized_compaction_continuity_aggregates",
         },
         "cannot_claim": [
+            "complete_spec_fresh_context_is_not_primary_opponent",
             "live_codex_host_behavior",
             "live_hook_capture",
             "live_semantic_adjudication_quality",
+            "memory_useful_when_current_prompt_contains_full_correct_context",
             "real_history_compaction_survival",
         ],
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),

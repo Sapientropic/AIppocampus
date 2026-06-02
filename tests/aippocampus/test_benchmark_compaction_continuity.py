@@ -119,6 +119,37 @@ class CompactionContinuityBenchmarkTests(unittest.TestCase):
         self.assertEqual(metrics["source_fidelity"], 1.0)
         self.assertEqual(metrics["anti_nag_precision"], 1.0)
 
+    def test_complete_spec_fresh_context_is_no_harm_upper_bound_not_primary_opponent(self) -> None:
+        payload = benchmark.run_benchmark(include_private_text=False)
+        framing = payload["benchmark_framing"]
+        oracle_arm = framing["baseline_arms"]["oracle_fresh_context_spec_loop"]
+        realistic_arm = framing["baseline_arms"]["realistic_fresh_context_handoff_loop"]
+        no_harm = payload["metrics"]["no_harm_when_spec_complete"]
+
+        self.assertEqual(framing["primary_endpoint"]["name"], "context_loss_or_instability")
+        self.assertEqual(oracle_arm["role"], "upper_bound_no_harm_control")
+        self.assertFalse(oracle_arm["primary_opponent"])
+        self.assertEqual(
+            oracle_arm["expected_short_task_winner"],
+            "fresh_context_or_memory_silence",
+        )
+        self.assertEqual(realistic_arm["role"], "primary_reset_baseline")
+        self.assertIn(
+            "complete_spec_fresh_context_is_not_primary_opponent",
+            payload["cannot_claim"],
+        )
+        self.assertIn(
+            "memory_useful_when_current_prompt_contains_full_correct_context",
+            payload["cannot_claim"],
+        )
+        self.assertTrue(no_harm["ok"])
+        self.assertGreater(no_harm["case_count"], 0)
+        self.assertEqual(no_harm["unwanted_memory_injection_count"], 0)
+        self.assertIn(
+            "spec_complete_short_task_no_harm",
+            {row["case_type"] for row in payload["cases"]},
+        )
+
     def test_source_fidelity_requires_bound_event_chain(self) -> None:
         case = next(
             item
