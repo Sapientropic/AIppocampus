@@ -119,6 +119,15 @@ future cache for the next few turns. In an agent thread, catching up one turn
 late is still useful because the conversation usually keeps moving inside the
 same topic field.
 
+The hot path now treats the prompt-time scent threshold as context-aware
+routing diagnostics rather than one global constant. This is a narrow #359
+slice for the #201/#281 problem space: long same-thread continuations and exact
+semantic-result reuse can make a weak scent measurable, while broad fresh
+personal prompts, secret surfaces, and current-repo factual prompts stay at the
+base threshold. The output is safe reason-code telemetry for the agent/operator;
+it is not a new memory surface and it cannot upgrade a scent into source-backed
+evidence.
+
 ## Thread Ambient Cache
 
 The primary cache should be keyed to the agent thread, not only to exact prompt

@@ -67,6 +67,15 @@ cover the two real-history failure shapes that motivated the issue:
   real-history boundary smoke required to close #302; see
   [`fresh-thread-real-history-smoke-2026-06-02.md`](fresh-thread-real-history-smoke-2026-06-02.md).
 
+## Issue #359 Threshold Boundary
+
+The prompt hook can now report a context-aware `scent_threshold_policy` with
+`base_threshold`, `effective_threshold`, reason-code adjustments, and a
+`risk_boundary`. This makes the #281 first-turn and continuation routes more
+measurable, but it does not change this demo's evidence boundary: synthetic
+fresh-thread packets remain navigation fixtures, and any specific memory-backed
+claim still requires source reopen.
+
 ## Local Result
 
 The local deterministic run reported:
