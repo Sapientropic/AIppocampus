@@ -122,9 +122,11 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
   or token-savings claim.
 - `benchmarks/aippocampus/benchmark_continuous_memory_arms.py` runs the #408
   continuous-memory attribution controls for #378. It compares
-  `no_memory`, `true_aippocampus_memory`, `sham_unrelated_memory`,
-  `stale_wrong_memory`, and `oracle_memory` arms on public-safe synthetic
-  coding-continuity cases, then reports `memory_presence_effect`,
+  `no_memory`, `host_native_continuous_no_aippocampus`,
+  `true_aippocampus_memory`, `sham_unrelated_memory`, `stale_wrong_memory`, and
+  `oracle_memory` arms on public-safe synthetic coding-continuity cases, then
+  reports `memory_presence_effect`,
+  `host_native_compaction_lift_over_bare_continuous`,
   `memory_correctness_effect`, `stale_memory_harm`, `oracle_headroom`, and
   source-reopen obedience by arm. Its #410 `cost_harm_ledger` also separates
   foreground-only cost from amortized memory cost, severity-weights stale
@@ -144,13 +146,19 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
   forward. The implemented Track D report also exposes
   `metrics.no_harm_when_spec_complete` so a complete short-task prompt rewards
   memory silence rather than noisy retrieval.
+  Its #406 host-native baseline separates `bare_continuous_no_memory` from a
+  Codex-style host-native compaction path with AIppocampus hook, MCP recall,
+  active recall, and registry memory disabled. That arm is a deterministic
+  contract baseline; it records the host/version field that a future live run
+  must fill, but it is not live host telemetry.
   This runner is diagnostic and not a public superiority claim.
 
 This slice is a smoke gate, not a real-history quality claim. It proves the
 benchmark runners can catch skip/scent/evidence mistakes, report sanitized
 metrics, and exercise deterministic Track D compaction-continuity behavior. The
 next slices still need broader private real-history gate cases, budget curves,
-larger live semantic-model verification, and host-native baseline evidence.
+larger live semantic-model verification, and live host-native baseline
+telemetry.
 
 ### Benchmark Suite Profiles
 
@@ -293,9 +301,14 @@ python benchmarks\aippocampus\benchmark_continuous_memory_arms.py --json
 ```
 
 The runner intentionally stays outside the default `public-fast` suite for now.
-It uses six public-safe coding-continuity cases and five arms:
+It uses six public-safe coding-continuity cases and six arms:
 
-- `no_memory`: the baseline has no recall context.
+- `no_memory`: the `bare_continuous_no_memory` diagnostic arm has no recall
+  context and no host-native compaction help.
+- `host_native_continuous_no_aippocampus`: a Codex-style same-thread
+  compaction/summary baseline with AIppocampus hook recall, MCP
+  `recall_context` / `recall_deepen`, active recall, and registry memory
+  injection disabled.
 - `true_aippocampus_memory`: production-shaped route handles require source
   reopen and may still abstain when the source is incomplete.
 - `sham_unrelated_memory`: same nearby memory-shaped format, but unrelated, so
@@ -308,6 +321,8 @@ It uses six public-safe coding-continuity cases and five arms:
 Reports must keep these effects separate:
 
 - `memory_presence_effect`: sham vs no-memory.
+- `host_native_compaction_lift_over_bare_continuous`: host-native continuous
+  no-AIppocampus vs `bare_continuous_no_memory`.
 - `memory_correctness_effect`: true memory vs sham.
 - `stale_memory_harm`: stale-wrong harm against no-memory.
 - `oracle_headroom`: oracle memory against true memory.
@@ -332,10 +347,23 @@ public-synthetic units rather than exact billing data:
   a `fresh_context_spec_loop` baseline; reports must allow that baseline to win
   when memory overhead or harm outweighs recall lift.
 
-`no_memory` remains a diagnostic attribution arm with no recall context. It is
-not the same thing as a fresh-context/spec-loop workflow, so reports keep
-`fresh_context_spec_loop` in `comparison_baselines` rather than folding it into
-the attribution arm list.
+`no_memory` remains a diagnostic attribution arm with no recall context and no
+host-native compaction help. It is not the same thing as either a
+fresh-context/spec-loop workflow or a realistic continuous host workflow, so
+reports keep `fresh_context_spec_loop` and
+`host_native_continuous_no_aippocampus` distinct in
+`comparison_baselines`.
+
+The #406 host-native arm is deliberately narrow. The documented v1 host family
+is Codex, with normal current-thread context, host compaction/summary, and host
+session state allowed. AIppocampus prompt-hook recall, MCP recall tools, active
+recall, and registry memory injection are disabled. The deterministic report
+records
+`compaction_settings=host_default_same_thread_summary_or_compaction_contract`
+and can run this contract arm, but it still records
+`live_measurement_status=not_measured_in_this_diagnostic_runner`; any
+cross-host claim must split Codex, Claude Code, Cursor / VS Code agents, or
+other clients into separately documented live paths.
 
 Fresh-context/spec-loop baselines must be named by role:
 
@@ -385,11 +413,12 @@ The #409 scenario provenance and holdout controls live under
   failure is not misread as memory intervention. These controls are separate
   from the stale wrong arm, which remains an adversarial diagnostic stressor.
 
-This is enough to prove the public-safe attribution, #409 scenario-control, and
-#410 ledger contracts exist. It does not prove full #378 continuous-memory
-superiority, exact dollar accounting for every local operation, live
-host-native cost telemetry, live host-native compaction behavior, private
-real-history generality, answer-generation quality, or competitor superiority.
+This is enough to prove the public-safe attribution, #406 host-native baseline,
+#409 scenario-control, and #410 ledger contracts exist. It does not prove full
+#378 continuous-memory superiority, exact dollar accounting for every local
+operation, live host-native cost telemetry, live host-native compaction
+behavior, private real-history generality, answer-generation quality, or
+competitor superiority.
 
 The #407 pre-registration contract lives under `preregistration`. It is the
 rule for future public-quality #378 claims, not a claim that the current
@@ -405,7 +434,8 @@ contract smoke has enough power:
   feasible. At least 30% of cases must come from external-written,
   public-log/VCS-derived, or holdout sources before public-quality superiority
   claims.
-- Required fair arms: `fresh_context_spec_loop`, `true_aippocampus_memory`,
+- Required fair arms: `fresh_context_spec_loop`,
+  `host_native_continuous_no_aippocampus`, `true_aippocampus_memory`,
   `sham_unrelated_memory`, and `stale_wrong_memory`; `oracle_memory` stays an
   upper bound and is excluded from the fair winner.
 - Seed rule:

@@ -19,9 +19,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
+BARE_CONTINUOUS_NO_MEMORY = "bare_continuous_no_memory"
+HOST_NATIVE_CONTINUOUS_NO_AIPPOCAMPUS = "host_native_continuous_no_aippocampus"
 ARM_ORDER = (
     "no_memory",
+    HOST_NATIVE_CONTINUOUS_NO_AIPPOCAMPUS,
     "true_aippocampus_memory",
     "sham_unrelated_memory",
     "stale_wrong_memory",
@@ -186,6 +189,9 @@ def _common_specs(
     no_memory_behavior: str,
     no_memory_success: bool,
     no_memory_harm: int,
+    host_native_behavior: str | None = None,
+    host_native_success: bool | None = None,
+    host_native_harm: int | None = None,
     sham_behavior: str,
     sham_success: bool,
     sham_harm: int,
@@ -205,6 +211,9 @@ def _common_specs(
 ) -> tuple[ArmSpec, ...]:
     true_action = true_behavior or expected_behavior
     stale_action = stale_behavior or "adopt_stale_wrong_memory"
+    host_action = host_native_behavior or no_memory_behavior
+    host_success = no_memory_success if host_native_success is None else host_native_success
+    host_harm = no_memory_harm if host_native_harm is None else host_native_harm
     return (
         ArmSpec(
             arm="no_memory",
@@ -224,6 +233,30 @@ def _common_specs(
             harm=HarmProfile(
                 downstream_turns_affected=1 if no_memory_harm else 0,
                 rollback_rework_minutes=5 if no_memory_harm else 0,
+            ),
+        ),
+        ArmSpec(
+            arm=HOST_NATIVE_CONTINUOUS_NO_AIPPOCAMPUS,
+            memory_packet=(
+                "Codex host-native compaction summary retains current-thread state; "
+                "AIppocampus hook, MCP recall, active recall, and registry memory are disabled."
+            ),
+            memory_packet_shape="host_native_compaction_summary",
+            actual_behavior=host_action,
+            success=host_success,
+            harm_score=host_harm,
+            source_reopen_required=False,
+            source_reopen_attempted=False,
+            source_backed_hit=False,
+            cost=CostProfile(
+                foreground_tokens=110,
+                background_tokens=45,
+                wall_clock_latency_ms=120,
+                retry_recovery_count=0 if host_success else 1,
+            ),
+            harm=HarmProfile(
+                downstream_turns_affected=1 if host_harm else 0,
+                rollback_rework_minutes=5 if host_harm else 0,
             ),
         ),
         ArmSpec(
@@ -342,6 +375,9 @@ def fixture_cases() -> list[AttributionCase]:
                 no_memory_behavior="retry_rejected_registry_import",
                 no_memory_success=False,
                 no_memory_harm=2,
+                host_native_behavior="avoid_rejected_route_from_host_compaction_summary",
+                host_native_success=True,
+                host_native_harm=0,
                 sham_behavior="retry_rejected_registry_import",
                 sham_success=False,
                 sham_harm=2,
@@ -366,6 +402,9 @@ def fixture_cases() -> list[AttributionCase]:
                 no_memory_behavior="edit_runtime_module",
                 no_memory_success=False,
                 no_memory_harm=2,
+                host_native_behavior="preserve_docs_only_scope_from_host_summary",
+                host_native_success=True,
+                host_native_harm=0,
                 sham_behavior="edit_runtime_module",
                 sham_success=False,
                 sham_harm=2,
@@ -607,6 +646,7 @@ def summarize_rows(rows: list[dict[str, Any]], *, case_count: int) -> dict[str, 
     no_memory = by_arm["no_memory"]
     true_memory = by_arm["true_aippocampus_memory"]
     sham = by_arm["sham_unrelated_memory"]
+    host_native = by_arm[HOST_NATIVE_CONTINUOUS_NO_AIPPOCAMPUS]
     stale = by_arm["stale_wrong_memory"]
     oracle = by_arm["oracle_memory"]
     return {
@@ -616,6 +656,9 @@ def summarize_rows(rows: list[dict[str, Any]], *, case_count: int) -> dict[str, 
         "by_arm": by_arm,
         "memory_presence_effect": round_delta(
             sham["success_rate"] - no_memory["success_rate"]
+        ),
+        "host_native_compaction_lift_over_bare_continuous": round_delta(
+            host_native["success_rate"] - no_memory["success_rate"]
         ),
         "memory_correctness_effect": round_delta(
             true_memory["success_rate"] - sham["success_rate"]
@@ -1092,6 +1135,35 @@ def build_fresh_context_spec_loop_baseline(case_count: int) -> tuple[dict[str, A
     return cost_summary, net_summary
 
 
+def host_native_baseline_metadata(cost_summary: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **cost_summary,
+        "baseline_role": HOST_NATIVE_CONTINUOUS_NO_AIPPOCAMPUS,
+        "framing_role": "realistic_host_native_continuous_baseline",
+        "primary_opponent": True,
+        "complete_spec_upper_bound": False,
+        "aippocampus_memory_surfaces_disabled": True,
+        "host_native_compaction_enabled": True,
+        "documented_host_family": "codex",
+        "host_version_or_build": "record_at_live_run_when_available",
+        "compaction_settings": "host_default_same_thread_summary_or_compaction_contract",
+        "host_native_surfaces_allowed": [
+            "current_thread_context",
+            "host_compaction_or_summary",
+            "host_session_state",
+        ],
+        "aippocampus_surfaces_disabled": [
+            "prompt_hook_recall",
+            "mcp_recall_context",
+            "mcp_recall_deepen",
+            "active_recall",
+            "registry_memory_injection",
+        ],
+        "modeled_from": "public synthetic Codex-style host compaction contract for #406",
+        "live_measurement_status": "not_measured_in_this_diagnostic_runner",
+    }
+
+
 def benchmark_framing() -> dict[str, Any]:
     return {
         "primary_endpoint": {
@@ -1107,6 +1179,25 @@ def benchmark_framing() -> dict[str, Any]:
             ],
         },
         "baseline_arms": {
+            "no_memory": {
+                "normalized_role": BARE_CONTINUOUS_NO_MEMORY,
+                "role": "diagnostic_degradation_control",
+                "primary_opponent": False,
+                "host_native_compaction_enabled": False,
+            },
+            BARE_CONTINUOUS_NO_MEMORY: {
+                "role": "diagnostic_degradation_control",
+                "legacy_report_key": "no_memory",
+                "primary_opponent": False,
+            },
+            HOST_NATIVE_CONTINUOUS_NO_AIPPOCAMPUS: {
+                "role": "primary_continuous_host_baseline",
+                "primary_opponent": True,
+                "documented_host_family": "codex",
+                "compaction_settings": "host_default_same_thread_summary_or_compaction_contract",
+                "aippocampus_memory_surfaces_disabled": True,
+                "host_native_compaction_enabled": True,
+            },
             "fresh_context_spec_loop": {
                 "normalized_role": "realistic_fresh_context_handoff_loop",
                 "role": "primary_reset_baseline",
@@ -1188,6 +1279,9 @@ def build_cost_harm_ledger(
     fresh_context_spec_loop, baseline_net = build_fresh_context_spec_loop_baseline(
         int(metrics["case_count"])
     )
+    host_native_baseline = host_native_baseline_metadata(
+        cost_by_arm[HOST_NATIVE_CONTINUOUS_NO_AIPPOCAMPUS]
+    )
     comparable_costs = comparable_cost_per_success(cost_by_arm, fresh_context_spec_loop)
     comparable_net = comparable_net_values(net_by_arm, baseline_net)
     cost_per_success_candidates = {
@@ -1232,6 +1326,7 @@ def build_cost_harm_ledger(
             "by_arm": cost_by_arm,
             "comparison_baselines": {
                 "fresh_context_spec_loop": fresh_context_spec_loop,
+                HOST_NATIVE_CONTINUOUS_NO_AIPPOCAMPUS: host_native_baseline,
             },
         },
         "harm": {
@@ -1286,10 +1381,16 @@ def build_cost_harm_ledger(
             "by_arm": net_by_arm,
             "comparison_baselines": {
                 "fresh_context_spec_loop": baseline_net,
+                HOST_NATIVE_CONTINUOUS_NO_AIPPOCAMPUS: net_by_arm[
+                    HOST_NATIVE_CONTINUOUS_NO_AIPPOCAMPUS
+                ],
             },
             "source_metrics": {
                 "memory_correctness_effect": metrics["memory_correctness_effect"],
                 "stale_memory_harm": metrics["stale_memory_harm"],
+                "host_native_compaction_lift_over_bare_continuous": metrics[
+                    "host_native_compaction_lift_over_bare_continuous"
+                ],
             },
         },
     }
@@ -1339,6 +1440,7 @@ def build_preregistration(cost_harm_ledger: dict[str, Any]) -> dict[str, Any]:
             ),
             "arms_required": [
                 "fresh_context_spec_loop",
+                HOST_NATIVE_CONTINUOUS_NO_AIPPOCAMPUS,
                 "true_aippocampus_memory",
                 "sham_unrelated_memory",
                 "stale_wrong_memory",
@@ -1489,6 +1591,7 @@ def run_benchmark(
             ),
             "uses_live_model": False,
             "uses_private_history": False,
+            "uses_live_host_native_compaction": False,
             "uses_oracle_for_true_memory_scoring": False,
             "default_suite_member": False,
         },
@@ -1517,9 +1620,11 @@ def run_benchmark(
             "oracle_memory is an upper-bound arm and must not leak into true-memory scoring.",
             "cost and harm ledger uses public synthetic units, not exact billing data.",
             "scenario provenance, holdout, and negative-control slices are reported separately for #409.",
+            "host_native_continuous_no_aippocampus is a Codex-style synthetic contract arm, not live host telemetry.",
         ],
         "cannot_claim": [
             "full #378 continuous-memory superiority",
+            "AIppocampus_has_beaten_realistic_host_native_continuous_workflows",
             "memory_useful_when_current_prompt_contains_full_correct_context",
             "public-quality continuous-memory advantage before the preregistered primary endpoint passes",
             "public-quality #378 superiority from only author_written_synthetic or tuning-visible diagnostic scenarios",

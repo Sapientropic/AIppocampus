@@ -28,6 +28,7 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
             set(payload["arms"]),
             {
                 "no_memory",
+                "host_native_continuous_no_aippocampus",
                 "true_aippocampus_memory",
                 "sham_unrelated_memory",
                 "stale_wrong_memory",
@@ -47,7 +48,7 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
         by_arm = metrics["by_arm"]
 
         self.assertEqual(metrics["case_count"], 6)
-        self.assertEqual(metrics["arm_count"], 5)
+        self.assertEqual(metrics["arm_count"], 6)
         self.assertEqual(metrics["memory_presence_effect"], 0.0)
         self.assertGreater(metrics["memory_correctness_effect"], 0.0)
         self.assertGreater(metrics["stale_memory_harm"], 0.0)
@@ -212,6 +213,47 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
             payload["cannot_claim"],
         )
 
+    def test_report_distinguishes_bare_and_host_native_continuous_baselines(self) -> None:
+        payload = benchmark.run_benchmark()
+        framing = payload["benchmark_framing"]
+        metrics = payload["metrics"]
+        baselines = payload["cost_harm_ledger"]["cost"]["comparison_baselines"]
+        host_native = baselines["host_native_continuous_no_aippocampus"]
+
+        self.assertIn("host_native_continuous_no_aippocampus", payload["arms"])
+        self.assertIn("bare_continuous_no_memory", framing["baseline_arms"])
+        self.assertEqual(
+            framing["baseline_arms"]["no_memory"]["normalized_role"],
+            "bare_continuous_no_memory",
+        )
+        self.assertEqual(
+            framing["baseline_arms"]["host_native_continuous_no_aippocampus"]["role"],
+            "primary_continuous_host_baseline",
+        )
+        self.assertEqual(
+            host_native["baseline_role"],
+            "host_native_continuous_no_aippocampus",
+        )
+        self.assertEqual(host_native["aippocampus_memory_surfaces_disabled"], True)
+        self.assertEqual(host_native["host_native_compaction_enabled"], True)
+        self.assertIn("codex", host_native["documented_host_family"])
+        self.assertEqual(
+            host_native["compaction_settings"],
+            "host_default_same_thread_summary_or_compaction_contract",
+        )
+        self.assertEqual(
+            metrics["host_native_compaction_lift_over_bare_continuous"],
+            round(
+                metrics["by_arm"]["host_native_continuous_no_aippocampus"]["success_rate"]
+                - metrics["by_arm"]["no_memory"]["success_rate"],
+                4,
+            ),
+        )
+        self.assertIn(
+            "AIppocampus_has_beaten_realistic_host_native_continuous_workflows",
+            payload["cannot_claim"],
+        )
+
     def test_report_pre_registers_primary_endpoint_and_decision_rule(self) -> None:
         payload = benchmark.run_benchmark()
         preregistration = payload["preregistration"]
@@ -355,6 +397,8 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
         self.assertIn("true_aippocampus_memory", benchmark_plan)
         self.assertIn("sham_unrelated_memory", benchmark_plan)
         self.assertIn("stale_wrong_memory", benchmark_plan)
+        self.assertIn("host_native_continuous_no_aippocampus", benchmark_plan)
+        self.assertIn("bare_continuous_no_memory", benchmark_plan)
         self.assertIn("oracle_memory", benchmark_plan)
         self.assertIn("memory_presence_effect", benchmark_plan)
         self.assertIn("memory_correctness_effect", benchmark_plan)

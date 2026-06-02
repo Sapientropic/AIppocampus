@@ -174,6 +174,11 @@ navigation map lives in `docs/evidence/benchmark-evidence-map.md`.
   labels, timeline groups, semantic sidecars, real-registry aggregate smoke,
   dynamic semantic sidecar smoke, recall eval prompts, source-review samples,
   and ambient scents are navigation hints only.
+- Benchmark evidence now includes a deterministic #406 Codex-style
+  `host_native_continuous_no_aippocampus` contract arm, but it is not live
+  host telemetry and does not prove
+  `AIppocampus_has_beaten_realistic_host_native_continuous_workflows`,
+  cross-host baseline coverage, or live host-native compaction behavior.
 - Stage 3 now has selected physical second-device and managed R2 provider
   evidence, but it is not a broad provider/client matrix. Do not generalize the
   R2 run into all S3-compatible/GCS/cloud-folder providers, and do not treat
