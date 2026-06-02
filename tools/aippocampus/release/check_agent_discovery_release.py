@@ -302,10 +302,18 @@ def check_mcp_registry(checks: list[Check], package_version: str, timeout: float
         )
         return
 
+    def server_payload(row: Any) -> dict[str, Any]:
+        if not isinstance(row, dict):
+            return {}
+        nested = row.get("server")
+        if isinstance(nested, dict):
+            return nested
+        return row
+
     matches = [
         server
-        for server in data.get("servers", [])
-        if isinstance(server, dict) and server.get("name") == SERVER_NAME
+        for server in (server_payload(row) for row in data.get("servers", []))
+        if server.get("name") == SERVER_NAME
     ]
     if not matches:
         add(

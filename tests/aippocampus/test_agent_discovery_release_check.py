@@ -157,6 +157,33 @@ class AgentDiscoveryReleaseCheckTests(unittest.TestCase):
             any(check["id"] == "pyproject" and check["status"] == "fail" for check in result["checks"])
         )
 
+    def test_mcp_registry_accepts_nested_server_search_results(self) -> None:
+        original_fetch_json = release_check.fetch_json
+
+        def fake_fetch_json(url: str, timeout: float) -> tuple[int, object]:
+            return 200, {
+                "servers": [
+                    {
+                        "server": {
+                            "name": "io.github.Sapientropic/aippocampus",
+                            "version": "0.1.1",
+                        },
+                        "_meta": {"io.modelcontextprotocol.registry/official": {"isLatest": True}},
+                    }
+                ]
+            }
+
+        try:
+            release_check.fetch_json = fake_fetch_json
+            checks: list[release_check.Check] = []
+
+            release_check.check_mcp_registry(checks, "0.1.1", timeout=0.01)
+        finally:
+            release_check.fetch_json = original_fetch_json
+
+        self.assertEqual(checks[0].id, "mcp_registry")
+        self.assertEqual(checks[0].status, "pass")
+
 
 if __name__ == "__main__":
     unittest.main()
