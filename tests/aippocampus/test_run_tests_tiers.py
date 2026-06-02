@@ -42,6 +42,7 @@ FAST_REVIEWED_SENSITIVE_MODULES = {
     "tests.aippocampus.test_macos_install_smoke_workflow",
     "tests.aippocampus.test_memory_pain_prompt_hook_smoke",
     "tests.aippocampus.test_multilingual_prompt_hook_smoke",
+    "tests.aippocampus.test_openai_agents_sdk_smoke",
     "tests.aippocampus.test_question_confirmation_live_smoke",
     "tests.aippocampus.test_question_tracking_scale_smoke",
     "tests.aippocampus.test_recall_funnel_smoke",

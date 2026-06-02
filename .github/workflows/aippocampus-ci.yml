@@ -87,6 +87,26 @@ jobs:
       - name: Public-fast suite and deterministic benchmark smoke tier
         run: python tools/aippocampus/run_tests.py --tier benchmark-smoke --benchmark-suite-profile public-fast
 
+  openai-agents-smoke:
+    name: OpenAI Agents SDK smoke (optional integration)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install optional OpenAI Agents SDK dependency
+        run: python -m pip install -e ".[openai-agents]"
+
+      - name: Run OpenAI Agents SDK function-tool smoke
+        run: python -m unittest tests.aippocampus.test_openai_agents_sdk_smoke -v
+
   macos-path-identity:
     name: macOS default TMPDIR path-identity smoke
     runs-on: macos-latest
