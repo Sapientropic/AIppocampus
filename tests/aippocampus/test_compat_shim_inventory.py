@@ -187,6 +187,45 @@ sys.modules[__name__] = _impl
             self.assertIn("documented_helper.py", temporary)
             self.assertIn("documented direct invocation", temporary["documented_helper.py"].reason)
 
+    def test_skill_entrypoint_direct_invocation_keeps_shim_temporary(self) -> None:
+        with TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            write_fixture_script(
+                repo_root,
+                "skill_documented_helper.py",
+                '''#!/usr/bin/env python3
+"""Compatibility shim for a helper documented by the installable skill."""
+
+from __future__ import annotations
+
+import sys
+
+from aippocampus_runtime.skill_documented import helper as _impl
+
+sys.modules[__name__] = _impl
+''',
+            )
+            write_fixture_script(
+                repo_root,
+                "aippocampus_runtime/skill_documented/helper.py",
+                "def main() -> int:\n    return 0\n",
+            )
+            skill_path = repo_root / "skills" / "aippocampus" / "SKILL.md"
+            skill_path.parent.mkdir(parents=True, exist_ok=True)
+            skill_path.write_text(
+                "Use `skill_documented_helper.py` for runtime recovery.\n",
+                encoding="utf-8",
+            )
+
+            report = inventory.build_inventory(repo_root)
+            temporary = {item.script: item for item in report.temporary_compat}
+
+            self.assertIn("skill_documented_helper.py", temporary)
+            self.assertIn(
+                "documented direct invocation",
+                temporary["skill_documented_helper.py"].reason,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

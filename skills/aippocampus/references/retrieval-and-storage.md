@@ -438,11 +438,12 @@ compatibility shim. Each manifest file is stored as an object under
 HTTP `PUT`/`GET` and writes the encrypted outer manifest last.
 `encrypted_sync_admin.py` owns device-key UX and plaintext-to-encrypted
 migration/cleanup so the core sync entrypoints stay focused on transport. The
-object-store client boundary is split into `object_storage_client.py` and
-`object_storage_providers.py`; provider mode covers generic HTTP bearer-token
-endpoints, S3-compatible SigV4, Cloudflare R2 region `auto`, and Google Cloud
-Storage XML HMAC signing. Provider-specific setup notes live in
-`docs/guides/object-storage-providers.md`.
+object-store client boundary is split into the `object_storage_client.py`
+compatibility shim and package-only
+`aippocampus_runtime.sync.object_storage.providers`; provider mode covers
+generic HTTP bearer-token endpoints, S3-compatible SigV4, Cloudflare R2 region
+`auto`, and Google Cloud Storage XML HMAC signing. Provider-specific setup
+notes live in `docs/guides/object-storage-providers.md`.
 
 Raw rollout files are excluded from plaintext sync. Normal raw rollout transfer
 requires encrypted sync. Pull never overwrites conflicting local files; it

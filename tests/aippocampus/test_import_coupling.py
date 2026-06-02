@@ -498,7 +498,6 @@ class ImportCouplingTests(unittest.TestCase):
 
     def test_object_storage_helpers_have_package_owner_and_compat_shims(self) -> None:
         import object_storage_client
-        import object_storage_providers
         from aippocampus_runtime.sync.object_storage import client, providers
 
         package_paths = [
@@ -508,6 +507,8 @@ class ImportCouplingTests(unittest.TestCase):
         ]
         shim_paths = [
             SCRIPTS / "object_storage_client.py",
+        ]
+        deleted_shim_paths = [
             SCRIPTS / "object_storage_providers.py",
         ]
 
@@ -515,6 +516,8 @@ class ImportCouplingTests(unittest.TestCase):
             self.assertTrue(path.exists(), path)
         for path in shim_paths:
             self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+        for path in deleted_shim_paths:
+            self.assertFalse(path.exists(), path)
 
         edges = same_dir_import_edges()
         self.assertIn(
@@ -534,14 +537,15 @@ class ImportCouplingTests(unittest.TestCase):
             "object_storage_providers",
             edges["aippocampus_runtime.sync.object_storage.client"],
         )
+        self.assertNotIn("object_storage_providers", pyproject_py_modules())
 
         self.assertIs(object_storage_client.HttpObjectStoreClient, client.HttpObjectStoreClient)
         self.assertIs(
             object_storage_client.object_storage_client_for,
             client.object_storage_client_for,
         )
-        self.assertIs(object_storage_providers.SigV4Auth, providers.SigV4Auth)
-        self.assertIs(object_storage_providers.provider_config, providers.provider_config)
+        self.assertTrue(callable(providers.provider_config))
+        self.assertTrue(hasattr(providers, "SigV4Auth"))
 
     def test_sync_public_commands_have_package_owner_and_compat_shims(self) -> None:
         import sync_bundle
@@ -606,7 +610,6 @@ class ImportCouplingTests(unittest.TestCase):
     def test_encrypted_sync_helpers_have_package_owner_and_compat_shims(self) -> None:
         import encrypted_sync_admin
         import encrypted_sync_bundle
-        import encrypted_sync_crypto
         import encrypted_sync_keys
         import encrypted_sync_migration
         import encrypted_sync_object_storage
@@ -631,16 +634,20 @@ class ImportCouplingTests(unittest.TestCase):
         shim_paths = [
             SCRIPTS / "encrypted_sync_admin.py",
             SCRIPTS / "encrypted_sync_bundle.py",
-            SCRIPTS / "encrypted_sync_crypto.py",
             SCRIPTS / "encrypted_sync_keys.py",
             SCRIPTS / "encrypted_sync_migration.py",
             SCRIPTS / "encrypted_sync_object_storage.py",
+        ]
+        deleted_shim_paths = [
+            SCRIPTS / "encrypted_sync_crypto.py",
         ]
 
         for path in package_paths + shim_paths:
             self.assertTrue(path.exists(), path)
         for path in shim_paths:
             self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+        for path in deleted_shim_paths:
+            self.assertFalse(path.exists(), path)
 
         edges = same_dir_import_edges(top_level_only=True)
         admin_shim_edges = edges["encrypted_sync_admin"]
@@ -687,7 +694,8 @@ class ImportCouplingTests(unittest.TestCase):
             encrypted_sync_bundle.ENCRYPTED_SYNC_DIR_NAME,
             bundle.ENCRYPTED_SYNC_DIR_NAME,
         )
-        self.assertIs(encrypted_sync_crypto.EncryptedSyncError, crypto.EncryptedSyncError)
+        self.assertTrue(issubclass(crypto.EncryptedSyncError, Exception))
+        self.assertNotIn("encrypted_sync_crypto", pyproject_py_modules())
         self.assertIs(encrypted_sync_keys.init_device_key, keys.init_device_key)
         self.assertIs(
             encrypted_sync_migration.inventory_plaintext_sync_dir,
