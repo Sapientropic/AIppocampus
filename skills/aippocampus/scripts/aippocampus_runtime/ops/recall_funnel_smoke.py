@@ -35,6 +35,14 @@ def _field_names(payload: dict[str, Any], names: list[str]) -> list[str]:
     return [name for name in names if name in payload]
 
 
+def _as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _as_list(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
 def _recall_args(
     *,
     cue: str,
@@ -60,7 +68,7 @@ def _recall_args(
 def _safe_error(result: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any] | None:
     if not result.get("isError") and not payload.get("error"):
         return None
-    error = payload.get("error") if isinstance(payload.get("error"), dict) else {}
+    error = _as_dict(payload.get("error"))
     return {
         "code": error.get("code") or "tool_error",
         "message": error.get("message") or "MCP tool returned an error.",
@@ -105,7 +113,7 @@ def build_recall_funnel_smoke(
     context_result = mcp_server.call_recall_context(context_args)
     context_payload = _tool_payload(context_result)
     context_error = _safe_error(context_result, context_payload)
-    routes = context_payload.get("routes") if isinstance(context_payload.get("routes"), list) else []
+    routes = _as_list(context_payload.get("routes"))
     selected_index, selected_route = _select_route(routes)
 
     deepen_payload: dict[str, Any] = {}
@@ -130,13 +138,11 @@ def build_recall_funnel_smoke(
             "message": "recall_context returned no reopenable route handle for recall_deepen.",
         }
 
-    source_window = deepen_payload.get("source_window") or {}
-    if not isinstance(source_window, dict):
-        source_window = {}
-    source_refs = deepen_payload.get("source_refs")
-    if not isinstance(source_refs, list):
-        source_refs = []
-    metrics = deepen_payload.get("metrics") if isinstance(deepen_payload.get("metrics"), dict) else {}
+    source_window = _as_dict(deepen_payload.get("source_window"))
+    source_refs = _as_list(deepen_payload.get("source_refs"))
+    metrics = _as_dict(deepen_payload.get("metrics"))
+    context_metrics = _as_dict(context_payload.get("metrics"))
+    selected_suggested_next = _as_dict(selected_route.get("suggested_next")) if selected_route else {}
     wrong_or_stale = bool(
         metrics.get("wrong_or_stale_handle")
         or (deepen_error or {}).get("code") in {"stale_recall_handle", "source_ref_not_found"}
@@ -160,9 +166,10 @@ def build_recall_funnel_smoke(
             "is_error": context_error is not None,
             "error": context_error,
             "route_count": int(context_payload.get("route_count") or len(routes)),
-            "handle_count": int((context_payload.get("metrics") or {}).get("handle_count") or 0)
-            if isinstance(context_payload.get("metrics"), dict)
-            else len([route for route in routes if isinstance(route, dict) and route.get("handle")]),
+            "handle_count": int(
+                context_metrics.get("handle_count")
+                or len([route for route in routes if isinstance(route, dict) and route.get("handle")])
+            ),
             "field_names": _field_names(
                 context_payload,
                 ["routes", "metrics", "source_boundary", "suggested_next"],
@@ -173,9 +180,7 @@ def build_recall_funnel_smoke(
             "available": selected_route is not None,
             "kind": selected_route.get("kind") if selected_route else None,
             "reopenable": bool(selected_route.get("reopenable")) if selected_route else False,
-            "suggested_next_tool": (selected_route.get("suggested_next") or {}).get("tool")
-            if selected_route and isinstance(selected_route.get("suggested_next"), dict)
-            else None,
+            "suggested_next_tool": selected_suggested_next.get("tool"),
             "handle_passed_to_recall_deepen": selected_route is not None,
         },
         "deepen": {
