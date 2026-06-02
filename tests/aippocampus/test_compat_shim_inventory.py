@@ -151,6 +151,41 @@ sys.modules[__name__] = _impl
             self.assertIn("shared_helper.py", temporary)
             self.assertIn("first-party import", temporary["shared_helper.py"].reason)
 
+    def test_dynamic_first_party_import_keeps_package_owner_shim_temporary(self) -> None:
+        with TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            write_fixture_script(
+                repo_root,
+                "dynamic_helper.py",
+                '''#!/usr/bin/env python3
+"""Compatibility shim for packaged dynamic helper."""
+
+from __future__ import annotations
+
+import sys
+
+from aippocampus_runtime.dynamic import helper as _impl
+
+sys.modules[__name__] = _impl
+''',
+            )
+            write_fixture_script(
+                repo_root,
+                "aippocampus_runtime/dynamic/helper.py",
+                "def value() -> int:\n    return 1\n",
+            )
+            write_fixture_script(
+                repo_root,
+                "aippocampus_runtime/consumer.py",
+                'import importlib\n\nVALUE = importlib.import_module("dynamic_helper").value()\n',
+            )
+
+            report = inventory.build_inventory(repo_root)
+            temporary = {item.script: item for item in report.temporary_compat}
+
+            self.assertIn("dynamic_helper.py", temporary)
+            self.assertIn("first-party import", temporary["dynamic_helper.py"].reason)
+
     def test_documented_direct_invocation_keeps_package_owner_shim_temporary(self) -> None:
         with TemporaryDirectory() as tmp:
             repo_root = Path(tmp)

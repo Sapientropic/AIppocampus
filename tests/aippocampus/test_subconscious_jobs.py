@@ -113,7 +113,7 @@ class SubconsciousJobsTests(unittest.TestCase):
                 circuits.validate_job_dependency_contract()
 
     def test_job_sample_plan_is_separate_from_runner(self) -> None:
-        plan = importlib.import_module("subconscious_job_plan")
+        plan = importlib.import_module("aippocampus_runtime.subconscious.job_plan")
         runner_source = JOBS_RUNNER.read_text(encoding="utf-8")
 
         tasks = plan.plan_job_run_tasks(["project_drift", "trigger_mining"], samples_per_job=2)
@@ -178,8 +178,10 @@ class SubconsciousJobsTests(unittest.TestCase):
         self.assertTrue(config.dry_run)
 
     def test_job_validation_is_separate_from_runner(self) -> None:
-        validation = importlib.import_module("subconscious_job_validation")
-        validation_audit = importlib.import_module("subconscious_validation_audit")
+        validation = importlib.import_module("aippocampus_runtime.subconscious.job_validation")
+        validation_audit = importlib.import_module(
+            "aippocampus_runtime.subconscious.validation_audit"
+        )
         runner_source = JOBS_RUNNER.read_text(encoding="utf-8")
 
         self.assertIs(jobs.validate_findings, validation.validate_findings)
