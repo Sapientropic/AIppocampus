@@ -76,6 +76,8 @@ from aippocampus_runtime.warm_ambient.config import (
     warm_recall_config_from_env as warm_recall_config_from_env,
 )
 from aippocampus_runtime.warm_ambient.diagnostics import (
+    guard_coverage_incomplete,
+    guard_coverage_status,
     suppression_diagnostics,
     suppression_reason_buckets,
 )
@@ -646,9 +648,9 @@ def run_scout_batch(
     prefix_cache_warmup_delay: float = 0.0,
     chat_fn: ChatFn,
     scout_fn: ScoutFn,
-) -> tuple[list[dict[str, Any]], bool]:
+) -> tuple[list[dict[str, Any]], bool, str]:
     if not scouts:
-        return [], False
+        return [], False, "no_scouts"
     worker_count = max(1, max_workers or len(scouts))
     scout_order = {name: idx for idx, name in enumerate(scouts)}
     rows: list[dict[str, Any]] = []
@@ -664,6 +666,9 @@ def run_scout_batch(
     remaining_scouts = scouts[warmup_count:]
     for scout in remaining_scouts:
         tasks.put(scout)
+
+    def guard_coverage_complete() -> bool:
+        return not guard_coverage_incomplete(guard_coverage_status(scouts=scouts, rows=rows))
 
     def execute_scout(scout: str) -> dict[str, Any]:
         try:
@@ -697,8 +702,12 @@ def run_scout_batch(
         received += 1
         if row.get("ok") and row.get("useful"):
             useful_count += 1
-        if not wait_all and useful_count >= max(1, quorum):
-            return sorted(rows, key=lambda row: scout_order.get(str(row.get("scout") or ""), 999)), True
+        if not wait_all and useful_count >= max(1, quorum) and guard_coverage_complete():
+            return (
+                sorted(rows, key=lambda row: scout_order.get(str(row.get("scout") or ""), 999)),
+                True,
+                "quorum_and_guard_coverage_met",
+            )
     if warmup_scouts and remaining_scouts and prefix_cache_warmup_delay > 0:
         time.sleep(max(0.0, float(prefix_cache_warmup_delay)))
 
@@ -723,21 +732,29 @@ def run_scout_batch(
     for thread in threads:
         thread.start()
 
+    end_reason = "all_scouts_observed"
     try:
         while received < len(scouts):
             remaining = None if wait_all else max(0.0, deadline - time.perf_counter())
             if remaining == 0.0:
+                end_reason = "timeout"
                 break
             try:
                 row = results.get(timeout=remaining)
             except queue.Empty:
+                end_reason = "timeout"
                 break
             received += 1
             rows.append(row)
             if row.get("ok") and row.get("useful"):
                 useful_count += 1
-            if not wait_all and useful_count >= max(1, quorum):
+            if (
+                not wait_all
+                and useful_count >= max(1, quorum)
+                and guard_coverage_complete()
+            ):
                 quorum_met = True
+                end_reason = "quorum_and_guard_coverage_met"
                 break
     finally:
         stop_event.set()
@@ -745,7 +762,7 @@ def run_scout_batch(
             for thread in threads:
                 thread.join(timeout=0.1)
     rows.sort(key=lambda row: scout_order.get(str(row.get("scout") or ""), 999))
-    return rows, quorum_met or (useful_count >= max(1, quorum))
+    return rows, quorum_met or (useful_count >= max(1, quorum)), end_reason
 
 
 def _theme_terms(card: dict[str, Any]) -> set[str]:
@@ -1028,10 +1045,14 @@ def _cache_write_summary(cache_write: dict[str, Any] | None) -> dict[str, Any] |
         return None
     summary = {
         "status": cache_write.get("status"),
+        "reason": cache_write.get("reason"),
         "topic_epoch": cache_write.get("topic_epoch"),
         "card_count": cache_write.get("card_count"),
         "source_ref_fingerprint_count": len(cache_write.get("source_ref_fingerprints") or []),
     }
+    guard_coverage = cache_write.get("guard_coverage")
+    if isinstance(guard_coverage, dict):
+        summary["guard_coverage"] = guard_coverage
     residue = cache_write.get("residue_export")
     if isinstance(residue, dict):
         summary["residue_export"] = {
@@ -1061,6 +1082,8 @@ def warm_job_result_summary(job: dict[str, Any], result: dict[str, Any]) -> dict
         "status": result.get("status"),
         "reason": result.get("reason") or "",
         "quorum_met": bool(result.get("quorum_met")),
+        "useful_signal_quorum_met": bool(result.get("useful_signal_quorum_met")),
+        "batch_end_reason": result.get("batch_end_reason"),
         "configured_scout_count": int(result.get("scout_count") or 0),
         "observed_scout_result_count": len(result.get("scouts") or []),
         "prefix_cache_warmup_scout_count": int(result.get("prefix_cache_warmup_scout_count") or 0),
@@ -1073,6 +1096,7 @@ def warm_job_result_summary(job: dict[str, Any], result: dict[str, Any]) -> dict
         "current_thread_echo_count": int(result.get("current_thread_echo_count") or 0),
         "suppression_reason_buckets": suppression_reason_buckets(result),
         "suppression_diagnostics": suppression_diagnostics(result),
+        "guard_coverage": result.get("guard_coverage") or {},
         "cache_write": _cache_write_summary(result.get("cache_write")),
         "active_recall_lock": {
             "lock_id": (result.get("active_recall_lock") or {}).get("lock_id"),
@@ -1280,7 +1304,7 @@ def run_warm_ambient_recall(
     )
 
     scout_names = expand_scout_lanes(scouts or DEFAULT_SCOUTS)
-    rows, quorum_met = run_scout_batch(
+    rows, useful_signal_quorum_met, batch_end_reason = run_scout_batch(
         scouts=scout_names,
         payload=payload,
         api_key=str(key_value),
@@ -1328,15 +1352,23 @@ def run_warm_ambient_recall(
     )
     accepted_count = len([row for row in rows if row.get("ok") and row.get("useful")])
     failed_count = len([row for row in rows if not row.get("ok")])
+    guard_coverage = guard_coverage_status(scouts=scout_names, rows=rows)
+    guards_incomplete = guard_coverage_incomplete(guard_coverage)
+    quorum_met = bool(useful_signal_quorum_met and not guards_incomplete)
     cache_write = None
     # A single enthusiastic scout should not poison the soft thread cache. Both
     # foreground-style quorum runs and detached wait-all runs must meet the
     # configured quorum before their merged cards become next-turn ambient state.
+    # If required guard families were selected but did not return a usable answer,
+    # keep the foreground result usable while withholding cache writes. Otherwise
+    # a slow privacy/evidence guard could let provisional cards become the next
+    # turn's ambient state without the caller noticing the safety coverage gap.
     if (
         merged["cards"]
-        and quorum_met
+        and useful_signal_quorum_met
         and not no_write
         and not topic_epoch_decision.get("suppress_write")
+        and not guards_incomplete
     ):
         cache_write = write_thread_cache(
             resolved_cache_path,
@@ -1353,6 +1385,19 @@ def run_warm_ambient_recall(
             residue_path=Path(residue_path).resolve() if residue_path else None,
             residue_reason=residue_reason,
         )
+    elif (
+        merged["cards"]
+        and useful_signal_quorum_met
+        and not no_write
+        and not topic_epoch_decision.get("suppress_write")
+        and guards_incomplete
+    ):
+        cache_write = {
+            "status": "withheld",
+            "reason": "guard_coverage_incomplete",
+            "card_count": len(merged["cards"]),
+            "guard_coverage": guard_coverage,
+        }
     lock_update = None
     if lock_path and lock_id:
         try:
@@ -1371,15 +1416,21 @@ def run_warm_ambient_recall(
                     state="ready",
                 )
             elif not no_write:
+                route_reason = (
+                    "warm_ambient_guard_coverage_incomplete"
+                    if guards_incomplete
+                    else "warm_ambient_no_ready_cards"
+                )
                 lock_update = enrich_recall_lock(
                     Path(lock_path).resolve(),
                     lock_id=lock_id,
                     query_aliases=merged.get("query_aliases") or [],
-                    route_reasons=["warm_ambient_no_ready_cards"],
+                    route_reasons=[route_reason],
                     diagnostics={
                         "cold_model_call": True,
                         "fast_scout_used": False,
                         "thinking_enrichment_pending": False,
+                        "guard_coverage": guard_coverage,
                     },
                     state="failed",
                 )
@@ -1396,7 +1447,9 @@ def run_warm_ambient_recall(
     status = "written" if cache_write and cache_write.get("status") == "written" else "ready"
     if not rows:
         status = "timeout"
-    elif merged["cards"] and not quorum_met and not no_write:
+    elif merged["cards"] and useful_signal_quorum_met and guards_incomplete:
+        status = "guard_coverage_incomplete"
+    elif merged["cards"] and not useful_signal_quorum_met and not no_write:
         status = "quorum_not_met"
     if topic_epoch_decision.get("suppress_write"):
         status = "suppressed"
@@ -1409,6 +1462,8 @@ def run_warm_ambient_recall(
         "status": status,
         "reason": "",
         "quorum_met": quorum_met,
+        "useful_signal_quorum_met": useful_signal_quorum_met,
+        "batch_end_reason": batch_end_reason,
         "scout_count": len(scout_names),
         "max_workers": resolved_max_workers or len(scout_names),
         "prefix_cache_warmup_scout_count": max(
@@ -1434,6 +1489,7 @@ def run_warm_ambient_recall(
         "blocked_by": merged["blocked_by"],
         "current_thread_echo_count": merged.get("current_thread_echo_count", 0),
         "source_validation_status_counts": merged.get("source_validation_status_counts", {}),
+        "guard_coverage": guard_coverage,
         "cache_write": cache_write,
         "active_recall_lock": lock_update,
         "usage": usage_total,

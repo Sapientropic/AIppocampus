@@ -520,6 +520,8 @@ def summarize_case(case: WarmBenchmarkCase, result: dict[str, Any]) -> dict[str,
         "mode": result.get("mode"),
         "confidence": result.get("confidence"),
         "quorum_met": bool(result.get("quorum_met")),
+        "useful_signal_quorum_met": bool(result.get("useful_signal_quorum_met")),
+        "batch_end_reason": result.get("batch_end_reason"),
         "configured_scout_count": int(result.get("scout_count") or 0),
         "max_workers": int(result.get("max_workers") or 0),
         "prefix_cache_warmup_scout_count": int(result.get("prefix_cache_warmup_scout_count") or 0),
@@ -537,6 +539,7 @@ def summarize_case(case: WarmBenchmarkCase, result: dict[str, Any]) -> dict[str,
             for item in result.get("blocked_by") or []
             if str(item or "").strip()
         ],
+        "guard_coverage": result.get("guard_coverage") or {},
         "elapsed_ms": float(result.get("elapsed_ms") or 0.0),
         "cache": {
             "available": cache.get("available"),
@@ -775,6 +778,9 @@ def summarize_metrics(cases: list[dict[str, Any]]) -> dict[str, Any]:
     )
     elapsed = [float(case.get("elapsed_ms") or 0.0) for case in cases]
     scout_error_kinds: dict[str, int] = {}
+    guard_coverage_state_counts: dict[str, int] = {}
+    guard_coverage_incomplete_cases = 0
+    guard_coverage_blocked_cases = 0
     prompt_tokens = 0
     completion_tokens = 0
     total_tokens = 0
@@ -782,6 +788,18 @@ def summarize_metrics(cases: list[dict[str, Any]]) -> dict[str, Any]:
     prompt_cache_hit_tokens_by_family: dict[str, int] = {}
     prompt_cache_miss_tokens_by_family: dict[str, int] = {}
     for case in cases:
+        guard_coverage = case.get("guard_coverage") if isinstance(case.get("guard_coverage"), dict) else {}
+        if guard_coverage.get("status") == "incomplete":
+            guard_coverage_incomplete_cases += 1
+        if guard_coverage.get("blocked_families"):
+            guard_coverage_blocked_cases += 1
+        families = guard_coverage.get("families") if isinstance(guard_coverage.get("families"), dict) else {}
+        for family, details in families.items():
+            if not isinstance(details, dict):
+                continue
+            state = str(details.get("state") or "missing")
+            key = f"{family}:{state}"
+            guard_coverage_state_counts[key] = guard_coverage_state_counts.get(key, 0) + 1
         for kind, count in (case.get("scout_error_kinds") or {}).items():
             scout_error_kinds[str(kind)] = scout_error_kinds.get(str(kind), 0) + int(count or 0)
         for family, usage in (case.get("scout_usage_by_family") or {}).items():
@@ -826,6 +844,9 @@ def summarize_metrics(cases: list[dict[str, Any]]) -> dict[str, Any]:
         "avg_elapsed_ms": round(sum(elapsed) / total, 2) if total else 0.0,
         "max_elapsed_ms": round(max(elapsed), 2) if elapsed else 0.0,
         "scout_error_kinds": scout_error_kinds,
+        "guard_coverage_incomplete_case_count": guard_coverage_incomplete_cases,
+        "guard_coverage_blocked_case_count": guard_coverage_blocked_cases,
+        "guard_coverage_state_counts": dict(sorted(guard_coverage_state_counts.items())),
     }
 
 

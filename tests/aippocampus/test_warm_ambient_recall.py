@@ -332,6 +332,8 @@ class WarmAmbientRecallTests(unittest.TestCase):
                 "status": "ready",
                 "reason": "model replied with private detail",
                 "quorum_met": True,
+                "useful_signal_quorum_met": True,
+                "batch_end_reason": "quorum_and_guard_coverage_met",
                 "scout_count": 1,
                 "max_workers": 1,
                 "accepted_scout_count": 1,
@@ -364,6 +366,34 @@ class WarmAmbientRecallTests(unittest.TestCase):
                     "card_count": 1,
                     "quorum_met": True,
                     "current_thread_echo_count": 0,
+                    "guard_coverage": {
+                        "status": "complete",
+                        "satisfied": True,
+                        "requested_families": ["privacy_boundary_guard"],
+                        "blocked_families": [],
+                        "incomplete_families": [],
+                        "families": {
+                            "privacy_boundary_guard": {
+                                "state": "resolved",
+                                "selected_lane_count": 1,
+                                "observed_lane_count": 1,
+                            }
+                        },
+                    },
+                },
+                "guard_coverage": {
+                    "status": "complete",
+                    "satisfied": True,
+                    "requested_families": ["privacy_boundary_guard"],
+                    "blocked_families": [],
+                    "incomplete_families": [],
+                    "families": {
+                        "privacy_boundary_guard": {
+                            "state": "resolved",
+                            "selected_lane_count": 1,
+                            "observed_lane_count": 1,
+                        }
+                    },
                 },
             }
 
@@ -391,6 +421,13 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(payload["card_count"], 1)
         self.assertEqual(payload["provenance_counts"], {"warm_scout_proposal": 1})
         self.assertEqual(payload["support_level_counts"], {"candidate": 1})
+        self.assertTrue(payload["useful_signal_quorum_met"])
+        self.assertEqual(payload["batch_end_reason"], "quorum_and_guard_coverage_met")
+        self.assertEqual(payload["guard_coverage"]["status"], "complete")
+        self.assertEqual(
+            payload["guard_coverage"]["families"]["privacy_boundary_guard"]["state"],
+            "resolved",
+        )
         self.assertEqual(payload["reason"], "")
         self.assertFalse(payload["privacy_boundary"]["raw_cards_emitted"])
         self.assertFalse(payload["privacy_boundary"]["model_route_emitted"])
@@ -691,7 +728,6 @@ class WarmAmbientRecallTests(unittest.TestCase):
             time.sleep(0.25)
             return {"decision": "skip", "confidence": 0.1}
 
-        started = time.perf_counter()
         result = warm.run_warm_ambient_recall(
             "继续 ambient recall 这条线",
             cwd=self.workspace,
@@ -703,12 +739,14 @@ class WarmAmbientRecallTests(unittest.TestCase):
             timeout=0.12,
             no_write=True,
         )
-        elapsed = time.perf_counter() - started
 
         self.assertTrue(result["available"])
-        self.assertTrue(result["quorum_met"])
-        self.assertLess(elapsed, 0.2)
-        self.assertEqual(result["accepted_scout_count"], 2)
+        self.assertTrue(result["useful_signal_quorum_met"])
+        self.assertFalse(result["quorum_met"])
+        self.assertEqual(result["guard_coverage"]["status"], "incomplete")
+        self.assertEqual(result["batch_end_reason"], "timeout")
+        self.assertGreaterEqual(result["accepted_scout_count"], 2)
+        self.assertLess(len(result["scouts"]), len(warm.DEFAULT_SCOUTS))
         self.assertEqual(len(warm.DEFAULT_SCOUTS), 50)
         self.assertTrue(any(call.startswith("key_line_hunter:") for call in calls))
         self.assertTrue(any(call.startswith("intent_mode_classifier:") for call in calls))
@@ -786,6 +824,181 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(result["suppression_reason_buckets"], ["quorum_not_met"])
         self.assertIsNone(result["cache_write"])
         self.assertFalse(self.cache_path.exists())
+
+    def test_quorum_with_missing_required_guards_withholds_cache_write(self) -> None:
+        def scout_fn(scout, payload, **kwargs):
+            del payload, kwargs
+            if scout.startswith(("key_line_hunter:", "deep_theme_matcher:")):
+                return {
+                    "decision": "candidate",
+                    "confidence": 0.76,
+                    "candidates": [
+                        {
+                            "theme": f"{scout} useful ambient cue",
+                            "support_level": "candidate",
+                            "matched_terms": ["ambient", "guard"],
+                        }
+                    ],
+                }
+            time.sleep(0.25)
+            return {"decision": "skip", "confidence": 0.1}
+
+        result = warm.run_warm_ambient_recall(
+            "继续 warm ambient guard coverage",
+            cwd=self.workspace,
+            thread_id="thread-a",
+            cache_path=self.cache_path,
+            api_key="test-key",
+            scout_fn=scout_fn,
+            scouts=(
+                "key_line_hunter:direct",
+                "deep_theme_matcher:direct",
+                "privacy_boundary_guard:direct",
+                "evidence_gap_sentinel:direct",
+            ),
+            quorum=2,
+            timeout=0.08,
+        )
+
+        self.assertTrue(result["available"])
+        self.assertTrue(result["useful_signal_quorum_met"])
+        self.assertFalse(result["quorum_met"])
+        self.assertEqual(result["status"], "guard_coverage_incomplete")
+        self.assertEqual(result["guard_coverage"]["status"], "incomplete")
+        self.assertEqual(
+            result["guard_coverage"]["families"]["privacy_boundary_guard"]["state"],
+            "missing",
+        )
+        self.assertEqual(
+            result["guard_coverage"]["families"]["evidence_gap_sentinel"]["state"],
+            "missing",
+        )
+        self.assertEqual(result["cache_write"]["status"], "withheld")
+        self.assertEqual(result["cache_write"]["reason"], "guard_coverage_incomplete")
+        self.assertFalse(self.cache_path.exists())
+        self.assertEqual(
+            result["suppression_diagnostics"]["guard_coverage"]["status"],
+            "incomplete",
+        )
+
+    def test_guard_timeout_state_is_reported_separately_from_missing(self) -> None:
+        def scout_fn(scout, payload, **kwargs):
+            del payload, kwargs
+            if scout.startswith("privacy_boundary_guard:"):
+                raise TimeoutError("guard timed out")
+            return {
+                "decision": "candidate",
+                "confidence": 0.75,
+                "candidates": [
+                    {
+                        "theme": "useful cue with timed-out guard",
+                        "support_level": "candidate",
+                    }
+                ],
+            }
+
+        result = warm.run_warm_ambient_recall(
+            "继续 warm ambient guard timeout",
+            cwd=self.workspace,
+            thread_id="thread-a",
+            cache_path=self.cache_path,
+            api_key="test-key",
+            scout_fn=scout_fn,
+            scouts=("privacy_boundary_guard:direct", "key_line_hunter:direct"),
+            quorum=1,
+            timeout=0.5,
+            wait_all=True,
+            no_write=True,
+        )
+
+        self.assertTrue(result["useful_signal_quorum_met"])
+        self.assertFalse(result["quorum_met"])
+        self.assertEqual(
+            result["guard_coverage"]["families"]["privacy_boundary_guard"]["state"],
+            "timed_out",
+        )
+        self.assertEqual(
+            result["guard_coverage"]["families"]["evidence_gap_sentinel"]["state"],
+            "not_requested",
+        )
+        self.assertEqual(result["guard_coverage"]["status"], "incomplete")
+        self.assertEqual(result["scouts"][0]["error_kind"], "read_timeout")
+
+    def test_evidence_guard_block_keeps_source_validated_prompt_trace_fallback(self) -> None:
+        messages = self._write_clean_thread(
+            "session:old",
+            [
+                {
+                    "message_id": "msg-1",
+                    "source_line": 5,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": "The booking system retry guardrail needs idempotent payment attempts.",
+                }
+            ],
+        )
+        registry_path = self._write_registry(
+            [
+                {
+                    "thread_key": "session:old",
+                    "title": "Booking guardrail",
+                    "paths": {"clean_source_messages_jsonl": str(messages)},
+                }
+            ]
+        )
+
+        def scout_fn(scout, payload, **kwargs):
+            del payload, kwargs
+            if scout.startswith("evidence_gap_sentinel:"):
+                return {
+                    "decision": "skip",
+                    "confidence": 0.9,
+                    "block": True,
+                    "reason": "model-generated cards lack closed-book support",
+                }
+            return {
+                "decision": "candidate",
+                "confidence": 0.76,
+                "candidates": [
+                    {
+                        "theme": "model-generated cue should not matter",
+                        "support_level": "candidate",
+                    }
+                ],
+            }
+
+        result = warm.run_warm_ambient_recall(
+            "继续 booking system retry guardrail",
+            cwd=self.workspace,
+            thread_id="thread-a",
+            registry_path=registry_path,
+            cache_path=self.cache_path,
+            api_key="test-key",
+            prompt_trace=[
+                {
+                    "thread_key": "session:old",
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "text": "The booking system retry guardrail needs idempotent payment attempts.",
+                    "source_refs": [
+                        {"thread_key": "session:old", "message_id": "msg-1", "line": 5}
+                    ],
+                }
+            ],
+            scout_fn=scout_fn,
+            scouts=("evidence_gap_sentinel:direct", "key_line_hunter:direct"),
+            quorum=1,
+            timeout=0.5,
+            wait_all=True,
+            no_write=True,
+        )
+
+        self.assertTrue(result["available"])
+        self.assertEqual(result["guard_coverage"]["families"]["evidence_gap_sentinel"]["state"], "blocked")
+        self.assertEqual(result["trace_fallback_card_count"], 1)
+        self.assertEqual(result["cards"][0]["cached_origin"], "prompt_trace_fallback")
+        self.assertEqual(result["cards"][0]["source_validation"]["status"], "supported")
 
     def test_malformed_scout_is_isolated(self) -> None:
         def scout_fn(scout, payload, **kwargs):

@@ -209,10 +209,15 @@ This is a proposed warm-path evolution, not the current stable hook contract.
 Until measured prototypes prove the foreground budget, the operational boundary
 in `skills/aippocampus/references/ambient-hooks.md` remains authoritative.
 
-The foreground rule is quorum, not completion. A warm-path caller may launch the
-full lane set, but it should only wait for the first useful subset inside the
-budget, for example the first 2-3 valid scout results plus privacy/scope guard
-if available. Late results should update the thread ambient cache after
+The foreground rule is two-layer quorum, not completion. A warm-path caller may
+launch the full lane set, but it should only wait inside the budget for enough
+useful signal plus coverage from the requested guard families. The public result
+reports both `useful_signal_quorum_met` and final `quorum_met`: final quorum
+requires useful signal and no missing/timed-out required guard. Guard states are
+`resolved`, `blocked`, `missing`, `timed_out`, or `not_requested`. Missing or
+timed-out guards make the current result diagnostic/provisional and withhold
+thread-cache writes; resolved or blocked guards still let runtime policy decide
+visibility. Late results should update the thread ambient cache after
 deterministic validation. A foreground hook must not require all 50 lanes to
 finish before the user prompt can proceed.
 
@@ -455,6 +460,15 @@ runtime loop does not inherit the short standalone foreground-style warm
 timeout. Keep 15s as the foreground-style quorum-first evaluation floor; for
 detached wait-all jobs, use 45s by default because they do not block the user
 and should not sit on the read-timeout boundary.
+Foreground-style warm results now report guard coverage explicitly. If the
+selected scout set includes `privacy_boundary_guard` or
+`evidence_gap_sentinel`, those families are required for final quorum within the
+timebox. `missing` and `timed_out` coverage leaves cards visible as diagnostic
+output but withholds ambient cache writes, so a slow guard cannot silently turn
+provisional hints into next-turn state. `evidence_gap_sentinel` blocks still do
+not suppress locally source-validated prompt-trace fallback cards; that fallback
+is deterministic and must pass the same source-ref validation before it can
+surface.
 
 The first slice should stay small but real:
 

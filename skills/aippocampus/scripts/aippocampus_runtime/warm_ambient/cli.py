@@ -17,6 +17,7 @@ from aippocampus_runtime.warm_ambient.config import warm_recall_config_from_env
 
 PUBLIC_STATUSES = {
     "disabled",
+    "guard_coverage_incomplete",
     "not_scheduled",
     "queued",
     "quorum_not_met",
@@ -27,20 +28,29 @@ PUBLIC_STATUSES = {
     "suppressed",
     "timeout",
     "unavailable",
+    "withheld",
     "written",
 }
 PUBLIC_REASONS = {
     "",
+    "all_scouts_observed",
     "background warm recall is not enabled",
     "empty prompt",
     "empty prompt after sanitization",
     "foreground hook must not wait for warm scouts",
+    "guard_coverage_incomplete",
     "missing api key",
     "missing thread id",
+    "no_scouts",
+    "quorum_and_guard_coverage_met",
+    "timeout",
 }
 PUBLIC_SUPPRESSION_BUCKETS = {
     "current_thread_echo",
+    "evidence_sentinel_blocked",
+    "guard_coverage_incomplete",
     "no_supported_cards",
+    "privacy_blocked",
     "privacy_boundary",
     "quorum_not_met",
     "source_validation_failed",
@@ -58,6 +68,7 @@ PUBLIC_SCOUT_ERROR_KINDS = {
     "exception",
     "invalid_json",
     "invalid_schema",
+    "read_timeout",
     "timeout",
     "unknown",
 }
@@ -156,11 +167,15 @@ def _public_cache_write(value: object) -> dict[str, Any] | None:
     status = _public_status(value.get("status"))
     summary: dict[str, Any] = {
         "status": status,
+        "reason": _public_reason(value.get("reason")),
         "card_count": _public_int(value.get("card_count")),
         "source_ref_fingerprint_count": _public_int(
             value.get("source_ref_fingerprint_count")
         ),
     }
+    guard_coverage = _public_guard_coverage(value.get("guard_coverage"))
+    if guard_coverage:
+        summary["guard_coverage"] = guard_coverage
     residue = value.get("residue_export")
     if isinstance(residue, Mapping):
         summary["residue_export"] = {
@@ -168,6 +183,57 @@ def _public_cache_write(value: object) -> dict[str, Any] | None:
             "residue_count": _public_int(residue.get("residue_count")),
         }
     return summary
+
+
+def _public_guard_coverage(value: object) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        return {}
+    families: dict[str, Any] = {}
+    raw_families = value.get("families")
+    if isinstance(raw_families, Mapping):
+        for family, details in raw_families.items():
+            name = str(family or "").strip()
+            if name not in {"privacy_boundary_guard", "evidence_gap_sentinel"}:
+                continue
+            if not isinstance(details, Mapping):
+                continue
+            state = str(details.get("state") or "").strip()
+            if state not in {"resolved", "blocked", "missing", "timed_out", "not_requested"}:
+                state = "missing"
+            family_payload: dict[str, Any] = {
+                "state": state,
+                "selected_lane_count": _public_int(details.get("selected_lane_count")),
+                "observed_lane_count": _public_int(details.get("observed_lane_count")),
+            }
+            error_kinds = _public_count_map(
+                details.get("error_kinds"), PUBLIC_SCOUT_ERROR_KINDS
+            )
+            if error_kinds:
+                family_payload["error_kinds"] = error_kinds
+            families[name] = family_payload
+    status = str(value.get("status") or "").strip()
+    if status not in {"complete", "incomplete", "not_requested"}:
+        status = "incomplete" if families else "not_requested"
+    return {
+        "status": status,
+        "satisfied": _public_bool(value.get("satisfied")),
+        "requested_families": [
+            str(item)
+            for item in value.get("requested_families") or []
+            if str(item) in {"privacy_boundary_guard", "evidence_gap_sentinel"}
+        ],
+        "blocked_families": [
+            str(item)
+            for item in value.get("blocked_families") or []
+            if str(item) in {"privacy_boundary_guard", "evidence_gap_sentinel"}
+        ],
+        "incomplete_families": [
+            str(item)
+            for item in value.get("incomplete_families") or []
+            if str(item) in {"privacy_boundary_guard", "evidence_gap_sentinel"}
+        ],
+        "families": families,
+    }
 
 
 def _public_diagnostics(value: object) -> dict[str, Any]:
@@ -188,6 +254,9 @@ def _public_diagnostics(value: object) -> dict[str, Any]:
     topic_epoch_action = str(value.get("topic_epoch_action") or "").strip()
     if topic_epoch_action in {"fallback", "reuse", "rotate", "suppress"}:
         diagnostics["topic_epoch_action"] = topic_epoch_action
+    guard_coverage = _public_guard_coverage(value.get("guard_coverage"))
+    if guard_coverage:
+        diagnostics["guard_coverage"] = guard_coverage
     return diagnostics
 
 
@@ -202,6 +271,8 @@ def _public_cli_payload(result: Mapping[str, Any]) -> dict[str, Any]:
         "status": _public_status(result.get("status")),
         "reason": _public_reason(result.get("reason")),
         "quorum_met": _public_bool(result.get("quorum_met")),
+        "useful_signal_quorum_met": _public_bool(result.get("useful_signal_quorum_met")),
+        "batch_end_reason": _public_reason(result.get("batch_end_reason")),
         "scout_count": _public_int(result.get("scout_count")),
         "observed_scout_result_count": _public_int(
             result.get("observed_scout_result_count")
@@ -232,6 +303,7 @@ def _public_cli_payload(result: Mapping[str, Any]) -> dict[str, Any]:
         "suppression_diagnostics": _public_diagnostics(
             result.get("suppression_diagnostics")
         ),
+        "guard_coverage": _public_guard_coverage(result.get("guard_coverage")),
         "cache": _public_cache(result.get("cache")),
         "cache_write": cache_write,
         "elapsed_ms": _public_float(result.get("elapsed_ms")),
