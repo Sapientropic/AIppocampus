@@ -105,12 +105,14 @@ The public API does not include every helper module or every script under
 
 The CLI contract applies to documented operator commands, especially:
 
-- `aippocampus health|search|onboard|export|import|mcp|smoke|storage|sync|object-sync|hooks`
+- `aippocampus health|search|onboard|export|import|doctor|mcp|smoke|storage|sync|object-sync|hooks`
 - `aippocampus_health.py`
 - `search_clean_source.py`
 - `latest_reply.py` as a Codex raw-rollout audit compatibility command
 - `onboard.py --provider codex|claude-code|generic-jsonl|auto`
 - `aippocampus import conversation --format generic-jsonl --input <path>`
+- `aippocampus doctor provider` as a no-model-call visibility diagnostic for
+  optional external-model route key environment variables
 - `aippocampus smoke recall-funnel "<cue>"` as a no-write progressive recall
   diagnostic over `recall_context` / first reopenable `recall_deepen` route
 - `aippocampus storage gc --dry-run` as the no-mutation storage governance plan
@@ -461,6 +463,11 @@ Common installs should stay small:
   encryption settings when raw/private data is included.
 - External-model and background-job variables are optional. Do not set them just
   to use clean-source search, MCP, import/export, or local sync.
+- `aippocampus doctor provider --json` checks whether the selected model
+  route's API-key environment variable is visible to the current process and a
+  child process. It does not read `.env` files, credential stores, or keychain
+  entries, it never prints key values, and it does not claim to inspect a
+  previously started Codex Desktop hook process.
 
 Registry storage precedence remains explicit:
 
