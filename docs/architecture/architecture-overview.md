@@ -80,6 +80,35 @@ currently supports the claim.
 | Cognitive map | Concept edges, semantic sidecars, route cues, and source-reopen pressure. | The map should improve wayfinding through old source, not replace the source or decide what is true. | Navigation sidecars can suggest routes back into source; broader map quality remains roadmap/prototype direction. | Do not imply a complete mental model, neuroscience fidelity, or a solved personal ontology. |
 | Dream / subconscious jobs | Background job circuits, dream input packs, adjudication rules, and optional staging writes. | Detached synthesis must be labeled, reviewable, discardable, and lower authority than source-backed recall. | Implemented slices and dated evidence exist for selected paths; broader Dream quality remains research. | Do not claim predictive dream quality, privileged user simulation, or solved proactive replay. |
 
+## Activation-Surface Authority Budget
+
+Strategy-like activation surfaces include AAR/reflection nudges, dream
+hypotheses, working memory, semantic triggers, ambient cards, active recall
+locks, and pruning rows. They may guide attention, route checks, slow risky
+actions, or retire noisy cues; they are not a second factual memory store.
+
+The shared authority vocabulary is:
+
+- `candidate`: navigation hint only.
+- `advisory`: may bias attention or suggest a check.
+- `guardrail`: may block or slow a risky action until source/current state is
+  checked.
+- `source_required`: cannot support a claim/action without source reopen or
+  equivalent evidence.
+- `blocked`: not eligible for foreground use until later review changes state.
+
+Conflict precedence is deterministic: explicit user correction suppresses
+strategy surfaces, current-checkout evidence and reopened clean source override
+activation rows for truth, and blocked/guardrail/source-required rows cannot
+upgrade scent, dream, cached, or AAR material into evidence. Pruning changes
+activation eligibility only; it must not change source or truth status.
+
+`aippocampus_runtime.ops.activation_authority_audit` is the no-write diagnostic
+for this boundary. It reports `activation_surface_authority_leak_count` when a
+strategy row is quoted or acted on as factual evidence without source support,
+and emits conflict-resolution reasons without raw prompts, snippets, secrets,
+or local paths.
+
 Two positive examples anchor the rule:
 
 - A prompt-time scent is allowed to say "this old thread may be relevant" before

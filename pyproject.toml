@@ -376,6 +376,7 @@ files = [
     "skills/aippocampus/scripts/onboard_frontier.py",
     "skills/aippocampus/scripts/onboard_status.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/__init__.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/ops/activation_authority_audit.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/cold_archive.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/graphify_corpus.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/maintenance.py",

@@ -223,6 +223,14 @@ DeepSeek can be used aggressively, but hooks must stay cheap. The split is:
   row as a dream hypothesis, ambient cards require source reopen for strong
   claims, reflection topology only accepts audited collapsed nodes, and agency
   affordances downgrade direct dream inputs to backstage-only.
+- cross-surface authority is audited, not inferred from confidence. Use
+  `aippocampus_runtime.ops.activation_authority_audit` to inspect whether AAR
+  nudges, dream hypotheses, working memory, semantic triggers, ambient cards,
+  active recall locks, or pruning rows are leaking into factual-evidence
+  territory. Its no-write report treats pruning as activation eligibility only,
+  requires source/current-checkout evidence for truth conflicts, and lets
+  explicit user correction suppress otherwise plausible strategy surfaces
+  without making the correction itself an ungrounded fact.
 - `dream_real_history_eval.py` reports dream impact in two layers: structural
   substrate lift and a sanitized user-visible ablation harness. The latter
   separates recall, reflection, unsupported-claim suppression, source-support,
