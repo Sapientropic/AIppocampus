@@ -214,6 +214,29 @@ def fake_standard_public_payload(*, ok: bool = True) -> dict:
     }
 
 
+def fake_skipped_standard_public_payload() -> dict:
+    payload = fake_standard_public_payload()
+    payload.update(
+        {
+            "ok": True,
+            "status": "skipped_missing_standard_corpus",
+            "corpus": {
+                "dataset": "locomo",
+                "questions_scanned": 0,
+                "eligible_questions": 0,
+            },
+            "metrics": {"question_count": 0, "case_types": {}},
+            "cases": [],
+            "cannot_claim": [
+                "standard_retrieval_qa_score",
+                "answer_generation_quality",
+                "decision_gate_quality",
+            ],
+        }
+    )
+    return payload
+
+
 def fake_public_semantic_sidecar_payload(*, ok: bool = True) -> dict:
     status = "diagnostic_only" if ok else "insufficient_recall_hits"
     claim_level = "diagnostic_pilot" if ok else "diagnostic_only"
@@ -334,7 +357,19 @@ class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["privacy_boundary"]["absolute_paths_emitted"], False)
         self.assertEqual(payload["tracks"]["fts5_source_line"]["hit_rate_top10"], 1.0)
         self.assertIn("rate_estimates", payload["tracks"]["fts5_source_line"])
+        self.assertEqual(
+            payload["tracks"]["fts5_source_line"]["query_origin"]["category"],
+            "source_derived_sparse",
+        )
+        self.assertEqual(
+            payload["tracks"]["fts5_source_line"]["claim_boundary"]["measures"],
+            "index_health_sanity",
+        )
         self.assertEqual(payload["tracks"]["source_evidence"]["top_k_hit_rate"], 0.5)
+        self.assertEqual(
+            payload["tracks"]["source_evidence"]["query_origin"]["bucket"],
+            "source_derived",
+        )
         self.assertEqual(
             payload["tracks"]["source_evidence"]["rate_estimates"]["top_k_hit_rate"][
                 "denominator"
@@ -351,6 +386,24 @@ class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
         self.assertNotIn("FAKE_TEST_PRIVATE_REGISTRY_PATH", json.dumps(payload))
         self.assertNotIn("FAKE_TEST_PRIVATE_CLEAN_SOURCE", json.dumps(payload))
         self.assertIn("real_history_gate_quality", payload["cannot_claim"])
+        self.assertIn("natural_user_query_recall", payload["cannot_claim"])
+        self.assertEqual(
+            payload["query_origin_summary"]["source_derived"]["tracks"],
+            ["fts5_source_line", "source_evidence"],
+        )
+        self.assertEqual(
+            payload["query_origin_summary"]["non_source_derived"]["track_count"],
+            0,
+        )
+        source_rates = payload["query_origin_summary"]["source_derived"]["hit_rates"]
+        self.assertIn(
+            {
+                "track": "fts5_source_line",
+                "metric": "hit_rate_top10",
+                "value": 1.0,
+            },
+            source_rates,
+        )
         fts_run.assert_called_once()
         self.assertEqual(fts_run.call_args.kwargs["include_private_text"], False)
         source_run.assert_called_once()
@@ -447,6 +500,18 @@ class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
         self.assertTrue(payload["config"]["include_standard_public"])
         self.assertIn("standard_public_retrieval_qa", payload["tracks"])
         self.assertEqual(
+            payload["tracks"]["standard_public_retrieval_qa"]["query_origin"]["category"],
+            "human_or_fixture_question",
+        )
+        self.assertEqual(
+            payload["tracks"]["standard_public_retrieval_qa"]["query_origin"]["bucket"],
+            "non_source_derived",
+        )
+        self.assertEqual(
+            payload["tracks"]["standard_public_retrieval_qa"]["claim_boundary"]["measures"],
+            "user_like_source_navigation",
+        )
+        self.assertEqual(
             payload["tracks"]["standard_public_retrieval_qa"]["metrics"][
                 "session_hit_rate_top5"
             ],
@@ -460,6 +525,55 @@ class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
         standard_run.assert_called_once()
         self.assertEqual(standard_run.call_args.kwargs["dataset"], "locomo")
         self.assertEqual(standard_run.call_args.kwargs["max_questions"], 2)
+        non_source = payload["query_origin_summary"]["non_source_derived"]
+        self.assertEqual(non_source["tracks"], ["standard_public_retrieval_qa"])
+        self.assertIn(
+            {
+                "track": "standard_public_retrieval_qa",
+                "metric": "session_hit_rate_top5",
+                "value": 1.0,
+            },
+            non_source["hit_rates"],
+        )
+        self.assertNotIn("natural_user_query_recall", payload["cannot_claim"])
+
+    def test_skipped_standard_public_arm_does_not_clear_user_query_boundary(self) -> None:
+        with (
+            patch.object(benchmark.fts5_benchmark, "run_benchmark", return_value=fake_fts5_payload()),
+            patch.object(
+                benchmark.source_evidence_eval,
+                "run_source_evidence_recall_eval",
+                return_value=fake_source_payload(),
+            ),
+            patch.object(
+                benchmark,
+                "run_standard_retrieval_qa_benchmark",
+                return_value=fake_skipped_standard_public_payload(),
+            ),
+        ):
+            payload = benchmark.run_source_evidence_retrieval_benchmark(
+                fts5_cases=2,
+                fts5_min_cases=1,
+                source_max_cases=2,
+                source_min_cases=1,
+                include_standard_public=True,
+                standard_dataset="locomo",
+                standard_max_questions=2,
+                standard_min_questions=1,
+                standard_top_k=5,
+            )
+
+        self.assertEqual(
+            payload["tracks"]["standard_public_retrieval_qa"]["query_origin"]["bucket"],
+            "non_source_derived",
+        )
+        self.assertEqual(
+            payload["query_origin_summary"]["non_source_derived"]["tracks"],
+            ["standard_public_retrieval_qa"],
+        )
+        self.assertEqual(payload["query_origin_summary"]["non_source_derived"]["hit_rates"], [])
+        self.assertIn("natural_user_query_recall", payload["cannot_claim"])
+        self.assertIn("semantic_generalized_memory_recall", payload["cannot_claim"])
 
     def test_track_b_wrapper_can_include_public_semantic_sidecar_track(self) -> None:
         with (

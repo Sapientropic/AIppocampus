@@ -228,10 +228,10 @@ python benchmarks\aippocampus\benchmark_source_evidence_retrieval.py --include-s
 ```
 
 This Track B slice reports message-level and turn-level source hits. It is a
-public-corpus retrieval baseline, not a private real-history source-evidence
-quality claim. Use `--sharegpt-public-sampling-mode first-n` only for a cheap
-Track B smoke/debug run; first-N reports do not claim full-population seeded
-stratified sampling.
+source-derived public-corpus retrieval baseline, not a private real-history
+source-evidence quality or natural user-query recall claim. Use
+`--sharegpt-public-sampling-mode first-n` only for a cheap Track B smoke/debug
+run; first-N reports do not claim full-population seeded stratified sampling.
 
 Do not count the generated ShareGPT clean-source output as
 `semantic-sidecar-required` by itself. The public corpus currently contains
@@ -262,15 +262,17 @@ Run the optional standard retrieval-QA Track B adapter:
 python benchmarks\aippocampus\benchmark_source_evidence_retrieval.py --include-standard-public --standard-dataset locomo --standard-questions 100 --standard-min-questions 20 --standard-top-k 10 --output benchmark_corpus\reports\locomo-track-b-standard-100.json
 ```
 
-The standard adapter reports retrieval-only session/source R@K and MRR. LoCoMo
-uses evidence dialogue ids; LongMemEval V1 uses answer sessions and
-`has_answer` message flags when present. Reports include exact evidence-line
-hits, context-visible evidence-line hits, context-improved counts, and top-K
-context-rescued counts; the default context radius is 5 source lines because
-AIppocampus source payloads normally carry a small bounded neighboring context
-window. It does not score answer generation or Track A gate decisions.
-LongMemEval V2 currently lacks explicit source-evidence refs in this adapter
-and is reported as skipped rather than assigned a fake R@K.
+The standard adapter reports retrieval-only session/source R@K and MRR. It is
+the current non-source-derived Track B arm because LoCoMo and LongMemEval V1
+queries come from public dataset questions rather than from the target source
+line. LoCoMo uses evidence dialogue ids; LongMemEval V1 uses answer sessions
+and `has_answer` message flags when present. Reports include exact
+evidence-line hits, context-visible evidence-line hits, context-improved
+counts, and top-K context-rescued counts; the default context radius is 5
+source lines because AIppocampus source payloads normally carry a small bounded
+neighboring context window. It does not score answer generation or Track A gate
+decisions. LongMemEval V2 currently lacks explicit source-evidence refs in this
+adapter and is reported as skipped rather than assigned a fake R@K.
 
 For published LongMemEval runs, prefer the dedicated runner so the split,
 checksum, report shape, and evidence page stay independent from the broader

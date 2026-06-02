@@ -173,6 +173,44 @@ STANDARD_QUERY_TERM_STOPWORDS = PUBLIC_SOURCE_TERM_STOPWORDS | {
 CONTINUATION_RE = re.compile(
     r"(?i)\b(continue|where\s+we\s+left\s+off|pick\s+up|go\s+on)\b|继续|接着|续写|从.*继续"
 )
+TRACK_B_QUERY_ORIGIN_ISSUES = ["#216", "#301", "#355"]
+QUERY_ORIGIN_TAXONOMY = {
+    "source_derived_exact": {
+        "bucket": "source_derived",
+        "independent_of_target_source": False,
+        "boundary": "Exact or near-exact terms copied from the expected source.",
+    },
+    "source_derived_sparse": {
+        "bucket": "source_derived",
+        "independent_of_target_source": False,
+        "boundary": "Sparse terms or prompts derived from the target source or its turn.",
+    },
+    "human_or_fixture_question": {
+        "bucket": "non_source_derived",
+        "independent_of_target_source": True,
+        "boundary": "Question text authored by the dataset or fixture, not extracted from the target source line.",
+    },
+    "human_or_fixture_paraphrase": {
+        "bucket": "non_source_derived",
+        "independent_of_target_source": True,
+        "boundary": "Independent paraphrase or degraded cue with fixture-reviewed source refs.",
+    },
+    "cross_language": {
+        "bucket": "non_source_derived",
+        "independent_of_target_source": True,
+        "boundary": "Independent cross-language cue with fixture-reviewed source refs.",
+    },
+    "degraded_cue": {
+        "bucket": "non_source_derived",
+        "independent_of_target_source": True,
+        "boundary": "Incomplete or vague cue authored outside the target source text.",
+    },
+    "adversarial_near_miss": {
+        "bucket": "non_source_derived",
+        "independent_of_target_source": True,
+        "boundary": "Hard negative or near-miss cue where wrong-source retrieval is meaningful.",
+    },
+}
 
 
 def now_utc() -> str:
@@ -195,6 +233,106 @@ def sha1_text(value: str) -> str:
     # Historical benchmark report ids keep the `sha1` field names for artifact
     # comparability. They are public fixture handles, not credential hashes.
     return hashlib.sha1(value.encode("utf-8", errors="replace")).hexdigest()
+
+
+def query_origin(category: str, *, query_author: str, notes: str) -> dict[str, Any]:
+    spec = QUERY_ORIGIN_TAXONOMY[category]
+    return {
+        "category": category,
+        "bucket": spec["bucket"],
+        "independent_of_target_source": bool(spec["independent_of_target_source"]),
+        "query_author": query_author,
+        "boundary": spec["boundary"],
+        "notes": notes,
+    }
+
+
+def claim_boundary(
+    *,
+    measures: str,
+    can_claim: list[str],
+    cannot_claim: list[str],
+) -> dict[str, Any]:
+    return {
+        "measures": measures,
+        "can_claim": can_claim,
+        "cannot_claim": cannot_claim,
+        "issue_refs": TRACK_B_QUERY_ORIGIN_ISSUES,
+    }
+
+
+def track_rate_entries(track_name: str, track: dict[str, Any]) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+
+    def maybe_add(metric: str, value: Any) -> None:
+        if "hit_rate" not in metric:
+            return
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return
+        key = (track_name, metric)
+        if key in seen:
+            return
+        seen.add(key)
+        entries.append(
+            {
+                "track": track_name,
+                "metric": metric,
+                "value": round(float(value), 4),
+            }
+        )
+
+    for key, value in sorted(track.items()):
+        maybe_add(str(key), value)
+    metrics = track.get("metrics") if isinstance(track.get("metrics"), dict) else {}
+    for key, value in sorted(metrics.items()):
+        maybe_add(str(key), value)
+    return entries
+
+
+def query_origin_summary(tracks: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    buckets: dict[str, dict[str, Any]] = {
+        "source_derived": {
+            "tracks": [],
+            "track_count": 0,
+            "hit_rates": [],
+            "claim_boundary": "Index-health and source-derived sanity checks; do not read as natural user-query recall.",
+        },
+        "non_source_derived": {
+            "tracks": [],
+            "track_count": 0,
+            "hit_rates": [],
+            "claim_boundary": "Independent user-like or fixture-authored query arms; report beside source-derived checks.",
+        },
+    }
+    for track_name, track in tracks.items():
+        if not isinstance(track, dict):
+            continue
+        origin = track.get("query_origin") if isinstance(track.get("query_origin"), dict) else {}
+        bucket_name = str(origin.get("bucket") or "source_derived")
+        bucket = buckets.setdefault(
+            bucket_name,
+            {
+                "tracks": [],
+                "track_count": 0,
+                "hit_rates": [],
+                "claim_boundary": "Unclassified query-origin bucket.",
+            },
+        )
+        bucket["tracks"].append(track_name)
+        bucket["hit_rates"].extend(track_rate_entries(track_name, track))
+    for bucket in buckets.values():
+        bucket["track_count"] = len(bucket["tracks"])
+    return {
+        "taxonomy": QUERY_ORIGIN_TAXONOMY,
+        "source_derived": buckets["source_derived"],
+        "non_source_derived": buckets["non_source_derived"],
+        "reporting_rule": (
+            "Report source-derived and non-source-derived hit rates side by side; "
+            "do not average source-derived sanity checks into user-query recall claims."
+        ),
+        "issue_refs": TRACK_B_QUERY_ORIGIN_ISSUES,
+    }
 
 
 def rank_metrics(cases: list[dict[str, Any]], key: str, thresholds: list[int]) -> dict[str, Any]:
@@ -273,6 +411,26 @@ def summarize_fts5_payload(payload: dict[str, Any], *, top_k: int) -> dict[str, 
             ((payload.get("metrics") or {}).get("fts5") or {}).get("miss_categories_top_k")
             or {}
         ),
+        "query_origin": query_origin(
+            "source_derived_sparse",
+            query_author="benchmark_fts5_recall.query_from_text",
+            notes=(
+                "Queries are extracted from the expected clean-source message. "
+                "This arm is retained as an index-health and stale-SQLite sanity check."
+            ),
+        ),
+        "claim_boundary": claim_boundary(
+            measures="index_health_sanity",
+            can_claim=[
+                "source_derived_source_line_retrieval_sanity",
+                "stale_sqlite_detection_signal",
+            ],
+            cannot_claim=[
+                "natural_user_query_recall",
+                "semantic_generalized_memory_recall",
+                "paraphrase_or_cross_language_recall",
+            ],
+        ),
         "elapsed_ms": payload.get("elapsed_ms"),
     }
     if any("production_hybrid" in case for case in cases):
@@ -299,6 +457,22 @@ def summarize_source_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "ranking": payload.get("ranking"),
         "prompt_kind": payload.get("prompt_kind"),
         "failure_diagnostics": payload.get("failure_diagnostics") or {},
+        "query_origin": query_origin(
+            "source_derived_sparse",
+            query_author="selected source-evidence evaluator",
+            notes=(
+                "Selected cases are built from source-backed rows and semantic/source labels; "
+                "keep this beside user-like query arms rather than merging claims."
+            ),
+        ),
+        "claim_boundary": claim_boundary(
+            measures="selected_source_evidence_retrieval_sanity",
+            can_claim=["selected_source_evidence_retrieval_on_labeled_slice"],
+            cannot_claim=[
+                "natural_user_query_recall",
+                "unbounded_private_history_semantic_recall",
+            ],
+        ),
     }
 
 
@@ -314,6 +488,22 @@ def summarize_sharegpt_public_payload(payload: dict[str, Any]) -> dict[str, Any]
         "skip_reason": payload.get("skip_reason"),
         "privacy_boundary": payload.get("privacy_boundary") or {},
         "cannot_claim": payload.get("cannot_claim") or [],
+        "query_origin": query_origin(
+            "source_derived_sparse",
+            query_author="ShareGPT public Track B fixture builder",
+            notes=(
+                "Prompt text is templated from public conversation source terms; "
+                "it is public and source-backed, but still source-derived."
+            ),
+        ),
+        "claim_boundary": claim_boundary(
+            measures="public_source_derived_source_navigation",
+            can_claim=["public_sharegpt_source_navigation_on_source_derived_prompts"],
+            cannot_claim=[
+                "private_real_history_source_evidence_quality",
+                "natural_user_query_recall",
+            ],
+        ),
     }
 
 
@@ -327,6 +517,23 @@ def summarize_standard_retrieval_payload(payload: dict[str, Any]) -> dict[str, A
         "metrics": payload.get("metrics") or {},
         "privacy_boundary": payload.get("privacy_boundary") or {},
         "cannot_claim": payload.get("cannot_claim") or [],
+        "query_origin": query_origin(
+            "human_or_fixture_question",
+            query_author="public benchmark dataset question",
+            notes=(
+                "LoCoMo and LongMemEval-style question text is not extracted from "
+                "the target source line, so this is the first non-source-derived Track B arm."
+            ),
+        ),
+        "claim_boundary": claim_boundary(
+            measures="user_like_source_navigation",
+            can_claim=["public_retrieval_qa_source_navigation"],
+            cannot_claim=[
+                "answer_generation_quality",
+                "private_real_history_user_query_recall",
+                "cross_dataset_model_comparison_without_matching_protocol",
+            ],
+        ),
     }
 
 
@@ -1185,6 +1392,23 @@ def summarize_public_semantic_source_payload(payload: dict[str, Any]) -> dict[st
         "privacy_boundary": payload.get("privacy_boundary") or {},
         "cannot_claim": payload.get("cannot_claim") or [],
         "skip_reason": payload.get("skip_reason"),
+        "query_origin": query_origin(
+            "source_derived_sparse",
+            query_author="public semantic sidecar labeler over clean-source rows",
+            notes=(
+                "Semantic-sidecar labels are source-backed navigation hints over the "
+                "public clean-source subset, not independently authored user queries."
+            ),
+        ),
+        "claim_boundary": claim_boundary(
+            measures="public_source_labeled_source_navigation",
+            can_claim=["public_semantic_sidecar_source_navigation_diagnostic"],
+            cannot_claim=[
+                "natural_user_query_recall",
+                "human_reviewed_semantic_labels",
+                "unbounded_public_semantic_sidecar_quality",
+            ],
+        ),
         "elapsed_ms": payload.get("elapsed_ms"),
     }
 
@@ -2650,6 +2874,20 @@ def run_standard_retrieval_qa_benchmark(
     }
 
 
+def has_successful_standard_question_arm(payload: dict[str, Any] | None) -> bool:
+    if not payload or not payload.get("ok"):
+        return False
+    if str(payload.get("status") or "").startswith("skipped_"):
+        return False
+    metrics = payload.get("metrics") if isinstance(payload.get("metrics"), dict) else {}
+    question_count = metrics.get("question_count")
+    return (
+        not isinstance(question_count, bool)
+        and isinstance(question_count, (int, float))
+        and question_count > 0
+    )
+
+
 def cannot_claim(
     *,
     fts5_payload: dict[str, Any],
@@ -2664,6 +2902,14 @@ def cannot_claim(
         "end_to_end_payload_fidelity_on_private_real_history",
         "external_baseline_comparison",
     ]
+    if not has_successful_standard_question_arm(standard_public_payload):
+        claims.extend(
+            [
+                "natural_user_query_recall",
+                "semantic_generalized_memory_recall",
+                "paraphrase_or_cross_language_recall",
+            ]
+        )
     claims.extend(str(item) for item in source_payload.get("cannot_claim") or [])
     if not fts5_payload.get("ok"):
         claims.append("source_line_retrieval_quality")
@@ -2958,6 +3204,7 @@ def run_source_evidence_retrieval_benchmark(
             for case in public_semantic_sidecar_payload.get("cases") or []
             if isinstance(case, dict)
         ]
+    payload["query_origin_summary"] = query_origin_summary(payload["tracks"])
     if include_private_text:
         payload["private_debug_payloads"] = {
             "fts5": fts5_payload,
