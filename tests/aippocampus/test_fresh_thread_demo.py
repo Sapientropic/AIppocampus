@@ -32,6 +32,8 @@ class FreshThreadDemoTests(unittest.TestCase):
                 "negative_irrelevant_website",
                 "negative_sensitive_gift",
                 "negative_project_fact_bleed",
+                "multi_turn_threshold_cue",
+                "negative_wrong_recall_correction",
             }.issubset(by_id)
         )
         self.assertEqual(
@@ -50,10 +52,14 @@ class FreshThreadDemoTests(unittest.TestCase):
         self.assertTrue(report["claim_boundary"]["synthetic_task_context_fixtures"])
         self.assertFalse(report["claim_boundary"]["semantic_classification_quality_proof"])
         self.assertIn("#285", report["claim_boundary"]["issue"])
-        self.assertEqual(report["metrics"]["flow_count"], 8)
-        self.assertEqual(report["metrics"]["positive_flow_count"], 4)
-        self.assertEqual(report["metrics"]["negative_control_count"], 4)
+        self.assertEqual(report["metrics"]["flow_count"], 10)
+        self.assertEqual(report["metrics"]["positive_flow_count"], 5)
+        self.assertEqual(report["metrics"]["negative_control_count"], 5)
         self.assertGreaterEqual(report["metrics"]["synthetic_task_context_fixture_turn_count"], 1)
+        self.assertEqual(report["metrics"]["max_turn_depth"], 3)
+        self.assertEqual(report["metrics"]["turn_depth_distribution"]["3"], 2)
+        self.assertEqual(report["metrics"]["correction_control_count"], 1)
+        self.assertEqual(report["metrics"]["threshold_edge_control_count"], 1)
 
     def test_active_recall_arm_shows_progression_and_source_reopen(self) -> None:
         report = demo.run_fresh_thread_demo()
@@ -76,11 +82,22 @@ class FreshThreadDemoTests(unittest.TestCase):
         self.assertTrue(any(turn["agent_action"] == "source_reopen" for turn in gift_turns))
         self.assertTrue(any(turn["requires_source_reopen"] for turn in gift_turns))
 
+        threshold_turns = flows["multi_turn_threshold_cue"]["arms"]["active_recall"]["turns"]
+        self.assertEqual([turn["agent_action"] for turn in threshold_turns], [
+            "ask_light_question",
+            "active_recall",
+            "source_reopen",
+        ])
+        self.assertEqual(threshold_turns[0]["packet_support_level"], "soft_hypothesis")
+        self.assertEqual(threshold_turns[0]["packet_advisory_action"], "ask_light_question")
+        self.assertEqual(threshold_turns[1]["lock_handling"], "use_ready_lock")
+        self.assertTrue(threshold_turns[2]["requires_source_reopen"])
+
     def test_negative_controls_are_first_class_and_do_not_call_active_recall(self) -> None:
         report = demo.run_fresh_thread_demo()
         negative_flows = [flow for flow in report["flows"] if flow["kind"] == "negative_control"]
 
-        self.assertEqual(len(negative_flows), 4)
+        self.assertEqual(len(negative_flows), 5)
         for flow in negative_flows:
             with self.subTest(flow=flow["flow_id"]):
                 active = flow["arms"]["active_recall"]
@@ -94,6 +111,7 @@ class FreshThreadDemoTests(unittest.TestCase):
                         "ask_normal_scoping_question",
                         "suppress_sensitive_detail",
                         "read_current_repo_first",
+                        "wrong_recall_rejected_and_suppressed",
                     },
                 )
                 if flow["flow_id"] == "negative_project_fact_bleed":
@@ -103,6 +121,16 @@ class FreshThreadDemoTests(unittest.TestCase):
                             for turn in active["turns"]
                         )
                     )
+
+        correction_turns = {
+            flow["flow_id"]: flow for flow in negative_flows
+        }["negative_wrong_recall_correction"]["arms"]["active_recall"]["turns"]
+        self.assertEqual(
+            [turn["agent_action"] for turn in correction_turns],
+            ["ask_light_question", "ignore", "ignore"],
+        )
+        self.assertEqual(correction_turns[1]["activation_update"], "rejected")
+        self.assertEqual(correction_turns[1]["reason"], "activation_state_suppressed_route")
 
     def test_expected_arm_outputs_are_explicit_for_no_memory_hook_and_active_recall(self) -> None:
         report = demo.run_fresh_thread_demo()

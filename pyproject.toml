@@ -397,6 +397,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/recall/fresh_thread_activation.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/fresh_thread_action.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/fresh_thread_demo.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/fresh_thread_demo_fixtures.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/fresh_thread_scent.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/index_builder.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/life_cues.py",

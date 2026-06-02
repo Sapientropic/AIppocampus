@@ -7,6 +7,10 @@ a fresh-thread recall quality benchmark. It checks the two integration failures
 that originally motivated #302 without publishing private prompts, source text,
 thread ids, source refs, local paths, or registry exports.
 
+For the later #490 expansion that samples multiple reopenable refs when
+available and reports explicit coverage denominators, see
+[`fresh-thread-expanded-coverage-2026-06-03.md`](fresh-thread-expanded-coverage-2026-06-03.md).
+
 ## Source Map
 
 - Issue: #302

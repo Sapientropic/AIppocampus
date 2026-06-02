@@ -20,7 +20,7 @@ _paths.ensure_paths()
 
 from aippocampus_runtime.recall import fresh_thread_demo
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def _quality_gates(report: dict[str, Any]) -> dict[str, Any]:
@@ -30,9 +30,13 @@ def _quality_gates(report: dict[str, Any]) -> dict[str, Any]:
         "privacy_safe": audit.get("privacy_failure_count") == 0,
         "no_unsupported_evidence": audit.get("unsupported_evidence_count") == 0,
         "negative_controls_pass": audit.get("negative_control_active_recall_count") == 0,
-        "positive_flows_present": metrics.get("positive_flow_count") == 4,
-        "negative_controls_present": metrics.get("negative_control_count") == 4,
+        "positive_flows_present": metrics.get("positive_flow_count", 0) >= 5,
+        "negative_controls_present": metrics.get("negative_control_count", 0) >= 5,
         "three_arms_present": set(report.get("arms") or []) == set(fresh_thread_demo.DEMO_ARMS),
+        "long_turn_flow_present": metrics.get("max_turn_depth", 0) >= 3
+        and metrics.get("multi_turn_flow_count", 0) >= 2,
+        "correction_controls_present": metrics.get("correction_control_count", 0) >= 1,
+        "threshold_edge_controls_present": metrics.get("threshold_edge_control_count", 0) >= 1,
     }
     return {
         **gates,
@@ -71,6 +75,7 @@ def run_benchmark(
         "cannot_claim": [
             "real-history fresh-thread recall quality",
             "live semantic-model quality",
+            "live correction-extraction quality",
             "competitor or leaderboard superiority",
             "private family or emotional-memory coverage",
         ],

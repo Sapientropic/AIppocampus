@@ -6,6 +6,10 @@ This report records the deterministic public-safe demo runner added for #285.
 It is a product-shape demonstration for fresh-thread progressive recall, not a
 real-history benchmark or leaderboard claim.
 
+For the later #490 expansion with multi-turn, correction, threshold-edge, and
+multi-ref smoke coverage, see
+[`fresh-thread-expanded-coverage-2026-06-03.md`](fresh-thread-expanded-coverage-2026-06-03.md).
+
 ## Source Map
 
 - Parent design issue: #281
@@ -14,6 +18,8 @@ real-history benchmark or leaderboard claim.
   [`benchmarks/aippocampus/benchmark_fresh_thread_recall_demo.py`](../../../benchmarks/aippocampus/benchmark_fresh_thread_recall_demo.py)
 - Runtime fixture contract:
   [`fresh_thread_demo.py`](../../../skills/aippocampus/scripts/aippocampus_runtime/recall/fresh_thread_demo.py)
+  and
+  [`fresh_thread_demo_fixtures.py`](../../../skills/aippocampus/scripts/aippocampus_runtime/recall/fresh_thread_demo_fixtures.py)
 - Existing contracts reused:
   [`fresh_thread_scent.py`](../../../skills/aippocampus/scripts/aippocampus_runtime/recall/fresh_thread_scent.py),
   [`fresh_thread_action.py`](../../../skills/aippocampus/scripts/aippocampus_runtime/recall/fresh_thread_action.py),

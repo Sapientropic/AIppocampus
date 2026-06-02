@@ -62,13 +62,15 @@ promotes a public-safe result into the official evidence flow.
    [`benchmarks/fresh-thread-recall-demo-2026-05-31.md`](benchmarks/fresh-thread-recall-demo-2026-05-31.md).
 15. Need sanitized real-history fresh-thread boundary evidence for #302:
    [`benchmarks/fresh-thread-real-history-smoke-2026-06-02.md`](benchmarks/fresh-thread-real-history-smoke-2026-06-02.md).
-16. Need explicit recall-reminder shadow A/B evidence:
+16. Need expanded fresh-thread demo and multi-ref real-history smoke evidence:
+   [`benchmarks/fresh-thread-expanded-coverage-2026-06-03.md`](benchmarks/fresh-thread-expanded-coverage-2026-06-03.md).
+17. Need explicit recall-reminder shadow A/B evidence:
    [`dream/dream-live-shadow-ab-2026-05-30.md`](dream/dream-live-shadow-ab-2026-05-30.md).
-17. Need public-corpus negative-control dream shadow evidence:
+18. Need public-corpus negative-control dream shadow evidence:
    [`dream/dream-live-shadow-benchmark-corpus-2026-05-31.md`](dream/dream-live-shadow-benchmark-corpus-2026-05-31.md).
-18. Need live question-extraction axis-coverage evidence for GitHub #153:
+19. Need live question-extraction axis-coverage evidence for GitHub #153:
    [`question/question-extraction-axis-coverage-2026-05-31.md`](question/question-extraction-axis-coverage-2026-05-31.md).
-19. Need community-submitted runs, demos, known gaps, or field-report intake:
+20. Need community-submitted runs, demos, known gaps, or field-report intake:
    [`community-field-reports.md`](community-field-reports.md) and the public
    [`/evidence/`](https://www.aippocampus.com/evidence/) page.
 
@@ -89,8 +91,8 @@ snapshot or dated verification ledger.
 | Public longitudinal user evidence | `docs/evidence/benchmarks/public-longitudinal-users.md`, `docs/evidence/benchmarks/public-longitudinal-users-measurement-2026-05-31.md`, `docs/evidence/benchmarks/react-real-vcs-smoke-2026-05-31.md`, `docs/evidence/benchmarks/react-real-vcs-100-gold-2026-05-31.md`, `docs/evidence/benchmarks/react-real-vcs-adversarial-v2-2026-05-31.md`, `benchmark_corpus/public_longitudinal_users/`, and `benchmark_corpus/locomo_manifest.json` | Public synthetic coding implicit-knowledge scoring-contract smoke, LoCoMo same-conversation control users, LoCoMo answer-usefulness prototype, deterministic scorers, VCS future-event recall roadmap, dated measurements, real public VCS hard-event smoke, 100+ gold React VCS measurement with anti-drift/counterfactual controls, sharper React VCS adversarial controls, and external-prediction contracts. |
 | Corpus setup | `benchmark_corpus/README.md` and `benchmark_corpus/sharegpt_manifest.json` | Public corpus conversion commands, ignored local outputs, and corpus-specific claim boundaries. |
 | Demo fixture report | `docs/evidence/benchmarks/memory-pain-fixture-report.md` | Public-safe fixture families and their narrow claim boundary. |
-| Fresh-thread recall demo evidence | `docs/evidence/benchmarks/fresh-thread-recall-demo-2026-05-31.md` | Public-safe three-arm fresh-thread recall flows, negative controls, and source-reopen boundaries for #285. |
-| Fresh-thread real-history boundary smoke | `docs/evidence/benchmarks/fresh-thread-real-history-smoke-2026-06-02.md` | Sanitized #302 real-history boundary smoke for ready-lock reopenability and current-repo fact negative control; not a recall-quality benchmark. |
+| Fresh-thread recall demo evidence | `docs/evidence/benchmarks/fresh-thread-recall-demo-2026-05-31.md` and `docs/evidence/benchmarks/fresh-thread-expanded-coverage-2026-06-03.md` | Public-safe three-arm fresh-thread recall flows, negative controls, source-reopen boundaries, multi-turn/correction/threshold controls, and the expanded #490 claim boundary. |
+| Fresh-thread real-history boundary smoke | `docs/evidence/benchmarks/fresh-thread-real-history-smoke-2026-06-02.md` and `docs/evidence/benchmarks/fresh-thread-expanded-coverage-2026-06-03.md` | Sanitized real-history boundary smoke for ready-lock reopenability, thread-only lock suppression, current-repo fact negative control, and #490 multi-ref aggregate coverage; not a recall-quality benchmark. |
 | Dream live shadow A/B reminder evidence | `docs/evidence/dream/dream-live-shadow-ab-2026-05-30.md` | Dated aggregate run for explicit recall-reminder frequency, shadow assignment, nearest-prior exposure attribution, and delivered-vs-shadow claim boundaries. |
 | Dream benchmark-corpus shadow evidence | `docs/evidence/dream/dream-live-shadow-benchmark-corpus-2026-05-31.md` | Dated public-corpus negative-control run for explicit reminder frequency and potential dream-only over-personalization activation. |
 | Question extraction axis coverage evidence | `docs/evidence/question/question-extraction-axis-coverage-2026-05-31.md` | Dated live no-write aggregate field-presence run for GitHub #153 and its prompt/repair/telemetry fix boundary. |
@@ -122,7 +124,7 @@ benchmark runner should be added here and linked to its dated evidence owner.
 | Track D synthetic compaction continuity | `benchmarks/aippocampus/benchmark_compaction_continuity.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `docs/evidence/readiness/public-readiness-verification.md` |
 | Continuous-memory attribution arms, host-native baseline, pre-registration, cost/harm ledger, and scenario provenance/holdout controls | `benchmarks/aippocampus/benchmark_continuous_memory_arms.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, #378/#406/#407/#408/#409/#410 |
 | Optional live semantic gate | `benchmarks/aippocampus/benchmark_live_semantic_gate.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `benchmark_corpus/README.md` |
-| Fresh-thread public-safe recall demo | `benchmarks/aippocampus/benchmark_fresh_thread_recall_demo.py` | `docs/evidence/benchmarks/fresh-thread-recall-demo-2026-05-31.md`, `docs/guides/demo-scenarios.md` |
+| Fresh-thread public-safe recall demo | `benchmarks/aippocampus/benchmark_fresh_thread_recall_demo.py` | `docs/evidence/benchmarks/fresh-thread-recall-demo-2026-05-31.md`, `docs/evidence/benchmarks/fresh-thread-expanded-coverage-2026-06-03.md`, `docs/guides/demo-scenarios.md` |
 | Structured cognitive portrait | `benchmarks/aippocampus/benchmark_cognitive_portrait.py` | `docs/research/compact-activation-signals.md`, `docs/evidence/benchmarks/memory-decision-benchmark-plan.md` |
 | Question-aware real-history structural benchmark | `benchmarks/aippocampus/benchmark_question_aware_real_history.py` | `docs/architecture/question-tracking-subconscious.md`, `docs/research/compact-activation-signals.md`, `docs/planning/next-iteration-plan.md`, `docs/evidence/readiness/stage-0-5-readiness.md`, `docs/evidence/benchmarks/memory-decision-benchmark-plan.md` |
 | Question tracking selected-fixture calibration | `benchmarks/aippocampus/benchmark_question_tracking_calibration.py` | `docs/architecture/question-tracking-subconscious.md`, `docs/planning/technical-differentiation-analysis.md` |
@@ -178,7 +180,7 @@ pasting raw JSON into multiple docs.
 | OpenAI Agents SDK function-tool contract smoke | `tools/aippocampus/smoke/smoke_openai_agents_sdk_tool_contract.py`, `tests/aippocampus/test_openai_agents_sdk_smoke.py` | `docs/guides/ecosystem-integration-matrix.md` |
 | Life-wide registry aggregate smoke | `tools/aippocampus/smoke/smoke_life_wide_registry.py` | `docs/evidence/readiness/stage-0-5-readiness.md` |
 | Real-history memory-pain prompt-hook smoke | `tools/aippocampus/smoke/smoke_memory_pain_prompt_hook.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md` |
-| Fresh-thread real-history boundary smoke | `tools/aippocampus/smoke/smoke_fresh_thread_real_history.py` | `docs/evidence/benchmarks/fresh-thread-real-history-smoke-2026-06-02.md` |
+| Fresh-thread real-history boundary smoke | `tools/aippocampus/smoke/smoke_fresh_thread_real_history.py` | `docs/evidence/benchmarks/fresh-thread-real-history-smoke-2026-06-02.md`, `docs/evidence/benchmarks/fresh-thread-expanded-coverage-2026-06-03.md` |
 | Real-history semantic scope smoke | `tools/aippocampus/smoke/smoke_semantic_scope_real_history.py` | `docs/evidence/readiness/stage-0-5-readiness.md` |
 | Semantic sidecar source-review smoke | `tools/aippocampus/smoke/smoke_semantic_scope_source_review.py` | `docs/evidence/readiness/stage-0-5-readiness.md` |
 | Selected source-evidence recall eval and candidate-space diagnostics | `tools/aippocampus/smoke/smoke_source_evidence_recall_eval.py` | `docs/evidence/readiness/stage-0-5-readiness.md`, `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, #458 |
