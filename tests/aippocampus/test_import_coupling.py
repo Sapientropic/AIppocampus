@@ -337,7 +337,6 @@ class ImportCouplingTests(unittest.TestCase):
         ]
         shim_paths = [
             SCRIPTS / "registry.py",
-            SCRIPTS / "registry_provider.py",
             SCRIPTS / "registry_search.py",
             SCRIPTS / "registry_store.py",
         ]
@@ -346,6 +345,8 @@ class ImportCouplingTests(unittest.TestCase):
             self.assertTrue(path.exists(), path)
         for path in shim_paths:
             self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+        self.assertFalse((SCRIPTS / "registry_provider.py").exists())
+        self.assertNotIn("registry_provider", pyproject_py_modules())
 
         edges = same_dir_import_edges()
 
@@ -1410,10 +1411,9 @@ class ImportCouplingTests(unittest.TestCase):
         )
         self.assertIs(theme_emergence.main, packaged_theme_emergence.main)
 
-    def test_question_helpers_have_package_owner_and_compat_shims(self) -> None:
+    def test_question_helpers_have_package_owner_and_remaining_compat_shims(self) -> None:
         import question_feedback_policy
         import question_health
-        import question_source_refs
         import question_vector_index
         from aippocampus_runtime.question import feedback_policy, health, source_refs, vector_index
 
@@ -1427,7 +1427,6 @@ class ImportCouplingTests(unittest.TestCase):
         shim_paths = [
             SCRIPTS / "question_feedback_policy.py",
             SCRIPTS / "question_health.py",
-            SCRIPTS / "question_source_refs.py",
             SCRIPTS / "question_vector_index.py",
         ]
 
@@ -1435,6 +1434,7 @@ class ImportCouplingTests(unittest.TestCase):
             self.assertTrue(path.exists(), path)
         for path in shim_paths:
             self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+        self.assertFalse((SCRIPTS / "question_source_refs.py").exists())
 
         edges = same_dir_import_edges(top_level_only=True)
         for source in [
@@ -1471,18 +1471,18 @@ class ImportCouplingTests(unittest.TestCase):
             {
                 "question_feedback_policy",
                 "question_health",
-                "question_source_refs",
                 "question_vector_index",
             }
             <= modules
         )
+        self.assertNotIn("question_source_refs", modules)
 
         self.assertIs(question_health.question_health_stats, health.question_health_stats)
         self.assertIs(
             question_health.aggregate_question_health_stats,
             health.aggregate_question_health_stats,
         )
-        self.assertIs(question_source_refs.source_ref_key, source_refs.source_ref_key)
+        self.assertTrue(callable(source_refs.source_ref_key))
         self.assertIs(
             question_feedback_policy.load_question_pair_feedback,
             feedback_policy.load_question_pair_feedback,
@@ -1924,15 +1924,13 @@ class ImportCouplingTests(unittest.TestCase):
             }
             self.assertFalse(cue_compat_names & imported_from_core)
 
-    def test_prompt_life_cues_have_package_owner_and_compat_shim(self) -> None:
-        import prompt_life_cues
+    def test_prompt_life_cues_uses_package_owner_only(self) -> None:
         from aippocampus_runtime.recall import life_cues
 
         package_file = SCRIPTS / "aippocampus_runtime" / "recall" / "life_cues.py"
-        shim_file = SCRIPTS / "prompt_life_cues.py"
         self.assertTrue(package_file.exists())
-        self.assertTrue(shim_file.exists())
-        self.assertIn("Compatibility shim", shim_file.read_text(encoding="utf-8"))
+        self.assertFalse((SCRIPTS / "prompt_life_cues.py").exists())
+        self.assertNotIn("prompt_life_cues", pyproject_py_modules())
 
         edges = same_dir_import_edges(top_level_only=True)
         for source in [
@@ -1943,11 +1941,8 @@ class ImportCouplingTests(unittest.TestCase):
             self.assertIn("aippocampus_runtime.recall.life_cues", edges[source])
             self.assertNotIn("prompt_life_cues", edges[source])
 
-        self.assertIs(prompt_life_cues.profile_recall_terms, life_cues.profile_recall_terms)
-        self.assertIs(
-            prompt_life_cues.LIFE_WIDE_SCOPE_LABEL_CUES,
-            life_cues.LIFE_WIDE_SCOPE_LABEL_CUES,
-        )
+        self.assertTrue(callable(life_cues.profile_recall_terms))
+        self.assertTrue(life_cues.LIFE_WIDE_SCOPE_LABEL_CUES)
 
     def test_recall_runtime_core_has_package_owner_and_compat_shims(self) -> None:
         package_paths = [

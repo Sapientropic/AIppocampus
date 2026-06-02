@@ -13,11 +13,11 @@ Current snapshot after the #144/#305 policy pass:
 | `keep_cli` | 23 | Documented CLI, hook, MCP, install, sync, onboarding, or operator paths. Keep until docs/installers publish a migration note. |
 | `temporary_compat` | 75 | Flat import shims still referenced by first-party imports, non-identity tests, documented direct invocation, hooks/installers/binaries, or documented local-logic exceptions. |
 | `legacy_bridge` | 0 | No single-implementation legacy top-level script exceptions remain. |
-| `delete_now` | 38 | Pure package-owner shims with no direct dependency left except, in most cases, their `py-modules` exposure; delete in small batches with the matching packaging entry. |
+| `delete_now` | 35 | Pure package-owner shims with no direct dependency left except, in most cases, their `py-modules` exposure; delete in small batches with the matching packaging entry. |
 | `reexport_blocks` | 0 | The prompt-cue compatibility re-export block was removed; cue policy now lives in `aippocampus_runtime.recall.prompt_cues`. |
 | `manual_export_surfaces` | 0 | No long temporary shim currently publishes a hand-maintained export list as a second API surface. |
 
-This file is only a short human pointer. Do not mirror the full 136-script list
+This file is only a short human pointer. Do not mirror the full 133-script list
 here; use the tool output when planning a deletion batch.
 
 Temporary compatibility shims must not grow a second API surface. Long manual
