@@ -253,9 +253,10 @@ External DeepSeek frontier extraction is explicit:
 
 The default CI path verifies Ubuntu Python 3.12 and 3.13 with docs health, Ruff,
 mypy, compile checks, and the fast deterministic test tier. It also runs a
-macOS fast-tier gate on the runner's default TMPDIR as a path-identity guard for
-the recurring `/var` and `/private/var` regression family. Ubuntu green alone is
-not a cross-platform fast-tier claim. Slower benchmark and smoke coverage stays
+single Ubuntu 3.12 deterministic benchmark-smoke lane plus a macOS fast-tier
+gate on the runner's default TMPDIR as a path-identity guard for the recurring
+`/var` and `/private/var` regression family. Ubuntu green alone is not a
+cross-platform fast-tier claim. Slower benchmark and smoke coverage stays
 explicit for release and readiness work.
 
 From the repository root:
@@ -268,6 +269,7 @@ python tools/aippocampus/docs/check_docs_health.py --json
 python -m ruff check skills plugins tests tools benchmarks benchmark_corpus
 python -m mypy
 python tools/aippocampus/run_tests.py --tier fast
+python tools/aippocampus/run_tests.py --tier benchmark-smoke --benchmark-suite-profile public-fast
 python tools/aippocampus/run_coverage.py --tier fast
 ```
 
@@ -288,9 +290,16 @@ Use the full tier before making a repository-health or public-readiness claim:
 python tools/aippocampus/run_tests.py --tier full
 ```
 
-Use `--tier benchmark` or `--tier slow` when touching benchmark runners, smoke
-tools, plugin packaging, onboarding, object sync, or prompt-hook integration
-behavior.
+Use `python -m pip install -e ".[benchmark]"` as the stable fresh-clone
+benchmark install target. The extra is intentionally empty while deterministic
+benchmark smoke needs only stdlib plus checked-in fixtures; optional live
+provider tracks remain explicit operator setup, not normal contributor deps.
+
+Use `--tier benchmark-smoke --benchmark-suite-profile public-fast` for the
+fresh-clone suite-level smoke plus curated deterministic benchmark mirror PR
+lane, `--tier benchmark` for all benchmark mirror tests, and `--tier slow` when
+touching smoke tools, plugin packaging, onboarding, object sync, or prompt-hook
+integration behavior.
 
 Runtime/package-owner or path-identity release slices should still run the
 manual macOS install smoke from the release checklist before making public

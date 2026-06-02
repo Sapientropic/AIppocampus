@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import os
 import sys
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -72,6 +75,61 @@ class RunTestsTierTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(events, ["tempdir", "run"])
 
+    def test_main_can_run_benchmark_suite_profile_before_selected_tier(self) -> None:
+        events: list[str] = []
+
+        with (
+            mock.patch.object(
+                run_tests,
+                "ensure_usable_tempdir",
+                side_effect=lambda: events.append("tempdir"),
+                create=True,
+            ),
+            mock.patch.object(run_tests, "modules_for_tier", return_value=["tests.fake"]),
+            mock.patch.object(
+                run_tests,
+                "run_benchmark_suite_profile",
+                side_effect=lambda profile: events.append(f"suite:{profile}") or True,
+            ),
+            mock.patch.object(
+                run_tests,
+                "run_modules",
+                side_effect=lambda modules, verbosity: events.append("run") or True,
+            ),
+        ):
+            exit_code = run_tests.main(
+                [
+                    "--tier",
+                    "benchmark-smoke",
+                    "--benchmark-suite-profile",
+                    "public-fast",
+                ],
+            )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(events, ["tempdir", "suite:public-fast", "run"])
+
+    def test_benchmark_suite_profile_runner_requires_json_ok(self) -> None:
+        completed = run_tests.subprocess.CompletedProcess(
+            args=["python"],
+            returncode=0,
+            stdout='{"ok": true, "status": "quality_gate_passed", "elapsed_ms": 12.5}',
+            stderr="",
+        )
+
+        with (
+            io.StringIO() as stdout,
+            contextlib.redirect_stdout(stdout),
+            mock.patch.object(run_tests.subprocess, "run", return_value=completed) as run,
+        ):
+            ok = run_tests.run_benchmark_suite_profile("public-fast")
+
+        self.assertTrue(ok)
+        command = run.call_args.args[0]
+        self.assertEqual(command[0], sys.executable)
+        self.assertIn("benchmark_suite.py", command[1])
+        self.assertEqual(command[-3:], ["--profile", "public-fast", "--json"])
+
     def test_tempdir_preflight_uses_fallback_when_default_temp_is_unusable(self) -> None:
         calls: list[Path | None] = []
 
@@ -126,6 +184,38 @@ class RunTestsTierTests(unittest.TestCase):
         self.assertEqual(fast & benchmark, set())
         self.assertEqual(slow & benchmark, set())
         self.assertEqual(fast | slow | benchmark, discovered)
+
+    def test_benchmark_smoke_is_curated_public_subset(self) -> None:
+        benchmark = set(run_tests.modules_for_tier("benchmark"))
+        smoke = set(run_tests.modules_for_tier("benchmark-smoke"))
+
+        self.assertTrue(smoke)
+        self.assertLess(smoke, benchmark)
+        self.assertLessEqual(smoke, benchmark)
+        self.assertEqual(smoke, run_tests.BENCHMARK_SMOKE_MODULES)
+        self.assertNotIn("tests.aippocampus.test_benchmark_live_semantic_gate", smoke)
+        self.assertFalse(any("real_history" in module for module in smoke))
+
+    def test_benchmark_smoke_tier_is_exposed_in_cli_and_ci(self) -> None:
+        help_text = run_tests.build_parser().format_help()
+        workflow = (REPO_ROOT / ".github" / "workflows" / "aippocampus-ci.yml").read_text(
+            encoding="utf-8",
+        )
+
+        self.assertIn("benchmark-smoke", help_text)
+        self.assertIn("--benchmark-suite-profile", help_text)
+        self.assertIn(
+            "--tier benchmark-smoke --benchmark-suite-profile public-fast",
+            workflow,
+        )
+        self.assertNotIn("python benchmarks/aippocampus/benchmark_suite.py", workflow)
+
+    def test_benchmark_extra_is_stable_contributor_install_target(self) -> None:
+        pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+
+        self.assertIn("optional-dependencies", pyproject["project"])
+        self.assertIn("benchmark", pyproject["project"]["optional-dependencies"])
+        self.assertEqual(pyproject["project"]["optional-dependencies"]["benchmark"], [])
 
 
 if __name__ == "__main__":

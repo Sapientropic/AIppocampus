@@ -39,6 +39,12 @@ build-backend = "setuptools.build_meta"
 [project.scripts]
 aippocampus = "aippocampus_runtime.cli.facade:main"
 
+[project.optional-dependencies]
+# Deterministic benchmark smoke currently uses stdlib plus checked-in public
+# fixtures. Keep this empty extra as the stable contributor install target; add
+# packages here only when a committed deterministic benchmark requires them.
+benchmark = []
+
 [tool.setuptools]
 package-dir = {"" = "skills/aippocampus/scripts"}
 packages = [
