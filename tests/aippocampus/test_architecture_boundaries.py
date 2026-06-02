@@ -240,7 +240,8 @@ class ArchitectureBoundaryTests(unittest.TestCase):
         positions = [text.index(f"`{path}`") for path in near_budget_paths]
         self.assertEqual(positions, sorted(positions))
         for phrase in (
-            "#500 owns the behavior-preserving extraction",
+            "#500 froze golden foreground projection fixtures",
+            "source-evidence/final skip-scent-evidence projection",
             "A real split should accompany a focused semantic-gate change",
             "another extraction would be speculative",
             "Split when a live-shadow feature touches one of those boundaries",

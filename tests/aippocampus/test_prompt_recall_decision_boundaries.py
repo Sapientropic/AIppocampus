@@ -61,6 +61,87 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
         except ModuleNotFoundError:
             self.fail("prompt_recall_context helper module is missing")
 
+    def _projection_module(self):
+        try:
+            return importlib.import_module("aippocampus_runtime.recall.prompt_recall_projection")
+        except ModuleNotFoundError:
+            self.fail("prompt_recall_projection helper module is missing")
+
+    def _write_clean_source_registry(self) -> Path:
+        clean_dir = self.root / "projection-clean-source"
+        clean_dir.mkdir()
+        messages_path = clean_dir / "messages.jsonl"
+        messages_path.write_text(
+            json.dumps(
+                {
+                    "message_id": "msg-projection",
+                    "turn_id": "turn-projection",
+                    "source_line": 27,
+                    "timestamp": "2026-05-25T19:00:00Z",
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "turn_index": 3,
+                    "is_final": True,
+                    "text": (
+                        "NeonMemory consent gate evidence: keep the consent gate "
+                        "beside mutation flow before calling it durable memory."
+                    ),
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        registry_path = self.root / "projection-registry" / "threads.json"
+        registry_path.parent.mkdir()
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:projection",
+                            "title": "NeonMemory consent gate source",
+                            "project_label": "BoundaryProject",
+                            "workspace_name": "BoundaryProject",
+                            "updated_at": "2026-05-25T19:00:00Z",
+                            "anchor_titles": ["NeonMemory consent gate"],
+                            "keywords": ["NeonMemory", "consent gate"],
+                            "summary": "Source-backed note about NeonMemory consent gate.",
+                            "paths": {
+                                "workspace": str(self.workspace),
+                                "clean_source_messages_jsonl": str(messages_path),
+                            },
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        return registry_path
+
+    @staticmethod
+    def _projection_snapshot(result: dict) -> dict:
+        return {
+            "decision": result["decision"],
+            "confidence": result["confidence"],
+            "candidate_threads": [
+                candidate.get("thread_key") for candidate in result.get("candidates") or []
+            ],
+            "evidence": [
+                {
+                    "thread_key": item.get("thread_key"),
+                    "line": item.get("line"),
+                    "source": item.get("source"),
+                    "phase": item.get("phase"),
+                    "is_final": item.get("is_final"),
+                }
+                for item in result.get("evidence") or []
+            ],
+            "semantic_bridge_diagnostic": result.get("semantic_bridge_diagnostic"),
+        }
+
     def test_context_helper_resolves_explicit_paths_and_loads_inputs(self) -> None:
         context_mod = self._context_module()
         associations_path = self.root / "custom-associations.json"
@@ -249,7 +330,9 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
     def test_current_checkout_fact_blocks_old_history_evidence_upgrade(self) -> None:
         reasons: list[str] = []
 
-        evidence = decision._source_intent_evidence(
+        projection = self._projection_module()
+
+        evidence = projection.source_intent_evidence(
             prompt="请给这个 repo 的 source-backed evidence：测试命令是什么？",
             candidates=[
                 {
@@ -280,10 +363,131 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
         self.assertEqual(evidence, [])
         self.assertIn("current checkout required: read current repo first", reasons)
 
+    def test_golden_foreground_projection_outputs_cover_skip_scent_evidence_and_bridge(self) -> None:
+        clean_registry = self._write_clean_source_registry()
+
+        def semantic_evidence_without_local_bridge(*args, **kwargs) -> dict:
+            return {
+                "available": True,
+                "decision": "evidence",
+                "confidence": 0.93,
+                "intent": "source_recall",
+                "query_aliases": ["ZetaBridge exact wording"],
+                "reasons": ["semantic route only"],
+            }
+
+        cases = {
+            "noise_skip": decision.assess_prompt(
+                "Current goal for this thread: status ACTIVE, token budget remaining",
+                cwd=self.workspace,
+                registry_path=self.registry_path,
+                search_budget=1,
+            ),
+            "local_scent": decision.assess_prompt(
+                "还记得 NeonMemory 吗？",
+                cwd=self.workspace,
+                registry_path=self.registry_path,
+                use_semantic_gate=False,
+                search_budget=0,
+            ),
+            "source_evidence": decision.assess_prompt(
+                "请给 source-backed evidence：NeonMemory consent gate 的原话",
+                cwd=self.workspace,
+                registry_path=clean_registry,
+                use_semantic_gate=False,
+                search_budget=1,
+            ),
+            "semantic_bridge_scent": decision.assess_prompt(
+                "请找一下 ZetaBridge exact wording 的原话",
+                cwd=self.workspace,
+                registry_path=self.registry_path,
+                semantic_gate_fn=semantic_evidence_without_local_bridge,
+                search_budget=1,
+            ),
+        }
+
+        self.assertEqual(
+            {name: self._projection_snapshot(result) for name, result in cases.items()},
+            {
+                "noise_skip": {
+                    "decision": "skip",
+                    "confidence": "low",
+                    "candidate_threads": [],
+                    "evidence": [],
+                    "semantic_bridge_diagnostic": None,
+                },
+                "local_scent": {
+                    "decision": "scent",
+                    "confidence": "medium",
+                    "candidate_threads": ["session:boundary"],
+                    "evidence": [],
+                    "semantic_bridge_diagnostic": None,
+                },
+                "source_evidence": {
+                    "decision": "evidence",
+                    "confidence": "high",
+                    "candidate_threads": ["session:projection"],
+                    "evidence": [
+                        {
+                            "thread_key": "session:projection",
+                            "line": 27,
+                            "source": "clean_source",
+                            "phase": "final_answer",
+                            "is_final": True,
+                        }
+                    ],
+                    "semantic_bridge_diagnostic": None,
+                },
+                "semantic_bridge_scent": {
+                    "decision": "scent",
+                    "confidence": "medium",
+                    "candidate_threads": [],
+                    "evidence": [],
+                    "semantic_bridge_diagnostic": "semantic_evidence_without_source_bridge",
+                },
+            },
+        )
+        self.assertIn(
+            "semantic evidence did not bridge to source-backed evidence",
+            cases["semantic_bridge_scent"]["reasons"],
+        )
+
     def test_assess_prompt_keeps_orchestration_below_boundary(self) -> None:
         source = inspect.getsource(decision.assess_prompt)
 
         self.assertLessEqual(len(source.splitlines()), 255)
+
+    def test_projection_stage_is_split_from_decision_orchestration(self) -> None:
+        projection = self._projection_module()
+        decision_source = (
+            SCRIPTS / "aippocampus_runtime" / "recall" / "prompt_recall_decision.py"
+        ).read_text(encoding="utf-8")
+        boundary = SCRIPTS / "aippocampus_runtime" / "recall" / "prompt_recall_projection.py"
+        self.assertTrue(boundary.exists())
+        boundary_source = boundary.read_text(encoding="utf-8")
+
+        for function_name in (
+            "source_intent_evidence",
+            "ambiguous_evidence_request",
+            "choose_decision_evidence",
+            "semantic_bridge_diagnostic",
+        ):
+            self.assertTrue(hasattr(projection, function_name))
+            self.assertIn(f"def {function_name}(", boundary_source)
+
+        for private_function_name in (
+            "_source_intent_evidence",
+            "_ambiguous_evidence_request",
+            "_choose_decision_evidence",
+            "_semantic_bridge_diagnostic",
+            "_evidence_lite_continuation",
+        ):
+            self.assertNotIn(f"def {private_function_name}(", decision_source)
+
+        self.assertNotIn("from aippocampus_runtime.recall.prompt_recall_ambiguity import", decision_source)
+        self.assertIn("from aippocampus_runtime.recall.prompt_recall_ambiguity import", boundary_source)
+        self.assertNotIn("collect_evidence(", decision_source)
+        self.assertIn("collect_evidence(", boundary_source)
 
     def test_foreground_budget_helpers_are_split_from_decision_orchestration(self) -> None:
         decision_source = (
