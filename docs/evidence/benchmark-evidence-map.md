@@ -175,6 +175,7 @@ pasting raw JSON into multiple docs.
 | Claude Code local-history parser smoke | `tools/aippocampus/smoke/smoke_claude_code_history.py` | `docs/evidence/readiness/public-readiness-verification.md` |
 | Synthetic cross-agent continuity smoke | `tools/aippocampus/smoke/smoke_cross_agent_continuity.py` | `docs/evidence/readiness/public-readiness-verification.md` |
 | Generic JSONL ecosystem integration smoke | `tools/aippocampus/smoke/smoke_generic_jsonl_integration.py` | `docs/guides/ecosystem-integration-matrix.md` |
+| OpenAI Agents SDK function-tool contract smoke | `tools/aippocampus/smoke/smoke_openai_agents_sdk_tool_contract.py`, `tests/aippocampus/test_openai_agents_sdk_smoke.py` | `docs/guides/ecosystem-integration-matrix.md` |
 | Life-wide registry aggregate smoke | `tools/aippocampus/smoke/smoke_life_wide_registry.py` | `docs/evidence/readiness/stage-0-5-readiness.md` |
 | Real-history memory-pain prompt-hook smoke | `tools/aippocampus/smoke/smoke_memory_pain_prompt_hook.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md` |
 | Fresh-thread real-history boundary smoke | `tools/aippocampus/smoke/smoke_fresh_thread_real_history.py` | `docs/evidence/benchmarks/fresh-thread-real-history-smoke-2026-06-02.md` |
