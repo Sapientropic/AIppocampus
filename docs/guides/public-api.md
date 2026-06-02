@@ -465,9 +465,11 @@ Common installs should stay small:
   to use clean-source search, MCP, import/export, or local sync.
 - `aippocampus doctor provider --json` checks whether the selected model
   route's API-key environment variable is visible to the current process and a
-  child process. It does not read `.env` files, credential stores, or keychain
-  entries, it never prints key values, and it does not claim to inspect a
-  previously started Codex Desktop hook process.
+  child process. This is a presence-only check: it does not read or validate the
+  key value, so it cannot prove the key is non-empty, correct, or unexpired. It
+  does not read `.env` files, credential stores, or keychain entries, it never
+  prints key values, and it does not claim to inspect a previously started Codex
+  Desktop hook process.
 
 Registry storage precedence remains explicit:
 

@@ -82,6 +82,20 @@ class ProviderDoctorTests(unittest.TestCase):
         self.assertFalse(report["hook_relevance"]["actual_installed_hook_process_checked"])
         self.assertNotIn(secret, encoded)
 
+    def test_provider_visibility_is_presence_only_and_does_not_read_empty_values(self) -> None:
+        with provider_env({"DEEPSEEK_API_KEY": ""}):
+            report = provider_doctor.build_provider_doctor_report(
+                model_route="default",
+                check_child_process=False,
+            )
+
+        self.assertTrue(report["ok"])
+        self.assertTrue(report["api_key"]["visible_in_current_process"])
+        self.assertIsNone(report["api_key"]["visible_in_child_process"])
+        self.assertTrue(report["api_key"]["presence_only"])
+        self.assertFalse(report["api_key"]["value_checked"])
+        self.assertFalse(report["privacy"]["api_key_value_checked"])
+
     def test_custom_route_config_error_is_public_and_does_not_probe_secret_values(self) -> None:
         with provider_env(
             {

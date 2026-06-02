@@ -35,7 +35,9 @@ def _as_dict(value: Any) -> dict[str, Any]:
 
 
 def _child_process_env_visibility(env_var: str) -> dict[str, Any]:
-    script = "import os, sys; sys.exit(0 if os.environ.get(sys.argv[1]) else 2)"
+    # Presence-only by design: reading even a non-empty/empty boolean from the
+    # key value would turn this doctor into credential inspection.
+    script = "import os, sys; sys.exit(0 if sys.argv[1] in os.environ else 2)"
     try:
         proc = subprocess.run(
             [sys.executable, "-c", script, env_var],
@@ -54,7 +56,8 @@ def _child_process_env_visibility(env_var: str) -> dict[str, Any]:
 
 
 def _env_var_is_visible(env_var: str) -> bool:
-    return bool(env_var and os.environ.get(env_var))
+    # Keep this as membership, not get(): the doctor must not touch key values.
+    return bool(env_var and env_var in os.environ)
 
 
 def _public_route(route: ModelRoute, *, requested_route: str) -> dict[str, Any]:
@@ -167,6 +170,8 @@ def build_provider_doctor_report(
             "visible_in_current_process": current_visible,
             "visible_in_child_process": child_visible,
             "child_process_check": child_visibility,
+            "presence_only": True,
+            "value_checked": False,
             "value_printed": False,
         },
         "hook_relevance": {
@@ -186,6 +191,7 @@ def build_provider_doctor_report(
         },
         "privacy": {
             "api_key_value_printed": False,
+            "api_key_value_checked": False,
             "local_paths_included": False,
             "base_url_value_printed": False,
             "checked_env_var_names": [public_env_name],
