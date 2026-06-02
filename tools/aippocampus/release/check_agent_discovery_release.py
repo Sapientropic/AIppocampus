@@ -211,6 +211,7 @@ def check_workflow(repo: Path, checks: list[Check]) -> None:
         "release_tag": "manual release tag input",
         "environment: release": "GitHub release environment",
         "pypa/gh-action-pypi-publish": "PyPI trusted publishing action",
+        'python -m pip install -e ".[release]"': "pinned release tooling extra",
         "Check tag matches package version": "tag/version guard",
         "git\", \"rev-list\", \"-n\", \"1\", tag": "tag commit guard",
         "check-jsonschema": "MCP schema validation",

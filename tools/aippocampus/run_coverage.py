@@ -52,7 +52,7 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if importlib.util.find_spec("coverage") is None:
         print(
-            "coverage.py is required; install it with: python -m pip install coverage",
+            'coverage.py is required; install it with: python -m pip install -e ".[dev]"',
             file=sys.stderr,
         )
         return 2

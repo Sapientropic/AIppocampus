@@ -25,13 +25,14 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
 
       - name: Install checks
-        run: python -m pip install ruff mypy coverage build
+        run: python -m pip install -e ".[dev]"
 
       - name: Editable install smoke
         run: |
-          python -m pip install -e .
           python -c "import aippocampus_runtime; print('editable-install-ok')"
           mkdir -p .tmp/ci-codex-home
           aippocampus hooks status --codex-home .tmp/ci-codex-home --json
@@ -80,6 +81,8 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
 
       - name: Install benchmark smoke dependencies
         run: python -m pip install -e ".[benchmark]"
@@ -100,9 +103,11 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
 
       - name: Install optional OpenAI Agents SDK dependency
-        run: python -m pip install -e ".[openai-agents]"
+        run: python -m pip install -e ".[openai-agents-smoke]"
 
       - name: Run OpenAI Agents SDK function-tool smoke
         run: python -m unittest tests.aippocampus.test_openai_agents_sdk_smoke -v
@@ -120,11 +125,11 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
 
       - name: Install smoke dependencies
-        run: |
-          python -m pip install ruff mypy coverage build
-          python -m pip install -e .
+        run: python -m pip install -e ".[dev]"
 
       - name: Capture default macOS temp identity
         shell: bash
@@ -156,6 +161,8 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
 
       - name: Full test tier
         run: python tools/aippocampus/run_tests.py --tier full

@@ -4,6 +4,7 @@ version = "0.1.1"
 description = "Source-backed continuity layer for long-running AI agent relationships."
 readme = "README.md"
 requires-python = ">=3.12"
+dependencies = []
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 keywords = [
@@ -33,18 +34,33 @@ Discussions = "https://github.com/Sapientropic/AIppocampus/discussions"
 Documentation = "https://github.com/Sapientropic/AIppocampus/tree/main/docs"
 
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools==82.0.1"]
 build-backend = "setuptools.build_meta"
 
 [project.scripts]
 aippocampus = "aippocampus_runtime.cli.facade:main"
 
 [project.optional-dependencies]
+# Runtime remains stdlib/package-local by default. The exact-pinned tooling
+# extras below are reproducibility contracts for contributors and CI, not
+# runtime requirements for local-first AIppocampus use.
+dev = [
+    "build==1.3.0",
+    "coverage==7.14.1",
+    "mypy==2.1.0",
+    "ruff==0.15.12",
+]
+release = [
+    "build==1.3.0",
+    "check-jsonschema==0.37.2",
+    "twine==6.2.0",
+]
 # Deterministic benchmark smoke currently uses stdlib plus checked-in public
 # fixtures. Keep this empty extra as the stable contributor install target; add
 # packages here only when a committed deterministic benchmark requires them.
 benchmark = []
 openai-agents = ["openai-agents>=0.17.4,<1"]
+openai-agents-smoke = ["openai-agents==0.17.4"]
 
 [tool.setuptools]
 package-dir = {"" = "skills/aippocampus/scripts"}

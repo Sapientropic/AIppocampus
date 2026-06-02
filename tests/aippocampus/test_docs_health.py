@@ -302,6 +302,59 @@ class DocsHealthTests(unittest.TestCase):
             issues,
         )
 
+    def test_dependency_contract_covers_metadata_docs_and_ci(self) -> None:
+        repo_root = docs_health.find_repo_root(ROOT)
+        self.assertIsNotNone(repo_root)
+
+        result = docs_health.dependency_contract_issues(repo_root)
+
+        self.assertEqual(result, [])
+
+    def test_dependency_contract_reports_floating_dev_tools(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            (repo / "pyproject.toml").write_text(
+                "\n".join(
+                    [
+                        "[project]",
+                        "dependencies = []",
+                        "[project.optional-dependencies]",
+                        'dev = ["ruff==0.15.12"]',
+                        'release = ["build==1.3.0", "check-jsonschema==0.37.2", "twine==6.2.0"]',
+                        "benchmark = []",
+                        'openai-agents = ["openai-agents>=0.17.4,<1"]',
+                        'openai-agents-smoke = ["openai-agents==0.17.4"]',
+                        "[build-system]",
+                        'requires = ["setuptools==82.0.1"]',
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (repo / "README.md").write_text(
+                "python -m pip install --upgrade pip ruff mypy coverage\n",
+                encoding="utf-8",
+            )
+            (repo / ".github" / "workflows").mkdir(parents=True)
+            (repo / ".github" / "workflows" / "aippocampus-ci.yml").write_text(
+                "python -m pip install ruff mypy coverage build\n",
+                encoding="utf-8",
+            )
+            (repo / ".github" / "workflows" / "publish-agent-discovery.yml").write_text(
+                "python -m pip install --upgrade build twine check-jsonschema\n",
+                encoding="utf-8",
+            )
+
+            issues = docs_health.dependency_contract_issues(repo)
+
+        self.assertIn(
+            "pyproject.toml optional dependency 'dev' must be "
+            "['build==1.3.0', 'coverage==7.14.1', 'mypy==2.1.0', 'ruff==0.15.12']",
+            issues,
+        )
+        self.assertIn("README must not use floating Ruff/mypy/coverage install", issues)
+        self.assertIn("aippocampus CI must not use floating dev tool install", issues)
+        self.assertIn("publish workflow must not use floating release tool install", issues)
+
     def test_benchmark_evidence_map_reports_missing_runner(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
