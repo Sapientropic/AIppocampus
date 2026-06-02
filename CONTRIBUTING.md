@@ -37,8 +37,11 @@ commercial/separate-license product surfaces is
 
 ## Development Checks
 
-AIppocampus supports Python 3.10 and newer. Before claiming the repository is
-healthy, run the fast deterministic path from the repository root:
+AIppocampus's public Python support floor is Python 3.12. CI and package
+metadata currently prove Python 3.12 and 3.13; Python 3.10 and Python 3.11 are
+unsupported public targets unless package metadata, docs, and workflows are
+widened in the same change. Before claiming the repository is healthy, run the
+fast deterministic path from the repository root:
 
 ```sh
 python tools/aippocampus/docs/check_docs_health.py --json
