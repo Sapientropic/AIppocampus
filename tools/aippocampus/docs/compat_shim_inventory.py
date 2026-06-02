@@ -10,7 +10,11 @@ moved to the package owner.
 from __future__ import annotations
 
 import argparse
+import ast
 import json
+import re
+import tomllib
+from collections import defaultdict
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -56,6 +60,31 @@ TEMPORARY_COMPAT_REMOVAL_CONDITION = (
     "aippocampus_runtime package owner and no install/hook/binary path calls "
     "this flat module."
 )
+DELETE_NOW_REMOVAL_CONDITION = (
+    "Delete in a small batch with its py-modules entry when present, then run "
+    "import-coupling and direct-help smokes."
+)
+PYTHON_REFERENCE_ROOTS = (
+    "skills",
+    "tools",
+    "tests",
+    "benchmarks",
+    "plugins",
+)
+DOC_REFERENCE_ROOTS = (
+    "docs",
+    "skills/aippocampus/references",
+)
+DIRECT_PATH_REFERENCE_ROOTS = (
+    ".github",
+    "skills",
+    "tools",
+)
+SHIM_IDENTITY_TESTS = {
+    "tests/aippocampus/test_import_coupling.py",
+    "tests/aippocampus/test_compat_shim_inventory.py",
+}
+
 
 @dataclass(frozen=True)
 class InventoryItem:
@@ -81,6 +110,16 @@ class InventoryReport:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class ReferenceIndex:
+    py_modules: set[str]
+    project_entrypoints: dict[str, list[str]]
+    first_party_imports: dict[str, list[str]]
+    non_identity_test_imports: dict[str, list[str]]
+    direct_path_dependencies: dict[str, list[str]]
+    documented_direct_invocations: dict[str, list[str]]
+
+
 def _scripts_dir(repo_root: Path) -> Path:
     return repo_root / "skills" / "aippocampus" / "scripts"
 
@@ -97,8 +136,184 @@ def _is_alias_or_dynamic_mirror(source: str) -> bool:
     return "sys.modules[__name__]" in source or "globals().update(" in source
 
 
-def _classify_top_level_script(path: Path) -> InventoryItem:
+def _is_pure_package_owner_reexport(source: str) -> bool:
+    if not _is_compat_shim(source):
+        return False
+    if "aippocampus_runtime" not in source:
+        return False
+    if _is_alias_or_dynamic_mirror(source):
+        return True
+    return _non_comment_line_count(source) <= MANUAL_EXPORT_LINE_LIMIT
+
+
+def _relative_posix(repo_root: Path, path: Path) -> str:
+    try:
+        return path.resolve().relative_to(repo_root).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def _iter_existing_files(repo_root: Path, roots: tuple[str, ...], pattern: str) -> list[Path]:
+    files: list[Path] = []
+    for rel_root in roots:
+        root = repo_root / Path(rel_root)
+        if not root.exists():
+            continue
+        if root.is_file():
+            files.append(root)
+            continue
+        files.extend(
+            path
+            for path in root.rglob(pattern)
+            if "__pycache__" not in path.parts and ".venv" not in path.parts
+        )
+    return sorted(files)
+
+
+def _pyproject_metadata(repo_root: Path, flat_modules: set[str]) -> tuple[set[str], dict[str, list[str]]]:
+    pyproject = repo_root / "pyproject.toml"
+    if not pyproject.exists():
+        return set(), {}
+    try:
+        data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+    except tomllib.TOMLDecodeError:
+        return set(), {}
+
+    setuptools = data.get("tool", {}).get("setuptools", {})
+    py_modules = {
+        module
+        for module in setuptools.get("py-modules", [])
+        if isinstance(module, str)
+    }
+    project_entrypoints: dict[str, list[str]] = defaultdict(list)
+    scripts = data.get("project", {}).get("scripts", {})
+    for command, target in scripts.items():
+        if not isinstance(command, str) or not isinstance(target, str):
+            continue
+        module = target.split(":", maxsplit=1)[0].split(".", maxsplit=1)[0]
+        if module in flat_modules:
+            project_entrypoints[module].append(f"pyproject.toml:[project.scripts].{command}")
+    return py_modules, dict(project_entrypoints)
+
+
+def _flat_import_targets(source: str, flat_modules: set[str]) -> set[str]:
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return set()
+
+    targets: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                top_level = alias.name.split(".", maxsplit=1)[0]
+                if top_level in flat_modules:
+                    targets.add(top_level)
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            top_level = node.module.split(".", maxsplit=1)[0]
+            if top_level in flat_modules:
+                targets.add(top_level)
+    return targets
+
+
+def _doc_line_is_direct_invocation(line: str, script_name: str) -> bool:
+    if script_name not in line:
+        return False
+    normalized = line.replace("\\", "/")
+    escaped = re.escape(script_name)
+    if f"skills/aippocampus/scripts/{script_name}" in normalized:
+        return True
+    if re.search(rf"\bpython(?:\s+-m)?\b[^\n`]*{escaped}", line):
+        return True
+    if re.search(rf"\b(?:Use|Run|Call|Invoke)\s+`?{escaped}`?\b", line, re.IGNORECASE):
+        return True
+    return bool(re.search(rf"`[^`]*{escaped}\s+--", line))
+
+
+def _code_line_is_direct_path_dependency(line: str, script_name: str) -> bool:
+    if script_name not in line:
+        return False
+    normalized = line.replace("\\", "/")
+    escaped = re.escape(script_name)
+    if f"skills/aippocampus/scripts/{script_name}" in normalized:
+        return True
+    if f"scripts/{script_name}" in normalized:
+        return True
+    return bool(
+        re.search(
+            rf"\b(?:SCRIPT_DIR|SCRIPTS|scripts_dir|script_dir|script_path)\b[^\n]*{escaped}",
+            line,
+        )
+    )
+
+
+def _build_reference_index(repo_root: Path, top_level_paths: list[Path]) -> ReferenceIndex:
+    flat_modules = {path.stem for path in top_level_paths}
+    script_names = {path.name for path in top_level_paths}
+    top_level_by_module = {path.stem: path.resolve() for path in top_level_paths}
+    py_modules, project_entrypoints = _pyproject_metadata(repo_root, flat_modules)
+
+    first_party_imports: dict[str, list[str]] = defaultdict(list)
+    non_identity_test_imports: dict[str, list[str]] = defaultdict(list)
+    for path in _iter_existing_files(repo_root, PYTHON_REFERENCE_ROOTS, "*.py"):
+        rel = _relative_posix(repo_root, path)
+        if rel in SHIM_IDENTITY_TESTS:
+            continue
+        source = path.read_text(encoding="utf-8")
+        for module in _flat_import_targets(source, flat_modules):
+            if path.resolve() == top_level_by_module.get(module):
+                continue
+            if rel.startswith("tests/"):
+                non_identity_test_imports[module].append(rel)
+            else:
+                first_party_imports[module].append(rel)
+
+    documented_direct_invocations: dict[str, list[str]] = defaultdict(list)
+    doc_files = [
+        *(repo_root / name for name in ("README.md", "AGENTS.md") if (repo_root / name).exists()),
+        *_iter_existing_files(repo_root, DOC_REFERENCE_ROOTS, "*.md"),
+    ]
+    for path in sorted(doc_files):
+        rel = _relative_posix(repo_root, path)
+        for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            for script_name in script_names:
+                if _doc_line_is_direct_invocation(line, script_name):
+                    documented_direct_invocations[script_name].append(f"{rel}:{line_no}")
+
+    direct_path_dependencies: dict[str, list[str]] = defaultdict(list)
+    for suffix in ("*.py", "*.ps1", "*.yml", "*.yaml"):
+        for path in _iter_existing_files(repo_root, DIRECT_PATH_REFERENCE_ROOTS, suffix):
+            rel = _relative_posix(repo_root, path)
+            if rel in SHIM_IDENTITY_TESTS or path.resolve() in top_level_by_module.values():
+                continue
+            source = path.read_text(encoding="utf-8")
+            for line_no, line in enumerate(source.splitlines(), start=1):
+                for script_name in script_names:
+                    if _code_line_is_direct_path_dependency(line, script_name):
+                        direct_path_dependencies[script_name].append(f"{rel}:{line_no}")
+
+    return ReferenceIndex(
+        py_modules=py_modules,
+        project_entrypoints=project_entrypoints,
+        first_party_imports=dict(first_party_imports),
+        non_identity_test_imports=dict(non_identity_test_imports),
+        direct_path_dependencies=dict(direct_path_dependencies),
+        documented_direct_invocations=dict(documented_direct_invocations),
+    )
+
+
+def _temporary_item(script: str, reason: str) -> InventoryItem:
+    return InventoryItem(
+        script=script,
+        bucket="temporary_compat",
+        reason=reason,
+        removal_condition=TEMPORARY_COMPAT_REMOVAL_CONDITION,
+    )
+
+
+def _classify_top_level_script(path: Path, references: ReferenceIndex) -> InventoryItem:
     source = path.read_text(encoding="utf-8")
+    module_name = path.stem
     if path.name in LEGACY_BRIDGES:
         return InventoryItem(
             script=path.name,
@@ -114,11 +329,61 @@ def _classify_top_level_script(path: Path) -> InventoryItem:
             removal_condition=KEEP_CLI_REMOVAL_CONDITION,
         )
     if _is_compat_shim(source):
+        if path.name in LOCAL_LOGIC_COMPAT_EXCEPTIONS:
+            return _temporary_item(
+                path.name,
+                "compatibility shim still carries a documented local-logic exception",
+            )
+        if not _is_pure_package_owner_reexport(source):
+            return _temporary_item(
+                path.name,
+                "compatibility shim is not yet a pure aippocampus_runtime owner re-export",
+            )
+        if references.project_entrypoints.get(module_name):
+            return _temporary_item(
+                path.name,
+                "project script entrypoint still targets flat module: "
+                + references.project_entrypoints[module_name][0],
+            )
+        if references.first_party_imports.get(module_name):
+            return _temporary_item(
+                path.name,
+                "first-party import still references flat module: "
+                + references.first_party_imports[module_name][0],
+            )
+        if references.non_identity_test_imports.get(module_name):
+            return _temporary_item(
+                path.name,
+                "non-identity test still imports flat module: "
+                + references.non_identity_test_imports[module_name][0],
+            )
+        if references.direct_path_dependencies.get(path.name):
+            return _temporary_item(
+                path.name,
+                "install/hook/binary path still references direct script path: "
+                + references.direct_path_dependencies[path.name][0],
+            )
+        if references.documented_direct_invocations.get(path.name):
+            return _temporary_item(
+                path.name,
+                "documented direct invocation still references flat script path: "
+                + references.documented_direct_invocations[path.name][0],
+            )
+        if module_name in references.py_modules:
+            reason = (
+                "only remaining flat-module exposure is pyproject py-modules; "
+                "drop that entry with the shim in the deletion batch"
+            )
+        else:
+            reason = (
+                "pure package-owner re-export with no first-party imports, "
+                "direct docs, or install/hook/binary path dependency"
+            )
         return InventoryItem(
             script=path.name,
-            bucket="temporary_compat",
-            reason="flat import shim for an aippocampus_runtime package owner",
-            removal_condition=TEMPORARY_COMPAT_REMOVAL_CONDITION,
+            bucket="delete_now",
+            reason=reason,
+            removal_condition=DELETE_NOW_REMOVAL_CONDITION,
         )
     return InventoryItem(
         script=path.name,
@@ -179,9 +444,11 @@ def _manual_export_surfaces(repo_root: Path, items: list[InventoryItem]) -> list
 
 def build_inventory(repo_root: Path) -> InventoryReport:
     repo_root = repo_root.resolve()
+    top_level_paths = sorted(_scripts_dir(repo_root).glob("*.py"))
+    references = _build_reference_index(repo_root, top_level_paths)
     items = [
-        _classify_top_level_script(path)
-        for path in sorted(_scripts_dir(repo_root).glob("*.py"))
+        _classify_top_level_script(path, references)
+        for path in top_level_paths
     ]
     bucketed_names = {item.script for item in items}
     top_level_scripts = [item.script for item in items]
