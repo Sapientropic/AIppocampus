@@ -411,6 +411,14 @@ the hook may record them in `$CODEX_HOME/aippocampus-registry/semantic_cues.json
 This is a multilingual cue cache, not a fact store: cues are promoted only after
 repeated hits with source refs, demoted when false positives accumulate, and fed
 back into the semantic gate's trigger catalog as search hints.
+The exact semantic result cache, `semantic_recall_cache.json`, is separate: it
+is a hashed prompt/result optimization with TTL, hit/miss/expired/write/eviction
+telemetry, and value-aware max-entry eviction. Entries keyed through the
+source-backed cue sidecar can be protected from low-value churn, but the cached
+aliases remain routing hints only. `semantic_recall_gate.py --cache-report
+--json` and `semantic_cue_cache.semantic_cue_cache_report()` expose count-only
+diagnostics; they must not emit raw prompt text, cue text, source snippets, or
+local paths.
 Active `semantic_cues.jsonl` rows and reviewed `semantic_triggers.jsonl` rows
 also feed the hook's local pre-gate and query seed terms. This is the intended
 replacement path for semantic proxy word lists in

@@ -134,6 +134,13 @@ Recommended cache layers:
 | Topic trajectory cache | Rolling topic hash, without raw prompt text. | Current theme, drift markers, likely next search aliases, visibility bias. | Still intentionally folded into the thread cache for now; split it only if real traces prove the metadata needs its own lifecycle. |
 | Clean-source validation pass | Candidate `source_refs` plus prompt/card terms. | Per-card validation status and source-ref fingerprints in the thread cache. | Keeps evidence checks source-backed without adding a second ambient-memory store. |
 
+The exact prompt cache should stay an optimization layer, not a memory surface.
+It needs count-only telemetry for hits, misses, expired entries, writes, and
+evictions so operators can see whether semantic reuse is actually reducing live
+model calls. Value-aware retention may protect source-backed semantic-cue
+results from low-value churn, but cached aliases remain routing hints until the
+current turn reopens clean source.
+
 Thread ambient cache is a soft working surface, not memory truth. It should be
 small, expiring, source-ref-fingerprinted, and safe to discard. It must not log
 raw prompt text. When the thread changes topic, the topic epoch should rotate so
@@ -387,6 +394,12 @@ Design constraints:
 - Run scouts concurrently, write serially.
 - Cache exact prompt results by prompt fingerprint plus semantic cue hash, not
   raw prompt text.
+- Keep exact-cache and cue-cache diagnostics count-only: cache keys, telemetry
+  counters, value classes, and source-backed buckets are acceptable; raw prompt
+  text, cue text, source snippets, and local paths are not.
+- Prefer value-aware eviction for high-confidence source-backed semantic-cue
+  results over pure recency when low-value prompt churn would otherwise evict
+  them.
 - Cache thread-level ambient cards by `thread_id + workspace + topic_epoch`.
 - Cache candidate cards with expiry and source-ref fingerprints.
 - Rotate topic epochs from scout output, not hard-coded prompt rules. Scouts
@@ -574,7 +587,9 @@ The first slice should stay small but real:
    repeated source-backed hits, neighboring paraphrases use the local
    semantic-cue path and skip a cold live semantic call unless an operator
    explicitly forces `semantic_gate=on` for calibration. Hook diagnostics report
-   `exact_cache_hit`, `semantic_cue_hit`, and `cold_model_call` separately.
+   `exact_cache_hit`, `semantic_cue_hit`, and `cold_model_call` separately, and
+   exact-cache reports now expose sanitized hit/miss/expired/write/eviction
+   counters without prompt or cue text.
    Further work should be driven by new regressions or product behavior gaps,
    not by repeating the completed calibration suite.
 

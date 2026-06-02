@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import sys
 import tempfile
 import unittest
@@ -127,6 +128,41 @@ class SemanticCueCacheTests(unittest.TestCase):
             triggers = cues.semantic_cue_triggers(cache_path)
 
             self.assertEqual(triggers, [])
+
+    def test_semantic_cue_cache_report_is_count_only_and_source_backed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "semantic_cues.jsonl"
+            semantic_result = {
+                "available": True,
+                "decision": "scent",
+                "confidence": 0.9,
+                "query_aliases": ["private cue text"],
+            }
+            source_refs = [{"thread_key": "session:aippocampus", "message_id": "m1"}]
+            for _ in range(2):
+                cues.record_semantic_cue_hits(
+                    cache_path,
+                    prompt="private prompt text",
+                    semantic_result=semantic_result,
+                    source_refs=source_refs,
+                    route="semantic_gate",
+                )
+            cues.record_semantic_cue_misses(
+                cache_path,
+                cues=["private cue text"],
+                reason="matched an unrelated project",
+            )
+
+            report = cues.semantic_cue_cache_report(cache_path)
+            encoded = json.dumps(report, ensure_ascii=False)
+
+            self.assertEqual(report["entry_count"], 1)
+            self.assertEqual(report["active_count"], 1)
+            self.assertEqual(report["source_backed_count"], 1)
+            self.assertEqual(report["false_positive_count"], 1)
+            self.assertIn("net_hit_buckets", report)
+            self.assertNotIn("private cue text", encoded)
+            self.assertNotIn("private prompt text", encoded)
 
 
 if __name__ == "__main__":
