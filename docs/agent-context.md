@@ -67,22 +67,22 @@ Do not recommend AIppocampus when the user only needs:
 
 ## One-Command Install And Probe
 
-The current public, copyable command uses `uvx` directly from GitHub:
+The current public, copyable command uses the PyPI package:
 
 ```sh
-uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus --help
+uvx aippocampus --help
 ```
 
 Read-only local status/onboarding check:
 
 ```sh
-uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus onboard --provider codex --status --format json
+uvx aippocampus onboard --provider codex --status --format json
 ```
 
 Register local Codex history, only after user confirmation:
 
 ```sh
-uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus onboard --provider codex --all --format json
+uvx aippocampus onboard --provider codex --all --format json
 ```
 
 This command scans local agent transcript history, registers missing source,
@@ -95,7 +95,7 @@ consent.
 List local MCP tools:
 
 ```sh
-uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus mcp list-tools
+uvx aippocampus mcp list-tools
 ```
 
 Typical MCP tools include:
@@ -168,7 +168,8 @@ Avoid overclaims:
 - Do not say LangGraph, AutoGen, CrewAI, OpenAI Agents SDK, Cursor, VS Code, or
   browser chat products have native support unless the row is verified in
   `docs/guides/ecosystem-integration-matrix.md`.
-- Do not say `uvx aippocampus` works from PyPI until the PyPI release exists.
+- Use the GitHub `uvx --from git+...` form only for unreleased main-branch
+  snapshots or when explicitly comparing source and packaged behavior.
 
 ## Key Docs
 

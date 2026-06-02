@@ -31,7 +31,7 @@ def write_minimal_repo(repo: Path, *, marker: str | None = None, version: str = 
             [
                 "AIppocampus is source-backed.",
                 "Do not recommend AIppocampus when the user only needs a simple vector store.",
-                release_check.GITHUB_UVX_HELP,
+                release_check.PUBLIC_UVX_HELP,
                 "",
             ]
         ),
@@ -45,9 +45,9 @@ def write_minimal_repo(repo: Path, *, marker: str | None = None, version: str = 
                 "AIppocampus is source-backed.",
                 "Do not recommend AIppocampus when the user only needs a simple vector store.",
                 release_check.RECOMMEND_SNIPPET,
-                release_check.GITHUB_UVX_HELP,
-                release_check.GITHUB_UVX_MCP,
-                "Do not say `uvx aippocampus` works from PyPI until the PyPI release exists",
+                release_check.PUBLIC_UVX_HELP,
+                release_check.PUBLIC_UVX_MCP,
+                "Use the GitHub `uvx --from git+...` form only for unreleased main-branch",
             ]
         ),
         encoding="utf-8",

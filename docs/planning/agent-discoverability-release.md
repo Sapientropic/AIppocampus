@@ -6,24 +6,22 @@ Registry.
 
 ## Current Truth
 
-- `uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus --help`
-  is the verified clone-free probe.
-- `uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus onboard --provider codex --status --format json`
-  is the verified read-only onboarding/status probe.
-- `uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus mcp list-tools`
-  is the verified clone-free MCP tool catalog probe.
-- The shorter `uvx aippocampus ...` form is not yet valid because the package is
-  not published on PyPI.
-- `server.json` is a conservative MCP Registry metadata draft. Publishing it
-  still requires a package artifact accepted by the official registry flow.
+- `aippocampus==0.1.0` was published to PyPI and fresh `uvx aippocampus ...`
+  smoke passed.
+- `v0.1.0` did not publish to the MCP Registry because the package README marker
+  used `io.github.sapientropic/aippocampus` while the registry OIDC grant uses
+  `io.github.Sapientropic/*`.
+- PyPI release metadata is immutable for this purpose, so the MCP Registry
+  repair must use a new package version whose README includes the corrected
+  marker.
+- `v0.1.1` is the metadata repair release target: same conservative stdio MCP
+  surface, corrected marker, and matching `server.json` package version.
+- GitHub `uvx --from git+...` remains a main-branch snapshot fallback, not the
+  default public install claim.
 
 ## Required Before MCP Registry Publication
 
-1. Publish an installable artifact through a registry supported by the MCP
-   Registry.
-   - Preferred first path: PyPI package `aippocampus`.
-   - Alternative later path: MCPB or OCI artifact if the binary/package story
-     becomes clearer.
+1. Publish a new PyPI package version with the corrected README marker.
 2. Ensure the package README on PyPI includes the exact marker:
 
    ```html
@@ -52,14 +50,14 @@ tag/version match, docs health, fast tests, MCP `server.json` schema validation,
 Python package build, Twine metadata check, built-wheel CLI/MCP smoke, PyPI
 publication through trusted publishing, then MCP Registry validation and
 publication through GitHub OIDC. It targets the GitHub `release` environment and
-will not succeed until the PyPI trusted publisher/project setup exists for
-`aippocampus`.
+uses PyPI trusted publishing for the package artifact and then the MCP Registry
+publisher for `server.json`.
 
 It can run in two equivalent ways:
 
-- automatic: push a matching tag such as `v0.1.0`;
+- automatic: push a matching tag such as `v0.1.1`;
 - manual: run the workflow from GitHub Actions with `release_tag` set to an
-  existing tag such as `v0.1.0`.
+  existing tag such as `v0.1.1`.
 
 Both paths check that the release tag matches `pyproject.toml` and that the
 checked-out commit is exactly the tag commit before publishing. Do not use the

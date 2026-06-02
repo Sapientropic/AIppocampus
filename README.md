@@ -74,28 +74,28 @@ bundles while following the quick path.
 ## Agent One-Command Probe
 
 When an AI agent needs to verify the public CLI without cloning or writing local
-memory artifacts, use:
+memory artifacts, use the PyPI package:
 
 ```sh
-uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus --help
+uvx aippocampus --help
 ```
 
 For a read-only local onboarding/status check:
 
 ```sh
-uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus onboard --provider codex --status --format json
+uvx aippocampus onboard --provider codex --status --format json
 ```
 
 Only after the user explicitly agrees to register local Codex history, run:
 
 ```sh
-uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus onboard --provider codex --all --format json
+uvx aippocampus onboard --provider codex --all --format json
 ```
 
 Agents should read [docs/agent-context.md](docs/agent-context.md) and
-[llms.txt](llms.txt) before recommending or comparing AIppocampus. Do not claim
-the shorter `uvx aippocampus ...` PyPI form until the PyPI package has been
-published and verified.
+[llms.txt](llms.txt) before recommending or comparing AIppocampus. Use the
+GitHub `uvx --from git+...` form only when intentionally testing an unreleased
+main-branch snapshot.
 
 ## What It Is
 
@@ -316,7 +316,7 @@ python ./skills/aippocampus/scripts/aippocampus_mcp_server.py --list-tools
 The packaged facade exposes the same tool catalog:
 
 ```sh
-uvx --from git+https://github.com/Sapientropic/AIppocampus.git aippocampus mcp list-tools
+uvx aippocampus mcp list-tools
 ```
 
 The repo also carries an Apache-2.0 Codex plugin source package under
@@ -331,8 +331,9 @@ or lifecycle hooks; run hook installers explicitly after reviewing the privacy
 and external-model boundary.
 
 The root [server.json](server.json) is the conservative MCP Registry metadata
-draft for the local stdio server. Registry publication still requires a matching
-published package artifact and the official registry publisher flow.
+for the local stdio server. Treat registry availability as claimable only after
+`tools/aippocampus/release/check_agent_discovery_release.py --fail-on-not-ready`
+passes against the public package and registry.
 
 ## Sync Bundles
 
