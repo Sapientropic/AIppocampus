@@ -213,8 +213,7 @@ DeepSeek can be used aggressively, but hooks must stay cheap. The split is:
   retrospective validation only counts later rows that explicitly target the
   finding id and carry source refs; similar terms alone stay `unknown`.
 - adjudicated dream hypotheses project through
-  `aippocampus_runtime.dream.working_memory` into ordinary working-memory rows;
-  `dream_working_memory.py` is only the compatibility shim, not a second owner.
+  `aippocampus_runtime.dream.working_memory` into ordinary working-memory rows.
   Those rows carry
   `foreground_use` / `sensitive_use_gate` metadata: use quietly only when it
   changes the current answer or route, stay silent when source is already
