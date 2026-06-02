@@ -60,13 +60,15 @@ promotes a public-safe result into the official evidence flow.
    [`benchmarks/memory-pain-fixture-report.md`](benchmarks/memory-pain-fixture-report.md).
 14. Need public-safe fresh-thread recall demo evidence:
    [`benchmarks/fresh-thread-recall-demo-2026-05-31.md`](benchmarks/fresh-thread-recall-demo-2026-05-31.md).
-15. Need explicit recall-reminder shadow A/B evidence:
+15. Need sanitized real-history fresh-thread boundary evidence for #302:
+   [`benchmarks/fresh-thread-real-history-smoke-2026-06-02.md`](benchmarks/fresh-thread-real-history-smoke-2026-06-02.md).
+16. Need explicit recall-reminder shadow A/B evidence:
    [`dream/dream-live-shadow-ab-2026-05-30.md`](dream/dream-live-shadow-ab-2026-05-30.md).
-16. Need public-corpus negative-control dream shadow evidence:
+17. Need public-corpus negative-control dream shadow evidence:
    [`dream/dream-live-shadow-benchmark-corpus-2026-05-31.md`](dream/dream-live-shadow-benchmark-corpus-2026-05-31.md).
-17. Need live question-extraction axis-coverage evidence for GitHub #153:
+18. Need live question-extraction axis-coverage evidence for GitHub #153:
    [`question/question-extraction-axis-coverage-2026-05-31.md`](question/question-extraction-axis-coverage-2026-05-31.md).
-18. Need community-submitted runs, demos, known gaps, or field-report intake:
+19. Need community-submitted runs, demos, known gaps, or field-report intake:
    [`community-field-reports.md`](community-field-reports.md) and the public
    [`/evidence/`](https://www.aippocampus.com/evidence/) page.
 
@@ -88,6 +90,7 @@ snapshot or dated verification ledger.
 | Corpus setup | `benchmark_corpus/README.md` and `benchmark_corpus/sharegpt_manifest.json` | Public corpus conversion commands, ignored local outputs, and corpus-specific claim boundaries. |
 | Demo fixture report | `docs/evidence/benchmarks/memory-pain-fixture-report.md` | Public-safe fixture families and their narrow claim boundary. |
 | Fresh-thread recall demo evidence | `docs/evidence/benchmarks/fresh-thread-recall-demo-2026-05-31.md` | Public-safe three-arm fresh-thread recall flows, negative controls, and source-reopen boundaries for #285. |
+| Fresh-thread real-history boundary smoke | `docs/evidence/benchmarks/fresh-thread-real-history-smoke-2026-06-02.md` | Sanitized #302 real-history boundary smoke for ready-lock reopenability and current-repo fact negative control; not a recall-quality benchmark. |
 | Dream live shadow A/B reminder evidence | `docs/evidence/dream/dream-live-shadow-ab-2026-05-30.md` | Dated aggregate run for explicit recall-reminder frequency, shadow assignment, nearest-prior exposure attribution, and delivered-vs-shadow claim boundaries. |
 | Dream benchmark-corpus shadow evidence | `docs/evidence/dream/dream-live-shadow-benchmark-corpus-2026-05-31.md` | Dated public-corpus negative-control run for explicit reminder frequency and potential dream-only over-personalization activation. |
 | Question extraction axis coverage evidence | `docs/evidence/question/question-extraction-axis-coverage-2026-05-31.md` | Dated live no-write aggregate field-presence run for GitHub #153 and its prompt/repair/telemetry fix boundary. |
@@ -149,6 +152,7 @@ pasting raw JSON into multiple docs.
 | Generic JSONL ecosystem integration smoke | `tools/aippocampus/smoke/smoke_generic_jsonl_integration.py` | `docs/guides/ecosystem-integration-matrix.md` |
 | Life-wide registry aggregate smoke | `tools/aippocampus/smoke/smoke_life_wide_registry.py` | `docs/evidence/readiness/stage-0-5-readiness.md` |
 | Real-history memory-pain prompt-hook smoke | `tools/aippocampus/smoke/smoke_memory_pain_prompt_hook.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md` |
+| Fresh-thread real-history boundary smoke | `tools/aippocampus/smoke/smoke_fresh_thread_real_history.py` | `docs/evidence/benchmarks/fresh-thread-real-history-smoke-2026-06-02.md` |
 | Real-history semantic scope smoke | `tools/aippocampus/smoke/smoke_semantic_scope_real_history.py` | `docs/evidence/readiness/stage-0-5-readiness.md` |
 | Semantic sidecar source-review smoke | `tools/aippocampus/smoke/smoke_semantic_scope_source_review.py` | `docs/evidence/readiness/stage-0-5-readiness.md` |
 | Selected source-evidence recall eval | `tools/aippocampus/smoke/smoke_source_evidence_recall_eval.py` | `docs/evidence/readiness/stage-0-5-readiness.md` |

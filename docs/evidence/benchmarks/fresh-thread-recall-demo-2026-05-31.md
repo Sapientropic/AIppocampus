@@ -63,6 +63,9 @@ cover the two real-history failure shapes that motivated the issue:
   source-backed prompt does not use old-project clean-source evidence.
 - `test_fresh_thread_demo.py` checks that the synthetic project-fact negative
   control routes to `current_checkout_required_read_current_repo_first`.
+- `smoke_fresh_thread_real_history.py` now provides the separate sanitized
+  real-history boundary smoke required to close #302; see
+  [`fresh-thread-real-history-smoke-2026-06-02.md`](fresh-thread-real-history-smoke-2026-06-02.md).
 
 ## Local Result
 
