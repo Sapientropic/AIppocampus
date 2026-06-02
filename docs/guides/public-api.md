@@ -162,6 +162,9 @@ For these commands:
   prompts, scout rows, model route secrets, user ids, or raw cards. Python
   callers that need local private diagnostics should call the packaged runtime
   API directly inside the trusted process boundary.
+  `provenance_counts` and `support_level_counts` are allowed public-safe
+  aggregate diagnostics. Per-card provenance/debug envelopes are not public
+  schemas and must not be treated as source-backed evidence.
 - Exit code `0` means the command completed successfully. Non-zero means invalid
   arguments, missing prerequisites, failed validation, failed smoke, or another
   command-specific hard failure.

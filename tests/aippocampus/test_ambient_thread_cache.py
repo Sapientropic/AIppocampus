@@ -154,6 +154,9 @@ class AmbientThreadCacheTests(unittest.TestCase):
             "card_id": "arc_validation",
             "theme": "validated ambient recall",
             "support_level": "evidence",
+            "provenance_class": "source_backed_reopen",
+            "source_reopen_required": True,
+            "reopenable_ref_count": 1,
             "source_refs": [{"thread_key": "session:old", "line": 42, "message_id": "msg-1"}],
             "source_validation": {
                 "status": "supported",
@@ -184,6 +187,9 @@ class AmbientThreadCacheTests(unittest.TestCase):
 
         self.assertEqual(loaded["status"], "hit")
         self.assertEqual(loaded["cards"][0]["source_validation"]["status"], "supported")
+        self.assertEqual(loaded["cards"][0]["provenance_class"], "source_backed_reopen")
+        self.assertTrue(loaded["cards"][0]["source_reopen_required"])
+        self.assertEqual(loaded["cards"][0]["reopenable_ref_count"], 1)
         self.assertEqual(loaded["query_aliases"], ["ambient recall", "warm scout"])
         self.assertEqual(loaded["topic_epoch_decision"]["action"], "rotate")
         self.assertEqual(loaded["visibility_bias"], "source_backed_recall_card")
@@ -306,6 +312,9 @@ class AmbientThreadCacheTests(unittest.TestCase):
                     "theme": "old sourced detail",
                     "support_level": "evidence",
                     "visibility": "source_backed_recall_card",
+                    "provenance_class": "source_backed_reopen",
+                    "source_reopen_required": True,
+                    "reopenable_ref_count": 1,
                     "source_refs": [
                         {"thread_key": "session:old-topic", "line": 42, "message_id": "msg-1"}
                     ],
@@ -325,6 +334,9 @@ class AmbientThreadCacheTests(unittest.TestCase):
         self.assertEqual(related["status"], "related_hit")
         self.assertEqual(related["cards"][0]["support_level"], "candidate")
         self.assertEqual(related["cards"][0]["visibility"], "active_gentle_nudge")
+        self.assertEqual(related["cards"][0]["provenance_class"], "cached_warm_card")
+        self.assertEqual(related["cards"][0]["cached_origin"], "source_backed_reopen")
+        self.assertTrue(related["cards"][0]["source_reopen_required"])
 
     def test_topic_epoch_is_stable_without_raw_prompt_text(self) -> None:
         first = cache.topic_epoch_from_terms(["ambient recall", "Card/cache", "ambient"])

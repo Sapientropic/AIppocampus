@@ -3864,6 +3864,10 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertEqual(ambient["cache_status"]["topic_epoch_decision"]["action"], "reuse")
         self.assertEqual(ambient["cache_status"]["visibility_bias"], "active_gentle_nudge")
         self.assertEqual(ambient["cards"][0]["card_id"], "cached-card")
+        self.assertEqual(ambient["cards"][0]["provenance_class"], "cached_warm_card")
+        self.assertEqual(ambient["cards"][0]["cached_origin"], "unknown")
+        context = hook.context_for_hook(result)
+        self.assertIn("cached warm candidate", context.casefold())
 
     def test_prompt_hook_uses_related_cache_after_paraphrase_epoch_miss(self) -> None:
         cache_path = self.root / "ambient-cache-related.json"
@@ -3969,6 +3973,8 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertEqual(len(scheduled), 1)
         self.assertEqual(second["ambient_recall"]["cache_status"]["status"], "hit")
         self.assertEqual(second["ambient_recall"]["cards"][0]["card_id"], "detached-card")
+        self.assertEqual(second["ambient_recall"]["cards"][0]["provenance_class"], "cached_warm_card")
+        self.assertEqual(second["ambient_recall"]["cards"][0]["cached_origin"], "unknown")
         self.assertNotIn("warm_background", second["ambient_recall"])
 
     def test_prompt_hook_debug_log_summarizes_ambient_cache_without_raw_prompt(self) -> None:
@@ -3992,6 +3998,8 @@ class AmbientRecallHookTests(unittest.TestCase):
                         "card_id": "card-a",
                         "theme": "ambient",
                         "visibility": "active_gentle_nudge",
+                        "support_level": "candidate",
+                        "provenance_class": "cached_warm_card",
                         "source_validation": {"status": "supported"},
                     }
                 ],
@@ -4017,6 +4025,8 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertEqual(event["ambient_recall"]["cache"]["status"], "hit")
         self.assertEqual(event["ambient_recall"]["warm_background"]["status"], "queued")
         self.assertEqual(event["ambient_recall"]["source_validation_statuses"]["supported"], 1)
+        self.assertEqual(event["ambient_recall"]["provenance_counts"]["cached_warm_card"], 1)
+        self.assertEqual(event["ambient_recall"]["support_level_counts"]["candidate"], 1)
 
 
 if __name__ == "__main__":

@@ -24,10 +24,20 @@ agent action, but it must not be reported as remembered fact.
 Prompt decisions may also include a private `ambient_recall` block built by
 `ambient_recall_cards.py`. This block normalizes existing hook signals into
 compact cards with `mode`, `confidence`, `cards`, `avoid`, `latency_ms`,
-`cache_status`, and `late_update_policy`. Cards are guidance for the agent, not
-text to paste into the final answer. `scent` and `candidate` cards are
-resonance only; only `evidence` cards may be treated as source-backed, and even
-then exact claims should be checked against clean source when they matter.
+`cache_status`, `late_update_policy`, and a small `late_warm_handoff` policy.
+Cards are guidance for the agent, not text to paste into the final answer.
+`scent` and `candidate` cards are resonance only; only `evidence` cards may be
+treated as source-backed, and even then exact claims should be checked against
+clean source when they matter.
+
+Cards may include `provenance_class`, `cached_origin`,
+`source_reopen_required`, `reopenable_ref_count`, and per-card `cache_status`.
+The allowed provenance classes are small and non-secret:
+`deterministic_cue`, `warm_scout_proposal`, `cached_warm_card`,
+`cognitive_map_route`, `working_memory_source`, `working_memory_model`, and
+`source_backed_reopen`. Provenance complements `support_level`, `visibility`,
+and `source_validation`; it must not be used to upgrade a card into fact or to
+skip clean-source reopen.
 
 `ambient_recall` also carries a `fresh_thread_packet` projected by
 `fresh_thread_scent.py`. This is the #282 contract that bridges the #281
@@ -168,6 +178,14 @@ or `AIPPOCAMPUS_WARM_RECALL_BACKGROUND=0|false|off` to disable this on shared
 machines or during provider-budget debugging; `--warm-background` remains an
 explicit enable override.
 
+Late warm results have only explicit handoff paths: next-turn thread ambient
+cache, active recall lock enrichment, or a foreground agent's later active
+recall pull. They must not silently affect the current turn after the hook has
+returned. Cached cards replayed in turn N+1 should be marked
+`provenance_class=cached_warm_card` and keep their prior source as
+`cached_origin`, so a warm scout proposal or related-cache replay cannot look
+like fresh source-backed evidence.
+
 Foreground `UserPromptSubmit` must remain below the host hook timeout. The
 installer keeps the Codex hook timeout at 5s and installs
 `--max-elapsed-ms 4300 --semantic-timeout 2.5` by default so the Python process
@@ -294,6 +312,8 @@ Useful commands:
 `warm_ambient_recall.py --json` is an operational summary, not a private
 diagnostic dump: it reports status, counts, cache telemetry, and gate buckets
 without raw prompts, scout rows, model route secrets, user ids, or raw cards.
+It may expose public-safe `provenance_counts` and `support_level_counts`; those
+are aggregate routing diagnostics, not evidence claims.
 Local Python callers that need the full private result should import the
 packaged runtime API inside a trusted process boundary.
 

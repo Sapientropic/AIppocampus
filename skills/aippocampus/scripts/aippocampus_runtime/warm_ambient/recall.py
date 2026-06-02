@@ -48,6 +48,8 @@ from aippocampus_runtime.recall.ambient_cards import (
     SCENT,
     SILENT_TUNING,
     SOURCE_BACKED_RECALL_CARD,
+    WARM_SCOUT_PROPOSAL,
+    with_card_provenance,
 )
 from aippocampus_runtime.recall.nudge_policy import safe_model_nudge_text
 from aippocampus_runtime.recall.query_policy import split_query_terms
@@ -368,7 +370,7 @@ def model_scout_fn(
 
 
 def _candidate_from_theme(theme: str, row: dict[str, Any]) -> dict[str, Any]:
-    return {
+    card = {
         "theme": theme,
         "support_level": SCENT if row.get("decision") in {"scent", "background_only"} else CANDIDATE,
         "resonance": "medium",
@@ -376,6 +378,7 @@ def _candidate_from_theme(theme: str, row: dict[str, Any]) -> dict[str, Any]:
         "matched_terms": row.get("query_aliases") or [],
         "source_refs": [],
     }
+    return with_card_provenance(card, WARM_SCOUT_PROPOSAL)
 
 
 def _clean_candidate(
@@ -458,7 +461,7 @@ def _clean_candidate(
             160,
         ),
     }
-    return card
+    return with_card_provenance(card, WARM_SCOUT_PROPOSAL)
 
 
 def parse_scout_output(raw: dict[str, Any], scout: str) -> dict[str, Any]:

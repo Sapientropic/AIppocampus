@@ -21,6 +21,7 @@ from aippocampus_runtime.core import (
     workspace_fingerprint,
     workspace_identity,
 )
+from aippocampus_runtime.recall.ambient_cards import cached_card_with_provenance
 from aippocampus_runtime.registry.api import registry_paths, unique_preserve
 
 CACHE_SCHEMA_VERSION = 1
@@ -260,6 +261,10 @@ def _compact_card(card: dict[str, Any]) -> dict[str, Any]:
         "matched_terms",
         "source_refs",
         "source_validation",
+        "provenance_class",
+        "cached_origin",
+        "source_reopen_required",
+        "reopenable_ref_count",
         "expand_if",
         "ambient_policy",
     }
@@ -462,7 +467,7 @@ def _related_cache_cards(cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     out: list[dict[str, Any]] = []
     for card in cards:
-        clean = dict(card)
+        clean = cached_card_with_provenance(card)
         if clean.get("support_level") == "evidence" or clean.get("visibility") in {
             "source_backed_recall_card",
             "deep_archival_recall",
@@ -474,6 +479,7 @@ def _related_cache_cards(cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "Related cached source exists; reopen clean source before exact claims."
             )
             clean["expand_if"] = "Search clean source before presenting exact claims as facts."
+        clean["source_reopen_required"] = True
         out.append(clean)
     return out
 

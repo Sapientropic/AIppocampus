@@ -52,8 +52,13 @@ class AmbientRecallCardTests(unittest.TestCase):
         self.assertEqual(payload["mode"], "source_backed_recall_card")
         self.assertEqual(payload["confidence"], "high")
         self.assertEqual(payload["late_update_policy"], "warm_scouts_deferred")
+        self.assertEqual(payload["late_warm_handoff"]["default_path"], "next_turn_thread_cache")
+        self.assertEqual(payload["late_warm_handoff"]["current_turn_use"], "not_allowed")
         self.assertEqual(payload["cards"][0]["support_level"], "evidence")
         self.assertEqual(payload["cards"][0]["visibility"], "source_backed_recall_card")
+        self.assertEqual(payload["cards"][0]["provenance_class"], "source_backed_reopen")
+        self.assertTrue(payload["cards"][0]["source_reopen_required"])
+        self.assertEqual(payload["cards"][0]["reopenable_ref_count"], 1)
         self.assertEqual(payload["cards"][0]["source_refs"][0]["line"], 12)
         self.assertIn("innate memory", " ".join(payload["avoid"]))
 
@@ -125,11 +130,40 @@ class AmbientRecallCardTests(unittest.TestCase):
 
         self.assertEqual(payload["mode"], "active_gentle_nudge")
         self.assertEqual(payload["cards"][0]["support_level"], "scent")
+        self.assertEqual(payload["cards"][0]["provenance_class"], "deterministic_cue")
+        self.assertTrue(payload["cards"][0]["source_reopen_required"])
+        self.assertEqual(payload["cards"][0]["reopenable_ref_count"], 0)
         self.assertEqual(payload["fresh_thread_packet"]["support_level"], "soft_hypothesis")
         self.assertEqual(payload["fresh_thread_packet"]["suggested_action"], "active_recall")
         self.assertEqual(payload["cards"][0]["visibility"], "active_gentle_nudge")
         self.assertEqual(payload["cards"][0]["source_refs"], [])
         self.assertIn("Ambient recall design", payload["cards"][0]["theme"])
+
+    def test_cognitive_map_card_is_wayfinding_provenance_not_evidence(self) -> None:
+        payload = cards.ambient_recall_from_decision(
+            {
+                "decision": "scent",
+                "confidence": "medium",
+                "candidates": [],
+                "evidence": [],
+                "working_memory": [],
+                "cognitive_map": [
+                    {
+                        "route_id": "route-a",
+                        "landmark_labels": ["ambient cache", "late warm"],
+                        "matched_cues": ["handoff"],
+                    }
+                ],
+            }
+        )
+
+        card = payload["cards"][0]
+
+        self.assertEqual(card["provenance_class"], "cognitive_map_route")
+        self.assertEqual(card["support_level"], "scent")
+        self.assertTrue(card["source_reopen_required"])
+        self.assertEqual(card["reopenable_ref_count"], 0)
+        self.assertEqual(card["source_refs"], [])
 
     def test_candidate_nudge_does_not_echo_instruction_like_theme(self) -> None:
         payload = cards.ambient_recall_from_decision(
@@ -231,6 +265,42 @@ class AmbientRecallCardTests(unittest.TestCase):
 
         self.assertEqual(payload["cards"][0]["card_id"], "cached-card")
         self.assertEqual(payload["cards"][0]["theme"], "cached warm context")
+        self.assertEqual(payload["cards"][0]["provenance_class"], "cached_warm_card")
+        self.assertEqual(payload["cards"][0]["cached_origin"], "unknown")
+        self.assertEqual(payload["cards"][0]["cache_status"]["status"], "hit")
+
+    def test_cached_card_preserves_existing_origin_as_cached_origin(self) -> None:
+        payload = cards.ambient_recall_from_decision(
+            {
+                "decision": "scent",
+                "confidence": "medium",
+                "elapsed_ms": 3.0,
+                "query_terms": ["ambient"],
+                "candidates": [],
+                "evidence": [],
+                "working_memory": [],
+                "cognitive_map": [],
+            },
+            cached_cards=[
+                {
+                    "card_id": "cached-card",
+                    "theme": "cached warm context",
+                    "support_level": "candidate",
+                    "visibility": "active_gentle_nudge",
+                    "provenance_class": "warm_scout_proposal",
+                    "source_reopen_required": True,
+                }
+            ],
+            cache_status={"status": "hit", "topic_epoch": "epoch-a"},
+            cached_cards_first=True,
+        )
+
+        card = payload["cards"][0]
+
+        self.assertEqual(card["provenance_class"], "cached_warm_card")
+        self.assertEqual(card["cached_origin"], "warm_scout_proposal")
+        self.assertEqual(card["cache_status"]["topic_epoch"], "epoch-a")
+        self.assertTrue(card["source_reopen_required"])
 
     def test_card_text_redacts_local_paths_before_future_scouts_can_read_it(self) -> None:
         local_path = "E:" + "\\private\\secret\\notes.md"

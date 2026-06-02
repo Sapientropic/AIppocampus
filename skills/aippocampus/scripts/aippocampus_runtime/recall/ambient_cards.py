@@ -28,6 +28,14 @@ SCENT = "scent"
 CANDIDATE = "candidate"
 EVIDENCE = "evidence"
 
+DETERMINISTIC_CUE = "deterministic_cue"
+SOURCE_BACKED_REOPEN = "source_backed_reopen"
+WARM_SCOUT_PROPOSAL = "warm_scout_proposal"
+CACHED_WARM_CARD = "cached_warm_card"
+COGNITIVE_MAP_ROUTE = "cognitive_map_route"
+WORKING_MEMORY_SOURCE = "working_memory_source"
+WORKING_MEMORY_MODEL = "working_memory_model"
+
 DEFAULT_AVOID = [
     "Do not claim innate memory.",
     "Do not present scent or candidate cards as source-backed fact.",
@@ -76,6 +84,85 @@ def _clean_source_ref(ref: dict[str, Any], *, fallback_thread: str = "", fallbac
     return {key: value for key, value in clean.items() if value not in {None, ""}}
 
 
+def _reopenable_ref_count(card: dict[str, Any]) -> int:
+    return len([ref for ref in card.get("source_refs") or [] if isinstance(ref, dict)])
+
+
+def with_card_provenance(
+    card: dict[str, Any],
+    provenance_class: str,
+    *,
+    cached_origin: str | None = None,
+    cache_status: dict[str, Any] | None = None,
+    source_reopen_required: bool = True,
+) -> dict[str, Any]:
+    """Attach navigation provenance without weakening source-backed semantics.
+
+    Provenance only tells the foreground agent how a card was produced. It must
+    not replace `support_level`, `visibility`, or `source_validation`; exact
+    claims still need clean-source reopen unless a supported evidence path says
+    otherwise.
+    """
+
+    clean = dict(card)
+    clean["provenance_class"] = provenance_class
+    if cached_origin:
+        clean["cached_origin"] = cached_origin
+    clean["source_reopen_required"] = bool(
+        clean.get("source_reopen_required", source_reopen_required)
+    )
+    clean["reopenable_ref_count"] = _reopenable_ref_count(clean)
+    if cache_status:
+        clean["cache_status"] = {
+            key: value
+            for key, value in {
+                "status": cache_status.get("status"),
+                "topic_epoch": cache_status.get("topic_epoch"),
+                "matched_topic_epoch": cache_status.get("matched_topic_epoch"),
+                "visibility_bias": cache_status.get("visibility_bias"),
+            }.items()
+            if value not in {None, ""}
+        }
+    return clean
+
+
+def cached_card_with_provenance(
+    card: dict[str, Any],
+    *,
+    cache_status: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    prior = str(
+        card.get("cached_origin")
+        or (
+            ""
+            if card.get("provenance_class") == CACHED_WARM_CARD
+            else card.get("provenance_class") or ""
+        )
+        or "unknown"
+    )
+    clean = dict(card)
+    clean["provenance_class"] = CACHED_WARM_CARD
+    return with_card_provenance(
+        clean,
+        CACHED_WARM_CARD,
+        cached_origin=prior,
+        cache_status=cache_status,
+        source_reopen_required=True,
+    )
+
+
+def count_cards_by_field(cards: list[dict[str, Any]], field: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for card in cards:
+        if not isinstance(card, dict):
+            continue
+        value = str(card.get(field) or "").strip()
+        if not value:
+            continue
+        counts[value] = counts.get(value, 0) + 1
+    return counts
+
+
 def _theme_from_item(item: dict[str, Any], fallback: str) -> str:
     title = str(item.get("title") or "").strip()
     terms = _clean_terms(item.get("matched_terms") or item.get("keywords") or [], limit=3)
@@ -93,7 +180,7 @@ def _evidence_card(item: dict[str, Any], *, deep_archival: bool = False) -> dict
     key_line = _safe_text(item.get("snippet"), 220)
     ref = _clean_source_ref(item)
     visibility = DEEP_ARCHIVAL_RECALL if deep_archival and ref else SOURCE_BACKED_RECALL_CARD
-    return {
+    return with_card_provenance({
         "card_id": _stable_id([EVIDENCE, theme, ref.get("thread_key"), ref.get("line"), key_line]),
         "theme": theme,
         "resonance": "high",
@@ -113,14 +200,14 @@ def _evidence_card(item: dict[str, Any], *, deep_archival: bool = False) -> dict
             if visibility == DEEP_ARCHIVAL_RECALL
             else "User asks for original wording, source details, or a disputed memory."
         ),
-    }
+    }, SOURCE_BACKED_REOPEN)
 
 
 def _candidate_card(item: dict[str, Any], *, support_level: str = SCENT) -> dict[str, Any]:
     theme = _theme_from_item(item, "related prior context")
     nudge_theme = safe_nudge_topic(theme)
     terms = _clean_terms(item.get("matched_terms") or item.get("keywords") or [])
-    return {
+    return with_card_provenance({
         "card_id": _stable_id([support_level, theme, item.get("thread_key"), ",".join(terms)]),
         "theme": theme,
         "resonance": "medium",
@@ -132,7 +219,7 @@ def _candidate_card(item: dict[str, Any], *, support_level: str = SCENT) -> dict
         "matched_terms": terms,
         "source_refs": [],
         "expand_if": "User asks for memory, exact context, or source-backed support.",
-    }
+    }, DETERMINISTIC_CUE)
 
 
 def _working_memory_card(item: dict[str, Any]) -> dict[str, Any]:
@@ -172,14 +259,18 @@ def _working_memory_card(item: dict[str, Any]) -> dict[str, Any]:
     policy = policy_payload_for_working_memory(item)
     if policy:
         card["ambient_policy"] = policy
-    return card
+    return with_card_provenance(
+        card,
+        WORKING_MEMORY_MODEL if is_dream else WORKING_MEMORY_SOURCE,
+        source_reopen_required=True,
+    )
 
 
 def _cognitive_map_card(item: dict[str, Any]) -> dict[str, Any]:
     labels = _clean_terms(item.get("landmark_labels") or item.get("matched_cues") or [], limit=4)
     theme = compact_text(", ".join(labels) or str(item.get("title") or "cognitive map route"), 140)
     nudge_theme = safe_nudge_topic(theme)
-    return {
+    return with_card_provenance({
         "card_id": _stable_id([SCENT, theme, item.get("route_id")]),
         "theme": theme,
         "resonance": "medium",
@@ -191,7 +282,7 @@ def _cognitive_map_card(item: dict[str, Any]) -> dict[str, Any]:
         "matched_terms": _clean_terms(item.get("matched_cues") or item.get("route_cues") or []),
         "source_refs": [],
         "expand_if": "Use clean-source search if this route would change the answer.",
-    }
+    }, COGNITIVE_MAP_ROUTE)
 
 
 def _dedupe_cards(cards: list[dict[str, Any]], *, limit: int) -> list[dict[str, Any]]:
@@ -233,9 +324,14 @@ def ambient_recall_from_decision(
 ) -> dict[str, Any]:
     decision = str(result.get("decision") or "skip")
     deep_archival = bool(result.get("deep_archival_requested"))
+    effective_cache_status = cache_status or ({"status": "hit"} if cached_cards else {"status": "not_used"})
     cards: list[dict[str, Any]] = []
     if cached_cards and cached_cards_first:
-        cards.extend(dict(card) for card in cached_cards if isinstance(card, dict))
+        cards.extend(
+            cached_card_with_provenance(card, cache_status=effective_cache_status)
+            for card in cached_cards
+            if isinstance(card, dict)
+        )
     if result.get("evidence"):
         cards.extend(_evidence_card(item, deep_archival=deep_archival) for item in result.get("evidence") or [])
     if result.get("working_memory"):
@@ -245,7 +341,11 @@ def ambient_recall_from_decision(
     if not cards and result.get("candidates"):
         cards.extend(_candidate_card(item) for item in result.get("candidates") or [])
     if cached_cards and not cached_cards_first:
-        cards.extend(dict(card) for card in cached_cards if isinstance(card, dict))
+        cards.extend(
+            cached_card_with_provenance(card, cache_status=effective_cache_status)
+            for card in cached_cards
+            if isinstance(card, dict)
+        )
 
     cards = _dedupe_cards(cards, limit=max(0, max_cards))
     mode = _mode_for_cards(decision, cards)
@@ -258,6 +358,12 @@ def ambient_recall_from_decision(
         "fresh_thread_packet": fresh_thread_scent_packet_from_decision(result),
         "avoid": list(DEFAULT_AVOID),
         "latency_ms": result.get("elapsed_ms"),
-        "cache_status": cache_status or {"status": "not_used"},
+        "cache_status": effective_cache_status,
         "late_update_policy": "warm_scouts_deferred",
+        "late_warm_handoff": {
+            "default_path": "next_turn_thread_cache",
+            "active_lock": "enrich_when_available",
+            "explicit_continuation": "active_recall_pull",
+            "current_turn_use": "not_allowed",
+        },
     }
