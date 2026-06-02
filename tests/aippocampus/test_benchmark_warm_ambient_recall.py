@@ -1191,6 +1191,179 @@ class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
         self.assertEqual(summary["scout_usage_by_family"]["semantic_expander"]["prompt_cache_hit_tokens"], 64)
         self.assertEqual(summary["scout_usage_by_family"]["key_line_hunter"]["prompt_cache_miss_tokens"], 40)
 
+    def test_case_summary_reports_public_safe_scout_roi_tables(self) -> None:
+        summary = benchmark.summarize_case(
+            benchmark.BUILTIN_CASES[0],
+            {
+                "available": True,
+                "status": "ready",
+                "mode": "active_gentle_nudge",
+                "confidence": "medium",
+                "quorum_met": True,
+                "useful_signal_quorum_met": True,
+                "quorum": 2,
+                "scout_count": 4,
+                "accepted_scout_count": 3,
+                "failed_scout_count": 1,
+                "cards": [
+                    {
+                        "support_level": "candidate",
+                        "source_scouts": ["key_line_hunter:direct"],
+                    },
+                    {
+                        "support_level": "evidence",
+                        "source_scouts": ["deep_theme_matcher:direct"],
+                        "source_validation": {"status": "supported"},
+                    },
+                ],
+                "scouts": [
+                    {
+                        "ok": True,
+                        "scout": "key_line_hunter:direct",
+                        "scout_family": "key_line_hunter",
+                        "scout_variant": "direct",
+                        "useful": True,
+                        "candidates": [
+                            {"theme": "private theme redacted by summary", "support_level": "candidate"}
+                        ],
+                        "usage": {
+                            "prompt_tokens": 100,
+                            "completion_tokens": 20,
+                            "total_tokens": 120,
+                            "prompt_cache_hit_tokens": 80,
+                            "prompt_cache_miss_tokens": 20,
+                        },
+                    },
+                    {
+                        "ok": True,
+                        "scout": "evidence_gap_sentinel:direct",
+                        "scout_family": "evidence_gap_sentinel",
+                        "scout_variant": "direct",
+                        "useful": True,
+                        "block": True,
+                        "candidates": [],
+                        "usage": {"total_tokens": 40},
+                    },
+                    {
+                        "ok": True,
+                        "scout": "deep_theme_matcher:direct",
+                        "scout_family": "deep_theme_matcher",
+                        "scout_variant": "direct",
+                        "useful": True,
+                        "candidates": [
+                            {"theme": "evidence card", "support_level": "evidence"}
+                        ],
+                        "usage": {"total_tokens": 90},
+                    },
+                    {
+                        "ok": False,
+                        "scout": "semantic_expander:direct",
+                        "scout_family": "semantic_expander",
+                        "scout_variant": "direct",
+                        "useful": False,
+                        "error_kind": "read_timeout",
+                        "reason": "read timeout",
+                        "candidates": [],
+                        "usage": {},
+                    },
+                ],
+                "elapsed_ms": 1.0,
+            },
+        )
+
+        lane_roi = summary["scout_roi_by_lane"]
+        family_roi = summary["scout_roi_by_family"]
+        encoded = json.dumps(summary, ensure_ascii=False)
+
+        self.assertEqual(lane_roi["key_line_hunter:direct"]["classification"], "keep")
+        self.assertEqual(lane_roi["key_line_hunter:direct"]["card_candidate_count"], 1)
+        self.assertEqual(lane_roi["key_line_hunter:direct"]["accepted_card_count"], 1)
+        self.assertEqual(lane_roi["key_line_hunter:direct"]["prompt_cache_hit_tokens"], 80)
+        self.assertEqual(lane_roi["evidence_gap_sentinel:direct"]["classification"], "diagnostic_only")
+        self.assertEqual(lane_roi["evidence_gap_sentinel:direct"]["blocker_count"], 1)
+        self.assertEqual(lane_roi["deep_theme_matcher:direct"]["evidence_candidate_count"], 1)
+        self.assertEqual(lane_roi["deep_theme_matcher:direct"]["accepted_evidence_count"], 1)
+        self.assertEqual(lane_roi["deep_theme_matcher:direct"]["late_useful_result_count"], 1)
+        self.assertEqual(lane_roi["semantic_expander:direct"]["timeout_count"], 1)
+        self.assertEqual(family_roi["key_line_hunter"]["card_candidate_rate"], 1.0)
+        self.assertEqual(family_roi["evidence_gap_sentinel"]["blocker_rate"], 1.0)
+        self.assertEqual(family_roi["semantic_expander"]["error_rate"], 1.0)
+        self.assertNotIn("private theme redacted by summary", encoded)
+
+    def test_metrics_aggregate_scout_roi_tables(self) -> None:
+        metrics = benchmark.summarize_metrics(
+            [
+                {
+                    "case_id": "roi-a",
+                    "available": True,
+                    "configured_scout_count": 2,
+                    "observed_scout_result_count": 2,
+                    "failed_scout_count": 0,
+                    "expectation_passed": True,
+                    "source_validation_statuses": {},
+                    "scout_usage_by_family": {},
+                    "scout_roi_by_lane": {
+                        "key_line_hunter:direct": {
+                            "scout_count": 1,
+                            "useful_result_count": 1,
+                            "card_candidate_count": 1,
+                            "accepted_card_count": 1,
+                            "evidence_candidate_count": 0,
+                            "accepted_evidence_count": 0,
+                            "blocker_count": 0,
+                            "late_useful_result_count": 0,
+                            "unobserved_count": 0,
+                            "error_count": 0,
+                            "timeout_count": 0,
+                            "total_tokens": 100,
+                            "prompt_cache_hit_tokens": 40,
+                            "prompt_cache_miss_tokens": 60,
+                        }
+                    },
+                    "scout_roi_by_family": {},
+                },
+                {
+                    "case_id": "roi-b",
+                    "available": True,
+                    "configured_scout_count": 2,
+                    "observed_scout_result_count": 2,
+                    "failed_scout_count": 1,
+                    "expectation_passed": True,
+                    "source_validation_statuses": {},
+                    "scout_usage_by_family": {},
+                    "scout_roi_by_lane": {
+                        "key_line_hunter:direct": {
+                            "scout_count": 1,
+                            "useful_result_count": 0,
+                            "card_candidate_count": 0,
+                            "accepted_card_count": 0,
+                            "evidence_candidate_count": 0,
+                            "accepted_evidence_count": 0,
+                            "blocker_count": 0,
+                            "late_useful_result_count": 0,
+                            "unobserved_count": 0,
+                            "error_count": 1,
+                            "timeout_count": 1,
+                            "total_tokens": 0,
+                            "prompt_cache_hit_tokens": 0,
+                            "prompt_cache_miss_tokens": 0,
+                        }
+                    },
+                    "scout_roi_by_family": {},
+                },
+            ]
+        )
+
+        lane = metrics["scout_roi_by_lane"]["key_line_hunter:direct"]
+
+        self.assertEqual(lane["scout_count"], 2)
+        self.assertEqual(lane["useful_result_count"], 1)
+        self.assertEqual(lane["timeout_count"], 1)
+        self.assertEqual(lane["useful_result_rate"], 0.5)
+        self.assertEqual(lane["card_candidate_rate"], 0.5)
+        self.assertEqual(lane["classification"], "keep")
+        self.assertEqual(metrics["scout_roi_classification_counts"]["keep"], 1)
+
     def test_case_summary_and_metrics_report_guard_coverage(self) -> None:
         guard_coverage = {
             "status": "incomplete",

@@ -240,9 +240,17 @@ case pack. The sweep ranks quality gates, case pass rate, false evidence, and
 source-ref health before latency, so it does not accidentally choose the fastest
 configuration that degrades recall. Its `analysis` block is the first place to
 read after a large run: it names foreground and detached recommendations, gate
-failure counts, scout error buckets, and source-ref pressure without exposing
-case rows. Scout prompts keep `output_contract` as a compact schema and add
-family-aware output budgets so Flash is not asked to fill a large template.
+failure counts, scout error buckets, scout ROI classifications, and source-ref
+pressure without exposing case rows. Benchmark and sweep metrics also expose
+public-safe `scout_roi_by_lane` and `scout_roi_by_family` tables: useful
+results, candidate-card proposals, accepted cards, accepted source-validated
+evidence, guard/blocker contribution, late-useful results after the
+useful-quorum cutoff, unobserved lanes, timeout/error rates, and token/cache
+cost proxies when provider usage fields are available. Treat
+`keep|watch|diagnostic_only` as human tuning evidence, not a public
+product-quality claim and not an automatic lane-deletion policy. Scout prompts
+keep `output_contract` as a compact schema and add family-aware output budgets
+so Flash is not asked to fill a large template.
 `--max-tokens` remains an explicit diagnostic override, not the default way to
 control scout length. Current public-corpus live smoke points to 15s and 20-50
 workers as the first real tuning band for quorum-first evaluation; 8s

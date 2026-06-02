@@ -34,6 +34,38 @@ class WarmAmbientSweepTests(unittest.TestCase):
                     "avg_elapsed_ms": float(kwargs["timeout"]) * 10,
                     "max_elapsed_ms": float(kwargs["timeout"]) * 10,
                     "scout_error_kinds": {},
+                    "scout_roi_by_family": {
+                        "key_line_hunter": {
+                            "classification": "keep",
+                            "useful_result_rate": 1.0,
+                            "card_candidate_rate": 1.0,
+                            "blocker_rate": 0.0,
+                            "error_rate": 0.0,
+                            "total_tokens": 120,
+                        },
+                        "evidence_gap_sentinel": {
+                            "classification": "diagnostic_only",
+                            "useful_result_rate": 1.0,
+                            "card_candidate_rate": 0.0,
+                            "blocker_rate": 1.0,
+                            "error_rate": 0.0,
+                            "total_tokens": 40,
+                        },
+                    },
+                    "scout_roi_by_lane": {
+                        "key_line_hunter:direct": {
+                            "classification": "keep",
+                            "useful_result_rate": 1.0,
+                            "card_candidate_rate": 1.0,
+                            "evidence_candidate_rate": 0.0,
+                            "blocker_rate": 0.0,
+                            "late_useful_result_rate": 0.0,
+                            "error_rate": 0.0,
+                            "timeout_rate": 0.0,
+                            "total_tokens": 120,
+                        }
+                    },
+                    "scout_roi_classification_counts": {"keep": 1, "diagnostic_only": 1},
                 },
                 "quality_gates": {"passed": True, "failed": []},
                 "cases": [{"prompt": "raw private prompt should not escape"}],
@@ -74,6 +106,15 @@ class WarmAmbientSweepTests(unittest.TestCase):
         self.assertTrue(all("cases" not in run for run in payload["runs"]))
         self.assertFalse(payload["privacy_boundary"]["raw_prompt_emitted"])
         self.assertFalse(payload["privacy_boundary"]["raw_cases_emitted"])
+        self.assertEqual(
+            payload["runs"][0]["metrics"]["scout_roi_by_family"]["key_line_hunter"]["classification"],
+            "keep",
+        )
+        self.assertEqual(
+            payload["runs"][0]["metrics"]["scout_roi_by_family"]["evidence_gap_sentinel"]["classification"],
+            "diagnostic_only",
+        )
+        self.assertEqual(payload["analysis"]["scout_roi"]["classification_counts"]["keep"], 8)
         self.assertNotIn("raw private prompt", raw)
         self.assertIsNone(calls[0]["max_tokens"])
 

@@ -552,12 +552,22 @@ The first slice should stay small but real:
    safe miss is better than an unsupported citation. The benchmark reports
    `trace_fallback_card_count` so live sweeps can distinguish model recall from
    deterministic prior-trace fallback coverage.
+   The benchmark also reports public-safe per-lane and per-family ROI tables:
+   useful-result rate, candidate-card proposal rate, accepted-card rate,
+   accepted-evidence rate after source validation, guard/blocker contribution,
+   late-useful results after the useful-quorum cutoff, unobserved lanes,
+   timeout/error rate, and token/cache cost proxies when provider usage fields
+   are available. These tables separate recall-card contribution from
+   guard/blocker contribution. Their `keep|watch|diagnostic_only`
+   classification is tuning evidence for human review, not a product-quality
+   claim and not an automatic lane-deletion policy.
    `benchmark_warm_ambient_sweep.py` now compares quorum-first vs. wait-all,
    worker caps, and timeout values over the same private case pack, ranking
    quality gates and source health before latency. Its sanitized `analysis`
    block gives foreground/detached recommendations plus gate failures, scout
-   error buckets, and source-ref pressure so a wide run can directly inform the
-   next tuning pass. Sweep defaults now keep `max_tokens=None` and use 50
+   error buckets, scout ROI classifications, and source-ref pressure so a wide
+   run can directly inform the next tuning pass. Sweep defaults now keep
+   `max_tokens=None` and use 50
    workers to match the 10x5 Flash lane design; lower worker lists are explicit
    rate-limit diagnostics, not the quality baseline. Strict labeled evaluation
    should read the three focused packs separately: source-ref support for

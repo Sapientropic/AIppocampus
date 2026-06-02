@@ -83,6 +83,10 @@ from aippocampus_runtime.warm_ambient.diagnostics import (
 )
 from aippocampus_runtime.warm_ambient.prompting import OUTPUT_BUDGET_RULES as OUTPUT_BUDGET_RULES
 from aippocampus_runtime.warm_ambient.prompting import SYSTEM_PROMPT, scout_prompt
+from aippocampus_runtime.warm_ambient.scout_attribution import (
+    merge_scout_origins,
+    with_scout_origin,
+)
 from aippocampus_runtime.warm_ambient.scout_profiles import (  # noqa: F401
     DEFAULT_SCOUTS,
     FAMILY_LENS_TASKS,
@@ -380,7 +384,7 @@ def _candidate_from_theme(theme: str, row: dict[str, Any]) -> dict[str, Any]:
         "matched_terms": row.get("query_aliases") or [],
         "source_refs": [],
     }
-    return with_card_provenance(card, WARM_SCOUT_PROPOSAL)
+    return with_scout_origin(with_card_provenance(card, WARM_SCOUT_PROPOSAL), row=row)
 
 
 def _clean_candidate(
@@ -463,7 +467,7 @@ def _clean_candidate(
             160,
         ),
     }
-    return with_card_provenance(card, WARM_SCOUT_PROPOSAL)
+    return with_scout_origin(with_card_provenance(card, WARM_SCOUT_PROPOSAL), row=row)
 
 
 def parse_scout_output(raw: dict[str, Any], scout: str) -> dict[str, Any]:
@@ -670,6 +674,11 @@ def run_scout_batch(
     def guard_coverage_complete() -> bool:
         return not guard_coverage_incomplete(guard_coverage_status(scouts=scouts, rows=rows))
 
+    def annotate_arrival(row: dict[str, Any]) -> dict[str, Any]:
+        row["observed_index"] = received + 1
+        row["completed_after_quorum_cutoff"] = useful_count >= max(1, quorum)
+        return row
+
     def execute_scout(scout: str) -> dict[str, Any]:
         try:
             return run_scout(
@@ -698,7 +707,7 @@ def run_scout_batch(
     # reuse the now-persisted shared context. Foreground callers keep this at 0.
     for scout in warmup_scouts:
         row = execute_scout(scout)
-        rows.append(row)
+        rows.append(annotate_arrival(row))
         received += 1
         if row.get("ok") and row.get("useful"):
             useful_count += 1
@@ -744,8 +753,8 @@ def run_scout_batch(
             except queue.Empty:
                 end_reason = "timeout"
                 break
+            rows.append(annotate_arrival(row))
             received += 1
-            rows.append(row)
             if row.get("ok") and row.get("useful"):
                 useful_count += 1
             if (
@@ -833,6 +842,7 @@ def _merge_card(existing: dict[str, Any], incoming: dict[str, Any]) -> None:
     for field in ("key_line", "nudge", "expand_if"):
         if not existing.get(field) and incoming.get(field):
             existing[field] = incoming[field]
+    merge_scout_origins(existing, incoming)
 
 
 def merge_scouts(
@@ -1463,8 +1473,10 @@ def run_warm_ambient_recall(
         "reason": "",
         "quorum_met": quorum_met,
         "useful_signal_quorum_met": useful_signal_quorum_met,
+        "quorum": runtime_config.quorum,
         "batch_end_reason": batch_end_reason,
         "scout_count": len(scout_names),
+        "configured_scouts": list(scout_names),
         "max_workers": resolved_max_workers or len(scout_names),
         "prefix_cache_warmup_scout_count": max(
             0, min(int(runtime_config.prefix_cache_warmup_scouts or 0), len(scout_names))
