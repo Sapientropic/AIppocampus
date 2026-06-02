@@ -204,6 +204,24 @@ route handle to `recall_deepen`, and reports counts, field names,
 stale/wrong-handle status, and the privacy boundary. It does not echo the cue
 or print source-window text.
 
+For optional external-model work, check whether the route's API-key environment
+variable is visible to the current process and a child process:
+
+```sh
+aippocampus doctor provider --json
+```
+
+This is a visibility diagnostic, not a credential-store reader. A key can exist
+in a `.env` file, password manager, shell profile, or another project while the
+Codex hook process still cannot see `DEEPSEEK_API_KEY` or the selected
+OpenAI-compatible key variable. The doctor prints variable names and booleans,
+never key values or base URL values. It is a presence-only check: it does not
+read or validate the key value, so it cannot prove the key is non-empty, correct,
+or unexpired. It checks the process running the command and a child process it
+starts; it does not prove what a previously started Codex Desktop hook process
+could see. Use `--provider-env-var <NAME>` when you need to test a local route
+override without changing the route configuration.
+
 Direct script commands remain supported when the facade is not installed:
 
 ```sh
