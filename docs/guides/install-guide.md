@@ -192,6 +192,18 @@ The MCP layer is read-mostly. It exposes clean-source and registry tools,
 progressive recall navigation through `recall_context` / `recall_deepen`, plus
 explicit `register_thread` and `sync_status`.
 
+For a human-facing progressive recall wiring check without hand-copying MCP
+route handles, run:
+
+```sh
+aippocampus smoke recall-funnel "remembered phrase or project cue" --json
+```
+
+The smoke calls `recall_context`, passes the first reopenable `recall_deepen`
+route handle to `recall_deepen`, and reports counts, field names,
+stale/wrong-handle status, and the privacy boundary. It does not echo the cue
+or print source-window text.
+
 Direct script commands remain supported when the facade is not installed:
 
 ```sh

@@ -48,6 +48,7 @@ COMMANDS = {
     "search": CommandSpec("search_clean_source.py", "aippocampus_runtime.source.search"),
     "export": CommandSpec("export_bundle.py", "aippocampus_runtime.artifacts.export_bundle"),
     "import": CommandSpec("import_bundle.py", "aippocampus_runtime.artifacts.import_bundle"),
+    "smoke": CommandSpec("recall_funnel_smoke.py", "aippocampus_runtime.ops.recall_funnel_smoke"),
     "storage": CommandSpec(
         "storage_governance.py",
         "aippocampus_runtime.ops.storage_governance",
@@ -61,6 +62,7 @@ SCRIPT_MODULES = {
     "registry.py": "aippocampus_runtime.registry.api",
     "sync_bundle.py": "aippocampus_runtime.sync.bundle",
     "sync_object_storage.py": "aippocampus_runtime.sync.object_storage.cli",
+    "recall_funnel_smoke.py": "aippocampus_runtime.ops.recall_funnel_smoke",
     "storage_governance.py": "aippocampus_runtime.ops.storage_governance",
     "install_aippocampus_prompt_hook.py": "aippocampus_runtime.hooks.install_prompt",
     "install_aippocampus_lifecycle_hook.py": "aippocampus_runtime.hooks.install_lifecycle",
@@ -277,6 +279,7 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  import              Import a portable AIppocampus bundle", file=target)
     print("  import conversation Register an explicit provider transcript", file=target)
     print("  mcp list-tools      List MCP tool schemas", file=target)
+    print("  smoke recall-funnel Run a progressive recall funnel diagnostic", file=target)
     print("  storage gc          Plan storage cleanup from existing evidence", file=target)
     print("  sync                Local-folder sync status/push/pull/repair", file=target)
     print("  object-sync         Object-storage sync status/push/pull/repair", file=target)
