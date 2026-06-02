@@ -175,13 +175,13 @@ def main(argv: list[str] | None = None) -> int:
                 run_text([sys.executable, str(SCRIPT_DIR / "build_index.py"), "--cwd", str(cwd)])
                 health = run_json(health_cmd)
         else:
-            code, checkpoint, stdout, stderr = run_json_checked(cmd)
-            if code == 0 and checkpoint is not None:
+            code, checkpoint_payload, stdout, stderr = run_json_checked(cmd)
+            if code == 0 and checkpoint_payload is not None:
                 action_results.append(
                     {
                         **command_result("checkpoint", cmd, code),
                         "appended": args.append_checkpoint,
-                        "result": checkpoint,
+                        "result": checkpoint_payload,
                     }
                 )
                 code, health_payload, health_stdout, health_stderr = run_json_checked(health_cmd)
@@ -265,10 +265,13 @@ def main(argv: list[str] | None = None) -> int:
             action_results.append({"id": "build_cognitive_map", "result": cognitive_map})
             health = run_json(health_cmd)
         else:
-            code, cognitive_map, stdout, stderr = run_json_checked(cmd)
-            if code == 0 and cognitive_map is not None:
+            code, cognitive_map_payload, stdout, stderr = run_json_checked(cmd)
+            if code == 0 and cognitive_map_payload is not None:
                 action_results.append(
-                    {**command_result("build_cognitive_map", cmd, code), "result": cognitive_map}
+                    {
+                        **command_result("build_cognitive_map", cmd, code),
+                        "result": cognitive_map_payload,
+                    }
                 )
                 code, health_payload, health_stdout, health_stderr = run_json_checked(health_cmd)
                 if code == 0 and health_payload is not None:
@@ -303,10 +306,13 @@ def main(argv: list[str] | None = None) -> int:
             action_results.append({"id": "prepare_graphify_corpus", "result": graphify})
             health = run_json(health_cmd)
         else:
-            code, graphify, stdout, stderr = run_json_checked(cmd)
-            if code == 0 and graphify is not None:
+            code, graphify_payload, stdout, stderr = run_json_checked(cmd)
+            if code == 0 and graphify_payload is not None:
                 action_results.append(
-                    {**command_result("prepare_graphify_corpus", cmd, code), "result": graphify}
+                    {
+                        **command_result("prepare_graphify_corpus", cmd, code),
+                        "result": graphify_payload,
+                    }
                 )
                 code, health_payload, health_stdout, health_stderr = run_json_checked(health_cmd)
                 if code == 0 and health_payload is not None:

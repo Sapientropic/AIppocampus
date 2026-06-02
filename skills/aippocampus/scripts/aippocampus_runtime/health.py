@@ -337,7 +337,8 @@ def registry_health_report(
         segments_manifest = (
             load_json_fail_open(thread_dir / "segments" / "manifest.json") if thread_dir else {}
         )
-        health = entry.get("health") if isinstance(entry.get("health"), dict) else {}
+        raw_health = entry.get("health")
+        health: dict[str, Any] = raw_health if isinstance(raw_health, dict) else {}
         actions = [
             action_item
             for action_item in health.get("recommended_actions") or []
