@@ -100,6 +100,15 @@ Use microcircuits for:
 Microcircuits propose candidate neighborhoods. They do not decide truth. A high
 cosine score means "inspect this relation", not "these are the same concern."
 
+Candidate generation is still influence. If a nearest-neighbor, graph, scope,
+or reranking microcircuit only exposes the top few rows to a deterministic
+verifier, then rows outside that budget never reach the truth gate. Benchmark
+and debug surfaces that have a known source ref should therefore report
+candidate-space diagnostics: whether the gold source entered the raw candidate
+pool, whether it was pruned by `top_k` / threshold / budget / source filtering,
+and whether the verifier actually saw it. These diagnostics explain misses;
+they do not upgrade candidate scores into truth.
+
 ## Semantic Subregions
 
 A fast LLM is not a cell. It is a semantic subregion.

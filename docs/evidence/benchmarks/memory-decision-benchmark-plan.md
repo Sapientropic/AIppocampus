@@ -1159,6 +1159,15 @@ Metrics:
   source
 - sanitized failure taxonomy for selected source-evidence misses, including
   scope/query-term split, rank-below-budget, and candidate-scored-too-low cases
+- candidate-space diagnostics for source-backed gold cases: raw candidate pool
+  size, candidate pool limit, whether the gold source entered the raw pool,
+  whether it survived the truncated verifier-visible pool, the coarse pruning
+  reason, and the resulting `failure_class`. These fields are diagnostic
+  counts/ranks only; they must not include raw prompt text, snippets, local
+  paths, message ids, thread keys, or source-ref details.
+  In the selected source-evidence smoke, `verifier_seen_gold` means the
+  source-ref / expected-ref check could inspect the gold candidate; it is not an
+  answer-generation verifier and must not support answer-quality claims.
 
 Embedding similarity may be logged as an analysis column, but it must not define
 the expected label or pass/fail boundary.

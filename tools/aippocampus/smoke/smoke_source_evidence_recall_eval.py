@@ -411,6 +411,58 @@ def search_expected_evidence_registry(
     return {"passed": False, "rank": None, "warning_count": warnings}
 
 
+def candidate_space_diagnostics(
+    scored_hits: list[dict[str, Any]],
+    *,
+    top_k: int,
+) -> dict[str, Any]:
+    """Summarize candidate visibility without exposing source identity.
+
+    Candidate-space diagnostics are benchmark/debug evidence, not recall truth.
+    Keep them to counts, ranks, and coarse decisions so private message ids,
+    thread keys, snippets, paths, and source refs never leave the smoke report.
+    """
+
+    pool_limit = max(1, int(top_k))
+    gold_raw_rank: int | None = None
+    for rank, hit in enumerate(scored_hits, start=1):
+        if hit.get("matched_expected"):
+            gold_raw_rank = rank
+            break
+    gold_truncated_rank: int | None = None
+    for rank, hit in enumerate(scored_hits[:pool_limit], start=1):
+        if hit.get("matched_expected"):
+            gold_truncated_rank = rank
+            break
+    gold_in_raw = gold_raw_rank is not None
+    gold_in_truncated = gold_truncated_rank is not None
+    if gold_in_truncated:
+        gold_pruned_by = "none"
+    elif gold_in_raw:
+        gold_pruned_by = "top_k"
+    else:
+        gold_pruned_by = "unsupported"
+    if not scored_hits:
+        winner_support_level = "no_candidate"
+    elif scored_hits[0].get("matched_expected"):
+        winner_support_level = "expected_source"
+    else:
+        winner_support_level = "candidate_without_expected_source"
+    verifier_seen_gold = gold_in_truncated
+    return {
+        "candidate_pool_size": len(scored_hits),
+        "candidate_pool_limit": pool_limit,
+        "gold_in_raw_candidate_pool": gold_in_raw,
+        "gold_raw_rank": gold_raw_rank,
+        "gold_in_truncated_candidate_pool": gold_in_truncated,
+        "gold_truncated_rank": gold_truncated_rank,
+        "gold_pruned_by": gold_pruned_by,
+        "verifier_seen_gold": verifier_seen_gold,
+        "verifier_decision_for_gold": "pending" if verifier_seen_gold else "not_seen",
+        "winner_support_level": winner_support_level,
+    }
+
+
 def search_expected_evidence_dynamic_source(
     corpus: list[dict[str, Any]],
     case: dict[str, Any],
@@ -467,14 +519,28 @@ def search_expected_evidence_dynamic_source(
             int(item.get("source_line") or 0),
         )
     )
+    candidate_space = candidate_space_diagnostics(scored_hits, top_k=top_k)
     for rank, hit in enumerate(scored_hits[: max(1, int(top_k))], start=1):
         if hit.get("matched_expected"):
-            return {"passed": True, "rank": rank, "warning_count": 0}
-    return {"passed": False, "rank": None, "warning_count": 0}
+            candidate_space["verifier_decision_for_gold"] = "accepted"
+            return {
+                "passed": True,
+                "rank": rank,
+                "warning_count": 0,
+                "candidate_space": candidate_space,
+            }
+    if candidate_space["verifier_seen_gold"]:
+        candidate_space["verifier_decision_for_gold"] = "rejected"
+    return {
+        "passed": False,
+        "rank": None,
+        "warning_count": 0,
+        "candidate_space": candidate_space,
+    }
 
 
 def sanitized_case_result(case: dict[str, Any], search_result: dict[str, Any]) -> dict[str, Any]:
-    return {
+    out = {
         "case_id": case.get("case_id"),
         "prompt_kind": case.get("prompt_kind"),
         "scope_labels": case.get("scope_labels") or [],
@@ -482,6 +548,10 @@ def sanitized_case_result(case: dict[str, Any], search_result: dict[str, Any]) -
         "passed": bool(search_result.get("passed")),
         "rank": search_result.get("rank"),
     }
+    candidate_space = search_result.get("candidate_space")
+    if isinstance(candidate_space, dict):
+        out["candidate_space"] = candidate_space
+    return out
 
 
 def expected_rows_for_case(
@@ -530,6 +600,30 @@ def classify_failure(
     return "no_retrievable_signal_on_expected_source"
 
 
+def candidate_failure_class(
+    category: str,
+    candidate_space: dict[str, Any],
+    *,
+    result_passed: bool,
+) -> str:
+    if result_passed:
+        return "success"
+    if category == "expected_source_missing_from_corpus":
+        return "source_reopen_failed"
+    if not candidate_space.get("gold_in_raw_candidate_pool"):
+        return "candidate_not_generated"
+    if not candidate_space.get("gold_in_truncated_candidate_pool"):
+        return "candidate_pruned_before_verifier"
+    if candidate_space.get("verifier_seen_gold"):
+        # This smoke runner's verifier is source-ref visibility/expected-ref
+        # matching, not answer generation. A failed result with visible gold
+        # means the diagnostic layer should treat the miss as verifier-side
+        # source-evidence rejection, without claiming anything about final
+        # answer quality.
+        return "candidate_seen_rejected_wrongly"
+    return "wrong_candidate_accepted"
+
+
 def source_evidence_failure_diagnostics(
     *,
     cases: list[dict[str, Any]],
@@ -561,18 +655,31 @@ def source_evidence_failure_diagnostics(
         "no_retrievable_signal_on_expected_source": 0,
         "not_diagnosed_for_ranking": 0,
     }
+    failure_classes = {
+        "candidate_not_generated": 0,
+        "candidate_pruned_before_verifier": 0,
+        "candidate_seen_rejected_correctly": 0,
+        "candidate_seen_rejected_wrongly": 0,
+        "wrong_candidate_accepted": 0,
+        "source_reopen_failed": 0,
+        "success": 0,
+        "unsupported": 0,
+    }
     failed_cases: list[dict[str, Any]] = []
     if ranking != "dynamic_source" or not corpus:
         categories["not_diagnosed_for_ranking"] = len(failed)
+        failure_classes["unsupported"] = len(failed)
         return {
             "failed_count": len(failed),
             "top_k": int(top_k),
             "extended_top_k": int(extended_top_k),
             "categories": categories,
+            "failure_classes": failure_classes,
             "failed_cases": [
                 {
                     "case_id": case.get("case_id"),
                     "category": "not_diagnosed_for_ranking",
+                    "failure_class": "unsupported",
                 }
                 for case, _ in failed
             ],
@@ -604,6 +711,12 @@ def source_evidence_failure_diagnostics(
             case,
             top_k=max(int(top_k), int(extended_top_k)),
         )
+        top_k_result = (
+            result
+            if isinstance(result.get("candidate_space"), dict)
+            else search_expected_evidence_dynamic_source(corpus, case, top_k=int(top_k))
+        )
+        candidate_space = dict_value(top_k_result.get("candidate_space"))
         extended_rank = extended.get("rank")
         category = classify_failure(
             expected_rows_found=len(expected_rows),
@@ -613,12 +726,27 @@ def source_evidence_failure_diagnostics(
             extended_rank=extended_rank,
         )
         categories[category] = categories.get(category, 0) + 1
+        failure_class = candidate_failure_class(
+            category,
+            candidate_space,
+            result_passed=bool(result.get("passed")),
+        )
+        if (
+            failure_class == "candidate_not_generated"
+            and category == "expected_match_missing_scope_labels"
+        ):
+            candidate_space["gold_pruned_by"] = "source_filter"
+        failure_classes[failure_class] = failure_classes.get(failure_class, 0) + 1
+        if failure_class == "candidate_seen_rejected_wrongly":
+            candidate_space["verifier_decision_for_gold"] = "rejected"
         failed_cases.append(
             {
                 "case_id": case.get("case_id"),
                 "category": category,
+                "failure_class": failure_class,
                 "rank": result.get("rank"),
                 "extended_rank": extended_rank,
+                "candidate_space": candidate_space,
                 "expected_rows_found": len(expected_rows),
                 "expected_scope_match_rows": scope_match_rows,
                 "expected_query_overlap_rows": query_overlap_rows,
@@ -634,6 +762,7 @@ def source_evidence_failure_diagnostics(
         "top_k": int(top_k),
         "extended_top_k": int(extended_top_k),
         "categories": categories,
+        "failure_classes": failure_classes,
         "failed_cases": failed_cases,
     }
 

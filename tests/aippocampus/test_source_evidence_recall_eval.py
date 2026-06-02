@@ -399,6 +399,158 @@ class SourceEvidenceRecallEvalTests(unittest.TestCase):
         self.assertNotIn("lighthouse", rendered)
         self.assertNotIn("msg_user", rendered)
 
+    def test_candidate_space_diagnostics_classify_generation_pruning_and_verifier_failures(
+        self,
+    ) -> None:
+        base_case = {
+            "case_id": "evidence:test-candidates",
+            "query_terms": ["lighthouse"],
+            "source_terms": ["lighthouse"],
+            "scope_labels": ["personal_reflection"],
+            "expected": {
+                "thread_key": "session:life",
+                "message_id": "msg_gold",
+                "turn_id": "turn_gold",
+            },
+        }
+        not_generated_corpus = [
+            {
+                "thread_key": "session:life",
+                "text_low": "plain gold source without cue",
+                "entry": {},
+                "message": {
+                    "message_id": "msg_gold",
+                    "turn_id": "turn_gold",
+                    "scope_labels": ["personal_reflection"],
+                    "text": "Plain gold source without cue",
+                },
+            }
+        ]
+        pruned_corpus = [
+            {
+                "thread_key": "session:life",
+                "text_low": "lighthouse lighthouse lighthouse decoy",
+                "entry": {},
+                "message": {
+                    "message_id": "msg_decoy",
+                    "turn_id": "turn_decoy",
+                    "scope_labels": ["personal_reflection"],
+                    "source_line": 1,
+                    "text": "lighthouse lighthouse lighthouse decoy",
+                },
+            },
+            {
+                "thread_key": "session:life",
+                "text_low": "lighthouse gold",
+                "entry": {},
+                "message": {
+                    "message_id": "msg_gold",
+                    "turn_id": "turn_gold",
+                    "scope_labels": ["personal_reflection"],
+                    "source_line": 2,
+                    "text": "lighthouse gold",
+                },
+            },
+        ]
+        verifier_corpus = [
+            {
+                "thread_key": "session:life",
+                "text_low": "lighthouse gold",
+                "entry": {},
+                "message": {
+                    "message_id": "msg_gold",
+                    "turn_id": "turn_gold",
+                    "scope_labels": ["personal_reflection"],
+                    "source_line": 1,
+                    "text": "lighthouse gold",
+                },
+            }
+        ]
+
+        not_generated = recall_eval.search_expected_evidence_dynamic_source(
+            not_generated_corpus, base_case, top_k=1
+        )
+        pruned = recall_eval.search_expected_evidence_dynamic_source(
+            pruned_corpus, base_case, top_k=1
+        )
+        verifier_seen = recall_eval.search_expected_evidence_dynamic_source(
+            verifier_corpus, base_case, top_k=1
+        )
+        verifier_failed = {
+            **verifier_seen,
+            "passed": False,
+            "rank": None,
+        }
+
+        not_generated_diagnostics = recall_eval.source_evidence_failure_diagnostics(
+            cases=[base_case],
+            results=[(base_case, not_generated)],
+            corpus=not_generated_corpus,
+            top_k=1,
+            ranking="dynamic_source",
+        )
+        pruned_diagnostics = recall_eval.source_evidence_failure_diagnostics(
+            cases=[base_case],
+            results=[(base_case, pruned)],
+            corpus=pruned_corpus,
+            top_k=1,
+            ranking="dynamic_source",
+        )
+        verifier_diagnostics = recall_eval.source_evidence_failure_diagnostics(
+            cases=[base_case],
+            results=[(base_case, verifier_failed)],
+            corpus=verifier_corpus,
+            top_k=1,
+            ranking="dynamic_source",
+        )
+
+        self.assertEqual(
+            not_generated_diagnostics["failed_cases"][0]["failure_class"],
+            "candidate_not_generated",
+        )
+        self.assertEqual(
+            not_generated_diagnostics["failed_cases"][0]["candidate_space"][
+                "gold_in_raw_candidate_pool"
+            ],
+            False,
+        )
+        self.assertEqual(
+            pruned_diagnostics["failed_cases"][0]["failure_class"],
+            "candidate_pruned_before_verifier",
+        )
+        self.assertEqual(
+            pruned_diagnostics["failed_cases"][0]["candidate_space"]["gold_raw_rank"],
+            2,
+        )
+        self.assertEqual(
+            pruned_diagnostics["failed_cases"][0]["candidate_space"]["gold_pruned_by"],
+            "top_k",
+        )
+        self.assertEqual(
+            verifier_diagnostics["failed_cases"][0]["failure_class"],
+            "candidate_seen_rejected_wrongly",
+        )
+        self.assertEqual(
+            verifier_diagnostics["failed_cases"][0]["candidate_space"][
+                "verifier_seen_gold"
+            ],
+            True,
+        )
+        self.assertEqual(
+            verifier_diagnostics["failed_cases"][0]["candidate_space"][
+                "verifier_decision_for_gold"
+            ],
+            "rejected",
+        )
+
+        rendered = json.dumps(
+            [not_generated_diagnostics, pruned_diagnostics, verifier_diagnostics],
+            ensure_ascii=False,
+        )
+        self.assertNotIn("lighthouse", rendered)
+        self.assertNotIn("msg_gold", rendered)
+        self.assertNotIn("msg_decoy", rendered)
+
 
 if __name__ == "__main__":
     unittest.main()
