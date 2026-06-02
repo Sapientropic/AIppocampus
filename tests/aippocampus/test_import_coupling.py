@@ -861,20 +861,18 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(subconscious_jobs.run_one_job, jobs.run_one_job)
         self.assertIs(subconscious_jobs.main, jobs.main)
 
-    def test_dream_delivery_policy_has_package_owner_and_compat_shim(self) -> None:
-        import dream_delivery_policy
+    def test_dream_delivery_policy_uses_package_owner_only(self) -> None:
         from aippocampus_runtime.dream import delivery_policy
 
         package_paths = [
             SCRIPTS / "aippocampus_runtime" / "dream" / "__init__.py",
             SCRIPTS / "aippocampus_runtime" / "dream" / "delivery_policy.py",
         ]
-        shim_path = SCRIPTS / "dream_delivery_policy.py"
 
         for path in package_paths:
             self.assertTrue(path.exists(), path)
-        self.assertTrue(shim_path.exists(), shim_path)
-        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+        self.assertFalse((SCRIPTS / "dream_delivery_policy.py").exists())
+        self.assertNotIn("dream_delivery_policy", pyproject_py_modules())
 
         edges = same_dir_import_edges(top_level_only=True)
         prompt_hook_source = (
@@ -883,14 +881,8 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIn("aippocampus_runtime.dream import delivery_policy", prompt_hook_source)
         self.assertNotIn("dream_delivery_policy", edges["aippocampus_runtime.hooks.prompt"])
 
-        self.assertIs(
-            dream_delivery_policy.prepare_dream_delivery,
-            delivery_policy.prepare_dream_delivery,
-        )
-        self.assertIs(
-            dream_delivery_policy.add_dream_delivery_arguments,
-            delivery_policy.add_dream_delivery_arguments,
-        )
+        self.assertTrue(callable(delivery_policy.prepare_dream_delivery))
+        self.assertTrue(callable(delivery_policy.add_dream_delivery_arguments))
 
     def test_codex_hooks_have_package_owner_and_compat_shims(self) -> None:
         import aippocampus_lifecycle_hook
@@ -1016,16 +1008,14 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(onboard_status.registry_stats, status.registry_stats)
         self.assertIs(onboard_status.sqlite_consistency_issues, status.sqlite_consistency_issues)
 
-    def test_dream_worker_contract_has_package_owner_and_compat_shim(self) -> None:
-        import dream_worker_contract
+    def test_dream_worker_contract_uses_package_owner_only(self) -> None:
         from aippocampus_runtime.dream import worker_contract
 
         package_path = SCRIPTS / "aippocampus_runtime" / "dream" / "worker_contract.py"
-        shim_path = SCRIPTS / "dream_worker_contract.py"
 
         self.assertTrue(package_path.exists(), package_path)
-        self.assertTrue(shim_path.exists(), shim_path)
-        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+        self.assertFalse((SCRIPTS / "dream_worker_contract.py").exists())
+        self.assertNotIn("dream_worker_contract", pyproject_py_modules())
 
         edges = same_dir_import_edges(top_level_only=True)
         self.assertIn(
@@ -1037,15 +1027,9 @@ class ImportCouplingTests(unittest.TestCase):
             edges["aippocampus_runtime.dream.worker"],
         )
 
-        self.assertEqual(dream_worker_contract.PROMPT_VERSION, worker_contract.PROMPT_VERSION)
-        self.assertIs(
-            dream_worker_contract.stable_worker_contract,
-            worker_contract.stable_worker_contract,
-        )
-        self.assertIs(
-            dream_worker_contract.variable_run_directive,
-            worker_contract.variable_run_directive,
-        )
+        self.assertIsInstance(worker_contract.PROMPT_VERSION, str)
+        self.assertTrue(callable(worker_contract.stable_worker_contract))
+        self.assertTrue(callable(worker_contract.variable_run_directive))
 
     def test_dream_precision_policy_has_package_owner_and_compat_shim(self) -> None:
         import dream_precision_policy
@@ -1125,7 +1109,9 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(dream_queue.public_queue_summary, queue.public_queue_summary)
         self.assertIs(dream_queue.main, queue.main)
 
-    def test_dream_core_helpers_have_package_owner_and_compat_shims(self) -> None:
+    def test_dream_core_helpers_have_package_owner_and_remaining_compat_shims(
+        self,
+    ) -> None:
         package_paths = [
             SCRIPTS / "aippocampus_runtime" / "dream" / "input_pack.py",
             SCRIPTS / "aippocampus_runtime" / "dream" / "worker.py",
@@ -1134,17 +1120,17 @@ class ImportCouplingTests(unittest.TestCase):
         shim_paths = [
             SCRIPTS / "dream_input_pack.py",
             SCRIPTS / "dream_worker.py",
-            SCRIPTS / "dream_working_memory.py",
         ]
 
         for path in package_paths + shim_paths:
             self.assertTrue(path.exists(), path)
         for path in shim_paths:
             self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+        self.assertFalse((SCRIPTS / "dream_working_memory.py").exists())
+        self.assertNotIn("dream_working_memory", pyproject_py_modules())
 
         import dream_input_pack
         import dream_worker
-        import dream_working_memory
         from aippocampus_runtime.dream import input_pack, worker, working_memory
 
         edges = same_dir_import_edges(top_level_only=True)
@@ -1186,10 +1172,7 @@ class ImportCouplingTests(unittest.TestCase):
             dream_worker.run_model_backed_dream_worker,
             worker.run_model_backed_dream_worker,
         )
-        self.assertIs(
-            dream_working_memory.background_adjudicate_dream_findings,
-            working_memory.background_adjudicate_dream_findings,
-        )
+        self.assertTrue(callable(working_memory.background_adjudicate_dream_findings))
 
     def test_dream_one_sidedness_has_package_owner_and_compat_shim(self) -> None:
         import dream_one_sidedness
