@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import json
 import sys
+import tempfile
 import unittest
+from io import StringIO
 from pathlib import Path
 from unittest import mock
 
@@ -89,6 +92,84 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertEqual(payload["tracked_question_count"], 1)
         self.assertNotIn("lifecycle", payload)
         self.assertNotIn("longest_running_open_question", payload)
+
+    def test_activity_diagnostics_are_advisory_not_threshold_replacements(self) -> None:
+        self.assertEqual(
+            health.activity_class(
+                message_delta=30,
+                byte_delta=0,
+                stale_age_seconds=300,
+                max_stale_messages=25,
+                max_stale_bytes=5_000,
+            ),
+            "high_activity",
+        )
+        self.assertEqual(
+            health.activity_class(
+                message_delta=2,
+                byte_delta=10,
+                stale_age_seconds=2 * 24 * 3600,
+                max_stale_messages=25,
+                max_stale_bytes=5_000,
+            ),
+            "quiet",
+        )
+
+    def test_registry_wide_health_aggregates_without_default_private_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            registry_dir = Path(tmp)
+            thread_dir = registry_dir / "threads" / "thread-1"
+            (thread_dir / "index").mkdir(parents=True)
+            (thread_dir / "clean-source").mkdir()
+            (thread_dir / "index" / "manifest.json").write_text(
+                json.dumps({"created_at": "2026-06-01T00:00:00Z", "message_count": 8}),
+                encoding="utf-8",
+            )
+            (thread_dir / "clean-source" / "manifest.json").write_text("{}", encoding="utf-8")
+            (thread_dir / "clean-source" / "messages.jsonl").write_text("one\n", encoding="utf-8")
+            (registry_dir / "threads.json").write_text(
+                json.dumps(
+                    {
+                        "threads": [
+                            {
+                                "thread_key": "provider:private-thread-title",
+                                "message_count": 10,
+                                "rollout_size": 2048,
+                                "paths": {"registry_thread_store": "threads/thread-1"},
+                                "health": {
+                                    "ok": False,
+                                    "recommended_actions": [
+                                        {"id": "build_index", "severity": "warning"}
+                                    ],
+                                },
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            payload = health.registry_health_report(registry_dir=registry_dir)
+
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["thread_count"], 1)
+        self.assertEqual(payload["recommended_action_counts"], {"build_index": 1})
+        self.assertFalse(payload["privacy"]["message_bodies_read"])
+        self.assertFalse(payload["privacy"]["paths_included"])
+        thread = payload["top_threads"][0]
+        self.assertIn("thread_ref", thread)
+        self.assertNotIn("private-thread-title", json.dumps(payload))
+        self.assertNotIn("thread_dir", thread)
+
+    def test_registry_wide_cli_can_emit_json(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "threads.json").write_text(json.dumps({"threads": []}), encoding="utf-8")
+            with mock.patch("sys.stdout", new=StringIO()) as stdout:
+                code = health.main(["--registry-wide", "--registry-dir", tmp, "--json"])
+
+        self.assertEqual(code, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["thread_count"], 0)
 
 
 if __name__ == "__main__":

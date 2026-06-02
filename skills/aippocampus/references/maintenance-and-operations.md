@@ -11,6 +11,7 @@ compaction, before closeout, or when the user says a thread should be preserved.
 Health checks include:
 
 - rollout growth beyond stale-message or stale-byte thresholds
+- advisory stale age, unindexed ratio, and activity-class diagnostics
 - clean-source freshness
 - anchor changes since the last index
 - missing or stale segment indexes for large rollouts
@@ -22,6 +23,19 @@ Health checks include:
 daemon. It can rebuild stale source/indexes, prepare graphify corpus, refresh
 segments, and produce checkpoint candidates. It should not append checkpoints
 unless called with `--append-checkpoint`.
+
+Maintenance defaults to a degraded-report contract: failed actions are recorded
+in `action_failures`, safe independent actions can still run, `health_final` is
+re-read, and `remaining_recommended_actions` states what still needs attention.
+Use `--fail-fast` only for strict CI/operator paths that need the old first
+failure to stop the command.
+
+`aippocampus health --registry-wide --json` gives a lightweight registry rollup:
+thread health counts, recommended-action counts, storage totals, and top
+hashed thread refs by risk. It reads registry and generated manifests only, not
+raw or clean-source message bodies. Default output must not expose private
+thread titles, raw snippets, or absolute local paths; `--include-paths` is a
+local maintainer diagnostic switch.
 
 Generated artifact writers must coordinate through same-directory leases instead
 of relying on users to run commands serially. `build_index.py` holds
@@ -170,6 +184,7 @@ and app event envelopes. Measure before advising.
 Common health and repair commands:
 
 - `python ...\aippocampus_health.py --cwd "$PWD"`
+- `aippocampus health --registry-wide --json`
 - `python ...\aippocampus_maintenance.py --cwd "$PWD"`
 - `python ...\build_clean_source.py --cwd "$PWD"`
 - `python ...\build_index.py --cwd "$PWD"`
