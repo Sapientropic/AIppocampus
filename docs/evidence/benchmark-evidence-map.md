@@ -131,7 +131,31 @@ benchmark runner should be added here and linked to its dated evidence owner.
 | Warm ambient case-pack builder | `benchmarks/aippocampus/build_warm_ambient_trace_cases.py` | `benchmark_corpus/README.md` |
 
 Benchmark mirror tests live in `tests/aippocampus/test_benchmark_*.py`. The
-test tier is selected with `python tools/aippocampus/run_tests.py --tier benchmark`.
+fresh-clone deterministic suite smoke plus curated PR mirror smoke is selected
+with
+`python tools/aippocampus/run_tests.py --tier benchmark-smoke --benchmark-suite-profile public-fast`;
+the complete benchmark mirror tier is selected with
+`python tools/aippocampus/run_tests.py --tier benchmark`.
+
+## Benchmark Test Tiers
+
+| Need | Command | Dependency / claim boundary |
+| --- | --- | --- |
+| Fast repository regression gate | `python tools/aippocampus/run_tests.py --tier fast` | Deterministic non-benchmark tests. This stays the default PR matrix and excludes `test_benchmark_*` modules. |
+| Deterministic benchmark PR smoke | `python -m pip install -e ".[benchmark]"` then `python tools/aippocampus/run_tests.py --tier benchmark-smoke --benchmark-suite-profile public-fast` | Public-fast suite smoke plus curated public benchmark/report/schema/profile guards. No provider calls, private registry data, raw reports, or large corpus downloads. |
+| Full benchmark mirror tests | `python tools/aippocampus/run_tests.py --tier benchmark` | All `tests/aippocampus/test_benchmark_*.py` modules. Use when changing benchmark runners, profiles, reports, or claim-boundary helpers. |
+| Full repository suite | `python tools/aippocampus/run_tests.py --tier full` | Fast + slow + benchmark tests. Use before broad repository-health, release, or public-readiness claims. |
+| Optional live/provider tracks | Track-specific CLI flags, environment variables, and owner docs | Not normal contributor deps and not part of default PR CI. They require explicit operator setup, documented provider/env boundaries, and sanitized outputs. |
+
+The `benchmark` optional dependency extra is intentionally empty while the
+deterministic smoke lane uses only stdlib plus checked-in public fixtures. It is
+the stable install target for contributors; add packages there only when a
+committed deterministic benchmark genuinely requires them.
+
+Python callers should prefer
+`BenchmarkSuiteConfig` plus `run_benchmark_suite_with_config()` for benchmark
+suite runs. The long `run_benchmark_suite(**kwargs)` function remains a
+compatibility bridge for existing callers and scripts.
 
 ## Smoke And Live Evidence Surfaces
 

@@ -32,3 +32,17 @@ private real-history case packs, local registry exports, and generated report
 directories stay out of git unless a small public-safe artifact is deliberately
 promoted.
 
+## Contributor Benchmark Commands
+
+For fresh-clone benchmark work, install the stable benchmark extra and start
+with the deterministic smoke tier:
+
+```sh
+python -m pip install -e ".[benchmark]"
+python tools/aippocampus/run_tests.py --tier benchmark-smoke --benchmark-suite-profile public-fast
+```
+
+The `benchmark` extra is intentionally empty while this lane uses only stdlib
+and checked-in public fixtures. Run `--tier benchmark` for the full benchmark
+mirror test tier, and use live/provider benchmark commands only when the owning
+track explicitly documents the required environment and privacy boundary.

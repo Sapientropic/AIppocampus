@@ -67,6 +67,26 @@ jobs:
       - name: Compile Python files
         run: python -m compileall -q skills plugins tests tools benchmarks benchmark_corpus
 
+  benchmark-smoke:
+    name: Benchmark smoke (deterministic)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install benchmark smoke dependencies
+        run: python -m pip install -e ".[benchmark]"
+
+      - name: Public-fast suite and deterministic benchmark smoke tier
+        run: python tools/aippocampus/run_tests.py --tier benchmark-smoke --benchmark-suite-profile public-fast
+
   macos-path-identity:
     name: macOS default TMPDIR path-identity smoke
     runs-on: macos-latest

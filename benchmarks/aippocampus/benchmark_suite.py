@@ -828,6 +828,13 @@ def run_benchmark_suite(
         retrieval_benchmark.DEFAULT_STANDARD_LINE_RERANKER_WORKERS
     ),
 ) -> dict[str, Any]:
+    """Compatibility keyword facade for existing benchmark-suite callers.
+
+    New Python callers should construct a BenchmarkSuiteConfig and call
+    run_benchmark_suite_with_config(). The config/profile path keeps claim
+    surfaces reviewable as the suite grows instead of spreading dozens of
+    independent keyword overrides through downstream scripts.
+    """
     return run_benchmark_suite_with_config(
         BenchmarkSuiteConfig(
             profile=profile,
@@ -887,6 +894,7 @@ def run_benchmark_suite(
 
 
 def run_benchmark_suite_with_config(config: BenchmarkSuiteConfig) -> dict[str, Any]:
+    """Run the benchmark suite from the preferred config/profile entrypoint."""
     config = normalize_config_for_profile(config)
     registry_path = config.registry_path
     include_private_text = config.include_private_text
@@ -1103,7 +1111,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
         epilog=(
             f"Profile ladder: {profile_names}. "
-            f"Profile and threshold rationale: {PROFILE_DOCS}"
+            f"Profile and threshold rationale: {PROFILE_DOCS}\n"
+            "Python callers should prefer BenchmarkSuiteConfig plus "
+            "run_benchmark_suite_with_config(); run_benchmark_suite(**kwargs) "
+            "is a compatibility bridge."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )

@@ -209,6 +209,8 @@ class BenchmarkSuiteTests(unittest.TestCase):
             "memory-decision-benchmark-plan.md#benchmark-suite-profiles",
             help_text,
         )
+        self.assertIn("BenchmarkSuiteConfig", help_text)
+        self.assertIn("run_benchmark_suite_with_config", help_text)
 
     def test_release_evidence_profile_stays_public_safe_by_default(self) -> None:
         parser = suite.build_arg_parser()

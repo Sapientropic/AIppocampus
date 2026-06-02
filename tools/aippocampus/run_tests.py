@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -24,6 +26,15 @@ SLOW_MODULES = {
     "tests.aippocampus.test_stage_0_5_smoke",
 }
 
+BENCHMARK_SMOKE_MODULES = {
+    "tests.aippocampus.test_benchmark_locomo_public_users",
+    "tests.aippocampus.test_benchmark_public_longitudinal_users",
+    "tests.aippocampus.test_benchmark_published_reports",
+    "tests.aippocampus.test_benchmark_statistics",
+    "tests.aippocampus.test_benchmark_suite",
+    "tests.aippocampus.test_benchmark_vcs_future_event_recall",
+}
+
 
 def discover_modules() -> list[str]:
     return [
@@ -37,6 +48,9 @@ def modules_for_tier(tier: str) -> list[str]:
     modules = discover_modules()
     if tier == "full":
         return modules
+    if tier == "benchmark-smoke":
+        discovered = set(modules)
+        return [module for module in sorted(BENCHMARK_SMOKE_MODULES) if module in discovered]
     if tier == "benchmark":
         return [module for module in modules if ".test_benchmark_" in module]
     if tier == "slow":
@@ -97,13 +111,63 @@ def run_modules(modules: list[str], *, verbosity: int) -> bool:
     return result.wasSuccessful()
 
 
+def run_benchmark_suite_profile(profile: str) -> bool:
+    suite_path = REPO_ROOT / "benchmarks" / "aippocampus" / "benchmark_suite.py"
+    command = [
+        sys.executable,
+        str(suite_path),
+        "--profile",
+        profile,
+        "--json",
+    ]
+    completed = subprocess.run(
+        command,
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        print(completed.stdout, end="")
+        print(completed.stderr, end="", file=sys.stderr)
+        return False
+    try:
+        payload = json.loads(completed.stdout)
+    except json.JSONDecodeError as exc:
+        print(f"benchmark suite profile {profile!r} did not emit valid JSON: {exc}", file=sys.stderr)
+        print(completed.stdout[:2000], file=sys.stderr)
+        return False
+    if payload.get("ok") is not True:
+        print(
+            f"benchmark suite profile {profile!r} failed: "
+            f"status={payload.get('status')!r}",
+            file=sys.stderr,
+        )
+        return False
+    elapsed_ms = payload.get("elapsed_ms")
+    elapsed_text = f" in {elapsed_ms:.2f} ms" if isinstance(elapsed_ms, (int, float)) else ""
+    print(f"benchmark suite profile {profile!r}: {payload.get('status', 'ok')}{elapsed_text}")
+    return True
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run AIppocampus unittest tiers.")
     parser.add_argument(
         "--tier",
-        choices=("fast", "slow", "benchmark", "full"),
+        choices=("fast", "slow", "benchmark-smoke", "benchmark", "full"),
         default="fast",
-        help="Test tier to run. Default is the deterministic fast suite.",
+        help=(
+            "Test tier to run. Default is the deterministic fast suite. "
+            "benchmark-smoke is the curated fresh-clone benchmark PR lane."
+        ),
+    )
+    parser.add_argument(
+        "--benchmark-suite-profile",
+        choices=("public-fast",),
+        help=(
+            "Run benchmark_suite.py with the selected fresh-clone profile before "
+            "the selected unittest tier. Intended for the CI benchmark smoke lane."
+        ),
     )
     parser.add_argument("--list", action="store_true", help="List selected test modules.")
     parser.add_argument("-v", "--verbose", action="count", default=1)
@@ -125,6 +189,10 @@ def main(argv: list[str] | None = None) -> int:
     except RuntimeError as exc:
         print(str(exc), file=sys.stderr)
         return 2
+    if args.benchmark_suite_profile and not run_benchmark_suite_profile(
+        args.benchmark_suite_profile,
+    ):
+        return 1
     return 0 if run_modules(modules, verbosity=max(1, args.verbose)) else 1
 
 

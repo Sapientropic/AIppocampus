@@ -108,6 +108,19 @@ That Ruff command is the staged hard gate from `pyproject.toml`; broader
 `--select ALL --statistics` output is advisory lint debt, not a normal install
 or CI failure gate.
 
+For benchmark work from a fresh clone, install the stable benchmark extra and
+run the deterministic smoke lane before attempting broader benchmark tiers:
+
+```sh
+python -m pip install -e ".[benchmark]"
+python tools/aippocampus/run_tests.py --tier benchmark-smoke --benchmark-suite-profile public-fast
+```
+
+The `benchmark` extra is currently empty because the deterministic benchmark
+smoke uses only stdlib plus checked-in public fixtures. Live/provider-backed
+tracks need explicit environment configuration and are not part of normal
+install verification.
+
 ### Remote macOS install smoke
 
 Maintainers can trigger the fresh-clone macOS install smoke from a Windows
