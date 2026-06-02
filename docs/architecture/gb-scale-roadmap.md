@@ -87,6 +87,10 @@ Completed foundation:
   thread count, planned thread count, planned handles, fallback reason, and
   budget exhaustion. It narrows using registry/thread metadata first, then still
   joins results back to stable source ids.
+- `aippocampus storage gc --dry-run` starts the storage governance bridge: it
+  reports protected source bytes, reclaimable rebuildable/review bytes, and
+  candidate safety preconditions from capacity data plus existing retention JSON
+  without reading message bodies or deleting files. Apply mode remains deferred.
 
 ## Target architecture
 
@@ -195,7 +199,9 @@ Completed foundation:
    `search_segments.py`; continue tuning with real recall failures.
 5. Add optional compressed raw archive and retention policy. Done:
    `cold_archive.py` plus `retention_report.py`; cleanup remains manual and
-   evidence-first.
+   evidence-first. A first dry-run-only governance bridge now lives behind
+   `aippocampus storage gc --dry-run`; eviction apply mode still needs
+   deterministic source/archive, lease, active-thread, and manifest checks.
 6. Add vector index via Protocol interface. Done for the first local slice:
    `aippocampus_runtime.question.vector_index` defines `QuestionVectorIndex`
    and `LocalQuestionVectorIndex` with add / search / remove / write / load

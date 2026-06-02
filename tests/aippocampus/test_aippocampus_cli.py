@@ -33,6 +33,7 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0)
         self.assertIn("health", proc.stdout)
         self.assertIn("mcp list-tools", proc.stdout)
+        self.assertIn("storage gc", proc.stdout)
         self.assertIn("hooks", proc.stdout)
 
     def test_top_level_script_is_compatibility_shim_for_package_facade(self) -> None:
@@ -71,6 +72,15 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(import_invocation.command, "import")
         self.assertEqual(import_invocation.module_name, "aippocampus_runtime.artifacts.import_bundle")
         self.assertEqual(import_invocation.script_name, "import_bundle.py")
+
+        storage_invocation = facade.resolve_command(["storage", "gc", "--dry-run", "--json"])
+        self.assertEqual(storage_invocation.command, "storage")
+        self.assertEqual(
+            storage_invocation.module_name,
+            "aippocampus_runtime.ops.storage_governance",
+        )
+        self.assertEqual(storage_invocation.script_name, "storage_governance.py")
+        self.assertEqual(storage_invocation.args, ["gc", "--dry-run", "--json"])
 
         conversation_import = facade.resolve_command(
             [
