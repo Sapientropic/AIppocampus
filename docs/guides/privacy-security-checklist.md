@@ -32,6 +32,13 @@ bundle, demo, release, or plugin package.
 - Lifecycle hooks may refresh generated artifacts, but they must not delete,
   archive, or run expensive model work synchronously.
 - Hook installers must preserve unrelated hooks and support uninstall.
+- Prompt-hook `status --last` output may be shared as an audit surface only
+  because it is a projection. Confirm the `last_prompt_hook` object contains
+  memory-surface buckets, counts, cache/warm status, source-reopen counts,
+  topic-epoch presence without topic-epoch values, and a redacted event id only.
+  It must not include raw prompt text, raw cards, snippets, source titles,
+  session or turn ids, secrets, or absolute local paths. Verbose debug JSONL
+  remains trusted local material.
 
 ## External Models
 

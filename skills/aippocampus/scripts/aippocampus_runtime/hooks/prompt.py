@@ -10,8 +10,18 @@ import time
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.hooks.debug_log import write_debug_log
+from aippocampus_runtime.hooks.debug_log import (
+    prompt_hook_audit_status,
+    write_debug_log,
+    write_prompt_hook_audit_status,
+)
 from aippocampus_runtime.hooks.skip_telemetry import write_skip_telemetry
+
+__all__ = [
+    "prompt_hook_audit_status",
+    "write_debug_log",
+    "write_prompt_hook_audit_status",
+]
 
 DEFAULT_SEARCH_BUDGET_FALLBACK = 3
 PROMPT_HOOK_SEMANTIC_TIMEOUT_FALLBACK = float(os.environ.get("AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT", "2.5"))
@@ -122,6 +132,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--log", action="store_true")
     parser.add_argument("--log-skip", action="store_true")
+    parser.add_argument("--audit-status-path")
+    parser.add_argument("--no-audit-status", action="store_true")
     parser.add_argument("--skip-telemetry-path")
     parser.add_argument("--no-skip-telemetry", action="store_true")
     _add_dream_delivery_arguments(parser)
@@ -193,6 +205,14 @@ def main(argv: list[str] | None = None) -> int:
             )
         except Exception:
             pass
+        if not args.no_audit_status:
+            try:
+                write_prompt_hook_audit_status(
+                    result,
+                    status_path=Path(args.audit_status_path) if args.audit_status_path else None,
+                )
+            except Exception:
+                pass
         if args.log or args.log_skip:
             write_debug_log(result, hook_input=hook_input, include_skip=args.log_skip)
         if args.json_output:

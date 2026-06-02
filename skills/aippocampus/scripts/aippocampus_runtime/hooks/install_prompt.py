@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import codex_home
+from aippocampus_runtime.hooks.debug_log import prompt_hook_audit_status
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
 DEFAULT_HOOK_TIMEOUT_SECONDS = 5
@@ -213,7 +214,14 @@ def uninstall(path: Path, script: Path) -> dict[str, Any]:
     return {"changed": changed, "installed": False, "path": str(path)}
 
 
-def status(path: Path, script: Path) -> dict[str, Any]:
+def status(
+    path: Path,
+    script: Path,
+    *,
+    include_last: bool = False,
+    log_path: Path | None = None,
+    status_path: Path | None = None,
+) -> dict[str, Any]:
     data = load_hooks(path)
     groups = (data.get("hooks") or {}).get("UserPromptSubmit") or []
     installed = False
@@ -223,7 +231,18 @@ def status(path: Path, script: Path) -> dict[str, Any]:
             if isinstance(handler, dict) and is_ambient_handler(handler, script):
                 installed = True
                 commands.append(str(handler.get("command") or ""))
-    return {"installed": installed, "path": str(path), "commands": commands}
+    result: dict[str, Any] = {"installed": installed, "path": str(path), "commands": commands}
+    if include_last:
+        result["path"] = path.name
+        result["path_redacted"] = True
+        if commands:
+            result["commands"] = ["<redacted:hook-command>" for _ in commands]
+            result["commands_redacted"] = True
+        result["last_prompt_hook"] = prompt_hook_audit_status(
+            log_path=log_path,
+            status_path=status_path,
+        )
+    return result
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -244,6 +263,13 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Ask the hook to write sanitized scent/evidence debug events.",
     )
+    parser.add_argument(
+        "--last",
+        action="store_true",
+        help="Include the latest sanitized prompt-hook memory injection audit summary in status output.",
+    )
+    parser.add_argument("--log-path", help="Prompt-hook debug JSONL path for --last status.")
+    parser.add_argument("--status-path", help="Prompt-hook last-status JSON path for --last status.")
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(argv)
 
@@ -262,7 +288,13 @@ def main(argv: list[str] | None = None) -> int:
     elif args.action == "uninstall":
         result = uninstall(path, script)
     else:
-        result = status(path, script)
+        result = status(
+            path,
+            script,
+            include_last=args.last,
+            log_path=Path(args.log_path).resolve() if args.log_path else None,
+            status_path=Path(args.status_path).resolve() if args.status_path else None,
+        )
 
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -273,6 +305,18 @@ def main(argv: list[str] | None = None) -> int:
             print(f"changed: {result.get('changed')}")
         if result.get("command"):
             print(f"command: {result.get('command')}")
+        raw_last = result.get("last_prompt_hook")
+        last = raw_last if isinstance(raw_last, dict) else {}
+        raw_latest = last.get("last_prompt_hook")
+        latest = raw_latest if isinstance(raw_latest, dict) else {}
+        if latest:
+            print(
+                "last prompt hook: "
+                f"{latest.get('memory_surface')} "
+                f"cards={latest.get('card_count')} "
+                f"source_backed={latest.get('source_backed_count')} "
+                f"cache={((latest.get('cache') or {}).get('status'))}"
+            )
     return 0
 
 

@@ -102,6 +102,20 @@ class AippocampusCliTests(unittest.TestCase):
             ],
         )
 
+        prompt_hook_status = facade.resolve_command(
+            ["hooks", "prompt", "status", "--last", "--json"]
+        )
+        self.assertEqual(prompt_hook_status.command, "hooks")
+        self.assertEqual(
+            prompt_hook_status.module_name,
+            "aippocampus_runtime.hooks.install_prompt",
+        )
+        self.assertEqual(
+            prompt_hook_status.script_name,
+            "install_aippocampus_prompt_hook.py",
+        )
+        self.assertEqual(prompt_hook_status.args, ["status", "--last", "--json"])
+
     def test_package_facade_default_runner_is_in_process(self) -> None:
         from aippocampus_runtime.cli import facade
 

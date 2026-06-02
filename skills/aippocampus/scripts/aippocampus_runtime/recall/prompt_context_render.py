@@ -135,6 +135,7 @@ def ambient_debug_summary(result: dict[str, Any]) -> dict[str, Any] | None:
     cards = [card for card in ambient.get("cards", []) if isinstance(card, dict)]
     validation_statuses: dict[str, int] = {}
     visibility_counts: dict[str, int] = {}
+    source_reopen_required_count = 0
     for card in cards[:8]:
         visibility = str(card.get("visibility") or "")
         if visibility:
@@ -142,6 +143,8 @@ def ambient_debug_summary(result: dict[str, Any]) -> dict[str, Any] | None:
         status = str((card.get("source_validation") or {}).get("status") or "")
         if status:
             validation_statuses[status] = validation_statuses.get(status, 0) + 1
+        if card.get("source_reopen_required"):
+            source_reopen_required_count += 1
     raw_cache_status = ambient.get("cache_status")
     cache_status: dict[str, Any] = raw_cache_status if isinstance(raw_cache_status, dict) else {}
     raw_warm_background = ambient.get("warm_background")
@@ -166,6 +169,7 @@ def ambient_debug_summary(result: dict[str, Any]) -> dict[str, Any] | None:
         else None,
         "visibility_counts": visibility_counts,
         "source_validation_statuses": validation_statuses,
+        "source_reopen_required_count": source_reopen_required_count,
         "provenance_counts": count_cards_by_field(cards, "provenance_class"),
         "support_level_counts": count_cards_by_field(cards, "support_level"),
     }

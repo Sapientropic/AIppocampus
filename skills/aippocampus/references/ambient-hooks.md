@@ -308,6 +308,8 @@ Useful commands:
 - `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --cases-file .tmp\warm-sharegpt-coding-100-topic-vote.jsonl --registry .tmp\warm-sharegpt-coding-100-pack\threads.json --live --wait-all --case-workers 1 --max-workers 50 --prefix-cache-warmup-scouts 2 --prefix-cache-warmup-delay 0.5 --timeout 30 --min-available-rate 0 --json`
 - `python benchmarks\aippocampus\benchmark_warm_ambient_sweep.py --cases-file traces.jsonl --registry .tmp\warm-sharegpt-coding-pack\threads.json --live --wait-modes quorum_first,wait_all --case-workers 2 --progress-dir .tmp\warm-progress --prefix-cache-warmup-scouts 2 --prefix-cache-warmup-delay 0.5 --max-workers-list 20,50 --timeouts 15,30 --json`
 - `python ...\install_aippocampus_prompt_hook.py install|status|uninstall`
+- `python ...\install_aippocampus_prompt_hook.py status --last --json`
+- `aippocampus hooks prompt status --last --json`
 
 `warm_ambient_recall.py --json` is an operational summary, not a private
 diagnostic dump: it reports status, counts, cache telemetry, and gate buckets
@@ -316,6 +318,19 @@ It may expose public-safe `provenance_counts` and `support_level_counts`; those
 are aggregate routing diagnostics, not evidence claims.
 Local Python callers that need the full private result should import the
 packaged runtime API inside a trusted process boundary.
+
+Prompt-hook audit status uses the same public-safe boundary. The hook writes a
+tiny local `aippocampus_prompt_hook_last_status.json` projection on every run,
+separate from the opt-in verbose debug JSONL. `status --last --json` reports
+whether the latest prompt produced `no_memory`, `scent`, `candidate`, or
+`source_backed_evidence`, plus card counts, wayfinding/stale-source counts,
+cache status, topic-epoch presence without the epoch value, warm-background
+status, and a redacted event id. It must not emit raw prompt text, raw cards,
+snippets, source titles, session/turn ids, secrets, topic-epoch values, or local
+paths. `scent` and `candidate` remain navigation hints; even
+`source_backed_evidence` still tells the agent to reopen clean source before
+making exact claims. Use `--log`/`--log-path` only for trusted local debugging;
+the audit projection is the surface intended for issue reports and demos.
 
 `deep_archival_recall` is an escalation request, not a license to dump history:
 the foreground agent should open clean source first using the card's

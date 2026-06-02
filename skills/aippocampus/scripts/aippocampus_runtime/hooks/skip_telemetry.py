@@ -45,7 +45,8 @@ def _latency_bucket(value: Any) -> str:
 
 
 def _skip_reason_bucket(result: dict[str, Any]) -> str:
-    semantic_gate = result.get("semantic_gate") if isinstance(result.get("semantic_gate"), dict) else {}
+    raw_semantic_gate = result.get("semantic_gate")
+    semantic_gate = raw_semantic_gate if isinstance(raw_semantic_gate, dict) else {}
     availability_reason = str(semantic_gate.get("availability_reason") or "").strip()
     if availability_reason:
         return availability_reason
@@ -59,8 +60,10 @@ def _skip_reason_bucket(result: dict[str, Any]) -> str:
         return "privacy_boundary"
     if "no ambient recall cue" in reason_text:
         return "no_ambient_recall_cue"
-    ambient = result.get("ambient_recall") if isinstance(result.get("ambient_recall"), dict) else {}
-    cache_status = ambient.get("cache_status") if isinstance(ambient.get("cache_status"), dict) else {}
+    raw_ambient = result.get("ambient_recall")
+    ambient = raw_ambient if isinstance(raw_ambient, dict) else {}
+    raw_cache_status = ambient.get("cache_status")
+    cache_status = raw_cache_status if isinstance(raw_cache_status, dict) else {}
     if cache_status.get("status") == "miss":
         return "cache_miss"
     return "other_skip"
@@ -176,7 +179,8 @@ def _write_skip_telemetry_locked(
     skip_reason = _skip_reason_bucket(result)
     _counter_add(telemetry.setdefault("skip_reason_counts", {}), skip_reason)
 
-    semantic_gate = result.get("semantic_gate") if isinstance(result.get("semantic_gate"), dict) else {}
+    raw_semantic_gate = result.get("semantic_gate")
+    semantic_gate = raw_semantic_gate if isinstance(raw_semantic_gate, dict) else {}
     if semantic_gate:
         _counter_add(telemetry.setdefault("semantic_availability_reason_counts", {}), semantic_gate.get("availability_reason"))
         _counter_add(telemetry.setdefault("semantic_diagnostic_counts", {}), semantic_gate.get("diagnostic"))
@@ -187,11 +191,14 @@ def _write_skip_telemetry_locked(
                 amount = 1
             _counter_add(telemetry.setdefault("semantic_error_bucket_counts", {}), bucket, amount=amount)
 
-    ambient = result.get("ambient_recall") if isinstance(result.get("ambient_recall"), dict) else {}
-    cache_status = ambient.get("cache_status") if isinstance(ambient.get("cache_status"), dict) else {}
+    raw_ambient = result.get("ambient_recall")
+    ambient = raw_ambient if isinstance(raw_ambient, dict) else {}
+    raw_cache_status = ambient.get("cache_status")
+    cache_status = raw_cache_status if isinstance(raw_cache_status, dict) else {}
     if cache_status:
         _counter_add(telemetry.setdefault("cache_status_counts", {}), cache_status.get("status"))
-    warm_background = ambient.get("warm_background") if isinstance(ambient.get("warm_background"), dict) else {}
+    raw_warm_background = ambient.get("warm_background")
+    warm_background = raw_warm_background if isinstance(raw_warm_background, dict) else {}
     if warm_background:
         _counter_add(telemetry.setdefault("warm_background_status_counts", {}), warm_background.get("status"))
 
