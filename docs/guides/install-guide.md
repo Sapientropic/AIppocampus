@@ -219,7 +219,8 @@ never key values or base URL values. It is a presence-only check: it does not
 read or validate the key value, so it cannot prove the key is non-empty, correct,
 or unexpired. It checks the process running the command and a child process it
 starts; it does not prove what a previously started Codex Desktop hook process
-could see.
+could see. Use `--provider-env-var <NAME>` when you need to test a local route
+override without changing the route configuration.
 
 Direct script commands remain supported when the facade is not installed:
 

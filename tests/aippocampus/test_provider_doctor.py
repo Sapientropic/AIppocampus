@@ -57,12 +57,12 @@ class ProviderDoctorTests(unittest.TestCase):
         encoded = json.dumps(report, ensure_ascii=False)
 
         self.assertFalse(report["ok"])
-        self.assertEqual(report["status"], "missing_api_key")
+        self.assertEqual(report["status"], "missing_provider_env_var")
         self.assertEqual(report["route"]["provider"], "deepseek")
-        self.assertEqual(report["api_key"]["env_var"], "DEEPSEEK_API_KEY")
-        self.assertFalse(report["api_key"]["visible_in_current_process"])
-        self.assertFalse(report["api_key"]["visible_in_child_process"])
-        self.assertFalse(report["privacy"]["api_key_value_printed"])
+        self.assertEqual(report["provider_env"]["env_var"], "DEEPSEEK_API_KEY")
+        self.assertFalse(report["provider_env"]["visible_in_current_process"])
+        self.assertFalse(report["provider_env"]["visible_in_child_process"])
+        self.assertFalse(report["privacy"]["env_var_value_printed"])
         self.assertTrue(report["hook_relevance"]["prompt_hook_reads_process_env"])
         self.assertFalse(report["hook_relevance"]["actual_installed_hook_process_checked"])
         self.assertTrue(report["recommended_actions"])
@@ -76,8 +76,8 @@ class ProviderDoctorTests(unittest.TestCase):
 
         self.assertTrue(report["ok"])
         self.assertEqual(report["status"], "ready")
-        self.assertTrue(report["api_key"]["visible_in_current_process"])
-        self.assertTrue(report["api_key"]["visible_in_child_process"])
+        self.assertTrue(report["provider_env"]["visible_in_current_process"])
+        self.assertTrue(report["provider_env"]["visible_in_child_process"])
         self.assertTrue(report["hook_relevance"]["semantic_gate_enabled_for_route"])
         self.assertFalse(report["hook_relevance"]["actual_installed_hook_process_checked"])
         self.assertNotIn(secret, encoded)
@@ -90,11 +90,11 @@ class ProviderDoctorTests(unittest.TestCase):
             )
 
         self.assertTrue(report["ok"])
-        self.assertTrue(report["api_key"]["visible_in_current_process"])
-        self.assertIsNone(report["api_key"]["visible_in_child_process"])
-        self.assertTrue(report["api_key"]["presence_only"])
-        self.assertFalse(report["api_key"]["value_checked"])
-        self.assertFalse(report["privacy"]["api_key_value_checked"])
+        self.assertTrue(report["provider_env"]["visible_in_current_process"])
+        self.assertIsNone(report["provider_env"]["visible_in_child_process"])
+        self.assertTrue(report["provider_env"]["presence_only"])
+        self.assertFalse(report["provider_env"]["value_checked"])
+        self.assertFalse(report["privacy"]["env_var_value_checked"])
 
     def test_custom_route_config_error_is_public_and_does_not_probe_secret_values(self) -> None:
         with provider_env(
@@ -110,7 +110,7 @@ class ProviderDoctorTests(unittest.TestCase):
         self.assertEqual(report["status"], "route_config_error")
         self.assertEqual(report["route"]["requested_route"], "local_semantic")
         self.assertIn("AIPPOCAMPUS_OPENAI_COMPAT_MODEL", report["route"]["error"]["message"])
-        self.assertFalse(report["privacy"]["api_key_value_printed"])
+        self.assertFalse(report["privacy"]["env_var_value_printed"])
         self.assertNotIn("LOCAL_PROVIDER_TEST_KEY", encoded)
 
     def test_cli_doctor_provider_runs_via_public_facade(self) -> None:

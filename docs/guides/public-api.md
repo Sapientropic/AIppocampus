@@ -469,7 +469,9 @@ Common installs should stay small:
   key value, so it cannot prove the key is non-empty, correct, or unexpired. It
   does not read `.env` files, credential stores, or keychain entries, it never
   prints key values, and it does not claim to inspect a previously started Codex
-  Desktop hook process.
+  Desktop hook process. JSON output names this surface `provider_env`; use
+  `--provider-env-var` to override the selected route variable name for local
+  diagnostics.
 
 Registry storage precedence remains explicit:
 

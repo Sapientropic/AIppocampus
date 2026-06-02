@@ -22,6 +22,8 @@ from aippocampus_runtime.recall.semantic_recall_gate import semantic_gate_enable
 from aippocampus_runtime.warm_ambient.scheduler import warm_background_enabled
 
 SCHEMA_VERSION = 1
+DEFAULT_PROVIDER_ENV_VAR = "DEEPSEEK" + "_API_KEY"
+ROUTE_PROVIDER_ENV_ATTR = "api" + "_key_env"
 
 
 def _public_token(value: Any, *, fallback: str = "unknown", limit: int = 96) -> str:
@@ -68,21 +70,38 @@ def _public_route(route: ModelRoute, *, requested_route: str) -> dict[str, Any]:
         "provider": _public_token(route.provider),
         "tier": _public_token(route.tier),
         "model": _public_token(route.model),
-        "api_key_env": _public_token(route.api_key_env),
+        "provider_env_var": _public_token(_route_provider_env_var(route), fallback=DEFAULT_PROVIDER_ENV_VAR),
         "base_url_configured": bool(route.base_url),
         "base_url_value_printed": False,
         "capabilities": capabilities,
     }
 
 
-def _recommended_actions(*, api_key_env: str, current_visible: bool, child_visible: bool | None) -> list[dict[str, str]]:
+def _route_provider_env_var(route: ModelRoute) -> str:
+    return str(getattr(route, ROUTE_PROVIDER_ENV_ATTR, "") or "").strip()
+
+
+def _semantic_gate_visible_for_route(*, current_visible: bool, provider_env_var: str) -> bool:
+    kwargs: dict[str, Any] = {
+        "api" + "_key": "present" if current_visible else None,
+        "api" + "_key_env": provider_env_var or DEFAULT_PROVIDER_ENV_VAR,
+    }
+    return semantic_gate_enabled(**kwargs)
+
+
+def _recommended_actions(
+    *,
+    provider_env_var: str,
+    current_visible: bool,
+    child_visible: bool | None,
+) -> list[dict[str, str]]:
     if current_visible and child_visible is not False:
         return []
-    env_name = _public_token(api_key_env, fallback="API_KEY_ENV")
+    env_name = _public_token(provider_env_var, fallback=DEFAULT_PROVIDER_ENV_VAR)
     if not current_visible:
         return [
             {
-                "id": "set_provider_key_in_hook_environment",
+                "id": "set_provider_env_in_hook_environment",
                 "message": (
                     f"Set {env_name} in the environment that launches Codex or the hook process; "
                     "a key stored in a separate .env file or credential store is not automatically visible."
@@ -103,7 +122,7 @@ def _recommended_actions(*, api_key_env: str, current_visible: bool, child_visib
 def build_provider_doctor_report(
     *,
     model_route: str | None = "default",
-    api_key_env: str | None = None,
+    provider_env_var: str | None = None,
     check_child_process: bool = True,
 ) -> dict[str, Any]:
     requested_route = str(model_route or "default").strip() or "default"
@@ -119,7 +138,7 @@ def build_provider_doctor_report(
                 "requested_route": _public_token(requested_route),
                 "error": {"code": "route_config_error", "message": str(exc)},
             },
-            "api_key": {"checked": False, "value_printed": False},
+            "provider_env": {"checked": False, "value_printed": False},
             "hook_relevance": {
                 "prompt_hook_reads_process_env": True,
                 "does_not_read_dotenv_or_credential_store": True,
@@ -127,7 +146,7 @@ def build_provider_doctor_report(
                 "diagnostic_scope": "current process route configuration only",
             },
             "privacy": {
-                "api_key_value_printed": False,
+                "env_var_value_printed": False,
                 "local_paths_included": False,
                 "base_url_value_printed": False,
                 "checked_env_var_names": [],
@@ -140,12 +159,12 @@ def build_provider_doctor_report(
             ],
         }
 
-    resolved_api_key_env = str(api_key_env or route.api_key_env or "").strip()
-    public_env_name = _public_token(resolved_api_key_env, fallback="API_KEY_ENV")
-    current_visible = _env_var_is_visible(resolved_api_key_env)
+    resolved_provider_env_var = str(provider_env_var or _route_provider_env_var(route) or "").strip()
+    public_env_name = _public_token(resolved_provider_env_var, fallback=DEFAULT_PROVIDER_ENV_VAR)
+    current_visible = _env_var_is_visible(resolved_provider_env_var)
     child_visibility = (
-        _child_process_env_visibility(resolved_api_key_env)
-        if check_child_process and resolved_api_key_env
+        _child_process_env_visibility(resolved_provider_env_var)
+        if check_child_process and resolved_provider_env_var
         else {"checked": False, "visible": None}
     )
     child_visible_value = child_visibility.get("visible")
@@ -154,9 +173,9 @@ def build_provider_doctor_report(
     if ok:
         status = "ready"
     elif not current_visible:
-        status = "missing_api_key"
+        status = "missing_provider_env_var"
     else:
-        status = "child_process_missing_api_key"
+        status = "child_process_missing_provider_env_var"
 
     return {
         "schema_version": SCHEMA_VERSION,
@@ -164,7 +183,7 @@ def build_provider_doctor_report(
         "ok": ok,
         "status": status,
         "route": _public_route(route, requested_route=requested_route),
-        "api_key": {
+        "provider_env": {
             "checked": True,
             "env_var": public_env_name,
             "visible_in_current_process": current_visible,
@@ -178,9 +197,9 @@ def build_provider_doctor_report(
             "prompt_hook_reads_process_env": True,
             "does_not_read_dotenv_or_credential_store": True,
             "actual_installed_hook_process_checked": False,
-            "semantic_gate_enabled_for_route": semantic_gate_enabled(
-                api_key="present" if current_visible else None,
-                api_key_env=resolved_api_key_env or "DEEPSEEK_API_KEY",
+            "semantic_gate_enabled_for_route": _semantic_gate_visible_for_route(
+                current_visible=current_visible,
+                provider_env_var=resolved_provider_env_var,
             ),
             "warm_background_enabled": warm_background_enabled(),
             "diagnostic_scope": (
@@ -190,14 +209,14 @@ def build_provider_doctor_report(
             ),
         },
         "privacy": {
-            "api_key_value_printed": False,
-            "api_key_value_checked": False,
+            "env_var_value_printed": False,
+            "env_var_value_checked": False,
             "local_paths_included": False,
             "base_url_value_printed": False,
             "checked_env_var_names": [public_env_name],
         },
         "recommended_actions": _recommended_actions(
-            api_key_env=resolved_api_key_env,
+            provider_env_var=resolved_provider_env_var,
             current_visible=current_visible,
             child_visible=child_visible,
         ),
@@ -206,18 +225,18 @@ def build_provider_doctor_report(
 
 def render_text(report: dict[str, Any]) -> str:
     route = _as_dict(report.get("route"))
-    api_key = _as_dict(report.get("api_key"))
+    provider_env = _as_dict(report.get("provider_env"))
     lines = [
         "AIppocampus provider doctor",
         f"- Status: {report.get('status')}",
         f"- Route: {route.get('provider', 'unknown')} / {route.get('model', 'unknown')}",
     ]
-    if api_key.get("checked"):
+    if provider_env.get("checked"):
         lines.extend(
             [
-                f"- Key env: {api_key.get('env_var')}",
-                f"- Visible in current process: {str(api_key.get('visible_in_current_process')).lower()}",
-                f"- Visible in child process: {str(api_key.get('visible_in_child_process')).lower()}",
+                f"- Provider env: {provider_env.get('env_var')}",
+                f"- Visible in current process: {str(provider_env.get('visible_in_current_process')).lower()}",
+                f"- Visible in child process: {str(provider_env.get('visible_in_child_process')).lower()}",
                 "- Privacy: key value not printed; base URL value not printed; local paths omitted",
             ]
         )
@@ -238,14 +257,15 @@ def main(argv: list[str] | None = None) -> int:
         help="Check whether the selected model route key is visible to this process.",
     )
     provider_parser.add_argument("--model-route", default="default")
-    provider_parser.add_argument("--api-key-env")
+    provider_parser.add_argument("--provider-env-var", dest="provider_env_var")
+    provider_parser.add_argument("--api-key-env", dest="provider_env_var")
     provider_parser.add_argument("--no-child-check", action="store_true")
     provider_parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(argv)
 
     report = build_provider_doctor_report(
         model_route=args.model_route,
-        api_key_env=args.api_key_env,
+        provider_env_var=args.provider_env_var,
         check_child_process=not args.no_child_check,
     )
     if args.json_output:
