@@ -108,6 +108,10 @@ The supported public surfaces are:
   in [public-core-boundary.md](public-core-boundary.md). These define source
   eligibility and claim promotion records, not a public knowledge-ingest,
   ranking, or answer-generation API.
+- The high-risk answer gate policy documented in
+  [high-risk-answer-gates.md](../architecture/high-risk-answer-gates.md) as a
+  trusted local deterministic cannot-claim boundary, not as generated
+  professional advice or a public answer API.
 - The Codex plugin package source under `plugins/aippocampus/`, including its
   MCP config and packaged skill surface.
 - The documented local-folder, HTTP object-storage, and encrypted sync commands.

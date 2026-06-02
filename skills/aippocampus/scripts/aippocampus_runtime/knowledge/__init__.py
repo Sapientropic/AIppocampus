@@ -2,4 +2,4 @@
 
 from __future__ import annotations
 
-__all__ = ["schema"]
+__all__ = ["answer_gate", "schema"]
