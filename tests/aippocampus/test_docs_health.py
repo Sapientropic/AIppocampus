@@ -355,6 +355,59 @@ class DocsHealthTests(unittest.TestCase):
         self.assertIn("aippocampus CI must not use floating dev tool install", issues)
         self.assertIn("publish workflow must not use floating release tool install", issues)
 
+    def test_safe_environment_contract_covers_template_docs_and_plugin_boundary(self) -> None:
+        repo_root = docs_health.find_repo_root(ROOT)
+        assert repo_root is not None
+
+        result = docs_health.safe_environment_issues(repo_root)
+
+        self.assertEqual(result, [])
+
+    def test_safe_environment_contract_reports_secret_values_and_plugin_env_block(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            (repo / ".gitignore").write_text(".env\n.env.*\n!.env.example\n", encoding="utf-8")
+            (repo / ".env.example").write_text(
+                "\n".join(
+                    [
+                        "AIPPOCAMPUS_HOME=",
+                        "AIPPOCAMPUS_REGISTRY_DIR=",
+                        "AIPPOCAMPUS_GENERIC_IMPORT_DIR=",
+                        "CODEX_HOME=",
+                        "AIPPOCAMPUS_OBJECT_STORE_URL=",
+                        "AIPPOCAMPUS_OBJECT_STORE_TOKEN=sk-test-leak-abcdefghijklmnopqrstuvwxyz",
+                        "AIPPOCAMPUS_OBJECT_ACCESS_KEY_ID=",
+                        "AIPPOCAMPUS_OBJECT_SECRET_ACCESS_KEY=",
+                        "AIPPOCAMPUS_OBJECT_SESSION_TOKEN=",
+                        "AIPPOCAMPUS_AGE_BIN=",
+                        "AIPPOCAMPUS_AGE_KEYGEN_BIN=",
+                        "AIPPOCAMPUS_SEMANTIC_GATE=off",
+                        "AIPPOCAMPUS_DEEPSEEK_BASE_URL=",
+                        "DEEPSEEK_API_KEY=",
+                        "AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV=",
+                        "LOCAL_OPENAI_COMPAT_API_KEY=",
+                        "AIPPOCAMPUS_PROJECTS_TOKEN=",
+                        "GH_TOKEN=",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            plugin = repo / "plugins" / "aippocampus"
+            plugin.mkdir(parents=True)
+            (plugin / ".mcp.json").write_text(
+                '{"mcpServers":{"aippocampus":{"command":"python","env":{"DEEPSEEK_API_KEY":"x"}}}}',
+                encoding="utf-8",
+            )
+
+            issues = docs_health.safe_environment_issues(repo)
+
+        self.assertIn(".env.example missing canonical public API env matrix pointer", issues)
+        self.assertTrue(any("contains secret-like or local-path value" in issue for issue in issues), issues)
+        self.assertIn(
+            "plugin MCP manifest must not include public env block; configure aippocampus env privately",
+            issues,
+        )
+
     def test_benchmark_evidence_map_reports_missing_runner(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)

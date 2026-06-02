@@ -24,6 +24,8 @@ bundle, demo, release, or plugin package.
   Private-text debug output remains local-only.
 - Confirm `.aippocampus/`, registry exports, `thread-anchors.md`, logs, and
   archives remain gitignored.
+- Confirm private `.env` files remain gitignored and `.env.example` contains
+  only blank values or safe fake examples.
 - Confirm public examples do not include `rollout.jsonl`.
 
 ## Hooks

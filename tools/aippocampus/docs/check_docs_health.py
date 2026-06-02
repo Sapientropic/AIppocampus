@@ -331,6 +331,58 @@ DEPENDENCY_CONTRACT_DOC_TERMS = {
     "setup-python` pip caching": "dependency contract doc missing CI caching boundary",
 }
 
+SAFE_ENV_REQUIRED_KEYS = {
+    "AIPPOCAMPUS_HOME",
+    "AIPPOCAMPUS_REGISTRY_DIR",
+    "AIPPOCAMPUS_GENERIC_IMPORT_DIR",
+    "CODEX_HOME",
+    "AIPPOCAMPUS_VAULT",
+    "AIPPOCAMPUS_STYLE_SOURCE",
+    "AIPPOCAMPUS_SCRIPT_SOURCE",
+    "AIPPOCAMPUS_SITE_MARK",
+    "AIPPOCAMPUS_SITE_TITLE",
+    "AIPPOCAMPUS_OBJECT_STORE_URL",
+    "AIPPOCAMPUS_OBJECT_STORE_TOKEN",
+    "AIPPOCAMPUS_OBJECT_ACCESS_KEY_ID",
+    "AIPPOCAMPUS_OBJECT_SECRET_ACCESS_KEY",
+    "AIPPOCAMPUS_OBJECT_SESSION_TOKEN",
+    "AIPPOCAMPUS_AGE_BIN",
+    "AIPPOCAMPUS_AGE_KEYGEN_BIN",
+    "AIPPOCAMPUS_SEMANTIC_GATE",
+    "AIPPOCAMPUS_DEEPSEEK_BASE_URL",
+    "DEEPSEEK_API_KEY",
+    "AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV",
+    "LOCAL_OPENAI_COMPAT_API_KEY",
+    "AIPPOCAMPUS_PROJECTS_TOKEN",
+    "GH_TOKEN",
+}
+
+SAFE_ENV_ALLOWED_VALUES = {
+    "AIPPOCAMPUS_PROMPT_HOOK_BUDGET_MS": "250",
+    "AIPPOCAMPUS_LIFECYCLE_HOOK_BUDGET_MS": "1000",
+    "AIPPOCAMPUS_PROMPT_SKIP_TELEMETRY": "1",
+    "AIPPOCAMPUS_SEMANTIC_GATE": "off",
+}
+
+SAFE_ENV_DOC_TERMS = {
+    ".env.example": "safe environment doc missing .env.example pointer",
+    "public-api.md#environment-configuration-matrix": (
+        "safe environment doc missing canonical environment matrix pointer"
+    ),
+    "`plugins/aippocampus/.mcp.json` intentionally has no `env` block": (
+        "safe environment doc missing plugin MCP inherited-env boundary"
+    ),
+    "does not currently ship a Dockerfile": (
+        "safe environment doc missing Docker/devcontainer deferral boundary"
+    ),
+    "smoke_alternate_runtime_sync.py": (
+        "safe environment doc missing alternate-runtime smoke substitute"
+    ),
+    "not a release claim for a maintained container image": (
+        "safe environment doc missing container-support overclaim boundary"
+    ),
+}
+
 PUBLIC_DOC_COMMAND_LINT_FILES = {
     "README.md",
     "docs/guides/install-guide.md",
@@ -753,6 +805,92 @@ def dependency_contract_issues(repo_root: Path) -> list[str]:
     return issues
 
 
+def safe_environment_issues(repo_root: Path) -> list[str]:
+    issues: list[str] = []
+
+    gitignore = repo_root / ".gitignore"
+    if gitignore.exists():
+        ignored = {
+            line.strip()
+            for line in gitignore.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        }
+        if ".env" not in ignored or ".env.*" not in ignored or "!.env.example" not in ignored:
+            issues.append(".gitignore must ignore private .env files while allowing .env.example")
+    else:
+        issues.append("missing .gitignore for private .env files")
+
+    env_path = repo_root / ".env.example"
+    if not env_path.exists():
+        issues.append("missing safe environment template: .env.example")
+    else:
+        env_text = env_path.read_text(encoding="utf-8")
+        if "docs/guides/public-api.md#environment-configuration-matrix" not in env_text:
+            issues.append(".env.example missing canonical public API env matrix pointer")
+        seen_keys: set[str] = set()
+        for line_no, raw_line in enumerate(env_text.splitlines(), start=1):
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" not in line:
+                issues.append(f".env.example:{line_no} must use KEY=VALUE syntax")
+                continue
+            key, value = line.split("=", maxsplit=1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            seen_keys.add(key)
+            if not re.fullmatch(r"[A-Z][A-Z0-9_]*", key):
+                issues.append(f".env.example:{line_no} has invalid env var name: {key}")
+            if value and SAFE_ENV_ALLOWED_VALUES.get(key) != value:
+                issues.append(
+                    f".env.example:{line_no} must keep {key} blank or use an approved safe value"
+                )
+            if value and (SECRET_OR_LOCAL_PATH_RE.search(value) or re.search(r"/(?:Users|home)/", value)):
+                issues.append(f".env.example:{line_no} contains secret-like or local-path value")
+        for key in sorted(SAFE_ENV_REQUIRED_KEYS - seen_keys):
+            issues.append(f".env.example missing supported environment variable: {key}")
+
+    safe_doc = repo_root / "docs" / "guides" / "safe-environment.md"
+    if not safe_doc.exists():
+        issues.append("missing safe environment guide: docs/guides/safe-environment.md")
+    else:
+        safe_text = safe_doc.read_text(encoding="utf-8")
+        for term, issue in SAFE_ENV_DOC_TERMS.items():
+            if term not in safe_text:
+                issues.append(issue)
+
+    for rel_path, required in {
+        "README.md": ["docs/guides/safe-environment.md", ".env.example"],
+        "docs/README.md": ["guides/safe-environment.md"],
+        "docs/guides/install-guide.md": ["safe-environment.md", ".env.example"],
+        "docs/guides/public-api.md": [".env.example"],
+        "docs/guides/privacy-security-checklist.md": [".env.example", ".env"],
+    }.items():
+        path = repo_root / rel_path
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8")
+        for term in required:
+            if term not in text:
+                issues.append(f"{rel_path} missing safe environment pointer: {term}")
+
+    mcp_path = repo_root / "plugins" / "aippocampus" / ".mcp.json"
+    if mcp_path.exists():
+        try:
+            mcp = json.loads(mcp_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            issues.append(f"invalid plugin MCP manifest: {type(exc).__name__}")
+            mcp = {}
+        for name, server in (mcp.get("mcpServers") or {}).items():
+            if isinstance(server, dict) and "env" in server:
+                issues.append(
+                    "plugin MCP manifest must not include public env block; "
+                    f"configure {name} env privately"
+                )
+
+    return issues
+
+
 def windows_context_from_recent_lines(lines: list[str], fence_start_line: int) -> bool:
     recent = "\n".join(lines[max(0, fence_start_line - 5) : fence_start_line - 1]).casefold()
     return "windows" in recent or "powershell" in recent
@@ -837,6 +975,7 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
     issues.extend(public_core_schema_contract_issues(repo_root))
     issues.extend(python_version_contract_issues(repo_root))
     issues.extend(dependency_contract_issues(repo_root))
+    issues.extend(safe_environment_issues(repo_root))
 
     gitignore = repo_root / ".gitignore"
     if not gitignore.exists():

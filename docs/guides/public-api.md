@@ -434,9 +434,10 @@ summary, label, or model-organized output when they need evidence.
 
 Public environment variables use the `AIPPOCAMPUS_*` prefix. This section is
 the canonical public matrix for environment configuration; install docs may
-show examples, but should not mirror this whole list. "Public" means documented
-and stable enough to configure. It does not mean the variable value is safe to
-publish.
+show examples and the safe [`.env.example`](../../.env.example) template may
+point here, but they should not mirror this whole list. "Public" means
+documented and stable enough to configure. It does not mean the variable value
+is safe to publish.
 
 ### Environment Configuration Matrix
 
