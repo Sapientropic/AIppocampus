@@ -19,7 +19,10 @@ def _load_repo_paths() -> ModuleType:
 
 
 _repo_paths = _load_repo_paths()
-_paths = _repo_paths.ensure_repo_imports(Path(__file__).resolve())
+_paths = _repo_paths.ensure_repo_imports(
+    Path(__file__).resolve(),
+    include_benchmark_tools=True,
+)
 
 REPO_ROOT = _paths.repo_root
 SKILL_ROOT = _paths.skill_root
@@ -27,4 +30,7 @@ SKILL_SCRIPTS = _paths.skill_scripts
 
 
 def ensure_paths() -> None:
-    _repo_paths.ensure_repo_imports(Path(__file__).resolve())
+    _repo_paths.ensure_repo_imports(
+        Path(__file__).resolve(),
+        include_benchmark_tools=True,
+    )
