@@ -16,6 +16,10 @@ htmlcov/
 venv/
 node_modules/
 
+.env
+.env.*
+!.env.example
+
 .aippocampus/
 aippocampus-registry/
 /thread-anchors.md

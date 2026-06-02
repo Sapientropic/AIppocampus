@@ -211,6 +211,9 @@ Then restart Codex or reload skills if your runtime requires it.
 The skill entrypoint is [skills/aippocampus/SKILL.md](skills/aippocampus/SKILL.md).
 The public API and stability boundary is
 [docs/guides/public-api.md](docs/guides/public-api.md).
+Safe local configuration starts from
+[.env.example](.env.example) and
+[docs/guides/safe-environment.md](docs/guides/safe-environment.md).
 The runtime and tooling dependency taxonomy lives in
 [docs/guides/dependency-contract.md](docs/guides/dependency-contract.md).
 

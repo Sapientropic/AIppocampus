@@ -65,6 +65,7 @@ material.
 - [`install-guide.md`](guides/install-guide.md) - public skill, MCP, plugin, hook, and local-sync install paths.
 - [`claude-code-mcp.md`](guides/claude-code-mcp.md) - Claude Code MCP setup, provider onboarding states, and privacy boundary.
 - [`public-api.md`](guides/public-api.md) - 10-minute dependency path plus supported CLI, MCP, JSON, environment-variable, SDK, and Python import stability boundary.
+- [`safe-environment.md`](guides/safe-environment.md) - `.env.example`, plugin MCP env inheritance, and isolated-runtime deferral/substitute smoke boundary.
 - [`dependency-contract.md`](guides/dependency-contract.md) - runtime, optional integration, benchmark, dev, release, and CI caching dependency taxonomy.
 - [`public-core-boundary.md`](guides/public-core-boundary.md) - Apache-2.0 public-core license, adapter, schema, third-party asset, and relicensing boundary.
 - [`ecosystem-integration-matrix.md`](guides/ecosystem-integration-matrix.md) - ecosystem support status by host family, with smoke status and overclaim boundaries.
