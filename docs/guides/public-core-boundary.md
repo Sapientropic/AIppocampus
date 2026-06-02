@@ -399,6 +399,16 @@ Required semantics:
 - Supersession, retraction, and rollback are lifecycle overlays. They never
   delete source history or silently rewrite promoted claims.
 
+### High-Risk Answer Gate Policy
+
+High-risk answer-time use of governed knowledge claims is owned by
+[high-risk-answer-gates.md](../architecture/high-risk-answer-gates.md). The
+policy is a deterministic local gate over already selected claims and evidence:
+it requires source reopen, applicability context, lifecycle eligibility, visible
+conflict handling, and privacy-safe cannot-claim boundaries before a claim can
+support a high-impact answer. It is not a public answer-generation API and it
+must not export raw source text or claim text in its report.
+
 ### Import Manifest
 
 ```json
