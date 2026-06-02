@@ -617,6 +617,89 @@ class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
         self.assertNotIn("Rust lifetime error", dumped)
         self.assertNotIn("dropna=False", dumped)
 
+    def test_sharegpt_public_sampling_is_seeded_and_summarized(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            corpus_dir = root / "sharegpt_clean"
+            rows = []
+            for conv_index in range(6):
+                source_id = f"conv-seeded-{conv_index}"
+                rows.extend(
+                    [
+                        {
+                            "message_id": f"{source_id}-m1",
+                            "turn_id": f"{source_id}-t1",
+                            "source_id": source_id,
+                            "source_line": 1,
+                            "role": "user",
+                            "turn_index": 1,
+                            "text": f"How should I handle Python dataframe nulls {conv_index}?",
+                            "_meta": {
+                                "source_file": "public-sharegpt.jsonl",
+                                "category": "program and code",
+                            },
+                        },
+                        {
+                            "message_id": f"{source_id}-m2",
+                            "turn_id": f"{source_id}-t1",
+                            "source_id": source_id,
+                            "source_line": 2,
+                            "role": "assistant",
+                            "phase": "final_answer",
+                            "turn_index": 1,
+                            "is_final": True,
+                            "text": f"Use dropna controls and explicit masks for dataframe nulls {conv_index}.",
+                            "_meta": {
+                                "source_file": "public-sharegpt.jsonl",
+                                "category": "program and code",
+                            },
+                        },
+                    ]
+                )
+            self.write_jsonl(corpus_dir / "messages.jsonl", rows)
+
+            first = benchmark.run_sharegpt_public_source_evidence_benchmark(
+                corpus_dir=corpus_dir,
+                conversations=2,
+                max_cases=4,
+                min_cases=1,
+                seed=218,
+            )
+            repeated = benchmark.run_sharegpt_public_source_evidence_benchmark(
+                corpus_dir=corpus_dir,
+                conversations=2,
+                max_cases=4,
+                min_cases=1,
+                seed=218,
+            )
+            first_n = benchmark.run_sharegpt_public_source_evidence_benchmark(
+                corpus_dir=corpus_dir,
+                conversations=2,
+                max_cases=4,
+                min_cases=1,
+                sampling_mode="first-n",
+            )
+
+        self.assertEqual(first["sampling"]["method"], "seeded_stratified")
+        self.assertTrue(first["sampling"]["population_scan_complete"])
+        self.assertEqual(first["sampling"]["eligible_population_count"], 6)
+        self.assertEqual(first["sampling"]["selected_conversation_count"], 2)
+        self.assertEqual(
+            first["sampling"]["selected_conversation_ids"],
+            repeated["sampling"]["selected_conversation_ids"],
+        )
+        summary = benchmark.summarize_sharegpt_public_payload(first)
+        self.assertEqual(
+            summary["sampling"]["selected_conversation_ids"],
+            first["sampling"]["selected_conversation_ids"],
+        )
+        self.assertEqual(first_n["sampling"]["method"], "first_n")
+        self.assertFalse(first_n["sampling"]["population_scan_complete"])
+        self.assertIn("seeded_stratified_population_sampling", first_n["cannot_claim"])
+        dumped = json.dumps(first, ensure_ascii=False)
+        self.assertNotIn("dataframe nulls", dumped)
+        self.assertNotIn("public-sharegpt.jsonl", dumped)
+
     def test_public_semantic_sidecar_builds_reviewed_bounded_subset(self) -> None:
         def fake_labeler(candidates: list[dict], **_: object) -> dict:
             target = next(item for item in candidates if item["message_id"] == "m1")

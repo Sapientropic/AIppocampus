@@ -487,13 +487,13 @@ and opt-in because the generated corpus is large and gitignored.
 Run from the repository root:
 
 ```powershell
-python benchmarks\aippocampus\benchmark_source_evidence_retrieval.py --include-sharegpt-public --sharegpt-public-conversations 100 --sharegpt-public-cases 200 --sharegpt-public-min-cases 50
+python benchmarks\aippocampus\benchmark_source_evidence_retrieval.py --include-sharegpt-public --sharegpt-public-conversations 100 --sharegpt-public-cases 200 --sharegpt-public-min-cases 50 --sharegpt-public-sampling-mode seeded-stratified --sharegpt-public-seed 218
 ```
 
 Or include it in the suite:
 
 ```powershell
-python benchmarks\aippocampus\benchmark_suite.py --include-sharegpt-public-track-b --sharegpt-public-conversations 100 --sharegpt-public-cases 200 --sharegpt-public-min-cases 50
+python benchmarks\aippocampus\benchmark_suite.py --include-sharegpt-public-track-b --sharegpt-public-conversations 100 --sharegpt-public-cases 200 --sharegpt-public-min-cases 50 --sharegpt-public-sampling-mode seeded-stratified --sharegpt-public-seed 218
 ```
 
 Boundary:
@@ -502,6 +502,11 @@ Boundary:
   claim
 - cases bind expected evidence to clean-source `source_id`, `message_id`,
   `turn_id`, and line metadata; model summaries are not grading truth
+- default public-corpus runs use seeded stratified conversation sampling and
+  report seed, selected id hashes, eligible population count, skipped counts,
+  and stratum counts; `--sharegpt-public-sampling-mode first-n` is only an
+  explicit smoke/debug override and carries a cannot-claim boundary for full
+  population sampling
 
 ### Optional Public Semantic Sidecar Track B
 
@@ -765,10 +770,13 @@ Current smoke and diagnostic results from 2026-05-27:
 - synthetic Track A gate benchmark before the harder family: 7 cases, 7
   correct, macro F1 1.0, over-escalation 0, evidence false positives 0,
   semantic model calls 0
-- public-real ShareGPT coding Track A P1 gate benchmark:
-  `python benchmarks\aippocampus\benchmark_memory_decision_gate.py --case-set sharegpt-coding --sharegpt-conversations 100`
-  produced 500 cases from the first 100 converted coding conversations; current
-  baseline is 500/500 correct, accuracy 1.0, macro F1 1.0,
+- public-real ShareGPT coding Track A P1 gate benchmark now defaults to seeded
+  stratified sampling:
+  `python benchmarks\aippocampus\benchmark_memory_decision_gate.py --case-set sharegpt-coding --sharegpt-conversations 100 --sharegpt-sampling-mode seeded-stratified --sharegpt-seed 218`;
+  reports include sampling seed, selected conversation id hashes, eligible
+  population count, skipped counts, and stratum counts. The earlier 2026-05-29
+  baseline used the first 100 converted coding conversations and was 500/500
+  correct, accuracy 1.0, macro F1 1.0,
   `scent_or_evidence_recall` 1.0, `evidence_recall` 1.0, evidence false
   positives 0, over-escalation 0, semantic model calls 200
 - the ShareGPT P1 case families now make the vague-continuation boundary
@@ -786,10 +794,10 @@ Current smoke and diagnostic results from 2026-05-27:
   positives came from short English associative cue substring matches such as
   `rag` inside unrelated words and bare `hook/evidence` in non-memory prose;
   those are now covered by token-boundary tests and narrower cue phrases.
-- sampling caveat: the current `--sharegpt-conversations 100` smoke consumes the
-  first 100 converted conversations, which came from `common_en_70k.jsonl` in
-  this run. It is reproducible, but not yet a stratified sample of the full
-  coding corpus.
+- historical sampling caveat: pre-#218 `--sharegpt-conversations 100` smoke
+  reports consumed the first 100 converted conversations, which came from
+  `common_en_70k.jsonl` in that run. Those older reports remain reproducible
+  smoke evidence, but not stratified samples of the full coding corpus.
 - existing real-history FTS5/source baseline after the 2026-05-29 rerun: 959
   registry threads, 810 eligible threads, 9,699 messages scanned, 97/100 FTS5
   top-10 hits, and 98/100 production-hybrid top-10 hits

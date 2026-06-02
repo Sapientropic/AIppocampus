@@ -62,8 +62,16 @@ python benchmark_corpus\convert_to_aippocampus.py --source sharegpt --input benc
 Run the Track A P1 gate-decision baseline over the coding corpus:
 
 ```powershell
-python benchmarks\aippocampus\benchmark_memory_decision_gate.py --case-set sharegpt-coding --sharegpt-conversations 100 --output benchmark_corpus\reports\sharegpt-p1-gate-100.json
+python benchmarks\aippocampus\benchmark_memory_decision_gate.py --case-set sharegpt-coding --sharegpt-conversations 100 --sharegpt-sampling-mode seeded-stratified --sharegpt-seed 218 --output benchmark_corpus\reports\sharegpt-p1-gate-100.json
 ```
+
+The ShareGPT Track A and Track B public-corpus entrypoints default to
+deterministic seeded stratified sampling. Reports include the seed, selected
+conversation id hashes, eligible population count, skipped counts, and stratum
+counts by source-file hash, category bucket, language bucket, turn bucket, and
+coding bucket. Use `--sharegpt-sampling-mode first-n` only for a cheap
+gate-decision smoke/debug run; first-N reports explicitly carry a
+`seeded_stratified_population_sampling` cannot-claim boundary.
 
 Run the fresh-clone public-fast benchmark profile:
 
@@ -194,12 +202,14 @@ Run the optional public-corpus Track B source-evidence baseline over the broad
 ShareGPT corpus:
 
 ```powershell
-python benchmarks\aippocampus\benchmark_source_evidence_retrieval.py --include-sharegpt-public --sharegpt-public-conversations 100 --sharegpt-public-cases 200 --sharegpt-public-min-cases 50 --output benchmark_corpus\reports\sharegpt-track-b-public-100.json
+python benchmarks\aippocampus\benchmark_source_evidence_retrieval.py --include-sharegpt-public --sharegpt-public-conversations 100 --sharegpt-public-cases 200 --sharegpt-public-min-cases 50 --sharegpt-public-sampling-mode seeded-stratified --sharegpt-public-seed 218 --output benchmark_corpus\reports\sharegpt-track-b-public-100.json
 ```
 
 This Track B slice reports message-level and turn-level source hits. It is a
 public-corpus retrieval baseline, not a private real-history source-evidence
-quality claim.
+quality claim. Use `--sharegpt-public-sampling-mode first-n` only for a cheap
+Track B smoke/debug run; first-N reports do not claim full-population seeded
+stratified sampling.
 
 Do not count the generated ShareGPT clean-source output as
 `semantic-sidecar-required` by itself. The public corpus currently contains

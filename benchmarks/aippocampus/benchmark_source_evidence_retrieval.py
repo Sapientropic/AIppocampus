@@ -29,6 +29,7 @@ _paths.ensure_paths()
 import smoke_source_evidence_recall_eval as source_evidence_eval
 
 import benchmark_fts5_recall as fts5_benchmark
+import sharegpt_sampling
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
 from aippocampus_runtime.source.semantic_scope_labels import (
     SEMANTIC_SCOPE_LABELS_FILENAME,
@@ -308,6 +309,7 @@ def summarize_sharegpt_public_payload(payload: dict[str, Any]) -> dict[str, Any]
         "status": payload.get("status"),
         "config": payload.get("config") or {},
         "corpus": payload.get("corpus") or {},
+        "sampling": payload.get("sampling") or {},
         "metrics": payload.get("metrics") or {},
         "skip_reason": payload.get("skip_reason"),
         "privacy_boundary": payload.get("privacy_boundary") or {},
@@ -389,49 +391,21 @@ def sharegpt_conversation_is_eligible(rows: list[dict[str, Any]]) -> bool:
     )
 
 
-def load_sharegpt_conversations(corpus_dir: Path, max_conversations: int) -> list[list[dict[str, Any]]]:
-    messages_path = corpus_dir / "messages.jsonl"
-    if not messages_path.exists():
-        raise FileNotFoundError(f"ShareGPT clean-source messages not found: {messages_path}")
-    target = max(1, int(max_conversations))
-    conversations: list[list[dict[str, Any]]] = []
-    current_source_id = ""
-    current_rows: list[dict[str, Any]] = []
-
-    def flush_current() -> None:
-        nonlocal current_source_id, current_rows
-        if not current_source_id:
-            return
-        rows = normalize_sharegpt_rows(current_rows)
-        if sharegpt_conversation_is_eligible(rows):
-            conversations.append(rows)
-        current_source_id = ""
-        current_rows = []
-
-    with messages_path.open("r", encoding="utf-8") as handle:
-        for line in handle:
-            if len(conversations) >= target:
-                break
-            if not line.strip():
-                continue
-            try:
-                message = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if not isinstance(message, dict):
-                continue
-            source_id = str(message.get("source_id") or "")
-            if not source_id:
-                continue
-            if current_source_id and source_id != current_source_id:
-                flush_current()
-                if len(conversations) >= target:
-                    break
-            current_source_id = source_id
-            current_rows.append(message)
-    if len(conversations) < target:
-        flush_current()
-    return conversations
+def load_sharegpt_conversations(
+    corpus_dir: Path,
+    max_conversations: int,
+    *,
+    sampling_mode: str | None = sharegpt_sampling.FIRST_N,
+    seed: int = sharegpt_sampling.DEFAULT_SHAREGPT_SAMPLE_SEED,
+) -> list[list[dict[str, Any]]]:
+    return sharegpt_sampling.sample_sharegpt_conversations(
+        corpus_dir,
+        max_conversations,
+        normalize_rows=normalize_sharegpt_rows,
+        is_eligible=sharegpt_conversation_is_eligible,
+        sampling_mode=sampling_mode,
+        seed=seed,
+    ).conversations
 
 
 def public_source_terms(*texts: str, limit: int = 5) -> list[str]:
@@ -814,6 +788,8 @@ def run_sharegpt_public_source_evidence_benchmark(
     candidate_limit: int = fts5_benchmark.DEFAULT_CANDIDATE_LIMIT,
     min_message_hit_rate: float = DEFAULT_SHAREGPT_PUBLIC_MIN_MESSAGE_HIT_RATE,
     min_turn_hit_rate: float = DEFAULT_SHAREGPT_PUBLIC_MIN_TURN_HIT_RATE,
+    sampling_mode: str = sharegpt_sampling.SEEDED_STRATIFIED,
+    seed: int = sharegpt_sampling.DEFAULT_SHAREGPT_SAMPLE_SEED,
     include_private_text: bool = False,
 ) -> dict[str, Any]:
     started = time.perf_counter()
@@ -828,12 +804,18 @@ def run_sharegpt_public_source_evidence_benchmark(
         "candidate_limit": int(candidate_limit),
         "min_message_hit_rate": float(min_message_hit_rate),
         "min_turn_hit_rate": float(min_turn_hit_rate),
+        "sampling_mode": sharegpt_sampling.canonical_sampling_mode(sampling_mode),
+        "seed": int(seed),
         "include_private_text": bool(include_private_text),
     }
     try:
-        conversations_payload = load_sharegpt_conversations(
+        sample = sharegpt_sampling.sample_sharegpt_conversations(
             resolved_corpus_dir,
-            max_conversations=conversations,
+            conversations,
+            normalize_rows=normalize_sharegpt_rows,
+            is_eligible=sharegpt_conversation_is_eligible,
+            sampling_mode=sampling_mode,
+            seed=seed,
         )
     except FileNotFoundError as exc:
         return skipped_sharegpt_public_payload(
@@ -842,6 +824,7 @@ def run_sharegpt_public_source_evidence_benchmark(
             reason=str(exc),
             config=config,
         )
+    conversations_payload = sample.conversations
     with tempfile.TemporaryDirectory(prefix="aippocampus-sharegpt-track-b-") as tmp:
         cases, corpus = build_sharegpt_public_cases(
             Path(tmp),
@@ -873,6 +856,7 @@ def run_sharegpt_public_source_evidence_benchmark(
         "ok": status == "sufficient",
         "config": config,
         "corpus": corpus,
+        "sampling": sample.report,
         "metrics": metrics,
         "cases": results,
         "privacy_boundary": {
@@ -886,6 +870,11 @@ def run_sharegpt_public_source_evidence_benchmark(
             "private_real_history_source_evidence_quality",
             "life_wide_semantic_sidecar_quality",
             "external_baseline_comparison",
+            *(
+                ["seeded_stratified_population_sampling"]
+                if sample.report.get("method") == sharegpt_sampling.FIRST_N
+                else []
+            ),
         ],
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
     }
@@ -2726,6 +2715,8 @@ def run_source_evidence_retrieval_benchmark(
     sharegpt_public_candidate_limit: int = fts5_benchmark.DEFAULT_CANDIDATE_LIMIT,
     sharegpt_public_min_message_hit_rate: float = DEFAULT_SHAREGPT_PUBLIC_MIN_MESSAGE_HIT_RATE,
     sharegpt_public_min_turn_hit_rate: float = DEFAULT_SHAREGPT_PUBLIC_MIN_TURN_HIT_RATE,
+    sharegpt_public_sampling_mode: str = sharegpt_sampling.SEEDED_STRATIFIED,
+    sharegpt_public_seed: int = sharegpt_sampling.DEFAULT_SHAREGPT_SAMPLE_SEED,
     include_standard_public: bool = False,
     standard_dataset: str = DEFAULT_STANDARD_DATASET,
     standard_corpus_path: Path | str | None = None,
@@ -2787,6 +2778,8 @@ def run_source_evidence_retrieval_benchmark(
             candidate_limit=sharegpt_public_candidate_limit,
             min_message_hit_rate=sharegpt_public_min_message_hit_rate,
             min_turn_hit_rate=sharegpt_public_min_turn_hit_rate,
+            sampling_mode=sharegpt_public_sampling_mode,
+            seed=sharegpt_public_seed,
             include_private_text=include_private_text,
         )
     standard_public_payload = None
@@ -2884,6 +2877,10 @@ def run_source_evidence_retrieval_benchmark(
             "sharegpt_public_max_cases": int(sharegpt_public_max_cases),
             "sharegpt_public_min_cases": int(sharegpt_public_min_cases),
             "sharegpt_public_top_k": int(sharegpt_public_top_k),
+            "sharegpt_public_sampling_mode": sharegpt_sampling.canonical_sampling_mode(
+                sharegpt_public_sampling_mode
+            ),
+            "sharegpt_public_seed": int(sharegpt_public_seed),
             "include_standard_public": bool(include_standard_public),
             "standard_dataset": standard_dataset,
             "standard_max_questions": int(standard_max_questions),
@@ -3084,6 +3081,17 @@ def main() -> int:
         default=DEFAULT_SHAREGPT_PUBLIC_MIN_CASES,
     )
     parser.add_argument("--sharegpt-public-top-k", type=int, default=DEFAULT_SHAREGPT_PUBLIC_TOP_K)
+    parser.add_argument(
+        "--sharegpt-public-sampling-mode",
+        choices=["seeded-stratified", "first-n"],
+        default="seeded-stratified",
+        help="ShareGPT public sampling. Use first-n only for explicit smoke/debug runs.",
+    )
+    parser.add_argument(
+        "--sharegpt-public-seed",
+        type=int,
+        default=sharegpt_sampling.DEFAULT_SHAREGPT_SAMPLE_SEED,
+    )
     parser.add_argument("--include-standard-public", action="store_true")
     parser.add_argument(
         "--standard-dataset",
@@ -3217,6 +3225,8 @@ def main() -> int:
         sharegpt_public_max_cases=args.sharegpt_public_cases,
         sharegpt_public_min_cases=args.sharegpt_public_min_cases,
         sharegpt_public_top_k=args.sharegpt_public_top_k,
+        sharegpt_public_sampling_mode=args.sharegpt_public_sampling_mode,
+        sharegpt_public_seed=args.sharegpt_public_seed,
         include_standard_public=args.include_standard_public,
         standard_dataset=args.standard_dataset,
         standard_corpus_path=args.standard_corpus_path,

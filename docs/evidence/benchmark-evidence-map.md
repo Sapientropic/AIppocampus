@@ -106,6 +106,7 @@ benchmark runner should be added here and linked to its dated evidence owner.
 | Benchmark run-history diff and regression guardrail | `benchmarks/aippocampus/benchmark_run_history_diff.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `.tmp/` or `benchmark_corpus/reports/` |
 | Track A memory decision gate | `benchmarks/aippocampus/benchmark_memory_decision_gate.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `docs/evidence/benchmarks/memory-pain-fixture-report.md` |
 | Track B source-evidence retrieval wrapper | `benchmarks/aippocampus/benchmark_source_evidence_retrieval.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `benchmark_corpus/README.md` |
+| ShareGPT public-corpus seeded sampler | `benchmarks/aippocampus/sharegpt_sampling.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `benchmark_corpus/sharegpt_manifest.json` |
 | Coding decision-shadow Tracks A-E | `benchmarks/aippocampus/benchmark_coding_decision_shadow.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `docs/research/agent-coding-context-analysis.md` |
 | LongMemEval retrieval-only benchmark | `benchmarks/aippocampus/benchmark_longmemeval.py` | `docs/evidence/benchmarks/longmemeval.md`, `benchmark_corpus/longmemeval_manifest.json` |
 | LoCoMo public longitudinal-users control | `benchmarks/aippocampus/benchmark_locomo_public_users.py` | `docs/evidence/benchmarks/public-longitudinal-users.md`, `benchmark_corpus/README.md`, `benchmark_corpus/locomo_manifest.json` |
