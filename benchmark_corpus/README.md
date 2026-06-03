@@ -319,6 +319,18 @@ Run the optional public-corpus Track B source-evidence baseline over the broad
 ShareGPT corpus:
 
 ```powershell
+python benchmarks\aippocampus\benchmark_source_evidence_retrieval.py --fts5-cases 1 --fts5-min-cases 1 --source-max-cases 1 --source-min-cases 1 --allow-deterministic-labels --json
+```
+
+This portable wiring smoke is the second-user-friendly Track B command. It can
+run without prebuilt semantic-sidecar selected cases and should keep
+`deterministic_label_fallback_is_not_semantic_sidecar_evidence` in
+`cannot_claim`. To validate semantic-sidecar quality, rerun without
+`--allow-deterministic-labels` only after the local registry has eligible
+`semantic-scope-labels.jsonl` sidecar rows; `insufficient_selected_cases` is a
+coverage/prep diagnostic, not a refactor failure.
+
+```powershell
 python benchmarks\aippocampus\benchmark_source_evidence_retrieval.py --include-sharegpt-public --sharegpt-public-conversations 100 --sharegpt-public-cases 200 --sharegpt-public-min-cases 50 --sharegpt-public-sampling-mode seeded-stratified --sharegpt-public-seed 218 --output benchmark_corpus\reports\sharegpt-track-b-public-100.json
 ```
 
