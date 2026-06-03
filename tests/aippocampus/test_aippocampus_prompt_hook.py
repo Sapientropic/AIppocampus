@@ -625,6 +625,22 @@ class AmbientRecallHookTests(unittest.TestCase):
                 "raw_prompt": "private prompt text",
             },
             "ambient_recall": {"mode": "scent", "card_count": 1},
+            "hot_path_funnel": {
+                "decision": "scent",
+                "candidate_count": 1,
+                "candidate_ids": ["session:private"],
+                "source_reopen_promotion_count": 0,
+                "stages": [
+                    {
+                        "stage": "bounded_trigram_fts",
+                        "status": "hit",
+                        "candidate_count": 1,
+                        "fallback_reason": "",
+                        "elapsed_ms": 3.4,
+                        "raw_prompt": "private prompt text",
+                    }
+                ],
+            },
             "elapsed_ms": 123.4,
         }
 
@@ -643,6 +659,11 @@ class AmbientRecallHookTests(unittest.TestCase):
             public["scent_threshold_policy"]["adjustments"][0]["reason"],
             "same_thread_decision_continuation",
         )
+        self.assertEqual(public["hot_path_funnel"]["decision"], "scent")
+        self.assertEqual(public["hot_path_funnel"]["candidate_count"], 1)
+        self.assertEqual(public["hot_path_funnel"]["source_reopen_promotion_count"], 0)
+        self.assertEqual(public["hot_path_funnel"]["stages"][0]["stage"], "bounded_trigram_fts")
+        self.assertNotIn("candidate_ids", public["hot_path_funnel"])
         self.assertNotIn("private prompt text", encoded)
 
     def test_prompt_hook_dry_run_logs_would_deliver_without_foreground_dream(self) -> None:

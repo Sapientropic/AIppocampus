@@ -257,6 +257,31 @@ def public_hook_debug_payload(result: dict[str, Any]) -> dict[str, Any]:
             "worker_count": raw_semantic_gate.get("worker_count")
             or len(raw_semantic_gate.get("workers") or []),
         }
+    raw_hot_path = result.get("hot_path_funnel")
+    if isinstance(raw_hot_path, dict):
+        stages: list[dict[str, Any]] = []
+        for stage in raw_hot_path.get("stages") or []:
+            if not isinstance(stage, dict):
+                continue
+            stages.append(
+                {
+                    "stage": stage.get("stage"),
+                    "status": stage.get("status"),
+                    "candidate_count": stage.get("candidate_count"),
+                    "fallback_reason": stage.get("fallback_reason") or "",
+                    "elapsed_ms": stage.get("elapsed_ms"),
+                }
+            )
+        payload["hot_path_funnel"] = {
+            "decision": raw_hot_path.get("decision"),
+            "candidate_count": raw_hot_path.get("candidate_count"),
+            "source_reopen_promotion_count": raw_hot_path.get(
+                "source_reopen_promotion_count", 0
+            ),
+            "local_only": bool(raw_hot_path.get("local_only")),
+            "elapsed_ms": raw_hot_path.get("elapsed_ms"),
+            "stages": stages[:6],
+        }
     return payload
 
 

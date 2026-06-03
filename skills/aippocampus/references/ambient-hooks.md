@@ -21,6 +21,18 @@ Outcomes:
 Keep `scent` and `evidence` distinct. A weak association can steer the next
 agent action, but it must not be reported as remembered fact.
 
+`prompt_recall_hot_path.py` owns the local `UserPromptSubmit` hot-path funnel.
+It is zero-dependency and local-only: first try current thread/profile route
+hints, then reviewed cue-cache aliases, then bounded SQLite trigram FTS over
+the existing clean-source indexes. Its result may include candidate ids,
+source refs, scent reasons, and per-stage diagnostics (`stage`, `status`,
+`candidate_count`, `fallback_reason`, `elapsed_ms`), but it must keep
+`evidence=[]`. Source-backed claims still require the normal source reopen or
+evidence probe. `benchmarks/aippocampus/benchmark_prompt_hot_path_funnel.py`
+reports latency beside quality counters (`false_skip_rate`, `wrong_scent_rate`,
+and `source_reopen_promotion_rate`) because speed alone does not prove recall
+quality.
+
 Prompt decisions may also include a private `ambient_recall` block built by
 `ambient_recall_cards.py`. This block normalizes existing hook signals into
 compact cards with `mode`, `confidence`, `cards`, `avoid`, `latency_ms`,
