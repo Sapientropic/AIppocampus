@@ -1,0 +1,313 @@
+{
+  "schema_version": "aippocampus.hippocampal_hard_negative_fixture.v1",
+  "dataset_id": "hippocampal_hard_negative_synthetic_v1",
+  "source": {
+    "issue": "https://github.com/Sapientropic/AIppocampus/issues/244",
+    "truth_source": "human_authored_synthetic_fixture",
+    "license": "CC0-compatible synthetic fixture text",
+    "design_docs": [
+      "docs/evidence/benchmarks/hippocampal-recall-plan.md",
+      "docs/evidence/benchmarks/memory-decision-benchmark-plan.md",
+      "docs/research/source-as-world.md",
+      "docs/research/correction-reconsolidation.md"
+    ]
+  },
+  "config": {
+    "uses_model_judge": false,
+    "uses_private_history": false,
+    "claim_surface": "contract_smoke"
+  },
+  "currentness_schema": {
+    "memory_event_type": [
+      "assertion",
+      "correction",
+      "supersession",
+      "retraction"
+    ],
+    "currentness": [
+      "current",
+      "superseded",
+      "disputed",
+      "historical_only"
+    ],
+    "visibility_policy": [
+      "normal",
+      "demote",
+      "scent_only",
+      "hidden_from_default_recall"
+    ]
+  },
+  "cases": [
+    {
+      "case_id": "near_neighbor_lure__d2_i2",
+      "family": "near_neighbor_lure",
+      "degradation_level": "D2",
+      "interference_level": "I2",
+      "query": "That cache thing we picked when the faster-looking neighbor was tempting",
+      "expected_decision": "evidence",
+      "acceptable_uncertainty": [
+        "scent",
+        "skip"
+      ],
+      "target_source_refs": [
+        "source:near_neighbor:target"
+      ],
+      "acceptable_scent_refs": [
+        "source:near_neighbor:target"
+      ],
+      "distractor_source_refs": [
+        "source:near_neighbor:frequent_distractor"
+      ],
+      "unsupported_source_refs": [],
+      "forbidden_claims": [
+        "The frequent distractor was selected as the durable target."
+      ],
+      "ambiguity_policy": "source_required",
+      "truth_source": "human_authored_synthetic_fixture",
+      "scorer_allowed_inputs": [
+        "query",
+        "candidate_refs",
+        "source_reopen_result"
+      ],
+      "currentness": {
+        "source_ref_currentness": {
+          "source:near_neighbor:target": "current",
+          "source:near_neighbor:frequent_distractor": "current"
+        },
+        "source_ref_visibility_policy": {
+          "source:near_neighbor:target": "normal",
+          "source:near_neighbor:frequent_distractor": "normal"
+        },
+        "memory_event_type": "assertion",
+        "supersedes_source_refs": [],
+        "superseded_by_source_refs": []
+      }
+    },
+    {
+      "case_id": "said_but_unsupported__d2_i1",
+      "family": "said_but_unsupported",
+      "degradation_level": "D2",
+      "interference_level": "I1",
+      "query": "That thing we floated once about auto-promoting every extracted preference",
+      "expected_decision": "scent",
+      "acceptable_uncertainty": [
+        "scent",
+        "skip"
+      ],
+      "target_source_refs": [
+        "source:unsupported:mention"
+      ],
+      "acceptable_scent_refs": [
+        "source:unsupported:mention"
+      ],
+      "distractor_source_refs": [],
+      "unsupported_source_refs": [
+        "source:unsupported:hypothesis_only"
+      ],
+      "forbidden_claims": [
+        "Auto-promotion was adopted for every extracted preference."
+      ],
+      "ambiguity_policy": "unsupported_skip",
+      "truth_source": "human_authored_synthetic_fixture",
+      "scorer_allowed_inputs": [
+        "query",
+        "candidate_refs",
+        "source_reopen_result"
+      ],
+      "currentness": {
+        "source_ref_currentness": {
+          "source:unsupported:mention": "historical_only",
+          "source:unsupported:hypothesis_only": "historical_only"
+        },
+        "source_ref_visibility_policy": {
+          "source:unsupported:mention": "scent_only",
+          "source:unsupported:hypothesis_only": "hidden_from_default_recall"
+        },
+        "memory_event_type": "assertion",
+        "supersedes_source_refs": [],
+        "superseded_by_source_refs": []
+      }
+    },
+    {
+      "case_id": "superseded_currentness_trap__d1_i5",
+      "family": "superseded_currentness_trap",
+      "degradation_level": "D1",
+      "interference_level": "I5",
+      "query": "The old answer about whether the route should stay active",
+      "expected_decision": "evidence",
+      "acceptable_uncertainty": [
+        "scent"
+      ],
+      "target_source_refs": [
+        "source:superseded:new_decision"
+      ],
+      "acceptable_scent_refs": [
+        "source:superseded:old_decision",
+        "source:superseded:new_decision"
+      ],
+      "distractor_source_refs": [
+        "source:superseded:old_decision"
+      ],
+      "unsupported_source_refs": [],
+      "forbidden_claims": [
+        "The old route remains the current decision."
+      ],
+      "ambiguity_policy": "single_target",
+      "truth_source": "human_authored_synthetic_fixture",
+      "scorer_allowed_inputs": [
+        "query",
+        "candidate_refs",
+        "source_reopen_result"
+      ],
+      "currentness": {
+        "source_ref_currentness": {
+          "source:superseded:old_decision": "superseded",
+          "source:superseded:new_decision": "current"
+        },
+        "source_ref_visibility_policy": {
+          "source:superseded:old_decision": "demote",
+          "source:superseded:new_decision": "normal"
+        },
+        "memory_event_type": "supersession",
+        "supersedes_source_refs": [
+          "source:superseded:old_decision"
+        ],
+        "superseded_by_source_refs": [
+          "source:superseded:new_decision"
+        ]
+      }
+    },
+    {
+      "case_id": "surface_paraphrase_lure__d4_i4",
+      "family": "surface_paraphrase_lure",
+      "degradation_level": "D4",
+      "interference_level": "I4",
+      "query": "When the phrase looked closer in English but the Chinese source meant the other path",
+      "expected_decision": "evidence",
+      "acceptable_uncertainty": [
+        "scent"
+      ],
+      "target_source_refs": [
+        "source:paraphrase:target"
+      ],
+      "acceptable_scent_refs": [
+        "source:paraphrase:target"
+      ],
+      "distractor_source_refs": [
+        "source:paraphrase:surface_match"
+      ],
+      "unsupported_source_refs": [],
+      "forbidden_claims": [
+        "The surface-nearest paraphrase is enough without source reopen."
+      ],
+      "ambiguity_policy": "single_target",
+      "truth_source": "human_authored_synthetic_fixture",
+      "scorer_allowed_inputs": [
+        "query",
+        "candidate_refs",
+        "source_reopen_result"
+      ],
+      "currentness": {
+        "source_ref_currentness": {
+          "source:paraphrase:target": "current",
+          "source:paraphrase:surface_match": "current"
+        },
+        "source_ref_visibility_policy": {
+          "source:paraphrase:target": "normal",
+          "source:paraphrase:surface_match": "normal"
+        },
+        "memory_event_type": "assertion",
+        "supersedes_source_refs": [],
+        "superseded_by_source_refs": []
+      }
+    }
+  ],
+  "scorer_examples": [
+    {
+      "example_id": "correct_target_reopen",
+      "case_id": "surface_paraphrase_lure__d4_i4",
+      "decision": "evidence",
+      "confidence": 0.84,
+      "evidence_refs": [
+        "source:paraphrase:target"
+      ],
+      "scent_refs": [],
+      "claims": [
+        "The reopened target source supports the answer."
+      ]
+    },
+    {
+      "example_id": "honest_scent",
+      "case_id": "superseded_currentness_trap__d1_i5",
+      "decision": "scent",
+      "confidence": 0.5,
+      "evidence_refs": [],
+      "scent_refs": [
+        "source:superseded:old_decision",
+        "source:superseded:new_decision"
+      ],
+      "claims": []
+    },
+    {
+      "example_id": "honest_skip",
+      "case_id": "near_neighbor_lure__d2_i2",
+      "decision": "skip",
+      "confidence": 0.2,
+      "evidence_refs": [],
+      "scent_refs": [],
+      "claims": []
+    },
+    {
+      "example_id": "wrong_neighbor",
+      "case_id": "near_neighbor_lure__d2_i2",
+      "decision": "evidence",
+      "confidence": 0.91,
+      "evidence_refs": [
+        "source:near_neighbor:frequent_distractor"
+      ],
+      "scent_refs": [],
+      "claims": [
+        "The frequent distractor is the target memory."
+      ]
+    },
+    {
+      "example_id": "stale_as_current",
+      "case_id": "superseded_currentness_trap__d1_i5",
+      "decision": "evidence",
+      "confidence": 0.88,
+      "evidence_refs": [
+        "source:superseded:old_decision"
+      ],
+      "scent_refs": [],
+      "claims": [
+        "The old answer is the current decision."
+      ]
+    },
+    {
+      "example_id": "unsupported_as_fact",
+      "case_id": "said_but_unsupported__d2_i1",
+      "decision": "evidence",
+      "confidence": 0.86,
+      "evidence_refs": [
+        "source:unsupported:hypothesis_only"
+      ],
+      "scent_refs": [],
+      "claims": [
+        "The hypothesis became an accepted fact."
+      ]
+    },
+    {
+      "example_id": "confabulation",
+      "case_id": "surface_paraphrase_lure__d4_i4",
+      "decision": "evidence",
+      "confidence": 0.93,
+      "evidence_refs": [
+        "source:paraphrase:target"
+      ],
+      "scent_refs": [],
+      "claims": [
+        "The surface-nearest paraphrase is enough without source reopen."
+      ]
+    }
+  ]
+}
