@@ -123,6 +123,9 @@ For AIppocampus, NIAH-style fixtures should score whether the answerer selects
 the right source anchors, handles conflict/recency, and abstains when the
 question asks for unsupported details.
 
+The public-safe deterministic contract smoke for #533 is documented in
+[`../multimodal-niah-evidence-pool-report.md`](../multimodal-niah-evidence-pool-report.md).
+
 ### Benchmark-Map Context
 
 Owned by #534.
