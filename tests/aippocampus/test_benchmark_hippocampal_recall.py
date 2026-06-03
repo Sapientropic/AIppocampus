@@ -128,6 +128,22 @@ class HippocampalRecallP1BenchmarkTests(unittest.TestCase):
             payload["views"]["matrix"]["D6/I5"]["coverage_status"],
             "diagnostic_only",
         )
+        self.assertEqual(
+            payload["report_schema_version"],
+            "aippocampus.hippocampal_recall_report.v1",
+        )
+        self.assertEqual(payload["config"]["fixture_dataset_id"], schema.DATASET_ID)
+        self.assertEqual(
+            payload["config"]["fixture_schema_version"],
+            schema.FIXTURE_SCHEMA_VERSION,
+        )
+        self.assertEqual(payload["config"]["fixture_version"], schema.FIXTURE_VERSION)
+        self.assertEqual(payload["config"]["fixture_seed"], schema.FIXTURE_SEED)
+        self.assertEqual(
+            payload["reproducibility"]["clean_clone_command"],
+            "python benchmarks/aippocampus/benchmark_hippocampal_recall.py --json",
+        )
+        self.assertFalse(payload["reproducibility"]["requires_private_registry"])
         self.assertIn("scent_precision", payload["views"]["aggregate"])
         self.assertIn("calibration", payload["views"])
         self.assertFalse(payload["config"]["uses_private_history"])

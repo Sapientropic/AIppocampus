@@ -40,11 +40,19 @@ Only `scent_hit` contributes to the `scent_precision` numerator.
 
 ## Command
 
+Clean-clone reproduction does not require a private registry, provider
+credentials, generated local indexes, or hidden `.aippocampus/` state:
+
 ```powershell
 python benchmarks\aippocampus\build_hippocampal_fixture.py --json
 python benchmarks\aippocampus\benchmark_hippocampal_recall.py --json
 python -m unittest tests.aippocampus.test_benchmark_hippocampal_recall
 ```
+
+The benchmark JSON report exposes `report_schema_version`, `fixture_dataset_id`,
+`fixture_schema_version`, `fixture_version`, `fixture_seed`, and a
+`reproducibility.clean_clone_command` field so later reports can be compared
+without relying on local machine state.
 
 ## Canonical Files
 

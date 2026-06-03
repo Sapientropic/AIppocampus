@@ -359,6 +359,19 @@ three additional deliverables beyond the design itself:
 Until those exist, the honest external claim is "designed to be among the most
 adversarial source-backed memory benchmarks", not "the hardest in industry".
 
+Current diagnostic-seed reproduction command:
+
+```powershell
+python benchmarks\aippocampus\benchmark_hippocampal_recall.py --json
+```
+
+This command uses the committed synthetic fixture at
+`benchmark_corpus/hippocampal_fixtures/hippocampal_synthetic_v1.jsonl`. The
+report must expose the fixture dataset id, fixture schema version, fixture
+version, fixture seed, report schema version, and cannot-claim boundaries so a
+clean clone can verify it is reproducing the same diagnostic seed rather than a
+private registry run.
+
 ## Anti-Gaming Controls
 
 - Do not build degraded queries from the same trigger alias registry used by the

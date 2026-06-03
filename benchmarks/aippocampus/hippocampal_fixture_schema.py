@@ -19,6 +19,8 @@ _paths.ensure_paths()
 
 DATASET_ID = "hippocampal_synthetic_v1"
 FIXTURE_SCHEMA_VERSION = "aippocampus.hippocampal_recall_fixture.v1"
+FIXTURE_VERSION = "hippocampal_synthetic_v1.public_seed_1"
+FIXTURE_SEED = "human_authored_public_safe_seed_v1"
 DEFAULT_FIXTURE = (
     _paths.REPO_ROOT
     / "benchmark_corpus"
