@@ -39,8 +39,13 @@ from aippocampus_runtime.model.routing import (
     route_payload_with_effective_values,
     route_service_name,
 )
-from aippocampus_runtime.navigation.concept_graph import concept_is_noise
 from aippocampus_runtime.registry.api import registry_paths, unique_preserve
+from aippocampus_runtime.subconscious.edge_validation import (
+    ALLOWED_EDGE_TYPES,  # noqa: F401 - re-exported for direct-script compatibility
+    WORKER_EDGE_POLICY,
+    clamp_confidence,  # noqa: F401 - re-exported for direct-script compatibility
+    validate_source_backed_edges,
+)
 from aippocampus_runtime.subconscious.staging_maintenance import (
     StagingPressureThresholds,
     queue_pressure,
@@ -50,17 +55,6 @@ PROMPT_VERSION = "aippocampus-subconscious-v0"
 DEFAULT_MODEL = flash_model()
 DEFAULT_BASE_URL = deepseek_base_url()
 DEFAULT_MAX_TURNS = 48
-
-ALLOWED_EDGE_TYPES = {
-    "alias",
-    "same_decision_space",
-    "project_topic",
-    "decision_about",
-    "depends_on",
-    "contrasts_with",
-    "supersedes",
-    "related",
-}
 
 
 def public_count(value: Any) -> int:
@@ -328,63 +322,27 @@ def parse_model_json(response: dict[str, Any]) -> dict[str, Any]:
     return parsed if isinstance(parsed, dict) else {}
 
 
-def clamp_confidence(value: Any) -> float:
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return 0.0
-    return max(0.0, min(1.0, number))
-
-
 def validate_edges(parsed: dict[str, Any], turns: list[dict[str, Any]]) -> list[dict[str, Any]]:
     by_ref = {str(turn.get("turn_ref")): turn for turn in turns}
-    out: list[dict[str, Any]] = []
-    for edge in parsed.get("edges") or []:
-        if not isinstance(edge, dict):
-            continue
-        src = str(edge.get("src") or "").strip()
-        dst = str(edge.get("dst") or "").strip()
-        edge_type = str(edge.get("edge_type") or "related").strip()
-        confidence = clamp_confidence(edge.get("confidence"))
-        if edge_type not in ALLOWED_EDGE_TYPES:
-            edge_type = "related"
-        if not src or not dst or src.casefold() == dst.casefold():
-            continue
-        if concept_is_noise(src) or concept_is_noise(dst):
-            continue
-        refs: list[dict[str, Any]] = []
-        for ref in edge.get("source_refs") or []:
-            if not isinstance(ref, dict):
-                continue
-            turn_ref = str(ref.get("turn_ref") or "")
-            turn = by_ref.get(turn_ref)
-            if not turn:
-                continue
-            refs.append(
-                {
-                    "turn_ref": turn_ref,
-                    "thread_key": turn.get("thread_key"),
-                    "title": turn.get("title"),
-                    "project_label": turn.get("project_label"),
-                    "turn_index": turn.get("turn_index"),
-                    "user_line": turn.get("user_line"),
-                    "assistant_line": turn.get("assistant_line"),
-                    "timestamp": turn.get("timestamp"),
-                }
-            )
-        if not refs or confidence < 0.45:
-            continue
-        out.append(
-            {
-                "src": src,
-                "dst": dst,
-                "edge_type": edge_type,
-                "confidence": round(confidence, 4),
-                "why": compact_text(str(edge.get("why") or ""), 220),
-                "source_refs": refs[:3],
-            }
-        )
-    return out
+
+    def worker_source_ref(turn_ref: str, turn: Mapping[str, Any]) -> dict[str, Any]:
+        return {
+            "turn_ref": turn_ref,
+            "thread_key": turn.get("thread_key"),
+            "title": turn.get("title"),
+            "project_label": turn.get("project_label"),
+            "turn_index": turn.get("turn_index"),
+            "user_line": turn.get("user_line"),
+            "assistant_line": turn.get("assistant_line"),
+            "timestamp": turn.get("timestamp"),
+        }
+
+    return validate_source_backed_edges(
+        parsed,
+        by_ref,
+        policy=WORKER_EDGE_POLICY,
+        project_source_ref=worker_source_ref,
+    )
 
 
 def append_staging_edges(

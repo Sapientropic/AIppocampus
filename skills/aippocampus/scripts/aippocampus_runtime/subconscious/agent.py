@@ -14,7 +14,7 @@ import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from aippocampus_runtime.core import (
     cli_error_payload,
@@ -23,11 +23,12 @@ from aippocampus_runtime.core import (
     deepseek_cache_metrics_from_usage,
     sanitize_external_model_payload,
 )
-from aippocampus_runtime.navigation.concept_graph import (
-    concept_is_noise,
-    default_concept_graph_path,
-)
+from aippocampus_runtime.navigation.concept_graph import default_concept_graph_path
 from aippocampus_runtime.registry.api import registry_paths
+from aippocampus_runtime.subconscious.edge_validation import (
+    AGENT_EDGE_POLICY,
+    validate_source_backed_edges,
+)
 from aippocampus_runtime.subconscious.runtime import (
     AGENT_SYSTEM_PROMPT,
     DEFAULT_MAX_STEPS,
@@ -46,12 +47,10 @@ from aippocampus_runtime.subconscious.runtime import (
 )
 from aippocampus_runtime.subconscious.tool_loop import run_tool_using_loop
 from aippocampus_runtime.subconscious.worker import (
-    ALLOWED_EDGE_TYPES,
     DEFAULT_BASE_URL,
     DEFAULT_MAX_TURNS,
     DEFAULT_MODEL,
     append_staging_edges,
-    clamp_confidence,
     default_project_timeline_path,
     default_staging_path,
     load_json,
@@ -127,62 +126,28 @@ def agent_run_config_from_args(args: Any) -> AgentRunConfig:
 def validate_agent_edges(
     parsed: dict[str, Any], source_bank: dict[str, dict[str, Any]]
 ) -> list[dict[str, Any]]:
-    out: list[dict[str, Any]] = []
-    for edge in parsed.get("edges") or []:
-        if not isinstance(edge, dict):
-            continue
-        src = str(edge.get("src") or "").strip()
-        dst = str(edge.get("dst") or "").strip()
-        edge_type = str(edge.get("edge_type") or "related").strip()
-        confidence = clamp_confidence(edge.get("confidence"))
-        if edge_type not in ALLOWED_EDGE_TYPES:
-            edge_type = "related"
-        if not src or not dst or src.casefold() == dst.casefold():
-            continue
-        if concept_is_noise(src) or concept_is_noise(dst):
-            continue
-        refs: list[dict[str, Any]] = []
-        for ref_item in edge.get("source_refs") or []:
-            if isinstance(ref_item, str):
-                ref_id = ref_item.strip()
-            elif isinstance(ref_item, dict):
-                ref_id = str(
-                    ref_item.get("ref") or ref_item.get("turn_ref") or ref_item.get("obs_ref") or ""
-                ).strip()
-            else:
-                continue
-            source = source_bank.get(ref_id)
-            if not source:
-                continue
-            refs.append(
-                {
-                    "ref": ref_id,
-                    "turn_ref": source.get("turn_ref"),
-                    "thread_key": source.get("thread_key"),
-                    "title": source.get("title"),
-                    "project_label": source.get("project_label"),
-                    "turn_id": source.get("turn_id"),
-                    "turn_index": source.get("turn_index"),
-                    "user_line": source.get("user_line"),
-                    "assistant_line": source.get("assistant_line"),
-                    "source_line": source.get("source_line"),
-                    "message_id": source.get("message_id"),
-                    "timestamp": source.get("timestamp"),
-                }
-            )
-        if not refs or confidence < 0.45:
-            continue
-        out.append(
-            {
-                "src": src,
-                "dst": dst,
-                "edge_type": edge_type,
-                "confidence": round(confidence, 4),
-                "why": compact_text(str(edge.get("why") or ""), 220),
-                "source_refs": refs[:4],
-            }
-        )
-    return out
+    def agent_source_ref(ref_id: str, source: Mapping[str, Any]) -> dict[str, Any]:
+        return {
+            "ref": ref_id,
+            "turn_ref": source.get("turn_ref"),
+            "thread_key": source.get("thread_key"),
+            "title": source.get("title"),
+            "project_label": source.get("project_label"),
+            "turn_id": source.get("turn_id"),
+            "turn_index": source.get("turn_index"),
+            "user_line": source.get("user_line"),
+            "assistant_line": source.get("assistant_line"),
+            "source_line": source.get("source_line"),
+            "message_id": source.get("message_id"),
+            "timestamp": source.get("timestamp"),
+        }
+
+    return validate_source_backed_edges(
+        parsed,
+        source_bank,
+        policy=AGENT_EDGE_POLICY,
+        project_source_ref=agent_source_ref,
+    )
 
 
 def _source_ref_id(ref_item: Any) -> str:
