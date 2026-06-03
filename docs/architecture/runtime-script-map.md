@@ -77,6 +77,32 @@ current cleanup contract for #305; see
 `docs/architecture/compatibility-shim-inventory.md` for the short maintainer
 snapshot. Do not infer permanence from a shim existing today.
 
+## Compatibility Shim Style Policy
+
+Compatibility bucket and shim style are separate decisions. A shim may be a
+true public `keep_cli` path or only `temporary_compat`, but its implementation
+style still needs to be explainable so flat modules do not grow sideways into a
+second API surface.
+
+The inventory reports `shim_style` for every top-level runtime script and fails
+the maintenance gate when a compatibility shim becomes `unknown_shim_style` or
+`mixed_shim_style`. New flat shims require a documented reason and removal
+condition unless they are true `keep_cli` paths.
+
+Allowed styles:
+
+- `direct_cli_wrapper`: a thin direct-script wrapper that delegates CLI
+  execution to the package owner and exposes only documented command symbols.
+- `module_alias_shim`: imports the package owner and assigns
+  `sys.modules[__name__]` when import identity compatibility matters.
+- `export_mirror_shim`: mirrors package-owner exports with either a tiny
+  explicit export list or a small generated `globals().update(...)` mirror.
+- `facade_shim`: reserved for command-router or provider-aware facades such as
+  the public `aippocampus` command facade and onboarding facade.
+- `local_fallback_shim`: reserved for documented half-installed hook fallback
+  paths such as `aippocampuslib.py`; do not add another one without explaining
+  the install-state failure it protects.
+
 No `legacy_bridge` exceptions should remain. Credential-adjacent and
 model-output-heavy commands now have package owners plus thin top-level
 compatibility shims. Do not reintroduce a single-implementation top-level

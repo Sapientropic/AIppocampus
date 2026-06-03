@@ -14,7 +14,7 @@ import ast
 import json
 import re
 import tomllib
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -47,6 +47,10 @@ KEEP_CLI_SCRIPTS = {
 LEGACY_BRIDGES: set[str] = set()
 LOCAL_LOGIC_COMPAT_EXCEPTIONS = {
     "aippocampuslib.py",
+}
+FACADE_SHIMS = {
+    "aippocampus_cli.py",
+    "onboard.py",
 }
 MANUAL_EXPORT_LINE_LIMIT = 20
 
@@ -93,6 +97,9 @@ class InventoryItem:
     bucket: str
     reason: str
     removal_condition: str
+    shim_style: str
+    style_reason: str
+    style_warnings: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -103,6 +110,8 @@ class InventoryReport:
     temporary_compat: list[InventoryItem]
     delete_now: list[InventoryItem]
     legacy_bridge: list[InventoryItem]
+    shim_style_counts: dict[str, int]
+    unknown_shim_styles: list[InventoryItem]
     reexport_blocks: list[InventoryItem]
     manual_export_surfaces: list[InventoryItem]
     unbucketed: list[str]
@@ -135,6 +144,69 @@ def _non_comment_line_count(source: str) -> int:
 
 def _is_alias_or_dynamic_mirror(source: str) -> bool:
     return "sys.modules[__name__]" in source or "globals().update(" in source
+
+
+def _shim_style(path: Path, source: str) -> tuple[str, str, tuple[str, ...]]:
+    if path.name in LOCAL_LOGIC_COMPAT_EXCEPTIONS:
+        return (
+            "local_fallback_shim",
+            "documented compatibility shim with a tiny half-installed fallback",
+            (),
+        )
+    if path.name in FACADE_SHIMS or "aippocampus_runtime.cli.facade" in source:
+        return (
+            "facade_shim",
+            "public command or provider-aware facade keeps a curated flat surface",
+            (),
+        )
+    if not _is_compat_shim(source):
+        return (
+            "non_shim_script",
+            "top-level file does not carry a compatibility-shim marker",
+            ("top-level file is not an explained compatibility shim",),
+        )
+
+    signals: list[tuple[str, str]] = []
+    if "sys.modules[__name__]" in source:
+        signals.append(
+            (
+                "module_alias_shim",
+                "imports the package owner and aliases the flat module identity",
+            )
+        )
+    if "globals().update(" in source:
+        signals.append(
+            (
+                "export_mirror_shim",
+                "mirrors package-owner exports through a small generated globals update",
+            )
+        )
+
+    if len(signals) > 1:
+        return (
+            "mixed_shim_style",
+            "shim mixes multiple compatibility export mechanisms",
+            ("choose one documented shim style unless this path has an explicit exception",),
+        )
+    if signals:
+        return (*signals[0], ())
+    if "aippocampus_runtime" in source and "if __name__ == \"__main__\"" in source:
+        return (
+            "direct_cli_wrapper",
+            "thin direct-script wrapper delegates CLI execution to the package owner",
+            (),
+        )
+    if "aippocampus_runtime" in source and _non_comment_line_count(source) <= MANUAL_EXPORT_LINE_LIMIT:
+        return (
+            "export_mirror_shim",
+            "mirrors selected package-owner exports through a small explicit export list",
+            (),
+        )
+    return (
+        "unknown_shim_style",
+        "compatibility shim marker exists but the export/import style is not recognized",
+        ("document the style or convert it to a known shim pattern",),
+    )
 
 
 def _is_pure_package_owner_reexport(source: str) -> bool:
@@ -315,24 +387,48 @@ def _build_reference_index(repo_root: Path, top_level_paths: list[Path]) -> Refe
     )
 
 
-def _temporary_item(script: str, reason: str) -> InventoryItem:
+def _temporary_item(
+    script: str,
+    reason: str,
+    *,
+    shim_style: str = "not_applicable",
+    style_reason: str = "synthetic non-top-level compatibility item",
+    style_warnings: tuple[str, ...] = (),
+) -> InventoryItem:
     return InventoryItem(
         script=script,
         bucket="temporary_compat",
         reason=reason,
         removal_condition=TEMPORARY_COMPAT_REMOVAL_CONDITION,
+        shim_style=shim_style,
+        style_reason=style_reason,
+        style_warnings=style_warnings,
     )
 
 
 def _classify_top_level_script(path: Path, references: ReferenceIndex) -> InventoryItem:
     source = path.read_text(encoding="utf-8")
     module_name = path.stem
+    shim_style, style_reason, style_warnings = _shim_style(path, source)
+
+    def temporary(reason: str) -> InventoryItem:
+        return _temporary_item(
+            path.name,
+            reason,
+            shim_style=shim_style,
+            style_reason=style_reason,
+            style_warnings=style_warnings,
+        )
+
     if path.name in LEGACY_BRIDGES:
         return InventoryItem(
             script=path.name,
             bucket="legacy_bridge",
             reason="single implementation is intentionally still at a legacy direct path",
             removal_condition="No legacy direct-path implementation exceptions should remain.",
+            shim_style=shim_style,
+            style_reason=style_reason,
+            style_warnings=style_warnings,
         )
     if path.name in KEEP_CLI_SCRIPTS:
         return InventoryItem(
@@ -340,45 +436,41 @@ def _classify_top_level_script(path: Path, references: ReferenceIndex) -> Invent
             bucket="keep_cli",
             reason="documented CLI, hook, MCP, install, sync, onboarding, or operator path",
             removal_condition=KEEP_CLI_REMOVAL_CONDITION,
+            shim_style=shim_style,
+            style_reason=style_reason,
+            style_warnings=style_warnings,
         )
     if _is_compat_shim(source):
         if path.name in LOCAL_LOGIC_COMPAT_EXCEPTIONS:
-            return _temporary_item(
-                path.name,
+            return temporary(
                 "compatibility shim still carries a documented local-logic exception",
             )
         if not _is_pure_package_owner_reexport(source):
-            return _temporary_item(
-                path.name,
+            return temporary(
                 "compatibility shim is not yet a pure aippocampus_runtime owner re-export",
             )
         if references.project_entrypoints.get(module_name):
-            return _temporary_item(
-                path.name,
+            return temporary(
                 "project script entrypoint still targets flat module: "
                 + references.project_entrypoints[module_name][0],
             )
         if references.first_party_imports.get(module_name):
-            return _temporary_item(
-                path.name,
+            return temporary(
                 "first-party import still references flat module: "
                 + references.first_party_imports[module_name][0],
             )
         if references.non_identity_test_imports.get(module_name):
-            return _temporary_item(
-                path.name,
+            return temporary(
                 "non-identity test still imports flat module: "
                 + references.non_identity_test_imports[module_name][0],
             )
         if references.direct_path_dependencies.get(path.name):
-            return _temporary_item(
-                path.name,
+            return temporary(
                 "install/hook/binary path still references direct script path: "
                 + references.direct_path_dependencies[path.name][0],
             )
         if references.documented_direct_invocations.get(path.name):
-            return _temporary_item(
-                path.name,
+            return temporary(
                 "documented direct invocation still references flat script path: "
                 + references.documented_direct_invocations[path.name][0],
             )
@@ -397,12 +489,18 @@ def _classify_top_level_script(path: Path, references: ReferenceIndex) -> Invent
             bucket="delete_now",
             reason=reason,
             removal_condition=DELETE_NOW_REMOVAL_CONDITION,
+            shim_style=shim_style,
+            style_reason=style_reason,
+            style_warnings=style_warnings,
         )
     return InventoryItem(
         script=path.name,
         bucket="delete_now",
         reason="no compatibility shim marker or legacy bridge classification",
         removal_condition="Delete once import-coupling and direct help smokes pass.",
+        shim_style=shim_style,
+        style_reason=style_reason,
+        style_warnings=style_warnings,
     )
 
 
@@ -422,6 +520,8 @@ def _reexport_blocks(repo_root: Path) -> list[InventoryItem]:
                     "Remove after first-party imports use the true owner module "
                     "and old installed-hook migration is complete."
                 ),
+                shim_style="package_reexport_block",
+                style_reason="package-level mechanical compatibility export block",
             )
         )
     return blocks
@@ -450,6 +550,9 @@ def _manual_export_surfaces(repo_root: Path, items: list[InventoryItem]) -> list
                     "Collapse to a module-alias shim or tiny globals mirror unless "
                     "a documented installer/hook fallback needs explicit local logic."
                 ),
+                shim_style=item.shim_style,
+                style_reason=item.style_reason,
+                style_warnings=item.style_warnings,
             )
         )
     return surfaces
@@ -471,6 +574,12 @@ def build_inventory(repo_root: Path) -> InventoryReport:
         "delete_now": [item for item in items if item.bucket == "delete_now"],
         "legacy_bridge": [item for item in items if item.bucket == "legacy_bridge"],
     }
+    style_counts = Counter(item.shim_style for item in items)
+    unknown_styles = [
+        item
+        for item in items
+        if item.shim_style in {"unknown_shim_style", "mixed_shim_style"}
+    ]
     return InventoryReport(
         top_level_script_count=len(top_level_scripts),
         top_level_scripts=top_level_scripts,
@@ -478,6 +587,8 @@ def build_inventory(repo_root: Path) -> InventoryReport:
         temporary_compat=buckets["temporary_compat"],
         delete_now=buckets["delete_now"],
         legacy_bridge=buckets["legacy_bridge"],
+        shim_style_counts=dict(sorted(style_counts.items())),
+        unknown_shim_styles=unknown_styles,
         reexport_blocks=_reexport_blocks(repo_root),
         manual_export_surfaces=_manual_export_surfaces(repo_root, items),
         unbucketed=sorted(set(top_level_scripts) - bucketed_names),
@@ -504,9 +615,15 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{bucket_name}: {len(bucket)}")
         print(f"reexport_blocks: {len(report.reexport_blocks)}")
         print(f"manual_export_surfaces: {len(report.manual_export_surfaces)}")
+        print("shim_style_counts:")
+        for style, count in report.shim_style_counts.items():
+            print(f"  {style}: {count}")
+        print(f"unknown_shim_styles: {len(report.unknown_shim_styles)}")
+        for item in report.unknown_shim_styles:
+            print(f"  {item.script}: {item.shim_style} - {item.style_reason}")
         if report.unbucketed:
             print("unbucketed: " + ", ".join(report.unbucketed))
-    return 1 if report.unbucketed else 0
+    return 1 if report.unbucketed or report.unknown_shim_styles else 0
 
 
 if __name__ == "__main__":
