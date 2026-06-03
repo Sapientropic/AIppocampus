@@ -18,6 +18,9 @@ Dated command evidence belongs in
 - [`external-benchmark-map.md`](external-benchmark-map.md) gives external
   benchmark and memory-system comparison paths, with explicit blockers and
   claim boundaries.
+- [`multimodal-memory-benchmark-map.md`](multimodal-memory-benchmark-map.md)
+  maps multimodal memory benchmark families to #528 source shapes and claim
+  boundaries.
 - [`atm-bench-hard-protocol-boundary.md`](atm-bench-hard-protocol-boundary.md)
   owns the verified ATM-Bench Hard protocol boundary for the #528 multimodal
   source-backed recall track.
