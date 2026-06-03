@@ -3,6 +3,9 @@
 These scenarios use public-safe examples. They are meant to show product shape
 without exposing private rollouts or personal registry data.
 
+Demo `Cannot claim` lines are claim-boundary inputs for
+`docs/evidence/current-claims.md`, not standalone benchmark or readiness proof.
+
 ## Scenario 1: Exact Quote Recall
 
 Use the public example bundle:
@@ -33,8 +36,8 @@ subconscious finding that can be materialized into
 `semantic-scope-labels.jsonl`, modeling a DeepSeek/subconscious sidecar rather
 than hard-coded lexical expansion.
 
-Cannot claim: that all personal life-wide labels are complete in the current
-runtime.
+Cannot claim: that all personal life-wide labels are complete. The governed
+demo boundary lives in `docs/evidence/current-claims.md`.
 
 ## Scenario 3: Real-History Semantic Scope Sidecar Smoke
 

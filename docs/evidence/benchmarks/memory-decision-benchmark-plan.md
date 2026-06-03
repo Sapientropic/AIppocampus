@@ -85,6 +85,12 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
   scenario-family fixtures, negative controls, hash-only private seed reporting
   rules, and claim-boundary metrics. It is a deterministic contract smoke, not
   real-history or live-model recall quality evidence.
+- `benchmarks/aippocampus/benchmark_hippocampal_hard_negatives.py` runs the
+  #244 H1/H2 hard-negative scoring-contract smoke. It validates a public-safe
+  synthetic fixture for near-neighbor lures, unsupported speech,
+  superseded-currentness traps, and surface-paraphrase lures, then reports the
+  seven outcome categories and asymmetric discipline score without using a
+  model judge, private history, or live retrieval.
 - `tests/aippocampus/test_benchmark_source_evidence_retrieval.py` checks
   Track B report shape, diagnostic status, ShareGPT public-corpus case
   generation, public semantic-sidecar materialization, LoCoMo/LongMemEval source
@@ -1570,6 +1576,7 @@ Scripts:
 - `benchmarks/aippocampus/benchmark_live_semantic_gate.py`
 - `benchmarks/aippocampus/benchmark_knowledge_pollution.py`
 - `benchmarks/aippocampus/benchmark_field_continuity.py`
+- `benchmarks/aippocampus/benchmark_hippocampal_hard_negatives.py`
 - `benchmarks/aippocampus/benchmark_cognitive_portrait.py`
 - `benchmarks/aippocampus/benchmark_suite.py`
 - `skills/aippocampus/scripts/aippocampus_runtime/knowledge/capability_contract.py`
@@ -1585,6 +1592,7 @@ Tests:
 - `tests/aippocampus/test_benchmark_live_semantic_gate.py`
 - `tests/aippocampus/test_benchmark_knowledge_pollution.py`
 - `tests/aippocampus/test_benchmark_field_continuity.py`
+- `tests/aippocampus/test_benchmark_hippocampal_hard_negatives.py`
 - `tests/aippocampus/test_benchmark_cognitive_portrait.py`
 - `tests/aippocampus/test_benchmark_suite.py`
 - `tests/aippocampus/test_agency_affordance.py`
