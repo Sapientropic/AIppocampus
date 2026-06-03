@@ -10,6 +10,14 @@ from aippocampus_runtime.recall.ambient_cards import count_cards_by_field
 
 MAX_CONTEXT_CHARS = 1800
 DREAM_HYPOTHESIS_TYPE = "dream_hypothesis"
+ROUTE_DELIVERY_FOREGROUND_PROFILES = {"ambient_hot_path", "explicit_recall"}
+ROUTE_DELIVERY_REUSE_SOURCES = {
+    "none",
+    "exact_semantic_cache",
+    "cold_model_call",
+    "semantic_cue_cache",
+}
+ROUTE_DELIVERY_BRIDGE_DIAGNOSTICS = {"semantic_evidence_without_source_bridge"}
 
 
 def _is_dream_hypothesis_item(item: Any) -> bool:
@@ -66,6 +74,47 @@ def _limit_dream_cards(cards: Any, *, allow_dream: bool, max_dream_hypotheses: i
             continue
         kept.append(card)
     return kept, kept_dreams, removed_dreams
+
+
+def route_delivery_debug_summary(raw: Any) -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+
+    def controlled(value: Any, allowed: set[str]) -> str | None:
+        text = str(value or "")
+        return text if text in allowed else None
+
+    def count(value: Any) -> int:
+        try:
+            return max(0, int(value))
+        except (TypeError, ValueError):
+            return 0
+
+    summary = {
+        "foreground_profile": controlled(
+            raw.get("foreground_profile"), ROUTE_DELIVERY_FOREGROUND_PROFILES
+        )
+        or "ambient_hot_path",
+        "semantic_bridge_diagnostic": controlled(
+            raw.get("semantic_bridge_diagnostic"), ROUTE_DELIVERY_BRIDGE_DIAGNOSTICS
+        ),
+        "semantic_gate_cache_hit_but_no_source_bridge": bool(
+            raw.get("semantic_gate_cache_hit_but_no_source_bridge")
+        ),
+        "semantic_reuse_source": controlled(
+            raw.get("semantic_reuse_source"), ROUTE_DELIVERY_REUSE_SOURCES
+        )
+        or "none",
+        "semantic_waited": bool(raw.get("semantic_waited")),
+        "cold_semantic_shadowed": bool(raw.get("cold_semantic_shadowed")),
+        "background_scheduled": bool(raw.get("background_scheduled")),
+        "hot_path_candidates_after_merge": count(
+            raw.get("hot_path_candidates_after_merge")
+        ),
+        "final_candidate_count": count(raw.get("final_candidate_count")),
+        "evidence_count": count(raw.get("evidence_count")),
+    }
+    return {key: value for key, value in summary.items() if value is not None}
 
 
 def apply_dream_delivery_boundary(
@@ -282,6 +331,9 @@ def public_hook_debug_payload(result: dict[str, Any]) -> dict[str, Any]:
             "elapsed_ms": raw_hot_path.get("elapsed_ms"),
             "stages": stages[:6],
         }
+    route_delivery = route_delivery_debug_summary(result.get("route_delivery_diagnostic"))
+    if route_delivery is not None:
+        payload["route_delivery_diagnostic"] = route_delivery
     return payload
 
 

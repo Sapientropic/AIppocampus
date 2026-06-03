@@ -452,6 +452,41 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
             cases["semantic_bridge_scent"]["reasons"],
         )
 
+    def test_route_delivery_diagnostic_marks_cached_semantic_bridge_gap(self) -> None:
+        def cached_semantic_evidence_without_local_bridge(*args, **kwargs) -> dict:
+            return {
+                "available": True,
+                "decision": "evidence",
+                "confidence": 0.95,
+                "intent": "source_recall",
+                "query_aliases": ["private bridge alias"],
+                "cached": True,
+                "cache_diagnostics": {"lookup": "hit"},
+                "reasons": ["semantic cache route only"],
+            }
+
+        result = decision.assess_prompt(
+            "请找一下 ZetaBridge exact wording 的原话",
+            cwd=self.workspace,
+            registry_path=self.registry_path,
+            semantic_gate_fn=cached_semantic_evidence_without_local_bridge,
+            search_budget=1,
+        )
+
+        diagnostic = result.get("route_delivery_diagnostic")
+        self.assertEqual(result["decision"], "scent")
+        self.assertEqual(
+            result.get("semantic_bridge_diagnostic"),
+            "semantic_evidence_without_source_bridge",
+        )
+        self.assertEqual(diagnostic["foreground_profile"], "ambient_hot_path")
+        self.assertTrue(diagnostic["semantic_gate_cache_hit_but_no_source_bridge"])
+        self.assertEqual(diagnostic["semantic_reuse_source"], "exact_semantic_cache")
+        self.assertEqual(diagnostic["hot_path_candidates_after_merge"], 0)
+        self.assertEqual(diagnostic["final_candidate_count"], 0)
+        self.assertFalse(diagnostic["cold_semantic_shadowed"])
+        self.assertNotIn("private bridge alias", json.dumps(diagnostic, ensure_ascii=False))
+
     def test_assess_prompt_keeps_orchestration_below_boundary(self) -> None:
         source = inspect.getsource(decision.assess_prompt)
 

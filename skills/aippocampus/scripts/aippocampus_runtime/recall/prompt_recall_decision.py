@@ -70,6 +70,9 @@ from aippocampus_runtime.recall.prompt_recall_projection import (
     choose_decision_evidence,
 )
 from aippocampus_runtime.recall.prompt_recall_projection import (
+    route_delivery_diagnostic as resolve_route_delivery_diagnostic,
+)
+from aippocampus_runtime.recall.prompt_recall_projection import (
     semantic_bridge_diagnostic as resolve_semantic_bridge_diagnostic,
 )
 from aippocampus_runtime.recall.prompt_recall_semantic import run_semantic_gate_for_context
@@ -745,9 +748,8 @@ def assess_prompt(
         "semantic_gate_reuse": semantic_gate_reuse,
         "scent_threshold_policy": threshold_policy,
         "semantic_bridge_diagnostic": semantic_bridge_diagnostic,
-        "semantic_cue_cache": semantic_cue_cache,
-        "hot_path_funnel": hot_path_funnel,
-        "elapsed_ms": round((time.perf_counter() - start) * 1000, 2), "deep_archival_requested": _deep_archival_requested(prompt),
+        "semantic_cue_cache": semantic_cue_cache, "hot_path_funnel": hot_path_funnel,
+        "route_delivery_diagnostic": resolve_route_delivery_diagnostic(state=locals()), "elapsed_ms": round((time.perf_counter() - start) * 1000, 2), "deep_archival_requested": _deep_archival_requested(prompt),
     }
     return attach_ambient_recall(
         result, prompt=prompt, thread_id=thread_id, workspace=str(cwd_path), registry_path=path,

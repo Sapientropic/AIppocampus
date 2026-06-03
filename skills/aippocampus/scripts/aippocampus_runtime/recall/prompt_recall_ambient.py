@@ -213,7 +213,14 @@ def attach_ambient_recall(
                 enabled=warm_background,
                 wait_all_foreground=False,
             )
-            result["ambient_recall"]["warm_background"] = public_warm_schedule_status(scheduled)
+            warm_status = public_warm_schedule_status(scheduled)
+            result["ambient_recall"]["warm_background"] = warm_status
+            route_diagnostic = result.get("route_delivery_diagnostic")
+            if isinstance(route_diagnostic, dict):
+                route_diagnostic["background_scheduled"] = bool(
+                    warm_status.get("spawned")
+                    or warm_status.get("status") in {"queued", "scheduled"}
+                )
     except Exception as exc:
         result["ambient_recall"] = ambient_recall_from_decision(
             result,

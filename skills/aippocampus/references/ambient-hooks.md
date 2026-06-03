@@ -33,6 +33,15 @@ reports latency beside quality counters (`false_skip_rate`, `wrong_scent_rate`,
 and `source_reopen_promotion_rate`) because speed alone does not prove recall
 quality.
 
+Prompt decisions may also include `route_delivery_diagnostic`, a no-raw-prompt
+ledger for the foreground route selector. It may report controlled profile
+labels, semantic-cache reuse class, whether cached semantic evidence failed to
+bridge to source-backed evidence, hot-path candidate counts after merge, final
+candidate/evidence counts, and whether cold semantic work was shadowed or
+background work was scheduled. It must not include raw prompts, query aliases,
+candidate ids, source snippets, local paths, or thread ids. These fields explain
+route delivery gaps; they do not promote scent or semantic output into evidence.
+
 Prompt decisions may also include a private `ambient_recall` block built by
 `ambient_recall_cards.py`. This block normalizes existing hook signals into
 compact cards with `mode`, `confidence`, `cards`, `avoid`, `latency_ms`,
