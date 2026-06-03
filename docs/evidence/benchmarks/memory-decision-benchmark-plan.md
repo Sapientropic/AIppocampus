@@ -716,6 +716,11 @@ Boundary:
 - reports include `claim_level`, `minimum_empirical_case_count`, and
   `sample_size_warning`; passing top-k hits below that density stays a
   `diagnostic_pilot`, not an empirical benchmark claim
+- reports include `anti_circular_controls`: the same bounded subset is evaluated
+  with a no-sidecar deterministic/source-visible baseline and a wrong-message
+  negative sidecar. The semantic-sidecar quality gate must not treat a passing
+  wrong-message control as valid evidence; those controls are diagnostics, not
+  a replacement for human-reviewed labels.
 - metrics include message-level hit and turn-level hit so sibling rows in the
   same user/assistant turn do not become false hard failures
 - default reports hash ids and queries and do not emit raw public conversation
@@ -1020,7 +1025,9 @@ Current smoke and diagnostic results from 2026-05-27:
   cases, 3/3 top-5 hits, `claim_level=diagnostic_pilot`, and
   `minimum_empirical_case_count=50`. Keep this as a public pilot until the
   sidecar-reviewed public sample is materially larger; do not merge it into the
-  private `semantic-sidecar-required` metric.
+  private `semantic-sidecar-required` metric. Current runner reports also carry
+  no-sidecar and wrong-message anti-circular controls, so a future larger pilot
+  must show sidecar lift without a matching negative-control pass.
 - Track B selected source-evidence track, deterministic source-label slice:
   sufficient, 100 selected cases, 97/100 top-5 hits, 0.97 hit rate. The
   remaining misses are 2 `rank_below_top_k` cases and 1

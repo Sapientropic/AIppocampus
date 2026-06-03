@@ -77,6 +77,13 @@
       "track": "Track B public semantic-sidecar pilot",
       "command": "python benchmarks/aippocampus/benchmark_source_evidence_retrieval.py --allow-deterministic-labels --include-public-semantic-sidecar --public-semantic-output-dir .tmp/public-semantic-sidecar-20260529-wide --public-semantic-conversations 80 --public-semantic-max-messages 160 --public-semantic-max-candidates 48 --public-semantic-cases 40 --public-semantic-min-cases 3 --public-semantic-top-k 5 --public-semantic-max-tokens 16384 --public-semantic-timeout 90 --output .tmp/track-b-public-semantic-sidecar-wide-20260529.json",
       "report_policy": ".tmp/ is ignored by default; keep generated subset, sidecar, registry, and live report local unless a future curated subset is deliberately promoted",
+      "current_runner_controls": {
+        "anti_circular_controls": [
+          "no_sidecar_baseline",
+          "wrong_message_negative"
+        ],
+        "claim_boundary": "controls are reported beside the semantic-sidecar track; a wrong-message negative control passing the same quality gate blocks semantic-sidecar quality claims"
+      },
       "latest_local_result": {
         "date": "2026-05-29",
         "status": "diagnostic_only",

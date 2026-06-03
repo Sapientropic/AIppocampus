@@ -347,6 +347,7 @@ def summarize_public_semantic_source_payload(payload: dict[str, Any]) -> dict[st
         "corpus": payload.get("corpus") or {},
         "artifacts": payload.get("artifacts") or {},
         "metrics": payload.get("metrics") or {},
+        "anti_circular_controls": payload.get("anti_circular_controls") or {},
         "privacy_boundary": payload.get("privacy_boundary") or {},
         "cannot_claim": payload.get("cannot_claim") or [],
         "skip_reason": payload.get("skip_reason"),
@@ -414,6 +415,84 @@ def public_semantic_sample_size_warning(
             "empirical_public_semantic_sidecar_quality_below_minimum_case_count"
         ],
     }
+
+
+def public_semantic_eval_control_summary(
+    payload: dict[str, Any], *, control_kind: str
+) -> dict[str, Any]:
+    return {
+        "control_kind": control_kind,
+        "status": payload.get("status"),
+        "ok": bool(payload.get("ok")),
+        "sample_gate_ok": bool(payload.get("sample_gate_ok")),
+        "quality_gate_ok": bool(payload.get("quality_gate_ok")),
+        "case_count": int(payload.get("case_count") or 0),
+        "passed_count": int(payload.get("passed_count") or 0),
+        "failed_count": int(payload.get("failed_count") or 0),
+        "top_k_hit_rate": float(payload.get("top_k_hit_rate") or 0.0),
+        "selection_mode": (payload.get("selection") or {}).get("mode"),
+        "cannot_claim": payload.get("cannot_claim") or [],
+    }
+
+
+def public_semantic_control_deltas(
+    *,
+    sidecar: dict[str, Any],
+    no_sidecar_baseline: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "sidecar_vs_no_sidecar_case_delta": int(sidecar.get("case_count") or 0)
+        - int(no_sidecar_baseline.get("case_count") or 0),
+        "sidecar_vs_no_sidecar_passed_delta": int(sidecar.get("passed_count") or 0)
+        - int(no_sidecar_baseline.get("passed_count") or 0),
+        "sidecar_vs_no_sidecar_hit_rate_delta": round(
+            float(sidecar.get("top_k_hit_rate") or 0.0)
+            - float(no_sidecar_baseline.get("top_k_hit_rate") or 0.0),
+            4,
+        ),
+    }
+
+
+def wrong_message_semantic_sidecar_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    controls: list[dict[str, Any]] = []
+    for index, row in enumerate(rows):
+        item = dict(row)
+        wrong_message_id = f"wrong-message-control-{index}"
+        wrong_turn_id = f"wrong-turn-control-{index}"
+        item["message_id"] = wrong_message_id
+        item["turn_id"] = wrong_turn_id
+        item["source_refs"] = [
+            {
+                "message_id": wrong_message_id,
+                "turn_id": wrong_turn_id,
+                "source_line": 0,
+                "role": "control",
+                "phase": "wrong_message_negative",
+            }
+        ]
+        item["control_kind"] = "wrong_message_negative"
+        controls.append(item)
+    return controls
+
+
+def run_public_semantic_source_eval(
+    subset: dict[str, Any],
+    *,
+    max_cases: int,
+    min_cases: int,
+    top_k: int,
+    min_hit_rate: float,
+    require_semantic_sidecar: bool,
+) -> dict[str, Any]:
+    return source_evidence_eval.run_source_evidence_recall_eval(
+        registry_path=subset["registry_path"],
+        max_cases=max_cases,
+        min_cases=min_cases,
+        top_k=top_k,
+        min_hit_rate=min_hit_rate,
+        require_semantic_sidecar=require_semantic_sidecar,
+        ranking="dynamic_source",
+    )
 
 
 def skipped_public_semantic_sidecar_payload(
@@ -532,6 +611,17 @@ def run_public_semantic_sidecar_benchmark(
         list(subset["messages"]),
         max_candidates=max_candidates,
     )
+    sidecar_path = subset["clean_source_dir"] / SEMANTIC_SCOPE_LABELS_FILENAME
+    if sidecar_path.exists():
+        sidecar_path.unlink()
+    no_sidecar_payload = run_public_semantic_source_eval(
+        subset,
+        max_cases=max_cases,
+        min_cases=min_cases,
+        top_k=top_k,
+        min_hit_rate=min_hit_rate,
+        require_semantic_sidecar=False,
+    )
     try:
         if labeler_fn:
             labeler_payload = labeler_fn(candidates)
@@ -571,15 +661,27 @@ def run_public_semantic_sidecar_benchmark(
     )
     write_semantic_scope_label_sidecar(subset["clean_source_dir"], sidecar_rows)
     reviewed_sidecar = load_semantic_scope_labels(subset["clean_source_dir"])
-    source_payload = source_evidence_eval.run_source_evidence_recall_eval(
-        registry_path=subset["registry_path"],
+    source_payload = run_public_semantic_source_eval(
+        subset,
         max_cases=max_cases,
         min_cases=min_cases,
         top_k=top_k,
         min_hit_rate=min_hit_rate,
         require_semantic_sidecar=True,
-        ranking="dynamic_source",
     )
+    write_semantic_scope_label_sidecar(
+        subset["clean_source_dir"],
+        wrong_message_semantic_sidecar_rows(sidecar_rows),
+    )
+    wrong_message_payload = run_public_semantic_source_eval(
+        subset,
+        max_cases=max_cases,
+        min_cases=min_cases,
+        top_k=top_k,
+        min_hit_rate=min_hit_rate,
+        require_semantic_sidecar=True,
+    )
+    write_semantic_scope_label_sidecar(subset["clean_source_dir"], sidecar_rows)
     sample_case_count = int(source_payload.get("case_count") or 0)
     status = public_semantic_status(
         source_payload,
@@ -593,7 +695,25 @@ def run_public_semantic_sidecar_benchmark(
         minimum_empirical_case_count=DEFAULT_PUBLIC_SEMANTIC_MINIMUM_EMPIRICAL_CASE_COUNT,
         claim_level=claim_level,
     )
-    quality_gate_ok = bool(source_payload.get("ok")) and len(sidecar_rows) > 0
+    no_sidecar_summary = public_semantic_eval_control_summary(
+        no_sidecar_payload,
+        control_kind="no_sidecar",
+    )
+    sidecar_summary = public_semantic_eval_control_summary(
+        source_payload,
+        control_kind="semantic_sidecar",
+    )
+    wrong_message_summary = public_semantic_eval_control_summary(
+        wrong_message_payload,
+        control_kind="wrong_message",
+    )
+    anti_circular_gate_passed = not bool(wrong_message_summary["quality_gate_ok"])
+    quality_gate_ok = (
+        bool(source_payload.get("ok")) and len(sidecar_rows) > 0 and anti_circular_gate_passed
+    )
+    if not anti_circular_gate_passed and status == "sufficient":
+        status = "anti_circular_control_failed"
+        claim_level = public_semantic_claim_level(status)
     metrics = {
         "case_count": sample_case_count,
         "passed_count": int(source_payload.get("passed_count") or 0),
@@ -658,6 +778,43 @@ def run_public_semantic_sidecar_benchmark(
             "finding_count": len(findings),
             "usage": compact_usage(labeler_payload.get("usage") or {}),
             "error_count": len(labeler_payload.get("errors") or []),
+            "identity": str(
+                labeler_payload.get("labeler_identity")
+                or ("custom_labeler_fn" if labeler_fn else "public_semantic_labeler")
+            ),
+            "review_status": str(labeler_payload.get("review_status") or "validator_reviewed"),
+            "human_reviewed": bool(labeler_payload.get("human_reviewed")),
+        },
+        "anti_circular_controls": {
+            "sidecar": sidecar_summary,
+            "no_sidecar_baseline": no_sidecar_summary,
+            "wrong_message_negative": wrong_message_summary,
+            "control_deltas": public_semantic_control_deltas(
+                sidecar=sidecar_summary,
+                no_sidecar_baseline=no_sidecar_summary,
+            ),
+            "anti_circular_gate": {
+                "passed": anti_circular_gate_passed,
+                "negative_control_quality_gate_ok": bool(
+                    wrong_message_summary["quality_gate_ok"]
+                ),
+                "cannot_claim": []
+                if anti_circular_gate_passed
+                else ["semantic_sidecar_quality_without_passing_anti_circular_controls"],
+            },
+            "label_review_boundary": {
+                "labeler_identity": str(
+                    labeler_payload.get("labeler_identity")
+                    or ("custom_labeler_fn" if labeler_fn else "public_semantic_labeler")
+                ),
+                "review_status": str(
+                    labeler_payload.get("review_status") or "validator_reviewed"
+                ),
+                "human_reviewed": bool(labeler_payload.get("human_reviewed")),
+                "cannot_claim": []
+                if labeler_payload.get("human_reviewed")
+                else ["human_reviewed_semantic_labels"],
+            },
         },
         "source_evidence": summarize_source_payload(source_payload),
         "privacy_boundary": {
@@ -671,6 +828,11 @@ def run_public_semantic_sidecar_benchmark(
             "private_real_history_source_evidence_quality",
             "human_reviewed_semantic_labels",
             "unbounded_public_semantic_sidecar_quality",
+            *(
+                []
+                if anti_circular_gate_passed
+                else ["semantic_sidecar_quality_without_passing_anti_circular_controls"]
+            ),
             *(
                 sample_warning.get("cannot_claim", [])
                 if isinstance(sample_warning, dict)
