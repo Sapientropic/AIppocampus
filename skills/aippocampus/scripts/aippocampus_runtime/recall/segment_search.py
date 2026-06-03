@@ -91,8 +91,10 @@ def ensure_segments(cwd: Path, rollout: str | None, manifest: Path, force: bool)
 
 
 def _safe_int(value: object, default: int = 0) -> int:
+    if not isinstance(value, (str, bytes, bytearray, int, float)):
+        return default
     try:
-        return int(value)  # type: ignore[arg-type]
+        return int(value)
     except (TypeError, ValueError):
         return default
 

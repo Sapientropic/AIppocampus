@@ -453,7 +453,7 @@ def read_only_tool_names() -> tuple[str, ...]:
 
 
 def dispatchable_tool_names() -> tuple[str, ...]:
-    return tuple(name for name, spec in READ_ONLY_TOOL_REGISTRY.items() if spec.dispatcher)
+    return read_only_tool_names()
 
 
 def available_tools_payload() -> dict[str, dict[str, Any]]:
