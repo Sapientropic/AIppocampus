@@ -451,6 +451,13 @@ The model-backed worker is bounded by design:
 - prompt order is always `stable_dream_worker_contract`, then
   `source_pack_payload`, then `variable_run_directive`
 - DeepSeek-flavored configs must use `cache_contract="deepseek_prefix_v1"`
+- DeepSeek-flavored configs use the shared thinking-mode contract:
+  `thinking="enabled"` and `reasoning_effort="high"` by default, with
+  OpenAI-compatible providers receiving those fields only when route
+  capabilities explicitly opt in
+- returned `reasoning_content` is stripped by the shared model client unless a
+  future provider tool-call replay contract can preserve it without storing
+  hidden reasoning as memory source
 - `max_samples` limits accepted candidate shaping per dream function
 - `no_write=True` is the default, so accepted candidates do not project to
   working memory unless the caller explicitly asks for projection

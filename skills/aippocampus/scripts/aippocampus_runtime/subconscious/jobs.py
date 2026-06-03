@@ -34,6 +34,8 @@ from aippocampus_runtime.model.routing import (
     route_cache_metrics,
     route_payload_with_effective_values,
     route_service_name,
+    resolve_route_reasoning_effort,
+    resolve_route_thinking,
 )
 from aippocampus_runtime.subconscious.deterministic_jobs import (
     DETERMINISTIC_RUNNERS,
@@ -175,6 +177,8 @@ def public_jobs_payload(result: Mapping[str, Any]) -> dict[str, Any]:
         "cache": public_cache(result.get("cache")),
         "usage": public_usage(result.get("usage")),
         "model_route": public_model_route(result.get("model_route")),
+        "thinking": str(result.get("thinking") or "provider"),
+        "reasoning_effort": str(result.get("reasoning_effort") or "provider"),
         "output_private_artifacts": bool(result.get("jobs_output") or result.get("edges_output")),
         "output_boundary": "job_details_are_local_private_artifacts",
     }
@@ -290,6 +294,11 @@ def run_one_job(
             f"missing {route_service_name(route)} key; "
             f"set {resolved_api_key_env} or pass --api-key-env"
         )
+    resolved_thinking = resolve_route_thinking(route)
+    resolved_reasoning_effort = resolve_route_reasoning_effort(
+        route,
+        thinking=resolved_thinking,
+    )
 
     system_prompt = (
         AGENT_SYSTEM_PROMPT
@@ -393,6 +402,8 @@ def run_one_job(
                 if (capabilities and capabilities.cache_metrics_kind == "deepseek_prefix")
                 else NO_PROVIDER_CACHE_CONTRACT
             ),
+            "thinking": resolved_thinking,
+            "reasoning_effort": resolved_reasoning_effort,
         }
         if chat_fn is call_chat_json
         else None,
@@ -459,6 +470,8 @@ def run_one_job(
         "effective_step_budget": step_budget,
         "timeout": timeout,
         "temperature": temperature,
+        "thinking": resolved_thinking,
+        "reasoning_effort": resolved_reasoning_effort,
         "tool_contract_version": TOOL_CONTRACT_VERSION,
         "validation_diagnostics": validation_diagnostics,
     }
@@ -659,6 +672,14 @@ def run_jobs(
         if semantic_jobs
         else successful_count > 0 or (not task_specs and not deterministic_jobs)
     )
+    resolved_thinking = next(
+        (result.get("thinking") for result in results if result.get("thinking")),
+        None,
+    )
+    resolved_reasoning_effort = next(
+        (result.get("reasoning_effort") for result in results if result.get("reasoning_effort")),
+        None,
+    )
     return {
         "ok": overall_ok,
         "jobs": results,
@@ -671,6 +692,8 @@ def run_jobs(
         "concurrency": max_workers,
         "timeout": timeout,
         "temperature": temperature,
+        "thinking": resolved_thinking,
+        "reasoning_effort": resolved_reasoning_effort,
         "model_route": route_payload,
         "finding_count": sum(int(result.get("finding_count") or 0) for result in results),
         "edge_count": sum(int(result.get("edge_count") or 0) for result in results),

@@ -331,6 +331,19 @@ boundary still reaches local-folder, object-storage, and encrypted paths.
 Generated findings, sidecars, and vector neighbors are advisory until they point
 back to clean source. External-model features must stay optional.
 
+DeepSeek routes use the shared model route contract before any background
+worker calls a model: default `thinking="enabled"`, default
+`reasoning_effort="high"`, DeepSeek prefix-cache telemetry, and no sampling
+temperature when thinking mode is active. Warm ambient, Dream model-backed
+workers, detached sleep-cycle runs, and older subconscious workers all consume
+that route contract rather than hard-coding per-call values. Conservative
+OpenAI-compatible routes omit DeepSeek-only fields unless the configured route
+explicitly advertises the matching capability. Returned `reasoning_content` is
+not memory source material: current AIppocampus routes strip it with
+count-level diagnostics, and provider tool-call continuation remains
+unsupported until a future replay contract can preserve it without storing
+chain-of-thought in clean source, staging, caches, or public reports.
+
 ## Warm Ambient Recall
 
 | Script or group | Purpose | Invocation route | Key dependencies | Status |

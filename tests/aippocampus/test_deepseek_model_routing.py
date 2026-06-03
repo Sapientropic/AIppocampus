@@ -39,6 +39,10 @@ class DeepSeekModelRoutingTests(unittest.TestCase):
                 "AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_JSON",
                 "AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_USER_ID",
                 "AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_THINKING",
+                "AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_REASONING_EFFORT",
+                "AIPPOCAMPUS_OPENAI_COMPAT_DEFAULT_THINKING",
+                "AIPPOCAMPUS_OPENAI_COMPAT_DEFAULT_REASONING_EFFORT",
+                "AIPPOCAMPUS_OPENAI_COMPAT_REASONING_CONTENT_HANDLING",
                 "AIPPOCAMPUS_OPENAI_COMPAT_CACHE_METRICS_KIND",
             ]
         }
@@ -60,6 +64,11 @@ class DeepSeekModelRoutingTests(unittest.TestCase):
         self.assertEqual(default.api_key_env, "DEEPSEEK_API_KEY")
         self.assertTrue(default.capabilities.supports_user_id)
         self.assertTrue(default.capabilities.supports_thinking)
+        self.assertTrue(default.capabilities.supports_reasoning_effort)
+        self.assertEqual(default.capabilities.default_thinking, "enabled")
+        self.assertEqual(default.capabilities.default_reasoning_effort, "high")
+        self.assertEqual(routing.resolve_route_thinking(default), "enabled")
+        self.assertEqual(routing.resolve_route_reasoning_effort(default, thinking="enabled"), "high")
         self.assertEqual(default.capabilities.cache_metrics_kind, "deepseek_prefix")
         self.assertEqual(default.capabilities.safe_default_concurrency, 4)
         self.assertEqual(routing.resolve_model_route("default").model, "deepseek-v4-flash")
@@ -103,6 +112,9 @@ class DeepSeekModelRoutingTests(unittest.TestCase):
         self.assertEqual(resolved.api_key_env, "LOCAL_KEY")
         self.assertFalse(resolved.capabilities.supports_user_id)
         self.assertFalse(resolved.capabilities.supports_thinking)
+        self.assertFalse(resolved.capabilities.supports_reasoning_effort)
+        self.assertIsNone(routing.resolve_route_thinking(resolved))
+        self.assertIsNone(routing.resolve_route_reasoning_effort(resolved, thinking=None))
         self.assertEqual(resolved.capabilities.cache_metrics_kind, "none")
         self.assertEqual(resolved.capabilities.safe_default_concurrency, 1)
 
@@ -142,6 +154,7 @@ class DeepSeekModelRoutingTests(unittest.TestCase):
         self.assertTrue(resolved.capabilities.supports_json_response)
         self.assertFalse(resolved.capabilities.supports_user_id)
         self.assertFalse(resolved.capabilities.supports_thinking)
+        self.assertFalse(resolved.capabilities.supports_reasoning_effort)
         self.assertEqual(resolved.capabilities.cache_metrics_kind, "none")
         self.assertEqual(resolved.capabilities.safe_default_concurrency, 2)
         self.assertEqual(payload["capabilities"]["supports_user_id"], False)
@@ -155,6 +168,9 @@ class DeepSeekModelRoutingTests(unittest.TestCase):
         os.environ["AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_JSON"] = "false"
         os.environ["AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_USER_ID"] = "true"
         os.environ["AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_THINKING"] = "true"
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_REASONING_EFFORT"] = "true"
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_DEFAULT_THINKING"] = "enabled"
+        os.environ["AIPPOCAMPUS_OPENAI_COMPAT_DEFAULT_REASONING_EFFORT"] = "max"
         os.environ["AIPPOCAMPUS_OPENAI_COMPAT_CACHE_METRICS_KIND"] = "provider_specific"
 
         resolved = routing.resolve_model_route("openai_compatible")
@@ -162,6 +178,9 @@ class DeepSeekModelRoutingTests(unittest.TestCase):
         self.assertFalse(resolved.capabilities.supports_json_response)
         self.assertTrue(resolved.capabilities.supports_user_id)
         self.assertTrue(resolved.capabilities.supports_thinking)
+        self.assertTrue(resolved.capabilities.supports_reasoning_effort)
+        self.assertEqual(routing.resolve_route_thinking(resolved), "enabled")
+        self.assertEqual(routing.resolve_route_reasoning_effort(resolved, thinking="enabled"), "max")
         self.assertEqual(resolved.capabilities.cache_metrics_kind, "provider_specific")
 
     def test_openai_compatible_provider_reports_missing_required_config(self) -> None:

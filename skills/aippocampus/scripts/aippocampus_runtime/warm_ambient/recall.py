@@ -29,6 +29,8 @@ from aippocampus_runtime.core import (
 )
 from aippocampus_runtime.model.routing import (
     DEFAULT_DEEPSEEK_API_KEY_ENV,
+    resolve_route_reasoning_effort,
+    resolve_route_thinking,
     resolve_model_route,
     route_cache_metrics,
     route_payload_with_effective_values,
@@ -350,11 +352,14 @@ def model_scout_fn(
     temperature: float,
     user_id: str | None,
     thinking: str | None,
+    reasoning_effort: str | None,
     service_name: str,
     response_format_json: bool,
     chat_fn: ChatFn,
 ) -> dict[str, Any]:
     kwargs: dict[str, Any] = {"thinking": thinking} if thinking else {}
+    if reasoning_effort:
+        kwargs["reasoning_effort"] = reasoning_effort
     if user_id:
         kwargs["user_id"] = user_id
     if chat_fn is call_chat_json:
@@ -608,6 +613,7 @@ def run_scout(
     temperature: float,
     user_id: str | None,
     thinking: str | None,
+    reasoning_effort: str | None,
     service_name: str,
     response_format_json: bool,
     chat_fn: ChatFn,
@@ -624,6 +630,7 @@ def run_scout(
         temperature=temperature,
         user_id=user_id,
         thinking=thinking,
+        reasoning_effort=reasoning_effort,
         service_name=service_name,
         response_format_json=response_format_json,
         chat_fn=chat_fn,
@@ -645,6 +652,7 @@ def run_scout_batch(
     max_workers: int | None,
     user_id: str | None,
     thinking: str | None,
+    reasoning_effort: str | None,
     service_name: str,
     response_format_json: bool,
     wait_all: bool,
@@ -692,6 +700,7 @@ def run_scout_batch(
                 temperature=temperature,
                 user_id=user_id,
                 thinking=thinking,
+                reasoning_effort=reasoning_effort,
                 service_name=service_name,
                 response_format_json=response_format_json,
                 chat_fn=chat_fn,
@@ -1226,6 +1235,7 @@ def run_warm_ambient_recall(
     timeout: float | None = None,
     temperature: float | None = None,
     thinking: str | None = None,
+    reasoning_effort: str | None = None,
     scouts: tuple[str, ...] | None = None,
     quorum: int | None = None,
     max_workers: int | None = None,
@@ -1244,6 +1254,7 @@ def run_warm_ambient_recall(
         timeout=timeout,
         temperature=temperature,
         thinking=thinking,
+        reasoning_effort=reasoning_effort,
         quorum=quorum,
         max_workers=max_workers,
         prefix_cache_warmup_scouts=prefix_cache_warmup_scouts,
@@ -1297,7 +1308,16 @@ def run_warm_ambient_recall(
         else None
     )
     resolved_thinking = (
-        resolve_thinking_mode(runtime_config.thinking) if supports_thinking else None
+        resolve_route_thinking(route, runtime_config.thinking) if supports_thinking else None
+    )
+    resolved_reasoning_effort = (
+        resolve_route_reasoning_effort(
+            route,
+            runtime_config.reasoning_effort,
+            thinking=resolved_thinking,
+        )
+        if supports_thinking
+        else None
     )
     resolved_max_workers = resolve_max_workers(runtime_config.max_workers)
     if resolved_max_workers is None and route.provider != "deepseek" and capabilities:
@@ -1327,6 +1347,7 @@ def run_warm_ambient_recall(
         max_workers=resolved_max_workers,
         user_id=resolved_user_id,
         thinking=resolved_thinking,
+        reasoning_effort=resolved_reasoning_effort,
         service_name=route_service_name(route),
         response_format_json=bool(capabilities.supports_json_response if capabilities else True),
         wait_all=wait_all,
@@ -1486,6 +1507,8 @@ def run_warm_ambient_recall(
         ),
         "timeout": runtime_config.timeout,
         "temperature": runtime_config.temperature,
+        "thinking": resolved_thinking,
+        "reasoning_effort": resolved_reasoning_effort,
         "user_id": resolved_user_id,
         "model_route": route_payload,
         "accepted_scout_count": accepted_count,

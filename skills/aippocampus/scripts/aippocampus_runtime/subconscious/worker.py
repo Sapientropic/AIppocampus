@@ -33,6 +33,8 @@ from aippocampus_runtime.model.routing import (
     DEFAULT_DEEPSEEK_API_KEY_ENV,
     deepseek_base_url,
     flash_model,
+    resolve_route_reasoning_effort,
+    resolve_route_thinking,
     resolve_model_route,
     route_artifact_source,
     route_cache_metrics,
@@ -129,6 +131,8 @@ def public_worker_payload(result: Mapping[str, Any]) -> dict[str, Any]:
         "cache": public_cache(result.get("cache")),
         "usage": public_usage(result.get("usage")),
         "model_route": public_model_route(result.get("model_route")),
+        "thinking": str(result.get("thinking") or "provider"),
+        "reasoning_effort": str(result.get("reasoning_effort") or "provider"),
         "staging_pressure": public_staging_pressure(result.get("staging_pressure")),
         "output_private_artifact": bool(result.get("output")),
         "output_boundary": "worker_details_are_local_private_artifacts",
@@ -280,8 +284,11 @@ def call_deepseek(
     turns: list[dict[str, Any]],
     max_tokens: int | None,
     timeout: int,
+    thinking: str | None = None,
+    reasoning_effort: str | None = None,
     service_name: str = "DeepSeek API",
     response_format_json: bool = True,
+    cache_contract: str = DEEPSEEK_PREFIX_CACHE_CONTRACT,
 ) -> dict[str, Any]:
     return chat_json(
         [
@@ -296,8 +303,10 @@ def call_deepseek(
             timeout=timeout,
             temperature=0,
             service_name=service_name,
+            thinking=thinking,
+            reasoning_effort=reasoning_effort,
             response_format_json=response_format_json,
-            cache_contract=DEEPSEEK_PREFIX_CACHE_CONTRACT,
+            cache_contract=cache_contract,
         ),
     )
 
@@ -441,6 +450,11 @@ def run_worker(
             f"missing {route_service_name(route)} key; "
             f"set {resolved_api_key_env} or pass --api-key-env"
         )
+    resolved_thinking = resolve_route_thinking(route)
+    resolved_reasoning_effort = resolve_route_reasoning_effort(
+        route,
+        thinking=resolved_thinking,
+    )
     response = call_deepseek(
         api_key=str(key_value),
         model=resolved_model,
@@ -448,8 +462,15 @@ def run_worker(
         turns=turns,
         max_tokens=max_tokens,
         timeout=timeout,
+        thinking=resolved_thinking,
+        reasoning_effort=resolved_reasoning_effort,
         service_name=route_service_name(route),
         response_format_json=bool(capabilities.supports_json_response if capabilities else True),
+        cache_contract=(
+            DEEPSEEK_PREFIX_CACHE_CONTRACT
+            if (capabilities and capabilities.cache_metrics_kind == "deepseek_prefix")
+            else "none"
+        ),
     )
     parsed = parse_model_json(response)
     edges = validate_edges(parsed, turns)
@@ -477,6 +498,8 @@ def run_worker(
         "edge_count": len(edges),
         "edges": edges,
         "timeout": timeout,
+        "thinking": resolved_thinking,
+        "reasoning_effort": resolved_reasoning_effort,
         "usage": usage,
         "cache": route_cache_metrics(route, usage),
         "wrote": False if no_write else True,

@@ -39,6 +39,8 @@ from aippocampus_runtime.model.routing import (
     DEFAULT_DEEPSEEK_API_KEY_ENV,
     deepseek_base_url,
     flash_model,
+    resolve_route_reasoning_effort,
+    resolve_route_thinking,
     resolve_model_route,
     route_service_name,
 )
@@ -591,6 +593,15 @@ def config_from_args(args: argparse.Namespace) -> ChatClientConfig:
         if route.provider == "deepseek"
         else NO_PROVIDER_CACHE_CONTRACT
     )
+    thinking = resolve_route_thinking(
+        route,
+        str(getattr(args, "dream_model_thinking", "auto") or "auto"),
+    )
+    reasoning_effort = resolve_route_reasoning_effort(
+        route,
+        str(getattr(args, "dream_model_reasoning_effort", "auto") or "auto"),
+        thinking=thinking,
+    )
     return ChatClientConfig(
         api_key=api_key,
         model=model,
@@ -598,6 +609,8 @@ def config_from_args(args: argparse.Namespace) -> ChatClientConfig:
         max_tokens=args.max_tokens,
         timeout=args.timeout,
         service_name=route_service_name(route),
+        thinking=thinking,
+        reasoning_effort=reasoning_effort,
         cache_contract=cache_contract,
     )
 
@@ -641,6 +654,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--api-key-env", default=DEFAULT_DEEPSEEK_API_KEY_ENV)
     parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT_SECONDS)
     parser.add_argument("--max-tokens", type=int)
+    parser.add_argument(
+        "--dream-model-thinking",
+        choices=["auto", "enabled", "disabled", "provider"],
+        default="auto",
+    )
+    parser.add_argument(
+        "--dream-model-reasoning-effort",
+        choices=["auto", "high", "max", "provider"],
+        default="auto",
+    )
     return parser
 
 

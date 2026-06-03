@@ -37,6 +37,8 @@ from aippocampus_runtime.model.client import (
 )
 from aippocampus_runtime.model.routing import (
     DEFAULT_DEEPSEEK_API_KEY_ENV,
+    resolve_route_reasoning_effort,
+    resolve_route_thinking,
     resolve_model_route,
     route_payload_with_effective_values,
     route_service_name,
@@ -539,13 +541,15 @@ def dream_model_config_from_args(args: Any) -> tuple[ChatClientConfig, dict[str,
             f"missing {route_service_name(route)} key; set {resolved_api_key_env} or pass --api-key-env"
         )
     capabilities = route.capabilities
-    thinking = str(getattr(args, "dream_model_thinking", "auto") or "auto").strip().casefold()
-    if thinking == "auto":
-        thinking_value = "enabled" if getattr(capabilities, "supports_thinking", False) else None
-    elif thinking in {"enabled", "disabled"}:
-        thinking_value = thinking
-    else:
-        raise ValueError("dream model thinking must be auto, enabled, or disabled")
+    thinking_value = resolve_route_thinking(
+        route,
+        str(getattr(args, "dream_model_thinking", "auto") or "auto"),
+    )
+    reasoning_effort_value = resolve_route_reasoning_effort(
+        route,
+        str(getattr(args, "dream_model_reasoning_effort", "auto") or "auto"),
+        thinking=thinking_value,
+    )
     config = ChatClientConfig(
         api_key=str(key_value),
         model=resolved_model,
@@ -555,6 +559,7 @@ def dream_model_config_from_args(args: Any) -> tuple[ChatClientConfig, dict[str,
         temperature=float(getattr(args, "dream_model_temperature", 0.0) or 0.0),
         service_name=route_service_name(route),
         thinking=thinking_value,
+        reasoning_effort=reasoning_effort_value,
         response_format_json=bool(getattr(capabilities, "supports_json_response", True)),
         cache_contract=cache_contract_for_route(route),
     )
@@ -1122,7 +1127,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--dream-model-thinking",
         default="auto",
-        choices=("auto", "enabled", "disabled"),
+        choices=("auto", "enabled", "disabled", "provider"),
+    )
+    parser.add_argument(
+        "--dream-model-reasoning-effort",
+        default="auto",
+        choices=("auto", "high", "max", "provider"),
     )
     parser.add_argument("--json", action="store_true", help="Emit compact JSON.")
     parser.add_argument("--output", type=Path)
@@ -1157,4 +1167,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

@@ -21,8 +21,12 @@ DEFAULT_FLASH_MODEL = "deepseek-v4-flash"
 DEFAULT_PRO_MODEL = "deepseek-v4-pro"
 DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEFAULT_DEEPSEEK_API_KEY_ENV = "DEEPSEEK_API_KEY"
+DEFAULT_DEEPSEEK_THINKING = "enabled"
+DEFAULT_DEEPSEEK_REASONING_EFFORT = "high"
 OPENAI_COMPAT_ROUTE_FALLBACKS = {"openai_compatible", "external", "custom_openai"}
 EXPLICIT_OPENAI_COMPAT_ROUTE = "explicit_openai_compatible"
+VALID_THINKING_MODES = {"enabled", "disabled"}
+VALID_REASONING_EFFORTS = {"high", "max"}
 
 
 def env_truthy(name: str, *, default: bool) -> bool:
@@ -40,6 +44,10 @@ class ModelCapabilities:
     supports_thinking: bool
     cache_metrics_kind: str
     safe_default_concurrency: int
+    supports_reasoning_effort: bool = False
+    default_thinking: str | None = None
+    default_reasoning_effort: str | None = None
+    reasoning_content_handling: str = "discard_without_storage"
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -49,6 +57,10 @@ class ModelCapabilities:
             "supports_thinking": self.supports_thinking,
             "cache_metrics_kind": self.cache_metrics_kind,
             "safe_default_concurrency": self.safe_default_concurrency,
+            "supports_reasoning_effort": self.supports_reasoning_effort,
+            "default_thinking": self.default_thinking,
+            "default_reasoning_effort": self.default_reasoning_effort,
+            "reasoning_content_handling": self.reasoning_content_handling,
         }
 
 
@@ -107,7 +119,53 @@ def deepseek_capabilities(tier: str) -> ModelCapabilities:
         supports_thinking=True,
         cache_metrics_kind="deepseek_prefix",
         safe_default_concurrency=1 if tier == "pro" else 4,
+        supports_reasoning_effort=True,
+        default_thinking=DEFAULT_DEEPSEEK_THINKING,
+        default_reasoning_effort=DEFAULT_DEEPSEEK_REASONING_EFFORT,
     )
+
+
+def normalize_thinking_mode(value: str | None, *, allow_provider: bool = True) -> str | None:
+    raw = str(value or "").strip().casefold()
+    if allow_provider and raw in {"", "auto", "provider", "default", "none"}:
+        return None
+    if raw not in VALID_THINKING_MODES:
+        raise ValueError("thinking must be enabled, disabled, or provider/default")
+    return raw
+
+
+def normalize_reasoning_effort(value: str | None, *, allow_provider: bool = True) -> str | None:
+    raw = str(value or "").strip().casefold()
+    if allow_provider and raw in {"", "auto", "provider", "default", "none"}:
+        return None
+    if raw not in VALID_REASONING_EFFORTS:
+        raise ValueError("reasoning_effort must be high, max, or provider/default")
+    return raw
+
+
+def resolve_route_thinking(route: ModelRoute, requested: str | None = "auto") -> str | None:
+    capabilities = route.capabilities or deepseek_capabilities(route.tier)
+    if not capabilities.supports_thinking:
+        return None
+    requested_value = normalize_thinking_mode(requested)
+    default_value = normalize_thinking_mode(capabilities.default_thinking)
+    return requested_value if requested_value is not None else default_value
+
+
+def resolve_route_reasoning_effort(
+    route: ModelRoute,
+    requested: str | None = "auto",
+    *,
+    thinking: str | None,
+) -> str | None:
+    capabilities = route.capabilities or deepseek_capabilities(route.tier)
+    if not capabilities.supports_reasoning_effort:
+        return None
+    if thinking == "disabled":
+        return None
+    requested_value = normalize_reasoning_effort(requested)
+    default_value = normalize_reasoning_effort(capabilities.default_reasoning_effort)
+    return requested_value if requested_value is not None else default_value
 
 
 def deepseek_route(route: str, tier: str, model: str) -> ModelRoute:
@@ -144,6 +202,7 @@ def conservative_openai_compatible_route(
             supports_thinking=False,
             cache_metrics_kind="none",
             safe_default_concurrency=1,
+            reasoning_content_handling="not_supported",
         ),
     )
 
@@ -244,6 +303,20 @@ def configured_openai_compatible_route(route: str) -> ModelRoute:
             ).strip()
             or "none",
             safe_default_concurrency=safe_default_concurrency,
+            supports_reasoning_effort=env_truthy(
+                "AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_REASONING_EFFORT", default=False
+            ),
+            default_thinking=normalize_thinking_mode(
+                os.environ.get("AIPPOCAMPUS_OPENAI_COMPAT_DEFAULT_THINKING")
+            ),
+            default_reasoning_effort=normalize_reasoning_effort(
+                os.environ.get("AIPPOCAMPUS_OPENAI_COMPAT_DEFAULT_REASONING_EFFORT")
+            ),
+            reasoning_content_handling=(
+                os.environ.get("AIPPOCAMPUS_OPENAI_COMPAT_REASONING_CONTENT_HANDLING", "")
+                .strip()
+                or "not_supported"
+            ),
         ),
     )
 
