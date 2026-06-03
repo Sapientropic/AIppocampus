@@ -423,6 +423,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_evidence.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_hot_path.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_policy.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_projection.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_semantic.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/query_policy.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/search_decision_adapter.py",

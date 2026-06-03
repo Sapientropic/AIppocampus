@@ -693,6 +693,14 @@ class AmbientRecallHookTests(unittest.TestCase):
         )
         self.assertNotIn("candidate_ids", public["route_delivery_diagnostic"])
         self.assertNotIn("private prompt text", encoded)
+        private_result["route_delivery_diagnostic"][
+            "semantic_reuse_source"
+        ] = "semantic_provider_timeout"
+        timeout_public = hook.public_hook_debug_payload(private_result)
+        self.assertEqual(
+            timeout_public["route_delivery_diagnostic"]["semantic_reuse_source"],
+            "semantic_provider_timeout",
+        )
 
     def test_prompt_hook_dry_run_logs_would_deliver_without_foreground_dream(self) -> None:
         working_memory = self._write_dream_working_memory()
