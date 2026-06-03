@@ -25,7 +25,9 @@
   const MAX_QUERY_RESULTS = 5;
   const MAX_RESULT_CHARS = 720;
   const MAX_HANDOFF_CHARS = 2400;
+  const MAX_STORAGE_TEXT_CHARS = 12000;
   const MAX_EXPORT_TEXT_CHARS = 12000;
+  const STORAGE_MODE = "redacted_local_storage_v1";
 
   const REDACTION_PATTERNS = [
     {
@@ -126,6 +128,18 @@
       redacted: redactionCount > 0,
       redactionCount,
       redactionTypes: Array.from(new Set(redactionTypes)),
+    };
+  }
+
+  function sanitizeForLocalStorage(value, maxChars) {
+    const sanitized = sanitizeText(value);
+    const bounded = truncateMiddle(sanitized.text, maxChars || MAX_STORAGE_TEXT_CHARS);
+    return {
+      text: bounded.text,
+      redacted: sanitized.redacted,
+      redactionCount: sanitized.redactionCount,
+      redactionTypes: sanitized.redactionTypes,
+      truncated: bounded.truncated,
     };
   }
 
@@ -282,23 +296,62 @@
     if (!options || !options.enabled) {
       return { captured: false, reason: "capture_disabled" };
     }
-    const userText = normalizeText(options.userText);
-    const assistantText = normalizeText(options.assistantText);
-    if (!userText && !assistantText) {
+    const rawUserText = normalizeText(options.userText);
+    const rawAssistantText = normalizeText(options.assistantText);
+    if (!rawUserText && !rawAssistantText) {
       return { captured: false, reason: "empty_turn" };
     }
     const now = options.now || new Date().toISOString();
+    const storedUser = sanitizeForLocalStorage(rawUserText, MAX_STORAGE_TEXT_CHARS);
+    const storedAssistant = sanitizeForLocalStorage(rawAssistantText, MAX_STORAGE_TEXT_CHARS);
+    const source = sanitizeText(options.source || "claude.ai:local").text || "claude.ai:local";
     const record = {
       id: `turn-${now}-${store.records.length + 1}`,
-      source: options.source || "claude.ai:local",
+      source,
       capturedAt: now,
-      userText,
-      assistantText,
-      text: normalizeText(`${userText}\n${assistantText}`),
+      userText: storedUser.text,
+      assistantText: storedAssistant.text,
+      text: normalizeText(`${storedUser.text}\n${storedAssistant.text}`),
+      storage_mode: STORAGE_MODE,
+      raw_capture_at_rest: false,
+      storage_redaction_count: storedUser.redactionCount + storedAssistant.redactionCount,
+      storage_redaction_types: Array.from(
+        new Set([...storedUser.redactionTypes, ...storedAssistant.redactionTypes])
+      ),
+      storage_truncated: storedUser.truncated || storedAssistant.truncated,
     };
     record.terms = tokenize(record.text);
     store.records.push(record);
     return { captured: true, record };
+  }
+
+  function storageDiagnostics(store) {
+    const records = Array.isArray(store && store.records) ? store.records : [];
+    let redactedCount = 0;
+    let legacyOrRawCount = 0;
+    let redactionCount = 0;
+    let truncatedCount = 0;
+    for (const record of records) {
+      if (record && record.storage_mode === STORAGE_MODE && record.raw_capture_at_rest === false) {
+        redactedCount += 1;
+      } else {
+        legacyOrRawCount += 1;
+      }
+      redactionCount += Number(record && record.storage_redaction_count) || 0;
+      if (record && record.storage_truncated) {
+        truncatedCount += 1;
+      }
+    }
+    return {
+      storage_mode: legacyOrRawCount ? "mixed_or_legacy_local_storage" : STORAGE_MODE,
+      raw_capture_at_rest: legacyOrRawCount > 0,
+      record_count: records.length,
+      redacted_record_count: redactedCount,
+      legacy_or_raw_record_count: legacyOrRawCount,
+      storage_redaction_count: redactionCount,
+      storage_truncated_count: truncatedCount,
+      boundary: "browser-local storage contains redacted/bounded visible text only for v1 records",
+    };
   }
 
   function decodeEntities(value) {
@@ -468,7 +521,7 @@
         assistantText: assistantBox.value,
       });
       output.textContent = result.captured
-        ? "Captured local turn. It remains in browser localStorage on this device."
+        ? "Captured local turn. Redacted/bounded text remains in browser localStorage on this device."
         : `Capture skipped: ${result.reason}`;
     });
     panel.querySelector("[data-aippocampus-export]").addEventListener("click", () => {
@@ -529,6 +582,7 @@
     parseMemorySearchRequest,
     sanitizeText,
     searchMemory,
+    storageDiagnostics,
     tokenize,
     truncateMiddle,
   };

@@ -285,8 +285,9 @@ browser-extension local MVP 验证 prompt 层虚拟 `memory_search`，不把
 
 The current userscript has two deliberately separate surfaces:
 
-- browser-local search: captured turns stay in `localStorage`, search is local,
-  and results are shown as visible handoff text for user review;
+- browser-local search: captured turns stay in `localStorage` as
+  redacted/bounded text, search is local, and results are shown as visible
+  handoff text for user review;
 - durable import: the user explicitly clicks `Export generic JSONL`, reviews the
   private local file, and then runs the existing AIppocampus
   `import conversation --format generic-jsonl` path.
@@ -298,6 +299,14 @@ Assistant-only captures are skipped instead of being forced into an orphan
 generic JSONL row, because the durable registry path should reject ambiguous
 conversation structure rather than guessing at turn ownership.
 
+Issue #599 tightened the raw-capture-at-rest boundary for the userscript MVP:
+new v1 records are stored with `storage_mode=redacted_local_storage_v1` and
+`raw_capture_at_rest=false`. This is still a prototype browser-local boundary,
+not a hostile same-origin threat-model claim. Before wider browser-chat support,
+the migration target is extension-isolated storage / IndexedDB owned by a
+content script/background page, with public diagnostics that distinguish
+redacted local records from legacy/raw localStorage records.
+
 `aippocampus_runtime.recall.search_decision_adapter` may sit in front of a future
 `memory_search` bridge as a local decision contract: before search it can tell
 the agent whether the prompt is new, a degraded cue into old source, or a weak
@@ -308,8 +317,8 @@ directly, upload search trails, or turn browser-local captures/search results
 into durable truth without the explicit export/import path above.
 
 1. **显式开启捕获**：用户对当前站点 / 当前会话开启后，才把消息片段存入
-   browser-local storage（当前 userscript 用 `localStorage`；正式扩展再迁到
-   IndexedDB）
+   browser-local storage（当前 userscript 用 redacted/bounded `localStorage`；
+   正式扩展再迁到 extension-isolated storage / IndexedDB）
 2. **Prompt 层虚拟工具**：在对话开头注入 memory_search 工具定义
 3. **Tool call 解析**：从 Claude 流式响应中提取 `<memory_search>` 标签
 4. **本地搜索**：MiniSearch 索引 + CJK 分词（移植自 retrieval.py）
