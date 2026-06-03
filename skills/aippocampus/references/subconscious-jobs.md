@@ -103,6 +103,14 @@ The model can be exploratory in tool planning, but output remains constrained:
 every accepted finding must have source refs that resolve to initial turn refs
 or tool observation refs.
 
+For the minimal agent, `min_tool_steps` is only a cheap anti-laziness gate. It
+does not prove the final edge used useful tool evidence. Agent run JSON exposes
+sanitized `tool_grounding` diagnostics with ref counts, useless tool-call
+counts, and one of `tool_grounded`, `initial_only_after_tool`, or `ungrounded`.
+This is diagnostic by default: cite `o*` observation refs when tool hits support
+the edge, but do not cite them merely to satisfy a metric when the initial turn
+refs are the real evidence or tools returned no useful source refs.
+
 Every accepted finding also gets deterministic metadata before it is written:
 
 - `fingerprint`: stable-ish finding id for dedup/review.

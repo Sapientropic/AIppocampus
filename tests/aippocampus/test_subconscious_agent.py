@@ -362,7 +362,113 @@ class SubconsciousAgentTests(unittest.TestCase):
         self.assertEqual(len(calls), 3)
         self.assertEqual(len(result["tool_steps"]), 1)
         self.assertEqual(result["edges"][0]["source_refs"][0]["ref"], "o0")
+        self.assertEqual(result["tool_grounding"]["status"], "tool_grounded")
+        self.assertEqual(result["tool_grounding"]["tool_observation_ref_count"], 1)
+        self.assertEqual(result["tool_grounding"]["final_edges_with_observation_refs"], 1)
+        repair_call = json.dumps(calls[2], ensure_ascii=False)
+        self.assertIn("observation_refs", repair_call)
+        self.assertIn("o0", repair_call)
         self.assertEqual(result["cache"]["hit_rate"], 0.9)
+
+    def test_agent_reports_initial_only_after_nonuseful_tool_call(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry_path = root / "threads.json"
+            registry_path.write_text(json.dumps({"threads": []}), encoding="utf-8")
+            timeline_path = root / "project_timeline.json"
+            timeline_path.write_text(
+                json.dumps(
+                    {
+                        "projects": {
+                            "project:t": {
+                                "project_label": "T-Sense",
+                                "latest_turns": [
+                                    {
+                                        "thread_key": "session:one",
+                                        "title": "T-Sense test",
+                                        "project_label": "T-Sense",
+                                        "turn_id": "turn-1",
+                                        "turn_index": 1,
+                                        "user": "本地底座要做 Go runtime spike。",
+                                        "assistant": "用 gotd 验证核心路径。",
+                                    }
+                                ],
+                            }
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            calls: list[list[dict[str, str]]] = []
+
+            def fake_chat(
+                messages: list[dict[str, str]],
+                api_key: str,
+                model: str,
+                base_url: str,
+                max_tokens: int | None,
+                timeout: int,
+                temperature: float,
+            ) -> dict[str, Any]:
+                del api_key, model, base_url, max_tokens, timeout, temperature
+                calls.append(messages)
+                content = (
+                    {
+                        "action": "tool",
+                        "tool": "recent_edges",
+                        "args": {"terms": ["nothing-here"], "limit": 2},
+                        "why": "Check whether this edge already exists.",
+                    }
+                    if len(calls) == 1
+                    else {
+                        "action": "final",
+                        "edges": [
+                            {
+                                "src": "Go runtime",
+                                "dst": "gotd",
+                                "edge_type": "depends_on",
+                                "confidence": 0.82,
+                                "why": "The initial source turn ties the spike to gotd validation.",
+                                "source_refs": [{"ref": "t0"}],
+                            }
+                        ],
+                    }
+                )
+                return {
+                    "choices": [{"message": {"content": json.dumps(content, ensure_ascii=False)}}],
+                    "usage": {"total_tokens": 1},
+                }
+
+            result = agent.run_agent(
+                registry_path=registry_path,
+                timeline_path=timeline_path,
+                concept_graph_path=root / "missing.sqlite",
+                output_path=root / "subconscious_edges.jsonl",
+                project="T-Sense",
+                objective="test non-useful tool grounding",
+                max_turns=4,
+                max_steps=2,
+                min_tool_steps=1,
+                model="deepseek-v4-flash",
+                base_url="https://example.invalid",
+                api_key="test",
+                max_tokens=None,
+                timeout=1,
+                temperature=0.2,
+                chat_fn=fake_chat,
+                no_write=True,
+            )
+
+        grounding = result["tool_grounding"]
+        self.assertEqual(result["edge_count"], 1)
+        self.assertEqual(grounding["status"], "initial_only_after_tool")
+        self.assertEqual(grounding["tool_observation_ref_count"], 0)
+        self.assertEqual(grounding["final_edges_with_observation_refs"], 0)
+        self.assertEqual(grounding["final_edges_with_initial_refs"], 1)
+        self.assertEqual(grounding["useless_tool_call_count"], 1)
+        self.assertEqual(grounding["useless_tool_calls"][0]["tool"], "recent_edges")
+        self.assertEqual(grounding["useless_tool_calls"][0]["reason"], "empty_recent_edges")
 
     def test_tool_observations_are_redacted_before_second_model_call(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
