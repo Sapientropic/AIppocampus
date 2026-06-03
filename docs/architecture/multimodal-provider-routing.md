@@ -70,6 +70,12 @@ The routing contract must not infer source truth. A later source-reopen answer
 gate still owns visual or document claims. This prevents a convenient text-only
 model route from silently converting captions, OCR, or entity tags into facts.
 
+The answer-time source-reopen gate now lives in
+`docs/architecture/multimodal-answer-gate.md`. Provider routing decides whether
+a route may process a source or derived artifact; the answer gate decides
+whether selected candidates have enough reopened source support to answer or
+abstain.
+
 ## Non-Goals
 
 - No live external vision provider.

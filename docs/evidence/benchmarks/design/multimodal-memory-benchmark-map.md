@@ -61,6 +61,7 @@ claim.
 | #533 NIAH-style evidence-pool evaluation | ATM-Bench NIAH. | Fixed pools separate answer synthesis and source selection from retrieval; this catches stale/conflicting-source reasoning failures even when the right evidence is present. |
 | #541 source manifest and media-origin policy | ATM-Bench, MemLens, HippoCamp, and egocentric/document-source families. | Runtime source handling needs one contract for original source anchors, origin policy, task-scoped consent, and derived-artifact provenance before fixtures become product paths. |
 | #542 provider capability routing | ATM-Bench Oracle/Agent boundary, MemLens media conversation flows, and local/offline provider constraints. | Before raw media is processed, routes need explicit modality support, execution location, media-origin allowance, and cannot-claim boundaries. |
+| #543 source-reopen answer gate | ATM-Bench Agent/NIAH reasoning, MemLens answer refusal, and document/payment conflict cases. | Candidate packets need source reopen, join reasons, source-authority precedence, abstention, and answer-time policy metrics before #528 can close. |
 | Future visual life-memory fixtures | EgoMemReason, MyEgo, Ego4D episodic memory. | These are better references for image/video-first temporal and spatial memory than staged email/image corpus QA. |
 | Future document/knowledge-source fixtures | UniDoc-Bench. | Document tables, figures, and page-local evidence should inform knowledge-source contracts, not personal-memory claims. |
 | Future profile/persona fixtures | PersonaVLM / Persona-MME plus HippoCamp profiling tasks. | Profile inference must stay source-backed and reversible; profile benchmarks are useful only if they preserve evidence and update boundaries. |
@@ -73,6 +74,10 @@ The #542 provider-routing contract is
 [`../../../architecture/multimodal-provider-routing.md`](../../../architecture/multimodal-provider-routing.md).
 It keeps text-only, vision-capable, local/offline, and external routes distinct
 before any source-reopen or answer gate tries to use the result.
+The #543 answer-time gate is
+[`../../../architecture/multimodal-answer-gate.md`](../../../architecture/multimodal-answer-gate.md).
+It keeps candidate packets bounded, requires source reopen for visual/document
+claims, and abstains when the requested detail is not source-backed.
 
 ## Claim-Boundary Traps
 

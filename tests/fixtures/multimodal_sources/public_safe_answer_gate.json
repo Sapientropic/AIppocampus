@@ -1,0 +1,289 @@
+{
+  "schema_version": "aippocampus.multimodal_answer_gate_fixture.v1",
+  "fixture_license": "CC0-1.0-synthetic",
+  "source_manifest": "tests/fixtures/multimodal_sources/public_safe_manifest.json",
+  "provider_routes": "tests/fixtures/multimodal_sources/public_safe_provider_routes.json",
+  "benchmark_links": {
+    "retrieval_fixture": "docs/evidence/benchmarks/multimodal-corpus-fixture-report.md",
+    "conversational_fixture": "docs/evidence/benchmarks/conversational-media-ingest-fixture-report.md",
+    "niah_fixture": "docs/evidence/benchmarks/multimodal-niah-evidence-pool-report.md"
+  },
+  "boundary": {
+    "fixture_public_safe": true,
+    "raw_private_media_included": false,
+    "candidate_packet_is_not_answer": true,
+    "live_provider_calls": false
+  },
+  "cases": [
+    {
+      "case_id": "personalized_reference_supported",
+      "family": "personalized_reference",
+      "request": {
+        "requested_detail": "synthetic plant label",
+        "requires_visible_detail": true,
+        "depends_on_raw_media_types": ["image"],
+        "raw_prompt_text": "SYNTHETIC_VISUAL_DETAIL_DO_NOT_EMIT"
+      },
+      "candidate_packet": {
+        "packet_id": "packet-personal-reference",
+        "join_reasons": ["entity_reference", "temporal_window"],
+        "candidates": [
+          {
+            "source_id": "mmsrc-user-image-001",
+            "media_type": "image",
+            "origin_policy": "user_provided_media",
+            "source_anchor": {"anchor_id": "user-image-001:full"},
+            "reopened_original_source": true,
+            "explicitly_selected_or_onboarded": true,
+            "selected": true,
+            "supports_requested_detail": true,
+            "authority_rank": 70,
+            "finality_rank": 50,
+            "captured_at": "2026-05-01T10:00:00Z",
+            "task_scoped_access": {
+              "hidden_durable_write_performed": false,
+              "cross_domain_reuse_allowed": false
+            }
+          }
+        ]
+      },
+      "expected_output_state": "answer_with_reopened_sources"
+    },
+    {
+      "case_id": "conflicting_amount_prefers_final_receipt",
+      "family": "conflicting_amount",
+      "request": {
+        "requested_detail": "synthetic final amount",
+        "requires_visible_detail": true,
+        "depends_on_raw_media_types": ["receipt", "email"]
+      },
+      "candidate_packet": {
+        "packet_id": "packet-conflicting-amount",
+        "join_reasons": ["document_payment_relation", "source_authority_precedence"],
+        "candidates": [
+          {
+            "source_id": "mmsrc-email-estimate-001",
+            "media_type": "email_message",
+            "origin_policy": "user_provided_media",
+            "source_anchor": {"anchor_id": "email-estimate-001:body"},
+            "reopened_original_source": true,
+            "explicitly_selected_or_onboarded": true,
+            "selected": false,
+            "supports_requested_detail": true,
+            "conflict_set_id": "synthetic-bill-amount",
+            "authority_rank": 40,
+            "finality_rank": 20,
+            "captured_at": "2026-05-01T08:00:00Z",
+            "task_scoped_access": {
+              "hidden_durable_write_performed": false,
+              "cross_domain_reuse_allowed": false
+            }
+          },
+          {
+            "source_id": "mmsrc-final-receipt-001",
+            "media_type": "receipt",
+            "origin_policy": "connected_library_media",
+            "source_anchor": {"anchor_id": "final-receipt-001:total"},
+            "reopened_original_source": true,
+            "explicitly_selected_or_onboarded": true,
+            "selected": true,
+            "supports_requested_detail": true,
+            "conflict_set_id": "synthetic-bill-amount",
+            "authority_rank": 90,
+            "finality_rank": 90,
+            "captured_at": "2026-05-01T12:20:00Z",
+            "task_scoped_access": {
+              "hidden_durable_write_performed": false,
+              "cross_domain_reuse_allowed": false
+            }
+          }
+        ]
+      },
+      "expected_output_state": "answer_with_reopened_sources"
+    },
+    {
+      "case_id": "cross_modal_event_join_supported",
+      "family": "cross_modal_event_join",
+      "request": {
+        "requested_detail": "synthetic event place",
+        "requires_visible_detail": true,
+        "depends_on_raw_media_types": ["image", "calendar_event"]
+      },
+      "candidate_packet": {
+        "packet_id": "packet-event-join",
+        "join_reasons": ["temporal_window", "place_event", "document_payment_relation"],
+        "candidates": [
+          {
+            "source_id": "mmsrc-user-image-001",
+            "media_type": "image",
+            "origin_policy": "user_provided_media",
+            "source_anchor": {"anchor_id": "user-image-001:full"},
+            "reopened_original_source": true,
+            "explicitly_selected_or_onboarded": true,
+            "selected": true,
+            "supports_requested_detail": true,
+            "authority_rank": 70,
+            "finality_rank": 50,
+            "captured_at": "2026-05-01T10:00:00Z",
+            "task_scoped_access": {
+              "hidden_durable_write_performed": false,
+              "cross_domain_reuse_allowed": false
+            }
+          },
+          {
+            "source_id": "mmsrc-calendar-event-001",
+            "media_type": "calendar_event",
+            "origin_policy": "user_provided_media",
+            "source_anchor": {"anchor_id": "calendar-event-001:event"},
+            "reopened_original_source": true,
+            "explicitly_selected_or_onboarded": true,
+            "selected": true,
+            "supports_requested_detail": true,
+            "authority_rank": 65,
+            "finality_rank": 50,
+            "captured_at": "2026-05-01T09:00:00Z",
+            "task_scoped_access": {
+              "hidden_durable_write_performed": false,
+              "cross_domain_reuse_allowed": false
+            }
+          }
+        ]
+      },
+      "expected_output_state": "answer_with_reopened_sources"
+    },
+    {
+      "case_id": "unsupported_detail_abstains",
+      "family": "unsupported_detail",
+      "request": {
+        "requested_detail": "synthetic invisible serial number",
+        "requires_visible_detail": true,
+        "depends_on_raw_media_types": ["image"]
+      },
+      "candidate_packet": {
+        "packet_id": "packet-unsupported-detail",
+        "join_reasons": ["entity_reference"],
+        "candidates": [
+          {
+            "source_id": "mmsrc-user-image-001",
+            "media_type": "image",
+            "origin_policy": "user_provided_media",
+            "source_anchor": {"anchor_id": "user-image-001:full"},
+            "reopened_original_source": true,
+            "explicitly_selected_or_onboarded": true,
+            "selected": true,
+            "supports_requested_detail": false,
+            "authority_rank": 70,
+            "finality_rank": 50,
+            "captured_at": "2026-05-01T10:00:00Z",
+            "task_scoped_access": {
+              "hidden_durable_write_performed": false,
+              "cross_domain_reuse_allowed": false
+            }
+          }
+        ]
+      },
+      "expected_output_state": "abstain_unsupported_detail"
+    },
+    {
+      "case_id": "visual_claim_without_source_reopen",
+      "family": "source_reopen_required",
+      "request": {
+        "requested_detail": "synthetic object color",
+        "requires_visible_detail": true,
+        "depends_on_raw_media_types": ["image"]
+      },
+      "candidate_packet": {
+        "packet_id": "packet-missing-reopen",
+        "join_reasons": ["entity_reference"],
+        "candidates": [
+          {
+            "source_id": "mmsrc-user-image-001",
+            "media_type": "image",
+            "origin_policy": "user_provided_media",
+            "source_anchor": {"anchor_id": "user-image-001:full"},
+            "reopened_original_source": false,
+            "explicitly_selected_or_onboarded": true,
+            "selected": true,
+            "supports_requested_detail": true,
+            "authority_rank": 70,
+            "finality_rank": 50,
+            "captured_at": "2026-05-01T10:00:00Z",
+            "task_scoped_access": {
+              "hidden_durable_write_performed": false,
+              "cross_domain_reuse_allowed": false
+            }
+          }
+        ]
+      },
+      "expected_output_state": "source_reopen_required"
+    },
+    {
+      "case_id": "background_media_without_selection",
+      "family": "background_policy",
+      "request": {
+        "requested_detail": "synthetic background photo fact",
+        "requires_visible_detail": true,
+        "depends_on_raw_media_types": ["image"],
+        "raw_prompt_text": "SYNTHETIC_BACKGROUND_PATH_TOKEN_DO_NOT_EMIT"
+      },
+      "candidate_packet": {
+        "packet_id": "packet-background-block",
+        "join_reasons": ["temporal_window"],
+        "candidates": [
+          {
+            "source_id": "mmsrc-background-image-001",
+            "media_type": "image",
+            "origin_policy": "background_filesystem_media",
+            "source_anchor": {"anchor_id": "background-image-001:full"},
+            "reopened_original_source": false,
+            "explicitly_selected_or_onboarded": false,
+            "selected": true,
+            "supports_requested_detail": true,
+            "authority_rank": 60,
+            "finality_rank": 40,
+            "captured_at": "2026-05-01T07:00:00Z",
+            "task_scoped_access": {
+              "hidden_durable_write_performed": false,
+              "cross_domain_reuse_allowed": false
+            }
+          }
+        ]
+      },
+      "expected_output_state": "blocked_policy_violation"
+    },
+    {
+      "case_id": "hidden_durable_write_during_task_use",
+      "family": "task_scoped_consent",
+      "request": {
+        "requested_detail": "synthetic selected media fact",
+        "requires_visible_detail": true,
+        "depends_on_raw_media_types": ["image"],
+        "raw_prompt_text": "SYNTHETIC_DURABLE_WRITE_PAYLOAD_DO_NOT_EMIT"
+      },
+      "candidate_packet": {
+        "packet_id": "packet-hidden-write-block",
+        "join_reasons": ["entity_reference"],
+        "candidates": [
+          {
+            "source_id": "mmsrc-user-image-001",
+            "media_type": "image",
+            "origin_policy": "user_provided_media",
+            "source_anchor": {"anchor_id": "user-image-001:full"},
+            "reopened_original_source": true,
+            "explicitly_selected_or_onboarded": true,
+            "selected": true,
+            "supports_requested_detail": true,
+            "authority_rank": 70,
+            "finality_rank": 50,
+            "captured_at": "2026-05-01T10:00:00Z",
+            "task_scoped_access": {
+              "hidden_durable_write_performed": true,
+              "cross_domain_reuse_allowed": false
+            }
+          }
+        ]
+      },
+      "expected_output_state": "blocked_policy_violation"
+    }
+  ]
+}
