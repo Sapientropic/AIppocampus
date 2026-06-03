@@ -55,3 +55,4 @@ benchmark_corpus/longmemeval/longmemeval_s_cleaned.json
 benchmark_corpus/longmemeval/longmemeval_m_cleaned.json
 benchmark_corpus/longmemeval/v2_questions.jsonl
 benchmark_corpus/longmemeval/v2_trajectories.jsonl
+benchmark_corpus/memoryagentbench/
