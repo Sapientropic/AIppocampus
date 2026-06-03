@@ -1,0 +1,350 @@
+{
+  "schema_version": "aippocampus.multimodal_corpus_fixture.v1",
+  "fixture_id": "public_multimodal_corpus_v1",
+  "fixture_license": "CC0-1.0-synthetic",
+  "boundary": {
+    "inspired_by": "ATM-Bench-inspired corpus-style fixture",
+    "not_conversational_upload_recall": true,
+    "derived_artifacts_are_navigation_only": true,
+    "raw_media_sources_are_synthetic_public_safe": true
+  },
+  "sources": [
+    {
+      "source_id": "msrc-img-001",
+      "modality": "image",
+      "source_type": "raw_image",
+      "publisher": "Synthetic Fixture Lab",
+      "authority_level": "user_provided_media",
+      "source_owner": "synthetic-user",
+      "origin_policy": "user_provided_fixture",
+      "privacy_class": "public",
+      "access_policy": "public_fixture",
+      "license": "CC0-1.0-synthetic",
+      "captured_at": "2026-05-01T10:00:00Z",
+      "content_hash_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "source_anchor": {
+        "anchor_id": "img-001:full",
+        "section_anchor": "image:full",
+        "media_type": "image",
+        "frame_index": null,
+        "region": "full"
+      },
+      "provenance_chain": [
+        {"kind": "synthetic_fixture", "ref": "public_multimodal_corpus:img-001"}
+      ]
+    },
+    {
+      "source_id": "msrc-video-001-frame-042",
+      "modality": "video_frame",
+      "source_type": "raw_video_frame",
+      "publisher": "Synthetic Fixture Lab",
+      "authority_level": "user_provided_media",
+      "source_owner": "synthetic-user",
+      "origin_policy": "user_provided_fixture",
+      "privacy_class": "public",
+      "access_policy": "public_fixture",
+      "license": "CC0-1.0-synthetic",
+      "captured_at": "2026-05-01T10:07:00Z",
+      "content_hash_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "source_anchor": {
+        "anchor_id": "video-001:frame-042",
+        "section_anchor": "video:frame-042",
+        "media_type": "video_frame",
+        "frame_index": 42,
+        "region": "full"
+      },
+      "provenance_chain": [
+        {"kind": "synthetic_fixture", "ref": "public_multimodal_corpus:video-001-frame-042"}
+      ]
+    },
+    {
+      "source_id": "msrc-email-001",
+      "modality": "email_message",
+      "source_type": "email_message",
+      "publisher": "Synthetic Fixture Lab",
+      "authority_level": "user_message_source",
+      "source_owner": "synthetic-user",
+      "origin_policy": "user_provided_fixture",
+      "privacy_class": "public",
+      "access_policy": "public_fixture",
+      "license": "CC0-1.0-synthetic",
+      "captured_at": "2026-05-01T08:30:00Z",
+      "content_hash_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "source_anchor": {
+        "anchor_id": "email-001:body",
+        "section_anchor": "email:body",
+        "media_type": "text",
+        "span": "body"
+      },
+      "provenance_chain": [
+        {"kind": "synthetic_fixture", "ref": "public_multimodal_corpus:email-001"}
+      ]
+    },
+    {
+      "source_id": "msrc-receipt-001",
+      "modality": "receipt",
+      "source_type": "receipt_image",
+      "publisher": "Synthetic Fixture Lab",
+      "authority_level": "merchant_receipt",
+      "source_owner": "synthetic-user",
+      "origin_policy": "user_provided_fixture",
+      "privacy_class": "public",
+      "access_policy": "public_fixture",
+      "license": "CC0-1.0-synthetic",
+      "captured_at": "2026-05-01T12:20:00Z",
+      "content_hash_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+      "source_anchor": {
+        "anchor_id": "receipt-001:line-items",
+        "section_anchor": "receipt:line-items",
+        "media_type": "image",
+        "region": "line-items"
+      },
+      "provenance_chain": [
+        {"kind": "synthetic_fixture", "ref": "public_multimodal_corpus:receipt-001"}
+      ]
+    },
+    {
+      "source_id": "msrc-bill-001",
+      "modality": "invoice",
+      "source_type": "final_bill_pdf",
+      "publisher": "Synthetic Fixture Lab",
+      "authority_level": "final_bill",
+      "source_owner": "synthetic-user",
+      "origin_policy": "user_provided_fixture",
+      "privacy_class": "public",
+      "access_policy": "public_fixture",
+      "license": "CC0-1.0-synthetic",
+      "captured_at": "2026-05-02T09:45:00Z",
+      "content_hash_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+      "source_anchor": {
+        "anchor_id": "bill-001:total",
+        "section_anchor": "bill:total",
+        "media_type": "document",
+        "span": "total"
+      },
+      "provenance_chain": [
+        {"kind": "synthetic_fixture", "ref": "public_multimodal_corpus:bill-001"}
+      ]
+    },
+    {
+      "source_id": "msrc-calendar-001",
+      "modality": "calendar_location",
+      "source_type": "calendar_event",
+      "publisher": "Synthetic Fixture Lab",
+      "authority_level": "user_calendar_source",
+      "source_owner": "synthetic-user",
+      "origin_policy": "user_provided_fixture",
+      "privacy_class": "public",
+      "access_policy": "public_fixture",
+      "license": "CC0-1.0-synthetic",
+      "captured_at": "2026-05-01T09:00:00Z",
+      "content_hash_sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+      "source_anchor": {
+        "anchor_id": "calendar-001:event",
+        "section_anchor": "calendar:event",
+        "media_type": "calendar",
+        "span": "event"
+      },
+      "provenance_chain": [
+        {"kind": "synthetic_fixture", "ref": "public_multimodal_corpus:calendar-001"}
+      ]
+    }
+  ],
+  "derived_artifacts": [
+    {
+      "artifact_id": "dart-img-001-caption",
+      "artifact_type": "caption",
+      "parent_source_id": "msrc-img-001",
+      "source_anchor": {"anchor_id": "img-001:full"},
+      "provider_route": "synthetic_captioner.v1",
+      "confidence": 0.96,
+      "created_at": "2026-05-03T00:00:00Z",
+      "authority": "navigation_only",
+      "text": "Grace is the small terrier wearing a red scarf beside the garden bench.",
+      "tags": ["Grace", "terrier", "red scarf", "garden bench"],
+      "entities": ["Grace"],
+      "time_bucket": "2026-05-01-morning",
+      "location_bucket": "garden"
+    },
+    {
+      "artifact_id": "dart-img-001-embedding",
+      "artifact_type": "visual_embedding",
+      "parent_source_id": "msrc-img-001",
+      "source_anchor": {"anchor_id": "img-001:full"},
+      "provider_route": "synthetic_visual_embedding.v1",
+      "confidence": 0.88,
+      "created_at": "2026-05-03T00:00:01Z",
+      "authority": "navigation_only",
+      "text": "terrier pet red scarf garden",
+      "tags": ["pet", "red scarf", "garden"],
+      "entities": ["Grace"],
+      "time_bucket": "2026-05-01-morning",
+      "location_bucket": "garden"
+    },
+    {
+      "artifact_id": "dart-video-001-caption",
+      "artifact_type": "caption",
+      "parent_source_id": "msrc-video-001-frame-042",
+      "source_anchor": {"anchor_id": "video-001:frame-042"},
+      "provider_route": "synthetic_frame_captioner.v1",
+      "confidence": 0.91,
+      "created_at": "2026-05-03T00:00:02Z",
+      "authority": "navigation_only",
+      "text": "A terrier is near the fountain; the collar detail is not visible.",
+      "tags": ["terrier", "fountain", "not visible"],
+      "entities": [],
+      "time_bucket": "2026-05-01-morning",
+      "location_bucket": "garden"
+    },
+    {
+      "artifact_id": "dart-video-001-thumbnail",
+      "artifact_type": "thumbnail",
+      "parent_source_id": "msrc-video-001-frame-042",
+      "source_anchor": {"anchor_id": "video-001:frame-042"},
+      "provider_route": "synthetic_thumbnailer.v1",
+      "confidence": 0.84,
+      "created_at": "2026-05-03T00:00:03Z",
+      "authority": "navigation_only",
+      "text": "fountain terrier frame",
+      "tags": ["fountain", "terrier"],
+      "entities": [],
+      "time_bucket": "2026-05-01-morning",
+      "location_bucket": "garden"
+    },
+    {
+      "artifact_id": "dart-email-001-schema",
+      "artifact_type": "schema_row",
+      "parent_source_id": "msrc-email-001",
+      "source_anchor": {"anchor_id": "email-001:body"},
+      "provider_route": "synthetic_email_parser.v1",
+      "confidence": 0.98,
+      "created_at": "2026-05-03T00:00:04Z",
+      "authority": "navigation_only",
+      "text": "Marigold Gallery booking estimate is 420 for the Poppyfield workshop.",
+      "tags": ["Marigold Gallery", "booking estimate", "Poppyfield workshop", "420"],
+      "entities": ["Marigold Gallery", "Poppyfield workshop"],
+      "time_bucket": "2026-05-01-morning",
+      "location_bucket": "marigold-gallery"
+    },
+    {
+      "artifact_id": "dart-receipt-001-ocr",
+      "artifact_type": "ocr",
+      "parent_source_id": "msrc-receipt-001",
+      "source_anchor": {"anchor_id": "receipt-001:line-items"},
+      "provider_route": "synthetic_ocr.v1",
+      "confidence": 0.95,
+      "created_at": "2026-05-03T00:00:05Z",
+      "authority": "navigation_only",
+      "text": "Receipt after the Poppyfield workshop: cobalt brush set.",
+      "tags": ["receipt", "Poppyfield workshop", "cobalt brush set"],
+      "entities": ["Poppyfield workshop"],
+      "time_bucket": "2026-05-01-midday",
+      "location_bucket": "marigold-gallery"
+    },
+    {
+      "artifact_id": "dart-receipt-001-tags",
+      "artifact_type": "object_tags",
+      "parent_source_id": "msrc-receipt-001",
+      "source_anchor": {"anchor_id": "receipt-001:line-items"},
+      "provider_route": "synthetic_object_tagger.v1",
+      "confidence": 0.9,
+      "created_at": "2026-05-03T00:00:06Z",
+      "authority": "navigation_only",
+      "text": "art supply purchase brush set",
+      "tags": ["art supply", "brush set"],
+      "entities": [],
+      "time_bucket": "2026-05-01-midday",
+      "location_bucket": "marigold-gallery"
+    },
+    {
+      "artifact_id": "dart-bill-001-ocr",
+      "artifact_type": "ocr",
+      "parent_source_id": "msrc-bill-001",
+      "source_anchor": {"anchor_id": "bill-001:total"},
+      "provider_route": "synthetic_document_ocr.v1",
+      "confidence": 0.99,
+      "created_at": "2026-05-03T00:00:07Z",
+      "authority": "navigation_only",
+      "text": "Final bill for Marigold Gallery booking total is 512.",
+      "tags": ["Marigold Gallery", "final bill", "booking", "512"],
+      "entities": ["Marigold Gallery"],
+      "time_bucket": "2026-05-02-morning",
+      "location_bucket": "marigold-gallery"
+    },
+    {
+      "artifact_id": "dart-bill-001-schema",
+      "artifact_type": "schema_row",
+      "parent_source_id": "msrc-bill-001",
+      "source_anchor": {"anchor_id": "bill-001:total"},
+      "provider_route": "synthetic_document_parser.v1",
+      "confidence": 0.99,
+      "created_at": "2026-05-03T00:00:08Z",
+      "authority": "navigation_only",
+      "text": "later stronger final bill supersedes estimate for booking amount",
+      "tags": ["final bill", "later source", "booking total"],
+      "entities": ["Marigold Gallery"],
+      "time_bucket": "2026-05-02-morning",
+      "location_bucket": "marigold-gallery"
+    },
+    {
+      "artifact_id": "dart-calendar-001-schema",
+      "artifact_type": "schema_row",
+      "parent_source_id": "msrc-calendar-001",
+      "source_anchor": {"anchor_id": "calendar-001:event"},
+      "provider_route": "synthetic_calendar_parser.v1",
+      "confidence": 0.98,
+      "created_at": "2026-05-03T00:00:09Z",
+      "authority": "navigation_only",
+      "text": "Poppyfield workshop at Marigold Gallery on May 1 before midday receipt.",
+      "tags": ["Poppyfield workshop", "Marigold Gallery", "May 1"],
+      "entities": ["Poppyfield workshop", "Marigold Gallery"],
+      "time_bucket": "2026-05-01-morning",
+      "location_bucket": "marigold-gallery"
+    }
+  ],
+  "qa_cases": [
+    {
+      "case_id": "mmc-personalized-reference",
+      "query_shape": "personalized_reference",
+      "question": "Which source shows Grace wearing the red scarf?",
+      "answer": "Grace appears in the image wearing a red scarf.",
+      "query_terms": ["Grace", "red scarf", "garden"],
+      "evidence_ids": ["msrc-img-001"],
+      "expected_answer_state": "answer_with_reopened_source",
+      "expected_abstain": false
+    },
+    {
+      "case_id": "mmc-conflict-final-bill",
+      "query_shape": "conflict_resolution",
+      "question": "What was the final amount for the Marigold Gallery booking?",
+      "answer": "The final bill says 512, overriding the earlier 420 estimate.",
+      "query_terms": ["Marigold Gallery", "booking", "final", "amount"],
+      "evidence_ids": ["msrc-bill-001"],
+      "weaker_source_ids": ["msrc-email-001"],
+      "expected_answer_state": "answer_with_conflict_explanation",
+      "expected_abstain": false
+    },
+    {
+      "case_id": "mmc-cross-modal-join",
+      "query_shape": "cross_modal_join",
+      "question": "What item was bought after the Poppyfield workshop?",
+      "answer": "The receipt shows a cobalt brush set.",
+      "query_terms": ["Poppyfield workshop", "bought", "after"],
+      "join_keys": ["time_bucket", "location_bucket", "entities"],
+      "evidence_ids": ["msrc-calendar-001", "msrc-receipt-001"],
+      "expected_answer_state": "answer_with_cross_modal_sources",
+      "expected_abstain": false
+    },
+    {
+      "case_id": "mmc-unsupported-detail",
+      "query_shape": "unsupported_detail",
+      "question": "What color collar was visible in the fountain clip?",
+      "answer": "Unknown",
+      "query_terms": ["collar", "fountain", "clip"],
+      "evidence_ids": ["msrc-video-001-frame-042"],
+      "expected_answer_state": "abstain_unsupported_visual_detail",
+      "expected_abstain": true,
+      "unsupported_reason": "related frame exists, but the collar detail is not visible"
+    }
+  ]
+}
