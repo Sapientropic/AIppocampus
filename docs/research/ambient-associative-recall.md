@@ -640,10 +640,13 @@ The first slice should stay small but real:
    Learned semantic cues also act as a foreground reuse gate: once a cue has
    repeated source-backed hits, neighboring paraphrases use the local
    semantic-cue path and skip a cold live semantic call unless an operator
-   explicitly forces `semantic_gate=on` for calibration. Hook diagnostics report
-   `exact_cache_hit`, `semantic_cue_hit`, and `cold_model_call` separately, and
-   exact-cache reports now expose sanitized hit/miss/expired/write/eviction
-   counters without prompt or cue text.
+   explicitly forces `semantic_gate=on` for calibration. Hook diagnostics now
+   keep cache reuse and cold semantic paths separate with public-safe labels such
+   as `exact_semantic_cache`, `semantic_cue_cache`,
+   `semantic_disabled_by_operator`, `semantic_unavailable_missing_auth`,
+   `semantic_provider_timeout`, `cold_semantic_attempted`, and
+   `cold_semantic_shadowed`; exact-cache reports expose sanitized
+   hit/miss/expired/write/eviction counters without prompt or cue text.
    Further work should be driven by new regressions or product behavior gaps,
    not by repeating the completed calibration suite.
 

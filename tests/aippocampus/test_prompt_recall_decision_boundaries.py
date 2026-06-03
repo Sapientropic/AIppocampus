@@ -487,6 +487,100 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
         self.assertFalse(diagnostic["cold_semantic_shadowed"])
         self.assertNotIn("private bridge alias", json.dumps(diagnostic, ensure_ascii=False))
 
+    def test_route_delivery_diagnostic_distinguishes_semantic_public_labels(self) -> None:
+        projection = self._projection_module()
+        base_state = {
+            "decision": "scent",
+            "semantic_gate_reuse": {"source": "cold_model_call"},
+            "hot_path_funnel": {"decision": "scent"},
+            "candidates": [],
+            "evidence": [],
+            "use_semantic_gate": True,
+            "effective_use_semantic_gate": True,
+        }
+        cases = [
+            (
+                "operator_off",
+                {
+                    **base_state,
+                    "semantic_gate_mode": "off",
+                    "semantic_result": {
+                        "available": False,
+                        "availability_reason": "semantic_unavailable",
+                        "diagnostic": "semantic_disabled_or_auth_unavailable",
+                        "error_buckets": {"auth_error": 1},
+                    },
+                },
+                "semantic_disabled_by_operator",
+                False,
+            ),
+            (
+                "missing_auth",
+                {
+                    **base_state,
+                    "semantic_gate_mode": "auto",
+                    "semantic_result": {
+                        "available": False,
+                        "availability_reason": "semantic_unavailable",
+                        "diagnostic": "semantic_disabled_or_auth_unavailable",
+                        "error_buckets": {"auth_error": 1},
+                    },
+                },
+                "semantic_unavailable_missing_auth",
+                False,
+            ),
+            (
+                "provider_timeout",
+                {
+                    **base_state,
+                    "semantic_gate_mode": "auto",
+                    "semantic_result": {
+                        "available": False,
+                        "availability_reason": "semantic_worker_timeout",
+                        "diagnostic": "semantic_provider_read_timeout",
+                        "error_buckets": {"read_timeout": 1},
+                    },
+                },
+                "semantic_provider_timeout",
+                True,
+            ),
+            (
+                "cold_attempted",
+                {
+                    **base_state,
+                    "semantic_gate_mode": "on",
+                    "semantic_result": {
+                        "available": True,
+                        "decision": "scent",
+                        "workers": [{"worker": "gate"}],
+                    },
+                },
+                "cold_semantic_attempted",
+                True,
+            ),
+            (
+                "cold_shadowed",
+                {
+                    **base_state,
+                    "semantic_gate_reuse": {"source": "none"},
+                    "semantic_gate_mode": "auto",
+                    "semantic_result": None,
+                    "effective_use_semantic_gate": False,
+                },
+                "cold_semantic_shadowed",
+                False,
+            ),
+        ]
+
+        for label, state, expected_source, expected_waited in cases:
+            with self.subTest(label=label):
+                diagnostic = projection.route_delivery_diagnostic(state=state)
+                self.assertEqual(diagnostic["semantic_reuse_source"], expected_source)
+                self.assertEqual(diagnostic["semantic_waited"], expected_waited)
+                encoded = json.dumps(diagnostic, ensure_ascii=False)
+                self.assertNotIn("auth_error", encoded)
+                self.assertNotIn("workers", encoded)
+
     def test_assess_prompt_keeps_orchestration_below_boundary(self) -> None:
         source = inspect.getsource(decision.assess_prompt)
 

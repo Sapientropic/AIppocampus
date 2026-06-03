@@ -120,6 +120,49 @@ def semantic_bridge_diagnostic(
     return "semantic_evidence_without_source_bridge"
 
 
+def semantic_delivery_reuse_source(
+    *,
+    raw_source: object,
+    semantic_result: Mapping[str, Any],
+    semantic_gate_mode: object,
+    cold_shadowed: bool,
+) -> str:
+    source = _controlled_text(
+        raw_source,
+        {"none", "exact_semantic_cache", "cold_model_call", "semantic_cue_cache"},
+        default="none",
+    ) or "none"
+    if source in {"exact_semantic_cache", "semantic_cue_cache"}:
+        return source
+    if cold_shadowed:
+        return "cold_semantic_shadowed"
+
+    diagnostic = str(semantic_result.get("diagnostic") or "").casefold()
+    availability = str(semantic_result.get("availability_reason") or "").casefold()
+    buckets = _dict_value(semantic_result.get("error_buckets"))
+    mode = str(semantic_gate_mode or "").casefold()
+    disabled_or_auth = diagnostic == "semantic_disabled_or_auth_unavailable"
+    if disabled_or_auth and mode == "off":
+        return "semantic_disabled_by_operator"
+    if disabled_or_auth or buckets.get("auth_error"):
+        return "semantic_unavailable_missing_auth"
+    if (
+        diagnostic
+        in {
+            "semantic_provider_read_timeout",
+            "semantic_overall_deadline_exceeded",
+            "semantic_timed_out_under_foreground_budget",
+        }
+        or availability == "semantic_worker_timeout"
+        or buckets.get("read_timeout")
+        or buckets.get("overall_deadline")
+    ):
+        return "semantic_provider_timeout"
+    if source == "cold_model_call":
+        return "cold_semantic_attempted"
+    return source
+
+
 def route_delivery_diagnostic(*, state: Mapping[str, Any]) -> dict[str, Any]:
     """Project no-raw-prompt delivery diagnostics for the foreground hook.
 
@@ -138,10 +181,17 @@ def route_delivery_diagnostic(*, state: Mapping[str, Any]) -> dict[str, Any]:
         state.get("semantic_bridge_diagnostic"),
         {"semantic_evidence_without_source_bridge"},
     )
-    reuse_source = _controlled_text(
-        semantic_gate_reuse.get("source"),
-        {"none", "exact_semantic_cache", "cold_model_call", "semantic_cue_cache"},
-        default="none",
+    semantic_mode = str(state.get("semantic_gate_mode") or "").casefold()
+    cold_shadowed = bool(
+        state.get("use_semantic_gate")
+        and not state.get("effective_use_semantic_gate")
+        and hot_path_funnel.get("decision") == "scent"
+    )
+    reuse_source = semantic_delivery_reuse_source(
+        raw_source=semantic_gate_reuse.get("source"),
+        semantic_result=semantic_result,
+        semantic_gate_mode=semantic_mode,
+        cold_shadowed=cold_shadowed,
     )
     cache_hit = bool(
         semantic_gate_reuse.get("exact_cache_hit")
@@ -152,7 +202,6 @@ def route_delivery_diagnostic(*, state: Mapping[str, Any]) -> dict[str, Any]:
     semantic_cache_bridge_gap = bool(
         semantic_bridge == "semantic_evidence_without_source_bridge" and cache_hit
     )
-    semantic_mode = str(state.get("semantic_gate_mode") or "").casefold()
     foreground_profile = "explicit_recall" if semantic_mode == "on" else "ambient_hot_path"
     return {
         "foreground_profile": foreground_profile,
@@ -162,12 +211,9 @@ def route_delivery_diagnostic(*, state: Mapping[str, Any]) -> dict[str, Any]:
         "semantic_bridge_diagnostic": semantic_bridge,
         "semantic_gate_cache_hit_but_no_source_bridge": semantic_cache_bridge_gap,
         "semantic_reuse_source": reuse_source,
-        "semantic_waited": bool(reuse_source == "cold_model_call"),
-        "cold_semantic_shadowed": bool(
-            state.get("use_semantic_gate")
-            and not state.get("effective_use_semantic_gate")
-            and hot_path_funnel.get("decision") == "scent"
-        ),
+        "semantic_waited": reuse_source
+        in {"cold_semantic_attempted", "semantic_provider_timeout"},
+        "cold_semantic_shadowed": cold_shadowed,
         "background_scheduled": False,
         "hot_path_candidates_after_merge": sum(
             1 for item in candidates if isinstance(item, dict) and item.get("hot_path_source")

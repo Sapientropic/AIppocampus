@@ -14,8 +14,12 @@ ROUTE_DELIVERY_FOREGROUND_PROFILES = {"ambient_hot_path", "explicit_recall"}
 ROUTE_DELIVERY_REUSE_SOURCES = {
     "none",
     "exact_semantic_cache",
-    "cold_model_call",
     "semantic_cue_cache",
+    "semantic_disabled_by_operator",
+    "semantic_unavailable_missing_auth",
+    "semantic_provider_timeout",
+    "cold_semantic_attempted",
+    "cold_semantic_shadowed",
 }
 ROUTE_DELIVERY_BRIDGE_DIAGNOSTICS = {"semantic_evidence_without_source_bridge"}
 
