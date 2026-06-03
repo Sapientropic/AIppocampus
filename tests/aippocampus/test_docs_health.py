@@ -552,6 +552,46 @@ class DocsHealthTests(unittest.TestCase):
         )
         self.assertIn("demo scenarios missing current claims snapshot pointer", issues)
 
+    def test_proof_slice_maturity_board_guard_covers_status_vocabulary(self) -> None:
+        repo_root = docs_health.find_repo_root(ROOT)
+        assert repo_root is not None
+
+        self.assertEqual(docs_health.proof_slice_maturity_board_issues(repo_root), [])
+
+    def test_proof_slice_maturity_board_reports_missing_terms_and_pointers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            write_origin_essays(repo)
+            readiness = repo / "docs" / "evidence" / "readiness"
+            readiness.mkdir(parents=True)
+            (readiness / "proof-slice-maturity.md").write_text(
+                "# Proof Slice Maturity\n\n"
+                "`design_only`\n"
+                "`deterministic_smoke`\n",
+                encoding="utf-8",
+            )
+            (repo / "docs" / "README.md").write_text("# Docs\n", encoding="utf-8")
+            (readiness / "stage-0-5-readiness.md").write_text(
+                "# Stage readiness\n",
+                encoding="utf-8",
+            )
+
+            issues = docs_health.proof_slice_maturity_board_issues(repo)
+
+        self.assertIn(
+            "proof-slice maturity board missing public_safe_fixture status",
+            issues,
+        )
+        self.assertIn("proof-slice maturity board missing cannot-claim column", issues)
+        self.assertIn(
+            "docs README missing proof-slice maturity board pointer",
+            issues,
+        )
+        self.assertIn(
+            "stage readiness missing proof-slice maturity board pointer",
+            issues,
+        )
+
     def test_benchmark_evidence_map_requires_hippocampal_private_annotation_protocol(
         self,
     ) -> None:

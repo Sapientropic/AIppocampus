@@ -153,6 +153,7 @@ chooses to publish or sync them.
 
 Use the dated evidence docs before making public claims:
 
+- `docs/evidence/readiness/proof-slice-maturity.md`
 - `docs/evidence/readiness/stage-0-5-readiness.md`
 - `docs/evidence/magic-moments.md`
 - `docs/evidence/benchmark-evidence-map.md`
