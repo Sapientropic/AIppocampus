@@ -486,6 +486,162 @@ summary-only consolidation before claiming AIppocampus-specific benefit:
 - `simple_summary_consolidation`: generate or use one summary per conversation
   and search over summaries instead of clean source or structured associations.
 
+## H3/H4 Follow-On Benchmark Design
+
+H3 and H4 should stay outside the H1/H2 runner until their truth labels and
+source-edge contracts are stable. They are follow-on benchmark families for
+time and relation memory, not new aggregate columns inside P1.
+
+### H3 Temporal Binding
+
+H3 asks whether AIppocampus can answer source-backed time questions without
+turning rough chronology into invented certainty.
+
+Candidate case schema:
+
+```json
+{
+  "dataset_id": "hippocampal_temporal_binding_v1",
+  "case_id": "question_threshold_evolution__interval_boundary",
+  "question_family": "interval",
+  "query": "When did the question tracker move from extraction-only to threshold calibration?",
+  "timeline_anchor_refs": ["source:question:extractor", "source:question:threshold"],
+  "expected_relation": "after",
+  "expected_window": {"start_ref": "source:question:extractor", "end_ref": "source:question:threshold"},
+  "acceptable_granularity": "source_order",
+  "forbidden_claims": ["exact wall-clock time without source timestamp"],
+  "truth_source": "human_reviewed_timeline_edges",
+  "scorer_allowed_inputs": ["query", "candidate_timeline_edges", "source_reopen_result"]
+}
+```
+
+Question families:
+
+- `time_order`: A happened before, after, or during B.
+- `causal_chain`: A source-backed decision led to B, with at least one
+  reopened intermediate source.
+- `interval`: a state held between two source anchors.
+- `evolution`: a preference, design, or route changed through ordered source
+  states.
+- `cross_timeline`: two threads or projects contain similar events, but only
+  one timeline supports the requested answer.
+
+Metrics:
+
+- `temporal_order_accuracy`: correct before/after/during relation after source
+  reopen.
+- `interval_boundary_accuracy`: start/end refs are both found or honestly
+  marked partial.
+- `evolution_step_recall`: required source states recovered in order.
+- `cross_timeline_confusion_rate`: answer borrows the wrong thread/project
+  timeline.
+- `over_precise_time_claim_rate`: report invents a date/time tighter than the
+  reopened sources support.
+
+Baselines:
+
+- keyword/date-token search over clean source.
+- chronological nearest-neighbor source selection.
+- timeline-edge retrieval without answer synthesis.
+- overactive chronology control that always imposes an order.
+
+Reusable components and blockers:
+
+- Reuse `build_project_timeline.py` only after it emits public-safe ordered
+  source edges with stable ids.
+- Reuse question tracking only for source-backed question/event anchors, not as
+  truth labels by itself.
+- Wait for timestamp/source-edge fidelity before wall-clock claims; until then
+  H3 can score only source-order relations.
+
+### H4 Relational Inference
+
+H4 asks whether the system can traverse source-backed relation edges while
+keeping every step reopenable. It must not become a generic LLM reasoning
+benchmark over summaries.
+
+Candidate case schema:
+
+```json
+{
+  "dataset_id": "hippocampal_relational_inference_v1",
+  "case_id": "semantic_sidecar_to_claim_boundary__two_hop",
+  "hop_count": 2,
+  "query": "Which evidence boundary should constrain the semantic sidecar benchmark claim?",
+  "required_relation_path": [
+    {"from_ref": "source:sidecar:strict-gate", "relation": "limits", "to_ref": "source:benchmark:claim-level"},
+    {"from_ref": "source:benchmark:claim-level", "relation": "points_to", "to_ref": "source:evidence:cannot-claim"}
+  ],
+  "negative_paths": ["source:sidecar:coverage-only"],
+  "expected_answer_refs": ["source:evidence:cannot-claim"],
+  "truth_source": "human_reviewed_relation_edges",
+  "scorer_allowed_inputs": ["query", "candidate_relation_edges", "source_reopen_result"]
+}
+```
+
+Case families:
+
+- `one_hop`: direct source-backed relation.
+- `two_hop`: one intermediate edge must be reopened.
+- `three_hop`: multiple edges, with a cost/abstention expectation.
+- `stale_premise`: the first edge exists but was superseded.
+- `counterfactual_relation`: surface-similar relation exists, but the
+  counterfactual source pack says another relation is current.
+
+Metrics:
+
+- `path_exact_match_rate`: required relation path recovered in order.
+- `per_step_source_fidelity`: each hop has a reopened supporting source.
+- `stale_premise_rejection_rate`: stale first-hop paths are demoted.
+- `wrong_bridge_rate`: answer reaches the right endpoint through an
+  unsupported intermediate relation.
+- `relation_overgeneralization_rate`: relation label is broadened beyond the
+  reopened source.
+- `abstention_on_missing_edge_rate`: system stays quiet when a required hop has
+  no source support.
+
+Baselines:
+
+- direct keyword/source search without relation traversal.
+- one-hop-only relation retrieval.
+- summary-only concept search.
+- overactive graph walk that returns any path to the target token.
+
+Reusable components and blockers:
+
+- Reuse concept graph or association builders only after they expose
+  per-edge source refs, relation type, creation time, and stale/superseded
+  status.
+- Reuse Dream/Journey residues only as candidate relation suggestions; they
+  cannot be truth labels until a clean source reopens each step.
+- Wait on source-edge fidelity before scoring two-hop or three-hop claims as
+  more than diagnostic.
+
+### Truth Source And Claim Boundary
+
+H3/H4 truth labels must be independent of the system being measured:
+
+- primary labels come from human-reviewed timeline/relation edges or frozen
+  hand-authored public fixtures;
+- extracted edges can seed review, but cannot score themselves;
+- every positive answer requires source reopen for each timeline anchor or
+  relation step;
+- missing source support should produce `scent` or `skip`, not an inferred
+  answer.
+
+H3/H4 cannot claim:
+
+- live model reasoning quality from deterministic fixture controls;
+- biological temporal-binding or relational-inference claims;
+- product-quality source graph traversal until private/live validation exists;
+- cross-system benchmark superiority until equivalent adapters and truth-label
+  independence exist.
+
+Split implementation issues only after the reusable component owner is clear:
+timeline-edge fixture builder, relation-edge fixture builder, H3 runner, H4
+runner, private annotation protocol, and external adapter arms should be
+separate closable slices.
+
 ## Implementation Slices
 
 Proposed files:
