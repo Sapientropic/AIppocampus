@@ -617,8 +617,8 @@ workflow can consume the strongest candidates".
 
 ## Staging Maintenance
 
-Staging queues are append-only review surfaces. Maintenance must start with a
-dry-run report, not an apply path:
+Staging queues are append-only review surfaces. Maintenance defaults to a
+dry-run report:
 
 ```powershell
 python "$env:CODEX_HOME\skills\aippocampus\scripts\subconscious_staging_maintenance.py" --json
@@ -627,14 +627,24 @@ python "$env:CODEX_HOME\skills\aippocampus\scripts\subconscious_staging_maintena
 The report classifies `subconscious_edges.jsonl` and
 `subconscious_jobs.jsonl` rows as `active`, `review`, or
 `archive_candidate`, counts duplicates and legacy/new finding-id formats, and
-reports row/byte backpressure. `archive_candidate` is only a proposed action:
-this command does not rewrite, move, compact, or delete rows.
+reports row/byte backpressure. In default mode, `archive_candidate` is only a
+proposed action: the command does not rewrite, move, compact, or delete rows.
 
-Before any future apply mode exists, it must preserve `source_refs`,
-promotion traceability, dream/question/review references, and private audit
-provenance. Referenced rows should stay `review` until the owning consumer can
-prove its trace chain survives. JSONL readers must remain tolerant of legacy
-`sf_...` finding ids and deterministic SHA-style ids.
+Explicit apply mode is an operator maintenance action, not a hook path:
+
+```powershell
+python "$env:CODEX_HOME\skills\aippocampus\scripts\subconscious_staging_maintenance.py" --apply --json
+```
+
+Apply mode archives only rows already classified as `archive_candidate`, writes
+a local-private archive manifest, verifies archive file hashes / row counts /
+stable ids, and only then rewrites the active staging JSONL files with
+`active` and `review` rows. It preserves the archived rows themselves plus
+manifest counts for `source_refs`, promotion traceability,
+dream/question/review references, and private audit provenance. Referenced rows
+stay `review` until the owning consumer can prove its trace chain survives.
+JSONL readers must remain tolerant of legacy `sf_...` finding ids and
+deterministic SHA-style ids.
 
 Producer warnings are soft pressure signals only. `append_staging_edges()` and
 `append_job_findings()` may return `staging_pressure` when

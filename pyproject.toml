@@ -494,6 +494,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/review.py",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/runtime.py",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/scheduler.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/subconscious/staging_archive.py",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/staging_maintenance.py",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/theme_emergence.py",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/tool_loop.py",

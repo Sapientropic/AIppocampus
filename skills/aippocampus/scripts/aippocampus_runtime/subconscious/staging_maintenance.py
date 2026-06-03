@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dry-run maintenance reporting for local-private subconscious staging queues."""
+"""Maintenance reporting and explicit archival for local-private staging queues."""
 
 from __future__ import annotations
 
@@ -17,8 +17,10 @@ from aippocampus_runtime.core import now_utc
 from aippocampus_runtime.registry.api import registry_paths, unique_preserve
 
 REPORT_KIND = "aippocampus_subconscious_staging_maintenance_report"
+ARCHIVE_MANIFEST_KIND = "aippocampus_subconscious_staging_archive_manifest"
 EDGE_KIND = "aippocampus_subconscious_edge"
 JOB_KIND = "aippocampus_subconscious_job_finding"
+ARCHIVE_DIR_NAME = "subconscious_staging_archives"
 DEFAULT_RECENT_EDGE_TAIL_BYTES = 256 * 1024
 DEFAULT_MAX_RECENT_TAIL_ROWS = 512
 DEFAULT_PRESSURE_MAX_ROWS = 5_000
@@ -506,6 +508,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--old-after-days", type=int, default=30)
     parser.add_argument("--row-threshold", type=int)
     parser.add_argument("--byte-threshold", type=int)
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Archive candidate rows with a manifest and rewrite active staging queues.",
+    )
+    parser.add_argument(
+        "--archive-dir",
+        help="Optional archive directory for --apply; defaults under the registry dir.",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     return parser
 
@@ -518,19 +529,39 @@ def main(argv: list[str] | None = None) -> int:
         max_rows=defaults.max_rows if args.row_threshold is None else int(args.row_threshold),
         max_bytes=defaults.max_bytes if args.byte_threshold is None else int(args.byte_threshold),
     )
-    report = analyze_staging_queues(
-        root,
-        old_after_days=args.old_after_days,
-        pressure_thresholds=thresholds,
-    )
+    if args.apply:
+        # Keep the default dry-run owner acyclic: apply-mode owns archive IO and
+        # is loaded only when an operator explicitly asks for writes.
+        from importlib import import_module
+
+        archive = import_module("aippocampus_runtime.subconscious.staging_archive")
+        report = archive.apply_staging_maintenance(
+            root,
+            old_after_days=args.old_after_days,
+            pressure_thresholds=thresholds,
+            archive_dir=args.archive_dir,
+        )
+    else:
+        report = analyze_staging_queues(
+            root,
+            old_after_days=args.old_after_days,
+            pressure_thresholds=thresholds,
+        )
     if args.json_output:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
-        print("subconscious staging maintenance: dry-run")
+        print(f"subconscious staging maintenance: {report['mode']}")
         for queue, data in report["queues"].items():
             print(
                 f"{queue}: rows={data['row_count']} active={data['active_count']} "
                 f"review={data['review_count']} archive_candidates={data['archive_candidate_count']}"
+            )
+        if args.apply:
+            applied = report.get("apply") or {}
+            print(
+                f"apply: archived={applied.get('archived_row_count', 0)} "
+                f"retained={applied.get('retained_row_count', 0)} "
+                f"manifest={applied.get('manifest_path', '')}"
             )
         if report["backpressure"]["warning"]:
             print("warning: " + ", ".join(report["backpressure"]["warning_reasons"]))
