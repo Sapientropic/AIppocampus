@@ -88,6 +88,7 @@ from source_evidence.reporting import (
     claim_boundary,
     now_utc,
     query_origin_summary,
+    source_evidence_validation_guidance,
     summarize_sharegpt_public_payload,
     summarize_standard_retrieval_payload,
 )
@@ -564,6 +565,12 @@ def run_source_evidence_retrieval_benchmark(
             if isinstance(case, dict)
         ]
     payload["query_origin_summary"] = query_origin_summary(payload["tracks"])
+    source_guidance = source_evidence_validation_guidance(
+        source_payload,
+        require_semantic_sidecar=source_require_semantic_sidecar,
+    )
+    if source_guidance:
+        payload["validation_guidance"] = {"track_b_source_evidence": source_guidance}
     if include_private_text:
         payload["private_debug_payloads"] = {
             "fts5": fts5_payload,
@@ -656,6 +663,10 @@ def print_human_summary(payload: dict[str, Any]) -> None:
             f"sidecar rows {artifacts.get('reviewed_sidecar_row_count', 0)}; "
             f"claim {public_semantic.get('claim_level') or 'unknown'}"
         )
+    guidance = (payload.get("validation_guidance") or {}).get("track_b_source_evidence")
+    if isinstance(guidance, dict):
+        print(f"- validation hint: {guidance.get('problem')}")
+        print(f"  portable smoke: {guidance.get('portable_smoke_command')}")
 
 
 def main() -> int:

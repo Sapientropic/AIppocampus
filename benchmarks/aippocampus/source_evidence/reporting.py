@@ -134,6 +134,65 @@ def query_origin_summary(tracks: dict[str, dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def source_evidence_validation_guidance(
+    payload: dict[str, Any],
+    *,
+    require_semantic_sidecar: bool,
+) -> dict[str, Any] | None:
+    if not require_semantic_sidecar:
+        return None
+    if payload.get("status") != "insufficient_selected_cases":
+        return None
+    selection = payload.get("selection") if isinstance(payload.get("selection"), dict) else {}
+    if selection.get("mode") not in {None, "semantic_sidecar_required"}:
+        return None
+
+    explanation = (
+        payload.get("selection_explanation")
+        if isinstance(payload.get("selection_explanation"), dict)
+        else {}
+    )
+    selected_count = int(
+        explanation.get("selected_case_count")
+        if explanation.get("selected_case_count") is not None
+        else payload.get("case_count") or 0
+    )
+    problem = (
+        "semantic_sidecar_selected_cases_absent"
+        if selected_count == 0
+        else "semantic_sidecar_selected_cases_below_minimum"
+    )
+    portable_command = (
+        "python benchmarks/aippocampus/benchmark_source_evidence_retrieval.py "
+        "--fts5-cases 1 --fts5-min-cases 1 "
+        "--source-max-cases 1 --source-min-cases 1 "
+        "--allow-deterministic-labels --json"
+    )
+    return {
+        "problem": problem,
+        "semantic_sidecar_required": True,
+        "selected_case_count": selected_count,
+        "min_cases": int(explanation.get("min_cases") or payload.get("min_cases") or 0),
+        "semantic_sidecar_quality_check": (
+            "Requires eligible prebuilt or refreshed semantic-scope sidecar rows."
+        ),
+        "portable_smoke_mode": "deterministic_label_fallback",
+        "portable_smoke_command": portable_command,
+        "portable_smoke_claim_boundary": (
+            "Wiring baseline only; do not read fallback success as semantic-sidecar coverage."
+        ),
+        "sidecar_next_action": explanation.get("next_action"),
+        "cannot_claim": sorted(
+            set(payload.get("cannot_claim") or [])
+            | {
+                "deterministic_label_fallback_is_not_semantic_sidecar_evidence",
+                "semantic_sidecar_sample_coverage",
+                "selected_semantic_source_evidence",
+            }
+        ),
+    }
+
+
 def rank_metrics(cases: list[dict[str, Any]], key: str, thresholds: list[int]) -> dict[str, Any]:
     total = len(cases)
     metrics: dict[str, Any] = {"total_cases": total}

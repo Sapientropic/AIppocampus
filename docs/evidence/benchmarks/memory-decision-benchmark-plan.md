@@ -1248,6 +1248,23 @@ Target: `search_hybrid_index()` and source-evidence retrieval helpers.
 This track keeps the existing recall-quality question, but reports it in the
 same suite as the decision benchmarks so regressions are visible together.
 
+Validation mode matters for this track:
+
+- Portable wiring smoke: use
+  `python benchmarks/aippocampus/benchmark_source_evidence_retrieval.py --fts5-cases 1 --fts5-min-cases 1 --source-max-cases 1 --source-min-cases 1 --allow-deterministic-labels --json`.
+  This path can pass on a fresh or second-user machine without prebuilt
+  semantic sidecars. It proves the wrapper, FTS5 source-line arm, selected
+  source-evidence wiring, privacy-safe report shape, and deterministic fallback
+  path. It cannot claim semantic-sidecar coverage or selected semantic-source
+  evidence quality.
+- Semantic-sidecar quality check: omit `--allow-deterministic-labels`, keep the
+  semantic-sidecar-required selected source-evidence arm, and ensure the local
+  registry has eligible `semantic-scope-labels.jsonl` sidecar rows first. If
+  this run returns `insufficient_selected_cases`, treat it as a coverage/prep
+  diagnostic rather than a Track B refactor regression. The wrapper emits
+  `validation_guidance.track_b_source_evidence` with the portable smoke command
+  and cannot-claim boundary.
+
 Case labels must identify an expected source message or line range. Query text
 may be exact, normalized, paraphrased, multilingual, or generated from source
 terms, but the expected answer is still the clean-source source ref.

@@ -491,6 +491,65 @@ class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["status"], "diagnostic_only")
         self.assertIn("selected_source_evidence_recall", payload["cannot_claim"])
 
+    def test_track_b_reports_portable_smoke_hint_when_semantic_sidecar_cases_are_absent(
+        self,
+    ) -> None:
+        source_payload = fake_source_payload(ok=False)
+        source_payload.update(
+            {
+                "status": "insufficient_selected_cases",
+                "case_count": 0,
+                "passed_count": 0,
+                "failed_count": 0,
+                "top_k_hit_rate": 0.0,
+                "selection": {
+                    "mode": "semantic_sidecar_required",
+                    "require_semantic_sidecar": True,
+                    "deterministic_label_fallback": False,
+                },
+                "selection_explanation": {
+                    "mode": "semantic_sidecar_required",
+                    "selected_case_count": 0,
+                    "min_cases": 1,
+                    "sample_gap": 1,
+                    "next_action": (
+                        "Refresh semantic sidecars for the quality check, or rerun "
+                        "with --allow-deterministic-labels as a wiring baseline."
+                    ),
+                },
+                "cannot_claim": [
+                    "selected_semantic_source_evidence",
+                    "semantic_sidecar_sample_coverage",
+                ],
+            }
+        )
+        with (
+            patch.object(benchmark.fts5_benchmark, "run_benchmark", return_value=fake_fts5_payload()),
+            patch.object(
+                benchmark.source_evidence_eval,
+                "run_source_evidence_recall_eval",
+                return_value=source_payload,
+            ),
+        ):
+            payload = benchmark.run_source_evidence_retrieval_benchmark(
+                fts5_cases=1,
+                fts5_min_cases=1,
+                source_max_cases=1,
+                source_min_cases=1,
+            )
+
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["status"], "diagnostic_only")
+        guidance = payload["validation_guidance"]["track_b_source_evidence"]
+        self.assertEqual(guidance["problem"], "semantic_sidecar_selected_cases_absent")
+        self.assertEqual(guidance["portable_smoke_mode"], "deterministic_label_fallback")
+        self.assertIn("--allow-deterministic-labels", guidance["portable_smoke_command"])
+        self.assertIn("semantic_sidecar_sample_coverage", guidance["cannot_claim"])
+        self.assertIn(
+            "deterministic_label_fallback_is_not_semantic_sidecar_evidence",
+            guidance["cannot_claim"],
+        )
+
     def test_track_b_wrapper_can_include_sharegpt_public_track(self) -> None:
         with (
             patch.object(benchmark.fts5_benchmark, "run_benchmark", return_value=fake_fts5_payload()),
