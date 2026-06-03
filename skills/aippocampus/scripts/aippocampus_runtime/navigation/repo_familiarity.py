@@ -175,11 +175,14 @@ def _stale_reason(
     current_fingerprints: Mapping[str, str],
     current_commit: str,
 ) -> str:
-    invalidation = card.get("invalidation") if isinstance(card.get("invalidation"), Mapping) else {}
+    raw_invalidation = card.get("invalidation")
+    invalidation: Mapping[str, Any] = (
+        raw_invalidation if isinstance(raw_invalidation, Mapping) else {}
+    )
     expected_commit = str(invalidation.get("commit") or "").strip()
     if expected_commit and current_commit and expected_commit != current_commit:
         return "commit_mismatch"
-    raw_files = invalidation.get("files") if isinstance(invalidation, Mapping) else []
+    raw_files = invalidation.get("files") or []
     if isinstance(raw_files, Sequence) and not isinstance(raw_files, (str, bytes)):
         for item in raw_files:
             if not isinstance(item, Mapping):
