@@ -13,7 +13,9 @@ evidence belongs in `docs/evidence/readiness/public-readiness-verification.md`;
 current numeric benchmark/readiness claims and supersession rules live in
 `docs/evidence/current-claims.md`; next-slice task handoff belongs in
 `docs/planning/next-iteration-plan.md`. The benchmark and smoke navigation map
-lives in `docs/evidence/benchmark-evidence-map.md`.
+lives in `docs/evidence/benchmark-evidence-map.md`. For a compact adoption
+view across proof lines, use
+`docs/evidence/readiness/proof-slice-maturity.md`.
 
 ## Can Claim Now
 

@@ -15,6 +15,8 @@ Start here instead of scanning every Markdown file in the tree.
 - Community evidence and field-report intake:
   [`evidence/community-field-reports.md`](evidence/community-field-reports.md).
 - Current claim boundary: [`evidence/readiness/stage-0-5-readiness.md`](evidence/readiness/stage-0-5-readiness.md).
+- Proof-slice maturity board:
+  [`evidence/readiness/proof-slice-maturity.md`](evidence/readiness/proof-slice-maturity.md).
 - Benchmark and smoke evidence map: [`evidence/benchmark-evidence-map.md`](evidence/benchmark-evidence-map.md).
 - Dated verification ledger: [`evidence/readiness/public-readiness-verification.md`](evidence/readiness/public-readiness-verification.md).
 - Public API 10-minute path and install surface:

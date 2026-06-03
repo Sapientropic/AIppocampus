@@ -208,6 +208,32 @@ CURRENT_CLAIMS_POINTER_DOCS = {
     "docs/guides/demo-scenarios.md": "demo scenarios missing current claims snapshot pointer",
 }
 
+PROOF_SLICE_MATURITY_DOC = "docs/evidence/readiness/proof-slice-maturity.md"
+
+REQUIRED_PROOF_SLICE_MATURITY_TERMS = {
+    "`design_only`": "proof-slice maturity board missing design_only status",
+    "`deterministic_smoke`": (
+        "proof-slice maturity board missing deterministic_smoke status"
+    ),
+    "`public_safe_fixture`": (
+        "proof-slice maturity board missing public_safe_fixture status"
+    ),
+    "`second_user`": "proof-slice maturity board missing second_user status",
+    "`release_claimable`": (
+        "proof-slice maturity board missing release_claimable status"
+    ),
+    "last_checked": "proof-slice maturity board missing last_checked field",
+    "Cannot claim": "proof-slice maturity board missing cannot-claim column",
+    "Owner / evidence": "proof-slice maturity board missing owner/evidence column",
+}
+
+PROOF_SLICE_MATURITY_POINTER_DOCS = {
+    "docs/README.md": "docs README missing proof-slice maturity board pointer",
+    "docs/evidence/readiness/stage-0-5-readiness.md": (
+        "stage readiness missing proof-slice maturity board pointer"
+    ),
+}
+
 # These phrase guards are intentionally narrow. They block specific stale
 # evidence claims that have already misled issue triage while avoiding broad
 # scans for ordinary identifiers such as current_thread or current_frontier.
@@ -784,6 +810,26 @@ def current_claims_snapshot_issues(repo_root: Path) -> list[str]:
     return issues
 
 
+def proof_slice_maturity_board_issues(repo_root: Path) -> list[str]:
+    issues: list[str] = []
+    board = repo_root / PROOF_SLICE_MATURITY_DOC
+    if not board.exists():
+        issues.append(f"missing proof-slice maturity board: {PROOF_SLICE_MATURITY_DOC}")
+    else:
+        text = board.read_text(encoding="utf-8")
+        for term, issue in REQUIRED_PROOF_SLICE_MATURITY_TERMS.items():
+            if term not in text:
+                issues.append(issue)
+
+    for rel_path, issue in PROOF_SLICE_MATURITY_POINTER_DOCS.items():
+        path = repo_root / rel_path
+        text = path.read_text(encoding="utf-8") if path.exists() else ""
+        docs_relative = PROOF_SLICE_MATURITY_DOC.removeprefix("docs/")
+        if path.exists() and PROOF_SLICE_MATURITY_DOC not in text and docs_relative not in text:
+            issues.append(issue)
+    return issues
+
+
 def hippocampal_private_annotation_protocol_issues(repo_root: Path) -> list[str]:
     path = repo_root / HIPPOCAMPAL_PRIVATE_ANNOTATION_DOC
     if not path.exists():
@@ -1212,6 +1258,7 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
     issues.extend(llm_call_contract_issues(repo_root))
     issues.extend(benchmark_evidence_map_issues(repo_root))
     issues.extend(current_claims_snapshot_issues(repo_root))
+    issues.extend(proof_slice_maturity_board_issues(repo_root))
     issues.extend(hippocampal_private_annotation_protocol_issues(repo_root))
     issues.extend(public_api_contract_issues(repo_root))
     issues.extend(public_core_schema_contract_issues(repo_root))
