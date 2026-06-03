@@ -101,6 +101,51 @@ also select the correct permission profile for the same tool under different
 risk levels. It cannot make a claim true, override a source registry, bypass
 source reopen, or certify answer quality.
 
+## Conflict Resolution
+
+When multiple typed capabilities apply to the same turn, the resolver lives in
+`aippocampus_runtime.knowledge.capability_conflicts`. It is a deterministic
+activation/action policy, not a planner, judge, or fact layer. It accepts
+already-proposed action packets from capability manifests, answer gates,
+privacy guards, task routes, tool policies, or communication preferences, then
+chooses the highest-precedence action and explains which lower-priority actions
+were suppressed.
+
+The first policy uses this precedence:
+
+1. `privacy_boundary`
+2. `safety_high_risk`
+3. `source_truth`
+4. `task_domain`
+5. `operation_side_effect`
+6. `communication_style`
+
+This order keeps helpfulness and tone below privacy, consent, high-risk safety,
+source reopen, freshness, and conflict-set gates. A warm support style cannot
+override a crisis boundary. A direct legal/medical-like answer cannot override
+a missing-context or human-review gate. A cross-domain memory or tool route
+cannot override a privacy partition. A task operation cannot proceed past stale
+or conflicting source truth. Brevity or personality preferences cannot remove
+required uncertainty, source citation, or cannot-claim boundaries.
+
+The resolver emits sanitized reports with:
+
+- the selected action id, capability id, precedence class, and output state;
+- suppressed action ids and reason codes such as
+  `source_truth_overrides_operation_side_effect`;
+- missing-context questions from the selected gate when the safe output state is
+  `missing_context_question`;
+- cannot-claim markers, including
+  `capability_text_is_not_fact_source` and
+  `conflict_resolution_is_activation_policy_not_truth`.
+
+Unknown prose fields, source text, prompt text, and model-written rationales are
+not consumed as authority. Capability conflict resolution governs activation
+and action selection only; it cannot promote strategy text, style guidance,
+Dream residue, model retrospection, or capability prose into truth. Source
+truth still belongs to clean source, governed registries, claim lifecycle, and
+answer gates.
+
 ## Relation To Existing Layers
 
 Source-backed memory:
@@ -177,3 +222,12 @@ Current deterministic coverage lives in
 - private/cross-partition external routes are blocked;
 - smoke output excludes raw input text, source text, claim text, and local
   absolute paths.
+
+`tests/aippocampus/test_knowledge_capability_conflicts.py` covers the #571
+composition policy:
+
+- communication style vs crisis/safety gate;
+- legal-like high-risk answer gate vs direct answer;
+- privacy partition vs cross-domain memory/tool use;
+- stale/source-conflict gate vs task operation;
+- brevity/style preference vs required uncertainty and source reopen.
