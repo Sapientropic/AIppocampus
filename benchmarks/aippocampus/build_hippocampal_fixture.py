@@ -466,9 +466,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     rows = build_fixture_rows()
-    report = {
+    report: dict[str, Any] = {
         "ok": True,
         "output": str(args.output),
+        "fixture_dataset_id": schema.DATASET_ID,
+        "fixture_schema_version": schema.FIXTURE_SCHEMA_VERSION,
+        "fixture_version": schema.FIXTURE_VERSION,
+        "fixture_seed": schema.FIXTURE_SEED,
         "validation": schema.validate_fixture(rows),
     }
     if not args.validate_only:

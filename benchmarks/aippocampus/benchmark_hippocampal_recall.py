@@ -22,6 +22,9 @@ _paths.ensure_paths()
 import hippocampal_fixture_schema as schema
 
 SCHEMA_VERSION = 1
+REPORT_SCHEMA_VERSION = "aippocampus.hippocampal_recall_report.v1"
+RELATIVE_FIXTURE_PATH = "benchmark_corpus/hippocampal_fixtures/hippocampal_synthetic_v1.jsonl"
+CLEAN_CLONE_COMMAND = "python benchmarks/aippocampus/benchmark_hippocampal_recall.py --json"
 OUTCOME_CATEGORIES = (
     "correct_evidence",
     "correct_scent",
@@ -492,16 +495,20 @@ def run_benchmark(
         if baseline_captured
         else "baseline_capture_failed"
     )
-    relative_fixture = "benchmark_corpus/hippocampal_fixtures/hippocampal_synthetic_v1.jsonl"
     return {
         "schema_version": SCHEMA_VERSION,
+        "report_schema_version": REPORT_SCHEMA_VERSION,
         "kind": "aippocampus_hippocampal_recall_benchmark",
         "generated_at": now_utc(),
         "status": status,
         "ok": baseline_captured,
         "quality_gate_ok": bool(quality_gates["ok"]),
         "config": {
-            "fixture": relative_fixture,
+            "fixture": RELATIVE_FIXTURE_PATH,
+            "fixture_dataset_id": validation.get("dataset_id"),
+            "fixture_schema_version": validation.get("schema_version"),
+            "fixture_version": schema.FIXTURE_VERSION,
+            "fixture_seed": schema.FIXTURE_SEED,
             "uses_live_model": False,
             "uses_model_judge": False,
             "uses_private_history": False,
@@ -513,9 +520,21 @@ def run_benchmark(
             "case_count": validation.get("case_count"),
             "scene_count": validation.get("scene_count"),
             "density_floor": validation.get("density_floor"),
+            "dataset_id": validation.get("dataset_id"),
+            "schema_version": validation.get("schema_version"),
+            "fixture_version": schema.FIXTURE_VERSION,
+            "fixture_seed": schema.FIXTURE_SEED,
             "blocker_codes": validation.get("blocker_codes") or [],
             "coverage": validation.get("coverage"),
             "public_safety": validation.get("public_safety"),
+        },
+        "reproducibility": {
+            "clean_clone_command": CLEAN_CLONE_COMMAND,
+            "fixture_builder_command": "python benchmarks/aippocampus/build_hippocampal_fixture.py --json",
+            "fixture": RELATIVE_FIXTURE_PATH,
+            "requires_private_registry": False,
+            "requires_provider_credentials": False,
+            "determinism": "human_authored_fixture_with_deterministic_baseline_outputs",
         },
         "quality_gates": quality_gates,
         "outcome_weights": dict(OUTCOME_WEIGHTS),
