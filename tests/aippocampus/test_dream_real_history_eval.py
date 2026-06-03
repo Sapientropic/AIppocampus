@@ -277,6 +277,10 @@ class DreamRealHistoryEvalTests(unittest.TestCase):
         self.assertEqual(payload["packs"][0]["themes"], ["continuity"])
         self.assertEqual(payload["metrics"]["user_visible"]["claim_level"], "visibility_ablation_harness")
         self.assertIn("real_user_behavior", payload["metrics"]["user_visible"]["cannot_claim"])
+        probe = payload["metrics"]["coding_decision_shadow_probe"]
+        self.assertFalse(probe["included"])
+        self.assertEqual(probe["status"], "deferred_no_coding_decision_shadow_pack")
+        self.assertIn("coding_decision_shadow_probe_deferred", payload["cannot_claim"])
 
     def test_eval_can_run_model_backed_worker_through_visibility_ablation(self) -> None:
         job_rows, working_rows = fixture_rows()
@@ -359,23 +363,67 @@ class DreamRealHistoryEvalTests(unittest.TestCase):
                     "kind": "dream_manual_source_review",
                     "review_status": "supported",
                     "source_refs": [source_ref("session:review", "msg-review", 50)],
+                },
+                {
+                    "kind": "dream_manual_source_review",
+                    "review_status": "stale",
+                    "user_visible_outcome": "wrong_hint",
+                    "annoyance_risk": "high",
+                    "source_refs": [source_ref("session:review", "msg-stale", 51)],
                 }
             ],
         )
         encoded = json.dumps(payload, ensure_ascii=False)
 
         self.assertEqual(payload["kind"], "aippocampus_dream_user_visible_lift_eval")
+        self.assertEqual(
+            payload["evaluation_axes"],
+            [
+                "structural_validity",
+                "recall_utility",
+                "action_utility",
+                "annoyance_noise",
+                "stale_superseded_handling",
+            ],
+        )
         self.assertIn("recall_lift", payload["metrics"])
         self.assertIn("reflection_lift", payload["metrics"])
         self.assertIn("unsupported_evidence_suppression", payload["metrics"])
         self.assertIn("source_support_correctness", payload["metrics"])
+        self.assertIn("annoyance_noise", payload["metrics"])
+        self.assertIn("stale_superseded_handling", payload["metrics"])
         self.assertIn("cost_cache", payload["metrics"])
-        self.assertEqual(payload["metrics"]["manual_source_review"]["reviewed_count"], 1)
+        self.assertEqual(payload["metrics"]["manual_source_review"]["reviewed_count"], 2)
+        self.assertEqual(payload["metrics"]["manual_source_review"]["status_counts"]["stale"], 1)
+        self.assertEqual(payload["metrics"]["annoyance_noise"]["wrong_hint_count"], 1)
+        self.assertEqual(payload["metrics"]["annoyance_noise"]["high_annoyance_count"], 1)
+        self.assertEqual(
+            payload["metrics"]["stale_superseded_handling"]["stale_or_superseded_count"],
+            1,
+        )
         self.assertEqual(payload["metrics"]["unsupported_evidence_suppression"]["suppression_rate"], 1.0)
         self.assertGreater(payload["metrics"]["reflection_lift"]["augmented_visible_reflection_count"], 0)
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("message_id", encoded)
         self.assertNotIn("thread_key", encoded)
+
+    def test_coding_decision_shadow_probe_status_reports_included_or_deferred(self) -> None:
+        deferred = dream_eval.coding_decision_shadow_probe_status(
+            [{"pack_id": "p1", "source_seed_kinds": ["question_candidate"]}]
+        )
+        included = dream_eval.coding_decision_shadow_probe_status(
+            [
+                {"pack_id": "p1", "source_seed_kinds": ["question_candidate"]},
+                {"pack_id": "p2", "source_seed_kinds": ["coding_ticket"]},
+            ]
+        )
+
+        self.assertFalse(deferred["included"])
+        self.assertEqual(deferred["status"], "deferred_no_coding_decision_shadow_pack")
+        self.assertEqual(deferred["selected_pack_count"], 1)
+        self.assertTrue(included["included"])
+        self.assertEqual(included["status"], "included")
+        self.assertEqual(included["coding_pack_count"], 1)
 
     def test_eval_exposes_deepseek_cache_contract_for_future_live_worker(self) -> None:
         job_rows, working_rows = fixture_rows()

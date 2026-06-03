@@ -428,6 +428,13 @@ provided it explicitly lists `manual_source_review_support` and
 does not include raw source refs, message ids, thread ids, local paths, or
 private text.
 
+The #163 report schema also names the user-visible evaluation axes directly:
+structural validity, recall utility, action utility, annoyance/noise, and
+stale/superseded handling. It reports whether selected packs included a coding
+decision-shadow probe or deferred that workload; when deferred, the top-level
+`cannot_claim` keeps prospective Dream value on a falsifiable coding workload
+out of scope.
+
 ### Implemented Phase 3.5 Bounded Model-Backed Workers
 
 `skills/aippocampus/scripts/aippocampus_runtime/dream/worker.py` adds the first bounded
