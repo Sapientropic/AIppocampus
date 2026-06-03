@@ -67,14 +67,25 @@ def safe_path_name(value: str, fallback: str = "item") -> str:
 
 
 def canonical_path(path: str | Path) -> Path:
+    """Return the local identity path for comparisons and registry joins.
+
+    This is intentionally stronger than display formatting: use it for identity
+    keys, cache keys, and same-workspace checks, not for public reports that
+    should preserve caller spelling or redact local paths.
+    """
+
     return Path(path).resolve()
 
 
 def path_identity_key(path: str | Path) -> str:
+    """Return the case-folded canonical path comparison key."""
+
     return str(canonical_path(path)).casefold()
 
 
 def workspace_identity(workspace: str | Path) -> str:
+    """Return canonical workspace identity while preserving non-path labels."""
+
     text = str(workspace or "")
     path = Path(text)
     # Workspace values are sometimes human/project labels rather than host

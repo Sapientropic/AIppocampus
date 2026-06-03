@@ -144,6 +144,8 @@ The public-core license, adapter, and schema boundary lives in
 `docs/guides/public-core-boundary.md`.
 Field-budget and profile discipline for minimal, runtime, high-risk, governance,
 and diagnostic projections lives in `docs/architecture/schema-field-profiles.md`.
+Path identity, display spelling, and privacy-safe path projection boundaries live
+in `docs/architecture/path-identity.md`.
 Runtime script ownership and dependency navigation lives in
 `docs/architecture/runtime-script-map.md`.
 The Rust deterministic-core migration boundary lives in

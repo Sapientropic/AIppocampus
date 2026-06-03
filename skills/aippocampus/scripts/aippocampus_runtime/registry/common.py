@@ -8,10 +8,17 @@ import re
 import subprocess
 from pathlib import Path
 
-from aippocampus_runtime.core import compact_text
+from aippocampus_runtime.core import canonical_path, compact_text, workspace_identity_key
 from aippocampus_runtime.registry.store import safe_slug
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
+
+
+def _stable_identity_digest(value: str) -> str:
+    # These registry ids are deterministic join keys, not secrecy boundaries.
+    # Use SHA-256 anyway so changed identity flows do not reintroduce weak-hash
+    # security alerts, and keep the suffix long enough for practical uniqueness.
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
 
 
 def run_json(cmd: list[str]) -> dict:
@@ -39,19 +46,23 @@ def unique_preserve(items: list[str], limit: int | None = None) -> list[str]:
 
 def project_key_for(cwd: Path | None, label: str | None = None) -> str:
     if cwd:
-        # Registry project keys are long-lived join ids, not credential hashes.
-        # Keep the legacy suffix stable until a dual-read alias migration exists.
-        digest = hashlib.sha1(str(cwd).casefold().encode("utf-8")).hexdigest()[:12]
-        return f"project:{safe_slug(label or cwd.name or 'workspace')}:{digest}"
+        # Registry project keys are long-lived join ids. Use the central
+        # workspace identity helper so symlink spelling, macOS /var aliases, and
+        # Windows path-case variants do not split one project into multiple
+        # registry identities. Keep the human label spelling separate from the
+        # identity digest; explicit labels remain operator-chosen display text.
+        canonical_cwd = canonical_path(cwd)
+        digest = _stable_identity_digest(workspace_identity_key(cwd))
+        return f"project:{safe_slug(label or canonical_cwd.name or 'workspace')}:{digest}"
     # Same compatibility boundary as the cwd-backed branch above.
-    digest = hashlib.sha1((label or "unknown").casefold().encode("utf-8")).hexdigest()[:12]
+    digest = _stable_identity_digest((label or "unknown").casefold())
     return f"project:{safe_slug(label or 'unknown')}:{digest}"
 
 
 def project_fields(
     cwd: Path | None, *, project: str | None = None, tags: list[str] | None = None
 ) -> dict:
-    label = project or (cwd.name if cwd else "unknown")
+    label = project or (canonical_path(cwd).name if cwd else "unknown")
     project_tags = unique_preserve([label, *(tags or [])], limit=24)
     return {
         "project_key": project_key_for(cwd, label),
