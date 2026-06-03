@@ -9,6 +9,10 @@ from typing import Any, Mapping
 
 from aippocampus_runtime.core import now_utc, sanitize_external_model_payload
 from aippocampus_runtime.subconscious.job_circuits import PROMPT_VERSION
+from aippocampus_runtime.subconscious.staging_maintenance import (
+    StagingPressureThresholds,
+    queue_pressure,
+)
 
 
 def public_model_route(route: Any) -> dict[str, str]:
@@ -28,7 +32,8 @@ def append_job_findings(
     usage: dict[str, Any],
     source: str = "deepseek_subconscious_jobs",
     model_route: dict[str, Any] | None = None,
-) -> None:
+    pressure_thresholds: StagingPressureThresholds | None = None,
+) -> dict[str, Any]:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8", newline="\n") as fh:
         for finding in findings:
@@ -52,6 +57,8 @@ def append_job_findings(
             # this audit trail into a secret or machine-path sink.
             safe_event = sanitize_external_model_payload(event)
             fh.write(json.dumps(safe_event, ensure_ascii=False) + "\n")
+    pressure = queue_pressure(path, thresholds=pressure_thresholds)
+    return {"staging_pressure": pressure}
 
 
 def concept_findings_to_edges(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:

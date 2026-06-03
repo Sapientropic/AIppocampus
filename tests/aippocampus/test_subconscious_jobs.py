@@ -30,6 +30,9 @@ import build_concept_graph as concept_graph  # noqa: E402
 import build_semantic_scope_labels as semantic_scope_materializer  # noqa: E402
 import subconscious_jobs as jobs  # noqa: E402
 from aippocampus_runtime.subconscious import job_storage  # noqa: E402
+from aippocampus_runtime.subconscious.staging_maintenance import (  # noqa: E402
+    StagingPressureThresholds,
+)
 from redaction_fixtures import (  # noqa: E402
     FAKE_TEST_BEARER_TOKEN,
     FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER,
@@ -77,6 +80,29 @@ class SubconsciousJobsTests(unittest.TestCase):
             self.assertNotIn(FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER, raw)
             self.assertIn("<redacted:bearer-token>", raw)
             self.assertIn("<redacted:local-path>", raw)
+
+    def test_job_storage_returns_backpressure_warning(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "subconscious_jobs.jsonl"
+
+            result = job_storage.append_job_findings(
+                output,
+                [
+                    {
+                        "kind": "question_candidate",
+                        "title": "Queue pressure",
+                        "summary": "A source-backed finding should still warn on pressure.",
+                        "source_refs": [{"thread_key": "thread:one", "line": 12}],
+                    }
+                ],
+                model="deepseek-test",
+                batch_id="batch-one",
+                usage={},
+                pressure_thresholds=StagingPressureThresholds(max_rows=0, max_bytes=0),
+            )
+
+        self.assertTrue(result["staging_pressure"]["warning"])
+        self.assertIn("row_threshold_exceeded", result["staging_pressure"]["warning_reasons"])
 
     def test_job_circuit_catalog_is_separate_from_runner(self) -> None:
         circuits = importlib.import_module("subconscious_job_circuits")

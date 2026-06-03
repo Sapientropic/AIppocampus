@@ -25,6 +25,9 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 import subconscious_worker as worker  # noqa: E402
+from aippocampus_runtime.subconscious.staging_maintenance import (  # noqa: E402
+    StagingPressureThresholds,
+)
 from redaction_fixtures import (  # noqa: E402
     FAKE_TEST_BEARER_TOKEN,
     FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER,
@@ -73,6 +76,30 @@ class SubconsciousWorkerTests(unittest.TestCase):
             self.assertNotIn(FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER, raw)
             self.assertIn("<redacted:bearer-token>", raw)
             self.assertIn("<redacted:local-path>", raw)
+
+    def test_append_staging_edges_returns_backpressure_warning(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "subconscious_edges.jsonl"
+
+            result = worker.append_staging_edges(
+                output,
+                [
+                    {
+                        "src": "runtime",
+                        "dst": "staging pressure",
+                        "edge_type": "related",
+                        "confidence": 0.82,
+                        "source_refs": [{"thread_key": "thread:edge", "line": 7}],
+                    }
+                ],
+                model="deepseek-test",
+                batch_id="batch-edge",
+                pressure_thresholds=StagingPressureThresholds(max_rows=0, max_bytes=0),
+            )
+
+        self.assertTrue(result["staging_pressure"]["warning"])
+        self.assertIn("row_threshold_exceeded", result["staging_pressure"]["warning_reasons"])
+        self.assertIn("byte_threshold_exceeded", result["staging_pressure"]["warning_reasons"])
 
     def test_select_turns_and_validate_edges_are_source_backed(self) -> None:
         timeline = {

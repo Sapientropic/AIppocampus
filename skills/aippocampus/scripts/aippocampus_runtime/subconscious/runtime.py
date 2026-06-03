@@ -18,6 +18,7 @@ from aippocampus_runtime.navigation.concept_graph import expand_concepts
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.registry.api import load_registry
 from aippocampus_runtime.source.search import iter_clean_messages, score_message
+from aippocampus_runtime.subconscious.staging_maintenance import iter_recent_jsonl_tail
 
 DEFAULT_MAX_STEPS = 16
 HARD_MAX_STEPS = 64
@@ -352,32 +353,26 @@ def tool_recent_edges(*, staging_path: Path, args: dict[str, Any]) -> dict[str, 
     terms = [term.casefold() for term in normalize_tool_terms(args)]
     limit = max(1, min(20, int(args.get("limit") or 8)))
     rows = []
-    if staging_path.exists():
-        with staging_path.open("r", encoding="utf-8") as fh:
-            for line in fh:
-                try:
-                    item = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                blob = " ".join(
-                    [
-                        str(item.get("src") or ""),
-                        str(item.get("dst") or ""),
-                        str(item.get("why") or ""),
-                    ]
-                ).casefold()
-                if terms and not any(term in blob for term in terms):
-                    continue
-                rows.append(
-                    {
-                        "src": item.get("src"),
-                        "dst": item.get("dst"),
-                        "edge_type": item.get("edge_type"),
-                        "confidence": item.get("confidence"),
-                        "source": item.get("source"),
-                        "why": compact_text(str(item.get("why") or ""), 180),
-                    }
-                )
+    for item in iter_recent_jsonl_tail(staging_path, max_rows=max(200, limit * 16)):
+        blob = " ".join(
+            [
+                str(item.get("src") or ""),
+                str(item.get("dst") or ""),
+                str(item.get("why") or ""),
+            ]
+        ).casefold()
+        if terms and not any(term in blob for term in terms):
+            continue
+        rows.append(
+            {
+                "src": item.get("src"),
+                "dst": item.get("dst"),
+                "edge_type": item.get("edge_type"),
+                "confidence": item.get("confidence"),
+                "source": item.get("source"),
+                "why": compact_text(str(item.get("why") or ""), 180),
+            }
+        )
     return {"tool": "recent_edges", "query_terms": terms, "edges": rows[-limit:]}
 
 

@@ -41,6 +41,10 @@ from aippocampus_runtime.model.routing import (
 )
 from aippocampus_runtime.navigation.concept_graph import concept_is_noise
 from aippocampus_runtime.registry.api import registry_paths, unique_preserve
+from aippocampus_runtime.subconscious.staging_maintenance import (
+    StagingPressureThresholds,
+    queue_pressure,
+)
 
 PROMPT_VERSION = "aippocampus-subconscious-v0"
 DEFAULT_MODEL = flash_model()
@@ -106,6 +110,21 @@ def public_error(error: Any) -> dict[str, str] | None:
     return cli_public_error_object(error)
 
 
+def public_staging_pressure(pressure: Any) -> dict[str, Any]:
+    if not isinstance(pressure, Mapping):
+        return {}
+    return {
+        "file_name": str(pressure.get("file_name") or ""),
+        "row_count": public_count(pressure.get("row_count")),
+        "byte_count": public_count(pressure.get("byte_count")),
+        "warning": bool(pressure.get("warning")),
+        "warning_reasons": [
+            str(reason) for reason in pressure.get("warning_reasons") or [] if str(reason)
+        ],
+        "pressure_level": str(pressure.get("pressure_level") or "ok"),
+    }
+
+
 def public_worker_payload(result: Mapping[str, Any]) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "ok": bool(result.get("ok")),
@@ -116,6 +135,7 @@ def public_worker_payload(result: Mapping[str, Any]) -> dict[str, Any]:
         "cache": public_cache(result.get("cache")),
         "usage": public_usage(result.get("usage")),
         "model_route": public_model_route(result.get("model_route")),
+        "staging_pressure": public_staging_pressure(result.get("staging_pressure")),
         "output_private_artifact": bool(result.get("output")),
         "output_boundary": "worker_details_are_local_private_artifacts",
     }
@@ -377,7 +397,8 @@ def append_staging_edges(
     prompt_version: str = PROMPT_VERSION,
     source: str = "deepseek_subconscious",
     model_route: dict[str, Any] | None = None,
-) -> None:
+    pressure_thresholds: StagingPressureThresholds | None = None,
+) -> dict[str, Any]:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8", newline="\n") as fh:
         for edge in edges:
@@ -399,6 +420,8 @@ def append_staging_edges(
             # before it can persist secrets or machine-local paths.
             safe_event = sanitize_external_model_payload(event)
             fh.write(json.dumps(safe_event, ensure_ascii=False) + "\n")
+    pressure = queue_pressure(path, thresholds=pressure_thresholds)
+    return {"staging_pressure": pressure}
 
 
 def run_worker(
@@ -473,8 +496,9 @@ def run_worker(
     parsed = parse_model_json(response)
     edges = validate_edges(parsed, turns)
     usage = response.get("usage") or {}
+    staging_pressure: dict[str, Any] = {}
     if not no_write:
-        append_staging_edges(
+        write_result = append_staging_edges(
             output_path,
             edges,
             model=resolved_model,
@@ -483,6 +507,7 @@ def run_worker(
             source=artifact_source,
             model_route=route_payload,
         )
+        staging_pressure = write_result.get("staging_pressure") or {}
     return {
         "ok": True,
         "dry_run": False,
@@ -498,6 +523,7 @@ def run_worker(
         "cache": route_cache_metrics(route, usage),
         "wrote": False if no_write else True,
         "batch_id": batch_id,
+        "staging_pressure": staging_pressure,
     }
 
 

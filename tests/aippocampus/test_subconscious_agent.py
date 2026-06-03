@@ -470,6 +470,32 @@ class SubconsciousAgentTests(unittest.TestCase):
         self.assertEqual(grounding["useless_tool_calls"][0]["tool"], "recent_edges")
         self.assertEqual(grounding["useless_tool_calls"][0]["reason"], "empty_recent_edges")
 
+    def test_recent_edges_reads_bounded_tail_when_old_prefix_is_not_utf8(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            staging_path = Path(tmp) / "subconscious_edges.jsonl"
+            tail_row = {
+                "kind": "aippocampus_subconscious_edge",
+                "status": "staging",
+                "src": "bounded recent edge",
+                "dst": "tail window",
+                "edge_type": "related",
+                "confidence": 0.84,
+                "source": "test",
+                "why": "The recent tool should not parse the whole historical file.",
+            }
+            with staging_path.open("wb") as fh:
+                fh.write(b"\xff\xfe historical corrupt prefix that must stay outside the tail\n")
+                fh.write(b"x\n" * 150_000)
+                fh.write(json.dumps(tail_row, ensure_ascii=False).encode("utf-8") + b"\n")
+
+            result = runtime.tool_recent_edges(
+                staging_path=staging_path,
+                args={"terms": ["bounded"], "limit": 1},
+            )
+
+        self.assertEqual(len(result["edges"]), 1)
+        self.assertEqual(result["edges"][0]["src"], "bounded recent edge")
+
     def test_tool_observations_are_redacted_before_second_model_call(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
