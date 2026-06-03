@@ -1,0 +1,208 @@
+{
+  "schema_version": "aippocampus.multimodal_source_registry.v1",
+  "registry_id": "public_safe_multimodal_source_manifest_v1",
+  "fixture_license": "CC0-1.0-synthetic",
+  "boundary": {
+    "fixture_public_safe": true,
+    "raw_private_media_included": false,
+    "derived_artifacts_are_navigation_only": true,
+    "original_sources_remain_truth_boundary": true
+  },
+  "sources": [
+    {
+      "schema_version": "aippocampus.multimodal_source.v1",
+      "source_id": "mmsrc-user-image-001",
+      "source_type": "raw_image",
+      "media_type": "image",
+      "origin_policy": "user_provided_media",
+      "privacy_class": "private_task_scoped",
+      "source_owner": "synthetic-user",
+      "access_policy": "current_task_only",
+      "license": "CC0-1.0-synthetic",
+      "captured_at": "2026-05-01T10:00:00Z",
+      "timezone": "UTC",
+      "location_hint": {"kind": "user_label", "value": "synthetic garden"},
+      "content_hash_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_anchor": {
+        "anchor_id": "user-image-001:full",
+        "media_type": "image",
+        "section_anchor": "image:full",
+        "region": "full"
+      },
+      "task_scoped_access": {
+        "current_task_access_allowed": true,
+        "configured_scope_required": false,
+        "hidden_durable_write_allowed": false,
+        "cross_domain_reuse_allowed": false,
+        "audit_event_required": true
+      },
+      "provenance_chain": [
+        {"kind": "synthetic_fixture", "ref": "multimodal_source_manifest:user-image-001"}
+      ]
+    },
+    {
+      "schema_version": "aippocampus.multimodal_source.v1",
+      "source_id": "mmsrc-chat-001",
+      "source_type": "conversation_turn",
+      "media_type": "chat_message",
+      "origin_policy": "user_provided_media",
+      "privacy_class": "private_task_scoped",
+      "source_owner": "synthetic-user",
+      "access_policy": "current_task_only",
+      "license": "CC0-1.0-synthetic",
+      "captured_at": "2026-05-01T10:01:00Z",
+      "timezone": "UTC",
+      "location_hint": {"kind": "none", "value": null},
+      "content_hash_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "source_anchor": {
+        "anchor_id": "chat-001:turn",
+        "media_type": "text",
+        "section_anchor": "conversation:turn",
+        "span_id": "turn-body"
+      },
+      "task_scoped_access": {
+        "current_task_access_allowed": true,
+        "configured_scope_required": false,
+        "hidden_durable_write_allowed": false,
+        "cross_domain_reuse_allowed": false,
+        "audit_event_required": true
+      },
+      "provenance_chain": [
+        {"kind": "synthetic_fixture", "ref": "multimodal_source_manifest:chat-001"}
+      ]
+    },
+    {
+      "schema_version": "aippocampus.multimodal_source.v1",
+      "source_id": "mmsrc-connected-receipt-001",
+      "source_type": "receipt_image",
+      "media_type": "receipt",
+      "origin_policy": "connected_library_media",
+      "privacy_class": "private_connected_scope",
+      "source_owner": "synthetic-user",
+      "access_policy": "configured_scope_only",
+      "license": "CC0-1.0-synthetic",
+      "captured_at": "2026-05-01T12:20:00Z",
+      "timezone": "UTC",
+      "location_hint": {"kind": "merchant_label", "value": "synthetic art shop"},
+      "content_hash_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "source_anchor": {
+        "anchor_id": "connected-receipt-001:line-items",
+        "media_type": "image",
+        "section_anchor": "receipt:line-items",
+        "region": "line-items"
+      },
+      "task_scoped_access": {
+        "current_task_access_allowed": false,
+        "configured_scope_required": true,
+        "configured_scope_id": "synthetic-connected-receipts",
+        "hidden_durable_write_allowed": false,
+        "cross_domain_reuse_allowed": false,
+        "audit_event_required": true
+      },
+      "provenance_chain": [
+        {"kind": "synthetic_fixture", "ref": "multimodal_source_manifest:receipt-001"}
+      ]
+    },
+    {
+      "schema_version": "aippocampus.multimodal_source.v1",
+      "source_id": "mmsrc-background-calendar-001",
+      "source_type": "calendar_event",
+      "media_type": "calendar_event",
+      "origin_policy": "background_filesystem_media",
+      "privacy_class": "private_unselected",
+      "source_owner": "synthetic-user",
+      "access_policy": "denied_by_default",
+      "license": "CC0-1.0-synthetic",
+      "captured_at": "2026-05-01T09:00:00Z",
+      "timezone": "UTC",
+      "location_hint": {"kind": "calendar_location", "value": "synthetic venue"},
+      "content_hash_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "source_anchor": {
+        "anchor_id": "background-calendar-001:event",
+        "media_type": "calendar",
+        "section_anchor": "calendar:event",
+        "span_id": "event-body"
+      },
+      "task_scoped_access": {
+        "current_task_access_allowed": false,
+        "configured_scope_required": true,
+        "hidden_durable_write_allowed": false,
+        "cross_domain_reuse_allowed": false,
+        "audit_event_required": true
+      },
+      "provenance_chain": [
+        {"kind": "synthetic_fixture", "ref": "multimodal_source_manifest:calendar-001"}
+      ]
+    }
+  ],
+  "derived_artifacts": [
+    {
+      "schema_version": "aippocampus.multimodal_derived_artifact.v1",
+      "artifact_id": "mmart-user-image-001-caption",
+      "artifact_type": "caption",
+      "parent_source_id": "mmsrc-user-image-001",
+      "parent_anchor_id": "user-image-001:full",
+      "source_anchor": {"anchor_id": "user-image-001:full:caption"},
+      "provider_route": "synthetic_captioner.v1",
+      "model_id": "synthetic-captioner",
+      "confidence": 0.96,
+      "created_at": "2026-05-03T00:00:00Z",
+      "authority": "navigation_only",
+      "output_artifacts": ["caption_text", "entity_candidates"],
+      "provenance_chain": [
+        {"kind": "derived_from_source", "ref": "mmsrc-user-image-001"}
+      ]
+    },
+    {
+      "schema_version": "aippocampus.multimodal_derived_artifact.v1",
+      "artifact_id": "mmart-chat-001-entity",
+      "artifact_type": "entity_tag",
+      "parent_source_id": "mmsrc-chat-001",
+      "parent_anchor_id": "chat-001:turn",
+      "source_anchor": {"anchor_id": "chat-001:turn:entities"},
+      "provider_route": "synthetic_entity_extractor.v1",
+      "model_id": "synthetic-entity-extractor",
+      "confidence": 0.92,
+      "created_at": "2026-05-03T00:00:01Z",
+      "authority": "navigation_only",
+      "output_artifacts": ["entity_candidates"],
+      "provenance_chain": [
+        {"kind": "derived_from_source", "ref": "mmsrc-chat-001"}
+      ]
+    },
+    {
+      "schema_version": "aippocampus.multimodal_derived_artifact.v1",
+      "artifact_id": "mmart-receipt-001-ocr",
+      "artifact_type": "ocr",
+      "parent_source_id": "mmsrc-connected-receipt-001",
+      "parent_anchor_id": "connected-receipt-001:line-items",
+      "source_anchor": {"anchor_id": "connected-receipt-001:line-items:ocr"},
+      "provider_route": "synthetic_ocr.v1",
+      "model_id": "synthetic-ocr",
+      "confidence": 0.95,
+      "created_at": "2026-05-03T00:00:02Z",
+      "authority": "navigation_only",
+      "output_artifacts": ["ocr_text", "line_item_candidates"],
+      "provenance_chain": [
+        {"kind": "derived_from_source", "ref": "mmsrc-connected-receipt-001"}
+      ]
+    },
+    {
+      "schema_version": "aippocampus.multimodal_derived_artifact.v1",
+      "artifact_id": "mmart-calendar-001-schema",
+      "artifact_type": "schema_row",
+      "parent_source_id": "mmsrc-background-calendar-001",
+      "parent_anchor_id": "background-calendar-001:event",
+      "source_anchor": {"anchor_id": "background-calendar-001:event:schema"},
+      "provider_route": "synthetic_calendar_parser.v1",
+      "model_id": "synthetic-calendar-parser",
+      "confidence": 0.98,
+      "created_at": "2026-05-03T00:00:03Z",
+      "authority": "navigation_only",
+      "output_artifacts": ["event_time", "event_place"],
+      "provenance_chain": [
+        {"kind": "derived_from_source", "ref": "mmsrc-background-calendar-001"}
+      ]
+    }
+  ]
+}

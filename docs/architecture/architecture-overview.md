@@ -134,3 +134,5 @@ Runtime script ownership and dependency navigation lives in
 `docs/architecture/runtime-script-map.md`.
 Typed execution boundaries for composable agent skills live in
 `docs/architecture/agent-skill-capability-contracts.md`.
+Multimodal source identity, media-origin policy, and derived-artifact truth
+boundaries live in `docs/architecture/multimodal-source-manifests.md`.
