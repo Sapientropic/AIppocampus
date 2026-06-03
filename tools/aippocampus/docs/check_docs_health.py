@@ -99,7 +99,6 @@ REQUIRED_RUNTIME_MAP_SCRIPTS = [
     "model_client.py",
     "deepseek_model_routing.py",
     "semantic_recall_gate.py",
-    "semantic_cue_cache.py",
     "warm_ambient_recall.py",
     "ambient_warm_scheduler.py",
     "ambient_recall_policy.py",
