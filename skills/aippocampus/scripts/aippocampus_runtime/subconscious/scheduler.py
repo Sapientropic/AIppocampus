@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import aippocampus_registry_dir, now_utc
+from aippocampus_runtime.subconscious import shell_selection
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
 STATE_SCHEMA_VERSION = 1
@@ -647,7 +648,7 @@ def maybe_start(args: argparse.Namespace) -> dict[str, Any]:
     if hook_env.lower() in {"0", "false", "off", "no"}:
         return {"started": False, "skipped": "disabled_by_env", "projects": []}
     if not os.environ.get(args.api_key_env):
-        return {"started": False, "skipped": f"missing_{args.api_key_env}", "projects": []}
+        return {"started": False, "skipped": "missing_api_key", "projects": []}
 
     try:
         lock = FileLock(
@@ -664,6 +665,7 @@ def maybe_start(args: argparse.Namespace) -> dict[str, Any]:
 def maybe_start_locked(args: argparse.Namespace, *, root: Path, state_file: Path) -> dict[str, Any]:
     state = load_state(state_file)
     now_ts = time.time()
+    shell_override = getattr(args, "shell_selection", "auto")
 
     due = choose_projects(
         root=root,
@@ -683,7 +685,10 @@ def maybe_start_locked(args: argparse.Namespace, *, root: Path, state_file: Path
         return {
             "started": False,
             "dry_run": True,
-            "projects": [{"label": stats.label, "reason": reason} for stats, reason in due],
+            "projects": [
+                shell_selection.scheduler_project_report(stats, reason, root=root, override=shell_override)
+                for stats, reason in due
+            ],
         }
     filtered: list[tuple[ProjectStats, str]] = []
     leased: list[tuple[ProjectStats, str]] = []
@@ -755,7 +760,10 @@ def maybe_start_locked(args: argparse.Namespace, *, root: Path, state_file: Path
     return {
         "started": True,
         "pid": pid,
-        "projects": [{"label": stats.label, "reason": reason} for stats, reason in due],
+        "projects": [
+            shell_selection.scheduler_project_report(stats, reason, root=root, override=shell_override)
+            for stats, reason in due
+        ],
         "log": str(log_path(root)),
     }
 
@@ -844,8 +852,10 @@ def main() -> int:
     parser.add_argument("--samples-per-job", type=int, default=DEFAULT_SAMPLES_PER_JOB)
     parser.add_argument("--lease-seconds", type=int, default=DEFAULT_PROJECT_LEASE_SECONDS)
     parser.add_argument("--api-key-env", default=DEFAULT_API_KEY_ENV)
+    parser.add_argument("--shell-selection", choices=["auto", *sorted(shell_selection.VALID_DECISIONS)], default="auto")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
+    parser.add_argument("--include-private-report", action="store_true")
     parser.add_argument(
         "--strict",
         action="store_true",
@@ -859,7 +869,9 @@ def main() -> int:
         else:
             result = maybe_start(args)
         if args.json_output:
-            print(json.dumps(public_scheduler_payload(result), ensure_ascii=False, indent=2))
+            public_payload = public_scheduler_payload(result)
+            payload = shell_selection.private_scheduler_report_payload(result, public_payload) if args.include_private_report else public_payload
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
         elif result.get("started"):
             print(f"subconscious scheduler started: pid {result.get('pid')}")
         elif result.get("ran"):
