@@ -164,6 +164,10 @@ at text; B-tree/generated/partial indexes are better for structure and time.
 
 ### Phase 2: Private Real-History Annotation
 
+The private-safe procedure lives in
+[`hippocampal-private-annotation-protocol.md`](hippocampal-private-annotation-protocol.md).
+This section keeps only the sampling intent.
+
 After the runner is stable, sample 20 private real-history scenes from
 registered clean-source threads. Candidate scenes should include:
 
@@ -500,6 +504,7 @@ P1:
 P2:
 
 - private real-history annotation protocol
+  (`docs/evidence/benchmarks/hippocampal-private-annotation-protocol.md`)
 - 20-scene private validation pack
 - human-label adjudication workflow
 - seeded expansion of natural degraded queries with human verification

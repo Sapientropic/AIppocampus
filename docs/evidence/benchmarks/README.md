@@ -26,6 +26,7 @@ collapsing them into one leaderboard.
 | External benchmark comparison home | [`design/external-benchmark-map.md`](design/external-benchmark-map.md) | Analysis map and blockers; not a superiority claim. |
 | Multimodal memory benchmark map | [`design/multimodal-memory-benchmark-map.md`](design/multimodal-memory-benchmark-map.md) | #528 source-shape routing across HippoCamp, MemLens, ATM-Bench, egocentric video, UniDoc, Persona, and conversation-memory benchmarks. |
 | ATM-Bench Hard protocol boundary | [`design/atm-bench-hard-protocol-boundary.md`](design/atm-bench-hard-protocol-boundary.md) | Verified upstream-protocol boundary for #528; no adapter, score, or privacy claim. |
+| Hippocampal private annotation protocol | [`hippocampal-private-annotation-protocol.md`](hippocampal-private-annotation-protocol.md) | Private H1/H2 real-history sampling and sanitized report rules; no committed private pack. |
 | Public-safe multimodal corpus fixture | [`multimodal-corpus-fixture-report.md`](multimodal-corpus-fixture-report.md) | #531 corpus-style contract smoke; not conversational upload recall or ATM-Bench score. |
 | Conversational media-ingest fixture | [`conversational-media-ingest-fixture-report.md`](conversational-media-ingest-fixture-report.md) | #532 conversational counterpart; media anchors attach to conversation turns. |
 | Multimodal NIAH evidence-pool fixture | [`multimodal-niah-evidence-pool-report.md`](multimodal-niah-evidence-pool-report.md) | #533 supplied-pool answer-synthesis contract; retrieval is not scored. |

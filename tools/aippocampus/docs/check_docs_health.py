@@ -162,6 +162,9 @@ REQUIRED_BENCHMARK_EVIDENCE_MAP_TERMS = {
     "docs/evidence/benchmarks/memory-pain-fixture-report.md": (
         "benchmark evidence map missing memory-pain fixture report pointer"
     ),
+    "docs/evidence/benchmarks/hippocampal-private-annotation-protocol.md": (
+        "benchmark evidence map missing hippocampal private annotation protocol pointer"
+    ),
 }
 
 CURRENT_CLAIMS_SNAPSHOT_DOC = "docs/evidence/current-claims.md"
@@ -226,6 +229,46 @@ STALE_CURRENT_EVIDENCE_PHRASES = {
             "across 2"
         ),
     },
+}
+
+HIPPOCAMPAL_PRIVATE_ANNOTATION_DOC = (
+    "docs/evidence/benchmarks/hippocampal-private-annotation-protocol.md"
+)
+
+REQUIRED_HIPPOCAMPAL_PRIVATE_ANNOTATION_TERMS = {
+    "truth-source independence": (
+        "hippocampal private annotation protocol missing truth-source independence"
+    ),
+    "## Reviewer And Adjudication Flow": (
+        "hippocampal private annotation protocol missing reviewer/adjudication flow"
+    ),
+    "disagreement": "hippocampal private annotation protocol missing disagreement handling",
+    "## Sanitized Dated Report Template": (
+        "hippocampal private annotation protocol missing sanitized report template"
+    ),
+    "cannot_claim": "hippocampal private annotation protocol missing cannot-claim boundary",
+    "raw private text": "hippocampal private annotation protocol missing privacy exclusions",
+    "local paths": "hippocampal private annotation protocol missing privacy exclusions",
+    "unsanitized snippets": "hippocampal private annotation protocol missing privacy exclusions",
+    "20 scenes": "hippocampal private annotation protocol missing 20-scene sample plan",
+    "15-30 minutes per scene": (
+        "hippocampal private annotation protocol missing annotation time estimate"
+    ),
+    "synthetic fixture external validity": (
+        "hippocampal private annotation protocol missing external-validity gate"
+    ),
+    "themes discussed at least three times": (
+        "hippocampal private annotation protocol missing theme sampling rule"
+    ),
+    "cross-thread decision evolution": (
+        "hippocampal private annotation protocol missing cross-thread sampling rule"
+    ),
+    "naturally degraded recall prompt": (
+        "hippocampal private annotation protocol missing natural prompt sampling rule"
+    ),
+    "realistic distractor": (
+        "hippocampal private annotation protocol missing distractor sampling rule"
+    ),
 }
 
 REQUIRED_PUBLIC_API_CONTRACT_TERMS = {
@@ -741,6 +784,23 @@ def current_claims_snapshot_issues(repo_root: Path) -> list[str]:
     return issues
 
 
+def hippocampal_private_annotation_protocol_issues(repo_root: Path) -> list[str]:
+    path = repo_root / HIPPOCAMPAL_PRIVATE_ANNOTATION_DOC
+    if not path.exists():
+        return [
+            "missing hippocampal private annotation protocol: "
+            f"{HIPPOCAMPAL_PRIVATE_ANNOTATION_DOC}"
+        ]
+
+    text = path.read_text(encoding="utf-8")
+    lower_text = text.lower()
+    issues: list[str] = []
+    for term, issue in REQUIRED_HIPPOCAMPAL_PRIVATE_ANNOTATION_TERMS.items():
+        if term.lower() not in lower_text:
+            issues.append(issue)
+    return issues
+
+
 def public_api_contract_issues(repo_root: Path) -> list[str]:
     issues: list[str] = []
     rel_path = "docs/guides/public-api.md"
@@ -1152,6 +1212,7 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
     issues.extend(llm_call_contract_issues(repo_root))
     issues.extend(benchmark_evidence_map_issues(repo_root))
     issues.extend(current_claims_snapshot_issues(repo_root))
+    issues.extend(hippocampal_private_annotation_protocol_issues(repo_root))
     issues.extend(public_api_contract_issues(repo_root))
     issues.extend(public_core_schema_contract_issues(repo_root))
     issues.extend(python_version_contract_issues(repo_root))

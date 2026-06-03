@@ -552,6 +552,66 @@ class DocsHealthTests(unittest.TestCase):
         )
         self.assertIn("demo scenarios missing current claims snapshot pointer", issues)
 
+    def test_benchmark_evidence_map_requires_hippocampal_private_annotation_protocol(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            docs = repo / "docs"
+            evidence = docs / "evidence"
+            evidence.mkdir(parents=True)
+            (docs / "README.md").write_text(
+                "# Docs\n\n- benchmark-evidence-map.md\n",
+                encoding="utf-8",
+            )
+            old_required_terms = [
+                term
+                for term in docs_health.REQUIRED_BENCHMARK_EVIDENCE_MAP_TERMS
+                if term
+                != "docs/evidence/benchmarks/hippocampal-private-annotation-protocol.md"
+            ]
+            (evidence / "benchmark-evidence-map.md").write_text(
+                "\n".join(old_required_terms) + "\n",
+                encoding="utf-8",
+            )
+
+            issues = docs_health.benchmark_evidence_map_issues(repo)
+
+        self.assertIn(
+            "benchmark evidence map missing hippocampal private annotation protocol pointer",
+            issues,
+        )
+
+    def test_hippocampal_private_annotation_protocol_reports_missing_terms(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            write_origin_essays(repo)
+            benchmark_docs = repo / "docs" / "evidence" / "benchmarks"
+            benchmark_docs.mkdir(parents=True)
+            (benchmark_docs / "hippocampal-private-annotation-protocol.md").write_text(
+                "# Private Annotation Protocol\n\nTruth-source independence.\n",
+                encoding="utf-8",
+            )
+
+            issues, _ = docs_health.check_repo_docs(repo)
+
+        self.assertIn(
+            "hippocampal private annotation protocol missing reviewer/adjudication flow",
+            issues,
+        )
+        self.assertIn(
+            "hippocampal private annotation protocol missing sanitized report template",
+            issues,
+        )
+        self.assertIn(
+            "hippocampal private annotation protocol missing privacy exclusions",
+            issues,
+        )
+        self.assertIn(
+            "hippocampal private annotation protocol missing external-validity gate",
+            issues,
+        )
+
     def test_runtime_script_map_reports_missing_required_script(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
