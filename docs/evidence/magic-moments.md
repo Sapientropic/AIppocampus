@@ -6,7 +6,9 @@ moments where source-backed continuity felt different from ordinary chat
 memory, while keeping the claim boundary visible.
 
 These examples come from external live-use notes in
-[Discussion #98](https://github.com/Sapientropic/AIppocampus/discussions/98).
+[Discussion #98](https://github.com/Sapientropic/AIppocampus/discussions/98)
+and the reader-facing field report in
+[Discussion #428](https://github.com/Sapientropic/AIppocampus/discussions/428).
 They are product-shaped evidence, not benchmark scores, release claims, or
 proof that the base model remembered anything by itself.
 
@@ -97,6 +99,27 @@ Source:
   can be recovered when the agent is allowed to reopen source instead of
   pretending to remember.
 
+### Cross-Thread Tool-Failure Provenance
+
+Source:
+[second-user field report](https://github.com/Sapientropic/AIppocampus/discussions/428#discussioncomment-17147730).
+
+- **User typed:** in a later thread, the user asked what had been asked in a
+  separate fresh thread and what went wrong during tool work.
+- **AIppocampus helped recover:** the earlier prompt shape across a language
+  boundary, the distinction between two Discord workflow-error families, and a
+  concrete Python tool-failure kind from the earlier investigation.
+- **What made it source-backed:** the assistant relied on registered clean
+  source and raw audit evidence rather than treating the follow-up as something
+  the base model remembered. The public benchmark fixture records only the
+  scenario shape and sanitized hashes, not the raw prompt or raw error text.
+- **What not to claim:** this does not prove ambient-hook-only exact recall,
+  universal cross-thread recovery, or that the tool failure was caused by the
+  memory system.
+- **Why it matters:** continuity should preserve mundane agent-work provenance,
+  including mistakes and recoveries, without turning those details into private
+  public fixtures.
+
 ## Try A Public-Safe Path
 
 The current honest install probe uses the PyPI package:
@@ -129,6 +152,12 @@ For no-private-data demos, start with
 benchmark and smoke ledger behind broader claims, use
 [`benchmark-evidence-map.md`](benchmark-evidence-map.md) and
 [`readiness/stage-0-5-readiness.md`](readiness/stage-0-5-readiness.md).
+
+The claim-bounded benchmark slice for turning these reports into reproducible
+fixture coverage is
+[#454](https://github.com/Sapientropic/AIppocampus/issues/454), with its public
+fixture report in
+[`benchmarks/field-continuity-fixture-report.md`](benchmarks/field-continuity-fixture-report.md).
 
 Related technical tracks: [#201](https://github.com/Sapientropic/AIppocampus/issues/201),
 [#281](https://github.com/Sapientropic/AIppocampus/issues/281),

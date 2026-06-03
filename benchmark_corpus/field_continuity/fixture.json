@@ -1,0 +1,316 @@
+{
+  "schema_version": "aippocampus.field_continuity_fixture.v1",
+  "fixture_id": "field_continuity_public_safe_v1",
+  "fixture_license": "CC0-1.0-synthetic",
+  "source": {
+    "issue": "https://github.com/Sapientropic/AIppocampus/issues/454",
+    "discussion": "https://github.com/Sapientropic/AIppocampus/discussions/428",
+    "status": "field reports are benchmark seeds, not official product proof by themselves"
+  },
+  "boundary": {
+    "public_safe_synthetic_fixtures": true,
+    "raw_discussion_prompt_text_copied": false,
+    "raw_source_snippets_copied": false,
+    "private_real_history_included": false,
+    "scenario_shapes_inspired_by_field_reports": true
+  },
+  "arms": [
+    "no_memory",
+    "hook_only",
+    "active_recall_or_source_reopen",
+    "stale_wrong_route_control"
+  ],
+  "scenario_families": [
+    {
+      "family": "fresh_projectless_familiarity",
+      "seed": "Discussion #428 fresh projectless thread report",
+      "expected_behavior": [
+        "light_scent_or_progressive_recall",
+        "source_reopen_before_specific_claims",
+        "uncertainty_boundary"
+      ],
+      "non_claims": [
+        "base_model_innate_memory",
+        "universal_fresh_thread_recall_quality",
+        "foreground-hook-only sufficiency"
+      ]
+    },
+    {
+      "family": "multilingual_vague_recall_with_route_correction",
+      "seed": "Discussion #428 multilingual correction report",
+      "expected_behavior": [
+        "accept_small_user_correction",
+        "switch_memory_family_after_correction",
+        "preserve_source_uncertainty_when_exact_lesson_unavailable"
+      ],
+      "non_claims": [
+        "first_route_always_correct",
+        "multilingual_recall_solved"
+      ]
+    },
+    {
+      "family": "external_state_restraint",
+      "seed": "Discussion #428 external account cue report",
+      "expected_behavior": [
+        "do_not_claim_live_external_state",
+        "separate_local_tool_evidence_from_external_account_truth",
+        "mark_unverified_external_state"
+      ],
+      "non_claims": [
+        "browser_or_account_access",
+        "external_platform_state_verified"
+      ]
+    },
+    {
+      "family": "long_thread_fuzzy_self_reference",
+      "seed": "Discussion #428 long-thread fuzzy reference report",
+      "expected_behavior": [
+        "recover_old_referent_when_source_reopen_available",
+        "preserve_completion_nuance",
+        "distinguish_hook_orientation_from_source_recovery"
+      ],
+      "non_claims": [
+        "foreground-hook-only sufficiency",
+        "private_real_history_quality"
+      ]
+    },
+    {
+      "family": "cross_thread_exact_prompt_tool_failure",
+      "seed": "Discussion #428 cross-thread tool-failure comment",
+      "expected_behavior": [
+        "recover_prior_prompt_shape_across_language_boundary",
+        "recover_tool_failure_kind_without_publishing_raw_error_text",
+        "distinguish_agent_tool_bug_from_memory_system_failure"
+      ],
+      "non_claims": [
+        "ambient_hook_solved_exact_recall",
+        "tool_failure_caused_by_memory_system"
+      ]
+    }
+  ],
+  "private_seed_reporting_contract": {
+    "hash_algorithm": "sha256",
+    "hash_only": true,
+    "aggregate_only": true,
+    "allowed_fields": [
+      "seed_hash_sha256",
+      "case_family",
+      "source_kind",
+      "date_bucket",
+      "scenario_tags",
+      "arm",
+      "metric_key",
+      "metric_value",
+      "denominator",
+      "cannot_claim"
+    ],
+    "forbidden_fields": [
+      "raw_prompt",
+      "raw_source_text",
+      "source_snippet",
+      "local_path",
+      "rollout_id",
+      "thread_id",
+      "session_id",
+      "credential",
+      "api_key",
+      "cookie"
+    ]
+  },
+  "cases": [
+    {
+      "case_id": "fc-fresh-projectless-public",
+      "scenario_family": "fresh_projectless_familiarity",
+      "case_kind": "public_synthetic",
+      "prompt_shape": "Fresh projectless thread asks whether the assistant knows recent work.",
+      "seed_hash_sha256": "2fb6f42b6c1e4a7812fd729e9d4f0659100e2f5045d1be4e40a8f88f5fb8fb51",
+      "expected_metrics": [
+        "source_reopen_success",
+        "uncertainty_boundary_preserved",
+        "irrelevant_memory_drag"
+      ],
+      "negative_control_tags": [
+        "over_personalization_near_miss"
+      ],
+      "arms": {
+        "no_memory": {
+          "source_reopen_success": false,
+          "uncertainty_boundary_preserved": true,
+          "irrelevant_memory_drag": false
+        },
+        "hook_only": {
+          "source_reopen_success": false,
+          "uncertainty_boundary_preserved": true,
+          "irrelevant_memory_drag": true
+        },
+        "active_recall_or_source_reopen": {
+          "source_reopen_success": true,
+          "uncertainty_boundary_preserved": true,
+          "irrelevant_memory_drag": false
+        },
+        "stale_wrong_route_control": {
+          "source_reopen_success": false,
+          "uncertainty_boundary_preserved": false,
+          "irrelevant_memory_drag": true
+        }
+      }
+    },
+    {
+      "case_id": "fc-multilingual-correction-public",
+      "scenario_family": "multilingual_vague_recall_with_route_correction",
+      "case_kind": "public_synthetic",
+      "prompt_shape": "Vague non-English study-memory cue followed by a correction to another memory family.",
+      "seed_hash_sha256": "f36c57bb1f3e2724ed695df96f98256578b6589b4eb60956551b5a5e52b54090",
+      "expected_metrics": [
+        "progressive_route_recovery",
+        "uncertainty_boundary_preserved",
+        "wrong_family_persistence"
+      ],
+      "negative_control_tags": [
+        "wrong_family_persistence",
+        "stale_route_dominance"
+      ],
+      "arms": {
+        "no_memory": {
+          "progressive_route_recovery": false,
+          "uncertainty_boundary_preserved": true,
+          "wrong_family_persistence": false
+        },
+        "hook_only": {
+          "progressive_route_recovery": false,
+          "uncertainty_boundary_preserved": false,
+          "wrong_family_persistence": true
+        },
+        "active_recall_or_source_reopen": {
+          "progressive_route_recovery": true,
+          "uncertainty_boundary_preserved": true,
+          "wrong_family_persistence": false
+        },
+        "stale_wrong_route_control": {
+          "progressive_route_recovery": false,
+          "uncertainty_boundary_preserved": false,
+          "wrong_family_persistence": true
+        }
+      }
+    },
+    {
+      "case_id": "fc-external-state-restraint-public",
+      "scenario_family": "external_state_restraint",
+      "case_kind": "public_synthetic",
+      "prompt_shape": "Ambiguous question about an external account or channel state.",
+      "seed_hash_sha256": "9e0c38ee9bf405fdb2a24092c7a55e82663df9aeebd698622288ef1ac862ef6b",
+      "expected_metrics": [
+        "source_reopen_success",
+        "external_state_overclaim",
+        "uncertainty_boundary_preserved"
+      ],
+      "negative_control_tags": [
+        "overclaiming"
+      ],
+      "arms": {
+        "no_memory": {
+          "source_reopen_success": false,
+          "external_state_overclaim": false,
+          "uncertainty_boundary_preserved": true
+        },
+        "hook_only": {
+          "source_reopen_success": false,
+          "external_state_overclaim": true,
+          "uncertainty_boundary_preserved": false
+        },
+        "active_recall_or_source_reopen": {
+          "source_reopen_success": true,
+          "external_state_overclaim": false,
+          "uncertainty_boundary_preserved": true
+        },
+        "stale_wrong_route_control": {
+          "source_reopen_success": false,
+          "external_state_overclaim": true,
+          "uncertainty_boundary_preserved": false
+        }
+      }
+    },
+    {
+      "case_id": "fc-long-thread-fuzzy-reference-public",
+      "scenario_family": "long_thread_fuzzy_self_reference",
+      "case_kind": "public_synthetic",
+      "prompt_shape": "Very long same-thread cue asks what an old placeholder referred to.",
+      "seed_hash_sha256": "a2631c9dca56385b36674f6beb26868e6ed3271c717fbc82e2661966ff0fd369",
+      "expected_metrics": [
+        "source_reopen_success",
+        "completion_nuance_preserved",
+        "irrelevant_memory_drag"
+      ],
+      "negative_control_tags": [
+        "stale_route_dominance"
+      ],
+      "arms": {
+        "no_memory": {
+          "source_reopen_success": false,
+          "completion_nuance_preserved": false,
+          "irrelevant_memory_drag": false
+        },
+        "hook_only": {
+          "source_reopen_success": false,
+          "completion_nuance_preserved": false,
+          "irrelevant_memory_drag": true
+        },
+        "active_recall_or_source_reopen": {
+          "source_reopen_success": true,
+          "completion_nuance_preserved": true,
+          "irrelevant_memory_drag": false
+        },
+        "stale_wrong_route_control": {
+          "source_reopen_success": false,
+          "completion_nuance_preserved": false,
+          "irrelevant_memory_drag": true
+        }
+      }
+    },
+    {
+      "case_id": "fc-cross-thread-tool-failure-public",
+      "scenario_family": "cross_thread_exact_prompt_tool_failure",
+      "case_kind": "public_synthetic",
+      "prompt_shape": "Separate long thread asks what was asked in a fresh thread and what tool work failed.",
+      "seed_hash_sha256": "0ef0db5f34f51a655d573e43e92f51f0b77713bbfe922e09a270272717890fe9",
+      "expected_metrics": [
+        "source_reopen_success",
+        "exact_prompt_or_tool_failure_recovery",
+        "uncertainty_boundary_preserved"
+      ],
+      "negative_control_tags": [
+        "wrong_family_persistence"
+      ],
+      "arms": {
+        "no_memory": {
+          "source_reopen_success": false,
+          "exact_prompt_or_tool_failure_recovery": false,
+          "uncertainty_boundary_preserved": true
+        },
+        "hook_only": {
+          "source_reopen_success": false,
+          "exact_prompt_or_tool_failure_recovery": false,
+          "uncertainty_boundary_preserved": false
+        },
+        "active_recall_or_source_reopen": {
+          "source_reopen_success": true,
+          "exact_prompt_or_tool_failure_recovery": true,
+          "uncertainty_boundary_preserved": true
+        },
+        "stale_wrong_route_control": {
+          "source_reopen_success": false,
+          "exact_prompt_or_tool_failure_recovery": false,
+          "uncertainty_boundary_preserved": false
+        }
+      }
+    }
+  ],
+  "cannot_claim": [
+    "field reports are benchmark seeds, not official product proof by themselves",
+    "real-history field-continuity recall quality",
+    "universal fresh-thread recall quality",
+    "foreground-hook-only sufficiency",
+    "live semantic-model quality",
+    "hosted-service or cross-device production readiness"
+  ]
+}

@@ -81,13 +81,16 @@ promotes a public-safe result into the official evidence flow.
    [`benchmarks/fresh-thread-real-history-smoke-2026-06-02.md`](benchmarks/fresh-thread-real-history-smoke-2026-06-02.md).
 22. Need expanded fresh-thread demo and multi-ref real-history smoke evidence:
    [`benchmarks/fresh-thread-expanded-coverage-2026-06-03.md`](benchmarks/fresh-thread-expanded-coverage-2026-06-03.md).
-23. Need explicit recall-reminder shadow A/B evidence:
+23. Need public-safe Field Continuity / magic-moment reproducibility fixture
+   evidence for #454:
+   [`benchmarks/field-continuity-fixture-report.md`](benchmarks/field-continuity-fixture-report.md).
+24. Need explicit recall-reminder shadow A/B evidence:
    [`dream/dream-live-shadow-ab-2026-05-30.md`](dream/dream-live-shadow-ab-2026-05-30.md).
-24. Need public-corpus negative-control dream shadow evidence:
+25. Need public-corpus negative-control dream shadow evidence:
    [`dream/dream-live-shadow-benchmark-corpus-2026-05-31.md`](dream/dream-live-shadow-benchmark-corpus-2026-05-31.md).
-25. Need live question-extraction axis-coverage evidence for GitHub #153:
+26. Need live question-extraction axis-coverage evidence for GitHub #153:
    [`question/question-extraction-axis-coverage-2026-05-31.md`](question/question-extraction-axis-coverage-2026-05-31.md).
-26. Need community-submitted runs, demos, known gaps, or field-report intake:
+27. Need community-submitted runs, demos, known gaps, or field-report intake:
    [`community-field-reports.md`](community-field-reports.md) and the public
    [`/evidence/`](https://www.aippocampus.com/evidence/) page.
 
@@ -117,6 +120,7 @@ snapshot or dated verification ledger.
 | Fresh-thread recall demo evidence | `docs/evidence/benchmarks/fresh-thread-recall-demo-2026-05-31.md` and `docs/evidence/benchmarks/fresh-thread-expanded-coverage-2026-06-03.md` | Public-safe three-arm fresh-thread recall flows, negative controls, source-reopen boundaries, multi-turn/correction/threshold controls, and the expanded #490 claim boundary. |
 | Recall navigation comparison smoke | `docs/evidence/benchmarks/recall-navigation-comparison-2026-06-03.md` | Public-safe deterministic #465 comparison of direct `search_memory`, hook-only, and progressive `recall_context -> recall_deepen` arms; covers vague cues, multilingual cue fixtures, stale-handle rejection, and claim-boundary metrics without live quality claims. |
 | Fresh-thread real-history boundary smoke | `docs/evidence/benchmarks/fresh-thread-real-history-smoke-2026-06-02.md` and `docs/evidence/benchmarks/fresh-thread-expanded-coverage-2026-06-03.md` | Sanitized real-history boundary smoke for ready-lock reopenability, thread-only lock suppression, current-repo fact negative control, and #490 multi-ref aggregate coverage; not a recall-quality benchmark. |
+| Field Continuity fixture report | `docs/evidence/benchmarks/field-continuity-fixture-report.md` and `benchmark_corpus/field_continuity/fixture.json` | Public-safe #454 scenario-family contract for second-user magic-moment reports from Discussion #428; includes two-plus public synthetic families, private seed hash/aggregate rules, and overclaim/wrong-family/stale-route controls without live or private-history quality claims. |
 | Dream live shadow A/B reminder evidence | `docs/evidence/dream/dream-live-shadow-ab-2026-05-30.md` | Dated aggregate run for explicit recall-reminder frequency, shadow assignment, nearest-prior exposure attribution, and delivered-vs-shadow claim boundaries. |
 | Dream benchmark-corpus shadow evidence | `docs/evidence/dream/dream-live-shadow-benchmark-corpus-2026-05-31.md` | Dated public-corpus negative-control run for explicit reminder frequency and potential dream-only over-personalization activation. |
 | Question extraction axis coverage evidence | `docs/evidence/question/question-extraction-axis-coverage-2026-05-31.md` | Dated live no-write aggregate field-presence run for GitHub #153 and its prompt/repair/telemetry fix boundary. |
@@ -153,6 +157,7 @@ benchmark runner should be added here and linked to its dated evidence owner.
 | Continuous-memory attribution arms, host-native baseline, pre-registration, cost/harm ledger, and scenario provenance/holdout controls | `benchmarks/aippocampus/benchmark_continuous_memory_arms.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, #378/#406/#407/#408/#409/#410 |
 | Optional live semantic gate | `benchmarks/aippocampus/benchmark_live_semantic_gate.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `benchmark_corpus/README.md` |
 | Fresh-thread public-safe recall demo | `benchmarks/aippocampus/benchmark_fresh_thread_recall_demo.py` | `docs/evidence/benchmarks/fresh-thread-recall-demo-2026-05-31.md`, `docs/evidence/benchmarks/fresh-thread-expanded-coverage-2026-06-03.md`, `docs/guides/demo-scenarios.md` |
+| Field Continuity / magic-moment reproducibility contract | `benchmarks/aippocampus/benchmark_field_continuity.py` | `docs/evidence/benchmarks/field-continuity-fixture-report.md`, `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `benchmark_corpus/field_continuity/fixture.json`, #454 |
 | Structured cognitive portrait | `benchmarks/aippocampus/benchmark_cognitive_portrait.py` | `docs/research/compact-activation-signals.md`, `docs/evidence/benchmarks/memory-decision-benchmark-plan.md` |
 | Question-aware real-history structural benchmark | `benchmarks/aippocampus/benchmark_question_aware_real_history.py` | `docs/architecture/question-tracking-subconscious.md`, `docs/research/compact-activation-signals.md`, `docs/planning/next-iteration-plan.md`, `docs/evidence/readiness/stage-0-5-readiness.md`, `docs/evidence/benchmarks/memory-decision-benchmark-plan.md` |
 | Question tracking selected-fixture calibration | `benchmarks/aippocampus/benchmark_question_tracking_calibration.py` | `docs/architecture/question-tracking-subconscious.md`, `docs/planning/technical-differentiation-analysis.md` |

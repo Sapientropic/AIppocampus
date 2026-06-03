@@ -79,6 +79,12 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
   the governed knowledge source/claim schema and high-risk answer gate, then
   adds one repo-internal `CapabilityContract` prototype for synthetic
   contract-review assistance.
+- `benchmarks/aippocampus/benchmark_field_continuity.py` runs the #454 Field
+  Continuity / Magic Moment Reproducibility contract slice. It converts the
+  second-user field-report shapes from Discussion #428 into public-safe
+  scenario-family fixtures, negative controls, hash-only private seed reporting
+  rules, and claim-boundary metrics. It is a deterministic contract smoke, not
+  real-history or live-model recall quality evidence.
 - `tests/aippocampus/test_benchmark_source_evidence_retrieval.py` checks
   Track B report shape, diagnostic status, ShareGPT public-corpus case
   generation, public semantic-sidecar materialization, LoCoMo/LongMemEval source
@@ -211,6 +217,53 @@ text, or absolute local paths. The prototype cannot claim legal advice,
 compliance certification, real contract-review quality, clinical/therapy
 quality, private-history quality, typed capability taxonomy completeness, or
 public API stability.
+
+### Field Continuity / Magic Moment Reproducibility Suite
+
+`benchmark_field_continuity.py` is a separate #454 contract-smoke surface. It
+does not replace Track A-D, and it does not turn community field reports into
+official benchmark proof by itself. Its job is to make the user-visible
+"magic moment" reports reproducible as scenario contracts with controls and
+privacy-safe reporting.
+
+Scenario families:
+
+| Family | Expected behavior | Non-claims |
+| --- | --- | --- |
+| `fresh_projectless_familiarity` | light scent or progressive recall, source reopen before specific claims, uncertainty boundary | base-model innate memory, universal fresh-thread quality, foreground-hook-only sufficiency |
+| `multilingual_vague_recall_with_route_correction` | accept a small correction, switch memory family, keep source uncertainty when exact lesson/source is unavailable | first route is always right, multilingual recall is solved |
+| `external_state_restraint` | refuse live external-state overclaims, separate local automation/tool evidence from external account truth, mark unverified state | browser/account access, external platform state verified |
+| `long_thread_fuzzy_self_reference` | recover an old referent when source reopen is available, preserve completion nuance, distinguish hook orientation from source recovery | hook-only sufficiency, private real-history quality |
+| `cross_thread_exact_prompt_tool_failure` | recover prompt shape and tool-failure provenance across a language/thread boundary, without publishing raw prompt or error text | ambient hook solved exact recall, tool failure was caused by the memory system |
+
+The public fixture lives in `benchmark_corpus/field_continuity/fixture.json`.
+It includes one synthetic public-safe row for each family, arms for
+`no_memory`, `hook_only`, `active_recall_or_source_reopen`, and
+`stale_wrong_route_control`, plus negative controls for overclaiming,
+wrong-family persistence, and stale-route dominance.
+
+Private real-history seed runs stay outside git. Shared reports may include
+only hash/aggregate rows: `seed_hash_sha256`, `case_family`, `source_kind`,
+`date_bucket`, `scenario_tags`, `arm`, `metric_key`, `metric_value`,
+`denominator`, and `cannot_claim`. They must not include raw prompts, source
+snippets, local paths, rollout ids, thread ids, session ids, credentials,
+cookies, or raw tool-error text.
+
+Run it directly:
+
+```powershell
+python benchmarks\aippocampus\benchmark_field_continuity.py --json
+```
+
+Required metrics mirror #454 without reducing the suite to top-k retrieval:
+`source_reopen_success`, `progressive_route_recovery`,
+`external_state_overclaim`, `uncertainty_boundary_preserved`,
+`exact_prompt_or_tool_failure_recovery`, `completion_nuance_preserved`,
+`wrong_family_persistence`, and `irrelevant_memory_drag`.
+
+The first implementation proves the fixture and report contract. It cannot
+claim real-history field-continuity recall quality, live semantic-model
+quality, foreground-hook-only sufficiency, or hosted/cross-device readiness.
 
 ### Benchmark Suite Profiles
 
@@ -1506,6 +1559,7 @@ Scripts:
 - `benchmarks/aippocampus/benchmark_compaction_continuity.py`
 - `benchmarks/aippocampus/benchmark_live_semantic_gate.py`
 - `benchmarks/aippocampus/benchmark_knowledge_pollution.py`
+- `benchmarks/aippocampus/benchmark_field_continuity.py`
 - `benchmarks/aippocampus/benchmark_cognitive_portrait.py`
 - `benchmarks/aippocampus/benchmark_suite.py`
 - `skills/aippocampus/scripts/aippocampus_runtime/knowledge/capability_contract.py`
@@ -1520,6 +1574,7 @@ Tests:
 - `tests/aippocampus/test_benchmark_compaction_continuity.py`
 - `tests/aippocampus/test_benchmark_live_semantic_gate.py`
 - `tests/aippocampus/test_benchmark_knowledge_pollution.py`
+- `tests/aippocampus/test_benchmark_field_continuity.py`
 - `tests/aippocampus/test_benchmark_cognitive_portrait.py`
 - `tests/aippocampus/test_benchmark_suite.py`
 - `tests/aippocampus/test_agency_affordance.py`
@@ -1534,6 +1589,12 @@ Knowledge pollution/privacy command:
 
 ```powershell
 python benchmarks\aippocampus\benchmark_knowledge_pollution.py
+```
+
+Field Continuity command:
+
+```powershell
+python benchmarks\aippocampus\benchmark_field_continuity.py --json
 ```
 
 Track D command:

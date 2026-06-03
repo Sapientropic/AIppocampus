@@ -26,6 +26,10 @@ records, start with [`docs/evidence/benchmark-evidence-map.md`](../docs/evidence
   fixture for #532. It models media the user sends or selects inside a
   conversation, where the user's wording around the upload is also source
   evidence.
+- `field_continuity/` contains the checked-in synthetic public-safe fixture for
+  #454. It turns Discussion #428 magic-moment field reports into scenario
+  families, negative controls, and hash/aggregate-only private seed reporting
+  rules without committing raw prompts, raw source snippets, or local paths.
 - `testdata_wildchat.jsonl` is a tiny checked-in fixture in WildChat-like JSONL
   shape, useful for smoke-testing the converter without network access.
 
@@ -94,6 +98,19 @@ python benchmarks\aippocampus\benchmark_suite.py --profile public-fast --json
 This runs deterministic Track A/C/D slices only. It intentionally skips private
 registry data, live semantic providers, Track B retrieval quality, and large
 external corpus downloads; those omitted surfaces appear in `cannot_claim`.
+
+Run the public-safe Field Continuity / magic-moment reproducibility contract:
+
+```powershell
+python benchmarks\aippocampus\benchmark_field_continuity.py --json
+```
+
+This #454 fixture covers fresh/projectless familiarity, multilingual route
+correction, external-state restraint, long-thread fuzzy self-reference, and
+cross-thread prompt/tool-failure provenance as scenario contracts. It does not
+claim live quality, private real-history recall quality, or foreground-hook-only
+sufficiency. The report owner is
+[`docs/evidence/benchmarks/field-continuity-fixture-report.md`](../docs/evidence/benchmarks/field-continuity-fixture-report.md).
 
 Run the deterministic coding decision-shadow A-E contract:
 
