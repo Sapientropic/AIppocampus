@@ -10,6 +10,10 @@ LongMemEval is an external public benchmark for long-term interactive memory.
 AIppocampus currently has a deterministic retrieval-only adapter for the
 official cleaned V1 files. It checks whether the expected answer session and
 source lines are retrievable; it does not generate answers or run an LLM judge.
+LongMemEval-V2 is tracked separately as a context-gathering mapping pilot: it
+can inspect the public V2 schema and local files, but it cannot report
+source-evidence R@K/MRR or answer accuracy without upstream gold evidence refs
+and the official reader/evaluator harness.
 
 Use this page to answer:
 
@@ -19,14 +23,18 @@ Use this page to answer:
 - Which retrieval metrics can be claimed, and which QA claims stay out of
   bounds?
 
-Do not use this page to claim SOTA, answer-generation quality, LongMemEval-V2
-quality, or broad memory superiority from one retrieval run.
+Do not use this page to claim SOTA, answer-generation quality,
+LongMemEval-V2 quality, or broad memory superiority from one retrieval or
+mapping run.
 
 ## Official Sources
 
 - Paper: <https://arxiv.org/abs/2410.10813>
 - Repository: <https://github.com/xiaowu0162/LongMemEval>
 - Cleaned dataset: <https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned>
+- V2 paper: <https://arxiv.org/abs/2605.12493>
+- V2 repository: <https://github.com/xiaowu0162/LongMemEval-V2>
+- V2 dataset: <https://huggingface.co/datasets/xiaowu0162/longmemeval-v2>
 - Local manifest: [`benchmark_corpus/longmemeval_manifest.json`](../../../benchmark_corpus/longmemeval_manifest.json)
 
 The runner pins Hugging Face LFS content SHA-256 values, not the HTTP `ETag`
@@ -41,9 +49,51 @@ matches the downloaded file hash.
 | `longmemeval-v1-small` | `longmemeval_s_cleaned.json` | 277,383,467 | `d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442` | First comparable public split. |
 | `longmemeval-v1-medium` | `longmemeval_m_cleaned.json` | 2,737,100,077 | `9d79e5524794a2e6900a3aa9cb7d9152c5a3e8319c9a87c25494ba1eacee495f` | Large-context stress split. |
 
-LongMemEval-V2 is a separate agentic-context benchmark. This V1
-source-evidence adapter intentionally reports V2 as out of scope instead of
-assigning fake source-retrieval scores.
+## LongMemEval-V2 Context Mapping Pilot
+
+LongMemEval-V2 is a separate agentic-context benchmark. The public V2
+documentation describes an Insert/Query memory API that returns compact
+multimodal context for a fixed reader, and reports answer accuracy plus query
+latency. AIppocampus keeps that surface separate from the V1 source-evidence
+adapter.
+
+The V2 pilot runner is:
+
+```powershell
+python benchmarks\aippocampus\benchmark_longmemeval_v2_context.py --case-limit 5 --output .tmp\longmemeval-v2-context-mapping.json
+```
+
+Local V2 JSONL files stay ignored under `benchmark_corpus/longmemeval/`.
+The runner emits only aggregate counts, local path hashes, checksums, hashed
+case ids, and claim boundaries; it excludes raw question text, answers,
+trajectory goals, UI accessibility trees, actions, thoughts, URLs, and
+screenshot paths.
+
+Current local pilot, run on 2026-06-03:
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `v2_questions.jsonl` | 286,186 | `0a3ae5ebea938c24d7800e1e0b0828e08ae1646f939a53853b2b8cdc08e292b7` |
+| `v2_trajectories.jsonl` | 1,195,604,539 | `363cec9a8e87aa8d9101ce4e600aadbf7031d674056ebe4f969e8424abc5f3c6` |
+
+| Metric | Value |
+| --- | ---: |
+| Questions | 451 |
+| Trajectories | 1,870 |
+| Exact question/trajectory id matches | 0 |
+| Environment candidate coverage | 451 / 451 |
+| Ambiguous environment candidate pools | 451 / 451 |
+| Question rows with gold evidence refs | 0 |
+| Trajectory rows with gold question/evidence refs | 0 |
+
+Decision: V2 can support a diagnostic context candidate-pack pilot because
+every question maps to a broad domain/environment trajectory pool. It cannot
+currently support benchmark-grade context-gathering scores, source-evidence
+R@K/MRR, or answer-generation quality inside AIppocampus without upstream
+question-to-haystack/evidence-state labels and the official reader/evaluator
+harness. Missing fields are `gold_trajectory_ids` or `haystack_ids` per
+question, evidence state indices or source spans, and source ids that can be
+used for grading without leaking answers.
 
 ## Commands
 
@@ -121,6 +171,21 @@ Reports have `kind: aippocampus_longmemeval_benchmark` and include:
   context-visible source-line recall, and MRR where available.
 - `cases`: sanitized per-case rows with hashed ids and no raw LongMemEval text.
 - `cannot_claim`: QA, judge-model, V2, SOTA, and broad-comparison boundaries.
+
+V2 mapping reports have
+`kind: aippocampus_longmemeval_v2_context_mapping` and include:
+
+- `benchmark`: official V2 URLs, license, local file path hashes, byte counts,
+  and SHA-256 values when available.
+- `schema_observation`: field/domain/environment/question-type counts only.
+- `metrics`: join-key coverage, environment-pool coverage, ambiguity rate, and
+  evidence-ref availability.
+- `decision`: whether source-evidence, context-gathering, and answer-generation
+  scoring are supported, diagnostic-only, or not run.
+- `cases`: hashed case ids with domain, environment family, question type,
+  mapping status, and candidate counts only.
+- `cannot_claim`: V2 source-evidence hit rate, MRR, answer accuracy, LAFS, SOTA,
+  and benchmark-grade context-gathering score boundaries.
 
 When a future run changes what the project can claim, update
 [`stage-0-5-readiness.md`](../readiness/stage-0-5-readiness.md). If it only records a dated

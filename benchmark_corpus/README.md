@@ -45,8 +45,8 @@ Supported converter sources:
 intended benchmark use for the locally generated ShareGPT outputs.
 
 `longmemeval_manifest.json` records the official LongMemEval cleaned V1 split
-files, Hugging Face LFS content hashes, runner entrypoint, and claim boundary.
-The corresponding evidence page is
+files, Hugging Face LFS content hashes, V2 context-mapping pilot metadata,
+runner entrypoints, and claim boundaries. The corresponding evidence page is
 [`docs/evidence/benchmarks/longmemeval.md`](../docs/evidence/benchmarks/longmemeval.md).
 
 `locomo_manifest.json` records the LoCoMo public long-conversation
@@ -350,8 +350,9 @@ evidence-line hits, context-visible evidence-line hits, context-improved
 counts, and top-K context-rescued counts; the default context radius is 5
 source lines because AIppocampus source payloads normally carry a small bounded
 neighboring context window. It does not score answer generation or Track A gate
-decisions. LongMemEval V2 currently lacks explicit source-evidence refs in this
-adapter and is reported as skipped rather than assigned a fake R@K.
+decisions. LongMemEval V2 is deliberately kept out of this source-evidence
+adapter; use the V2 context-mapping pilot below instead of assigning a fake
+R@K/MRR.
 
 For published LongMemEval runs, prefer the dedicated runner so the split,
 checksum, report shape, and evidence page stay independent from the broader
@@ -361,6 +362,18 @@ Track B adapter:
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-oracle --download --questions 50 --min-questions 20 --top-k 10 --output benchmark_corpus\reports\longmemeval-v1-oracle-retrieval-50.json
 python benchmarks\aippocampus\benchmark_longmemeval.py --split longmemeval-v1-small --download --questions 50 --min-questions 20 --top-k 10 --output benchmark_corpus\reports\longmemeval-v1-small-retrieval-50.json
 ```
+
+Run the LongMemEval V2 context-mapping pilot after the ignored V2 JSONL files
+are present locally:
+
+```powershell
+python benchmarks\aippocampus\benchmark_longmemeval_v2_context.py --case-limit 5 --output .tmp\longmemeval-v2-context-mapping.json
+```
+
+This pilot reports schema, checksum, join-key coverage, environment-pool
+coverage, and sanitized case hashes. It does not report V2 source-evidence
+R@K/MRR, benchmark-grade context-gathering quality, answer accuracy, LAFS, or
+SOTA claims.
 
 Run the optional semantic second-stage line reranker over the same source
 boundary:
