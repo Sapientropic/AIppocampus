@@ -100,6 +100,9 @@ Provider-route capability gating is tracked separately in
 the source and origin policy; provider routing decides whether a declared route
 may process that source or a navigation-only derived artifact.
 
+Answer-time source-reopen and cross-modal join packet checks are tracked in
+`docs/architecture/multimodal-answer-gate.md`.
+
 ## Verification
 
 The public-safe fixture covers:

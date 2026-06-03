@@ -335,6 +335,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_catalog.py",
     "skills/aippocampus/scripts/aippocampus_runtime/model/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/model/client.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/model/multimodal_answer_gate.py",
     "skills/aippocampus/scripts/aippocampus_runtime/model/multimodal_routing.py",
     "skills/aippocampus/scripts/aippocampus_runtime/model/routing.py",
     "skills/aippocampus/scripts/deepseek_model_routing.py",

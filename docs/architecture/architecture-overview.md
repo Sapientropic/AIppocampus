@@ -138,3 +138,5 @@ Multimodal source identity, media-origin policy, and derived-artifact truth
 boundaries live in `docs/architecture/multimodal-source-manifests.md`.
 Multimodal provider route capability and media-origin gating lives in
 `docs/architecture/multimodal-provider-routing.md`.
+Answer-time multimodal source reopen, cross-modal join packets, and abstention
+metrics live in `docs/architecture/multimodal-answer-gate.md`.
