@@ -609,7 +609,10 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser()
+    # Python 3.14 changed argparse's default prog to reflect how __main__ was
+    # executed. Keep the public compatibility-shim identity stable for direct
+    # installed-script help, facade dispatch, and cross-platform smoke tests.
+    parser = argparse.ArgumentParser(prog="aippocampus_health.py")
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument(
         "--registry-wide",
