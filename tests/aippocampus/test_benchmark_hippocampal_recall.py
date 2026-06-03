@@ -153,6 +153,60 @@ class HippocampalRecallP1BenchmarkTests(unittest.TestCase):
         self.assertNotIn("E:\\", serialized)
         self.assertNotIn("C:\\", serialized)
 
+    def test_adapter_contract_reports_local_arms_and_external_diagnostics(self) -> None:
+        payload = benchmark.run_benchmark()
+        contract = payload["adapter_contract"]
+        views_by_arm = payload["views_by_arm"]
+
+        for arm in (
+            "keyword_only",
+            "baseline_rag",
+            "closed_book",
+            "overactive_all_evidence",
+            "random_retrieval",
+        ):
+            self.assertIn(arm, contract["local_arms"])
+            self.assertIn(arm, views_by_arm)
+            self.assertIn("D0/I0", views_by_arm[arm]["matrix"])
+            self.assertIn("calibration", views_by_arm[arm])
+            self.assertIn("source_reopen_success", views_by_arm[arm]["aggregate"])
+            self.assertIn("cost", views_by_arm[arm]["aggregate"])
+
+        self.assertEqual(contract["arm_count"], len(contract["local_arms"]))
+        self.assertFalse(contract["requires_external_credentials"])
+        self.assertEqual(
+            contract["external_adapters"]["mem0"]["status"],
+            "diagnostic_missing_configuration",
+        )
+        self.assertEqual(
+            contract["external_adapters"]["zep_graphiti"]["status"],
+            "diagnostic_missing_configuration",
+        )
+        self.assertIn(
+            "expected_source_refs",
+            contract["truth_label_fields_hidden_from_adapters"],
+        )
+
+    def test_adapter_case_input_hides_truth_labels(self) -> None:
+        row = builder.build_fixture_rows()[0]
+        adapter_case = benchmark.adapter_case_for_row(row)
+        serialized = json.dumps(adapter_case, ensure_ascii=False, sort_keys=True)
+
+        self.assertEqual(adapter_case["case_id"], row["case_id"])
+        self.assertIn("query", adapter_case)
+        self.assertIn("candidate_source_refs", adapter_case)
+        for field in (
+            "expected_decision",
+            "expected_source_refs",
+            "acceptable_scent_refs",
+            "distractor_source_refs",
+            "forbidden_claims",
+            "truth_source",
+            "ambiguity_policy",
+        ):
+            self.assertNotIn(field, adapter_case)
+            self.assertNotIn(field, serialized)
+
     def test_scoring_catches_source_reopen_wrong_twin_overactive_and_skip_failures(self) -> None:
         rows = _by_case(builder.build_fixture_rows())
 

@@ -20,6 +20,14 @@ private registry.
   internal cues.
 - Deterministic baseline arms: `full_query`, `keyword_only`, and
   `random_retrieval`.
+- Adapter-contract arms for #237: `full_query`, `keyword_only`,
+  `baseline_rag`, `closed_book`, `overactive_all_evidence`, and
+  `random_retrieval`, each with per-arm D/I, calibration, source-reopen, and
+  cost/latency report views.
+- External adapter candidates for Mem0, Zep/Graphiti, Letta, and LangMem are
+  reported as opt-in diagnostics when dependency/configuration is missing; the
+  default public benchmark does not require external credentials or paid
+  services.
 - Report views by degradation, by interference, D/I matrix, aggregate metrics,
   and calibration categories.
 
@@ -54,6 +62,11 @@ The benchmark JSON report exposes `report_schema_version`, `fixture_dataset_id`,
 `reproducibility.clean_clone_command` field so later reports can be compared
 without relying on local machine state.
 
+Adapter runs also expose `adapter_contract` and `views_by_arm`. Adapter inputs
+hide scoring-only truth labels such as expected decisions, expected source
+refs, distractor refs, forbidden claims, truth source, and ambiguity policy, so
+local baseline arms cannot score by reading the answer key.
+
 ## Canonical Files
 
 - Schema: `benchmarks/aippocampus/hippocampal_fixture_schema.py`
@@ -73,3 +86,5 @@ without relying on local machine state.
 - live semantic-retriever or model quality
 - D4-D6 quality gates beyond exploratory diagnostic coverage
 - bucketed calibration error without calibrated confidence bins
+- external memory-system scores or cross-system superiority
+- live provider quality from missing-config diagnostic adapters
