@@ -56,16 +56,15 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
 - `tests/aippocampus/test_benchmark_payload_fidelity.py` checks payload
   metrics, source-fidelity accounting, parked-memory protection, and sanitized
   report defaults.
-- `benchmarks/aippocampus/benchmark_source_evidence_retrieval.py` runs the
-  Track B real-history retrieval wrapper, reusing the existing FTS5 source-line
-  benchmark and selected source-evidence recall evaluation. It also has an
-  opt-in ShareGPT public-corpus source-evidence slice with message-level and
-  turn-level hit metrics, an opt-in bounded public semantic-sidecar pilot, and
-  an opt-in standard retrieval-QA adapter for LoCoMo and LongMemEval V1
-  source/session recall metrics. Reports carry a Track B query-origin taxonomy
-  and separate source-derived sanity arms from non-source-derived question-text
-  arms so FTS5/source-label checks cannot be over-read as natural user-query
-  recall.
+- `benchmarks/aippocampus/benchmark_source_evidence_retrieval.py` remains the
+  Track B CLI/report facade, with track-owned helpers under
+  `benchmarks/aippocampus/source_evidence/`. It reuses the existing FTS5
+  source-line benchmark and selected source-evidence recall evaluation, and it
+  also has opt-in ShareGPT public-corpus, bounded public semantic-sidecar, and
+  LoCoMo/LongMemEval V1 standard retrieval-QA adapters. Reports carry a Track B
+  query-origin taxonomy and separate source-derived sanity arms from
+  non-source-derived question-text arms so FTS5/source-label checks cannot be
+  over-read as natural user-query recall.
 - `benchmarks/aippocampus/benchmark_coding_decision_shadow.py` runs the
   deterministic coding-agent decision-shadow tracks A-E from
   `docs/research/agent-coding-context-analysis.md`: original source refs,
@@ -1588,6 +1587,7 @@ Scripts:
 
 - `benchmarks/aippocampus/benchmark_memory_decision_gate.py`
 - `benchmarks/aippocampus/benchmark_source_evidence_retrieval.py`
+- `benchmarks/aippocampus/source_evidence/`
 - `benchmarks/aippocampus/benchmark_payload_fidelity.py`
 - `benchmarks/aippocampus/benchmark_compaction_continuity.py`
 - `benchmarks/aippocampus/benchmark_live_semantic_gate.py`

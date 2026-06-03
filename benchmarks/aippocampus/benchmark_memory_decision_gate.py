@@ -835,7 +835,11 @@ def now_utc() -> str:
 
 
 def sha1_text(text: str) -> str:
-    return hashlib.sha1(text.encode("utf-8", errors="replace")).hexdigest()
+    # Historical reports and downstream comparators use `sha1` field names as
+    # schema labels. Keep the public helper name stable, but use SHA-256 for new
+    # benchmark fingerprints so report generation does not introduce weak-hash
+    # code-scanning alerts.
+    return hashlib.sha256(text.encode("utf-8", errors="replace")).hexdigest()
 
 
 def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
