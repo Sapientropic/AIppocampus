@@ -641,6 +641,17 @@ class AmbientRecallHookTests(unittest.TestCase):
                     }
                 ],
             },
+            "route_delivery_diagnostic": {
+                "foreground_profile": "ambient_hot_path",
+                "semantic_gate_cache_hit_but_no_source_bridge": True,
+                "semantic_reuse_source": "exact_semantic_cache",
+                "hot_path_candidates_after_merge": 1,
+                "final_candidate_count": 2,
+                "cold_semantic_shadowed": False,
+                "raw_prompt": "private prompt text",
+                "query_aliases": ["private prompt text"],
+                "candidate_ids": ["session:private"],
+            },
             "elapsed_ms": 123.4,
         }
 
@@ -664,6 +675,23 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertEqual(public["hot_path_funnel"]["source_reopen_promotion_count"], 0)
         self.assertEqual(public["hot_path_funnel"]["stages"][0]["stage"], "bounded_trigram_fts")
         self.assertNotIn("candidate_ids", public["hot_path_funnel"])
+        self.assertEqual(
+            public["route_delivery_diagnostic"]["foreground_profile"],
+            "ambient_hot_path",
+        )
+        self.assertTrue(
+            public["route_delivery_diagnostic"][
+                "semantic_gate_cache_hit_but_no_source_bridge"
+            ]
+        )
+        self.assertEqual(
+            public["route_delivery_diagnostic"]["semantic_reuse_source"],
+            "exact_semantic_cache",
+        )
+        self.assertEqual(
+            public["route_delivery_diagnostic"]["hot_path_candidates_after_merge"], 1
+        )
+        self.assertNotIn("candidate_ids", public["route_delivery_diagnostic"])
         self.assertNotIn("private prompt text", encoded)
 
     def test_prompt_hook_dry_run_logs_would_deliver_without_foreground_dream(self) -> None:
@@ -4073,6 +4101,7 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertFalse(scheduled[0]["wait_all_foreground"])
         self.assertEqual(result["ambient_recall"]["warm_background"]["status"], "queued")
         self.assertEqual(result["ambient_recall"]["warm_background"]["job_id"], "job-test")
+        self.assertTrue(result["route_delivery_diagnostic"]["background_scheduled"])
 
     def test_prompt_hook_creates_navigation_only_active_recall_lock(self) -> None:
         cache_path = self.root / "ambient-cache-lock.json"

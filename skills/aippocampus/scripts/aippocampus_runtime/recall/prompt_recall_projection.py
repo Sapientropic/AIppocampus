@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Mapping
 
 from aippocampus_runtime.recall.prompt_cues import (
     current_checkout_live_fact_intent,
@@ -120,6 +120,63 @@ def semantic_bridge_diagnostic(
     return "semantic_evidence_without_source_bridge"
 
 
+def route_delivery_diagnostic(*, state: Mapping[str, Any]) -> dict[str, Any]:
+    """Project no-raw-prompt delivery diagnostics for the foreground hook.
+
+    This intentionally reports only booleans, counts, and controlled labels.
+    Semantic aliases, candidate ids, source snippets, and prompt text stay out:
+    the diagnostic explains why a route did not reach the final packet without
+    turning model-only semantic output into source-backed evidence.
+    """
+
+    semantic_result = _dict_value(state.get("semantic_result"))
+    semantic_gate_reuse = _dict_value(state.get("semantic_gate_reuse"))
+    hot_path_funnel = _dict_value(state.get("hot_path_funnel"))
+    candidates = _list_value(state.get("candidates"))
+    evidence = _list_value(state.get("evidence"))
+    semantic_bridge = _controlled_text(
+        state.get("semantic_bridge_diagnostic"),
+        {"semantic_evidence_without_source_bridge"},
+    )
+    reuse_source = _controlled_text(
+        semantic_gate_reuse.get("source"),
+        {"none", "exact_semantic_cache", "cold_model_call", "semantic_cue_cache"},
+        default="none",
+    )
+    cache_hit = bool(
+        semantic_gate_reuse.get("exact_cache_hit")
+        or semantic_result.get("cached")
+        or str((semantic_result.get("cache_diagnostics") or {}).get("lookup") or "")
+        == "hit"
+    )
+    semantic_cache_bridge_gap = bool(
+        semantic_bridge == "semantic_evidence_without_source_bridge" and cache_hit
+    )
+    semantic_mode = str(state.get("semantic_gate_mode") or "").casefold()
+    foreground_profile = "explicit_recall" if semantic_mode == "on" else "ambient_hot_path"
+    return {
+        "foreground_profile": foreground_profile,
+        "decision": _controlled_text(
+            state.get("decision"), {"skip", "scent", "evidence"}, default="skip"
+        ),
+        "semantic_bridge_diagnostic": semantic_bridge,
+        "semantic_gate_cache_hit_but_no_source_bridge": semantic_cache_bridge_gap,
+        "semantic_reuse_source": reuse_source,
+        "semantic_waited": bool(reuse_source == "cold_model_call"),
+        "cold_semantic_shadowed": bool(
+            state.get("use_semantic_gate")
+            and not state.get("effective_use_semantic_gate")
+            and hot_path_funnel.get("decision") == "scent"
+        ),
+        "background_scheduled": False,
+        "hot_path_candidates_after_merge": sum(
+            1 for item in candidates if isinstance(item, dict) and item.get("hot_path_source")
+        ),
+        "final_candidate_count": len(candidates),
+        "evidence_count": len(evidence),
+    }
+
+
 def choose_decision_evidence(
     *,
     prompt: str,
@@ -192,6 +249,21 @@ def choose_decision_evidence(
         reasons=reasons,
     )
     return ("evidence" if evidence else "scent"), evidence
+
+
+def _dict_value(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _list_value(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+def _controlled_text(
+    value: Any, allowed: set[str], *, default: str | None = None
+) -> str | None:
+    text = str(value or "")
+    return text if text in allowed else default
 
 
 def _evidence_lite_continuation(
