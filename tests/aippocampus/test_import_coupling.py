@@ -746,6 +746,39 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(deepseek_model_routing.resolve_model_route, routing.resolve_model_route)
         self.assertIs(deepseek_model_routing.ModelRoute, routing.ModelRoute)
 
+    def test_semantic_gate_response_stage_owns_worker_parsing_boundary(self) -> None:
+        from aippocampus_runtime.recall import semantic_gate_response, semantic_recall_gate
+
+        stage_path = (
+            SCRIPTS
+            / "aippocampus_runtime"
+            / "recall"
+            / "semantic_gate_response.py"
+        )
+        self.assertTrue(stage_path.exists(), stage_path)
+
+        edges = same_dir_import_edges(top_level_only=True)
+        self.assertIn(
+            "aippocampus_runtime.recall.semantic_gate_response",
+            edges["aippocampus_runtime.recall.semantic_recall_gate"],
+        )
+        self.assertIn(
+            "aippocampus_runtime.subconscious.worker",
+            edges["aippocampus_runtime.recall.semantic_gate_response"],
+        )
+        self.assertNotIn(
+            "aippocampus_runtime.subconscious.worker",
+            edges["aippocampus_runtime.recall.semantic_recall_gate"],
+        )
+        self.assertIs(
+            semantic_recall_gate.parse_worker_response,
+            semantic_gate_response.parse_worker_response,
+        )
+        self.assertIs(
+            semantic_recall_gate.unavailable_result,
+            semantic_gate_response.unavailable_result,
+        )
+
     def test_coding_host_contract_has_package_owner_and_compat_shim(self) -> None:
         import coding_ticket_host_contract
         from aippocampus_runtime.coding import host_contract
@@ -817,7 +850,7 @@ class ImportCouplingTests(unittest.TestCase):
             "aippocampus_runtime.subconscious.jobs_config",
             "aippocampus_runtime.subconscious.validation_audit",
             "aippocampus_runtime.onboarding.frontier",
-            "aippocampus_runtime.recall.semantic_recall_gate",
+            "aippocampus_runtime.recall.semantic_gate_response",
             "aippocampus_runtime.source.semantic_scope_suppressed_recovery",
             "aippocampus_runtime.subconscious.jobs",
             "aippocampus_runtime.subconscious.review",
@@ -2295,6 +2328,7 @@ class ImportCouplingTests(unittest.TestCase):
         runtime_consumers = [
             "aippocampus_runtime.subconscious.agent",
             "aippocampus_runtime.subconscious.tool_loop",
+            "aippocampus_runtime.recall.semantic_gate_response",
             "aippocampus_runtime.recall.semantic_recall_gate",
             "aippocampus_runtime.source.semantic_scope_suppressed_recovery",
             "aippocampus_runtime.subconscious.jobs",

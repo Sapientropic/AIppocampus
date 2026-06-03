@@ -26,6 +26,7 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 from aippocampus_runtime.recall import semantic_cue_cache as cues  # noqa: E402
+from aippocampus_runtime.recall import semantic_gate_response as response_stage  # noqa: E402
 from aippocampus_runtime.recall import semantic_recall_gate as gate  # noqa: E402
 from redaction_fixtures import FAKE_TEST_OPENAI_API_KEY, FAKE_TEST_SECRET_VALUE  # noqa: E402
 
@@ -80,6 +81,7 @@ class SemanticRecallGateTests(unittest.TestCase):
                 "AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_USER_ID",
                 "AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_THINKING",
                 "AIPPOCAMPUS_OPENAI_COMPAT_CACHE_METRICS_KIND",
+                "LOCAL_SEMANTIC_MISSING_KEY",
                 "LOCAL_SEMANTIC_TEST_KEY",
             ]
         }
@@ -212,6 +214,102 @@ class SemanticRecallGateTests(unittest.TestCase):
         self.assertEqual(merged["winning_worker"], "gate")
         self.assertEqual(merged["risk_worker"], "scope")
         self.assertIn("capped", " ".join(merged["reasons"]))
+
+    def test_issue_580_response_stage_fixtures_cover_major_gate_outputs(self) -> None:
+        disabled = gate.run_semantic_gate(
+            "那个脑内续接器现在怎么样了？",
+            cwd=self.workspace,
+            registry=self.registry,
+            registry_path=self.registry_path,
+            api_key_env="LOCAL_SEMANTIC_MISSING_KEY",
+            mode="on",
+            use_cache=False,
+        )
+
+        self.assertFalse(disabled["available"])
+        self.assertEqual(disabled["decision"], "skip")
+        self.assertEqual(disabled["availability_reason"], "semantic_unavailable")
+        self.assertEqual(disabled["diagnostic"], "semantic_disabled_or_auth_unavailable")
+
+        def evidence_chat(messages, api_key, model, base_url, max_tokens, timeout, temperature):
+            del messages, api_key, model, base_url, max_tokens, timeout, temperature
+            return fake_response(
+                {
+                    "decision": "evidence",
+                    "intent": "recall",
+                    "confidence": 0.91,
+                    "query_aliases": ["old source-backed wording"],
+                    "memory_scope": ["registered_threads"],
+                    "anti_personalization_risk": "low",
+                    "reason": "The prompt asks for exact old source wording.",
+                }
+            )
+
+        evidence = gate.run_semantic_gate(
+            "找回之前那段原话和来源",
+            cwd=self.workspace,
+            registry=self.registry,
+            registry_path=self.registry_path,
+            api_key="test-key",
+            use_cache=False,
+            chat_fn=evidence_chat,
+        )
+
+        self.assertTrue(evidence["available"])
+        self.assertEqual(evidence["decision"], "evidence")
+        self.assertEqual(evidence["anti_personalization_risk"], "low")
+        self.assertIn("old source-backed wording", evidence["query_aliases"])
+
+        def low_confidence_chat(messages, api_key, model, base_url, max_tokens, timeout, temperature):
+            del messages, api_key, model, base_url, max_tokens, timeout, temperature
+            return fake_response(
+                {
+                    "decision": "scent",
+                    "confidence": 0.31,
+                    "query_aliases": ["weak ambient association"],
+                    "memory_scope": ["registered_threads"],
+                    "anti_personalization_risk": "low",
+                    "reason": "Only a weak association.",
+                }
+            )
+
+        low_confidence = gate.run_semantic_gate(
+            "这个可能和以前哪条线有点像？",
+            cwd=self.workspace,
+            registry=self.registry,
+            registry_path=self.registry_path,
+            api_key="test-key",
+            use_cache=False,
+            chat_fn=low_confidence_chat,
+        )
+
+        self.assertTrue(low_confidence["available"])
+        self.assertEqual(low_confidence["decision"], "background_only")
+        self.assertIn("downgraded low-confidence scent", low_confidence["reasons"])
+
+    def test_issue_580_response_stage_owns_worker_response_parsing(self) -> None:
+        parsed = response_stage.parse_worker_response(
+            fake_response(
+                {
+                    "decision": "evidence",
+                    "intent": "recall",
+                    "confidence": 0.92,
+                    "query_aliases": ["外置海马体", "external hippocampus"],
+                    "memory_scope": ["registered_threads"],
+                    "anti_personalization_risk": "low",
+                    "reason": "source-backed recall request",
+                }
+            ),
+            "gate",
+        )
+
+        self.assertIs(gate.parse_worker_response, response_stage.parse_worker_response)
+        self.assertEqual(parsed["worker"], "gate")
+        self.assertEqual(parsed["decision"], "evidence")
+        self.assertEqual(parsed["intent"], "recall")
+        self.assertEqual(parsed["confidence"], 0.92)
+        self.assertIn("外置海马体", parsed["query_aliases"])
+        self.assertEqual(parsed["anti_personalization_risk"], "low")
 
     def test_public_cli_payload_omits_aliases_workers_and_raw_errors(self) -> None:
         private_result = {

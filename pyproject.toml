@@ -430,6 +430,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/recall/scoring_policy.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/score_fusion.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/semantic_cue_cache.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/semantic_gate_response.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/semantic_recall_gate.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/semantic_trigger_router.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/segment_builder.py",

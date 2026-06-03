@@ -242,7 +242,8 @@ class ArchitectureBoundaryTests(unittest.TestCase):
         for phrase in (
             "#500 froze golden foreground projection fixtures",
             "source-evidence/final skip-scent-evidence projection",
-            "A real split should accompany a focused semantic-gate change",
+            "#580 froze focused skip/scent/evidence fixtures",
+            "moved worker response parsing, unavailable classification, and public projection",
             "another extraction would be speculative",
             "Split when a live-shadow feature touches one of those boundaries",
         ):
