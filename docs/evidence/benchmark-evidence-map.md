@@ -41,6 +41,9 @@ promotes a public-safe result into the official evidence flow.
    [`benchmarks/memory-decision-benchmark-plan.md`](benchmarks/memory-decision-benchmark-plan.md).
 6. Need external benchmark and memory-system comparison boundaries:
    [`benchmarks/design/external-benchmark-map.md`](benchmarks/design/external-benchmark-map.md).
+   For the MemoryAgentBench feasibility decision and staged adapter boundary,
+   use [`benchmarks/memoryagentbench.md`](benchmarks/memoryagentbench.md);
+   no runner is listed until #608 adds an executable metadata/case-pack smoke.
 7. Need the multimodal memory benchmark-family map for #528:
    [`benchmarks/design/multimodal-memory-benchmark-map.md`](benchmarks/design/multimodal-memory-benchmark-map.md).
 8. Need the ATM-Bench Hard protocol boundary for multimodal source-backed
