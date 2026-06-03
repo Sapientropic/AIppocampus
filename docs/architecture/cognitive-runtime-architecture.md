@@ -301,6 +301,12 @@ Every new worker should answer these questions before it is implemented:
 6. Is it allowed to run in foreground hooks?
 7. Does it treat model output as scent, candidate, or evidence?
 
+When a worker or skill path needs a machine-readable execution boundary, use
+[Agent Skill Capability Contracts](agent-skill-capability-contracts.md). Those
+contracts type permissions, source boundaries, side effects, and evaluation
+protocols; they do not replace clean source, worker validation, or this
+cognitive-runtime layer map.
+
 Default answers:
 
 - foreground hooks read stable scent and source-backed evidence only

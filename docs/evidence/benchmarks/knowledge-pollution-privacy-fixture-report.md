@@ -40,6 +40,12 @@ only proves that the prototype can ask for missing context, require reopened
 sources, refuse unsafe partitions, and emit bounded source-backed risk flags on
 synthetic public-safe data.
 
+Typed agent-skill capability contracts are a separate #518 architecture slice
+owned by
+[`../../architecture/agent-skill-capability-contracts.md`](../../architecture/agent-skill-capability-contracts.md).
+This report keeps the #517 benchmark boundary and does not mirror the typed
+taxonomy.
+
 ## Command
 
 ```powershell
@@ -54,6 +60,8 @@ python -m unittest tests.aippocampus.test_benchmark_knowledge_pollution
   `skills/aippocampus/scripts/aippocampus_runtime/knowledge/capability_contract.py`
 - Capability fixture:
   `tests/fixtures/knowledge_sources/public_safe_capability_contracts.json`
+- Typed manifest fixture:
+  `tests/fixtures/knowledge_sources/public_safe_capability_manifest.json`
 - Source/claim registry:
   `tests/fixtures/knowledge_sources/public_safe_registry.json`
 - Mirror tests:

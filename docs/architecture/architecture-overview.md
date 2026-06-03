@@ -132,3 +132,5 @@ The public-core license, adapter, and schema boundary lives in
 `docs/guides/public-core-boundary.md`.
 Runtime script ownership and dependency navigation lives in
 `docs/architecture/runtime-script-map.md`.
+Typed execution boundaries for composable agent skills live in
+`docs/architecture/agent-skill-capability-contracts.md`.

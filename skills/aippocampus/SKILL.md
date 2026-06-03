@@ -105,6 +105,9 @@ Product roadmap, research notes, and long-horizon skill-upgrade strategy live
 in the repository `docs/` folder, not in this installable runtime reference
 set. Load those only when the task is roadmap, research, or public positioning.
 For public CLI/MCP/API stability, use `docs/guides/public-api.md` in the repository.
+For typed agent-skill capability boundaries, use
+`docs/architecture/agent-skill-capability-contracts.md` in the repository;
+`SKILL.md` remains the bootstrap guidance surface.
 
 If a detail appears in more than one place, keep only the stable rule here and
 move the operational contract into one reference doc.

@@ -121,6 +121,13 @@ The supported public surfaces are:
 The public API does not include every helper module or every script under
 `skills/aippocampus/scripts/`.
 
+Typed agent-skill capability manifests, including
+`aippocampus_runtime.knowledge.capability_types` and the public-safe fixture
+under `tests/fixtures/knowledge_sources/`, are an internal architecture
+prototype unless a future public contract explicitly promotes a subset. They
+constrain execution permissions and evaluation boundaries; they are not a
+public answer API, public SDK schema, or source of factual authority.
+
 ## CLI Contract
 
 The CLI contract applies to documented operator commands, especially:
@@ -595,6 +602,10 @@ These are internal, experimental, or best-effort unless promoted elsewhere:
   compatibility shims such as `retrieval_score_fusion.py`; their outputs are
   policy diagnostics and ranking hints, not stable public schemas or source
   truth.
+- Typed capability manifest helpers under
+  `aippocampus_runtime.knowledge.capability_types`; their fixture and tests
+  prove the current internal execution-boundary prototype, not a public
+  capability-manifest schema.
 - Semantic result-cache and semantic-cue-cache reports are trusted-local
   diagnostics. They may be public-safe in content, but their helper-level field
   shapes are additive implementation details unless a facade command documents

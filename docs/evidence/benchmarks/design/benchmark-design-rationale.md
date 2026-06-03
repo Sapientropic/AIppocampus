@@ -63,6 +63,10 @@ knowledge, prompt-injection-in-source-text, privacy partitioning, and a thin
 contract-review capability prototype without claiming legal quality or typed
 capability taxonomy completeness.
 
+The #518 typed capability-contract architecture is owned by
+[`../../../architecture/agent-skill-capability-contracts.md`](../../../architecture/agent-skill-capability-contracts.md).
+Benchmark docs should point there instead of mirroring the full taxonomy.
+
 ### 4. Scent, Evidence, And Fact Are Different Surfaces
 
 Scent is a tentative route. Evidence is a source-backed payload. Fact is a
@@ -151,3 +155,5 @@ for comparison candidates and blockers.
   [`../../readiness/stage-0-5-readiness.md`](../../readiness/stage-0-5-readiness.md).
 - Dated verification ledger:
   [`../../readiness/public-readiness-verification.md`](../../readiness/public-readiness-verification.md).
+- Typed agent-skill capability contracts:
+  [`../../../architecture/agent-skill-capability-contracts.md`](../../../architecture/agent-skill-capability-contracts.md).

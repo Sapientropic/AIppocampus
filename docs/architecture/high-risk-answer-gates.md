@@ -27,6 +27,13 @@ It returns a deterministic report with `output_state`, `gate_codes`,
 `cited_boundaries`. It does not fetch sources, write review records, call
 external models, rank answers, or emit final natural-language advice.
 
+Typed capability manifests, defined in
+[Agent Skill Capability Contracts](agent-skill-capability-contracts.md), may
+select or constrain the skill path before this gate runs. They can require
+source reopen, privacy partitions, permission profiles, and human-review
+boundaries, but they do not replace this answer gate or make any source claim
+true by themselves.
+
 ## Output States
 
 | State | Meaning |
