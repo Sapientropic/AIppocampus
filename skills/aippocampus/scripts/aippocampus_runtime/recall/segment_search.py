@@ -26,7 +26,7 @@ from aippocampus_runtime.recall.rollout_search import (
     resolve_anchor_path,
     search_index_literal,
 )
-from aippocampus_runtime.recall.scoring_policy import SEGMENT_MERGE_POLICY
+from aippocampus_runtime.recall.scoring_policy import SEGMENT_MERGE_POLICY, SegmentMergePolicy
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
 
@@ -175,14 +175,17 @@ def plan_segments(segments: Sequence[dict], options: SegmentSearchOptions) -> tu
     return planned, fanout
 
 
-def segment_sort_key(result: dict) -> tuple[float, int, int]:
+def segment_sort_key(
+    result: dict,
+    policy: SegmentMergePolicy = SEGMENT_MERGE_POLICY,
+) -> tuple[float, int, int]:
     final_bonus = (
-        SEGMENT_MERGE_POLICY.final_answer_bonus
+        policy.final_answer_bonus
         if result.get("phase") == "final_answer" or result.get("is_final")
         else 0.0
     )
     commentary_penalty = (
-        SEGMENT_MERGE_POLICY.commentary_penalty if result.get("phase") == "commentary" else 0.0
+        policy.commentary_penalty if result.get("phase") == "commentary" else 0.0
     )
     return (
         -(float(result.get("score") or 0.0) + final_bonus + commentary_penalty),
@@ -191,19 +194,24 @@ def segment_sort_key(result: dict) -> tuple[float, int, int]:
     )
 
 
-def merge_topk(results: list[dict], limit: int) -> list[dict]:
+def merge_topk(
+    results: list[dict],
+    limit: int,
+    policy: SegmentMergePolicy = SEGMENT_MERGE_POLICY,
+) -> list[dict]:
     """Merge per-shard hits without letting one dense recap shard dominate.
 
     Segment-local SQLite row ids collide, so this intentionally avoids
     retrieval.diversify_results, whose duplicate guard assumes one monolithic
     index. The merge keeps high-score hits first, then applies light penalties
     for same-segment and near-line repeats so early source evidence and later
-    summaries can both surface.
+    summaries can both surface. The optional policy argument is for deterministic
+    calibration/sensitivity tests; the CLI path uses the default named policy.
     """
 
     if not results:
         return []
-    pool = sorted(results, key=segment_sort_key)
+    pool = sorted(results, key=lambda item: segment_sort_key(item, policy))
     selected: list[dict] = []
     seen: set[tuple[str, int, int]] = set()
 
@@ -234,7 +242,7 @@ def merge_topk(results: list[dict], limit: int) -> list[dict]:
             (item for item in pool if item.get("role") == "assistant"),
             key=lambda item: (
                 (
-                    SEGMENT_MERGE_POLICY.final_answer_bonus
+                    policy.final_answer_bonus
                     if item.get("phase") == "final_answer" or item.get("is_final")
                     else 0.0
                 )
@@ -254,21 +262,21 @@ def merge_topk(results: list[dict], limit: int) -> list[dict]:
                 continue
             value = float(item.get("score") or 0.0)
             if str(item.get("segment_id")) in selected_segments:
-                value -= SEGMENT_MERGE_POLICY.same_segment_penalty
+                value -= policy.same_segment_penalty
             if item.get("phase") == "final_answer" or item.get("is_final"):
-                value += SEGMENT_MERGE_POLICY.final_answer_bonus
+                value += policy.final_answer_bonus
             if item.get("phase") == "commentary":
-                value += SEGMENT_MERGE_POLICY.commentary_penalty
+                value += policy.commentary_penalty
             line = int(item.get("line") or 0)
             if any(
-                abs(line - other) < SEGMENT_MERGE_POLICY.nearby_line_window
+                abs(line - other) < policy.nearby_line_window
                 for other in selected_lines
             ):
-                value -= SEGMENT_MERGE_POLICY.nearby_line_penalty
+                value -= policy.nearby_line_penalty
             if (item.get("signals") or {}).get("literal_hits", 0) > 0 and item.get(
                 "role"
             ) == "user":
-                value += SEGMENT_MERGE_POLICY.user_literal_bonus
+                value += policy.user_literal_bonus
             if best_value is None or value > best_value:
                 best = item
                 best_value = value

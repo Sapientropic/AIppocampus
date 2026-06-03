@@ -30,6 +30,9 @@ records, start with [`docs/evidence/benchmark-evidence-map.md`](../docs/evidence
   #454. It turns Discussion #428 magic-moment field reports into scenario
   families, negative controls, and hash/aggregate-only private seed reporting
   rules without committing raw prompts, raw source snippets, or local paths.
+- `segmented_merge_policy/` contains the checked-in synthetic public-safe
+  fixture for #375. It calibrates segmented-search merge behavior over
+  source-ref-shaped hits without committing private thread text.
 - `testdata_wildchat.jsonl` is a tiny checked-in fixture in WildChat-like JSONL
   shape, useful for smoke-testing the converter without network access.
 
@@ -98,6 +101,19 @@ python benchmarks\aippocampus\benchmark_suite.py --profile public-fast --json
 This runs deterministic Track A/C/D slices only. It intentionally skips private
 registry data, live semantic providers, Track B retrieval quality, and large
 external corpus downloads; those omitted surfaces appear in `cannot_claim`.
+
+Run the public-safe segmented-search merge policy calibration:
+
+```powershell
+python benchmarks\aippocampus\benchmark_segmented_merge_policy.py --json
+```
+
+This #375 fixture checks cross-segment diversity, adjacent-turn pairing,
+duplicate nearby recap suppression, and stale/superseded currentness for
+`SEGMENT_MERGE_POLICY`. It is diagnostic policy calibration, not real
+long-thread recall quality or source-evidence retrieval proof. The report owner
+is
+[`docs/evidence/benchmarks/segmented-merge-policy-fixture-report.md`](../docs/evidence/benchmarks/segmented-merge-policy-fixture-report.md).
 
 Run the public-safe Field Continuity / magic-moment reproducibility contract:
 

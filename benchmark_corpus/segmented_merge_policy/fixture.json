@@ -1,0 +1,171 @@
+{
+  "schema_version": 1,
+  "name": "segmented_merge_policy_public_safe_v1",
+  "description": "Synthetic public-safe calibration fixture for segmented search merge behavior. Source refs are synthetic and snippets are sentinel text that must not appear in reports.",
+  "claim_boundary": [
+    "diagnostic segmented-merge policy calibration only",
+    "no real user recall quality claim",
+    "no private-history segment quality claim",
+    "no replacement for Track B source-evidence retrieval runs"
+  ],
+  "cases": [
+    {
+      "case_id": "cross-segment-diversity",
+      "pattern": "cross_segment_diversity",
+      "query_family": "vague_cue",
+      "top_k": 2,
+      "results": [
+        {
+          "segment_id": "seg-recap",
+          "id": 1,
+          "line": 120,
+          "role": "assistant",
+          "phase": "final_answer",
+          "score": 82.0,
+          "source_ref": "source:cross-diversity:recap",
+          "snippet": "RAW_SEGMENT_TEXT_SHOULD_NOT_EMIT recap"
+        },
+        {
+          "segment_id": "seg-recap",
+          "id": 2,
+          "line": 130,
+          "role": "assistant",
+          "score": 81.0,
+          "source_ref": "source:cross-diversity:nearby-recap",
+          "snippet": "RAW_SEGMENT_TEXT_SHOULD_NOT_EMIT nearby recap"
+        },
+        {
+          "segment_id": "seg-original",
+          "id": 1,
+          "line": 640,
+          "role": "assistant",
+          "score": 75.0,
+          "source_ref": "source:cross-diversity:original",
+          "snippet": "RAW_SEGMENT_TEXT_SHOULD_NOT_EMIT original source"
+        }
+      ],
+      "expect": {
+        "target_source_refs": ["source:cross-diversity:original"],
+        "min_unique_segments": 2
+      }
+    },
+    {
+      "case_id": "adjacent-turn-pairing",
+      "pattern": "adjacent_turn_pairing",
+      "query_family": "user_quote_plus_resolution",
+      "top_k": 2,
+      "results": [
+        {
+          "segment_id": "seg-user-cue",
+          "id": 10,
+          "line": 200,
+          "role": "user",
+          "score": 66.0,
+          "signals": {"literal_hits": 2},
+          "source_ref": "source:adjacent:user-cue",
+          "snippet": "RAW_SEGMENT_TEXT_SHOULD_NOT_EMIT user cue"
+        },
+        {
+          "segment_id": "seg-final-answer",
+          "id": 11,
+          "line": 205,
+          "role": "assistant",
+          "phase": "final_answer",
+          "score": 55.0,
+          "source_ref": "source:adjacent:final-answer",
+          "snippet": "RAW_SEGMENT_TEXT_SHOULD_NOT_EMIT final answer"
+        },
+        {
+          "segment_id": "seg-distractor",
+          "id": 12,
+          "line": 410,
+          "role": "assistant",
+          "score": 62.0,
+          "source_ref": "source:adjacent:distractor",
+          "snippet": "RAW_SEGMENT_TEXT_SHOULD_NOT_EMIT distractor"
+        }
+      ],
+      "expect": {
+        "target_source_refs": [
+          "source:adjacent:user-cue",
+          "source:adjacent:final-answer"
+        ],
+        "min_unique_segments": 2,
+        "requires_adjacent_pair": true
+      }
+    },
+    {
+      "case_id": "duplicate-nearby-recap-suppression",
+      "pattern": "duplicate_nearby_recap_suppression",
+      "query_family": "exact_phrase_with_recap_noise",
+      "top_k": 2,
+      "results": [
+        {
+          "segment_id": "seg-recap",
+          "id": 20,
+          "line": 300,
+          "role": "assistant",
+          "score": 90.0,
+          "duplicate_group": "nearby_recap_cluster",
+          "source_ref": "source:duplicate:recap-a",
+          "snippet": "RAW_SEGMENT_TEXT_SHOULD_NOT_EMIT duplicate A"
+        },
+        {
+          "segment_id": "seg-recap",
+          "id": 21,
+          "line": 306,
+          "role": "assistant",
+          "score": 89.0,
+          "duplicate_group": "nearby_recap_cluster",
+          "source_ref": "source:duplicate:recap-b",
+          "snippet": "RAW_SEGMENT_TEXT_SHOULD_NOT_EMIT duplicate B"
+        },
+        {
+          "segment_id": "seg-original",
+          "id": 22,
+          "line": 760,
+          "role": "assistant",
+          "score": 81.0,
+          "source_ref": "source:duplicate:original",
+          "snippet": "RAW_SEGMENT_TEXT_SHOULD_NOT_EMIT original"
+        }
+      ],
+      "expect": {
+        "target_source_refs": ["source:duplicate:original"],
+        "min_unique_segments": 2,
+        "max_selected_from_groups": {"nearby_recap_cluster": 1}
+      }
+    },
+    {
+      "case_id": "stale-superseded-currentness",
+      "pattern": "stale_superseded_currentness",
+      "query_family": "superseded_answer",
+      "top_k": 1,
+      "results": [
+        {
+          "segment_id": "seg-old",
+          "id": 30,
+          "line": 100,
+          "role": "assistant",
+          "score": 90.0,
+          "source_ref": "source:stale:old-answer",
+          "snippet": "RAW_SEGMENT_TEXT_SHOULD_NOT_EMIT old answer"
+        },
+        {
+          "segment_id": "seg-current",
+          "id": 31,
+          "line": 900,
+          "role": "assistant",
+          "phase": "final_answer",
+          "score": 79.0,
+          "source_ref": "source:stale:current-answer",
+          "snippet": "RAW_SEGMENT_TEXT_SHOULD_NOT_EMIT current answer"
+        }
+      ],
+      "expect": {
+        "target_source_refs": ["source:stale:current-answer"],
+        "forbidden_top1_source_refs": ["source:stale:old-answer"]
+      }
+    }
+  ]
+}

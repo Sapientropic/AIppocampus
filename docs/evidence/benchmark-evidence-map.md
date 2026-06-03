@@ -94,13 +94,15 @@ promotes a public-safe result into the official evidence flow.
 26. Need public-safe Field Continuity / magic-moment reproducibility fixture
    evidence for #454:
    [`benchmarks/field-continuity-fixture-report.md`](benchmarks/field-continuity-fixture-report.md).
-27. Need explicit recall-reminder shadow A/B evidence:
+27. Need segmented-search merge policy calibration evidence for #375:
+   [`benchmarks/segmented-merge-policy-fixture-report.md`](benchmarks/segmented-merge-policy-fixture-report.md).
+28. Need explicit recall-reminder shadow A/B evidence:
    [`dream/dream-live-shadow-ab-2026-05-30.md`](dream/dream-live-shadow-ab-2026-05-30.md).
-28. Need public-corpus negative-control dream shadow evidence:
+29. Need public-corpus negative-control dream shadow evidence:
    [`dream/dream-live-shadow-benchmark-corpus-2026-05-31.md`](dream/dream-live-shadow-benchmark-corpus-2026-05-31.md).
-29. Need live question-extraction axis-coverage evidence for GitHub #153:
+30. Need live question-extraction axis-coverage evidence for GitHub #153:
    [`question/question-extraction-axis-coverage-2026-05-31.md`](question/question-extraction-axis-coverage-2026-05-31.md).
-30. Need community-submitted runs, demos, known gaps, or field-report intake:
+31. Need community-submitted runs, demos, known gaps, or field-report intake:
    [`community-field-reports.md`](community-field-reports.md) and the public
    [`/evidence/`](https://www.aippocampus.com/evidence/) page.
 
@@ -135,6 +137,7 @@ snapshot or dated verification ledger.
 | Recall navigation comparison smoke | `docs/evidence/benchmarks/recall-navigation-comparison-2026-06-03.md` | Public-safe deterministic #465 comparison of direct `search_memory`, hook-only, and progressive `recall_context -> recall_deepen` arms; covers vague cues, multilingual cue fixtures, stale-handle rejection, and claim-boundary metrics without live quality claims. |
 | Fresh-thread real-history boundary smoke | `docs/evidence/benchmarks/fresh-thread-real-history-smoke-2026-06-02.md` and `docs/evidence/benchmarks/fresh-thread-expanded-coverage-2026-06-03.md` | Sanitized real-history boundary smoke for ready-lock reopenability, thread-only lock suppression, current-repo fact negative control, and #490 multi-ref aggregate coverage; not a recall-quality benchmark. |
 | Field Continuity fixture report | `docs/evidence/benchmarks/field-continuity-fixture-report.md` and `benchmark_corpus/field_continuity/fixture.json` | Public-safe #454 scenario-family contract for second-user magic-moment reports from Discussion #428; includes two-plus public synthetic families, private seed hash/aggregate rules, and overclaim/wrong-family/stale-route controls without live or private-history quality claims. |
+| Segmented merge policy fixture report | `docs/evidence/benchmarks/segmented-merge-policy-fixture-report.md` and `benchmark_corpus/segmented_merge_policy/fixture.json` | Public-safe #375 calibration fixture for `SEGMENT_MERGE_POLICY` over cross-segment diversity, adjacent-turn pairing, duplicate nearby recap suppression, and stale/superseded currentness; not source-evidence retrieval or real long-thread recall quality. |
 | Dream live shadow A/B reminder evidence | `docs/evidence/dream/dream-live-shadow-ab-2026-05-30.md` | Dated aggregate run for explicit recall-reminder frequency, shadow assignment, nearest-prior exposure attribution, and delivered-vs-shadow claim boundaries. |
 | Dream benchmark-corpus shadow evidence | `docs/evidence/dream/dream-live-shadow-benchmark-corpus-2026-05-31.md` | Dated public-corpus negative-control run for explicit reminder frequency and potential dream-only over-personalization activation. |
 | Question extraction axis coverage evidence | `docs/evidence/question/question-extraction-axis-coverage-2026-05-31.md` | Dated live no-write aggregate field-presence run for GitHub #153 and its prompt/repair/telemetry fix boundary. |
@@ -182,6 +185,7 @@ benchmark runner should be added here and linked to its dated evidence owner.
 | Warm ambient recall benchmark | `benchmarks/aippocampus/benchmark_warm_ambient_recall.py` | `docs/research/ambient-associative-recall.md`, `benchmark_corpus/README.md` |
 | Warm ambient parameter sweep | `benchmarks/aippocampus/benchmark_warm_ambient_sweep.py` | `docs/research/ambient-associative-recall.md`, `docs/evidence/benchmarks/memory-decision-benchmark-plan.md` |
 | Warm ambient case-pack builder | `benchmarks/aippocampus/build_warm_ambient_trace_cases.py` | `benchmark_corpus/README.md` |
+| Segmented merge policy calibration | `benchmarks/aippocampus/benchmark_segmented_merge_policy.py` | `docs/evidence/benchmarks/segmented-merge-policy-fixture-report.md`, `benchmark_corpus/segmented_merge_policy/fixture.json`, #375 |
 
 Benchmark mirror tests live in `tests/aippocampus/test_benchmark_*.py`. The
 fresh-clone deterministic suite smoke plus curated PR mirror smoke is selected

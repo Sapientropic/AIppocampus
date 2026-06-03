@@ -57,6 +57,12 @@ class RetrievalDiversityPolicy:
 
 @dataclass(frozen=True)
 class SegmentMergePolicy:
+    # User-visible cross-segment ranking policy. Keep value changes paired with
+    # the public-safe calibration fixture and report:
+    # benchmarks/aippocampus/benchmark_segmented_merge_policy.py and
+    # docs/evidence/benchmarks/segmented-merge-policy-fixture-report.md.
+    # Passing that fixture is diagnostic only; it is not real recall-quality
+    # proof or a substitute for source-evidence retrieval benchmarks.
     final_answer_bonus: float = 12.0
     commentary_penalty: float = -4.0
     same_segment_penalty: float = 7.0
