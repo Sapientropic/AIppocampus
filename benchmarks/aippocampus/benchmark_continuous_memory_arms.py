@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 BARE_CONTINUOUS_NO_MEMORY = "bare_continuous_no_memory"
 HOST_NATIVE_CONTINUOUS_NO_AIPPOCAMPUS = "host_native_continuous_no_aippocampus"
 ARM_ORDER = (
@@ -43,6 +43,49 @@ COST_COMPONENTS = (
     "human_correction_minutes",
 )
 SUCCESS_VALUE_UNIT = 10.0
+SENSITIVITY_WEIGHT_SCENARIOS: tuple[dict[str, Any], ...] = (
+    {
+        "id": "base_formula",
+        "description": "Current public synthetic cost/harm ledger weights.",
+        "success_value_unit": SUCCESS_VALUE_UNIT,
+        "default_cost_multiplier": 1.0,
+        "default_harm_multiplier": 1.0,
+        "cost_multiplier_by_strategy": {},
+    },
+    {
+        "id": "harm_heavy",
+        "description": (
+            "Doubles false-positive harm so stale or unsafe memory cannot win by "
+            "small success gains."
+        ),
+        "success_value_unit": SUCCESS_VALUE_UNIT,
+        "default_cost_multiplier": 1.0,
+        "default_harm_multiplier": 2.0,
+        "cost_multiplier_by_strategy": {},
+    },
+    {
+        "id": "memory_cost_light",
+        "description": (
+            "Gives true AIppocampus memory a generous cost discount to test whether "
+            "the current conclusion depends only on modeled memory overhead."
+        ),
+        "success_value_unit": SUCCESS_VALUE_UNIT,
+        "default_cost_multiplier": 1.0,
+        "default_harm_multiplier": 1.0,
+        "cost_multiplier_by_strategy": {"true_aippocampus_memory": 0.5},
+    },
+    {
+        "id": "fresh_context_rebuild_expensive",
+        "description": (
+            "Doubles fresh-context rebuild cost to expose whether another realistic "
+            "baseline, rather than true memory, becomes the fair winner."
+        ),
+        "success_value_unit": SUCCESS_VALUE_UNIT,
+        "default_cost_multiplier": 1.0,
+        "default_harm_multiplier": 1.0,
+        "cost_multiplier_by_strategy": {"fresh_context_spec_loop": 2.0},
+    },
+)
 SCENARIO_PROVENANCE_CATEGORIES = (
     "author_written_synthetic",
     "external_written_synthetic",
@@ -1255,6 +1298,115 @@ def comparable_net_values(
     return comparable
 
 
+def summarize_cost_harm_sensitivity(
+    *,
+    cost_by_arm: dict[str, dict[str, Any]],
+    harm_by_arm: dict[str, dict[str, Any]],
+    fresh_context_spec_loop: dict[str, Any],
+) -> dict[str, Any]:
+    strategy_inputs: dict[str, dict[str, float]] = {}
+    for arm, cost_summary in cost_by_arm.items():
+        if arm == "oracle_memory":
+            continue
+        strategy_inputs[arm] = {
+            "success_count": float(cost_summary["success_count"]),
+            "total_cost_units": float(cost_summary["total_cost_units"]),
+            "harm_weighted_false_positive_cost": float(
+                harm_by_arm[arm]["harm_weighted_false_positive_cost"]
+            ),
+        }
+    strategy_inputs["fresh_context_spec_loop"] = {
+        "success_count": float(fresh_context_spec_loop["success_count"]),
+        "total_cost_units": float(fresh_context_spec_loop["total_cost_units"]),
+        "harm_weighted_false_positive_cost": 0.0,
+    }
+
+    scenarios: list[dict[str, Any]] = []
+    winner_distribution: dict[str, int] = {}
+    true_memory_margins: list[float] = []
+    for scenario in SENSITIVITY_WEIGHT_SCENARIOS:
+        cost_multipliers = scenario["cost_multiplier_by_strategy"]
+        by_strategy: dict[str, dict[str, float]] = {}
+        for strategy, values in strategy_inputs.items():
+            cost_multiplier = float(
+                cost_multipliers.get(strategy, scenario["default_cost_multiplier"])
+            )
+            harm_multiplier = float(scenario["default_harm_multiplier"])
+            success_value_units = round_delta(
+                values["success_count"] * float(scenario["success_value_unit"])
+            )
+            cost_penalty_units = round_delta(values["total_cost_units"] * cost_multiplier)
+            harm_penalty_units = round_delta(
+                values["harm_weighted_false_positive_cost"] * harm_multiplier
+            )
+            by_strategy[strategy] = {
+                "success_value_units": success_value_units,
+                "cost_penalty_units": cost_penalty_units,
+                "harm_penalty_units": harm_penalty_units,
+                "net_value_units": round_delta(
+                    success_value_units - cost_penalty_units - harm_penalty_units
+                ),
+            }
+
+        winner = max(
+            by_strategy,
+            key=lambda strategy: by_strategy[strategy]["net_value_units"],
+        )
+        winner_distribution[winner] = winner_distribution.get(winner, 0) + 1
+        best_baseline = max(
+            (
+                strategy
+                for strategy in by_strategy
+                if strategy != "true_aippocampus_memory"
+            ),
+            key=lambda strategy: by_strategy[strategy]["net_value_units"],
+        )
+        true_margin = round_delta(
+            by_strategy["true_aippocampus_memory"]["net_value_units"]
+            - by_strategy[best_baseline]["net_value_units"]
+        )
+        true_memory_margins.append(true_margin)
+        scenarios.append(
+            {
+                "id": scenario["id"],
+                "description": scenario["description"],
+                "weights": {
+                    "success_value_unit": scenario["success_value_unit"],
+                    "default_cost_multiplier": scenario["default_cost_multiplier"],
+                    "default_harm_multiplier": scenario["default_harm_multiplier"],
+                    "cost_multiplier_by_strategy": cost_multipliers,
+                },
+                "highest_net_value_fair_strategy": winner,
+                "best_non_true_memory_strategy": best_baseline,
+                "true_memory_margin_vs_best_baseline_units": true_margin,
+                "by_strategy": by_strategy,
+            }
+        )
+
+    return {
+        "basis": "public_synthetic_weight_sweep",
+        "claim_level": "diagnostic_weight_sensitivity",
+        "headline_policy": "report_sensitivity_before_any_public_quality_advantage_claim",
+        "scenario_count": len(scenarios),
+        "winner_distribution": winner_distribution,
+        "continuous_memory_advantage_stable_across_sweep": all(
+            scenario["highest_net_value_fair_strategy"] == "true_aippocampus_memory"
+            for scenario in scenarios
+        ),
+        "true_memory_margin_vs_best_baseline_units": {
+            "min": round_delta(min(true_memory_margins)),
+            "max": round_delta(max(true_memory_margins)),
+        },
+        "scenarios": scenarios,
+        "cannot_claim": [
+            "public synthetic weights only",
+            "live host telemetry cost robustness",
+            "user-calibrated harm severity weights",
+            "public-quality continuous-memory advantage",
+        ],
+    }
+
+
 def build_cost_harm_ledger(
     rows: list[dict[str, Any]],
     *,
@@ -1298,6 +1450,11 @@ def build_cost_harm_ledger(
         details["harm_weighted_false_positive_cost"]
         for arm, details in harm_by_arm.items()
         if arm != "stale_wrong_memory"
+    )
+    sensitivity_analysis = summarize_cost_harm_sensitivity(
+        cost_by_arm=cost_by_arm,
+        harm_by_arm=harm_by_arm,
+        fresh_context_spec_loop=fresh_context_spec_loop,
     )
     return {
         "schema_version": 1,
@@ -1393,6 +1550,7 @@ def build_cost_harm_ledger(
                 ],
             },
         },
+        "sensitivity_analysis": sensitivity_analysis,
     }
 
 
@@ -1619,6 +1777,7 @@ def run_benchmark(
             "stale wrong arm is an adversarial diagnostic stressor, not a product mode",
             "oracle_memory is an upper-bound arm and must not leak into true-memory scoring.",
             "cost and harm ledger uses public synthetic units, not exact billing data.",
+            "cost/harm sensitivity analysis is a diagnostic sweep, not calibrated robustness proof.",
             "scenario provenance, holdout, and negative-control slices are reported separately for #409.",
             "host_native_continuous_no_aippocampus is a Codex-style synthetic contract arm, not live host telemetry.",
         ],
@@ -1629,6 +1788,7 @@ def run_benchmark(
             "public-quality continuous-memory advantage before the preregistered primary endpoint passes",
             "public-quality #378 superiority from only author_written_synthetic or tuning-visible diagnostic scenarios",
             "exact dollar accounting for every local operation",
+            "cost-weight robust continuous-memory advantage",
             "live host-native cost telemetry",
             "live host-native compaction behavior",
             "private real-history generality",
