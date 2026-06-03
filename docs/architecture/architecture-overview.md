@@ -142,6 +142,8 @@ Detailed runtime behavior lives in the skill references:
 Product direction remains in `docs/roadmap.md`.
 The public-core license, adapter, and schema boundary lives in
 `docs/guides/public-core-boundary.md`.
+Field-budget and profile discipline for minimal, runtime, high-risk, governance,
+and diagnostic projections lives in `docs/architecture/schema-field-profiles.md`.
 Runtime script ownership and dependency navigation lives in
 `docs/architecture/runtime-script-map.md`.
 The Rust deterministic-core migration boundary lives in
