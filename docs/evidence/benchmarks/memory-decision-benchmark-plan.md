@@ -146,6 +146,9 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
   foreground-only cost from amortized memory cost, severity-weights stale
   memory false positives, and keeps a separate `fresh_context_spec_loop`
   comparison baseline so a fair non-memory strategy can win on cost or safety.
+  The ledger also includes `sensitivity_analysis`, a public-synthetic weight
+  sweep that reports whether the fair winner changes under alternate cost/harm
+  assumptions before any headline advantage claim.
   Its #407 `preregistration` block fixes the primary endpoint, paired
   seed/repeat strategy, lower-bound decision rule, and no-advantage rule before
   any public-quality #378 superiority claim. Its #409 scenario provenance and
@@ -451,6 +454,12 @@ public-synthetic units rather than exact billing data:
   excludes `oracle_memory` from fair cost winners and compares memory arms with
   a `fresh_context_spec_loop` baseline; reports must allow that baseline to win
   when memory overhead or harm outweighs recall lift.
+- `sensitivity_analysis` reruns the fair-winner calculation under a few
+  public-synthetic weight settings, including harm-heavy, memory-cost-light,
+  and fresh-context-rebuild-expensive variants. It reports winner distribution
+  and the true-memory margin against the best non-true-memory strategy. This is
+  a diagnostic robustness sweep, not calibrated user-study or live telemetry
+  evidence.
 
 `no_memory` remains a diagnostic attribution arm with no recall context and no
 host-native compaction help. It is not the same thing as either a
@@ -519,11 +528,12 @@ The #409 scenario provenance and holdout controls live under
   from the stale wrong arm, which remains an adversarial diagnostic stressor.
 
 This is enough to prove the public-safe attribution, #406 host-native baseline,
-#409 scenario-control, and #410 ledger contracts exist. It does not prove full
-#378 continuous-memory superiority, exact dollar accounting for every local
-operation, live host-native cost telemetry, live host-native compaction
-behavior, private real-history generality, answer-generation quality, or
-competitor superiority.
+#409 scenario-control, #410 ledger, and diagnostic cost/harm sensitivity
+contracts exist. It does not prove full #378 continuous-memory superiority,
+cost-weight robust continuous-memory advantage, exact dollar accounting for
+every local operation, live host-native cost telemetry, live host-native
+compaction behavior, private real-history generality, answer-generation
+quality, or competitor superiority.
 
 The #407 pre-registration contract lives under `preregistration`. It is the
 rule for future public-quality #378 claims, not a claim that the current

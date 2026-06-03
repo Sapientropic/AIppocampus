@@ -822,6 +822,38 @@ host-native continuous baseline for #378.
   host-native compaction behavior, cross-host baseline coverage, private
   real-history generality, or public-quality #378 advantage.
 
+## 2026-06-03 - Continuous-memory cost/harm sensitivity sweep
+
+The #378 runner now extends `cost_harm_ledger` with
+`sensitivity_analysis`, bumping
+`benchmarks/aippocampus/benchmark_continuous_memory_arms.py` to
+`schema_version=4`.
+
+- The sweep reports `basis=public_synthetic_weight_sweep` and
+  `claim_level=diagnostic_weight_sensitivity`.
+- It reruns the fair-winner calculation across `base_formula`, `harm_heavy`,
+  `memory_cost_light`, and `fresh_context_rebuild_expensive` scenarios, while
+  still excluding `oracle_memory` from fair winners.
+- The verified public-synthetic result reports
+  `winner_distribution={"fresh_context_spec_loop": 3,
+  "host_native_continuous_no_aippocampus": 1}`,
+  `continuous_memory_advantage_stable_across_sweep=false`, and
+  `true_memory_margin_vs_best_baseline_units={"min": -27.7675,
+  "max": -9.6738}`.
+- This is a guard against treating one heuristic formula as headline evidence.
+  It does not calibrate weights against user studies, production incidents, or
+  live host telemetry.
+- Verification commands passed during this slice:
+  `python -m unittest tests.aippocampus.test_benchmark_continuous_memory_arms`,
+  `python benchmarks/aippocampus/benchmark_continuous_memory_arms.py --json`,
+  `python tools/aippocampus/docs/check_docs_health.py --json`,
+  `python -m ruff check benchmarks/aippocampus/benchmark_continuous_memory_arms.py tests/aippocampus/test_benchmark_continuous_memory_arms.py`,
+  `git diff --check`, `python tools/aippocampus/run_tests.py --tier fast`, and
+  `python tools/aippocampus/run_tests.py --tier benchmark`.
+- This does not claim cost-weight robust continuous-memory advantage,
+  public-quality #378 superiority, live host-native cost telemetry, private
+  real-history generality, or competitor superiority.
+
 ## 2026-06-03 - First-recall onboarding receipt smoke
 
 The #470 slice moves the first-user path toward a 5-minute source-backed recall

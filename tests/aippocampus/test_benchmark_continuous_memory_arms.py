@@ -185,6 +185,37 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
             by_arm["no_memory"]["success_value_units"],
         )
 
+    def test_cost_harm_sensitivity_keeps_heuristic_weights_from_becoming_headline(self) -> None:
+        payload = benchmark.run_benchmark()
+        ledger = payload["cost_harm_ledger"]
+        sensitivity = ledger["sensitivity_analysis"]
+
+        self.assertEqual(sensitivity["basis"], "public_synthetic_weight_sweep")
+        self.assertEqual(sensitivity["claim_level"], "diagnostic_weight_sensitivity")
+        self.assertFalse(sensitivity["continuous_memory_advantage_stable_across_sweep"])
+        self.assertIn("public synthetic weights only", sensitivity["cannot_claim"])
+        self.assertGreaterEqual(len(sensitivity["scenarios"]), 3)
+
+        scenario_ids = {scenario["id"] for scenario in sensitivity["scenarios"]}
+        self.assertIn("base_formula", scenario_ids)
+        self.assertIn("harm_heavy", scenario_ids)
+        self.assertIn("memory_cost_light", scenario_ids)
+
+        base = next(
+            scenario for scenario in sensitivity["scenarios"] if scenario["id"] == "base_formula"
+        )
+        self.assertEqual(base["highest_net_value_fair_strategy"], "fresh_context_spec_loop")
+        self.assertIn("fresh_context_spec_loop", sensitivity["winner_distribution"])
+        self.assertNotIn("oracle_memory", sensitivity["winner_distribution"])
+        self.assertEqual(
+            sensitivity["headline_policy"],
+            "report_sensitivity_before_any_public_quality_advantage_claim",
+        )
+        self.assertIn(
+            "cost-weight robust continuous-memory advantage",
+            payload["cannot_claim"],
+        )
+
     def test_fresh_context_spec_loop_is_realistic_baseline_not_oracle_upper_bound(self) -> None:
         payload = benchmark.run_benchmark()
         framing = payload["benchmark_framing"]
