@@ -74,6 +74,11 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
   Its default report is sanitized and carries `cannot_claim` boundaries for
   private real-history lift, full code-index navigation quality, and live host
   timing.
+- `benchmarks/aippocampus/benchmark_knowledge_pollution.py` runs the #517
+  public-safe knowledge pollution and privacy-partition benchmark. It reuses
+  the governed knowledge source/claim schema and high-risk answer gate, then
+  adds one repo-internal `CapabilityContract` prototype for synthetic
+  contract-review assistance.
 - `tests/aippocampus/test_benchmark_source_evidence_retrieval.py` checks
   Track B report shape, diagnostic status, ShareGPT public-corpus case
   generation, public semantic-sidecar materialization, LoCoMo/LongMemEval source
@@ -81,6 +86,9 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
 - `tests/aippocampus/test_benchmark_coding_decision_shadow.py` checks A-E
   track statuses, wrong-source evidence, visible-source suppression, stale
   authority, and explicit private-text debug boundaries.
+- `tests/aippocampus/test_benchmark_knowledge_pollution.py` checks #517
+  pollution/privacy metrics, sanitized default reports, source-reopen
+  enforcement, and bounded contract-review prototype behavior.
 - `benchmarks/aippocampus/benchmark_suite.py` runs the repeatable baseline
   suite across Track A, Track B, Track C, and the broader deterministic
   source-label diagnostic slice, with opt-in ShareGPT public Track B, standard
@@ -159,6 +167,50 @@ metrics, and exercise deterministic Track D compaction-continuity behavior. The
 next slices still need broader private real-history gate cases, budget curves,
 larger live semantic-model verification, and live host-native baseline
 telemetry.
+
+### Knowledge Pollution And Privacy Partition Benchmark
+
+`benchmark_knowledge_pollution.py` is a separate #517 contract-smoke surface.
+It is not averaged into Track A-D, because it tests whether governed knowledge
+and capability execution stay inside source authority, source-reopen, and
+privacy-partition boundaries after a source or memory candidate has already
+looked relevant.
+
+Run it directly:
+
+```powershell
+python benchmarks\aippocampus\benchmark_knowledge_pollution.py --json
+```
+
+The runner covers these synthetic public-safe families:
+
+- stale guideline and old-law/effective-date mismatch
+- source-looking fake authority and low-authority override
+- prompt injection inside source text
+- model-summary-as-truth
+- medical-memory to legal review, therapy-memory to work advice, contract
+  secret to external-tool route, and cross-case context bleed
+
+Required lower-is-better metrics are
+`contamination_escape_rate`, `stale_source_harm_rate`,
+`authority_override_rate`, `privacy_partition_leak_rate`,
+`source_reopen_required_violation_count`, and `unsupported_claim_rate`.
+Reports also include `source_prompt_injection_escape_rate` and
+`model_summary_as_truth_rate` as direct diagnostics for issue #517.
+
+The `CapabilityContract` fixture is a repo-internal prototype. It constrains a
+synthetic contract-review capability by allowed sources, required permissions,
+privacy partitions, source-reopen requirements, human-review boundaries,
+input/output schema, cannot-claim entries, audit events, and fixture test
+cases. It does not replace `knowledge.schema`, `knowledge.answer_gate`, or the
+source-as-truth boundary.
+
+Default reports emit ids, hashes, gate codes, and metrics only. They do not
+emit raw input text, source text, private conversation text, contract-secret
+text, or absolute local paths. The prototype cannot claim legal advice,
+compliance certification, real contract-review quality, clinical/therapy
+quality, private-history quality, typed capability taxonomy completeness, or
+public API stability.
 
 ### Benchmark Suite Profiles
 
@@ -1453,8 +1505,10 @@ Scripts:
 - `benchmarks/aippocampus/benchmark_payload_fidelity.py`
 - `benchmarks/aippocampus/benchmark_compaction_continuity.py`
 - `benchmarks/aippocampus/benchmark_live_semantic_gate.py`
+- `benchmarks/aippocampus/benchmark_knowledge_pollution.py`
 - `benchmarks/aippocampus/benchmark_cognitive_portrait.py`
 - `benchmarks/aippocampus/benchmark_suite.py`
+- `skills/aippocampus/scripts/aippocampus_runtime/knowledge/capability_contract.py`
 - `skills/aippocampus/scripts/agency_affordance.py`
 
 Tests:
@@ -1465,6 +1519,7 @@ Tests:
 - `tests/aippocampus/test_benchmark_payload_fidelity.py`
 - `tests/aippocampus/test_benchmark_compaction_continuity.py`
 - `tests/aippocampus/test_benchmark_live_semantic_gate.py`
+- `tests/aippocampus/test_benchmark_knowledge_pollution.py`
 - `tests/aippocampus/test_benchmark_cognitive_portrait.py`
 - `tests/aippocampus/test_benchmark_suite.py`
 - `tests/aippocampus/test_agency_affordance.py`
@@ -1473,6 +1528,12 @@ Structured portrait command:
 
 ```powershell
 python benchmarks\aippocampus\benchmark_cognitive_portrait.py
+```
+
+Knowledge pollution/privacy command:
+
+```powershell
+python benchmarks\aippocampus\benchmark_knowledge_pollution.py
 ```
 
 Track D command:

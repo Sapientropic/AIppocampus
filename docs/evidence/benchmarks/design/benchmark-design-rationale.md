@@ -49,14 +49,28 @@ layer must know when to stay silent, when to provide a quiet scent, and when to
 show source-backed evidence. Over-escalating a vague association into evidence
 is more dangerous than missing a weak fuzzy recall.
 
-### 3. Scent, Evidence, And Fact Are Different Surfaces
+### 3. Capability Contracts Are Execution Boundaries
+
+Capability contracts can constrain what a skill-like path is allowed to read,
+which privacy partitions it may touch, which permissions it needs, and what it
+must not claim. They are not an alternate fact layer. A contract-review
+prototype still has to reopen eligible sources and pass the governed
+knowledge-answer gate before it can emit bounded risk flags.
+
+The #517 knowledge pollution/privacy benchmark is therefore separate from the
+Track A-D headline surfaces. It tests source authority, stale/superseded
+knowledge, prompt-injection-in-source-text, privacy partitioning, and a thin
+contract-review capability prototype without claiming legal quality or typed
+capability taxonomy completeness.
+
+### 4. Scent, Evidence, And Fact Are Different Surfaces
 
 Scent is a tentative route. Evidence is a source-backed payload. Fact is a
 claim the foreground agent can responsibly use after checking source and scope.
 Reports should keep these separate so a warm association cannot be quoted as an
 established user preference or project truth.
 
-### 4. Wrong-Source Confidence Costs More Than Honest Abstention
+### 5. Wrong-Source Confidence Costs More Than Honest Abstention
 
 Hard negatives and asymmetric scoring are core to the benchmark philosophy. A
 system that confidently cites a nearby but wrong memory should be penalized
@@ -65,7 +79,7 @@ more than a system that says it only has a weak scent or chooses to skip.
 This is especially important for stale decisions, superseded conclusions,
 cross-project lookalikes, and private-context leakage.
 
-### 5. Track Families Should Not Be Averaged Into One Headline
+### 6. Track Families Should Not Be Averaged Into One Headline
 
 Track A gate decisions, Track B source retrieval, Track C payload fidelity,
 Track D compaction continuity, VCS hard-event recall, and H-series
@@ -76,7 +90,7 @@ payload safety, compaction behavior, or degraded-cue discrimination.
 If a report needs a summary, it should preserve per-track status and keep
 `cannot_claim` boundaries visible.
 
-### 6. Evidence Layers Must Stay Separate
+### 7. Evidence Layers Must Stay Separate
 
 Deterministic contract tests, public synthetic fixtures, public corpus controls,
 private real-history smokes, live model-backed runs, and external adapter
@@ -94,7 +108,7 @@ surface:
 | Live model-backed run | Provider/prompt/date-dependent semantic behavior. | Deterministic product quality or future model stability. |
 | External adapter | Layer-aware comparison against another system or benchmark. | Official partner support, SOTA, or superiority outside the tested adapter. |
 
-### 7. Compaction Continuity Is Behavior-Level Memory
+### 8. Compaction Continuity Is Behavior-Level Memory
 
 Track D and E2E continuity benchmarks are not ordinary recall QA. They ask
 whether a correction, rejected route, accepted decision, or scope narrowing can
@@ -102,7 +116,7 @@ survive compression without becoming stale authority. This is why fresh-context
 spec loops, host-native compaction baselines, and no-advantage rules matter
 before any continuous-memory superiority claim.
 
-### 8. Hippocampal Tests Add Completion And Separation
+### 9. Hippocampal Tests Add Completion And Separation
 
 The H-series benchmark direction adds degraded cues and interference density:
 partial, metaphorical, cross-language, structural, or time-only prompts should
@@ -112,7 +126,7 @@ superseded memories stay separated.
 The hippocampal framing is an engineering lens. The claim remains source-backed
 continuity, not biological fidelity.
 
-### 9. External Benchmarks Must Be Layer-Aware
+### 10. External Benchmarks Must Be Layer-Aware
 
 Long-context QA benchmarks, same-conversation evidence retrieval, parameter-edit
 tests, external memory systems, and agent-host compaction baselines are not
@@ -137,4 +151,3 @@ for comparison candidates and blockers.
   [`../../readiness/stage-0-5-readiness.md`](../../readiness/stage-0-5-readiness.md).
 - Dated verification ledger:
   [`../../readiness/public-readiness-verification.md`](../../readiness/public-readiness-verification.md).
-
