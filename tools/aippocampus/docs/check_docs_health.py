@@ -33,6 +33,7 @@ REQUIRED_PROJECT_DOCS = [
     "docs/README.md",
     "docs/roadmap.md",
     "docs/evidence/benchmark-evidence-map.md",
+    "docs/evidence/current-claims.md",
     "docs/evidence/readiness/stage-0-5-readiness.md",
     "docs/planning/next-iteration-plan.md",
     "docs/architecture/runtime-script-map.md",
@@ -142,6 +143,9 @@ REQUIRED_DREAM_PHASE1_CONTRACT_TERMS = {
 }
 
 REQUIRED_BENCHMARK_EVIDENCE_MAP_TERMS = {
+    "docs/evidence/current-claims.md": (
+        "benchmark evidence map missing current claims snapshot pointer"
+    ),
     "docs/evidence/readiness/stage-0-5-readiness.md": (
         "benchmark evidence map missing current claim-boundary pointer"
     ),
@@ -158,6 +162,70 @@ REQUIRED_BENCHMARK_EVIDENCE_MAP_TERMS = {
     "docs/evidence/benchmarks/memory-pain-fixture-report.md": (
         "benchmark evidence map missing memory-pain fixture report pointer"
     ),
+}
+
+CURRENT_CLAIMS_SNAPSHOT_DOC = "docs/evidence/current-claims.md"
+
+REQUIRED_CURRENT_CLAIMS_TERMS = {
+    "## Current Claim Snapshot": "current claims snapshot missing current snapshot section",
+    "metric_id": "current claims snapshot missing metric-id column",
+    "run_date": "current claims snapshot missing run-date column",
+    "source_report": "current claims snapshot missing source-report column",
+    "claim_level": "current claims snapshot missing claim-level column",
+    "cohort": "current claims snapshot missing cohort column",
+    "supersedes": "current claims snapshot missing supersession column",
+    "cannot_claim": "current claims snapshot missing cannot-claim column",
+    "semantic_sidecar.aggregate_materialized_rows": (
+        "current claims snapshot missing semantic sidecar aggregate metric"
+    ),
+    "semantic_sidecar.strict_survival_snapshot": (
+        "current claims snapshot missing historical strict sidecar metric"
+    ),
+    "semantic_sidecar.source_review_green_gate": (
+        "current claims snapshot missing semantic sidecar green-review metric"
+    ),
+    "semantic_sidecar.source_review_diagnostic": (
+        "current claims snapshot missing semantic sidecar diagnostic-review metric"
+    ),
+    "track_b.private_semantic_sidecar_required": (
+        "current claims snapshot missing private Track B semantic-sidecar metric"
+    ),
+    "fts5.real_history_recall_2026_05_29": (
+        "current claims snapshot missing dated FTS5 real-history metric"
+    ),
+    "demo_scenarios.claim_boundaries": (
+        "current claims snapshot missing demo scenario claim-boundary pointer"
+    ),
+}
+
+CURRENT_CLAIMS_POINTER_DOCS = {
+    "docs/evidence/readiness/stage-0-5-readiness.md": (
+        "stage readiness missing current claims snapshot pointer"
+    ),
+    "docs/guides/demo-scenarios.md": "demo scenarios missing current claims snapshot pointer",
+}
+
+# These phrase guards are intentionally narrow. They block specific stale
+# evidence claims that have already misled issue triage while avoiding broad
+# scans for ordinary identifiers such as current_thread or current_frontier.
+STALE_CURRENT_EVIDENCE_PHRASES = {
+    "docs/evidence/readiness/stage-0-5-readiness.md": {
+        "current strict sidecars at 2 threads/5 rows": (
+            "stage readiness has stale semantic sidecar current wording: "
+            "current strict sidecars at 2 threads/5 rows"
+        ),
+        "current strict materialization keeps only": (
+            "stage readiness has stale semantic sidecar current wording: "
+            "current strict materialization keeps only"
+        ),
+    },
+    "docs/evidence/readiness/public-readiness-verification.md": {
+        "current strict re-materialized sidecars intentionally contain only 5 rows across 2": (
+            "public readiness ledger has stale semantic sidecar current wording: "
+            "current strict re-materialized sidecars intentionally contain only 5 rows "
+            "across 2"
+        ),
+    },
 }
 
 REQUIRED_PUBLIC_API_CONTRACT_TERMS = {
@@ -644,6 +712,35 @@ def benchmark_evidence_map_issues(repo_root: Path) -> list[str]:
     return issues
 
 
+def current_claims_snapshot_issues(repo_root: Path) -> list[str]:
+    issues: list[str] = []
+    snapshot = repo_root / CURRENT_CLAIMS_SNAPSHOT_DOC
+    if not snapshot.exists():
+        issues.append(f"missing current claims snapshot: {CURRENT_CLAIMS_SNAPSHOT_DOC}")
+    else:
+        text = snapshot.read_text(encoding="utf-8")
+        for term, issue in REQUIRED_CURRENT_CLAIMS_TERMS.items():
+            if term not in text:
+                issues.append(issue)
+
+    for rel_path, issue in CURRENT_CLAIMS_POINTER_DOCS.items():
+        path = repo_root / rel_path
+        if path.exists() and CURRENT_CLAIMS_SNAPSHOT_DOC not in path.read_text(encoding="utf-8"):
+            issues.append(issue)
+
+    for rel_path, phrases in STALE_CURRENT_EVIDENCE_PHRASES.items():
+        path = repo_root / rel_path
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8")
+        normalized_text = " ".join(text.split())
+        for phrase, issue in phrases.items():
+            if phrase in text or phrase in normalized_text:
+                issues.append(issue)
+
+    return issues
+
+
 def public_api_contract_issues(repo_root: Path) -> list[str]:
     issues: list[str] = []
     rel_path = "docs/guides/public-api.md"
@@ -1054,6 +1151,7 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
     issues.extend(dream_phase1_contract_issues(repo_root))
     issues.extend(llm_call_contract_issues(repo_root))
     issues.extend(benchmark_evidence_map_issues(repo_root))
+    issues.extend(current_claims_snapshot_issues(repo_root))
     issues.extend(public_api_contract_issues(repo_root))
     issues.extend(public_core_schema_contract_issues(repo_root))
     issues.extend(python_version_contract_issues(repo_root))

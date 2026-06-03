@@ -17,7 +17,8 @@ collapsing them into one leaderboard.
 
 | Need | Start here | Boundary |
 | --- | --- | --- |
-| Current claim snapshot | [`../readiness/stage-0-5-readiness.md`](../readiness/stage-0-5-readiness.md) | Can-claim / cannot-claim status only; not a dated command ledger. |
+| Current claim snapshot | [`../current-claims.md`](../current-claims.md) | Current numeric values, dated cohorts, supersession, and cannot-claim status for over-readable benchmark/readiness metrics. |
+| Stage readiness boundary | [`../readiness/stage-0-5-readiness.md`](../readiness/stage-0-5-readiness.md) | Stage-level can-claim / cannot-claim status only; not a dated command ledger. |
 | Dated verification ledger | [`../readiness/public-readiness-verification.md`](../readiness/public-readiness-verification.md) | Summarized command evidence; old entries can be historical. |
 | Full runner and smoke map | [`../benchmark-evidence-map.md`](../benchmark-evidence-map.md) | Navigation owner for benchmark and smoke entrypoints. |
 | Benchmark philosophy | [`design/benchmark-design-rationale.md`](design/benchmark-design-rationale.md) | Reader-facing rationale; no raw outputs or current-status upgrades. |

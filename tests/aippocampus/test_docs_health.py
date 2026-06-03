@@ -490,6 +490,68 @@ class DocsHealthTests(unittest.TestCase):
             issues,
         )
 
+    def test_benchmark_evidence_map_requires_current_claims_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            docs = repo / "docs"
+            evidence = docs / "evidence"
+            evidence.mkdir(parents=True)
+            (docs / "README.md").write_text(
+                "# Docs\n\n- benchmark-evidence-map.md\n",
+                encoding="utf-8",
+            )
+            old_required_terms = [
+                term
+                for term in docs_health.REQUIRED_BENCHMARK_EVIDENCE_MAP_TERMS
+                if term != "docs/evidence/current-claims.md"
+            ]
+            (evidence / "benchmark-evidence-map.md").write_text(
+                "\n".join(old_required_terms) + "\n",
+                encoding="utf-8",
+            )
+
+            issues = docs_health.benchmark_evidence_map_issues(repo)
+
+        self.assertIn("benchmark evidence map missing current claims snapshot pointer", issues)
+
+    def test_current_claims_guard_reports_stale_evidence_wording(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            write_origin_essays(repo)
+            readiness = repo / "docs" / "evidence" / "readiness"
+            readiness.mkdir(parents=True)
+            (readiness / "stage-0-5-readiness.md").write_text(
+                "current strict sidecars at 2 threads/5 rows/5 timeline turns\n",
+                encoding="utf-8",
+            )
+            (readiness / "public-readiness-verification.md").write_text(
+                "the current strict re-materialized sidecars intentionally "
+                "contain only 5 rows across 2 real clean-source threads\n",
+                encoding="utf-8",
+            )
+            guides = repo / "docs" / "guides"
+            guides.mkdir(parents=True)
+            (guides / "demo-scenarios.md").write_text(
+                "Cannot claim: all personal life-wide labels are complete in "
+                "the current runtime.\n",
+                encoding="utf-8",
+            )
+
+            issues, _ = docs_health.check_repo_docs(repo)
+
+        self.assertIn("missing current claims snapshot: docs/evidence/current-claims.md", issues)
+        self.assertIn(
+            "stage readiness has stale semantic sidecar current wording: "
+            "current strict sidecars at 2 threads/5 rows",
+            issues,
+        )
+        self.assertIn(
+            "public readiness ledger has stale semantic sidecar current wording: "
+            "current strict re-materialized sidecars intentionally contain only 5 rows across 2",
+            issues,
+        )
+        self.assertIn("demo scenarios missing current claims snapshot pointer", issues)
+
     def test_runtime_script_map_reports_missing_required_script(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)

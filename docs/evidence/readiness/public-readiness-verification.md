@@ -555,8 +555,9 @@ Stage 2 soft-label evidence for #55:
   for full-history refresh, semantic completeness, and label correctness
   without clean-source review.
 - `python .\tools\aippocampus\smoke\smoke_semantic_scope_real_history.py --require-labels --min-sidecar-rows 1 --min-sidecar-threads 1 --min-timeline-turns 1 --json`:
-  passed in observe-only mode. This confirmed the currently materialized
-  dynamic semantic sidecar slice without making a fresh external-model write.
+  passed in observe-only mode. This confirmed the dynamic semantic sidecar
+  slice materialized as of the 2026-05-30 run without making a fresh
+  external-model write.
 - `python .\tools\aippocampus\smoke\smoke_source_evidence_recall_eval.py --max-cases 24 --min-cases 12 --top-k 5 --min-hit-rate 0.85 --json`:
   passed with 24 selected cases, 24/24 top-5 hits, `top_k_hit_rate=1.0`,
   `warning_count=0`, dynamic-source ranking, and coverage across
@@ -570,8 +571,9 @@ Stage 2 soft-label evidence for #55:
   restored in this closeout; live Pro recovery evidence remains the earlier
   dated evidence above.
 - `python .\tools\aippocampus\smoke\smoke_semantic_scope_source_review.py --live --max-cases 24 --min-cases 12 --min-pass-rate 0.75 --min-label-pass-rate 0.65 --concurrency 2 --timeout 200 --max-attempts 3 --json`:
-  passed. It reviewed 24 selected current semantic sidecar label cases through
-  the DeepSeek-compatible live source-review path, passed 24/24, reached
+  passed. It reviewed 24 selected semantic sidecar label cases from the
+  2026-05-30 slice through the DeepSeek-compatible live source-review path,
+  passed 24/24, reached
   `pass_rate=1.0`, and had no failed label categories or live model failures.
   Reviewed live label families were `idea_seed`, `life_context`,
   `open_question`, `personal_reflection`, `preference`, `reading_notes`, and
@@ -586,7 +588,7 @@ Stage 2 soft-label evidence for #55:
   for treating the 96-case run itself as passed.
 - `python .\tools\aippocampus\smoke\smoke_semantic_scope_source_review.py --max-cases 96 --min-cases 64 --json`:
   passed in observe-only mode and confirmed 96 selectable source-review cases
-  across the current strict semantic sidecar slice.
+  across that strict semantic sidecar slice.
 
 Closeout interpretation for #55:
 
@@ -594,7 +596,7 @@ Closeout interpretation for #55:
   `idea_seed`, `life_context`, `open_question`, `personal_reflection`,
   `preference`, `reading_notes`, and `technical_work`; selected retrieval
   evidence also covers `relationship_continuity`.
-- Accepted current strict sidecar labels are only the labels that survived
+- Accepted labels in that strict sidecar slice are only the labels that survived
   per-label evidence gates and live source review. No new high-risk
   suppressed label was restored by this closeout.
 - Still-suppressed or not-broadly-claimed cases include generic
@@ -617,21 +619,23 @@ Stage 2 #308 report-hardening update:
   `review_buckets`. The selected pool still covers 96 public-safe hashed cases
   across `idea_seed`, `life_context`, `open_question`, `personal_reflection`,
   `preference`, `reading_notes`, and `technical_work`, while
-  `relationship_continuity` has no currently materialized strict review case.
+  `relationship_continuity` has no materialized strict review case in that
+  observed slice.
   Because this mode does not call a live reviewer, all 96 selected cases remain
   `unreviewed`, and `cannot_claim` still includes fresh live model review and
   selected source-review pass.
 - `python .\skills\aippocampus\scripts\semantic_scope_suppressed_recovery.py --max-cases 12 --json`:
   passed in observe-only mode and now emits `recovery_buckets` plus
-  `per_label_recovery`. The current suppressed pool contains 8 cases / 11
+  `per_label_recovery`. The observed suppressed pool for that run contains 8 cases / 11
   candidate labels across `relationship_continuity`, `reading_notes`,
   `idea_seed`, `preference`, `life_context`, `technical_work`, and
   `open_question`; all remain `unreviewed` in observe-only output, and
   `strict_gate_relaxed=false`.
-- Current Stage 2 wording distinguishes the old 5-row strict sidecar survival
-  evidence, the 24-case green live source-review slice, and the broader 96-case
-  diagnostic run with one live model partial failure. The broader run is not a
-  green gate unless rerun cleanly.
+- Current claim governance now distinguishes the old 5-row strict sidecar
+  survival evidence, the 24-case green live source-review slice, and the
+  broader 96-case diagnostic run with one live model partial failure. The
+  broader run is not a green gate unless rerun cleanly; the compact current
+  snapshot lives in `docs/evidence/current-claims.md`.
 - Follow-up #320 tracks systematic evidence improvement for high-risk
   still-suppressed label families. That follow-up must improve source-backed
   semantic evidence or classify labels as unsafe to restore; it must not use
@@ -979,10 +983,11 @@ Results:
   it covered `idea_seed`, `open_question`, `personal_reflection`,
   `preference`, `reading_notes`, `relationship_continuity`, and
   `technical_work`. Follow-up clean-source review found that several broad
-  labels still over-inferred beyond source text, so the current strict
-  re-materialized sidecars intentionally contain only 5 rows across 2 real
-  clean-source threads, and the refreshed timeline observes 5 semantic latest
-  turns. The smoke output remained aggregate-only and explicitly preserved
+  labels still over-inferred beyond source text, so that 2026-05-29
+  strict-survival rematerialization intentionally contained only 5 rows across
+  2 real clean-source threads, and the refreshed timeline observed 5 semantic
+  latest turns. Later aggregate sidecar coverage and supersession notes live in
+  `docs/evidence/current-claims.md`. The smoke output remained aggregate-only and explicitly preserved
   `cannot_claim` entries for full-history refresh, semantic completeness, and
   label correctness without clean-source review.
 - selected source-evidence recall eval: passed. The new
@@ -1019,9 +1024,9 @@ Results:
   discovery and pushed `relationship_continuity`, `open_question`,
   `idea_seed`, `technical_work`, and media-like `reading_notes` evidence
   through stricter prompt and materializer gates rather than lowering the
-  review bar. The current strict materialization then passed a 5-case live
-  review slice with 5 of 5 labels supported by the matching clean-source
-  message (`pass_rate=1.0`) and no model call failures. This is not human
+  review bar. The 2026-05-29 strict-survival materialization then passed a
+  5-case live review slice with 5 of 5 labels supported by the matching
+  clean-source message (`pass_rate=1.0`) and no model call failures. This is not human
   review or a global correctness claim; it is a stronger quality signal than
   materialization alone. Suppressed soft labels still need more
   high-confidence, source-backed model findings before they should be trusted.
@@ -1036,7 +1041,7 @@ Results:
   recovered 3 of 5 candidate labels across 3 cases through the unchanged strict
   materializer (`strict_gate_relaxed=false`), covering `idea_seed`,
   `open_question`, and `reading_notes`. The same Pro-agent source-review path
-  executed against 5 current strict sidecar labels with tool observations and
+  executed against 5 strict-survival sidecar labels from that run with tool observations and
   high cache reuse, but a stricter 0.75 pass-rate run remained diagnostic
   (`pass_rate=0.6`) and flagged remaining `personal_reflection` /
   `reading_notes` ambiguity. That failure is kept as source-review evidence for
@@ -1139,7 +1144,7 @@ be demonstrated without private biography or hard-coded fuzzy phrase expansion.
   coverage. Local HTTP object-storage remains labeled as simulation; the R2 run
   is real managed-provider evidence, not a provider matrix.
 - Continue Stage 2 life-wide memory evidence beyond the selected top-5 recall,
-  current strict source-review slices, and first Pro-agent recovery smoke:
+  dated strict source-review slices, and first Pro-agent recovery smoke:
   broaden suppressed-label recovery samples, use Pro-agent source-review
   failures as training/evidence-selection feedback, and avoid treating sidecar
   labels as source truth.
