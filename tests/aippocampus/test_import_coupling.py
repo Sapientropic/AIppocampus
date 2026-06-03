@@ -1650,6 +1650,13 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(aippocampus_health.health_report, health.health_report)
         self.assertIs(aippocampus_health.load_question_stats, health.load_question_stats)
 
+    def test_runtime_health_arg_parser_keeps_direct_script_prog(self) -> None:
+        from aippocampus_runtime import health
+
+        parser = health.build_arg_parser()
+
+        self.assertEqual(parser.prog, "aippocampus_health.py")
+
     def test_runtime_health_package_api_replaces_script_health_dispatch(self) -> None:
         package_sources = [
             SCRIPTS / "aippocampus_runtime" / "mcp" / "server.py",
