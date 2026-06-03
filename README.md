@@ -262,8 +262,10 @@ mypy, compile checks, and the fast deterministic test tier. It also runs a
 single Ubuntu 3.12 deterministic benchmark-smoke lane plus a macOS fast-tier
 gate on the runner's default TMPDIR as a path-identity guard for the recurring
 `/var` and `/private/var` regression family. Ubuntu green alone is not a
-cross-platform fast-tier claim. Slower benchmark and smoke coverage stays
-explicit for release and readiness work.
+cross-platform fast-tier claim. The broader identity/display/privacy path
+contract lives in [docs/architecture/path-identity.md](docs/architecture/path-identity.md)
+for #404/#589-style macOS, UNC, symlink, and bind-mount regressions. Slower
+benchmark and smoke coverage stays explicit for release and readiness work.
 
 From the repository root:
 

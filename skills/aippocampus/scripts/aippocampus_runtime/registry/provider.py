@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import hashlib
 import sys
 from pathlib import Path
 
-from aippocampus_runtime.core import public_session_meta, read_session_meta
-
-from .store import safe_slug
+from aippocampus_runtime.core import public_session_meta, read_session_meta, workspace_thread_key
 
 
 def current_thread_build_cmd(
@@ -46,5 +43,4 @@ def thread_key_for(cwd: Path, manifest: dict, rollout: Path | None) -> str:
         if provider_name and provider_name != "codex":
             return f"{provider_name}:session:{session_id}"
         return f"session:{session_id}"
-    digest = hashlib.sha1(str(cwd).casefold().encode("utf-8")).hexdigest()[:12]
-    return f"workspace:{safe_slug(cwd.name)}:{digest}"
+    return workspace_thread_key(cwd)
