@@ -230,7 +230,12 @@ DeepSeek can be used aggressively, but hooks must stay cheap. The split is:
   territory. Its no-write report treats pruning as activation eligibility only,
   requires source/current-checkout evidence for truth conflicts, and lets
   explicit user correction suppress otherwise plausible strategy surfaces
-  without making the correction itself an ungrounded fact.
+  without making the correction itself an ungrounded fact. The #483 extension
+  adds foreground-usefulness counters for false scent reduction, wrong-route
+  drag reduction, duplicate-route collapse, recent helpful/harmful outcomes,
+  and estimated verification tool calls saved; apply mode writes only an
+  append-only lifecycle manifest for the owning surface writer, not source or
+  truth mutations.
 - `dream_real_history_eval.py` reports dream impact in two layers: structural
   substrate lift and a sanitized user-visible ablation harness. The latter
   separates recall, reflection, unsupported-claim suppression, source-support,
