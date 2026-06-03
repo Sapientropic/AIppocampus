@@ -394,6 +394,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/knowledge/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/knowledge/answer_gate.py",
     "skills/aippocampus/scripts/aippocampus_runtime/knowledge/capability_contract.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/knowledge/capability_types.py",
     "skills/aippocampus/scripts/aippocampus_runtime/knowledge/schema.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/activation_authority_audit.py",

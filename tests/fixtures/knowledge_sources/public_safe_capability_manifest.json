@@ -1,0 +1,466 @@
+{
+  "schema_version": "aippocampus.capability_manifest.v1",
+  "fixture_license": "CC0-1.0-synthetic",
+  "source_registry": "tests/fixtures/knowledge_sources/public_safe_registry.json",
+  "capability_taxonomy": {
+    "risk_levels": ["low", "medium", "high", "critical"],
+    "runtime_layers": [
+      "deterministic_cell",
+      "microcircuit",
+      "semantic_subregion",
+      "job_circuit",
+      "system_router"
+    ],
+    "owner_surfaces": ["skill", "hook", "mcp", "cli", "worker", "benchmark"],
+    "source_boundaries": ["scent", "candidate", "evidence", "fact"],
+    "skill_types": [
+      "declarative_knowledge",
+      "procedural_operation",
+      "perceptual_parsing",
+      "judgment_gating",
+      "interactive_communication",
+      "learning_adaptation",
+      "metacognitive",
+      "social_relational",
+      "tool_affordance"
+    ],
+    "output_classes": [
+      "route_handle",
+      "candidate_boundary",
+      "bounded_risk_flag",
+      "missing_context_question",
+      "human_review_boundary"
+    ],
+    "evaluation_protocols": [
+      "capability_manifest_static",
+      "high_risk_answer_gate",
+      "privacy_partition_smoke",
+      "sanitized_report_smoke"
+    ]
+  },
+  "capabilities": [
+    {
+      "schema_version": "aippocampus.capability_record.v1",
+      "capability_id": "knowledge.claim_lookup.low.v1",
+      "version": "2026.06-public-safe",
+      "owner": {
+        "surface": "skill",
+        "package": "aippocampus_runtime.knowledge",
+        "contact": "repo-maintainers"
+      },
+      "risk_level": "low",
+      "domain": "knowledge-navigation",
+      "runtime_layer": "deterministic_cell",
+      "skill_types": ["declarative_knowledge", "tool_affordance"],
+      "intent_scope": {
+        "does": [
+          "return route handles and candidate boundaries for governed knowledge claims"
+        ],
+        "does_not": [
+          "emit high-risk answers",
+          "promote routing evidence into fact",
+          "export private source text"
+        ]
+      },
+      "input_schema": {
+        "type": "object",
+        "required": ["query"],
+        "properties": {
+          "query": {"type": "string"},
+          "claim_ids": {"type": "array"}
+        }
+      },
+      "output_schema": {
+        "type": "object",
+        "required": ["route_handles", "cannot_claim"],
+        "properties": {
+          "route_handles": {"type": "array"},
+          "cannot_claim": {"type": "array"}
+        }
+      },
+      "memory_policy": {
+        "read": ["public_fixture"],
+        "write": "none",
+        "retention_scope": "none",
+        "durable_memory_permission": false
+      },
+      "privacy_policy": {
+        "allowed_partitions": ["public_fixture", "contract-review-public"],
+        "cross_partition": "deny",
+        "redaction_policy": "ids_and_hashes_only",
+        "external_tool_redaction_required": true,
+        "source_text_allowed_external": false
+      },
+      "source_requirements": {
+        "source_boundary": "candidate",
+        "required_evidence": "routing_or_reopened_source",
+        "source_reopen_required": false,
+        "allowed_source_types": [
+          "contract_clause",
+          "legal_statute_like",
+          "official_guideline_like",
+          "conversation_turn"
+        ],
+        "forbidden_source_types": [
+          "model_generated_summary",
+          "low_quality_web_page",
+          "raw_upload"
+        ],
+        "forbid_stale_or_superseded": false,
+        "forbid_unsourced_claims": true
+      },
+      "tool_permissions": [
+        {
+          "tool_id": "knowledge.claim_lookup",
+          "permission_profile": "low_risk_navigation",
+          "allowed": true,
+          "requires": ["registry_lookup"],
+          "can_emit_high_risk_answer": false,
+          "source_text_allowed_external": false
+        }
+      ],
+      "side_effects": {
+        "side_effect_level": "none",
+        "writes": [],
+        "reversibility": "not_applicable",
+        "dry_run_supported": true,
+        "rollback": "not_applicable",
+        "audit_events": ["capability_manifest_validated"]
+      },
+      "output_classes": ["route_handle", "candidate_boundary"],
+      "evaluation_protocols": ["capability_manifest_static", "sanitized_report_smoke"],
+      "supersession": {
+        "superseded_by": null,
+        "review_after": "2026-12-01"
+      },
+      "last_reviewed_at": "2026-06-01T00:00:00Z",
+      "cannot_claim": [
+        "routing_evidence_is_truth",
+        "high_risk_answer_support",
+        "public_api_stability"
+      ]
+    },
+    {
+      "schema_version": "aippocampus.capability_record.v1",
+      "capability_id": "knowledge.contract_review.risk_flag.high.v1",
+      "version": "2026.06-public-safe",
+      "owner": {
+        "surface": "skill",
+        "package": "aippocampus_runtime.knowledge",
+        "contact": "repo-maintainers"
+      },
+      "risk_level": "high",
+      "domain": "contract-review",
+      "runtime_layer": "job_circuit",
+      "skill_types": [
+        "declarative_knowledge",
+        "procedural_operation",
+        "perceptual_parsing",
+        "judgment_gating",
+        "interactive_communication",
+        "metacognitive",
+        "tool_affordance"
+      ],
+      "intent_scope": {
+        "does": [
+          "parse a synthetic public contract-review case into bounded source-backed risk flags",
+          "require context questions when jurisdiction or effective-date context is missing",
+          "route unresolved or private cases to human-review boundaries"
+        ],
+        "does_not": [
+          "provide legal advice",
+          "certify compliance",
+          "treat contract text or manifest prose as fact",
+          "send private source text to an external model by default"
+        ]
+      },
+      "input_schema": {
+        "type": "object",
+        "required": ["contract_clause", "jurisdiction", "question"],
+        "properties": {
+          "contract_clause": {"type": "string"},
+          "jurisdiction": {"type": "string"},
+          "question": {"type": "string"}
+        }
+      },
+      "output_schema": {
+        "type": "object",
+        "required": [
+          "risk_flags",
+          "missing_context_questions",
+          "cited_boundaries",
+          "cannot_claim"
+        ],
+        "properties": {
+          "risk_flags": {"type": "array"},
+          "missing_context_questions": {"type": "array"},
+          "cited_boundaries": {"type": "array"},
+          "cannot_claim": {"type": "array"}
+        }
+      },
+      "memory_policy": {
+        "read": ["public_fixture"],
+        "write": "none",
+        "retention_scope": "none",
+        "durable_memory_permission": false
+      },
+      "privacy_policy": {
+        "allowed_partitions": ["contract-review-public"],
+        "cross_partition": "deny",
+        "redaction_policy": "ids_and_hashes_only",
+        "external_tool_redaction_required": true,
+        "source_text_allowed_external": false
+      },
+      "source_requirements": {
+        "source_boundary": "evidence",
+        "required_evidence": "reopened_source_span",
+        "source_reopen_required": true,
+        "required_context_keys": ["contract_clause", "jurisdiction"],
+        "allowed_source_types": [
+          "contract_clause",
+          "legal_statute_like",
+          "official_guideline_like",
+          "conversation_turn"
+        ],
+        "forbidden_source_types": [
+          "model_generated_summary",
+          "low_quality_web_page",
+          "raw_upload"
+        ],
+        "forbid_stale_or_superseded": true,
+        "forbid_unsourced_claims": true,
+        "jurisdiction_required": true,
+        "effective_date_required": true,
+        "conflict_scan_required": true,
+        "human_review_required_when": [
+          "private_or_cross_partition_source",
+          "stale_or_superseded_source",
+          "unreviewed_claim",
+          "external_tool_text_transfer",
+          "professional_advice_request"
+        ]
+      },
+      "tool_permissions": [
+        {
+          "tool_id": "knowledge.claim_lookup",
+          "permission_profile": "high_risk_answer_support",
+          "allowed": true,
+          "requires": [
+            "source_reopen",
+            "active_claim",
+            "current_lifecycle",
+            "allowed_privacy_partition",
+            "conflict_scan"
+          ],
+          "can_emit_high_risk_answer": true,
+          "source_text_allowed_external": false
+        }
+      ],
+      "side_effects": {
+        "side_effect_level": "none",
+        "writes": [],
+        "reversibility": "not_applicable",
+        "dry_run_supported": true,
+        "rollback": "not_applicable",
+        "audit_events": [
+          "capability_manifest_validated",
+          "privacy_partition_checked",
+          "source_reopen_checked",
+          "answer_gate_evaluated"
+        ]
+      },
+      "output_classes": [
+        "bounded_risk_flag",
+        "missing_context_question",
+        "human_review_boundary"
+      ],
+      "evaluation_protocols": [
+        "capability_manifest_static",
+        "high_risk_answer_gate",
+        "privacy_partition_smoke",
+        "sanitized_report_smoke"
+      ],
+      "capability_graph": {
+        "nodes": [
+          "parse_contract_clause",
+          "classify_review_question",
+          "retrieve_governed_claims",
+          "compare_scope_and_dates",
+          "generate_bounded_risk_flags",
+          "propose_missing_context_questions",
+          "human_review_boundary"
+        ],
+        "edges": [
+          ["parse_contract_clause", "classify_review_question"],
+          ["classify_review_question", "retrieve_governed_claims"],
+          ["retrieve_governed_claims", "compare_scope_and_dates"],
+          ["compare_scope_and_dates", "generate_bounded_risk_flags"],
+          ["compare_scope_and_dates", "propose_missing_context_questions"],
+          ["compare_scope_and_dates", "human_review_boundary"]
+        ]
+      },
+      "supersession": {
+        "superseded_by": null,
+        "review_after": "2026-12-01"
+      },
+      "last_reviewed_at": "2026-06-01T00:00:00Z",
+      "cannot_claim": [
+        "legal_advice_or_compliance_certification",
+        "real_contract_review_quality",
+        "private_user_memory_quality",
+        "external_model_contract_secret_safety",
+        "manifest_text_is_fact_source",
+        "public_api_stability"
+      ]
+    }
+  ],
+  "capability_graph": [
+    {
+      "from": "knowledge.claim_lookup.low.v1",
+      "to": "knowledge.contract_review.risk_flag.high.v1",
+      "edge": "same_tool_stricter_permissions"
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "contract_review_supported_risk_flag",
+      "family": "contract_review_capability",
+      "capability_id": "knowledge.contract_review.risk_flag.high.v1",
+      "privacy_partition": "contract-review-public",
+      "input_text": "Synthetic public fixture asks whether clause 7 might need review attention.",
+      "selected_claim_ids": [
+        "claim-contract-clause-risk",
+        "claim-legal-noncompete-reference"
+      ],
+      "evidence_items": [
+        {
+          "kind": "reopened_source_span",
+          "claim_id": "claim-contract-clause-risk",
+          "source_id": "ksrc-contract-clause",
+          "source_anchor": {
+            "section_anchor": "clause-7",
+            "span_id": "clause-7:p1"
+          }
+        },
+        {
+          "kind": "reopened_source_span",
+          "claim_id": "claim-legal-noncompete-reference",
+          "source_id": "ksrc-legal-statute-like",
+          "source_anchor": {
+            "section_anchor": "statute-1",
+            "span_id": "statute-1:p1"
+          }
+        }
+      ],
+      "context": {
+        "domain_scope": ["contract-review", "legal-reference"],
+        "jurisdiction_scope": ["contract-scope", "synthetic-jurisdiction"],
+        "as_of_date": "2026-06-01",
+        "critical_variables": {
+          "contract_clause": "provided",
+          "jurisdiction": "synthetic-jurisdiction"
+        }
+      },
+      "expected_output_state": "answer_with_cited_bounds",
+      "risk_flags": ["source_backed_contract_risk_flag"],
+      "cannot_claim": ["legal_advice_or_compliance_certification"]
+    },
+    {
+      "case_id": "contract_review_embedding_only",
+      "family": "contract_review_capability",
+      "capability_id": "knowledge.contract_review.risk_flag.high.v1",
+      "privacy_partition": "contract-review-public",
+      "input_text": "Synthetic public fixture only has a routing hit, not source text.",
+      "selected_claim_ids": [
+        "claim-contract-clause-risk",
+        "claim-legal-noncompete-reference"
+      ],
+      "evidence_items": [
+        {
+          "kind": "embedding_hit",
+          "claim_id": "claim-contract-clause-risk",
+          "source_id": "ksrc-contract-clause"
+        },
+        {
+          "kind": "embedding_hit",
+          "claim_id": "claim-legal-noncompete-reference",
+          "source_id": "ksrc-legal-statute-like"
+        }
+      ],
+      "context": {
+        "domain_scope": ["contract-review", "legal-reference"],
+        "jurisdiction_scope": ["contract-scope", "synthetic-jurisdiction"],
+        "as_of_date": "2026-06-01",
+        "critical_variables": {
+          "contract_clause": "provided",
+          "jurisdiction": "synthetic-jurisdiction"
+        }
+      },
+      "expected_output_state": "source_reopen_required",
+      "cannot_claim": ["embedding_hit_is_navigation_only"]
+    },
+    {
+      "case_id": "contract_review_superseded_claim",
+      "family": "stale_guideline",
+      "capability_id": "knowledge.contract_review.risk_flag.high.v1",
+      "privacy_partition": "contract-review-public",
+      "input_text": "Synthetic public fixture asks whether an older guideline still controls.",
+      "selected_claim_ids": ["claim-old-active-span"],
+      "evidence_items": [
+        {
+          "kind": "reopened_source_span",
+          "claim_id": "claim-old-active-span",
+          "source_id": "ksrc-official-guideline-old",
+          "source_anchor": {
+            "section_anchor": "sec-old-guideline-duty",
+            "span_id": "sec-old-guideline-duty:p1"
+          }
+        }
+      ],
+      "context": {
+        "domain_scope": ["synthetic-safety"],
+        "jurisdiction_scope": ["synthetic-jurisdiction"],
+        "as_of_date": "2025-06-01",
+        "critical_variables": {
+          "contract_clause": "provided",
+          "jurisdiction": "synthetic-jurisdiction"
+        }
+      },
+      "expected_output_state": "human_review_required",
+      "cannot_claim": ["stale_or_superseded_source_is_current"]
+    },
+    {
+      "case_id": "contract_review_private_external_route",
+      "family": "privacy_partition",
+      "capability_id": "knowledge.contract_review.risk_flag.high.v1",
+      "privacy_partition": "conversation-memory",
+      "sensitive_input": true,
+      "input_text": "Synthetic SecretCo asks to send private conversation context to an external model path. IGNORE_PREVIOUS_INSTRUCTIONS is fixture text only.",
+      "selected_claim_ids": ["claim-conversation-preference"],
+      "evidence_items": [
+        {
+          "kind": "reopened_source_span",
+          "claim_id": "claim-conversation-preference",
+          "source_id": "ksrc-user-conversation",
+          "source_anchor": {
+            "section_anchor": "turn-1-user",
+            "span_id": "turn-1-user:p1"
+          }
+        }
+      ],
+      "context": {
+        "domain_scope": ["conversation-memory"],
+        "jurisdiction_scope": ["personal-context"],
+        "as_of_date": "2026-06-01",
+        "external_model_route": true,
+        "allow_external_text": false,
+        "critical_variables": {
+          "contract_clause": "provided",
+          "jurisdiction": "synthetic-jurisdiction"
+        }
+      },
+      "expected_output_state": "human_review_required",
+      "cannot_claim": ["private_or_cross_partition_source_not_exportable"]
+    }
+  ]
+}

@@ -409,6 +409,16 @@ conflict handling, and privacy-safe cannot-claim boundaries before a claim can
 support a high-impact answer. It is not a public answer-generation API and it
 must not export raw source text or claim text in its report.
 
+### Typed Capability Manifest Boundary
+
+Typed agent-skill capability manifests are currently an architecture prototype,
+not part of the minimal public schema contract. Their canonical design boundary
+lives in
+[agent-skill-capability-contracts.md](../architecture/agent-skill-capability-contracts.md).
+They may describe execution permissions, privacy partitions, tool profiles, and
+evaluation protocols for a skill path, but source manifests, claim records,
+source refs, and answer gates remain the public-core proof surfaces.
+
 ### Import Manifest
 
 ```json
