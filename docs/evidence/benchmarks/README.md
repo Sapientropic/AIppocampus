@@ -25,6 +25,7 @@ collapsing them into one leaderboard.
 | External benchmark comparison home | [`design/external-benchmark-map.md`](design/external-benchmark-map.md) | Analysis map and blockers; not a superiority claim. |
 | ATM-Bench Hard protocol boundary | [`design/atm-bench-hard-protocol-boundary.md`](design/atm-bench-hard-protocol-boundary.md) | Verified upstream-protocol boundary for #528; no adapter, score, or privacy claim. |
 | Public-safe multimodal corpus fixture | [`multimodal-corpus-fixture-report.md`](multimodal-corpus-fixture-report.md) | #531 corpus-style contract smoke; not conversational upload recall or ATM-Bench score. |
+| Conversational media-ingest fixture | [`conversational-media-ingest-fixture-report.md`](conversational-media-ingest-fixture-report.md) | #532 conversational counterpart; media anchors attach to conversation turns. |
 
 ## Report Boundary
 

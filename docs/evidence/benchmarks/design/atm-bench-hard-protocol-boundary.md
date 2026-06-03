@@ -99,6 +99,9 @@ assistant's response are all part of the source history. This is not the same as
 ATM-Bench staged-corpus QA, because the conversation trace itself can carry
 labels, intent, or ambiguity that later recall must reopen.
 
+The public-safe deterministic contract smoke is documented in
+[`../conversational-media-ingest-fixture-report.md`](../conversational-media-ingest-fixture-report.md).
+
 ### Oracle-Style Answer Synthesis
 
 Use this slice when retrieval is intentionally removed from the measurement.
