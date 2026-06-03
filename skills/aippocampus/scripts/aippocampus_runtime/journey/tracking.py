@@ -26,6 +26,8 @@ JOURNEY_KIND = "aippocampus_journey"
 WAYPOINT_KIND = "journey_waypoint"
 FRONTIER_KIND = "journey_current_frontier"
 REPLAY_SMOKE_KIND = "aippocampus_journey_replay_fixture_smoke"
+CONTENT_LIGHT_SIGNATURE_KIND = "aippocampus_content_light_journey_signature"
+CONTENT_LIGHT_RESONANCE_KIND = "aippocampus_content_light_journey_resonance"
 
 JourneyStatus = Literal["traveling", "camped", "arrived", "abandoned"]
 FeedbackAction = Literal["confirm", "correct", "merge", "abandon", "revive"]
@@ -46,6 +48,15 @@ GENERIC_INQUIRIES = {
     "help",
     "general",
 }
+SAFE_STRUCTURE_LABEL_PREFIXES = ("dynamics:", "phase:", "transition:")
+SAFE_RESONANCE_PATTERNS = (
+    "stale_generated_artifact",
+    "rejected_route",
+)
+PRIVATE_TOKEN_RE = re.compile(
+    r"([A-Za-z]:[\\/])|([\\/][^\\/\s]+[\\/])|(\w+://)|(@)|(\bsecret\b)|(\bprivate\b)",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -243,6 +254,223 @@ def journey_to_dict(journey: Journey) -> dict[str, Any]:
             "Journey and current_frontier are navigation candidates; exact claims require "
             "the attached clean-source refs."
         ),
+    }
+
+
+def looks_like_private_payload(value: str) -> bool:
+    text = str(value or "")
+    return bool(PRIVATE_TOKEN_RE.search(text))
+
+
+def safe_arc_token(value: object) -> str:
+    text = compact_text(str(value or ""), 40)
+    if not text or text == "unmapped" or looks_like_private_payload(text):
+        return ""
+    return text
+
+
+def safe_structure_label(value: object) -> str:
+    text = compact_text(str(value or ""), 80)
+    if not text or looks_like_private_payload(text):
+        return ""
+    lowered = text.casefold()
+    if not any(lowered.startswith(prefix) for prefix in SAFE_STRUCTURE_LABEL_PREFIXES):
+        return ""
+    return text
+
+
+def safe_resonance_patterns(values: object) -> list[str]:
+    if not isinstance(values, (list, tuple)):
+        return []
+    patterns: list[str] = []
+    for value in values:
+        text = str(value or "")
+        if text not in SAFE_RESONANCE_PATTERNS or text in patterns:
+            continue
+        patterns.append(text)
+    return patterns
+
+
+def journey_mapping(value: Journey | Mapping[str, Any] | None) -> dict[str, Any] | None:
+    if isinstance(value, Journey):
+        return journey_to_dict(value)
+    if isinstance(value, Mapping):
+        return dict(value)
+    return None
+
+
+def content_light_journey_signature(
+    journey: Journey | Mapping[str, Any] | None,
+    *,
+    project_key: str,
+) -> dict[str, Any] | None:
+    """Return a cross-project-safe structural signature.
+
+    Cross-project resonance must begin with source-free structure. This helper
+    deliberately ignores path labels, moments, frontiers, source refs, thread
+    ids, and raw project keys so callers cannot accidentally move private
+    source text or local paths between projects while looking for a similar
+    journey shape.
+    """
+
+    row = journey_mapping(journey)
+    if not row:
+        return None
+    waypoints = row.get("waypoints")
+    if not isinstance(waypoints, list) or not waypoints:
+        return None
+
+    arcs: list[str] = []
+    dynamics: list[str] = []
+    for waypoint in waypoints[:8]:
+        if not isinstance(waypoint, Mapping):
+            continue
+        arc = safe_arc_token(waypoint.get("arc"))
+        if arc:
+            arcs.append(arc)
+        labels = waypoint.get("labels") or []
+        if isinstance(labels, (list, tuple)):
+            dynamics.extend(label for label in (safe_structure_label(item) for item in labels) if label)
+    dynamics = list(unique_preserve(dynamics, limit=12))
+    if not arcs and not dynamics:
+        return None
+
+    project_hash = stable_digest(project_key or "unknown-project", prefix="project", length=14)
+    signature_id = stable_digest(project_hash, arcs, dynamics, len(waypoints), prefix="jr_sig", length=18)
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": CONTENT_LIGHT_SIGNATURE_KIND,
+        "signature_id": signature_id,
+        "project_hash": project_hash,
+        "arc_sequence": arcs,
+        "dynamics_labels": dynamics,
+        "waypoint_count": len(waypoints),
+        "source_free": True,
+        "source_boundary": {
+            "raw_source_refs_included": False,
+            "raw_source_text_included": False,
+            "raw_project_key_included": False,
+            "local_paths_included": False,
+        },
+    }
+
+
+def shared_arc_sequence(current: list[str], candidate: list[str]) -> list[str]:
+    shared: list[str] = []
+    candidate_index = 0
+    for arc in current:
+        try:
+            found = candidate.index(arc, candidate_index)
+        except ValueError:
+            continue
+        shared.append(arc)
+        candidate_index = found + 1
+    return shared
+
+
+def shared_dynamic_labels(current: list[str], candidate: list[str]) -> list[str]:
+    candidate_set = set(candidate)
+    return [label for label in current if label in candidate_set]
+
+
+def build_content_light_resonance(
+    *,
+    current_journey: Journey | Mapping[str, Any] | None,
+    candidate_journeys: Iterable[Mapping[str, Any]],
+    current_project_key: str,
+    min_shared_arcs: int = 2,
+) -> dict[str, Any]:
+    current_signature = content_light_journey_signature(
+        current_journey,
+        project_key=current_project_key,
+    )
+    base_payload: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "kind": CONTENT_LIGHT_RESONANCE_KIND,
+        "ok": True,
+        "matches": [],
+        "claim_boundary": {
+            "hypothesis_not_fact": True,
+            "not_evidence": True,
+            "requires_source_reopen_before_use": True,
+        },
+        "privacy_boundary": {
+            "content_light_only": True,
+            "raw_source_refs_shared": False,
+            "raw_source_text_shared": False,
+            "raw_project_details_shared": False,
+        },
+        "cannot_claim": [
+            "source_text_comparison",
+            "same_constraint_still_applies",
+            "project_fact",
+            "route_should_be_reused",
+        ],
+    }
+    if not current_signature:
+        return {**base_payload, "status": "skipped_missing_journey_data"}
+
+    matches: list[dict[str, Any]] = []
+    for candidate in candidate_journeys:
+        if not isinstance(candidate, Mapping):
+            continue
+        candidate_signature = content_light_journey_signature(
+            candidate.get("journey") if "journey" in candidate else candidate,
+            project_key=str(candidate.get("project_key") or candidate.get("project_id") or "unknown-project"),
+        )
+        if not candidate_signature:
+            continue
+        if candidate_signature["project_hash"] == current_signature["project_hash"]:
+            continue
+        shared_arcs = shared_arc_sequence(
+            list(current_signature["arc_sequence"]),
+            list(candidate_signature["arc_sequence"]),
+        )
+        shared_dynamics = shared_dynamic_labels(
+            list(current_signature["dynamics_labels"]),
+            list(candidate_signature["dynamics_labels"]),
+        )
+        if len(shared_arcs) < min_shared_arcs and not shared_dynamics:
+            continue
+        match_id = stable_digest(
+            current_signature["signature_id"],
+            candidate_signature["signature_id"],
+            shared_arcs,
+            shared_dynamics,
+            prefix="jr_res",
+            length=18,
+        )
+        matches.append(
+            {
+                "resonance_id": match_id,
+                "match_kind": "content_light_cross_project_journey_resonance",
+                "suggested_use": "source_refresh_cue",
+                "hypothesis": (
+                    "A source-free Journey shape resembles another project. "
+                    "Reopen sources inside the appropriate project before treating any route as evidence."
+                ),
+                "source_refresh_cue": {
+                    "action": "reopen_candidate_project_sources_before_comparison",
+                    "reason": "similar_content_light_journey_structure",
+                    "permission_required": True,
+                },
+                "shared_structure": {
+                    "arc_sequence": shared_arcs,
+                    "dynamics_labels": shared_dynamics,
+                },
+                "candidate_patterns": safe_resonance_patterns(candidate.get("source_free_patterns") or []),
+                "current_signature": current_signature,
+                "candidate_signature": candidate_signature,
+                "claim_boundary": dict(base_payload["claim_boundary"]),
+                "privacy_boundary": dict(base_payload["privacy_boundary"]),
+            }
+        )
+
+    return {
+        **base_payload,
+        "status": "hypotheses_available" if matches else "no_content_light_resonance",
+        "current_signature": current_signature,
+        "matches": matches,
     }
 
 

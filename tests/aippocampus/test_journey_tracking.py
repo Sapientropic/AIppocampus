@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -172,6 +173,130 @@ class JourneyTrackingTests(unittest.TestCase):
         )
         self.assertEqual(payload["journey"]["current_frontier_kind"], "journey_current_frontier")
         self.assertIn("live_model_behavioral_equivalence", payload["cannot_claim"])
+
+    def test_content_light_cross_project_resonance_outputs_hypothesis_without_private_payload(self) -> None:
+        current = journey.create_journey(
+            path_label="PRIVATE_SENTINEL_CURRENT_PROJECT_GENERATED_ARTIFACTS",
+            core_inquiry="How can migration cleanup avoid stale generated artifacts in private project alpha?",
+            waypoint_rows=[
+                {
+                    "moment": "PRIVATE_SENTINEL_CURRENT_MOMENT stale build cache leaked into the patch.",
+                    "thread_id": "current-a",
+                    "timestamp": "2026-05-01T00:00:00Z",
+                    "arc": "屯",
+                    "labels": ["dynamics:stalled-start", "PRIVATE_SENTINEL_CURRENT_LABEL"],
+                    "source_refs": [{"thread_key": "current-a", "message_id": "msg-current-a"}],
+                },
+                {
+                    "moment": "PRIVATE_SENTINEL_CURRENT_MOMENT generated files needed a fresh source reopen.",
+                    "thread_id": "current-b",
+                    "timestamp": "2026-05-02T00:00:00Z",
+                    "arc": "蒙",
+                    "labels": ["dynamics:uncertain-route"],
+                    "source_refs": [{"thread_key": "current-b", "message_id": "msg-current-b"}],
+                },
+                {
+                    "moment": "PRIVATE_SENTINEL_CURRENT_MOMENT the route waited for source-backed validation.",
+                    "thread_id": "current-c",
+                    "timestamp": "2026-05-03T00:00:00Z",
+                    "arc": "需",
+                    "labels": ["dynamics:wait-for-evidence"],
+                    "source_refs": [{"thread_key": "current-c", "message_id": "msg-current-c"}],
+                },
+            ],
+        )
+        candidate = journey.create_journey(
+            path_label="PRIVATE_SENTINEL_OLD_PROJECT_REJECTED_ROUTE",
+            core_inquiry="How can a rejected route be reopened only after its old source constraints change?",
+            waypoint_rows=[
+                {
+                    "moment": "PRIVATE_SENTINEL_OLD_PROJECT old generated artifact was stale.",
+                    "thread_id": "old-a",
+                    "timestamp": "2026-04-01T00:00:00Z",
+                    "arc": "屯",
+                    "labels": ["dynamics:stalled-start"],
+                    "source_refs": [
+                        {
+                            "thread_key": "old-a",
+                            "message_id": "msg-old-a",
+                            "source_line": "E:/PRIVATE/old-project/generated.py",
+                        }
+                    ],
+                },
+                {
+                    "moment": "PRIVATE_SENTINEL_OLD_PROJECT old route was rejected for a now-uncertain constraint.",
+                    "thread_id": "old-b",
+                    "timestamp": "2026-04-02T00:00:00Z",
+                    "arc": "蒙",
+                    "labels": ["dynamics:uncertain-route"],
+                    "source_refs": [{"thread_key": "old-b", "message_id": "msg-old-b"}],
+                },
+                {
+                    "moment": "PRIVATE_SENTINEL_OLD_PROJECT old route waited for source-backed validation.",
+                    "thread_id": "old-c",
+                    "timestamp": "2026-04-03T00:00:00Z",
+                    "arc": "需",
+                    "labels": ["dynamics:wait-for-evidence"],
+                    "source_refs": [{"thread_key": "old-c", "message_id": "msg-old-c"}],
+                },
+            ],
+        )
+        self.assertTrue(current.created, current.reason)
+        self.assertTrue(candidate.created, candidate.reason)
+
+        payload = journey.build_content_light_resonance(
+            current_journey=journey.journey_to_dict(current.journey),
+            candidate_journeys=[
+                {
+                    "project_key": "repo://PRIVATE_SENTINEL_OLD_PROJECT",
+                    "journey": journey.journey_to_dict(candidate.journey),
+                    "source_free_patterns": [
+                        "stale_generated_artifact",
+                        "rejected_route",
+                        "E:/PRIVATE/old-project/generated.py",
+                        "PRIVATE_SENTINEL_PATTERN_SHOULD_NOT_LEAK",
+                    ],
+                }
+            ],
+            current_project_key="repo://PRIVATE_SENTINEL_CURRENT_PROJECT",
+        )
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["kind"], "aippocampus_content_light_journey_resonance")
+        self.assertEqual(payload["status"], "hypotheses_available")
+        self.assertEqual(len(payload["matches"]), 1)
+        match = payload["matches"][0]
+        self.assertEqual(match["suggested_use"], "source_refresh_cue")
+        self.assertEqual(match["candidate_patterns"], ["stale_generated_artifact", "rejected_route"])
+        self.assertEqual(match["shared_structure"]["arc_sequence"], ["屯", "蒙", "需"])
+        self.assertTrue(match["claim_boundary"]["hypothesis_not_fact"])
+        self.assertTrue(match["privacy_boundary"]["content_light_only"])
+        self.assertFalse(match["privacy_boundary"]["raw_source_refs_shared"])
+
+        dumped = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        self.assertIn("屯", dumped)
+        for private_value in [
+            "PRIVATE_SENTINEL_CURRENT_PROJECT",
+            "PRIVATE_SENTINEL_CURRENT_MOMENT",
+            "PRIVATE_SENTINEL_CURRENT_LABEL",
+            "PRIVATE_SENTINEL_OLD_PROJECT",
+            "msg-old-a",
+            "E:/PRIVATE/old-project/generated.py",
+            "PRIVATE_SENTINEL_PATTERN_SHOULD_NOT_LEAK",
+        ]:
+            self.assertNotIn(private_value, dumped)
+
+    def test_content_light_resonance_degrades_when_journey_data_is_missing(self) -> None:
+        payload = journey.build_content_light_resonance(
+            current_journey=None,
+            candidate_journeys=[],
+            current_project_key="repo://PRIVATE_SENTINEL_CURRENT_PROJECT",
+        )
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["status"], "skipped_missing_journey_data")
+        self.assertEqual(payload["matches"], [])
+        self.assertIn("source_text_comparison", payload["cannot_claim"])
 
 
 if __name__ == "__main__":
