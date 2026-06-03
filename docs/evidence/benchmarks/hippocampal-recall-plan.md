@@ -1,10 +1,15 @@
 # Hippocampal Recall-Discrimination Benchmark Plan
 
-Status: design intake for P1. This document defines the first executable
+Status: design intake for P1, with the first #244 hard-negative scoring
+contract smoke implemented. This document defines the first executable
 benchmark layer for H1 pattern completion and H2 pattern separation. It is not
 yet measurement evidence, publication evidence, or proof of live model quality.
 
 Related methodology umbrella: #216.
+First contract-smoke slice:
+`benchmarks/aippocampus/benchmark_hippocampal_hard_negatives.py`,
+`benchmark_corpus/hippocampal_hard_negatives/fixture.json`, and
+`docs/evidence/benchmarks/hippocampal-hard-negative-fixture-report.md`.
 
 AIppocampus already has strong benchmark coverage for recall routing, source
 retrieval, payload fidelity, compaction continuity, and VCS hard-event memory.
@@ -158,6 +163,10 @@ This is preferable to stuffing all metadata into FTS5 columns. FTS remains good
 at text; B-tree/generated/partial indexes are better for structure and time.
 
 ### Phase 2: Private Real-History Annotation
+
+The private-safe procedure lives in
+[`hippocampal-private-annotation-protocol.md`](hippocampal-private-annotation-protocol.md).
+This section keeps only the sampling intent.
 
 After the runner is stable, sample 20 private real-history scenes from
 registered clean-source threads. Candidate scenes should include:
@@ -495,6 +504,7 @@ P1:
 P2:
 
 - private real-history annotation protocol
+  (`docs/evidence/benchmarks/hippocampal-private-annotation-protocol.md`)
 - 20-scene private validation pack
 - human-label adjudication workflow
 - seeded expansion of natural degraded queries with human verification

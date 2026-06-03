@@ -9,9 +9,11 @@ Repository-layout command paths refreshed: 2026-05-29.
 Public-core license and adapter boundary refreshed: 2026-05-30.
 
 Keep this page focused on claim boundaries and missing proof. Dated command
-evidence belongs in `docs/evidence/readiness/public-readiness-verification.md`; next-slice task
-handoff belongs in `docs/planning/next-iteration-plan.md`. The benchmark and smoke
-navigation map lives in `docs/evidence/benchmark-evidence-map.md`.
+evidence belongs in `docs/evidence/readiness/public-readiness-verification.md`;
+current numeric benchmark/readiness claims and supersession rules live in
+`docs/evidence/current-claims.md`; next-slice task handoff belongs in
+`docs/planning/next-iteration-plan.md`. The benchmark and smoke navigation map
+lives in `docs/evidence/benchmark-evidence-map.md`.
 
 ## Can Claim Now
 
@@ -45,14 +47,16 @@ navigation map lives in `docs/evidence/benchmark-evidence-map.md`.
   fails on missing API keys, partial model failures, or empty model findings
   rather than falling back to deterministic sidecar observation. The
   unit suite also covers the mocked DeepSeek job-to-sidecar path for
-  `semantic_scope_labeling`. The current local registry has also been refreshed
-  beyond the newest slice: onboarding registered 63 additional sessions, bringing
-  the aggregate local registry evidence to 949 threads with complete clean
-  source/index/graph artifacts, 101 scope-labeled threads, 80 non-technical
-  life-wide threads, and 142 project groups. The semantic real-history smoke now
+  `semantic_scope_labeling`. The dated local registry and semantic-sidecar
+  counts for this family are governed by `docs/evidence/current-claims.md` so
+  older readiness paragraphs cannot outrank newer cohorts. The 2026-05-29
+  registry refresh onboarded 63 additional sessions, bringing that aggregate
+  local registry evidence to 949 threads with complete clean source/index/graph
+  artifacts, 101 scope-labeled threads, 80 non-technical life-wide threads, and
+  142 project groups. The semantic real-history smoke now
   emits `claim_level`, coverage ratios, and `cannot_claim` fields so `sufficient`
-  cannot be mistaken for full-history completion. The latest full-candidate
-  live semantic run selected 609 currently unlabeled life-wide candidate turns
+  cannot be mistaken for full-history completion. A 2026-05-29 full-candidate
+  live semantic run selected 609 then-unlabeled life-wide candidate turns
   across 98 threads, evaluated all of them in 26 successful parallel
   DeepSeek-compatible batches with no model failures, accepted 99 new
   source-backed staging findings, and expanded materialized dynamic semantic
@@ -67,8 +71,8 @@ navigation map lives in `docs/evidence/benchmark-evidence-map.md`.
   `idea_seed`/`technical_work` guesses. A fresh v2 no-write DeepSeek probe over
   32 candidate turns produced 11 accepted findings and 15 accepted labels with
   complete sufficient per-label evidence, covering seven canonical labels. The
-  current strict materialization keeps only the labels that survived the
-  stronger evidence gates, leaving 2 threads/5 rows and 5 latest timeline turns
+  historical strict-survival materialization kept only the labels that survived
+  the stronger evidence gates, leaving 2 threads/5 rows and 5 timeline turns
   with semantic labels. A selected source-evidence recall
   eval now builds fuzzy life-wide prompts from dynamic
   low-frequency source cue terms, not a hand-expanded word list, and uses
@@ -76,19 +80,19 @@ navigation map lives in `docs/evidence/benchmark-evidence-map.md`.
   return the expected clean-source evidence in top-5 results
   (`top_k_hit_rate=1.0`) while emitting only hashed case ids and aggregate
   counts. A separate live source-review smoke samples semantic sidecar labels
-  one label at a time, retries transient reviewer failures, and now verifies
-  the current strict materialization at 5 of 5 selected labels supported by the
-  matching clean-source message (`pass_rate=1.0`) with no model-call failures.
-  The latest review sample covers the labels that survived the stricter
+  one label at a time, retries transient reviewer failures, and verified the
+  2026-05-29 strict-survival materialization at 5 of 5 selected labels
+  supported by the matching clean-source message (`pass_rate=1.0`) with no
+  model-call failures. The 2026-05-30 review sample covers the labels that survived the stricter
   materializer; high-risk soft labels that lack strong per-label evidence are
   intentionally suppressed rather than treated as supported. DeepSeek model
   routing now keeps flash as the default fast/background model and routes
   slower `suppressed_label_recovery` / `agentic_source_review` work to Pro. A
   live Pro-agent suppressed-label recovery smoke filtered out old
   empty-evidence sidecar candidates, inspected clean source through a tool, and
-  recovered 3 labels from the currently available 8 suppressed cases / 11
+  recovered 3 labels from the then-available 8 suppressed cases / 11
   candidate labels through the unchanged strict materializer
-  (`strict_gate_relaxed=false`). The latest broader 96-case source-review run
+  (`strict_gate_relaxed=false`). The 2026-05-30 broader 96-case source-review run
   is diagnostic rather than a green gate: it selected enough cases and kept
   every reviewed label category above the 0.65 per-label floor, but a live model
   partial failure kept the run at `claim_level=diagnostic_only`. The smoke now
@@ -204,8 +208,8 @@ The #55/#56 closeout refreshes evidence without changing the claim boundary
 above. The canonical command details live in
 `docs/evidence/readiness/public-readiness-verification.md`.
 
-- #55 adds a 24-case live source-review pass for the current strict semantic
-  sidecar slice and records a broader 96-case diagnostic live run with strong
+- #55 adds a 24-case live source-review pass for the selected strict semantic
+  sidecar slice as of the 2026-05-30 run and records a broader 96-case diagnostic live run with strong
   semantic pass-rate but one live model partial failure. Treat the broader run
   as diagnostic, not as a green gate.
 - #55 also refreshes selected retrieval evidence across all eight canonical
@@ -345,7 +349,7 @@ above. The canonical command details live in
 | --- | --- | --- |
 | 0 | Ubuntu PR CI runs Python 3.12/3.13 docs health, Ruff `E9` + full Pyflakes `F`, mypy, compile checks, and `python tools/aippocampus/run_tests.py --tier fast` for the default deterministic regression path. PR CI also runs a macOS fast-tier gate on the runner's default TMPDIR as a path-identity guard for recurring #140/#242/#402 `/var` and `/private/var` regressions. `--tier full` remains the explicit release/readiness suite. | Keep the Ubuntu and macOS fast gates green after each slice; run the slow, benchmark, manual macOS install smoke, or full tier when claiming the surface they own |
 | 1 | `README.md`, `CONTRIBUTING.md`, `docs/guides/public-core-boundary.md`, architecture/install/demo/privacy docs, synthetic example bundle, docs health guardrails, dated full-suite/scan notes, Apache-2.0 package/plugin/provenance metadata, `tools/aippocampus/smoke/run_stage_0_5_smoke.py` unified smoke runner, package-level temporary plugin install/MCP/uninstall smoke, and real Codex app-server plugin manager/MCP host smoke | Third-party fresh-clone or second-user install review, public marketplace submission if claimed, and repeated full-suite/scan evidence after each release slice |
-| 2 | Registry, clean source, cognitive map, semantic triggers, subconscious jobs, deterministic `scope_labels`, mocked DeepSeek `semantic_scope_labeling` job-to-sidecar test, `build_semantic_scope_labels.py` materializer, dynamic `semantic-scope-labels.jsonl` sidecar merging with strict per-label evidence gates for every materialized label, scope-filtered clean-source search, public casual-important metaphor/pivot example, `life_wide` timeline groups with source refs, quiet life-wide ambient scent with anti-over-personalization tests, real-registry aggregate coverage smoke with claim-level/ratio guards, refreshed 949-thread local registry, full-candidate real-history semantic sidecar smoke evaluating 609 selected candidates and expanding to 27 threads/119 rows before strict filtering, v2 fresh DeepSeek probe with 11 findings / 15 accepted labels / complete per-label evidence, current strict sidecars at 2 threads/5 rows/5 timeline turns, selected source-evidence recall eval with 24/24 top-5 hits, broader selected source-review smoke with 96 cases / 84 supported / 0 failed label categories, DeepSeek flash/pro route tests, live Pro-agent suppressed-label recovery restoring 3 labels from 8 suppressed cases / 11 candidate labels without relaxing strict gates, synthetic Track D compaction-continuity benchmark coverage for event-chain source fidelity / correction-anchor recall / anti-nag / repeated-anchor and stale-anchor suppression, slow/live #45 real Codex app-server long-session smoke coverage for 50 pre-compaction turns, real compaction hooks, synthetic correction survival, and clean-source rebuild verification, deterministic #65 correction-reconsolidation event/adjudication helper coverage, deterministic #67 coding decision-event/ticket helper coverage, deterministic #68 agency affordance-map/ticket-selector coverage, deterministic #71 retrieval score-fusion policy coverage, deterministic #72 question salience/adaptive-threshold coverage, deterministic #70 structured-text cognitive portrait benchmark coverage, deterministic #63 Journey Tracking P1-P3 core coverage, deterministic #64 compensatory dream Phase 1 plus P2 source-pack/adjudication substrate coverage, selected real-history structural dream eval coverage, and deterministic #69 reflection-space topology/feedback MVP coverage | Broader human/source review and stronger model-side evidence to restore high-confidence coverage for still-suppressed soft labels; live semantic adjudication quality, private real-history compaction survival, host-agent decision-ticket timing, agency-ticket annoyance calibration, measured real vector/graph fusion quality, calibrated question salience/threshold weights, private/live portrait quality, live Journey/theme quality, private real-history dream quality and measured user-visible recall/reflection lift beyond structural substrate deltas, and real reflection-space behavior/UI evidence before visual polish claims |
+| 2 | Registry, clean source, cognitive map, semantic triggers, subconscious jobs, deterministic `scope_labels`, mocked DeepSeek `semantic_scope_labeling` job-to-sidecar test, `build_semantic_scope_labels.py` materializer, dynamic `semantic-scope-labels.jsonl` sidecar merging with strict per-label evidence gates for every materialized label, scope-filtered clean-source search, public casual-important metaphor/pivot example, `life_wide` timeline groups with source refs, quiet life-wide ambient scent with anti-over-personalization tests, real-registry aggregate coverage smoke with claim-level/ratio guards and current numeric snapshot in `docs/evidence/current-claims.md`, dated 2026-05-29 949-thread local registry evidence, full-candidate real-history semantic sidecar smoke evaluating 609 selected candidates and expanding to 27 threads/119 rows before strict filtering, v2 fresh DeepSeek probe with 11 findings / 15 accepted labels / complete per-label evidence, historical strict sidecar survival slice at 2 threads/5 rows/5 timeline turns, selected source-evidence recall eval with 24/24 top-5 hits, broader selected source-review smoke with 96 cases / 84 supported / 0 failed label categories, DeepSeek flash/pro route tests, live Pro-agent suppressed-label recovery restoring 3 labels from 8 suppressed cases / 11 candidate labels without relaxing strict gates, synthetic Track D compaction-continuity benchmark coverage for event-chain source fidelity / correction-anchor recall / anti-nag / repeated-anchor and stale-anchor suppression, slow/live #45 real Codex app-server long-session smoke coverage for 50 pre-compaction turns, real compaction hooks, synthetic correction survival, and clean-source rebuild verification, deterministic #65 correction-reconsolidation event/adjudication helper coverage, deterministic #67 coding decision-event/ticket helper coverage, deterministic #68 agency affordance-map/ticket-selector coverage, deterministic #71 retrieval score-fusion policy coverage, deterministic #72 question salience/adaptive-threshold coverage, deterministic #70 structured-text cognitive portrait benchmark coverage, deterministic #63 Journey Tracking P1-P3 core coverage, deterministic #64 compensatory dream Phase 1 plus P2 source-pack/adjudication substrate coverage, selected real-history structural dream eval coverage, and deterministic #69 reflection-space topology/feedback MVP coverage | Broader human/source review and stronger model-side evidence to restore high-confidence coverage for still-suppressed soft labels; live semantic adjudication quality, private real-history compaction survival, host-agent decision-ticket timing, agency-ticket annoyance calibration, measured real vector/graph fusion quality, calibrated question salience/threshold weights, private/live portrait quality, live Journey/theme quality, private real-history dream quality and measured user-visible recall/reflection lift beyond structural substrate deltas, and real reflection-space behavior/UI evidence before visual polish claims |
 | 3 | `sync_bundle.py`, `sync_object_storage.py`, `export_bundle.py`, `import_bundle.py`, global thread store defaults, semantic scope-label sidecar sync, device-neutral bundle registry locators, target-registry path repair on pull, conflict-preserving pull tests, single-machine dual-device/cross-OS-path-shape smoke, local HTTP object-storage adapter smoke, Docker/WSL alternate-runtime smoke when available, physical Windows-to-MacBook sync smoke, managed Cloudflare R2 encrypted object-storage smoke, legacy macOS system-Python path-repair regression coverage, and install docs | Broader provider matrix, cloud-folder client evidence if claimed, and longer-running multi-user/device operational soak |
 | 4 | `aippocampus_mcp_server.py`, `.mcp.json`, MCP unit tests, structured MCP error-contract tests, source stdio JSON-RPC process smoke, installed-plugin `.mcp.json` standalone MCP JSON-RPC client smoke, real Codex app-server MCP host list and `mcpServer/tool/call sync_status` smoke | Interactive Desktop UI verification or additional Codex client surfaces only if claiming those wrappers |
 | 5 | `plugins/aippocampus/`, `build_plugin_package.py`, plugin contract tests, public distribution/uninstall/rollback docs, package-level temporary install/MCP JSON-RPC/uninstall smoke, real Codex app-server marketplace/plugin install/uninstall smoke | Public marketplace submission or independent third-party install review if claimed |
