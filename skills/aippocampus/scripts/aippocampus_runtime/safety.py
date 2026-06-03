@@ -244,6 +244,16 @@ BENCHMARK_PRIVATE_HOST_PATTERN = re.compile(
     re.IGNORECASE,
 )
 BENCHMARK_IPV4_PATTERN = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+CLEAN_SOURCE_REDACTION_PROFILES = {"raw-private", "redacted-local", "public-export"}
+CLEAN_SOURCE_DATABASE_KV_PATTERN = re.compile(
+    r"\b(?:(?:Server|Data Source|Initial Catalog|Database|User ID|Uid|PWD|Password)"
+    r"\s*=[^;\s]+;?\s*){2,}",
+    re.IGNORECASE,
+)
+
+
+def _text_sha256(text: str) -> str:
+    return hashlib.sha256(str(text or "").encode("utf-8")).hexdigest()
 
 
 def sanitize_external_model_text(
@@ -364,6 +374,100 @@ def benchmark_sensitive_text_policy(text: str) -> dict[str, Any]:
 
 def benchmark_text_is_sensitive(text: str) -> bool:
     return bool(benchmark_sensitive_text_policy(text)["sensitive"])
+
+
+def project_clean_source_text(
+    text: str,
+    *,
+    profile: str = "raw-private",
+    project_root: str | Path | None = None,
+) -> tuple[str, dict[str, Any]]:
+    """Project clean-source text into an optional at-rest privacy profile.
+
+    `raw-private` is the canonical source text. Redacted profiles are privacy
+    projections only; callers must preserve source refs / message ids if they
+    need to reopen the private source later.
+    """
+
+    profile = str(profile or "raw-private")
+    if profile not in CLEAN_SOURCE_REDACTION_PROFILES:
+        raise ValueError(f"unknown clean-source redaction profile: {profile}")
+
+    original = str(text or "")
+    if profile == "raw-private":
+        return original, {
+            "profile": profile,
+            "redacted": False,
+            "redaction_count": 0,
+            "redaction_types": [],
+            "hard_block": False,
+            "source_fidelity": "canonical",
+            "policy": "aippocampus_runtime.safety.project_clean_source_text",
+        }
+
+    projected = original
+    redaction_types: list[str] = []
+    redaction_count = 0
+    extra_patterns: list[tuple[str, re.Pattern[str], str]] = [
+        (
+            "database_connection_string",
+            BENCHMARK_DATABASE_DSN_PATTERN,
+            "<redacted:connection-string>",
+        ),
+        (
+            "database_connection_string",
+            CLEAN_SOURCE_DATABASE_KV_PATTERN,
+            "<redacted:connection-string>",
+        ),
+        ("email_address", BENCHMARK_PRIVATE_EMAIL_PATTERN, "<redacted:email>"),
+    ]
+    for label, pattern, replacement in extra_patterns:
+        projected, count = pattern.subn(replacement, projected)
+        if count:
+            redaction_types.append(label)
+            redaction_count += count
+
+    projected, external_policy = sanitize_external_model_text(
+        projected,
+        project_root=project_root,
+    )
+    redaction_count += int(external_policy.get("redaction_count") or 0)
+    redaction_types.extend(str(item) for item in external_policy.get("redaction_types") or [])
+    unique_types = list(dict.fromkeys(redaction_types))
+    return projected, {
+        "profile": profile,
+        "redacted": bool(redaction_count),
+        "redaction_count": redaction_count,
+        "redaction_types": unique_types[:12],
+        "hard_block": bool(external_policy.get("hard_block")),
+        "source_fidelity": "projection",
+        "policy": "aippocampus_runtime.safety.project_clean_source_text",
+        "external_model_policy": external_policy,
+    }
+
+
+def project_clean_source_row(
+    row: dict[str, Any],
+    *,
+    profile: str = "raw-private",
+    project_root: str | Path | None = None,
+) -> dict[str, Any]:
+    """Return a clean-source row projected for an optional privacy profile."""
+
+    projected = dict(row)
+    projected_text, policy = project_clean_source_text(
+        str(projected.get("text") or ""),
+        profile=profile,
+        project_root=project_root,
+    )
+    if profile != "raw-private":
+        # Keep original ids/hashes as source-reopen join keys. The redacted hash
+        # identifies only this projection text and must not replace content_sha256.
+        projected["text"] = projected_text
+        projected["redaction_profile"] = profile
+        projected["redaction_policy"] = policy
+        projected["redacted_text_sha256"] = _text_sha256(projected_text)
+    return projected
 
 
 def is_loopback_host(hostname: str | None) -> bool:

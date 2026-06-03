@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import sqlite3
@@ -16,6 +18,11 @@ sys.path.insert(0, str(SCRIPTS))
 import artifact_publish  # noqa: E402
 import build_index  # noqa: E402
 import search_rollout  # noqa: E402
+from tests.aippocampus.redaction_fixtures import (  # noqa: E402
+    fake_test_database_dsn,
+    fake_test_email,
+    fake_test_windows_path,
+)
 
 
 def canonical(path: str | Path) -> Path:
@@ -248,6 +255,75 @@ class BuildIndexTests(unittest.TestCase):
                 search_rollout.auto_index_path(str(root), None, prefer_existing=True),
                 canonical(current),
             )
+
+    def test_public_export_index_profile_sanitizes_jsonl_and_sqlite_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            transcript = root / "generic.jsonl"
+            private_path = fake_test_windows_path("memory_gate.py")
+            email = fake_test_email()
+            database_dsn = fake_test_database_dsn()
+            private_text = (
+                f"Open {private_path}; email {email}; "
+                f"database {database_dsn}."
+            )
+            transcript.write_text(
+                json.dumps(
+                    {
+                        "session_id": "public-export-index",
+                        "timestamp": "2026-06-03T00:00:00Z",
+                        "cwd": str(root),
+                        "role": "user",
+                        "text": private_text,
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            output_dir = root / "index"
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                code = build_index.main(
+                    [
+                        "--provider",
+                        "generic-jsonl",
+                        "--cwd",
+                        str(root),
+                        "--rollout",
+                        str(transcript),
+                        "--output-dir",
+                        str(output_dir),
+                        "--redaction-profile",
+                        "public-export",
+                        "--json",
+                    ]
+                )
+
+            self.assertEqual(code, 0)
+            manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["redaction_profile"], "public-export")
+            self.assertEqual(manifest["privacy_boundary"]["source_text_profile"], "public-export")
+
+            messages_text = (output_dir / "messages.jsonl").read_text(encoding="utf-8")
+            self.assertIn("<redacted:email>", messages_text)
+            self.assertIn("<redacted:connection-string>", messages_text)
+            self.assertIn("<redacted:local-path>", messages_text)
+            for raw in (
+                email,
+                database_dsn,
+                "FAKE_TEST_LOCAL_PATH",
+            ):
+                self.assertNotIn(raw, messages_text)
+
+            con = sqlite3.connect(output_dir / "source_index.sqlite")
+            try:
+                sqlite_text = con.execute("SELECT text FROM messages").fetchone()[0]
+                self.assertIn("<redacted:email>", sqlite_text)
+                self.assertNotIn(email, sqlite_text)
+                self.assertNotIn(database_dsn, sqlite_text)
+            finally:
+                con.close()
 
 
 if __name__ == "__main__":

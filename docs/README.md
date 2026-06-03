@@ -51,6 +51,7 @@ maps.
 - [`cognitive-runtime-architecture.md`](architecture/cognitive-runtime-architecture.md) - layered runtime architecture and cognitive-map direction.
 - [`runtime-script-map.md`](architecture/runtime-script-map.md) - maintainer map for high-risk runtime scripts, recall flow, entrypoints, callers, and tests.
 - [`schema-field-profiles.md`](architecture/schema-field-profiles.md) - field-budget, profile, sidecar, and projection discipline for keeping minimal/runtime/high-risk/diagnostic surfaces separate.
+- [`clean-source-redaction-profiles.md`](architecture/clean-source-redaction-profiles.md) - optional clean-source redaction profiles and the source-fidelity boundary for #591.
 - [`path-identity.md`](architecture/path-identity.md) - identity key, display path, and privacy-safe public path boundary for #404/#589 style platform path regressions.
 - [`rust-deterministic-core.md`](architecture/rust-deterministic-core.md) - contract-replay gate for future Rust infrastructure slices without rewriting cognitive layers.
 - [`project-planning-automation.md`](architecture/project-planning-automation.md) - boundary between issue intake triage and recurring roadmap drift audits.

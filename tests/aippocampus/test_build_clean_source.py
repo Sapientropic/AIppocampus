@@ -20,6 +20,11 @@ for _path in (
 
 import build_clean_source as clean_source  # noqa: E402
 from conversation_sources import ConversationSourceRef, GenericConversationProvider  # noqa: E402
+from tests.aippocampus.redaction_fixtures import (  # noqa: E402
+    fake_test_database_dsn,
+    fake_test_email,
+    fake_test_windows_path,
+)
 
 
 class MemoryConversationProvider:
@@ -392,6 +397,85 @@ class BuildCleanSourceTests(unittest.TestCase):
         self.assertNotIn("<skill>", text)
         self.assertNotIn("secret-local-path", text)
         self.assertIn("真实回答仍然保留。", text)
+
+    def test_clean_source_can_write_public_export_projection_without_replacing_canonical_text(
+        self,
+    ) -> None:
+        private_path = fake_test_windows_path("token.py")
+        email = fake_test_email()
+        database_dsn = fake_test_database_dsn()
+        self._append(
+            {
+                "type": "event_msg",
+                "timestamp": "2026-05-26T04:10:03Z",
+                "payload": {
+                    "type": "user_message",
+                    "message": (
+                        f"Please preserve source refs for {private_path}. "
+                        f"email {email}; "
+                        f"database {database_dsn}."
+                    ),
+                },
+            }
+        )
+        self._append(
+            {
+                "type": "event_msg",
+                "timestamp": "2026-05-26T04:10:04Z",
+                "payload": {
+                    "type": "agent_message",
+                    "phase": "final_answer",
+                    "message": "Projection rows are privacy surfaces, not source truth.",
+                },
+            }
+        )
+
+        result = clean_source.build_clean_source(
+            self.cwd,
+            rollout=self.rollout,
+            redaction_profiles=["public-export"],
+        )
+
+        canonical_text = Path(result["outputs"]["messages_jsonl"]).read_text(encoding="utf-8")
+        self.assertIn(email, canonical_text)
+        self.assertIn(database_dsn, canonical_text)
+        canonical_rows = [json.loads(line) for line in canonical_text.splitlines()]
+
+        projection_path = Path(
+            result["outputs"]["redaction_profiles"]["public-export"]["messages_jsonl"]
+        )
+        projection_rows = [
+            json.loads(line) for line in projection_path.read_text(encoding="utf-8").splitlines()
+        ]
+        projected_row = next(item for item in projection_rows if "<redacted:email>" in item["text"])
+        projected_text = projected_row["text"]
+        canonical_row = next(
+            item for item in canonical_rows if item["message_id"] == projected_row["message_id"]
+        )
+
+        self.assertEqual(projected_row["redaction_profile"], "public-export")
+        self.assertEqual(projected_row["source_ref"], canonical_row["source_ref"])
+        self.assertEqual(projected_row["source_id"], canonical_row["source_id"])
+        self.assertEqual(projected_row["content_sha256"], canonical_row["content_sha256"])
+        self.assertIn("redacted_text_sha256", projected_row)
+        self.assertIn("<redacted:email>", projected_text)
+        self.assertIn("<redacted:connection-string>", projected_text)
+        self.assertIn("<redacted:local-path>", projected_text)
+        self.assertNotIn(email, projected_text)
+        self.assertNotIn(database_dsn, projected_text)
+        self.assertNotIn("FAKE_TEST_LOCAL_PATH", projected_text)
+        self.assertEqual(
+            result["redaction_profiles"]["public-export"]["source_fidelity"],
+            "projection",
+        )
+        self.assertEqual(
+            result["cleaning_policy"]["redaction_default_profile"],
+            "raw-private",
+        )
+        self.assertEqual(
+            result["cleaning_policy"]["projection_boundary"],
+            "redacted profiles preserve join keys but are not canonical source truth",
+        )
 
     def test_clean_source_builds_from_provider_normalized_generic_transcript(self) -> None:
         transcript = self.cwd / "generic.jsonl"

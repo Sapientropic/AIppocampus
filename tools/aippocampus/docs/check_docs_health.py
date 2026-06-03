@@ -593,6 +593,7 @@ REPO_MARKDOWN_EXCLUDED_PARTS = {
     ".git",
     ".tmp",
     "__pycache__",
+    "reviews",
 }
 
 ORIGIN_PHRASES = [

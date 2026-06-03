@@ -31,6 +31,11 @@ from conversation_sources import (  # noqa: E402
     GenericJsonlValidationError,
     create_conversation_provider,
 )
+from tests.aippocampus.redaction_fixtures import (  # noqa: E402
+    fake_test_credential_url,
+    fake_test_database_dsn,
+    fake_test_email,
+)
 
 LOCATE_ROLLOUT = SCRIPTS / "locate_rollout.py"
 
@@ -213,13 +218,16 @@ class AippocampusLibTests(unittest.TestCase):
         self.assertEqual(mostly_secret, "<redacted:private-key-block>")
 
     def test_benchmark_sensitive_text_policy_reuses_runtime_safety_boundary(self) -> None:
+        database_dsn = fake_test_database_dsn()
+        credential_url = fake_test_credential_url()
+        email = fake_test_email()
         cases = {
-            "postgres://user:pass@db.internal:5432/app": {
-                "credential_url",
+            database_dsn: {
                 "database_connection_string",
                 "private_hostname",
             },
-            "contact me at person@example.com": {"email_address"},
+            credential_url: {"credential_url", "private_hostname"},
+            f"contact me at {email}": {"email_address"},
             "service endpoint http://10.0.0.8:8080": {"private_ip_address"},
             "token=super-secret and /home/sdy/private.txt": {
                 "secret_assignment",
@@ -242,6 +250,82 @@ class AippocampusLibTests(unittest.TestCase):
         )
         self.assertFalse(normal_policy["sensitive"])
         self.assertEqual(normal_policy["reason_categories"], [])
+
+    def test_clean_source_redaction_profiles_mask_text_without_replacing_source_truth(self) -> None:
+        project_file = REPO_ROOT / "skills" / "aippocampus" / "scripts" / "aippocampus_runtime" / "safety.py"
+        database_dsn = fake_test_database_dsn()
+        email = fake_test_email()
+        private_key_block = "\n".join(
+            [
+                "-----" + "BEGIN PRIVATE KEY" + "-----",
+                "FAKE_TEST_PRIVATE_KEY_PAYLOAD",
+                "-----" + "END PRIVATE KEY" + "-----",
+            ]
+        )
+        text = (
+            f"Keep source refs for {project_file}. "
+            f"Contact {email}. "
+            f"Use {database_dsn}. "
+            "token=sk-FAKE_TEST_OPENAI_REDACTION_1234567890.\n"
+            f"{private_key_block}"
+        )
+
+        raw_text, raw_policy = safety.project_clean_source_text(
+            text,
+            profile="raw-private",
+            project_root=REPO_ROOT,
+        )
+        self.assertEqual(raw_text, text)
+        self.assertEqual(raw_policy["source_fidelity"], "canonical")
+        self.assertFalse(raw_policy["redacted"])
+
+        projected, policy = safety.project_clean_source_text(
+            text,
+            profile="public-export",
+            project_root=REPO_ROOT,
+        )
+
+        self.assertEqual(policy["profile"], "public-export")
+        self.assertEqual(policy["source_fidelity"], "projection")
+        self.assertTrue(policy["redacted"])
+        self.assertIn("private_key_block", policy["redaction_types"])
+        self.assertIn("openai_api_key", policy["redaction_types"])
+        self.assertIn("email_address", policy["redaction_types"])
+        self.assertIn("database_connection_string", policy["redaction_types"])
+        self.assertIn("<redacted:private-key-block>", projected)
+        self.assertIn("<redacted:api-key>", projected)
+        self.assertIn("<redacted:email>", projected)
+        self.assertIn("<redacted:connection-string>", projected)
+        self.assertIn("<redacted:local-path>", projected)
+        self.assertIn("<path-anchor", projected)
+        self.assertNotIn("FAKE_TEST_PRIVATE_KEY_PAYLOAD", projected)
+        self.assertNotIn(email, projected)
+        self.assertNotIn(database_dsn, projected)
+        self.assertNotIn(str(REPO_ROOT), projected)
+        self.assertNotIn("safety.py", projected)
+
+    def test_clean_source_redaction_profile_design_doc_links_policy_surfaces(self) -> None:
+        doc = REPO_ROOT / "docs" / "architecture" / "clean-source-redaction-profiles.md"
+        text = doc.read_text(encoding="utf-8")
+        docs_index = (REPO_ROOT / "docs" / "README.md").read_text(encoding="utf-8")
+        privacy_checklist = (
+            REPO_ROOT / "docs" / "guides" / "privacy-security-checklist.md"
+        ).read_text(encoding="utf-8")
+
+        for term in (
+            "#591",
+            "#352",
+            "#357",
+            "raw-private",
+            "redacted-local",
+            "public-export",
+            "external-model",
+            "source refs",
+            "canonical evidence source",
+        ):
+            self.assertIn(term, text)
+        self.assertIn("clean-source-redaction-profiles.md", docs_index)
+        self.assertIn("clean-source redaction profiles", privacy_checklist)
 
     def test_cli_error_owner_preserves_payload_shape(self) -> None:
         payload = cli_errors.cli_error_payload_from_message("missing API key")

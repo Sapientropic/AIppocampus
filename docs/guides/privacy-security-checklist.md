@@ -6,6 +6,10 @@ bundle, demo, release, or plugin package.
 ## Source Boundaries
 
 - Clean source may contain private visible conversation text.
+- Optional clean-source redaction profiles are defined in
+  [`clean-source-redaction-profiles.md`](../architecture/clean-source-redaction-profiles.md).
+  Redacted projections are privacy surfaces; `raw-private` clean source remains
+  the canonical evidence source unless a user explicitly chooses otherwise.
 - Raw rollout is audit provenance, not the daily recall surface.
 - Registry rows, vault exports, thread anchors, and sync bundles are private
   unless intentionally sanitized.
