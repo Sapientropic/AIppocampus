@@ -60,6 +60,37 @@ DEFAULT_DREAM_WORKER_MODE = "deterministic"
 MODEL_BACKED_DREAM_WORKER_MODE = "model_backed"
 
 SEED_FINDING_KINDS = {"question_candidate", "frontier_marker", "question_link"}
+USER_VISIBLE_EVALUATION_AXES = [
+    "structural_validity",
+    "recall_utility",
+    "action_utility",
+    "annoyance_noise",
+    "stale_superseded_handling",
+]
+MANUAL_REVIEW_STATUSES = {
+    "supported",
+    "refuted",
+    "unknown",
+    "stale",
+    "superseded",
+    "noisy",
+    "over_personalized",
+}
+WRONG_HINT_OUTCOMES = {
+    "wrong_hint",
+    "irrelevant",
+    "stale",
+    "superseded",
+    "over_personalized",
+    "user_correction",
+}
+HIGH_ANNOYANCE_VALUES = {"high", "annoying", "noisy"}
+CODING_DECISION_SHADOW_SEED_KINDS = {
+    "coding_ticket",
+    "coding_decision_event",
+    "decision_event",
+    "rejected_route",
+}
 LOW_SIGNAL_TERMS = {
     "aippocampus",
     "app",
@@ -820,20 +851,34 @@ def manual_source_review_metrics(rows: Iterable[Mapping[str, Any]]) -> dict[str,
     status_counts: Counter[str] = Counter()
     reviewed = 0
     source_backed = 0
+    wrong_hint_count = 0
+    high_annoyance_count = 0
+    stale_or_superseded_count = 0
     for row in rows:
         if not isinstance(row, Mapping):
             continue
         status = str(row.get("review_status") or row.get("status") or "unknown").casefold()
-        if status not in {"supported", "refuted", "unknown"}:
+        if status not in MANUAL_REVIEW_STATUSES:
             status = "unknown"
+        outcome = str(row.get("user_visible_outcome") or row.get("outcome") or "").casefold()
+        annoyance = str(row.get("annoyance_risk") or row.get("noise_risk") or "").casefold()
         reviewed += 1
         status_counts[status] += 1
         if row.get("source_refs"):
             source_backed += 1
+        if outcome in WRONG_HINT_OUTCOMES:
+            wrong_hint_count += 1
+        if annoyance in HIGH_ANNOYANCE_VALUES:
+            high_annoyance_count += 1
+        if status in {"stale", "superseded"}:
+            stale_or_superseded_count += 1
     return {
         "reviewed_count": reviewed,
         "source_backed_review_count": source_backed,
         "status_counts": dict(sorted(status_counts.items())),
+        "wrong_hint_count": wrong_hint_count,
+        "high_annoyance_count": high_annoyance_count,
+        "stale_or_superseded_count": stale_or_superseded_count,
     }
 
 
@@ -925,6 +970,7 @@ def evaluate_user_visible_dream_lift(
         "kind": "aippocampus_dream_user_visible_lift_eval",
         "claim_level": "visibility_ablation_harness",
         "private_text_emitted": False,
+        "evaluation_axes": USER_VISIBLE_EVALUATION_AXES,
         "metrics": {
             "recall_lift": {
                 "prompt_count": recall_total,
@@ -950,6 +996,21 @@ def evaluate_user_visible_dream_lift(
                 "support_rate": ratio(source_correct, len(visible_rows)),
             },
             "manual_source_review": manual,
+            "annoyance_noise": {
+                "visible_dream_row_count": len(visible_rows),
+                "wrong_hint_count": manual["wrong_hint_count"],
+                "high_annoyance_count": manual["high_annoyance_count"],
+                "wrong_hint_rate": ratio(manual["wrong_hint_count"], manual["reviewed_count"]),
+                "no_harm_rate": ratio(suppressed, unsupported_total),
+            },
+            "stale_superseded_handling": {
+                "reviewed_count": manual["reviewed_count"],
+                "stale_or_superseded_count": manual["stale_or_superseded_count"],
+                "stale_or_superseded_rate": ratio(
+                    manual["stale_or_superseded_count"],
+                    manual["reviewed_count"],
+                ),
+            },
             "cost_cache": {
                 "usage": usage,
                 "cache": cache,
@@ -961,6 +1022,26 @@ def evaluate_user_visible_dream_lift(
             "unsupported_strong_claims_require_source_reopen_in_eval",
         ],
         "cannot_claim": cannot_claim,
+    }
+
+
+def coding_decision_shadow_probe_status(packs: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+    pack_list = [pack for pack in packs if isinstance(pack, Mapping)]
+    coding_pack_count = 0
+    for pack in pack_list:
+        seed_kinds = {str(kind or "").casefold() for kind in (pack.get("source_seed_kinds") or [])}
+        if seed_kinds & CODING_DECISION_SHADOW_SEED_KINDS:
+            coding_pack_count += 1
+    included = coding_pack_count > 0
+    return {
+        "included": included,
+        "status": "included" if included else "deferred_no_coding_decision_shadow_pack",
+        "selected_pack_count": len(pack_list),
+        "coding_pack_count": coding_pack_count,
+        "claim_boundary": (
+            "reports whether the selected pack set exercises coding decision-shadow probes; "
+            "absence keeps #163 prospective Dream value untested on a falsifiable coding workload"
+        ),
     }
 
 
@@ -1061,6 +1142,7 @@ def run_dream_real_history_eval(
         kind for pack in packs for kind in (pack.get("source_seed_kinds") or [])
     )
     status = eval_status(len(packs), min_packs, comparison["lift"])
+    coding_probe = coding_decision_shadow_probe_status(packs)
     metrics: dict[str, Any] = {
         "job_row_count": len(jobs),
         "working_memory_row_count": len(working_rows),
@@ -1069,11 +1151,22 @@ def run_dream_real_history_eval(
         "dream_finding_count": sum(len(run.get("findings") or []) for run in worker_runs),
         "dream_working_memory_count": len(dream_working_rows),
         "source_seed_kind_counts": dict(sorted(seed_kind_counts.items())),
+        "coding_decision_shadow_probe": coding_probe,
         "user_visible": user_visible,
         **comparison,
     }
     if model_route_payload:
         metrics["dream_model_route"] = dict(model_route_payload)
+    cannot_claim = [
+        "private_real_history_dream_quality",
+        "live_model_behavioral_lift",
+        "full_history_coverage",
+        "user_visible_reflection_value",
+        "clean_source_resolution_without_reopen",
+        "formal_memory_promotion",
+    ]
+    if not coding_probe["included"]:
+        cannot_claim.append("coding_decision_shadow_probe_deferred")
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": EVAL_KIND,
@@ -1092,15 +1185,9 @@ def run_dream_real_history_eval(
                 else "deterministic_dream_hypotheses_can_be_compared_against_plain_rows"
             ),
             "visibility_ablation_harness_ran_on_selected_real_history_packs",
+            "coding_decision_shadow_probe_inclusion_or_deferment_reported",
         ],
-        "cannot_claim": [
-            "private_real_history_dream_quality",
-            "live_model_behavioral_lift",
-            "full_history_coverage",
-            "user_visible_reflection_value",
-            "clean_source_resolution_without_reopen",
-            "formal_memory_promotion",
-        ],
+        "cannot_claim": cannot_claim,
     }
 
 
