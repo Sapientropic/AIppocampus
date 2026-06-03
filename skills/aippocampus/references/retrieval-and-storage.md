@@ -336,6 +336,10 @@ Default MCP tools read clean source, registry rows, or health metadata. The
 only mutating tool is `register_thread`, and it is explicit. `sync_status`
 reports real local-folder sync state when the caller supplies `sync_dir`;
 without one, it reports capability truth instead of pretending sync is active.
+`register_thread` is a control-plane registry operation: it serializes registry
+metadata writes with `.threads-registry.lock` and reports retryable
+`registry_writer_busy` contention, but it does not unlock broad memory-write
+tools or put global locks around read-only MCP queries.
 
 `recall_context` and `recall_deepen` are the agent-facing progressive recall
 funnel between hook-time scent and low-level source reopen. `recall_context`

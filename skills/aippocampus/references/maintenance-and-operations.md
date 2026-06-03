@@ -56,6 +56,19 @@ future entrypoint writes generated SQLite directly, it must reuse
 `scripts/artifact_publish.py` rather than creating a parallel lock or retry
 scheme.
 
+Registry/control-plane writes have a narrower #590 contract. `register_thread`,
+`register-rollout`, and `register-source` still write JSON registry metadata,
+not a SQLite truth store. They use the same-directory `.threads-registry.lock`
+around the registry `load -> upsert -> save` window so concurrent local agents
+do not lose updates. The JSON and Markdown registry files are both published
+through temporary files plus replace. Read-only MCP tools and registry searches
+do not take this writer lease; they either see the previous complete registry or
+the next complete registry. If the registry writer lease cannot be acquired,
+MCP reports `registry_writer_busy` as retryable writer contention. This remains
+separate from #111's generated SQLite writer coordination: generated indexes are
+still rebuildable caches, and registry metadata remains the control-plane
+source for thread discovery.
+
 Writer coordination entrypoints:
 
 - `build_index.py`: owns main index publish; uses `.index-publish.lock`,
@@ -79,6 +92,11 @@ Writer coordination entrypoints:
   export may include generated index files inside the bundle, and import
   reports both the stable search path and the pointer-resolved current SQLite
   path.
+- `aippocampus_runtime.registry.api` / `source_registration.py`: own
+  control-plane registry writes for MCP `register_thread`, `register-rollout`,
+  and `register-source`; use `.threads-registry.lock` only around registry
+  metadata updates and return retryable busy diagnostics instead of widening the
+  MCP write surface.
 
 ## Checkpoints And Anchors
 

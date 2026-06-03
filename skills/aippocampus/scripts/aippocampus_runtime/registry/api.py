@@ -48,6 +48,7 @@ from aippocampus_runtime.registry.source_registration import (
 from aippocampus_runtime.registry.store import (
     REGISTRY_SCHEMA_VERSION,
     RegistryReadError,
+    RegistryWriteBusyError,
     default_registry_dir,
     load_existing_json_object,
     load_json,
@@ -58,6 +59,7 @@ from aippocampus_runtime.registry.store import (
     safe_slug,
     save_registry,
     thread_store_dir,
+    update_registry,
     upsert_thread,
 )
 from conversation_sources import (
@@ -70,6 +72,7 @@ from conversation_sources import (
 __all__ = [
     "REGISTRY_SCHEMA_VERSION",
     "RegistryReadError",
+    "RegistryWriteBusyError",
     "default_registry_dir",
     "registry_paths",
     "registry_root",
@@ -92,6 +95,31 @@ __all__ = [
     "deep_search_entry",
     "deep_search_entry_result",
 ]
+
+
+def registry_writer_busy_payload(exc: RegistryWriteBusyError) -> dict:
+    return {
+        "ok": False,
+        "error": {
+            "code": exc.code,
+            "class": "retryable_contention",
+            "message": str(exc),
+            "retryable": exc.retryable,
+            "registry": str(exc.registry_path),
+            "wait_timeout_seconds": exc.wait_timeout_seconds,
+        },
+        "data": None,
+    }
+
+
+def report_registry_writer_busy(exc: RegistryWriteBusyError, *, json_output: bool) -> int:
+    payload = registry_writer_busy_payload(exc)
+    if json_output:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        print(payload["error"]["message"], file=sys.stderr)
+    return cli_exit_code_for_error_code(exc.code)
+
 
 def register_current_thread(
     cwd: Path,
@@ -221,8 +249,11 @@ def register_current_thread(
     }
 
     json_path, md_path = registry_paths(registry_dir)
-    registry = upsert_thread(load_registry(json_path), entry)
-    save_registry(registry, json_path, md_path)
+    registry = update_registry(
+        json_path,
+        md_path,
+        lambda current: upsert_thread(current, entry),
+    )
     return {
         "entry": entry,
         "registry_json": str(json_path),
@@ -445,15 +476,18 @@ def main() -> int:
     json_path, md_path = registry_paths(registry_dir)
 
     if args.command == "register":
-        result = register_current_thread(
-            Path(args.cwd),
-            vault=Path(args.vault) if args.vault else None,
-            dashboard_note=Path(args.dashboard_note) if args.dashboard_note else None,
-            dashboard_html=Path(args.dashboard_html) if args.dashboard_html else None,
-            registry_dir=registry_dir,
-            build_index=args.build_index,
-            provider=create_conversation_provider(args.provider, codex_home_dir=codex_home()),
-        )
+        try:
+            result = register_current_thread(
+                Path(args.cwd),
+                vault=Path(args.vault) if args.vault else None,
+                dashboard_note=Path(args.dashboard_note) if args.dashboard_note else None,
+                dashboard_html=Path(args.dashboard_html) if args.dashboard_html else None,
+                registry_dir=registry_dir,
+                build_index=args.build_index,
+                provider=create_conversation_provider(args.provider, codex_home_dir=codex_home()),
+            )
+        except RegistryWriteBusyError as exc:
+            return report_registry_writer_busy(exc, json_output=args.json_output)
         if args.json_output:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
@@ -463,16 +497,19 @@ def main() -> int:
         return 0
 
     if args.command == "register-rollout":
-        result = register_rollout_thread(
-            Path(args.rollout),
-            cwd=Path(args.cwd) if args.cwd else None,
-            title=args.title,
-            project=args.project,
-            tags=args.tag,
-            registry_dir=registry_dir,
-            build_index=args.build_index,
-            provider=provider_for_explicit_source(args.provider, Path(args.rollout)),
-        )
+        try:
+            result = register_rollout_thread(
+                Path(args.rollout),
+                cwd=Path(args.cwd) if args.cwd else None,
+                title=args.title,
+                project=args.project,
+                tags=args.tag,
+                registry_dir=registry_dir,
+                build_index=args.build_index,
+                provider=provider_for_explicit_source(args.provider, Path(args.rollout)),
+            )
+        except RegistryWriteBusyError as exc:
+            return report_registry_writer_busy(exc, json_output=args.json_output)
         if args.json_output:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
@@ -496,6 +533,8 @@ def main() -> int:
                 build_index=args.build_index,
                 dry_run=args.dry_run,
             )
+        except RegistryWriteBusyError as exc:
+            return report_registry_writer_busy(exc, json_output=args.json_output)
         except GenericJsonlValidationError as exc:
             payload = generic_validation_error_payload(exc)
             if args.json_output:
@@ -515,17 +554,20 @@ def main() -> int:
         return 0
 
     if args.command == "scan-sessions":
-        result = scan_session_rollouts(
-            registry_dir=registry_dir,
-            build_index=args.build_index,
-            refresh=args.refresh,
-            max_count=args.max,
-            cwd_filter=args.cwd_filter,
-            project=args.project,
-            tags=args.tag,
-            dry_run=args.dry_run,
-            provider=create_conversation_provider(args.provider, codex_home_dir=codex_home()),
-        )
+        try:
+            result = scan_session_rollouts(
+                registry_dir=registry_dir,
+                build_index=args.build_index,
+                refresh=args.refresh,
+                max_count=args.max,
+                cwd_filter=args.cwd_filter,
+                project=args.project,
+                tags=args.tag,
+                dry_run=args.dry_run,
+                provider=create_conversation_provider(args.provider, codex_home_dir=codex_home()),
+            )
+        except RegistryWriteBusyError as exc:
+            return report_registry_writer_busy(exc, json_output=args.json_output)
         if args.json_output:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:

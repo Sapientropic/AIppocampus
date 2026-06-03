@@ -4,6 +4,7 @@ import json
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -21,7 +22,9 @@ for _path in (
 
 import aippocampus_mcp_server as mcp  # noqa: E402
 from aippocampus_runtime import core  # noqa: E402
+from aippocampus_runtime.registry import store as registry_store  # noqa: E402
 from aippocampus_runtime.sync import bundle as sync_bundle  # noqa: E402
+from conversation_sources import ConversationSourceRef  # noqa: E402
 
 
 class AippocampusMcpServerTests(unittest.TestCase):
@@ -134,6 +137,128 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(payload["status"], "registered")
         provider = register.call_args.kwargs["provider"]
         self.assertEqual(provider.name, "codex")
+
+    def test_register_thread_reports_retryable_registry_writer_busy(self) -> None:
+        with mock.patch.object(
+            mcp.registry,
+            "register_current_thread",
+            side_effect=registry_store.RegistryWriteBusyError(
+                Path("threads.json"),
+                wait_timeout_seconds=0.0,
+            ),
+        ):
+            response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 32,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "register_thread",
+                        "arguments": {
+                            "cwd": str(self.cwd),
+                            "provider": "codex",
+                            "build_index": False,
+                        },
+                    },
+                }
+            )
+
+        self.assertTrue(response["result"]["isError"])
+        payload = self.tool_payload(response)
+        self.assertEqual(payload["error"]["code"], "registry_writer_busy")
+        self.assertTrue(payload["error"]["retryable"])
+
+    def test_concurrent_register_thread_keeps_registry_valid(self) -> None:
+        registry_dir = self.cwd / "registry"
+        workspace_a = self.cwd / "workspace-a"
+        workspace_b = self.cwd / "workspace-b"
+        workspace_a.mkdir()
+        workspace_b.mkdir()
+        rollouts = {
+            core.path_identity_key(workspace_a): self.cwd / "rollout-a.jsonl",
+            core.path_identity_key(workspace_b): self.cwd / "rollout-b.jsonl",
+        }
+        for rollout in rollouts.values():
+            rollout.write_text(
+                '{"type":"session_meta","payload":{"id":"session-test"}}\n',
+                encoding="utf-8",
+            )
+
+        class FixtureProvider:
+            name = "codex"
+
+            def locate_current(
+                self,
+                cwd: str | Path,
+                *,
+                latest: bool = False,
+            ) -> ConversationSourceRef:
+                del latest
+                cwd_path = core.canonical_path(cwd)
+                return ConversationSourceRef(
+                    provider=self.name,
+                    path=rollouts[core.path_identity_key(cwd_path)],
+                    cwd=cwd_path,
+                )
+
+        def fake_thread_key(cwd: Path, manifest: dict, rollout: Path | None) -> str:
+            del manifest, rollout
+            return f"workspace:{cwd.name}"
+
+        start = threading.Barrier(2)
+        responses: list[dict] = []
+        errors: list[BaseException] = []
+
+        def call_register(cwd: Path, request_id: int) -> None:
+            try:
+                start.wait(timeout=5)
+                responses.append(
+                    mcp.handle_request(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": request_id,
+                            "method": "tools/call",
+                            "params": {
+                                "name": "register_thread",
+                                "arguments": {
+                                    "cwd": str(cwd),
+                                    "provider": "codex",
+                                    "registry_dir": str(registry_dir),
+                                    "build_index": False,
+                                    "include_private_paths": True,
+                                },
+                            },
+                        }
+                    )
+                )
+            except BaseException as exc:
+                errors.append(exc)
+
+        with (
+            mock.patch.object(mcp, "create_conversation_provider", return_value=FixtureProvider()),
+            mock.patch.object(mcp.registry, "thread_key_for", side_effect=fake_thread_key),
+            mock.patch.object(mcp.aippocampus_health, "health_report", return_value={}),
+        ):
+            threads = [
+                threading.Thread(target=call_register, args=(workspace_a, 41)),
+                threading.Thread(target=call_register, args=(workspace_b, 42)),
+            ]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=5)
+
+        self.assertFalse(errors)
+        self.assertEqual(len(responses), 2)
+        self.assertTrue(all(not response["result"].get("isError") for response in responses))
+        registry = json.loads((registry_dir / "threads.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            {entry["thread_key"] for entry in registry["threads"]},
+            {"workspace:workspace-a", "workspace:workspace-b"},
+        )
+        registry_markdown = (registry_dir / "threads.md").read_text(encoding="utf-8")
+        self.assertIn("workspace:workspace-a", registry_markdown)
+        self.assertIn("workspace:workspace-b", registry_markdown)
 
     def test_search_memory_returns_clean_source_hits_as_tool_content(self) -> None:
         response = mcp.handle_request(
