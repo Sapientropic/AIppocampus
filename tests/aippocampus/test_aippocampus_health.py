@@ -23,6 +23,12 @@ import aippocampus_health as health  # noqa: E402
 
 
 class AippocampusHealthTests(unittest.TestCase):
+    def test_health_phase_boundaries_have_separate_registry_and_rendering_owners(self) -> None:
+        from aippocampus_runtime import health_registry, health_render  # noqa: PLC0415
+
+        self.assertIs(health.registry_health_report, health_registry.registry_health_report)
+        self.assertIs(health.render_health_text, health_render.render_health_text)
+
     def test_recommended_script_command_uses_posix_codex_home_on_macos(self) -> None:
         with mock.patch.object(health.os, "name", "posix"):
             command = health.recommended_script_command("build_index.py", Path("/tmp/work space"))

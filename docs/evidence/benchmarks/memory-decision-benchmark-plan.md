@@ -173,6 +173,9 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
   active recall, and registry memory disabled. That arm is a deterministic
   contract baseline; it records the host/version field that a future live run
   must fill, but it is not live host telemetry.
+  Fixture arm construction is typed through `CommonArmSpecConfig`; this keeps
+  host-native fallback and stale-harm knobs explicit without changing the
+  public report schema.
   This runner is diagnostic and not a public superiority claim.
 
 This slice is a smoke gate, not a real-history quality claim. It proves the

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import json
 import subprocess
 import sys
@@ -18,6 +19,43 @@ import benchmark_continuous_memory_arms as benchmark  # noqa: E402
 
 
 class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
+    def test_common_specs_uses_typed_config_instead_of_wide_kwargs(self) -> None:
+        signature = inspect.signature(benchmark._common_specs)
+
+        self.assertEqual(list(signature.parameters), ["config"])
+        self.assertTrue(hasattr(benchmark, "CommonArmSpecConfig"))
+
+    def test_common_arm_config_preserves_host_defaults_and_stale_harm_knobs(self) -> None:
+        config = benchmark.CommonArmSpecConfig(
+            correct_packet="correct",
+            sham_packet="sham",
+            stale_packet="stale",
+            oracle_packet="oracle",
+            expected_behavior="expected",
+            no_memory_behavior="no_memory_action",
+            no_memory_success=False,
+            no_memory_harm=2,
+            sham_behavior="sham_action",
+            sham_success=False,
+            sham_harm=1,
+            stale_harm=5,
+            stale_downstream_turns=7,
+            stale_rework_minutes=30,
+        )
+
+        specs = benchmark._common_specs(config)
+        by_arm = {spec.arm: spec for spec in specs}
+
+        self.assertEqual(
+            by_arm[benchmark.HOST_NATIVE_CONTINUOUS_NO_AIPPOCAMPUS].actual_behavior,
+            "no_memory_action",
+        )
+        self.assertFalse(by_arm[benchmark.HOST_NATIVE_CONTINUOUS_NO_AIPPOCAMPUS].success)
+        self.assertEqual(by_arm[benchmark.HOST_NATIVE_CONTINUOUS_NO_AIPPOCAMPUS].harm_score, 2)
+        self.assertEqual(by_arm["stale_wrong_memory"].harm_score, 5)
+        self.assertEqual(by_arm["stale_wrong_memory"].harm.downstream_turns_affected, 7)
+        self.assertEqual(by_arm["stale_wrong_memory"].harm.rollback_rework_minutes, 30)
+
     def test_report_has_public_safe_memory_attribution_arms(self) -> None:
         payload = benchmark.run_benchmark()
 

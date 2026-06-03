@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import importlib
 import json
 import os
@@ -27,6 +26,8 @@ from aippocampus_runtime.core import (
     parse_anchor_file,
     resolve_artifact_path,
 )
+from aippocampus_runtime.health_registry import registry_health_report
+from aippocampus_runtime.health_render import render_health_text, render_registry_health_text
 from aippocampus_runtime.ops.storage_eviction import latest_intentional_eviction
 from aippocampus_runtime.question.constants import DEFAULT_DORMANT_AFTER_DAYS
 from aippocampus_runtime.registry.store import registry_paths
@@ -140,10 +141,6 @@ def activity_class(
     return "normal"
 
 
-def privacy_ref(value: str) -> str:
-    return hashlib.sha256(value.encode("utf-8", errors="replace")).hexdigest()[:12]
-
-
 def question_health_stats(*args: Any, **kwargs: Any) -> dict[str, Any]:
     impl = importlib.import_module("aippocampus_runtime.question.health").question_health_stats
     return impl(*args, **kwargs)
@@ -190,63 +187,6 @@ def recommended_script_command(script_name: str, cwd: str | Path) -> str:
     )
 
 
-def render_health_text(result: dict[str, Any]) -> None:
-    status = "OK" if result["ok"] else "needs maintenance"
-    rollout = result["rollout"]
-    index = result["index"]
-    clean_source = result["clean_source"]
-    segments = result["segments"]
-    checkpoint = result["checkpoint"]
-    graphify = result["graphify"]
-    storage = result.get("storage") or {}
-    question_stats = result.get("question_stats") or {}
-    actions = result["recommended_actions"]
-
-    print(f"thread memory health: {status}")
-    if storage:
-        print(
-            "registry: "
-            f"{storage.get('active_registry')} "
-            f"({storage.get('active_registry_source')})"
-        )
-    print(
-        f"rollout: {rollout['path']} ({rollout['size']} bytes, {rollout['message_count']} messages)"
-    )
-    if index["stale"]:
-        print("index: stale")
-    elif index["message_delta"] or index["byte_delta"]:
-        print(
-            f"index: fresh window ({index['message_delta']} unindexed messages, {index['byte_delta']} new bytes below threshold)"
-        )
-    else:
-        print("index: fresh")
-    if index["rag"]:
-        print(f"rag cache: {index['rag'].get('chunk_count', 0)} chunks")
-    print(f"clean source: {'stale' if clean_source['stale'] else 'fresh'}")
-    if segments["exists"]:
-        print(
-            f"segments: {'stale' if segments['stale'] else 'fresh'} ({segments['segment_count']} shards)"
-        )
-    elif segments["needed"]:
-        print("segments: missing")
-    else:
-        print("segments: not needed yet")
-    print(f"checkpoint: {'due' if checkpoint['due'] else 'not due'}")
-    print(f"graphify corpus: {'stale' if graphify['stale'] else 'fresh'}")
-    if question_stats.get("available"):
-        print(
-            "question health: "
-            f"{question_stats.get('question_group_count', 0)} groups, "
-            f"{question_stats.get('recurring_link_count', 0)} recurring links, "
-            f"{question_stats.get('dormant_question_count', 0)} dormant, "
-            f"{question_stats.get('resolved_question_count', 0)} resolved"
-        )
-    if actions:
-        print("\nrecommended actions:")
-        for item in actions:
-            print(f"- {item['id']} [{item['severity']}]: {item['reason']}")
-
-
 def load_question_stats(
     *,
     jobs_path: Path | None,
@@ -291,133 +231,6 @@ def health_report(cwd: str | Path | None = None, **overrides: Any) -> dict[str, 
     `sys.executable script.py`.
     """
     return build_health_report(HealthOptions(cwd=Path.cwd() if cwd is None else cwd, **overrides))
-
-
-def registry_health_report(
-    *,
-    registry_dir: str | Path | None = None,
-    top: int = 10,
-    include_paths: bool = False,
-) -> dict[str, Any]:
-    """Return a privacy-safe registry-wide health rollup.
-
-    The aggregate view is intentionally manifest-only: it reads registry rows
-    and generated health/index manifests, not raw rollout or clean-source text.
-    Default output uses stable hashed refs instead of local paths or titles so
-    "fleet health" does not become a new private-history disclosure surface.
-    """
-    registry_root_dir = (
-        Path(registry_dir).resolve() if registry_dir else registry_paths(None)[0].parent
-    )
-    registry_path, _registry_md = registry_paths(registry_root_dir)
-    registry = load_json_fail_open(registry_path)
-    threads = [item for item in registry.get("threads") or [] if isinstance(item, dict)]
-    action_counts: dict[str, int] = {}
-    severity_counts: dict[str, int] = {}
-    status_counts = {"ok": 0, "needs_maintenance": 0, "unknown": 0}
-    high_risk_threads: list[dict[str, Any]] = []
-    total_rollout_bytes = 0
-    total_index_bytes = 0
-    total_clean_source_bytes = 0
-
-    for entry in threads:
-        thread_key = str(entry.get("thread_key") or entry.get("id") or "")
-        paths = entry.get("paths") or {}
-        thread_store = paths.get("registry_thread_store")
-        thread_dir = Path(thread_store) if thread_store else None
-        if thread_dir and not thread_dir.is_absolute():
-            thread_dir = registry_root_dir / thread_dir
-        if thread_key and (thread_dir is None or not thread_dir.exists()):
-            candidate = registry_root_dir / "threads" / (thread_key.replace(":", "-") or "")
-            thread_dir = candidate if candidate.exists() else None
-
-        index_manifest = load_json_fail_open(thread_dir / "index" / "manifest.json") if thread_dir else {}
-        clean_manifest = (
-            load_json_fail_open(thread_dir / "clean-source" / "manifest.json") if thread_dir else {}
-        )
-        segments_manifest = (
-            load_json_fail_open(thread_dir / "segments" / "manifest.json") if thread_dir else {}
-        )
-        raw_health = entry.get("health")
-        health: dict[str, Any] = raw_health if isinstance(raw_health, dict) else {}
-        actions = [
-            action_item
-            for action_item in health.get("recommended_actions") or []
-            if isinstance(action_item, dict)
-        ]
-        if health.get("ok") is True:
-            status_counts["ok"] += 1
-        elif health.get("ok") is False:
-            status_counts["needs_maintenance"] += 1
-        else:
-            status_counts["unknown"] += 1
-        for action_item in actions:
-            action_id = str(action_item.get("id") or "unknown")
-            severity = str(action_item.get("severity") or "unknown")
-            action_counts[action_id] = action_counts.get(action_id, 0) + 1
-            severity_counts[severity] = severity_counts.get(severity, 0) + 1
-
-        rollout_size = safe_int(entry.get("rollout_size"))
-        total_rollout_bytes += rollout_size
-        if thread_dir:
-            total_index_bytes += safe_stat_size(
-                resolve_sqlite_index_path(thread_dir / "index" / "source_index.sqlite")
-            )
-            total_clean_source_bytes += sum(
-                safe_stat_size(thread_dir / "clean-source" / filename)
-                for filename in ("manifest.json", "messages.jsonl", "turns.jsonl", "events.jsonl")
-            )
-        message_count = safe_int(entry.get("message_count"))
-        indexed_message_count = safe_int(index_manifest.get("message_count"))
-        message_delta = max(0, message_count - indexed_message_count)
-        stale_age = age_seconds_since(index_manifest.get("created_at"))
-
-        risk = (
-            len(actions) * 1000
-            + message_delta * 10
-            + safe_int(entry.get("rollout_size")) // max(1, 1024 * 1024)
-            + ((stale_age or 0) // 3600)
-        )
-        if risk > 0:
-            row: dict[str, Any] = {
-                "thread_ref": privacy_ref(thread_key or str(thread_dir or "")),
-                "health_ok": health.get("ok") if "ok" in health else None,
-                "message_count": message_count,
-                "rollout_size": rollout_size,
-                "index_message_delta": message_delta,
-                "index_stale_age_seconds": stale_age,
-                "recommended_action_ids": [str(item.get("id") or "unknown") for item in actions],
-                "has_clean_source": bool(clean_manifest),
-                "has_index": bool(index_manifest),
-                "has_segments": bool(segments_manifest),
-                "risk_score": risk,
-            }
-            if include_paths:
-                row["thread_key"] = thread_key
-                row["thread_dir"] = str(thread_dir) if thread_dir else None
-            high_risk_threads.append(row)
-
-    high_risk_threads.sort(key=lambda item: int(item.get("risk_score") or 0), reverse=True)
-    return {
-        "ok": status_counts["needs_maintenance"] == 0 and status_counts["unknown"] == 0,
-        "registry": str(registry_path) if include_paths else None,
-        "thread_count": len(threads),
-        "status_counts": status_counts,
-        "recommended_action_counts": dict(sorted(action_counts.items())),
-        "severity_counts": dict(sorted(severity_counts.items())),
-        "storage": {
-            "rollout_bytes": total_rollout_bytes,
-            "clean_source_bytes": total_clean_source_bytes,
-            "generated_index_bytes": total_index_bytes,
-            "index_amplification_ratio": ratio(total_index_bytes, total_clean_source_bytes),
-        },
-        "top_threads": high_risk_threads[: max(0, top)],
-        "privacy": {
-            "default_identifiers": "sha256 thread refs only",
-            "message_bodies_read": False,
-            "paths_included": include_paths,
-        },
-    }
 
 
 def build_health_report(options: HealthOptions) -> dict[str, Any]:
@@ -921,31 +734,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.json_output:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
-            print("registry memory health: " + ("OK" if result["ok"] else "needs maintenance"))
-            print(f"threads: {result['thread_count']}")
-            status_counts = result.get("status_counts") or {}
-            print(
-                "status: "
-                f"ok={status_counts.get('ok', 0)} "
-                f"needs={status_counts.get('needs_maintenance', 0)} "
-                f"unknown={status_counts.get('unknown', 0)}"
-            )
-            action_counts = result.get("recommended_action_counts") or {}
-            if action_counts:
-                print("recommended actions:")
-                for action_id, count in action_counts.items():
-                    print(f"- {action_id}: {count}")
-            else:
-                print("no registry recommendations recorded")
-            top_threads = result.get("top_threads") or []
-            if top_threads:
-                print("highest-risk thread refs:")
-                for item in top_threads:
-                    print(
-                        f"- {item['thread_ref']}: "
-                        f"{', '.join(item.get('recommended_action_ids') or []) or 'no action'} "
-                        f"(delta={item.get('index_message_delta', 0)})"
-                    )
+            render_registry_health_text(result)
         if args.exit_code and not result["ok"]:
             return 2
         return 0
