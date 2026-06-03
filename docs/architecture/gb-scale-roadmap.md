@@ -94,7 +94,9 @@ Completed foundation:
   rebuildable` now has a narrow path-level retention-report v1 for the main
   `source_index.sqlite` cache, with source/ref/lease/active-thread/pointer
   checks and an eviction manifest; capacity aggregates and broader cache classes
-  remain plan-only.
+  remain plan-only. If this bridge becomes the first Rust deterministic-core
+  slice, it must follow the contract-replay gate in
+  `docs/architecture/rust-deterministic-core.md`.
 
 ## Target architecture
 

@@ -132,6 +132,12 @@ for durable payloads. A useful port must make a concrete swap safer; it must not
 create a second schema owner, dependency-injection framework, or abstraction
 layer whose only proof is that future code might need it.
 
+Future Rust deterministic-core slices follow the same restraint, with a
+stricter replay gate. They must first preserve a frozen Python-owned CLI/JSON
+contract and source-truth boundary before Rust earns authority over that
+surface. The canonical migration boundary is
+`docs/architecture/rust-deterministic-core.md`.
+
 When a port is justified:
 
 - Keep the `Protocol` tiny and behavior-focused.
