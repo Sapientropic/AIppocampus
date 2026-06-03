@@ -67,6 +67,24 @@ SEPARATION_FAILURES = {
     "confabulation",
 }
 DEFAULT_ARMS = ("full_query", "keyword_only", "random_retrieval")
+LOCAL_ADAPTER_ARMS = (
+    "full_query",
+    "keyword_only",
+    "baseline_rag",
+    "closed_book",
+    "overactive_all_evidence",
+    "random_retrieval",
+)
+TRUTH_LABEL_FIELDS = (
+    "expected_decision",
+    "expected_source_refs",
+    "acceptable_scent_refs",
+    "distractor_source_refs",
+    "forbidden_claims",
+    "truth_source",
+    "ambiguity_policy",
+)
+EXTERNAL_ADAPTER_CANDIDATES = ("mem0", "zep_graphiti", "letta", "langmem")
 
 
 def now_utc() -> str:
@@ -127,6 +145,121 @@ def _score_payload(
         "calibration_category": calibration_category or outcome,
         "scent_precision_contributes": bool(scent_precision_contributes),
     }
+
+
+def adapter_case_for_row(row: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the model-facing adapter input, excluding scoring truth labels."""
+
+    return {
+        "case_id": row.get("case_id"),
+        "scene_id": row.get("scene_id"),
+        "query": row.get("query"),
+        "degradation_level": row.get("degradation_level"),
+        "interference_level": row.get("interference_level"),
+        "candidate_source_refs": _as_list(row.get("candidate_source_refs")),
+        "baseline_outputs": _as_mapping(row.get("baseline_outputs")),
+    }
+
+
+def _cost_payload(
+    response: Mapping[str, Any],
+    *,
+    candidate_count: int,
+) -> dict[str, Any]:
+    source_reopen_count = len(_as_list(response.get("evidence_refs"))) if response.get("source_reopened") else 0
+    return {
+        "candidate_count": candidate_count,
+        "source_reopen_count": source_reopen_count,
+        "model_calls": 0,
+        "tokens": 0,
+        "latency_ms": 0.0,
+    }
+
+
+def _with_adapter_metadata(
+    response: Mapping[str, Any],
+    *,
+    arm: str,
+    candidate_count: int,
+) -> dict[str, Any]:
+    payload = dict(response)
+    payload.setdefault("adapter_status", "ok")
+    payload.setdefault("adapter_arm", arm)
+    payload.setdefault("cost", _cost_payload(payload, candidate_count=candidate_count))
+    return payload
+
+
+def _closed_book_response() -> dict[str, Any]:
+    return {
+        "decision": "evidence",
+        "confidence": 0.5,
+        "evidence_refs": [],
+        "scent_refs": [],
+        "source_reopened": False,
+        "claims": ["closed-book memory answer without reopened source"],
+    }
+
+
+def _overactive_response(adapter_case: Mapping[str, Any]) -> dict[str, Any]:
+    refs = _as_list(adapter_case.get("candidate_source_refs"))
+    return {
+        "decision": "evidence" if refs else "skip",
+        "confidence": 0.99 if refs else 0.05,
+        "evidence_refs": refs,
+        "scent_refs": [],
+        "source_reopened": bool(refs),
+        "claims": [],
+    }
+
+
+def _baseline_rag_response(adapter_case: Mapping[str, Any]) -> dict[str, Any]:
+    refs = _as_list(adapter_case.get("candidate_source_refs"))
+    if not refs:
+        return {
+            "decision": "skip",
+            "confidence": 0.05,
+            "evidence_refs": [],
+            "scent_refs": [],
+            "source_reopened": False,
+            "claims": [],
+        }
+    return {
+        "decision": "evidence",
+        "confidence": 0.62,
+        "evidence_refs": [refs[0]],
+        "scent_refs": [],
+        "source_reopened": True,
+        "claims": [],
+    }
+
+
+def run_adapter_arm(case: Mapping[str, Any], arm: str) -> dict[str, Any]:
+    adapter_case = adapter_case_for_row(case)
+    candidate_count = len(_as_list(adapter_case.get("candidate_source_refs")))
+    baseline_outputs = _as_mapping(adapter_case.get("baseline_outputs"))
+    if arm in baseline_outputs:
+        response = _as_mapping(baseline_outputs.get(arm))
+    elif arm == "baseline_rag":
+        response = _baseline_rag_response(adapter_case)
+    elif arm == "closed_book":
+        response = _closed_book_response()
+    elif arm == "overactive_all_evidence":
+        response = _overactive_response(adapter_case)
+    else:
+        response = {
+            "decision": "skip",
+            "confidence": 0.0,
+            "evidence_refs": [],
+            "scent_refs": [],
+            "source_reopened": False,
+            "claims": [],
+            "adapter_status": "unsupported_arm",
+        }
+    return _with_adapter_metadata(
+        response,
+        arm=arm,
+        candidate_count=candidate_count,
+    )
 
 
 def score_response(case: Mapping[str, Any], response: Mapping[str, Any]) -> dict[str, Any]:
@@ -289,6 +422,8 @@ def _sanitized_case_result(
         "calibration_category": score.get("calibration_category"),
         "query_sha1": schema.sha1_text(str(case.get("query") or ""))[:16],
         "matched_ref_hashes": score.get("matched_ref_hashes") or [],
+        "adapter_status": response.get("adapter_status"),
+        "cost": response.get("cost") or {},
     }
     if include_private_text:
         payload["query"] = str(case.get("query") or "")
@@ -349,6 +484,12 @@ def _views(
     skip_expected = 0
     skip_correct = 0
     score_total = 0.0
+    cost_totals = {
+        "source_reopen_count": 0,
+        "model_calls": 0,
+        "tokens": 0,
+        "latency_ms": 0.0,
+    }
 
     for result in case_results:
         degradation = str(result.get("degradation_level") or "")
@@ -362,6 +503,12 @@ def _views(
             confidence_present += 1
         if isinstance(result.get("score"), (int, float)):
             score_total += float(result["score"])
+        cost = _as_mapping(result.get("cost"))
+        cost_totals["source_reopen_count"] += int(cost.get("source_reopen_count") or 0)
+        cost_totals["model_calls"] += int(cost.get("model_calls") or 0)
+        cost_totals["tokens"] += int(cost.get("tokens") or 0)
+        if isinstance(cost.get("latency_ms"), (int, float)):
+            cost_totals["latency_ms"] += float(cost["latency_ms"])
         if result.get("expected_decision") == "skip":
             skip_expected += 1
             if outcome == "correct_skip":
@@ -410,6 +557,10 @@ def _views(
         "confabulation_count": outcome_counts.get("confabulation", 0),
         "confabulation_rate": _rate(outcome_counts.get("confabulation", 0), total),
         "source_reopen_failure_count": outcome_counts.get("source_reopen_failure", 0),
+        "source_reopen_success": _rate(
+            total - outcome_counts.get("source_reopen_failure", 0),
+            total,
+        ),
         "wrong_twin_selection_count": outcome_counts.get("wrong_twin_selection", 0),
         "overconfidence_rate": _rate(outcome_counts.get("overconfident_evidence", 0), total),
         "underconfidence_rate": _rate(outcome_counts.get("underconfident_scent", 0), total),
@@ -419,6 +570,11 @@ def _views(
         "scent_precision_hit_count": scent_precision_hits,
         "outcome_counts": outcome_counts,
         "scent_layer_counts": scent_layer_counts,
+        "cost": {
+            **cost_totals,
+            "latency_ms": round(cost_totals["latency_ms"], 6),
+            "available": total > 0,
+        },
     }
     return {
         "by_degradation": by_degradation,
@@ -458,6 +614,58 @@ def _quality_gates(validation: Mapping[str, Any], views: Mapping[str, Any]) -> d
     return {**gate_items, "ok": all(gate_items.values())}
 
 
+def _views_by_arm(
+    rows: Sequence[Mapping[str, Any]],
+    validation: Mapping[str, Any],
+    case_results: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    views: dict[str, Any] = {}
+    for arm in LOCAL_ADAPTER_ARMS:
+        arm_results = [result for result in case_results if result.get("arm") == arm]
+        views[arm] = _views(rows, validation, arm_results)
+    return views
+
+
+def _external_adapter_diagnostics() -> dict[str, dict[str, Any]]:
+    return {
+        name: {
+            "status": "diagnostic_missing_configuration",
+            "requires_opt_in": True,
+            "quality_gate_participation": "none",
+            "cannot_claim": [
+                "adapter_score",
+                "product_comparison",
+                "api_compatibility",
+            ],
+        }
+        for name in EXTERNAL_ADAPTER_CANDIDATES
+    }
+
+
+def _adapter_contract() -> dict[str, Any]:
+    return {
+        "version": "aippocampus.hippocampal_adapter_contract.v1",
+        "local_arms": list(LOCAL_ADAPTER_ARMS),
+        "arm_count": len(LOCAL_ADAPTER_ARMS),
+        "requires_external_credentials": False,
+        "truth_label_fields_hidden_from_adapters": list(TRUTH_LABEL_FIELDS),
+        "adapter_input_fields": [
+            "case_id",
+            "scene_id",
+            "query",
+            "degradation_level",
+            "interference_level",
+            "candidate_source_refs",
+        ],
+        "external_adapters": _external_adapter_diagnostics(),
+        "cannot_claim": [
+            "external_memory_system_score",
+            "cross_system_superiority",
+            "live_provider_quality",
+        ],
+    }
+
+
 def run_benchmark(
     fixture_path: str | Path = schema.DEFAULT_FIXTURE,
     *,
@@ -467,9 +675,8 @@ def run_benchmark(
     validation = schema.validate_fixture(rows)
     case_results: list[dict[str, Any]] = []
     for case in rows:
-        baseline_outputs = _as_mapping(case.get("baseline_outputs"))
-        for arm in DEFAULT_ARMS:
-            response = _as_mapping(baseline_outputs.get(arm))
+        for arm in LOCAL_ADAPTER_ARMS:
+            response = run_adapter_arm(case, arm)
             if not response:
                 continue
             score = score_response(case, response)
@@ -486,8 +693,11 @@ def run_benchmark(
             case_results.append(result)
 
     views = _views(rows, validation, case_results)
+    arm_views = _views_by_arm(rows, validation, case_results)
     quality_gates = _quality_gates(validation, views)
-    baseline_captured = bool(validation.get("ok")) and len(case_results) >= len(rows)
+    baseline_captured = bool(validation.get("ok")) and len(case_results) >= (
+        len(rows) * len(LOCAL_ADAPTER_ARMS)
+    )
     status = (
         "quality_gate_passed"
         if baseline_captured and quality_gates["ok"]
@@ -512,7 +722,7 @@ def run_benchmark(
             "uses_live_model": False,
             "uses_model_judge": False,
             "uses_private_history": False,
-            "baseline_arms": list(DEFAULT_ARMS),
+            "baseline_arms": list(LOCAL_ADAPTER_ARMS),
             "include_private_text": include_private_text,
         },
         "fixture_validation": {
@@ -537,8 +747,10 @@ def run_benchmark(
             "determinism": "human_authored_fixture_with_deterministic_baseline_outputs",
         },
         "quality_gates": quality_gates,
+        "adapter_contract": _adapter_contract(),
         "outcome_weights": dict(OUTCOME_WEIGHTS),
         "views": views,
+        "views_by_arm": arm_views,
         "cases": case_results,
         "privacy_boundary": {
             "public_safe_synthetic_fixture": True,
