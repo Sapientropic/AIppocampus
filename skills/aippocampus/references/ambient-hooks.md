@@ -127,7 +127,7 @@ would change the answer, plan, or action. Any specific memory-backed claim still
 requires clean-source reopen; scent packets, route reasons, locks, aliases, and
 candidate refs are not enough.
 
-`search_decision_adapter.py` applies the same boundary to external-search
+`aippocampus_runtime.recall.search_decision_adapter` applies the same boundary to external-search
 workflows. It may decide that a degraded prompt is a cue into old source and
 may return a source-ref-backed query expansion packet, but that packet remains
 navigation material. Search terms, scent/candidate support, and candidate refs

@@ -298,7 +298,7 @@ Assistant-only captures are skipped instead of being forced into an orphan
 generic JSONL row, because the durable registry path should reject ambiguous
 conversation structure rather than guessing at turn ownership.
 
-`scripts/search_decision_adapter.py` may sit in front of a future
+`aippocampus_runtime.recall.search_decision_adapter` may sit in front of a future
 `memory_search` bridge as a local decision contract: before search it can tell
 the agent whether the prompt is new, a degraded cue into old source, or a weak
 scent that should stay quiet; during search it can return source-ref-backed

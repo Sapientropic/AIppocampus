@@ -398,7 +398,6 @@ class ImportCouplingTests(unittest.TestCase):
         import build_clean_source
         import build_semantic_scope_labels
         import latest_reply
-        import rollout_behavior_events
         import search_clean_source
         import semantic_scope_labels
         from aippocampus_runtime.source import (
@@ -434,11 +433,16 @@ class ImportCouplingTests(unittest.TestCase):
             SCRIPTS / "search_clean_source.py",
             SCRIPTS / "semantic_scope_labels.py",
         ]
+        deleted_package_only_shims = [
+            SCRIPTS / "rollout_behavior_events.py",
+        ]
 
         for path in package_paths + shim_paths:
             self.assertTrue(path.exists(), path)
         for path in shim_paths:
             self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+        for path in deleted_package_only_shims:
+            self.assertFalse(path.exists(), path)
 
         edges = same_dir_import_edges()
         packaged_consumers = [
@@ -469,14 +473,11 @@ class ImportCouplingTests(unittest.TestCase):
             "aippocampus_runtime.source.semantic_scope_builder",
         ]:
             self.assertFalse(flat_source_modules & edges[source], source)
-        self.assertIn("rollout_behavior_events", pyproject_py_modules())
+        self.assertNotIn("rollout_behavior_events", pyproject_py_modules())
 
         self.assertIs(build_clean_source.build_clean_source, clean_source.build_clean_source)
         self.assertEqual(build_clean_source.SCOPE_LABEL_ORDER, clean_source.SCOPE_LABEL_ORDER)
-        self.assertIs(
-            rollout_behavior_events.extract_rollout_behavior_events,
-            behavior_events.extract_rollout_behavior_events,
-        )
+        self.assertTrue(callable(behavior_events.extract_rollout_behavior_events))
         self.assertIs(latest_reply.latest_reply, packaged_latest_reply.latest_reply)
         self.assertIs(latest_reply.main, packaged_latest_reply.main)
         self.assertIs(search_clean_source.search_clean_source, search.search_clean_source)
@@ -612,7 +613,6 @@ class ImportCouplingTests(unittest.TestCase):
         import encrypted_sync_bundle
         import encrypted_sync_keys
         import encrypted_sync_migration
-        import encrypted_sync_object_storage
         from aippocampus_runtime.sync.encrypted import (
             admin,
             bundle,
@@ -636,10 +636,10 @@ class ImportCouplingTests(unittest.TestCase):
             SCRIPTS / "encrypted_sync_bundle.py",
             SCRIPTS / "encrypted_sync_keys.py",
             SCRIPTS / "encrypted_sync_migration.py",
-            SCRIPTS / "encrypted_sync_object_storage.py",
         ]
         deleted_shim_paths = [
             SCRIPTS / "encrypted_sync_crypto.py",
+            SCRIPTS / "encrypted_sync_object_storage.py",
         ]
 
         for path in package_paths + shim_paths:
@@ -696,15 +696,13 @@ class ImportCouplingTests(unittest.TestCase):
         )
         self.assertTrue(issubclass(crypto.EncryptedSyncError, Exception))
         self.assertNotIn("encrypted_sync_crypto", pyproject_py_modules())
+        self.assertNotIn("encrypted_sync_object_storage", pyproject_py_modules())
         self.assertIs(encrypted_sync_keys.init_device_key, keys.init_device_key)
         self.assertIs(
             encrypted_sync_migration.inventory_plaintext_sync_dir,
             migration.inventory_plaintext_sync_dir,
         )
-        self.assertIs(
-            encrypted_sync_object_storage.encrypted_manifest_relative_path,
-            object_storage.encrypted_manifest_relative_path,
-        )
+        self.assertTrue(callable(object_storage.encrypted_manifest_relative_path))
 
     def test_external_model_helpers_have_package_owner_and_compat_shims(self) -> None:
         import deepseek_model_routing
@@ -2153,6 +2151,7 @@ class ImportCouplingTests(unittest.TestCase):
             "prompt_recall_core": "prompt_recall_core",
             "prompt_recall_evidence": "prompt_recall_evidence",
             "prompt_recall_semantic": "prompt_recall_semantic",
+            "search_decision_adapter": "search_decision_adapter",
             "semantic_cue_cache": "semantic_cue_cache",
         }
         for shim, package_name in package_modules.items():
@@ -2199,6 +2198,9 @@ class ImportCouplingTests(unittest.TestCase):
         )
         from aippocampus_runtime.recall import (
             prompt_recall_semantic as packaged_semantic,
+        )
+        from aippocampus_runtime.recall import (
+            search_decision_adapter as packaged_search_decision,
         )
         from aippocampus_runtime.recall import (
             semantic_cue_cache as packaged_cue_cache,
@@ -2254,6 +2256,7 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(prompt_recall_decision.assess_prompt, packaged_decision.assess_prompt)
         self.assertTrue(callable(packaged_evidence.collect_evidence))
         self.assertTrue(callable(packaged_semantic.run_semantic_gate_for_context))
+        self.assertTrue(callable(packaged_search_decision.assess_before_search))
         self.assertTrue(callable(packaged_cue_cache.record_semantic_cue_hits))
         self.assertIs(semantic_recall_gate.run_semantic_gate, packaged_gate.run_semantic_gate)
         self.assertIs(
@@ -2273,14 +2276,12 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertTrue(package_runtime_path.exists())
         self.assertTrue(shim_runtime_path.exists())
         self.assertTrue(package_loop_path.exists())
-        self.assertTrue(shim_loop_path.exists())
         self.assertIn("Compatibility shim", shim_agent_path.read_text(encoding="utf-8"))
         self.assertIn("Compatibility shim", shim_runtime_path.read_text(encoding="utf-8"))
-        self.assertIn("Compatibility shim", shim_loop_path.read_text(encoding="utf-8"))
+        self.assertFalse(shim_loop_path.exists(), shim_loop_path)
 
         import subconscious_agent
         import subconscious_runtime
-        import subconscious_tool_loop
         from aippocampus_runtime.subconscious import agent, runtime, tool_loop
 
         edges = same_dir_import_edges(top_level_only=True)
@@ -2324,8 +2325,9 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(subconscious_agent.main, agent.main)
         self.assertIs(subconscious_runtime.AgentState, runtime.AgentState)
         self.assertIs(subconscious_runtime.run_tool, runtime.run_tool)
-        self.assertIs(subconscious_tool_loop.ToolLoopResult, tool_loop.ToolLoopResult)
-        self.assertIs(subconscious_tool_loop.run_tool_using_loop, tool_loop.run_tool_using_loop)
+        self.assertNotIn("subconscious_tool_loop", pyproject_py_modules())
+        self.assertTrue(callable(tool_loop.ToolLoopResult))
+        self.assertTrue(callable(tool_loop.run_tool_using_loop))
 
     def test_runtime_scripts_do_not_import_smoke_modules(self) -> None:
         edges = same_dir_import_edges()
