@@ -98,7 +98,37 @@ class SubconsciousReviewTests(unittest.TestCase):
 
         self.assertEqual(len(findings), 1)
         self.assertTrue(findings[0]["fingerprint"].startswith("sf_"))
-        self.assertIn("promotion_readiness", findings[0]["quality"])
+        quality = findings[0]["quality"]
+        self.assertIn("promotion_readiness", quality)
+        self.assertEqual(quality["heuristic_promotion_score"], quality["promotion_readiness"])
+        self.assertEqual(quality["score_version"], "heuristic_promotion_readiness_v1")
+        self.assertEqual(quality["score_kind"], "heuristic_routing_signal")
+        self.assertFalse(quality["calibrated_probability"])
+        self.assertIn("not calibrated", quality["meaning"])
+
+    def test_recent_findings_upgrades_legacy_quality_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "subconscious_jobs.jsonl"
+            row = {
+                "kind": "aippocampus_subconscious_job_finding",
+                "job": "project_drift",
+                "finding_kind": "project_drift",
+                "fingerprint": "sf_legacy_quality",
+                "title": "Runtime drift",
+                "summary": "T-Sense moved toward Go runtime work.",
+                "confidence": 0.9,
+                "quality": {"promotion_readiness": 0.88, "bucket": "strong"},
+                "source_refs": [{"thread_key": "session:one", "assistant_line": 12}],
+            }
+            path.write_text(json.dumps(row, ensure_ascii=False) + "\n", encoding="utf-8")
+
+            findings = review.recent_findings(path)
+
+        quality = findings[0]["quality"]
+        self.assertEqual(quality["heuristic_promotion_score"], 0.88)
+        self.assertEqual(quality["promotion_readiness"], 0.88)
+        self.assertEqual(quality["score_version"], "heuristic_promotion_readiness_v1")
+        self.assertFalse(quality["calibrated_probability"])
 
     def test_recent_findings_excludes_navigation_only_semantic_labels_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -204,6 +234,105 @@ class SubconsciousReviewTests(unittest.TestCase):
         self.assertEqual(result["model"], "local-review-model")
         self.assertEqual(result["model_route"]["provider"], "local-test")
         self.assertEqual(result["cache"], {"available": False, "kind": "none"})
+
+    def test_review_quality_diagnostics_report_bucket_outcomes_publicly(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jobs_path = root / "subconscious_jobs.jsonl"
+            rows = [
+                {
+                    "kind": "aippocampus_subconscious_job_finding",
+                    "job": "project_drift",
+                    "finding_kind": "project_drift",
+                    "fingerprint": "sf_strong",
+                    "title": "Strong finding",
+                    "summary": "Source-backed finding with a clear next action.",
+                    "confidence": 0.92,
+                    "quality": {"promotion_readiness": 0.9, "bucket": "strong"},
+                    "source_refs": [{"thread_key": "session:one", "assistant_line": 12}],
+                },
+                {
+                    "kind": "aippocampus_subconscious_job_finding",
+                    "job": "project_drift",
+                    "finding_kind": "project_drift",
+                    "fingerprint": "sf_weak",
+                    "title": "Weak finding",
+                    "summary": "Thin finding.",
+                    "confidence": 0.5,
+                    "quality": {"promotion_readiness": 0.5, "bucket": "weak"},
+                    "source_refs": [{"thread_key": "session:two", "assistant_line": 18}],
+                },
+            ]
+            jobs_path.write_text(
+                "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
+                encoding="utf-8",
+            )
+
+            def fake_chat(
+                messages,
+                api_key,
+                model,
+                base_url,
+                max_tokens,
+                timeout,
+                temperature,
+            ):
+                del api_key, model, base_url, max_tokens, timeout, temperature
+                payload = json.loads(messages[1]["content"])
+                self.assertEqual(
+                    payload["quality_score_contract"]["score_version"],
+                    "heuristic_promotion_readiness_v1",
+                )
+                self.assertEqual(payload["quality_diagnostics"]["bucket_distribution"]["strong"], 1)
+                content = {
+                    "action": "final",
+                    "promotion_candidates": [
+                        {
+                            "candidate_type": "project_memory",
+                            "title": "Strong finding",
+                            "summary": "Review strong finding.",
+                            "recommendation": "Promote after human review.",
+                            "confidence": 0.9,
+                            "source_finding_ids": ["sf_strong"],
+                        }
+                    ],
+                    "duplicate_groups": [],
+                    "weak_findings": [
+                        {"finding_id": "sf_weak", "reason": "too thin"},
+                    ],
+                }
+                return {
+                    "choices": [{"message": {"content": json.dumps(content, ensure_ascii=False)}}],
+                    "usage": {"total_tokens": 1},
+                }
+
+            result = review.run_review(
+                jobs_path=jobs_path,
+                output_path=root / "promotion_candidates.jsonl",
+                max_findings=10,
+                jobs=None,
+                focus="",
+                model=review.DEFAULT_MODEL,
+                base_url=review.DEFAULT_BASE_URL,
+                api_key="present",
+                no_write=True,
+                chat_fn=fake_chat,
+            )
+
+        diagnostics = result["quality_diagnostics"]
+        self.assertEqual(diagnostics["bucket_distribution"], {"strong": 1, "weak": 1})
+        self.assertEqual(
+            diagnostics["review_outcomes_by_bucket"]["strong"]["promotion_candidate_source"],
+            1,
+        )
+        self.assertEqual(diagnostics["review_outcomes_by_bucket"]["weak"]["weak_finding"], 1)
+        public_payload = review_public_output.public_review_cli_payload(result)
+        self.assertEqual(
+            public_payload["quality_diagnostics"]["review_outcomes_by_bucket"]["strong"][
+                "promotion_candidate_source"
+            ],
+            1,
+        )
 
     def test_review_output_can_record_external_model_source_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

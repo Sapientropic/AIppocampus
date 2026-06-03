@@ -33,6 +33,8 @@ from aippocampus_runtime.subconscious.candidate_router import activation_cues_fo
 from aippocampus_runtime.subconscious.job_validation import (
     estimate_finding_quality,
     finding_fingerprint,
+    quality_score_contract,
+    quality_with_score_contract,
 )
 from aippocampus_runtime.subconscious.jobs import (
     PROMPT_VERSION as JOBS_PROMPT_VERSION,
@@ -119,7 +121,10 @@ def normalize_finding(row: dict[str, Any]) -> dict[str, Any]:
     if finding.get("kind") == "aippocampus_subconscious_job_finding":
         finding["kind"] = finding.get("finding_kind") or ""
     finding.setdefault("fingerprint", finding_fingerprint(finding))
-    finding.setdefault("quality", estimate_finding_quality(str(finding.get("job") or ""), finding))
+    if isinstance(finding.get("quality"), dict):
+        finding["quality"] = quality_with_score_contract(finding["quality"])
+    else:
+        finding["quality"] = estimate_finding_quality(str(finding.get("job") or ""), finding)
     finding["summary"] = compact_text(str(finding.get("summary") or finding.get("why") or ""), 620)
     finding["recommendation"] = compact_text(str(finding.get("recommendation") or ""), 300)
     return finding
@@ -161,6 +166,78 @@ def deterministic_duplicate_groups(findings: list[dict[str, Any]]) -> list[dict[
     return out
 
 
+def _quality_bucket_for_finding(finding: dict[str, Any]) -> str:
+    raw_quality = finding.get("quality")
+    quality = raw_quality if isinstance(raw_quality, dict) else {}
+    bucket = str(quality.get("bucket") or "unknown")
+    if bucket not in {"strong", "usable", "weak", "noise"}:
+        return "unknown"
+    return bucket
+
+
+def _ordered_nonzero_counts(counts: dict[str, int]) -> dict[str, int]:
+    ordered: dict[str, int] = {}
+    for key in ("strong", "usable", "weak", "noise", "unknown"):
+        value = int(counts.get(key) or 0)
+        if value:
+            ordered[key] = value
+    return ordered
+
+
+def review_quality_diagnostics(
+    findings: list[dict[str, Any]], review: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    bucket_counts: dict[str, int] = defaultdict(int)
+    bucket_by_id: dict[str, str] = {}
+    outcomes: dict[str, dict[str, int]] = defaultdict(
+        lambda: {
+            "input_findings": 0,
+            "promotion_candidate_source": 0,
+            "weak_finding": 0,
+            "duplicate_canonical": 0,
+            "duplicate_duplicate": 0,
+        }
+    )
+    for finding in findings:
+        bucket = _quality_bucket_for_finding(finding)
+        bucket_counts[bucket] += 1
+        outcomes[bucket]["input_findings"] += 1
+        finding_id = str(finding.get("fingerprint") or "")
+        if finding_id:
+            bucket_by_id[finding_id] = bucket
+
+    if review:
+        for candidate in review.get("promotion_candidates") or []:
+            for finding_id in candidate.get("source_finding_ids") or []:
+                bucket = bucket_by_id.get(str(finding_id), "unknown")
+                outcomes[bucket]["promotion_candidate_source"] += 1
+        for weak in review.get("weak_findings") or []:
+            bucket = bucket_by_id.get(str(weak.get("finding_id") or ""), "unknown")
+            outcomes[bucket]["weak_finding"] += 1
+        for group in review.get("duplicate_groups") or []:
+            canonical = str(group.get("canonical_finding_id") or "")
+            if canonical:
+                outcomes[bucket_by_id.get(canonical, "unknown")]["duplicate_canonical"] += 1
+            for finding_id in group.get("duplicate_finding_ids") or []:
+                outcomes[bucket_by_id.get(str(finding_id), "unknown")][
+                    "duplicate_duplicate"
+                ] += 1
+
+    return {
+        "score_contract": quality_score_contract(),
+        "bucket_distribution": _ordered_nonzero_counts(bucket_counts),
+        "review_outcomes_by_bucket": {
+            bucket: {name: count for name, count in counts.items() if count}
+            for bucket, counts in outcomes.items()
+            if any(counts.values())
+        },
+        "interpretation": (
+            "Bucket outcomes are audit diagnostics for heuristic score behavior; "
+            "they are not calibration proof."
+        ),
+    }
+
+
 def compact_review_payload(
     findings: list[dict[str, Any]], duplicate_groups: list[dict[str, Any]], focus: str = ""
 ) -> dict[str, Any]:
@@ -171,6 +248,8 @@ def compact_review_payload(
         "prompt_version": PROMPT_VERSION,
         "source_prompt_version": JOBS_PROMPT_VERSION,
         "task": "review_subconscious_findings_for_promotion",
+        "quality_score_contract": quality_score_contract(),
+        "quality_diagnostics": review_quality_diagnostics(findings),
         "findings": [
             {
                 "finding_id": finding.get("fingerprint"),
@@ -527,6 +606,8 @@ def run_review(
     review = apply_focus_filter(review, focus)
     if not review["duplicate_groups"]:
         review["duplicate_groups"] = duplicate_groups
+    quality_diagnostics = review_quality_diagnostics(findings, review)
+    review["quality_diagnostics"] = quality_diagnostics
     if not no_write:
         append_review_output(
             output_path,
@@ -546,6 +627,7 @@ def run_review(
         "duplicate_group_count": len(review["duplicate_groups"]),
         "weak_finding_count": len(review["weak_findings"]),
         "focus": focus,
+        "quality_diagnostics": quality_diagnostics,
         "review": review,
         "usage": usage,
         "cache": route_cache_metrics(route, usage),
@@ -625,4 +707,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
