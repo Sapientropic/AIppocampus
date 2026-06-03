@@ -1,13 +1,21 @@
 {
   "schema_version": 1,
   "benchmark": "LongMemEval",
-  "scope": "official cleaned V1 files for AIppocampus retrieval-only benchmark runs",
+  "scope": "official cleaned V1 files for AIppocampus retrieval-only benchmark runs plus LongMemEval-V2 context-mapping pilot metadata",
   "official_sources": {
     "paper": "https://arxiv.org/abs/2410.10813",
     "repository": "https://github.com/xiaowu0162/LongMemEval",
     "cleaned_dataset": "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned"
   },
+  "v2_official_sources": {
+    "paper": "https://arxiv.org/abs/2605.12493",
+    "repository": "https://github.com/xiaowu0162/LongMemEval-V2",
+    "project_page": "https://xiaowu0162.github.io/longmemeval-v2/",
+    "dataset": "https://huggingface.co/datasets/xiaowu0162/longmemeval-v2",
+    "license": "Apache-2.0"
+  },
   "runner": "benchmarks/aippocampus/benchmark_longmemeval.py",
+  "v2_context_mapping_runner": "benchmarks/aippocampus/benchmark_longmemeval_v2_context.py",
   "evidence_page": "docs/evidence/benchmarks/longmemeval.md",
   "checksum_note": "sha256 values are Hugging Face LFS content oids and should match the downloaded file hash; the resolved download URL ETag may differ.",
   "splits": [
@@ -33,11 +41,48 @@
       "role": "large-context stress split"
     }
   ],
+  "v2_context_mapping_pilot": {
+    "local_file_policy": "ignored local download only; do not commit raw questions, trajectories, screenshots, or reports",
+    "observed_at": "2026-06-03",
+    "local_files": [
+      {
+        "id": "longmemeval-v2-questions",
+        "file": "v2_questions.jsonl",
+        "bytes": 286186,
+        "sha256": "0a3ae5ebea938c24d7800e1e0b0828e08ae1646f939a53853b2b8cdc08e292b7",
+        "role": "public V2 benchmark questions for context-mapping pilot"
+      },
+      {
+        "id": "longmemeval-v2-trajectories",
+        "file": "v2_trajectories.jsonl",
+        "bytes": 1195604539,
+        "sha256": "363cec9a8e87aa8d9101ce4e600aadbf7031d674056ebe4f969e8424abc5f3c6",
+        "role": "public V2 task trajectories for context-mapping pilot"
+      }
+    ],
+    "observed_metrics": {
+      "question_count": 451,
+      "trajectory_count": 1870,
+      "exact_question_trajectory_id_matches": 0,
+      "environment_candidate_coverage_count": 451,
+      "ambiguous_environment_candidate_pools": 451,
+      "question_rows_with_gold_evidence_refs": 0,
+      "trajectory_rows_with_gold_question_or_evidence_refs": 0
+    },
+    "decision": [
+      "diagnostic context candidate-pack pilot is feasible at domain/environment pool level",
+      "benchmark-grade context-gathering score is not supported without explicit question-to-haystack or evidence-state labels",
+      "source-evidence R@K/MRR is not supported without gold evidence refs",
+      "answer accuracy and LAFS require the official reader/evaluator harness and remain out of scope for this runner"
+    ]
+  },
   "claim_boundary": [
     "retrieval-only session and source-line recall",
+    "V2 context mapping pilot is diagnostic-only",
     "no answer generation score",
     "no LLM judge score",
-    "no LongMemEval-V2 score",
+    "no LongMemEval-V2 source-evidence R@K/MRR",
+    "no LongMemEval-V2 answer accuracy or LAFS",
     "no SOTA or external-baseline superiority claim"
   ]
 }

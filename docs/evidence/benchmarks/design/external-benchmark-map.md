@@ -32,7 +32,7 @@ If two systems are tested on different layers, report them separately.
 | Surface | Why it matters | Current AIppocampus path | Current status | Cannot claim yet |
 | --- | --- | --- | --- | --- |
 | LongMemEval V1 | Public long-memory QA family with source/session evidence variants. | Retrieval-only source/session slices are tracked in [`../longmemeval.md`](../longmemeval.md) and the Track B standard retrieval-QA notes. | Implemented as a retrieval/control surface. | Answer-generation quality, SOTA, LongMemEval-V2 quality, or broad user-memory superiority. |
-| LongMemEval V2 | Closer to agentic-context and workflow-memory evaluation. | Mentioned as a near-neighbor in [`../public-longitudinal-users.md`](../public-longitudinal-users.md); needs explicit source-evidence mapping before scoring. | Planned analysis surface. | Comparable scores until the dataset source contract, adapter, and claim boundary are implemented. |
+| LongMemEval V2 | Closer to agentic-context and workflow-memory evaluation. | Context-mapping pilot is documented in [`../longmemeval.md`](../longmemeval.md); it inspects the public V2 schema and local files without emitting raw text. | Diagnostic mapping pilot implemented; benchmark-grade context/source-evidence/answer scoring still blocked. | Comparable scores, source-evidence R@K/MRR, answer accuracy, or LAFS until explicit question-to-haystack/evidence labels and the official reader/evaluator harness are wired. |
 | LoCoMo | Public long-dialogue control with evidence ids inside one conversation sample. | Public same-conversation evidence retrieval is documented in [`../public-longitudinal-users.md`](../public-longitudinal-users.md) and its dated measurement report. | Implemented as a same-conversation control. | Cross-conversation, cross-project, coding tacit-constraint, or life-wide memory proof. |
 | ATM-Bench Hard | Multimodal personal-memory-corpus QA with staged raw media, derived artifacts, evidence ids, Oracle, NIAH, and agent-harness modes. | Protocol boundary is owned by [`atm-bench-hard-protocol-boundary.md`](atm-bench-hard-protocol-boundary.md); public-safe corpus-style, conversational media-ingest, and NIAH evidence-pool fixtures are documented in [`../multimodal-corpus-fixture-report.md`](../multimodal-corpus-fixture-report.md), [`../conversational-media-ingest-fixture-report.md`](../conversational-media-ingest-fixture-report.md), and [`../multimodal-niah-evidence-pool-report.md`](../multimodal-niah-evidence-pool-report.md). | Protocol boundary documented; public-safe contract fixtures added; upstream adapter planned. | Conversational media-upload recall from staged-corpus QA, product privacy behavior, ATM-Bench score, retrieval quality from NIAH, or broad multimodal-memory quality. |
 | MemoryAgentBench | Candidate benchmark for memory-agent behavior. | No repo-owned adapter yet. Use this page for future intake before adding runner docs. | Planned / unverified. | Any AIppocampus score, compatibility, or fairness claim. |
@@ -57,7 +57,9 @@ Before adding a new external adapter result, document:
 
 ## Next Slices
 
-- LongMemEval-V2: define source-evidence mapping before any scoring result.
+- LongMemEval-V2: use the diagnostic context-mapping pilot to decide whether a
+  future official haystack/evidence adapter is possible before any scoring
+  result.
 - ATM-Bench Hard: keep staged-corpus QA, conversational media-ingest recall,
   Oracle answer synthesis, and NIAH evidence-pool evaluation as separate slices
   before adapting the #528 multimodal track.

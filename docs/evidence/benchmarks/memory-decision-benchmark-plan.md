@@ -855,10 +855,14 @@ Current smoke and diagnostic results from 2026-05-30:
   These are retrieval-only numbers using question text as query, not
   answer-generation accuracy. They are the current deterministic
   non-source-derived Track B arm because the query comes from public dataset
-  questions rather than from the target source line. LongMemEval V2 currently
-  has local question and trajectory files but no explicit source-evidence refs
-  in this adapter, so it reports `skipped_no_source_evidence_refs` rather than
-  inventing R@K.
+  questions rather than from the target source line. LongMemEval V2 now has a
+  dedicated context-mapping pilot that inspects the public questions and
+  trajectories without emitting raw text. The 2026-06-03 local pilot observed
+  451 questions, 1,870 trajectories, 0 exact question/trajectory id matches,
+  and 0 question or trajectory rows with gold evidence refs. The standard
+  source-evidence adapter therefore still reports V2 as skipped rather than
+  inventing R@K, while the V2 pilot reports only schema, checksum, join-key
+  coverage, environment-pool ambiguity, and `cannot_claim` boundaries.
 - Standard retrieval-QA semantic line-reranker smoke:
   the optional top-session/top-context second stage keeps the first-stage FTS5
   session/context boundary fixed, sends only bounded candidate source lines to
@@ -1324,9 +1328,11 @@ runs answer only "can the retriever navigate to the source session/message from
 the question text, and can an optional reranker pick the exact source row?" They
 do not measure whether a model generates the final answer correctly, and they
 must not be merged with Track A gate-decision scores.
-LongMemEval V2 needs an explicit source-evidence mapping before it can produce
-comparable retrieval R@K/MRR; until then the adapter reports a skipped
-source-evidence status.
+LongMemEval V2 has a diagnostic context-mapping pilot, but it still needs
+explicit question-to-haystack/evidence-state labels before it can produce
+comparable retrieval R@K/MRR. Until then the source-evidence adapter reports a
+skipped source-evidence status and the V2 runner reports only mapping
+feasibility.
 
 ## Track C: End-to-End Payload Fidelity
 
