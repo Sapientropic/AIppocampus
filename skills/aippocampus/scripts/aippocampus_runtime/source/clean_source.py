@@ -26,6 +26,7 @@ from aippocampus_runtime.core import (
     resolve_artifact_path,
 )
 from aippocampus_runtime.source.behavior_events import extract_rollout_behavior_events
+from aippocampus_runtime.source.redaction_profiles import write_clean_source_redaction_profiles
 from conversation_sources import ConversationProvider, create_conversation_provider
 from conversation_sources.normalized import stable_source_ref
 
@@ -414,6 +415,7 @@ def build_clean_source(
     hash_source: bool = False,
     provider_name: str = "codex",
     provider: ConversationProvider | None = None,
+    redaction_profiles: list[str] | None = None,
 ) -> dict[str, Any]:
     cwd = Path(cwd).resolve()
     active_provider = provider or create_conversation_provider(
@@ -460,6 +462,14 @@ def build_clean_source(
     with messages_path.open("w", encoding="utf-8", newline="\n") as f:
         for item in clean_messages:
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
+
+    profile_outputs, profile_summary = write_clean_source_redaction_profiles(
+        clean_messages,
+        profiles=redaction_profiles,
+        output_dir=out,
+        project_root=cwd,
+        canonical_messages_path=messages_path,
+    )
 
     turns_path = out / "turns.jsonl"
     with turns_path.open("w", encoding="utf-8", newline="\n") as f:
@@ -518,7 +528,9 @@ def build_clean_source(
             "messages_jsonl": str(messages_path),
             "turns_jsonl": str(turns_path),
             "events_jsonl": str(events_path),
+            "redaction_profiles": profile_outputs,
         },
+        "redaction_profiles": profile_summary,
         "identity_policy": {
             "stable_join_keys": [
                 "source_id",
@@ -552,6 +564,8 @@ def build_clean_source(
             },
         },
         "cleaning_policy": {
+            "redaction_default_profile": "raw-private",
+            "projection_boundary": "redacted profiles preserve join keys but are not canonical source truth",
             "keeps": [
                 "user_message",
                 "assistant final_answer",
@@ -617,6 +631,13 @@ def main() -> int:
         help="Defaults to the AIppocampus registry thread store; pass .aippocampus/clean-source for project-local output.",
     )
     parser.add_argument("--hash-source", action="store_true")
+    parser.add_argument(
+        "--redaction-profile",
+        dest="redaction_profiles",
+        action="append",
+        default=[],
+        help="Also write an optional clean-source projection profile, e.g. public-export.",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
@@ -626,6 +647,7 @@ def main() -> int:
         output_dir=args.output_dir,
         hash_source=args.hash_source,
         provider_name=args.provider,
+        redaction_profiles=args.redaction_profiles,
     )
     if args.json_output:
         print(json.dumps(manifest, ensure_ascii=False, indent=2))

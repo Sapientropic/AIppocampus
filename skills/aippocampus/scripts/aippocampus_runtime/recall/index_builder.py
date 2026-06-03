@@ -28,6 +28,7 @@ from aippocampus_runtime.core import (
     resolve_artifact_path,
 )
 from aippocampus_runtime.recall.retrieval import build_rag_chunks
+from aippocampus_runtime.safety import project_clean_source_row
 from conversation_sources import create_conversation_provider
 
 
@@ -214,6 +215,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--include-tools", action="store_true")
     parser.add_argument("--hash-source", action="store_true")
     parser.add_argument(
+        "--redaction-profile",
+        default="raw-private",
+        help="Project source text before writing index artifacts; public-export is safe for bundles.",
+    )
+    parser.add_argument(
         "--no-rag-cache", action="store_true", help="Skip periodic local RAG-lite chunk cache."
     )
     parser.add_argument(
@@ -241,6 +247,11 @@ def main(argv: list[str] | None = None) -> int:
 
     meta = provider.read_metadata(rollout) or {}
     messages, turns = provider.read_normalized_messages(rollout, include_tools=args.include_tools)
+    redaction_profile = str(args.redaction_profile or "raw-private")
+    messages = [
+        project_clean_source_row(message, profile=redaction_profile, project_root=cwd)
+        for message in messages
+    ]
 
     with artifact_lease(output_dir, ".index-publish.lock"):
         messages_path = output_dir / "messages.jsonl"
@@ -313,6 +324,13 @@ def main(argv: list[str] | None = None) -> int:
             },
             "sqlite": sqlite_status,
             "rag": sqlite_status.get("rag"),
+            "redaction_profile": redaction_profile,
+            "privacy_boundary": {
+                "source_text_profile": redaction_profile,
+                "canonical_clean_source_replaced": False,
+                "raw_source_text_emitted": redaction_profile == "raw-private",
+                "projection_policy": "aippocampus_runtime.safety.project_clean_source_text",
+            },
         }
         manifest_path = output_dir / "manifest.json"
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")

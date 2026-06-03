@@ -22,6 +22,9 @@ memory.
      removed.
    - Preserves source ids, turn ids, message ids, line spans, timestamps, and
      hashes.
+   - Optional redaction projections may be written for local-at-rest or public
+     export privacy, but `raw-private` clean source remains the canonical
+     evidence source.
    - Search and MCP tools should prefer this layer for ordinary recall.
 
 3. Registry and local indexes
@@ -144,6 +147,8 @@ The public-core license, adapter, and schema boundary lives in
 `docs/guides/public-core-boundary.md`.
 Field-budget and profile discipline for minimal, runtime, high-risk, governance,
 and diagnostic projections lives in `docs/architecture/schema-field-profiles.md`.
+Optional clean-source redaction profiles and source-fidelity boundaries live in
+`docs/architecture/clean-source-redaction-profiles.md`.
 Path identity, display spelling, and privacy-safe path projection boundaries live
 in `docs/architecture/path-identity.md`.
 Runtime script ownership and dependency navigation lives in

@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import tempfile
 import unittest
+from argparse import Namespace
 from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
@@ -66,6 +67,7 @@ class ExportBundleTests(unittest.TestCase):
                     root / "index",
                     root / "thread-anchors.md",
                     hash_source=True,
+                    redaction_profile="raw-private",
                 )
 
         self.assertEqual(result["message_count"], 1)
@@ -82,9 +84,87 @@ class ExportBundleTests(unittest.TestCase):
                 "--anchors",
                 str(root / "thread-anchors.md"),
                 "--json",
+                "--redaction-profile",
+                "raw-private",
                 "--hash-source",
             ],
         )
+
+    def test_public_export_profile_is_index_projection_and_excludes_raw_rollout(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            root_resolved = root.resolve()
+            rollout = root / "rollout.jsonl"
+            anchors = root / "thread-anchors.md"
+            work_dir = root / "work"
+            rollout.write_text(
+                '{"type":"event_msg","payload":{"type":"user_message","message":"token=secret"}}\n',
+                encoding="utf-8",
+            )
+            anchors.write_text("# Anchors\n", encoding="utf-8")
+
+            def fake_build_index(
+                cwd: Path,
+                rollout_path: Path,
+                index_dir: Path,
+                anchors_path: Path,
+                hash_source: bool,
+                redaction_profile: str,
+            ) -> dict:
+                self.assertEqual(cwd, root_resolved)
+                self.assertEqual(rollout_path, rollout)
+                self.assertEqual(anchors_path, anchors)
+                self.assertFalse(hash_source)
+                self.assertEqual(redaction_profile, "public-export")
+                index_dir.mkdir(parents=True, exist_ok=True)
+                (index_dir / "messages.jsonl").write_text(
+                    '{"text":"<redacted:secret>"}\n',
+                    encoding="utf-8",
+                )
+                return {
+                    "created_at": "2026-06-03T00:00:00Z",
+                    "cwd": str(root),
+                    "message_count": 1,
+                    "anchor_count": 0,
+                    "graph": {"node_count": 0},
+                    "redaction_profile": "public-export",
+                }
+
+            args = Namespace(
+                cwd=str(root),
+                rollout=str(rollout),
+                anchors=str(anchors),
+                output=str(root / "bundle.zip"),
+                work_dir=str(work_dir),
+                no_raw=True,
+                hash_source=False,
+                redaction_profile="public-export",
+            )
+
+            with patch.object(packaged_export_bundle, "run_build_index", side_effect=fake_build_index):
+                result = packaged_export_bundle.export_bundle(args)
+
+            self.assertTrue(Path(result["bundle"]).exists())
+            bundle_root = work_dir / "bundle"
+            bundle_manifest = (bundle_root / "bundle_manifest.json").read_text(encoding="utf-8")
+            self.assertIn('"redaction_profile": "public-export"', bundle_manifest)
+            self.assertIn('"raw_rollout_included": false', bundle_manifest)
+            self.assertFalse((bundle_root / "rollout.jsonl").exists())
+
+    def test_public_export_profile_rejects_raw_rollout_inclusion(self) -> None:
+        args = Namespace(
+            cwd=".",
+            rollout="rollout.jsonl",
+            anchors="thread-anchors.md",
+            output=None,
+            work_dir=None,
+            no_raw=False,
+            hash_source=False,
+            redaction_profile="public-export",
+        )
+
+        with self.assertRaisesRegex(ValueError, "public-export.*--no-raw"):
+            packaged_export_bundle.export_bundle(args)
 
 
 if __name__ == "__main__":
