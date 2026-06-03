@@ -77,6 +77,14 @@ The job runner gives DeepSeek a bounded perception loop. Tools are read-only:
 - `expand_concepts`: inspect nearby concepts in `concept_index.sqlite`.
 - `recent_edges`: inspect recent staging concept edges.
 
+The canonical tool contract lives in
+`aippocampus_runtime.subconscious.runtime.READ_ONLY_TOOL_REGISTRY`. The agent
+system prompt, agent/job initial payloads, dispatcher, and dry-run
+`tool_contract_version` all derive from that registry. Keep additions small and
+static: one registry entry plus tests, no dynamic tool discovery, no write
+tools, and no broad agent framework. This is an anti-drift guard so prompt
+wording, payload examples, and runtime dispatch cannot silently disagree.
+
 Defaults are quality-oriented:
 
 - `--max-steps 16`.
@@ -94,6 +102,14 @@ Defaults are quality-oriented:
 The model can be exploratory in tool planning, but output remains constrained:
 every accepted finding must have source refs that resolve to initial turn refs
 or tool observation refs.
+
+For the minimal agent, `min_tool_steps` is only a cheap anti-laziness gate. It
+does not prove the final edge used useful tool evidence. Agent run JSON exposes
+sanitized `tool_grounding` diagnostics with ref counts, useless tool-call
+counts, and one of `tool_grounded`, `initial_only_after_tool`, or `ungrounded`.
+This is diagnostic by default: cite `o*` observation refs when tool hits support
+the edge, but do not cite them merely to satisfy a metric when the initial turn
+refs are the real evidence or tools returned no useful source refs.
 
 Every accepted finding also gets deterministic metadata before it is written:
 

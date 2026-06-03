@@ -368,7 +368,6 @@ def main(argv: list[str] | None = None) -> int:
         segments = health.get("segments") or {}
         use_segments = bool(segments.get("exists")) or bool(segments.get("needed"))
         if use_segments:
-            build_segments = not segments.get("exists") or bool(segments.get("stale"))
             search_payload = search_segments_payload(
                 SegmentSearchOptions(
                     patterns=search_terms,
@@ -376,7 +375,10 @@ def main(argv: list[str] | None = None) -> int:
                     mode="hybrid",
                     max_results=args.max,
                     context=args.context,
-                    build_segments=build_segments,
+                    # Foreground recall must never turn a user prompt into a
+                    # segment rebuild. Missing or stale shards are reported as
+                    # structured availability and owned by maintenance hooks.
+                    build_segments=False,
                 )
             )
         else:

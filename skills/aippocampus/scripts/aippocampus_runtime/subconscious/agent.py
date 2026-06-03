@@ -33,11 +33,14 @@ from aippocampus_runtime.subconscious.runtime import (
     DEFAULT_MAX_STEPS,
     DEFAULT_MIN_TOOL_STEPS,
     DEFAULT_TEMPERATURE,
+    TOOL_CONTRACT_VERSION,
     AgentState,
     ChatFn,
+    available_tools_payload,
     call_chat_json,
     effective_step_budget,
     parse_action,
+    read_only_tool_names,
     run_tool,
     source_bank_from_turns,
 )
@@ -182,6 +185,136 @@ def validate_agent_edges(
     return out
 
 
+def _source_ref_id(ref_item: Any) -> str:
+    if isinstance(ref_item, str):
+        return ref_item.strip()
+    if isinstance(ref_item, dict):
+        return str(
+            ref_item.get("ref") or ref_item.get("turn_ref") or ref_item.get("obs_ref") or ""
+        ).strip()
+    return ""
+
+
+def _edge_ref_ids(edge: dict[str, Any]) -> set[str]:
+    return {
+        ref
+        for ref in (_source_ref_id(item) for item in edge.get("source_refs") or [])
+        if ref
+    }
+
+
+def _observation_refs_from_bank(source_bank: dict[str, dict[str, Any]]) -> list[str]:
+    return [ref for ref in source_bank if ref.startswith("o")]
+
+
+def _initial_refs_from_bank(source_bank: dict[str, dict[str, Any]]) -> list[str]:
+    return [ref for ref in source_bank if not ref.startswith("o")]
+
+
+def _feedback_refs(source_bank: dict[str, dict[str, Any]], *, limit: int) -> dict[str, list[str]]:
+    refs = list(source_bank.keys())
+    return {
+        "available_refs": refs[:limit],
+        "observation_refs": _observation_refs_from_bank(source_bank)[:limit],
+        "initial_refs": _initial_refs_from_bank(source_bank)[:limit],
+    }
+
+
+def _collect_payload_refs(value: Any) -> set[str]:
+    refs: set[str] = set()
+    if isinstance(value, dict):
+        ref = value.get("ref")
+        if isinstance(ref, str) and ref.startswith("o"):
+            refs.add(ref)
+        for item in value.values():
+            refs.update(_collect_payload_refs(item))
+    elif isinstance(value, list):
+        for item in value:
+            refs.update(_collect_payload_refs(item))
+    return refs
+
+
+def _useless_tool_reason(step: dict[str, Any]) -> str | None:
+    action = step.get("action") or {}
+    observation = step.get("observation") or {}
+    tool = str(observation.get("tool") or action.get("tool") or "")
+    if observation.get("error"):
+        return "unknown_tool" if observation.get("error") == "unknown tool" else "tool_error"
+    if _collect_payload_refs(observation):
+        return None
+    if tool == "search_clean_source" and not observation.get("hits"):
+        return "empty_search"
+    if tool == "get_turn_context" and not observation.get("messages"):
+        return "empty_context"
+    if tool == "recent_edges" and not observation.get("edges"):
+        return "empty_recent_edges"
+    if tool == "expand_concepts" and not observation.get("expansions"):
+        return "empty_expansion"
+    return None
+
+
+def tool_grounding_diagnostics(
+    *,
+    edges: list[dict[str, Any]],
+    source_bank: dict[str, dict[str, Any]],
+    loop: Any,
+    min_tool_steps: int,
+) -> dict[str, Any]:
+    observation_refs = set(_observation_refs_from_bank(source_bank))
+    initial_refs = set(_initial_refs_from_bank(source_bank))
+    final_edges_with_observation_refs = 0
+    final_edges_with_initial_refs = 0
+    final_observation_refs: set[str] = set()
+    for edge in edges:
+        refs = _edge_ref_ids(edge)
+        obs_refs = refs & observation_refs
+        if obs_refs:
+            final_edges_with_observation_refs += 1
+            final_observation_refs.update(obs_refs)
+        if refs & initial_refs:
+            final_edges_with_initial_refs += 1
+
+    # This is deliberately diagnostic by default. A valid initial-turn ref should
+    # not be rejected merely because a required tool step returned no useful refs.
+    if final_edges_with_observation_refs:
+        status = "tool_grounded"
+    elif loop.tool_count > 0 and edges:
+        status = "initial_only_after_tool"
+    else:
+        status = "ungrounded"
+
+    useless_tool_calls = []
+    for step in loop.tool_steps:
+        reason = _useless_tool_reason(step)
+        if reason:
+            action = step.get("action") or {}
+            observation = step.get("observation") or {}
+            useless_tool_calls.append(
+                {
+                    "step": step.get("step"),
+                    "tool": str(observation.get("tool") or action.get("tool") or ""),
+                    "reason": reason,
+                }
+            )
+
+    return {
+        "status": status,
+        "min_tool_steps": max(0, int(min_tool_steps)),
+        "tool_call_count": loop.tool_count,
+        "tool_observation_ref_count": len(observation_refs),
+        "final_edge_count": len(edges),
+        "final_edges_with_observation_refs": final_edges_with_observation_refs,
+        "final_edges_with_initial_refs": final_edges_with_initial_refs,
+        "final_observation_refs": sorted(final_observation_refs),
+        "useless_tool_call_count": len(useless_tool_calls),
+        "useless_tool_calls": useless_tool_calls,
+        "policy": (
+            "diagnostic_by_default; observation refs should be cited when they "
+            "support a finding, but initial refs remain valid when tools added no useful source refs"
+        ),
+    }
+
+
 def agent_initial_payload(
     objective: str, turns: list[dict[str, Any]], max_steps: int, min_tool_steps: int
 ) -> str:
@@ -190,12 +323,8 @@ def agent_initial_payload(
     # still letting repeated samples over the same source reuse the source block.
     payload = {
         "prompt_version": PROMPT_VERSION,
-        "available_tools": {
-            "search_clean_source": {"args": {"terms": ["..."], "limit": 6}},
-            "get_turn_context": {"args": {"ref": "t0", "limit": 6}},
-            "expand_concepts": {"args": {"terms": ["..."], "depth": 2, "limit": 12}},
-            "recent_edges": {"args": {"terms": ["..."], "limit": 8}},
-        },
+        "tool_contract_version": TOOL_CONTRACT_VERSION,
+        "available_tools": available_tools_payload(),
         "tool_budget": max_steps,
         "minimum_tool_steps_before_final": min_tool_steps,
         "initial_turns": turns,
@@ -242,6 +371,7 @@ def run_agent(
             "max_steps": max_steps,
             "effective_step_budget": step_budget,
             "temperature": temperature,
+            "tool_contract_version": TOOL_CONTRACT_VERSION,
             "prompt_preview": compact_text(initial_payload, 2400),
         }
     if not api_key:
@@ -251,6 +381,40 @@ def run_agent(
         {"role": "system", "content": AGENT_SYSTEM_PROMPT},
         {"role": "user", "content": initial_payload},
     ]
+
+    def invalid_final_feedback() -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "error": (
+                "No valid source-backed edges survived validation. Use source_refs from "
+                "available refs, or return an empty final only if no durable relation exists."
+            ),
+            "instruction": (
+                "If observations mention concrete decisions, libraries, workflows, aliases, "
+                "or contrasts, propose at least one edge with source_refs."
+            ),
+            "grounding_instruction": (
+                "Cite observation_refs when they support the finding; keep initial refs when "
+                "tools added no useful source refs. Do not cite o* refs merely to satisfy metrics."
+            ),
+        }
+        payload.update(_feedback_refs(state.source_bank, limit=24))
+        return payload
+
+    def repair_feedback() -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "repair": "final_only",
+            "instruction": (
+                "Use the existing tool observations and available refs to produce "
+                "source-backed edges. Do not call tools. Return action=final."
+            ),
+            "grounding_instruction": (
+                "Prefer observation_refs for findings supported by tool hits; use initial_refs "
+                "only when they are the real source support."
+            ),
+        }
+        payload.update(_feedback_refs(state.source_bank, limit=32))
+        return payload
+
     loop = run_tool_using_loop(
         messages=messages,
         step_budget=step_budget,
@@ -275,29 +439,22 @@ def run_agent(
         ),
         min_tool_feedback=lambda: {
             "error": "Call at least one read-only tool before finalizing.",
-            "allowed_tools": [
-                "search_clean_source",
-                "get_turn_context",
-                "expand_concepts",
-                "recent_edges",
-            ],
+            "allowed_tools": list(read_only_tool_names()),
         },
-        invalid_final_feedback=lambda: {
-            "error": "No valid source-backed edges survived validation. Use source_refs from available refs, or return an empty final only if no durable relation exists.",
-            "instruction": "If observations mention concrete decisions, libraries, workflows, aliases, or contrasts, propose at least one edge with source_refs.",
-            "available_refs": list(state.source_bank.keys())[:24],
-        },
-        repair_feedback=lambda: {
-            "repair": "final_only",
-            "instruction": "Use the existing tool observations and available refs to produce source-backed edges. Do not call tools. Return action=final.",
-            "available_refs": list(state.source_bank.keys())[:32],
-        },
+        invalid_final_feedback=invalid_final_feedback,
+        repair_feedback=repair_feedback,
         tool_result_instruction=(
             "Next: call another tool if needed; otherwise return action=final with source-backed edges. "
             "Do not return an empty final when the observations contain concrete decisions, libraries, workflows, aliases, or contrasts."
         ),
     )
     edges = loop.final_items
+    grounding = tool_grounding_diagnostics(
+        edges=edges,
+        source_bank=state.source_bank,
+        loop=loop,
+        min_tool_steps=min_tool_steps,
+    )
     if not no_write:
         append_staging_edges(
             output_path,
@@ -318,12 +475,14 @@ def run_agent(
         "turn_count": len(turns),
         "edge_count": len(edges),
         "edges": edges,
+        "tool_grounding": grounding,
         "tool_steps": loop.tool_steps,
         "final_attempts": loop.final_attempts,
         "min_tool_steps": min_tool_steps,
         "max_steps": max_steps,
         "effective_step_budget": step_budget,
         "temperature": temperature,
+        "tool_contract_version": TOOL_CONTRACT_VERSION,
         "usage": loop.usage_total,
         "cache": deepseek_cache_metrics_from_usage(loop.usage_total),
         "wrote": False if no_write else True,

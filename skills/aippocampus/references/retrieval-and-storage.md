@@ -200,8 +200,12 @@ For hundred-MB or GB threads, use segments:
 - Each segment has its own `messages.jsonl` and `source_index.sqlite`.
 - The segment manifest records source rollout size/mtime, anchor hash, byte
   spans, line spans, message spans, and index paths.
-- `search_segments.py` fans queries out to segments, retrieves top candidates
-  per segment, and merges global top-k with diversity penalties.
+- `search_segments.py` fans queries out to segments, optionally enforces
+  `--fanout-budget` / `--max-segments` before opening SQLite shards, retrieves
+  top candidates per selected segment, and merges global top-k with diversity
+  penalties. Missing manifests or shard indexes report structured
+  `segments_unavailable` / `build_required` status unless the caller explicitly
+  asks to build segments.
 
 Segment-local ids collide by design. Treat `(segment_id, id, line)` as the hit
 key.

@@ -17,6 +17,7 @@ from aippocampus_runtime.core import sanitize_external_model_payload
 from aippocampus_runtime.subconscious.question_diagnostics import (
     QUESTION_EXTRACTION_FIELD_CONTRACT,
 )
+from aippocampus_runtime.subconscious.runtime import TOOL_CONTRACT_VERSION, available_tools_payload
 
 PROMPT_VERSION = "aippocampus-subconscious-jobs-v2"
 
@@ -282,14 +283,10 @@ def jobs_initial_payload(
     # cache contract.
     payload = {
         "prompt_version": PROMPT_VERSION,
+        "tool_contract_version": TOOL_CONTRACT_VERSION,
         "job": job,
         "job_spec": spec,
-        "available_tools": {
-            "search_clean_source": {"args": {"terms": ["..."], "limit": 8}},
-            "get_turn_context": {"args": {"ref": "t0", "limit": 8}},
-            "expand_concepts": {"args": {"terms": ["..."], "depth": 2, "limit": 16}},
-            "recent_edges": {"args": {"terms": ["..."], "limit": 10}},
-        },
+        "available_tools": available_tools_payload(),
         "final_schema": {
             "action": "final",
             "findings": [

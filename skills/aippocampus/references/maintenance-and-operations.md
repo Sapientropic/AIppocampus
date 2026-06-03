@@ -204,7 +204,8 @@ Common health and repair commands:
 - `python ...\build_clean_source.py --cwd "$PWD"`
 - `python ...\build_index.py --cwd "$PWD"`
 - `python ...\build_segments.py --cwd "$PWD"`
-- `python ...\search_segments.py "query" --cwd "$PWD" --build-segments --mode hybrid`
+- `python ...\search_segments.py "query" --cwd "$PWD" --mode hybrid --fanout-budget 8`
+- `python ...\search_segments.py "query" --cwd "$PWD" --mode hybrid --full-fanout`
 
 Audit and archive commands:
 

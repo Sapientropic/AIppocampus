@@ -22,8 +22,9 @@ agents do not mistake desired layers for finished behavior.
   can describe sealed segment indexes built by `build_segments.py`.
   Project-local `.aippocampus/segments/` is explicit compatibility/debug
   output only.
-- `search_segments.py` fans a query out across segment SQLite indexes and
-  merges top-k hits with source diversity.
+- `search_segments.py` fans a query out across segment SQLite indexes, can cap
+  executable segment fanout before opening SQLite shards, and reports
+  planned/searched/skipped segment counts alongside merged top-k hits.
 - `graph.json` is a lightweight anchor graph.
 - The global registry discovers old thread memories from new threads.
 - `storage_capacity_report.py` reports aggregate clean-source bytes, generated
@@ -87,6 +88,12 @@ Completed foundation:
   thread count, planned thread count, planned handles, fallback reason, and
   budget exhaustion. It narrows using registry/thread metadata first, then still
   joins results back to stable source ids.
+- `search_segments.py --fanout-budget ...` applies an executable per-thread
+  segment budget before opening SQLite shards and reports planned, searched,
+  skipped, and missing-index counts. `--full-fanout` remains the explicit
+  diagnostics/benchmark path. Missing manifests or shard indexes now return
+  structured `segments_unavailable` / `build_required` status unless
+  `--build-segments` is explicitly requested.
 - `aippocampus storage gc --dry-run` starts the storage governance bridge: it
   reports protected source bytes, reclaimable rebuildable/review bytes, and
   candidate safety preconditions from capacity data plus existing retention JSON
@@ -127,8 +134,9 @@ Completed foundation:
    - This merge layer is the same scoring fusion contract described in
      `wukong-mining-notes.md` — a single `blend()` function with explicit
      policy, not scattered search logic.
-   - Status: `search_segments.py` owns the first segment merge. The first
-     cross-signal contract now lives in
+   - Status: `search_segments.py` owns the first segment merge, executable
+     segment fanout caps, structured unavailable/build-required status, and
+     explicit full-fanout diagnostics. The first cross-signal contract now lives in
      `skills/aippocampus/scripts/retrieval_score_fusion.py`; it keeps exact
      text recall text-heavy, allows vector-heavy question-tracking contexts and
      graph-heavy theme contexts, and refuses candidates that cannot join back to
@@ -181,7 +189,10 @@ Completed foundation:
    - Status: first content-addressed clean-source chunk/delta sync is
      implemented in `sync_bundle.py`; first registry-metadata query planner and
      fanout budget reporting are implemented in `storage_capacity_report.py`.
-     Synthetic multi-GB threshold smoke is implemented in
+     Executable per-thread segment fanout budgets are implemented in
+     `search_segments.py`; report-only capacity planning and actual SQLite
+     query planning are intentionally tracked as separate layers. Synthetic
+     multi-GB threshold smoke is implemented in
      `tools/aippocampus/smoke/smoke_synthetic_scale_capacity.py`; segmented
      index rebuilds now have a single-writer lease and last-known-good recovery.
      Main indexes now have versioned pointer publishing for Windows locked-file
@@ -231,10 +242,12 @@ Completed foundation:
    private registry content.
 7. Add source chunking, delta sync, and registry query planning. Done for the
    first executable slice: local-folder/object-storage sync now moves
-   clean-source JSONL through content-addressed chunks, and capacity reports now
-   include planned fanout under a budget. The synthetic multi-GB capacity smoke
-   models warning/blocker thresholds without creating large files. Segmented
-   index rebuilds now use `.rebuild.lock` single-writer discipline, staged
+   clean-source JSONL through content-addressed chunks, capacity reports now
+   include report-only planned fanout under a budget, and `search_segments.py`
+   can enforce an actual segment fanout budget before SQLite opens. The
+   synthetic multi-GB capacity smoke models warning/blocker thresholds without
+   creating large files. Segmented index rebuilds now use `.rebuild.lock`
+   single-writer discipline, staged
    publish, and last-known-good restoration. Main indexes now use a
    `source_index.pointer.json` current/LKG pointer and stable SQLite backup
    refresh. Default sync excludes generated SQLite caches and pointer files;

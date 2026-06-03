@@ -78,6 +78,7 @@ from aippocampus_runtime.subconscious.runtime import (
     DEFAULT_MAX_STEPS,
     DEFAULT_MIN_TOOL_STEPS,
     DEFAULT_TEMPERATURE,
+    TOOL_CONTRACT_VERSION,
     AgentState,
     ChatFn,
     add_usage,
@@ -255,6 +256,7 @@ def run_one_job(
             "sample_count": sample_count,
             "turn_count": len(turns),
             "effective_step_budget": step_budget,
+            "tool_contract_version": TOOL_CONTRACT_VERSION,
             "prompt_preview": compact_text(initial_payload, 2600),
         }
     route = route or resolve_model_route(
@@ -457,6 +459,7 @@ def run_one_job(
         "effective_step_budget": step_budget,
         "timeout": timeout,
         "temperature": temperature,
+        "tool_contract_version": TOOL_CONTRACT_VERSION,
         "validation_diagnostics": validation_diagnostics,
     }
     if quality_diagnostics:
