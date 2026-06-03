@@ -175,6 +175,13 @@ not mix prompt-evidence truth gates or model judgement into that module merely
 because they also have numbers; source refs and stable source ids remain the
 truth boundary.
 
+Segmented merge weights are calibrated by the public-safe #375 fixture runner
+`benchmarks/aippocampus/benchmark_segmented_merge_policy.py` and documented in
+`docs/evidence/benchmarks/segmented-merge-policy-fixture-report.md`. Passing
+that fixture only means the default policy survives four deterministic
+long-thread merge patterns; it does not prove real recall quality or replace
+Track B source-evidence retrieval measurements.
+
 Use `--mode literal` only for chronological/debug behavior. Use `--diversity
 none` when inspecting pure score order.
 

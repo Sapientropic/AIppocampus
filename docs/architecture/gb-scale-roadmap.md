@@ -213,7 +213,10 @@ Completed foundation:
 3. Add segment builder and query fanout. Done: `build_segments.py` and
    `search_segments.py`.
 4. Add cross-segment top-k merge. Done: first diversity-aware merge in
-   `search_segments.py`; continue tuning with real recall failures.
+   `search_segments.py`; #375 adds a public-safe calibration fixture and
+   report for the current default weights. Continue tuning with real recall
+   failures, but keep before/after evidence in
+   [`docs/evidence/benchmarks/segmented-merge-policy-fixture-report.md`](../evidence/benchmarks/segmented-merge-policy-fixture-report.md).
 5. Add optional compressed raw archive and retention policy. Done:
    `cold_archive.py` plus `retention_report.py`; cleanup remains manual and
    evidence-first. A first governance bridge now lives behind `aippocampus

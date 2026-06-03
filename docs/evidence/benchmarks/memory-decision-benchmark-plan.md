@@ -1334,6 +1334,17 @@ comparable retrieval R@K/MRR. Until then the source-evidence adapter reports a
 skipped source-evidence status and the V2 runner reports only mapping
 feasibility.
 
+Segmented-search merge policy calibration is a separate deterministic
+diagnostic under Track B's ranking boundary. The #375 runner
+`benchmarks/aippocampus/benchmark_segmented_merge_policy.py` feeds synthetic
+source-ref-shaped hits directly into `search_segments.py::merge_topk()` and
+checks cross-segment diversity, adjacent-turn pairing, duplicate nearby recap
+suppression, and stale/superseded currentness. Its report belongs in
+`docs/evidence/benchmarks/segmented-merge-policy-fixture-report.md`. Passing it
+means the default merge weights have a small public-safe regression contract; it
+does not prove source-evidence retrieval quality, real long-thread recall
+quality, or turn-aware segment-boundary quality.
+
 ## Track C: End-to-End Payload Fidelity
 
 Target: prompt to hook payload, including `context_for_hook()` output.
