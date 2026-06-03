@@ -68,6 +68,53 @@ class ActiveRecallTests(unittest.TestCase):
         output = "".join(call.args[0] for call in stdout.write.call_args_list if call.args)
         self.assertTrue(json.loads(output)["searched"])
 
+    def test_segment_search_needed_does_not_trigger_foreground_segment_build(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = Path(tmp).resolve()
+            with mock.patch.object(
+                packaged_active_recall,
+                "health_report",
+                return_value={
+                    "status": "ok",
+                    "index": {"stale": False},
+                    "segments": {"exists": False, "needed": True, "stale": False},
+                    "checkpoint": {"due": False},
+                    "graphify": {"stale": False},
+                    "recommended_actions": [],
+                },
+            ), mock.patch.object(
+                packaged_active_recall,
+                "search_segments_payload",
+                return_value={
+                    "ok": False,
+                    "status": "segments_unavailable",
+                    "query_terms": [],
+                    "matched_anchors": [],
+                    "rag_context": [],
+                    "matches": [],
+                    "segment_errors": [],
+                },
+            ) as segment_search, mock.patch.object(
+                packaged_active_recall, "search_rollout_payload"
+            ) as rollout_search:
+                with mock.patch("sys.stdout"):
+                    code = packaged_active_recall.main(
+                        [
+                            "继续刚才那个状态",
+                            "--cwd",
+                            str(cwd),
+                            "--search",
+                            "always",
+                            "--json",
+                        ]
+                    )
+
+        self.assertEqual(code, 0)
+        segment_search.assert_called_once()
+        options = segment_search.call_args.args[0]
+        self.assertFalse(options.build_segments)
+        rollout_search.assert_not_called()
+
     def test_profile_prompt_searches_with_stale_checkpoint_and_alias_terms(self) -> None:
         prompt = "你知道我的简历和领英资料吗？"
         health = {

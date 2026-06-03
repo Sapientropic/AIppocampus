@@ -46,6 +46,9 @@ class SegmentSearchOptions:
     rag_context: int = 6
     max_results: int = 30
     snippet_chars: int = 700
+    fanout_budget: int | None = None
+    max_segments: int | None = None
+    full_fanout: bool = False
 
 
 def manifest_path(cwd: Path, segments_dir: str | None, *, prefer_existing: bool = True) -> Path:
@@ -68,7 +71,7 @@ def load_manifest(path: Path) -> dict:
 
 
 def ensure_segments(cwd: Path, rollout: str | None, manifest: Path, force: bool) -> None:
-    if manifest.exists() and not force:
+    if not force:
         return
     cmd = [
         sys.executable,
@@ -85,6 +88,89 @@ def ensure_segments(cwd: Path, rollout: str | None, manifest: Path, force: bool)
     )
     if proc.returncode != 0:
         raise RuntimeError(proc.stdout or proc.stderr)
+
+
+def _safe_int(value: object, default: int = 0) -> int:
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+
+
+def _optional_nonnegative_int(value: object) -> int | None:
+    if value is None:
+        return None
+    return max(0, _safe_int(value))
+
+
+def _segment_id(segment: dict, ordinal: int) -> str:
+    return str(segment.get("id") or f"segment-{ordinal:06d}")
+
+
+def _segment_recency_key(item: tuple[int, dict]) -> tuple[int, int, int, int]:
+    ordinal, segment = item
+    return (
+        _safe_int(segment.get("end_global_id")),
+        _safe_int(segment.get("end_line")),
+        _safe_int(segment.get("start_line")),
+        ordinal,
+    )
+
+
+def _empty_fanout(options: SegmentSearchOptions) -> dict:
+    return {
+        "mode": "full" if options.full_fanout else "budgeted",
+        "requested_fanout_budget": options.fanout_budget,
+        "requested_max_segments": options.max_segments,
+        "effective_max_segments": 0,
+        "planned_segment_count": 0,
+        "searched_segment_count": 0,
+        "skipped_segment_count": 0,
+        "missing_index_count": 0,
+        "budget_exhausted": False,
+        "planned_segments": [],
+        "skipped_segments": [],
+    }
+
+
+def plan_segments(segments: Sequence[dict], options: SegmentSearchOptions) -> tuple[list[tuple[int, dict]], dict]:
+    ranked = sorted(enumerate(segments, start=1), key=_segment_recency_key, reverse=True)
+    budget_values: list[int] = []
+    if not options.full_fanout:
+        for value in (options.fanout_budget, options.max_segments):
+            parsed = _optional_nonnegative_int(value)
+            if parsed is not None:
+                budget_values.append(parsed)
+    effective_max = len(ranked) if not budget_values else min(len(ranked), min(budget_values))
+    planned = ranked[:effective_max]
+    skipped = ranked[effective_max:]
+    # The budget must be resolved before touching any SQLite shard. Full fanout
+    # stays explicit so diagnostics and benchmark comparisons can still measure
+    # worst-case search without changing foreground latency by accident.
+    fanout = {
+        "mode": "full" if options.full_fanout else "budgeted",
+        "requested_fanout_budget": options.fanout_budget,
+        "requested_max_segments": options.max_segments,
+        "effective_max_segments": effective_max,
+        "planned_segment_count": len(planned),
+        "searched_segment_count": 0,
+        "skipped_segment_count": len(skipped),
+        "missing_index_count": 0,
+        "budget_exhausted": bool(skipped),
+        "planned_segments": [
+            {"segment_id": _segment_id(segment, ordinal), "ordinal": ordinal}
+            for ordinal, segment in planned
+        ],
+        "skipped_segments": [
+            {
+                "segment_id": _segment_id(segment, ordinal),
+                "ordinal": ordinal,
+                "reason": "fanout_budget",
+            }
+            for ordinal, segment in skipped
+        ],
+    }
+    return planned, fanout
 
 
 def segment_sort_key(result: dict) -> tuple[float, int, int]:
@@ -213,20 +299,8 @@ def annotate_rag_chunk(chunk: dict, segment: dict, ordinal: int) -> dict:
     return item
 
 
-def search_segments_payload(options: SegmentSearchOptions) -> dict:
+def query_context_payload(options: SegmentSearchOptions, cwd: Path) -> dict:
     patterns = list(options.patterns)
-    cwd = Path(options.cwd).resolve()
-    manifest = manifest_path(cwd, str(options.segments_dir) if options.segments_dir else None, prefer_existing=not options.build_segments)
-    ensure_segments(
-        cwd,
-        str(options.rollout) if options.rollout else None,
-        manifest,
-        options.build_segments,
-    )
-    data = load_manifest(manifest)
-    if not data:
-        raise FileNotFoundError(f"segment manifest not found: {manifest}")
-
     anchor_path = resolve_anchor_path(str(cwd), str(options.anchors))
     query_terms = split_query_terms(patterns)
     anchors = match_anchors(anchor_path, query_terms) if anchor_path.exists() else []
@@ -240,15 +314,81 @@ def search_segments_payload(options: SegmentSearchOptions) -> dict:
         if options.mode == "hybrid"
         else []
     )
+    return {
+        "query_terms": query_terms,
+        "expanded_terms": expanded_terms,
+        "matched_anchors": anchors,
+        "graph_neighbors": graph,
+    }
+
+
+def unavailable_segments_payload(
+    options: SegmentSearchOptions,
+    cwd: Path,
+    manifest: Path,
+    *,
+    reason: str,
+) -> dict:
+    payload = query_context_payload(options, cwd)
+    payload.update(
+        {
+            "ok": False,
+            "status": "segments_unavailable",
+            "source": str(manifest),
+            "mode": f"segmented-{options.mode}",
+            "segment_count": 0,
+            "rag_context": [],
+            "matches": [],
+            "segment_errors": [],
+            "fanout": _empty_fanout(options),
+            "availability": {
+                "reason": reason,
+                "build_required": True,
+                "build_requested": bool(options.build_segments),
+            },
+        }
+    )
+    return payload
+
+
+def search_segments_payload(options: SegmentSearchOptions) -> dict:
+    patterns = list(options.patterns)
+    cwd = Path(options.cwd).resolve()
+    manifest = manifest_path(cwd, str(options.segments_dir) if options.segments_dir else None, prefer_existing=not options.build_segments)
+    ensure_segments(
+        cwd,
+        str(options.rollout) if options.rollout else None,
+        manifest,
+        options.build_segments,
+    )
+    data = load_manifest(manifest)
+    if not data:
+        return unavailable_segments_payload(
+            options,
+            cwd,
+            manifest,
+            reason="manifest_missing",
+        )
+
+    query_payload = query_context_payload(options, cwd)
+    query_terms = query_payload["query_terms"]
+    expanded_terms = query_payload["expanded_terms"]
+    anchors = query_payload["matched_anchors"]
 
     raw_results: list[dict] = []
     rag_context: list[dict] = []
     segment_errors: list[dict] = []
-    for ordinal, segment in enumerate(data.get("segments") or [], start=1):
+    segments = list(data.get("segments") or [])
+    planned_segments, fanout = plan_segments(segments, options)
+    searched_segment_count = 0
+    missing_index_count = 0
+    for ordinal, segment in planned_segments:
         index = Path(segment["sqlite"])
         if not index.exists():
+            missing_index_count += 1
             segment_errors.append({"segment_id": segment.get("id"), "error": "sqlite missing"})
             continue
+        searched_segment_count += 1
         try:
             if options.mode == "literal":
                 hits = search_index_literal(
@@ -280,23 +420,34 @@ def search_segments_payload(options: SegmentSearchOptions) -> dict:
         except Exception as exc:
             segment_errors.append({"segment_id": segment.get("id"), "error": str(exc)})
 
+    fanout["searched_segment_count"] = searched_segment_count
+    fanout["missing_index_count"] = missing_index_count
     results = merge_topk(raw_results, options.max_results)
     rag_context.sort(
         key=lambda item: (-float(item.get("score") or 0.0), int(item.get("start_line") or 10**12))
     )
     rag_context = rag_context[: options.rag_context]
+    available = searched_segment_count > 0 or not planned_segments
 
     return {
+        "ok": available,
+        "status": "ok" if available else "segments_unavailable",
         "source": str(manifest),
         "mode": f"segmented-{options.mode}",
         "segment_count": int(data.get("segment_count") or len(data.get("segments") or [])),
         "query_terms": query_terms,
         "expanded_terms": expanded_terms,
         "matched_anchors": anchors,
-        "graph_neighbors": graph,
+        "graph_neighbors": query_payload["graph_neighbors"],
         "rag_context": rag_context,
         "matches": results,
         "segment_errors": segment_errors,
+        "fanout": fanout,
+        "availability": {
+            "reason": "available" if available else "sqlite_missing",
+            "build_required": bool(missing_index_count),
+            "build_requested": bool(options.build_segments),
+        },
     }
 
 
@@ -315,6 +466,9 @@ def options_from_args(args: argparse.Namespace) -> SegmentSearchOptions:
         rag_context=args.rag_context,
         max_results=args.max,
         snippet_chars=args.snippet_chars,
+        fanout_budget=args.fanout_budget,
+        max_segments=args.max_segments,
+        full_fanout=args.full_fanout,
     )
 
 
@@ -335,6 +489,23 @@ def main() -> int:
     parser.add_argument("--per-segment", type=int, default=12)
     parser.add_argument("--candidate-max", type=int, default=120)
     parser.add_argument("--rag-context", type=int, default=6)
+    parser.add_argument(
+        "--fanout-budget",
+        type=int,
+        default=None,
+        help="Maximum segment shards to plan before opening SQLite indexes.",
+    )
+    parser.add_argument(
+        "--max-segments",
+        type=int,
+        default=None,
+        help="Compatibility alias for an explicit segment fanout cap.",
+    )
+    parser.add_argument(
+        "--full-fanout",
+        action="store_true",
+        help="Ignore fanout caps for diagnostics and benchmark comparisons.",
+    )
     parser.add_argument("--show-anchors", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--max", type=int, default=30)
@@ -358,6 +529,21 @@ def main() -> int:
     else:
         print(f"source: {payload['source']}")
         print(f"mode: {payload['mode']} ({payload['segment_count']} segments)")
+        availability = payload.get("availability") or {}
+        if not payload.get("ok", True):
+            print(
+                "availability: "
+                f"{payload.get('status')} ({availability.get('reason')}; "
+                f"build_required={availability.get('build_required')})"
+            )
+        fanout = payload.get("fanout") or {}
+        if fanout:
+            print(
+                "fanout: "
+                f"{fanout.get('planned_segment_count', 0)} planned, "
+                f"{fanout.get('searched_segment_count', 0)} searched, "
+                f"{fanout.get('skipped_segment_count', 0)} skipped"
+            )
         if args.mode == "hybrid":
             print(f"query terms: {', '.join(query_terms) or '(none)'}")
             print(f"expanded terms: {', '.join(expanded_terms) or '(none)'}")
