@@ -7,7 +7,8 @@ for issue #61.
 
 - Capture is off by default.
 - The user must explicitly enable capture/search in the visible panel.
-- Captured turns stay in browser `localStorage` for the current device.
+- Captured turns stay as redacted/bounded text at rest in browser
+  `localStorage` for the current device.
 - `<memory_search query="..." max="...">` requests can be parsed locally.
 - Search uses small browser-local lexical matching with CJK bigrams.
 - Results are redacted, length-bounded, and shown as a visible handoff for the
@@ -27,6 +28,11 @@ for issue #61.
 - It does not automatically import browser captures into AIppocampus. Export
   creates a private local file; the registry import remains a separate user-run
   command.
+- Raw visible turns are not kept in localStorage by this userscript v1. This
+  still does not make page `localStorage` an extension-grade trust boundary:
+  same-origin scripts can read browser-local state, so wider web-chat support
+  should move to extension-isolated storage / IndexedDB before any general
+  browser-memory claim.
 
 ## Manual Smoke
 
@@ -44,6 +50,11 @@ Click `Run visible search`. The output should show an
 `AIppocampus memory_search results` block with a `source-boundary` line,
 redaction markers when sensitive-looking text is present, and `truncated` when
 the bounded result would exceed the local limit.
+
+The local record stored before handoff/export uses
+`storage_mode=redacted_local_storage_v1`, `raw_capture_at_rest=false`, and
+redaction/truncation diagnostics. Treat legacy records without that marker as
+mixed/legacy local storage until cleared or re-captured.
 
 To make captured turns durable in AIppocampus, click `Export generic JSONL`.
 The downloaded file contains redacted visible rows only: `session_id`, `role`,
@@ -73,5 +84,5 @@ python -m unittest tests.aippocampus.test_browser_memory_companion
 
 The tests load the userscript through Node and cover explicit enablement,
 capture, XML-style request parsing, CJK search, credential/path/prompt-injection
-redaction, long-result truncation, generic JSONL export, registry dry-run
-validation, and malformed export rejection.
+redaction at rest, visible handoff redaction, long-result truncation, generic
+JSONL export, registry dry-run validation, and malformed export rejection.
