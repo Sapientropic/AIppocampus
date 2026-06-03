@@ -18,6 +18,10 @@ records, start with [`docs/evidence/benchmark-evidence-map.md`](../docs/evidence
   corpus-style multimodal retrieval fixture for #531. It is inspired by the
   ATM-Bench staged-corpus shape, but it is not an ATM-Bench adapter or a
   conversational media-upload recall benchmark.
+- `conversational_media_ingest/` contains the checked-in synthetic public-safe
+  fixture for #532. It models media the user sends or selects inside a
+  conversation, where the user's wording around the upload is also source
+  evidence.
 - `testdata_wildchat.jsonl` is a tiny checked-in fixture in WildChat-like JSONL
   shape, useful for smoke-testing the converter without network access.
 
@@ -113,6 +117,22 @@ does not claim ATM-Bench Hard support, live vision quality, conversational
 media-upload recall, full-device indexing, or product privacy behavior. The
 report owner is
 [`docs/evidence/benchmarks/multimodal-corpus-fixture-report.md`](../docs/evidence/benchmarks/multimodal-corpus-fixture-report.md).
+
+Run the public-safe conversational media-ingest recall contract:
+
+```powershell
+python benchmarks\aippocampus\benchmark_conversational_media_ingest_recall.py --json
+```
+
+This fixture is the conversational counterpart to staged corpus QA: media
+anchors are attached to user turns, and the user's wording can help resolve
+personal references. Text around an upload still cannot count as visual proof
+without reopening the media source. The runner scores personal-reference
+resolution, visual source reopen, text-hint leakage, stale-label correction,
+unsupported visual claims, and hidden durable writes. It does not claim
+background scanning, cross-domain reuse, live vision quality, face-recognition
+identity graphs, or product privacy behavior. The report owner is
+[`docs/evidence/benchmarks/conversational-media-ingest-fixture-report.md`](../docs/evidence/benchmarks/conversational-media-ingest-fixture-report.md).
 
 Run the public longitudinal pseudo-user contract smoke for coding implicit
 knowledge:
