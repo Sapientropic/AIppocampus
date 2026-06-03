@@ -108,6 +108,10 @@ importers.
 
 These shapes are the stable public contract. Field names may grow, but existing
 meaning should not be silently reused for a different concept.
+When adding optional metadata, follow
+[`schema-field-profiles.md`](../architecture/schema-field-profiles.md): minimal
+identity, retrieval runtime, governance, diagnostic, and high-risk projections
+must remain separate instead of widening every base record.
 
 ### Canonical Source Event
 
