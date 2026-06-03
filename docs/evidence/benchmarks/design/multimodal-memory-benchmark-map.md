@@ -60,6 +60,7 @@ claim.
 | #532 conversational media-ingest recall | MemLens, Mem-Gallery, MMRC. | These stress conversation traces where the user's wording and media evidence both matter, plus refusal/update behavior. |
 | #533 NIAH-style evidence-pool evaluation | ATM-Bench NIAH. | Fixed pools separate answer synthesis and source selection from retrieval; this catches stale/conflicting-source reasoning failures even when the right evidence is present. |
 | #541 source manifest and media-origin policy | ATM-Bench, MemLens, HippoCamp, and egocentric/document-source families. | Runtime source handling needs one contract for original source anchors, origin policy, task-scoped consent, and derived-artifact provenance before fixtures become product paths. |
+| #542 provider capability routing | ATM-Bench Oracle/Agent boundary, MemLens media conversation flows, and local/offline provider constraints. | Before raw media is processed, routes need explicit modality support, execution location, media-origin allowance, and cannot-claim boundaries. |
 | Future visual life-memory fixtures | EgoMemReason, MyEgo, Ego4D episodic memory. | These are better references for image/video-first temporal and spatial memory than staged email/image corpus QA. |
 | Future document/knowledge-source fixtures | UniDoc-Bench. | Document tables, figures, and page-local evidence should inform knowledge-source contracts, not personal-memory claims. |
 | Future profile/persona fixtures | PersonaVLM / Persona-MME plus HippoCamp profiling tasks. | Profile inference must stay source-backed and reversible; profile benchmarks are useful only if they preserve evidence and update boundaries. |
@@ -68,6 +69,10 @@ The #541 runtime source contract is
 [`../../../architecture/multimodal-source-manifests.md`](../../../architecture/multimodal-source-manifests.md).
 It keeps captions, OCR, tags, and schema rows as navigation artifacts while
 original source anchors remain the audit boundary.
+The #542 provider-routing contract is
+[`../../../architecture/multimodal-provider-routing.md`](../../../architecture/multimodal-provider-routing.md).
+It keeps text-only, vision-capable, local/offline, and external routes distinct
+before any source-reopen or answer gate tries to use the result.
 
 ## Claim-Boundary Traps
 
