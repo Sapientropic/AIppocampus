@@ -184,6 +184,37 @@ class AttributionCase:
         raise KeyError(f"missing arm {arm!r} for case {self.case_id!r}")
 
 
+@dataclass(frozen=True)
+class CommonArmSpecConfig:
+    correct_packet: str
+    sham_packet: str
+    stale_packet: str
+    oracle_packet: str
+    expected_behavior: str
+    no_memory_behavior: str
+    no_memory_success: bool
+    no_memory_harm: int
+    sham_behavior: str
+    sham_success: bool
+    sham_harm: int
+    host_native_behavior: str | None = None
+    host_native_success: bool | None = None
+    host_native_harm: int | None = None
+    true_behavior: str | None = None
+    true_success: bool = True
+    true_harm: int = 0
+    true_source_hit: bool = True
+    true_abstained_on_missing_source: bool = False
+    stale_behavior: str | None = None
+    stale_harm: int = 4
+    stale_downstream_turns: int = 4
+    stale_wrong_constraint_adopted: bool = True
+    stale_rejected_route_retried: bool = False
+    stale_project_contamination: bool = False
+    stale_risky_action_before_reopen: bool = True
+    stale_rework_minutes: int = 18
+
+
 def now_utc() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
@@ -222,41 +253,38 @@ def round_delta(value: float) -> float:
     return round(value, 4)
 
 
-def _common_specs(
-    *,
-    correct_packet: str,
-    sham_packet: str,
-    stale_packet: str,
-    oracle_packet: str,
-    expected_behavior: str,
-    no_memory_behavior: str,
-    no_memory_success: bool,
-    no_memory_harm: int,
-    host_native_behavior: str | None = None,
-    host_native_success: bool | None = None,
-    host_native_harm: int | None = None,
-    sham_behavior: str,
-    sham_success: bool,
-    sham_harm: int,
-    true_behavior: str | None = None,
-    true_success: bool = True,
-    true_harm: int = 0,
-    true_source_hit: bool = True,
-    true_abstained_on_missing_source: bool = False,
-    stale_behavior: str | None = None,
-    stale_harm: int = 4,
-    stale_downstream_turns: int = 4,
-    stale_wrong_constraint_adopted: bool = True,
-    stale_rejected_route_retried: bool = False,
-    stale_project_contamination: bool = False,
-    stale_risky_action_before_reopen: bool = True,
-    stale_rework_minutes: int = 18,
-) -> tuple[ArmSpec, ...]:
-    true_action = true_behavior or expected_behavior
-    stale_action = stale_behavior or "adopt_stale_wrong_memory"
-    host_action = host_native_behavior or no_memory_behavior
-    host_success = no_memory_success if host_native_success is None else host_native_success
-    host_harm = no_memory_harm if host_native_harm is None else host_native_harm
+def _common_specs(config: CommonArmSpecConfig) -> tuple[ArmSpec, ...]:
+    correct_packet = config.correct_packet
+    sham_packet = config.sham_packet
+    stale_packet = config.stale_packet
+    oracle_packet = config.oracle_packet
+    expected_behavior = config.expected_behavior
+    no_memory_behavior = config.no_memory_behavior
+    no_memory_success = config.no_memory_success
+    no_memory_harm = config.no_memory_harm
+    sham_behavior = config.sham_behavior
+    sham_success = config.sham_success
+    sham_harm = config.sham_harm
+    true_success = config.true_success
+    true_harm = config.true_harm
+    true_source_hit = config.true_source_hit
+    true_abstained_on_missing_source = config.true_abstained_on_missing_source
+    stale_harm = config.stale_harm
+    stale_downstream_turns = config.stale_downstream_turns
+    stale_wrong_constraint_adopted = config.stale_wrong_constraint_adopted
+    stale_rejected_route_retried = config.stale_rejected_route_retried
+    stale_project_contamination = config.stale_project_contamination
+    stale_risky_action_before_reopen = config.stale_risky_action_before_reopen
+    stale_rework_minutes = config.stale_rework_minutes
+    true_action = config.true_behavior or config.expected_behavior
+    stale_action = config.stale_behavior or "adopt_stale_wrong_memory"
+    host_action = config.host_native_behavior or config.no_memory_behavior
+    host_success = (
+        config.no_memory_success
+        if config.host_native_success is None
+        else config.host_native_success
+    )
+    host_harm = config.no_memory_harm if config.host_native_harm is None else config.host_native_harm
     return (
         ArmSpec(
             arm="no_memory",
@@ -409,7 +437,7 @@ def fixture_cases() -> list[AttributionCase]:
             expected_behavior="avoid_rejected_route_and_use_accepted_path",
             source_ref="synthetic://continuous-memory/rejected-route#source",
             source_window="User rejected the registry import route and accepted direct fixture replay.",
-            specs=_common_specs(
+            specs=_common_specs(CommonArmSpecConfig(
                 correct_packet="Route handle says rejected registry import has source support.",
                 sham_packet="Route handle says a website preference thread may be nearby.",
                 stale_packet="Route handle says registry import is the accepted path.",
@@ -428,7 +456,7 @@ def fixture_cases() -> list[AttributionCase]:
                 stale_rejected_route_retried=True,
                 stale_wrong_constraint_adopted=False,
                 stale_rework_minutes=24,
-            ),
+            )),
         ),
         AttributionCase(
             case_id="scope-narrowing-after-horizon-loss",
@@ -436,7 +464,7 @@ def fixture_cases() -> list[AttributionCase]:
             expected_behavior="preserve_docs_only_scope",
             source_ref="synthetic://continuous-memory/docs-scope#source",
             source_window="User narrowed the slice to docs and benchmark reports only.",
-            specs=_common_specs(
+            specs=_common_specs(CommonArmSpecConfig(
                 correct_packet="Route handle says the active task was narrowed to docs only.",
                 sham_packet="Route handle says a nutrition note had a similar date.",
                 stale_packet="Route handle says code edits are in scope for this slice.",
@@ -454,7 +482,7 @@ def fixture_cases() -> list[AttributionCase]:
                 stale_harm=4,
                 stale_project_contamination=True,
                 stale_rework_minutes=24,
-            ),
+            )),
         ),
         AttributionCase(
             case_id="transient-concern-expired",
@@ -462,7 +490,7 @@ def fixture_cases() -> list[AttributionCase]:
             expected_behavior="do_not_preserve_expired_constraint",
             source_ref="synthetic://continuous-memory/transient-expiry#source",
             source_window="Concern was explicitly local to one run and expired at closeout.",
-            specs=_common_specs(
+            specs=_common_specs(CommonArmSpecConfig(
                 correct_packet="Route handle says the old concern was local-only and expired.",
                 sham_packet="Route handle says an unrelated visual-review task existed.",
                 stale_packet="Route handle says the old local concern is still a global rule.",
@@ -478,7 +506,7 @@ def fixture_cases() -> list[AttributionCase]:
                 stale_downstream_turns=2,
                 stale_risky_action_before_reopen=False,
                 stale_rework_minutes=12,
-            ),
+            )),
             negative_control_kind="expired_memory_should_not_intervene",
         ),
         AttributionCase(
@@ -487,7 +515,7 @@ def fixture_cases() -> list[AttributionCase]:
             expected_behavior="recover_exact_source_before_claim",
             source_ref="synthetic://continuous-memory/incomplete-handoff#source",
             source_window="Handoff mentions a decision but omits the exact source window.",
-            specs=_common_specs(
+            specs=_common_specs(CommonArmSpecConfig(
                 correct_packet="Route handle names a likely decision but source reopen misses.",
                 sham_packet="Route handle names an unrelated benchmark report.",
                 stale_packet="Route handle fills the missing decision with an old wrong claim.",
@@ -506,7 +534,7 @@ def fixture_cases() -> list[AttributionCase]:
                 true_abstained_on_missing_source=True,
                 stale_harm=3,
                 stale_rework_minutes=18,
-            ),
+            )),
         ),
         AttributionCase(
             case_id="public-vcs-temporal-override-chain",
@@ -520,7 +548,7 @@ def fixture_cases() -> list[AttributionCase]:
                 "Sanitized aggregate says temporal override cases require the "
                 "later effective source rather than the older public outcome."
             ),
-            specs=_common_specs(
+            specs=_common_specs(CommonArmSpecConfig(
                 correct_packet="Route handle says a later source supersedes the older public outcome.",
                 sham_packet="Route handle says an unrelated UI polish trace may be nearby.",
                 stale_packet="Route handle says the original public outcome remains authoritative.",
@@ -537,7 +565,7 @@ def fixture_cases() -> list[AttributionCase]:
                 stale_wrong_constraint_adopted=True,
                 stale_risky_action_before_reopen=True,
                 stale_rework_minutes=20,
-            ),
+            )),
             scenario_provenance=("public_log_or_vcs_derived", "holdout_blind"),
             scenario_generated_by="public_vcs_fixture_adapter",
             scenario_source_material=(
@@ -558,7 +586,7 @@ def fixture_cases() -> list[AttributionCase]:
                 "Sanitized aggregate says same-token non-flag events require "
                 "suppression rather than memory intervention."
             ),
-            specs=_common_specs(
+            specs=_common_specs(CommonArmSpecConfig(
                 correct_packet=(
                     "Route handle finds a similar old event but source support "
                     "is insufficient for the current non-flag task."
@@ -584,7 +612,7 @@ def fixture_cases() -> list[AttributionCase]:
                 stale_project_contamination=True,
                 stale_risky_action_before_reopen=True,
                 stale_rework_minutes=16,
-            ),
+            )),
             scenario_provenance=("public_log_or_vcs_derived", "holdout_blind"),
             scenario_generated_by="public_vcs_fixture_adapter",
             scenario_source_material=(
@@ -1126,7 +1154,7 @@ def build_fresh_context_spec_loop_baseline(case_count: int) -> tuple[dict[str, A
     # without carrying long-lived memory state. Keeping it separate prevents the
     # no-memory diagnostic arm from being misread as the fair fresh-context
     # baseline named in #410.
-    cost_summary = {
+    cost_summary: dict[str, Any] = {
         "foreground_tokens": case_count * 260,
         "background_tokens": 0,
         "background_api_calls": 0,
