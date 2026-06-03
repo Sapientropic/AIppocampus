@@ -157,3 +157,5 @@ for comparison candidates and blockers.
   [`../../readiness/public-readiness-verification.md`](../../readiness/public-readiness-verification.md).
 - Typed agent-skill capability contracts:
   [`../../../architecture/agent-skill-capability-contracts.md`](../../../architecture/agent-skill-capability-contracts.md).
+- ATM-Bench Hard protocol boundary for multimodal source-backed recall:
+  [`atm-bench-hard-protocol-boundary.md`](atm-bench-hard-protocol-boundary.md).
