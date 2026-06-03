@@ -25,6 +25,10 @@ For quick product-shaped evidence, read
 second-user continuity moments before the benchmark machinery, while preserving
 the boundary that scent is navigation, source reopening is evidence, and the
 base model did not innately remember the facts.
+For the narrow coding-agent product lane, use
+[`docs/guides/coding-agent-memory.md`](guides/coding-agent-memory.md). It is the
+front door for local, source-backed continuity in Codex/Claude-style long-running
+work.
 For neuroscience-adjacent metaphor boundaries, use
 [`docs/architecture/architecture-overview.md#metaphor-discipline`](architecture/architecture-overview.md#metaphor-discipline).
 
@@ -184,6 +188,8 @@ Avoid overclaims:
 - `AGENTS.md`: Codex project instructions and source-of-truth map.
 - `CLAUDE.md`: Claude Code bridge that imports `AGENTS.md`.
 - `llms.txt`: compact LLM discovery index.
+- `docs/guides/coding-agent-memory.md`: narrow coding-agent product lane,
+  demo path, evidence drawer, and recommendation boundary.
 - `docs/guides/install-guide.md`: full install paths.
 - `docs/guides/public-api.md`: supported CLI, MCP, env, JSON, and import
   boundary.
