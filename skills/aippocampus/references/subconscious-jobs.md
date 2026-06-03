@@ -28,6 +28,9 @@ but they must not rewrite source, delete source, or directly write formal memory
 - `subconscious_worker.py`: single-shot timeline-to-concept-edge extractor.
 - `subconscious_agent.py`: minimal read-only tool loop for concept edges.
 - `subconscious_jobs.py`: multi-job background cognition runner.
+- `subconscious_staging_maintenance.py`: dry-run maintenance reporter for
+  local-private staging queues. It classifies rows and pressure, but does not
+  archive, compact, or delete.
 - `subconscious_scheduler.py`: hook-safe scheduler that starts detached
   subconscious runs only after cooldown, new-turn, API-key, and lock checks.
 - `memory_candidate_router.py`: deterministic promotion-candidate router for
@@ -574,6 +577,34 @@ Review produces:
 
 This is the main bridge from "the subconscious noticed things" to "a later
 workflow can consume the strongest candidates".
+
+## Staging Maintenance
+
+Staging queues are append-only review surfaces. Maintenance must start with a
+dry-run report, not an apply path:
+
+```powershell
+python "$env:CODEX_HOME\skills\aippocampus\scripts\subconscious_staging_maintenance.py" --json
+```
+
+The report classifies `subconscious_edges.jsonl` and
+`subconscious_jobs.jsonl` rows as `active`, `review`, or
+`archive_candidate`, counts duplicates and legacy/new finding-id formats, and
+reports row/byte backpressure. `archive_candidate` is only a proposed action:
+this command does not rewrite, move, compact, or delete rows.
+
+Before any future apply mode exists, it must preserve `source_refs`,
+promotion traceability, dream/question/review references, and private audit
+provenance. Referenced rows should stay `review` until the owning consumer can
+prove its trace chain survives. JSONL readers must remain tolerant of legacy
+`sf_...` finding ids and deterministic SHA-style ids.
+
+Producer warnings are soft pressure signals only. `append_staging_edges()` and
+`append_job_findings()` may return `staging_pressure` when
+`AIPPOCAMPUS_SUBCONSCIOUS_STAGING_WARN_ROWS` or
+`AIPPOCAMPUS_SUBCONSCIOUS_STAGING_WARN_BYTES` is exceeded, but they must not
+drop source-backed rows. The scheduler/operator can use those warnings to run
+the dry-run report or reduce noisy batches.
 
 ## Promotion Boundary
 
