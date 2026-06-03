@@ -38,54 +38,56 @@ promotes a public-safe result into the official evidence flow.
    [`benchmarks/memory-decision-benchmark-plan.md`](benchmarks/memory-decision-benchmark-plan.md).
 5. Need external benchmark and memory-system comparison boundaries:
    [`benchmarks/design/external-benchmark-map.md`](benchmarks/design/external-benchmark-map.md).
-6. Need the ATM-Bench Hard protocol boundary for multimodal source-backed
+6. Need the multimodal memory benchmark-family map for #528:
+   [`benchmarks/design/multimodal-memory-benchmark-map.md`](benchmarks/design/multimodal-memory-benchmark-map.md).
+7. Need the ATM-Bench Hard protocol boundary for multimodal source-backed
    recall before adapting #528:
    [`benchmarks/design/atm-bench-hard-protocol-boundary.md`](benchmarks/design/atm-bench-hard-protocol-boundary.md).
-7. Need LongMemEval source, commands, and published retrieval-only results:
+8. Need LongMemEval source, commands, and published retrieval-only results:
    [`benchmarks/longmemeval.md`](benchmarks/longmemeval.md).
-8. Need public corpus commands and local report boundaries:
+9. Need public corpus commands and local report boundaries:
    [`benchmark_corpus/README.md`](../../benchmark_corpus/README.md) and
    [`benchmark_corpus/sharegpt_manifest.json`](../../benchmark_corpus/sharegpt_manifest.json).
-9. Need the public longitudinal pseudo-user benchmark for coding implicit
+10. Need the public longitudinal pseudo-user benchmark for coding implicit
    knowledge:
    [`benchmarks/public-longitudinal-users.md`](benchmarks/public-longitudinal-users.md).
-10. Need the latest dated public-longitudinal-users measurement report:
+11. Need the latest dated public-longitudinal-users measurement report:
    [`benchmarks/public-longitudinal-users-measurement-2026-05-31.md`](benchmarks/public-longitudinal-users-measurement-2026-05-31.md).
-11. Need the first real public VCS hard-event smoke:
+12. Need the first real public VCS hard-event smoke:
    [`benchmarks/react-real-vcs-smoke-2026-05-31.md`](benchmarks/react-real-vcs-smoke-2026-05-31.md).
-12. Need the 100+ gold real React VCS measurement with anti-drift negatives
+13. Need the 100+ gold real React VCS measurement with anti-drift negatives
    and counterfactual controls:
    [`benchmarks/react-real-vcs-100-gold-2026-05-31.md`](benchmarks/react-real-vcs-100-gold-2026-05-31.md).
-13. Need the sharper React VCS adversarial controls for source authority,
+14. Need the sharper React VCS adversarial controls for source authority,
    keyword drift, behavior-only support, and abstention:
    [`benchmarks/react-real-vcs-adversarial-v2-2026-05-31.md`](benchmarks/react-real-vcs-adversarial-v2-2026-05-31.md).
-14. Need public-safe memory-pain fixture evidence:
+15. Need public-safe memory-pain fixture evidence:
    [`benchmarks/memory-pain-fixture-report.md`](benchmarks/memory-pain-fixture-report.md).
-15. Need public-safe multimodal corpus-style retrieval fixture evidence for
+16. Need public-safe multimodal corpus-style retrieval fixture evidence for
    #531:
    [`benchmarks/multimodal-corpus-fixture-report.md`](benchmarks/multimodal-corpus-fixture-report.md).
-16. Need public-safe conversational media-ingest recall fixture evidence for
+17. Need public-safe conversational media-ingest recall fixture evidence for
    #532:
    [`benchmarks/conversational-media-ingest-fixture-report.md`](benchmarks/conversational-media-ingest-fixture-report.md).
-17. Need public-safe NIAH-style multimodal evidence-pool fixture evidence for
+18. Need public-safe NIAH-style multimodal evidence-pool fixture evidence for
    #533:
    [`benchmarks/multimodal-niah-evidence-pool-report.md`](benchmarks/multimodal-niah-evidence-pool-report.md).
-18. Need public-safe knowledge pollution, privacy partition, and capability
+19. Need public-safe knowledge pollution, privacy partition, and capability
    contract-smoke evidence:
    [`benchmarks/knowledge-pollution-privacy-fixture-report.md`](benchmarks/knowledge-pollution-privacy-fixture-report.md).
-19. Need public-safe fresh-thread recall demo evidence:
+20. Need public-safe fresh-thread recall demo evidence:
    [`benchmarks/fresh-thread-recall-demo-2026-05-31.md`](benchmarks/fresh-thread-recall-demo-2026-05-31.md).
-20. Need sanitized real-history fresh-thread boundary evidence for #302:
+21. Need sanitized real-history fresh-thread boundary evidence for #302:
    [`benchmarks/fresh-thread-real-history-smoke-2026-06-02.md`](benchmarks/fresh-thread-real-history-smoke-2026-06-02.md).
-21. Need expanded fresh-thread demo and multi-ref real-history smoke evidence:
+22. Need expanded fresh-thread demo and multi-ref real-history smoke evidence:
    [`benchmarks/fresh-thread-expanded-coverage-2026-06-03.md`](benchmarks/fresh-thread-expanded-coverage-2026-06-03.md).
-22. Need explicit recall-reminder shadow A/B evidence:
+23. Need explicit recall-reminder shadow A/B evidence:
    [`dream/dream-live-shadow-ab-2026-05-30.md`](dream/dream-live-shadow-ab-2026-05-30.md).
-23. Need public-corpus negative-control dream shadow evidence:
+24. Need public-corpus negative-control dream shadow evidence:
    [`dream/dream-live-shadow-benchmark-corpus-2026-05-31.md`](dream/dream-live-shadow-benchmark-corpus-2026-05-31.md).
-24. Need live question-extraction axis-coverage evidence for GitHub #153:
+25. Need live question-extraction axis-coverage evidence for GitHub #153:
    [`question/question-extraction-axis-coverage-2026-05-31.md`](question/question-extraction-axis-coverage-2026-05-31.md).
-25. Need community-submitted runs, demos, known gaps, or field-report intake:
+26. Need community-submitted runs, demos, known gaps, or field-report intake:
    [`community-field-reports.md`](community-field-reports.md) and the public
    [`/evidence/`](https://www.aippocampus.com/evidence/) page.
 
@@ -102,6 +104,7 @@ snapshot or dated verification ledger.
 | Benchmark design rationale | `docs/evidence/benchmarks/design/README.md` and `docs/evidence/benchmarks/design/benchmark-design-rationale.md` | Evaluation philosophy, track-family why, evidence-layer separation, and external-comparison boundaries. |
 | Benchmark runner methodology | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md` | Track definitions, report shape, non-goals, and diagnostic interpretation. |
 | External benchmark analysis | `docs/evidence/benchmarks/design/external-benchmark-map.md` | Layer-aware external benchmark and memory-system comparison candidates, blockers, and cannot-claim boundaries. |
+| Multimodal memory benchmark map | `docs/evidence/benchmarks/design/multimodal-memory-benchmark-map.md` | Source-shape routing for #528 across conversation, corpus, personal filesystem, egocentric video, document/knowledge-source, and personalization benchmark families. |
 | ATM-Bench Hard protocol boundary | `docs/evidence/benchmarks/design/atm-bench-hard-protocol-boundary.md` | Verified upstream-protocol intake for #528 multimodal source-backed recall, including corpus-style, conversational media-ingest, Oracle, and NIAH slice boundaries. |
 | LongMemEval evidence | `docs/evidence/benchmarks/longmemeval.md` and `benchmark_corpus/longmemeval_manifest.json` | Official sources, dataset checksums, dedicated runner commands, dated retrieval-only results, and claim boundaries. |
 | Public longitudinal user evidence | `docs/evidence/benchmarks/public-longitudinal-users.md`, `docs/evidence/benchmarks/public-longitudinal-users-measurement-2026-05-31.md`, `docs/evidence/benchmarks/react-real-vcs-smoke-2026-05-31.md`, `docs/evidence/benchmarks/react-real-vcs-100-gold-2026-05-31.md`, `docs/evidence/benchmarks/react-real-vcs-adversarial-v2-2026-05-31.md`, `benchmark_corpus/public_longitudinal_users/`, and `benchmark_corpus/locomo_manifest.json` | Public synthetic coding implicit-knowledge scoring-contract smoke, LoCoMo same-conversation control users, LoCoMo answer-usefulness prototype, deterministic scorers, VCS future-event recall roadmap, dated measurements, real public VCS hard-event smoke, 100+ gold React VCS measurement with anti-drift/counterfactual controls, sharper React VCS adversarial controls, and external-prediction contracts. |

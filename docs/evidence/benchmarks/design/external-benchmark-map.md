@@ -8,6 +8,11 @@ quoted as evidence.
 It is not a leaderboard. Do not use this page to claim SOTA, broad competitor
 superiority, official partner support, or product-quality proof.
 
+For the #528-specific multimodal source-shape map across HippoCamp, MemLens,
+ATM-Bench, Ego-series episodic memory, UniDoc-Bench, PersonaVLM/Persona-MME,
+Mem-Gallery, and MMRC, use
+[`multimodal-memory-benchmark-map.md`](multimodal-memory-benchmark-map.md).
+
 ## Comparison Boundary
 
 Every external comparison must name the layer it measures:
