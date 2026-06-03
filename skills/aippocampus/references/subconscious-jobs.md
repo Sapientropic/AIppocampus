@@ -106,6 +106,21 @@ The model can be exploratory in tool planning, but output remains constrained:
 every accepted finding must have source refs that resolve to initial turn refs
 or tool observation refs.
 
+Adaptive shell selection starts as a dry-run/report policy in
+`aippocampus_runtime.subconscious.shell_selection`. It may recommend
+`deterministic_only`, `worker`, `agent_probe`, `agent_deep`, or
+`skip_due_to_backpressure` from queue shape, corpus size, thread span, and prior
+low-confidence worker output, but the scheduler must not treat that report as
+permission to run expensive deep agents automatically. Use explicit operator
+commands or a later named budget policy before turning `agent_probe`/`agent_deep`
+into execution. The report is cost/quality routing only; it does not raise
+staging rows into formal memory or bypass deterministic validation.
+
+For operator inspection, run the scheduler with `--dry-run --json
+--include-private-report`; keep the default public `--json` projection compact
+for hook-safe sharing. `--shell-selection` is a report override for debugging
+and does not by itself start a worker or agent path.
+
 Concept-edge source integrity is owned by
 `aippocampus_runtime.subconscious.edge_validation`. The single-shot worker and
 minimal tool-using agent share the same confidence floor, edge-type fallback,

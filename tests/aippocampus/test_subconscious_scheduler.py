@@ -133,6 +133,87 @@ class SubconsciousSchedulerTests(unittest.TestCase):
         self.assertFalse(result["started"])
         self.assertEqual(result["projects"][0]["label"], "T-Sense")
 
+    def test_shell_selection_policy_reports_core_routing_shapes(self) -> None:
+        from aippocampus_runtime.subconscious import shell_selection
+
+        tiny = shell_selection.select_shell(
+            shell_selection.ShellSelectionInput(
+                project_label="Tiny",
+                due_reason="first_run",
+                clean_turn_count=2,
+                clean_message_count=4,
+                thread_count=1,
+            )
+        )
+        mature = shell_selection.select_shell(
+            shell_selection.ShellSelectionInput(
+                project_label="Mature",
+                due_reason="new_turns:80",
+                clean_turn_count=96,
+                clean_message_count=192,
+                thread_count=4,
+            )
+        )
+        backlog = shell_selection.select_shell(
+            shell_selection.ShellSelectionInput(
+                project_label="Backlog",
+                due_reason="new_turns:20",
+                clean_turn_count=40,
+                clean_message_count=80,
+                thread_count=2,
+                staging_backlog_rows=shell_selection.DEFAULT_MAX_BACKLOG_ROWS + 1,
+            )
+        )
+        low_confidence = shell_selection.select_shell(
+            shell_selection.ShellSelectionInput(
+                project_label="Low Confidence",
+                due_reason="new_turns:12",
+                clean_turn_count=24,
+                clean_message_count=48,
+                thread_count=1,
+                low_confidence_prior_count=shell_selection.DEFAULT_LOW_CONFIDENCE_PRIOR_LIMIT,
+            )
+        )
+
+        self.assertEqual(tiny["decision"], "deterministic_only")
+        self.assertIn("tiny_corpus", tiny["reasons"])
+        self.assertEqual(mature["decision"], "agent_probe")
+        self.assertIn("mature_multi_thread_corpus", mature["reasons"])
+        self.assertEqual(backlog["decision"], "skip_due_to_backpressure")
+        self.assertIn("staging_backlog_high", backlog["reasons"])
+        self.assertEqual(low_confidence["decision"], "agent_probe")
+        self.assertIn("low_confidence_prior_worker_output", low_confidence["reasons"])
+        self.assertFalse(mature["will_start_expensive_agent"])
+
+    def test_shell_selection_manual_override_is_explicit(self) -> None:
+        from aippocampus_runtime.subconscious import shell_selection
+
+        report = shell_selection.select_shell(
+            shell_selection.ShellSelectionInput(
+                project_label="Manual",
+                due_reason="new_turns:50",
+                clean_turn_count=80,
+                clean_message_count=160,
+                thread_count=4,
+            ),
+            override="worker",
+        )
+
+        self.assertEqual(report["decision"], "worker")
+        self.assertTrue(report["overridden"])
+        self.assertIn("manual_override", report["reasons"])
+        self.assertIn("subconscious_worker.py", " ".join(report["manual_override_surface"]))
+
+    def test_maybe_start_dry_run_includes_shell_selection_report(self) -> None:
+        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "x"}, clear=True):
+            result = scheduler.maybe_start(self.args(dry_run=True, shell_selection="worker"))
+
+        project = result["projects"][0]
+        self.assertEqual(project["label"], "T-Sense")
+        self.assertEqual(project["shell_selection"]["decision"], "worker")
+        self.assertTrue(project["shell_selection"]["overridden"])
+        self.assertIn("manual_override", project["shell_selection"]["reasons"])
+
     def test_maybe_start_uses_parallel_deepseek_defaults_for_detached_worker(self) -> None:
         captured: dict[str, object] = {}
 
@@ -376,6 +457,48 @@ class SubconsciousSchedulerTests(unittest.TestCase):
         self.assertNotIn("projects", payload)
         self.assertNotIn("Private Project", encoded)
         self.assertNotIn("PRIVATE_TOKEN", encoded)
+        self.assertNotIn(str(self.root), encoded)
+
+    def test_main_json_can_include_explicit_private_policy_report(self) -> None:
+        private_result = {
+            "started": False,
+            "dry_run": True,
+            "projects": [
+                {
+                    "label": "Private Project",
+                    "reason": "first_run",
+                    "shell_selection": {
+                        "decision": "worker",
+                        "reasons": ["manual_override"],
+                        "overridden": True,
+                    },
+                }
+            ],
+            "log": str(self.root / "subconscious_scheduler.log"),
+        }
+        stdout = io.StringIO()
+        with (
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "subconscious_scheduler.py",
+                    "--maybe-start",
+                    "--dry-run",
+                    "--json",
+                    "--include-private-report",
+                ],
+            ),
+            patch.object(scheduler, "maybe_start", return_value=private_result),
+            contextlib.redirect_stdout(stdout),
+        ):
+            code = scheduler.main()
+
+        self.assertEqual(code, 0)
+        payload = json.loads(stdout.getvalue())
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(payload["projects"][0]["shell_selection"]["decision"], "worker")
+        self.assertIn("Private Project", encoded)
         self.assertNotIn(str(self.root), encoded)
 
 
