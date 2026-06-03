@@ -272,12 +272,17 @@ the already-written thread cache.
 
 Warm scouts stay quality-first: DeepSeek thinking mode is enabled by default,
 and `AIPPOCAMPUS_WARM_RECALL_THINKING=disabled` is only an explicit diagnostic
-or ablation setting. Do not couple thinking mode to sampling temperature.
+or ablation setting. The route-level default reasoning effort is `high` unless
+an operator explicitly selects provider/default or `max`. Do not couple
+thinking mode to sampling temperature.
 DeepSeek's thinking-mode contract says temperature/top-p style sampling
 parameters are not supported there, so the client omits `temperature` when
 `thinking=enabled`. JSON stability comes from `response_format=json_object`,
 strict parse isolation, output profiles, and deterministic validation rather
 than pretending a high temperature is safe.
+Returned `reasoning_content` is hidden reasoning, not source evidence; current
+warm paths strip it at the shared model-client boundary and retain only
+count-level diagnostics.
 
 Each scout returns a small strict JSON object. A malformed result is isolated as
 `ok=false`; it must not poison the batch. The parent process owns merging,

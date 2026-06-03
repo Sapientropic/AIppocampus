@@ -289,6 +289,72 @@ class SubconsciousWorkerTests(unittest.TestCase):
 
         self.assertNotIn("max_tokens", captured["body"])
 
+    def test_default_deepseek_worker_sends_thinking_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            timeline_path = root / "project_timeline.json"
+            output_path = root / "subconscious_edges.jsonl"
+            timeline_path.write_text(
+                json.dumps(
+                    {
+                        "projects": {
+                            "project:ai": {
+                                "project_label": "AIppocampus",
+                                "latest_turns": [
+                                    {
+                                        "thread_key": "session:one",
+                                        "title": "AIppocampus",
+                                        "timestamp": "2026-05-25T00:00:00Z",
+                                        "turn_index": 1,
+                                        "user": "继续 provider contract。",
+                                        "assistant": "DeepSeek thinking mode 要统一。",
+                                    }
+                                ],
+                            }
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            captured: dict[str, object] = {}
+
+            class FakeResponse:
+                def __enter__(self) -> "FakeResponse":
+                    return self
+
+                def __exit__(self, *_: object) -> None:
+                    return None
+
+                def read(self) -> bytes:
+                    return json.dumps(
+                        {"choices": [{"message": {"content": json.dumps({"edges": []})}}]},
+                        ensure_ascii=False,
+                    ).encode("utf-8")
+
+            def fake_urlopen(req: Request, timeout: int) -> FakeResponse:
+                del timeout
+                captured["body"] = json.loads(req.data.decode("utf-8"))
+                return FakeResponse()
+
+            with patch("urllib.request.urlopen", fake_urlopen):
+                result = worker.run_worker(
+                    timeline_path=timeline_path,
+                    output_path=output_path,
+                    project="AIppocampus",
+                    max_turns=1,
+                    model=worker.DEFAULT_MODEL,
+                    base_url=worker.DEFAULT_BASE_URL,
+                    api_key="test",
+                    no_write=True,
+                )
+
+            self.assertEqual(captured["body"]["thinking"], {"type": "enabled"})
+            self.assertEqual(captured["body"]["reasoning_effort"], "high")
+            self.assertNotIn("temperature", captured["body"])
+            self.assertEqual(result["thinking"], "enabled")
+            self.assertEqual(result["reasoning_effort"], "high")
+
     def test_openai_compatible_route_omits_json_response_format_when_disabled(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -376,6 +442,8 @@ class SubconsciousWorkerTests(unittest.TestCase):
                 )
 
             self.assertNotIn("response_format", captured["body"])
+            self.assertNotIn("thinking", captured["body"])
+            self.assertNotIn("reasoning_effort", captured["body"])
             self.assertEqual(result["model"], "local-worker-model")
             self.assertEqual(result["model_route"]["provider"], "local-test")
             self.assertEqual(result["cache"], {"available": False, "kind": "none"})

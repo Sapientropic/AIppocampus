@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
@@ -92,6 +94,51 @@ def accepted_content(dream_function: str) -> str:
 
 
 class DreamSleepCycleTests(unittest.TestCase):
+    def test_config_from_args_uses_deepseek_thinking_contract_by_default(self) -> None:
+        class Args:
+            model_route = None
+            model = dream_sleep_cycle.flash_model()
+            base_url = dream_sleep_cycle.deepseek_base_url()
+            api_key_env = "DEEPSEEK_API_KEY"
+            max_tokens = None
+            timeout = 5.0
+            dream_model_thinking = "auto"
+            dream_model_reasoning_effort = "auto"
+
+        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "test"}, clear=False):
+            config = dream_sleep_cycle.config_from_args(Args())
+
+        self.assertEqual(config.thinking, "enabled")
+        self.assertEqual(config.reasoning_effort, "high")
+
+    def test_config_from_args_omits_deepseek_fields_for_conservative_route(self) -> None:
+        class Args:
+            model_route = "local_sleep"
+            model = dream_sleep_cycle.flash_model()
+            base_url = dream_sleep_cycle.deepseek_base_url()
+            api_key_env = "DEEPSEEK_API_KEY"
+            max_tokens = None
+            timeout = 5.0
+            dream_model_thinking = "auto"
+            dream_model_reasoning_effort = "auto"
+
+        with patch.dict(
+            os.environ,
+            {
+                "AIPPOCAMPUS_OPENAI_COMPAT_ROUTE": "local_sleep",
+                "AIPPOCAMPUS_OPENAI_COMPAT_PROVIDER": "local-test",
+                "AIPPOCAMPUS_OPENAI_COMPAT_MODEL": "local-model",
+                "AIPPOCAMPUS_OPENAI_COMPAT_BASE_URL": "http://127.0.0.1:11434/v1",
+                "AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV": "LOCAL_SLEEP_KEY",
+                "LOCAL_SLEEP_KEY": "test",
+            },
+            clear=True,
+        ):
+            config = dream_sleep_cycle.config_from_args(Args())
+
+        self.assertIsNone(config.thinking)
+        self.assertIsNone(config.reasoning_effort)
+
     def test_select_runnable_queue_items_requires_due_unless_run_ready(self) -> None:
         queue_payload = dream_sleep_cycle.dream_queue.build_dream_queue(
             [ready_pack()],

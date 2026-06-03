@@ -14,6 +14,7 @@ WARM_RECALL_OPERATOR_ENV_VARS = (
 WARM_RECALL_PRODUCT_TUNING_ENV_VARS = (
     "AIPPOCAMPUS_WARM_RECALL_TEMPERATURE",
     "AIPPOCAMPUS_WARM_RECALL_THINKING",
+    "AIPPOCAMPUS_WARM_RECALL_REASONING_EFFORT",
     "AIPPOCAMPUS_WARM_RECALL_QUORUM",
     "AIPPOCAMPUS_WARM_PREFIX_CACHE_WARMUP_SCOUTS",
     "AIPPOCAMPUS_WARM_PREFIX_CACHE_WARMUP_DELAY",
@@ -33,6 +34,7 @@ class WarmRecallConfig:
     max_catalog_items: int = 64
     temperature: float = 0.2
     thinking: str = "enabled"
+    reasoning_effort: str | None = None
     max_workers: int | None = None
     prefix_cache_warmup_scouts: int = 0
     prefix_cache_warmup_delay: float = 0.0
@@ -46,6 +48,7 @@ class WarmRecallConfig:
         max_catalog_items: int | None = None,
         temperature: float | None = None,
         thinking: str | None = None,
+        reasoning_effort: str | None = None,
         max_workers: int | None = None,
         prefix_cache_warmup_scouts: int | None = None,
         prefix_cache_warmup_delay: float | None = None,
@@ -61,6 +64,9 @@ class WarmRecallConfig:
             ),
             temperature=self.temperature if temperature is None else float(temperature),
             thinking=self.thinking if thinking is None else str(thinking),
+            reasoning_effort=(
+                self.reasoning_effort if reasoning_effort is None else str(reasoning_effort)
+            ),
             max_workers=self.max_workers if max_workers is None else int(max_workers),
             prefix_cache_warmup_scouts=(
                 self.prefix_cache_warmup_scouts

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -22,6 +23,25 @@ from model_client import ChatClientConfig  # noqa: E402
 
 
 class DreamLiveShadowABTests(unittest.TestCase):
+    def test_live_shadow_model_config_uses_deepseek_thinking_contract(self) -> None:
+        class Args:
+            model_route = None
+            model = ""
+            base_url = ""
+            api_key_env = "DEEPSEEK_API_KEY"
+            max_tokens = None
+            dream_model_timeout = 5.0
+            dream_model_temperature = 0.0
+            dream_model_thinking = "auto"
+            dream_model_reasoning_effort = "auto"
+
+        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "test"}, clear=False):
+            config, route_payload = shadow.dream_model_config_from_args(Args())
+
+        self.assertEqual(config.thinking, "enabled")
+        self.assertEqual(config.reasoning_effort, "high")
+        self.assertEqual(route_payload["provider"], "deepseek")
+
     def test_recall_reminder_classifier_is_strict_about_temporal_noise(self) -> None:
         positives = [
             "你忘了我们之前说过要先回忆旧线程。",

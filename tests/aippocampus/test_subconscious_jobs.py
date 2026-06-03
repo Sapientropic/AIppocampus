@@ -259,6 +259,94 @@ class SubconsciousJobsTests(unittest.TestCase):
         self.assertIn("<redacted:secret>", payload)
         self.assertIn("<redacted:local-path>", payload)
 
+    def test_deepseek_jobs_send_thinking_contract_through_shared_chat_wrapper(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            timeline_path = root / "project_timeline.json"
+            timeline_path.write_text(
+                json.dumps(
+                    {
+                        "projects": {
+                            "project:ai": {
+                                "project_label": "AIppocampus",
+                                "latest_turns": [
+                                    {
+                                        "thread_key": "session:jobs",
+                                        "title": "AIppocampus",
+                                        "timestamp": "2026-05-25T00:00:00Z",
+                                        "turn_index": 1,
+                                        "user": "继续 subconscious jobs。",
+                                        "assistant": "需要统一 DeepSeek thinking contract。",
+                                    }
+                                ],
+                            }
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            captured: dict[str, object] = {}
+
+            def fake_chat(
+                messages: list[dict[str, str]],
+                api_key: str,
+                model: str,
+                base_url: str,
+                max_tokens: int | None,
+                timeout: int,
+                temperature: float,
+                *,
+                thinking: str | None = None,
+                reasoning_effort: str | None = None,
+                **kwargs: Any,
+            ) -> dict[str, Any]:
+                del messages, api_key, model, base_url, max_tokens, timeout, temperature, kwargs
+                captured["thinking"] = thinking
+                captured["reasoning_effort"] = reasoning_effort
+                content = {
+                    "action": "final",
+                    "findings": [
+                        {
+                            "kind": "project_drift",
+                            "title": "DeepSeek contract alignment",
+                            "summary": "The source-backed job notes a thinking-mode contract alignment.",
+                            "confidence": 0.86,
+                            "source_refs": ["t0"],
+                            "concepts": ["DeepSeek thinking contract"],
+                        }
+                    ],
+                }
+                return {"choices": [{"message": {"content": json.dumps(content)}}]}
+
+            with patch.object(jobs, "call_chat_json", fake_chat):
+                result = jobs.run_one_job(
+                    job="project_drift",
+                    registry_path=root / "threads.json",
+                    timeline_path=timeline_path,
+                    concept_graph_path=root / "missing.sqlite",
+                    jobs_output_path=root / "subconscious_jobs.jsonl",
+                    edges_output_path=root / "subconscious_edges.jsonl",
+                    project="AIppocampus",
+                    objective="test DeepSeek thinking contract",
+                    max_turns=1,
+                    max_steps=1,
+                    min_tool_steps=0,
+                    model=jobs.DEFAULT_MODEL,
+                    base_url=jobs.DEFAULT_BASE_URL,
+                    api_key="test",
+                    max_tokens=None,
+                    timeout=1,
+                    temperature=0.2,
+                    chat_fn=jobs.call_chat_json,
+                    no_write=True,
+                )
+
+            self.assertEqual(captured["thinking"], "enabled")
+            self.assertEqual(captured["reasoning_effort"], "high")
+            self.assertEqual(result["thinking"], "enabled")
+            self.assertEqual(result["reasoning_effort"], "high")
+
     def test_validate_findings_accepts_string_refs(self) -> None:
         parsed = {
             "findings": [

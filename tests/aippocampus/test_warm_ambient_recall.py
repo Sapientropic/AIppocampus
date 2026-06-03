@@ -230,6 +230,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(config.max_workers, 4)
         self.assertEqual(config.temperature, warm.DEFAULT_TEMPERATURE)
         self.assertEqual(config.thinking, warm.DEFAULT_THINKING)
+        self.assertIsNone(config.reasoning_effort)
         self.assertEqual(config.quorum, warm.DEFAULT_QUORUM)
         self.assertEqual(
             config.prefix_cache_warmup_scouts,
@@ -241,6 +242,10 @@ class WarmAmbientRecallTests(unittest.TestCase):
         )
         self.assertNotIn(
             "AIPPOCAMPUS_WARM_RECALL_TEMPERATURE",
+            warm.WARM_RECALL_OPERATOR_ENV_VARS,
+        )
+        self.assertNotIn(
+            "AIPPOCAMPUS_WARM_RECALL_REASONING_EFFORT",
             warm.WARM_RECALL_OPERATOR_ENV_VARS,
         )
 
@@ -259,8 +264,9 @@ class WarmAmbientRecallTests(unittest.TestCase):
             *,
             user_id=None,
             thinking=None,
+            reasoning_effort=None,
         ):
-            del messages, api_key, model, base_url, max_tokens, timeout, user_id
+            del messages, api_key, model, base_url, max_tokens, timeout, user_id, reasoning_effort
             seen_thinking.append(thinking)
             seen_temperatures.append(temperature)
             content = json.dumps({"decision": "skip", "confidence": 0.1})
@@ -314,6 +320,8 @@ class WarmAmbientRecallTests(unittest.TestCase):
             "0.4",
             "--thinking",
             "disabled",
+            "--reasoning-effort",
+            "provider",
             "--quorum",
             "1",
             "--max-catalog-items",
@@ -334,6 +342,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertIsInstance(config, warm.WarmRecallConfig)
         self.assertEqual(config.temperature, 0.4)
         self.assertEqual(config.thinking, "disabled")
+        self.assertEqual(config.reasoning_effort, "provider")
         self.assertEqual(config.quorum, 1)
         self.assertEqual(config.max_catalog_items, 9)
 
@@ -513,6 +522,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
     def test_model_scout_uses_stable_sanitized_user_id_and_quality_first_thinking(self) -> None:
         seen_user_ids: list[str | None] = []
         seen_thinking: list[str | None] = []
+        seen_reasoning_effort: list[str | None] = []
         seen_temperatures: list[float] = []
 
         def chat_fn(
@@ -526,10 +536,12 @@ class WarmAmbientRecallTests(unittest.TestCase):
             *,
             user_id=None,
             thinking=None,
+            reasoning_effort=None,
         ):
             del messages, api_key, model, base_url, max_tokens, timeout
             seen_user_ids.append(user_id)
             seen_thinking.append(thinking)
+            seen_reasoning_effort.append(reasoning_effort)
             seen_temperatures.append(temperature)
             content = json.dumps({"decision": "skip", "confidence": 0.1})
             return {"choices": [{"message": {"content": content}}]}
@@ -550,6 +562,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertRegex(seen_user_ids[0] or "", r"^aip-warm-[a-f0-9]{32}$")
         self.assertNotIn(str(self.workspace), seen_user_ids[0] or "")
         self.assertEqual(set(seen_thinking), {"enabled"})
+        self.assertEqual(set(seen_reasoning_effort), {"high"})
         self.assertEqual(set(seen_temperatures), {warm.DEFAULT_TEMPERATURE})
 
     def test_model_scout_can_disable_thinking_for_explicit_diagnostics(self) -> None:
@@ -567,8 +580,9 @@ class WarmAmbientRecallTests(unittest.TestCase):
             *,
             user_id=None,
             thinking=None,
+            reasoning_effort=None,
         ):
-            del messages, api_key, model, base_url, max_tokens, timeout, user_id
+            del messages, api_key, model, base_url, max_tokens, timeout, user_id, reasoning_effort
             seen_thinking.append(thinking)
             seen_temperatures.append(temperature)
             content = json.dumps({"decision": "skip", "confidence": 0.1})
@@ -593,6 +607,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
     def test_openai_compatible_route_does_not_send_deepseek_extensions_by_default(self) -> None:
         seen_user_ids: list[str | None] = []
         seen_thinking: list[str | None] = []
+        seen_reasoning_effort: list[str | None] = []
         seen_models: list[str] = []
         seen_base_urls: list[str] = []
 
@@ -607,10 +622,12 @@ class WarmAmbientRecallTests(unittest.TestCase):
             *,
             user_id=None,
             thinking=None,
+            reasoning_effort=None,
         ):
             del messages, api_key, max_tokens, timeout, temperature
             seen_user_ids.append(user_id)
             seen_thinking.append(thinking)
+            seen_reasoning_effort.append(reasoning_effort)
             seen_models.append(model)
             seen_base_urls.append(base_url)
             return {"choices": [{"message": {"content": json.dumps({"decision": "skip", "confidence": 0.1})}}]}
@@ -641,6 +658,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
 
         self.assertEqual(seen_user_ids, [None])
         self.assertEqual(seen_thinking, [None])
+        self.assertEqual(seen_reasoning_effort, [None])
         self.assertEqual(seen_models, ["local-warm-model"])
         self.assertEqual(seen_base_urls, ["http://127.0.0.1:11434/v1"])
         self.assertIsNone(result["user_id"])
@@ -650,6 +668,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
     def test_legacy_explicit_base_url_uses_conservative_compatible_capabilities(self) -> None:
         seen_user_ids: list[str | None] = []
         seen_thinking: list[str | None] = []
+        seen_reasoning_effort: list[str | None] = []
         seen_models: list[str] = []
         seen_base_urls: list[str] = []
 
@@ -664,10 +683,12 @@ class WarmAmbientRecallTests(unittest.TestCase):
             *,
             user_id=None,
             thinking=None,
+            reasoning_effort=None,
         ):
             del messages, api_key, max_tokens, timeout, temperature
             seen_user_ids.append(user_id)
             seen_thinking.append(thinking)
+            seen_reasoning_effort.append(reasoning_effort)
             seen_models.append(model)
             seen_base_urls.append(base_url)
             return {"choices": [{"message": {"content": json.dumps({"decision": "skip", "confidence": 0.1})}}]}
@@ -689,6 +710,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
 
         self.assertEqual(seen_user_ids, [None])
         self.assertEqual(seen_thinking, [None])
+        self.assertEqual(seen_reasoning_effort, [None])
         self.assertEqual(seen_models, ["local-explicit-model"])
         self.assertEqual(seen_base_urls, ["http://127.0.0.1:11434/v1"])
         self.assertEqual(result["model_route"]["route"], "explicit_openai_compatible")

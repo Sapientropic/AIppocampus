@@ -40,6 +40,8 @@ from aippocampus_runtime.model.routing import (
     deepseek_base_url,
     flash_model,
     resolve_model_route,
+    resolve_route_reasoning_effort,
+    resolve_route_thinking,
     route_service_name,
 )
 
@@ -574,15 +576,23 @@ def packs_from_args(args: argparse.Namespace) -> list[dict[str, Any]]:
 
 
 def config_from_args(args: argparse.Namespace) -> ChatClientConfig:
+    api_key_env_arg = str(
+        getattr(args, "api_key_env", DEFAULT_DEEPSEEK_API_KEY_ENV)
+        or DEFAULT_DEEPSEEK_API_KEY_ENV
+    )
     route = resolve_model_route(
         args.model_route,
         explicit_model=args.model if args.model != flash_model() and not args.model_route else None,
         explicit_base_url=args.base_url if args.base_url != deepseek_base_url() and not args.model_route else None,
-        explicit_api_key_env=args.api_key_env if args.api_key_env != DEFAULT_DEEPSEEK_API_KEY_ENV else None,
+        explicit_api_key_env=(
+            api_key_env_arg
+            if api_key_env_arg != DEFAULT_DEEPSEEK_API_KEY_ENV and not args.model_route
+            else None
+        ),
     )
     model = route.model if args.model == flash_model() else args.model
     base_url = route.base_url if args.base_url == deepseek_base_url() else args.base_url
-    api_key_env = args.api_key_env or route.api_key_env
+    api_key_env = route.api_key_env if api_key_env_arg == DEFAULT_DEEPSEEK_API_KEY_ENV else api_key_env_arg
     api_key = os.environ.get(api_key_env, "")
     if not api_key:
         raise RuntimeError(f"missing API key env: {api_key_env}")
@@ -591,6 +601,15 @@ def config_from_args(args: argparse.Namespace) -> ChatClientConfig:
         if route.provider == "deepseek"
         else NO_PROVIDER_CACHE_CONTRACT
     )
+    thinking = resolve_route_thinking(
+        route,
+        str(getattr(args, "dream_model_thinking", "auto") or "auto"),
+    )
+    reasoning_effort = resolve_route_reasoning_effort(
+        route,
+        str(getattr(args, "dream_model_reasoning_effort", "auto") or "auto"),
+        thinking=thinking,
+    )
     return ChatClientConfig(
         api_key=api_key,
         model=model,
@@ -598,6 +617,8 @@ def config_from_args(args: argparse.Namespace) -> ChatClientConfig:
         max_tokens=args.max_tokens,
         timeout=args.timeout,
         service_name=route_service_name(route),
+        thinking=thinking,
+        reasoning_effort=reasoning_effort,
         cache_contract=cache_contract,
     )
 
@@ -641,6 +662,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--api-key-env", default=DEFAULT_DEEPSEEK_API_KEY_ENV)
     parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT_SECONDS)
     parser.add_argument("--max-tokens", type=int)
+    parser.add_argument(
+        "--dream-model-thinking",
+        choices=["auto", "enabled", "disabled", "provider"],
+        default="auto",
+    )
+    parser.add_argument(
+        "--dream-model-reasoning-effort",
+        choices=["auto", "high", "max", "provider"],
+        default="auto",
+    )
     return parser
 
 

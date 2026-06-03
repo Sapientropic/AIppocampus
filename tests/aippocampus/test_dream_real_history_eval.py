@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
@@ -86,6 +88,55 @@ def fixture_rows() -> tuple[list[dict[str, object]], list[dict[str, object]]]:
 
 
 class DreamRealHistoryEvalTests(unittest.TestCase):
+    def test_dream_model_config_uses_deepseek_thinking_contract_by_default(self) -> None:
+        class Args:
+            model_route = None
+            model = ""
+            base_url = ""
+            api_key_env = "DEEPSEEK_API_KEY"
+            max_tokens = None
+            dream_model_timeout = 5.0
+            dream_model_temperature = 0.0
+            dream_model_thinking = "auto"
+            dream_model_reasoning_effort = "auto"
+
+        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "test"}, clear=False):
+            config, route_payload = dream_eval.dream_model_config_from_args(Args())
+
+        self.assertEqual(config.thinking, "enabled")
+        self.assertEqual(config.reasoning_effort, "high")
+        self.assertEqual(route_payload["provider"], "deepseek")
+
+    def test_dream_model_config_omits_deepseek_fields_for_conservative_route(self) -> None:
+        class Args:
+            model_route = "local_dream_eval"
+            model = ""
+            base_url = ""
+            api_key_env = "DEEPSEEK_API_KEY"
+            max_tokens = None
+            dream_model_timeout = 5.0
+            dream_model_temperature = 0.0
+            dream_model_thinking = "auto"
+            dream_model_reasoning_effort = "auto"
+
+        with patch.dict(
+            os.environ,
+            {
+                "AIPPOCAMPUS_OPENAI_COMPAT_ROUTE": "local_dream_eval",
+                "AIPPOCAMPUS_OPENAI_COMPAT_PROVIDER": "local-test",
+                "AIPPOCAMPUS_OPENAI_COMPAT_MODEL": "local-model",
+                "AIPPOCAMPUS_OPENAI_COMPAT_BASE_URL": "http://127.0.0.1:11434/v1",
+                "AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV": "LOCAL_DREAM_EVAL_KEY",
+                "LOCAL_DREAM_EVAL_KEY": "test",
+            },
+            clear=False,
+        ):
+            config, route_payload = dream_eval.dream_model_config_from_args(Args())
+
+        self.assertIsNone(config.thinking)
+        self.assertIsNone(config.reasoning_effort)
+        self.assertEqual(route_payload["provider"], "local-test")
+
     def test_select_real_history_packs_requires_cross_thread_source_pattern(self) -> None:
         job_rows, working_rows = fixture_rows()
 

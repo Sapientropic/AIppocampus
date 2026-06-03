@@ -246,6 +246,138 @@ class ModelClientTests(unittest.TestCase):
         self.assertEqual(captured["body"]["thinking"], {"type": "enabled"})
         self.assertNotIn("temperature", captured["body"])
 
+    def test_chat_json_sends_reasoning_effort_and_omits_sampling_params(self) -> None:
+        captured: dict[str, object] = {}
+
+        class FakeResponse:
+            def __enter__(self) -> "FakeResponse":
+                return self
+
+            def __exit__(self, *_: object) -> None:
+                return None
+
+            def read(self) -> bytes:
+                return json.dumps({"choices": [{"message": {"content": "{}"}}]}).encode("utf-8")
+
+        def fake_urlopen(req: Request, timeout: int) -> FakeResponse:
+            del timeout
+            captured["body"] = json.loads(req.data.decode("utf-8"))
+            return FakeResponse()
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            model_client.chat_json(
+                [{"role": "user", "content": "{}"}],
+                model_client.ChatClientConfig(
+                    api_key="test",
+                    model="deepseek-v4-flash",
+                    base_url="https://example.invalid",
+                    cache_contract=model_client.DEEPSEEK_PREFIX_CACHE_CONTRACT,
+                    reasoning_effort="high",
+                ),
+            )
+
+        self.assertEqual(captured["body"]["reasoning_effort"], "high")
+        self.assertNotIn("temperature", captured["body"])
+        self.assertNotIn("thinking", captured["body"])
+
+    def test_chat_json_rejects_reasoning_effort_when_thinking_disabled(self) -> None:
+        with self.assertRaisesRegex(ValueError, "reasoning_effort"):
+            model_client.chat_json(
+                [{"role": "user", "content": "{}"}],
+                model_client.ChatClientConfig(
+                    api_key="test",
+                    model="deepseek-v4-flash",
+                    base_url="https://example.invalid",
+                    cache_contract=model_client.DEEPSEEK_PREFIX_CACHE_CONTRACT,
+                    thinking="disabled",
+                    reasoning_effort="high",
+                ),
+            )
+
+    def test_chat_json_strips_reasoning_content_with_diagnostic(self) -> None:
+        class FakeResponse:
+            def __enter__(self) -> "FakeResponse":
+                return self
+
+            def __exit__(self, *_: object) -> None:
+                return None
+
+            def read(self) -> bytes:
+                return json.dumps(
+                    {
+                        "choices": [
+                            {
+                                "message": {
+                                    "reasoning_content": "private hidden chain of thought",
+                                    "content": "{}",
+                                }
+                            }
+                        ]
+                    }
+                ).encode("utf-8")
+
+        def fake_urlopen(req: Request, timeout: int) -> FakeResponse:
+            del req, timeout
+            return FakeResponse()
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            response = model_client.chat_json(
+                [{"role": "user", "content": "{}"}],
+                model_client.ChatClientConfig(
+                    api_key="test",
+                    model="deepseek-v4-flash",
+                    base_url="https://example.invalid",
+                    cache_contract=model_client.DEEPSEEK_PREFIX_CACHE_CONTRACT,
+                ),
+            )
+
+        message = response["choices"][0]["message"]
+        self.assertNotIn("reasoning_content", message)
+        self.assertEqual(message["content"], "{}")
+        diagnostic = response["aippocampus_diagnostics"]["reasoning_content"]
+        self.assertEqual(diagnostic["handling"], "discarded_without_storage")
+        self.assertFalse(diagnostic["tool_call_continuation_supported"])
+        self.assertNotIn("private hidden chain of thought", json.dumps(response))
+
+    def test_chat_json_rejects_reasoning_content_tool_call_continuation_gap(self) -> None:
+        class FakeResponse:
+            def __enter__(self) -> "FakeResponse":
+                return self
+
+            def __exit__(self, *_: object) -> None:
+                return None
+
+            def read(self) -> bytes:
+                return json.dumps(
+                    {
+                        "choices": [
+                            {
+                                "message": {
+                                    "reasoning_content": "private hidden chain of thought",
+                                    "content": "",
+                                    "tool_calls": [{"id": "call_1"}],
+                                }
+                            }
+                        ]
+                    }
+                ).encode("utf-8")
+
+        def fake_urlopen(req: Request, timeout: int) -> FakeResponse:
+            del req, timeout
+            return FakeResponse()
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            with self.assertRaisesRegex(RuntimeError, "tool_calls"):
+                model_client.chat_json(
+                    [{"role": "user", "content": "{}"}],
+                    model_client.ChatClientConfig(
+                        api_key="test",
+                        model="deepseek-v4-flash",
+                        base_url="https://example.invalid",
+                        cache_contract=model_client.DEEPSEEK_PREFIX_CACHE_CONTRACT,
+                    ),
+                )
+
     def test_chat_json_rejects_unknown_thinking_mode(self) -> None:
         with self.assertRaisesRegex(ValueError, "thinking"):
             model_client.chat_json(

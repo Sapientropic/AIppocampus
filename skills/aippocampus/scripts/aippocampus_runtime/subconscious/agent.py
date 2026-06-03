@@ -23,6 +23,10 @@ from aippocampus_runtime.core import (
     deepseek_cache_metrics_from_usage,
     sanitize_external_model_payload,
 )
+from aippocampus_runtime.model.routing import (
+    DEFAULT_DEEPSEEK_REASONING_EFFORT,
+    DEFAULT_DEEPSEEK_THINKING,
+)
 from aippocampus_runtime.navigation.concept_graph import default_concept_graph_path
 from aippocampus_runtime.registry.api import registry_paths
 from aippocampus_runtime.subconscious.edge_validation import (
@@ -412,6 +416,12 @@ def run_agent(
             "Next: call another tool if needed; otherwise return action=final with source-backed edges. "
             "Do not return an empty final when the observations contain concrete decisions, libraries, workflows, aliases, or contrasts."
         ),
+        chat_kwargs={
+            "thinking": DEFAULT_DEEPSEEK_THINKING,
+            "reasoning_effort": DEFAULT_DEEPSEEK_REASONING_EFFORT,
+        }
+        if chat_fn is call_chat_json
+        else None,
     )
     edges = loop.final_items
     grounding = tool_grounding_diagnostics(
@@ -447,6 +457,8 @@ def run_agent(
         "max_steps": max_steps,
         "effective_step_budget": step_budget,
         "temperature": temperature,
+        "thinking": DEFAULT_DEEPSEEK_THINKING,
+        "reasoning_effort": DEFAULT_DEEPSEEK_REASONING_EFFORT,
         "tool_contract_version": TOOL_CONTRACT_VERSION,
         "usage": loop.usage_total,
         "cache": deepseek_cache_metrics_from_usage(loop.usage_total),

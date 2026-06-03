@@ -348,6 +348,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--timeout", type=float, default=None)
     parser.add_argument("--temperature", type=float, default=None)
     parser.add_argument("--thinking", choices=["enabled", "disabled", "provider"], default=None)
+    parser.add_argument("--reasoning-effort", choices=["high", "max", "provider"], default=None)
     parser.add_argument("--quorum", type=int, default=None)
     parser.add_argument("--max-cards", type=int, default=None)
     parser.add_argument("--max-catalog-items", type=int, default=None)
@@ -376,6 +377,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         timeout=args.timeout,
         temperature=args.temperature,
         thinking=args.thinking,
+        reasoning_effort=args.reasoning_effort,
         quorum=args.quorum,
         max_cards=args.max_cards,
         max_catalog_items=args.max_catalog_items,
