@@ -145,9 +145,9 @@ class ArchitectureBoundaryTests(unittest.TestCase):
         helper_paths = [
             "onboard_frontier.py",
             "onboard_status.py",
-            "prompt_recall_ambient.py",
-            "prompt_recall_budget.py",
-            "prompt_recall_evidence.py",
+            "aippocampus_runtime/recall/prompt_recall_ambient.py",
+            "aippocampus_runtime/recall/prompt_recall_budget.py",
+            "aippocampus_runtime/recall/prompt_recall_evidence.py",
             "registry_search.py",
             "retrieval_query_policy.py",
             "subconscious_jobs_config.py",
