@@ -144,6 +144,9 @@ The public-core license, adapter, and schema boundary lives in
 `docs/guides/public-core-boundary.md`.
 Runtime script ownership and dependency navigation lives in
 `docs/architecture/runtime-script-map.md`.
+The Rust deterministic-core migration boundary lives in
+`docs/architecture/rust-deterministic-core.md`; Rust ports must replay frozen
+Python-owned source-backed contracts before becoming authoritative.
 Typed execution boundaries for composable agent skills live in
 `docs/architecture/agent-skill-capability-contracts.md`.
 Multimodal source identity, media-origin policy, and derived-artifact truth
