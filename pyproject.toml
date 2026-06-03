@@ -389,6 +389,8 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/ops/maintenance.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/provider_doctor.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/recall_funnel_smoke.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/ops/recall_navigation_comparison.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/ops/recall_navigation_comparison_fixtures.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/retention_report.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/rollout_size_audit.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/storage_capacity_report.py",
