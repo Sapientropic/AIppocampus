@@ -2603,6 +2603,23 @@ class ImportCouplingTests(unittest.TestCase):
 
         self.assertEqual(real_flat_scripts, [])
 
+    def test_representative_compat_shim_styles_keep_import_behavior(self) -> None:
+        import aippocampus_cli
+        import aippocampus_health
+        import build_clean_source
+        import onboard
+        from aippocampus_runtime import health
+        from aippocampus_runtime.cli import facade
+        from aippocampus_runtime.onboarding import facade as onboarding_facade
+        from aippocampus_runtime.source import clean_source
+
+        self.assertIs(aippocampus_health, health)
+        self.assertIs(onboard, onboarding_facade)
+        self.assertIs(aippocampus_cli.main, facade.main)
+        self.assertIs(build_clean_source.main, clean_source.main)
+        self.assertIs(build_clean_source.build_clean_source, clean_source.build_clean_source)
+        self.assertIsNot(build_clean_source, clean_source)
+
     def test_ops_reports_have_package_owners_and_compat_shims(self) -> None:
         import cold_archive
         import retention_report

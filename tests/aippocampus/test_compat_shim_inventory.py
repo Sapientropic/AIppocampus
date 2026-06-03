@@ -103,6 +103,93 @@ class CompatibilityShimInventoryTests(unittest.TestCase):
 
         self.assertEqual(report.manual_export_surfaces, [])
 
+    def test_inventory_reports_explicit_shim_styles(self) -> None:
+        payload = inventory.build_inventory(ROOT).as_dict()
+        all_items = {
+            item["script"]: item
+            for bucket in (
+                payload["keep_cli"],
+                payload["temporary_compat"],
+                payload["delete_now"],
+                payload["legacy_bridge"],
+            )
+            for item in bucket
+        }
+
+        self.assertEqual(payload.get("unknown_shim_styles"), [])
+        self.assertEqual(
+            sum(payload.get("shim_style_counts", {}).values()),
+            payload["top_level_script_count"],
+        )
+        self.assertGreater(payload.get("shim_style_counts", {}).get("module_alias_shim", 0), 0)
+        self.assertGreater(payload.get("shim_style_counts", {}).get("export_mirror_shim", 0), 0)
+        self.assertEqual(all_items["aippocampus_cli.py"].get("shim_style"), "facade_shim")
+        self.assertEqual(all_items["onboard.py"].get("shim_style"), "facade_shim")
+        self.assertEqual(
+            all_items["aippocampus_health.py"].get("shim_style"),
+            "module_alias_shim",
+        )
+        self.assertEqual(
+            all_items["build_clean_source.py"].get("shim_style"),
+            "export_mirror_shim",
+        )
+        self.assertEqual(
+            all_items["aippocampuslib.py"].get("shim_style"),
+            "local_fallback_shim",
+        )
+
+    def test_mixed_or_unknown_shim_style_is_reported(self) -> None:
+        with TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            write_fixture_script(
+                repo_root,
+                "mixed_helper.py",
+                '''#!/usr/bin/env python3
+"""Compatibility shim with an intentionally mixed export style."""
+
+from __future__ import annotations
+
+import sys
+
+from aippocampus_runtime.mixed import helper as _impl
+
+globals().update({"main": _impl.main})
+sys.modules[__name__] = _impl
+''',
+            )
+            write_fixture_script(
+                repo_root,
+                "aippocampus_runtime/mixed/helper.py",
+                "def main() -> int:\n    return 0\n",
+            )
+
+            payload = inventory.build_inventory(repo_root).as_dict()
+            unknown = {
+                item["script"]: item
+                for item in payload.get("unknown_shim_styles", [])
+            }
+
+            self.assertIn("mixed_helper.py", unknown)
+            self.assertEqual(
+                unknown["mixed_helper.py"].get("shim_style"),
+                "mixed_shim_style",
+            )
+
+    def test_runtime_map_documents_shim_style_policy(self) -> None:
+        runtime_map = (ROOT / "docs" / "architecture" / "runtime-script-map.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("## Compatibility Shim Style Policy", runtime_map)
+        for style in (
+            "direct_cli_wrapper",
+            "module_alias_shim",
+            "export_mirror_shim",
+            "facade_shim",
+            "local_fallback_shim",
+        ):
+            self.assertIn(style, runtime_map)
+
     def test_package_only_helper_shims_are_removed_after_deletion_batch(self) -> None:
         report = inventory.build_inventory(ROOT)
         top_level_scripts = set(report.top_level_scripts)
