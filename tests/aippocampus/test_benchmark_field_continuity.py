@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import sys
 import unittest
@@ -14,6 +15,12 @@ import benchmark_field_continuity as benchmark  # noqa: E402
 
 
 class FieldContinuityBenchmarkTests(unittest.TestCase):
+    def assert_fixture_blocker(self, fixture: dict, expected_code: str) -> None:
+        validation = benchmark.validate_fixture(fixture)
+
+        self.assertFalse(validation["ok"], validation)
+        self.assertIn(expected_code, validation["blocker_codes"])
+
     def test_fixture_contract_covers_field_continuity_acceptance_slice(self) -> None:
         fixture = benchmark.load_fixture()
         validation = benchmark.validate_fixture(fixture)
@@ -32,6 +39,64 @@ class FieldContinuityBenchmarkTests(unittest.TestCase):
         self.assertIn("fresh_projectless_familiarity", validation["scenario_families"])
         self.assertIn("external_state_restraint", validation["scenario_families"])
         self.assertIn("cross_thread_exact_prompt_tool_failure", validation["scenario_families"])
+
+    def test_validator_rejects_unsupported_fixture_schema_version(self) -> None:
+        fixture = copy.deepcopy(benchmark.load_fixture())
+        fixture["schema_version"] = "aippocampus.field_continuity_fixture.v0"
+
+        self.assert_fixture_blocker(fixture, "unsupported_fixture_schema_version")
+
+    def test_validator_rejects_missing_required_top_level_arm(self) -> None:
+        fixture = copy.deepcopy(benchmark.load_fixture())
+        fixture["arms"].remove(benchmark.ACTIVE_ARM)
+
+        self.assert_fixture_blocker(fixture, "missing_required_arm")
+
+    def test_validator_rejects_missing_field_report_discussion_link(self) -> None:
+        fixture = copy.deepcopy(benchmark.load_fixture())
+        fixture["source"]["discussion"] = "https://github.com/Sapientropic/AIppocampus/issues/454"
+
+        self.assert_fixture_blocker(fixture, "missing_field_report_link")
+
+    def test_validator_rejects_duplicate_case_ids(self) -> None:
+        fixture = copy.deepcopy(benchmark.load_fixture())
+        fixture["cases"][1]["case_id"] = fixture["cases"][0]["case_id"]
+
+        self.assert_fixture_blocker(fixture, "duplicate_case_id")
+
+    def test_validator_rejects_unknown_case_scenario_family(self) -> None:
+        fixture = copy.deepcopy(benchmark.load_fixture())
+        fixture["cases"][0]["scenario_family"] = "undeclared_magic_moment_family"
+
+        self.assert_fixture_blocker(fixture, "case_unknown_scenario_family")
+
+    def test_validator_rejects_case_missing_required_arm(self) -> None:
+        fixture = copy.deepcopy(benchmark.load_fixture())
+        del fixture["cases"][0]["arms"][benchmark.ACTIVE_ARM]
+
+        self.assert_fixture_blocker(fixture, "case_missing_required_arm")
+
+    def test_validator_rejects_insufficient_public_synthetic_family_coverage(self) -> None:
+        fixture = copy.deepcopy(benchmark.load_fixture())
+        for case in fixture["cases"]:
+            case["scenario_family"] = "fresh_projectless_familiarity"
+
+        self.assert_fixture_blocker(fixture, "insufficient_public_synthetic_families")
+
+    def test_validator_rejects_missing_required_negative_control(self) -> None:
+        fixture = copy.deepcopy(benchmark.load_fixture())
+        for case in fixture["cases"]:
+            case["negative_control_tags"] = [
+                tag for tag in case["negative_control_tags"] if tag != "overclaiming"
+            ]
+
+        self.assert_fixture_blocker(fixture, "missing_required_negative_control")
+
+    def test_validator_rejects_invalid_private_seed_reporting_contract(self) -> None:
+        fixture = copy.deepcopy(benchmark.load_fixture())
+        fixture["private_seed_reporting_contract"]["forbidden_fields"].remove("raw_prompt")
+
+        self.assert_fixture_blocker(fixture, "invalid_private_seed_reporting_contract")
 
     def test_private_seed_reporting_contract_is_hash_and_aggregate_only(self) -> None:
         fixture = benchmark.load_fixture()
