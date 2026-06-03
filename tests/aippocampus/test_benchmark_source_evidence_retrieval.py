@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import json
 import subprocess
 import sys
@@ -307,6 +308,21 @@ def fake_public_semantic_sidecar_payload(*, ok: bool = True) -> dict:
 
 
 class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
+    def test_track_b_runner_is_split_into_track_owned_modules(self) -> None:
+        source_path = REPO_ROOT / "benchmarks" / "aippocampus" / "benchmark_source_evidence_retrieval.py"
+
+        line_count = len(source_path.read_text(encoding="utf-8").splitlines())
+
+        self.assertLess(line_count, 1800)
+        for module_name in (
+            "source_evidence.fts5_source_line",
+            "source_evidence.selected_source",
+            "source_evidence.sharegpt_public",
+            "source_evidence.public_semantic",
+            "source_evidence.standard_public",
+        ):
+            importlib.import_module(module_name)
+
     def write_jsonl(self, path: Path, rows: list[dict]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
