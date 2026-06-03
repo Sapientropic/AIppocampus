@@ -309,7 +309,7 @@ handoff context.
      `journey_waypoint` outputs when the job circuit exists, then evaluate on
      time-sliced private history before surfacing Journey hints in AAR.
 
-17. Compensatory dream Phase 1 plus P2/P3 substrate
+17. Dream runtime substrate plus bounded sleep-cycle path
    - Source: `docs/research/dream-task-design.md`,
      `docs/research/source-as-world.md`, and
      `docs/architecture/cognitive-runtime-architecture.md`.
@@ -333,8 +333,7 @@ handoff context.
      requires at least two clean source threads for a ready pack, and parks
      dream hypotheses whose bridge claims lack source refs. It is still a
      holding-queue plus background-adjudication substrate, not proof of live
-     dream quality, prospective analysis, validated amplification output, or
-     active imagination.
+     dream quality or user-visible lift.
    - The P3 structural eval is implemented in
      `skills/aippocampus/scripts/dream_real_history_eval.py`: it selects
      source-backed real-history packs from materialized question/frontier/link
@@ -344,10 +343,17 @@ handoff context.
      registry selected 4 packs and observed structural lift
      (`source_thread_coverage_delta=2.5`, `reflection_ready_delta=64`,
      `bridge_claim_coverage_delta=1.0`) with sanitized aggregate output only.
-   - Next hardening: replace the deterministic toy worker with a bounded
-     model-backed amplification worker over the selected packs, then manually
-     source-review a small sample before claiming private real-history dream
-     quality or user-visible recall/reflection lift.
+   - The bounded worker and sleep-cycle path now exist as contract-level runtime
+     slices: `aippocampus_runtime.dream.worker` covers model-backed
+     compensatory/amplification/prospective candidates plus the
+     active-imagination sandbox with source-ref, no-write, and adjudication
+     gates; `aippocampus_runtime.dream.sleep_cycle` runs ready queue items as
+     detached background work and can write staging rows without projecting
+     dream hypotheses into working memory.
+   - Next hardening: run #163's real-history quality and user-visible-lift eval
+     with reviewed samples, no-dream baselines, negative controls, and sanitized
+     aggregate output before claiming private Dream quality, predictive value,
+     active-imagination usefulness, or foreground recall/reflection improvement.
 
 18. Reflection-space topology and feedback MVP
    - Source: `docs/research/reflection-space.md`,
