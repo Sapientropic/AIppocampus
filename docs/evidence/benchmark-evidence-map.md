@@ -42,8 +42,8 @@ promotes a public-safe result into the official evidence flow.
 6. Need external benchmark and memory-system comparison boundaries:
    [`benchmarks/design/external-benchmark-map.md`](benchmarks/design/external-benchmark-map.md).
    For the MemoryAgentBench feasibility decision and staged adapter boundary,
-   use [`benchmarks/memoryagentbench.md`](benchmarks/memoryagentbench.md);
-   no runner is listed until #608 adds an executable metadata/case-pack smoke.
+   runner, and claim limits, use
+   [`benchmarks/memoryagentbench.md`](benchmarks/memoryagentbench.md).
 7. Need the multimodal memory benchmark-family map for #528:
    [`benchmarks/design/multimodal-memory-benchmark-map.md`](benchmarks/design/multimodal-memory-benchmark-map.md).
 8. Need the ATM-Bench Hard protocol boundary for multimodal source-backed
@@ -171,6 +171,7 @@ benchmark runner should be added here and linked to its dated evidence owner.
 | Knowledge pollution, privacy partition, and capability-contract smoke | `benchmarks/aippocampus/benchmark_knowledge_pollution.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `docs/evidence/benchmarks/knowledge-pollution-privacy-fixture-report.md`, `docs/architecture/high-risk-answer-gates.md` |
 | LongMemEval retrieval-only benchmark | `benchmarks/aippocampus/benchmark_longmemeval.py` | `docs/evidence/benchmarks/longmemeval.md`, `benchmark_corpus/longmemeval_manifest.json` |
 | LongMemEval-V2 context-mapping pilot | `benchmarks/aippocampus/benchmark_longmemeval_v2_context.py` | `docs/evidence/benchmarks/longmemeval.md`, `benchmark_corpus/longmemeval_manifest.json`, #259 |
+| MemoryAgentBench metadata and case-pack smoke | `benchmarks/aippocampus/benchmark_memoryagentbench.py` | `docs/evidence/benchmarks/memoryagentbench.md`, `benchmark_corpus/memoryagentbench_manifest.json`, #608 |
 | LoCoMo public longitudinal-users control | `benchmarks/aippocampus/benchmark_locomo_public_users.py` | `docs/evidence/benchmarks/public-longitudinal-users.md`, `benchmark_corpus/README.md`, `benchmark_corpus/locomo_manifest.json` |
 | LoCoMo answer-usefulness prototype | `benchmarks/aippocampus/benchmark_locomo_answer_usefulness.py` | `docs/evidence/benchmarks/public-longitudinal-users.md`, `benchmark_corpus/README.md`, #400 |
 | Public longitudinal pseudo-user coding implicit-knowledge contract smoke | `benchmarks/aippocampus/benchmark_public_longitudinal_users.py` | `docs/evidence/benchmarks/public-longitudinal-users.md`, `benchmark_corpus/public_longitudinal_users/README.md` |

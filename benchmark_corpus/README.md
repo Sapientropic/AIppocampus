@@ -56,6 +56,11 @@ runner entrypoints, and claim boundaries. The corresponding evidence page is
 same-dialogue control, its local-file policy, and the evidence-retrieval
 runner that treats each LoCoMo sample as one within-sample retrieval task.
 
+`memoryagentbench_manifest.json` records the official MemoryAgentBench sources,
+MIT license, split metadata, local ignored artifact policy, and deterministic
+metadata/case-pack smoke runner. It does not make a MemoryAgentBench score
+claim.
+
 ## Usage
 
 Run a local smoke conversion:
@@ -402,6 +407,22 @@ This pilot reports schema, checksum, join-key coverage, environment-pool
 coverage, and sanitized case hashes. It does not report V2 source-evidence
 R@K/MRR, benchmark-grade context-gathering quality, answer accuracy, LAFS, or
 SOTA claims.
+
+Run the MemoryAgentBench metadata and public-safe case-pack smoke:
+
+```powershell
+python benchmarks\aippocampus\benchmark_memoryagentbench.py --json
+python benchmarks\aippocampus\benchmark_memoryagentbench.py --case-pack-output .tmp\memoryagentbench-case-pack.json --prediction-template-output .tmp\memoryagentbench-predictions.jsonl --json
+```
+
+The runner defaults to fresh-clone-safe metadata: it reports official split
+expectations, local file hashes, byte counts, row/schema observations where
+local JSON/JSONL exports exist, and per-layer support status. Keep downloaded
+or exported MemoryAgentBench files under the ignored
+`benchmark_corpus/memoryagentbench/` directory. The explicit case pack may
+contain MemoryAgentBench context and question text for a narrow model-facing
+subset, but it excludes answers, gold labels, and scoring-only metadata; keep
+that output under `.tmp/` or `benchmark_corpus/reports/`.
 
 Run the optional semantic second-stage line reranker over the same source
 boundary:

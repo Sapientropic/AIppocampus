@@ -1,0 +1,160 @@
+{
+  "schema_version": 1,
+  "benchmark": "MemoryAgentBench",
+  "scope": "deterministic metadata and public-safe case-pack smoke for locally provided MemoryAgentBench files",
+  "official_sources": {
+    "paper": "https://arxiv.org/abs/2507.05257",
+    "openreview": "https://openreview.net/forum?id=DT7JyQC3MR",
+    "repository": "https://github.com/HUST-AI-HYZ/MemoryAgentBench",
+    "dataset": "https://huggingface.co/datasets/ai-hyz/MemoryAgentBench",
+    "license": "MIT"
+  },
+  "observed_at": "2026-06-04",
+  "official_dataset": {
+    "hugging_face_id": "ai-hyz/MemoryAgentBench",
+    "last_modified": "2025-10-07T23:53:07Z",
+    "format": "parquet",
+    "download_size": 74805902,
+    "dataset_size": 131992200,
+    "total_examples": 146,
+    "features": [
+      "context",
+      "questions",
+      "answers",
+      "metadata.demo",
+      "metadata.haystack_sessions",
+      "metadata.keypoints",
+      "metadata.previous_events",
+      "metadata.qa_pair_ids",
+      "metadata.question_dates",
+      "metadata.question_ids",
+      "metadata.question_types",
+      "metadata.source"
+    ]
+  },
+  "runner": "benchmarks/aippocampus/benchmark_memoryagentbench.py",
+  "evidence_page": "docs/evidence/benchmarks/memoryagentbench.md",
+  "local_file_policy": {
+    "dataset_dir": "benchmark_corpus/memoryagentbench/",
+    "generated_report_dirs": [
+      ".tmp/",
+      "benchmark_corpus/reports/"
+    ],
+    "git_policy": "ignored local download/export only; do not commit raw dataset rows, local case packs, generated reports, or machine-specific paths",
+    "supported_local_formats": [
+      "jsonl",
+      "json",
+      "parquet metadata only unless an optional parquet reader is installed"
+    ]
+  },
+  "splits": [
+    {
+      "id": "Accurate_Retrieval",
+      "upstream_name": "Accurate_Retrieval",
+      "expected_examples": 22,
+      "expected_num_bytes": 19889235.616438355,
+      "data_files": [
+        "data/Accurate_Retrieval-00000-of-00001.parquet"
+      ],
+      "task_families": [
+        "question_answering"
+      ],
+      "metric_families": [
+        "substring_exact_match"
+      ],
+      "support_status": {
+        "source_evidence": "diagnostic_requires_source_ref_mapping",
+        "answer": "template_only_no_score",
+        "write_policy": "not_primary",
+        "conflict_resolution": "not_applicable"
+      },
+      "sha256": null,
+      "checksum_status": "operator_download_not_observed"
+    },
+    {
+      "id": "Test_Time_Learning",
+      "upstream_name": "Test_Time_Learning",
+      "expected_examples": 6,
+      "expected_num_bytes": 5424336.98630137,
+      "data_files": [
+        "data/Test_Time_Learning-00000-of-00001.parquet"
+      ],
+      "task_families": [
+        "text_classification",
+        "test_time_learning"
+      ],
+      "metric_families": [
+        "exact_match"
+      ],
+      "support_status": {
+        "source_evidence": "not_primary",
+        "answer": "template_only_no_score",
+        "write_policy": "diagnostic_requires_incremental_replay",
+        "conflict_resolution": "not_applicable"
+      },
+      "sha256": null,
+      "checksum_status": "operator_download_not_observed"
+    },
+    {
+      "id": "Long_Range_Understanding",
+      "upstream_name": "Long_Range_Understanding",
+      "expected_examples": 110,
+      "expected_num_bytes": 99446178.08219178,
+      "data_files": [
+        "data/Long_Range_Understanding-00000-of-00001.parquet"
+      ],
+      "task_families": [
+        "long_range_understanding",
+        "question_answering",
+        "summarization"
+      ],
+      "metric_families": [
+        "exact_match",
+        "llm_as_judge",
+        "f1_llm_as_judge"
+      ],
+      "support_status": {
+        "source_evidence": "diagnostic_requires_context_mapping",
+        "answer": "template_only_no_score",
+        "write_policy": "not_primary",
+        "conflict_resolution": "not_applicable"
+      },
+      "sha256": null,
+      "checksum_status": "operator_download_not_observed"
+    },
+    {
+      "id": "Conflict_Resolution",
+      "upstream_name": "Conflict_Resolution",
+      "expected_examples": 8,
+      "expected_num_bytes": 7232449.315068494,
+      "data_files": [
+        "data/Conflict_Resolution-00000-of-00001.parquet"
+      ],
+      "task_families": [
+        "conflict_resolution",
+        "selective_forgetting"
+      ],
+      "metric_families": [
+        "substring_exact_match"
+      ],
+      "support_status": {
+        "source_evidence": "diagnostic_requires_source_ref_mapping",
+        "answer": "template_only_no_score",
+        "write_policy": "diagnostic_requires_incremental_replay",
+        "conflict_resolution": "diagnostic_requires_update_forgetting_contract"
+      },
+      "sha256": null,
+      "checksum_status": "operator_download_not_observed"
+    }
+  ],
+  "claim_boundary": [
+    "metadata and schema smoke only",
+    "public-safe model-input template shape only",
+    "no official MemoryAgentBench score",
+    "no official-runner compatibility claim",
+    "no answer-generation quality claim",
+    "no LLM-as-judge result treated as source truth",
+    "no merged retrieval/generation/judge metric",
+    "no static-retrieval substitute for test-time learning or conflict-resolution quality"
+  ]
+}

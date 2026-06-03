@@ -5,10 +5,10 @@ MemoryAgentBench should become an AIppocampus external benchmark adapter before
 any runner code is added.
 
 Decision: suitable as a staged benchmark family, but not as an immediate
-default runner. The first AIppocampus slice should be a deterministic,
-public-safe metadata and case-pack smoke. Full incremental runner support is
-deferred until the write/update/forgetting contracts can be measured without
-collapsing the benchmark into static retrieval.
+official-score runner. AIppocampus now has a deterministic, public-safe
+metadata and case-pack smoke for Stage 1/2. Full incremental runner support is
+still deferred until the write/update/forgetting contracts can be measured
+without collapsing the benchmark into static retrieval.
 
 ## Official Sources
 
@@ -86,8 +86,12 @@ compatibility, or fairness result.
 
 ### Stage 1: Deterministic Metadata Smoke
 
-Add a small runner that inspects local MemoryAgentBench files only after the
-operator downloads them. It should emit:
+Status: implemented by
+`benchmarks/aippocampus/benchmark_memoryagentbench.py` with source metadata in
+`benchmark_corpus/memoryagentbench_manifest.json`.
+
+The runner inspects local MemoryAgentBench files only after the operator
+downloads or exports them. It emits:
 
 - dataset source URLs, license, local path hashes, byte counts, and checksums;
 - split and row counts;
@@ -100,13 +104,35 @@ No model calls, provider keys, full contexts, raw questions, or answers should
 be emitted. This stage is a public-boundary and schema-readiness smoke, not a
 quality benchmark.
 
+Fresh clones can run:
+
+```powershell
+python benchmarks\aippocampus\benchmark_memoryagentbench.py --json
+```
+
+When the ignored local dataset directory is absent, the runner returns a
+`skipped_missing_dataset` metadata payload with the official split expectations
+and `cannot_claim` boundaries. For local JSON/JSONL exports, it observes row
+and field families. For official parquet files, it reports file metadata and
+can read parquet row/schema metadata only when an optional parquet reader is
+installed; no parquet dependency is required by the deterministic smoke lane.
+
 ### Stage 2: Public-Safe Case-Pack Projection
 
-Build a prediction-template format for one narrow subset, preferably Accurate
-Retrieval or Conflict Resolution. The case pack should give the system under
-test only the permitted interaction/context payload and blank prediction slots.
-It should keep gold answers, gold labels, and scoring-only metadata out of the
-model-facing input.
+Status: implemented for an explicit local-only case-pack output, defaulting to
+the Accurate Retrieval split.
+
+The case-pack path is opt-in:
+
+```powershell
+python benchmarks\aippocampus\benchmark_memoryagentbench.py --case-pack-output .tmp\memoryagentbench-case-pack.json --prediction-template-output .tmp\memoryagentbench-predictions.jsonl --json
+```
+
+The case pack gives the system under test the permitted context/question
+payload and blank prediction slots. It keeps gold answers, gold labels, and
+scoring-only metadata out of the model-facing input. Because it may contain raw
+benchmark text, keep it under `.tmp/` or `benchmark_corpus/reports/`, both of
+which are ignored local artifact locations.
 
 Reports should separate:
 
@@ -132,7 +158,8 @@ AIppocampus retrieval/source evidence and downstream answer model quality.
 
 ## Blockers Before Scoring
 
-- The current repository has no MemoryAgentBench runner or manifest.
+- The current repository has only a metadata/case-pack smoke, not an
+  official-score runner.
 - The official runner expects a separate Python environment and external model
   API keys for several paths.
 - Some task families require LLM-as-judge evaluation, which cannot be treated
@@ -152,8 +179,10 @@ Can claim now:
 - MemoryAgentBench is a relevant external benchmark candidate for incremental
   memory-agent evaluation.
 - A staged adapter path is defined.
-- The first implementation should be a deterministic metadata/case-pack smoke,
-  not a full runner.
+- The repository has a deterministic MemoryAgentBench metadata/case-pack smoke
+  that reports public-safe schema observations, local file hashes, split/row
+  expectations, support status by evaluation layer, and `cannot_claim`
+  boundaries.
 
 Cannot claim now:
 
@@ -167,18 +196,18 @@ Cannot claim now:
 
 ## Follow-Up Implementation Issue Scope
 
-Follow-up implementation is tracked in #608. It should be scoped to Stage 1
-and Stage 2 only:
+Follow-up implementation was tracked in #608 and is scoped to Stage 1 and
+Stage 2 only:
 
-- add `benchmark_corpus/memoryagentbench_manifest.json` with official source
+- added `benchmark_corpus/memoryagentbench_manifest.json` with official source
   URLs, license, local ignored path policy, and expected checksums once local
   files are downloaded;
-- add `benchmarks/aippocampus/benchmark_memoryagentbench.py` or a staged helper
+- added `benchmarks/aippocampus/benchmark_memoryagentbench.py`, a staged helper
   that emits schema/metadata observations without raw text;
-- add tests for public-safe report shape, license/checksum metadata,
+- added tests for public-safe report shape, license/checksum metadata,
   `cannot_claim` boundaries, and no raw question/answer/context leakage;
-- update `docs/evidence/benchmark-evidence-map.md` only after the runner exists,
-  so the map does not point to a non-existent executable surface.
+- updated `docs/evidence/benchmark-evidence-map.md` after the executable runner
+  existed, so the map does not point to a non-existent surface.
 
 Non-goals for that follow-up:
 
