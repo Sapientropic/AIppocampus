@@ -22,6 +22,7 @@ def write_fixture_script(repo_root: Path, script_name: str, source: str) -> None
 
 
 BATCH_DELETED_PACKAGE_ONLY_SHIMS = {
+    "encrypted_sync_object_storage.py",
     "prompt_cues.py",
     "prompt_recall_ambient.py",
     "prompt_recall_budget.py",
@@ -29,7 +30,10 @@ BATCH_DELETED_PACKAGE_ONLY_SHIMS = {
     "prompt_recall_evidence.py",
     "question_feedback_policy.py",
     "question_vector_index.py",
+    "rollout_behavior_events.py",
+    "search_decision_adapter.py",
     "semantic_cue_cache.py",
+    "subconscious_tool_loop.py",
     "vault_notes.py",
     "vault_sync_utils.py",
     "warm_ambient_prompting.py",

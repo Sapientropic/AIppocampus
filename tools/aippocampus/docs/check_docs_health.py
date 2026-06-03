@@ -76,7 +76,6 @@ REQUIRED_RUNTIME_MAP_SCRIPTS = [
     "sync_bundle.py",
     "sync_object_storage.py",
     "encrypted_sync_bundle.py",
-    "encrypted_sync_object_storage.py",
     "sync_vault.py",
     "subconscious_jobs.py",
     "subconscious_scheduler.py",

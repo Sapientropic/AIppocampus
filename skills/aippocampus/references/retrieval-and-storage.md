@@ -294,7 +294,7 @@ outrank real user turns or assistant final answers.
 
 ## Search-Decision Adapter
 
-`scripts/search_decision_adapter.py` is a narrow local contract for #381-style
+`aippocampus_runtime.recall.search_decision_adapter` is a narrow local contract for #381-style
 external-search decisions. It does not call Google, browser search, Perplexity,
 or any remote authority ranker. It only accepts the current prompt plus
 source-backed candidate rows and returns:
@@ -434,8 +434,9 @@ over an HTTP object-storage transport; `sync_object_storage.py` remains the
 compatibility shim. Each manifest file is stored as an object under
 `AIPPOCAMPUS_OBJECT_PREFIX`, the manifest object is written last, and
 `status`/`repair` verify object content by sha256 before `pull` imports it.
-`encrypted_sync_object_storage.py` uses the same encrypted bundle contract over
-HTTP `PUT`/`GET` and writes the encrypted outer manifest last.
+`aippocampus_runtime.sync.encrypted.object_storage` uses the same encrypted
+bundle contract over HTTP `PUT`/`GET` and writes the encrypted outer manifest
+last.
 `encrypted_sync_admin.py` owns device-key UX and plaintext-to-encrypted
 migration/cleanup so the core sync entrypoints stay focused on transport. The
 object-store client boundary is split into the `object_storage_client.py`

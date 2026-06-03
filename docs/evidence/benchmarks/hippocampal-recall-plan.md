@@ -379,7 +379,7 @@ sounds plausible.
 
 ### Search-Decision Adapter Bridge
 
-`scripts/search_decision_adapter.py` is an adapter surface for external-search
+`aippocampus_runtime.recall.search_decision_adapter` is an adapter surface for external-search
 moments, not a new benchmark score. Map its behavior onto this plan:
 
 - before search, degraded-cue classification belongs to H1 pattern completion;
