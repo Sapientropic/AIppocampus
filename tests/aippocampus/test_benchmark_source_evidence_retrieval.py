@@ -967,6 +967,9 @@ class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
                         ],
                     }
                 ],
+                "labeler_identity": "fixture_public_semantic_labeler",
+                "review_status": "validator_reviewed",
+                "human_reviewed": False,
                 "usage": {"total_tokens": 11},
             }
 
@@ -1037,6 +1040,22 @@ class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
         )
         self.assertEqual(payload["artifacts"]["sidecar_row_count"], 1)
         self.assertEqual(payload["artifacts"]["reviewed_sidecar_row_count"], 1)
+        self.assertEqual(payload["labeler"]["identity"], "fixture_public_semantic_labeler")
+        self.assertEqual(payload["labeler"]["review_status"], "validator_reviewed")
+        self.assertFalse(payload["labeler"]["human_reviewed"])
+        controls = payload["anti_circular_controls"]
+        self.assertEqual(controls["sidecar"]["case_count"], 1)
+        self.assertEqual(controls["no_sidecar_baseline"]["control_kind"], "no_sidecar")
+        self.assertEqual(controls["wrong_message_negative"]["control_kind"], "wrong_message")
+        self.assertFalse(controls["wrong_message_negative"]["quality_gate_ok"])
+        self.assertTrue(controls["anti_circular_gate"]["passed"])
+        self.assertIn(
+            "sidecar_vs_no_sidecar_case_delta",
+            controls["control_deltas"],
+        )
+        self.assertEqual(
+            controls["label_review_boundary"]["human_reviewed"], False
+        )
         self.assertEqual(payload["metrics"]["case_count"], 1)
         self.assertEqual(payload["metrics"]["top_k_hit_rate"], 1.0)
         self.assertEqual(payload["privacy_boundary"]["raw_text_emitted"], False)
