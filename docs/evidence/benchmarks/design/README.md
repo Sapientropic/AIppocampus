@@ -18,6 +18,9 @@ Dated command evidence belongs in
 - [`external-benchmark-map.md`](external-benchmark-map.md) gives external
   benchmark and memory-system comparison paths, with explicit blockers and
   claim boundaries.
+- [`atm-bench-hard-protocol-boundary.md`](atm-bench-hard-protocol-boundary.md)
+  owns the verified ATM-Bench Hard protocol boundary for the #528 multimodal
+  source-backed recall track.
 - [`../memory-decision-benchmark-plan.md`](../memory-decision-benchmark-plan.md)
   remains the detailed Track A-D methodology and runner-plan owner.
 - [`../hippocampal-recall-plan.md`](../hippocampal-recall-plan.md) owns the
