@@ -58,6 +58,11 @@ from aippocampus_runtime.recall.prompt_recall_evidence import (
     strip_private_fields,
     strip_semantic_gate,
 )
+from aippocampus_runtime.recall.prompt_recall_hot_path import (
+    candidate_indexes_from_registry,
+    merge_hot_path_candidates,
+    run_hot_path_funnel,
+)
 from aippocampus_runtime.recall.prompt_recall_projection import (
     ambiguous_evidence_request as resolve_ambiguous_evidence_request,
 )
@@ -237,6 +242,99 @@ def _merge_semantic_trigger_source_candidates(
             candidates.append(item)
             by_key[thread_key] = item
     return sort_candidates(candidates)
+
+
+def _candidate_matches_for_prompt(
+    *,
+    prompt: str,
+    registry: dict[str, Any],
+    registry_path: Path,
+    cwd_path: Path,
+    concept_file: Path,
+    seed_terms: list[str],
+    cognitive_map_matches: list[dict[str, Any]],
+    association_matches: list[dict[str, Any]],
+    semantic_trigger_matches: list[dict[str, Any]],
+    hot_path_funnel: dict[str, Any],
+    scent_threshold: float,
+    use_concept_graph: bool,
+    start: float,
+    max_elapsed_ms: int | None,
+) -> tuple[list[dict[str, Any]], list[str], list[dict[str, Any]]]:
+    query_terms = seed_terms
+    concept_expansions: list[dict[str, Any]] = []
+    timeline = load_project_timeline(default_project_timeline_path(registry_path))
+    candidates = _score_recall_candidates(
+        prompt=prompt,
+        registry=registry,
+        timeline=timeline,
+        cwd_path=cwd_path,
+        query_terms=query_terms,
+        cognitive_map_matches=cognitive_map_matches,
+        association_matches=association_matches,
+    )
+    candidates = merge_hot_path_candidates(
+        candidates, registry, hot_path_funnel, query_terms, scent_threshold=scent_threshold
+    )
+    candidates = _merge_semantic_trigger_source_candidates(
+        candidates, registry, semantic_trigger_matches, query_terms, scent_threshold=scent_threshold
+    )
+    if not (
+        not candidates
+        and use_concept_graph
+        and prompt
+        and concept_file.exists()
+        and budget_allows(start, max_elapsed_ms, PROBE_MIN_REMAINING_MS)
+    ):
+        return candidates, query_terms, concept_expansions
+
+    # Concept BFS is a recall bridge for prompts whose surface words miss
+    # registry associations. Once direct association/timeline candidates
+    # already exist, expanding concepts can easily introduce semantic drift
+    # and corrupt clean-source probe ranking, so keep it as a fallback.
+    concept_expansions = expand_concepts(
+        concept_file, seed_terms, depth=2, max_terms=CONCEPT_EXPANSION_MAX_TERMS
+    )
+    if concept_expansions:
+        query_terms = unique_preserve(
+            seed_terms + concept_expansion_terms(concept_expansions), limit=40
+        )
+        candidates = _score_recall_candidates(
+            prompt=prompt,
+            registry=registry,
+            timeline=timeline,
+            cwd_path=cwd_path,
+            query_terms=query_terms,
+            cognitive_map_matches=cognitive_map_matches,
+            association_matches=association_matches,
+        )
+        candidates = _merge_semantic_trigger_source_candidates(
+            candidates,
+            registry,
+            semantic_trigger_matches,
+            query_terms,
+            scent_threshold=scent_threshold,
+        )
+    return candidates, query_terms, concept_expansions
+
+
+def _should_skip_default_semantic_gate_for_hot_path(
+    *,
+    hot_path_funnel: dict[str, Any],
+    semantic_gate_mode: str | None,
+    semantic_gate_fn: Callable[..., dict[str, Any]] | None,
+    natural_evidence: list[str],
+    source_evidence: list[str],
+) -> bool:
+    """Skip only the default cold semantic path when a local route already exists."""
+
+    return (
+        hot_path_funnel.get("decision") == "scent"
+        and str(semantic_gate_mode or "").casefold() != "on"
+        and semantic_gate_fn is None
+        and not natural_evidence
+        and not source_evidence
+    )
 
 
 def _noise_prompt_result(context: Any, start: float) -> dict[str, Any]:
@@ -473,10 +571,32 @@ def assess_prompt(
     source_evidence = source_evidence_intent(prompt)
     negative_evidence = negative_evidence_intent(prompt)
     current_checkout_live_fact = current_checkout_live_fact_intent(prompt)
+    local_seed_terms = unique_preserve(
+        (expand_query_terms(prompt) if prompt else [])
+        + cognitive_map_terms(cognitive_map_matches)
+        + _association_seed_terms(association_matches)
+        + _semantic_trigger_seed_terms(context.semantic_trigger_matches)
+        + working_memory_terms(working_memory_matches),
+        limit=36,
+    )
+    hot_path_funnel = run_hot_path_funnel(
+        prompt=prompt,
+        query_terms=local_seed_terms,
+        candidate_indexes=candidate_indexes_from_registry(registry),
+    )
+    effective_use_semantic_gate = use_semantic_gate
+    if _should_skip_default_semantic_gate_for_hot_path(
+        hot_path_funnel=hot_path_funnel,
+        semantic_gate_mode=semantic_gate_mode,
+        semantic_gate_fn=semantic_gate_fn,
+        natural_evidence=natural_evidence,
+        source_evidence=source_evidence,
+    ):
+        effective_use_semantic_gate = False
     semantic_result, semantic_gate_reuse = run_semantic_gate_for_context(
         prompt=prompt, context=context, semantic_cache_path=semantic_cache_path,
         semantic_gate_mode=semantic_gate_mode, semantic_timeout=semantic_timeout,
-        semantic_gate_fn=semantic_gate_fn, use_semantic_gate=use_semantic_gate,
+        semantic_gate_fn=semantic_gate_fn, use_semantic_gate=effective_use_semantic_gate,
         start=start, max_elapsed_ms=max_elapsed_ms,
     )
     threshold_policy = scent_threshold_policy(prompt=prompt, thread_id=thread_id, topic_epoch=topic_epoch, semantic_gate_reuse=semantic_gate_reuse, current_checkout_live_fact=current_checkout_live_fact)
@@ -489,51 +609,26 @@ def assess_prompt(
         + semantic_gate_terms(semantic_result),
         limit=36,
     )
-    concept_expansions: list[dict[str, Any]] = []
-    query_terms = seed_terms
     explicit = pre_explicit
     associative = pre_associative
     important = pre_important
-
-    timeline = load_project_timeline(default_project_timeline_path(path))
-    candidates = _score_recall_candidates(
+    scent_threshold = float(threshold_policy["effective_threshold"])
+    candidates, query_terms, concept_expansions = _candidate_matches_for_prompt(
         prompt=prompt,
         registry=registry,
-        timeline=timeline,
+        registry_path=path,
         cwd_path=cwd_path,
-        query_terms=query_terms,
+        concept_file=concept_file,
+        seed_terms=seed_terms,
         cognitive_map_matches=cognitive_map_matches,
         association_matches=association_matches,
+        semantic_trigger_matches=context.semantic_trigger_matches,
+        hot_path_funnel=hot_path_funnel,
+        scent_threshold=scent_threshold,
+        use_concept_graph=use_concept_graph,
+        start=start,
+        max_elapsed_ms=max_elapsed_ms,
     )
-    candidates = _merge_semantic_trigger_source_candidates(candidates, registry, context.semantic_trigger_matches, query_terms, scent_threshold=float(threshold_policy["effective_threshold"]))
-    if (
-        not candidates
-        and use_concept_graph
-        and prompt
-        and concept_file.exists()
-        and budget_allows(start, max_elapsed_ms, PROBE_MIN_REMAINING_MS)
-    ):
-        # Concept BFS is a recall bridge for prompts whose surface words miss
-        # registry associations. Once direct association/timeline candidates
-        # already exist, expanding concepts can easily introduce semantic drift
-        # and corrupt clean-source probe ranking, so keep it as a fallback.
-        concept_expansions = expand_concepts(
-            concept_file, seed_terms, depth=2, max_terms=CONCEPT_EXPANSION_MAX_TERMS
-        )
-        if concept_expansions:
-            query_terms = unique_preserve(
-                seed_terms + concept_expansion_terms(concept_expansions), limit=40
-            )
-            candidates = _score_recall_candidates(
-                prompt=prompt,
-                registry=registry,
-                timeline=timeline,
-                cwd_path=cwd_path,
-                query_terms=query_terms,
-                cognitive_map_matches=cognitive_map_matches,
-                association_matches=association_matches,
-            )
-            candidates = _merge_semantic_trigger_source_candidates(candidates, registry, context.semantic_trigger_matches, query_terms, scent_threshold=float(threshold_policy["effective_threshold"]))
     semantic_memory_cue = semantic_gate_is_memory_cue(semantic_result)
     if not candidates and (
         explicit or associative or natural_evidence or source_evidence or semantic_memory_cue
@@ -546,6 +641,7 @@ def assess_prompt(
         # expanding static cue lists.
         candidates = fallback_search_candidates(registry, query_terms)
     timeline_memory_cue = any(item.get("life_wide_timeline_source") for item in candidates)
+    hot_path_memory_cue = any(item.get("hot_path_source") for item in candidates)
     positive_evidence_intent = bool((natural_evidence or source_evidence) and not negative_evidence)
     has_memory_cue = bool(
         explicit
@@ -557,6 +653,7 @@ def assess_prompt(
         or working_memory_matches
         or semantic_memory_cue
         or timeline_memory_cue
+        or hot_path_memory_cue
         or positive_evidence_intent
     )
     if candidates and has_memory_cue and budget_allows(start, max_elapsed_ms, PROBE_MIN_REMAINING_MS):
@@ -596,7 +693,7 @@ def assess_prompt(
         source_evidence=source_evidence,
         natural_evidence=natural_evidence,
         semantic_result=semantic_result,
-        scent_threshold=float(threshold_policy["effective_threshold"]),
+        scent_threshold=scent_threshold,
         reasons=reasons,
     )
 
@@ -606,7 +703,7 @@ def assess_prompt(
         associative=associative, important=important, cognitive_map_matches=cognitive_map_matches,
         semantic_memory_cue=semantic_memory_cue, positive_evidence_intent=positive_evidence_intent,
         has_memory_cue=has_memory_cue, suppressed=suppressed, top_score=top_score,
-        working_score=working_score, scent_threshold=float(threshold_policy["effective_threshold"]), semantic_result=semantic_result, natural_evidence=natural_evidence,
+        working_score=working_score, scent_threshold=scent_threshold, semantic_result=semantic_result, natural_evidence=natural_evidence,
         source_evidence=source_evidence, ambiguous_evidence_request=ambiguous_evidence_request,
         association_matches=association_matches, start=start, max_elapsed_ms=max_elapsed_ms,
         reasons=reasons,
@@ -649,6 +746,7 @@ def assess_prompt(
         "scent_threshold_policy": threshold_policy,
         "semantic_bridge_diagnostic": semantic_bridge_diagnostic,
         "semantic_cue_cache": semantic_cue_cache,
+        "hot_path_funnel": hot_path_funnel,
         "elapsed_ms": round((time.perf_counter() - start) * 1000, 2), "deep_archival_requested": _deep_archival_requested(prompt),
     }
     return attach_ambient_recall(
