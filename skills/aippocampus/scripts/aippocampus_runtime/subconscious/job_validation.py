@@ -22,6 +22,26 @@ from aippocampus_runtime.source.semantic_scope_labels import (
 from aippocampus_runtime.subconscious.job_circuits import JOB_SPECS
 from aippocampus_runtime.subconscious.worker import ALLOWED_EDGE_TYPES, clamp_confidence
 
+QUALITY_BUCKET_THRESHOLDS = {
+    "strong": 0.82,
+    "usable": 0.64,
+    "weak": 0.48,
+}
+QUALITY_SCORE_VERSION = "heuristic_promotion_readiness_v1"
+QUALITY_SCORE_KIND = "heuristic_routing_signal"
+QUALITY_SCORE_MEANING = (
+    "Heuristic routing score for staging review priority; not calibrated "
+    "confidence, not a promotion gate, and not evidence by itself."
+)
+QUALITY_SCORE_WEIGHTS = {
+    "confidence": 0.34,
+    "evidence_strength": 0.26,
+    "specificity": 0.18,
+    "actionability": 0.14,
+    "novelty": 0.08,
+    "drift_risk_penalty": -0.12,
+}
+
 
 def normalize_for_fingerprint(value: str) -> str:
     return re.sub(r"\s+", " ", str(value or "").casefold()).strip()
@@ -49,13 +69,51 @@ def finding_fingerprint(finding: dict[str, Any]) -> str:
 
 
 def quality_bucket(score: float) -> str:
-    if score >= 0.82:
+    if score >= QUALITY_BUCKET_THRESHOLDS["strong"]:
         return "strong"
-    if score >= 0.64:
+    if score >= QUALITY_BUCKET_THRESHOLDS["usable"]:
         return "usable"
-    if score >= 0.48:
+    if score >= QUALITY_BUCKET_THRESHOLDS["weak"]:
         return "weak"
     return "noise"
+
+
+def quality_score_contract() -> dict[str, Any]:
+    return {
+        "score_version": QUALITY_SCORE_VERSION,
+        "score_kind": QUALITY_SCORE_KIND,
+        "meaning": QUALITY_SCORE_MEANING,
+        "calibrated_probability": False,
+        "bucket_thresholds": dict(QUALITY_BUCKET_THRESHOLDS),
+        "weights": dict(QUALITY_SCORE_WEIGHTS),
+        "review_boundary": (
+            "Promotion and review still require source_refs, confidence gates, "
+            "candidate-type gates, and human/context review where applicable."
+        ),
+    }
+
+
+def clamp_quality_score(value: Any) -> float:
+    try:
+        return max(0.0, min(1.0, float(value)))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def quality_with_score_contract(quality: dict[str, Any]) -> dict[str, Any]:
+    out = dict(quality)
+    score = clamp_quality_score(
+        out.get("heuristic_promotion_score", out.get("promotion_readiness"))
+    )
+    score = round(score, 4)
+    out["promotion_readiness"] = score
+    out["heuristic_promotion_score"] = score
+    out["bucket"] = quality_bucket(score)
+    out["score_version"] = QUALITY_SCORE_VERSION
+    out["score_kind"] = QUALITY_SCORE_KIND
+    out["meaning"] = QUALITY_SCORE_MEANING
+    out["calibrated_probability"] = False
+    return out
 
 
 def estimate_finding_quality(job: str, finding: dict[str, Any]) -> dict[str, Any]:
@@ -94,28 +152,30 @@ def estimate_finding_quality(job: str, finding: dict[str, Any]) -> dict[str, Any
     if confidence < 0.65:
         drift_risk += 0.15
     promotion_readiness = (
-        confidence * 0.34
-        + evidence_strength * 0.26
-        + specificity * 0.18
-        + actionability * 0.14
-        + novelty * 0.08
-        - drift_risk * 0.12
+        confidence * QUALITY_SCORE_WEIGHTS["confidence"]
+        + evidence_strength * QUALITY_SCORE_WEIGHTS["evidence_strength"]
+        + specificity * QUALITY_SCORE_WEIGHTS["specificity"]
+        + actionability * QUALITY_SCORE_WEIGHTS["actionability"]
+        + novelty * QUALITY_SCORE_WEIGHTS["novelty"]
+        + drift_risk * QUALITY_SCORE_WEIGHTS["drift_risk_penalty"]
     )
     promotion_readiness = max(0.0, min(1.0, promotion_readiness))
-    return {
-        "evidence_strength": round(evidence_strength, 4),
-        "specificity": round(specificity, 4),
-        "novelty": round(novelty, 4),
-        "actionability": round(min(1.0, actionability), 4),
-        "drift_risk": round(min(1.0, drift_risk), 4),
-        "promotion_readiness": round(promotion_readiness, 4),
-        "bucket": quality_bucket(promotion_readiness),
-        "signals": {
-            "source_ref_count": ref_count,
-            "source_thread_count": thread_count,
-            "has_recommendation": recommendation,
-        },
-    }
+    return quality_with_score_contract(
+        {
+            "evidence_strength": round(evidence_strength, 4),
+            "specificity": round(specificity, 4),
+            "novelty": round(novelty, 4),
+            "actionability": round(min(1.0, actionability), 4),
+            "drift_risk": round(min(1.0, drift_risk), 4),
+            "promotion_readiness": round(promotion_readiness, 4),
+            "bucket": quality_bucket(promotion_readiness),
+            "signals": {
+                "source_ref_count": ref_count,
+                "source_thread_count": thread_count,
+                "has_recommendation": recommendation,
+            },
+        }
+    )
 
 
 def normalize_ref_id(ref_item: Any) -> str:

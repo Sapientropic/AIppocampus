@@ -349,8 +349,9 @@ Replay serves three functions:
   backfill.
 - **Generalization → the entire review pipeline:** `subconscious_review.py`
   already generalizes from individual findings to promotion candidates. The
-  quality scoring and routing mechanisms are the analog of hippocampal
-  consolidation during sleep.
+  versioned heuristic scoring and routing mechanisms are the analog of
+  hippocampal consolidation during sleep; they prioritize review, but do not
+  prove calibrated finding quality.
 - **Generative replay → anticipatory questions:** Beyond replaying past
   sequences, the hippocampus can generate novel trajectories through cognitive
   space (preplay). In Phase 3+, `theme_emergence` could generate candidate
@@ -623,9 +624,9 @@ rows and the concept graph.
 This is the most critical design decision. The existing subconscious pipeline
 already provides:
 
-- `estimate_finding_quality()` — deterministic quality scoring with evidence
-  strength, specificity, novelty, actionability, drift risk, and promotion
-  readiness.
+- `estimate_finding_quality()` — deterministic heuristic scoring with evidence
+  strength, specificity, novelty, actionability, drift risk, score version, and
+  bucketed promotion-readiness diagnostics.
 - `subconscious_review.py` — LLM second-pass review that produces promotion
   candidates.
 - `memory_candidate_router.py` — four-way deterministic routing (`use_silently`,
@@ -645,8 +646,9 @@ output:
 | `theme_emergence` | `theme_candidate` | A cluster of recurring questions forming a theme |
 
 Today, every extracted question and frontier marker from `question_extraction`
-gets quality scoring, review, and routing through the same pipeline that
-already handles `concept_edges`, `decision_evolution`, `trigger_mining`, etc.
+gets versioned heuristic scoring, review, and routing through the same pipeline
+that already handles `concept_edges`, `decision_evolution`, `trigger_mining`,
+etc.
 The deterministic Phase 2 runner can also append `question_link` rows back to
 the same stream. The first #136 Phase 3 runner can now append conservative
 `theme_candidate` rows to that stream; richer calibration and LLM naming remain

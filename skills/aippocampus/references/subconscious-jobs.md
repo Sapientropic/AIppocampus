@@ -147,8 +147,20 @@ Every accepted finding also gets deterministic metadata before it is written:
 - `quality.novelty`: a light novelty estimate for staging triage.
 - `quality.actionability`: whether a downstream action is clear.
 - `quality.drift_risk`: how likely the finding needs human/context review.
-- `quality.promotion_readiness`: compact blended score.
+- `quality.promotion_readiness`: backward-compatible alias for the heuristic
+  promotion score.
+- `quality.heuristic_promotion_score`: compact blended routing score. It is
+  not calibrated confidence, not evidence, and not an automatic promotion gate.
+- `quality.score_version`: score contract version; current value is
+  `heuristic_promotion_readiness_v1`.
+- `quality.score_kind`: current value is `heuristic_routing_signal`.
 - `quality.bucket`: `strong`, `usable`, `weak`, or `noise`.
+
+`subconscious_review.py` includes aggregate `quality_diagnostics` with bucket
+distribution and review outcomes by bucket. Treat those diagnostics as
+threshold-sensitivity/audit data only: promotion still depends on source refs,
+confidence gates, candidate-type gates, and human/context review where
+applicable.
 
 ## DeepSeek Model Routing
 

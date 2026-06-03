@@ -92,6 +92,54 @@ def public_usage(usage: Any) -> dict[str, Any]:
     return out
 
 
+def public_quality_bucket_counts(value: Any) -> dict[str, int]:
+    if not isinstance(value, dict):
+        return {}
+    out: dict[str, int] = {}
+    for bucket in ("strong", "usable", "weak", "noise", "unknown"):
+        count = public_count(value.get(bucket))
+        if count:
+            out[bucket] = count
+    return out
+
+
+def public_quality_diagnostics(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    contract = value.get("score_contract") if isinstance(value.get("score_contract"), dict) else {}
+    outcomes: dict[str, dict[str, int]] = {}
+    raw_outcomes = value.get("review_outcomes_by_bucket")
+    if isinstance(raw_outcomes, dict):
+        for bucket in ("strong", "usable", "weak", "noise", "unknown"):
+            raw_counts = raw_outcomes.get(bucket)
+            if not isinstance(raw_counts, dict):
+                continue
+            counts = {
+                key: public_count(raw_counts.get(key))
+                for key in (
+                    "input_findings",
+                    "promotion_candidate_source",
+                    "weak_finding",
+                    "duplicate_canonical",
+                    "duplicate_duplicate",
+                )
+                if public_count(raw_counts.get(key))
+            }
+            if counts:
+                outcomes[bucket] = counts
+    return {
+        "score_contract": {
+            "score_version": public_identifier(contract.get("score_version"), fallback="unknown"),
+            "score_kind": public_identifier(contract.get("score_kind"), fallback="heuristic"),
+            "calibrated_probability": bool(contract.get("calibrated_probability")),
+            "meaning": str(contract.get("meaning") or "")[:240],
+        },
+        "bucket_distribution": public_quality_bucket_counts(value.get("bucket_distribution")),
+        "review_outcomes_by_bucket": outcomes,
+        "interpretation": "heuristic_bucket_outcomes_not_calibration_proof",
+    }
+
+
 def public_review_event(event: dict[str, Any]) -> dict[str, Any]:
     kind = public_identifier(event.get("kind"))
     if kind not in PUBLIC_REVIEW_EVENT_KINDS:
@@ -164,5 +212,6 @@ def public_review_cli_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "wrote": bool(payload.get("wrote")),
         "cache": sanitize_external_model_payload(payload.get("cache") or {}),
         "model_route": public_model_route(payload.get("model_route")),
+        "quality_diagnostics": public_quality_diagnostics(payload.get("quality_diagnostics")),
         "output_boundary": MODEL_TEXT_OUTPUT_BOUNDARY,
     }
