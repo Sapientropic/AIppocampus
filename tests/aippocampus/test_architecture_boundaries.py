@@ -151,9 +151,9 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             "registry_search.py",
             "retrieval_query_policy.py",
             "subconscious_jobs_config.py",
-            "warm_ambient_prompting.py",
-            "warm_ambient_scout_profiles.py",
-            "warm_ambient_source_validation.py",
+            "aippocampus_runtime/warm_ambient/prompting.py",
+            "aippocampus_runtime/warm_ambient/scout_profiles.py",
+            "aippocampus_runtime/warm_ambient/source_validation.py",
         ]
 
         missing = sorted(path for path in helper_paths if not (SCRIPTS / path).is_file())

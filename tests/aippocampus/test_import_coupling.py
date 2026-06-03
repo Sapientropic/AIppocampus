@@ -2354,10 +2354,7 @@ class ImportCouplingTests(unittest.TestCase):
 
     def test_warm_ambient_helpers_have_package_owner_and_compat_shims(self) -> None:
         import ambient_warm_scheduler
-        import warm_ambient_prompting
         import warm_ambient_recall
-        import warm_ambient_scout_profiles
-        import warm_ambient_source_validation
         from aippocampus_runtime.warm_ambient import (
             cli,
             config,
@@ -2379,8 +2376,10 @@ class ImportCouplingTests(unittest.TestCase):
         ]
         shim_files = [
             SCRIPTS / "ambient_warm_scheduler.py",
-            SCRIPTS / "warm_ambient_prompting.py",
             SCRIPTS / "warm_ambient_recall.py",
+        ]
+        deleted_package_only_shims = [
+            SCRIPTS / "warm_ambient_prompting.py",
             SCRIPTS / "warm_ambient_scout_profiles.py",
             SCRIPTS / "warm_ambient_source_validation.py",
         ]
@@ -2389,6 +2388,8 @@ class ImportCouplingTests(unittest.TestCase):
             self.assertTrue(path.exists(), path)
         for path in shim_files:
             self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+        for path in deleted_package_only_shims:
+            self.assertFalse(path.exists(), path)
 
         edges = same_dir_import_edges(top_level_only=True)
         self.assertIn(
@@ -2408,6 +2409,19 @@ class ImportCouplingTests(unittest.TestCase):
             edges["aippocampus_runtime.recall.prompt_recall_ambient"],
         )
         self.assertNotIn("warm_ambient_recall", edges["ambient_warm_scheduler"])
+        deleted_modules = {
+            "warm_ambient_prompting",
+            "warm_ambient_scout_profiles",
+            "warm_ambient_source_validation",
+        }
+        self.assertFalse(deleted_modules & pyproject_py_modules())
+        for owner in [
+            "aippocampus_runtime.warm_ambient.prompting",
+            "aippocampus_runtime.warm_ambient.recall",
+            "aippocampus_runtime.warm_ambient.scout_profiles",
+            "aippocampus_runtime.warm_ambient.source_validation",
+        ]:
+            self.assertFalse(deleted_modules & edges[owner], owner)
 
         self.assertIs(
             ambient_warm_scheduler.schedule_warm_ambient_recall,
@@ -2423,22 +2437,13 @@ class ImportCouplingTests(unittest.TestCase):
             warm_ambient_recall.warm_recall_config_from_env,
             config.warm_recall_config_from_env,
         )
-        self.assertIs(warm_ambient_prompting.scout_prompt, prompting.scout_prompt)
+        self.assertTrue(callable(prompting.scout_prompt))
         self.assertIs(warm_ambient_recall.run_warm_ambient_recall, recall.run_warm_ambient_recall)
         self.assertIs(warm_ambient_recall.main, recall.main)
         self.assertTrue(callable(cli.main))
-        self.assertIs(
-            warm_ambient_scout_profiles.expand_scout_lanes,
-            scout_profiles.expand_scout_lanes,
-        )
-        self.assertIs(
-            warm_ambient_source_validation.calibrate_cards,
-            source_validation.calibrate_cards,
-        )
-        self.assertIs(
-            warm_ambient_source_validation._stable_id,
-            source_validation._stable_id,
-        )
+        self.assertTrue(callable(scout_profiles.expand_scout_lanes))
+        self.assertTrue(callable(source_validation.calibrate_cards))
+        self.assertTrue(callable(source_validation._stable_id))
 
     def test_artifact_publish_has_package_owner_and_compat_shim(self) -> None:
         import artifact_publish
@@ -2629,8 +2634,6 @@ class ImportCouplingTests(unittest.TestCase):
     def test_vault_projection_has_package_owner_and_compat_shims(self) -> None:
         import sync_vault
         import vault_dashboard
-        import vault_notes
-        import vault_sync_utils
         from aippocampus_runtime.vault import dashboard, notes, sync, utils
 
         package_paths = [
@@ -2643,6 +2646,8 @@ class ImportCouplingTests(unittest.TestCase):
         shim_paths = [
             SCRIPTS / "sync_vault.py",
             SCRIPTS / "vault_dashboard.py",
+        ]
+        deleted_package_only_shims = [
             SCRIPTS / "vault_notes.py",
             SCRIPTS / "vault_sync_utils.py",
         ]
@@ -2652,12 +2657,12 @@ class ImportCouplingTests(unittest.TestCase):
         for path in shim_paths:
             self.assertTrue(path.exists(), path)
             self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+        for path in deleted_package_only_shims:
+            self.assertFalse(path.exists(), path)
 
         edges = same_dir_import_edges(top_level_only=True)
         self.assertIn("aippocampus_runtime.vault.sync", edges["sync_vault"])
         self.assertIn("aippocampus_runtime.vault.dashboard", edges["vault_dashboard"])
-        self.assertIn("aippocampus_runtime.vault.notes", edges["vault_notes"])
-        self.assertIn("aippocampus_runtime.vault.utils", edges["vault_sync_utils"])
         for owner in [
             "aippocampus_runtime.vault.dashboard",
             "aippocampus_runtime.vault.notes",
@@ -2672,12 +2677,21 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIn("aippocampus_runtime.vault.dashboard", edges["aippocampus_runtime.vault.sync"])
         self.assertIn("aippocampus_runtime.vault.notes", edges["aippocampus_runtime.vault.sync"])
         self.assertIn("aippocampus_runtime.vault.utils", edges["aippocampus_runtime.vault.sync"])
+        deleted_modules = {"vault_notes", "vault_sync_utils"}
+        self.assertFalse(deleted_modules & pyproject_py_modules())
+        for owner in [
+            "aippocampus_runtime.vault.dashboard",
+            "aippocampus_runtime.vault.notes",
+            "aippocampus_runtime.vault.sync",
+            "aippocampus_runtime.vault.utils",
+        ]:
+            self.assertFalse(deleted_modules & edges[owner], owner)
 
         self.assertEqual(sync.SCRIPT_DIR, SCRIPTS)
         self.assertIs(sync_vault.main, sync.main)
         self.assertIs(vault_dashboard.html_dashboard_v2, dashboard.html_dashboard_v2)
-        self.assertIs(vault_notes.dashboard_markdown, notes.dashboard_markdown)
-        self.assertIs(vault_sync_utils.copy_dashboard_assets, utils.copy_dashboard_assets)
+        self.assertTrue(callable(notes.dashboard_markdown))
+        self.assertTrue(callable(utils.copy_dashboard_assets))
 
     def test_sync_contract_has_package_owner_and_compat_shim(self) -> None:
         import sync_contract

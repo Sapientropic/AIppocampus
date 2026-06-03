@@ -21,6 +21,15 @@ def write_fixture_script(repo_root: Path, script_name: str, source: str) -> None
     path.write_text(source, encoding="utf-8")
 
 
+BATCH_DELETED_PACKAGE_ONLY_SHIMS = {
+    "vault_notes.py",
+    "vault_sync_utils.py",
+    "warm_ambient_prompting.py",
+    "warm_ambient_scout_profiles.py",
+    "warm_ambient_source_validation.py",
+}
+
+
 class CompatibilityShimInventoryTests(unittest.TestCase):
     def test_inventory_buckets_every_top_level_runtime_script(self) -> None:
         report = inventory.build_inventory(ROOT)
@@ -81,6 +90,14 @@ class CompatibilityShimInventoryTests(unittest.TestCase):
         report = inventory.build_inventory(ROOT)
 
         self.assertEqual(report.manual_export_surfaces, [])
+
+    def test_package_only_helper_shims_are_removed_after_deletion_batch(self) -> None:
+        report = inventory.build_inventory(ROOT)
+        top_level_scripts = set(report.top_level_scripts)
+        delete_now = {item.script for item in report.delete_now}
+
+        self.assertFalse(BATCH_DELETED_PACKAGE_ONLY_SHIMS & top_level_scripts)
+        self.assertFalse(BATCH_DELETED_PACKAGE_ONLY_SHIMS & delete_now)
 
     def test_unreferenced_package_owner_shim_is_delete_now_candidate(self) -> None:
         with TemporaryDirectory() as tmp:

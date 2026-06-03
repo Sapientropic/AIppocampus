@@ -198,12 +198,7 @@ py-modules = [
     "sync_object_storage",
     "sync_vault",
     "vault_dashboard",
-    "vault_notes",
-    "vault_sync_utils",
-    "warm_ambient_prompting",
     "warm_ambient_recall",
-    "warm_ambient_scout_profiles",
-    "warm_ambient_source_validation",
 ]
 
 [tool.setuptools.package-data]
@@ -542,8 +537,6 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/vault/utils.py",
     "skills/aippocampus/scripts/sync_vault.py",
     "skills/aippocampus/scripts/vault_dashboard.py",
-    "skills/aippocampus/scripts/vault_notes.py",
-    "skills/aippocampus/scripts/vault_sync_utils.py",
     "skills/aippocampus/scripts/aippocampus_runtime/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/cli.py",
@@ -553,10 +546,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/scheduler.py",
     "skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/scout_profiles.py",
     "skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/source_validation.py",
-    "skills/aippocampus/scripts/warm_ambient_prompting.py",
     "skills/aippocampus/scripts/warm_ambient_recall.py",
-    "skills/aippocampus/scripts/warm_ambient_scout_profiles.py",
-    "skills/aippocampus/scripts/warm_ambient_source_validation.py",
     "tools/aippocampus/docs/check_docs_health.py",
     "tools/aippocampus/docs/compat_shim_inventory.py",
     "tools/aippocampus/github/planning_audit.py",
