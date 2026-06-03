@@ -106,9 +106,7 @@ REQUIRED_RUNTIME_MAP_SCRIPTS = [
     "ambient_thread_cache.py",
     "question_confirmation.py",
     "question_confirmation_live.py",
-    "question_feedback_policy.py",
     "question_index_sidecar.py",
-    "question_vector_index.py",
     "question_health.py",
     "question_resolution.py",
 ]

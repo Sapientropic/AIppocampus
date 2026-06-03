@@ -140,8 +140,8 @@ Completed foundation:
    - L4: TurboVec compressed vector index for semantic recall.
      Protocol interface (`QuestionVectorIndex`: add, search, remove, write)
      starts in `aippocampus_runtime.question.vector_index` with a small local
-     JSON-backed implementation. `question_vector_index.py` remains the
-     compatibility shim. It is an adapter boundary only:
+     JSON-backed implementation. It is package-owner only and an adapter
+     boundary:
      vector neighbors carry stable source ids and remain hints until clean-source
      evidence is re-opened. TurboVec can replace the local implementation when
      scale warrants, without changing the caller contract. Future coverage can
@@ -212,9 +212,9 @@ Completed foundation:
 6. Add vector index via Protocol interface. Done for the first local slice:
    `aippocampus_runtime.question.vector_index` defines `QuestionVectorIndex`
    and `LocalQuestionVectorIndex` with add / search / remove / write / load
-   behavior; `question_vector_index.py` remains the compatibility shim. It is
-   intentionally non-default and source-id-only; question tracking must still
-   re-open clean source before accepting a link. TurboVec remains a later
+   behavior. It is intentionally package-owner only, non-default, and
+   source-id-only; question tracking must still re-open clean source before
+   accepting a link. TurboVec remains a later
    replacement when scale warrants. A first #138 evaluator in
    `question_index_sidecar.py` can build/reuse an optional SQLite question-index
    cache, detect missing or stale caches, and measure whether lookup candidates

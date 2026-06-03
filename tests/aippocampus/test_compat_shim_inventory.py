@@ -22,6 +22,8 @@ def write_fixture_script(repo_root: Path, script_name: str, source: str) -> None
 
 
 BATCH_DELETED_PACKAGE_ONLY_SHIMS = {
+    "question_feedback_policy.py",
+    "question_vector_index.py",
     "vault_notes.py",
     "vault_sync_utils.py",
     "warm_ambient_prompting.py",
