@@ -65,6 +65,19 @@ If you are deciding which AIppocampus surface another tool should depend on,
 use the [10-minute public API path](docs/guides/public-api.md#ten-minute-public-path).
 Repository checks for maintainers live in [Maintainer Checks](#maintainer-checks).
 
+## AIppocampus For Coding Agents
+
+The narrow usable product lane today is local, source-backed continuity for
+Codex/Claude-style long-running work: register local conversation source after
+consent, search or reopen old snippets, and treat recall scents or repo
+familiarity as navigation until source is reopened.
+
+Start with the
+[Coding-Agent Memory Lane](docs/guides/coding-agent-memory.md) when deciding
+whether to recommend AIppocampus as an agent-memory tool. It includes the
+3-5 minute demo path, evidence drawer, and "recommend / do not recommend"
+boundary without duplicating the public API or readiness docs.
+
 ## Agent One-Command Probe
 
 When an AI agent needs to verify the public CLI without cloning or writing local
@@ -138,6 +151,8 @@ recognizable again.
   [The Unfinished Map](docs/the-unfinished-map.md).
 - Real user-visible continuity examples:
   [Magic Moments, Claim-Bounded](docs/evidence/magic-moments.md).
+- Narrow coding-agent product lane:
+  [Coding-Agent Memory Lane](docs/guides/coding-agent-memory.md).
 - Evidence and field reports:
   [public evidence surface](https://www.aippocampus.com/evidence/) and
   [community field-report boundary](docs/evidence/community-field-reports.md).

@@ -12,6 +12,8 @@ Start here instead of scanning every Markdown file in the tree.
 - Product requirements: [`roadmap.md`](roadmap.md).
 - Real user-visible continuity examples:
   [`evidence/magic-moments.md`](evidence/magic-moments.md).
+- Narrow coding-agent product lane:
+  [`guides/coding-agent-memory.md`](guides/coding-agent-memory.md).
 - Community evidence and field-report intake:
   [`evidence/community-field-reports.md`](evidence/community-field-reports.md).
 - Current claim boundary: [`evidence/readiness/stage-0-5-readiness.md`](evidence/readiness/stage-0-5-readiness.md).
@@ -69,6 +71,9 @@ maps.
 material.
 
 - [`install-guide.md`](guides/install-guide.md) - public skill, MCP, plugin, hook, and local-sync install paths.
+- [`coding-agent-memory.md`](guides/coding-agent-memory.md) - narrow
+  source-backed continuity lane for Codex/Claude-style agent work, with demo
+  path, evidence drawer, and recommendation boundary.
 - [`claude-code-mcp.md`](guides/claude-code-mcp.md) - Claude Code MCP setup, provider onboarding states, and privacy boundary.
 - [`public-api.md`](guides/public-api.md) - 10-minute dependency path plus supported CLI, MCP, JSON, environment-variable, SDK, and Python import stability boundary.
 - [`safe-environment.md`](guides/safe-environment.md) - `.env.example`, plugin MCP env inheritance, and isolated-runtime deferral/substitute smoke boundary.

@@ -9,6 +9,9 @@ has innate memory.
 For product-shaped evidence before the benchmark wall, see
 `docs/evidence/magic-moments.md`. Treat those examples as claim-bounded
 second-user live-use notes, not as broad benchmark proof.
+For the narrow coding-agent memory lane, see
+`docs/guides/coding-agent-memory.md` before recommending AIppocampus as a
+source-backed continuity tool for Codex/Claude-style work.
 
 For integration decisions, use
 `docs/guides/public-api.md#which-layer-should-i-depend-on` before recommending
@@ -85,6 +88,7 @@ The MCP surface is read-mostly by default and exposes tools such as
 - Human origin: `docs/未干的地图.md`
 - English origin: `docs/the-unfinished-map.md`
 - Agent context pack: `docs/agent-context.md`
+- Coding-agent memory lane: `docs/guides/coding-agent-memory.md`
 - Magic moments, claim-bounded: `docs/evidence/magic-moments.md`
 - Install guide: `docs/guides/install-guide.md`
 - Public API and 10-minute dependency path: `docs/guides/public-api.md`
