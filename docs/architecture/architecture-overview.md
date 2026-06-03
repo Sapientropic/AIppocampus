@@ -107,7 +107,19 @@ activation eligibility only; it must not change source or truth status.
 for this boundary. It reports `activation_surface_authority_leak_count` when a
 strategy row is quoted or acted on as factual evidence without source support,
 and emits conflict-resolution reasons without raw prompts, snippets, secrets,
-or local paths.
+or local paths. The same report also carries foreground-usefulness pruning
+metrics such as `false_scent_reduction_count`,
+`wrong_route_drag_reduction_count`, `duplicate_route_collapse_count`, recent
+helpful/harmful counts, and estimated verification tool calls saved. Those
+metrics are about reducing stale foreground drag, not about deleting older
+source or making memory merely quieter.
+
+Apply-capable pruning remains bounded. The audit helper can write an
+append-only lifecycle update manifest for activation rows, but that manifest is
+not a clean-source mutator and not a truth-status editor. It records demote,
+park, supersede, or retire actions for the owning surface writer to consume
+later, preserving source refs and provenance while removing noisy rows from
+foreground eligibility.
 
 Two positive examples anchor the rule:
 

@@ -13,6 +13,7 @@ if str(SCRIPTS) not in sys.path:
 from aippocampus_runtime.ops.activation_authority_audit import (  # noqa: E402
     AUTHORITY_AUDIT_KIND,
     activation_surface_authority_audit,
+    apply_activation_lifecycle_manifest,
     fixture_authority_conflict_audit,
 )
 
@@ -187,6 +188,102 @@ class ActivationSurfaceAuthorityTests(unittest.TestCase):
         self.assertEqual(report["metrics"]["conflict_count"], 2)
         self.assertEqual(report["metrics"]["activation_surface_authority_leak_count"], 0)
         self.assertTrue(report["contract"]["activation_rows_are_not_factual_memory_store"])
+
+    def test_foreground_usefulness_metrics_count_noise_reduction_not_only_size(self) -> None:
+        report = activation_surface_authority_audit(
+            [
+                {
+                    "surface_id": "stale_false_scent",
+                    "surface_kind": "ambient_card",
+                    "conflict_key": "old-route",
+                    "freshness": "stale",
+                    "would_emit_scent": True,
+                    "pruning_action": "demote",
+                    "wrong_route_drag_count": 2,
+                    "estimated_verification_tool_calls": 3,
+                    "recent_helpful_count": 0,
+                    "recent_harmful_count": 2,
+                },
+                {
+                    "surface_id": "duplicate_lock",
+                    "surface_kind": "active_recall_lock",
+                    "conflict_key": "old-route",
+                    "would_emit_scent": True,
+                    "pruning_action": "retire",
+                    "estimated_verification_tool_calls": 1,
+                    "recent_helpful_count": 1,
+                    "recent_harmful_count": 0,
+                },
+                {
+                    "surface_id": "fresh_useful_route",
+                    "surface_kind": "semantic_trigger",
+                    "conflict_key": "new-route",
+                    "freshness": "current",
+                    "would_emit_scent": True,
+                    "pruning_action": "keep",
+                    "estimated_verification_tool_calls": 2,
+                    "recent_helpful_count": 3,
+                    "recent_harmful_count": 0,
+                },
+            ]
+        )
+        metrics = report["metrics"]
+
+        self.assertEqual(metrics["false_scent_reduction_count"], 1)
+        self.assertEqual(metrics["wrong_route_drag_reduction_count"], 1)
+        self.assertEqual(metrics["duplicate_route_collapse_count"], 1)
+        self.assertEqual(metrics["foreground_budget_saved_tool_calls"], 4)
+        self.assertEqual(metrics["recent_helpfulness_count"], 4)
+        self.assertEqual(metrics["recent_harmfulness_count"], 2)
+        self.assertEqual(metrics["active_surface_count_before_pruning"], 3)
+        self.assertEqual(metrics["active_surface_count_after_pruning"], 1)
+
+    def test_apply_manifest_is_bounded_append_only_and_preserves_source_refs(self) -> None:
+        manifest = apply_activation_lifecycle_manifest(
+            [
+                {
+                    "surface_id": "noisy_card",
+                    "surface_kind": "ambient_card",
+                    "conflict_key": "old-route",
+                    "pruning_action": "park",
+                    "source_refs": [
+                        {
+                            "source_id": "clean:1",
+                            "message_id": "m1",
+                            "thread_key": "E:" + "\\private\\thread.jsonl",
+                        }
+                    ],
+                    "prompt": "raw prompt text should not enter apply manifest",
+                    "path": "E:" + "\\private\\thread.jsonl",
+                },
+                {
+                    "surface_id": "source_row",
+                    "surface_kind": "source_reopen_evidence",
+                    "conflict_key": "old-route",
+                    "pruning_action": "retire",
+                    "source_refs": [{"source_id": "clean:source", "message_id": "m2"}],
+                },
+            ]
+        )
+
+        self.assertTrue(manifest["ok"], manifest)
+        self.assertEqual(manifest["update_count"], 1)
+        update = manifest["updates"][0]
+        self.assertEqual(update["surface_id"], "noisy_card")
+        self.assertEqual(update["action"], "park")
+        self.assertEqual(update["lifecycle_state_after"], "parked")
+        self.assertFalse(update["activation_eligible_after"])
+        self.assertEqual(update["source_refs"][0]["source_id"], "clean:1")
+        self.assertEqual(update["source_refs"][0]["thread_key"], "<redacted-sensitive-label>")
+        self.assertTrue(update["source_refs_preserved"])
+        self.assertFalse(update["clean_source_mutation"])
+        self.assertFalse(update["truth_status_changed"])
+        self.assertTrue(manifest["contract"]["append_only_lifecycle_update"])
+
+        serialized = json.dumps(manifest, ensure_ascii=False, sort_keys=True)
+        self.assertNotIn("raw prompt text", serialized)
+        self.assertNotIn("private\\thread", serialized)
+        self.assertNotIn("source_row", {item["surface_id"] for item in manifest["updates"]})
 
 
 if __name__ == "__main__":
