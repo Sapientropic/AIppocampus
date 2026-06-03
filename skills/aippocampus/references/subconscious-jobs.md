@@ -77,6 +77,14 @@ The job runner gives DeepSeek a bounded perception loop. Tools are read-only:
 - `expand_concepts`: inspect nearby concepts in `concept_index.sqlite`.
 - `recent_edges`: inspect recent staging concept edges.
 
+The canonical tool contract lives in
+`aippocampus_runtime.subconscious.runtime.READ_ONLY_TOOL_REGISTRY`. The agent
+system prompt, agent/job initial payloads, dispatcher, and dry-run
+`tool_contract_version` all derive from that registry. Keep additions small and
+static: one registry entry plus tests, no dynamic tool discovery, no write
+tools, and no broad agent framework. This is an anti-drift guard so prompt
+wording, payload examples, and runtime dispatch cannot silently disagree.
+
 Defaults are quality-oriented:
 
 - `--max-steps 16`.

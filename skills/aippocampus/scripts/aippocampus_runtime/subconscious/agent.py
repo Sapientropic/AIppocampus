@@ -33,11 +33,14 @@ from aippocampus_runtime.subconscious.runtime import (
     DEFAULT_MAX_STEPS,
     DEFAULT_MIN_TOOL_STEPS,
     DEFAULT_TEMPERATURE,
+    TOOL_CONTRACT_VERSION,
     AgentState,
     ChatFn,
+    available_tools_payload,
     call_chat_json,
     effective_step_budget,
     parse_action,
+    read_only_tool_names,
     run_tool,
     source_bank_from_turns,
 )
@@ -190,12 +193,8 @@ def agent_initial_payload(
     # still letting repeated samples over the same source reuse the source block.
     payload = {
         "prompt_version": PROMPT_VERSION,
-        "available_tools": {
-            "search_clean_source": {"args": {"terms": ["..."], "limit": 6}},
-            "get_turn_context": {"args": {"ref": "t0", "limit": 6}},
-            "expand_concepts": {"args": {"terms": ["..."], "depth": 2, "limit": 12}},
-            "recent_edges": {"args": {"terms": ["..."], "limit": 8}},
-        },
+        "tool_contract_version": TOOL_CONTRACT_VERSION,
+        "available_tools": available_tools_payload(),
         "tool_budget": max_steps,
         "minimum_tool_steps_before_final": min_tool_steps,
         "initial_turns": turns,
@@ -242,6 +241,7 @@ def run_agent(
             "max_steps": max_steps,
             "effective_step_budget": step_budget,
             "temperature": temperature,
+            "tool_contract_version": TOOL_CONTRACT_VERSION,
             "prompt_preview": compact_text(initial_payload, 2400),
         }
     if not api_key:
@@ -275,12 +275,7 @@ def run_agent(
         ),
         min_tool_feedback=lambda: {
             "error": "Call at least one read-only tool before finalizing.",
-            "allowed_tools": [
-                "search_clean_source",
-                "get_turn_context",
-                "expand_concepts",
-                "recent_edges",
-            ],
+            "allowed_tools": list(read_only_tool_names()),
         },
         invalid_final_feedback=lambda: {
             "error": "No valid source-backed edges survived validation. Use source_refs from available refs, or return an empty final only if no durable relation exists.",
@@ -324,6 +319,7 @@ def run_agent(
         "max_steps": max_steps,
         "effective_step_budget": step_budget,
         "temperature": temperature,
+        "tool_contract_version": TOOL_CONTRACT_VERSION,
         "usage": loop.usage_total,
         "cache": deepseek_cache_metrics_from_usage(loop.usage_total),
         "wrote": False if no_write else True,

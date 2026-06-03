@@ -23,44 +23,7 @@ DEFAULT_MAX_STEPS = 16
 HARD_MAX_STEPS = 64
 DEFAULT_MIN_TOOL_STEPS = 1
 DEFAULT_TEMPERATURE = 0.2
-
-AGENT_SYSTEM_PROMPT = """You are AIppocampus subconscious agent.
-Your job is to propose source-backed concept edges for long-term recall.
-You may inspect clean memory through read-only tools before finalizing.
-Never invent facts. Never include secrets, full local paths, API keys, or long quotes.
-
-Return only JSON with one of these shapes:
-
-Tool request:
-{
-  "action": "tool",
-  "tool": "search_clean_source|get_turn_context|expand_concepts|recent_edges",
-  "args": {},
-  "why": "short reason"
-}
-
-Final answer:
-{
-  "action": "final",
-  "edges": [
-    {
-      "src": "...",
-      "dst": "...",
-      "edge_type": "alias|same_decision_space|project_topic|decision_about|depends_on|contrasts_with|supersedes|related",
-      "confidence": 0.0,
-      "why": "short reason",
-      "source_refs": [{"ref": "t0"}]
-    }
-  ]
-}
-
-Source rules:
-- Use refs from the initial turns (`t0`, `t1`, ...) or tool observations (`o0`, `o1`, ...).
-- Every final edge needs at least one source ref.
-- Prefer durable concepts, project decisions, libraries, workflows, contrasts, and aliases.
-- Avoid generic edges such as "project -> implementation" unless a concrete concept is present.
-- If tool observations contain concrete decisions, libraries, workflows, or contrasts, do not return an empty final.
-"""
+TOOL_CONTRACT_VERSION = "aippocampus-subconscious-read-only-tools-v1"
 
 ChatFn = Callable[..., dict[str, Any]]
 
@@ -75,6 +38,29 @@ class AgentState:
         self.next_observation_id += 1
         self.source_bank[ref] = {"ref": ref, **payload}
         return ref
+
+
+@dataclass(frozen=True)
+class ToolRuntimeContext:
+    registry_path: Path
+    project: str | None
+    concept_graph_path: Path
+    staging_path: Path
+    state: AgentState
+
+
+ToolDispatcher = Callable[[ToolRuntimeContext, dict[str, Any]], dict[str, Any]]
+
+
+@dataclass(frozen=True)
+class ReadOnlyToolSpec:
+    name: str
+    args: dict[str, Any]
+    purpose: str
+    prompt_description: str
+    dispatcher: ToolDispatcher
+    safety_class: str = "read_only"
+    limits: dict[str, int] = field(default_factory=dict)
 
 
 def compact_usage(usage: dict[str, Any]) -> dict[str, Any]:
@@ -395,6 +381,146 @@ def tool_recent_edges(*, staging_path: Path, args: dict[str, Any]) -> dict[str, 
     return {"tool": "recent_edges", "query_terms": terms, "edges": rows[-limit:]}
 
 
+def _dispatch_search_clean_source(
+    context: ToolRuntimeContext, args: dict[str, Any]
+) -> dict[str, Any]:
+    return tool_search_clean_source(
+        registry_path=context.registry_path,
+        project=context.project,
+        args=args,
+        state=context.state,
+    )
+
+
+def _dispatch_get_turn_context(context: ToolRuntimeContext, args: dict[str, Any]) -> dict[str, Any]:
+    return tool_get_turn_context(
+        registry_path=context.registry_path,
+        project=context.project,
+        args=args,
+        state=context.state,
+    )
+
+
+def _dispatch_expand_concepts(context: ToolRuntimeContext, args: dict[str, Any]) -> dict[str, Any]:
+    return tool_expand_concepts(concept_graph_path=context.concept_graph_path, args=args)
+
+
+def _dispatch_recent_edges(context: ToolRuntimeContext, args: dict[str, Any]) -> dict[str, Any]:
+    return tool_recent_edges(staging_path=context.staging_path, args=args)
+
+
+# The model-facing contract, initial payload, and dispatcher all read this
+# registry. Keep it static and read-only so future tool additions do not drift
+# into dynamic discovery or accidentally widen the subconscious authority.
+READ_ONLY_TOOL_REGISTRY: dict[str, ReadOnlyToolSpec] = {
+    "search_clean_source": ReadOnlyToolSpec(
+        name="search_clean_source",
+        args={"terms": ["..."], "limit": 6},
+        purpose="Search registered clean-source messages for source-backed memory hits.",
+        prompt_description="search clean-source messages by terms; limit is clamped to 12.",
+        dispatcher=_dispatch_search_clean_source,
+        limits={"terms": 12, "limit": 12},
+    ),
+    "get_turn_context": ReadOnlyToolSpec(
+        name="get_turn_context",
+        args={"ref": "t0", "limit": 6},
+        purpose="Inspect clean messages around an initial or observed turn reference.",
+        prompt_description="reopen one source turn by ref/thread id; limit is clamped to 10.",
+        dispatcher=_dispatch_get_turn_context,
+        limits={"limit": 10},
+    ),
+    "expand_concepts": ReadOnlyToolSpec(
+        name="expand_concepts",
+        args={"terms": ["..."], "depth": 2, "limit": 12},
+        purpose="Inspect nearby concepts in the concept graph.",
+        prompt_description="expand concept graph terms; depth is clamped to 2 and limit to 24.",
+        dispatcher=_dispatch_expand_concepts,
+        limits={"terms": 12, "depth": 2, "limit": 24},
+    ),
+    "recent_edges": ReadOnlyToolSpec(
+        name="recent_edges",
+        args={"terms": ["..."], "limit": 8},
+        purpose="Inspect recent staging concept edges.",
+        prompt_description="search recent staging edges; limit is clamped to 20.",
+        dispatcher=_dispatch_recent_edges,
+        limits={"terms": 12, "limit": 20},
+    ),
+}
+
+
+def read_only_tool_names() -> tuple[str, ...]:
+    return tuple(READ_ONLY_TOOL_REGISTRY)
+
+
+def dispatchable_tool_names() -> tuple[str, ...]:
+    return tuple(name for name, spec in READ_ONLY_TOOL_REGISTRY.items() if spec.dispatcher)
+
+
+def available_tools_payload() -> dict[str, dict[str, Any]]:
+    return {
+        name: {
+            "args": spec.args,
+            "purpose": spec.purpose,
+            "safety_class": spec.safety_class,
+            "limits": spec.limits,
+        }
+        for name, spec in READ_ONLY_TOOL_REGISTRY.items()
+    }
+
+
+def build_agent_system_prompt() -> str:
+    tool_union = "|".join(read_only_tool_names())
+    tool_descriptions = "\n".join(
+        f"- {name}: {spec.prompt_description}"
+        for name, spec in READ_ONLY_TOOL_REGISTRY.items()
+    )
+    return f"""You are AIppocampus subconscious agent.
+Your job is to propose source-backed concept edges for long-term recall.
+You may inspect clean memory through read-only tools before finalizing.
+Never invent facts. Never include secrets, full local paths, API keys, or long quotes.
+
+Tool contract version: {TOOL_CONTRACT_VERSION}
+
+Available read-only tools:
+{tool_descriptions}
+
+Return only JSON with one of these shapes:
+
+Tool request:
+{{
+  "action": "tool",
+  "tool": "{tool_union}",
+  "args": {{}},
+  "why": "short reason"
+}}
+
+Final answer:
+{{
+  "action": "final",
+  "edges": [
+    {{
+      "src": "...",
+      "dst": "...",
+      "edge_type": "alias|same_decision_space|project_topic|decision_about|depends_on|contrasts_with|supersedes|related",
+      "confidence": 0.0,
+      "why": "short reason",
+      "source_refs": [{{"ref": "t0"}}]
+    }}
+  ]
+}}
+
+Source rules:
+- Use refs from the initial turns (`t0`, `t1`, ...) or tool observations (`o0`, `o1`, ...).
+- Every final edge needs at least one source ref.
+- Prefer durable concepts, project decisions, libraries, workflows, contrasts, and aliases.
+- Avoid generic edges such as "project -> implementation" unless a concrete concept is present.
+- If tool observations contain concrete decisions, libraries, workflows, or contrasts, do not return an empty final.
+"""
+
+
+AGENT_SYSTEM_PROMPT = build_agent_system_prompt()
+
+
 def run_tool(
     name: str,
     args: dict[str, Any],
@@ -405,19 +531,17 @@ def run_tool(
     staging_path: Path,
     state: AgentState,
 ) -> dict[str, Any]:
+    context = ToolRuntimeContext(
+        registry_path=registry_path,
+        project=project,
+        concept_graph_path=concept_graph_path,
+        staging_path=staging_path,
+        state=state,
+    )
     try:
-        if name == "search_clean_source":
-            return tool_search_clean_source(
-                registry_path=registry_path, project=project, args=args, state=state
-            )
-        if name == "get_turn_context":
-            return tool_get_turn_context(
-                registry_path=registry_path, project=project, args=args, state=state
-            )
-        if name == "expand_concepts":
-            return tool_expand_concepts(concept_graph_path=concept_graph_path, args=args)
-        if name == "recent_edges":
-            return tool_recent_edges(staging_path=staging_path, args=args)
-        return {"tool": name, "error": "unknown tool"}
+        spec = READ_ONLY_TOOL_REGISTRY.get(name)
+        if not spec:
+            return {"tool": name, "error": "unknown tool"}
+        return spec.dispatcher(context, args)
     except Exception as exc:
         return {"tool": name, "error": f"{type(exc).__name__}: {exc}"}

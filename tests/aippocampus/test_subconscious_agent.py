@@ -21,6 +21,7 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 import subconscious_agent as agent  # noqa: E402
+from aippocampus_runtime.subconscious import job_circuits, runtime  # noqa: E402
 from redaction_fixtures import (  # noqa: E402
     FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER,
     FAKE_TEST_OPENAI_API_KEY,
@@ -30,6 +31,49 @@ from redaction_fixtures import (  # noqa: E402
 
 
 class SubconsciousAgentTests(unittest.TestCase):
+    def test_read_only_tool_registry_drives_prompt_payload_and_dispatcher(self) -> None:
+        payload = json.loads(
+            agent.agent_initial_payload(
+                "Find durable edges from this run.",
+                [{"turn_ref": "t0", "user": "A", "assistant": "B"}],
+                max_steps=4,
+                min_tool_steps=1,
+            )
+        )
+        jobs_payload = json.loads(
+            job_circuits.jobs_initial_payload(
+                "concept_edges",
+                "Use a distinct sample angle.",
+                [{"turn_ref": "t0", "user": "A", "assistant": "B"}],
+                max_steps=4,
+                min_tool_steps=1,
+            )
+        )
+        registry_names = set(runtime.READ_ONLY_TOOL_REGISTRY)
+
+        self.assertEqual(set(payload["available_tools"]), registry_names)
+        self.assertEqual(set(jobs_payload["available_tools"]), registry_names)
+        self.assertEqual(set(runtime.read_only_tool_names()), registry_names)
+        self.assertEqual(set(runtime.dispatchable_tool_names()), registry_names)
+        self.assertEqual(
+            runtime.TOOL_CONTRACT_VERSION,
+            payload["tool_contract_version"],
+        )
+        self.assertEqual(
+            runtime.TOOL_CONTRACT_VERSION,
+            jobs_payload["tool_contract_version"],
+        )
+        for name in registry_names:
+            self.assertIn(name, runtime.AGENT_SYSTEM_PROMPT)
+            self.assertEqual(
+                payload["available_tools"][name],
+                runtime.available_tools_payload()[name],
+            )
+            self.assertEqual(
+                jobs_payload["available_tools"][name],
+                runtime.available_tools_payload()[name],
+            )
+
     def test_agent_initial_payload_keeps_turns_before_variable_objective(self) -> None:
         payload = json.loads(
             agent.agent_initial_payload(
@@ -75,6 +119,47 @@ class SubconsciousAgentTests(unittest.TestCase):
         self.assertEqual(config.output_path, (root / "subconscious_edges.jsonl").resolve())
         self.assertEqual(config.api_key, None)
         self.assertTrue(config.dry_run)
+
+    def test_dry_run_reports_tool_contract_version_for_audit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            timeline_path = root / "project_timeline.json"
+            timeline_path.write_text(
+                json.dumps(
+                    {
+                        "projects": {
+                            "project:ai": {
+                                "project_label": "AIppocampus",
+                                "latest_turns": [],
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = agent.run_agent(
+                registry_path=root / "threads.json",
+                timeline_path=timeline_path,
+                concept_graph_path=root / "concept.sqlite",
+                output_path=root / "edges.jsonl",
+                project="AIppocampus",
+                objective="audit dry run",
+                max_turns=4,
+                max_steps=2,
+                min_tool_steps=1,
+                model="deepseek-v4-flash",
+                base_url="https://example.invalid",
+                api_key=None,
+                max_tokens=None,
+                timeout=1,
+                temperature=0.2,
+                dry_run=True,
+                no_write=True,
+            )
+
+        self.assertEqual(result["tool_contract_version"], runtime.TOOL_CONTRACT_VERSION)
+        self.assertIn(runtime.TOOL_CONTRACT_VERSION, result["prompt_preview"])
 
     def test_initial_payload_redacts_external_model_sensitive_text(self) -> None:
         payload = agent.agent_initial_payload(
