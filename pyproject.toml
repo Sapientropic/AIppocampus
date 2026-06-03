@@ -288,6 +288,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/navigation/cognitive_map.py",
     "skills/aippocampus/scripts/aippocampus_runtime/navigation/concept_graph.py",
     "skills/aippocampus/scripts/aippocampus_runtime/navigation/project_timeline.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/navigation/repo_familiarity.py",
     "skills/aippocampus/scripts/build_associations.py",
     "skills/aippocampus/scripts/build_clean_source.py",
     "skills/aippocampus/scripts/build_cognitive_map.py",
