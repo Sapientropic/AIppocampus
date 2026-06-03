@@ -87,16 +87,19 @@ promotes a public-safe result into the official evidence flow.
 24. Need public-safe H1/H2 hard-negative scoring-contract fixture evidence for
    #244:
    [`benchmarks/hippocampal-hard-negative-fixture-report.md`](benchmarks/hippocampal-hard-negative-fixture-report.md).
-25. Need public-safe Field Continuity / magic-moment reproducibility fixture
+25. Need public-safe hippocampal recall-discrimination diagnostic seed evidence
+   for #229/#230/#231:
+   [`benchmarks/hippocampal-recall-fixture-report.md`](benchmarks/hippocampal-recall-fixture-report.md).
+26. Need public-safe Field Continuity / magic-moment reproducibility fixture
    evidence for #454:
    [`benchmarks/field-continuity-fixture-report.md`](benchmarks/field-continuity-fixture-report.md).
-26. Need explicit recall-reminder shadow A/B evidence:
+27. Need explicit recall-reminder shadow A/B evidence:
    [`dream/dream-live-shadow-ab-2026-05-30.md`](dream/dream-live-shadow-ab-2026-05-30.md).
-27. Need public-corpus negative-control dream shadow evidence:
+28. Need public-corpus negative-control dream shadow evidence:
    [`dream/dream-live-shadow-benchmark-corpus-2026-05-31.md`](dream/dream-live-shadow-benchmark-corpus-2026-05-31.md).
-28. Need live question-extraction axis-coverage evidence for GitHub #153:
+29. Need live question-extraction axis-coverage evidence for GitHub #153:
    [`question/question-extraction-axis-coverage-2026-05-31.md`](question/question-extraction-axis-coverage-2026-05-31.md).
-29. Need community-submitted runs, demos, known gaps, or field-report intake:
+30. Need community-submitted runs, demos, known gaps, or field-report intake:
    [`community-field-reports.md`](community-field-reports.md) and the public
    [`/evidence/`](https://www.aippocampus.com/evidence/) page.
 
@@ -125,6 +128,7 @@ snapshot or dated verification ledger.
 | Multimodal NIAH evidence-pool fixture report | `docs/evidence/benchmarks/multimodal-niah-evidence-pool-report.md` and `benchmark_corpus/multimodal_niah_evidence_pool/fixture.json` | Public-safe NIAH-style supplied-pool answer-synthesis contract for #533; not retrieval quality, ATM-Bench score, or live vision-model quality. |
 | Knowledge pollution/privacy fixture report | `docs/evidence/benchmarks/knowledge-pollution-privacy-fixture-report.md` | Public-safe pollution, stale/authority, privacy partition, source-reopen, and thin capability-contract prototype evidence for #517. |
 | Hippocampal hard-negative fixture report | `docs/evidence/benchmarks/hippocampal-hard-negative-fixture-report.md` and `benchmark_corpus/hippocampal_hard_negatives/fixture.json` | Public-safe #244 H1/H2 hard-negative contract smoke for near-neighbor lures, unsupported speech, superseded currentness, surface paraphrase lures, seven outcome categories, and asymmetric scoring; not live or real-history recall quality. |
+| Hippocampal recall fixture report | `docs/evidence/benchmarks/hippocampal-recall-fixture-report.md` and `benchmark_corpus/hippocampal_fixtures/hippocampal_synthetic_v1.jsonl` | Public-safe #229/#230/#231 diagnostic seed for D/I matrix reporting, source-reopen failure, wrong-twin separation, scent layers, abstention, and calibration categories; not full 50-scene / 350-case P1 quality. |
 | Hippocampal private annotation protocol | `docs/evidence/benchmarks/hippocampal-private-annotation-protocol.md` | Private real-history H1/H2 sampling, truth-source independence, reviewer/adjudication flow, sanitized dated report template, and privacy exclusions for #232; not a committed private case pack. |
 | Fresh-thread recall demo evidence | `docs/evidence/benchmarks/fresh-thread-recall-demo-2026-05-31.md` and `docs/evidence/benchmarks/fresh-thread-expanded-coverage-2026-06-03.md` | Public-safe three-arm fresh-thread recall flows, negative controls, source-reopen boundaries, multi-turn/correction/threshold controls, and the expanded #490 claim boundary. |
 | Recall navigation comparison smoke | `docs/evidence/benchmarks/recall-navigation-comparison-2026-06-03.md` | Public-safe deterministic #465 comparison of direct `search_memory`, hook-only, and progressive `recall_context -> recall_deepen` arms; covers vague cues, multilingual cue fixtures, stale-handle rejection, and claim-boundary metrics without live quality claims. |
@@ -154,6 +158,8 @@ benchmark runner should be added here and linked to its dated evidence owner.
 | ShareGPT public-corpus seeded sampler | `benchmarks/aippocampus/sharegpt_sampling.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `benchmark_corpus/sharegpt_manifest.json` |
 | Coding decision-shadow Tracks A-E | `benchmarks/aippocampus/benchmark_coding_decision_shadow.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `docs/research/agent-coding-context-analysis.md` |
 | H1/H2 hard-negative scoring contract smoke | `benchmarks/aippocampus/benchmark_hippocampal_hard_negatives.py` | `docs/evidence/benchmarks/hippocampal-hard-negative-fixture-report.md`, `docs/evidence/benchmarks/hippocampal-recall-plan.md`, `benchmark_corpus/hippocampal_hard_negatives/fixture.json`, #244 |
+| Hippocampal recall-discrimination diagnostic benchmark | `benchmarks/aippocampus/benchmark_hippocampal_recall.py` | `docs/evidence/benchmarks/hippocampal-recall-fixture-report.md`, `docs/evidence/benchmarks/hippocampal-recall-plan.md`, `benchmark_corpus/hippocampal_fixtures/hippocampal_synthetic_v1.jsonl`, #229/#230/#231 |
+| Hippocampal recall-discrimination fixture builder | `benchmarks/aippocampus/build_hippocampal_fixture.py` | `docs/evidence/benchmarks/hippocampal-recall-fixture-report.md`, `benchmark_corpus/hippocampal_fixtures/hippocampal_synthetic_v1.jsonl`, #229 |
 | Knowledge pollution, privacy partition, and capability-contract smoke | `benchmarks/aippocampus/benchmark_knowledge_pollution.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `docs/evidence/benchmarks/knowledge-pollution-privacy-fixture-report.md`, `docs/architecture/high-risk-answer-gates.md` |
 | LongMemEval retrieval-only benchmark | `benchmarks/aippocampus/benchmark_longmemeval.py` | `docs/evidence/benchmarks/longmemeval.md`, `benchmark_corpus/longmemeval_manifest.json` |
 | LoCoMo public longitudinal-users control | `benchmarks/aippocampus/benchmark_locomo_public_users.py` | `docs/evidence/benchmarks/public-longitudinal-users.md`, `benchmark_corpus/README.md`, `benchmark_corpus/locomo_manifest.json` |
