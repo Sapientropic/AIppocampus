@@ -210,6 +210,63 @@ class SubconsciousAgentTests(unittest.TestCase):
         self.assertEqual(edges[0]["source_refs"][0]["ref"], "o0")
         self.assertEqual(edges[0]["source_refs"][0]["source_line"], 1202)
 
+    def test_validate_agent_edges_keeps_ref_shapes_and_rejection_policy_shared(self) -> None:
+        parsed = {
+            "edges": [
+                {
+                    "src": "tool-using agent",
+                    "dst": "source-backed validation",
+                    "edge_type": "invented_type",
+                    "confidence": 1.7,
+                    "why": "String, dict, and observation refs share the edge policy.",
+                    "source_refs": ["t0", {"turn_ref": "t1"}, {"obs_ref": "o0"}, {"ref": "o1"}, "t2"],
+                },
+                {
+                    "src": "low confidence",
+                    "dst": "must drop",
+                    "edge_type": "related",
+                    "confidence": 0.44,
+                    "source_refs": ["t0"],
+                },
+                {
+                    "src": "问题",
+                    "dst": "generic concept must drop",
+                    "edge_type": "related",
+                    "confidence": 0.9,
+                    "source_refs": ["t0"],
+                },
+                {
+                    "src": "missing source",
+                    "dst": "must drop",
+                    "edge_type": "related",
+                    "confidence": 0.9,
+                    "source_refs": ["missing"],
+                },
+            ]
+        }
+        source_bank = {
+            ref: {
+                "turn_ref": ref if ref.startswith("t") else None,
+                "thread_key": f"session:{ref}",
+                "title": "AIppocampus",
+                "project_label": "AIppocampus",
+                "turn_index": idx,
+                "source_line": 120 + idx,
+            }
+            for idx, ref in enumerate(["t0", "t1", "o0", "o1", "t2"])
+        }
+
+        edges = agent.validate_agent_edges(parsed, source_bank)
+
+        self.assertEqual(len(edges), 1)
+        self.assertEqual(edges[0]["edge_type"], "related")
+        self.assertEqual(edges[0]["confidence"], 1.0)
+        self.assertEqual(
+            [ref["ref"] for ref in edges[0]["source_refs"]],
+            ["t0", "t1", "o0", "o1"],
+        )
+        self.assertEqual(edges[0]["source_refs"][2]["source_line"], 122)
+
     def test_run_agent_can_use_clean_source_tool_then_final_edges(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

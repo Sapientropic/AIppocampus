@@ -106,6 +106,16 @@ The model can be exploratory in tool planning, but output remains constrained:
 every accepted finding must have source refs that resolve to initial turn refs
 or tool observation refs.
 
+Concept-edge source integrity is owned by
+`aippocampus_runtime.subconscious.edge_validation`. The single-shot worker and
+minimal tool-using agent share the same confidence floor, edge-type fallback,
+generic/noise concept filter, self-edge rejection, source-ref resolution, and
+`why` compaction policy. The intentional shell difference is source-ref shape
+and retention: worker staging edges keep turn-shaped refs and retain 3 refs;
+agent staging edges keep `ref`/observation-compatible refs and retain 4 refs.
+Do not loosen one shell's source-ref or confidence gate without adding an
+explicit named policy difference and tests.
+
 For the minimal agent, `min_tool_steps` is only a cheap anti-laziness gate. It
 does not prove the final edge used useful tool evidence. Agent run JSON exposes
 sanitized `tool_grounding` diagnostics with ref counts, useless tool-call

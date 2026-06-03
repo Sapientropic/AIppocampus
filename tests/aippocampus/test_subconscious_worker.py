@@ -149,6 +149,67 @@ class SubconsciousWorkerTests(unittest.TestCase):
         self.assertEqual(edges[0]["src"], "本地底座")
         self.assertEqual(edges[0]["source_refs"][0]["thread_key"], "session:one")
 
+    def test_validate_edges_accepts_string_and_dict_refs_under_same_policy(self) -> None:
+        turns = [
+            {
+                "turn_ref": f"t{idx}",
+                "thread_key": f"session:{idx}",
+                "title": "AIppocampus",
+                "project_label": "AIppocampus",
+                "turn_index": idx,
+                "assistant_line": 100 + idx,
+            }
+            for idx in range(5)
+        ]
+        parsed = {
+            "edges": [
+                {
+                    "src": "subconscious worker",
+                    "dst": "source-backed validation",
+                    "edge_type": "invented_type",
+                    "confidence": 1.7,
+                    "why": "String refs should resolve through the same source-backed edge policy.",
+                    "source_refs": ["t0", "t1", "t2", "t3"],
+                },
+                {
+                    "src": "edge policy",
+                    "dst": "dict refs",
+                    "edge_type": "depends_on",
+                    "confidence": 0.86,
+                    "why": "Dict turn_ref refs remain compatible.",
+                    "source_refs": [
+                        {"turn_ref": "t0"},
+                        {"turn_ref": "t1"},
+                        {"turn_ref": "t2"},
+                        {"turn_ref": "t3"},
+                    ],
+                },
+                {
+                    "src": "low confidence",
+                    "dst": "must drop",
+                    "edge_type": "related",
+                    "confidence": 0.44,
+                    "source_refs": ["t0"],
+                },
+                {
+                    "src": "问题",
+                    "dst": "generic concept must drop",
+                    "edge_type": "related",
+                    "confidence": 0.9,
+                    "source_refs": ["t0"],
+                },
+            ]
+        }
+
+        edges = worker.validate_edges(parsed, turns)
+
+        self.assertEqual(len(edges), 2)
+        self.assertEqual(edges[0]["edge_type"], "related")
+        self.assertEqual(edges[0]["confidence"], 1.0)
+        self.assertEqual([ref["turn_ref"] for ref in edges[0]["source_refs"]], ["t0", "t1", "t2"])
+        self.assertNotIn("ref", edges[0]["source_refs"][0])
+        self.assertEqual([ref["turn_ref"] for ref in edges[1]["source_refs"]], ["t0", "t1", "t2"])
+
     def test_zero_max_turns_keeps_full_project_timeline_slice(self) -> None:
         latest_turns = [
             {
