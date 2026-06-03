@@ -5,15 +5,41 @@ from __future__ import annotations
 
 import json
 import re
+import time
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
+from aippocampus_runtime.artifacts.publish import ArtifactLeaseBusyError, artifact_lease
 from aippocampus_runtime.core import aippocampus_registry_dir, now_utc
 
 REGISTRY_SCHEMA_VERSION = 1
+REGISTRY_WRITER_LEASE_NAME = ".threads-registry.lock"
+DEFAULT_REGISTRY_WRITER_WAIT_TIMEOUT_SECONDS = 10.0
 
 
 class RegistryReadError(RuntimeError):
     """Raised when an existing registry file cannot be safely interpreted."""
+
+
+class RegistryWriteBusyError(RuntimeError):
+    """Raised when another local agent is updating registry metadata."""
+
+    code = "registry_writer_busy"
+    retryable = True
+
+    def __init__(
+        self,
+        registry_path: Path,
+        *,
+        wait_timeout_seconds: float,
+    ) -> None:
+        self.registry_path = registry_path
+        self.wait_timeout_seconds = wait_timeout_seconds
+        super().__init__(
+            "Registry writer lease is held by another local agent; retry after "
+            f"the current writer finishes. registry={registry_path}"
+        )
 
 
 def default_registry_dir() -> Path:
@@ -91,6 +117,26 @@ def upsert_thread(registry: dict, entry: dict) -> dict:
     return registry
 
 
+@contextmanager
+def registry_writer_lease(
+    json_path: Path,
+    *,
+    wait_timeout_seconds: float = DEFAULT_REGISTRY_WRITER_WAIT_TIMEOUT_SECONDS,
+) -> Iterator[Path]:
+    try:
+        with artifact_lease(
+            json_path.parent,
+            REGISTRY_WRITER_LEASE_NAME,
+            wait_timeout_seconds=wait_timeout_seconds,
+        ) as lease_path:
+            yield lease_path
+    except ArtifactLeaseBusyError as exc:
+        raise RegistryWriteBusyError(
+            json_path,
+            wait_timeout_seconds=float(wait_timeout_seconds),
+        ) from exc
+
+
 def render_registry_markdown(registry: dict) -> str:
     lines = [
         "# Thread Memory Registry",
@@ -140,11 +186,37 @@ def render_registry_markdown(registry: dict) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def _write_text_atomic(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.tmp-{id(text)}-{time.time_ns()}")
+    tmp.write_text(text, encoding="utf-8", newline="\n")
+    tmp.replace(path)
+
+
 def save_registry(registry: dict, json_path: Path, md_path: Path) -> None:
     json_path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = json_path.with_suffix(json_path.suffix + ".tmp")
-    tmp.write_text(
-        json.dumps(registry, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n"
+    _write_text_atomic(
+        json_path,
+        json.dumps(registry, ensure_ascii=False, indent=2),
     )
-    tmp.replace(json_path)
-    md_path.write_text(render_registry_markdown(registry), encoding="utf-8", newline="\n")
+    _write_text_atomic(md_path, render_registry_markdown(registry))
+
+
+def update_registry(
+    json_path: Path,
+    md_path: Path,
+    updater: Callable[[dict], dict],
+    *,
+    wait_timeout_seconds: float = DEFAULT_REGISTRY_WRITER_WAIT_TIMEOUT_SECONDS,
+) -> dict:
+    # Registry updates are read-modify-write operations over JSON plus Markdown.
+    # Holding the same-directory lease across load/upsert/save prevents two local
+    # MCP/CLI agents from both reading the old registry and publishing whichever
+    # write finishes last. Read-only registry queries intentionally stay lock-free.
+    with registry_writer_lease(
+        json_path,
+        wait_timeout_seconds=wait_timeout_seconds,
+    ):
+        registry = updater(load_registry(json_path))
+        save_registry(registry, json_path, md_path)
+        return registry

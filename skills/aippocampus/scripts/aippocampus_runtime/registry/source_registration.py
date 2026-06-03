@@ -23,8 +23,8 @@ from aippocampus_runtime.registry.store import (
     load_json,
     load_registry,
     registry_paths,
-    save_registry,
     thread_store_dir,
+    update_registry,
     upsert_thread,
 )
 from conversation_sources import (
@@ -202,8 +202,11 @@ def register_rollout_thread(
     }
 
     json_path, md_path = registry_paths(registry_dir)
-    registry = upsert_thread(load_registry(json_path), entry)
-    save_registry(registry, json_path, md_path)
+    registry = update_registry(
+        json_path,
+        md_path,
+        lambda current: upsert_thread(current, entry),
+    )
     return {
         "entry": entry,
         "registry_json": str(json_path),

@@ -21,6 +21,7 @@ from aippocampus_runtime.mcp.recall_navigation import (
 from aippocampus_runtime.mcp.tool_catalog import TOOLS
 from aippocampus_runtime.privacy import LOCAL_PATH_REDACTION, redact_private_paths
 from aippocampus_runtime.registry import api as registry
+from aippocampus_runtime.registry.store import RegistryWriteBusyError
 from aippocampus_runtime.source import latest_reply as latest_reply_module
 from aippocampus_runtime.source.search import iter_clean_messages, search_clean_source
 from aippocampus_runtime.sync import bundle as sync_bundle
@@ -117,9 +118,12 @@ def tool_error(
     message: str,
     *,
     arguments: dict[str, Any] | None = None,
+    retryable: bool | None = None,
     **details: Any,
 ) -> dict[str, Any]:
     error: dict[str, Any] = {"code": code, "message": message}
+    if retryable is not None:
+        error["retryable"] = retryable
     if details:
         error["details"] = details
     payload: Any = {"ok": False, "error": error}
@@ -374,12 +378,22 @@ def call_register_thread(arguments: dict[str, Any]) -> dict[str, Any]:
             provider=provider_name,
             supported=list(PROVIDER_CHOICES),
         )
-    result = registry.register_current_thread(
-        cwd_arg(arguments),
-        registry_dir=registry_dir,
-        build_index=bool(arguments.get("build_index")),
-        provider=provider,
-    )
+    try:
+        result = registry.register_current_thread(
+            cwd_arg(arguments),
+            registry_dir=registry_dir,
+            build_index=bool(arguments.get("build_index")),
+            provider=provider,
+        )
+    except RegistryWriteBusyError as exc:
+        return tool_error(
+            "registry_writer_busy",
+            "Another local agent is updating the AIppocampus registry. Retry after it finishes.",
+            arguments=arguments,
+            retryable=True,
+            wait_timeout_seconds=exc.wait_timeout_seconds,
+            registry=str(exc.registry_path),
+        )
     return text_result(public_payload(arguments, result))
 
 

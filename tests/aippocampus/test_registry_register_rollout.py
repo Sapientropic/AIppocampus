@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import subprocess
@@ -306,6 +308,49 @@ class RegisterRolloutTests(unittest.TestCase):
         self.assertEqual(data["error"]["class"], "validation_error")
         self.assertEqual(data["error"]["line"], 2)
         self.assertEqual(data["error"]["details"]["missing"], ["text"])
+        self.assertFalse((self.registry_dir / "threads.json").exists())
+
+    def test_registry_cli_register_source_reports_writer_busy_json(self) -> None:
+        transcript = self.root / "generic-import.jsonl"
+        self._write_generic_jsonl(transcript)
+        old_argv = sys.argv[:]
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        try:
+            sys.argv = [
+                str(REGISTRY),
+                "--registry-dir",
+                str(self.registry_dir),
+                "register-source",
+                "--provider",
+                "generic-jsonl",
+                "--input",
+                str(transcript),
+                "--json",
+            ]
+            with (
+                mock.patch.object(
+                    registry,
+                    "register_source_thread",
+                    side_effect=registry.RegistryWriteBusyError(
+                        self.registry_dir / "threads.json",
+                        wait_timeout_seconds=0.0,
+                    ),
+                ),
+                contextlib.redirect_stdout(stdout),
+                contextlib.redirect_stderr(stderr),
+            ):
+                code = registry.main()
+        finally:
+            sys.argv = old_argv
+
+        self.assertEqual(code, 1)
+        self.assertEqual(stderr.getvalue(), "")
+        data = json.loads(stdout.getvalue())
+        self.assertFalse(data["ok"])
+        self.assertEqual(data["error"]["code"], "registry_writer_busy")
+        self.assertTrue(data["error"]["retryable"])
         self.assertFalse((self.registry_dir / "threads.json").exists())
 
     def test_registry_cli_search_redacts_top_level_registry_path(self) -> None:

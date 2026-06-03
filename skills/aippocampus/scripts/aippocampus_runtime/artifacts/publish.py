@@ -19,6 +19,23 @@ INDEX_SQLITE_NAME = "source_index.sqlite"
 INDEX_VERSIONS_DIR = "versions"
 
 
+class ArtifactLeaseBusyError(RuntimeError):
+    """Raised when a same-directory artifact lease is held by another writer."""
+
+    def __init__(
+        self,
+        lease_path: Path,
+        *,
+        wait_timeout_seconds: float,
+    ) -> None:
+        self.lease_path = lease_path
+        self.wait_timeout_seconds = wait_timeout_seconds
+        super().__init__(
+            f"artifact writer lease already held: {lease_path}. "
+            "Wait for the current writer or remove the stale lease after verification."
+        )
+
+
 def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
@@ -142,6 +159,8 @@ def artifact_lease(
     lease_name: str,
     *,
     stale_after_seconds: int = DEFAULT_ARTIFACT_LEASE_STALE_SECONDS,
+    wait_timeout_seconds: float = 0.0,
+    poll_interval_seconds: float = 0.05,
 ) -> Iterator[Path]:
     """Create a portable same-directory single-writer lease.
 
@@ -154,6 +173,7 @@ def artifact_lease(
 
     output_dir.mkdir(parents=True, exist_ok=True)
     lease_path = output_dir / lease_name
+    deadline = time.monotonic() + max(0.0, float(wait_timeout_seconds))
     payload = {
         "schema_version": 1,
         "kind": "aippocampus_artifact_writer_lease",
@@ -175,9 +195,12 @@ def artifact_lease(
                 except OSError:
                     pass
                 continue
-            raise RuntimeError(
-                f"artifact writer lease already held: {lease_path}. "
-                "Wait for the current writer or remove the stale lease after verification."
+            if time.monotonic() < deadline:
+                time.sleep(max(0.01, float(poll_interval_seconds)))
+                continue
+            raise ArtifactLeaseBusyError(
+                lease_path,
+                wait_timeout_seconds=float(wait_timeout_seconds),
             ) from exc
         else:
             with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:

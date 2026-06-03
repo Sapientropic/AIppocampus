@@ -342,6 +342,8 @@ The caller-facing MCP failure boundary is:
   source yet", not as proof that memory does not exist elsewhere.
 - Unsupported writes return `unsupported_mutation`. That is a deliberate
   privacy and provenance boundary.
+- Retryable registry writer contention during `register_thread` returns
+  `registry_writer_busy`, not a generic crash or broad memory-write failure.
 - Tool results redact local paths by default. Local operators may request
   private locators only through documented `include_private_paths` fields.
 
@@ -355,7 +357,10 @@ reopenable. Stale, malformed, or non-reopenable handles fail as MCP tool errors
 instead of silently becoming evidence.
 
 `register_thread` is an explicit control-plane operation. It is not a general
-memory-write API.
+memory-write API. Concurrent local agents may call it against the same registry;
+registry metadata writes are serialized by the same-directory registry writer
+lease described in the maintenance reference, while read-only MCP tools remain
+lock-free.
 
 ### MCP Control-Plane Boundary
 
