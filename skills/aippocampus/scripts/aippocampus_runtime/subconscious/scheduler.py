@@ -648,7 +648,7 @@ def maybe_start(args: argparse.Namespace) -> dict[str, Any]:
     if hook_env.lower() in {"0", "false", "off", "no"}:
         return {"started": False, "skipped": "disabled_by_env", "projects": []}
     if not os.environ.get(args.api_key_env):
-        return {"started": False, "skipped": f"missing_{args.api_key_env}", "projects": []}
+        return {"started": False, "skipped": "missing_api_key", "projects": []}
 
     try:
         lock = FileLock(

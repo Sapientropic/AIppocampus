@@ -38,6 +38,16 @@ MANUAL_OVERRIDE_SURFACE = [
     "subconscious_agent.py --dry-run/--no-write",
     "subconscious_jobs.py --dry-run --job ...",
 ]
+# Private reports are still command output; keep reasons enumerated so local
+# env var names and runtime exception text cannot leak into copied JSON/logs.
+PRIVATE_REPORT_REASONS = {
+    "first_run",
+    "no_due_projects",
+    "leased_projects",
+    "enqueue_cooldown",
+    "disabled_by_env",
+    "missing_api_key",
+}
 
 
 @dataclass(frozen=True)
@@ -139,7 +149,7 @@ def private_scheduler_report_payload(
             continue
         row: dict[str, Any] = {
             "label": str(project.get("label") or ""),
-            "reason": str(project.get("reason") or ""),
+            "reason": _private_report_reason(project.get("reason")),
         }
         selection = project.get("shell_selection")
         if isinstance(selection, dict):
@@ -148,6 +158,16 @@ def private_scheduler_report_payload(
     if projects:
         payload["projects"] = projects
     return payload
+
+
+def _private_report_reason(value: Any) -> str:
+    reason = str(value or "").strip()
+    if reason.startswith("new_turns:"):
+        suffix = reason.removeprefix("new_turns:")
+        return f"new_turns:{_safe_count(suffix)}"
+    if reason.startswith("missing_"):
+        return "missing_api_key"
+    return reason if reason in PRIVATE_REPORT_REASONS else ("runtime_reason_redacted" if reason else "")
 
 
 def _safe_float(value: Any) -> float:

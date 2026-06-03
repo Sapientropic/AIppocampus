@@ -113,7 +113,7 @@ class SubconsciousSchedulerTests(unittest.TestCase):
         with patch.dict(os.environ, {}, clear=True):
             result = scheduler.maybe_start(self.args())
 
-        self.assertEqual(result["skipped"], "missing_DEEPSEEK_API_KEY")
+        self.assertEqual(result["skipped"], "missing_api_key")
 
     def test_maybe_start_respects_subconscious_hook_disable_env(self) -> None:
         with patch.dict(
@@ -500,6 +500,45 @@ class SubconsciousSchedulerTests(unittest.TestCase):
         self.assertEqual(payload["projects"][0]["shell_selection"]["decision"], "worker")
         self.assertIn("Private Project", encoded)
         self.assertNotIn(str(self.root), encoded)
+
+    def test_private_policy_report_redacts_missing_env_reason(self) -> None:
+        private_result = {
+            "started": False,
+            "dry_run": True,
+            "projects": [
+                {
+                    "label": "Private Project",
+                    "reason": "missing_PRIVATE_TOKEN",
+                    "shell_selection": {
+                        "decision": "deterministic_only",
+                        "reasons": ["tiny_corpus"],
+                    },
+                }
+            ],
+        }
+        stdout = io.StringIO()
+        with (
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "subconscious_scheduler.py",
+                    "--maybe-start",
+                    "--dry-run",
+                    "--json",
+                    "--include-private-report",
+                ],
+            ),
+            patch.object(scheduler, "maybe_start", return_value=private_result),
+            contextlib.redirect_stdout(stdout),
+        ):
+            code = scheduler.main()
+
+        self.assertEqual(code, 0)
+        payload = json.loads(stdout.getvalue())
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(payload["projects"][0]["reason"], "missing_api_key")
+        self.assertNotIn("PRIVATE_TOKEN", encoded)
 
 
 if __name__ == "__main__":
