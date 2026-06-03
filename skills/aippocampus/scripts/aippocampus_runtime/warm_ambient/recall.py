@@ -29,9 +29,9 @@ from aippocampus_runtime.core import (
 )
 from aippocampus_runtime.model.routing import (
     DEFAULT_DEEPSEEK_API_KEY_ENV,
+    resolve_model_route,
     resolve_route_reasoning_effort,
     resolve_route_thinking,
-    resolve_model_route,
     route_cache_metrics,
     route_payload_with_effective_values,
     route_service_name,

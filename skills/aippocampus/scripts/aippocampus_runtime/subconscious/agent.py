@@ -23,11 +23,11 @@ from aippocampus_runtime.core import (
     deepseek_cache_metrics_from_usage,
     sanitize_external_model_payload,
 )
-from aippocampus_runtime.navigation.concept_graph import default_concept_graph_path
 from aippocampus_runtime.model.routing import (
     DEFAULT_DEEPSEEK_REASONING_EFFORT,
     DEFAULT_DEEPSEEK_THINKING,
 )
+from aippocampus_runtime.navigation.concept_graph import default_concept_graph_path
 from aippocampus_runtime.registry.api import registry_paths
 from aippocampus_runtime.subconscious.edge_validation import (
     AGENT_EDGE_POLICY,

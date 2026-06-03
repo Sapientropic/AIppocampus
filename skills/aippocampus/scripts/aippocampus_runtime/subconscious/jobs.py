@@ -30,12 +30,12 @@ from aippocampus_runtime.model.routing import (
     DEFAULT_DEEPSEEK_API_KEY_ENV,
     ModelRoute,
     resolve_model_route,
+    resolve_route_reasoning_effort,
+    resolve_route_thinking,
     route_artifact_source,
     route_cache_metrics,
     route_payload_with_effective_values,
     route_service_name,
-    resolve_route_reasoning_effort,
-    resolve_route_thinking,
 )
 from aippocampus_runtime.subconscious.deterministic_jobs import (
     DETERMINISTIC_RUNNERS,

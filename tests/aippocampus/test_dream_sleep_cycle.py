@@ -132,7 +132,7 @@ class DreamSleepCycleTests(unittest.TestCase):
                 "AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV": "LOCAL_SLEEP_KEY",
                 "LOCAL_SLEEP_KEY": "test",
             },
-            clear=False,
+            clear=True,
         ):
             config = dream_sleep_cycle.config_from_args(Args())
 
