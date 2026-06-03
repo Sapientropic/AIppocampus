@@ -150,6 +150,12 @@ rejection, stale/superseded rejection, privacy partition blocking, and sanitized
 reports. It does not prove live model quality, legal quality, private-history
 coverage, or public API stability.
 
+The multimodal provider-routing contract in
+`docs/architecture/multimodal-provider-routing.md` reuses this typed capability
+vocabulary for provider routes. It adds route-level modality, execution
+location, media-origin allowance, and privacy decisions without promoting typed
+capability manifests into a public SDK or answer authority.
+
 ## Non-Goals
 
 - Do not migrate every `SKILL.md` into a manifest.

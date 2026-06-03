@@ -95,6 +95,11 @@ true just because it exists.
 - No claim that public-safe synthetic fixtures prove private-history lift or
   live vision-model quality.
 
+Provider-route capability gating is tracked separately in
+`docs/architecture/multimodal-provider-routing.md`. Source manifests describe
+the source and origin policy; provider routing decides whether a declared route
+may process that source or a navigation-only derived artifact.
+
 ## Verification
 
 The public-safe fixture covers:

@@ -1,0 +1,232 @@
+{
+  "schema_version": "aippocampus.multimodal_provider_routes.v1",
+  "fixture_license": "CC0-1.0-synthetic",
+  "source_manifest": "tests/fixtures/multimodal_sources/public_safe_manifest.json",
+  "capability_contract": "docs/architecture/agent-skill-capability-contracts.md",
+  "boundary": {
+    "fixture_public_safe": true,
+    "raw_private_media_included": false,
+    "routes_are_static_contracts": true,
+    "live_provider_calls": false
+  },
+  "routes": [
+    {
+      "route_id": "deepseek-text-derived.v1",
+      "provider": "deepseek",
+      "model_id": "deepseek-v4-flash",
+      "input_modalities": ["text"],
+      "output_artifacts": ["text_summary", "entity_candidates"],
+      "output_authority": "navigation_only",
+      "execution_location": "external_provider",
+      "external_provider": true,
+      "privacy_policy": {
+        "redaction_policy": "ids_hashes_and_derived_text_only",
+        "raw_media_bytes_allowed": false,
+        "source_text_allowed_external": false,
+        "local_path_export_allowed": false,
+        "provider_secret_values_allowed": false
+      },
+      "media_origin_allowances": {
+        "user_provided_media": {
+          "raw_media_allowed": false,
+          "derived_text_allowed": true,
+          "current_task_required": true
+        },
+        "connected_library_media": {
+          "raw_media_allowed": false,
+          "derived_text_allowed": true,
+          "configured_scope_required": true
+        },
+        "background_filesystem_media": {
+          "raw_media_allowed": false,
+          "derived_text_allowed": false,
+          "denied_by_default": true
+        }
+      },
+      "capability_contract": {
+        "capability_family": "typed_capability_contract",
+        "permission_profile": "derived_text_navigation",
+        "source_reopen_required_for_truth_claims": true,
+        "cannot_claim": [
+          "raw_image_understanding",
+          "raw_video_understanding",
+          "derived_text_is_source_truth"
+        ]
+      }
+    },
+    {
+      "route_id": "synthetic-vision-current-task.v1",
+      "provider": "synthetic-vision",
+      "model_id": "synthetic-vision-model",
+      "input_modalities": ["image", "video"],
+      "output_artifacts": ["caption", "entity_tag", "thumbnail"],
+      "output_authority": "navigation_only",
+      "execution_location": "host_provided",
+      "external_provider": false,
+      "privacy_policy": {
+        "redaction_policy": "ids_hashes_and_media_handles_only",
+        "raw_media_bytes_allowed": true,
+        "source_text_allowed_external": false,
+        "local_path_export_allowed": false,
+        "provider_secret_values_allowed": false
+      },
+      "media_origin_allowances": {
+        "user_provided_media": {
+          "raw_media_allowed": true,
+          "derived_text_allowed": true,
+          "current_task_required": true
+        },
+        "connected_library_media": {
+          "raw_media_allowed": true,
+          "derived_text_allowed": true,
+          "configured_scope_required": true
+        },
+        "background_filesystem_media": {
+          "raw_media_allowed": false,
+          "derived_text_allowed": false,
+          "denied_by_default": true
+        }
+      },
+      "capability_contract": {
+        "capability_family": "typed_capability_contract",
+        "permission_profile": "current_task_visual_navigation",
+        "source_reopen_required_for_truth_claims": true,
+        "cannot_claim": [
+          "live_vision_quality",
+          "background_filesystem_access",
+          "provider_output_is_source_truth"
+        ]
+      }
+    },
+    {
+      "route_id": "local-ocr-current-task.v1",
+      "provider": "local-ocr",
+      "model_id": "synthetic-local-ocr",
+      "input_modalities": ["image", "document"],
+      "output_artifacts": ["ocr", "schema_row", "line_item_candidates"],
+      "output_authority": "navigation_only",
+      "execution_location": "local_runtime",
+      "external_provider": false,
+      "privacy_policy": {
+        "redaction_policy": "ids_hashes_and_local_artifacts_only",
+        "raw_media_bytes_allowed": true,
+        "source_text_allowed_external": false,
+        "local_path_export_allowed": false,
+        "provider_secret_values_allowed": false
+      },
+      "media_origin_allowances": {
+        "user_provided_media": {
+          "raw_media_allowed": true,
+          "derived_text_allowed": true,
+          "current_task_required": true
+        },
+        "connected_library_media": {
+          "raw_media_allowed": true,
+          "derived_text_allowed": true,
+          "configured_scope_required": true
+        },
+        "background_filesystem_media": {
+          "raw_media_allowed": false,
+          "derived_text_allowed": false,
+          "denied_by_default": true
+        }
+      },
+      "capability_contract": {
+        "capability_family": "typed_capability_contract",
+        "permission_profile": "local_ocr_navigation",
+        "source_reopen_required_for_truth_claims": true,
+        "cannot_claim": [
+          "ocr_is_source_truth",
+          "background_filesystem_access"
+        ]
+      }
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "raw_image_to_text_only_route",
+      "route_id": "deepseek-text-derived.v1",
+      "input_kind": "raw_media",
+      "media_type": "image",
+      "origin_policy": "user_provided_media",
+      "raw_prompt_text": "SYNTHETIC_RAW_IMAGE_BYTES_DO_NOT_EMIT",
+      "task_scoped_access": {
+        "current_task_access_allowed": true,
+        "hidden_durable_write_allowed": false,
+        "cross_domain_reuse_allowed": false,
+        "audit_event_required": true
+      },
+      "expected_allowed": false,
+      "cannot_claim": ["text_route_understands_raw_image"]
+    },
+    {
+      "case_id": "derived_caption_to_text_route",
+      "route_id": "deepseek-text-derived.v1",
+      "input_kind": "derived_text",
+      "media_type": "image",
+      "origin_policy": "user_provided_media",
+      "derived_artifact": {
+        "artifact_type": "caption",
+        "authority": "navigation_only",
+        "parent_source_reopened": true
+      },
+      "raw_prompt_text": "Synthetic derived caption candidate, not source truth.",
+      "task_scoped_access": {
+        "current_task_access_allowed": true,
+        "hidden_durable_write_allowed": false,
+        "cross_domain_reuse_allowed": false,
+        "audit_event_required": true
+      },
+      "expected_allowed": true,
+      "cannot_claim": ["derived_caption_is_visual_truth"]
+    },
+    {
+      "case_id": "raw_video_to_text_only_route",
+      "route_id": "deepseek-text-derived.v1",
+      "input_kind": "raw_media",
+      "media_type": "video_segment",
+      "origin_policy": "user_provided_media",
+      "raw_prompt_text": "SYNTHETIC_RAW_VIDEO_BYTES_DO_NOT_EMIT",
+      "task_scoped_access": {
+        "current_task_access_allowed": true,
+        "hidden_durable_write_allowed": false,
+        "cross_domain_reuse_allowed": false,
+        "audit_event_required": true
+      },
+      "expected_allowed": false,
+      "cannot_claim": ["text_route_understands_raw_video"]
+    },
+    {
+      "case_id": "user_image_to_vision_route",
+      "route_id": "synthetic-vision-current-task.v1",
+      "input_kind": "raw_media",
+      "media_type": "image",
+      "origin_policy": "user_provided_media",
+      "raw_prompt_text": "SYNTHETIC_PRIVATE_PATH_TOKEN_DO_NOT_EMIT",
+      "task_scoped_access": {
+        "current_task_access_allowed": true,
+        "hidden_durable_write_allowed": false,
+        "cross_domain_reuse_allowed": false,
+        "audit_event_required": true
+      },
+      "expected_allowed": true,
+      "cannot_claim": ["provider_output_is_source_truth"]
+    },
+    {
+      "case_id": "background_image_to_vision_route",
+      "route_id": "synthetic-vision-current-task.v1",
+      "input_kind": "raw_media",
+      "media_type": "image",
+      "origin_policy": "background_filesystem_media",
+      "raw_prompt_text": "SYNTHETIC_PROVIDER_SECRET_TOKEN_DO_NOT_EMIT",
+      "task_scoped_access": {
+        "current_task_access_allowed": false,
+        "hidden_durable_write_allowed": false,
+        "cross_domain_reuse_allowed": false,
+        "audit_event_required": true
+      },
+      "expected_allowed": false,
+      "cannot_claim": ["background_filesystem_media_is_selected"]
+    }
+  ]
+}
