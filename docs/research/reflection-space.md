@@ -30,10 +30,17 @@ The first MVP lives in
 - Current tests live in `tests/aippocampus/test_reflection_space.py` and cover
   small graph rendering, merge/revive/abandon actions, recall-effect feedback,
   unsourced feedback suppression, and a fixture smoke.
+- The first #484 AAR v2 slice lives in
+  `skills/aippocampus/scripts/aippocampus_runtime/reflection/aar_v2.py`, with
+  its object/boundary contract in
+  [AAR v2 Action-Time Nudges](../architecture/aar-v2-action-time-nudges.md).
+  It provides a no-write report over source-backed corrections/postmortems,
+  one deterministic action-time match for specific memory/source claims from
+  weak context, and feedback metrics for later pruning.
 
 Still not claimed: polished visualization, real user behavior change,
-scheduler/AAR enforcement, calibrated suggestion timing, or any clean-source /
-Journey-history mutation.
+scheduler-wide AAR enforcement, calibrated suggestion timing, live hook
+installation, or any clean-source / Journey-history mutation.
 
 ## TL;DR
 

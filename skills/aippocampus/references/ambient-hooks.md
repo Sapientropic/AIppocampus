@@ -127,6 +127,12 @@ would change the answer, plan, or action. Any specific memory-backed claim still
 requires clean-source reopen; scent packets, route reasons, locks, aliases, and
 candidate refs are not enough.
 
+`aippocampus_runtime.reflection.aar_v2` owns the #484 deterministic first slice
+for action-time AAR nudges. It can propose a source-backed advisory nudge when
+the next action is a specific memory/source claim from weak scent/candidate/dream
+context, and it suppresses that nudge when clean source is already visible. The
+nudge routes attention to source reopen; it is not evidence.
+
 `aippocampus_runtime.recall.search_decision_adapter` applies the same boundary to external-search
 workflows. It may decide that a degraded prompt is a cue into old source and
 may return a source-ref-backed query expansion packet, but that packet remains
