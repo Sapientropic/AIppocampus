@@ -14,6 +14,10 @@ records, start with [`docs/evidence/benchmark-evidence-map.md`](../docs/evidence
   scoring-contract smoke for coding implicit-knowledge continuity. It keeps
   the report and prediction contract public-safe while the flagship track moves
   toward VCS-derived hard future events for recall measurement.
+- `public_multimodal_corpus/` contains the checked-in synthetic public-safe
+  corpus-style multimodal retrieval fixture for #531. It is inspired by the
+  ATM-Bench staged-corpus shape, but it is not an ATM-Bench adapter or a
+  conversational media-upload recall benchmark.
 - `testdata_wildchat.jsonl` is a tiny checked-in fixture in WildChat-like JSONL
   shape, useful for smoke-testing the converter without network access.
 
@@ -92,6 +96,23 @@ python benchmarks\aippocampus\benchmark_coding_decision_shadow.py --json
 This public-safe runner checks original source refs, rejected-route warnings,
 compaction boundary preservation, relevant decision selection, and anti-nag
 suppression. It is a synthetic contract, not private real-history lift evidence.
+
+Run the public-safe multimodal corpus-style retrieval contract:
+
+```powershell
+python benchmarks\aippocampus\benchmark_multimodal_corpus_retrieval.py --json
+python benchmarks\aippocampus\benchmark_multimodal_corpus_retrieval.py --raw-media-mode deterministic_fixture --json
+```
+
+This fixture has synthetic image, video-frame, email/message, receipt, invoice,
+and calendar/location sources plus captions, OCR, object tags, thumbnail or
+embedding hints, and schema rows as derived artifacts. Derived artifacts are
+navigation only; the runner scores source reopen, conflict handling,
+cross-modal join, unsupported visual abstention, and retrieval recall@3. It
+does not claim ATM-Bench Hard support, live vision quality, conversational
+media-upload recall, full-device indexing, or product privacy behavior. The
+report owner is
+[`docs/evidence/benchmarks/multimodal-corpus-fixture-report.md`](../docs/evidence/benchmarks/multimodal-corpus-fixture-report.md).
 
 Run the public longitudinal pseudo-user contract smoke for coding implicit
 knowledge:
