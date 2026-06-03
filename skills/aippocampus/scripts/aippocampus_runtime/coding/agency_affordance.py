@@ -32,6 +32,7 @@ TICKET_KIND = "aippocampus_agency_ticket"
 FEEDBACK_KIND = "aippocampus_agency_ticket_feedback"
 DREAM_HYPOTHESIS_TYPE = "dream_hypothesis"
 DREAM_TRUTH_BOUNDARY = "adjudicated_dream_hypothesis_not_fact"
+JOURNEY_RESONANCE_KIND = "aippocampus_content_light_journey_resonance"
 
 TRIGGERS = (
     "user_correction",
@@ -247,6 +248,9 @@ def affordance_from_row(
     source_kind: str,
     default_trigger: str,
 ) -> dict[str, Any] | None:
+    if source_kind == "journey_resonance":
+        return affordance_from_journey_resonance(row)
+
     is_dream_hypothesis = (
         row.get("candidate_type") == DREAM_HYPOTHESIS_TYPE
         or row.get("truth_boundary") == DREAM_TRUTH_BOUNDARY
@@ -351,12 +355,98 @@ def affordance_from_row(
     }
 
 
+def safe_journey_resonance_match(row: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    if row.get("kind") != JOURNEY_RESONANCE_KIND:
+        return None
+    matches = row.get("matches")
+    if not isinstance(matches, list):
+        return None
+    for item in matches:
+        if not isinstance(item, Mapping):
+            continue
+        raw_claim = item.get("claim_boundary")
+        raw_privacy = item.get("privacy_boundary")
+        claim: Mapping[str, Any] = raw_claim if isinstance(raw_claim, Mapping) else {}
+        privacy: Mapping[str, Any] = raw_privacy if isinstance(raw_privacy, Mapping) else {}
+        if item.get("suggested_use") != "source_refresh_cue":
+            continue
+        if not (
+            claim.get("hypothesis_not_fact")
+            and claim.get("not_evidence")
+            and claim.get("requires_source_reopen_before_use")
+        ):
+            continue
+        if not (
+            privacy.get("content_light_only")
+            and privacy.get("raw_source_refs_shared") is False
+            and privacy.get("raw_source_text_shared") is False
+        ):
+            continue
+        return item
+    return None
+
+
+def affordance_from_journey_resonance(row: Mapping[str, Any]) -> dict[str, Any] | None:
+    match = safe_journey_resonance_match(row)
+    if not match:
+        return None
+    summary = compact_text(
+        str(
+            match.get("hypothesis")
+            or "A source-free Journey shape suggests reopening sources before comparison."
+        ),
+        520,
+    )
+    resonance_id = str(match.get("resonance_id") or stable_id("journey_resonance", summary))
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": AFFORDANCE_KIND,
+        "affordance_id": stable_id("agency_affordance", "journey_resonance", resonance_id, summary, length=20),
+        "created_at": row.get("created_at") or now_utc(),
+        "source_kind": "journey_resonance",
+        "source_ids": unique_preserve([resonance_id], limit=8),
+        "scope": {
+            "kind": "cross_project_journey_resonance",
+            "stable_id": stable_id("scope", "journey_resonance", resonance_id, length=16),
+            "label": "content-light Journey resonance",
+        },
+        "intervention_level": "backstage_only",
+        "proposed_action": {
+            "verb": "refresh_sources",
+            "object": "reopen candidate project sources before comparison",
+        },
+        "why_now": {
+            "trigger": "compaction_loss",
+            "explanation": summary,
+        },
+        # A content-light resonance cue is intentionally source-free at this
+        # boundary. Source refs may exist inside each project, but moving them
+        # through this affordance would turn a low-leakage scent into evidence.
+        "evidence_refs": [],
+        "source_thickness": "thin",
+        "confidence": round(float(row.get("confidence") or 0.55), 4),
+        "annoyance_risk": "medium",
+        "do_not_do": [
+            "treat_resonance_as_fact",
+            "surface_as_warning_before_source_reopen",
+        ],
+        "preconditions": [
+            "reopen sources inside the appropriate project/context before use",
+        ],
+        "requires_user_confirmation": True,
+        "expires_at": str(row.get("expires_at") or "topic_epoch_end"),
+        "outcome_feedback_expected": list(OUTCOME_FEEDBACK),
+        "matched_terms_only": True,
+    }
+
+
 def build_agency_affordance_map(
     *,
     cognitive_map_inputs: Sequence[Mapping[str, Any]] | None = None,
     correction_windows: Sequence[Mapping[str, Any]] | None = None,
     ambient_recall_cards: Sequence[Mapping[str, Any]] | None = None,
     dream_outputs: Sequence[Mapping[str, Any]] | None = None,
+    journey_resonance_inputs: Sequence[Mapping[str, Any]] | None = None,
     coding_tickets: Sequence[Mapping[str, Any]] | None = None,
     unfinished_tasks: Sequence[Mapping[str, Any]] | None = None,
     scheduled_revisits: Sequence[Mapping[str, Any]] | None = None,
@@ -367,6 +457,7 @@ def build_agency_affordance_map(
         ("correction_window", "user_correction", correction_windows or []),
         ("ambient_recall", "compaction_loss", ambient_recall_cards or []),
         ("dream_output", "compaction_loss", dream_outputs or []),
+        ("journey_resonance", "compaction_loss", journey_resonance_inputs or []),
         ("coding_ticket", "compaction_loss", coding_tickets or []),
         ("unfinished_task", "unfinished_task_reentry", unfinished_tasks or []),
         ("scheduled_revisit", "scheduled_revisit", scheduled_revisits or []),
@@ -625,6 +716,7 @@ def main(argv: list[str] | None = None) -> int:
                 correction_windows=raw.get("correction_windows") or [],
                 ambient_recall_cards=raw.get("ambient_recall_cards") or [],
                 dream_outputs=raw.get("dream_outputs") or [],
+                journey_resonance_inputs=raw.get("journey_resonance_inputs") or [],
                 coding_tickets=raw.get("coding_tickets") or [],
                 unfinished_tasks=raw.get("unfinished_tasks") or [],
                 scheduled_revisits=raw.get("scheduled_revisits") or [],
@@ -657,4 +749,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

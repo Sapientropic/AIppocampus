@@ -385,7 +385,11 @@ Path resonance 不再是「两段 Journey 有没有相同的卦」，而是：
 
 不阻塞 P1-P3（Journey 核心）。HexArc dataclass 可在 P1 期间实现为
 纯计算模块（给定卦名 → 查表得 trigram → 计算互/错/综/爻变）。
-P6（图随机游走）的 path resonance 逻辑基于确定性结构匹配。
+P6（图随机游走）的 path resonance 逻辑基于确定性结构匹配。当前已有第一版
+content-light cross-project resonance helper：它只比较 waypoint arc 和显式
+source-free dynamics labels，把项目身份 hash 化，输出 source-refresh
+hypothesis，不跨项目携带 source refs、source text、local paths 或私有项目名。
+完整图随机游走、真实历史质量和用户可感知 lift 仍是后续验证范围。
 
 ## 用户反馈
 

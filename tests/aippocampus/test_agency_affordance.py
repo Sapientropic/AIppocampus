@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
@@ -261,6 +262,65 @@ class AgencyAffordanceTests(unittest.TestCase):
         self.assertEqual(len(selection["backstage_tickets"]), 1)
         self.assertEqual(selection["backstage_tickets"][0]["intervention_level"], "backstage_only")
         self.assertFalse(selection["backstage_tickets"][0]["foreground"])
+
+    def test_journey_resonance_remains_backstage_source_refresh_without_raw_refs(self) -> None:
+        resonance = {
+            "kind": "aippocampus_content_light_journey_resonance",
+            "status": "hypotheses_available",
+            "intervention_level": "warning",
+            "source_refs": [source_ref(47, message_id="msg-raw-journey-resonance")],
+            "matches": [
+                {
+                    "resonance_id": "jr_res_fixture",
+                    "suggested_use": "source_refresh_cue",
+                    "hypothesis": (
+                        "A source-free Journey shape resembles another project. "
+                        "Reopen sources inside that project before treating any route as evidence."
+                    ),
+                    "shared_structure": {
+                        "arc_sequence": ["屯", "蒙", "需"],
+                        "dynamics_labels": ["dynamics:stalled-start"],
+                    },
+                    "candidate_patterns": ["stale_generated_artifact", "rejected_route"],
+                    "claim_boundary": {
+                        "hypothesis_not_fact": True,
+                        "not_evidence": True,
+                        "requires_source_reopen_before_use": True,
+                    },
+                    "privacy_boundary": {
+                        "content_light_only": True,
+                        "raw_source_refs_shared": False,
+                        "raw_source_text_shared": False,
+                    },
+                }
+            ],
+        }
+
+        affordance_map = agency.build_agency_affordance_map(
+            journey_resonance_inputs=[resonance],
+            topic_epoch="epoch-journey-resonance",
+        )
+        selection = agency.select_agency_tickets(
+            affordance_map,
+            trigger="compaction_loss",
+            topic_epoch="epoch-journey-resonance",
+        )
+
+        self.assertEqual(len(affordance_map["affordances"]), 1)
+        affordance = affordance_map["affordances"][0]
+        self.assertEqual(affordance["source_kind"], "journey_resonance")
+        self.assertEqual(affordance["intervention_level"], "backstage_only")
+        self.assertEqual(affordance["proposed_action"]["verb"], "refresh_sources")
+        self.assertEqual(affordance["source_thickness"], "thin")
+        self.assertEqual(affordance["evidence_refs"], [])
+        self.assertTrue(affordance["matched_terms_only"])
+        self.assertEqual(selection["foreground_tickets"], [])
+        self.assertEqual(len(selection["backstage_tickets"]), 1)
+        self.assertFalse(selection["backstage_tickets"][0]["foreground"])
+
+        dumped = json.dumps({"map": affordance_map, "selection": selection}, ensure_ascii=False, sort_keys=True)
+        self.assertIn("source-free Journey shape", dumped)
+        self.assertNotIn("msg-raw-journey-resonance", dumped)
 
     def test_feedback_events_cover_expected_outcomes(self) -> None:
         affordance_map = agency.build_agency_affordance_map(

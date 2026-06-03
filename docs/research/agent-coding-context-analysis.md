@@ -255,6 +255,13 @@ another one" without carrying private source text across project boundaries.
 Only after that low-leakage scent should the agent decide whether to reopen
 source inside the appropriate project.
 
+First deterministic prototype: `aippocampus_runtime.journey.tracking` can now
+build a content-light Journey signature from waypoint arcs and explicit
+source-free dynamics labels, compare it across hashed project identities, and
+emit only a hypothesis/source-refresh cue. `agency_affordance` consumes that cue
+as backstage `refresh_sources` work; it is not foreground evidence, a warning,
+or permission to reuse an old route.
+
 See [Journey Tracking](journey-tracking.md) and
 [hexagram validation results](hexagram-validation/results_v1.md).
 
@@ -265,9 +272,9 @@ Related mechanisms:
 - dream work for cross-thread synthesis and blind-spot detection
 - source-backed review before promotion into durable memory
 
-Status: first deterministic terrain/weather slice implemented. This layer
-still needs real-history benchmark validation before it can be presented as
-solved.
+Status: first deterministic terrain/weather slice plus content-light
+cross-project resonance prototype implemented. This layer still needs
+real-history benchmark validation before it can be presented as solved.
 
 ### Layer 3: Action Interface
 
@@ -401,8 +408,9 @@ backed comparison:
 - "This looks like an earlier rejected route, but the old rejection depended on
   a constraint that may no longer exist."
 
-This should be phrased as a hypothesis with evidence refs, not as a mystical
-pattern match.
+This should be phrased first as a hypothesis/source-refresh cue, not as a
+mystical pattern match. Evidence refs belong only after source is reopened
+inside the appropriate project and permission context.
 
 This scenario is also the privacy boundary test. Cross-project resonance should
 start from content-light structure cues, such as waypoint arcs or dynamics
@@ -418,7 +426,7 @@ happen inside the appropriate project and permission context.
 | Registry discovery | Implemented / active | Cross-thread discovery and stale-index behavior |
 | Ambient recall scent | Partial | False positive rate, anti-nag behavior, source-backed expansion |
 | Correction reconsolidation | Designed | User-correction validity, compaction continuity, refuted-correction handling |
-| Journey tracking | Research design | Whether state labels improve task outcomes over ordinary summaries |
+| Journey tracking | P1-P3 core plus first content-light resonance prototype | Whether state labels improve task outcomes over ordinary summaries |
 | Decision-event extraction | First deterministic slice implemented | Broader real-history review and host-agent outcome validation |
 | Affordance / coding tickets | Blueprint | Whether host agents use tickets correctly and quietly |
 | Codeksei executive integration | Blueprint | Whether intervention timing reduces drift without annoyance |
