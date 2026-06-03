@@ -1391,9 +1391,7 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(theme_emergence.main, packaged_theme_emergence.main)
 
     def test_question_helpers_have_package_owner_and_remaining_compat_shims(self) -> None:
-        import question_feedback_policy
         import question_health
-        import question_vector_index
         from aippocampus_runtime.question import feedback_policy, health, source_refs, vector_index
 
         package_paths = [
@@ -1404,8 +1402,10 @@ class ImportCouplingTests(unittest.TestCase):
             SCRIPTS / "aippocampus_runtime" / "question" / "vector_index.py",
         ]
         shim_paths = [
-            SCRIPTS / "question_feedback_policy.py",
             SCRIPTS / "question_health.py",
+        ]
+        deleted_package_only_shims = [
+            SCRIPTS / "question_feedback_policy.py",
             SCRIPTS / "question_vector_index.py",
         ]
 
@@ -1413,6 +1413,8 @@ class ImportCouplingTests(unittest.TestCase):
             self.assertTrue(path.exists(), path)
         for path in shim_paths:
             self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+        for path in deleted_package_only_shims:
+            self.assertFalse(path.exists(), path)
         self.assertFalse((SCRIPTS / "question_source_refs.py").exists())
 
         edges = same_dir_import_edges(top_level_only=True)
@@ -1437,6 +1439,13 @@ class ImportCouplingTests(unittest.TestCase):
             edges["aippocampus_runtime.question.tracking"],
         )
         self.assertIn("aippocampus_runtime.question.health", edges["question_health"])
+        deleted_modules = {"question_feedback_policy", "question_vector_index"}
+        for owner in [
+            "aippocampus_runtime.question.feedback_policy",
+            "aippocampus_runtime.question.health",
+            "aippocampus_runtime.question.vector_index",
+        ]:
+            self.assertFalse(deleted_modules & edges[owner], owner)
         self.assertIn("aippocampus_runtime.core", edges["aippocampus_runtime.question.health"])
         self.assertIn(
             "aippocampus_runtime.registry.api",
@@ -1446,14 +1455,8 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertNotIn("registry", edges["aippocampus_runtime.question.health"])
 
         modules = pyproject_py_modules()
-        self.assertTrue(
-            {
-                "question_feedback_policy",
-                "question_health",
-                "question_vector_index",
-            }
-            <= modules
-        )
+        self.assertIn("question_health", modules)
+        self.assertFalse(deleted_modules & modules)
         self.assertNotIn("question_source_refs", modules)
 
         self.assertIs(question_health.question_health_stats, health.question_health_stats)
@@ -1462,14 +1465,8 @@ class ImportCouplingTests(unittest.TestCase):
             health.aggregate_question_health_stats,
         )
         self.assertTrue(callable(source_refs.source_ref_key))
-        self.assertIs(
-            question_feedback_policy.load_question_pair_feedback,
-            feedback_policy.load_question_pair_feedback,
-        )
-        self.assertIs(
-            question_vector_index.LocalQuestionVectorIndex,
-            vector_index.LocalQuestionVectorIndex,
-        )
+        self.assertTrue(callable(feedback_policy.load_question_pair_feedback))
+        self.assertTrue(callable(vector_index.LocalQuestionVectorIndex))
 
     def test_question_tracking_has_package_owner_and_compat_shims(self) -> None:
         import question_confirmation

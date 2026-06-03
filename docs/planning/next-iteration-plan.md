@@ -182,8 +182,7 @@ handoff context.
 9. Vector index protocol
    - Source: `gb-scale-roadmap.md` and `wukong-mining-notes.md`.
    - First slice is implemented in
-     `aippocampus_runtime.question.vector_index`; `question_vector_index.py`
-     remains the compatibility shim.
+     `aippocampus_runtime.question.vector_index`; it is package-owner only.
    - Keep vectors optional and join every result back to stable source ids.
    - `question_tracking` now has a deterministic local hash-vector baseline;
      TurboVec or sqlite vector evaluation remains deferred until the current
@@ -254,7 +253,7 @@ handoff context.
      `aippocampus_runtime.question.feedback_policy` lets `question_tracking.py`
      treat source-id-backed ambient dismiss/reopen events as conservative
      separation pressure for the same source-backed `question_link` pair;
-     `question_feedback_policy.py` remains the compatibility shim;
+     it is package-owner only;
      theme/frontier dismissals stay ambient-surface policy only.
    - First #137 theme/cap hardening is implemented: `theme_candidate` scent uses
      the same frequency cap and dismiss/reopen overlay as question scent, and

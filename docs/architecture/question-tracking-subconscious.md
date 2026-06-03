@@ -106,7 +106,8 @@ theme-emergence slice, plus first question-index scale/sidecar evaluation:
   `aippocampus_runtime.question.feedback_policy` lets `question_tracking.py`
   consume source-id-backed ambient dismiss/reopen events as conservative
   separation pressure for the same source-backed question pair.
-  `question_feedback_policy.py` remains the direct import compatibility shim.
+  The feedback policy is now package-owner only, not a separate flat import
+  promise.
   Only `target_kind="question_link"` can affect pair separation; theme/frontier
   dismissals remain hook-surface policy and do not change question-pair scoring.
   Unsourced feedback fails open, and later reopen events clear dismissal
@@ -925,8 +926,8 @@ None. All output goes to existing `subconscious_jobs.jsonl`.
 
 A lightweight vector adapter now exists in
 `aippocampus_runtime.question.vector_index` for Phase 2 tests and small local
-smoke runs. `question_vector_index.py` remains the compatibility shim. It is
-deliberately not the default retrieval path:
+smoke runs. It is deliberately package-owner only and not the default retrieval
+path:
 neighbors carry stable source ids, and `question_tracking` must re-open clean
 source before accepting or promoting a link.
 
