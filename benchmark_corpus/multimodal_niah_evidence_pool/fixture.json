@@ -1,0 +1,87 @@
+{
+  "schema_version": "aippocampus.multimodal_niah_evidence_pool_fixture.v1",
+  "fixture_id": "multimodal_niah_evidence_pool_v1",
+  "fixture_license": "CC0-1.0-synthetic",
+  "source_fixture": {
+    "fixture_id": "public_multimodal_corpus_v1",
+    "path": "benchmark_corpus/public_multimodal_corpus/fixture.json"
+  },
+  "boundary": {
+    "inspired_by": "ATM-Bench NIAH protocol",
+    "retrieval_not_scored": true,
+    "pool_contains_ground_truth_plus_distractors": true,
+    "derived_artifacts_are_navigation_only": true,
+    "raw_media_source_reopen_required_for_visual_claims": true
+  },
+  "pool_shuffle_seed": "aippocampus-issue-533-v42",
+  "pool_size_ladder": {
+    "current_public_safe_fixture_sizes": [3, 4, 5],
+    "future_atm_like_sizes": [25, 50, 100, 200],
+    "growth_boundary": "Use the larger ladder only after the public fixture has enough source anchors to avoid repeated distractors."
+  },
+  "cases": [
+    {
+      "case_id": "niah-personalized-reference-small",
+      "corpus_case_id": "mmc-personalized-reference",
+      "query_shape": "personalized_reference",
+      "pool_size": 3,
+      "ground_truth_evidence_ids": ["msrc-img-001"],
+      "distractor_evidence_ids": ["msrc-video-001-frame-042", "msrc-email-001"],
+      "pool_evidence_ids": ["msrc-video-001-frame-042", "msrc-img-001", "msrc-email-001"],
+      "selected_evidence_ids": ["msrc-img-001"],
+      "cited_source_anchor_ids": ["img-001:full"],
+      "expected_answer_state": "answer_with_reopened_source",
+      "selected_answer_state": "answer_with_reopened_source",
+      "answer_correct": true,
+      "expected_failure": false
+    },
+    {
+      "case_id": "niah-conflict-final-bill-stale-failure",
+      "corpus_case_id": "mmc-conflict-final-bill",
+      "query_shape": "conflict_resolution",
+      "pool_size": 4,
+      "ground_truth_evidence_ids": ["msrc-bill-001"],
+      "distractor_evidence_ids": ["msrc-email-001", "msrc-receipt-001", "msrc-calendar-001"],
+      "pool_evidence_ids": ["msrc-calendar-001", "msrc-bill-001", "msrc-email-001", "msrc-receipt-001"],
+      "selected_evidence_ids": ["msrc-email-001"],
+      "cited_source_anchor_ids": ["email-001:body"],
+      "stale_or_conflicting_distractor_ids": ["msrc-email-001"],
+      "expected_answer_state": "answer_with_conflict_explanation",
+      "selected_answer_state": "answer_with_stale_conflicting_evidence",
+      "answer_correct": false,
+      "expected_failure": true,
+      "failure_mode": "stale_conflicting_evidence_selected"
+    },
+    {
+      "case_id": "niah-cross-modal-join-medium",
+      "corpus_case_id": "mmc-cross-modal-join",
+      "query_shape": "cross_modal_join",
+      "pool_size": 5,
+      "ground_truth_evidence_ids": ["msrc-calendar-001", "msrc-receipt-001"],
+      "distractor_evidence_ids": ["msrc-bill-001", "msrc-email-001", "msrc-img-001"],
+      "pool_evidence_ids": ["msrc-email-001", "msrc-bill-001", "msrc-receipt-001", "msrc-img-001", "msrc-calendar-001"],
+      "selected_evidence_ids": ["msrc-calendar-001", "msrc-receipt-001"],
+      "cited_source_anchor_ids": ["calendar-001:event", "receipt-001:line-items"],
+      "expected_answer_state": "answer_with_cross_modal_sources",
+      "selected_answer_state": "answer_with_cross_modal_sources",
+      "answer_correct": true,
+      "expected_failure": false
+    },
+    {
+      "case_id": "niah-unsupported-detail-abstain",
+      "corpus_case_id": "mmc-unsupported-detail",
+      "query_shape": "unsupported_detail",
+      "pool_size": 3,
+      "ground_truth_evidence_ids": ["msrc-video-001-frame-042"],
+      "distractor_evidence_ids": ["msrc-img-001", "msrc-bill-001"],
+      "pool_evidence_ids": ["msrc-bill-001", "msrc-video-001-frame-042", "msrc-img-001"],
+      "selected_evidence_ids": ["msrc-video-001-frame-042"],
+      "cited_source_anchor_ids": ["video-001:frame-042"],
+      "expected_answer_state": "abstain_unsupported_visual_detail",
+      "selected_answer_state": "abstain_unsupported_visual_detail",
+      "answer_correct": true,
+      "expected_abstain": true,
+      "expected_failure": false
+    }
+  ]
+}

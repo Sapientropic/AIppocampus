@@ -18,6 +18,10 @@ records, start with [`docs/evidence/benchmark-evidence-map.md`](../docs/evidence
   corpus-style multimodal retrieval fixture for #531. It is inspired by the
   ATM-Bench staged-corpus shape, but it is not an ATM-Bench adapter or a
   conversational media-upload recall benchmark.
+- `multimodal_niah_evidence_pool/` contains the checked-in synthetic
+  public-safe NIAH-style evidence-pool fixture for #533. It reuses the
+  corpus-style multimodal source fixture, but removes retrieval from the
+  measurement by supplying fixed ground-truth-plus-distractor pools.
 - `conversational_media_ingest/` contains the checked-in synthetic public-safe
   fixture for #532. It models media the user sends or selects inside a
   conversation, where the user's wording around the upload is also source
@@ -133,6 +137,23 @@ unsupported visual claims, and hidden durable writes. It does not claim
 background scanning, cross-domain reuse, live vision quality, face-recognition
 identity graphs, or product privacy behavior. The report owner is
 [`docs/evidence/benchmarks/conversational-media-ingest-fixture-report.md`](../docs/evidence/benchmarks/conversational-media-ingest-fixture-report.md).
+
+Run the public-safe NIAH-style multimodal evidence-pool contract:
+
+```powershell
+python benchmarks\aippocampus\benchmark_multimodal_niah_evidence_pool.py --json
+python benchmarks\aippocampus\benchmark_multimodal_niah_evidence_pool.py --source-reopen-mode deterministic_fixture --json
+```
+
+This fixture supplies fixed evidence pools that contain all ground-truth source
+ids plus distractors, so it scores answer synthesis, source selection,
+source-anchor citation, conflict handling, and abstention under a supplied
+pool. It deliberately includes one stale/conflicting-source failure even though
+the correct source is present, proving the slice catches reasoning failures
+rather than only retrieval misses. It does not claim retrieval quality,
+ATM-Bench Hard support or score, live vision quality, conversational
+media-upload recall, or product privacy behavior. The report owner is
+[`docs/evidence/benchmarks/multimodal-niah-evidence-pool-report.md`](../docs/evidence/benchmarks/multimodal-niah-evidence-pool-report.md).
 
 Run the public longitudinal pseudo-user contract smoke for coding implicit
 knowledge:
