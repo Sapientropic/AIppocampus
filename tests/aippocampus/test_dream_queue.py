@@ -71,6 +71,23 @@ def ambient_residue_row() -> dict[str, object]:
     }
 
 
+def journey_row() -> dict[str, object]:
+    return {
+        "kind": "aippocampus_journey",
+        "journey_id": "journey_continuity",
+        "path_label": "Continuity after compaction",
+        "core_inquiry": "How do we keep continuity source-backed after context loss?",
+        "current_frontier": "The route needs source-backed waypoints instead of a smoother recap.",
+        "status": "traveling",
+        "source_refs": [
+            source_ref("session:j-a", "msg-ja", 40),
+            source_ref("session:j-b", "msg-jb", 50),
+        ],
+        "current_frontier_source_refs": [source_ref("session:j-c", "msg-jc", 60)],
+        "active_questions": ["What should be appended as the next waypoint?"],
+    }
+
+
 def ready_pack(*rows: dict[str, object]) -> dict[str, object]:
     return input_pack.build_dream_input_pack(rows or [question_link_row()])
 
@@ -114,6 +131,35 @@ class DreamQueueTests(unittest.TestCase):
         self.assertEqual(families[residue_pack["pack_id"]], "topic_epoch_residue")
         self.assertEqual(payload["counts"]["trigger_families"]["correction_outcome"], 2)
         self.assertEqual(payload["counts"]["trigger_families"]["topic_epoch_residue"], 2)
+
+    def test_journey_frontier_items_carry_retention_ladder_policy(self) -> None:
+        journey_pack = ready_pack(journey_row())
+
+        payload = dream_queue.build_dream_queue(
+            [journey_pack],
+            now="2026-05-30T00:00:00Z",
+        )
+        first = payload["items"][0]
+
+        self.assertEqual(first["trigger_family"], "journey_frontier")
+        self.assertEqual(first["retention_ladder"]["current_tier"], "dream_queue_hypothesis_24h_7d")
+        self.assertEqual(first["retention_ladder"]["foreground_hot_cache_ttl"], "0-6h")
+        self.assertEqual(first["retention_ladder"]["dream_residue_buffer_ttl"], "6-24h")
+        self.assertEqual(
+            first["retention_ladder"]["weekly_monthly_role"],
+            "journey_review_view_not_summary_replacement",
+        )
+        journey_projection = first["journey_projection"]
+        self.assertEqual(journey_projection["default_action"], "append_waypoint_candidate")
+        self.assertIn("append_waypoint_candidate", journey_projection["allowed_actions"])
+        self.assertIn("park_one_off_residue", journey_projection["allowed_actions"])
+        self.assertIn("replace_journey_with_summary", journey_projection["forbidden_actions"])
+        self.assertFalse(journey_projection["can_rewrite_waypoints"])
+        self.assertFalse(journey_projection["can_emit_user_profile_claim"])
+        self.assertEqual(
+            journey_projection["truth_boundary"],
+            "journey_projection_is_navigation_not_source_truth",
+        )
 
     def test_dedup_suppresses_previous_queue_and_adjudicated_findings(self) -> None:
         pack = ready_pack(question_link_row())
