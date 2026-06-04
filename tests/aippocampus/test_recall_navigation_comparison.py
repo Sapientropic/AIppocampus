@@ -96,6 +96,9 @@ class RecallNavigationComparisonTests(unittest.TestCase):
         )
         self.assertTrue(readout["semantic_timeout_but_route_available"])
         self.assertTrue(readout["source_boundary_preserved"])
+        self.assertTrue(readout["foreground_source_reopen_follow_through_measured"])
+        self.assertTrue(readout["foreground_source_reopen_follow_through"])
+        self.assertEqual(readout["foreground_manual_query_invention_count"], 0)
         foreground = report["foreground_lift"]
         self.assertEqual(foreground["first_turn"]["decision"], "scent")
         self.assertTrue(foreground["first_turn"]["route_actionable"])
@@ -106,6 +109,16 @@ class RecallNavigationComparisonTests(unittest.TestCase):
         self.assertEqual(foreground["first_turn"]["evidence_count"], 0)
         self.assertEqual(foreground["second_turn"]["cache_status"], "hit")
         self.assertGreaterEqual(foreground["second_turn"]["cached_card_count"], 1)
+        source_reopen = foreground["source_reopen_after_packet"]
+        self.assertTrue(source_reopen["measured"])
+        self.assertTrue(source_reopen["candidate_ref_consumed"])
+        self.assertEqual(source_reopen["selected_ref_kind"], "thread_key")
+        self.assertTrue(source_reopen["source_reopen_attempted"])
+        self.assertTrue(source_reopen["source_reopen_follow_through"])
+        self.assertEqual(source_reopen["manual_query_invention_count"], 0)
+        self.assertTrue(source_reopen["source_boundary_preserved"])
+        self.assertFalse(source_reopen["raw_source_snippet_serialized"])
+        self.assertIn("foreground_source_reopen_after_packet", report["metric_notes"])
         self.assertTrue(report["comparison_boundary"]["cannot_claim_live_default_foreground_lift"])
         self.assertFalse(readout["closeout_eligible"])
 

@@ -243,6 +243,57 @@ def _cards_are_navigation_only(result: Mapping[str, Any]) -> bool:
     return True
 
 
+def _foreground_source_reopen_after_packet(
+    result: Mapping[str, Any],
+    *,
+    registry_path: Path,
+) -> dict[str, Any]:
+    ambient = _as_dict(result.get("ambient_recall"))
+    packet = _as_dict(ambient.get("fresh_thread_packet"))
+    candidate_refs = [ref for ref in packet.get("candidate_refs") or [] if isinstance(ref, dict)]
+    selected_ref = next((ref for ref in candidate_refs if ref.get("thread_key")), None)
+    # This follow-through intentionally uses the packet ref, not a text query;
+    # otherwise the fixture would hide the manual-query invention #201 tracks.
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    threads = [entry for entry in registry.get("threads") or [] if isinstance(entry, dict)]
+    matched_threads = [
+        entry for entry in threads if entry.get("thread_key") == (selected_ref or {}).get("thread_key")
+    ]
+    source_rows_checked = 0
+    expected_source_found = False
+    if matched_threads:
+        sqlite_path = Path(str(_as_dict(matched_threads[0].get("paths")).get("sqlite") or ""))
+        if sqlite_path.exists():
+            con = sqlite3.connect(sqlite_path)
+            try:
+                rows = con.execute(
+                    "SELECT text FROM messages WHERE is_final = 1 ORDER BY id"
+                ).fetchall()
+            finally:
+                con.close()
+            source_rows_checked = len(rows)
+            expected_source_found = any(
+                "audio and lesson-loop closure" in str(row[0])
+                and "source reopen" in str(row[0])
+                for row in rows
+            )
+    return {
+        "measured": True,
+        "candidate_ref_count": len(candidate_refs),
+        "candidate_ref_consumed": bool(selected_ref),
+        "selected_ref_kind": "thread_key" if selected_ref else "",
+        "selected_next_action": "reopen_registry_thread_source_index" if selected_ref else "",
+        "registry_match_count": len(matched_threads),
+        "source_rows_checked": source_rows_checked,
+        "source_reopen_attempted": bool(selected_ref),
+        "source_reopen_follow_through": expected_source_found,
+        "manual_query_invention_count": 0,
+        "source_boundary_preserved": len(result.get("evidence") or []) == 0,
+        "raw_source_snippet_serialized": False,
+        "local_paths_serialized": False,
+    }
+
+
 def fixture_foreground_lift_measurement(root: Path) -> dict[str, Any]:
     """Run a public-safe two-turn prompt-hook measurement for #201.
 
@@ -321,6 +372,10 @@ def fixture_foreground_lift_measurement(root: Path) -> dict[str, Any]:
         and _cards_are_navigation_only(first)
         and _cards_are_navigation_only(second)
     )
+    source_reopen_after_packet = _foreground_source_reopen_after_packet(
+        first,
+        registry_path=registry_path,
+    )
     return {
         "measured": True,
         "case_id": "foreground_semantic_timeout_books_cache_lift",
@@ -356,11 +411,13 @@ def fixture_foreground_lift_measurement(root: Path) -> dict[str, Any]:
             "reschedule_avoided": "warm_background" not in second_ambient,
             "context_delivered": bool(second_context),
         },
+        "source_reopen_after_packet": source_reopen_after_packet,
         "boundary": {
             "deterministic_fixture_only": True,
             "semantic_provider_simulated_timeout": True,
             "no_external_model_calls": True,
             "navigation_only_until_source_reopen": True,
+            "packet_reopen_uses_candidate_ref_not_manual_query": True,
         },
     }
 
