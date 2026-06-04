@@ -238,6 +238,16 @@ source, raw rollout, registry refs, provenance, or foreground hook state.
 Physical payload compaction remains owner-specific and requires separate
 source/provenance/reference and rebuild-review checks.
 
+For the ambient thread cache owner, that apply step lives in
+`aippocampus_runtime.recall.ambient_cache_compaction` and is maintenance-only, not
+foreground-hook work. It may compact a matching `ambient_card` only when the
+dead-letter update is already `dead_lettered`, source refs are marked
+preserved, source-ref and provenance counts are present, no protected reference
+is present, and a rebuild/review note exists. The cache row becomes a
+hash-identity tombstone with counts and provenance hash; raw card text,
+source refs, and related-cache fingerprints for that card are removed so the
+dead-lettered cue does not keep reappearing as a related hit.
+
 `aippocampus_runtime.recall.fresh_thread_demo` is the #285 public-safe demonstration runner for this
 contract. It strings together the existing scent packet, action policy, and
 activation state modules over synthetic upstream decision packets across
