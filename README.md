@@ -63,6 +63,9 @@ API keys, cookies, or sync bundles while following the quick path.
 
 If you are deciding which AIppocampus surface another tool should depend on,
 use the [10-minute public API path](docs/guides/public-api.md#ten-minute-public-path).
+If you are deciding whether a feature belongs in the low-friction personal path
+or in governed/high-risk opt-in behavior, use
+[Product Profiles](docs/architecture/product-profiles.md).
 Repository checks for maintainers live in [Maintainer Checks](#maintainer-checks).
 
 ## AIppocampus For Coding Agents

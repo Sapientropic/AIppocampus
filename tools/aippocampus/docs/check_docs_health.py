@@ -252,6 +252,26 @@ PROOF_SLICE_MATURITY_POINTER_DOCS = {
     ),
 }
 
+PRODUCT_PROFILES_DOC = "docs/architecture/product-profiles.md"
+
+REQUIRED_PRODUCT_PROFILE_TERMS = {
+    "`personal_default`": "product profile doc missing personal_default tag",
+    "`power_user_optional`": "product profile doc missing power_user_optional tag",
+    "`enterprise_governed`": "product profile doc missing enterprise_governed tag",
+    "purpose-bound memory access tokens": "product profile doc missing purpose-token boundary",
+    "not baseline ceremony": "product profile doc missing non-ceremony boundary",
+    "pause / forget / do-not-use-here / export / why-not": "product profile doc missing personal controls",
+}
+
+PRODUCT_PROFILE_POINTER_DOCS = (
+    "docs/README.md",
+    "docs/guides/public-api.md",
+    "docs/guides/install-guide.md",
+    "docs/guides/coding-agent-memory.md",
+    "docs/architecture/high-risk-answer-gates.md",
+    "docs/guides/public-core-boundary.md",
+)
+
 # These phrase guards are intentionally narrow. They block specific stale
 # evidence claims that have already misled issue triage while avoiding broad
 # scans for ordinary identifiers such as current_thread or current_frontier.
@@ -895,6 +915,27 @@ def public_core_schema_contract_issues(repo_root: Path) -> list[str]:
     return issues
 
 
+def product_profile_contract_issues(repo_root: Path) -> list[str]:
+    issues: list[str] = []
+    profile_doc = repo_root / PRODUCT_PROFILES_DOC
+    if not profile_doc.exists():
+        return [f"missing product profile boundary doc: {PRODUCT_PROFILES_DOC}"]
+
+    for term, message in REQUIRED_PRODUCT_PROFILE_TERMS.items():
+        if term not in profile_doc.read_text(encoding="utf-8"):
+            issues.append(message)
+
+    for rel_path in PRODUCT_PROFILE_POINTER_DOCS:
+        path = repo_root / rel_path
+        if not path.exists():
+            issues.append(f"missing product profile pointer doc: {rel_path}")
+            continue
+        if "product-profiles.md" not in path.read_text(encoding="utf-8"):
+            issues.append(f"{rel_path} missing product profile boundary pointer")
+
+    return issues
+
+
 def python_version_contract_issues(repo_root: Path) -> list[str]:
     issues: list[str] = []
 
@@ -1282,6 +1323,7 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
     issues.extend(hippocampal_private_annotation_protocol_issues(repo_root))
     issues.extend(legacy_alias_inventory_issues(repo_root))
     issues.extend(public_api_contract_issues(repo_root))
+    issues.extend(product_profile_contract_issues(repo_root))
     issues.extend(public_core_schema_contract_issues(repo_root))
     issues.extend(python_version_contract_issues(repo_root))
     issues.extend(dependency_contract_issues(repo_root))

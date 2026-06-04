@@ -7,6 +7,9 @@ publishing release notes or package metadata.
 
 For supported CLI, MCP, JSON, environment-variable, and Python import stability,
 see [public-api.md](public-api.md).
+For the product profile split between personal defaults, optional diagnostics,
+and governed/enterprise behavior, see
+[product-profiles.md](../architecture/product-profiles.md).
 
 ## Licensing Decision
 
@@ -58,6 +61,11 @@ repository under an explicit open-source license:
 Local scripts that already ship in this repository are part of the Apache-2.0
 public core. A future hosted implementation may reuse the same contracts while
 remaining a separate product.
+
+This licensing boundary is separate from product profile friction. The public
+local core can still include high-risk gates or governance helpers, but those
+surfaces should be labeled `enterprise_governed` or explicit opt-in when they
+would make ordinary personal recall feel like a compliance console.
 
 ## Private User Data Boundary
 

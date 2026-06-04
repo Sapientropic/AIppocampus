@@ -10,6 +10,9 @@ the schema details here.
 For host-family support status, smoke evidence boundaries, and planned versus
 verified ecosystem claims, see
 [ecosystem-integration-matrix.md](ecosystem-integration-matrix.md).
+For the friction budget between ordinary personal recall, optional diagnostics,
+and governed/high-risk controls, see
+[product-profiles.md](../architecture/product-profiles.md).
 
 ## Ten-Minute Public Path
 
@@ -60,6 +63,11 @@ This path intentionally does not require MCP, Dream, cognitive-map jobs,
 semantic gates, sync, plugin packaging, benchmark runners, or hook installation.
 Those surfaces can be useful, but they are not the ordinary 10-minute dependency
 story.
+
+The default control vocabulary for the personal path is pause / forget /
+do-not-use-here / export / why-not. `export` and `why-not` have public command
+surfaces today; pause, forget, and do-not-use-here are the preferred product
+language for future low-friction controls, not a claim of complete CLI coverage.
 
 ## Which Layer Should I Depend On?
 
