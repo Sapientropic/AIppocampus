@@ -2,7 +2,8 @@
 
 Status: first deterministic repo-adapter slice.
 Related: #250, `aippocampus_runtime.navigation.repo_familiarity`,
-`tools/aippocampus/smoke/smoke_repo_familiarity.py`.
+`tools/aippocampus/smoke/smoke_repo_familiarity.py`,
+`tools/aippocampus/smoke/smoke_repo_familiarity_foreground_experiment.py`.
 
 AIppocampus can make a future agent feel oriented without pretending the model
 has innate memory. A familiarity map is the layer that says "this source area
@@ -55,6 +56,16 @@ The repo smoke is no-write and public-safe. It uses repository docs/code/test
 paths as source rows, computes relative-path fingerprints, and includes an
 adversarial stale-card arm plus an unrelated README task arm. Passing the smoke
 only proves the deterministic contract, not live agent helpfulness.
+
+## Opt-In Foreground Experiment Evidence
+
+The opt-in foreground experiment smoke compares public-safe fixture arms for
+`no_card`, `selected_card`, and `stale_or_irrelevant_card`. It reports only
+proxy metrics: `route_quality_proxy`, `tool_call_count`, `input_token_proxy`,
+`elapsed_ms_proxy`, fast rejects, and stale-route drag. These fields define the
+evidence envelope for future live runs; they do not prove live answer quality,
+token/tool-call savings, default prompt-hook lift, or multi-agent familiarity
+sharing.
 
 ## Non-Claims
 
