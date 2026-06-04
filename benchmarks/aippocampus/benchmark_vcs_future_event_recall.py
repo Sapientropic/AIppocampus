@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -55,6 +56,58 @@ SOURCE_DEGRADATION_STATES = {
     "partial_support",
 }
 FULL_SUPPORT_BLOCKING_DEGRADATIONS = {"missing_source_id", "partial_support"}
+SOURCE_DISAMBIGUATION_INPUT_FIELDS = [
+    "future_window.text",
+    "future_window.family",
+    "future_window.hard_event_kind",
+    "past_window.kind",
+    "past_window.text",
+    "past_window.behavior_backed",
+    "past_window.tool_name",
+    "past_window.command_class",
+    "past_window.failure_family",
+]
+TRACK_PREFIXES = {
+    "adv-dual-": "dual_source_counterfactual",
+    "adv-temporal-": "temporal_override_chain",
+    "adv-cross-family-": "family_cross_contamination",
+    "adv-paraphrase-": "adversarial_paraphrase",
+    "adv-lexical-": "lexical_near_miss_anti_drift",
+    "adv-abstain-": "abstention_unsupported",
+}
+TOKEN_RE = re.compile(r"[a-z0-9]+")
+STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "because",
+    "but",
+    "by",
+    "for",
+    "from",
+    "has",
+    "if",
+    "in",
+    "into",
+    "is",
+    "it",
+    "not",
+    "of",
+    "on",
+    "or",
+    "pr",
+    "source",
+    "that",
+    "the",
+    "this",
+    "to",
+    "was",
+    "with",
+}
 
 
 @dataclass(frozen=True)
@@ -115,6 +168,200 @@ def normalize_decision(value: Any) -> str:
 def normalize_source_degradation(value: Any) -> str:
     state = str(value or "full_source").strip().lower()
     return state if state in SOURCE_DEGRADATION_STATES else "full_source"
+
+
+def tokenize_for_retrieval(value: Any) -> set[str]:
+    return {
+        token
+        for token in TOKEN_RE.findall(str(value or "").casefold())
+        if token and token not in STOPWORDS and len(token) > 1
+    }
+
+
+def retrieval_text_for_source(source: dict[str, Any]) -> str:
+    # Deliberately omit source_id: source ids are oracle labels for grading and
+    # often encode "current" / "stale" in synthetic fixtures. Ranking may use
+    # public-safe candidate content and bounded source metadata only.
+    fields = [
+        source.get("kind"),
+        source.get("text"),
+        source.get("tool_name"),
+        source.get("command_class"),
+        source.get("command_family"),
+        source.get("target_class"),
+        source.get("test_target_class"),
+        source.get("failure_family"),
+    ]
+    return " ".join(str(field or "") for field in fields)
+
+
+def retrieval_text_for_event(event: dict[str, Any]) -> str:
+    # Do not include expected_signal, flag_worthy, or required_past_source_ids.
+    # The production-like arm receives the future event surface, not the grader.
+    return " ".join(
+        str(field or "")
+        for field in (
+            event.get("text"),
+            event.get("family"),
+            event.get("hard_event_kind"),
+        )
+    )
+
+
+def source_kind(source: dict[str, Any]) -> str:
+    return str(source.get("kind") or "").casefold()
+
+
+def source_is_behavior_backed(source: dict[str, Any]) -> bool:
+    return bool(source.get("behavior_backed")) or source_kind(source) in {
+        "tool_call",
+        "tool_call_failed",
+        "test_failed",
+        "edit_reverted",
+        "route_abandoned",
+    }
+
+
+def source_is_current_like(source: dict[str, Any]) -> bool:
+    kind = source_kind(source)
+    source_text = str(source.get("text") or "").casefold()
+    return any(
+        marker in f"{kind} {source_text}"
+        for marker in (
+            "counterfactual_current",
+            "current_decision",
+            "current source",
+            "active rationale",
+            "effective rule",
+            "local override",
+        )
+    )
+
+
+def source_is_stale_like(source: dict[str, Any]) -> bool:
+    kind = source_kind(source)
+    source_text = str(source.get("text") or "").casefold()
+    return any(
+        marker in f"{kind} {source_text}"
+        for marker in (
+            "old_decision",
+            "old source",
+            "original public",
+            "stale",
+            "superseded",
+            "earlier constraint",
+            "pull_request_metadata",
+            "weak_related_source",
+        )
+    )
+
+
+def source_is_weak_or_narrative(source: dict[str, Any]) -> bool:
+    kind = source_kind(source)
+    return kind in {"weak_related_source", "assistant_message"} or bool(
+        source.get("behavior_backed") is False
+    )
+
+
+def event_requests_current_source(event: dict[str, Any]) -> bool:
+    text = retrieval_text_for_event(event).casefold()
+    return any(
+        marker in text
+        for marker in (
+            "current",
+            "effective",
+            "override",
+            "overrides",
+            "overridden",
+            "newer",
+            "active",
+        )
+    )
+
+
+def event_requests_behavior_source(event: dict[str, Any]) -> bool:
+    text = retrieval_text_for_event(event).casefold()
+    return any(
+        marker in text
+        for marker in (
+            "behavior",
+            "failed",
+            "failure",
+            "test_failed",
+            "tool_call_failed",
+            "edit_reverted",
+            "route_abandoned",
+        )
+    )
+
+
+def event_has_unsupported_signal(event: dict[str, Any]) -> bool:
+    text = retrieval_text_for_event(event).casefold()
+    return any(
+        marker in text
+        for marker in (
+            "unsupported",
+            "no source-backed",
+            "without support",
+            "unrelated",
+            "similar surface",
+            "weak related",
+            "narrative-only",
+            "successful tool behavior",
+            "docs-only",
+        )
+    )
+
+
+def infer_event_track(event_id: str) -> str | None:
+    for prefix, track in TRACK_PREFIXES.items():
+        if event_id.startswith(prefix):
+            return track
+    if event_id.startswith("adv-rollout-"):
+        if event_id.endswith("-behavior-event"):
+            return "behavior_only_rollout_gold"
+        if event_id.endswith("-narrative-negative"):
+            return "behavior_narrative_negative"
+    return None
+
+
+def load_event_metadata(path: Path | str | None) -> dict[str, dict[str, Any]]:
+    if path is None:
+        return {}
+    rows = json.loads(Path(path).read_text(encoding="utf-8"))
+    if isinstance(rows, dict):
+        return {
+            str(event_id): dict(value)
+            for event_id, value in rows.items()
+            if isinstance(value, dict)
+        }
+    if isinstance(rows, list):
+        result: dict[str, dict[str, Any]] = {}
+        for index, row in enumerate(rows, start=1):
+            if not isinstance(row, dict):
+                raise ValueError(f"event metadata row {index} must be an object")
+            event_id = str(row.get("event_id") or "")
+            if not event_id:
+                raise ValueError(f"event metadata row {index} missing event_id")
+            result[event_id] = dict(row)
+        return result
+    raise ValueError("event metadata must be a JSON object or array")
+
+
+def event_track(
+    event: dict[str, Any] | None,
+    event_metadata: dict[str, dict[str, Any]] | None = None,
+) -> str | None:
+    if event is None:
+        return None
+    explicit_track = str(event.get("track") or "").strip()
+    if explicit_track:
+        return explicit_track
+    event_id = str(event.get("event_id") or "")
+    metadata_track = str((event_metadata or {}).get(event_id, {}).get("track") or "").strip()
+    if metadata_track:
+        return metadata_track
+    return infer_event_track(event_id)
 
 
 def read_json_or_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -282,9 +529,311 @@ def baseline_predictions(dataset: VcsFutureEventDataset, mode: str) -> list[Pred
     return predictions
 
 
+def score_source_for_event(
+    *,
+    event: dict[str, Any],
+    source: dict[str, Any],
+    row_sources: list[dict[str, Any]],
+) -> float:
+    query_tokens = tokenize_for_retrieval(retrieval_text_for_event(event))
+    source_tokens = tokenize_for_retrieval(retrieval_text_for_source(source))
+    overlap = query_tokens & source_tokens
+    score = float(len(overlap))
+
+    has_current_choice = any(source_is_current_like(candidate) for candidate in row_sources)
+    has_behavior_choice = any(source_is_behavior_backed(candidate) for candidate in row_sources)
+    if event_requests_current_source(event):
+        if source_is_current_like(source):
+            score += 8.0
+        elif has_current_choice and source_is_stale_like(source):
+            score -= 3.0
+    if event_requests_behavior_source(event):
+        if source_is_behavior_backed(source):
+            score += 6.0
+        elif has_behavior_choice and source_is_weak_or_narrative(source):
+            score -= 4.0
+    if source_is_weak_or_narrative(source):
+        score -= 2.0
+    if event_has_unsupported_signal(event):
+        score -= 3.0
+    return round(score, 4)
+
+
+def rank_sources_for_event(
+    *,
+    event: dict[str, Any],
+    row_sources: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    ranked: list[dict[str, Any]] = []
+    for source in row_sources:
+        source_id = str(source.get("source_id") or "")
+        if not source_id:
+            continue
+        ranked.append(
+            {
+                "source_id": source_id,
+                "kind": str(source.get("kind") or ""),
+                "score": score_source_for_event(
+                    event=event,
+                    source=source,
+                    row_sources=row_sources,
+                ),
+                "source_text_sha1": sha1_text(str(source.get("text") or ""))[:16],
+                "behavior_backed": source.get("behavior_backed")
+                if "behavior_backed" in source
+                else None,
+            }
+        )
+    return sorted(
+        ranked,
+        key=lambda item: (
+            -float(item["score"]),
+            str(item.get("kind") or ""),
+            str(item.get("source_text_sha1") or ""),
+        ),
+    )
+
+
+def should_flag_from_ranked_sources(
+    *,
+    event: dict[str, Any],
+    ranked_sources: list[dict[str, Any]],
+    min_score: float,
+) -> bool:
+    if not ranked_sources:
+        return False
+    top = ranked_sources[0]
+    if float(top["score"]) < min_score:
+        return False
+    if event_has_unsupported_signal(event):
+        return False
+    top_kind = str(top.get("kind") or "").casefold()
+    if top_kind in {"weak_related_source", "assistant_message"}:
+        return False
+    if top.get("behavior_backed") is False and event_requests_behavior_source(event):
+        return False
+    return True
+
+
+def source_disambiguation_case_rows(
+    dataset: VcsFutureEventDataset,
+    *,
+    event_metadata: dict[str, dict[str, Any]] | None = None,
+    top_k: int = 1,
+    min_score: float = 1.0,
+) -> tuple[list[Prediction], list[dict[str, Any]]]:
+    predictions: list[Prediction] = []
+    case_rows: list[dict[str, Any]] = []
+    safe_top_k = max(1, int(top_k))
+    for row in dataset.rows:
+        row_sources = [dict(source) for source in row.get("past_window") or []]
+        source_by_id = {
+            str(source.get("source_id") or ""): source
+            for source in row_sources
+            if str(source.get("source_id") or "")
+        }
+        for raw_event in row.get("future_window") or []:
+            event = dataset.events_by_id[str(raw_event.get("event_id") or "")]
+            ranked = rank_sources_for_event(event=event, row_sources=row_sources)
+            selected = should_flag_from_ranked_sources(
+                event=event,
+                ranked_sources=ranked,
+                min_score=min_score,
+            )
+            top_sources = ranked[:safe_top_k]
+            selected_source_ids = [str(source["source_id"]) for source in top_sources] if selected else []
+            if selected:
+                predictions.append(
+                    Prediction(
+                        prediction_id=f"production-like:{event['event_id']}",
+                        event_id=str(event["event_id"]),
+                        decision="flag",
+                        past_source_ids=tuple(selected_source_ids),
+                        family=str(event.get("family") or "") or None,
+                    )
+                )
+
+            required_source_ids = set(as_string_list(event.get("required_past_source_ids")))
+            stale_source_ids = sorted(set(source_by_id) - required_source_ids)
+            scores_by_source_id = {
+                str(source["source_id"]): float(source["score"]) for source in ranked
+            }
+            pairwise_comparisons = 0
+            pairwise_wins = 0
+            for required_source_id in required_source_ids:
+                if required_source_id not in scores_by_source_id:
+                    continue
+                for stale_source_id in stale_source_ids:
+                    if stale_source_id not in scores_by_source_id:
+                        continue
+                    pairwise_comparisons += 1
+                    pairwise_wins += int(
+                        scores_by_source_id[required_source_id]
+                        > scores_by_source_id[stale_source_id]
+                    )
+            top_source_ids = [str(source["source_id"]) for source in top_sources]
+            flag_worthy = bool(event.get("flag_worthy"))
+            current_top_k_hit = (
+                bool(required_source_ids)
+                and required_source_ids <= set(top_source_ids)
+                and source_support_allowed(event)
+            )
+            wrong_source_evidence = bool(
+                flag_worthy
+                and selected
+                and (
+                    not required_source_ids <= set(selected_source_ids)
+                    or bool(set(selected_source_ids) - required_source_ids)
+                )
+            )
+            negative_false_positive = bool((not flag_worthy) and selected)
+            case_rows.append(
+                {
+                    "event_id": event.get("event_id"),
+                    "project_id": event.get("project_id"),
+                    "track": event_track(event, event_metadata),
+                    "family": event.get("family"),
+                    "hard_event_kind": event.get("hard_event_kind"),
+                    "flag_worthy": flag_worthy,
+                    "required_past_source_ids": sorted(required_source_ids),
+                    "selected_past_source_ids": selected_source_ids,
+                    "top_source_ids": top_source_ids,
+                    "top_sources": top_sources,
+                    "stale_or_decoy_source_ids": stale_source_ids,
+                    "current_source_top_k_hit": current_top_k_hit,
+                    "stale_source_top_k": bool(set(top_source_ids) & set(stale_source_ids))
+                    if flag_worthy
+                    else False,
+                    "wrong_source_evidence": wrong_source_evidence,
+                    "negative_false_positive": negative_false_positive,
+                    "pairwise_current_vs_stale": {
+                        "wins": pairwise_wins,
+                        "comparisons": pairwise_comparisons,
+                    },
+                }
+            )
+    return predictions, case_rows
+
+
+def summarize_source_disambiguation_cases(
+    case_rows: list[dict[str, Any]],
+    *,
+    top_k: int,
+    min_score: float,
+) -> dict[str, Any]:
+    def bucket_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+        positives = [row for row in rows if row["flag_worthy"]]
+        negatives = [row for row in rows if not row["flag_worthy"]]
+        pairwise_wins = sum(
+            int(row["pairwise_current_vs_stale"]["wins"]) for row in positives
+        )
+        pairwise_comparisons = sum(
+            int(row["pairwise_current_vs_stale"]["comparisons"]) for row in positives
+        )
+        return {
+            "event_count": len(rows),
+            "gold_event_count": len(positives),
+            "non_flag_event_count": len(negatives),
+            "current_source_top_k_hit_rate": safe_rate(
+                sum(1 for row in positives if row["current_source_top_k_hit"]),
+                len(positives),
+            ),
+            "current_vs_stale_pairwise_win_rate": safe_rate(
+                pairwise_wins,
+                pairwise_comparisons,
+            ),
+            "stale_source_top_k_rate": safe_rate(
+                sum(1 for row in positives if row["stale_source_top_k"]),
+                len(positives),
+            ),
+            "wrong_source_evidence_rate": safe_rate(
+                sum(1 for row in positives if row["wrong_source_evidence"]),
+                len(positives),
+            ),
+            "negative_false_positive_rate": safe_rate(
+                sum(1 for row in negatives if row["negative_false_positive"]),
+                len(negatives),
+            ),
+            "current_vs_stale_pairwise_wins": pairwise_wins,
+            "current_vs_stale_pairwise_comparisons": pairwise_comparisons,
+        }
+
+    metrics = bucket_summary(case_rows)
+    by_track: dict[str, dict[str, Any]] = {}
+    for row in case_rows:
+        track = str(row.get("track") or "unknown")
+        by_track.setdefault(track, {"rows": []})["rows"].append(row)
+    return {
+        "available": True,
+        "kind": "production_like_source_disambiguation",
+        "config": {
+            "top_k": top_k,
+            "min_score": min_score,
+        },
+        "input_contract": {
+            "uses_required_past_source_ids_for_ranking": False,
+            "required_past_source_ids_used_for": "grading_only",
+            "ranking_input_fields": SOURCE_DISAMBIGUATION_INPUT_FIELDS,
+            "live_model_or_provider_call": False,
+            "claim_boundary": (
+                "This arm builds a local in-memory candidate index from each "
+                "case's past_window and ranks candidates without gold source ids. "
+                "It is production-like deterministic retrieval, not live LLM quality."
+            ),
+        },
+        "metrics": metrics,
+        "by_track": {
+            track: bucket_summary(bucket["rows"])
+            for track, bucket in sorted(by_track.items())
+        },
+        "events": case_rows,
+        "privacy_boundary": {
+            "raw_event_text_emitted": False,
+            "raw_past_source_text_emitted": False,
+            "source_text_hashes_emitted": True,
+            "absolute_paths_emitted": False,
+        },
+    }
+
+
+def claim_levels(
+    *,
+    production_like_retrieval: bool,
+    predictions_file: Path | str | None,
+    baseline: str,
+) -> dict[str, Any]:
+    oracle_baseline = (
+        predictions_file is None and baseline == "gold" and not production_like_retrieval
+    )
+    return {
+        "source_window_oracle_contract": {
+            "available": not production_like_retrieval,
+            "uses_required_past_source_ids_as_prediction_input": oracle_baseline,
+            "claim_boundary": (
+                "The gold baseline is an oracle contract check: it proves scorer "
+                "semantics only when required source ids are supplied as predictions."
+            ),
+        },
+        "production_like_retrieval": {
+            "available": production_like_retrieval,
+            "uses_required_past_source_ids_as_prediction_input": False,
+            "claim_boundary": (
+                "Ranks a local past-window source index without gold ids; it is "
+                "not a live model/provider quality claim."
+            ),
+        },
+        "live_source_disambiguation": {
+            "available": False,
+            "why": "No live model/provider call is made by this deterministic runner.",
+        },
+    }
+
+
 def score_predictions(
     dataset: VcsFutureEventDataset,
     predictions: list[Prediction],
+    *,
+    event_metadata: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     event_rows: list[dict[str, Any]] = []
     prediction_rows: list[dict[str, Any]] = []
@@ -309,6 +858,7 @@ def score_predictions(
             {
                 "event_id": event_id,
                 "project_id": event.get("project_id"),
+                "track": event_track(event, event_metadata),
                 "family": event.get("family"),
                 "hard_event_kind": event.get("hard_event_kind"),
                 "flag_worthy": flag_worthy,
@@ -348,6 +898,7 @@ def score_predictions(
                 "prediction_id": prediction.prediction_id,
                 "event_id": prediction.event_id,
                 "decision": prediction.decision,
+                "track": event_track(maybe_event, event_metadata),
                 "family": prediction.family or (maybe_event.get("family") if maybe_event else None),
                 "known_event_id": not unknown_event_id,
                 "flag_worthy_event": flag_worthy,
@@ -511,7 +1062,11 @@ def run_benchmark(
     dataset_path: Path | str = DEFAULT_DATASET,
     predictions_file: Path | str | None = None,
     closed_book_predictions_file: Path | str | None = None,
+    event_metadata_file: Path | str | None = None,
     baseline: str = "gold",
+    production_like_retrieval: bool = False,
+    source_disambiguation_top_k: int = 1,
+    source_disambiguation_min_score: float = 1.0,
     require_cc0_dataset: bool = True,
     min_recall: float = 1.0,
     min_precision: float = 1.0,
@@ -520,12 +1075,33 @@ def run_benchmark(
 ) -> dict[str, Any]:
     started = time.perf_counter()
     dataset = load_dataset(dataset_path, require_cc0=require_cc0_dataset)
-    predictions = (
-        load_predictions(Path(predictions_file).resolve())
-        if predictions_file
-        else baseline_predictions(dataset, baseline)
+    event_metadata = load_event_metadata(event_metadata_file)
+    source_disambiguation: dict[str, Any] | None = None
+    if production_like_retrieval and predictions_file:
+        raise ValueError("--production-like-retrieval cannot be combined with --predictions")
+    if production_like_retrieval:
+        predictions, source_disambiguation_rows = source_disambiguation_case_rows(
+            dataset,
+            event_metadata=event_metadata,
+            top_k=source_disambiguation_top_k,
+            min_score=source_disambiguation_min_score,
+        )
+        source_disambiguation = summarize_source_disambiguation_cases(
+            source_disambiguation_rows,
+            top_k=source_disambiguation_top_k,
+            min_score=source_disambiguation_min_score,
+        )
+    else:
+        predictions = (
+            load_predictions(Path(predictions_file).resolve())
+            if predictions_file
+            else baseline_predictions(dataset, baseline)
+        )
+    event_rows, prediction_rows = score_predictions(
+        dataset,
+        predictions,
+        event_metadata=event_metadata,
     )
-    event_rows, prediction_rows = score_predictions(dataset, predictions)
     metrics = summarize(event_rows, prediction_rows)
     closed_book: dict[str, Any] | None = None
     if closed_book_predictions_file:
@@ -533,6 +1109,7 @@ def run_benchmark(
         closed_event_rows, closed_prediction_rows = score_predictions(
             dataset,
             closed_book_predictions,
+            event_metadata=event_metadata,
         )
         closed_metrics = summarize(closed_event_rows, closed_prediction_rows)
         closed_book = {
@@ -615,10 +1192,20 @@ def run_benchmark(
             "closed_book_predictions_file_sha1": sha1_text(str(closed_book_predictions_file))[:16]
             if closed_book_predictions_file
             else None,
-            "prediction_source": "external_predictions" if predictions_file else f"{baseline}_baseline",
-            "baseline": None if predictions_file else baseline,
+            "event_metadata_file_sha1": sha1_text(str(Path(event_metadata_file).resolve()))[:16]
+            if event_metadata_file
+            else None,
+            "prediction_source": (
+                "production_like_retrieval"
+                if production_like_retrieval
+                else ("external_predictions" if predictions_file else f"{baseline}_baseline")
+            ),
+            "baseline": None if (predictions_file or production_like_retrieval) else baseline,
             "closed_book_ablation": bool(closed_book_predictions_file),
             "require_cc0_dataset": require_cc0_dataset,
+            "production_like_retrieval": production_like_retrieval,
+            "source_disambiguation_top_k": source_disambiguation_top_k,
+            "source_disambiguation_min_score": source_disambiguation_min_score,
             "min_recall": min_recall,
             "min_precision": min_precision,
             "max_false_positives": max_false_positives,
@@ -649,6 +1236,16 @@ def run_benchmark(
                 "required-source support; useful for debugging but not for the "
                 "source-backed quality gate"
             ),
+        },
+        "claim_levels": claim_levels(
+            production_like_retrieval=production_like_retrieval,
+            predictions_file=predictions_file,
+            baseline=baseline,
+        ),
+        "source_disambiguation": source_disambiguation
+        or {
+            "available": False,
+            "why": "Run with --production-like-retrieval to score local source disambiguation.",
         },
         "candidate_discovery_bias": dataset.candidate_discovery_bias,
         "source_degradation_controls": source_degradation_controls(event_rows),
@@ -716,7 +1313,26 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dataset", type=Path, default=DEFAULT_DATASET)
     parser.add_argument("--predictions", type=Path, default=None)
     parser.add_argument("--closed-book-predictions", type=Path, default=None)
+    parser.add_argument(
+        "--event-metadata",
+        type=Path,
+        default=None,
+        help=(
+            "Optional sanitized event metadata JSON with fields such as track. "
+            "Gold required source ids are still used only for grading."
+        ),
+    )
     parser.add_argument("--baseline", choices=["gold", "empty"], default="gold")
+    parser.add_argument(
+        "--production-like-retrieval",
+        action="store_true",
+        help=(
+            "Build a local past-window source index and rank sources without "
+            "required_past_source_ids as prediction input."
+        ),
+    )
+    parser.add_argument("--source-disambiguation-top-k", type=int, default=1)
+    parser.add_argument("--source-disambiguation-min-score", type=float, default=1.0)
     parser.add_argument(
         "--allow-non-cc0-dataset",
         action="store_true",
@@ -745,7 +1361,11 @@ def main() -> int:
         dataset_path=args.dataset,
         predictions_file=args.predictions,
         closed_book_predictions_file=args.closed_book_predictions,
+        event_metadata_file=args.event_metadata,
         baseline=args.baseline,
+        production_like_retrieval=args.production_like_retrieval,
+        source_disambiguation_top_k=args.source_disambiguation_top_k,
+        source_disambiguation_min_score=args.source_disambiguation_min_score,
         require_cc0_dataset=not args.allow_non_cc0_dataset,
         min_recall=args.min_recall,
         min_precision=args.min_precision,

@@ -1,0 +1,134 @@
+{
+  "schema_version": 1,
+  "kind": "aippocampus_react_real_vcs_production_like_source_disambiguation_measurement",
+  "report_date": "2026-06-04",
+  "repository": "facebook/react",
+  "repository_url": "https://github.com/facebook/react",
+  "dataset_id": "react_real_vcs_adversarial_v2_2026_05_31",
+  "local_fixture_policy": "fixture, event metadata, and full runner output are local .tmp artifacts; raw PR bodies, search payloads, rollout payloads, and local paths are not committed",
+  "local_artifacts": {
+    "fixture_path_sha1": "2cf7f1eab91881ff",
+    "event_metadata_path_sha1": "2244d31ae84b83b0",
+    "full_report_path": ".tmp/react-real-vcs-adversarial-v2/react-adversarial-v2-production-like-retrieval-report.json"
+  },
+  "command": "python benchmarks\\aippocampus\\benchmark_vcs_future_event_recall.py --dataset .tmp\\react-real-vcs-adversarial-v2\\react-adversarial-v2-fixture.jsonl --event-metadata .tmp\\react-real-vcs-adversarial-v2\\event-meta.json --production-like-retrieval --allow-non-cc0-dataset --output .tmp\\react-real-vcs-adversarial-v2\\react-adversarial-v2-production-like-retrieval-report.json --json",
+  "claim_levels": {
+    "source_window_oracle_contract": {
+      "available": false,
+      "uses_required_past_source_ids_as_prediction_input": false
+    },
+    "production_like_retrieval": {
+      "available": true,
+      "uses_required_past_source_ids_as_prediction_input": false
+    },
+    "live_source_disambiguation": {
+      "available": false,
+      "why": "No live model/provider call was made."
+    }
+  },
+  "overall_metrics": {
+    "future_event_gold_count": 60,
+    "non_flag_future_event_count": 57,
+    "predicted_flag_count": 90,
+    "true_positive_count": 60,
+    "false_negative_count": 0,
+    "false_positive_count": 30,
+    "future_event_flag_recall_rate": 1.0,
+    "future_event_flag_precision": 0.6667,
+    "future_event_flag_f1": 0.8,
+    "anti_drift_pass_rate": 0.4737,
+    "source_support_failure_count": 0
+  },
+  "source_disambiguation_metrics": {
+    "top_k": 1,
+    "min_score": 1.0,
+    "event_count": 117,
+    "gold_event_count": 60,
+    "non_flag_event_count": 57,
+    "current_source_top_k_hit_rate": 1.0,
+    "current_vs_stale_pairwise_win_rate": 1.0,
+    "stale_source_top_k_rate": 0.0,
+    "wrong_source_evidence_rate": 0.0,
+    "negative_false_positive_rate": 0.5263,
+    "current_vs_stale_pairwise_wins": 51,
+    "current_vs_stale_pairwise_comparisons": 51
+  },
+  "track_summary": {
+    "dual_source_counterfactual": {
+      "gold_event_count": 12,
+      "current_source_top_k_hit_rate": 1.0,
+      "current_vs_stale_pairwise_win_rate": 1.0,
+      "stale_source_top_k_rate": 0.0,
+      "wrong_source_evidence_rate": 0.0
+    },
+    "temporal_override_chain": {
+      "gold_event_count": 12,
+      "current_source_top_k_hit_rate": 1.0,
+      "current_vs_stale_pairwise_win_rate": 1.0,
+      "stale_source_top_k_rate": 0.0,
+      "wrong_source_evidence_rate": 0.0
+    },
+    "family_cross_contamination": {
+      "gold_event_count": 9,
+      "current_source_top_k_hit_rate": 1.0,
+      "current_vs_stale_pairwise_win_rate": 1.0,
+      "wrong_source_evidence_rate": 0.0
+    },
+    "behavior_only_rollout_gold": {
+      "gold_event_count": 9,
+      "current_source_top_k_hit_rate": 1.0,
+      "current_vs_stale_pairwise_win_rate": 1.0,
+      "wrong_source_evidence_rate": 0.0
+    },
+    "adversarial_paraphrase": {
+      "gold_event_count": 18,
+      "current_source_top_k_hit_rate": 1.0,
+      "wrong_source_evidence_rate": 0.0
+    },
+    "lexical_near_miss_anti_drift": {
+      "non_flag_event_count": 30,
+      "negative_false_positive_rate": 1.0,
+      "false_positive_count": 30
+    },
+    "behavior_narrative_negative": {
+      "non_flag_event_count": 9,
+      "negative_false_positive_rate": 0.0,
+      "false_positive_count": 0
+    },
+    "abstention_unsupported": {
+      "non_flag_event_count": 18,
+      "negative_false_positive_rate": 0.0,
+      "false_positive_count": 0
+    }
+  },
+  "failure_categories": {
+    "lexical_near_miss_false_positive_count": 30,
+    "source_selection_failure_count": 0,
+    "missed_current_source_count": 0,
+    "negative_false_positive_count": 30
+  },
+  "input_contract": {
+    "ranking_input_fields": [
+      "future_window.text",
+      "future_window.family",
+      "future_window.hard_event_kind",
+      "past_window.kind",
+      "past_window.text",
+      "past_window.behavior_backed",
+      "past_window.tool_name",
+      "past_window.command_class",
+      "past_window.failure_family"
+    ],
+    "uses_required_past_source_ids_for_ranking": false,
+    "required_past_source_ids_used_for": "grading_only",
+    "live_model_or_provider_call": false
+  },
+  "cannot_claim": [
+    "live_model_quality",
+    "license_safe_redistributable_fixture_corpus",
+    "private_real_history_continuity_quality",
+    "wild_vcs_corpus_quality",
+    "negative_control_pass_for_lexical_near_miss_track",
+    "source_window_oracle_contract_score"
+  ]
+}

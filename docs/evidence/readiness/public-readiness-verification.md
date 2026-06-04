@@ -15,6 +15,34 @@ Stable privacy rules live in `docs/guides/privacy-security-checklist.md`. Do not
 raw command JSON here: local smoke outputs may contain machine-specific
 temporary paths, so this document keeps only summarized evidence.
 
+## 2026-06-04 React VCS Production-Like Source Disambiguation
+
+Issue #254 added the first non-oracle source-disambiguation arm for the React
+VCS adversarial fixture. The runner now has a `--production-like-retrieval`
+mode that builds a local past-window source index, ranks source candidates
+without using `required_past_source_ids`, and uses those ids only for grading.
+
+Latest verification for this slice:
+
+- `python -m pytest tests\aippocampus\test_benchmark_vcs_future_event_recall.py -q`:
+  12 tests passed. The new tests cover current-vs-stale source ranking,
+  track metadata from a sidecar file, and the rule that required source ids are
+  not ranking input.
+- `python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset .tmp\react-real-vcs-adversarial-v2\react-adversarial-v2-fixture.jsonl --event-metadata .tmp\react-real-vcs-adversarial-v2\event-meta.json --production-like-retrieval --allow-non-cc0-dataset --output .tmp\react-real-vcs-adversarial-v2\react-adversarial-v2-production-like-retrieval-report.json --json`:
+  produced a sanitized local report and exited nonzero under the default
+  perfect-quality gate because the arm still has 30 lexical-near-miss false
+  positives. The measured aggregate was 60/60 gold true positives, 0 source
+  support failures, `current_source_top_k_hit_rate=1.0`,
+  `current_vs_stale_pairwise_win_rate=1.0`, `wrong_source_evidence_rate=0.0`,
+  and `negative_false_positive_rate=0.5263`.
+
+The committed aggregate report is
+`docs/evidence/benchmarks/react-real-vcs-production-like-disambiguation-2026-06-04.md`.
+This is source-disambiguation evidence with an explicit hard-negative
+calibration failure. It is not live model quality, wild VCS corpus quality,
+private real-history quality, or license-safe redistribution of the local React
+fixture.
+
 ## 2026-05-28 Layout Refresh
 
 The installable skill body is now runtime-only: repository tests live in

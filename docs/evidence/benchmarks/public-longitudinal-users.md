@@ -44,6 +44,9 @@ Latest 100+ gold real public VCS measurement:
 Latest adversarial React VCS measurement:
 [`react-real-vcs-adversarial-v2-2026-05-31.md`](react-real-vcs-adversarial-v2-2026-05-31.md).
 
+Latest non-oracle React VCS source-disambiguation follow-up:
+[`react-real-vcs-production-like-disambiguation-2026-06-04.md`](react-real-vcs-production-like-disambiguation-2026-06-04.md).
+
 ## Purpose
 
 AIppocampus should help agents remember hidden engineering context across
@@ -321,6 +324,15 @@ The bad-control arms deliberately fail: stale/decoy sources fall to 30% recall,
 keyword-surface matching produces 57 false positives, and overactive all-flags
 gets 0% anti-drift pass.
 
+The first non-oracle production-like source-disambiguation follow-up is
+[`react-real-vcs-production-like-disambiguation-2026-06-04.md`](react-real-vcs-production-like-disambiguation-2026-06-04.md).
+It reuses the adversarial V2 fixture, builds a local past-window source index,
+and ranks candidates without using `required_past_source_ids` as prediction
+input. The run picks the current/effective source on the dual-source and
+temporal-override tracks, but still over-activates all lexical near-miss
+negatives, so it is source-disambiguation evidence with an explicit
+anti-drift calibration failure.
+
 ## Runner
 
 Entrypoint:
@@ -455,6 +467,7 @@ The first scaffold for this contract is now:
 python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --json
 python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --baseline empty --json
 python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --predictions .tmp\vcs-source-window.jsonl --closed-book-predictions .tmp\vcs-closed-book.jsonl --json
+python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset .tmp\react-real-vcs-adversarial-v2\react-adversarial-v2-fixture.jsonl --event-metadata .tmp\react-real-vcs-adversarial-v2\event-meta.json --production-like-retrieval --allow-non-cc0-dataset --json
 python benchmarks\aippocampus\benchmark_vcs_future_event_recall.py --dataset benchmark_corpus\public_longitudinal_users\rollout_behavior_events_v1.jsonl --json
 python benchmarks\aippocampus\build_vcs_future_event_fixture.py --input .tmp\public-vcs-links.jsonl --output .tmp\vcs-future-events-built.jsonl --json
 python benchmarks\aippocampus\build_vcs_future_event_fixture.py --clean-source-events .tmp\clean-source\events.jsonl --links .tmp\rollout-event-links.jsonl --output .tmp\rollout-future-events.jsonl --allow-non-cc0-output --json
@@ -484,6 +497,12 @@ The runner now exposes `contamination_control.closed_book` when
 `--closed-book-predictions` is provided. Public claims should report the
 source-over-closed-book lift; without that lift, public VCS scores are
 contamination diagnostics rather than source-backed memory evidence.
+
+The same runner also exposes `--production-like-retrieval` for source
+disambiguation. That arm builds a local candidate index from each case's
+`past_window` and uses `required_past_source_ids` only for grading, not ranking.
+Report it separately from `source_window_oracle_contract` and do not call it
+live model quality unless a live provider/model is actually used.
 
 Raw outputs, external predictions, and large follow-up reports belong in
 `.tmp/` or `benchmark_corpus/reports/` unless a future change deliberately
