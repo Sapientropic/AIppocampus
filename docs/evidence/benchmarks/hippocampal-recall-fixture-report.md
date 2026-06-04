@@ -1,7 +1,7 @@
 # Hippocampal Recall Fixture Report
 
 Status: implemented public-safe diagnostic seed for GitHub #229, #230, #231,
-#233, and #237.
+#233, #237, and the first #239 structure/time retrieval slice.
 
 This report records the narrow evidence boundary for
 `benchmarks/aippocampus/benchmark_hippocampal_recall.py`. The runner validates a
@@ -39,6 +39,10 @@ private registry.
 - Cross-system comparison rows for #238, exposed in the benchmark JSON as
   `cross_system_comparison` and summarized in
   [`hippocampal-cross-system-comparison-2026-06-04.md`](hippocampal-cross-system-comparison-2026-06-04.md).
+- First D5/D6 index/search slice for #239: `source_index.sqlite` now includes a
+  deterministic `message_features` sidecar, and hybrid retrieval can expose
+  separate text, structure, and temporal diagnostics when explicit cues are
+  supplied.
 
 ## Scoring Contract
 
@@ -64,6 +68,7 @@ credentials, generated local indexes, or hidden `.aippocampus/` state:
 python benchmarks\aippocampus\build_hippocampal_fixture.py --json
 python benchmarks\aippocampus\benchmark_hippocampal_recall.py --json
 python -m unittest tests.aippocampus.test_benchmark_hippocampal_recall
+python -m unittest tests.aippocampus.test_recall_structure_time_features
 ```
 
 The benchmark JSON report exposes `report_schema_version`, `fixture_dataset_id`,
@@ -86,6 +91,11 @@ Cross-system rows expose `cross_system_comparison`. Local rows use observed
 public-synthetic fixture metrics; semantic-only and external memory-system rows
 stay visible as not-implemented or missing-config diagnostics until runnable
 adapters exist.
+
+Structure/time retrieval exposes `message_features`, `structure_match_score`,
+`structure_signals`, and `temporal_affinity_score` for debugging D5/D6 misses.
+These are retrieval diagnostics over source-backed message projections, not
+claims that D5/D6 benchmark quality is solved.
 
 ## Canonical Files
 
@@ -111,5 +121,7 @@ adapters exist.
 - user-visible Dream benefit or predictive validity from synthetic H5 deltas
 - private real-history consolidation quality
 - AIppocampus-specific consolidation lift without live controls
+- full D5/D6 recall quality from the first deterministic structure/time index
+  slice
 - publication-grade comparison or confidence intervals from the 12-case
   diagnostic seed
