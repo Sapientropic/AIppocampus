@@ -88,6 +88,10 @@ DEFAULT_MAX_PROMPT_RELEVANT_CATALOG_ITEMS = 8
 DEFAULT_MAX_TRIGGER_ITEMS = int(os.environ.get("AIPPOCAMPUS_SEMANTIC_TRIGGER_LIMIT", "0"))
 DEFAULT_MAX_PROMPT_RELEVANT_TRIGGER_ITEMS = 8
 DEFAULT_WORKERS = ("gate", "alias", "scope")
+WORKER_ALIASES = {
+    "all": DEFAULT_WORKERS,
+    "default": DEFAULT_WORKERS,
+}
 
 __all__ = [
     "parse_worker_response",
@@ -135,6 +139,23 @@ def semantic_gate_enabled(
     if resolved == "on":
         return bool(key)
     return bool(key)
+
+
+def normalize_worker_names(workers: tuple[str, ...] | list[str] | None) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    requested = tuple(str(worker or "").strip().casefold() for worker in (workers or DEFAULT_WORKERS))
+    expanded: list[str] = []
+    invalid: list[str] = []
+    for worker in requested:
+        if not worker:
+            continue
+        alias = WORKER_ALIASES.get(worker)
+        if alias:
+            expanded.extend(alias)
+        elif worker in DEFAULT_WORKERS:
+            expanded.append(worker)
+        else:
+            invalid.append(worker)
+    return tuple(unique_preserve(expanded)), tuple(unique_preserve(invalid))
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -683,6 +704,9 @@ def run_semantic_gate(
         api_key_env=resolved_api_key_env,
     )
     key_value = api_key or os.environ.get(resolved_api_key_env)
+    worker_names, invalid_workers = normalize_worker_names(workers)
+    if route.provider != "deepseek" and capabilities:
+        worker_names = worker_names[: max(1, int(capabilities.safe_default_concurrency or 1))]
     unavailable_metadata: dict[str, Any] = {
         "model_route": route_payload,
         "cache": route_cache_metrics(route, {}),
@@ -693,8 +717,20 @@ def run_semantic_gate(
         },
         "timeout": timeout,
         "temperature": temperature,
-        "worker_count": len(tuple(worker for worker in workers if worker in set(DEFAULT_WORKERS))),
+        "worker_count": len(worker_names),
     }
+    if invalid_workers:
+        return unavailable_result(
+            "invalid semantic worker(s): "
+            + ", ".join(invalid_workers)
+            + "; valid workers are gate, alias, scope",
+            **unavailable_metadata,
+        )
+    if not worker_names:
+        return unavailable_result(
+            "no semantic workers selected; valid workers are gate, alias, scope",
+            **unavailable_metadata,
+        )
     if not semantic_gate_enabled(mode, api_key=key_value, api_key_env=resolved_api_key_env):
         return unavailable_result(
             "semantic gate disabled or missing api key",
@@ -751,7 +787,7 @@ def run_semantic_gate(
         mode=mode or "auto",
         model=resolved_model,
         base_url=resolved_base_url,
-        workers=tuple(worker for worker in workers if worker in set(DEFAULT_WORKERS)),
+        workers=worker_names,
         temperature=temperature,
     )
     cache_lookup = "disabled"
@@ -786,9 +822,6 @@ def run_semantic_gate(
     payload = sanitize_external_model_payload(payload, project_root=cwd_path)
     parsed_workers: list[dict[str, Any]] = []
     errors: list[str] = []
-    worker_names = tuple(worker for worker in workers if worker in set(DEFAULT_WORKERS))
-    if route.provider != "deepseek" and capabilities:
-        worker_names = worker_names[: max(1, int(capabilities.safe_default_concurrency or 1))]
     worker_kwargs: dict[str, Any] = {
         "payload": payload,
         "api_key": str(key_value),

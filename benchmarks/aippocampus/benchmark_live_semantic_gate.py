@@ -59,6 +59,7 @@ def summarize_live_semantic_results(results: list[dict[str, Any]]) -> dict[str, 
     called = [row for row in results if row.get("semantic_gate_called")]
     decisions: dict[str, int] = {}
     error_kinds: dict[str, int] = {}
+    availability_reasons: dict[str, int] = {}
     usage_totals = {
         "prompt_tokens": 0,
         "completion_tokens": 0,
@@ -74,10 +75,14 @@ def summarize_live_semantic_results(results: list[dict[str, Any]]) -> dict[str, 
     for row in called:
         decision = str(row.get("semantic_decision") or "none")
         decisions[decision] = decisions.get(decision, 0) + 1
+        if not row.get("semantic_available"):
+            reason = str(row.get("semantic_availability_reason") or "unknown")
+            availability_reasons[reason] = availability_reasons.get(reason, 0) + 1
         for kind in row.get("semantic_error_kinds") or []:
             error_kinds[str(kind)] = error_kinds.get(str(kind), 0) + 1
         for key in usage_totals:
             usage_totals[key] += int(row.get(f"semantic_{key}") or 0)
+    available_count = sum(1 for row in called if row.get("semantic_available"))
     guarded_to_scent = sum(
         1
         for row in called
@@ -89,14 +94,16 @@ def summarize_live_semantic_results(results: list[dict[str, Any]]) -> dict[str, 
         if row.get("semantic_decision") == "evidence" and row.get("actual") == "evidence"
     )
     return {
-        "semantic_available_count": sum(1 for row in called if row.get("semantic_available")),
+        "semantic_available_count": available_count,
         "semantic_unavailable_count": sum(
             1 for row in called if not row.get("semantic_available")
         ),
+        "semantic_availability_rate": safe_rate(available_count, len(called)),
         "semantic_error_case_count": sum(
             1 for row in called if int(row.get("semantic_error_count") or 0) > 0
         ),
         "semantic_decision_counts": decisions,
+        "semantic_availability_reason_counts": availability_reasons,
         "semantic_error_kind_counts": error_kinds,
         "semantic_usage": {
             **usage_totals,
@@ -286,6 +293,8 @@ def run_case(
         {
             "semantic_decision": semantic_result.get("decision"),
             "semantic_available": bool(semantic_result.get("available")),
+            "semantic_availability_reason": semantic_result.get("availability_reason"),
+            "semantic_diagnostic": semantic_result.get("diagnostic"),
             "semantic_confidence": semantic_result.get("confidence"),
             "semantic_cached": bool(semantic_result.get("cached")),
             "semantic_elapsed_ms": semantic_result.get("elapsed_ms"),
@@ -328,8 +337,10 @@ def unavailable_payload(*, reason: str, started: float, config: dict[str, Any]) 
             "semantic_model_call_rate": 0.0,
             "semantic_available_count": 0,
             "semantic_unavailable_count": 0,
+            "semantic_availability_rate": 0.0,
             "semantic_error_case_count": 0,
             "semantic_decision_counts": {},
+            "semantic_availability_reason_counts": {},
             "semantic_error_kind_counts": {},
             "semantic_usage": {
                 "prompt_tokens": 0,
@@ -369,6 +380,10 @@ def privacy_boundary(*, case_ids_are_hashed: bool) -> dict[str, Any]:
 def status_for_metrics(metrics: dict[str, Any], *, min_cases: int, min_surface_recall: float) -> str:
     if int(metrics.get("total_cases") or 0) < min_cases:
         return "diagnostic_only"
+    if int(metrics.get("semantic_model_call_count") or 0) > 0 and int(
+        metrics.get("semantic_available_count") or 0
+    ) == 0:
+        return "insufficient_live_semantic_availability"
     if float(metrics.get("scent_or_evidence_recall") or 0.0) < min_surface_recall:
         return "insufficient_live_semantic_recall"
     if int(metrics.get("evidence_false_positive_count") or 0) > 0:
@@ -507,8 +522,30 @@ def print_human_summary(payload: dict[str, Any]) -> None:
 
 
 def parse_workers(raw: str) -> tuple[str, ...]:
-    workers = tuple(item.strip() for item in raw.split(",") if item.strip())
-    return workers or DEFAULT_WORKERS
+    workers: list[str] = []
+    invalid: list[str] = []
+    for item in (raw or "").split(","):
+        worker = item.strip().casefold()
+        if not worker:
+            continue
+        if worker in {"all", "default"}:
+            workers.extend(DEFAULT_WORKERS)
+        elif worker in DEFAULT_WORKERS:
+            workers.append(worker)
+        else:
+            invalid.append(worker)
+    if invalid:
+        raise argparse.ArgumentTypeError(
+            "invalid semantic worker(s): "
+            + ", ".join(invalid)
+            + "; use default, all, or one of "
+            + ", ".join(DEFAULT_WORKERS)
+        )
+    out: list[str] = []
+    for worker in workers or list(DEFAULT_WORKERS):
+        if worker not in out:
+            out.append(worker)
+    return tuple(out)
 
 
 def main() -> int:
@@ -520,7 +557,7 @@ def main() -> int:
     parser.add_argument("--min-surface-recall", type=float, default=DEFAULT_MIN_SURFACE_RECALL)
     parser.add_argument("--semantic-mode", choices=["auto", "on", "off"], default="auto")
     parser.add_argument("--semantic-timeout", type=int, default=DEFAULT_SEMANTIC_TIMEOUT)
-    parser.add_argument("--semantic-workers", default=",".join(DEFAULT_WORKERS))
+    parser.add_argument("--semantic-workers", type=parse_workers, default=DEFAULT_WORKERS)
     parser.add_argument(
         "--case-workers",
         type=int,
@@ -540,7 +577,7 @@ def main() -> int:
         min_surface_recall=args.min_surface_recall,
         semantic_mode=args.semantic_mode,
         semantic_timeout=args.semantic_timeout,
-        semantic_workers=parse_workers(args.semantic_workers),
+        semantic_workers=args.semantic_workers,
         semantic_cache_path=args.semantic_cache,
         case_workers=args.case_workers,
     )

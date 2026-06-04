@@ -108,6 +108,7 @@ pages; most detailed evidence pages are grouped by purpose: `readiness/`,
 - [`longmemeval.md`](evidence/benchmarks/longmemeval.md) - LongMemEval sources, dataset checksums, dedicated runner commands, retrieval-only results, and claim boundaries.
 - [`memory-decision-benchmark-plan.md`](evidence/benchmarks/memory-decision-benchmark-plan.md) - benchmark design for quiet-by-default recall decisions, source fidelity, and payload privacy.
 - [`memory-pain-fixture-report.md`](evidence/benchmarks/memory-pain-fixture-report.md) - public-safe demo/report for memory-system pain fixtures and explicit claim boundaries.
+- [`dream-private-large-history-diagnostic-2026-06-04.md`](evidence/dream/dream-private-large-history-diagnostic-2026-06-04.md) - sanitized #158/#164 private-history Dream diagnostic evidence and root-cause notes.
 - [`dream-live-shadow-ab-2026-05-30.md`](evidence/dream/dream-live-shadow-ab-2026-05-30.md) - live shadow A/B dream-worker reminder evidence.
 - [`question-extraction-axis-coverage-2026-05-31.md`](evidence/question/question-extraction-axis-coverage-2026-05-31.md) - #153 question extraction axis coverage evidence.
 
