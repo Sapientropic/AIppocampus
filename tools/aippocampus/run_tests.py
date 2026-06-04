@@ -27,6 +27,9 @@ SLOW_MODULES = {
 }
 
 BENCHMARK_SMOKE_MODULES = {
+    # #279 support guard: this validates public-safe candidate seed discovery
+    # only. It must not be used to claim E2E50 behavior benchmark quality.
+    "tests.aippocampus.test_e2e50_seed_candidates",
     "tests.aippocampus.test_benchmark_field_continuity",
     "tests.aippocampus.test_benchmark_hippocampal_recall",
     "tests.aippocampus.test_benchmark_locomo_public_users",

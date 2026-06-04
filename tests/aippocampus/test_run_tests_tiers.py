@@ -52,6 +52,13 @@ FAST_REVIEWED_SENSITIVE_MODULES = {
     "tests.aippocampus.test_synthetic_scale_capacity_smoke",
 }
 
+BENCHMARK_SMOKE_REVIEWED_NON_BENCHMARK_MODULES = {
+    # The E2E50 seed scanner is a public-safe deterministic benchmark support
+    # guard, not a completed benchmark mirror. Keep it explicit so benchmark
+    # smoke does not become a catch-all lane for unrelated fast tests.
+    "tests.aippocampus.test_e2e50_seed_candidates",
+}
+
 
 class RunTestsTierTests(unittest.TestCase):
     def test_main_preflights_tempdir_before_loading_tests(self) -> None:
@@ -186,14 +193,18 @@ class RunTestsTierTests(unittest.TestCase):
         self.assertEqual(slow & benchmark, set())
         self.assertEqual(fast | slow | benchmark, discovered)
 
-    def test_benchmark_smoke_is_curated_public_subset(self) -> None:
+    def test_benchmark_smoke_is_curated_public_lane(self) -> None:
         benchmark = set(run_tests.modules_for_tier("benchmark"))
         smoke = set(run_tests.modules_for_tier("benchmark-smoke"))
+        benchmark_smoke = smoke - BENCHMARK_SMOKE_REVIEWED_NON_BENCHMARK_MODULES
 
         self.assertTrue(smoke)
-        self.assertLess(smoke, benchmark)
-        self.assertLessEqual(smoke, benchmark)
+        self.assertTrue(benchmark_smoke)
+        self.assertLess(benchmark_smoke, benchmark)
+        self.assertLessEqual(benchmark_smoke, benchmark)
         self.assertEqual(smoke, run_tests.BENCHMARK_SMOKE_MODULES)
+        self.assertLessEqual(BENCHMARK_SMOKE_REVIEWED_NON_BENCHMARK_MODULES, smoke)
+        self.assertTrue(BENCHMARK_SMOKE_REVIEWED_NON_BENCHMARK_MODULES.isdisjoint(benchmark))
         self.assertNotIn("tests.aippocampus.test_benchmark_live_semantic_gate", smoke)
         self.assertFalse(any("real_history" in module for module in smoke))
 
