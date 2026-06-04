@@ -403,6 +403,24 @@ REQUIRED_PUBLIC_CORE_SCHEMA_CONTRACT_TERMS = {
     "`kind` and `phase`": "public core schema doc missing provider-normalized metadata boundary",
 }
 
+REQUIRED_PUBLIC_CORE_PROFILE_TERMS = {
+    "## Product Profile Boundary": "public core boundary missing product profile boundary",
+    "### Personal/Core Default": "public core boundary missing Personal/Core default profile",
+    "### Power-User Optional": "public core boundary missing Power-user optional profile",
+    "### Enterprise/High-Risk Governed": (
+        "public core boundary missing Enterprise/high-risk governed profile"
+    ),
+    "Purpose-bound memory access tokens are not a personal-default prerequisite": (
+        "public core boundary missing purpose-token opt-in boundary"
+    ),
+    "pause, forget, do-not-use-here, export, and why-not diagnostics": (
+        "public core boundary missing simple default controls"
+    ),
+    "why-recall and why-not-recall remain diagnostics": (
+        "public core boundary missing advanced diagnostics optionality"
+    ),
+}
+
 BENCHMARK_EVIDENCE_EXCLUDED_SCRIPT_NAMES = {"_paths.py"}
 LLM_CALL_CONTRACT_EXCLUDED_SCRIPT_NAMES = {"model_client.py"}
 
@@ -895,6 +913,21 @@ def public_core_schema_contract_issues(repo_root: Path) -> list[str]:
     return issues
 
 
+def public_core_product_profile_issues(repo_root: Path) -> list[str]:
+    issues: list[str] = []
+    rel_path = "docs/guides/public-core-boundary.md"
+    public_core = repo_root / rel_path
+    if not public_core.exists():
+        return [f"missing public core boundary doc: {rel_path}"]
+
+    text = public_core.read_text(encoding="utf-8")
+    normalized_text = " ".join(text.split())
+    for term, issue in REQUIRED_PUBLIC_CORE_PROFILE_TERMS.items():
+        if term not in text and " ".join(term.split()) not in normalized_text:
+            issues.append(issue)
+    return issues
+
+
 def python_version_contract_issues(repo_root: Path) -> list[str]:
     issues: list[str] = []
 
@@ -1283,6 +1316,7 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
     issues.extend(legacy_alias_inventory_issues(repo_root))
     issues.extend(public_api_contract_issues(repo_root))
     issues.extend(public_core_schema_contract_issues(repo_root))
+    issues.extend(public_core_product_profile_issues(repo_root))
     issues.extend(python_version_contract_issues(repo_root))
     issues.extend(dependency_contract_issues(repo_root))
     issues.extend(safe_environment_issues(repo_root))

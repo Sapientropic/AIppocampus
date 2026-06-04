@@ -59,6 +59,50 @@ Local scripts that already ship in this repository are part of the Apache-2.0
 public core. A future hosted implementation may reuse the same contracts while
 remaining a separate product.
 
+## Product Profile Boundary
+
+The public core supports multiple product profiles, but the default personal
+experience must stay low-friction. This is the canonical #680 boundary for
+features that could otherwise turn ordinary recall into enterprise ceremony.
+
+### Personal/Core Default
+
+The personal default is the ordinary local AIppocampus path: clean-source
+registration, source-backed search, progressive recall, import/export, and
+privacy-safe diagnostics. It should help a user reach a first source-backed
+recall before asking them to understand governance machinery.
+
+Purpose-bound memory access tokens are not a personal-default prerequisite.
+Personal users should be able to use pause, forget, do-not-use-here, export,
+and why-not diagnostics without approving every memory access. The default may
+still block unsafe routes, require source reopen for
+strong claims, and avoid over-personalization; low friction does not weaken
+source truth or privacy.
+
+### Power-User Optional
+
+Power-user surfaces add control without becoming mandatory setup. Examples
+include optional review inboxes, route/entity review, advanced why-recall /
+why-not-recall inspection, configurable partitions, and explicit sensitive-area
+checks. These features are available when a user wants them, but they must not
+make the default install, first recall, or ordinary local search look broken.
+
+why-recall and why-not-recall remain diagnostics. They can explain route
+eligibility, silence, degradation, or suppression with public-safe reason
+codes, but they are not source evidence and not a control plane by themselves.
+
+### Enterprise/High-Risk Governed
+
+Enterprise and high-risk profiles cover legal, medical, therapy-like, regulated,
+team, sensitive multimodal, or compliance-heavy deployments. Purpose-bound
+access, capability contracts, audit logs, human review queues, retention
+governance, policy reports, and high-risk answer gates belong here unless a
+future design explicitly promotes a smaller piece into the personal default.
+
+This profile boundary is not an enterprise compliance claim. It only says where
+heavier controls belong and why they should not be baseline ceremony for a
+personal external-hippocampus workflow.
+
 ## Private User Data Boundary
 
 The repository license covers project code, documentation, schemas, tests, and
