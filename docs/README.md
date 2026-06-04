@@ -61,6 +61,7 @@ maps.
 - [`architecture-debt-register.md`](architecture/architecture-debt-register.md) - lightweight large-runtime-script debt register and guard budgets.
 - [`gb-scale-roadmap.md`](architecture/gb-scale-roadmap.md) - long-thread indexing, segmenting, retention, vector-index, and scale planning.
 - [`encrypted-sync-v1.md`](architecture/encrypted-sync-v1.md) - end-to-end encrypted multi-device sync design contract.
+- [`encrypted-sync-v2.md`](architecture/encrypted-sync-v2.md) - v2 recovery, conflict, revocation, key-provider, plaintext/debug, and manifest-hardening decision track.
 - [`question-tracking-subconscious.md`](architecture/question-tracking-subconscious.md) - question extraction, tracking, and theme-emergence designs.
 - [`wukong-mining-notes.md`](architecture/wukong-mining-notes.md) - scoring-fusion and mining notes for long-memory retrieval.
 - [`browser-extension-design.md`](architecture/browser-extension-design.md) - browser extension concept and platform research leads.

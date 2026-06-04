@@ -596,8 +596,16 @@ Minimum tests before calling v1 ready:
 
 ## Open Questions
 
-- Should plaintext sync remain available for object storage after encrypted
-  sync ships, or become a debug-only path?
-- How much metadata padding is worth doing before a real cloud/provider smoke?
-- Should encrypted manifests be signed separately, or is AEAD plus local
-  revision tracking enough for v1?
+The v1 open questions are now owned by
+[`encrypted-sync-v2.md`](encrypted-sync-v2.md). Keep this v1 document as the
+implemented contract; do not silently backport v2 claims here before runtime
+changes and tests land.
+
+- Plaintext sync remains available for local trusted folders and public
+  synthetic demos. Object-storage plaintext becomes an explicit debug/
+  compatibility path with warning and opt-in.
+- Metadata padding stays deferred beyond the minimal outer-manifest boundary
+  until real provider evidence justifies the cost and claim.
+- Manifest hashes are integrity binding, not sender authentication. V2 starts
+  with a named "trusted recipient can author bundles" model; signing is a
+  follow-up before automated multi-writer trust.
