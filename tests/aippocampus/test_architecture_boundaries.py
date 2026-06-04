@@ -41,6 +41,7 @@ PROVIDER_ENTRYPOINT_INVENTORY = (
     REPO_ROOT / "docs" / "architecture" / "provider-entrypoint-inventory.md"
 )
 RUNTIME_SCRIPT_MAP = REPO_ROOT / "docs" / "architecture" / "runtime-script-map.md"
+ENCRYPTED_SYNC_V2 = REPO_ROOT / "docs" / "architecture" / "encrypted-sync-v2.md"
 
 
 def debt_register_entries() -> dict[str, int]:
@@ -172,6 +173,62 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             "`ConversationProvider`",
         ):
             self.assertIn(phrase, text)
+
+    def test_encrypted_sync_v2_contract_records_deferred_decisions(self) -> None:
+        self.assertTrue(ENCRYPTED_SYNC_V2.is_file(), "encrypted sync v2 design note is missing")
+        text = ENCRYPTED_SYNC_V2.read_text(encoding="utf-8")
+
+        for phrase in (
+            "# Encrypted Sync V2 Decision Track",
+            "## Decision Table",
+            "## Threat Model Additions",
+            "## Verification And Smoke Plan",
+            "## Follow-Up Implementation Issues",
+            "passphrase recovery",
+            "offline recovery kit",
+            "divergent_head",
+            "future-recipient revocation",
+            "historical ciphertext remains decryptable",
+            "removed from future recipients",
+            "manifest signing",
+            "metadata padding",
+            "plaintext debug path",
+            "key-provider",
+            "macos-keychain",
+            "windows-credential-manager",
+            "linux-secret-service",
+            "vault-id recovery",
+            "trusted recipient can author bundles",
+        ):
+            self.assertIn(phrase, text)
+
+        for threat_row in (
+            "storage provider",
+            "network observer",
+            "compromised object store",
+            "revoked device",
+            "compromised trusted device",
+            "lost local identity",
+            "lost vault id",
+            "stale/replayed manifest",
+            "partial migration",
+        ):
+            self.assertIn(threat_row, text)
+
+        for smoke_plan in (
+            "revoked-recipient status",
+            "required re-encryption",
+            "wrong-key pull",
+            "stale/replayed manifest/head",
+            "missing/corrupt vault-id",
+            "age_missing",
+            "partial migration recovery",
+            "key-provider missing",
+            "locked provider",
+            "wrong identity",
+            "export/backup warnings",
+        ):
+            self.assertIn(smoke_plan, text)
 
     def test_mypy_baseline_covers_high_risk_core_scripts(self) -> None:
         missing = sorted(HIGH_RISK_MYPY_SCRIPTS - mypy_file_entries())
