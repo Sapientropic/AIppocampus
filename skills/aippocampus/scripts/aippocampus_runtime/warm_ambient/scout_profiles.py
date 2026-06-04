@@ -311,7 +311,7 @@ SCOUT_OUTPUT_PROFILES = {
 
 FAMILY_TASKS = {
     "intent_mode_classifier": "Classify task mode, visibility bias, collaboration posture, and cognitive load.",
-    "privacy_boundary_guard": "Suppress credential leaks, personal/financial/relationship material, professional secrets, and over-personalized associations.",
+    "privacy_boundary_guard": "Block credential leaks, professional secrets, unsafe external projection, and over-personalized associations; route ordinary same-user personal context privately instead of starving recall.",
     "deep_theme_matcher": "Match long-running themes, philosophical motives, emotional resonance, and recurring trade-offs.",
     "key_line_hunter": "Find memorable lines, visual images, metaphors, strong assertions, and unresolved questions.",
     "evidence_gap_sentinel": "Check source-ref support, hallucinated refs, missing premises, drift, single-source fragility, and timeliness gaps.",
@@ -358,9 +358,9 @@ FAMILY_VARIANT_LENS_TASKS = {
     ("intent_mode_classifier", "current_trace_window"): "Collaboration posture lens: asking, approving, correcting, steering, or asking the agent to continue.",
     ("intent_mode_classifier", "skeptic_window"): "Cognitive-load lens: suppress verbose recall when the user is in a high-load execution moment.",
     ("privacy_boundary_guard", "direct"): "Credential leak lens: block tokens, cookies, connection strings, private paths, and auth-like material.",
-    ("privacy_boundary_guard", "registry_window"): "Personal-health lens: downgrade health, body, medical, or intimate wellbeing associations unless explicitly requested.",
-    ("privacy_boundary_guard", "clean_source_window"): "Financial lens: suppress private finances, contracts, invoices, accounts, or purchase-sensitive material.",
-    ("privacy_boundary_guard", "current_trace_window"): "Relationship privacy lens: suppress family, romantic, friendship, or interpersonal conflict unless directly in scope.",
+    ("privacy_boundary_guard", "registry_window"): "Personal-health lens: keep ordinary same-user wellbeing source private and tentative; require stricter gates for medical-like claims or external projection.",
+    ("privacy_boundary_guard", "clean_source_window"): "Financial lens: keep private finances, contracts, invoices, accounts, or purchase-sensitive material purpose-scoped; hard-block secret-like details.",
+    ("privacy_boundary_guard", "current_trace_window"): "Relationship privacy lens: route family, romantic, friendship, or interpersonal conflict privately when in same-user scope; suppress only unsolicited or cross-domain use.",
     ("privacy_boundary_guard", "skeptic_window"): "Professional secret and over-personalization lens: suppress confidential work details and unsolicited intimacy.",
     ("deep_theme_matcher", "direct"): "Philosophical abstraction lens: look for the underlying question or worldview pattern.",
     ("deep_theme_matcher", "registry_window"): "Product-specific lens: match concrete project/product decisions and long-running implementation themes.",
