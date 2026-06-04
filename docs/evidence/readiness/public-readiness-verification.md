@@ -15,6 +15,42 @@ Stable privacy rules live in `docs/guides/privacy-security-checklist.md`. Do not
 raw command JSON here: local smoke outputs may contain machine-specific
 temporary paths, so this document keeps only summarized evidence.
 
+## 2026-06-04 Issue #104 Post-Migration R2 Provider Re-Smoke
+
+Issue #104 re-ran the encrypted object-storage provider path after the
+device-key and plaintext-to-encrypted migration workflow from #58 / PR #86.
+The run used the existing Cloudflare R2-compatible provider class through the
+S3 SigV4 HMAC path against local checkout commit
+`8d5e284281b171f75718455e0f93838f39f20509`.
+
+Sanitized evidence from this run:
+
+- Provider credentials were recovered from the existing local Cloudflare token
+  path and persisted as `AIPPOCAMPUS_OBJECT_*` user environment variables for
+  future operator smokes. `age` v1.3.1 was installed under the local Codex tool
+  directory and `AIPPOCAMPUS_AGE_BIN` / `AIPPOCAMPUS_AGE_KEYGEN_BIN` were set.
+- Baseline real-provider encrypted smoke passed with generated ephemeral age
+  identity, encrypted `push/status/repair/pull`, `recipient_match=yes`,
+  `raw_rollout_synced_without_opt_in=false`, and cleanup of all 13 uploaded
+  encrypted objects.
+- Post-migration sequence passed on the second full attempt: plaintext
+  object-storage push, plaintext inventory, migration dry-run, migration to a
+  fresh encrypted provider prefix, encrypted status/repair/pull, target
+  registry materialization, raw-rollout exclusion, preservation of a preexisting
+  local target file, plaintext cleanup dry-run, and explicit plaintext cleanup.
+- Cleanup verification deleted 12/12 plaintext source objects and 13/13
+  encrypted target objects for the completed attempt. A separate guard smoke
+  confirmed object plaintext cleanup with `confirm=true` but without
+  `verified_encrypted_target=true` returns
+  `encrypted_target_verification_required`, and cleaned up its 12/12 temporary
+  plaintext objects.
+
+This is one dated post-migration Cloudflare R2-compatible provider re-smoke. It
+does not claim broad S3-compatible, GCS XML, cloud-folder, multi-user, or
+long-duration provider/client soak coverage. Provider account identifiers,
+bucket names, object prefixes, credentials, raw private source, and local
+temporary paths are intentionally omitted.
+
 ## 2026-06-04 React VCS Production-Like Source Disambiguation
 
 Issue #254 added the first non-oracle source-disambiguation arm for the React
