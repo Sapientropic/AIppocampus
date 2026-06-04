@@ -1,6 +1,6 @@
+# ruff: noqa: E402
 from __future__ import annotations
 
-import importlib
 import json
 import os
 import sys
@@ -18,28 +18,33 @@ SCRIPTS = ROOT / "scripts"
 TESTS = Path(__file__).resolve().parent
 JOBS_RUNNER = SCRIPTS / "aippocampus_runtime" / "subconscious" / "jobs.py"
 sys.path.insert(0, str(TESTS))
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
+sys.path.insert(0, str(SCRIPTS))
 
-import build_concept_graph as concept_graph  # noqa: E402
-import build_semantic_scope_labels as semantic_scope_materializer  # noqa: E402
-import subconscious_jobs as jobs  # noqa: E402
-from aippocampus_runtime.subconscious import job_storage  # noqa: E402
-from aippocampus_runtime.subconscious.staging_maintenance import (  # noqa: E402
+# isort: off
+from aippocampus_runtime.navigation import concept_graph
+from aippocampus_runtime.question import confirmation
+from aippocampus_runtime.source import (
+    semantic_scope_builder as semantic_scope_materializer,
+)
+from aippocampus_runtime.subconscious import (
+    deterministic_jobs,
+    job_circuits as circuits,
+    job_storage,
+    jobs,
+    jobs_config as config_module,
+    question_diagnostics as diagnostics_module,
+)
+from aippocampus_runtime.subconscious.staging_maintenance import (
     StagingPressureThresholds,
 )
-from redaction_fixtures import (  # noqa: E402
+from redaction_fixtures import (
     FAKE_TEST_BEARER_TOKEN,
     FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER,
     FAKE_TEST_PASSWORD_VALUE,
     FAKE_TEST_SECRET_VALUE,
     fake_test_windows_path,
 )
+# isort: on
 
 
 class SubconsciousJobsTests(unittest.TestCase):
@@ -105,7 +110,6 @@ class SubconsciousJobsTests(unittest.TestCase):
         self.assertIn("row_threshold_exceeded", result["staging_pressure"]["warning_reasons"])
 
     def test_job_circuit_catalog_is_separate_from_runner(self) -> None:
-        circuits = importlib.import_module("subconscious_job_circuits")
         runner_source = JOBS_RUNNER.read_text(encoding="utf-8")
 
         self.assertNotIn("JOB_SPECS: dict", runner_source)
@@ -117,8 +121,6 @@ class SubconsciousJobsTests(unittest.TestCase):
         )
 
     def test_job_circuit_dependency_contract_is_validated(self) -> None:
-        circuits = importlib.import_module("subconscious_job_circuits")
-
         ordered = circuits.job_names("all")
 
         self.assertLess(ordered.index("question_extraction"), ordered.index("question_tracking"))
@@ -139,7 +141,8 @@ class SubconsciousJobsTests(unittest.TestCase):
                 circuits.validate_job_dependency_contract()
 
     def test_job_sample_plan_is_separate_from_runner(self) -> None:
-        plan = importlib.import_module("aippocampus_runtime.subconscious.job_plan")
+        from aippocampus_runtime.subconscious import job_plan as plan
+
         runner_source = JOBS_RUNNER.read_text(encoding="utf-8")
 
         tasks = plan.plan_job_run_tasks(["project_drift", "trigger_mining"], samples_per_job=2)
@@ -157,7 +160,6 @@ class SubconsciousJobsTests(unittest.TestCase):
         self.assertNotIn("for sample_index in range", runner_source)
 
     def test_jobs_run_config_factory_derives_default_paths_from_registry_dir(self) -> None:
-        config_module = importlib.import_module("subconscious_jobs_config")
         runner_source = JOBS_RUNNER.read_text(encoding="utf-8")
 
         self.assertIs(jobs.JobsRunConfig, config_module.JobsRunConfig)
@@ -204,10 +206,9 @@ class SubconsciousJobsTests(unittest.TestCase):
         self.assertTrue(config.dry_run)
 
     def test_job_validation_is_separate_from_runner(self) -> None:
-        validation = importlib.import_module("aippocampus_runtime.subconscious.job_validation")
-        validation_audit = importlib.import_module(
-            "aippocampus_runtime.subconscious.validation_audit"
-        )
+        from aippocampus_runtime.subconscious import job_validation as validation
+        from aippocampus_runtime.subconscious import validation_audit
+
         runner_source = JOBS_RUNNER.read_text(encoding="utf-8")
 
         self.assertIs(jobs.validate_findings, validation.validate_findings)
@@ -559,7 +560,6 @@ class SubconsciousJobsTests(unittest.TestCase):
         self.assertIn("expected", schema["where_context"])
 
     def test_question_extraction_diagnostics_split_frontier_recommendations(self) -> None:
-        diagnostics_module = importlib.import_module("subconscious_question_diagnostics")
         findings = [
             {
                 "kind": "question_candidate",
@@ -1085,9 +1085,6 @@ class SubconsciousJobsTests(unittest.TestCase):
         self.assertEqual(rows[-1]["question_count"], 2)
 
     def test_question_tracking_job_materializes_confirmed_borderline_artifacts(self) -> None:
-        deterministic_jobs = importlib.import_module("subconscious_deterministic_jobs")
-        confirmation = importlib.import_module("question_confirmation")
-
         def question_row(suffix: str, **overrides: Any) -> dict[str, Any]:
             row = {
                 "schema_version": 1,

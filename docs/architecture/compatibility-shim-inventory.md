@@ -6,14 +6,14 @@ The authoritative inventory is executable:
 python tools\aippocampus\docs\compat_shim_inventory.py --json
 ```
 
-Current snapshot after the #305 final style-policy pass:
+Current snapshot after the #659 first flat-import migration slice:
 
 | Bucket | Count | Meaning |
 |---|---:|---|
 | `keep_cli` | 23 | Documented CLI, hook, MCP, install, sync, onboarding, or operator paths. Keep until docs/installers publish a migration note. |
-| `temporary_compat` | 82 | Flat import shims still referenced by first-party imports, non-identity tests, documented direct invocation, hooks/installers/binaries, or documented local-logic exceptions. |
+| `temporary_compat` | 77 | Flat import shims still referenced by first-party imports, non-identity tests, documented direct invocation, hooks/installers/binaries, or documented local-logic exceptions. |
 | `legacy_bridge` | 0 | No single-implementation legacy top-level script exceptions remain. |
-| `delete_now` | 0 | No pure package-owner shims are currently safe to delete without first moving a real dependency or documented direct invocation. |
+| `delete_now` | 5 | Pure package-owner shims with no remaining first-party/import/docs blocker; delete only in a focused batch with any matching `py-modules` entries. |
 | `reexport_blocks` | 0 | The prompt-cue compatibility re-export block was removed; cue policy now lives in `aippocampus_runtime.recall.prompt_cues`. |
 | `manual_export_surfaces` | 0 | No long temporary shim currently publishes a hand-maintained export list as a second API surface. |
 
@@ -40,12 +40,10 @@ gate. Current style counts are:
 convert the shim to one of the documented styles in `runtime-script-map.md` or
 add a specific policy reason before treating it as intentional compatibility.
 
-This closes the #305 kill-list phase: the immediate `delete_now` queue is empty,
-and the remaining `temporary_compat` entries carry concrete blockers and removal
-conditions. Future deletion work should start by moving one listed dependency,
-test import, direct invocation, or installer path to its package owner in a
-focused follow-up issue, then rerun this inventory before deleting the flat
-shim.
+The #305 kill-list phase left the immediate `delete_now` queue empty. The #659
+flat-import migration work is expected to move concrete blockers into
+`delete_now`; delete those candidates only in focused batches after rerunning
+the inventory and dropping any matching `py-modules` entries.
 
 The inventory treats the installable skill runtime entrypoint,
 `skills/aippocampus/SKILL.md`, as a documentation source. A direct script path

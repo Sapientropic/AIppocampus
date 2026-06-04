@@ -13,18 +13,9 @@ from unittest.mock import patch
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
+sys.path.insert(0, str(SCRIPTS))
 
-import subconscious_agent as agent  # noqa: E402
-import subconscious_jobs as jobs  # noqa: E402
-import subconscious_review as review  # noqa: E402
-import subconscious_worker as worker  # noqa: E402
+from aippocampus_runtime.subconscious import agent, jobs, review, worker  # noqa: E402
 
 
 class CliJsonContractTests(unittest.TestCase):
