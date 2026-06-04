@@ -335,6 +335,33 @@ def public_hook_debug_payload(result: dict[str, Any]) -> dict[str, Any]:
             "elapsed_ms": raw_hot_path.get("elapsed_ms"),
             "stages": stages[:6],
         }
+        raw_living = raw_hot_path.get("living_cue_cache")
+        if isinstance(raw_living, dict):
+            raw_diagnostics_value = raw_living.get("diagnostics")
+            raw_diagnostics = (
+                raw_diagnostics_value if isinstance(raw_diagnostics_value, dict) else {}
+            )
+            diagnostics = {
+                key: raw_diagnostics.get(key, 0)
+                for key in (
+                    "cache_hit_count",
+                    "cache_miss_count",
+                    "selected_count",
+                    "stale_suppressed_count",
+                    "temporary_suppressed_count",
+                    "would_overpersonalize_count",
+                    "low_confidence_suppressed_count",
+                    "missing_source_ref_count",
+                    "live_llm_call_count",
+                )
+            }
+            payload["hot_path_funnel"]["living_cue_cache"] = {
+                "decision": raw_living.get("decision"),
+                "support_level": raw_living.get("support_level"),
+                "selected_count": raw_living.get("selected_count", 0),
+                "candidate_ref_count": len(raw_living.get("candidate_refs") or []),
+                "diagnostics": diagnostics,
+            }
     route_delivery = route_delivery_debug_summary(result.get("route_delivery_diagnostic"))
     if route_delivery is not None:
         payload["route_delivery_diagnostic"] = route_delivery

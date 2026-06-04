@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.artifacts.publish import resolve_sqlite_index_path
+from aippocampus_runtime.recall.living_cue_cache import select_living_cue_packet
 from aippocampus_runtime.recall.prompt_recall_core import candidate_summary, sort_candidates
 from aippocampus_runtime.recall.retrieval import search_hybrid_index
 from aippocampus_runtime.registry.api import unique_preserve
@@ -64,19 +65,26 @@ def merge_hot_path_candidates(
         return candidates
     by_thread = {entry.get("thread_key"): entry for entry in registry.get("threads") or []}
     by_key = {item.get("thread_key"): item for item in candidates}
+    candidate_reasons = hot_path.get("candidate_reasons") if isinstance(hot_path, dict) else {}
+    reason_by_thread = candidate_reasons if isinstance(candidate_reasons, dict) else {}
     for thread_key in hot_path.get("candidate_ids") or []:
         entry = by_thread.get(thread_key)
         if not entry:
             continue
+        hot_path_reason = str(reason_by_thread.get(thread_key) or "").strip()
         existing = by_key.get(thread_key)
         if existing:
             existing["score"] = round(
                 max(float(existing.get("score") or 0.0), scent_threshold), 3
             )
             existing["hot_path_source"] = True
+            if hot_path_reason:
+                existing["hot_path_reason"] = hot_path_reason
             continue
         item = candidate_summary(entry, scent_threshold, query_terms)
         item["hot_path_source"] = True
+        if hot_path_reason:
+            item["hot_path_reason"] = hot_path_reason
         item["matched_terms"] = unique_preserve(
             list(item.get("matched_terms") or []) + query_terms,
             limit=8,
@@ -209,6 +217,37 @@ def _cue_cache_candidates(
     return _hit_rows(hits), "stale_navigation_only" if stale else ""
 
 
+def _living_cue_candidates(
+    *,
+    prompt: str,
+    entries: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, Any], str]:
+    packet = select_living_cue_packet(prompt, entries)
+    if packet.get("decision") != "scent":
+        raw_diagnostics = packet.get("diagnostics")
+        diagnostics = raw_diagnostics if isinstance(raw_diagnostics, dict) else {}
+        if diagnostics.get("cache_hit_count"):
+            return [], packet, "living_cue_suppressed"
+        return [], packet, "no_living_cue_match"
+
+    hits: list[dict[str, Any]] = []
+    for ref in packet.get("candidate_refs") or []:
+        if not isinstance(ref, dict):
+            continue
+        thread_key = str(ref.get("thread_key") or "").strip()
+        if not thread_key:
+            continue
+        hits.append(
+            {
+                "thread_key": thread_key,
+                "source_refs": [ref],
+                "hot_path_reason": "living_cue_cache",
+                "hot_path_navigation_only": True,
+            }
+        )
+    return _hit_rows(hits), packet, "" if hits else "living_cue_missing_thread_ref"
+
+
 def _index_path(candidate: dict[str, Any]) -> Path | None:
     candidate_paths = candidate.get("paths")
     raw_paths: dict[str, Any] = candidate_paths if isinstance(candidate_paths, dict) else {}
@@ -276,6 +315,7 @@ def run_hot_path_funnel(
     prompt: str,
     query_terms: list[str],
     candidate_indexes: list[dict[str, Any]],
+    living_cue_entries: list[dict[str, Any]] | None = None,
     candidate_cap: int = 8,
 ) -> dict[str, Any]:
     """Return local route candidates plus stage diagnostics.
@@ -288,6 +328,7 @@ def run_hot_path_funnel(
     overall_start = time.perf_counter()
     stages: list[dict[str, Any]] = []
     candidates: list[dict[str, Any]] = []
+    living_cue_packet: dict[str, Any] | None = None
 
     stage_start = time.perf_counter()
     candidates = _thread_profile_candidates(prompt=prompt, candidate_indexes=candidate_indexes)
@@ -300,6 +341,32 @@ def run_hot_path_funnel(
             start=stage_start,
         )
     )
+
+    stage_start = time.perf_counter()
+    if candidates:
+        stages.append(
+            _stage(
+                stage="living_cue_cache",
+                status="skip",
+                candidate_count=0,
+                fallback_reason="already_hit",
+                start=stage_start,
+            )
+        )
+    else:
+        candidates, living_cue_packet, living_reason = _living_cue_candidates(
+            prompt=prompt,
+            entries=living_cue_entries or [],
+        )
+        stages.append(
+            _stage(
+                stage="living_cue_cache",
+                status="hit" if candidates else "skip",
+                candidate_count=len(candidates),
+                fallback_reason=living_reason or ("" if candidates else "no_living_cue_match"),
+                start=stage_start,
+            )
+        )
 
     stage_start = time.perf_counter()
     if candidates:
@@ -368,13 +435,20 @@ def run_hot_path_funnel(
         )
 
     candidate_ids = [_candidate_id(candidate) for candidate in candidates if _candidate_id(candidate)]
+    candidate_reasons = {
+        _candidate_id(candidate): str(candidate.get("hot_path_reason") or "")
+        for candidate in candidates
+        if _candidate_id(candidate) and candidate.get("hot_path_reason")
+    }
     return {
         "decision": "scent" if candidate_ids else "skip",
         "candidate_count": len(candidate_ids),
         "candidate_ids": candidate_ids,
+        "candidate_reasons": candidate_reasons,
         "candidate_refs": [_candidate_ref(candidate) for candidate in candidates],
         "stages": stages,
         "evidence": [],
+        "living_cue_cache": living_cue_packet,
         "source_reopen_promotion_count": 0,
         "local_only": True,
         "elapsed_ms": _elapsed_ms(overall_start),

@@ -1885,6 +1885,65 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertIn("memoria externa", result["query_terms"])
         self.assertIn("associative cue", " ".join(result["reasons"]))
 
+    def test_living_cue_cache_default_hook_emits_scent_without_leaking_private_cue(self) -> None:
+        living_cues = self.registry.parent / "living_cue_cache.jsonl"
+        living_cues.write_text(
+            json.dumps(
+                {
+                    "cue": "private canonical tree bridge",
+                    "aliases": ["tree problem"],
+                    "source_refs": [
+                        {
+                            "source_id": "clean:tree:m7",
+                            "thread_key": "session:test-old",
+                            "message_id": "m7",
+                            "line": 14,
+                            "snippet": "raw private source text must not leak",
+                            "path": fake_test_windows_path("private-tree-messages.jsonl"),
+                        }
+                    ],
+                    "confidence": 0.94,
+                    "sensitivity": "safe",
+                    "freshness": "current",
+                    "status": "current",
+                    "last_helpful_count": 2,
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        result = hook.assess_prompt(
+            "Can we continue that tree problem from before?",
+            cwd=self.workspace,
+            registry_path=self.registry,
+            use_semantic_gate=False,
+            search_budget=0,
+        )
+        public = hook.public_hook_debug_payload(result)
+        encoded_public = json.dumps(public, ensure_ascii=False, sort_keys=True)
+        context = hook.context_for_hook(result) or ""
+        encoded_context = json.dumps(context, ensure_ascii=False)
+
+        self.assertEqual(result["decision"], "scent")
+        self.assertEqual(result["evidence"], [])
+        self.assertIsNone(result["semantic_gate"])
+        self.assertIn("living cue cache", " ".join(result["reasons"]))
+        self.assertEqual(result["candidates"][0]["thread_key"], "session:test-old")
+        self.assertEqual(
+            result["hot_path_funnel"]["living_cue_cache"]["diagnostics"]["live_llm_call_count"],
+            0,
+        )
+        self.assertEqual(
+            public["hot_path_funnel"]["living_cue_cache"]["selected_count"],
+            1,
+        )
+        self.assertIn("Ambient recall scent", context)
+        self.assertNotIn("private canonical tree bridge", encoded_public + encoded_context)
+        self.assertNotIn("raw private source text", encoded_public + encoded_context)
+        self.assertNotIn("private-tree", encoded_public + encoded_context)
+
     def test_active_semantic_cue_hit_skips_cold_foreground_semantic_call(self) -> None:
         registry_path = self.root / "semantic-cue-skip-live-registry" / "threads.json"
         registry_path.parent.mkdir()
