@@ -104,7 +104,8 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
 - `tests/aippocampus/test_benchmark_source_evidence_retrieval.py` checks
   Track B report shape, diagnostic status, ShareGPT public-corpus case
   generation, public semantic-sidecar materialization, LoCoMo/LongMemEval source
-  ref handling, and default privacy boundaries.
+  ref handling, #309 source-joined reranker bridge/collision diagnostics, and
+  default privacy boundaries.
 - `tests/aippocampus/test_benchmark_coding_decision_shadow.py` checks A-E
   track statuses, wrong-source evidence, visible-source suppression, stale
   authority, and explicit private-text debug boundaries.
@@ -1361,10 +1362,16 @@ first-stage hits so a reranker cannot regress lines already surfaced by local
 retrieval. `line_reranker_candidate_evidence_coverage_rate` is an oracle
 diagnostic for the benchmark report only: it measures whether the labeled
 source row entered the candidate set and is not an input to retrieval. These
-runs answer only "can the retriever navigate to the source session/message from
-the question text, and can an optional reranker pick the exact source row?" They
-do not measure whether a model generates the final answer correctly, and they
-must not be merged with Track A gate-decision scores.
+runs also report the #309 diagnostic counters
+`semantic_bridge_lift_topK`, `source_joined_candidate_evidence_coverage_rate`,
+and `wrong_stance_rerank_rate_topK`. They mean "a source-joined auxiliary
+candidate/reranker path found or misprioritized a labeled source row after a
+top-k text miss"; they do not make embeddings, graph hints, or rerankers source
+truth. These runs answer only "can the retriever navigate to the source
+session/message from the question text, and can an optional reranker pick the
+exact source row without ranking a stale/opposite-meaning neighbor above it?"
+They do not measure whether a model generates the final answer correctly, and
+they must not be merged with Track A gate-decision scores.
 LongMemEval V2 has a diagnostic context-mapping pilot, but it still needs
 explicit question-to-haystack/evidence-state labels before it can produce
 comparable retrieval R@K/MRR. Until then the source-evidence adapter reports a
