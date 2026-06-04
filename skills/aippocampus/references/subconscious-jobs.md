@@ -369,19 +369,28 @@ Purpose: extract genuine user questions and explicit unresolved frontiers.
 Output kinds:
 
 - `question_candidate`: a real question the user was pursuing, with
-  `question_text`, `question_short`, optional `intent_orientation`,
-  `what_features`, `where_context`, `phase_context`, and
-  `collaboration_context`. `question_text` is a short normalized question, not
-  a pasted transcript. If the model emits a long raw excerpt, validation may
-  compress it to `question_short`/title or reject it.
+  `question_text`, `question_short`, `intent_orientation`, and source-backed
+  `what_features`, `where_context`, and `phase_context` unless that axis is
+  unavailable from the source/tool context. `collaboration_context` and
+  `recommendation` stay optional and must not be invented. `question_text` is a
+  short normalized question, not a pasted transcript. If the model emits a long
+  raw excerpt, validation may compress it to `question_short`/title or reject it.
 - `frontier_marker`: a source-backed stopping point or unresolved boundary,
-  with `frontier_type` and `boundary_reason`.
+  with `frontier_type`, `boundary_reason`, and `where_context` or
+  `phase_context` when source-backed.
 
 This is not a regex job and not every sentence with a question mark qualifies.
 DeepSeek should use tool observations and source refs to decide whether the
 question mattered. `frontier_marker` is stricter: emit it only when the source
 explicitly shows a block, deferral, missing evidence, dissatisfaction, or scope
 boundary.
+
+Local job results include counts-only
+`quality_diagnostics.question_extraction_field_presence` for this job. It
+reports raw-final, accepted-final, and validated field coverage by kind, but
+never source text, paths, refs, message ids, thread ids, or field values. Public
+CLI `--json` output remains sanitized and does not expose local-private job
+details.
 
 ### `question_tracking`
 
