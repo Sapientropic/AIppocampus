@@ -1,6 +1,6 @@
 # Provider Entrypoint Inventory
 
-Last audited: 2026-06-04.
+Last audited: 2026-06-05.
 
 This inventory classifies runtime surfaces that mention Codex raw rollouts,
 Codex home helpers, or host hook configuration. The goal is not to erase the
@@ -46,6 +46,7 @@ facade commands.
 | `aippocampus_runtime/ops/cold_archive.py` | Codex-only raw audit/archive tool | Optional raw rollout archive path; not daily recall. |
 | `aippocampus_runtime/ops/retention_report.py` | Codex-only raw audit/report tool | Uses raw Codex rollout unless an explicit rollout is supplied. |
 | `aippocampus_runtime/ops/storage_governance.py` | Registry-first storage governance facade with Codex-current-thread retention discovery | `aippocampus storage gc --dry-run` can generate capacity evidence from registry/manifests without reading message bodies. `--apply --class rebuildable` is limited to path-level retention-report eviction of the main SQLite cache through package helper `storage_eviction.py`. |
+| `aippocampus_runtime/update/cli.py` | Codex-aware local update facade | `aippocampus update status/plan/apply` compares the repo skill, installed Codex skill copy, plugin staging, MCP config, hook config, and provider-key visibility. It may explicitly sync the installable skill, rebuild the repo-local plugin package, and install AIppocampus-owned Codex hooks; it does not mutate private memory artifacts or read API-key values. |
 | `aippocampus_runtime/artifacts/export_bundle.py` | Codex-current-thread export helper | Exports generated artifacts for a current Codex thread unless explicit paths are supplied. |
 
 ## Host Integration Matrix

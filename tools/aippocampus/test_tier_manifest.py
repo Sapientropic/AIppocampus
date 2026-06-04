@@ -188,6 +188,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_sync_bundle",
         "test_synthetic_scale_capacity_smoke",
         "test_theme_emergence",
+        "test_update_sync",
         "test_vault_dashboard_assets",
         "test_warm_ambient_recall",
         "test_warm_ambient_scheduler_policy",
@@ -356,6 +357,7 @@ TAG_OVERRIDES = {
     "test_simulate_prompt_hook": ("hook",),
     "test_stage_0_5_smoke": ("release", "slow"),
     "test_sync_bundle": ("sync", "filesystem"),
+    "test_update_sync": ("install", "filesystem", "hook", "packaging"),
 }
 
 

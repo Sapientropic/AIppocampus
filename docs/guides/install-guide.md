@@ -53,6 +53,37 @@ source-backed snippet with source/date/turn metadata. Use `--format json` only
 for automation. Use the GitHub `uvx --from git+...` form only when intentionally
 testing an unreleased main-branch snapshot.
 
+## Updating AIppocampus
+
+Run update status when AIppocampus feels installed but not alive yet:
+
+```sh
+aippocampus update status
+aippocampus update plan
+```
+
+The update check is read-only. It reports whether the CLI package, installed
+skill copy, MCP config, plugin package, Codex hooks, and optional LLM provider
+key are current. It also calls out the ordinary-user "magic readiness" path:
+prompt/lifecycle hooks need to be installed, and the selected provider key must
+be visible to the environment that launches Codex or the hook process.
+
+Apply local package/effect surfaces explicitly:
+
+```sh
+aippocampus update apply --surface skill
+aippocampus update apply --surface hooks
+aippocampus update apply --all-local
+```
+
+`--all-local` syncs the installable skill, rebuilds the repo-local plugin
+package, and installs AIppocampus-owned Codex hooks. It does not copy private
+memory data, raw rollouts, generated indexes, sync bundles, or package caches.
+It also does not read, print, or store API-key values. If `update status`
+reports the LLM surface as missing, set the reported environment variable
+(`DEEPSEEK_API_KEY` by default, or the configured OpenAI-compatible key env)
+in the process that launches Codex, then rerun status.
+
 ## Standalone Binary Status
 
 The default public install path is the PyPI `uvx aippocampus ...` probe above.

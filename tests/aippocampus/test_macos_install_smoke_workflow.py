@@ -26,10 +26,13 @@ class MacOSInstallSmokeWorkflowTests(unittest.TestCase):
         self.assertIn("actions/setup-python", text)
         self.assertIn("python -m pip install -e .", text)
         self.assertIn("aippocampus --help", text)
+        self.assertIn("aippocampus update status --json", text)
         self.assertIn("aippocampus mcp list-tools", text)
+        self.assertIn("python -m aippocampus_runtime.mcp.server --list-tools", text)
         self.assertIn("tools/aippocampus/docs/check_docs_health.py --json", text)
         self.assertIn("tests.aippocampus.test_run_tests_tiers", text)
         self.assertIn("actions/upload-artifact@v7", text)
+        self.assertNotIn("scripts/aippocampus_mcp_server.py", text)
         self.assertNotIn("secrets.", text)
         self.assertNotIn("runner.temp", text)
 

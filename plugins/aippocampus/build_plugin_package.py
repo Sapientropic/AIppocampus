@@ -15,11 +15,30 @@ IGNORED_NAMES = {
     ".pytest_cache",
     ".mypy_cache",
     ".ruff_cache",
+    ".tox",
+    ".eggs",
+    ".aippocampus",
+    "aippocampus-registry",
+    "clean-source",
+    "raw-rollouts",
+    "graphify-out",
+    "exports",
+    "exported-bundles",
+    "sync-bundles",
+    "build",
+    "dist",
 }
 
 
 def ignore_distribution_noise(directory: str, names: list[str]) -> set[str]:
-    ignored = {name for name in names if name in IGNORED_NAMES or name.endswith(".pyc")}
+    ignored = {
+        name
+        for name in names
+        if name in IGNORED_NAMES
+        or name.endswith(".egg-info")
+        or name.endswith(".pyc")
+        or name.endswith(".pyo")
+    }
     if Path(directory).resolve() == PLUGIN_SOURCE_DIR.resolve():
         ignored.add("build_plugin_package.py")
     return ignored
@@ -55,7 +74,9 @@ def build_package(repo_root: str | Path, output_dir: str | Path | None = None) -
     output.mkdir(parents=True)
 
     for item in PLUGIN_SOURCE_DIR.iterdir():
-        if item.name == "build_plugin_package.py":
+        if item.name == "build_plugin_package.py" or item.name in ignore_distribution_noise(
+            str(PLUGIN_SOURCE_DIR), [item.name]
+        ):
             continue
         target = output / item.name
         if item.is_dir():

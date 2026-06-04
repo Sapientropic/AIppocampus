@@ -40,7 +40,13 @@ class PluginDistributionTests(unittest.TestCase):
 
     def test_build_package_copies_skill_mcp_config_and_package_hook_owners(self) -> None:
         output = REPO_ROOT / "dist" / "test-aippocampus-plugin"
+        skill_noise = REPO_ROOT / "skills" / "aippocampus" / "aippocampus_runtime.egg-info"
+        plugin_noise = PLUGIN_ROOT / ".pytest_cache"
         try:
+            skill_noise.mkdir(exist_ok=True)
+            (skill_noise / "PKG-INFO").write_text("noise", encoding="utf-8")
+            plugin_noise.mkdir(exist_ok=True)
+            (plugin_noise / "cache").write_text("noise", encoding="utf-8")
             result = build_plugin_package.build_package(REPO_ROOT, output)
 
             built_root = Path(result["output_dir"])
@@ -74,8 +80,14 @@ class PluginDistributionTests(unittest.TestCase):
                 ).exists()
             )
             self.assertFalse((built_root / "skills" / "aippocampus" / "__pycache__").exists())
+            self.assertFalse(
+                (built_root / "skills" / "aippocampus" / "aippocampus_runtime.egg-info").exists()
+            )
+            self.assertFalse((built_root / ".pytest_cache").exists())
         finally:
             shutil.rmtree(output, ignore_errors=True)
+            shutil.rmtree(skill_noise, ignore_errors=True)
+            shutil.rmtree(plugin_noise, ignore_errors=True)
 
     def test_build_package_refuses_to_replace_repo_external_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

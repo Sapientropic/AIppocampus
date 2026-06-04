@@ -85,7 +85,7 @@ jobs:
           rm -rf "$CODEX_HOME/skills/aippocampus"
           cp -R ./skills/aippocampus "$CODEX_HOME/skills/aippocampus"
           test -f "$CODEX_HOME/skills/aippocampus/SKILL.md"
-          test -f "$CODEX_HOME/skills/aippocampus/scripts/aippocampus_mcp_server.py"
+          test -f "$CODEX_HOME/skills/aippocampus/scripts/aippocampus_runtime/mcp/server.py"
 
       - name: Verify docs and installed CLI surface
         shell: bash
@@ -93,8 +93,10 @@ jobs:
           python tools/aippocampus/docs/check_docs_health.py --json \
             | tee .tmp/macos-install-smoke/docs-health.json
           aippocampus --help | tee .tmp/macos-install-smoke/aippocampus-help.txt
+          aippocampus update status --json | tee .tmp/macos-install-smoke/update-status.json
           aippocampus mcp list-tools | tee .tmp/macos-install-smoke/mcp-tools-via-cli.json
-          python "$CODEX_HOME/skills/aippocampus/scripts/aippocampus_mcp_server.py" --list-tools \
+          PYTHONPATH="$CODEX_HOME/skills/aippocampus/scripts" \
+            python -m aippocampus_runtime.mcp.server --list-tools \
             | tee .tmp/macos-install-smoke/mcp-tools-via-staged-skill.json
 
       - name: Run focused deterministic repo smoke
