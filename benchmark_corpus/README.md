@@ -374,6 +374,18 @@ Run the optional standard retrieval-QA Track B adapter:
 python benchmarks\aippocampus\benchmark_source_evidence_retrieval.py --include-standard-public --standard-dataset locomo --standard-questions 100 --standard-min-questions 20 --standard-top-k 10 --output benchmark_corpus\reports\locomo-track-b-standard-100.json
 ```
 
+For a focused external-public adapter check, use the standard-only mode:
+
+```powershell
+python benchmarks\aippocampus\benchmark_source_evidence_retrieval.py --only-standard-public --standard-dataset locomo --standard-questions 100 --standard-min-questions 20 --standard-top-k 10 --output benchmark_corpus\reports\locomo-track-b-standard-only-100.json
+```
+
+`--only-standard-public` reports `standard_public_only_*` status values and
+does not run the private-registry FTS5 or selected source-evidence arms. Use it
+when validating the LoCoMo/LongMemEval adapter itself; use
+`--include-standard-public` when you intentionally want the broader mixed Track
+B bundle status.
+
 The standard adapter reports retrieval-only session/source R@K and MRR. It is
 the current non-source-derived Track B arm because LoCoMo and LongMemEval V1
 queries come from public dataset questions rather than from the target source
