@@ -972,6 +972,131 @@ class SubconsciousJobsTests(unittest.TestCase):
         )
         self.assertEqual(result["quality_diagnostics"][0], job["quality_diagnostics"])
 
+    def test_question_extraction_no_write_reports_field_presence_counts_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            timeline_path = root / "project_timeline.json"
+            timeline_path.write_text(
+                json.dumps(
+                    {
+                        "projects": {
+                            "project:ai": {
+                                "project_label": "AIppocampus",
+                                "latest_turns": [
+                                    {
+                                        "thread_key": "session:map",
+                                        "title": "AIppocampus",
+                                        "project_label": "AIppocampus",
+                                        "turn_index": 1,
+                                        "assistant_line": 10,
+                                        "user": "Codex compaction 后怎么保持上下文？",
+                                        "assistant": "用 source-backed continuity。",
+                                    }
+                                ],
+                            }
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            registry_path = root / "threads.json"
+            registry_path.write_text(json.dumps({"threads": []}), encoding="utf-8")
+
+            def fake_chat(
+                messages: list[dict[str, str]],
+                api_key: str,
+                model: str,
+                base_url: str,
+                max_tokens: int | None,
+                timeout: int,
+                temperature: float,
+            ) -> dict[str, Any]:
+                del messages, api_key, model, base_url, max_tokens, timeout, temperature
+                content = {
+                    "action": "final",
+                    "findings": [
+                        {
+                            "kind": "question_candidate",
+                            "title": "Agent context continuity",
+                            "summary": "The user asks how agent context survives compaction.",
+                            "confidence": 0.88,
+                            "source_refs": ["t0"],
+                            "question_text": "How do I keep agent context across compaction?",
+                            "question_short": "agent context continuity",
+                            "intent_orientation": "implementation",
+                            "what_features": ["context continuity", "compaction"],
+                            "where_context": ["AIppocampus private thread"],
+                            "phase_context": "post_compaction",
+                            "recommendation": "Track this as a continuity question.",
+                        },
+                        {
+                            "kind": "question_candidate",
+                            "title": "Sparse but valid",
+                            "summary": "The user asks a minimal valid question.",
+                            "confidence": 0.82,
+                            "source_refs": ["t0"],
+                            "question_text": "What is the next step?",
+                        },
+                    ],
+                }
+                return {
+                    "choices": [{"message": {"content": json.dumps(content, ensure_ascii=False)}}],
+                    "usage": {"total_tokens": 1},
+                }
+
+            result = jobs.run_one_job(
+                job="question_extraction",
+                registry_path=registry_path,
+                timeline_path=timeline_path,
+                concept_graph_path=root / "missing.sqlite",
+                jobs_output_path=root / "subconscious_jobs.jsonl",
+                edges_output_path=root / "subconscious_edges.jsonl",
+                project="AIppocampus",
+                objective="extract question axes",
+                max_turns=4,
+                max_steps=1,
+                min_tool_steps=0,
+                model="deepseek-v4-flash",
+                base_url="https://example.invalid",
+                api_key="test",
+                max_tokens=None,
+                timeout=1,
+                temperature=0.2,
+                chat_fn=fake_chat,
+                no_write=True,
+            )
+
+        diagnostics = result["quality_diagnostics"]["question_extraction_field_presence"]
+        raw_final = diagnostics["raw_final_attempts"]
+        validated = diagnostics["validated"]
+        question_fields = validated["question_candidate_fields"]
+
+        self.assertEqual(result["finding_count"], 2)
+        self.assertEqual(len(result["final_attempts"]), 1)
+        self.assertEqual(
+            raw_final["question_candidate_fields"]["where_context"],
+            {"count": 1, "rate": 0.5},
+        )
+        self.assertEqual(validated["question_candidate_count"], 2)
+        self.assertEqual(question_fields["what_features"], {"count": 1, "rate": 0.5})
+        self.assertEqual(question_fields["where_context"], {"count": 2, "rate": 1.0})
+        self.assertEqual(question_fields["phase_context"], {"count": 1, "rate": 0.5})
+        self.assertEqual(
+            validated["recommendation_by_kind"]["question_candidate"],
+            {"count": 1, "rate": 0.5},
+        )
+        self.assertEqual(
+            validated["complete_core_axes"],
+            {"count": 1, "rate": 0.5},
+        )
+        self.assertEqual(validated["any_core_axis"], {"count": 2, "rate": 1.0})
+        self.assertEqual(validated["missing_core_axis_rate"], 0.5)
+        self.assertNotIn(
+            "AIppocampus private thread",
+            json.dumps(diagnostics, ensure_ascii=False),
+        )
+
     def test_run_jobs_runs_question_tracking_after_extraction_writes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

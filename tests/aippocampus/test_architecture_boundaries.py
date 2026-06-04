@@ -368,7 +368,7 @@ class ArchitectureBoundaryTests(unittest.TestCase):
 
         self.assertIn("## Near-Budget Split Priority Queue", text)
         self.assertIn("Counting method: `script_line_count()`", text)
-        self.assertIn("Last counted: 2026-06-03", text)
+        self.assertRegex(text, r"Last counted: \d{4}-\d{2}-\d{2}\.")
         for path in near_budget_paths:
             count = script_line_count(REPO_ROOT / path)
             self.assertRegex(

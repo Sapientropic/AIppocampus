@@ -177,6 +177,56 @@ class SemanticRecallGateTests(unittest.TestCase):
         self.assertIn("registered_threads", result["memory_scope"])
         self.assertEqual(result["anti_personalization_risk"], "low")
 
+    def test_worker_alias_runs_and_invalid_worker_fails_closed(self) -> None:
+        calls: list[str] = []
+
+        def chat_fn(messages, api_key, model, base_url, max_tokens, timeout, temperature):
+            del api_key, model, base_url, max_tokens, timeout, temperature
+            content = "\n".join(str(message.get("content") or "") for message in messages)
+            calls.append(content)
+            return fake_response(
+                {
+                    "decision": "scent",
+                    "intent": "continuation",
+                    "confidence": 0.82,
+                    "query_aliases": ["AIppocampus"],
+                    "memory_scope": ["registered_threads"],
+                    "anti_personalization_risk": "low",
+                    "reason": "The prompt asks to continue prior memory work.",
+                }
+            )
+
+        result = gate.run_semantic_gate(
+            "继续之前 AIppocampus recall gate 那段",
+            cwd=self.workspace,
+            registry=self.registry,
+            registry_path=self.registry_path,
+            api_key="test-key",
+            workers=("default",),
+            use_cache=False,
+            chat_fn=chat_fn,
+        )
+
+        self.assertTrue(result["available"])
+        self.assertEqual(result["worker_count"], 3)
+        self.assertEqual(len(calls), 3)
+
+        invalid = gate.run_semantic_gate(
+            "继续之前 AIppocampus recall gate 那段",
+            cwd=self.workspace,
+            registry=self.registry,
+            registry_path=self.registry_path,
+            api_key="test-key",
+            workers=("unknown",),
+            use_cache=False,
+            chat_fn=chat_fn,
+        )
+
+        self.assertFalse(invalid["available"])
+        self.assertEqual(invalid["decision"], "skip")
+        self.assertEqual(invalid["worker_count"], 0)
+        self.assertIn("invalid semantic worker", " ".join(invalid["errors"]))
+
     def test_merge_workers_caps_evidence_when_scope_worker_reports_high_risk(self) -> None:
         merged = gate.merge_workers(
             [

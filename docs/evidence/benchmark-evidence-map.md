@@ -102,13 +102,17 @@ promotes a public-safe result into the official evidence flow.
    [`benchmarks/field-continuity-fixture-report.md`](benchmarks/field-continuity-fixture-report.md).
 28. Need segmented-search merge policy calibration evidence for #375:
    [`benchmarks/segmented-merge-policy-fixture-report.md`](benchmarks/segmented-merge-policy-fixture-report.md).
-29. Need explicit recall-reminder shadow A/B evidence:
+29. Need private real-history Dream offline and diagnostic evidence:
+   [`dream/dream-real-history-model-backed-eval-2026-05-31.md`](dream/dream-real-history-model-backed-eval-2026-05-31.md)
+   and
+   [`dream/dream-private-large-history-diagnostic-2026-06-04.md`](dream/dream-private-large-history-diagnostic-2026-06-04.md).
+30. Need explicit recall-reminder shadow A/B evidence:
    [`dream/dream-live-shadow-ab-2026-05-30.md`](dream/dream-live-shadow-ab-2026-05-30.md).
-30. Need public-corpus negative-control dream shadow evidence:
+31. Need public-corpus negative-control dream shadow evidence:
    [`dream/dream-live-shadow-benchmark-corpus-2026-05-31.md`](dream/dream-live-shadow-benchmark-corpus-2026-05-31.md).
-31. Need live question-extraction axis-coverage evidence for GitHub #153:
+32. Need live question-extraction axis-coverage evidence for GitHub #153:
    [`question/question-extraction-axis-coverage-2026-05-31.md`](question/question-extraction-axis-coverage-2026-05-31.md).
-32. Need community-submitted runs, demos, known gaps, or field-report intake:
+33. Need community-submitted runs, demos, known gaps, or field-report intake:
    [`community-field-reports.md`](community-field-reports.md) and the public
    [`/evidence/`](https://www.aippocampus.com/evidence/) page.
 
@@ -147,6 +151,7 @@ snapshot or dated verification ledger.
 | Field Continuity fixture report | `docs/evidence/benchmarks/field-continuity-fixture-report.md` and `benchmark_corpus/field_continuity/fixture.json` | Public-safe #454 scenario-family contract for second-user magic-moment reports from Discussion #428; includes two-plus public synthetic families, private seed hash/aggregate rules, and overclaim/wrong-family/stale-route controls without live or private-history quality claims. |
 | Segmented merge policy fixture report | `docs/evidence/benchmarks/segmented-merge-policy-fixture-report.md` and `benchmark_corpus/segmented_merge_policy/fixture.json` | Public-safe #375 calibration fixture for `SEGMENT_MERGE_POLICY` over cross-segment diversity, adjacent-turn pairing, duplicate nearby recap suppression, and stale/superseded currentness; not source-evidence retrieval or real long-thread recall quality. |
 | Dream live shadow A/B reminder evidence | `docs/evidence/dream/dream-live-shadow-ab-2026-05-30.md` | Dated aggregate run for explicit recall-reminder frequency, shadow assignment, nearest-prior exposure attribution, and delivered-vs-shadow claim boundaries. |
+| Dream private real-history offline evidence | `docs/evidence/dream/dream-real-history-model-backed-eval-2026-05-31.md` and `docs/evidence/dream/dream-private-large-history-diagnostic-2026-06-04.md` | Sanitized aggregate private-history Dream eval and diagnostic evidence for selected ready-pack structural lift, shadow replay boundaries, coding-probe deferment, E2E50 seed scan/manual annotation boundaries, agency host-timing replay, coding decision-shadow proxy evidence, and live semantic gate worker/availability diagnostics. |
 | Dream benchmark-corpus shadow evidence | `docs/evidence/dream/dream-live-shadow-benchmark-corpus-2026-05-31.md` | Dated public-corpus negative-control run for explicit reminder frequency and potential dream-only over-personalization activation. |
 | Question extraction axis coverage evidence | `docs/evidence/question/question-extraction-axis-coverage-2026-05-31.md` | Dated live no-write aggregate field-presence run for GitHub #153 and its prompt/repair/telemetry fix boundary. |
 | Community field reports | `docs/evidence/community-field-reports.md`, the public `/evidence/` page, and GitHub Discussions | Public-safe user and contributor reports. These are community signals until reviewed and promoted into official benchmark evidence, readiness ledgers, or known-gap docs. |

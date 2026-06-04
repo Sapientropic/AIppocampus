@@ -324,6 +324,90 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertFalse(payload["index"]["intentional_eviction"]["detected"])
         self.assertIn("source_index.sqlite is missing", payload["index"]["reasons"])
 
+    def test_health_reports_legacy_alias_names_without_private_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            rollout = workspace / "rollout.jsonl"
+            rollout.write_text(
+                '{"type":"event_msg","payload":{"type":"user_message","message":"hi"}}\n',
+                encoding="utf-8",
+            )
+            anchors = workspace / "thread-anchors.md"
+            anchors.write_text("# Anchors\n", encoding="utf-8")
+            index_dir = workspace / ".aippocampus" / "index"
+            index_dir.mkdir(parents=True)
+            (index_dir / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "created_at": "2026-06-03T00:00:00Z",
+                        "message_count": 1,
+                        "source_rollout_size": rollout.stat().st_size,
+                        "last_message_line": 1,
+                        "rag": {"enabled": True},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (index_dir / "messages.jsonl").write_text("{}\n", encoding="utf-8")
+            clean = root / "clean-source"
+            clean.mkdir()
+            (clean / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 2,
+                        "upgrade_contract": {"source_backed": True},
+                        "source_rollout_size": rollout.stat().st_size,
+                        "message_count": 1,
+                        "turn_count": 1,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (clean / "messages.jsonl").write_text("{}\n", encoding="utf-8")
+            (clean / "turns.jsonl").write_text("{}\n", encoding="utf-8")
+            graphify = root / "graphify-corpus"
+            graphify.mkdir()
+            manifest_path = index_dir / "manifest.json"
+            (graphify / "corpus_manifest.json").write_text(
+                json.dumps({"source_index_manifest_sha256": health.file_sha256(manifest_path)}),
+                encoding="utf-8",
+            )
+
+            with (
+                mock.patch.dict(health.os.environ, {"USERPROFILE": str(root / "home")}, clear=True),
+                mock.patch.object(health, "codex_home", return_value=root / "codex-home"),
+                mock.patch.object(health, "locate_rollout", return_value=rollout),
+                mock.patch.object(
+                    health,
+                    "aippocampus_registry_resolution",
+                    return_value={
+                        "path": str(root / "codex-home" / "aippocampus-registry"),
+                        "source": "CODEX_HOME/aippocampus-registry",
+                        "legacy_fallback": True,
+                    },
+                ),
+            ):
+                payload = health.build_health_report(
+                    health.HealthOptions(
+                        cwd=workspace,
+                        index_dir=index_dir,
+                        clean_source_dir=clean,
+                        graphify_corpus=graphify,
+                        segments_dir=root / "segments",
+                        checkpoint_state=root / "checkpoint_state.json",
+                        anchors=anchors,
+                    )
+                )
+        aliases = {entry["alias"] for entry in payload["legacy_aliases"]["active"]}
+        encoded_aliases = json.dumps(payload["legacy_aliases"], ensure_ascii=False)
+
+        self.assertEqual(aliases, {"CODEX_HOME/aippocampus-registry", ".aippocampus/"})
+        self.assertFalse(payload["legacy_aliases"]["value_printed"])
+        self.assertFalse(payload["legacy_aliases"]["local_paths_included"])
+        self.assertNotIn(str(root), encoded_aliases)
+
 
 if __name__ == "__main__":
     unittest.main()

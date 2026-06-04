@@ -28,6 +28,7 @@ from aippocampus_runtime.core import (
 )
 from aippocampus_runtime.health_registry import registry_health_report
 from aippocampus_runtime.health_render import render_health_text, render_registry_health_text
+from aippocampus_runtime.legacy_aliases import legacy_alias_diagnostics
 from aippocampus_runtime.ops.storage_eviction import latest_intentional_eviction
 from aippocampus_runtime.question.constants import DEFAULT_DORMANT_AFTER_DAYS
 from aippocampus_runtime.registry.store import registry_paths
@@ -258,6 +259,17 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         else registry_paths(Path(options.registry_dir).resolve() if options.registry_dir else None)[0]
     )
     registry_resolution = aippocampus_registry_resolution()
+    legacy_aliases = legacy_alias_diagnostics(
+        registry_resolution=registry_resolution,
+        workspace=cwd,
+        project_local_paths={
+            "index": index_dir,
+            "clean_source": clean_source_dir,
+            "graphify": graphify_corpus,
+            "segments": segments_dir,
+            "checkpoint": checkpoint_state,
+        },
+    )
     jobs_path = (
         Path(options.jobs_output).resolve()
         if options.jobs_output
@@ -532,6 +544,7 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
                 else registry_resolution["source"]
             ),
         },
+        "legacy_aliases": legacy_aliases,
         "index": {
             "dir": str(index_dir),
             "manifest": str(manifest_path),

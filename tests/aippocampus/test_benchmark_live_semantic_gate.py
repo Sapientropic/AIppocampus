@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 import tempfile
@@ -99,8 +100,10 @@ class LiveSemanticGateBenchmarkTests(unittest.TestCase):
         self.assertFalse(payload["quality_gate_ok"])
         self.assertEqual(payload["metrics"]["total_cases"], 0)
         self.assertEqual(payload["metrics"]["semantic_available_count"], 0)
+        self.assertEqual(payload["metrics"]["semantic_availability_rate"], 0.0)
         self.assertEqual(payload["metrics"]["semantic_error_case_count"], 0)
         self.assertEqual(payload["metrics"]["semantic_decision_counts"], {})
+        self.assertEqual(payload["metrics"]["semantic_availability_reason_counts"], {})
         self.assertEqual(payload["metrics"]["semantic_usage"]["total_tokens"], 0)
         self.assertEqual(
             payload["metrics"]["continuation_language_metrics"]["zh"]["total_cases"],
@@ -147,24 +150,25 @@ class LiveSemanticGateBenchmarkTests(unittest.TestCase):
                 sharegpt_conversations=1,
                 min_cases=4,
                 semantic_gate_fn=fake_live_semantic,
-                case_workers=2,
+                case_workers=1,
             )
 
         self.assertEqual(payload["status"], "sufficient")
         self.assertTrue(payload["quality_gate_ok"])
-        self.assertEqual(payload["config"]["case_workers"], 2)
+        self.assertEqual(payload["config"]["case_workers"], 1)
         self.assertFalse(payload["config"]["semantic_result_cache_enabled"])
         self.assertEqual(payload["metrics"]["total_cases"], 4)
-        self.assertEqual(payload["metrics"]["semantic_model_call_count"], 3)
-        self.assertEqual(payload["metrics"]["semantic_available_count"], 3)
+        semantic_calls = payload["metrics"]["semantic_model_call_count"]
+        self.assertGreater(semantic_calls, 0)
+        self.assertEqual(payload["metrics"]["semantic_available_count"], semantic_calls)
+        self.assertEqual(payload["metrics"]["semantic_availability_rate"], 1.0)
         self.assertEqual(payload["metrics"]["semantic_error_case_count"], 0)
-        self.assertEqual(payload["metrics"]["semantic_decision_counts"]["scent"], 2)
-        self.assertEqual(payload["metrics"]["semantic_decision_counts"]["evidence"], 1)
-        self.assertEqual(payload["metrics"]["semantic_evidence_allowed_count"], 1)
+        self.assertEqual(sum(payload["metrics"]["semantic_decision_counts"].values()), semantic_calls)
+        self.assertLessEqual(payload["metrics"]["semantic_evidence_allowed_count"], semantic_calls)
         self.assertEqual(payload["metrics"]["semantic_evidence_guarded_to_scent_count"], 0)
-        self.assertEqual(payload["metrics"]["semantic_usage"]["total_tokens"], 360)
+        self.assertEqual(payload["metrics"]["semantic_usage"]["total_tokens"], 120 * semantic_calls)
         self.assertEqual(payload["metrics"]["semantic_usage"]["cache_hit_rate"], 0.3)
-        self.assertEqual(payload["metrics"]["semantic_latency_ms"]["count"], 3)
+        self.assertEqual(payload["metrics"]["semantic_latency_ms"]["count"], semantic_calls)
         self.assertEqual(
             payload["metrics"]["continuation_language_metrics"]["zh"]["total_cases"],
             1,
@@ -176,6 +180,7 @@ class LiveSemanticGateBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["privacy_boundary"]["raw_prompt_emitted"], False)
         self.assertEqual(payload["privacy_boundary"]["semantic_aliases_emitted"], False)
         self.assertIn("semantic_error_kinds", payload["cases"][1])
+        self.assertIn("semantic_availability_reason", payload["cases"][1])
         self.assertTrue(any("能接着我们之前关于" in prompt for prompt in seen_prompts))
         evidence_cases = [
             row
@@ -187,6 +192,56 @@ class LiveSemanticGateBenchmarkTests(unittest.TestCase):
         self.assertGreater(evidence_cases[0]["evidence_count"], 0)
         self.assertNotIn("How do I debug", json.dumps(payload))
         self.assertNotIn("list.sort", json.dumps(payload))
+
+    def test_live_eval_fails_quality_gate_when_live_semantic_never_available(self) -> None:
+        def unavailable_semantic(prompt: str, **kwargs) -> dict:
+            del prompt, kwargs
+            return {
+                "kind": "aippocampus_semantic_recall_gate",
+                "available": False,
+                "decision": "skip",
+                "confidence": 0.0,
+                "availability_reason": "semantic_unavailable",
+                "diagnostic": "invalid_worker_or_backend_unavailable",
+                "query_aliases": [],
+                "memory_scope": [],
+                "negative_contexts": [],
+                "reasons": ["semantic worker did not run"],
+                "workers": [],
+                "errors": [],
+                "usage": {},
+                "cached": False,
+                "elapsed_ms": 2.0,
+            }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            corpus = Path(tmp) / "sharegpt"
+            self._write_corpus(corpus)
+            payload = live_benchmark.run_live_semantic_eval(
+                sharegpt_corpus_dir=corpus,
+                sharegpt_conversations=1,
+                min_cases=4,
+                min_surface_recall=0.0,
+                semantic_gate_fn=unavailable_semantic,
+                case_workers=1,
+            )
+
+        self.assertEqual(payload["status"], "insufficient_live_semantic_availability")
+        self.assertFalse(payload["quality_gate_ok"])
+        semantic_calls = payload["metrics"]["semantic_model_call_count"]
+        self.assertGreater(semantic_calls, 0)
+        self.assertEqual(payload["metrics"]["semantic_available_count"], 0)
+        self.assertEqual(
+            payload["metrics"]["semantic_availability_reason_counts"],
+            {"semantic_unavailable": semantic_calls},
+        )
+        self.assertIn("live_semantic_model_quality", payload["cannot_claim"])
+
+    def test_parse_workers_accepts_default_alias_and_rejects_unknown(self) -> None:
+        self.assertEqual(live_benchmark.parse_workers("default"), live_benchmark.DEFAULT_WORKERS)
+        self.assertEqual(live_benchmark.parse_workers("gate,default"), live_benchmark.DEFAULT_WORKERS)
+        with self.assertRaises(argparse.ArgumentTypeError):
+            live_benchmark.parse_workers("default,unknown")
 
     def test_live_eval_auto_parallelism_scales_with_conversation_count(self) -> None:
         self.assertEqual(

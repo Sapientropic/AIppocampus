@@ -758,9 +758,10 @@ Negative examples are embedded in the prompt:
   hash matching.
 - Assign `evidence_strength` based on how explicitly the user stated the
   question versus how much the model inferred it.
-- Assign `intent_orientation`, `what_features`, `where_context`, and
-  `phase_context` whenever source evidence supports them; omit rather than
-  invent only when the axis is genuinely unavailable.
+- Treat `intent_orientation`, `what_features`, `where_context`, and
+  `phase_context` as expected question-map axes whenever source/tool context
+  supports them; omit rather than invent only when an axis is genuinely
+  unavailable.
 - Treat `collaboration_context` as optional and source-backed. It should not be
   filled from generic assumptions about the current agent.
 - Live/no-write runs expose aggregate `question_extraction_field_presence`

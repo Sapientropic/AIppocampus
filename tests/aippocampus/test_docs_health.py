@@ -207,6 +207,82 @@ class DocsHealthTests(unittest.TestCase):
         self.assertIn("public API doc missing CLI JSON error contract", issues)
         self.assertIn("public API doc missing stable CLI error classes", issues)
 
+    def test_legacy_alias_inventory_covers_current_repo(self) -> None:
+        repo_root = docs_health.find_repo_root(ROOT)
+        self.assertIsNotNone(repo_root)
+
+        result = docs_health.legacy_alias_inventory_issues(repo_root)
+
+        self.assertEqual(result, [])
+
+    def test_legacy_alias_inventory_reports_unclassified_env_alias(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            alias = "CODEX_MEMORY_" + "NEW_THING"
+            inventory = repo / "docs" / "architecture" / "legacy-alias-inventory.md"
+            inventory.parent.mkdir(parents=True)
+            inventory.write_text("# Legacy Alias Inventory\n", encoding="utf-8")
+            script = repo / "skills" / "aippocampus" / "scripts" / "new_surface.py"
+            script.parent.mkdir(parents=True)
+            script.write_text(f'os.environ.get("{alias}")\n', encoding="utf-8")
+
+            issues = docs_health.legacy_alias_inventory_issues(repo)
+
+        self.assertIn(
+            "legacy/provider-specific env or path missing inventory classification: "
+            f"{alias}; update docs/architecture/legacy-alias-inventory.md",
+            issues,
+        )
+
+    def test_legacy_alias_inventory_reports_misspelled_aippocampus_alias(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            inventory = repo / "docs" / "architecture" / "legacy-alias-inventory.md"
+            inventory.parent.mkdir(parents=True)
+            inventory.write_text("# Legacy Alias Inventory\n", encoding="utf-8")
+            script = repo / "skills" / "aippocampus" / "scripts" / "scheduler.py"
+            script.parent.mkdir(parents=True)
+            script.write_text(
+                'os.environ.get("AIIPPOCAMPUS_SUBCONSCIOUS_HOOK")\n',
+                encoding="utf-8",
+            )
+
+            issues = docs_health.legacy_alias_inventory_issues(repo)
+
+        self.assertIn(
+            "legacy/provider-specific env or path missing inventory classification: "
+            "AIIPPOCAMPUS_SUBCONSCIOUS_HOOK; "
+            "update docs/architecture/legacy-alias-inventory.md",
+            issues,
+        )
+
+    def test_legacy_alias_inventory_ignores_deepseek_non_env_constants(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            alias = "CODEX_MEMORY_" + "NEW_THING"
+            inventory = repo / "docs" / "architecture" / "legacy-alias-inventory.md"
+            inventory.parent.mkdir(parents=True)
+            inventory.write_text(
+                f"`{alias}`\n",
+                encoding="utf-8",
+            )
+            script = repo / "skills" / "aippocampus" / "scripts" / "new_surface.py"
+            script.parent.mkdir(parents=True)
+            script.write_text(
+                "\n".join(
+                    [
+                        f'os.environ.get("{alias}")',
+                        'DEEPSEEK_PREFIX_CACHE_CONTRACT = "deepseek_prefix_v1"',
+                        'DEEPSEEK_KV_CACHE_GUIDE_URL = "https://example.invalid"',
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            issues = docs_health.legacy_alias_inventory_issues(repo)
+
+        self.assertEqual(issues, [])
+
     def test_public_core_schema_contract_covers_metadata_namespace_rules(self) -> None:
         repo_root = docs_health.find_repo_root(ROOT)
         self.assertIsNotNone(repo_root)
