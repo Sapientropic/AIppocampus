@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from typing import TypedDict
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TEST_ROOT = REPO_ROOT / "tests" / "aippocampus"
@@ -44,6 +45,14 @@ BENCHMARK_SMOKE_MODULES = {
     "tests.aippocampus.test_benchmark_vcs_future_event_recall",
 }
 
+TEST_TIERS = ("fast", "slow", "benchmark-smoke", "benchmark", "full")
+TIER_REPORT_TOP_LIMIT = 10
+
+
+class TierModuleRow(TypedDict):
+    module: str
+    test_count: int
+
 
 def discover_modules() -> list[str]:
     return [
@@ -71,6 +80,54 @@ def modules_for_tier(tier: str) -> list[str]:
             if ".test_benchmark_" not in module and module not in SLOW_MODULES
         ]
     raise ValueError(f"unknown test tier: {tier}")
+
+
+def _ensure_repo_on_path() -> None:
+    if str(REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(REPO_ROOT))
+
+
+def count_tests_for_module(module: str) -> int:
+    _ensure_repo_on_path()
+    return unittest.defaultTestLoader.loadTestsFromName(module).countTestCases()
+
+
+def build_tier_report(
+    *,
+    tiers: tuple[str, ...] = TEST_TIERS,
+    top_limit: int = TIER_REPORT_TOP_LIMIT,
+) -> dict[str, object]:
+    # This is an observation layer for #662's migration path. Keep it delegated
+    # to modules_for_tier() until the explicit manifest exists, so the report
+    # exposes the current drift without silently becoming a second tier contract.
+    counts: dict[str, int] = {}
+    report_tiers: dict[str, dict[str, object]] = {}
+
+    for tier in tiers:
+        modules = modules_for_tier(tier)
+        module_rows: list[TierModuleRow] = []
+        for module in modules:
+            test_count = counts.setdefault(module, count_tests_for_module(module))
+            module_rows.append({"module": module, "test_count": test_count})
+        top_modules = sorted(
+            module_rows,
+            key=lambda row: (-row["test_count"], row["module"]),
+        )[:top_limit]
+        report_tiers[tier] = {
+            "module_count": len(modules),
+            "test_count": sum(row["test_count"] for row in module_rows),
+            "top_modules": top_modules,
+        }
+
+    return {
+        "kind": "aippocampus_test_tier_report",
+        "schema_version": 1,
+        "tiers": report_tiers,
+        "known_limitations": [
+            "fast is still exclusion-based; this report surfaces the current boundary "
+            "without changing tier selection.",
+        ],
+    }
 
 
 def _probe_tempdir(parent: Path | None) -> None:
@@ -113,8 +170,7 @@ def ensure_usable_tempdir() -> Path:
 
 
 def run_modules(modules: list[str], *, verbosity: int) -> bool:
-    if str(REPO_ROOT) not in sys.path:
-        sys.path.insert(0, str(REPO_ROOT))
+    _ensure_repo_on_path()
     suite = unittest.defaultTestLoader.loadTestsFromNames(modules)
     result = unittest.TextTestRunner(verbosity=verbosity).run(suite)
     return result.wasSuccessful()
@@ -163,7 +219,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run AIppocampus unittest tiers.")
     parser.add_argument(
         "--tier",
-        choices=("fast", "slow", "benchmark-smoke", "benchmark", "full"),
+        choices=TEST_TIERS,
         default="fast",
         help=(
             "Test tier to run. Default is the deterministic fast suite. "
@@ -179,12 +235,21 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument("--list", action="store_true", help="List selected test modules.")
+    parser.add_argument(
+        "--report-json",
+        action="store_true",
+        help="Print tier module/test counts as JSON without running tests.",
+    )
     parser.add_argument("-v", "--verbose", action="count", default=1)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.report_json:
+        json.dump(build_tier_report(), sys.stdout, ensure_ascii=False, indent=2)
+        print()
+        return 0
     modules = modules_for_tier(args.tier)
     if args.list:
         for module in modules:
