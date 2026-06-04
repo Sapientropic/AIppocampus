@@ -116,8 +116,12 @@ When the ignored local dataset directory is absent, the runner returns a
 `skipped_missing_dataset` metadata payload with the official split expectations
 and `cannot_claim` boundaries. For local JSON/JSONL exports, it observes row
 and field families. For official parquet files, it reports file metadata and
-can read parquet row/schema metadata only when an optional parquet reader is
-installed; no parquet dependency is required by the deterministic smoke lane.
+can read parquet rows into the same metadata/case-pack/Stage 3 dry-run paths
+when the optional `pyarrow` reader is installed. If parquet files are present
+but the reader is unavailable, the status is
+`found_files_missing_optional_reader` with a `parquet_optional_reader_missing`
+next-step hint instead of pretending the dataset is absent. No parquet
+dependency is required by the deterministic smoke lane.
 
 ### Stage 2: Public-Safe Case-Pack Projection
 
@@ -135,6 +139,11 @@ payload and blank prediction slots. It keeps gold answers, gold labels, and
 scoring-only metadata out of the model-facing input. Because it may contain raw
 benchmark text, keep it under `.tmp/` or `benchmark_corpus/reports/`, both of
 which are ignored local artifact locations.
+
+For the official parquet dataset, this path no longer requires a manual JSONL
+export when `pyarrow` is installed. The runner still treats fields such as
+`answers` as both raw/sensitive text and gold-label material, so they remain out
+of the model-facing case pack and default reports.
 
 Reports should separate:
 
@@ -169,6 +178,11 @@ or scores. When write/update instrumentation is not explicitly selected, the
 Stage 3 report fails closed as `unsupported_missing_write_update_instrumentation`
 instead of pretending that static retrieval measured Test-Time Learning or
 Conflict Resolution.
+
+With `pyarrow` installed, the Stage 3 dry-run can collect its TTL/CR cases
+directly from official parquet files. Without that optional reader, parquet-only
+operator folders still report file presence and reader-missing diagnostics but
+do not synthesize Stage 3 cases.
 
 This is still a dry-run/protocol surface, not an official MemoryAgentBench
 runner. Test-Time Learning and Conflict Resolution become quality evidence only
@@ -212,6 +226,9 @@ Can claim now:
 - The repository has a Stage 3 dry-run contract harness that reports explicit
   ingest/write-update/retrieve/generate/judge modes and fails closed when
   write/update instrumentation is missing.
+- Official parquet files can feed metadata, case-pack, and Stage 3 dry-run
+  paths when the optional local `pyarrow` reader is installed; missing reader
+  states are reported separately from missing datasets.
 
 Cannot claim now:
 

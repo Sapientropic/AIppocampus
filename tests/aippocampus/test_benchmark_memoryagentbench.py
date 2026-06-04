@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
@@ -60,6 +61,7 @@ class MemoryAgentBenchSmokeTests(unittest.TestCase):
         self.assertIn("question_answering", accurate["task_families"])
         self.assertIn("substring_exact_match", accurate["metric_families"])
         self.assertIn("context", accurate["raw_text_fields_present"])
+        self.assertIn("answers", accurate["gold_label_fields_present"])
         self.assertEqual(
             accurate["support_status"]["source_evidence"],
             "diagnostic_requires_source_ref_mapping",
@@ -218,6 +220,93 @@ class MemoryAgentBenchSmokeTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, dumped)
 
+    def test_parquet_files_without_optional_reader_are_not_reported_as_missing_dataset(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dataset_dir = Path(tmp) / "memoryagentbench"
+            data_dir = dataset_dir / "data"
+            data_dir.mkdir(parents=True)
+            (data_dir / "Accurate_Retrieval-00000-of-00001.parquet").write_bytes(
+                b"parquet placeholder"
+            )
+
+            with (
+                mock.patch.object(
+                    benchmark,
+                    "parquet_metadata",
+                    return_value={
+                        "format_support": benchmark.PARQUET_READER_MISSING_SUPPORT,
+                        "observed_rows": None,
+                        "schema_fields": [],
+                    },
+                ),
+                mock.patch.object(
+                    benchmark,
+                    "read_parquet_rows",
+                    side_effect=benchmark.OptionalParquetReaderMissing("missing"),
+                ),
+            ):
+                payload = benchmark.run_memoryagentbench_smoke(
+                    dataset_dir=dataset_dir,
+                    compute_sha256=False,
+                )
+
+        self.assertTrue(payload["ok"], payload)
+        self.assertEqual(payload["status"], "found_files_missing_optional_reader")
+        self.assertEqual(payload["metrics"]["local_file_count"], 1)
+        self.assertEqual(payload["metrics"]["observed_row_count"], 0)
+        self.assertEqual(payload["metrics"]["optional_reader_missing_file_count"], 1)
+        self.assertEqual(
+            payload["splits"]["Accurate_Retrieval"]["files"][0]["format_support"],
+            "metadata_only_parquet_without_optional_reader",
+        )
+        self.assertIn("parquet_optional_reader_missing", payload["next_step"])
+
+    def test_parquet_rows_feed_case_pack_and_stage3_when_reader_available(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dataset_dir = root / "memoryagentbench"
+            data_dir = dataset_dir / "data"
+            data_dir.mkdir(parents=True)
+            for split in ("Accurate_Retrieval", "Test_Time_Learning", "Conflict_Resolution"):
+                (data_dir / f"{split}-00000-of-00001.parquet").write_bytes(
+                    b"parquet placeholder"
+                )
+            case_pack_path = root / "case-pack.json"
+            template_path = root / "predictions-template.jsonl"
+
+            with mock.patch.object(
+                benchmark,
+                "read_parquet_rows",
+                create=True,
+                side_effect=self._parquet_rows_for_path,
+            ):
+                payload = benchmark.run_memoryagentbench_smoke(
+                    dataset_dir=dataset_dir,
+                    case_pack_output=case_pack_path,
+                    prediction_template_output=template_path,
+                    stage3_incremental_dry_run=True,
+                    stage3_write_update_mode="dry_run_contract",
+                    compute_sha256=False,
+                )
+
+            case_pack = json.loads(case_pack_path.read_text(encoding="utf-8"))
+            template_rows = [
+                json.loads(line)
+                for line in template_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+
+        self.assertTrue(payload["ok"], payload)
+        self.assertEqual(payload["status"], "metadata_smoke")
+        self.assertEqual(payload["metrics"]["observed_row_count"], 3)
+        self.assertEqual(payload["metrics"]["parquet_row_file_count"], 3)
+        self.assertEqual(len(case_pack["cases"]), 1)
+        self.assertEqual(len(template_rows), 1)
+        self.assertEqual(payload["stage3_incremental_runner"]["metrics"]["stage3_case_count"], 2)
+        self.assertIn(RAW_CONTEXT_AR, json.dumps(case_pack, ensure_ascii=False))
+        self.assertNotIn(RAW_ANSWER_AR, json.dumps(case_pack, ensure_ascii=False))
+        self.assertNotIn("answers", case_pack["cases"][0])
+
     def test_runner_can_embed_stage3_incremental_dry_run_when_explicitly_requested(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             dataset_dir = Path(tmp) / "memoryagentbench"
@@ -236,6 +325,48 @@ class MemoryAgentBenchSmokeTests(unittest.TestCase):
         self.assertEqual(stage3["metrics"]["stage3_case_count"], 2)
         self.assertFalse(stage3["privacy_boundary"]["raw_text_emitted"])
         self.assertFalse(payload["privacy_boundary"]["raw_text_emitted"])
+
+    @staticmethod
+    def _parquet_rows_for_path(path: Path) -> list[dict[str, object]]:
+        name = path.name
+        if name.startswith("Accurate_Retrieval"):
+            return [
+                {
+                    "context": RAW_CONTEXT_AR,
+                    "questions": [RAW_QUESTION_AR],
+                    "answers": [[RAW_ANSWER_AR]],
+                    "metadata": {
+                        "source": LOCAL_PATH_SENTINEL,
+                        "question_types": ["lookup"],
+                        "qa_pair_ids": ["ar-parquet-1"],
+                    },
+                    "metric": "substring_exact_match",
+                    "task_type": "question_answering",
+                }
+            ]
+        if name.startswith("Test_Time_Learning"):
+            return [
+                {
+                    "context": RAW_CONTEXT_TTL,
+                    "questions": ["RAW TTL QUESTION"],
+                    "answers": [[RAW_ANSWER_TTL]],
+                    "metadata": {"source": "ICL_banking", "question_types": ["classification"]},
+                    "metric": "exact_match",
+                    "task_type": "classification",
+                }
+            ]
+        if name.startswith("Conflict_Resolution"):
+            return [
+                {
+                    "context": "SECRET CR CONTEXT",
+                    "questions": ["RAW CR QUESTION"],
+                    "answers": [["RAW CR ANSWER"]],
+                    "metadata": {"source": "fact_sh", "question_types": ["conflict"]},
+                    "metric": "substring_exact_match",
+                    "task_type": "conflict_resolution",
+                }
+            ]
+        return []
 
     @staticmethod
     def _write_fixture(dataset_dir: Path) -> None:

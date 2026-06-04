@@ -112,6 +112,12 @@ CANNOT_CLAIM = [
 STAGE3_INCREMENTAL_SPLITS = ("Test_Time_Learning", "Conflict_Resolution")
 STAGE3_WRITE_UPDATE_DRY_RUN_MODE = "dry_run_contract"
 STAGE3_MISSING_WRITE_UPDATE_MODE = "unsupported_missing_instrumentation"
+PARQUET_READER_MISSING_SUPPORT = "metadata_only_parquet_without_optional_reader"
+PARQUET_ROW_SUPPORT = "parquet_rows_with_optional_reader"
+
+
+class OptionalParquetReaderMissing(RuntimeError):
+    """Raised when local parquet rows exist but pyarrow is not installed."""
 
 
 @dataclass
@@ -233,12 +239,21 @@ def read_json_or_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def read_parquet_rows(path: Path) -> list[dict[str, Any]]:
+    try:
+        import pyarrow.parquet as pq  # type: ignore[import-not-found]
+    except Exception as exc:
+        raise OptionalParquetReaderMissing("Install pyarrow to read parquet rows.") from exc
+    table = pq.read_table(str(path))
+    return [dict(row) for row in table.to_pylist() if isinstance(row, dict)]
+
+
 def parquet_metadata(path: Path) -> dict[str, Any]:
     try:
         import pyarrow.parquet as pq  # type: ignore[import-not-found]
     except Exception:
         return {
-            "format_support": "metadata_only_parquet_without_optional_reader",
+            "format_support": PARQUET_READER_MISSING_SUPPORT,
             "observed_rows": None,
             "schema_fields": [],
         }
@@ -274,18 +289,23 @@ def base_field_name(field_name: str) -> str:
 
 
 def field_family(field_name: str) -> str:
+    return sorted(field_families(field_name))[0]
+
+
+def field_families(field_name: str) -> set[str]:
     base = base_field_name(field_name)
+    families: set[str] = set()
     if base in RAW_TEXT_FIELD_NAMES:
-        return "raw_text"
+        families.add("raw_text")
     if base in GOLD_LABEL_FIELD_NAMES:
-        return "gold_label"
+        families.add("gold_label")
     if base in TASK_FIELD_NAMES:
-        return "task"
+        families.add("task")
     if base in METRIC_FIELD_NAMES:
-        return "metric"
+        families.add("metric")
     if field_name.startswith("metadata."):
-        return "metadata"
-    return "other"
+        families.add("metadata")
+    return families or {"other"}
 
 
 def as_string_list(value: Any) -> list[str]:
@@ -381,12 +401,13 @@ def observe_row(
     field_names = sorted(flatten_field_names(row))
     observation.field_counts.update(field_names)
     for field_name in field_names:
-        family = field_family(field_name)
-        observation.field_family_counts[family] += 1
+        families = field_families(field_name)
+        for family in families:
+            observation.field_family_counts[family] += 1
         base = base_field_name(field_name)
-        if family == "raw_text":
+        if "raw_text" in families:
             observation.raw_text_fields.add(base)
-        if family == "gold_label":
+        if "gold_label" in families:
             observation.gold_label_fields.add(base)
     task_families = task_families_for_row(row, split_meta)
     metric_families = metric_families_for_row(row, split_meta)
@@ -404,7 +425,9 @@ def observe_row(
             "split": observation.split_id,
             "row_index": row_index,
             "file_path_sha1": file_payload["path_sha1"],
-            "field_families": sorted(set(field_family(name) for name in field_names)),
+            "field_families": sorted(
+                {family for name in field_names for family in field_families(name)}
+            ),
             "task_families": sorted(task_families),
             "metric_families": sorted(metric_families),
             "question_count": len(questions_for_row(row)),
@@ -429,13 +452,35 @@ def observe_split(
         if path.suffix.lower() == ".parquet":
             metadata = parquet_metadata(path)
             file_payload.update(metadata)
-            row_count = metadata.get("observed_rows")
-            if isinstance(row_count, int):
-                observation.observed_rows += row_count
-            for field_name in metadata.get("schema_fields") or []:
-                observation.field_counts[field_name] += 1
-                observation.field_family_counts[field_family(field_name)] += 1
-            observation.files.append(file_payload)
+            try:
+                rows = read_parquet_rows(path)
+            except OptionalParquetReaderMissing:
+                rows = []
+            except Exception as exc:
+                file_payload["row_read_error_type"] = type(exc).__name__
+                rows = []
+            if rows:
+                file_payload["format_support"] = PARQUET_ROW_SUPPORT
+                file_payload["observed_rows"] = len(rows)
+                observation.files.append(file_payload)
+                for row_index, row in enumerate(rows, start=1):
+                    observe_row(
+                        observation,
+                        split_meta=split_meta,
+                        file_payload=file_payload,
+                        row_index=row_index,
+                        row=row,
+                        case_limit=case_limit,
+                    )
+            else:
+                row_count = metadata.get("observed_rows")
+                if isinstance(row_count, int):
+                    observation.observed_rows += row_count
+                for field_name in metadata.get("schema_fields") or []:
+                    observation.field_counts[field_name] += 1
+                    for family in field_families(field_name):
+                        observation.field_family_counts[family] += 1
+                observation.files.append(file_payload)
             continue
         rows = read_json_or_jsonl(path)
         file_payload["observed_rows"] = len(rows)
@@ -490,10 +535,17 @@ def collect_case_rows(
 ) -> list[dict[str, Any]]:
     rows_out: list[dict[str, Any]] = []
     for path in discover_split_files(dataset_dir, split_id):
-        if path.suffix.lower() not in {".json", ".jsonl"}:
-            continue
         file_payload = file_verification(path, compute_sha256=False)
-        for row_index, row in enumerate(read_json_or_jsonl(path), start=1):
+        if path.suffix.lower() in {".json", ".jsonl"}:
+            rows = read_json_or_jsonl(path)
+        elif path.suffix.lower() == ".parquet":
+            try:
+                rows = read_parquet_rows(path)
+            except Exception:
+                continue
+        else:
+            continue
+        for row_index, row in enumerate(rows, start=1):
             case_id = stable_case_id(split_id, file_payload, row_index, row)
             rows_out.append(
                 {
@@ -830,6 +882,19 @@ def run_memoryagentbench_smoke(
     }
     observed_split_count = sum(1 for split in splits.values() if split["observed_rows"] > 0)
     observed_row_count = sum(int(split["observed_rows"]) for split in splits.values())
+    local_file_count = sum(len(split["files"]) for split in splits.values())
+    optional_reader_missing_file_count = sum(
+        1
+        for split in splits.values()
+        for file_payload in split["files"]
+        if file_payload.get("format_support") == PARQUET_READER_MISSING_SUPPORT
+    )
+    parquet_row_file_count = sum(
+        1
+        for split in splits.values()
+        for file_payload in split["files"]
+        if file_payload.get("format_support") == PARQUET_ROW_SUPPORT
+    )
 
     case_pack_path: Path | None = None
     if case_pack_output:
@@ -872,9 +937,26 @@ def run_memoryagentbench_smoke(
             write_update_mode=stage3_write_update_mode,
         )
 
-    status = "metadata_smoke" if observed_row_count else "skipped_missing_dataset"
+    if observed_row_count:
+        status = "metadata_smoke"
+    elif local_file_count and optional_reader_missing_file_count:
+        status = "found_files_missing_optional_reader"
+    else:
+        status = "skipped_missing_dataset"
     official_expected_total_rows = int(manifest["official_dataset"]["total_examples"])
     official_expected_split_count = len(CANONICAL_SPLITS)
+    if status == "found_files_missing_optional_reader":
+        next_step = (
+            "parquet_optional_reader_missing: official MemoryAgentBench parquet files were found, "
+            "but row inspection requires installing the optional pyarrow reader. "
+            "Install pyarrow or provide JSON/JSONL exports before writing case packs or Stage 3 dry-run cases."
+        )
+    else:
+        next_step = (
+            "Place operator-downloaded or exported MemoryAgentBench files under "
+            "benchmark_corpus/memoryagentbench/ for local metadata inspection; "
+            "use explicit output paths for local-only case packs or prediction templates."
+        )
     payload = {
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_memoryagentbench_metadata_smoke",
@@ -905,7 +987,9 @@ def run_memoryagentbench_smoke(
             "official_expected_total_rows": official_expected_total_rows,
             "observed_split_count": observed_split_count,
             "observed_row_count": observed_row_count,
-            "local_file_count": sum(len(split["files"]) for split in splits.values()),
+            "local_file_count": local_file_count,
+            "optional_reader_missing_file_count": optional_reader_missing_file_count,
+            "parquet_row_file_count": parquet_row_file_count,
             "task_family_counts": dict(
                 sorted(
                     sum((Counter(split["task_family_counts"]) for split in splits.values()), Counter()).items()
@@ -941,11 +1025,7 @@ def run_memoryagentbench_smoke(
             else None,
         },
         "cannot_claim": CANNOT_CLAIM,
-        "next_step": (
-            "Place operator-downloaded or exported MemoryAgentBench files under "
-            "benchmark_corpus/memoryagentbench/ for local metadata inspection; "
-            "use explicit output paths for local-only case packs or prediction templates."
-        ),
+        "next_step": next_step,
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
     }
     if stage3_payload:
