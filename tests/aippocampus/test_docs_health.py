@@ -234,6 +234,56 @@ class DocsHealthTests(unittest.TestCase):
             issues,
         )
 
+    def test_legacy_alias_inventory_rejects_public_doc_first_choice_setup(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            inventory = repo / "docs" / "architecture" / "legacy-alias-inventory.md"
+            inventory.parent.mkdir(parents=True)
+            inventory.write_text("`CODEX_MEMORY_VAULT`\n", encoding="utf-8")
+            install_doc = repo / "docs" / "guides" / "install-guide.md"
+            install_doc.parent.mkdir(parents=True)
+            install_doc.write_text("export CODEX_MEMORY_VAULT=/tmp/private\n", encoding="utf-8")
+
+            issues = docs_health.legacy_alias_inventory_issues(repo)
+
+        self.assertIn(
+            "public docs present legacy alias as first-choice setup: "
+            "CODEX_MEMORY_VAULT in docs/guides/install-guide.md:1; "
+            "prefer canonical AIPPOCAMPUS_* docs and link "
+            "docs/architecture/legacy-alias-inventory.md",
+            issues,
+        )
+
+    def test_legacy_alias_inventory_reports_incomplete_inventory_row(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            alias = "CODEX_MEMORY_" + "VAULT"
+            inventory = repo / "docs" / "architecture" / "legacy-alias-inventory.md"
+            inventory.parent.mkdir(parents=True)
+            inventory.write_text(
+                "\n".join(
+                    [
+                        "# Legacy Alias Inventory",
+                        "",
+                        "| Alias | Canonical replacement | Why it exists | Classification | Diagnostic behavior | Removal stage |",
+                        "| --- | --- | --- | --- | --- | --- |",
+                        f"| `{alias}` | `AIPPOCAMPUS_VAULT` | old name |  | Active only when canonical unset. |  |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            script = repo / "skills" / "aippocampus" / "scripts" / "vault.py"
+            script.parent.mkdir(parents=True)
+            script.write_text(f'os.environ.get("{alias}")\n', encoding="utf-8")
+
+            issues = docs_health.legacy_alias_inventory_issues(repo)
+
+        self.assertIn(
+            f"legacy/provider-specific env or path inventory row incomplete: {alias} "
+            "(missing classification); update docs/architecture/legacy-alias-inventory.md",
+            issues,
+        )
+
     def test_legacy_alias_inventory_reports_misspelled_aippocampus_alias(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
@@ -263,7 +313,18 @@ class DocsHealthTests(unittest.TestCase):
             inventory = repo / "docs" / "architecture" / "legacy-alias-inventory.md"
             inventory.parent.mkdir(parents=True)
             inventory.write_text(
-                f"`{alias}`\n",
+                "\n".join(
+                    [
+                        "# Legacy Alias Inventory",
+                        "",
+                        "| Alias | Canonical replacement | Why it exists | Classification | Diagnostic behavior | Removal stage |",
+                        "| --- | --- | --- | --- | --- | --- |",
+                        (
+                            f"| `{alias}` | `AIPPOCAMPUS_NEW_THING` | old name | "
+                            "Migration-only fallback | Active when canonical unset. | Remove after migration smoke. |"
+                        ),
+                    ]
+                ),
                 encoding="utf-8",
             )
             script = repo / "skills" / "aippocampus" / "scripts" / "new_surface.py"

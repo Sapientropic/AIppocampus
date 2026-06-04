@@ -531,6 +531,11 @@ Common installs should stay small:
   Desktop hook process. JSON output names this surface `provider_env`; use
   `--provider-env-var` to override the selected route variable name for local
   diagnostics.
+- `aippocampus health --json`, `aippocampus doctor provider --json`, and
+  `aippocampus onboard --status --json` expose path-free `legacy_aliases`
+  diagnostics for compatibility fallbacks. New setup examples should still use
+  the canonical `AIPPOCAMPUS_*` names and link the legacy inventory only when
+  explaining migration behavior.
 
 Registry storage precedence remains explicit:
 

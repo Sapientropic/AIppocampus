@@ -19,10 +19,25 @@ LEGACY_ALIAS_POINTER_DOCS = {
     ),
 }
 
+LEGACY_ALIAS_PUBLIC_SETUP_DOCS = (
+    ".env.example",
+    "README.md",
+    "docs/README.md",
+    "docs/guides/install-guide.md",
+    "docs/guides/public-api.md",
+)
+
 LEGACY_ENV_ALIAS_RE = re.compile(
     r"\b(?:CODEX_MEMORY|THREAD_MEMORY)_[A-Z0-9_]+\b"
     r"|\bAIIPPOCAMPUS_SUBCONSCIOUS_HOOK\b"
     r"|\bDEEPSEEK_(?:BASE_URL|MODEL|PRO_MODEL|API_KEY)\b"
+)
+
+LEGACY_FIRST_CHOICE_ENV_ALIAS_RE = re.compile(
+    r"(?:^|\s)(?:export\s+|set\s+|\$env:)?"
+    r"(?P<alias>(?:CODEX_MEMORY|THREAD_MEMORY)_[A-Z0-9_]+"
+    r"|AIIPPOCAMPUS_SUBCONSCIOUS_HOOK"
+    r"|DEEPSEEK_(?:BASE_URL|MODEL|PRO_MODEL))\s*="
 )
 
 LEGACY_PATH_ALIAS_PATTERNS = {
@@ -87,6 +102,8 @@ LEGACY_ALIAS_SCAN_EXCLUDED_PARTS = {
     "node_modules",
     "reviews",
 }
+
+_INCOMPLETE_INVENTORY_CELL_VALUES = {"", "-", "tbd", "todo", "unknown"}
 
 
 def legacy_alias_scan_paths(repo_root: Path) -> list[Path]:
@@ -268,6 +285,7 @@ def legacy_alias_inventory_issues(repo_root: Path) -> list[str]:
         return [f"missing legacy alias inventory: {LEGACY_ALIAS_INVENTORY_DOC}"]
 
     inventory_text = inventory_path.read_text(encoding="utf-8")
+    inventory_rows = legacy_alias_inventory_rows(inventory_text)
     for rel_path, (pointer, issue) in LEGACY_ALIAS_POINTER_DOCS.items():
         path = repo_root / rel_path
         if path.exists() and pointer not in path.read_text(encoding="utf-8"):
@@ -283,9 +301,70 @@ def legacy_alias_inventory_issues(repo_root: Path) -> list[str]:
         aliases, path_aliases = scanned_tokens
 
     for alias in sorted(aliases | path_aliases):
-        if f"`{alias}`" not in inventory_text:
+        row = inventory_rows.get(alias)
+        if row is None:
             issues.append(
                 f"legacy/provider-specific env or path missing inventory classification: {alias}; "
                 f"update {LEGACY_ALIAS_INVENTORY_DOC}"
+            )
+            continue
+        incomplete_reason = legacy_alias_inventory_row_incomplete(row)
+        if incomplete_reason:
+            issues.append(
+                f"legacy/provider-specific env or path inventory row incomplete: {alias} "
+                f"({incomplete_reason}); update {LEGACY_ALIAS_INVENTORY_DOC}"
+            )
+    issues.extend(public_doc_first_choice_legacy_alias_issues(repo_root))
+    return issues
+
+
+def legacy_alias_inventory_rows(inventory_text: str) -> dict[str, list[str]]:
+    rows: dict[str, list[str]] = {}
+    for raw_line in inventory_text.splitlines():
+        line = raw_line.strip()
+        if not line.startswith("|"):
+            continue
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        if len(cells) < 6:
+            continue
+        header = cells[0].casefold()
+        if header in {"alias", "path alias"} or set(cells[0]) <= {"-", " "}:
+            continue
+        for alias in re.findall(r"`([^`]+)`", cells[0]):
+            rows[alias] = cells
+    return rows
+
+
+def legacy_alias_inventory_row_incomplete(row: list[str]) -> str | None:
+    required = {
+        "classification": row[3] if len(row) > 3 else "",
+        "diagnostic behavior": row[4] if len(row) > 4 else "",
+        "removal stage": row[5] if len(row) > 5 else "",
+    }
+    for field, value in required.items():
+        normalized = re.sub(r"\s+", " ", value.strip()).casefold()
+        if normalized in _INCOMPLETE_INVENTORY_CELL_VALUES:
+            return f"missing {field}"
+    return None
+
+
+def public_doc_first_choice_legacy_alias_issues(repo_root: Path) -> list[str]:
+    issues: list[str] = []
+    for rel_path in LEGACY_ALIAS_PUBLIC_SETUP_DOCS:
+        path = repo_root / rel_path
+        if not path.exists() or not path.is_file():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        for line_no, line in enumerate(text.splitlines(), start=1):
+            match = LEGACY_FIRST_CHOICE_ENV_ALIAS_RE.search(line)
+            if not match:
+                continue
+            issues.append(
+                "public docs present legacy alias as first-choice setup: "
+                f"{match.group('alias')} in {rel_path}:{line_no}; "
+                f"prefer canonical AIPPOCAMPUS_* docs and link {LEGACY_ALIAS_INVENTORY_DOC}"
             )
     return issues
