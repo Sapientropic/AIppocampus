@@ -239,6 +239,7 @@ pasting raw JSON into multiple docs.
 | Semantic paraphrase reuse smoke | `tools/aippocampus/smoke/smoke_semantic_paraphrase_reuse.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md` |
 | Living cue cache public-safe smoke | `tools/aippocampus/smoke/smoke_living_cue_cache.py` | `skills/aippocampus/references/ambient-hooks.md`, `docs/research/ambient-associative-recall.md`, #281 |
 | Real Codex long-session continuity smoke | `tools/aippocampus/smoke/smoke_codex_long_session_continuity.py` | `docs/evidence/readiness/public-readiness-verification.md` |
+| E2E50 silent-constraint candidate seed scanner | `tools/aippocampus/smoke/smoke_e2e50_seed_candidates.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, #279 |
 | Claude Code MCP host probe | `tools/aippocampus/smoke/smoke_claude_code_mcp_host.py` | `docs/evidence/readiness/public-readiness-verification.md` |
 | Claude Code local-history parser smoke | `tools/aippocampus/smoke/smoke_claude_code_history.py` | `docs/evidence/readiness/public-readiness-verification.md` |
 | Synthetic cross-agent continuity smoke | `tools/aippocampus/smoke/smoke_cross_agent_continuity.py` | `docs/evidence/readiness/public-readiness-verification.md` |

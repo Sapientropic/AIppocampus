@@ -73,6 +73,16 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
   Its default report is sanitized and carries `cannot_claim` boundaries for
   private real-history lift, full code-index navigation quality, and live host
   timing.
+- `tools/aippocampus/smoke/smoke_e2e50_seed_candidates.py` is the #279
+  candidate-seed scanner for the future E2E50 silent-constraint benchmark. It
+  scans registered clean-source `messages.jsonl` plus the behavior
+  `events.jsonl` lane for long threads with compaction evidence, early-window
+  binding/rejected-route/temporary/superseded signals, behavior-backed failure
+  events, and later-window drift. Its output is `candidate_seed_discovery_only`:
+  hash/count-only candidate rows, case-family guesses, and reviewer checklists.
+  It does not score agent behavior, publish private text/paths/ids, or claim
+  #279 benchmark quality before manually annotated cases and the shared
+  benchmark methodology are ready.
 - `benchmarks/aippocampus/benchmark_knowledge_pollution.py` runs the #517
   public-safe knowledge pollution and privacy-partition benchmark. It reuses
   the governed knowledge source/claim schema and high-risk answer gate, then
