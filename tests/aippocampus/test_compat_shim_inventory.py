@@ -338,6 +338,48 @@ sys.modules[__name__] = _impl
             self.assertIn("documented_helper.py", temporary)
             self.assertIn("documented direct invocation", temporary["documented_helper.py"].reason)
 
+    def test_archived_direct_invocation_does_not_keep_shim_temporary(self) -> None:
+        with TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            write_fixture_script(
+                repo_root,
+                "archived_helper.py",
+                '''#!/usr/bin/env python3
+"""Compatibility shim for a helper referenced only by archived plans."""
+
+from __future__ import annotations
+
+import sys
+
+from aippocampus_runtime.archived import helper as _impl
+
+sys.modules[__name__] = _impl
+''',
+            )
+            write_fixture_script(
+                repo_root,
+                "aippocampus_runtime/archived/helper.py",
+                "def main() -> int:\n    return 0\n",
+            )
+            archive_dir = repo_root / "docs" / "archive" / "plans"
+            archive_dir.mkdir(parents=True)
+            (archive_dir / "old.md").write_text(
+                "Use `archived_helper.py` for an old migration.\n",
+                encoding="utf-8",
+            )
+            (repo_root / "pyproject.toml").write_text(
+                '[tool.setuptools]\npy-modules = ["archived_helper"]\n',
+                encoding="utf-8",
+            )
+
+            report = inventory.build_inventory(repo_root)
+            temporary = {item.script: item for item in report.temporary_compat}
+            delete_now = {item.script: item for item in report.delete_now}
+
+            self.assertNotIn("archived_helper.py", temporary)
+            self.assertIn("archived_helper.py", delete_now)
+            self.assertIn("only remaining flat-module exposure", delete_now["archived_helper.py"].reason)
+
     def test_skill_entrypoint_direct_invocation_keeps_shim_temporary(self) -> None:
         with TemporaryDirectory() as tmp:
             repo_root = Path(tmp)

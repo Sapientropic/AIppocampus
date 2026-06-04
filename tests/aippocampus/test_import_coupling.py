@@ -2058,12 +2058,12 @@ class ImportCouplingTests(unittest.TestCase):
         self,
     ) -> None:
         package_modules = {
-            "prompt_context_render": "prompt_context_render",
-            "prompt_recall_decision": "prompt_recall_decision",
             "semantic_recall_gate": "semantic_recall_gate",
             "semantic_trigger_router": "semantic_trigger_router",
         }
         deleted_package_only_modules = {
+            "prompt_context_render": "prompt_context_render",
+            "prompt_recall_decision": "prompt_recall_decision",
             "prompt_recall_ambiguity": "prompt_recall_ambiguity",
             "prompt_cues": "prompt_cues",
             "prompt_recall_ambient": "prompt_recall_ambient",
@@ -2089,8 +2089,6 @@ class ImportCouplingTests(unittest.TestCase):
             self.assertFalse(shim_path.exists(), shim_path)
             self.assertNotIn(shim, py_modules)
 
-        import prompt_context_render
-        import prompt_recall_decision
         import semantic_recall_gate
         import semantic_trigger_router
         from aippocampus_runtime.recall import (
@@ -2168,13 +2166,13 @@ class ImportCouplingTests(unittest.TestCase):
             edges["aippocampus_runtime.recall.prompt_recall_semantic"],
         )
 
-        self.assertIs(prompt_context_render.context_for_hook, packaged_render.context_for_hook)
+        self.assertTrue(callable(packaged_render.context_for_hook))
         self.assertTrue(callable(packaged_cues.explicit_recall_terms))
         self.assertTrue(callable(packaged_ambient.attach_ambient_recall))
         self.assertTrue(callable(packaged_ambiguity.explicit_evidence_request_is_ambiguous))
         self.assertTrue(callable(packaged_context.build_recall_decision_context))
         self.assertTrue(callable(packaged_core.score_candidates))
-        self.assertIs(prompt_recall_decision.assess_prompt, packaged_decision.assess_prompt)
+        self.assertTrue(callable(packaged_decision.assess_prompt))
         self.assertTrue(callable(packaged_evidence.collect_evidence))
         self.assertTrue(callable(packaged_semantic.run_semantic_gate_for_context))
         self.assertTrue(callable(packaged_search_decision.assess_before_search))
