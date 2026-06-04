@@ -9,6 +9,7 @@ import sys
 from typing import Sequence
 
 from aippocampus_runtime.core import aippocampus_registry_resolution, codex_home
+from aippocampus_runtime.legacy_aliases import legacy_alias_diagnostics
 from aippocampus_runtime.onboarding import codex as onboard_codex
 from conversation_sources import create_conversation_provider, normalize_provider_name
 
@@ -100,6 +101,7 @@ def provider_status_report(cwd: str | None = None) -> dict:
         _provider_capability("claude-code", cwd=cwd),
         _provider_capability("generic-jsonl", cwd=cwd),
     ]
+    storage = aippocampus_registry_resolution()
     return {
         "ok": True,
         "data": {
@@ -114,7 +116,8 @@ def provider_status_report(cwd: str | None = None) -> dict:
                 "default_provider": "codex",
                 "why": "auto keeps the safest fully implemented default and lists other providers separately.",
             },
-            "storage": aippocampus_registry_resolution(),
+            "storage": storage,
+            "legacy_aliases": legacy_alias_diagnostics(registry_resolution=storage),
         },
         "meta": {"facade": "onboard.py", "schema_version": 1},
     }

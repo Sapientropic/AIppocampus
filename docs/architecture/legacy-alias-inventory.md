@@ -21,6 +21,17 @@ printing values or local paths.
 - Registry storage resolution also keeps the narrower `source` and
   `legacy_fallback` fields for existing callers.
 
+Command-local coverage is intentionally selective:
+
+| Surface | JSON legacy diagnostic | Scope | Reason |
+| --- | --- | --- | --- |
+| `aippocampus health --json` | `legacy_aliases` | Env fallbacks, registry path fallback, and project-local diagnostic paths | Aggregate readiness is the canonical broad diagnostic. |
+| `aippocampus doctor provider --json` | `legacy_aliases` | Current-process env fallbacks only | Provider visibility is already a process-env diagnostic and must not print credential values. |
+| `onboard.py --status --json` / `aippocampus onboard --status --json` | `data.legacy_aliases` | Onboarding storage resolution plus current-process env fallbacks | Onboarding is where users first discover storage, so legacy storage fallback should be visible without requiring a separate health run. |
+| Registry storage helpers | `source` and `legacy_fallback` | Storage resolution only | Existing callers depend on this compact shape; use aggregate diagnostics for full alias inventory context. |
+| Vault/dashboard commands | Aggregate-only through health / status diagnostics | `CODEX_MEMORY_*` vault and asset fallbacks | Values are local paths/content branding, and command outputs focus on generated vault artifacts rather than environment introspection. |
+| Scheduler / hook paths | Aggregate-only through health / provider doctor diagnostics | `AIIPPOCAMPUS_SUBCONSCIOUS_HOOK` typo fallback | Hooks should stay quiet and bounded; diagnostics belong in explicit operator commands. |
+
 ## Env Aliases
 
 | Alias | Canonical replacement | Why it exists | Classification | Diagnostic behavior | Removal stage |

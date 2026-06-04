@@ -277,6 +277,30 @@ class OnboardCodexTests(unittest.TestCase):
         self.assertIn("blocked", data["data"]["state_legend"])
         self.assertEqual(data["data"]["storage"]["source"], "AIPPOCAMPUS_HOME/registry")
         self.assertFalse(data["data"]["storage"]["legacy_fallback"])
+        self.assertEqual(data["data"]["legacy_aliases"]["active_count"], 0)
+
+    def test_onboard_status_json_reports_legacy_storage_alias_without_private_path(self) -> None:
+        legacy_registry = self.root / "private-legacy-registry"
+        proc = self._run_onboard_facade(
+            "--status",
+            "--cwd",
+            str(self.cwd),
+            env_extra={
+                "THREAD_MEMORY_REGISTRY_DIR": str(legacy_registry),
+            },
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        data = json.loads(proc.stdout)
+        aliases = {entry["alias"] for entry in data["data"]["legacy_aliases"]["active"]}
+        encoded_aliases = json.dumps(data["data"]["legacy_aliases"], ensure_ascii=False)
+
+        self.assertEqual(data["data"]["storage"]["source"], "THREAD_MEMORY_REGISTRY_DIR")
+        self.assertTrue(data["data"]["storage"]["legacy_fallback"])
+        self.assertIn("THREAD_MEMORY_REGISTRY_DIR", aliases)
+        self.assertFalse(data["data"]["legacy_aliases"]["value_printed"])
+        self.assertFalse(data["data"]["legacy_aliases"]["local_paths_included"])
+        self.assertNotIn(str(legacy_registry), encoded_aliases)
 
     def test_onboard_status_reports_missing_non_codex_providers_as_blocked(self) -> None:
         proc = self._run_onboard_facade(
