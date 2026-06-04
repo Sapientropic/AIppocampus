@@ -592,17 +592,27 @@ first; rendered previews must say "Dream hypothesis, not source fact" and keep
 uncertainty/source-reopen wording. Sensitive personal interpretations,
 relationship-continuity stories, durable profile/preference claims, and
 overconfident dream language are parked before working-memory projection.
+As of the #299 trust-horizon slice, accepted projected rows also carry a
+`trust_horizon` capsule plus top-level aliases for `validated_at`,
+`validated_by`, `source_fingerprint`, `review_after`, `expires_at`,
+`invalidation_triggers`, and `visibility_tier`. This is an invalidation
+contract, not a truth upgrade: quiet route use is allowed only while the horizon
+is valid, while source-fingerprint drift, visible contradiction, explicit
+evidence requests, exact or quoted claims, sensitive claims, strong claims,
+expiry, or review-due state require source reopen or silence according to the
+consumer policy. This slice does not claim the long-horizon Journey weekly /
+monthly wiring or real-history dream quality lift.
 The actual foreground path enforces this through working-memory matching and
-hook rendering: blocked/expired/sensitive dream rows are not matched, matched
-dream rows carry a `dream_hypothesis_use` plan, and hook context renders the
-dream boundary instead of the generic working-memory wording. Ambient recall
-cards generated from dream rows likewise say to use the hint quietly and reopen
-source before strong claims. Reflection topology may include only adjudicated,
-source-ref-carried dream hypotheses as collapsed interpretive nodes with a
-source-reopen boundary. Agency affordance mapping treats direct dream
-hypothesis inputs as backstage-only and drops rows blocked by the sensitive-use
-gate, so a dream cannot become a foreground action ticket merely by bypassing
-ambient recall.
+hook rendering: blocked, expired, review-due, or sensitive dream rows are not
+matched, matched dream rows carry a `dream_hypothesis_use` plan, and hook
+context renders the dream boundary instead of the generic working-memory
+wording. Ambient recall cards generated from dream rows likewise say to use the
+hint quietly and reopen source before strong claims. Reflection topology may
+include only adjudicated, source-ref-carried dream hypotheses as collapsed
+interpretive nodes with a source-reopen boundary. Agency affordance mapping
+treats direct dream hypothesis inputs as backstage-only and drops rows blocked
+by the sensitive-use gate, so a dream cannot become a foreground action ticket
+merely by bypassing ambient recall.
 
 ### Sleep-Cycle Dream Dialogue
 
@@ -702,7 +712,9 @@ The implemented runtime shape lives in
 objects with `hard_gate`, `raw_components`, and `aggregate` sections. Aggregate
 pressure is explicitly `attention_lifecycle_not_truth`; model self-ratings are
 reported only as ignored telemetry, and deterministic structural divergence is
-the information-gain proxy. The detached sleep-cycle runner attaches
+the information-gain proxy. Activation hard gates read trust-horizon expiry and
+review boundaries as well as top-level aliases so consumers cannot bypass the
+capsule by reading only projection rows. The detached sleep-cycle runner attaches
 `retention_policy` to adjudicated dream findings before optional staging writes.
 
 ### One-Sidedness Gate For Compensation

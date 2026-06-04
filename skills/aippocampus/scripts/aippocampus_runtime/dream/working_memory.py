@@ -76,6 +76,16 @@ SENSITIVE_BOUNDARY_COPY = (
     "not a user-profile fact",
     "do not treat this as a user-profile fact",
 )
+DEFAULT_TRUST_HORIZON_INVALIDATION_TRIGGERS = (
+    "source_fingerprint_changed",
+    "contradiction_visible",
+    "user_correction",
+    "user_requested_evidence",
+    "exact_or_quote_claim",
+    "sensitive_claim",
+    "trust_horizon_expired",
+    "trust_horizon_review_due",
+)
 
 
 def stable_digest(*parts: object, prefix: str, length: int = 16) -> str:
@@ -284,6 +294,58 @@ def clean_working_memory_refs(
     return out
 
 
+def dream_source_fingerprint(refs: Iterable[Mapping[str, Any]]) -> str:
+    keys = sorted(key for ref in refs if any(key := source_ref_key(ref)))
+    return stable_digest(keys, prefix="dreamsrc", length=18)
+
+
+def dream_trust_horizon(
+    finding: Mapping[str, Any],
+    refs: Iterable[Mapping[str, Any]],
+    *,
+    visibility_tier: str = "quiet_substrate",
+) -> dict[str, Any]:
+    """Build the #299 trust-horizon capsule for adjudicated dream findings.
+
+    The horizon is a source-discipline control, not a truth upgrade. It lets a
+    foreground consumer use an accepted capsule as quiet route context while
+    naming exactly which changes force source reopen instead of letting the
+    dream become a smoother long-lived summary.
+    """
+
+    validated_at = (
+        finding.get("validated_at")
+        or finding.get("adjudicated_at")
+        or finding.get("reviewed_at")
+        or finding.get("created_at")
+        or now_utc()
+    )
+    validated_by = (
+        finding.get("validated_by")
+        or finding.get("adjudication_source")
+        or DEFAULT_BACKGROUND_ADJUDICATION_SOURCE
+    )
+    triggers = unique_preserve(
+        [
+            *string_values(finding.get("invalidation_triggers")),
+            *DEFAULT_TRUST_HORIZON_INVALIDATION_TRIGGERS,
+        ],
+        limit=16,
+    )
+    return {
+        "schema_version": 1,
+        "validated_at": str(validated_at),
+        "validated_by": str(validated_by),
+        "source_fingerprint": dream_source_fingerprint(refs),
+        "review_after": finding.get("review_after") or finding.get("expires_or_review_after"),
+        "expires_at": finding.get("expires_at"),
+        "invalidation_triggers": triggers,
+        "visibility_tier": visibility_tier,
+        "ordinary_use": "quiet_route_context_without_reopen_until_invalidated",
+        "truth_boundary": "trust_horizon_does_not_make_dream_a_source_fact",
+    }
+
+
 def adjudicated_dream_downstream_use(finding: Mapping[str, Any]) -> list[str]:
     requested = [
         str(item)
@@ -404,7 +466,8 @@ def adjudicated_dream_findings_to_working_memory(
             break
         if not adjudicated_dream_is_eligible(finding):
             continue
-        refs = clean_working_memory_refs(finding.get("source_refs") or [])
+        raw_refs = normalize_source_refs(finding.get("source_refs"))
+        refs = clean_working_memory_refs(raw_refs)
         if not refs:
             continue
         bridge_claims = [
@@ -429,6 +492,7 @@ def adjudicated_dream_findings_to_working_memory(
             limit=18,
         )
         activation_cues = unique_preserve(finding.get("activation_cues") or [], limit=12)
+        trust_horizon = dream_trust_horizon(finding, raw_refs)
         candidate = {
             "candidate_type": DREAM_HYPOTHESIS_TYPE,
             "title": title,
@@ -464,6 +528,12 @@ def adjudicated_dream_findings_to_working_memory(
                 "concepts": concepts,
                 "source_finding_ids": [source_finding_id],
                 "source_refs": refs,
+                "source_fingerprint": trust_horizon["source_fingerprint"],
+                "validated_at": trust_horizon["validated_at"],
+                "validated_by": trust_horizon["validated_by"],
+                "review_after": trust_horizon["review_after"],
+                "invalidation_triggers": trust_horizon["invalidation_triggers"],
+                "visibility_tier": trust_horizon["visibility_tier"],
                 "source_strength": {
                     "score": 1.0 if len(refs) >= 2 else 0.75,
                     "source_ref_count": len(refs),
@@ -482,10 +552,12 @@ def adjudicated_dream_findings_to_working_memory(
                 "downstream_use": adjudicated_dream_downstream_use(finding),
                 "truth_boundary": "adjudicated_dream_hypothesis_not_fact",
                 "expires_at": finding.get("expires_at"),
+                "trust_horizon": trust_horizon,
                 "foreground_use": {
                     "default_action": "quiet_substrate",
                     "use_only_when_it_changes_current_answer": True,
                     "strong_claim_requires_source_reopen": True,
+                    "accepted_capsule_can_be_used_quietly_until_invalidated": True,
                     "stay_silent_when_source_visible": True,
                     "stay_silent_when_annoyance_risk_high": True,
                     "render_boundary": "dream_hypothesis_not_source_fact",
@@ -503,9 +575,33 @@ def adjudicated_dream_findings_to_working_memory(
     return rows
 
 
+def trust_horizon_map(row: Mapping[str, Any]) -> Mapping[str, Any]:
+    horizon = row.get("trust_horizon") or {}
+    return horizon if isinstance(horizon, Mapping) else {}
+
+
+def trust_horizon_timestamps(row: Mapping[str, Any], key: str) -> list[datetime]:
+    horizon = trust_horizon_map(row)
+    timestamps: list[datetime] = []
+    for value in (row.get(key), horizon.get(key)):
+        parsed = parse_utc(str(value or ""))
+        if parsed:
+            timestamps.append(parsed)
+    return timestamps
+
+
 def dream_hypothesis_expired(row: Mapping[str, Any], *, now: str | datetime | None = None) -> bool:
-    expires_at = parse_utc(str(row.get("expires_at") or ""))
-    return bool(expires_at and expires_at <= normalize_now(now))
+    now_dt = normalize_now(now)
+    return any(expires_at <= now_dt for expires_at in trust_horizon_timestamps(row, "expires_at"))
+
+
+def trust_horizon_status(row: Mapping[str, Any], *, now: str | datetime | None = None) -> str:
+    now_dt = normalize_now(now)
+    if any(expires_at <= now_dt for expires_at in trust_horizon_timestamps(row, "expires_at")):
+        return "expired"
+    if any(review_after <= now_dt for review_after in trust_horizon_timestamps(row, "review_after")):
+        return "review_due"
+    return "valid"
 
 
 def plan_dream_hypothesis_use(
@@ -516,6 +612,11 @@ def plan_dream_hypothesis_use(
     source_visible: bool = False,
     annoyance_risk: str = "low",
     strong_user_facing_claim: bool = False,
+    exact_or_quote_claim: bool = False,
+    sensitive_claim: bool = False,
+    contradiction_visible: bool = False,
+    user_requested_evidence: bool = False,
+    source_fingerprint_current: str | None = None,
     now: str | datetime | None = None,
 ) -> dict[str, Any]:
     if row.get("candidate_type") != DREAM_HYPOTHESIS_TYPE:
@@ -530,12 +631,65 @@ def plan_dream_hypothesis_use(
         return {"action": "stay_silent", "reason": "source_already_visible"}
     if str(annoyance_risk or "").casefold() in {"high", "annoying", "noisy"}:
         return {"action": "stay_silent", "reason": "annoyance_risk_high"}
+    horizon = row.get("trust_horizon") or {}
+    stored_fingerprint = str(
+        row.get("source_fingerprint")
+        or (horizon.get("source_fingerprint") if isinstance(horizon, Mapping) else "")
+        or ""
+    )
+    if source_fingerprint_current and stored_fingerprint and source_fingerprint_current != stored_fingerprint:
+        return {
+            "action": "reopen_source",
+            "reason": "source_fingerprint_changed",
+            "requires_source_reopen": True,
+            "truth_boundary": row.get("truth_boundary"),
+            "trust_horizon_status": trust_horizon_status(row, now=now),
+        }
+    if contradiction_visible:
+        return {
+            "action": "reopen_source",
+            "reason": "contradiction_visible_requires_source_reopen",
+            "requires_source_reopen": True,
+            "truth_boundary": row.get("truth_boundary"),
+            "trust_horizon_status": trust_horizon_status(row, now=now),
+        }
+    if user_requested_evidence:
+        return {
+            "action": "reopen_source",
+            "reason": "user_requested_evidence_requires_source_reopen",
+            "requires_source_reopen": True,
+            "truth_boundary": row.get("truth_boundary"),
+            "trust_horizon_status": trust_horizon_status(row, now=now),
+        }
+    if exact_or_quote_claim or sensitive_claim:
+        reason = (
+            "sensitive_claim_requires_source_reopen"
+            if sensitive_claim
+            else "exact_or_quote_claim_requires_source_reopen"
+        )
+        return {
+            "action": "reopen_source",
+            "reason": reason,
+            "requires_source_reopen": True,
+            "truth_boundary": row.get("truth_boundary"),
+            "trust_horizon_status": trust_horizon_status(row, now=now),
+        }
     if strong_user_facing_claim:
         return {
             "action": "reopen_source",
             "reason": "strong_claim_requires_source_reopen",
             "requires_source_reopen": True,
             "truth_boundary": row.get("truth_boundary"),
+            "trust_horizon_status": trust_horizon_status(row, now=now),
+        }
+    horizon_status = trust_horizon_status(row, now=now)
+    if horizon_status == "review_due":
+        return {
+            "action": "reopen_source",
+            "reason": "trust_horizon_review_due_requires_source_reopen",
+            "requires_source_reopen": True,
+            "truth_boundary": row.get("truth_boundary"),
+            "trust_horizon_status": horizon_status,
         }
     if route_relevance is None:
         haystack = " ".join(
@@ -556,6 +710,7 @@ def plan_dream_hypothesis_use(
         "route": "working_memory",
         "requires_source_reopen": False,
         "truth_boundary": row.get("truth_boundary"),
+        "trust_horizon_status": trust_horizon_status(row, now=now),
         "matched_prompt_terms": text_terms(prompt)[:6],
     }
 

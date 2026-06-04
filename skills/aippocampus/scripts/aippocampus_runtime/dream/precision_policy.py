@@ -113,6 +113,21 @@ def normalize_now(now: str | datetime | None) -> datetime:
     return parse_utc(now) or datetime.now(timezone.utc)
 
 
+def trust_horizon_map(row: Mapping[str, Any]) -> Mapping[str, Any]:
+    horizon = row.get("trust_horizon") or {}
+    return horizon if isinstance(horizon, Mapping) else {}
+
+
+def trust_horizon_timestamps(row: Mapping[str, Any], key: str) -> list[datetime]:
+    horizon = trust_horizon_map(row)
+    timestamps: list[datetime] = []
+    for value in (row.get(key), horizon.get(key)):
+        parsed = parse_utc(value)
+        if parsed:
+            timestamps.append(parsed)
+    return timestamps
+
+
 def string_values(value: object) -> list[str]:
     if isinstance(value, str):
         return [value]
@@ -401,15 +416,17 @@ def topic_fit_component(row: Mapping[str, Any], prompt: str, route_relevance: bo
 
 def activation_hard_gate_failures(row: Mapping[str, Any], *, now: str | datetime | None = None) -> list[str]:
     failures: list[str] = []
+    now_dt = normalize_now(now)
     if row.get("candidate_type") != DREAM_HYPOTHESIS_TYPE:
         failures.append("not_dream_hypothesis")
     if str(row.get("review_state") or "") not in ADJUDICATED_REVIEW_STATES:
         failures.append("not_adjudicated")
     if (row.get("sensitive_use_gate") or {}).get("state") == "blocked" or row.get("human_review_required"):
         failures.append("sensitive_review_required")
-    expires_at = parse_utc(row.get("expires_at"))
-    if expires_at and expires_at <= normalize_now(now):
+    if any(expires_at <= now_dt for expires_at in trust_horizon_timestamps(row, "expires_at")):
         failures.append("dream_hypothesis_expired")
+    if any(review_after <= now_dt for review_after in trust_horizon_timestamps(row, "review_after")):
+        failures.append("trust_horizon_review_due")
     if not normalize_source_refs(row.get("source_refs")):
         failures.append("source_refs_present")
     return failures

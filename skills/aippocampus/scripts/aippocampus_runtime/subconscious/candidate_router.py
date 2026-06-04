@@ -552,23 +552,28 @@ def parse_utc(value: str | None) -> datetime | None:
         return None
 
 
+def dream_horizon_timestamps(row: dict[str, Any], key: str) -> list[datetime]:
+    horizon = row.get("trust_horizon") or {}
+    values = (row.get(key), horizon.get(key) if isinstance(horizon, dict) else None)
+    return [parsed for value in values if (parsed := parse_utc(str(value or "")))]
+
+
 def dream_hypothesis_block_reason(row: dict[str, Any]) -> str:
     if row.get("candidate_type") != DREAM_HYPOTHESIS_TYPE:
         return ""
-    if str(row.get("review_state") or "") not in {
-        "accepted",
-        "approved",
-        "reviewed",
-        "agent_adjudicated",
-        "auto_adjudicated",
-        "source_adjudicated",
-    }:
+    if str(row.get("review_state") or "") not in (
+        "accepted", "approved", "reviewed", "agent_adjudicated", "auto_adjudicated", "source_adjudicated"
+    ):
         return "not_adjudicated"
     if (row.get("sensitive_use_gate") or {}).get("state") == "blocked" or row.get("human_review_required"):
         return "sensitive_review_required"
-    expires_at = parse_utc(str(row.get("expires_at") or ""))
-    if expires_at and expires_at <= datetime.now(timezone.utc):
-        return "dream_hypothesis_expired"
+    now = datetime.now(timezone.utc)
+    for key, reason in (
+        ("expires_at", "dream_hypothesis_expired"),
+        ("review_after", "trust_horizon_review_due"),
+    ):
+        if any(timestamp <= now for timestamp in dream_horizon_timestamps(row, key)):
+            return reason
     return ""
 
 
