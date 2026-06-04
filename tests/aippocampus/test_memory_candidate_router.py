@@ -232,6 +232,45 @@ class MemoryCandidateRouterTests(unittest.TestCase):
             "adjudicated_dream_hypothesis_not_fact",
         )
 
+    def test_dream_hypothesis_match_skips_invalid_trust_horizon_rows(self) -> None:
+        dream_row = {
+            "kind": "aippocampus_working_memory",
+            "status": "active",
+            "route": router.USE_WITH_SOURCE,
+            "candidate_type": "dream_hypothesis",
+            "title": "Continuity dream bridge",
+            "summary": "A dream hypothesis about continuity and source refs.",
+            "recommendation": "Use quietly; reopen source before strong claims.",
+            "confidence": 0.66,
+            "trigger_terms": ["continuity", "source refs"],
+            "source_refs": [{"thread_key": "session:dream", "message_id": "msg-d", "line": 12}],
+            "truth_boundary": "adjudicated_dream_hypothesis_not_fact",
+            "review_state": "agent_adjudicated",
+            "foreground_use": {
+                "default_action": "quiet_substrate",
+                "strong_claim_requires_source_reopen": True,
+            },
+            "sensitive_use_gate": {"state": "allowed"},
+        }
+        nested_expired = {
+            **dream_row,
+            "trust_horizon": {"expires_at": "2000-01-01T00:00:00Z"},
+        }
+        review_due = {
+            **dream_row,
+            "trust_horizon": {
+                "expires_at": "2999-01-01T00:00:00Z",
+                "review_after": "2000-01-01T00:00:00Z",
+            },
+        }
+
+        matched = router.match_working_memory(
+            "continuity source refs 这条线索还在吗？",
+            [nested_expired, review_due],
+        )
+
+        self.assertEqual(matched, [])
+
 
 if __name__ == "__main__":
     unittest.main()

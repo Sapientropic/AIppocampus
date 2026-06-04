@@ -212,6 +212,29 @@ class DreamPrecisionPolicyTests(unittest.TestCase):
         self.assertEqual(blocked["activation_policy"]["visibility"], "stay_silent")
         self.assertEqual(blocked["activation_policy"]["reason"], "source_already_visible")
 
+    def test_activation_policy_reads_trust_horizon_boundaries(self) -> None:
+        expired = working_memory_row(
+            trust_horizon={
+                "expires_at": "2026-05-01T00:00:00Z",
+                "review_after": "2026-04-01T00:00:00Z",
+            }
+        )
+        review_due = working_memory_row(
+            trust_horizon={
+                "expires_at": "2026-07-01T00:00:00Z",
+                "review_after": "2026-05-01T00:00:00Z",
+            }
+        )
+
+        self.assertIn(
+            "dream_hypothesis_expired",
+            policy.activation_hard_gate_failures(expired, now="2026-06-01T00:00:00Z"),
+        )
+        self.assertIn(
+            "trust_horizon_review_due",
+            policy.activation_hard_gate_failures(review_due, now="2026-06-01T00:00:00Z"),
+        )
+
     def test_retrospective_policy_requires_explicit_target_not_term_overlap(self) -> None:
         probe = dream_finding(fingerprint="pf_supported")
         term_overlap_only = [

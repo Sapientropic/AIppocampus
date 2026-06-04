@@ -274,9 +274,15 @@ DeepSeek can be used aggressively, but hooks must stay cheap. The split is:
   `foreground_use` / `sensitive_use_gate` metadata: use quietly only when it
   changes the current answer or route, stay silent when source is already
   visible, expired, or high-annoyance, and reopen source before any strong
-  user-facing claim. The live consumers enforce the same boundary:
-  working-memory matching skips blocked/expired rows, hook rendering labels the
-  row as a dream hypothesis, ambient cards require source reopen for strong
+  user-facing claim. Accepted rows also carry the #299 trust-horizon contract:
+  `validated_at`, `validated_by`, `source_fingerprint`, `review_after`,
+  `expires_at`, `invalidation_triggers`, `visibility_tier`, and the nested
+  `trust_horizon` capsule. Treat these as invalidation metadata, not proof;
+  source drift, contradiction, user evidence requests, exact/quoted or sensitive
+  claims, expiry, and review-due states must reopen source or stay silent before
+  foreground use. The live consumers enforce the same boundary:
+  working-memory matching skips blocked/expired/review-due rows, hook rendering
+  labels the row as a dream hypothesis, ambient cards require source reopen for strong
   claims, reflection topology only accepts audited collapsed nodes, and agency
   affordances downgrade direct dream inputs to backstage-only.
 - cross-surface authority is audited, not inferred from confidence. Use
