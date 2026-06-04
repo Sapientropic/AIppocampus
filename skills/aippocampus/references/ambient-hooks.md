@@ -218,7 +218,25 @@ overlap; registry freshness changes mark the state stale until source is
 reopened; weak first-turn states default to a short TTL, while confirmed or
 rejected states may live as long as the ambient cache for the current topic
 epoch. This overlay is not a second long-lived cache and must not be promoted to
-formal memory.
+truth or formal memory.
+
+Dead-letter reporting for activation surfaces is owned by
+`aippocampus_runtime.ops.activation_authority_audit`, not by the foreground
+hook. A row may become a dead-letter candidate only after lifecycle/pruning has
+already removed or reduced foreground eligibility and repeated wrong-route,
+harmful, false-positive, or no-source-reopen counters cross deterministic
+thresholds. Reports must stay public-safe: hash-only candidate identity,
+surface kind, reason codes, source-ref counts, and aggregate metrics. They must
+not serialize raw prompts, raw source snippets, local paths, raw activation
+payloads, source refs, or model-generated facts.
+
+Dead-letter apply output is an append-only lifecycle manifest for the owning
+surface writer. It may mark a safe candidate as `dead_lettered`, but it must
+skip rows still referenced by promotion candidates, dream inputs, review
+artifacts, question links, or source-reopen evidence. It does not delete clean
+source, raw rollout, registry refs, provenance, or foreground hook state.
+Physical payload compaction remains owner-specific and requires separate
+source/provenance/reference and rebuild-review checks.
 
 `aippocampus_runtime.recall.fresh_thread_demo` is the #285 public-safe demonstration runner for this
 contract. It strings together the existing scent packet, action policy, and
