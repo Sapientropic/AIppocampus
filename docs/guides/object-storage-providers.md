@@ -61,6 +61,12 @@ outer manifest is deleted while ciphertext objects remain.
 
 Use `--keep-objects` only for debugging a temporary test prefix.
 
+Encrypted sync hides synced registry/source contents from the provider, but it
+does not hide object counts, object sizes, or upload timing. Current provider
+evidence is dated per smoke run; do not generalize one R2-compatible smoke to a
+full S3/GCS/cloud-folder matrix, and do not claim metadata padding unless a
+focused padding smoke records the cost and leakage tradeoff.
+
 Plaintext migration cleanup uses HTTP `DELETE` for objects listed in the
 plaintext sync manifest and deletes the manifest object last. Providers that do
 not expose delete permissions can still use migration dry-run and encrypted

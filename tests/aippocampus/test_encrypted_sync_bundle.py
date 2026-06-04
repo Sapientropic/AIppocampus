@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
@@ -711,6 +712,64 @@ raise SystemExit(0)
         )
         self.assertTrue(cleanup["ok"], cleanup)
         self.assertFalse((self.sync_dir / sync_bundle.SYNC_MANIFEST_NAME).exists())
+
+    def test_plaintext_migration_failed_push_preserves_plaintext_and_partial_target(self) -> None:
+        sync_bundle.push_sync_bundle(self.registry, self.sync_dir)
+        encrypted_target = self.root / "partial-encrypted-target"
+
+        def partial_push(
+            registry_dir: str | Path | None,
+            sync_dir: str | Path,
+            **kwargs: object,
+        ) -> dict[str, object]:
+            partial = (
+                encrypted_sync_bundle.encrypted_root(Path(sync_dir))
+                / encrypted_sync_bundle.ENCRYPTED_OBJECTS_DIR_NAME
+                / "partial.age"
+            )
+            partial.parent.mkdir(parents=True, exist_ok=True)
+            partial.write_text("partial encrypted object", encoding="utf-8")
+            return {
+                "ok": False,
+                "encrypted": True,
+                "issues": [
+                    {
+                        "code": "simulated_interrupted_push",
+                        "message": "simulated encrypted push interruption",
+                    }
+                ],
+                "object_count": 1,
+            }
+
+        with patch.object(
+            encrypted_sync_migration.encrypted_sync_bundle,
+            "push_encrypted_sync_bundle",
+            side_effect=partial_push,
+        ):
+            migration = encrypted_sync_migration.migrate_plaintext_sync_dir_to_encrypted(
+                self.sync_dir,
+                encrypted_target,
+                registry_dir=self.registry,
+                recipients=[self.recipient],
+                age_bin=self.fake_age,
+            )
+
+        self.assertFalse(migration["ok"])
+        self.assertEqual(migration["issues"][0]["code"], "simulated_interrupted_push")
+        self.assertEqual(migration["issues"][-1]["code"], "partial_migration_preserved")
+        self.assertEqual(migration["migration_recovery"]["status"], "partial_migration_preserved")
+        self.assertTrue(migration["migration_recovery"]["plaintext_source_preserved"])
+        self.assertTrue(migration["migration_recovery"]["target_preserved_for_inspection"])
+        self.assertFalse(migration["migration_recovery"]["cleanup_allowed"])
+        self.assertEqual(migration["migration_recovery"]["partial_encrypted_artifact_count"], 1)
+        self.assertTrue((self.sync_dir / sync_bundle.SYNC_MANIFEST_NAME).is_file())
+        self.assertTrue(
+            (
+                encrypted_sync_bundle.encrypted_root(encrypted_target)
+                / encrypted_sync_bundle.ENCRYPTED_OBJECTS_DIR_NAME
+                / "partial.age"
+            ).is_file()
+        )
 
 
 if __name__ == "__main__":
