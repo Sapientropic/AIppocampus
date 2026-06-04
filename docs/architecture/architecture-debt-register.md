@@ -1,24 +1,30 @@
 # Architecture Debt Register
 
-This is the lightweight guardrail for oversized runtime scripts and repo-owned
-test / benchmark / tool harnesses. It is not a scorecard and it should not
-replace source-backed design decisions. Its job is only to keep large-file debt
-visible: every `skills/aippocampus/scripts/**/*.py` file at or above 600
-non-comment LOC must be listed here with a guard budget and a next plausible
-boundary. Repo tests, benchmark runners, and tools use separate thresholds below
-because they have different review costs and split pressures.
+This is the lightweight action board for oversized runtime scripts and
+repo-owned test / benchmark / tool harnesses. It is not a scorecard and it does
+not replace source-backed design decisions.
+
+Full budget metadata lives in
+[`docs/evidence/architecture-debt-snapshot-2026-06-04.md`](../evidence/architecture-debt-snapshot-2026-06-04.md).
+Generate the current count/status report with:
+
+```powershell
+python tools\aippocampus\docs\debt_report.py --json
+```
 
 For contributor onboarding, dependency flow, maintenance/core-recall separation,
-and recall test visibility, use `runtime-script-map.md`. This register only
-answers "which large scripts need an explicit split boundary next?"
+and recall test visibility, use
+[`runtime-script-map.md`](./runtime-script-map.md). This register only answers
+"which large files need attention next?"
 
-The enforcing test is
-`tests/aippocampus/test_architecture_boundaries.py::ArchitectureBoundaryTests.test_large_runtime_scripts_have_debt_register_budgets`.
-The non-runtime companion guard is
-`tests/aippocampus/test_architecture_boundaries.py::ArchitectureBoundaryTests.test_large_tests_benchmarks_and_tools_have_debt_register_budgets`.
+The enforcing tests are:
+
+- `tests/aippocampus/test_architecture_boundaries.py::ArchitectureBoundaryTests.test_large_runtime_scripts_have_debt_register_budgets`
+- `tests/aippocampus/test_architecture_boundaries.py::ArchitectureBoundaryTests.test_large_tests_benchmarks_and_tools_have_debt_register_budgets`
+
 If a file grows past its budget, either split a real responsibility out or raise
-the budget here with a concrete reason. Do not raise budgets as a routine way to
-make tests pass.
+the budget with a concrete owner-boundary reason. Do not raise budgets as a
+routine way to make tests pass.
 
 ## Near-Budget Split Priority Queue
 
@@ -29,7 +35,8 @@ lines whose first non-space character is `#`.
 
 This queue is intentionally small. It ranks modules that are at or near their
 guard budgets by product/runtime risk and next owner boundary, not by LOC alone.
-It is not a quality score and should not replace the full register below.
+Closed or fully stable inventory rows belong in the evidence snapshot, not in
+this main action queue.
 
 | Path | Current `script_line_count()` | Guard budget | Priority | Next split boundary | Current split status / deferral reason |
 | --- | ---: | ---: | --- | --- | --- |
@@ -37,26 +44,6 @@ It is not a quality score and should not replace the full register below.
 | `skills/aippocampus/scripts/aippocampus_runtime/recall/semantic_recall_gate.py` | 906 | 1200 | P1 foreground-budget-risk | Separate prompt/catalog payload construction or foreground-budget arbitration from the semantic gate coordinator if either grows again. | #580 froze focused skip/scent/evidence fixtures and moved worker response parsing, unavailable classification, and public projection into `semantic_gate_response.py`; the next split should not re-inline provider diagnostics or source/evidence truth into the coordinator. |
 | `skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/recall.py` | 1438 | 1438 | P2 background-runtime-risk | Split batch/quorum bookkeeping or job/cache summary projection before adding more warm runtime orchestration. | Recent helper splits already moved config and scout attribution out; another extraction would be speculative if it only wraps #605 route-contract pass-through for DeepSeek thinking/reasoning-effort diagnostics. Splitting those few parameters out would duplicate `model.routing`; the next warm-runtime growth should extract batch/quorum bookkeeping or job/cache summary projection before any further budget raise. |
 | `skills/aippocampus/scripts/aippocampus_runtime/dream/live_shadow_ab.py` | 1254 | 1340 | P3 opt-in-eval-risk | Split replay adapters, semantic relevance gating, delivery policy, or model-route binding before adding richer live outcome analysis. | It is below budget and opt-in/evaluation-facing. #605 added shared route-contract consumption but did not change the next split boundary. Split when a live-shadow feature touches one of those boundaries. |
-
-## Guard Budget Change Policy
-
-Raise a guard budget only when the added code is still inside the same owner
-boundary, the split candidate would be artificial or duplicate an existing
-helper, and the PR records the reason here with a follow-up owner if pressure is
-still rising.
-
-Do not raise budgets as a routine way to make tests pass; budget changes need a
-real owner-boundary reason.
-
-Split before raising when a module is at or over budget and the change adds a
-new stage, IO surface, CLI projection, provider/host concern, retry policy, or
-foreground user-visible behavior that can be extracted behind existing tests.
-
-For #502 specifically, the safe action was debt-governance only: current counts,
-priority order, next split boundaries, and extraction deferral were recorded
-here. The first executable extraction is #500 for
-`prompt_recall_decision.py`; that issue froze golden foreground
-recall-decision fixtures before moving source-evidence/final projection policy.
 
 ## Test, Benchmark, And Tool Debt Budgets
 
@@ -82,56 +69,43 @@ live in `tests/aippocampus/import_coupling_helpers.py`. Keep future
 contract assertions rather than rebuilding generic import-analysis helpers
 inside the assertion file.
 
-| Path | Guard budget | Current count | Primary responsibility | Next boundary to consider |
-| --- | ---: | ---: | --- | --- |
-| `tests/aippocampus/test_aippocampus_prompt_hook.py` | 4300 | 4095 | Foreground hook output contract, budget behavior, semantic-gate fallback, ambient attach, and privacy-safe prompt-hook projections. | Split fixture builders or repeated hook invocation/assertion helpers before adding more foreground policy cases; keep product contract assertions in this file until a helper boundary is proven by repeated setup. |
-| `tests/aippocampus/test_subconscious_jobs.py` | 2700 | 2655 | Subconscious job runner, deterministic follow-up, question extraction/tracking, staging writes, and public JSON projection coverage. | #153 no-write field-presence coverage stays here because it verifies the current `quality_diagnostics` contract against the real runner result shape, not a reusable fixture boundary. Split deterministic question-tracking fixtures or shared model-route/job-output assertions before adding more job families; avoid hiding runner semantics behind a generic test utility. |
-| `tests/aippocampus/test_import_coupling.py` | 2500 | 2419 | Compatibility shim, package-owner, and public-entrypoint boundary assertions. | Continue moving reusable analysis helpers into `import_coupling_helpers.py`; invert remaining shim-preservation assertions toward explicit public allowlists as #658/#659 progress. |
-| `tests/aippocampus/test_warm_ambient_recall.py` | 2150 | 2076 | Warm ambient recall quorum, scout behavior, validation, cache, detached job, and public projection tests. | Split scenario fixtures or scout-card assertion helpers before adding more scheduler/lifecycle lanes; keep quorum/source-validation semantics visible. |
-| `tests/aippocampus/test_benchmark_warm_ambient_recall.py` | 1650 | 1584 | Benchmark report and ROI schema coverage for warm ambient recall. | Split benchmark fixture builders from report-shape assertions if more lifecycle or tuning dimensions land. |
-| `tests/aippocampus/test_benchmark_source_evidence_retrieval.py` | 1550 | 1508 | Source-evidence retrieval benchmark fixtures, manifests, and public-safe report assertions. | Split manifest/report validators from corpus construction before adding broader benchmark suites or provider-specific paths. |
-| `benchmarks/aippocampus/benchmark_memory_decision_gate.py` | 2100 | 2073 | Memory-decision gate benchmark cases, synthetic scenario construction, and aggregate report output. | Split scenario catalog / report projection from runner orchestration before adding another decision family. |
-| `benchmarks/aippocampus/benchmark_continuous_memory_arms.py` | 1800 | 1774 | Continuous memory arm benchmark scenarios and comparative result aggregation. | Split arm fixture catalog or scoring/report projection before adding more arms or private-history adapters. |
-| `benchmarks/aippocampus/benchmark_hippocampal_recall.py` | 1400 | 1391 | Hippocampal recall benchmark cases and public report generation. | Split corpus fixtures from scoring/report output if more recall baselines land. |
-| `benchmarks/aippocampus/benchmark_suite.py` | 1350 | 1327 | Fresh-clone benchmark suite orchestration, profile selection, and JSON summary output. | Split profile manifests or runner/report projection if more suites join public-fast. |
-| `benchmarks/aippocampus/benchmark_vcs_future_event_recall.py` | 1300 | 1272 | VCS future-event recall benchmark corpus, future-event probes, and report output. | Split fixture construction from recall evaluation before adding more VCS event classes. |
-| `tools/aippocampus/docs/check_docs_health.py` | 1400 | 1363 | Repository documentation health checks, public-readiness guards, and JSON diagnostics. | Split focused check groups or shared markdown/path scanners before adding more public-readiness domains; keep single CLI output stable. |
-| `tools/aippocampus/github/project_triage.py` | 1250 | 1216 | GitHub issue/project triage, conservative field inference, and warning-safe automation output. | Split GitHub client/projection helpers from triage policy before adding milestone/project-field automation. |
-| `tools/aippocampus/smoke/smoke_semantic_scope_real_history.py` | 1200 | 1167 | Real-history semantic-scope smoke orchestration and public-safe aggregate reporting. | Split fixture/report projection from live-provider orchestration before adding more recovery/outcome taxonomy. |
+Current non-runtime action rows:
 
-| Path | Guard budget | Primary responsibility | Next boundary to consider |
-| --- | ---: | --- | --- |
-| `skills/aippocampus/scripts/aippocampus_runtime/health.py` | 760 | Single-thread runtime health contract, stale age/ratio/activity diagnostics, question-health aggregation, and CLI argument handling; registry-wide aggregation now lives in `health_registry.py`, and human text projection lives in `health_render.py` | Keep registry-wide aggregation and text rendering out of `health.py` before adding storage GC governance, scheduler orchestration, or richer per-project queue planning. Keep raw/clean-source body access out of health; storage cleanup belongs to a separate dry-run/apply governance owner. |
-| `skills/aippocampus/scripts/aippocampus_runtime/knowledge/schema.py` | 860 | Governed knowledge-source manifest, claim-promotion, and append-only update-lifecycle validation reports for public-safe fixtures and future high-impact answer gates | Split update-event lifecycle evaluation into `knowledge/lifecycle.py` before adding live watcher behavior, answer-time gates, regulatory review workflow, or richer conflict-set policy. Keep retrieval/ranking and source fetching out of this schema owner. |
-| `skills/aippocampus/scripts/aippocampus_runtime/knowledge/capability_types.py` | 760 | Typed capability-manifest validation, same-tool permission profile projection, and public-safe sanitized case/smoke evaluation for the internal #518 agent-skill execution-boundary prototype | Split sanitized case evaluation or smoke projection into a focused `knowledge/capability_eval.py` helper before adding more evaluation protocols, CLI output, host-specific permission adapters, or public schema promotion. Keep answer generation, retrieval/ranking, and source fetching out of this typed-manifest owner. |
-| `skills/aippocampus/scripts/aippocampus_runtime/ops/storage_governance.py` | 760 | Storage GC public facade, capacity/retention evidence loading, candidate planning, apply result orchestration, privacy-safe JSON/text projection, and CLI argument handling | Apply-time deletion/tombstone logic already lives in `storage_eviction.py`. If storage GC grows again, split candidate-class orchestration or CLI/result projection before adding segment/Graphify/review-artifact apply paths; do not fold cache deletion details back into the facade. |
-| `skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/recall.py` | 1438 | Warm scout runtime orchestration, two-layer quorum / required guard coverage policy, model calls, result merging, cache writes, route capability metadata including thinking/reasoning-effort pass-through, and CLI/job entrypoints | Typed config now lives in `aippocampus_runtime/warm_ambient/config.py`; scout-card attribution now lives in `aippocampus_runtime/warm_ambient/scout_attribution.py` so ROI tuning metadata does not make recall own another concern. #605 kept DeepSeek thinking-mode contract consumption here because splitting a parameter-only wrapper would duplicate the shared model route owner. If warm runtime grows again, split batch/quorum bookkeeping or job/cache summary projection into a focused helper before raising this guard further; source validation, scout profiles, prompt rendering, detached scheduling, and top-level script compatibility are no longer separate implementations. |
-| `skills/aippocampus/scripts/aippocampus_runtime/recall/retrieval.py` | 740 | Hybrid SQLite/RAG-lite retrieval execution, source-backed result ranking, and recall result assembly; structure/time cue lanes and diversity ordering now live in focused recall helpers | Split row assembly or SQLite candidate collection from final scoring if retrieval tuning keeps growing; query expansion, structure/time lanes, and diversity policy already live in sibling recall modules. |
-| `skills/aippocampus/scripts/aippocampus_runtime/registry/api.py` | 715 | Thread registry CLI/API orchestration, provider-aware scan guardrails, registration artifact bookkeeping, and legacy build-subprocess bridge calls. | Move path repair/export compatibility into a registry maintenance helper if sync-specific cases keep accumulating; storage, search/ranking, and provider-key helpers already live in sibling `aippocampus_runtime/registry/` modules, while `registry.py` is now only the compatibility shim. |
-| `skills/aippocampus/scripts/aippocampus_runtime/onboarding/codex.py` | 640 | Agent-native onboarding orchestration, provider scan/repair planning, compact public CLI projection, frontier maintenance gate wiring, and local-private storage policy reporting | Split public result projection or frontier-boundary shaping into focused helpers if more CodeQL/public-output policy lands here; do not collapse provider scan, repair, and CLI output into the top-level facade again. |
-| `skills/aippocampus/scripts/aippocampus_runtime/recall/semantic_recall_gate.py` | 1200 | Semantic recall gate coordinator: catalog/prompt payload shaping, foreground deadline and worker-timeout guards, provider route selection, worker orchestration, cache-key orchestration, high-risk worker arbitration, and evidence-aware suppression; response parsing, unavailable diagnostics, and public CLI projection live in `semantic_gate_response.py` | External model transport and route capability helpers stay under `aippocampus_runtime/model/`; response parsing and unavailable/public projection stay in `semantic_gate_response.py`. If this owner grows again, split prompt/catalog payload construction or foreground-budget arbitration before raising this guard further. |
-| `skills/aippocampus/scripts/aippocampus_runtime/navigation/concept_graph.py` | 720 | Concept graph extraction and graph artifact construction | Separate graph schema/write layer from extraction heuristics if graph consumers multiply. |
-| `skills/aippocampus/scripts/aippocampus_runtime/subconscious/scheduler.py` | 800 | Background job scheduling, queue eligibility, local lock/lease diagnostics, lifecycle timing, and public-safe CLI projection | Split local coordination lock/lease helpers or eligibility policy from scheduler IO if more scheduler coordination cases land after #344. |
-| `skills/aippocampus/scripts/aippocampus_runtime/sync/bundle.py` | 780 | Local-folder sync bundle manifest, chunk copy, conflict preservation, and path repair policy | Split path repair and conflict handling into focused helpers if additional sync backends start copying this policy. |
-| `skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_decision.py` | 836 | Foreground recall decision orchestration across context/cues, semantic gate, budget diagnostics, source-ref cue fallback candidates, suppression, dream delivery limiting, semantic cue cache, and ambient attach; source-evidence/final skip-scent-evidence projection lives in `prompt_recall_projection.py` | Extract candidate assembly, semantic-gate skip diagnostics, or hook-result projection only with focused foreground fixtures; do not push more policy into the hook glue. |
-| `skills/aippocampus/scripts/aippocampus_runtime/recall/active_recall_lock.py` | 805 | Short-lived active-recall route-lock storage, schema-v2 freshness/version/consumer timing gates, privacy-safe public lock projection, reopenable source-ref readiness checks, and clean-source reopen execution | Lifecycle/ROI helpers now live in `aippocampus_runtime/recall/active_recall_lock_lifecycle.py`; if this owner grows again, split clean-source reopen execution or public projection before raising this guard. Do not let thread-only refs become ready evidence handles or let lock ROI become public quality proof. |
-| `skills/aippocampus/scripts/aippocampus_runtime/subconscious/jobs.py` | 765 | Subconscious job circuit runner, tool-loop wiring, provider route metadata including thinking/reasoning-effort pass-through, sample ordering, deterministic follow-up ordering, append-only staging writes, and public-safe CLI projection. | #248 moved question-extraction pre-filter policy into `subconscious/question_extraction_gate.py`; this budget only rises for the runner glue that invokes the gate and returns aggregate diagnostics. #605 kept route-contract consumption in the existing model job runner so DeepSeek defaults and OpenAI-compatible omissions stay visible at the same boundary as cache/json capabilities. Split semantic runner execution from deterministic follow-up orchestration if more non-model jobs join `--job all`; `subconscious_jobs.py` remains only the compatibility shim and public direct-script path. |
-| `skills/aippocampus/scripts/aippocampus_runtime/subconscious/candidate_router.py` | 660 | Promotion-candidate routing, source-strength scoring, working-memory foreground matching, hook-safe stripping, and dream-hypothesis foreground gates. | Split foreground match/gate policy from candidate routing if more candidate-specific live-use rules land after the dream-hypothesis gate; `memory_candidate_router.py` remains only the compatibility shim. |
-| `skills/aippocampus/scripts/aippocampus_runtime/subconscious/review.py` | 700 | LLM second-pass subconscious finding review orchestration, deterministic duplicate grouping, heuristic quality diagnostics, model routing, validation gates, JSONL writes, and CLI output | Split quality diagnostics or review-result/public projection into a focused helper before adding score calibration, richer outcome analytics, additional reviewer providers, or more candidate-type-specific adjudication. Keep promotion gates source-ref backed; do not turn heuristic bucket counts into promotion truth. |
-| `skills/aippocampus/scripts/aippocampus_runtime/question/tracking.py` | 1130 | Deterministic Phase 2 question-link tracking over staged question candidates, including salience tags, adaptive separation/completion thresholds, local multi-field scoring, ordering edges, confirmation audit, pending-request diagnostics, feedback-pressure consumption, and CLI output | Confirmation request shaping and feedback/source-ref helpers now live in `aippocampus_runtime.question`; split salience/threshold/feedback application into a focused helper before adding broader calibration, dormancy detection, or more model-confirmation plumbing. |
-| `skills/aippocampus/scripts/aippocampus_runtime/subconscious/theme_emergence.py` | 690 | Deterministic Phase 3 theme candidate runner over recurring question links, concept-graph neighbor clustering, frontier boundary aggregation, append-only writes, and diagnostics CLI | Split JSONL/CLI plumbing or boundary-map aggregation into focused helpers before adding LLM naming, user-resonance calibration, or predictive replay. |
-| `skills/aippocampus/scripts/aippocampus_runtime/reflection/reconsolidation.py` | 720 | Correction activation/outcome event builders, privacy-scanned evidence shaping, detached adjudication candidates, active-anchor rendering, and CLI output | Split event sanitization or anchor rendering into focused helpers if live hook capture lands and starts sharing this logic with foreground hooks; `correction_reconsolidation.py` remains only the compatibility shim. |
-| `skills/aippocampus/scripts/aippocampus_runtime/coding/decision_events.py` | 820 | Source-backed coding decision-event extraction, terrain/weather assessment derivation, source-thickness ticket gating, append-only writes, and CLI output | Split read-time assessment and ticket rendering into a focused helper before adding Dream probe lifecycle or host-consumption simulation to this path; `coding_decision_events.py` remains only the compatibility shim. |
-| `skills/aippocampus/scripts/aippocampus_runtime/coding/agency_affordance.py` | 760 | Conservative agency affordance map and ticket selection across cognitive-map, correction, ambient, dream, content-light Journey resonance, coding-ticket, unfinished-task, and scheduled-revisit inputs | Split the content-light Journey resonance adapter or CLI/result projection into a focused helper before adding more cross-project resonance families, live host timing, or foreground policy. Keep source-free resonance as backstage refresh only; do not fold host permission or source reopen execution into this selector. |
-| `skills/aippocampus/scripts/aippocampus_runtime/dream/input_pack.py` | 760 | Source-backed dream input pack assembly, seed adapters for question/Journey/ambient/concept/theme/correction/reflection/agency rows, readiness audit, weak-handle handling, and CLI output | Split seed adapters into a focused helper if more dream seed families land after #132, or if live worker scheduling starts sharing seed normalization. |
-| `skills/aippocampus/scripts/aippocampus_runtime/dream/sleep_cycle.py` | 720 | Detached Dream queue execution bridge, runnable item selection, bounded worker fanout, lifecycle/finding/working-memory staging writes, public summaries, and CLI output | Split write-mode/output plumbing from queue selection and worker execution if sleep-cycle staging adds more sinks, but keep foreground-safety policy close to the runner until the scheduler contract stabilizes. |
-| `skills/aippocampus/scripts/aippocampus_runtime/dream/real_history_eval.py` | 1146 | Selected real-history dream pack selection, deterministic fallback worker, bounded model-backed worker handoff exposed through CLI, structural and user-visible ablation metrics, #163 evaluation-axis and coding decision-shadow probe status reporting, sanitized aggregate output, and evidence routing | #163 added report-schema fields for user-visible axes, annoyance/stale handling, and coding-probe included/deferred status. Manual source-review ingestion now lives in `aippocampus_runtime/dream/manual_source_review.py`; keep richer review sampling/adjudication there or in a dedicated review runner. Split pack selection, visibility-ablation/report scoring, or shared external-model route binding before adding live smoke orchestration or more eval surfaces. Keep model-backed prompt/validation policy in `aippocampus_runtime/dream/worker.py`; `dream_real_history_eval.py` remains only the compatibility shim. |
-| `skills/aippocampus/scripts/aippocampus_runtime/dream/worker.py` | 660 | Bounded model-backed compensatory/amplification/prospective/active-imagination dream prompt shaping, source-ref-id validation, sandbox risk gates, background adjudication handoff, no-write summaries, and retrospective prospective validation | Split retrospective validation, active-imagination risk gating, or prompt-schema shaping into focused helpers before adding live retry orchestration, provider-specific repair loops, or more creative synthesis surfaces. |
-| `skills/aippocampus/scripts/aippocampus_runtime/dream/working_memory.py` | 700 | Background-adjudicated dream-hypothesis eligibility, working-memory projection, trust-horizon invalidation metadata, and quiet-use/source-reopen planning | #299 kept trust-horizon fields and use planning in the projection owner so accepted capsules, top-level aliases, and consumer invalidation behavior cannot drift. Split trust-horizon metadata/planner helpers only if another foreground surface or invalidation family starts sharing this logic outside working-memory and precision-policy gates. |
-| `skills/aippocampus/scripts/aippocampus_runtime/dream/live_shadow_ab.py` | 1340 | Hash-only dream shadow/delivered A/B event ledger, reminder classifier, clean-source and benchmark-corpus replay, model-backed dream-row generation bridge, opt-in semantic relevance gate, assignment/holdback fields, aggregate attribution, match diagnostics, and CLI evidence output | Split replay adapters, semantic relevance gating, delivery policy, or model-route binding into focused helpers before adding richer live-outcome analysis or additional public-corpus adapters. Keep foreground hook integration limited to explicit opt-in, hash-only delivery events; `dream_live_shadow_ab.py` remains only the compatibility shim. |
-| `skills/aippocampus/scripts/aippocampus_runtime/reflection/space.py` | 660 | Journey reflection topology, source-ref-carried feedback adjustments, AAR strategy hints, and collapsed adjudicated dream-hypothesis nodes with source-reopen boundaries | Split dream-hypothesis node shaping or feedback-adjustment policy into focused helpers before adding visual layout, richer topology clustering, or live reflection UI orchestration; `reflection_space.py` remains only the compatibility shim. |
-| `skills/aippocampus/scripts/aippocampus_runtime/journey/tracking.py` | 740 | Source-backed Journey P1-P3 core, append-only waypoint updates, feedback/state transitions, replay fixture smoke, and first content-light cross-project resonance signature/match helper | Split content-light resonance into a sibling Journey resonance helper before adding graph random walks, richer HexArc structural similarity, real-history scoring, or source-reopen execution. Keep raw source text, source refs, and private project identity out of cross-project signatures. |
-| `skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_cues.py` | 680 | Static cue taxonomy, multilingual recall cues, current-checkout live-source boundary cues, and query expansion bootstrap tables | Split broad cue catalogs from intent/gating helpers if cue additions keep landing without product-level review. |
-| `skills/aippocampus/scripts/aippocampus_runtime/source/semantic_scope_suppressed_recovery.py` | 780 | Pro-agent suppressed-label recovery smoke, clean-source inspection tool loop, strict materializer replay, and public-safe aggregate recovery reporting | Split public report shaping from the live Pro tool-loop if recovery adds more outcome taxonomy or sidecar-write workflows; keep strict materializer replay close to this path so future recovery work cannot lower thresholds by accident. |
-| `skills/aippocampus/scripts/aippocampus_runtime/sync/object_storage/cli.py` | 650 | Object-storage sync CLI wiring, provider argument resolution, and shared bundle transport orchestration | Client construction and provider signing live in the same `aippocampus_runtime/sync/object_storage/` package; split command parsing from push/pull orchestration only if additional object workflows keep growing this public CLI. |
-| `skills/aippocampus/scripts/aippocampus_runtime/source/clean_source.py` | 650 | Canonical clean-source materialization, source ids/turn ids/message ids, event-lane manifest policy, and optional projection-profile orchestration | Optional redaction profile writing now lives in `aippocampus_runtime/source/redaction_profiles.py`; if this owner grows again, split CLI/manifest projection or scope-label policy before adding more clean-source sidecars. Do not rewrite canonical `messages.jsonl` for privacy/export concerns; use projection profiles instead. |
+| Path | Current `script_line_count()` | Guard budget | Owner issue | Next split boundary |
+| --- | ---: | ---: | --- | --- |
+| `tests/aippocampus/test_subconscious_jobs.py` | 2655 | 2700 | #153 / #248 | Split deterministic question-tracking fixtures or shared model-route/job-output assertions before adding more job families; keep runner semantics visible. |
+| `tests/aippocampus/test_import_coupling.py` | 2418 | 2500 | #658 / #659 | Continue moving reusable analysis helpers into `import_coupling_helpers.py`; invert remaining shim-preservation assertions toward explicit public allowlists. |
+| `tools/aippocampus/docs/check_docs_health.py` | 1367 | 1400 | #672 | Split focused check groups or shared markdown/path scanners before adding more public-readiness domains; keep single CLI output stable. |
+
+The complete test / benchmark / tool inventory is in the evidence snapshot and
+the deterministic report output.
+
+## Guard Budget Change Policy
+
+Raise a guard budget only when the added code is still inside the same owner
+boundary, the split candidate would be artificial or duplicate an existing
+helper, and the PR records the reason here or in the evidence snapshot with a
+follow-up owner if pressure is still rising.
+
+Do not raise budgets as a routine way to make tests pass; budget changes need a
+real owner-boundary reason.
+
+Split before raising when a module is at or over budget and the change adds a
+new stage, IO surface, CLI projection, provider/host concern, retry policy, or
+foreground user-visible behavior that can be extracted behind existing tests.
+
+For #502 specifically, the safe action was debt-governance only: current counts,
+priority order, next split boundaries, and extraction deferral were recorded.
+The first executable extraction is #500 for `prompt_recall_decision.py`; that
+issue froze golden foreground recall-decision fixtures before moving
+source-evidence/final projection policy.
+
+## Update Rule
+
+1. Run `python tools\aippocampus\docs\debt_report.py --json`.
+2. If a file is missing, add it to the evidence snapshot with a guard budget and
+   owner-boundary note, or split a real responsibility out.
+3. If a file is over budget, split first unless the owner boundary is still
+   coherent and the budget raise reason is recorded.
+4. Keep this main document as a short action queue. Move resolved or stable
+   inventory rows to the evidence snapshot.

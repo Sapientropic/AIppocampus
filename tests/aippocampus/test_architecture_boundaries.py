@@ -37,6 +37,10 @@ HIGH_RISK_MYPY_SCRIPTS = {
     "skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/recall.py",
 }
 DEBT_REGISTER = REPO_ROOT / "docs" / "architecture" / "architecture-debt-register.md"
+DEBT_SNAPSHOT = (
+    REPO_ROOT / "docs" / "evidence" / "architecture-debt-snapshot-2026-06-04.md"
+)
+DEBT_REPORT = REPO_ROOT / "tools" / "aippocampus" / "docs" / "debt_report.py"
 PROVIDER_ENTRYPOINT_INVENTORY = (
     REPO_ROOT / "docs" / "architecture" / "provider-entrypoint-inventory.md"
 )
@@ -49,17 +53,18 @@ LARGE_TOOL_THRESHOLD = 1100
 
 
 def debt_register_entries(*, prefixes: tuple[str, ...] | None = None) -> dict[str, int]:
-    text = DEBT_REGISTER.read_text(encoding="utf-8")
     entries: dict[str, int] = {}
-    for match in re.finditer(
-        r"^\|\s*`(?P<path>[^`]+\.py)`\s*"
-        r"\|\s*(?P<budget>\d+)\s*\|",
-        text,
-        flags=re.MULTILINE,
-    ):
-        if prefixes and not match.group("path").startswith(prefixes):
-            continue
-        entries[match.group("path")] = int(match.group("budget"))
+    for source in (DEBT_REGISTER, DEBT_SNAPSHOT):
+        text = source.read_text(encoding="utf-8")
+        for match in re.finditer(
+            r"^\|\s*`(?P<path>[^`]+\.py)`\s*"
+            r"\|\s*(?P<budget>\d+)\s*\|",
+            text,
+            flags=re.MULTILINE,
+        ):
+            if prefixes and not match.group("path").startswith(prefixes):
+                continue
+            entries[match.group("path")] = int(match.group("budget"))
     return entries
 
 
@@ -350,6 +355,7 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             f"test modules: {LARGE_TEST_THRESHOLD}",
             f"benchmark runners: {LARGE_BENCHMARK_THRESHOLD}",
             f"repo tools and smokes: {LARGE_TOOL_THRESHOLD}",
+            "docs/evidence/architecture-debt-snapshot-2026-06-04.md",
             "not a scorecard",
             "At least one real boundary split",
             "test_import_coupling.py",
@@ -399,6 +405,32 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             "#500",
         ):
             self.assertIn(phrase, text)
+
+    def test_architecture_debt_report_emits_full_inventory(self) -> None:
+        proc = subprocess.run(
+            [sys.executable, str(DEBT_REPORT), "--json"],
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        report = json.loads(proc.stdout)
+        rows = {row["path"]: row for row in report["rows"]}
+
+        self.assertTrue(report["ok"], report)
+        self.assertIn("docs/architecture/architecture-debt-register.md", report["sources"])
+        self.assertIn(
+            "docs/evidence/architecture-debt-snapshot-2026-06-04.md",
+            report["sources"],
+        )
+        self.assertGreater(report["entry_count"], 40)
+        self.assertEqual(
+            rows["tests/aippocampus/test_subconscious_jobs.py"]["current_count"],
+            script_line_count(REPO_ROOT / "tests/aippocampus/test_subconscious_jobs.py"),
+        )
 
     def test_codex_default_call_sites_are_classified_in_provider_inventory(self) -> None:
         inventory = PROVIDER_ENTRYPOINT_INVENTORY.read_text(encoding="utf-8")
