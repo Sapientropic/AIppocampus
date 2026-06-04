@@ -2,8 +2,8 @@
 """Run AIppocampus subconscious consolidation jobs.
 
 Jobs are the durable background cognition layer. They use the same bounded,
-read-only perception loop as `subconscious_agent.py`, but write job-specific
-staging findings instead of directly changing formal memory.
+read-only perception loop as `aippocampus_runtime.subconscious.agent`, but
+write job-specific staging findings instead of directly changing formal memory.
 """
 
 from __future__ import annotations

@@ -1394,7 +1394,6 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertTrue(callable(vector_index.LocalQuestionVectorIndex))
 
     def test_question_tracking_has_package_owner_and_compat_shims(self) -> None:
-        import question_confirmation
         import question_tracking
         from aippocampus_runtime.question import confirmation, tracking
 
@@ -1403,14 +1402,19 @@ class ImportCouplingTests(unittest.TestCase):
             SCRIPTS / "aippocampus_runtime" / "question" / "tracking.py",
         ]
         shim_paths = [
-            SCRIPTS / "question_confirmation.py",
             SCRIPTS / "question_tracking.py",
+        ]
+        deleted_shim_paths = [
+            SCRIPTS / "question_confirmation.py",
         ]
 
         for path in package_paths + shim_paths:
             self.assertTrue(path.exists(), path)
         for path in shim_paths:
             self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
+        for path in deleted_shim_paths:
+            self.assertFalse(path.exists(), path)
+        self.assertNotIn("question_confirmation", pyproject_py_modules())
 
         edges = same_dir_import_edges()
         for source in [
@@ -1434,14 +1438,8 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertIs(question_tracking.PairDecision, tracking.PairDecision)
         self.assertIs(question_tracking.run_question_tracking, tracking.run_question_tracking)
         self.assertIs(question_tracking.main, tracking.main)
-        self.assertIs(
-            question_confirmation.load_confirmation_decisions,
-            confirmation.load_confirmation_decisions,
-        )
-        self.assertIs(
-            question_confirmation.borderline_confirmation_request,
-            confirmation.borderline_confirmation_request,
-        )
+        self.assertTrue(callable(confirmation.load_confirmation_decisions))
+        self.assertTrue(callable(confirmation.borderline_confirmation_request))
 
     def test_question_live_and_sidecar_have_package_owner_and_compat_shims(self) -> None:
         import question_confirmation_live
@@ -1597,33 +1595,24 @@ class ImportCouplingTests(unittest.TestCase):
         self.assertTrue(callable(validation_audit.validation_audit))
         self.assertTrue(callable(validation_audit.validation_rejection_reason))
 
-    def test_subconscious_deterministic_jobs_have_package_owner_and_compat_shim(self) -> None:
-        import subconscious_deterministic_jobs
+    def test_subconscious_deterministic_jobs_is_package_owner_only(self) -> None:
         from aippocampus_runtime.subconscious import deterministic_jobs
 
         package_path = SCRIPTS / "aippocampus_runtime" / "subconscious" / "deterministic_jobs.py"
         shim_path = SCRIPTS / "subconscious_deterministic_jobs.py"
 
         self.assertTrue(package_path.exists(), package_path)
-        self.assertTrue(shim_path.exists(), shim_path)
-        self.assertIn("Compatibility shim", shim_path.read_text(encoding="utf-8"))
+        self.assertFalse(shim_path.exists(), shim_path)
+        self.assertNotIn("subconscious_deterministic_jobs", pyproject_py_modules())
 
         edges = same_dir_import_edges(top_level_only=True)
         self.assertIn("aippocampus_runtime.subconscious.deterministic_jobs", edges["aippocampus_runtime.subconscious.jobs"])
         self.assertNotIn("subconscious_deterministic_jobs", edges["aippocampus_runtime.subconscious.jobs"])
 
-        self.assertIs(
-            subconscious_deterministic_jobs.run_deterministic_job,
-            deterministic_jobs.run_deterministic_job,
-        )
-        self.assertEqual(
-            subconscious_deterministic_jobs.DETERMINISTIC_RUNNERS,
-            deterministic_jobs.DETERMINISTIC_RUNNERS,
-        )
+        self.assertTrue(callable(deterministic_jobs.run_deterministic_job))
+        self.assertTrue(deterministic_jobs.DETERMINISTIC_RUNNERS)
 
-    def test_subconscious_job_contracts_have_package_owner_and_compat_shims(self) -> None:
-        import subconscious_job_circuits
-        import subconscious_question_diagnostics
+    def test_subconscious_job_contracts_are_package_owner_only(self) -> None:
         from aippocampus_runtime.subconscious import (
             job_circuits,
             job_validation,
@@ -1640,15 +1629,16 @@ class ImportCouplingTests(unittest.TestCase):
             SCRIPTS / "subconscious_job_circuits.py",
         ]
         deleted_shim_paths = [
+            *shim_paths,
             SCRIPTS / "subconscious_job_validation.py",
         ]
 
-        for path in package_paths + shim_paths:
+        for path in package_paths:
             self.assertTrue(path.exists(), path)
-        for path in shim_paths:
-            self.assertIn("Compatibility shim", path.read_text(encoding="utf-8"))
         for path in deleted_shim_paths:
             self.assertFalse(path.exists(), path)
+        self.assertNotIn("subconscious_job_circuits", pyproject_py_modules())
+        self.assertNotIn("subconscious_question_diagnostics", pyproject_py_modules())
         self.assertNotIn("subconscious_job_validation", pyproject_py_modules())
 
         edges = same_dir_import_edges(top_level_only=True)
@@ -1689,13 +1679,10 @@ class ImportCouplingTests(unittest.TestCase):
         )
         self.assertNotIn("subconscious_question_diagnostics", edges["aippocampus_runtime.subconscious.jobs"])
 
-        self.assertIs(subconscious_job_circuits.JOB_SPECS, job_circuits.JOB_SPECS)
-        self.assertIs(subconscious_job_circuits.job_names, job_circuits.job_names)
+        self.assertTrue(job_circuits.JOB_SPECS)
+        self.assertTrue(callable(job_circuits.job_names))
         self.assertTrue(callable(job_validation.validate_findings))
-        self.assertIs(
-            subconscious_question_diagnostics.question_extraction_quality_diagnostics,
-            question_diagnostics.question_extraction_quality_diagnostics,
-        )
+        self.assertTrue(callable(question_diagnostics.question_extraction_quality_diagnostics))
 
     def test_prompt_recall_core_stays_small_foreground_gate(self) -> None:
         edges = same_dir_import_edges()
@@ -2206,22 +2193,18 @@ class ImportCouplingTests(unittest.TestCase):
         package_loop_path = SCRIPTS / "aippocampus_runtime" / "subconscious" / "tool_loop.py"
         shim_loop_path = SCRIPTS / "subconscious_tool_loop.py"
         self.assertTrue(package_agent_path.exists())
-        self.assertTrue(shim_agent_path.exists())
+        self.assertFalse(shim_agent_path.exists())
         self.assertTrue(package_runtime_path.exists())
         self.assertTrue(shim_runtime_path.exists())
         self.assertTrue(package_loop_path.exists())
-        self.assertIn("Compatibility shim", shim_agent_path.read_text(encoding="utf-8"))
         self.assertIn("Compatibility shim", shim_runtime_path.read_text(encoding="utf-8"))
         self.assertFalse(shim_loop_path.exists(), shim_loop_path)
 
-        import subconscious_agent
         import subconscious_runtime
         from aippocampus_runtime.subconscious import agent, runtime, tool_loop
 
         edges = same_dir_import_edges(top_level_only=True)
 
-        self.assertIn("aippocampus_runtime.subconscious.agent", edges["subconscious_agent"])
-        self.assertNotIn("aippocampus_runtime.subconscious.tool_loop", edges["subconscious_agent"])
         self.assertIn(
             "aippocampus_runtime.subconscious.tool_loop",
             edges["aippocampus_runtime.subconscious.agent"],
@@ -2240,7 +2223,7 @@ class ImportCouplingTests(unittest.TestCase):
             self.assertIn("aippocampus_runtime.subconscious.runtime", edges[source])
             self.assertNotIn("subconscious_runtime", edges[source])
         self.assertIn("aippocampus_runtime.subconscious.tool_loop", edges["aippocampus_runtime.subconscious.jobs"])
-        self.assertNotIn("subconscious_tool_loop", edges["subconscious_agent"])
+        self.assertNotIn("subconscious_tool_loop", edges["aippocampus_runtime.subconscious.agent"])
         self.assertNotIn("subconscious_tool_loop", edges["aippocampus_runtime.subconscious.jobs"])
         self.assertNotIn("subconscious_agent", edges["aippocampus_runtime.subconscious.jobs"])
         self.assertFalse(
@@ -2255,11 +2238,12 @@ class ImportCouplingTests(unittest.TestCase):
             {"subconscious_agent", "aippocampus_runtime.subconscious.jobs"}
             & edges["aippocampus_runtime.subconscious.tool_loop"]
         )
-        self.assertIs(subconscious_agent.AgentRunConfig, agent.AgentRunConfig)
-        self.assertIs(subconscious_agent.run_agent, agent.run_agent)
-        self.assertIs(subconscious_agent.main, agent.main)
+        self.assertTrue(callable(agent.AgentRunConfig))
+        self.assertTrue(callable(agent.run_agent))
+        self.assertTrue(callable(agent.main))
         self.assertIs(subconscious_runtime.AgentState, runtime.AgentState)
         self.assertIs(subconscious_runtime.run_tool, runtime.run_tool)
+        self.assertNotIn("subconscious_agent", pyproject_py_modules())
         self.assertNotIn("subconscious_tool_loop", pyproject_py_modules())
         self.assertTrue(callable(tool_loop.ToolLoopResult))
         self.assertTrue(callable(tool_loop.run_tool_using_loop))

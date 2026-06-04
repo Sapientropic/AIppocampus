@@ -45,7 +45,12 @@ class CliJsonContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             code, payload = self.run_main_json(
                 agent,
-                ["subconscious_agent.py", "--registry-dir", tmp, "--json"],
+                [
+                    "python -m aippocampus_runtime.subconscious.agent",
+                    "--registry-dir",
+                    tmp,
+                    "--json",
+                ],
             )
 
         self.assertEqual(code, 2)

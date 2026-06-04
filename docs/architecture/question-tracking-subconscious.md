@@ -963,7 +963,7 @@ are skipped, not treated as evidence.
 
 ### Changes to Existing Files
 
-**`subconscious_jobs.py` / `subconscious_job_circuits.py`:** Current code
+**`subconscious_jobs.py` / `aippocampus_runtime.subconscious.job_circuits`:** Current code
 registers `question_extraction`, deterministic `question_tracking`, and
 deterministic `theme_emergence`. The deterministic runners are not LLM jobs;
 they run after semantic jobs write their rows so tracking and emergence do not
