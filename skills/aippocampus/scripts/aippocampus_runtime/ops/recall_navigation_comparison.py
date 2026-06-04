@@ -22,7 +22,7 @@ from aippocampus_runtime.mcp import server as mcp_server
 from aippocampus_runtime.mcp.recall_navigation import NAVIGATION_SCHEMA_VERSION
 
 COMPARISON_KIND = "aippocampus_recall_navigation_comparison"
-COMPARISON_SCHEMA_VERSION = 1
+COMPARISON_SCHEMA_VERSION = 2
 ARM_DIRECT = "direct_search"
 ARM_HOOK = "hook_only"
 ARM_PROGRESSIVE = "progressive_recall"
@@ -134,6 +134,8 @@ def _run_direct_search(
         "tool_call_count": attempts,
         "match_count": match_count,
         "route_actionable": success,
+        "source_reopen_attempted": False,
+        "source_reopen_follow_through": False,
         "selected_next_tool": "search_memory" if success else "",
         "wrong_or_stale_handle": False,
         "wrong_route_drag_count": 0,
@@ -160,6 +162,8 @@ def _run_hook_only(case: Mapping[str, Any]) -> dict[str, Any]:
         "tool_call_count": verification_tool_calls,
         "match_count": 0,
         "route_actionable": route_actionable,
+        "source_reopen_attempted": False,
+        "source_reopen_follow_through": False,
         "selected_next_tool": str(hook.get("suggested_tool") or ""),
         "wrong_or_stale_handle": stale_or_irrelevant,
         "wrong_route_drag_count": verification_tool_calls if stale_or_irrelevant else 0,
@@ -205,6 +209,8 @@ def _run_progressive_recall(
             "tool_call_count": tool_calls,
             "route_count": route_count,
             "route_actionable": False,
+            "source_reopen_attempted": False,
+            "source_reopen_follow_through": False,
             "selected_route_index": None,
             "selected_next_tool": "",
             "source_ref_count": 0,
@@ -224,6 +230,8 @@ def _run_progressive_recall(
             "tool_call_count": tool_calls,
             "route_count": route_count,
             "route_actionable": False,
+            "source_reopen_attempted": False,
+            "source_reopen_follow_through": False,
             "selected_route_index": None,
             "selected_next_tool": "",
             "source_ref_count": 0,
@@ -266,6 +274,8 @@ def _run_progressive_recall(
         "tool_call_count": tool_calls,
         "route_count": route_count,
         "route_actionable": True,
+        "source_reopen_attempted": True,
+        "source_reopen_follow_through": success,
         "selected_route_index": selected_index,
         "selected_next_tool": str(suggested_next.get("tool") or ""),
         "source_ref_count": len(source_refs),
@@ -294,6 +304,8 @@ def _aggregate(cases: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         total = len(rows)
         success_count = sum(1 for row in rows if row.get("source_backed_success"))
         actionable_count = sum(1 for row in rows if row.get("route_actionable"))
+        reopen_attempt_count = sum(1 for row in rows if row.get("source_reopen_attempted"))
+        reopen_follow_count = sum(1 for row in rows if row.get("source_reopen_follow_through"))
         wrong_drag_count = sum(1 for row in rows if int(row.get("wrong_route_drag_count") or 0) > 0)
         scent_fact_count = sum(1 for row in rows if row.get("scent_as_fact_violation"))
         arms[arm] = {
@@ -301,6 +313,11 @@ def _aggregate(cases: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             "source_backed_success_count": success_count,
             "source_backed_success_rate": _ratio(success_count, total),
             "route_actionability_rate": _ratio(actionable_count, total),
+            "source_reopen_attempt_count": reopen_attempt_count,
+            "source_reopen_follow_through_count": reopen_follow_count,
+            "source_reopen_follow_through_rate": _ratio(
+                reopen_follow_count, reopen_attempt_count
+            ),
             "wrong_route_drag_count": wrong_drag_count,
             "wrong_route_drag_rate": _ratio(wrong_drag_count, total),
             "scent_as_fact_violation_count": scent_fact_count,
@@ -312,6 +329,25 @@ def _aggregate(cases: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             "input_token_proxy_total": sum(int(row.get("input_token_proxy") or 0) for row in rows),
         }
     return {"arms": arms}
+
+
+def _issue_readouts(aggregate: Mapping[str, Any]) -> dict[str, Any]:
+    arms = _as_dict(aggregate.get("arms"))
+    progressive = _as_dict(arms.get(ARM_PROGRESSIVE))
+    return {
+        "github_201": {
+            "route_actionability_measured": True,
+            "route_actionability_rate": progressive.get("route_actionability_rate", 0),
+            "source_reopen_follow_through_measured": True,
+            "source_reopen_follow_through_rate": progressive.get(
+                "source_reopen_follow_through_rate", 0
+            ),
+            "default_foreground_first_turn_lift": "not_measured",
+            "default_foreground_second_turn_lift": "not_measured",
+            "live_registry_quality": "not_measured",
+            "closeout_eligible": False,
+        }
+    }
 
 
 def build_recall_navigation_comparison(
@@ -353,6 +389,7 @@ def build_recall_navigation_comparison(
                 "arms": arms,
             }
         )
+    aggregate = _aggregate(rows)
     report = {
         "schema_version": COMPARISON_SCHEMA_VERSION,
         "kind": COMPARISON_KIND,
@@ -360,7 +397,8 @@ def build_recall_navigation_comparison(
         "navigation_schema_version": NAVIGATION_SCHEMA_VERSION,
         "cases": rows,
         "cases_by_id": {str(row["case_id"]): row for row in rows},
-        "aggregate": _aggregate(rows),
+        "aggregate": aggregate,
+        "issue_readouts": _issue_readouts(aggregate),
         "metric_notes": {
             "manual_query_invention_count": (
                 "Fixture-supplied direct-search query attempts before the first useful source; "
@@ -369,6 +407,10 @@ def build_recall_navigation_comparison(
             "route_actionability_rate": (
                 "Whether the arm returned a concrete next action such as recall_deepen or a "
                 "source-backed search result."
+            ),
+            "source_reopen_follow_through_rate": (
+                "Among attempted source-reopen actions from a route handle, the share that "
+                "reached the expected source-backed clean-source refs."
             ),
             "wrong_route_drag_rate": (
                 "Cases where stale/irrelevant routes caused verification work or were rejected "
@@ -380,6 +422,7 @@ def build_recall_navigation_comparison(
             "deterministic_proxy_only": True,
             "cannot_claim_live_cost_reduction": True,
             "cannot_claim_answer_quality_lift": True,
+            "cannot_claim_default_foreground_lift": True,
             "source_reopen_required_for_strong_claims": True,
             "hook_scent_is_not_evidence": True,
             "no_external_model_calls": True,
@@ -412,6 +455,8 @@ def render_text(report: Mapping[str, Any]) -> str:
             + str(row.get("source_backed_success_rate", 0))
             + "; route actionable "
             + str(row.get("route_actionability_rate", 0))
+            + "; source reopen follow-through "
+            + str(row.get("source_reopen_follow_through_rate", 0))
             + "; avg manual queries "
             + str(row.get("avg_manual_query_invention_count", 0))
             + "; wrong-route drag "
