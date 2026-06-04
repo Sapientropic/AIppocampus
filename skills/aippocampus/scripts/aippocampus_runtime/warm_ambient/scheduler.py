@@ -32,6 +32,11 @@ from aippocampus_runtime.warm_ambient.config import (
     WarmDetachedJobConfig,
     warm_detached_job_config_from_env,
 )
+from aippocampus_runtime.warm_ambient.scout_profiles import (
+    expand_scout_lanes,
+    scheduler_tier_policy,
+    select_scheduler_scouts,
+)
 
 JOB_SCHEMA_VERSION = 1
 DEFAULT_JOB_DIR_NAME = "ambient_warm_jobs"
@@ -131,6 +136,8 @@ def schedule_warm_ambient_recall(
     api_key_env: str = "DEEPSEEK_API_KEY",
     user_id: str | None = None,
     scouts: tuple[str, ...] | list[str] | None = None,
+    scheduler_tier: str | None = "tier2_background",
+    task_profile: str | None = "general",
     timeout: float | None = None,
     quorum: int | None = None,
     max_workers: int | None = None,
@@ -162,6 +169,27 @@ def schedule_warm_ambient_recall(
         }
     if spawn and not os.environ.get(api_key_env):
         return {"status": "skipped_missing_api_key", "reason": f"{api_key_env} is not set"}
+    tier_policy = scheduler_tier_policy(scheduler_tier)
+    explicit_scouts = scouts is not None
+    selected_scouts = (
+        expand_scout_lanes(tuple(scouts or ()))
+        if explicit_scouts
+        else select_scheduler_scouts(tier=str(tier_policy["tier"]), task_profile=task_profile)
+    )
+    # Job-file replay treats an absent/empty scout list as the legacy full
+    # matrix. Skip instead so foreground/cache-only tiers and invalid explicit
+    # lanes cannot accidentally become a 50-lane detached sweep.
+    if not selected_scouts:
+        return {
+            "status": "skipped",
+            "reason": (
+                "scheduler tier does not allow fresh warm scouts"
+                if not tier_policy["fresh_model_calls_allowed"]
+                else "no valid warm scout lanes selected"
+            ),
+            "scheduler_tier": tier_policy["tier"],
+            "task_profile": task_profile or "general",
+        }
     job_config = (detached_config or warm_detached_job_config_from_env()).with_overrides(
         timeout=timeout,
         prefix_cache_warmup_scouts=prefix_cache_warmup_scouts,
@@ -224,7 +252,15 @@ def schedule_warm_ambient_recall(
         "lock_id": lock_id,
         "api_key_env": api_key_env,
         "user_id": user_id,
-        "scouts": list(scouts or []),
+        "scouts": list(selected_scouts),
+        "scheduler": {
+            **tier_policy,
+            "task_profile": task_profile or "general",
+            "explicit_scouts": explicit_scouts,
+            "selected_lane_count": len(selected_scouts),
+            "selected_lane_total": len(selected_scouts),
+            "scout_outputs_are_route_signals_not_memory_truth": True,
+        },
         # Detached jobs are allowed to spend seconds because they do not block
         # UserPromptSubmit. Do not inherit the standalone warm CLI's short
         # foreground-style timeout here, or the default-on loop warms nothing.
@@ -250,6 +286,9 @@ def schedule_warm_ambient_recall(
         "spawned": bool(launch.get("spawned")),
         "prompt_hash": job["prompt_hash"],
         "secret_policy": secret_policy,
+        "scheduler_tier": tier_policy["tier"],
+        "task_profile": task_profile or "general",
+        "selected_lane_count": len(selected_scouts),
         **lock_status,
     }
     if lock_id and not result.get("lock_id"):

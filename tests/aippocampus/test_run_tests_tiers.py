@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
 import os
 import sys
 import tempfile
@@ -116,6 +117,69 @@ class RunTestsTierTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(events, ["tempdir", "suite:public-fast", "run"])
+
+    def test_tier_report_exposes_module_counts_test_counts_and_top_contributors(self) -> None:
+        fake_modules = [
+            "tests.aippocampus.test_alpha",
+            "tests.aippocampus.test_beta",
+            "tests.aippocampus.test_benchmark_gamma",
+            "tests.aippocampus.test_onboard_codex",
+        ]
+        counts = {
+            "tests.aippocampus.test_alpha": 3,
+            "tests.aippocampus.test_beta": 7,
+            "tests.aippocampus.test_benchmark_gamma": 11,
+            "tests.aippocampus.test_onboard_codex": 13,
+        }
+
+        with (
+            mock.patch.object(run_tests, "discover_modules", return_value=fake_modules),
+            mock.patch.object(
+                run_tests,
+                "count_tests_for_module",
+                side_effect=lambda module: counts[module],
+            ),
+        ):
+            report = run_tests.build_tier_report()
+
+        self.assertEqual(report["kind"], "aippocampus_test_tier_report")
+        self.assertEqual(report["tiers"]["full"]["module_count"], 4)
+        self.assertEqual(report["tiers"]["full"]["test_count"], 34)
+        self.assertEqual(report["tiers"]["fast"]["module_count"], 2)
+        self.assertEqual(report["tiers"]["fast"]["test_count"], 10)
+        self.assertEqual(
+            report["tiers"]["fast"]["top_modules"],
+            [
+                {"module": "tests.aippocampus.test_beta", "test_count": 7},
+                {"module": "tests.aippocampus.test_alpha", "test_count": 3},
+            ],
+        )
+        self.assertTrue(
+            any(
+                "fast is still exclusion-based" in limitation
+                for limitation in report["known_limitations"]
+            ),
+        )
+
+    def test_report_json_cli_prints_report_without_running_tests(self) -> None:
+        report = {
+            "kind": "aippocampus_test_tier_report",
+            "tiers": {"fast": {"module_count": 1, "test_count": 2}},
+        }
+
+        with (
+            io.StringIO() as stdout,
+            contextlib.redirect_stdout(stdout),
+            mock.patch.object(run_tests, "ensure_usable_tempdir", return_value=Path(".")),
+            mock.patch.object(run_tests, "build_tier_report", return_value=report),
+            mock.patch.object(run_tests, "run_modules") as run_modules,
+        ):
+            exit_code = run_tests.main(["--report-json"])
+            payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload, report)
+        run_modules.assert_not_called()
 
     def test_benchmark_suite_profile_runner_requires_json_ok(self) -> None:
         completed = run_tests.subprocess.CompletedProcess(

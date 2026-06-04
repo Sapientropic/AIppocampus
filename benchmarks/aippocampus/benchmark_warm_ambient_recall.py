@@ -29,6 +29,7 @@ import _paths
 _paths.ensure_paths()
 
 import warm_ambient_recall as warm
+from aippocampus_runtime.warm_ambient.scout_profiles import scheduler_lifecycle_status
 from aippocampuslib import compact_text, sanitize_external_model_text
 
 DEFAULT_CASE_WORKERS = 1
@@ -441,10 +442,10 @@ def _roi_classification(bucket: dict[str, Any]) -> str:
     return "watch"
 
 
-def _finalize_roi_bucket(bucket: dict[str, Any]) -> dict[str, Any]:
+def _finalize_roi_bucket(bucket: dict[str, Any], *, scout: str) -> dict[str, Any]:
     scout_count = int(bucket.get("scout_count") or 0)
     configured_count = scout_count + int(bucket.get("unobserved_count") or 0)
-    finalized = {key: int(bucket.get(key) or 0) for key in ROI_COUNTER_KEYS}
+    finalized: dict[str, Any] = {key: int(bucket.get(key) or 0) for key in ROI_COUNTER_KEYS}
     for rate_name, count_name in ROI_RATE_FIELDS:
         denominator = configured_count if count_name == "unobserved_count" else scout_count
         finalized[rate_name] = _safe_rate(int(finalized.get(count_name) or 0), denominator)
@@ -453,6 +454,7 @@ def _finalize_roi_bucket(bucket: dict[str, Any]) -> dict[str, Any]:
         finalized["prompt_cache_hit_tokens"], cache_total
     )
     finalized["classification"] = _roi_classification(finalized)
+    finalized["scheduler_lifecycle_status"] = scheduler_lifecycle_status(scout, finalized)
     return finalized
 
 
@@ -564,8 +566,14 @@ def summarize_scout_roi(
         cards=cards or [], by_lane=by_lane, by_family=by_family
     )
     return (
-        {key: _finalize_roi_bucket(value) for key, value in sorted(by_lane.items())},
-        {key: _finalize_roi_bucket(value) for key, value in sorted(by_family.items())},
+        {
+            key: _finalize_roi_bucket(value, scout=key)
+            for key, value in sorted(by_lane.items())
+        },
+        {
+            key: _finalize_roi_bucket(value, scout=key)
+            for key, value in sorted(by_family.items())
+        },
     )
 
 
@@ -583,7 +591,7 @@ def aggregate_scout_roi(
             for counter in ROI_COUNTER_KEYS:
                 bucket[counter] += _roi_int(row.get(counter))
     return {
-        label: _finalize_roi_bucket(bucket)
+        label: _finalize_roi_bucket(bucket, scout=label)
         for label, bucket in sorted(buckets.items())
     }
 

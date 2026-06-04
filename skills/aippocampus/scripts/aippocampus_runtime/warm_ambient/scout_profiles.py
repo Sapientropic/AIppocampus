@@ -65,6 +65,109 @@ SCOUT_PRIORITY = {
 }
 
 REQUIRED_GUARD_FAMILIES = ("privacy_boundary_guard", "evidence_gap_sentinel")
+HIGH_ASSOCIATION_FAMILIES = (
+    "nudge_writer",
+    "cross_domain_bridge",
+    "deep_theme_matcher",
+    "user_style_preference",
+)
+
+SCHEDULER_TIER_POLICIES = {
+    "tier0_foreground": {
+        "tier": "tier0_foreground",
+        "fresh_model_calls_allowed": False,
+        "foreground_read_allowed": True,
+        "description": "hard-real-time foreground path; read local/cache handles only",
+    },
+    "tier1_foreground_warm_read": {
+        "tier": "tier1_foreground_warm_read",
+        "fresh_model_calls_allowed": False,
+        "foreground_read_allowed": True,
+        "description": "foreground warm-read path; consume precomputed cards and route handles",
+    },
+    "tier2_background": {
+        "tier": "tier2_background",
+        "fresh_model_calls_allowed": True,
+        "foreground_read_allowed": False,
+        "description": "post-turn/background scout subset; warms next-turn route handles",
+    },
+    "tier3_diagnostic": {
+        "tier": "tier3_diagnostic",
+        "fresh_model_calls_allowed": True,
+        "foreground_read_allowed": False,
+        "description": "sleep, idle, benchmark, or diagnostic full sweep",
+    },
+}
+
+SCHEDULER_TIER_ALIASES = {
+    "foreground": "tier0_foreground",
+    "tier0": "tier0_foreground",
+    "warm_read": "tier1_foreground_warm_read",
+    "tier1": "tier1_foreground_warm_read",
+    "background": "tier2_background",
+    "post_turn": "tier2_background",
+    "tier2": "tier2_background",
+    "diagnostic": "tier3_diagnostic",
+    "sleep": "tier3_diagnostic",
+    "full": "tier3_diagnostic",
+    "tier3": "tier3_diagnostic",
+}
+
+SCHEDULER_TASK_PROFILE_SCOUTS = {
+    "general": (
+        "intent_mode_classifier:direct",
+        "privacy_boundary_guard:direct",
+        "evidence_gap_sentinel:direct",
+        "key_line_hunter:direct",
+        "semantic_expander:direct",
+        "evidence_gap_sentinel:skeptic_window",
+    ),
+    "coding": (
+        "intent_mode_classifier:direct",
+        "privacy_boundary_guard:direct",
+        "evidence_gap_sentinel:direct",
+        "trajectory_matcher:direct",
+        "key_line_hunter:direct",
+        "evidence_gap_sentinel:skeptic_window",
+    ),
+    "personal": (
+        "intent_mode_classifier:direct",
+        "privacy_boundary_guard:direct",
+        "deep_theme_matcher:direct",
+        "user_style_preference:direct",
+        "evidence_gap_sentinel:direct",
+        "privacy_boundary_guard:skeptic_window",
+    ),
+    "high_risk": (
+        "privacy_boundary_guard:direct",
+        "evidence_gap_sentinel:direct",
+        "privacy_boundary_guard:skeptic_window",
+        "evidence_gap_sentinel:skeptic_window",
+        "key_line_hunter:clean_source_window",
+    ),
+    "vague_multilingual": (
+        "semantic_expander:direct",
+        "trajectory_matcher:direct",
+        "key_line_hunter:direct",
+        "evidence_gap_sentinel:direct",
+        "privacy_boundary_guard:direct",
+        "semantic_expander:registry_window",
+    ),
+}
+
+SCHEDULER_TASK_PROFILE_ALIASES = {
+    "code": "coding",
+    "project": "coding",
+    "repo": "coding",
+    "life": "personal",
+    "relationship": "personal",
+    "sensitive": "high_risk",
+    "legal": "high_risk",
+    "medical": "high_risk",
+    "psychology": "high_risk",
+    "multilingual": "vague_multilingual",
+    "vague_recall": "vague_multilingual",
+}
 
 LEGACY_SCOUT_ALIASES = {
     "query_expansion": "semantic_expander",
@@ -308,6 +411,85 @@ def expand_scout_lanes(scouts: tuple[str, ...]) -> tuple[str, ...]:
         if lane not in lanes:
             lanes.append(lane)
     return tuple(lanes)
+
+
+def _normalize_scheduler_tier(tier: str | None) -> str:
+    raw = str(tier or "tier2_background").strip().casefold().replace("-", "_")
+    return SCHEDULER_TIER_ALIASES.get(raw, raw if raw in SCHEDULER_TIER_POLICIES else "tier2_background")
+
+
+def _normalize_task_profile(task_profile: str | None) -> str:
+    raw = str(task_profile or "general").strip().casefold().replace("-", "_")
+    return SCHEDULER_TASK_PROFILE_ALIASES.get(
+        raw,
+        raw if raw in SCHEDULER_TASK_PROFILE_SCOUTS else "general",
+    )
+
+
+def scheduler_tier_policy(tier: str | None) -> dict[str, Any]:
+    normalized = _normalize_scheduler_tier(tier)
+    return dict(SCHEDULER_TIER_POLICIES[normalized])
+
+
+def select_scheduler_scouts(*, tier: str | None, task_profile: str | None = None) -> tuple[str, ...]:
+    policy = scheduler_tier_policy(tier)
+    if not policy["fresh_model_calls_allowed"]:
+        return ()
+    if policy["tier"] == "tier3_diagnostic":
+        return DEFAULT_SCOUTS
+    profile = _normalize_task_profile(task_profile)
+    return expand_scout_lanes(SCHEDULER_TASK_PROFILE_SCOUTS[profile])
+
+
+def scheduler_lifecycle_status(scout: str, roi: dict[str, Any] | None = None) -> str:
+    family, _ = scout_lane_parts(scout)
+    # Lifecycle status is scheduler advice, not an auto-delete command. Guard
+    # lanes are intentionally protected before ROI math so quiet safety lanes do
+    # not become retire candidates merely because they rarely produce cards.
+    if family in REQUIRED_GUARD_FAMILIES:
+        return "guard_required"
+    row = roi or {}
+    classification = str(row.get("classification") or "").strip().casefold()
+    if classification == "diagnostic_only":
+        return "diagnostic_only"
+    if family in HIGH_ASSOCIATION_FAMILIES:
+        return "foreground_cached_only"
+    contribution_count = sum(
+        _safe_int(row.get(key))
+        for key in (
+            "useful_result_count",
+            "card_candidate_count",
+            "accepted_card_count",
+            "evidence_candidate_count",
+            "accepted_evidence_count",
+            "late_useful_result_count",
+        )
+    )
+    if contribution_count > 0 or classification == "keep":
+        return "background_default"
+    if _safe_int(row.get("scout_count")) >= 5:
+        return "retire_candidate"
+    return "watch"
+
+
+def foreground_visibility_allowed(
+    scout: str,
+    *,
+    privacy_guard_resolved: bool,
+    evidence_guard_clear: bool,
+    source_ref_count: int = 0,
+    blocked: bool = False,
+) -> bool:
+    if blocked:
+        return False
+    family, _ = scout_lane_parts(scout)
+    if family in HIGH_ASSOCIATION_FAMILIES:
+        return bool(
+            privacy_guard_resolved
+            and evidence_guard_clear
+            and int(source_ref_count or 0) > 0
+        )
+    return bool(privacy_guard_resolved and evidence_guard_clear)
 
 
 def lens_task_for(family: str, variant: str) -> str:

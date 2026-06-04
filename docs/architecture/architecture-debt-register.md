@@ -1,10 +1,12 @@
 # Architecture Debt Register
 
-This is the lightweight guardrail for oversized runtime scripts. It is not a
-scorecard and it should not replace source-backed design decisions. Its job is
-only to keep large-file debt visible: every `skills/aippocampus/scripts/**/*.py`
-file at or above 600 non-comment LOC must be listed here with a guard budget
-and a next plausible boundary.
+This is the lightweight guardrail for oversized runtime scripts and repo-owned
+test / benchmark / tool harnesses. It is not a scorecard and it should not
+replace source-backed design decisions. Its job is only to keep large-file debt
+visible: every `skills/aippocampus/scripts/**/*.py` file at or above 600
+non-comment LOC must be listed here with a guard budget and a next plausible
+boundary. Repo tests, benchmark runners, and tools use separate thresholds below
+because they have different review costs and split pressures.
 
 For contributor onboarding, dependency flow, maintenance/core-recall separation,
 and recall test visibility, use `runtime-script-map.md`. This register only
@@ -12,6 +14,8 @@ answers "which large scripts need an explicit split boundary next?"
 
 The enforcing test is
 `tests/aippocampus/test_architecture_boundaries.py::ArchitectureBoundaryTests.test_large_runtime_scripts_have_debt_register_budgets`.
+The non-runtime companion guard is
+`tests/aippocampus/test_architecture_boundaries.py::ArchitectureBoundaryTests.test_large_tests_benchmarks_and_tools_have_debt_register_budgets`.
 If a file grows past its budget, either split a real responsibility out or raise
 the budget here with a concrete reason. Do not raise budgets as a routine way to
 make tests pass.
@@ -53,6 +57,47 @@ priority order, next split boundaries, and extraction deferral were recorded
 here. The first executable extraction is #500 for
 `prompt_recall_decision.py`; that issue froze golden foreground
 recall-decision fixtures before moving source-evidence/final projection policy.
+
+## Test, Benchmark, And Tool Debt Budgets
+
+Last counted: 2026-06-04.
+Counting method: `script_line_count()` from
+`tests/aippocampus/test_architecture_boundaries.py`: nonblank lines excluding
+lines whose first non-space character is `#`.
+
+Thresholds:
+
+- test modules: 1500
+- benchmark runners: 1200
+- repo tools and smokes: 1100
+
+This is not a scorecard. A large test can be the right shape when it owns one
+coherent behavior surface, but it must say what should split next so review
+pressure does not become invisible.
+
+At least one real boundary split has landed for this register: the shared
+AST/import graph helpers from `tests/aippocampus/test_import_coupling.py` now
+live in `tests/aippocampus/import_coupling_helpers.py`. Keep future
+`test_import_coupling.py` work focused on compatibility/public-entrypoint
+contract assertions rather than rebuilding generic import-analysis helpers
+inside the assertion file.
+
+| Path | Guard budget | Current count | Primary responsibility | Next boundary to consider |
+| --- | ---: | ---: | --- | --- |
+| `tests/aippocampus/test_aippocampus_prompt_hook.py` | 4300 | 4095 | Foreground hook output contract, budget behavior, semantic-gate fallback, ambient attach, and privacy-safe prompt-hook projections. | Split fixture builders or repeated hook invocation/assertion helpers before adding more foreground policy cases; keep product contract assertions in this file until a helper boundary is proven by repeated setup. |
+| `tests/aippocampus/test_subconscious_jobs.py` | 2600 | 2541 | Subconscious job runner, deterministic follow-up, question extraction/tracking, staging writes, and public JSON projection coverage. | Split deterministic question-tracking fixtures or shared model-route/job-output assertions before adding more job families; avoid hiding runner semantics behind a generic test utility. |
+| `tests/aippocampus/test_import_coupling.py` | 2500 | 2419 | Compatibility shim, package-owner, and public-entrypoint boundary assertions. | Continue moving reusable analysis helpers into `import_coupling_helpers.py`; invert remaining shim-preservation assertions toward explicit public allowlists as #658/#659 progress. |
+| `tests/aippocampus/test_warm_ambient_recall.py` | 2150 | 2076 | Warm ambient recall quorum, scout behavior, validation, cache, detached job, and public projection tests. | Split scenario fixtures or scout-card assertion helpers before adding more scheduler/lifecycle lanes; keep quorum/source-validation semantics visible. |
+| `tests/aippocampus/test_benchmark_warm_ambient_recall.py` | 1650 | 1584 | Benchmark report and ROI schema coverage for warm ambient recall. | Split benchmark fixture builders from report-shape assertions if more lifecycle or tuning dimensions land. |
+| `tests/aippocampus/test_benchmark_source_evidence_retrieval.py` | 1550 | 1508 | Source-evidence retrieval benchmark fixtures, manifests, and public-safe report assertions. | Split manifest/report validators from corpus construction before adding broader benchmark suites or provider-specific paths. |
+| `benchmarks/aippocampus/benchmark_memory_decision_gate.py` | 2100 | 2073 | Memory-decision gate benchmark cases, synthetic scenario construction, and aggregate report output. | Split scenario catalog / report projection from runner orchestration before adding another decision family. |
+| `benchmarks/aippocampus/benchmark_continuous_memory_arms.py` | 1800 | 1774 | Continuous memory arm benchmark scenarios and comparative result aggregation. | Split arm fixture catalog or scoring/report projection before adding more arms or private-history adapters. |
+| `benchmarks/aippocampus/benchmark_hippocampal_recall.py` | 1400 | 1391 | Hippocampal recall benchmark cases and public report generation. | Split corpus fixtures from scoring/report output if more recall baselines land. |
+| `benchmarks/aippocampus/benchmark_suite.py` | 1350 | 1327 | Fresh-clone benchmark suite orchestration, profile selection, and JSON summary output. | Split profile manifests or runner/report projection if more suites join public-fast. |
+| `benchmarks/aippocampus/benchmark_vcs_future_event_recall.py` | 1300 | 1272 | VCS future-event recall benchmark corpus, future-event probes, and report output. | Split fixture construction from recall evaluation before adding more VCS event classes. |
+| `tools/aippocampus/docs/check_docs_health.py` | 1400 | 1363 | Repository documentation health checks, public-readiness guards, and JSON diagnostics. | Split focused check groups or shared markdown/path scanners before adding more public-readiness domains; keep single CLI output stable. |
+| `tools/aippocampus/github/project_triage.py` | 1250 | 1216 | GitHub issue/project triage, conservative field inference, and warning-safe automation output. | Split GitHub client/projection helpers from triage policy before adding milestone/project-field automation. |
+| `tools/aippocampus/smoke/smoke_semantic_scope_real_history.py` | 1200 | 1167 | Real-history semantic-scope smoke orchestration and public-safe aggregate reporting. | Split fixture/report projection from live-provider orchestration before adding more recovery/outcome taxonomy. |
 
 | Path | Guard budget | Primary responsibility | Next boundary to consider |
 | --- | ---: | --- | --- |
