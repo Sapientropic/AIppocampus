@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import io
 import json
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -85,6 +87,13 @@ def fixture_rows() -> tuple[list[dict[str, object]], list[dict[str, object]]]:
         }
     ]
     return job_rows, working_rows
+
+
+def write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
+    path.write_text(
+        "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
+        encoding="utf-8",
+    )
 
 
 class DreamRealHistoryEvalTests(unittest.TestCase):
@@ -406,6 +415,92 @@ class DreamRealHistoryEvalTests(unittest.TestCase):
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("message_id", encoded)
         self.assertNotIn("thread_key", encoded)
+
+    def test_cli_loads_manual_source_review_rows_without_leaking_private_handles(self) -> None:
+        job_rows, working_rows = fixture_rows()
+        review_rows = [
+            {
+                "kind": "dream_manual_source_review",
+                "review_status": "supported",
+                "user_visible_outcome": "useful_action_delta",
+                "annoyance_risk": "low",
+                "private_review_note": "private note must stay out of sanitized output",
+                "source_refs": [source_ref("session:private", "msg-private", 50)],
+            }
+        ]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jobs_path = root / "jobs.jsonl"
+            working_memory_path = root / "working-memory.jsonl"
+            review_path = root / "manual-review.jsonl"
+            output_path = root / "dream-eval.json"
+            write_jsonl(jobs_path, job_rows)
+            write_jsonl(working_memory_path, working_rows)
+            write_jsonl(review_path, review_rows)
+
+            with patch("sys.stdout", new=io.StringIO()):
+                code = dream_eval.main(
+                    [
+                        "--jobs",
+                        str(jobs_path),
+                        "--working-memory",
+                        str(working_memory_path),
+                        "--manual-source-review",
+                        str(review_path),
+                        "--max-packs",
+                        "2",
+                        "--min-packs",
+                        "1",
+                        "--json",
+                        "--output",
+                        str(output_path),
+                    ]
+                )
+
+            payload = json.loads(output_path.read_text(encoding="utf-8"))
+            user_visible = payload["metrics"]["user_visible"]
+            encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            user_visible["metrics"]["manual_source_review"]["reviewed_count"],
+            1,
+        )
+        self.assertEqual(
+            user_visible["metrics"]["manual_source_review"]["status_counts"]["supported"],
+            1,
+        )
+        self.assertNotIn("manual_source_review_support", user_visible["cannot_claim"])
+        self.assertNotIn("session:private", encoded)
+        self.assertNotIn("msg-private", encoded)
+        self.assertNotIn("message_id", encoded)
+        self.assertNotIn("thread_key", encoded)
+        self.assertNotIn("private note", encoded)
+
+    def test_manual_source_review_loader_filters_contract_rows_and_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            review_path = root / "manual-review.jsonl"
+            missing_path = root / "missing.jsonl"
+            write_jsonl(
+                review_path,
+                [
+                    {"kind": "unrelated_review", "review_status": "supported"},
+                    {
+                        "kind": "dream_manual_source_review",
+                        "review_status": "supported",
+                        "source_refs": [source_ref("session:review", "msg-review", 50)],
+                    },
+                ],
+            )
+
+            rows = dream_eval.load_manual_source_review_rows(review_path)
+
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["kind"], "dream_manual_source_review")
+            with self.assertRaises(FileNotFoundError):
+                dream_eval.load_manual_source_review_rows(missing_path)
 
     def test_coding_decision_shadow_probe_status_reports_included_or_deferred(self) -> None:
         deferred = dream_eval.coding_decision_shadow_probe_status(

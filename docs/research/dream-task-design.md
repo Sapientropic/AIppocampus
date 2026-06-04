@@ -422,11 +422,16 @@ The #131 visibility-ablation harness adds a second, still conservative layer:
 strong-claim suppression, source-support correctness, manual source-review
 coverage, and cost/cache behavior separately. This distinguishes "the substrate
 has more bridge structure" from "a visible answer would improve." The harness
-can ingest selected manual source-review rows, but when no reviewed sample is
-provided it explicitly lists `manual_source_review_support` and
-`real_user_behavior` under `cannot_claim`. Public output remains sanitized and
-does not include raw source refs, message ids, thread ids, local paths, or
-private text.
+can ingest selected manual source-review rows through
+`--manual-source-review <jsonl>` when the file contains
+`kind="dream_manual_source_review"` rows. That CLI path contributes only
+aggregate counts (`reviewed_count`, review status buckets, wrong-hint,
+high-annoyance, and stale/superseded counts) to the public report; it does not
+emit source refs, message ids, thread ids, local paths, or private review
+notes. Passing a missing review file fails closed instead of silently turning
+review coverage into zero. When no reviewed sample is provided the report
+explicitly lists `manual_source_review_support` and `real_user_behavior` under
+`cannot_claim`.
 
 The #163 report schema also names the user-visible evaluation axes directly:
 structural validity, recall utility, action utility, annoyance/noise, and
