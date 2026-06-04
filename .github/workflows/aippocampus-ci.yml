@@ -51,9 +51,9 @@ jobs:
       - name: Docs health
         run: python tools/aippocampus/docs/check_docs_health.py --json
 
-      - name: Fast test tier with coverage
+      - name: PR test tier with coverage
         run: |
-          python -m coverage run --branch --source=skills/aippocampus/scripts,tools/aippocampus,plugins/aippocampus tools/aippocampus/run_tests.py --tier fast
+          python -m coverage run --branch --source=skills/aippocampus/scripts,tools/aippocampus,plugins/aippocampus tools/aippocampus/run_tests.py --tier pr
           python -m coverage report -m
           python -m coverage xml -o coverage.xml
 
@@ -143,11 +143,11 @@ jobs:
           print(f"default_tmpdir_resolved={tempdir.resolve()}")
           PY
 
-      - name: Fast tier on default macOS tempdir
+      - name: PR tier on default macOS tempdir
         shell: bash
         run: |
           # Covers recurring #140/#242/#402 /var and /private/var path-identity regressions.
-          python tools/aippocampus/run_tests.py --tier fast
+          python tools/aippocampus/run_tests.py --tier pr
 
   full-tests:
     if: github.event_name == 'workflow_dispatch'

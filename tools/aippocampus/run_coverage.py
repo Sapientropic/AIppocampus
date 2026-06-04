@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from test_tier_manifest import TEST_TIERS
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SOURCE_PATHS = [
     "skills/aippocampus/scripts",
@@ -25,9 +27,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--tier",
-        choices=("fast", "slow", "benchmark", "full"),
-        default="fast",
-        help="Test tier to run under coverage. Default is the deterministic fast tier.",
+        choices=TEST_TIERS,
+        default="pr",
+        help="Test tier to run under coverage. Default is the deterministic PR lane.",
     )
     parser.add_argument(
         "--xml",

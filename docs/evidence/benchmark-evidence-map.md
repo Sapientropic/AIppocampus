@@ -213,10 +213,11 @@ the complete benchmark mirror tier is selected with
 
 | Need | Command | Dependency / claim boundary |
 | --- | --- | --- |
-| Fast repository regression gate | `python tools/aippocampus/run_tests.py --tier fast` | Deterministic non-benchmark tests. This stays the default PR matrix and excludes `test_benchmark_*` modules. |
+| Quick local inner loop | `python tools/aippocampus/run_tests.py --tier quick` | Small manifest-classified deterministic core for local iteration. It is intentionally smaller than the broad PR lane and excludes smoke/integration/provider/install/sync surfaces. |
+| Broad deterministic PR gate | `python tools/aippocampus/run_tests.py --tier pr` | Manifest-classified deterministic PR matrix. `fast` remains a deprecated compatibility alias for this lane, not the inner-loop tier. |
 | Deterministic benchmark PR smoke | `python -m pip install -e ".[benchmark]"` then `python tools/aippocampus/run_tests.py --tier benchmark-smoke --benchmark-suite-profile public-fast` | Public-fast suite smoke plus curated public benchmark/report/schema/profile guards and the #279 candidate-seed discovery support guard. No provider calls, private registry data, raw reports, or large corpus downloads. |
 | Full benchmark mirror tests | `python tools/aippocampus/run_tests.py --tier benchmark` | All `tests/aippocampus/test_benchmark_*.py` modules. Use when changing benchmark runners, profiles, reports, or claim-boundary helpers. |
-| Full repository suite | `python tools/aippocampus/run_tests.py --tier full` | Fast + slow + benchmark tests. Use before broad repository-health, release, or public-readiness claims. |
+| Full repository suite | `python tools/aippocampus/run_tests.py --tier full` | All manifest-classified quick, PR, smoke, integration, slow, and benchmark tests. Use before broad repository-health, release, or public-readiness claims. |
 | Optional live/provider tracks | Track-specific CLI flags, environment variables, and owner docs | Not normal contributor deps and not part of default PR CI. They require explicit operator setup, documented provider/env boundaries, and sanitized outputs. |
 
 The `benchmark` optional dependency extra is intentionally empty while the

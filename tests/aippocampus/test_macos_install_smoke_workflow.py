@@ -68,7 +68,7 @@ class MacOSInstallSmokeWorkflowTests(unittest.TestCase):
         self.assertIn('python-version: "3.12"', text)
         self.assertIn("tempfile.gettempdir()", text)
         self.assertIn(".resolve()", text)
-        self.assertIn("python tools/aippocampus/run_tests.py --tier fast", text)
+        self.assertIn("python tools/aippocampus/run_tests.py --tier pr", text)
         self.assertIn("#402", text)
         self.assertIn("#140", text)
         self.assertIn("#242", text)

@@ -32,9 +32,10 @@ python tools/aippocampus/docs/check_docs_health.py --json
 python tools/aippocampus/release/check_agent_discovery_release.py --json
 python -m ruff check skills plugins tests tools benchmarks benchmark_corpus
 python -m mypy
-python tools/aippocampus/run_tests.py --tier fast
+python tools/aippocampus/run_tests.py --tier quick
+python tools/aippocampus/run_tests.py --tier pr
 python tools/aippocampus/run_tests.py --tier benchmark-smoke --benchmark-suite-profile public-fast
-python tools/aippocampus/run_coverage.py --tier fast
+python tools/aippocampus/run_coverage.py --tier pr
 ```
 
 The Ruff hard gate is deliberately staged through `pyproject.toml`: `E9/F/I/B`
@@ -63,12 +64,13 @@ python tools/aippocampus/release/check_agent_discovery_release.py --fail-on-not-
 The non-strict check may report `pending` before publication. Do not translate
 that pending state into a public claim.
 
-Run the complete benchmark, slow, provider, or smoke tiers when the release
-touches their surface. Do not use fast-tier or benchmark-smoke coverage to claim
-that cloud providers, physical device sync, prompt hooks, external-model routes,
-large public-corpus adapters, or private real-history packs were exercised.
+Run the complete benchmark, slow, provider, integration, or smoke tiers when the
+release touches their surface. Do not use `quick`, `pr`, or benchmark-smoke
+coverage to claim that cloud providers, physical device sync, prompt hooks,
+external-model routes, large public-corpus adapters, or private real-history
+packs were exercised.
 
-PR and push CI include a macOS fast-tier path-identity guard on GitHub's
+PR and push CI include a macOS `pr`-tier path-identity guard on GitHub's
 default `TMPDIR`, but that job is only a regression gate for the recurring
 `/var` and `/private/var` class. For runtime/package-owner or path-identity
 changes, also run the manual macOS install smoke before making a release or

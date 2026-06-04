@@ -27,7 +27,7 @@ preferred new storage API.
 Optional external-model routes stay opt-in. Leaving `DEEPSEEK_API_KEY`,
 `AIPPOCAMPUS_OPENAI_COMPAT_*`, object-storage credentials, or GitHub planning
 tokens blank must not block local-first install, MCP listing, docs health, or
-the fast test tier.
+the manifest-classified `quick` / `pr` test tiers.
 
 ## Plugin MCP Environment
 
