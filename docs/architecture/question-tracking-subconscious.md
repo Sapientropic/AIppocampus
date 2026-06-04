@@ -1232,11 +1232,16 @@ the same underlying question?
 - Shipped first slice: boundary-map aggregation from related
   `frontier_marker` findings, explicitly marked as navigation rather than
   proof of unresolved status.
+- Shipped #248 theme-resonance boundary reporting slice: each
+  `theme_candidate` and `run_theme_emergence()` result now reports
+  `theme_resonance_calibration.status = "absent"`,
+  `user_review_evidence = false`, and cannot-claim boundaries. This is runtime
+  claim hygiene, not user-review calibration evidence.
 - Shipped first ambient-policy coverage: `theme_candidate` uses the same
   frequency cap and dismiss/reopen latest-wins overlay as question scent.
 - Deferred: LLM naming for already-validated clusters, user resonance
-  calibration, and theme-specific hook calibration beyond the existing quiet
-  `theme_candidate` router/policy path.
+  calibration beyond explicit absent-status reporting, and theme-specific hook
+  calibration beyond the existing quiet `theme_candidate` router/policy path.
 
 **Validation criterion:** Do the emergent themes resonate with the user's
 self-understanding? This is inherently subjective and can only be validated by

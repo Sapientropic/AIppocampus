@@ -229,6 +229,17 @@ class ThemeEmergenceTests(unittest.TestCase):
         self.assertEqual(theme["frontier_refs"][0]["frontier_type"], "blocked")
         self.assertEqual(theme["frontier_refs"][0]["source_refs"][0]["message_id"], "msg_frontier_4")
         self.assertFalse(theme["naming_evidence"]["llm_naming"])
+        resonance = theme["theme_resonance_calibration"]
+        self.assertEqual(resonance["status"], "absent")
+        self.assertFalse(resonance["user_review_evidence"])
+        self.assertEqual(
+            resonance["claim_boundary"],
+            "Deterministic source-backed navigation is not user resonance proof.",
+        )
+        self.assertIn("theme_label_resonates_with_user", resonance["cannot_claim"])
+        self.assertEqual(result["theme_resonance_calibration"]["status"], "absent")
+        self.assertEqual(result["theme_resonance_calibration"]["theme_count"], 1)
+        self.assertEqual(result["theme_resonance_calibration"]["status_counts"], {"absent": 1})
         self.assertEqual(
             theme["match_evidence"]["method"],
             "deterministic_shared_concept_graph_neighbors_v1",

@@ -37,6 +37,13 @@ QUESTION_LINK_KIND = "question_link"
 FRONTIER_MARKER_KIND = "frontier_marker"
 THEME_CANDIDATE_KIND = "theme_candidate"
 DEFAULT_MIN_RECURRING_LINKS = 3
+THEME_RESONANCE_BOUNDARY = "Deterministic source-backed navigation is not user resonance proof."
+THEME_RESONANCE_CANNOT_CLAIM = (
+    "theme_label_resonates_with_user",
+    "user_visible_recall_lift",
+    "answer_quality_improvement",
+    "llm_theme_naming_supported",
+)
 
 BROAD_THEME_TERMS = {
     "agent",
@@ -429,6 +436,30 @@ def theme_cluster_id(links: list[QuestionLink], shared_concepts: list[str]) -> s
     )
 
 
+def theme_resonance_calibration_boundary() -> dict[str, Any]:
+    # Keep this explicit until a user-review artifact exists. Source-derived
+    # labels are useful navigation handles, but silently treating them as user
+    # resonance evidence would overstate the Phase 3 contract.
+    return {
+        "status": "absent",
+        "user_review_evidence": False,
+        "claim_boundary": THEME_RESONANCE_BOUNDARY,
+        "cannot_claim": list(THEME_RESONANCE_CANNOT_CLAIM),
+    }
+
+
+def theme_resonance_calibration_report(themes: list[dict[str, Any]]) -> dict[str, Any]:
+    status_counts = Counter(
+        str(theme.get("theme_resonance_calibration", {}).get("status") or "unknown")
+        for theme in themes
+    )
+    return {
+        **theme_resonance_calibration_boundary(),
+        "theme_count": len(themes),
+        "status_counts": dict(sorted(status_counts.items())),
+    }
+
+
 def build_theme_candidate(
     links: list[QuestionLink],
     shared_concepts: list[str],
@@ -511,6 +542,7 @@ def build_theme_candidate(
             "label_source": "shared_concepts",
             "hallucination_guard": "Theme names are selected from source-derived shared concepts only.",
         },
+        "theme_resonance_calibration": theme_resonance_calibration_boundary(),
         "fingerprint": theme_fingerprint(theme_id, link_ids),
         "quality": {
             "bucket": "usable" if confidence < 0.82 else "strong",
@@ -672,6 +704,7 @@ def run_theme_emergence(
         "themes": themes,
         "batch_id": batch_id,
         "naming_contract": "deterministic shared-concept labels only; no LLM theme discovery or naming",
+        "theme_resonance_calibration": theme_resonance_calibration_report(themes),
     }
 
 
