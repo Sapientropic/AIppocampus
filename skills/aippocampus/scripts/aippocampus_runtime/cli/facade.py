@@ -280,20 +280,24 @@ def print_help(*, file: TextIO | None = None) -> None:
     target = sys.stdout if file is None else file
     parser = argparse.ArgumentParser(
         prog="aippocampus",
-        description="Unified facade for AIppocampus operator commands.",
+        description="Unified facade for AIppocampus personal and operator commands.",
         add_help=False,
     )
     parser.print_usage(target)
     print("", file=target)
     print("Commands:", file=target)
+    print("", file=target)
+    print("Personal path:", file=target)
     print("  health              Run runtime health checks", file=target)
-    print("  onboard             Register/build provider-backed clean source", file=target)
+    print("  onboard             Check/register provider-backed clean source", file=target)
     print("  search              Search clean-source memory", file=target)
+    print("  update status       Check personal core/magic readiness", file=target)
     print("  export              Export a portable AIppocampus bundle", file=target)
     print("  import              Import a portable AIppocampus bundle", file=target)
     print("  import conversation Register an explicit provider transcript", file=target)
+    print("", file=target)
+    print("Advanced/operator diagnostics:", file=target)
     print("  doctor provider     Check live-provider env visibility", file=target)
-    print("  update status       Check local skill/hooks/LLM/MCP/plugin drift", file=target)
     print("  mcp list-tools      List MCP tool schemas", file=target)
     print("  smoke recall-funnel Run a progressive recall funnel diagnostic", file=target)
     print("  storage gc          Plan storage cleanup from existing evidence", file=target)

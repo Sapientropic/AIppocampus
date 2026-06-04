@@ -51,8 +51,18 @@ class MultimodalSourceManifestTests(unittest.TestCase):
         policy = report["media_origin_policy"]
         self.assertTrue(policy["user_provided_media"]["current_task_access_allowed"])
         self.assertFalse(policy["user_provided_media"]["hidden_durable_write_allowed"])
+        self.assertTrue(policy["user_provided_media"]["audit_event_required"])
+        self.assertFalse(policy["user_provided_media"]["user_visible_confirmation_required"])
         self.assertTrue(policy["connected_library_media"]["configured_scope_required"])
         self.assertTrue(policy["background_filesystem_media"]["default_access_denied"])
+
+        user_media = next(
+            item
+            for item in report["sources"].values()
+            if item["origin_policy"] == "user_provided_media"
+        )
+        self.assertTrue(user_media["audit_event_required"])
+        self.assertFalse(user_media["user_visible_confirmation_required"])
 
     def test_derived_artifacts_are_navigation_only_and_reopen_to_parent_anchors(self) -> None:
         payload = load_fixture()

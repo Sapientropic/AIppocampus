@@ -302,6 +302,30 @@ class OnboardCodexTests(unittest.TestCase):
         self.assertFalse(data["data"]["legacy_aliases"]["local_paths_included"])
         self.assertNotIn(str(legacy_registry), encoded_aliases)
 
+    def test_onboard_status_respects_explicit_provider_scope(self) -> None:
+        self._write_claude_transcript(
+            self.root / "claude-home" / "projects" / "-project" / "claude-session.jsonl"
+        )
+
+        proc = self._run_onboard_facade(
+            "--provider",
+            "codex",
+            "--status",
+            "--cwd",
+            str(self.cwd),
+            env_extra={
+                "CLAUDE_HOME": str(self.root / "claude-home"),
+                "AIPPOCAMPUS_GENERIC_IMPORT_DIR": str(self.root / "missing-generic.jsonl"),
+            },
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        data = json.loads(proc.stdout)
+        providers = [item["provider"] for item in data["data"]["providers"]]
+
+        self.assertEqual(providers, ["codex"])
+        self.assertEqual(data["data"]["provider_scope"], "codex")
+
     def test_onboard_status_reports_missing_non_codex_providers_as_blocked(self) -> None:
         proc = self._run_onboard_facade(
             "--status",
@@ -323,7 +347,7 @@ class OnboardCodexTests(unittest.TestCase):
         self.assertFalse(providers["generic-jsonl"]["detected"])
         self.assertIn("AIPPOCAMPUS_GENERIC_IMPORT_DIR", providers["generic-jsonl"]["blockers"][0])
 
-    def test_onboard_status_can_render_human_readable_output(self) -> None:
+    def test_onboard_status_can_render_human_readable_auto_output(self) -> None:
         proc = self._run_onboard_facade(
             "--status",
             "--format",
@@ -337,8 +361,26 @@ class OnboardCodexTests(unittest.TestCase):
         self.assertIn("AIppocampus provider status", proc.stdout)
         self.assertIn("- codex: write_enabled", proc.stdout)
         self.assertIn("- claude-code: blocked", proc.stdout)
-        self.assertIn("registry:", proc.stdout)
+        self.assertIn("registry configured", proc.stdout)
         self.assertIn("CODEX_HOME/aippocampus-registry legacy fallback", proc.stdout)
+        self.assertNotIn(str(self.root), proc.stdout)
+
+    def test_onboard_status_human_provider_scope_hides_other_provider_blockers(self) -> None:
+        proc = self._run_onboard_facade(
+            "--provider",
+            "codex",
+            "--status",
+            "--format",
+            "text",
+            "--cwd",
+            str(self.cwd),
+            env_extra={"CLAUDE_HOME": str(self.root / "missing-claude-home")},
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("- codex: write_enabled", proc.stdout)
+        self.assertNotIn("claude-code", proc.stdout)
+        self.assertNotIn(str(self.root), proc.stdout)
 
     def test_onboard_facade_provider_generic_jsonl_dry_run_reports_plan(self) -> None:
         generic = self.root / "generic" / "generic-session.jsonl"

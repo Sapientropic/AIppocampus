@@ -7,6 +7,17 @@ research notes.
 
 Start here instead of scanning every Markdown file in the tree.
 
+## Ordinary User Start
+
+For a first recall moment, start with
+[`guides/public-api.md#ten-minute-public-path`](guides/public-api.md#ten-minute-public-path)
+or [`guides/install-guide.md#first-recall-path`](guides/install-guide.md#first-recall-path).
+Those paths check the package, inspect the selected provider, register local
+history only after the user is ready, and then search for one source-backed
+snippet. MCP, hooks, sync, Dream, benchmark, and release evidence pages are
+agent-host, operator, research, or maintainer surfaces; they are not required
+before ordinary users see value.
+
 ## First Stops
 
 - Product requirements: [`roadmap.md`](roadmap.md).

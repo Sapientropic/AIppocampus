@@ -94,6 +94,7 @@ MEDIA_ORIGIN_POLICY = {
         "hidden_durable_write_allowed": False,
         "cross_domain_reuse_allowed": False,
         "audit_event_required": True,
+        "user_visible_confirmation_required": False,
     },
     "connected_library_media": {
         "current_task_access_allowed": False,
@@ -102,6 +103,7 @@ MEDIA_ORIGIN_POLICY = {
         "hidden_durable_write_allowed": False,
         "cross_domain_reuse_allowed": False,
         "audit_event_required": True,
+        "user_visible_confirmation_required": True,
     },
     "background_filesystem_media": {
         "current_task_access_allowed": False,
@@ -110,6 +112,7 @@ MEDIA_ORIGIN_POLICY = {
         "hidden_durable_write_allowed": False,
         "cross_domain_reuse_allowed": False,
         "audit_event_required": True,
+        "user_visible_confirmation_required": True,
     },
 }
 
@@ -249,6 +252,10 @@ def _source_report(source: Mapping[str, Any]) -> dict[str, Any]:
     hidden_durable_write_allowed = task_access.get("hidden_durable_write_allowed") is True
     cross_domain_reuse_allowed = task_access.get("cross_domain_reuse_allowed") is True
     audit_event_required = task_access.get("audit_event_required") is True
+    origin_policy_contract = MEDIA_ORIGIN_POLICY.get(origin_policy, {})
+    user_visible_confirmation_required = bool(
+        origin_policy_contract.get("user_visible_confirmation_required")
+    )
 
     if origin_policy == "user_provided_media" and not current_task_access:
         blockers.append(
@@ -315,6 +322,8 @@ def _source_report(source: Mapping[str, Any]) -> dict[str, Any]:
         "configured_scope_required": configured_scope_required,
         "hidden_durable_write_allowed": hidden_durable_write_allowed,
         "cross_domain_reuse_allowed": cross_domain_reuse_allowed,
+        "audit_event_required": audit_event_required,
+        "user_visible_confirmation_required": user_visible_confirmation_required,
         "blockers": blockers,
         "blocker_codes": _blocker_codes(blockers),
     }

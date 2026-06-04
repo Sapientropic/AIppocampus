@@ -479,6 +479,25 @@ def status_llm(
     }
 
 
+READY_SURFACE_STATUSES = {"current", "ready", "installed_package"}
+CORE_SURFACES = ("cli", "skill")
+MAGIC_SURFACES = ("hooks", "llm")
+OPTIONAL_SURFACES = ("plugin",)
+OPERATOR_SURFACES = ("mcp",)
+
+
+def _surface_ready(item: dict[str, Any]) -> bool:
+    if item.get("surface") == "llm":
+        return bool(item.get("ready"))
+    return item.get("status") in READY_SURFACE_STATUSES
+
+
+def _unready_surfaces(
+    surfaces: dict[str, dict[str, Any]], names: tuple[str, ...]
+) -> list[str]:
+    return [name for name in names if not _surface_ready(surfaces.get(name) or {})]
+
+
 def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
     repo_root = find_repo_root(Path(args.repo_root).resolve() if args.repo_root else None)
     codex_home_path = Path(args.codex_home).resolve() if args.codex_home else codex_home()
@@ -515,7 +534,11 @@ def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
         for name, item in surfaces.items()
         if item.get("status") not in {"current", "ready", "installed_package"}
     ]
-    magic_ready = hooks.get("status") == "current" and bool(llm.get("ready"))
+    core_blockers = _unready_surfaces(surfaces, CORE_SURFACES)
+    magic_blockers = _unready_surfaces(surfaces, MAGIC_SURFACES)
+    optional_surfaces = _unready_surfaces(surfaces, OPTIONAL_SURFACES)
+    operator_blockers = _unready_surfaces(surfaces, OPERATOR_SURFACES)
+    magic_ready = not magic_blockers
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": f"aippocampus_update_{mode}",
@@ -524,7 +547,13 @@ def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
         "repo_root": str(repo_root),
         "codex_home": str(codex_home_path),
         "summary": {
+            "core_ready": not core_blockers,
+            "core_blockers": core_blockers,
             "magic_ready": magic_ready,
+            "magic_blockers": magic_blockers,
+            "optional_surfaces": optional_surfaces,
+            "operator_surfaces": list(OPERATOR_SURFACES),
+            "operator_blockers": operator_blockers,
             "needs_action": actionable,
             "stale_or_missing_surfaces": actionable,
         },
@@ -724,7 +753,16 @@ def render_text(report: dict[str, Any]) -> str:
     surfaces = report.get("surfaces") or {}
     label = "plan" if mode == "plan" else "status"
     lines = [f"AIppocampus update {label}"]
+    lines.append(f"- Core ready: {str(summary.get('core_ready')).lower()}")
+    if summary.get("core_blockers"):
+        lines.append("- Core blockers: " + ", ".join(summary.get("core_blockers") or []))
     lines.append(f"- Magic ready: {str(summary.get('magic_ready')).lower()}")
+    if summary.get("magic_blockers"):
+        lines.append("- Magic blockers: " + ", ".join(summary.get("magic_blockers") or []))
+    if summary.get("optional_surfaces"):
+        lines.append("- Optional surfaces: " + ", ".join(summary.get("optional_surfaces") or []))
+    if summary.get("operator_surfaces"):
+        lines.append("- Operator surfaces: " + ", ".join(summary.get("operator_surfaces") or []))
     for name in ("skill", "hooks", "llm", "cli", "mcp", "plugin"):
         item = surfaces.get(name) or {}
         lines.append(f"- {name}: {item.get('status')}")

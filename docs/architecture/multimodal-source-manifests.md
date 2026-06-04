@@ -52,6 +52,9 @@ AIppocampus must keep these three situations separate:
 Task-scoped consent is intentionally narrow. Using selected media to answer the
 current request does not allow background scanning, hidden provider routes,
 silent memory creation, cross-domain reuse, or durable profile updates.
+For `user_provided_media`, `audit_event_required` means a local policy/audit
+row for future traceability. It is not a second user-visible confirmation prompt
+after the user has already selected or uploaded the media for the current task.
 
 ## Derived Artifacts
 

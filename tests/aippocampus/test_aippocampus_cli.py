@@ -27,12 +27,17 @@ class AippocampusCliTests(unittest.TestCase):
             check=False,
         )
 
-    def test_help_lists_common_operator_flows(self) -> None:
+    def test_help_leads_with_personal_path_before_operator_flows(self) -> None:
         proc = self.run_cli("--help")
 
         self.assertEqual(proc.returncode, 0)
+        self.assertIn("Personal path", proc.stdout)
+        self.assertIn("Advanced/operator diagnostics", proc.stdout)
+        self.assertLess(proc.stdout.index("Personal path"), proc.stdout.index("Advanced/operator"))
+        self.assertLess(proc.stdout.index("search"), proc.stdout.index("doctor provider"))
         self.assertIn("health", proc.stdout)
-        self.assertIn("doctor provider", proc.stdout)
+        self.assertIn("onboard", proc.stdout)
+        self.assertIn("search", proc.stdout)
         self.assertIn("update status", proc.stdout)
         self.assertIn("mcp list-tools", proc.stdout)
         self.assertIn("smoke recall-funnel", proc.stdout)
@@ -184,7 +189,7 @@ class AippocampusCliTests(unittest.TestCase):
                     }
                 ],
                 "auto": {"default_provider": "codex", "why": "safe default"},
-                "storage": {"path": "registry", "source": "AIPPOCAMPUS_HOME"},
+                "storage": {"path": "C:/private/aippocampus/registry", "source": "AIPPOCAMPUS_HOME"},
             },
         }
 
@@ -195,6 +200,8 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("project cue", output)
         self.assertIn("time cue", output)
         self.assertIn("aippocampus search", output)
+        self.assertIn("registry configured", output)
+        self.assertNotIn("C:/private/aippocampus/registry", output)
 
     def test_package_facade_default_runner_is_in_process(self) -> None:
         from aippocampus_runtime.cli import facade

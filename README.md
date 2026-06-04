@@ -342,12 +342,15 @@ check. Some gates inspect the local AIppocampus registry under `$CODEX_HOME`; on
 a new machine without enough registered clean source, those gates may report
 diagnostic-only coverage rather than a readiness pass.
 
-## MCP And Plugin Preview
+## Agent-Host And Plugin Preview
 
 The local MCP server is read-mostly by default. It exposes clean-source and
 registry-backed tools such as `search_memory`, `recall_context`,
 `recall_deepen`, `latest_reply`, `get_turn_context`, `list_threads`,
 `register_thread`, `sync_status`, and `memory_health`:
+
+This is for agent-host wiring and plugin/operator checks. It is not required
+before the Quick Start first-recall path returns value.
 
 ```sh
 aippocampus mcp list-tools

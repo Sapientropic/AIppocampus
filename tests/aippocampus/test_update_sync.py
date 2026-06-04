@@ -89,6 +89,76 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(surfaces["llm"]["status"], "missing_provider_env_var")
         self.assertFalse(hooks_json.exists())
 
+    def test_status_splits_core_magic_optional_and_operator_readiness(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            codex_home = root / "codex-home"
+            hooks_json = codex_home / "hooks.json"
+            update_cli.install_prompt.install(hooks_json)
+            update_cli.install_lifecycle.install(hooks_json)
+
+            code, payload = run_update(
+                "status",
+                "--repo-root",
+                str(REPO_ROOT),
+                "--codex-home",
+                str(codex_home),
+                "--skill-target",
+                str(REPO_ROOT / "skills" / "aippocampus"),
+                "--plugin-output",
+                str(root / "missing-plugin-package"),
+                "--hooks-json",
+                str(hooks_json),
+                "--no-child-check",
+            )
+
+        self.assertEqual(code, 0)
+        summary = payload["summary"]
+        self.assertTrue(summary["core_ready"])
+        self.assertEqual(summary["core_blockers"], [])
+        self.assertFalse(summary["magic_ready"])
+        self.assertIn("llm", summary["magic_blockers"])
+        self.assertIn("plugin", summary["optional_surfaces"])
+        self.assertIn("mcp", summary["operator_surfaces"])
+        self.assertNotIn("plugin", summary["core_blockers"])
+        self.assertNotIn("plugin", summary["magic_blockers"])
+        self.assertNotIn("llm", summary["optional_surfaces"])
+
+    def test_status_text_leads_with_core_and_magic_not_generic_needs_action(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            codex_home = root / "codex-home"
+            hooks_json = codex_home / "hooks.json"
+            update_cli.install_prompt.install(hooks_json)
+            update_cli.install_lifecycle.install(hooks_json)
+            stdout = StringIO()
+
+            with redirect_stdout(stdout):
+                code = update_cli.main(
+                    [
+                        "status",
+                        "--repo-root",
+                        str(REPO_ROOT),
+                        "--codex-home",
+                        str(codex_home),
+                        "--skill-target",
+                        str(REPO_ROOT / "skills" / "aippocampus"),
+                        "--plugin-output",
+                        str(root / "missing-plugin-package"),
+                        "--hooks-json",
+                        str(hooks_json),
+                        "--no-child-check",
+                    ]
+                )
+
+        output = stdout.getvalue()
+        self.assertEqual(code, 0)
+        self.assertIn("Core ready: true", output)
+        self.assertIn("Magic ready: false", output)
+        self.assertIn("Magic blockers: llm", output)
+        self.assertIn("Optional surfaces: plugin", output)
+        self.assertNotIn("Still needs action: plugin, llm", output)
+
     def test_skill_apply_updates_stale_copy_and_excludes_distribution_noise(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():
             root = Path(tmp)
