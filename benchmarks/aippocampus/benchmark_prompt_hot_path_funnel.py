@@ -11,7 +11,11 @@ import time
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.recall.prompt_recall_hot_path import run_hot_path_funnel
+import _paths
+
+_paths.ensure_paths()
+
+from aippocampus_runtime.recall.prompt_recall_hot_path import run_hot_path_funnel  # noqa: E402
 
 
 def _write_index(path: Path, messages: list[tuple[int, str, str]]) -> None:

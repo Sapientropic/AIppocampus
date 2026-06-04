@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+import os
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -12,6 +15,29 @@ import benchmark_prompt_hot_path_funnel as benchmark  # noqa: E402
 
 
 class PromptHotPathFunnelBenchmarkTests(unittest.TestCase):
+    def test_script_runs_from_repo_root_without_pythonpath(self) -> None:
+        env = os.environ.copy()
+        env.pop("PYTHONPATH", None)
+
+        process = subprocess.run(
+            [
+                sys.executable,
+                "-S",
+                str(BENCHMARKS / "benchmark_prompt_hot_path_funnel.py"),
+                "--json",
+            ],
+            cwd=REPO_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(process.returncode, 0, process.stderr)
+        report = json.loads(process.stdout)
+        self.assertEqual(report["kind"], "aippocampus_prompt_hot_path_funnel_benchmark")
+        self.assertTrue(report["ok"])
+
     def test_report_pairs_latency_with_quality_metrics(self) -> None:
         report = benchmark.run_benchmark()
 
