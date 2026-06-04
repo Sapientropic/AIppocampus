@@ -75,6 +75,9 @@ from aippocampus_runtime.subconscious.question_diagnostics import (
     question_extraction_quality_diagnostics,
     should_request_question_axis_repair,
 )
+from aippocampus_runtime.subconscious.question_extraction_gate import (
+    filter_question_extraction_turns,
+)
 from aippocampus_runtime.subconscious.runtime import (
     AGENT_SYSTEM_PROMPT,
     DEFAULT_MAX_STEPS,
@@ -239,6 +242,9 @@ def run_one_job(
         raise ValueError(f"{job} is a deterministic follow-up; run it through run_jobs")
     timeline = load_json(timeline_path)
     turns = select_timeline_turns(timeline, project=project, max_turns=max_turns)
+    question_extraction_gate: dict[str, Any] = {}
+    if job == "question_extraction":
+        turns, question_extraction_gate = filter_question_extraction_turns(turns)
     state = AgentState(source_bank=source_bank_from_turns(turns))
     step_budget = effective_step_budget(max_steps)
     batch_id = f"subconscious-job-{job}-{time.time_ns()}-{os.getpid()}-{sample_index}"
@@ -262,6 +268,7 @@ def run_one_job(
             "effective_step_budget": step_budget,
             "tool_contract_version": TOOL_CONTRACT_VERSION,
             "prompt_preview": compact_text(initial_payload, 2600),
+            "question_extraction_gate": question_extraction_gate,
         }
     route = route or resolve_model_route(
         model_route,
@@ -474,6 +481,7 @@ def run_one_job(
         "reasoning_effort": resolved_reasoning_effort,
         "tool_contract_version": TOOL_CONTRACT_VERSION,
         "validation_diagnostics": validation_diagnostics,
+        "question_extraction_gate": question_extraction_gate,
     }
     if quality_diagnostics:
         result["quality_diagnostics"] = quality_diagnostics

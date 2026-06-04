@@ -35,6 +35,12 @@ theme-emergence slice, plus first question-index scale/sidecar evaluation:
 
 - Implemented: `question_extraction` inside `JOB_SPECS`, including
   `question_candidate` and explicit `frontier_marker` output.
+- Implemented first #248 extraction-gate slice: `question_extraction` now
+  applies deterministic pre-filtering before model calls and same-thread
+  normalized dedupe during validation. Dry/no-write runs expose aggregate
+  `question_extraction_gate` diagnostics. This does not claim default question
+  index adoption, live answer-quality lift, or broader theme-resonance
+  calibration.
 - Implemented: `question_tracking` as a deterministic runner in
   `skills/aippocampus/scripts/aippocampus_runtime/question/tracking.py`;
   `skills/aippocampus/scripts/question_tracking.py` remains the direct-script
@@ -728,6 +734,9 @@ Negative examples are embedded in the prompt:
 - Only send turns that contain interrogative words (who/what/why/how/怎么/为什么/
   哪/是否) or question marks, or local implicit-question cues such as "I don't
   understand", "卡住", "困惑", "不确定", "到底", or "怎么判断".
+- Also keep explicit frontier/stopping-signal cues such as unresolved,
+  blocked, deferred, or needing external evidence before closure, because
+  `question_extraction` owns source-backed `frontier_marker` rows too.
 
 **Deterministic post-filter (after LLM response):**
 

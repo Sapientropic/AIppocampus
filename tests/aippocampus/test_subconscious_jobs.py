@@ -1680,6 +1680,139 @@ class SubconsciousJobsTests(unittest.TestCase):
         self.assertTrue(findings[0]["question_text_compressed"])
         self.assertLessEqual(len(findings[0]["question_text"]), jobs.QUESTION_TEXT_MAX_CHARS)
 
+    def test_question_extraction_dry_run_prefilters_noise_before_model_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            timeline_path = root / "project_timeline.json"
+            timeline_path.write_text(
+                json.dumps(
+                    {
+                        "projects": {
+                            "project:ai": {
+                                "project_label": "AIppocampus",
+                                "latest_turns": [
+                                    {
+                                        "thread_key": "session:q",
+                                        "turn_index": 1,
+                                        "user": "好，开干",
+                                        "assistant": "收到。",
+                                    },
+                                    {
+                                        "thread_key": "session:q",
+                                        "turn_index": 2,
+                                        "user": "OK?",
+                                        "assistant": "OK.",
+                                    },
+                                    {
+                                        "thread_key": "session:q",
+                                        "turn_index": 3,
+                                        "user": "```python\nprint('hello')\nprint('world')\n```\n怎么改？",
+                                        "assistant": "需要先看目标。",
+                                    },
+                                    {
+                                        "thread_key": "session:q",
+                                        "turn_index": 4,
+                                        "user": "我不太明白第三点，这里到底怎么判断边界？",
+                                        "assistant": "这里是在问边界判断。",
+                                    },
+                                    {
+                                        "thread_key": "session:q",
+                                        "turn_index": 5,
+                                        "user": "Why does the agent keep dropping context after compaction?",
+                                        "assistant": "That is a recurring continuity question.",
+                                    },
+                                ],
+                            }
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            result = jobs.run_one_job(
+                job="question_extraction",
+                registry_path=root / "threads.json",
+                timeline_path=timeline_path,
+                concept_graph_path=root / "missing.sqlite",
+                jobs_output_path=root / "subconscious_jobs.jsonl",
+                edges_output_path=root / "subconscious_edges.jsonl",
+                project="AIppocampus",
+                objective="extract durable questions",
+                max_turns=8,
+                max_steps=1,
+                min_tool_steps=0,
+                model="deepseek-v4-flash",
+                base_url="https://example.invalid",
+                api_key=None,
+                max_tokens=None,
+                timeout=1,
+                temperature=0.2,
+                dry_run=True,
+            )
+
+        gate = result["question_extraction_gate"]
+
+        self.assertEqual(gate["input_turn_count"], 5)
+        self.assertEqual(gate["selected_turn_count"], 2)
+        self.assertEqual(
+            gate["selected_user_previews"],
+            [
+                "Why does the agent keep dropping context after compaction?",
+                "我不太明白第三点，这里到底怎么判断边界？",
+            ],
+        )
+        self.assertEqual(
+            gate["skipped_by_reason"],
+            {"code_heavy": 1, "noise": 1, "too_short": 1},
+        )
+
+    def test_question_extraction_dedupes_normalized_questions_within_thread(self) -> None:
+        parsed = {
+            "findings": [
+                {
+                    "kind": "question_candidate",
+                    "title": "Question tracking noise",
+                    "summary": "The user asks how question tracking should avoid noise.",
+                    "confidence": 0.86,
+                    "source_refs": ["t0"],
+                    "question_text": "How should question tracking avoid noise?",
+                    "question_short": "question tracking avoid noise",
+                },
+                {
+                    "kind": "question_candidate",
+                    "title": "Question tracking noise duplicate",
+                    "summary": "The same source thread repeats the question with punctuation drift.",
+                    "confidence": 0.86,
+                    "source_refs": ["t1"],
+                    "question_text": "how should question-tracking avoid noise",
+                    "question_short": "question tracking avoid noise",
+                },
+                {
+                    "kind": "question_candidate",
+                    "title": "Question tracking noise in another thread",
+                    "summary": "Another thread can carry the same durable question.",
+                    "confidence": 0.86,
+                    "source_refs": ["t2"],
+                    "question_text": "How should question tracking avoid noise?",
+                    "question_short": "question tracking avoid noise",
+                },
+            ]
+        }
+        source_bank = {
+            "t0": {"turn_ref": "t0", "thread_key": "session:one", "turn_index": 1},
+            "t1": {"turn_ref": "t1", "thread_key": "session:one", "turn_index": 2},
+            "t2": {"turn_ref": "t2", "thread_key": "session:two", "turn_index": 1},
+        }
+
+        findings = jobs.validate_findings("question_extraction", parsed, source_bank)
+
+        self.assertEqual(len(findings), 2)
+        self.assertEqual(
+            [finding["source_refs"][0]["thread_key"] for finding in findings],
+            ["session:one", "session:two"],
+        )
+
     def test_run_concept_edges_job_writes_job_and_edge_staging(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
