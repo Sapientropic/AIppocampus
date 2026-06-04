@@ -25,6 +25,7 @@ class RecallNavigationComparisonTests(unittest.TestCase):
         positive = report["cases_by_id"]["vague_magic_moment"]
 
         self.assertEqual(report["kind"], recall_navigation_comparison.COMPARISON_KIND)
+        self.assertEqual(report["schema_version"], 2)
         self.assertEqual(set(arms), {"direct_search", "hook_only", "progressive_recall"})
         self.assertGreaterEqual(len(report["cases"]), 2)
         self.assertTrue(report["comparison_boundary"]["deterministic_proxy_only"])
@@ -40,6 +41,8 @@ class RecallNavigationComparisonTests(unittest.TestCase):
         self.assertTrue(hook["scent_as_fact_violation"])
         self.assertTrue(progressive["source_backed_success"])
         self.assertTrue(progressive["route_actionable"])
+        self.assertTrue(progressive["source_reopen_attempted"])
+        self.assertTrue(progressive["source_reopen_follow_through"])
         self.assertEqual(progressive["manual_query_invention_count"], 0)
         self.assertEqual(progressive["selected_next_tool"], "recall_deepen")
 
@@ -50,6 +53,8 @@ class RecallNavigationComparisonTests(unittest.TestCase):
         encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
 
         self.assertFalse(progressive["source_backed_success"])
+        self.assertTrue(progressive["source_reopen_attempted"])
+        self.assertFalse(progressive["source_reopen_follow_through"])
         self.assertTrue(progressive["wrong_or_stale_handle"])
         self.assertEqual(progressive["error_code"], "stale_recall_handle")
         self.assertEqual(progressive["rejection_stage"], "deepen")
@@ -65,11 +70,24 @@ class RecallNavigationComparisonTests(unittest.TestCase):
         hook = report["aggregate"]["arms"]["hook_only"]
 
         self.assertGreater(progressive["route_actionability_rate"], 0)
+        self.assertGreater(progressive["source_reopen_follow_through_rate"], 0)
+        self.assertLess(progressive["source_reopen_follow_through_rate"], 1)
         self.assertGreater(progressive["wrong_route_drag_rate"], 0)
         self.assertGreater(direct["avg_manual_query_invention_count"], 0)
         self.assertGreater(hook["scent_as_fact_violation_rate"], 0)
         self.assertIn("manual_query_invention_count", report["metric_notes"])
+        self.assertIn("source_reopen_follow_through_rate", report["metric_notes"])
         self.assertIn("wrong_route_drag_rate", report["metric_notes"])
+
+    def test_issue_201_readout_keeps_foreground_lift_unclaimed(self) -> None:
+        report = recall_navigation_comparison_fixtures.fixture_recall_navigation_comparison()
+        readout = report["issue_readouts"]["github_201"]
+
+        self.assertTrue(readout["route_actionability_measured"])
+        self.assertTrue(readout["source_reopen_follow_through_measured"])
+        self.assertEqual(readout["default_foreground_first_turn_lift"], "not_measured")
+        self.assertEqual(readout["default_foreground_second_turn_lift"], "not_measured")
+        self.assertFalse(readout["closeout_eligible"])
 
     def test_cli_smoke_emits_json_report(self) -> None:
         proc = subprocess.run(

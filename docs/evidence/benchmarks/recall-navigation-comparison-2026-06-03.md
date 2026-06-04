@@ -1,7 +1,9 @@
 # Recall Navigation Comparison Smoke - 2026-06-03
 
-This is a public-safe deterministic smoke for GitHub #465. It compares three
-source-navigation arms on the same synthetic clean-source fixtures:
+This is a public-safe deterministic smoke for GitHub #465. It also carries a
+narrow GitHub #201 readout for route actionability and source-reopen
+follow-through. It compares three source-navigation arms on the same synthetic
+clean-source fixtures:
 
 - direct `search_memory`
 - hook-only scent/card behavior
@@ -34,20 +36,39 @@ The report includes these metrics for each arm:
 - `manual_query_invention_count`
 - `tool_call_count`
 - `route_actionable`
+- `source_reopen_attempted`
+- `source_reopen_follow_through`
 - `wrong_route_drag_count`
 - `scent_as_fact_violation`
 - `time_to_first_useful_source_observed_ms`
 - `input_token_proxy`
 
-The aggregate fixture run on 2026-06-03 showed:
+The aggregate fixture run updated on 2026-06-04 showed:
 
 - direct search: source-backed success on all 4 cases, but with manual query
-  invention in the vague cases;
+  invention in the vague cases (`avg_manual_query_invention_count=1.5`);
 - hook-only: no source-backed success, one scent-as-fact violation fixture, and
   one wrong-route drag fixture;
 - progressive recall: actionable `recall_deepen` route on all 4 cases,
-  source-backed success on the 3 non-stale cases, and deterministic stale-handle
+  source-backed success on the 3 non-stale cases,
+  `source_reopen_follow_through_rate=0.75`, and deterministic stale-handle
   rejection before source use.
+
+## #201 Readout
+
+For #201, this smoke now measures only two deterministic proxy outcomes:
+
+- `route_actionability_rate`
+- `source_reopen_follow_through_rate`
+
+The report intentionally marks these #201 outcomes as not measured:
+
+- default foreground first-turn lift;
+- default foreground second-turn lift;
+- live registry quality.
+
+So this evidence can support a narrow route-follow-through slice, but it is not
+a #201 closeout signal.
 
 ## Can Claim
 
@@ -67,6 +88,6 @@ The aggregate fixture run on 2026-06-03 showed:
 - That hook-only behavior is unsafe in all real settings; the hook-only arm is a
   boundary fixture, not a live-agent study.
 
-Use this smoke as deterministic contract evidence for #465. Stronger user-facing
-claims still need live or replay evaluations with real agent behavior and
-sanitized cost traces.
+Use this smoke as deterministic contract evidence for #465 and as a narrow #201
+route-actionability/source-reopen proxy. Stronger user-facing claims still need
+live or replay evaluations with real agent behavior and sanitized cost traces.
