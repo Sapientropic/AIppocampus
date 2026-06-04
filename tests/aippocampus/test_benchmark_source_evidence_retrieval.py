@@ -1426,6 +1426,166 @@ class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
 
         self.assertIn(4, [candidate["line"] for candidate in candidates])
 
+    def test_standard_reranker_reports_semantic_bridge_lift_for_source_joined_candidates(
+        self,
+    ) -> None:
+        def source_joined_reranker(
+            question: str,
+            candidates: list[dict],
+            **_: object,
+        ) -> dict:
+            self.assertIn("login safety mechanism", question)
+            self.assertEqual({1, 2}, {int(candidate["line"]) for candidate in candidates})
+            return {
+                "available": True,
+                "ranked_lines": [2, 1],
+                "confidence": 0.82,
+            }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            sqlite_path = Path(tmp) / "source_index.sqlite"
+            messages = [
+                benchmark.standard_message_for_sqlite(
+                    source_id="source",
+                    line=1,
+                    role="user",
+                    text="We kept calling this the login safety mechanism during planning.",
+                ),
+                benchmark.standard_message_for_sqlite(
+                    source_id="source",
+                    line=2,
+                    role="assistant",
+                    text="Current source truth: the adopted authentication flow uses rotating session tokens.",
+                ),
+            ]
+            benchmark.make_sqlite(sqlite_path, messages, anchors=[], turns=[])
+            case = {
+                "case_id": "bridge-lift",
+                "dataset": "synthetic",
+                "case_type": "cross_vocabulary_vague_cue",
+                "source_id_sha1": "source",
+                "question_id_sha1": "question",
+                "query": "Which login safety mechanism did we adopt?",
+                "query_sha1": "query",
+                "query_terms": ["login", "safety", "mechanism"],
+                "sqlite_path": sqlite_path,
+                "expected": {
+                    "lines": [2],
+                    "sessions": ["D1"],
+                    "line_to_session": {"1": "D1", "2": "D1"},
+                    "has_line_evidence": True,
+                },
+            }
+
+            row = benchmark.evaluate_standard_retrieval_case(
+                case,
+                top_k=1,
+                candidate_limit=8,
+                context_radius=1,
+                include_private_text=False,
+                line_reranker_mode="custom",
+                line_reranker_fn=source_joined_reranker,
+                line_reranker_top_sessions=0,
+                line_reranker_max_candidates=8,
+            )
+
+        self.assertFalse(row["evidence_hit_top1"])
+        self.assertTrue(row["semantic_only_evidence_hit_top1"])
+        self.assertTrue(row["semantic_bridge_lift_top1"])
+        self.assertTrue(row["source_joined_candidate_contains_evidence"])
+        metrics = benchmark.summarize_standard_retrieval_results(
+            [row],
+            top_k=1,
+            context_radius=1,
+        )
+        self.assertEqual(metrics["semantic_bridge_lift_top1"], 1)
+        self.assertEqual(metrics["semantic_bridge_lift_rate_top1"], 1.0)
+        self.assertEqual(metrics["source_joined_candidate_evidence_coverage"], 1)
+        self.assertEqual(metrics["source_joined_candidate_evidence_coverage_rate"], 1.0)
+
+    def test_standard_reranker_reports_wrong_stance_ranked_above_correct_source(
+        self,
+    ) -> None:
+        def stale_first_reranker(
+            question: str,
+            candidates: list[dict],
+            **_: object,
+        ) -> dict:
+            self.assertIn("login safety mechanism", question)
+            self.assertEqual({1, 2, 3}, {int(candidate["line"]) for candidate in candidates})
+            return {
+                "available": True,
+                "ranked_lines": [3, 2, 1],
+                "confidence": 0.77,
+            }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            sqlite_path = Path(tmp) / "source_index.sqlite"
+            messages = [
+                benchmark.standard_message_for_sqlite(
+                    source_id="source",
+                    line=1,
+                    role="user",
+                    text="The login safety mechanism came up again.",
+                ),
+                benchmark.standard_message_for_sqlite(
+                    source_id="source",
+                    line=2,
+                    role="assistant",
+                    text="Current source truth: we adopted the authentication flow with rotating tokens.",
+                ),
+                benchmark.standard_message_for_sqlite(
+                    source_id="source",
+                    line=3,
+                    role="assistant",
+                    text="Superseded source: we rejected the authentication flow as too heavy.",
+                ),
+            ]
+            benchmark.make_sqlite(sqlite_path, messages, anchors=[], turns=[])
+            case = {
+                "case_id": "wrong-stance",
+                "dataset": "synthetic",
+                "case_type": "cross_vocabulary_wrong_stance_control",
+                "source_id_sha1": "source",
+                "question_id_sha1": "question",
+                "query": "Which login safety mechanism did we adopt?",
+                "query_sha1": "query",
+                "query_terms": ["login", "safety", "mechanism"],
+                "sqlite_path": sqlite_path,
+                "expected": {
+                    "lines": [2],
+                    "sessions": ["D1"],
+                    "wrong_stance_lines": [3],
+                    "line_to_session": {"1": "D1", "2": "D1", "3": "D1"},
+                    "has_line_evidence": True,
+                },
+            }
+
+            row = benchmark.evaluate_standard_retrieval_case(
+                case,
+                top_k=2,
+                candidate_limit=8,
+                context_radius=2,
+                include_private_text=False,
+                line_reranker_mode="custom",
+                line_reranker_fn=stale_first_reranker,
+                line_reranker_top_sessions=0,
+                line_reranker_max_candidates=8,
+            )
+
+        self.assertEqual(row["semantic_only_evidence_rank"], 2)
+        self.assertEqual(row["wrong_stance_semantic_rank"], 1)
+        self.assertTrue(row["wrong_stance_ranked_above_evidence"])
+        self.assertTrue(row["wrong_stance_rerank_top2"])
+        metrics = benchmark.summarize_standard_retrieval_results(
+            [row],
+            top_k=2,
+            context_radius=2,
+        )
+        self.assertEqual(metrics["wrong_stance_control_case_count"], 1)
+        self.assertEqual(metrics["wrong_stance_rerank_top2"], 1)
+        self.assertEqual(metrics["wrong_stance_rerank_rate_top2"], 1.0)
+
 
 if __name__ == "__main__":
     unittest.main()

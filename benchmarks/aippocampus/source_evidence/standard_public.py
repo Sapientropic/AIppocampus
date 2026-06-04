@@ -713,6 +713,7 @@ def evaluate_standard_retrieval_case(
         hits,
         expected_lines,
     )
+    evidence_hit_top_k = bool(evidence_rank and evidence_rank <= top_k)
     evidence_context_rank = rank_expected_line_context(
         hits,
         expected_lines=expected_lines,
@@ -736,7 +737,7 @@ def evaluate_standard_retrieval_case(
         "expected_session_count": len(expected.get("sessions") or []),
         "has_line_evidence": bool(expected.get("has_line_evidence")),
         "evidence_rank": evidence_rank,
-        f"evidence_hit_top{top_k}": bool(evidence_rank and evidence_rank <= top_k),
+        f"evidence_hit_top{top_k}": evidence_hit_top_k,
         "evidence_context_rank": evidence_context_rank,
         f"evidence_context_hit_top{top_k}": bool(
             evidence_context_rank and evidence_context_rank <= top_k
@@ -773,6 +774,10 @@ def evaluate_standard_retrieval_case(
         semantic_lines: list[int] = []
         reranker_payload: dict[str, Any] = {}
         reranker_errors: list[str] = []
+        source_joined_candidate_rank = rank_expected_line(candidates, expected_lines)
+        source_joined_candidate_contains_evidence = bool(
+            expected_lines & {int(candidate["line"]) for candidate in candidates}
+        )
         try:
             runner = line_reranker_fn or run_semantic_line_reranker
             reranker_payload = runner(
@@ -790,6 +795,29 @@ def evaluate_standard_retrieval_case(
         semantic_only_rank = rank_expected_line(
             [{"line": line} for line in semantic_lines[:top_k]],
             expected_lines,
+        )
+        semantic_only_hit_top_k = bool(semantic_only_rank and semantic_only_rank <= top_k)
+        wrong_stance_lines = {
+            int(value) for value in expected.get("wrong_stance_lines") or []
+        }
+        wrong_stance_semantic_rank = rank_expected_line(
+            [{"line": line} for line in semantic_lines],
+            wrong_stance_lines,
+        )
+        wrong_stance_ranked_above_evidence = bool(
+            wrong_stance_semantic_rank
+            and (
+                not semantic_only_rank
+                or int(wrong_stance_semantic_rank) < int(semantic_only_rank)
+            )
+        )
+        # Issue #309 measures whether an auxiliary source-joined route rescues a
+        # top-k lexical miss. This stays diagnostic: candidates are source rows,
+        # not user-visible evidence, until the owning path reopens clean source.
+        semantic_bridge_lift = bool(
+            not evidence_hit_top_k
+            and semantic_only_hit_top_k
+            and source_joined_candidate_contains_evidence
         )
         # Product-facing second stage is FTS-preserving: semantic ranking can
         # promote exact source rows inside the top-session/top-context boundary,
@@ -827,9 +855,20 @@ def evaluate_standard_retrieval_case(
                     reranker_payload.get("confidence")
                 ),
                 "line_reranker_usage": compact_usage(reranker_payload.get("usage") or {}),
+                "source_joined_candidate_contains_evidence": (
+                    source_joined_candidate_contains_evidence
+                ),
+                "source_joined_candidate_evidence_rank": source_joined_candidate_rank,
                 "semantic_only_evidence_rank": semantic_only_rank,
-                f"semantic_only_evidence_hit_top{top_k}": bool(
-                    semantic_only_rank and semantic_only_rank <= top_k
+                f"semantic_only_evidence_hit_top{top_k}": semantic_only_hit_top_k,
+                f"semantic_bridge_lift_top{top_k}": semantic_bridge_lift,
+                "wrong_stance_line_count": len(wrong_stance_lines),
+                "wrong_stance_semantic_rank": wrong_stance_semantic_rank,
+                "wrong_stance_ranked_above_evidence": wrong_stance_ranked_above_evidence,
+                f"wrong_stance_rerank_top{top_k}": bool(
+                    wrong_stance_ranked_above_evidence
+                    and wrong_stance_semantic_rank
+                    and int(wrong_stance_semantic_rank) <= top_k
                 ),
                 "reranked_evidence_rank": reranked_rank,
                 f"reranked_evidence_hit_top{top_k}": bool(
@@ -952,6 +991,24 @@ def summarize_standard_retrieval_results(
         ),
     }
     if reranker_cases:
+        source_joined_candidate_coverage = sum(
+            1
+            for row in reranker_cases
+            if row.get("source_joined_candidate_contains_evidence")
+        )
+        semantic_bridge_lifts = sum(
+            1 for row in reranker_cases if row.get(f"semantic_bridge_lift_top{top_k}")
+        )
+        wrong_stance_cases = [
+            row
+            for row in reranker_cases
+            if int(row.get("wrong_stance_line_count") or 0) > 0
+        ]
+        wrong_stance_reranks = sum(
+            1
+            for row in wrong_stance_cases
+            if row.get(f"wrong_stance_rerank_top{top_k}")
+        )
         semantic_only_mrr = round(
             sum(
                 reciprocal_rank(row.get("semantic_only_evidence_rank"))
@@ -994,6 +1051,13 @@ def summarize_standard_retrieval_results(
                     / len(reranker_cases),
                     2,
                 ),
+                "source_joined_candidate_evidence_coverage": (
+                    source_joined_candidate_coverage
+                ),
+                "source_joined_candidate_evidence_coverage_rate": safe_rate(
+                    source_joined_candidate_coverage,
+                    len(reranker_cases),
+                ),
                 "line_reranker_usage": compact_usage(reranker_usage),
                 f"semantic_only_evidence_hit_top{top_k}": semantic_only_hits,
                 f"semantic_only_evidence_miss_top{top_k}": len(reranker_cases)
@@ -1004,6 +1068,17 @@ def summarize_standard_retrieval_results(
                 ),
                 "semantic_only_evidence_mrr": semantic_only_mrr,
                 "semantic_only_evidence_mrr_delta": round(semantic_only_mrr - evidence_mrr, 4),
+                f"semantic_bridge_lift_top{top_k}": semantic_bridge_lifts,
+                f"semantic_bridge_lift_rate_top{top_k}": safe_rate(
+                    semantic_bridge_lifts,
+                    len(reranker_cases),
+                ),
+                "wrong_stance_control_case_count": len(wrong_stance_cases),
+                f"wrong_stance_rerank_top{top_k}": wrong_stance_reranks,
+                f"wrong_stance_rerank_rate_top{top_k}": safe_rate(
+                    wrong_stance_reranks,
+                    len(wrong_stance_cases),
+                ),
                 f"reranked_evidence_hit_top{top_k}": reranker_hits,
                 f"reranked_evidence_miss_top{top_k}": len(reranker_cases) - reranker_hits,
                 f"reranked_evidence_hit_rate_top{top_k}": safe_rate(
