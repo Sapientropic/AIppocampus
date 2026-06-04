@@ -13,16 +13,9 @@ ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
 TESTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(TESTS))
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
+sys.path.insert(0, str(SCRIPTS))
 
-import subconscious_review as review  # noqa: E402
-from aippocampus_runtime.subconscious import review_public_output  # noqa: E402
+from aippocampus_runtime.subconscious import review, review_public_output  # noqa: E402
 from redaction_fixtures import (  # noqa: E402
     FAKE_TEST_BEARER_TOKEN,
     FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER,
