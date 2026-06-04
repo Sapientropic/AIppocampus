@@ -3,7 +3,8 @@
     "aippocampus": {
       "command": "python",
       "args": [
-        "./skills/aippocampus/scripts/aippocampus_mcp_server.py"
+        "-c",
+        "import sys; sys.path.insert(0, './skills/aippocampus/scripts'); from aippocampus_runtime.mcp.server import main; raise SystemExit(main())"
       ]
     }
   }

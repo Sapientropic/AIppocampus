@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import sys
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,7 @@ from aippocampus_runtime.hooks.host_boundary import (
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
+DEFAULT_HOOK_MODULE = "aippocampus_runtime.hooks.prompt"
 DEFAULT_HOOK_TIMEOUT_SECONDS = 5
 # Keep the internal Python budget below the host timeout. If a future installer
 # raises the host timeout, this value can be raised deliberately; do not remove
@@ -53,15 +55,34 @@ def save_hooks(path: Path, data: dict[str, Any]) -> None:
     tmp.replace(path)
 
 
+def quote_powershell_double(value: str | Path) -> str:
+    text = str(value)
+    escaped = text.replace("`", "``").replace('"', '`"').replace("$", "`$")
+    return f'"{escaped}"'
+
+
 def command_for(
-    script: Path,
+    script: Path | None = None,
     *,
+    module: str = DEFAULT_HOOK_MODULE,
     log: bool = False,
     max_elapsed_ms: int = DEFAULT_HOOK_BUDGET_MS,
     semantic_timeout: float = DEFAULT_SEMANTIC_TIMEOUT_SECONDS,
 ) -> str:
-    command = f'"{Path(sys.executable).resolve()}" "{script.resolve()}"'
-    if os.name == "nt":
+    if script is None:
+        if os.name == "nt":
+            command = (
+                f"$env:PYTHONPATH={quote_powershell_double(SCRIPT_DIR)}; "
+                f"& {quote_powershell_double(Path(sys.executable).resolve())} -m {module}"
+            )
+        else:
+            command = (
+                f"PYTHONPATH={shlex.quote(str(SCRIPT_DIR))} "
+                f"{shlex.quote(str(Path(sys.executable).resolve()))} -m {module}"
+            )
+    else:
+        command = f'"{Path(sys.executable).resolve()}" "{script.resolve()}"'
+    if os.name == "nt" and script is not None:
         # Codex Desktop executes hook command strings through PowerShell on
         # Windows. A quoted executable at the start of the line is parsed as a
         # string expression and exits with code 1; the call operator keeps
@@ -77,8 +98,9 @@ def command_for(
 
 
 def ambient_hook(
-    script: Path,
+    script: Path | None = None,
     *,
+    module: str = DEFAULT_HOOK_MODULE,
     timeout: int,
     log: bool = False,
     max_elapsed_ms: int = DEFAULT_HOOK_BUDGET_MS,
@@ -88,6 +110,7 @@ def ambient_hook(
         "type": "command",
         "command": command_for(
             script,
+            module=module,
             log=log,
             max_elapsed_ms=max_elapsed_ms,
             semantic_timeout=semantic_timeout,
@@ -96,15 +119,21 @@ def ambient_hook(
     }
 
 
-def is_ambient_handler(handler: dict[str, Any], script: Path) -> bool:
+def is_ambient_handler(
+    handler: dict[str, Any],
+    script: Path | None = None,
+    *,
+    module: str = DEFAULT_HOOK_MODULE,
+) -> bool:
     command = str(handler.get("command") or "")
-    script_resolved = str(script.resolve())
+    script_resolved = str(script.resolve()) if script is not None else ""
     # Match both the new AIppocampus handler and the old thread-memory handler
     # so reinstalling upgrades hooks in-place instead of leaving duplicate
     # UserPromptSubmit entries pointing at a renamed script.
     return (
-        any(name in command for name in ("aippocampus_prompt_hook.py", "ambient_recall_hook.py"))
-        or script_resolved in command
+        bool(module and module in command)
+        or any(name in command for name in ("aippocampus_prompt_hook.py", "ambient_recall_hook.py"))
+        or bool(script_resolved and script_resolved in command)
     )
 
 
@@ -119,8 +148,9 @@ def user_prompt_groups(data: dict[str, Any]) -> list[dict[str, Any]]:
 
 def install(
     path: Path,
-    script: Path,
+    script: Path | None = None,
     *,
+    module: str = DEFAULT_HOOK_MODULE,
     timeout: int = DEFAULT_HOOK_TIMEOUT_SECONDS,
     log: bool = False,
     max_elapsed_ms: int = DEFAULT_HOOK_BUDGET_MS,
@@ -130,6 +160,7 @@ def install(
     groups = user_prompt_groups(data)
     target = ambient_hook(
         script,
+        module=module,
         timeout=timeout,
         log=log,
         max_elapsed_ms=max_elapsed_ms,
@@ -144,7 +175,7 @@ def install(
         existing = [
             handler
             for handler in handlers
-            if isinstance(handler, dict) and is_ambient_handler(handler, script)
+            if isinstance(handler, dict) and is_ambient_handler(handler, script, module=module)
         ]
         if existing:
             if len(existing) == 1 and existing[0] == target:
@@ -159,7 +190,10 @@ def install(
             group["hooks"] = [
                 handler
                 for handler in handlers
-                if not (isinstance(handler, dict) and is_ambient_handler(handler, script))
+                if not (
+                    isinstance(handler, dict)
+                    and is_ambient_handler(handler, script, module=module)
+                )
             ]
             changed = True
 
@@ -184,7 +218,12 @@ def install(
     )
 
 
-def uninstall(path: Path, script: Path) -> dict[str, Any]:
+def uninstall(
+    path: Path,
+    script: Path | None = None,
+    *,
+    module: str = DEFAULT_HOOK_MODULE,
+) -> dict[str, Any]:
     data = load_hooks(path)
     hooks = data.setdefault("hooks", {})
     groups = hooks.get("UserPromptSubmit")
@@ -204,7 +243,10 @@ def uninstall(path: Path, script: Path) -> dict[str, Any]:
         kept = [
             handler
             for handler in handlers
-            if not (isinstance(handler, dict) and is_ambient_handler(handler, script))
+            if not (
+                isinstance(handler, dict)
+                and is_ambient_handler(handler, script, module=module)
+            )
         ]
         if len(kept) != len(handlers):
             changed = True
@@ -224,8 +266,9 @@ def uninstall(path: Path, script: Path) -> dict[str, Any]:
 
 def status(
     path: Path,
-    script: Path,
+    script: Path | None = None,
     *,
+    module: str = DEFAULT_HOOK_MODULE,
     include_last: bool = False,
     log_path: Path | None = None,
     status_path: Path | None = None,
@@ -236,7 +279,7 @@ def status(
     commands: list[str] = []
     for group in groups if isinstance(groups, list) else []:
         for handler in group.get("hooks", []) if isinstance(group, dict) else []:
-            if isinstance(handler, dict) and is_ambient_handler(handler, script):
+            if isinstance(handler, dict) and is_ambient_handler(handler, script, module=module):
                 installed = True
                 commands.append(str(handler.get("command") or ""))
     result: dict[str, Any] = add_host_integration(
@@ -262,7 +305,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--codex-home", default=os.environ.get("CODEX_HOME") or str(codex_home()))
     parser.add_argument("--hooks-json")
-    parser.add_argument("--script", default=str(SCRIPT_DIR / "aippocampus_prompt_hook.py"))
+    parser.add_argument("--script", help="Override hook command with an explicit Python file path.")
+    parser.add_argument("--module", default=DEFAULT_HOOK_MODULE)
     parser.add_argument("--timeout", type=int, default=DEFAULT_HOOK_TIMEOUT_SECONDS)
     parser.add_argument("--max-elapsed-ms", type=int, default=DEFAULT_HOOK_BUDGET_MS)
     parser.add_argument(
@@ -285,22 +329,24 @@ def main(argv: list[str] | None = None) -> int:
 
     root = Path(args.codex_home).resolve()
     path = Path(args.hooks_json).resolve() if args.hooks_json else hooks_json_path(root)
-    script = Path(args.script).resolve()
+    script = Path(args.script).resolve() if args.script else None
     if args.action == "install":
         result = install(
             path,
             script,
+            module=args.module,
             timeout=args.timeout,
             log=args.log,
             max_elapsed_ms=args.max_elapsed_ms,
             semantic_timeout=args.semantic_timeout,
         )
     elif args.action == "uninstall":
-        result = uninstall(path, script)
+        result = uninstall(path, script, module=args.module)
     else:
         result = status(
             path,
             script,
+            module=args.module,
             include_last=args.last,
             log_path=Path(args.log_path).resolve() if args.log_path else None,
             status_path=Path(args.status_path).resolve() if args.status_path else None,

@@ -12,14 +12,14 @@ from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-CLI = SCRIPTS / "aippocampus_cli.py"
 sys.path.insert(0, str(SCRIPTS))
 
 
 class AippocampusCliTests(unittest.TestCase):
     def run_cli(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            [sys.executable, str(CLI), *args],
+            [sys.executable, "-m", "aippocampus_runtime.cli.facade", *args],
+            cwd=SCRIPTS,
             text=True,
             encoding="utf-8",
             errors="replace",
@@ -39,9 +39,9 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("why-recall", proc.stdout)
         self.assertIn("hooks [kind]        Codex prompt/lifecycle hook status/install/uninstall", proc.stdout)
 
-    def test_top_level_script_is_compatibility_shim_for_package_facade(self) -> None:
-        import aippocampus_cli
+    def test_package_facade_is_the_public_python_entrypoint(self) -> None:
         from aippocampus_runtime.cli import facade
+        from aippocampus_runtime.cli import facade as aippocampus_cli
 
         self.assertIs(aippocampus_cli.main, facade.main)
         self.assertIs(aippocampus_cli.run_script, facade.run_script)

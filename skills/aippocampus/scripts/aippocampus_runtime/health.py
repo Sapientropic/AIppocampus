@@ -175,15 +175,27 @@ def quote_posix_double(value: str | Path) -> str:
     return f'"{escaped}"'
 
 
+SCRIPT_MODULES = {
+    "build_index.py": "aippocampus_runtime.recall.index_builder",
+    "build_clean_source.py": "aippocampus_runtime.source.clean_source",
+    "checkpoint.py": "aippocampus_runtime.artifacts.checkpoint",
+    "prepare_graphify_corpus.py": "aippocampus_runtime.ops.graphify_corpus",
+    "build_segments.py": "aippocampus_runtime.recall.segment_builder",
+}
+
+
 def recommended_script_command(script_name: str, cwd: str | Path) -> str:
+    module = SCRIPT_MODULES.get(script_name, Path(script_name).stem)
     if os.name == "nt":
         windows_cwd = str(PureWindowsPath(str(cwd)))
         return (
-            f'python "$env:CODEX_HOME\\skills\\aippocampus\\scripts\\{script_name}" '
+            '$env:PYTHONPATH="$env:CODEX_HOME\\skills\\aippocampus\\scripts"; '
+            f"python -m {module} "
             f'--cwd "{windows_cwd}"'
         )
     return (
-        f'python "$CODEX_HOME/skills/aippocampus/scripts/{script_name}" '
+        'PYTHONPATH="$CODEX_HOME/skills/aippocampus/scripts" '
+        f"python -m {module} "
         f"--cwd {quote_posix_double(cwd)}"
     )
 

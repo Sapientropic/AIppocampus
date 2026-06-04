@@ -61,7 +61,7 @@
 | six-axis question map | partial implementation | `aippocampus_runtime.question.tracking` 已有确定性 Phase 2 baseline，并开始把六轴用于 salience 与 adaptive threshold；offline pending-confirmation request、selected-fixture calibration、static-vs-adaptive threshold non-regression report，以及 optional live/model confirmation no-write smoke 已有首片；更大真实历史 / 用户校准仍未实现。 |
 | `question_link` / `theme_emergence` | partial implementation | `question_link` 可由 Phase 2 runner 写入 `subconscious_jobs.jsonl`；`theme_emergence.py` 已有 first deterministic Phase 3 slice，可从 recurring question links + concept graph 写入 source-backed `theme_candidate`，但 LLM naming、用户共鸣校准、scale sidecar 仍未实现。 |
 | `journey_tracking` P1-P3 core | first deterministic prototype | `aippocampus_runtime.journey.tracking` 已有 source-backed Waypoint/Journey 结构、保守多线程实例化 gate、状态/过期/反馈动作、`current_frontier` 导航候选和 fixture replay smoke；`journey_tracking.py` 仅保留兼容 shim。Journey 仍未接入 live `theme_candidate` 输出，真实历史 Journey 质量仍未实现。 |
-| Dream runtime substrate + bounded sleep-cycle worker path | bounded runtime prototype | `compensatory_dream.py` 已能从 source-backed 单线程 extraction rows 生成 adjudication-only `dream_synthesized` 补偿性候选，并为每条 bridge claim 保留同线程 source refs；`aippocampus_runtime.dream.input_pack` 可把 source-backed question links / Journey rows 与 ambient residue 弱提示打成跨线程 dream input pack；`aippocampus_runtime.dream.working_memory` 会在后台 structural adjudication 后才允许 dream hypothesis 进入 working memory；`dream_real_history_eval.py` 已能选 real-history packs，跑 compensatory/amplification worker，并量化相对 plain rows 的结构性 recall/reflection substrate delta；`aippocampus_runtime.dream.worker` 覆盖 bounded model-backed compensatory/amplification/prospective worker 与 active-imagination sandbox 合同；`aippocampus_runtime.dream.sleep_cycle` 提供 detached background staging path。仍不能声称 live provider Dream 质量、predictive validity、active-imagination usefulness、私有真实历史 dream 质量，或用户可感知 recall/reflection lift；这些仍归 #163。 |
+| Dream runtime substrate + bounded sleep-cycle worker path | bounded runtime prototype | `aippocampus_runtime.dream.compensatory` 已能从 source-backed 单线程 extraction rows 生成 adjudication-only `dream_synthesized` 补偿性候选，并为每条 bridge claim 保留同线程 source refs；`aippocampus_runtime.dream.input_pack` 可把 source-backed question links / Journey rows 与 ambient residue 弱提示打成跨线程 dream input pack；`aippocampus_runtime.dream.working_memory` 会在后台 structural adjudication 后才允许 dream hypothesis 进入 working memory；`aippocampus_runtime.dream.real_history_eval` 已能选 real-history packs，跑 compensatory/amplification worker，并量化相对 plain rows 的结构性 recall/reflection substrate delta；`aippocampus_runtime.dream.worker` 覆盖 bounded model-backed compensatory/amplification/prospective worker 与 active-imagination sandbox 合同；`aippocampus_runtime.dream.sleep_cycle` 提供 detached background staging path。仍不能声称 live provider Dream 质量、predictive validity、active-imagination usefulness、私有真实历史 dream 质量，或用户可感知 recall/reflection lift；这些仍归 #163。 |
 | reflection-space topology/feedback MVP | first deterministic prototype | `aippocampus_runtime.reflection.space` 已能把 Journey/Waypoint/current_frontier 生成可检查拓扑，并把 recall 效果、转折点、用户纠正和 merge/revive/abandon 反馈转换为 ranking/confidence/visibility 调整；`reflection_space.py` 仅保留兼容 shim。视觉 polish、真实用户行为变化和 AAR runtime enforcement 仍未实现。 |
 | dynamic separation/completion threshold | first deterministic prototype | `aippocampus_runtime.question.tracking` 会按六轴兼容/冲突调整 strong/borderline 阈值，并跳过低信息 salience 候选；`benchmark_question_tracking_calibration.py` 覆盖 selected fixtures，并报告相对静态 strong-threshold baseline 的 missed-positive / merged-negative delta；真实语义阈值调参仍需要更多 clean-source 样本。 |
 | reconsolidation queue / retrieval-count update | proposed | `working_memory.jsonl` 和 router 提供骨架，但 hook 侧还未记录 retrieval lifecycle。 |
@@ -199,7 +199,7 @@ AIppocampus 的 `working_memory.jsonl` + `subconscious_review.py` + `memory_cand
 
 **具体工程路径**：
 
-1. **检索标记（Deterministic cell）**：在 `aippocampus_prompt_hook.py` 中，当某条 working memory 被检索并注入当前 prompt 时，记录 `last_retrieved_at`、`retrieval_count` 和当前 source turn id。不要直接原地改写正式记忆；先写 append-only activation event。
+1. **检索标记（Deterministic cell）**：在 `aippocampus_runtime.hooks.prompt` 中，当某条 working memory 被检索并注入当前 prompt 时，记录 `last_retrieved_at`、`retrieval_count` 和当前 source turn id。不要直接原地改写正式记忆；先写 append-only activation event。
 
 2. **再巩固队列（Microcircuit）**：每次 hook 运行后，被检索到的记忆进入 `reconsolidation_queue`。这是一个轻量的 append-only 列表，记录「哪些记忆在当前对话中被激活了」。
 
@@ -263,7 +263,7 @@ slice；但它还不是 predictive / preplay runtime。预激活应建立在 Pha
    - 这些母题对应的 `source_refs` 和 `frontier_markers` 是什么？
    - 生成 `finding_kind="preplay_candidate"`，包含预测的母题和预加载的 source refs
 
-4. **状态依赖检索（Hook 层）**：在 `aippocampus_prompt_hook.py` 中，检索不仅匹配 query embedding，还匹配当前 `cognitive_state_vector`：
+4. **状态依赖检索（Hook 层）**：在 `aippocampus_runtime.hooks.prompt` 中，检索不仅匹配 query embedding，还匹配当前 `cognitive_state_vector`：
    - 优先检索与当前 `phase_context` 和 `intent_orientation` **兼容**的记忆
    - 如果 query 模糊（如 "帮我看看这个"），使用状态向量作为隐式路由信号
 

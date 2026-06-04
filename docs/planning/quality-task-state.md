@@ -21,8 +21,8 @@ artifact_index:
   - docs/evidence/readiness/public-readiness-verification.md
   - docs/planning/standalone-binary-packaging.md
   - skills/aippocampus/scripts/conversation_sources/
-  - skills/aippocampus/scripts/build_clean_source.py
-  - skills/aippocampus/scripts/onboard.py
+  - skills/aippocampus/scripts/aippocampus_runtime/source/clean_source.py
+  - skills/aippocampus/scripts/aippocampus_runtime/onboarding/facade.py
   - tools/aippocampus/package_windows_binary.py
   - tests/aippocampus/
 worker_plan: "subagents used for Claude MCP audit, Windows binary packaging, and issue evidence audit"

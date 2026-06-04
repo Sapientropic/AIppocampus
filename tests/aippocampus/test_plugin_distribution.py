@@ -36,9 +36,9 @@ class PluginDistributionTests(unittest.TestCase):
 
         server = mcp_config["mcpServers"]["aippocampus"]
         self.assertEqual(server["command"], "python")
-        self.assertIn("./skills/aippocampus/scripts/aippocampus_mcp_server.py", server["args"])
+        self.assertIn("aippocampus_runtime.mcp.server", " ".join(server["args"]))
 
-    def test_build_package_copies_skill_mcp_config_and_hook_installers(self) -> None:
+    def test_build_package_copies_skill_mcp_config_and_package_hook_owners(self) -> None:
         output = REPO_ROOT / "dist" / "test-aippocampus-plugin"
         try:
             result = build_plugin_package.build_package(REPO_ROOT, output)
@@ -48,9 +48,18 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertTrue((built_root / ".codex-plugin" / "plugin.json").exists())
             self.assertTrue((built_root / ".mcp.json").exists())
             self.assertTrue((built_root / "skills" / "aippocampus" / "SKILL.md").exists())
+            self.assertFalse(
+                (built_root / "skills" / "aippocampus" / "scripts" / "aippocampus_mcp_server.py").exists()
+            )
             self.assertTrue(
                 (
-                    built_root / "skills" / "aippocampus" / "scripts" / "aippocampus_mcp_server.py"
+                    built_root
+                    / "skills"
+                    / "aippocampus"
+                    / "scripts"
+                    / "aippocampus_runtime"
+                    / "hooks"
+                    / "install_prompt.py"
                 ).exists()
             )
             self.assertTrue(
@@ -59,16 +68,9 @@ class PluginDistributionTests(unittest.TestCase):
                     / "skills"
                     / "aippocampus"
                     / "scripts"
-                    / "install_aippocampus_prompt_hook.py"
-                ).exists()
-            )
-            self.assertTrue(
-                (
-                    built_root
-                    / "skills"
-                    / "aippocampus"
-                    / "scripts"
-                    / "install_aippocampus_lifecycle_hook.py"
+                    / "aippocampus_runtime"
+                    / "hooks"
+                    / "install_lifecycle.py"
                 ).exists()
             )
             self.assertFalse((built_root / "skills" / "aippocampus" / "__pycache__").exists())

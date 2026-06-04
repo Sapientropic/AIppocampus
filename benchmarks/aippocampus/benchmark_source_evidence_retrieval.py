@@ -26,7 +26,7 @@ import smoke_source_evidence_recall_eval as source_evidence_eval
 
 import benchmark_fts5_recall as fts5_benchmark
 import sharegpt_sampling
-from build_index import make_sqlite
+from aippocampus_runtime.recall.index_builder import make_sqlite
 from source_evidence.defaults import (
     DEFAULT_FTS5_CASES,
     DEFAULT_FTS5_MIN_CASES,

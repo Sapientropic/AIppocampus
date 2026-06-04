@@ -18,7 +18,7 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 import benchmark_fts5_recall as benchmark  # noqa: E402
-from build_index import make_sqlite  # noqa: E402
+from aippocampus_runtime.recall.index_builder import make_sqlite  # noqa: E402
 
 
 def write_jsonl(path: Path, rows: list[dict]) -> None:

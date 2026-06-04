@@ -22,27 +22,27 @@ import _paths
 
 _paths.ensure_paths()
 
+from aippocampus_runtime.core import (
+    aippocampus_registry_dir,
+    compact_text,
+    deepseek_cache_metrics_from_usage,
+    sanitize_external_model_payload,
+)
+from aippocampus_runtime.model.routing import resolve_model_route
+from aippocampus_runtime.registry.api import load_registry
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
 from aippocampus_runtime.source.registry_paths import resolve_registry_member_path
 from aippocampus_runtime.source.semantic_scope_labels import (
     clean_messages_by_id,
     load_semantic_scope_labels,
 )
-from aippocampuslib import (
-    aippocampus_registry_dir,
-    compact_text,
-    deepseek_cache_metrics_from_usage,
-    sanitize_external_model_payload,
-)
-from deepseek_model_routing import resolve_model_route
-from registry import load_registry
-from semantic_scope_source_review_core import (
+from aippocampus_runtime.source.semantic_scope_source_review_core import (
     LABEL_GUIDANCE,
     parse_agent_action,
     response_content,
 )
-from subconscious_runtime import add_usage, call_chat_json, compact_usage
-from subconscious_worker import DEFAULT_BASE_URL
+from aippocampus_runtime.subconscious.runtime import add_usage, call_chat_json, compact_usage
+from aippocampus_runtime.subconscious.worker import DEFAULT_BASE_URL
 
 PROMPT_KIND = "semantic_scope_label_source_review"
 

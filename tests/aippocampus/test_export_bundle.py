@@ -12,7 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-import export_bundle  # noqa: E402
+from aippocampus_runtime.artifacts import export_bundle as export_bundle  # noqa: E402
 from aippocampus_runtime.artifacts import export_bundle as packaged_export_bundle  # noqa: E402
 
 

@@ -11,7 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-import aippocampus_maintenance as maintenance  # noqa: E402
+from aippocampus_runtime.ops import maintenance as maintenance  # noqa: E402
 
 
 class AippocampusMaintenanceTests(unittest.TestCase):
@@ -42,15 +42,19 @@ class AippocampusMaintenanceTests(unittest.TestCase):
             },
         ]
 
+        def module_for(cmd: list[str]) -> str:
+            return cmd[2] if len(cmd) > 2 and cmd[1] == "-m" else Path(cmd[1]).stem
+
         def fake_json(cmd: list[str]) -> tuple[int, dict | None, str, str]:
-            if "aippocampus_health.py" in cmd[1]:
+            module = module_for(cmd)
+            if module == "aippocampus_runtime.health":
                 return 0, health_calls.pop(0), "{}", ""
-            if "build_cognitive_map.py" in cmd[1]:
+            if module == "aippocampus_runtime.navigation.cognitive_map":
                 return 0, {"ok": True}, "{}", ""
             self.fail(f"unexpected JSON command: {cmd}")
 
         def fake_text(cmd: list[str]) -> tuple[int, str, str]:
-            if "build_index.py" in cmd[1]:
+            if module_for(cmd) == "aippocampus_runtime.recall.index_builder":
                 return 3, "", "index writer locked"
             self.fail(f"unexpected text command: {cmd}")
 
@@ -113,12 +117,16 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         }
         health_calls = [stale_health, stale_health, stale_health]
 
+        def module_for(cmd: list[str]) -> str:
+            return cmd[2] if len(cmd) > 2 and cmd[1] == "-m" else Path(cmd[1]).stem
+
         def fake_json(cmd: list[str]) -> tuple[int, dict | None, str, str]:
-            if "aippocampus_health.py" in cmd[1]:
+            module = module_for(cmd)
+            if module == "aippocampus_runtime.health":
                 return 0, health_calls.pop(0), "{}", ""
-            if "build_cognitive_map.py" in cmd[1]:
+            if module == "aippocampus_runtime.navigation.cognitive_map":
                 return 0, {"ok": True}, "{}", ""
-            if "prepare_graphify_corpus.py" in cmd[1]:
+            if module == "aippocampus_runtime.ops.graphify_corpus":
                 self.fail("Graphify refresh should wait for a successful index rebuild")
             self.fail(f"unexpected JSON command: {cmd}")
 

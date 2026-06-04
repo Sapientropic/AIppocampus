@@ -25,7 +25,7 @@ import _paths
 
 _paths.ensure_paths()
 
-from aippocampuslib import benchmark_text_is_sensitive
+from aippocampus_runtime.core import benchmark_text_is_sensitive
 
 SCHEMA_VERSION = 1
 PORTRAIT_KIND = "aippocampus_cognitive_portrait"

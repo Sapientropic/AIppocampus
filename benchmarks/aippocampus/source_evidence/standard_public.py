@@ -13,12 +13,17 @@ from pathlib import Path
 from typing import Any
 
 import benchmark_fts5_recall as fts5_benchmark
-from aippocampuslib import compact_text
+from aippocampus_runtime.core import compact_text
+from aippocampus_runtime.recall.index_builder import make_sqlite
+from aippocampus_runtime.recall.retrieval import split_query_terms
+from aippocampus_runtime.subconscious.runtime import add_usage, call_chat_json, compact_usage
+from aippocampus_runtime.subconscious.worker import (
+    DEFAULT_BASE_URL,
+    DEFAULT_MODEL,
+    clamp_confidence,
+    parse_model_json,
+)
 from benchmark_statistics import binomial_rate_report
-from build_index import make_sqlite
-from retrieval import split_query_terms
-from subconscious_runtime import add_usage, call_chat_json, compact_usage
-from subconscious_worker import DEFAULT_BASE_URL, DEFAULT_MODEL, clamp_confidence, parse_model_json
 
 from .defaults import (
     DEFAULT_STANDARD_DATASET,

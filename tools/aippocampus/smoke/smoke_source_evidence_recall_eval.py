@@ -21,7 +21,18 @@ import _paths
 
 _paths.ensure_paths()
 
+from aippocampus_runtime.core import aippocampus_registry_dir
 from aippocampus_runtime.navigation.project_timeline import build_project_timeline
+from aippocampus_runtime.recall.retrieval import (
+    GENERIC_ANCHOR_TERMS,
+    split_query_terms,
+    unique_preserve,
+)
+from aippocampus_runtime.registry.api import (
+    deep_search_entry_result,
+    entry_search_score,
+    load_registry,
+)
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
 from aippocampus_runtime.source.registry_paths import resolve_registry_member_path
 from aippocampus_runtime.source.search import iter_clean_messages, score_message
@@ -30,10 +41,7 @@ from aippocampus_runtime.source.semantic_scope_labels import (
     merged_scope_labels,
     semantic_labels_for_message,
 )
-from aippocampuslib import aippocampus_registry_dir
 from benchmark_statistics import binomial_rate_report
-from registry import deep_search_entry_result, entry_search_score, load_registry
-from retrieval import GENERIC_ANCHOR_TERMS, split_query_terms, unique_preserve
 
 PROMPT_KIND = "fuzzy_life_wide_source_evidence"
 NON_TECHNICAL_LABELS = tuple(label for label in SCOPE_LABEL_ORDER if label != "technical_work")

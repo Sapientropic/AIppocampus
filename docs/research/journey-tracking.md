@@ -10,8 +10,7 @@ Related: [dream-task-design.md](dream-task-design.md) — 不 impose 叙事结�
 ## Implementation Status
 
 Current code implements the source-backed P1-P3 Journey core in
-`skills/aippocampus/scripts/aippocampus_runtime/journey/tracking.py`, with
-`journey_tracking.py` kept as the direct-script/import compatibility shim:
+`skills/aippocampus/scripts/aippocampus_runtime/journey/tracking.py`:
 
 - P1: `Waypoint`, `Journey`, and `JourneyFeedback` structures; append-only
   waypoint history; `traveling` / `camped` / `arrived` / `abandoned` states;
@@ -35,7 +34,7 @@ Still designed/deferred: Journey instantiation from live `theme_candidate` rows,
 foreground hook journey hints, question-tracking P4 integration, HexArc
 structural matching, graph random walks, predictive replay, and private
 real-history journey quality claims. The first reflection-space consumer now exists in
-`skills/aippocampus/scripts/reflection_space.py`, but it is an inspectable
+`skills/aippocampus/scripts/aippocampus_runtime/reflection/space.py`, but it is an inspectable
 topology/feedback helper only, not a polished UI or foreground Journey hint
 runtime.
 

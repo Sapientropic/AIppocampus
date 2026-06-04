@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Inventory top-level runtime compatibility surfaces.
+"""Inventory accidental top-level runtime compatibility surfaces.
 
-This is intentionally a lightweight maintainer report, not a deletion bot.
-AIppocampus still supports direct script paths in installed skills, so a shim
-only becomes deletable after docs, installer paths, and first-party imports have
-moved to the package owner.
+The supported runtime now lives under package owners plus the public
+``aippocampus`` console facade. Any ``skills/aippocampus/scripts/*.py`` file is
+treated as residual shim debt unless a future migration deliberately reopens a
+flat entrypoint.
 """
 
 from __future__ import annotations
@@ -79,6 +79,9 @@ DOC_REFERENCE_ROOTS = (
     "docs",
     "skills/aippocampus/SKILL.md",
     "skills/aippocampus/references",
+)
+ARCHIVED_DOC_PREFIXES = (
+    "docs/archive/",
 )
 DIRECT_PATH_REFERENCE_ROOTS = (
     ".github",
@@ -226,6 +229,12 @@ def _relative_posix(repo_root: Path, path: Path) -> str:
         return path.as_posix()
 
 
+def _is_archived_doc_reference(rel_path: str) -> bool:
+    # Archived plans preserve provenance for humans; they should not keep
+    # legacy direct script shims alive after active docs and code have migrated.
+    return any(rel_path.startswith(prefix) for prefix in ARCHIVED_DOC_PREFIXES)
+
+
 def _iter_existing_files(repo_root: Path, roots: tuple[str, ...], pattern: str) -> list[Path]:
     files: list[Path] = []
     for rel_root in roots:
@@ -360,6 +369,8 @@ def _build_reference_index(repo_root: Path, top_level_paths: list[Path]) -> Refe
     ]
     for path in sorted(doc_files):
         rel = _relative_posix(repo_root, path)
+        if _is_archived_doc_reference(rel):
+            continue
         for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
             for script_name in script_names:
                 if _doc_line_is_direct_invocation(line, script_name):

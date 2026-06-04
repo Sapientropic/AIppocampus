@@ -20,8 +20,8 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import build_semantic_scope_labels as builder  # noqa: E402
-import semantic_scope_labels as semantic  # noqa: E402
+from aippocampus_runtime.source import semantic_scope_builder as builder  # noqa: E402
+from aippocampus_runtime.source import semantic_scope_labels as semantic  # noqa: E402
 
 
 class SemanticScopeLabelsTests(unittest.TestCase):

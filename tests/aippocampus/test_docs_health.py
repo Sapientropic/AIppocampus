@@ -795,12 +795,16 @@ class DocsHealthTests(unittest.TestCase):
             architecture = repo / "docs" / "architecture"
             architecture.mkdir(parents=True)
             (architecture / "runtime-script-map.md").write_text(
-                "aippocampus_prompt_hook.py\n", encoding="utf-8"
+                "aippocampus_runtime/hooks/prompt.py\n", encoding="utf-8"
             )
 
             issues = docs_health.runtime_script_map_issues(repo)
 
-        self.assertIn("runtime script map missing high-risk script: sync_bundle.py", issues)
+        self.assertIn(
+            "runtime script map missing high-risk runtime entry: "
+            "aippocampus_runtime/sync/bundle.py",
+            issues,
+        )
 
     def test_runtime_script_map_reports_missing_navigation_sections(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

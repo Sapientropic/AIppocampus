@@ -26,16 +26,13 @@ import _paths
 
 _paths.ensure_paths()
 
-from aippocampus_runtime.source.search import iter_clean_messages
-from aippocampuslib import (
+from aippocampus_runtime.core import (
     benchmark_text_is_sensitive,
     compact_text,
     is_injected_instruction_text,
     now_utc,
 )
-from registry import load_registry as load_thread_registry
-from registry import registry_paths
-from retrieval import (
+from aippocampus_runtime.recall.retrieval import (
     fts_query,
     message_select_columns,
     search_hybrid_index,
@@ -43,6 +40,9 @@ from retrieval import (
     sqlite_has_table,
     unique_preserve,
 )
+from aippocampus_runtime.registry.api import load_registry as load_thread_registry
+from aippocampus_runtime.registry.api import registry_paths
+from aippocampus_runtime.source.search import iter_clean_messages
 
 DEFAULT_CASES = 80
 DEFAULT_SEED = 20260527

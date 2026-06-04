@@ -70,7 +70,7 @@ Completed foundation:
 - The default sync bundle policy does not copy generated SQLite indexes as
   mandatory portable source; SQLite, FTS, graph, and semantic/vector sidecars
   remain rebuildable local caches unless a command explicitly exports them.
-- `sync_bundle.py` now writes clean-source JSONL through a top-level
+- `aippocampus_runtime.sync.bundle` now writes clean-source JSONL through a top-level
   content-addressed chunk store. The sync manifest carries
   `clean_source_delta.kind=content_addressed_clean_source_chunks`; each logical
   clean-source file records size, whole-file SHA-256, and ordered chunk entries
@@ -137,7 +137,7 @@ Completed foundation:
    - Status: `search_segments.py` owns the first segment merge, executable
      segment fanout caps, structured unavailable/build-required status, and
      explicit full-fanout diagnostics. The first cross-signal contract now lives in
-     `skills/aippocampus/scripts/retrieval_score_fusion.py`; it keeps exact
+     `skills/aippocampus/scripts/aippocampus_runtime/recall/score_fusion.py`; it keeps exact
      text recall text-heavy, allows vector-heavy question-tracking contexts and
      graph-heavy theme contexts, and refuses candidates that cannot join back to
      stable source ids or source refs.
@@ -187,7 +187,7 @@ Completed foundation:
    - Add a registry-level query planner that narrows candidate threads, days,
      and segments before opening SQLite files.
    - Status: first content-addressed clean-source chunk/delta sync is
-     implemented in `sync_bundle.py`; first registry-metadata query planner and
+     implemented in `aippocampus_runtime.sync.bundle`; first registry-metadata query planner and
      fanout budget reporting are implemented in `storage_capacity_report.py`.
      Executable per-thread segment fanout budgets are implemented in
      `search_segments.py`; report-only capacity planning and actual SQLite
@@ -261,7 +261,7 @@ Completed foundation:
 ## Cross-references
 
 - Scoring fusion contract: `wukong-mining-notes.md` and
-  `skills/aippocampus/scripts/retrieval_score_fusion.py`
+  `skills/aippocampus/scripts/aippocampus_runtime/recall/score_fusion.py`
 - Cognitive runtime layers: `cognitive-runtime-architecture.md`
 - Question tracking design: `question-tracking-subconscious.md`
 - TurboVec evaluation: planned note, no standalone file yet. Current rationale

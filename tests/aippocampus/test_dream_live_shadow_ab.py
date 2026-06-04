@@ -18,8 +18,8 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import dream_live_shadow_ab as shadow  # noqa: E402
-from model_client import ChatClientConfig  # noqa: E402
+from aippocampus_runtime.dream import live_shadow_ab as shadow  # noqa: E402
+from aippocampus_runtime.model.client import ChatClientConfig  # noqa: E402
 
 
 class DreamLiveShadowABTests(unittest.TestCase):

@@ -15,7 +15,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import reflection_space as reflection  # noqa: E402
+from aippocampus_runtime.reflection import space as reflection  # noqa: E402
 
 
 class ReflectionSpaceTests(unittest.TestCase):

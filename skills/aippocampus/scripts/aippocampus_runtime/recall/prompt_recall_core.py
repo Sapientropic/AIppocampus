@@ -2,7 +2,7 @@
 """Recall scoring, candidate selection, and foreground-gate policy.
 
 This module is imported by `prompt_recall_decision.py`. Keep Codex hook
-stdin/stdout glue in `aippocampus_prompt_hook.py` so the foreground hook
+stdin/stdout glue in `aippocampus_runtime.hooks.prompt` so the foreground hook
 entrypoint stays small and auditable.
 """
 

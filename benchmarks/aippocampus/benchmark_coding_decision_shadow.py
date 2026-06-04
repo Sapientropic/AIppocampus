@@ -22,7 +22,7 @@ import _paths
 _paths.ensure_paths()
 
 import benchmark_compaction_continuity as compaction_benchmark
-import coding_decision_events as decisions
+from aippocampus_runtime.coding import decision_events as decisions
 from aippocampus_runtime.coding import host_contract
 
 SCHEMA_VERSION = 1

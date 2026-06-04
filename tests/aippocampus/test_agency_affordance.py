@@ -11,7 +11,7 @@ ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-import agency_affordance as agency  # noqa: E402
+from aippocampus_runtime.coding import agency_affordance as agency  # noqa: E402
 
 
 def source_ref(line: int = 10, *, message_id: str | None = None) -> dict[str, object]:

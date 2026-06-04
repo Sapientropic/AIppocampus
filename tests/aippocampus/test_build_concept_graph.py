@@ -17,7 +17,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import build_concept_graph as graph  # noqa: E402
+from aippocampus_runtime.navigation import concept_graph as graph  # noqa: E402
 
 
 class ConceptGraphTests(unittest.TestCase):

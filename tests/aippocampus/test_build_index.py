@@ -15,9 +15,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-import artifact_publish  # noqa: E402
-import build_index  # noqa: E402
-import search_rollout  # noqa: E402
+from aippocampus_runtime.artifacts import publish as artifact_publish  # noqa: E402
+from aippocampus_runtime.recall import index_builder as build_index  # noqa: E402
+from aippocampus_runtime.recall import rollout_search as search_rollout  # noqa: E402
 from tests.aippocampus.redaction_fixtures import (  # noqa: E402
     fake_test_database_dsn,
     fake_test_email,

@@ -259,7 +259,13 @@ def build_command_plan(
             "mcp_tool_list",
             [
                 python,
-                str(repo_root / "skills" / "aippocampus" / "scripts" / "aippocampus_mcp_server.py"),
+                "-c",
+                (
+                    "import sys; "
+                    f"sys.path.insert(0, {str(repo_root / 'skills' / 'aippocampus' / 'scripts')!r}); "
+                    "from aippocampus_runtime.mcp.server import main; "
+                    "raise SystemExit(main())"
+                ),
                 "--list-tools",
             ],
             repo_root,
@@ -577,7 +583,7 @@ def run_semantic_scope_generation_smoke(repo_root: Path, run_id: str) -> dict[st
 
 def run_sync_smoke(repo_root: Path) -> dict[str, Any]:
     python = sys.executable
-    script = repo_root / "skills" / "aippocampus" / "scripts" / "sync_bundle.py"
+    scripts_dir = repo_root / "skills" / "aippocampus" / "scripts"
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         source_registry = root / "source-registry"
@@ -605,7 +611,8 @@ def run_sync_smoke(repo_root: Path) -> dict[str, Any]:
         for command in ("push", "status", "repair", "pull"):
             args = [
                 python,
-                str(script),
+                "-m",
+                "aippocampus_runtime.sync.bundle",
                 command,
                 "--sync-dir",
                 str(sync_dir),
@@ -615,7 +622,7 @@ def run_sync_smoke(repo_root: Path) -> dict[str, Any]:
             ]
             proc = subprocess.run(
                 args,
-                cwd=repo_root,
+                cwd=scripts_dir,
                 text=True,
                 encoding="utf-8",
                 errors="replace",

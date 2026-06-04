@@ -35,7 +35,7 @@ def rel_to_cwd(path: Path, cwd: Path) -> str:
 def run_build_index(cwd: Path, index_dir: Path, anchors: Path) -> dict:
     cmd = [
         sys.executable,
-        str(SCRIPT_DIR / "build_index.py"),
+        "-m", "aippocampus_runtime.recall.index_builder",
         "--cwd",
         str(cwd),
         "--output-dir",

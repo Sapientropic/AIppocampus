@@ -13,11 +13,11 @@ ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-import encrypted_sync_bundle  # noqa: E402
-import encrypted_sync_keys  # noqa: E402
-import encrypted_sync_migration  # noqa: E402
-import sync_contract  # noqa: E402
 from aippocampus_runtime.sync import bundle as sync_bundle  # noqa: E402
+from aippocampus_runtime.sync import contract as sync_contract  # noqa: E402
+from aippocampus_runtime.sync.encrypted import bundle as encrypted_sync_bundle  # noqa: E402
+from aippocampus_runtime.sync.encrypted import keys as encrypted_sync_keys  # noqa: E402
+from aippocampus_runtime.sync.encrypted import migration as encrypted_sync_migration  # noqa: E402
 
 
 class EncryptedSyncBundleTests(unittest.TestCase):
@@ -273,7 +273,7 @@ raise SystemExit(0)
         init_proc = subprocess.run(
             [
                 sys.executable,
-                str(SCRIPTS / "encrypted_sync_admin.py"),
+                "-m", "aippocampus_runtime.sync.encrypted.admin",
                 "key",
                 "init",
                 "--registry-dir",
@@ -292,7 +292,7 @@ raise SystemExit(0)
         recipient_proc = subprocess.run(
             [
                 sys.executable,
-                str(SCRIPTS / "encrypted_sync_admin.py"),
+                "-m", "aippocampus_runtime.sync.encrypted.admin",
                 "key",
                 "recipient",
                 "--registry-dir",

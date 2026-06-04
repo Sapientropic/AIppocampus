@@ -3,7 +3,7 @@
 
 This module inspects registry rows, manifests, and SQLite freshness. It must not
 repair artifacts, register rollouts, run frontier jobs, or write onboarding
-outputs; `onboard_codex.py` owns that orchestration.
+outputs; `aippocampus_runtime.onboarding.codex` owns that orchestration.
 """
 
 from __future__ import annotations

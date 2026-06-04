@@ -75,7 +75,7 @@ def ensure_segments(cwd: Path, rollout: str | None, manifest: Path, force: bool)
         return
     cmd = [
         sys.executable,
-        str(SCRIPT_DIR / "build_segments.py"),
+        "-m", "aippocampus_runtime.recall.segment_builder",
         "--cwd",
         str(cwd),
         "--output-dir",

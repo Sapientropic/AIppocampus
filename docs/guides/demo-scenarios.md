@@ -11,7 +11,7 @@ Demo `Cannot claim` lines are claim-boundary inputs for
 Use the public example bundle:
 
 ```sh
-python ./skills/aippocampus/scripts/search_clean_source.py "without pretending it has innate memory" --cwd . --clean-source-dir ./examples/public-memory-bundle/clean-source --json
+PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.source.search "without pretending it has innate memory" --cwd . --clean-source-dir ./examples/public-memory-bundle/clean-source --json
 ```
 
 Expected result: matches come from original visible clean-source text, not a
@@ -22,10 +22,10 @@ Cannot claim: that summaries or model-generated findings are the source.
 ## Scenario 2: Fuzzy Life-Topic Recall
 
 ```sh
-python ./skills/aippocampus/scripts/build_semantic_scope_labels.py --jobs-output ./examples/public-memory-bundle/registry/subconscious_jobs.jsonl --clean-source-dir ./examples/public-memory-bundle/clean-source --no-write --json
-python ./skills/aippocampus/scripts/search_clean_source.py "casual sparks" --cwd . --clean-source-dir ./examples/public-memory-bundle/clean-source --json
-python ./skills/aippocampus/scripts/search_clean_source.py "casual sparks" --cwd . --clean-source-dir ./examples/public-memory-bundle/clean-source --scope-label idea_seed --json
-python ./skills/aippocampus/scripts/search_clean_source.py "lighthouse metaphor pivot" --cwd . --clean-source-dir ./examples/public-memory-bundle/clean-source --scope-label personal_reflection --scope-label idea_seed --json
+PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.source.semantic_scope_builder --jobs-output ./examples/public-memory-bundle/registry/subconscious_jobs.jsonl --clean-source-dir ./examples/public-memory-bundle/clean-source --no-write --json
+PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.source.search "casual sparks" --cwd . --clean-source-dir ./examples/public-memory-bundle/clean-source --json
+PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.source.search "casual sparks" --cwd . --clean-source-dir ./examples/public-memory-bundle/clean-source --scope-label idea_seed --json
+PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.source.search "lighthouse metaphor pivot" --cwd . --clean-source-dir ./examples/public-memory-bundle/clean-source --scope-label personal_reflection --scope-label idea_seed --json
 ```
 
 Expected result: the public example surfaces a non-project idea seed. This
@@ -118,7 +118,7 @@ Build a source-backed project and life-wide timeline from the public example
 registry:
 
 ```sh
-python ./skills/aippocampus/scripts/build_project_timeline.py --registry ./examples/public-memory-bundle/registry/threads.json --output ./.tmp/public-project-timeline.json --json
+PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.navigation.project_timeline --registry ./examples/public-memory-bundle/registry/threads.json --output ./.tmp/public-project-timeline.json --json
 ```
 
 Expected result: the output contains a `life_wide` section with labeled turns
@@ -130,7 +130,7 @@ clean-source turns.
 ## Scenario 5: Project Continuity Recall
 
 ```sh
-python ./skills/aippocampus/scripts/aippocampus_mcp_server.py --list-tools
+PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.mcp.server --list-tools
 ```
 
 Expected result: `search_memory`, `recall_context`, `recall_deepen`, and
@@ -194,7 +194,7 @@ part of the fast deterministic path.
 ## Scenario 6d: Fresh-Thread Recall Arms
 
 ```sh
-python ./skills/aippocampus/scripts/fresh_thread_demo.py --flow website_cue --arm active_recall
+PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.recall.fresh_thread_demo --flow website_cue --arm active_recall
 python ./benchmarks/aippocampus/benchmark_fresh_thread_recall_demo.py --json --output ./.tmp/fresh-thread-recall-demo.json
 ```
 
@@ -215,7 +215,7 @@ be read as a prompt-keyword classifier.
 ## Scenario 7: Inspect MCP Tools
 
 ```sh
-python ./skills/aippocampus/scripts/aippocampus_mcp_server.py --list-tools
+PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.mcp.server --list-tools
 ```
 
 Expected result: the tool list includes `search_memory`, `recall_context`,
@@ -253,9 +253,9 @@ third-party machine installed the public package.
 Use a throwaway sync folder:
 
 ```sh
-python ./skills/aippocampus/scripts/sync_bundle.py push --registry-dir ./examples/public-memory-bundle/registry --sync-dir ./.tmp/demo-sync --json
-python ./skills/aippocampus/scripts/sync_bundle.py repair --sync-dir ./.tmp/demo-sync --json
-python ./skills/aippocampus/scripts/sync_bundle.py pull --sync-dir ./.tmp/demo-sync --registry-dir ./.tmp/demo-target-registry --json
+PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.bundle push --registry-dir ./examples/public-memory-bundle/registry --sync-dir ./.tmp/demo-sync --json
+PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.bundle repair --sync-dir ./.tmp/demo-sync --json
+PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.bundle pull --sync-dir ./.tmp/demo-sync --registry-dir ./.tmp/demo-target-registry --json
 ```
 
 Expected result: the sync manifest is valid and `raw_rollout_included` remains
@@ -323,8 +323,8 @@ Cannot claim: that every prompt should include personal history.
 Run hook status before installing anything:
 
 ```sh
-python "${CODEX_HOME}/skills/aippocampus/scripts/install_aippocampus_prompt_hook.py" status --json
-python "${CODEX_HOME}/skills/aippocampus/scripts/install_aippocampus_prompt_hook.py" status --last --json
+PYTHONPATH="${CODEX_HOME}/skills/aippocampus/scripts" python -m aippocampus_runtime.hooks.install_prompt status --json
+PYTHONPATH="${CODEX_HOME}/skills/aippocampus/scripts" python -m aippocampus_runtime.hooks.install_prompt status --last --json
 ```
 
 Expected result: status is observable without enabling the hook. `--last`
@@ -345,7 +345,7 @@ Cannot claim: that hooks are enabled by plugin install alone, or that a visible
 Use raw search only when clean source is insufficient:
 
 ```sh
-python "${CODEX_HOME}/skills/aippocampus/scripts/search_rollout.py" "keyword" --cwd .
+PYTHONPATH="${CODEX_HOME}/skills/aippocampus/scripts" python -m aippocampus_runtime.recall.rollout_search "keyword" --cwd .
 ```
 
 Expected result: raw audit remains an explicit operator action.

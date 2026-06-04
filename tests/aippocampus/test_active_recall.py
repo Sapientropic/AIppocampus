@@ -13,10 +13,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-import active_recall  # noqa: E402
-import retrieval  # noqa: E402
+from aippocampus_runtime.recall import active_recall as active_recall  # noqa: E402
 from aippocampus_runtime.recall import active_recall as packaged_active_recall  # noqa: E402
 from aippocampus_runtime.recall import active_recall_lock  # noqa: E402
+from aippocampus_runtime.recall import retrieval as retrieval  # noqa: E402
 
 
 class ActiveRecallTests(unittest.TestCase):

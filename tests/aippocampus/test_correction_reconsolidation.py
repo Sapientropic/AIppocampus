@@ -13,7 +13,7 @@ TESTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(TESTS))
 sys.path.insert(0, str(SCRIPTS))
 
-import correction_reconsolidation as corr  # noqa: E402
+from aippocampus_runtime.reflection import reconsolidation as corr  # noqa: E402
 from redaction_fixtures import (  # noqa: E402
     FAKE_TEST_BEARER_TOKEN,
     FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER,

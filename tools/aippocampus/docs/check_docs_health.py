@@ -79,53 +79,53 @@ DOCS_ROOT_ALLOWED_DIRECTORIES = {
 }
 
 REQUIRED_RUNTIME_MAP_SCRIPTS = [
-    "aippocampus_prompt_hook.py",
-    "aippocampus_lifecycle_hook.py",
-    "aippocampus_mcp_server.py",
-    "aippocampus_health.py",
-    "build_clean_source.py",
-    "build_index.py",
-    "build_segments.py",
-    "build_project_timeline.py",
-    "registry.py",
-    "registry_search.py",
-    "retrieval.py",
-    "search_clean_source.py",
-    "search_segments.py",
-    "retrieval_score_fusion.py",
-    "sync_bundle.py",
-    "sync_object_storage.py",
-    "encrypted_sync_bundle.py",
-    "sync_vault.py",
-    "subconscious_jobs.py",
-    "subconscious_scheduler.py",
-    "subconscious_worker.py",
-    "subconscious_review.py",
-    "compensatory_dream.py",
-    "dream_precision_policy.py",
-    "dream_one_sidedness.py",
-    "dream_retrospective_lifecycle.py",
-    "dream_sleep_cycle.py",
-    "theme_emergence.py",
-    "journey_tracking.py",
-    "reflection_space.py",
-    "memory_candidate_router.py",
-    "agency_affordance.py",
-    "coding_decision_events.py",
-    "coding_ticket_host_contract.py",
-    "coding_rejected_route_probes.py",
-    "correction_reconsolidation.py",
-    "model_client.py",
-    "deepseek_model_routing.py",
-    "semantic_recall_gate.py",
-    "warm_ambient_recall.py",
-    "ambient_warm_scheduler.py",
-    "ambient_recall_policy.py",
-    "ambient_thread_cache.py",
-    "question_confirmation_live.py",
-    "question_index_sidecar.py",
-    "question_health.py",
-    "question_resolution.py",
+    "aippocampus_runtime/hooks/prompt.py",
+    "aippocampus_runtime/hooks/lifecycle.py",
+    "aippocampus_runtime/mcp/server.py",
+    "aippocampus_runtime/health.py",
+    "aippocampus_runtime/source/clean_source.py",
+    "aippocampus_runtime/recall/index_builder.py",
+    "aippocampus_runtime/recall/segment_builder.py",
+    "aippocampus_runtime/navigation/project_timeline.py",
+    "aippocampus_runtime/registry/api.py",
+    "aippocampus_runtime/registry/search.py",
+    "aippocampus_runtime/recall/retrieval.py",
+    "aippocampus_runtime/source/search.py",
+    "aippocampus_runtime/recall/segment_search.py",
+    "aippocampus_runtime/recall/score_fusion.py",
+    "aippocampus_runtime/sync/bundle.py",
+    "aippocampus_runtime/sync/object_storage/cli.py",
+    "aippocampus_runtime/sync/encrypted/bundle.py",
+    "aippocampus_runtime/vault/sync.py",
+    "aippocampus_runtime/subconscious/jobs.py",
+    "aippocampus_runtime/subconscious/scheduler.py",
+    "aippocampus_runtime/subconscious/worker.py",
+    "aippocampus_runtime/subconscious/review.py",
+    "aippocampus_runtime/dream/compensatory.py",
+    "aippocampus_runtime/dream/precision_policy.py",
+    "aippocampus_runtime/dream/one_sidedness.py",
+    "aippocampus_runtime/dream/retrospective_lifecycle.py",
+    "aippocampus_runtime/dream/sleep_cycle.py",
+    "aippocampus_runtime/subconscious/theme_emergence.py",
+    "aippocampus_runtime/journey/tracking.py",
+    "aippocampus_runtime/reflection/space.py",
+    "aippocampus_runtime/subconscious/candidate_router.py",
+    "aippocampus_runtime/coding/agency_affordance.py",
+    "aippocampus_runtime/coding/decision_events.py",
+    "aippocampus_runtime/coding/host_contract.py",
+    "aippocampus_runtime/coding/rejected_route_probes.py",
+    "aippocampus_runtime/reflection/reconsolidation.py",
+    "aippocampus_runtime/model/client.py",
+    "aippocampus_runtime/model/routing.py",
+    "aippocampus_runtime/recall/semantic_recall_gate.py",
+    "aippocampus_runtime/warm_ambient/recall.py",
+    "aippocampus_runtime/warm_ambient/scheduler.py",
+    "aippocampus_runtime/warm_ambient/config.py",
+    "aippocampus_runtime/warm_ambient/diagnostics.py",
+    "aippocampus_runtime/question/confirmation_live.py",
+    "aippocampus_runtime/question/index_sidecar.py",
+    "aippocampus_runtime/question/health.py",
+    "aippocampus_runtime/subconscious/question_resolution.py",
 ]
 
 REQUIRED_RUNTIME_MAP_TERMS = {
@@ -142,14 +142,14 @@ REQUIRED_RUNTIME_MAP_TERMS = {
 
 REQUIRED_DREAM_PHASE1_CONTRACT_TERMS = {
     "### Implemented Phase 1 Contract": "dream task design missing implemented Phase 1 contract",
-    "skills/aippocampus/scripts/compensatory_dream.py": (
+    "skills/aippocampus/scripts/aippocampus_runtime/dream/compensatory.py": (
         "dream task design missing compensatory_dream implementation pointer"
     ),
     'finding_kind="dream_synthesized"': (
         "dream task design missing dream_synthesized output contract"
     ),
     'foreground_eligible=false': "dream task design missing foreground eligibility boundary",
-    "tests/aippocampus/test_compensatory_dream.py": (
+    "tests/aippocampus/test_aippocampus_runtime.dream.compensatory": (
         "dream task design missing executable contract test pointer"
     ),
     "### Live Dream Worker DeepSeek KV Cache Contract": (
@@ -365,7 +365,7 @@ REQUIRED_PUBLIC_API_CONTRACT_TERMS = {
     "`aippocampus import conversation --format generic-jsonl --input <path>`": (
         "public API doc missing provider-neutral conversation import command"
     ),
-    "`registry.py register-source --provider generic-jsonl --input <path>`": (
+    "`python -m aippocampus_runtime.registry.api register-source --provider generic-jsonl --input <path>`": (
         "public API doc missing registry register-source command"
     ),
     "not a generic arbitrary-file ingest endpoint": (
@@ -697,7 +697,7 @@ def runtime_script_map_issues(repo_root: Path) -> list[str]:
     text = runtime_map.read_text(encoding="utf-8")
     for script in REQUIRED_RUNTIME_MAP_SCRIPTS:
         if script not in text:
-            issues.append(f"runtime script map missing high-risk script: {script}")
+            issues.append(f"runtime script map missing high-risk runtime entry: {script}")
     for term, issue in REQUIRED_RUNTIME_MAP_TERMS.items():
         if term not in text:
             issues.append(issue)

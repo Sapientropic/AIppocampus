@@ -22,7 +22,7 @@ SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-import question_index_sidecar as sidecar  # noqa: E402
+from aippocampus_runtime.question import index_sidecar as sidecar  # noqa: E402
 from aippocampus_runtime.question import tracking  # noqa: E402
 
 

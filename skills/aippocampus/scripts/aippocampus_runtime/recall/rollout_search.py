@@ -105,7 +105,7 @@ def ensure_index(cwd: str, rollout: Path | None, index: Path, *, force: bool = F
     # enough" cached index.
     cmd = [
         sys.executable,
-        str(SCRIPT_DIR / "build_index.py"),
+        "-m", "aippocampus_runtime.recall.index_builder",
         "--cwd",
         cwd,
         "--output-dir",

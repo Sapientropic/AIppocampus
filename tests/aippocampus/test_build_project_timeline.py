@@ -17,7 +17,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import build_project_timeline as timeline  # noqa: E402
+from aippocampus_runtime.navigation import project_timeline as timeline  # noqa: E402
 
 
 class ProjectTimelineTests(unittest.TestCase):

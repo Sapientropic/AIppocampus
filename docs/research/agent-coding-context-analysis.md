@@ -319,8 +319,8 @@ support a nudge or warning. A ticket should never smuggle a decayed
 
 Status: first deterministic ticket gate implemented for coding continuity
 tickets. `aippocampus_runtime.coding.host_contract`, with
-`skills/aippocampus/scripts/coding_ticket_host_contract.py` kept as a
-compatibility shim, now defines the host consumption simulator and contract
+`skills/aippocampus/scripts/aippocampus_runtime/coding/host_contract.py` as the
+package owner, now defines the host consumption simulator and contract
 boundary: AIppocampus emits the source-backed ticket plus source-thickness,
 derived assessment, expiry, preconditions, annoyance risk, and feedback
 expectations; the host supplies runtime source visibility and owns timing,
@@ -488,7 +488,7 @@ claim: source-backed decision memory can prevent repeated coding mistakes.
 
 Current implementation:
 
-- `skills/aippocampus/scripts/coding_decision_events.py` extracts staging
+- `skills/aippocampus/scripts/aippocampus_runtime/coding/decision_events.py` extracts staging
   `decision_event` candidates from clean-source user turns and assistant final
   answers. It preserves `thread_key`, `message_id`, `turn_id`, `source_id`,
   `clean_ordinal`, `source_line`, `role`, and `phase` source refs.
@@ -502,8 +502,8 @@ Current implementation:
   `source_thickness`, `freshness`, `still_rejected`, `confidence`,
   `proposed_use`, and `basis_refs` without mutating the event.
 - `aippocampus_runtime.coding.rejected_route_probes`, with
-  `skills/aippocampus/scripts/coding_rejected_route_probes.py` kept as a
-  compatibility shim, turns source-backed rejected-route decision events into
+  `skills/aippocampus/scripts/aippocampus_runtime/coding/rejected_route_probes.py`
+  as the package owner, turns source-backed rejected-route decision events into
   review-only prospective Dream probes. The fixture asks what later evidence
   would justify reopening a rejected route, then reuses
   `aippocampus_runtime.dream.retrospective_lifecycle` to bucket explicit future

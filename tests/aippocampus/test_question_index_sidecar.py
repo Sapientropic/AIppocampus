@@ -20,7 +20,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import question_index_sidecar as sidecar  # noqa: E402
+from aippocampus_runtime.question import index_sidecar as sidecar  # noqa: E402
 
 
 class QuestionIndexSidecarTests(unittest.TestCase):

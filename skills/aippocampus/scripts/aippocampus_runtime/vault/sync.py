@@ -62,11 +62,11 @@ def main() -> int:
 
     if not args.no_hook:
         run_text(
-            [sys.executable, str(SCRIPT_DIR / "aippocampus_maintenance.py"), "--cwd", str(cwd)]
+            [sys.executable, "-m", "aippocampus_runtime.ops.maintenance", "--cwd", str(cwd)]
         )
 
     health = run_json(
-        [sys.executable, str(SCRIPT_DIR / "aippocampus_health.py"), "--cwd", str(cwd), "--json"]
+        [sys.executable, "-m", "aippocampus_runtime.health", "--cwd", str(cwd), "--json"]
     )
     index_dir = Path((health.get("index") or {}).get("dir") or default_thread_index_dir(cwd))
     checkpoint_state = load_json(

@@ -172,8 +172,9 @@ def heartbeat_note(thread_home: Path, vault: Path, cwd: Path, automation_name: s
             "## Local Maintenance Command",
             "",
             "```powershell",
-            f'python "$env:CODEX_HOME\\skills\\aippocampus\\scripts\\aippocampus_maintenance.py" --cwd "{cwd}"',
-            f'python "$env:CODEX_HOME\\skills\\aippocampus\\scripts\\sync_vault.py" --cwd "{cwd}" --vault "{vault}"',
+            '$env:PYTHONPATH = "$env:CODEX_HOME\\skills\\aippocampus\\scripts"',
+            f'python -m aippocampus_runtime.ops.maintenance --cwd "{cwd}"',
+            f'python -m aippocampus_runtime.vault.sync --cwd "{cwd}" --vault "{vault}"',
             "```",
             "",
         ]

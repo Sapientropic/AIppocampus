@@ -24,7 +24,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import subconscious_worker as worker  # noqa: E402
+from aippocampus_runtime.subconscious import worker as worker  # noqa: E402
 from aippocampus_runtime.subconscious.staging_maintenance import (  # noqa: E402
     StagingPressureThresholds,
 )

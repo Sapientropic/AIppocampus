@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -21,17 +20,17 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import aippocampus_prompt_hook as prompt_hook  # noqa: E402
-import sync_vault  # noqa: E402
+from aippocampus_runtime.hooks import prompt as prompt_hook  # noqa: E402
+from aippocampus_runtime.vault import sync as sync_vault  # noqa: E402
 
 HIGH_RISK_MYPY_SCRIPTS = {
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/server.py",
-    "skills/aippocampus/scripts/aippocampus_lifecycle_hook.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/hooks/lifecycle.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/ambient_cache.py",
     "skills/aippocampus/scripts/aippocampus_runtime/navigation/associations.py",
     "skills/aippocampus/scripts/aippocampus_runtime/navigation/project_timeline.py",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/candidate_router.py",
-    "skills/aippocampus/scripts/onboard_codex.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/onboarding/codex.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_core.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/retrieval.py",
     "skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/recall.py",
@@ -175,14 +174,14 @@ class ArchitectureBoundaryTests(unittest.TestCase):
 
     def test_runtime_boundary_helpers_remain_available(self) -> None:
         helper_paths = [
-            "onboard_frontier.py",
-            "onboard_status.py",
+            "aippocampus_runtime/onboarding/frontier.py",
+            "aippocampus_runtime/onboarding/status.py",
             "aippocampus_runtime/recall/prompt_recall_ambient.py",
             "aippocampus_runtime/recall/prompt_recall_budget.py",
             "aippocampus_runtime/recall/prompt_recall_evidence.py",
-            "registry_search.py",
-            "retrieval_query_policy.py",
-            "subconscious_jobs_config.py",
+            "aippocampus_runtime/registry/search.py",
+            "aippocampus_runtime/recall/query_policy.py",
+            "aippocampus_runtime/subconscious/jobs_config.py",
             "aippocampus_runtime/warm_ambient/prompting.py",
             "aippocampus_runtime/warm_ambient/scout_profiles.py",
             "aippocampus_runtime/warm_ambient/source_validation.py",
@@ -457,18 +456,15 @@ class ArchitectureBoundaryTests(unittest.TestCase):
         self.assertNotIn("import aippocampus_runtime.core", text)
         self.assertNotIn("codex_home()", text)
 
-    def test_prompt_hook_exits_zero_when_split_helper_install_lags(self) -> None:
+    def test_prompt_hook_module_exits_zero_from_package_root(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
-            shutil.copy2(
-                SCRIPTS / "aippocampus_prompt_hook.py", tmp_path / "aippocampus_prompt_hook.py"
-            )
-            shutil.copy2(SCRIPTS / "aippocampuslib.py", tmp_path / "aippocampuslib.py")
             env = {**os.environ, "CODEX_HOME": str(tmp_path / "codex-home")}
             payload = json.dumps({"prompt": "继续清债", "cwd": str(ROOT)}, ensure_ascii=False)
 
             proc = subprocess.run(
-                [sys.executable, str(tmp_path / "aippocampus_prompt_hook.py")],
+                [sys.executable, "-m", "aippocampus_runtime.hooks.prompt"],
+                cwd=SCRIPTS,
                 input=payload,
                 text=True,
                 encoding="utf-8",

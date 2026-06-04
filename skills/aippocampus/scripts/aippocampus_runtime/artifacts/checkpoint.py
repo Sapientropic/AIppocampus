@@ -48,7 +48,7 @@ def load_json(path: Path) -> dict:
 def run_build_index(cwd: Path, index_dir: Path, anchors: Path) -> None:
     cmd = [
         sys.executable,
-        str(SCRIPT_DIR / "build_index.py"),
+        "-m", "aippocampus_runtime.recall.index_builder",
         "--cwd",
         str(cwd),
         "--output-dir",

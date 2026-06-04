@@ -22,12 +22,12 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import onboard_codex as onboard  # noqa: E402
-import onboard_frontier  # noqa: E402
-import registry  # noqa: E402
+from aippocampus_runtime.onboarding import codex as onboard  # noqa: E402
+from aippocampus_runtime.onboarding import frontier as onboard_frontier  # noqa: E402
+from aippocampus_runtime.registry import api as registry  # noqa: E402
 from conversation_sources import CodexConversationProvider  # noqa: E402
 
-ONBOARD = SCRIPTS / "onboard.py"
+ONBOARD_CMD = [sys.executable, "-m", "aippocampus_runtime.onboarding.facade"]
 
 
 class OnboardCodexTests(unittest.TestCase):
@@ -369,13 +369,14 @@ class OnboardCodexTests(unittest.TestCase):
 
         env = {**os.environ, "CODEX_HOME": str(self.root), **(env_extra or {})}
         return subprocess.run(
-            [sys.executable, str(ONBOARD), *args],
+            [*ONBOARD_CMD, *args],
             text=True,
             encoding="utf-8",
             errors="replace",
             capture_output=True,
             env=env,
             check=False,
+            cwd=SCRIPTS,
         )
 
     def test_onboarding_registers_indexes_and_returns_compact_stats(self) -> None:
@@ -435,7 +436,7 @@ class OnboardCodexTests(unittest.TestCase):
                 sys,
                 "argv",
                 [
-                    "onboard_codex.py",
+                    "aippocampus_runtime.onboarding.codex",
                     "--cwd",
                     str(self.cwd),
                     "--registry-dir",

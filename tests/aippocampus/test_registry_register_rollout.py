@@ -22,12 +22,12 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import aippocampuslib  # noqa: E402
-import registry  # noqa: E402
+from aippocampus_runtime import core as aippocampuslib  # noqa: E402
+from aippocampus_runtime.registry import api as registry  # noqa: E402
 from conversation_sources import CodexConversationProvider  # noqa: E402
 
-REGISTRY = SCRIPTS / "registry.py"
-AIPPOCAMPUS_CLI = SCRIPTS / "aippocampus_cli.py"
+REGISTRY_CMD = [sys.executable, "-m", "aippocampus_runtime.registry.api"]
+AIPPOCAMPUS_CLI_CMD = [sys.executable, "-m", "aippocampus_runtime.cli.facade"]
 
 
 class RegisterRolloutTests(unittest.TestCase):
@@ -180,8 +180,7 @@ class RegisterRolloutTests(unittest.TestCase):
 
         proc = subprocess.run(
             [
-                sys.executable,
-                str(REGISTRY),
+                *REGISTRY_CMD,
                 "--registry-dir",
                 str(self.registry_dir),
                 "scan-sessions",
@@ -195,6 +194,7 @@ class RegisterRolloutTests(unittest.TestCase):
             errors="replace",
             capture_output=True,
             check=False,
+            cwd=SCRIPTS,
             env={**os.environ, "CODEX_HOME": str(self.root)},
         )
 
@@ -209,8 +209,7 @@ class RegisterRolloutTests(unittest.TestCase):
 
         proc = subprocess.run(
             [
-                sys.executable,
-                str(REGISTRY),
+                *REGISTRY_CMD,
                 "--registry-dir",
                 str(self.registry_dir),
                 "register-source",
@@ -228,6 +227,7 @@ class RegisterRolloutTests(unittest.TestCase):
             errors="replace",
             capture_output=True,
             check=False,
+            cwd=SCRIPTS,
         )
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
@@ -245,8 +245,7 @@ class RegisterRolloutTests(unittest.TestCase):
 
         proc = subprocess.run(
             [
-                sys.executable,
-                str(AIPPOCAMPUS_CLI),
+                *AIPPOCAMPUS_CLI_CMD,
                 "import",
                 "conversation",
                 "--registry-dir",
@@ -264,6 +263,7 @@ class RegisterRolloutTests(unittest.TestCase):
             errors="replace",
             capture_output=True,
             check=False,
+            cwd=SCRIPTS,
         )
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
@@ -283,8 +283,7 @@ class RegisterRolloutTests(unittest.TestCase):
 
         proc = subprocess.run(
             [
-                sys.executable,
-                str(REGISTRY),
+                *REGISTRY_CMD,
                 "--registry-dir",
                 str(self.registry_dir),
                 "register-source",
@@ -299,6 +298,7 @@ class RegisterRolloutTests(unittest.TestCase):
             errors="replace",
             capture_output=True,
             check=False,
+            cwd=SCRIPTS,
         )
 
         self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
@@ -319,7 +319,7 @@ class RegisterRolloutTests(unittest.TestCase):
 
         try:
             sys.argv = [
-                str(REGISTRY),
+                "registry",
                 "--registry-dir",
                 str(self.registry_dir),
                 "register-source",
@@ -362,8 +362,7 @@ class RegisterRolloutTests(unittest.TestCase):
 
         proc = subprocess.run(
             [
-                sys.executable,
-                str(REGISTRY),
+                *REGISTRY_CMD,
                 "--registry-dir",
                 str(self.registry_dir),
                 "search",
@@ -376,6 +375,7 @@ class RegisterRolloutTests(unittest.TestCase):
             errors="replace",
             capture_output=True,
             check=False,
+            cwd=SCRIPTS,
         )
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
@@ -403,10 +403,10 @@ class RegisterRolloutTests(unittest.TestCase):
         def fake_run_json(cmd: list[str]) -> dict:
             call = [str(part) for part in cmd]
             calls.append(call)
-            script_name = Path(call[1]).name
+            module_name = call[2] if len(call) > 2 and call[1] == "-m" else Path(call[1]).stem
             rollout_arg = call[call.index("--rollout") + 1]
             self.assertEqual(Path(rollout_arg), target)
-            if script_name == "build_index.py":
+            if module_name == "aippocampus_runtime.recall.index_builder":
                 index_dir.mkdir(parents=True, exist_ok=True)
                 (index_dir / "manifest.json").write_text(
                     json.dumps(
@@ -421,7 +421,7 @@ class RegisterRolloutTests(unittest.TestCase):
                     ),
                     encoding="utf-8",
                 )
-            if script_name == "build_clean_source.py":
+            if module_name == "aippocampus_runtime.source.clean_source":
                 clean_dir.mkdir(parents=True, exist_ok=True)
                 (clean_dir / "manifest.json").write_text(
                     json.dumps(
@@ -451,8 +451,11 @@ class RegisterRolloutTests(unittest.TestCase):
 
         self.assertEqual(result["entry"]["thread_key"], "session:session-other")
         self.assertEqual(
-            [Path(call[1]).name for call in calls],
-            ["build_index.py", "build_clean_source.py"],
+            [call[2] for call in calls],
+            [
+                "aippocampus_runtime.recall.index_builder",
+                "aippocampus_runtime.source.clean_source",
+            ],
         )
 
     def test_scan_sessions_dry_run_reports_archived_rollouts(self) -> None:

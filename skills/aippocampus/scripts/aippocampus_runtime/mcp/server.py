@@ -459,8 +459,10 @@ def call_sync_status(arguments: dict[str, Any]) -> dict[str, Any]:
                 "backend": "local_folder",
                 "backends": ["local_folder", "http_object_store"],
                 "commands": ["status", "push", "pull", "repair"],
-                "script": str(SCRIPT_DIR / "sync_bundle.py"),
-                "object_storage_script": str(SCRIPT_DIR / "sync_object_storage.py"),
+                "command": "python -m aippocampus_runtime.sync.bundle",
+                "object_storage_command": (
+                    "python -m aippocampus_runtime.sync.object_storage.cli"
+                ),
                 "sync_flows": {
                     "status": "implemented",
                     "push": "implemented",

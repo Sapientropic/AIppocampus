@@ -9,7 +9,7 @@ ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-import retrieval_score_fusion as fusion  # noqa: E402
+from aippocampus_runtime.recall import score_fusion as fusion  # noqa: E402
 
 
 def source_ref(message_id: str, line: int) -> dict[str, object]:

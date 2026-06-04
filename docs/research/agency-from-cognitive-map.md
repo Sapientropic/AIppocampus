@@ -216,7 +216,7 @@ feedback.
 ## Implemented First Slice
 
 The first deterministic runtime helper is
-`skills/aippocampus/scripts/agency_affordance.py`.
+`skills/aippocampus/scripts/aippocampus_runtime/coding/agency_affordance.py`.
 
 It builds an `aippocampus_agency_affordance_map` from existing sidecar-like
 inputs: cognitive-map rows, correction windows, ambient recall cards, dream
@@ -244,8 +244,8 @@ for `accepted`, `ignored`, `dismissed`, `corrected`, `tool_success`, and
 
 Coding-continuity tickets have a narrower host contract in
 `aippocampus_runtime.coding.host_contract`, with
-`skills/aippocampus/scripts/coding_ticket_host_contract.py` kept as a
-compatibility shim. That simulator maps coding tickets to `silent_tuning`,
+`skills/aippocampus/scripts/aippocampus_runtime/coding/host_contract.py` as the
+package owner. That simulator maps coding tickets to `silent_tuning`,
 `backstage_prep`, `light_nudge`, `warning`, `offer_next_step`, or `stay_silent`,
 and treats source visibility as a host-supplied runtime input rather than stored
 truth.

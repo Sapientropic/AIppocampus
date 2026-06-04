@@ -18,7 +18,7 @@ opts into raw rollout sync, encrypted sync is mandatory.
 
 - Preserve the current local-first privacy model while enabling multi-device
   sync through untrusted storage.
-- Reuse the existing `sync_bundle.py` and `sync_object_storage.py` data model
+- Reuse the existing `aippocampus_runtime.sync.bundle` and `aippocampus_runtime.sync.object_storage.cli` data model
   instead of inventing a parallel sync system.
 - Encrypt clean source, registry rows, semantic sidecars, working memory,
   cognitive-map artifacts, and opt-in raw rollouts before they leave a device.
@@ -325,7 +325,7 @@ safety net for concurrent writers.
    the outer encrypted-sync pointer manifest last.
 7. Delete temporary plaintext bundle files.
 
-For object storage, `sync_object_storage.py` should upload encrypted objects and
+For object storage, `aippocampus_runtime.sync.object_storage.cli` should upload encrypted objects and
 write the outer manifest last, preserving the existing "manifest last" behavior
 while relying on parent-hash validation for concurrent writers.
 
@@ -427,12 +427,12 @@ For release-oriented repair behavior, keep these expectations stable:
 Initial CLI shape:
 
 ```sh
-python ./skills/aippocampus/scripts/sync_bundle.py push \
+PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.bundle push \
   --sync-dir <folder> \
   --encrypt \
   --recipient <age-recipient>
 
-python ./skills/aippocampus/scripts/sync_bundle.py pull \
+PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.bundle pull \
   --sync-dir <folder> \
   --require-encrypted
 ```
@@ -440,7 +440,7 @@ python ./skills/aippocampus/scripts/sync_bundle.py pull \
 Object storage should use the same flags:
 
 ```sh
-python ./skills/aippocampus/scripts/sync_object_storage.py push \
+PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.object_storage.cli push \
   --object-store-url <url> \
   --encrypt \
   --recipient <age-recipient>
@@ -581,9 +581,9 @@ Minimum tests before calling v1 ready:
 1. **Design and docs:** land this document, link it from docs index, and mark
    encrypted sync as the next Stage 3 hardening slice.
 2. **Bundle-level encryption:** add encrypted push/pull/status/repair around
-   `sync_bundle.py` using direct `age` recipient encryption and temporary
+   `aippocampus_runtime.sync.bundle` using direct `age` recipient encryption and temporary
    plaintext bundles.
-3. **Object-storage reuse:** make `sync_object_storage.py` upload the encrypted
+3. **Object-storage reuse:** make `aippocampus_runtime.sync.object_storage.cli` upload the encrypted
    object set without changing the transport model.
 4. **Device key UX:** add recipient generation, device listing, and local key
    storage helpers.

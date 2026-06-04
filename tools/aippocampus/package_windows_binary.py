@@ -75,7 +75,6 @@ def render_binary_entrypoint() -> str:
 
 from __future__ import annotations
 
-import runpy
 import sys
 from pathlib import Path
 
@@ -88,30 +87,6 @@ def _bundled_scripts_dir() -> Path:
     return Path(__file__).resolve().parent
 
 
-def _run_script_in_process(script_name: str, args: list[str]) -> int:
-    script_dir = _bundled_scripts_dir()
-    script = script_dir / script_name
-    old_argv = sys.argv[:]
-    old_path = sys.path[:]
-    sys.argv = [str(script), *args]
-    if str(script_dir) not in sys.path:
-        sys.path.insert(0, str(script_dir))
-    try:
-        runpy.run_path(str(script), run_name="__main__")
-    except SystemExit as exc:
-        code = exc.code
-        if code is None:
-            return 0
-        if isinstance(code, int):
-            return code
-        print(code, file=sys.stderr)
-        return 1
-    finally:
-        sys.argv = old_argv
-        sys.path[:] = old_path
-    return 0
-
-
 def main() -> int:
     script_dir = _bundled_scripts_dir()
     if str(script_dir) not in sys.path:
@@ -119,7 +94,6 @@ def main() -> int:
     from aippocampus_runtime.cli import facade as cli_facade
 
     cli_facade.SCRIPT_DIR = script_dir
-    cli_facade.run_script = _run_script_in_process
     return int(cli_facade.main())
 
 
@@ -137,12 +111,12 @@ def _read_pyproject_imports(pyproject: Path) -> list[str]:
             {
                 *setuptools.get("packages", []),
                 *setuptools.get("py-modules", []),
-                "aippocampus_cli",
+                "aippocampus_runtime.cli.facade",
             }
         )
 
     text = pyproject.read_text(encoding="utf-8")
-    imports = {"aippocampus_cli"}
+    imports = {"aippocampus_runtime.cli.facade"}
     for key in ("packages", "py-modules"):
         match = re.search(rf"(?m)^\s*{re.escape(key)}\s*=\s*\[(.*?)\]", text, re.DOTALL)
         if match is None:

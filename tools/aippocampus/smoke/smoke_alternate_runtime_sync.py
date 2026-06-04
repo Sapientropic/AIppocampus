@@ -3,7 +3,7 @@
 
 The regular cross-device smoke models multiple devices on one host. This smoke
 adds a real alternate runtime boundary when Docker or WSL is available: the
-bundle is created on the host, then `sync_bundle.py` runs inside the alternate
+bundle is created on the host, then the sync package runs inside the alternate
 runtime and repairs locators to that runtime's local paths.
 
 No external cloud backend is claimed here. Object storage remains a separate
@@ -30,7 +30,7 @@ _paths.ensure_paths()
 
 import smoke_cross_device_sync
 
-import sync_bundle
+from aippocampus_runtime.sync import bundle as sync_bundle
 
 # Build drive markers without literal drive-root strings so repo secret/path
 # scans can still flag accidental local absolute paths elsewhere.
@@ -44,14 +44,14 @@ DEFAULT_DOCKER_IMAGE = os.environ.get(
 class RuntimePaths:
     sync_dir: str
     target_registry: str
-    runtime_script: str
+    runtime_root: str
 
 
 def write_runtime_scripts(root: Path) -> Path:
     runtime_dir = root / "runtime"
     runtime_dir.mkdir(parents=True, exist_ok=True)
-    for name in ("sync_bundle.py", "aippocampuslib.py"):
-        shutil.copy2(_paths.SKILL_SCRIPTS / name, runtime_dir / name)
+    for name in ("aippocampus_runtime", "conversation_sources"):
+        shutil.copytree(_paths.SKILL_SCRIPTS / name, runtime_dir / name, dirs_exist_ok=True)
     return runtime_dir
 
 
@@ -122,7 +122,7 @@ def docker_paths(root: Path, runtime_dir: Path) -> RuntimePaths:
     return RuntimePaths(
         sync_dir="/work/shared-sync-folder",
         target_registry="/work/docker-target-registry",
-        runtime_script="/work/runtime/sync_bundle.py",
+        runtime_root="/work/runtime",
     )
 
 
@@ -136,9 +136,12 @@ def docker_run(image: str, root: Path, runtime_paths: RuntimePaths, command: str
         "never",
         "-v",
         f"{root.resolve()}:/work",
+        "-w",
+        runtime_paths.runtime_root,
         image,
         "python",
-        runtime_paths.runtime_script,
+        "-m",
+        "aippocampus_runtime.sync.bundle",
         command,
         "--sync-dir",
         runtime_paths.sync_dir,
@@ -211,15 +214,16 @@ def wsl_paths(root: Path, runtime_dir: Path) -> RuntimePaths:
     return RuntimePaths(
         sync_dir=f"{wsl_path(root)}/shared-sync-folder",
         target_registry=f"{wsl_path(root)}/wsl-target-registry",
-        runtime_script=f"{wsl_path(runtime_dir)}/sync_bundle.py",
+        runtime_root=wsl_path(runtime_dir),
     )
 
 
 def wsl_run(runtime_paths: RuntimePaths, command: str) -> dict[str, Any]:
     wsl = shutil.which("wsl.exe") or shutil.which("wsl") or "wsl.exe"
     shell = (
-        "python3 "
-        + quote_sh(runtime_paths.runtime_script)
+        "cd "
+        + quote_sh(runtime_paths.runtime_root)
+        + " && python3 -m aippocampus_runtime.sync.bundle"
         + f" {command} --sync-dir "
         + quote_sh(runtime_paths.sync_dir)
         + " --registry-dir "

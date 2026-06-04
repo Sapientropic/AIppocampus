@@ -25,7 +25,7 @@ except ImportError:  # pragma: no cover - direct script fallback
 
 ensure_paths()
 
-import aippocampus_mcp_server as mcp  # noqa: E402
+from aippocampus_runtime.mcp import server as mcp  # noqa: E402
 
 
 MARKER = "generic-jsonl-internal-agent-marker-399"
@@ -79,7 +79,7 @@ def write_internal_agent_transcript(path: Path, *, cwd: Path, marker: str = MARK
 
 def _run_cli(args: list[str]) -> dict[str, Any]:
     proc = subprocess.run(
-        [sys.executable, str(SKILL_SCRIPTS / "aippocampus_cli.py"), *args],
+        [sys.executable, "-m", "aippocampus_runtime.cli.facade", *args],
         text=True,
         encoding="utf-8",
         errors="replace",

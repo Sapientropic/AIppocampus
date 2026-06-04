@@ -16,7 +16,7 @@ ground without a custom engine.
 | Relational graph | concept graph (already in use) | Shared-neighbor traversal, theme clustering |
 
 No custom search engine needed. The first scoring fusion layer now exists in
-`skills/aippocampus/scripts/retrieval_score_fusion.py`: it blends signals from
+`skills/aippocampus/scripts/aippocampus_runtime/recall/score_fusion.py`: it blends signals from
 all three after candidates join back to stable source ids or source refs.
 
 ## Concepts still worth mining

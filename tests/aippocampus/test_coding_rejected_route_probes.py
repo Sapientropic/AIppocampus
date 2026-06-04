@@ -12,7 +12,7 @@ TESTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(TESTS))
 sys.path.insert(0, str(SCRIPTS))
 
-import coding_decision_events as decisions  # noqa: E402
+from aippocampus_runtime.coding import decision_events as decisions  # noqa: E402
 from aippocampus_runtime.coding import rejected_route_probes as probes  # noqa: E402
 
 

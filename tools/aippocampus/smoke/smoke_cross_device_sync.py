@@ -26,7 +26,7 @@ import _paths
 
 _paths.ensure_paths()
 
-import sync_bundle
+from aippocampus_runtime.sync import bundle as sync_bundle
 
 THREAD_KEY = "session:cross-device-smoke"
 THREAD_DIR = sync_bundle.thread_dir_name(THREAD_KEY)
