@@ -34,7 +34,7 @@ def _now_utc() -> str:
 
 def _public_hash(value: Any, default: str = "unknown") -> str:
     text = str(value or default)
-    return hashlib.sha1(text.encode("utf-8")).hexdigest()[:16]
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
 def _dead_letter_reason_codes(

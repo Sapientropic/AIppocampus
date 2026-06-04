@@ -113,7 +113,7 @@ def _public_label(value: Any, default: str) -> str:
 
 
 def _public_hash(value: Any, default: str = "unknown") -> str:
-    return hashlib.sha1(_public_label(value, default).encode("utf-8")).hexdigest()[:16]
+    return hashlib.sha256(_public_label(value, default).encode("utf-8")).hexdigest()[:16]
 
 
 def _safe_ref_value(value: Any) -> Any:

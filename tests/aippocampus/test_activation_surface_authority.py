@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 import unittest
@@ -397,6 +398,33 @@ class ActivationSurfaceAuthorityTests(unittest.TestCase):
         self.assertTrue(dead_letter["privacy_boundary"]["raw_source_snippets_serialized"] is False)
         self.assertTrue(dead_letter["privacy_boundary"]["local_paths_serialized"] is False)
         self.assertTrue(report["contract"]["foreground_hook_mutation"] is False)
+
+    def test_dead_letter_identity_hashes_use_sha256_prefix(self) -> None:
+        surface_id = "secret-like-surface-id"
+        provenance_pointer = "manifest:private-provenance-pointer"
+        report = activation_dead_letter_candidate_report(
+            [
+                {
+                    "surface_id": surface_id,
+                    "surface_kind": "ambient_card",
+                    "conflict_key": "old-route",
+                    "pruning_action": "retire",
+                    "wrong_route_drag_count": 4,
+                    "source_refs": [{"source_id": "clean:1"}],
+                    "provenance_pointer": provenance_pointer,
+                }
+            ]
+        )
+
+        candidate = report["candidates"][0]
+        self.assertEqual(
+            candidate["surface_id_hash"],
+            hashlib.sha256(surface_id.encode("utf-8")).hexdigest()[:16],
+        )
+        self.assertEqual(
+            candidate["provenance_pointer_hash"],
+            hashlib.sha256(provenance_pointer.encode("utf-8")).hexdigest()[:16],
+        )
 
     def test_dead_letter_apply_manifest_requires_reference_safety_and_preserves_source(self) -> None:
         manifest = apply_dead_letter_candidate_manifest(
