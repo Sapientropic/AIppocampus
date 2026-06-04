@@ -331,9 +331,14 @@ def _aggregate(cases: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     return {"arms": arms}
 
 
-def _issue_readouts(aggregate: Mapping[str, Any]) -> dict[str, Any]:
+def _issue_readouts(
+    aggregate: Mapping[str, Any],
+    foreground_lift: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     arms = _as_dict(aggregate.get("arms"))
     progressive = _as_dict(arms.get(ARM_PROGRESSIVE))
+    foreground = _as_dict(foreground_lift)
+    foreground_measured = bool(foreground.get("measured"))
     return {
         "github_201": {
             "route_actionability_measured": True,
@@ -342,8 +347,19 @@ def _issue_readouts(aggregate: Mapping[str, Any]) -> dict[str, Any]:
             "source_reopen_follow_through_rate": progressive.get(
                 "source_reopen_follow_through_rate", 0
             ),
-            "default_foreground_first_turn_lift": "not_measured",
-            "default_foreground_second_turn_lift": "not_measured",
+            "foreground_lift_measured": foreground_measured,
+            "default_foreground_first_turn_lift": foreground.get(
+                "first_turn_lift", "not_measured"
+            ),
+            "default_foreground_second_turn_lift": foreground.get(
+                "second_turn_lift", "not_measured"
+            ),
+            "semantic_timeout_but_route_available": bool(
+                foreground.get("semantic_timeout_but_route_available")
+            ),
+            "source_boundary_preserved": bool(
+                foreground.get("source_boundary_preserved")
+            ),
             "live_registry_quality": "not_measured",
             "closeout_eligible": False,
         }
@@ -358,6 +374,7 @@ def build_recall_navigation_comparison(
     max_routes: int = 5,
     max_deepen_matches: int = 5,
     after_context_by_case_id: Mapping[str, Callable[[], None]] | None = None,
+    foreground_lift: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     cwd_path = Path(cwd or os.getcwd()).resolve()
     clean_path = Path(clean_source_dir or cwd_path / ".aippocampus" / "clean-source").resolve()
@@ -398,7 +415,8 @@ def build_recall_navigation_comparison(
         "cases": rows,
         "cases_by_id": {str(row["case_id"]): row for row in rows},
         "aggregate": aggregate,
-        "issue_readouts": _issue_readouts(aggregate),
+        "foreground_lift": dict(foreground_lift or {"measured": False}),
+        "issue_readouts": _issue_readouts(aggregate, foreground_lift),
         "metric_notes": {
             "manual_query_invention_count": (
                 "Fixture-supplied direct-search query attempts before the first useful source; "
@@ -417,16 +435,25 @@ def build_recall_navigation_comparison(
                 "as stale before source use."
             ),
             "input_token_proxy": "Word-count proxy over public fixture cues; not model billing tokens.",
+            "foreground_lift": (
+                "Fixture-backed prompt-hook first/second turn readout. It measures "
+                "whether a local route is delivered under a simulated semantic timeout "
+                "and whether the next turn reuses the ambient cache; it is not a live "
+                "quality or cost claim."
+            ),
         },
         "comparison_boundary": {
             "deterministic_proxy_only": True,
             "cannot_claim_live_cost_reduction": True,
             "cannot_claim_answer_quality_lift": True,
             "cannot_claim_default_foreground_lift": True,
+            "cannot_claim_live_default_foreground_lift": True,
             "source_reopen_required_for_strong_claims": True,
             "hook_scent_is_not_evidence": True,
             "no_external_model_calls": True,
             "no_write": True,
+            "no_repo_write": True,
+            "temp_fixture_writes_only": True,
         },
         "privacy": {
             "raw_cues_serialized": False,
@@ -461,6 +488,16 @@ def render_text(report: Mapping[str, Any]) -> str:
             + str(row.get("avg_manual_query_invention_count", 0))
             + "; wrong-route drag "
             + str(row.get("wrong_route_drag_rate", 0))
+        )
+    foreground = _as_dict(report.get("foreground_lift"))
+    if foreground.get("measured"):
+        lines.append(
+            "- foreground_lift: first turn "
+            + str(foreground.get("first_turn_lift"))
+            + "; second turn "
+            + str(foreground.get("second_turn_lift"))
+            + "; semantic timeout route available "
+            + str(bool(foreground.get("semantic_timeout_but_route_available"))).lower()
         )
     lines.append("- Boundary: deterministic proxy only; source reopen remains required.")
     return "\n".join(lines) + "\n"

@@ -79,14 +79,34 @@ class RecallNavigationComparisonTests(unittest.TestCase):
         self.assertIn("source_reopen_follow_through_rate", report["metric_notes"])
         self.assertIn("wrong_route_drag_rate", report["metric_notes"])
 
-    def test_issue_201_readout_keeps_foreground_lift_unclaimed(self) -> None:
+    def test_issue_201_readout_measures_deterministic_foreground_lift(self) -> None:
         report = recall_navigation_comparison_fixtures.fixture_recall_navigation_comparison()
         readout = report["issue_readouts"]["github_201"]
 
         self.assertTrue(readout["route_actionability_measured"])
         self.assertTrue(readout["source_reopen_follow_through_measured"])
-        self.assertEqual(readout["default_foreground_first_turn_lift"], "not_measured")
-        self.assertEqual(readout["default_foreground_second_turn_lift"], "not_measured")
+        self.assertTrue(readout["foreground_lift_measured"])
+        self.assertEqual(
+            readout["default_foreground_first_turn_lift"],
+            "measured_route_hint_under_semantic_timeout",
+        )
+        self.assertEqual(
+            readout["default_foreground_second_turn_lift"],
+            "measured_cache_reuse",
+        )
+        self.assertTrue(readout["semantic_timeout_but_route_available"])
+        self.assertTrue(readout["source_boundary_preserved"])
+        foreground = report["foreground_lift"]
+        self.assertEqual(foreground["first_turn"]["decision"], "scent")
+        self.assertTrue(foreground["first_turn"]["route_actionable"])
+        self.assertEqual(
+            foreground["first_turn"]["semantic_reuse_source"],
+            "semantic_provider_timeout",
+        )
+        self.assertEqual(foreground["first_turn"]["evidence_count"], 0)
+        self.assertEqual(foreground["second_turn"]["cache_status"], "hit")
+        self.assertGreaterEqual(foreground["second_turn"]["cached_card_count"], 1)
+        self.assertTrue(report["comparison_boundary"]["cannot_claim_live_default_foreground_lift"])
         self.assertFalse(readout["closeout_eligible"])
 
     def test_cli_smoke_emits_json_report(self) -> None:
