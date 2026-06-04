@@ -42,17 +42,23 @@ PROVIDER_ENTRYPOINT_INVENTORY = (
 )
 RUNTIME_SCRIPT_MAP = REPO_ROOT / "docs" / "architecture" / "runtime-script-map.md"
 ENCRYPTED_SYNC_V2 = REPO_ROOT / "docs" / "architecture" / "encrypted-sync-v2.md"
+LARGE_RUNTIME_THRESHOLD = 600
+LARGE_TEST_THRESHOLD = 1500
+LARGE_BENCHMARK_THRESHOLD = 1200
+LARGE_TOOL_THRESHOLD = 1100
 
 
-def debt_register_entries() -> dict[str, int]:
+def debt_register_entries(*, prefixes: tuple[str, ...] | None = None) -> dict[str, int]:
     text = DEBT_REGISTER.read_text(encoding="utf-8")
     entries: dict[str, int] = {}
     for match in re.finditer(
-        r"^\|\s*`(?P<path>skills/aippocampus/scripts/[^`]+\.py)`\s*"
+        r"^\|\s*`(?P<path>[^`]+\.py)`\s*"
         r"\|\s*(?P<budget>\d+)\s*\|",
         text,
         flags=re.MULTILINE,
     ):
+        if prefixes and not match.group("path").startswith(prefixes):
+            continue
         entries[match.group("path")] = int(match.group("budget"))
     return entries
 
@@ -88,6 +94,26 @@ def runtime_python_files() -> list[Path]:
     return sorted(
         path
         for path in SCRIPTS.rglob("*.py")
+        if "__pycache__" not in path.parts
+    )
+
+
+def test_python_files() -> list[Path]:
+    return sorted((REPO_ROOT / "tests" / "aippocampus").glob("test_*.py"))
+
+
+def benchmark_python_files() -> list[Path]:
+    return sorted(
+        path
+        for path in (REPO_ROOT / "benchmarks" / "aippocampus").glob("*.py")
+        if path.name != "_paths.py"
+    )
+
+
+def tool_python_files() -> list[Path]:
+    return sorted(
+        path
+        for path in (REPO_ROOT / "tools" / "aippocampus").rglob("*.py")
         if "__pycache__" not in path.parts
     )
 
@@ -253,11 +279,11 @@ class ArchitectureBoundaryTests(unittest.TestCase):
         self.assertEqual(missing, [])
 
     def test_large_runtime_scripts_have_debt_register_budgets(self) -> None:
-        entries = debt_register_entries()
+        entries = debt_register_entries(prefixes=("skills/aippocampus/scripts/",))
         large_scripts = {
             path.relative_to(REPO_ROOT).as_posix(): script_line_count(path)
             for path in runtime_python_files()
-            if script_line_count(path) >= 600
+            if script_line_count(path) >= LARGE_RUNTIME_THRESHOLD
         }
         missing = sorted(set(large_scripts) - set(entries))
         runtime_scripts = {
@@ -274,6 +300,62 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             {"missing": missing, "stale": stale, "over_budget": over_budget},
             {"missing": [], "stale": [], "over_budget": {}},
         )
+
+    def test_large_tests_benchmarks_and_tools_have_debt_register_budgets(self) -> None:
+        entries = debt_register_entries(
+            prefixes=("tests/aippocampus/", "benchmarks/aippocampus/", "tools/aippocampus/"),
+        )
+        tracked_files = {
+            path.relative_to(REPO_ROOT).as_posix(): path
+            for path in [
+                *test_python_files(),
+                *benchmark_python_files(),
+                *tool_python_files(),
+            ]
+        }
+        large_files = {
+            rel: script_line_count(path)
+            for rel, path in tracked_files.items()
+            if (
+                rel.startswith("tests/aippocampus/")
+                and script_line_count(path) >= LARGE_TEST_THRESHOLD
+            )
+            or (
+                rel.startswith("benchmarks/aippocampus/")
+                and script_line_count(path) >= LARGE_BENCHMARK_THRESHOLD
+            )
+            or (
+                rel.startswith("tools/aippocampus/")
+                and script_line_count(path) >= LARGE_TOOL_THRESHOLD
+            )
+        }
+        missing = sorted(set(large_files) - set(entries))
+        stale = sorted(set(entries) - set(tracked_files))
+        over_budget = {
+            path: {"loc": large_files[path], "budget": entries[path]}
+            for path in sorted(set(large_files) & set(entries))
+            if large_files[path] > entries[path]
+        }
+
+        self.assertEqual(
+            {"missing": missing, "stale": stale, "over_budget": over_budget},
+            {"missing": [], "stale": [], "over_budget": {}},
+        )
+
+    def test_debt_register_documents_non_runtime_thresholds(self) -> None:
+        text = DEBT_REGISTER.read_text(encoding="utf-8")
+
+        for phrase in (
+            "## Test, Benchmark, And Tool Debt Budgets",
+            f"test modules: {LARGE_TEST_THRESHOLD}",
+            f"benchmark runners: {LARGE_BENCHMARK_THRESHOLD}",
+            f"repo tools and smokes: {LARGE_TOOL_THRESHOLD}",
+            "not a scorecard",
+            "At least one real boundary split",
+            "test_import_coupling.py",
+            "import_coupling_helpers.py",
+        ):
+            self.assertIn(phrase, text)
 
     def test_debt_register_records_near_budget_split_priority_queue(self) -> None:
         text = DEBT_REGISTER.read_text(encoding="utf-8")
