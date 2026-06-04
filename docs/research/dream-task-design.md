@@ -607,6 +607,15 @@ evidence requests, exact or quoted claims, sensitive claims, strong claims,
 expiry, or review-due state require source reopen or silence according to the
 consumer policy. This slice does not claim the long-horizon Journey weekly /
 monthly wiring or real-history dream quality lift.
+As of the #299 queue-retention slice, queued Dream items also carry
+`retention_ladder` and `journey_projection` policy blocks. These make the
+0-6h foreground cache, 6-24h residue buffer, 24h-7d Dream queue, and weekly /
+monthly Journey-review roles visible at runtime. Journey-triggered Dream work
+may produce append-only waypoint/frontier candidates, camp/revive candidates,
+or parked residue; it must not rewrite Journey waypoints, replace a Journey
+with a smoother summary, emit user-profile claims, or promote model synthesis
+to source truth. This is still routing/reconciliation metadata, not proof of
+long-horizon Dream quality.
 The actual foreground path enforces this through working-memory matching and
 hook rendering: blocked, expired, review-due, or sensitive dream rows are not
 matched, matched dream rows carry a `dream_hypothesis_use` plan, and hook
