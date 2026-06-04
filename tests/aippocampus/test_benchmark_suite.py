@@ -151,7 +151,7 @@ class BenchmarkSuiteTests(unittest.TestCase):
                 "--skip-track-d",
                 "--include-live-semantic",
                 "--live-semantic-workers",
-                "deepseek,openai",
+                "gate,scope",
                 "--source-max-cases",
                 "7",
                 "--track-d-cases",
@@ -166,7 +166,7 @@ class BenchmarkSuiteTests(unittest.TestCase):
         self.assertFalse(config.include_track_b)
         self.assertFalse(config.include_track_d)
         self.assertTrue(config.include_live_semantic)
-        self.assertEqual(config.live_semantic_workers, ("deepseek", "openai"))
+        self.assertEqual(config.live_semantic_workers, ("gate", "scope"))
         self.assertEqual(config.source_max_cases, 7)
         self.assertEqual(config.track_d_case_limit, 4)
         self.assertEqual(config.standard_dataset, "locomo")

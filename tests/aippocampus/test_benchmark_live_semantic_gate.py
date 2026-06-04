@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 import tempfile
@@ -239,7 +240,7 @@ class LiveSemanticGateBenchmarkTests(unittest.TestCase):
     def test_parse_workers_accepts_default_alias_and_rejects_unknown(self) -> None:
         self.assertEqual(live_benchmark.parse_workers("default"), live_benchmark.DEFAULT_WORKERS)
         self.assertEqual(live_benchmark.parse_workers("gate,default"), live_benchmark.DEFAULT_WORKERS)
-        with self.assertRaises(Exception):
+        with self.assertRaises(argparse.ArgumentTypeError):
             live_benchmark.parse_workers("default,unknown")
 
     def test_live_eval_auto_parallelism_scales_with_conversation_count(self) -> None:
