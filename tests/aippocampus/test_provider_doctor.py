@@ -24,6 +24,7 @@ PROVIDER_ENV_NAMES = [
     "AIPPOCAMPUS_DEEPSEEK_PRO_MODEL",
     "DEEPSEEK_MODEL",
     "DEEPSEEK_PRO_MODEL",
+    "AIIPPOCAMPUS_SUBCONSCIOUS_HOOK",
     "AIPPOCAMPUS_OPENAI_COMPAT_ROUTE",
     "AIPPOCAMPUS_OPENAI_COMPAT_PROVIDER",
     "AIPPOCAMPUS_OPENAI_COMPAT_MODEL",
@@ -66,7 +67,28 @@ class ProviderDoctorTests(unittest.TestCase):
         self.assertTrue(report["hook_relevance"]["prompt_hook_reads_process_env"])
         self.assertFalse(report["hook_relevance"]["actual_installed_hook_process_checked"])
         self.assertTrue(report["recommended_actions"])
+        self.assertEqual(report["legacy_aliases"]["active_count"], 0)
         self.assertNotIn("sk-", encoded)
+
+    def test_provider_doctor_reports_legacy_env_alias_names_without_values(self) -> None:
+        with provider_env(
+            {
+                "DEEPSEEK_API_KEY": "sk-provider-doctor-test-secret",
+                "AIIPPOCAMPUS_SUBCONSCIOUS_HOOK": "0",
+                "DEEPSEEK_MODEL": "legacy-flash-model",
+            }
+        ):
+            report = provider_doctor.build_provider_doctor_report(model_route="default")
+        alias_diagnostics = json.dumps(report["legacy_aliases"], ensure_ascii=False)
+        aliases = {entry["alias"] for entry in report["legacy_aliases"]["active"]}
+
+        self.assertEqual(aliases, {"AIIPPOCAMPUS_SUBCONSCIOUS_HOOK", "DEEPSEEK_MODEL"})
+        self.assertFalse(report["legacy_aliases"]["value_printed"])
+        self.assertFalse(report["legacy_aliases"]["local_paths_included"])
+        self.assertFalse(report["privacy"]["legacy_alias_values_printed"])
+        self.assertNotIn("legacy-flash-model", alias_diagnostics)
+        self.assertNotIn('"0"', alias_diagnostics)
+        self.assertNotIn("sk-provider-doctor-test-secret", json.dumps(report, ensure_ascii=False))
 
     def test_visible_default_key_reports_ready_without_leaking_value(self) -> None:
         secret = "sk-provider-doctor-test-secret"

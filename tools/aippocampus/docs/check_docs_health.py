@@ -16,6 +16,8 @@ import _paths
 
 _paths.ensure_paths()
 
+from legacy_alias_guard import legacy_alias_inventory_issues
+
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER, infer_scope_labels
 
 MAX_SKILL_LINES = 220
@@ -48,6 +50,7 @@ REQUIRED_SKILL_PROACTIVE_TERMS = {
 REQUIRED_PROJECT_DOCS = [
     "docs/README.md",
     "docs/roadmap.md",
+    "docs/architecture/legacy-alias-inventory.md",
     "docs/evidence/benchmark-evidence-map.md",
     "docs/evidence/current-claims.md",
     "docs/evidence/readiness/stage-0-5-readiness.md",
@@ -346,6 +349,7 @@ REQUIRED_PUBLIC_API_CONTRACT_TERMS = {
     "`AIPPOCAMPUS_PROJECTS_TOKEN`": (
         "public API doc missing project automation token classification"
     ),
+    "legacy-alias-inventory.md": "public API doc missing legacy alias inventory pointer",
     "### Python Import Stability Layers": (
         "public API doc missing Python import stability layers"
     ),
@@ -1277,6 +1281,7 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
     issues.extend(current_claims_snapshot_issues(repo_root))
     issues.extend(proof_slice_maturity_board_issues(repo_root))
     issues.extend(hippocampal_private_annotation_protocol_issues(repo_root))
+    issues.extend(legacy_alias_inventory_issues(repo_root))
     issues.extend(public_api_contract_issues(repo_root))
     issues.extend(public_core_schema_contract_issues(repo_root))
     issues.extend(python_version_contract_issues(repo_root))

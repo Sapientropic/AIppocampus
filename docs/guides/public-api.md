@@ -486,6 +486,11 @@ point here, but they should not mirror this whole list. "Public" means
 documented and stable enough to configure. It does not mean the variable value
 is safe to publish.
 
+Legacy env/path names that remain accepted for migration are classified in the
+[legacy alias inventory](../architecture/legacy-alias-inventory.md). New setup
+docs should prefer the canonical names below and link that inventory only when
+explaining compatibility fallback behavior.
+
 ### Environment Configuration Matrix
 
 | Variable / family | Group | Audience | Default / precedence | Sensitivity | Stability |
