@@ -122,7 +122,6 @@ REQUIRED_RUNTIME_MAP_SCRIPTS = [
     "ambient_warm_scheduler.py",
     "ambient_recall_policy.py",
     "ambient_thread_cache.py",
-    "question_confirmation.py",
     "question_confirmation_live.py",
     "question_index_sidecar.py",
     "question_health.py",

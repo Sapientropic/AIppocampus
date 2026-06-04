@@ -35,7 +35,7 @@ LOW_CONFIDENCE_PRIOR_THRESHOLD = 0.62
 
 MANUAL_OVERRIDE_SURFACE = [
     "subconscious_worker.py --dry-run/--no-write",
-    "subconscious_agent.py --dry-run/--no-write",
+    "python -m aippocampus_runtime.subconscious.agent --dry-run/--no-write",
     "subconscious_jobs.py --dry-run --job ...",
 ]
 # Private reports are still command output; keep reasons enumerated so local

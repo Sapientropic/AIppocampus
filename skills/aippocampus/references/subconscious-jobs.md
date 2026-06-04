@@ -26,7 +26,8 @@ but they must not rewrite source, delete source, or directly write formal memory
 ## Files
 
 - `subconscious_worker.py`: single-shot timeline-to-concept-edge extractor.
-- `subconscious_agent.py`: minimal read-only tool loop for concept edges.
+- `aippocampus_runtime.subconscious.agent`: package-owner minimal read-only
+  tool loop for concept edges.
 - `subconscious_jobs.py`: multi-job background cognition runner.
 - `subconscious_staging_maintenance.py`: dry-run maintenance reporter for
   local-private staging queues. It classifies rows and pressure, but does not
