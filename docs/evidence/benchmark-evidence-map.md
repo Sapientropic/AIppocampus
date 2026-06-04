@@ -198,8 +198,8 @@ benchmark runner should be added here and linked to its dated evidence owner.
 | Segmented merge policy calibration | `benchmarks/aippocampus/benchmark_segmented_merge_policy.py` | `docs/evidence/benchmarks/segmented-merge-policy-fixture-report.md`, `benchmark_corpus/segmented_merge_policy/fixture.json`, #375 |
 
 Benchmark mirror tests live in `tests/aippocampus/test_benchmark_*.py`. The
-fresh-clone deterministic suite smoke plus curated PR mirror smoke is selected
-with
+fresh-clone deterministic suite smoke plus curated PR mirror/support smoke is
+selected with
 `python tools/aippocampus/run_tests.py --tier benchmark-smoke --benchmark-suite-profile public-fast`;
 the complete benchmark mirror tier is selected with
 `python tools/aippocampus/run_tests.py --tier benchmark`.
@@ -209,7 +209,7 @@ the complete benchmark mirror tier is selected with
 | Need | Command | Dependency / claim boundary |
 | --- | --- | --- |
 | Fast repository regression gate | `python tools/aippocampus/run_tests.py --tier fast` | Deterministic non-benchmark tests. This stays the default PR matrix and excludes `test_benchmark_*` modules. |
-| Deterministic benchmark PR smoke | `python -m pip install -e ".[benchmark]"` then `python tools/aippocampus/run_tests.py --tier benchmark-smoke --benchmark-suite-profile public-fast` | Public-fast suite smoke plus curated public benchmark/report/schema/profile guards. No provider calls, private registry data, raw reports, or large corpus downloads. |
+| Deterministic benchmark PR smoke | `python -m pip install -e ".[benchmark]"` then `python tools/aippocampus/run_tests.py --tier benchmark-smoke --benchmark-suite-profile public-fast` | Public-fast suite smoke plus curated public benchmark/report/schema/profile guards and the #279 candidate-seed discovery support guard. No provider calls, private registry data, raw reports, or large corpus downloads. |
 | Full benchmark mirror tests | `python tools/aippocampus/run_tests.py --tier benchmark` | All `tests/aippocampus/test_benchmark_*.py` modules. Use when changing benchmark runners, profiles, reports, or claim-boundary helpers. |
 | Full repository suite | `python tools/aippocampus/run_tests.py --tier full` | Fast + slow + benchmark tests. Use before broad repository-health, release, or public-readiness claims. |
 | Optional live/provider tracks | Track-specific CLI flags, environment variables, and owner docs | Not normal contributor deps and not part of default PR CI. They require explicit operator setup, documented provider/env boundaries, and sanitized outputs. |
@@ -239,7 +239,7 @@ pasting raw JSON into multiple docs.
 | Semantic paraphrase reuse smoke | `tools/aippocampus/smoke/smoke_semantic_paraphrase_reuse.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md` |
 | Living cue cache public-safe smoke | `tools/aippocampus/smoke/smoke_living_cue_cache.py` | `skills/aippocampus/references/ambient-hooks.md`, `docs/research/ambient-associative-recall.md`, #281 |
 | Real Codex long-session continuity smoke | `tools/aippocampus/smoke/smoke_codex_long_session_continuity.py` | `docs/evidence/readiness/public-readiness-verification.md` |
-| E2E50 silent-constraint candidate seed scanner | `tools/aippocampus/smoke/smoke_e2e50_seed_candidates.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, #279 |
+| E2E50 silent-constraint candidate seed scanner | `tools/aippocampus/smoke/smoke_e2e50_seed_candidates.py`; deterministic unittest included in `benchmark-smoke` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, #279 |
 | Claude Code MCP host probe | `tools/aippocampus/smoke/smoke_claude_code_mcp_host.py` | `docs/evidence/readiness/public-readiness-verification.md` |
 | Claude Code local-history parser smoke | `tools/aippocampus/smoke/smoke_claude_code_history.py` | `docs/evidence/readiness/public-readiness-verification.md` |
 | Synthetic cross-agent continuity smoke | `tools/aippocampus/smoke/smoke_cross_agent_continuity.py` | `docs/evidence/readiness/public-readiness-verification.md` |

@@ -80,9 +80,10 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
   binding/rejected-route/temporary/superseded signals, behavior-backed failure
   events, and later-window drift. Its output is `candidate_seed_discovery_only`:
   hash/count-only candidate rows, case-family guesses, and reviewer checklists.
-  It does not score agent behavior, publish private text/paths/ids, or claim
-  #279 benchmark quality before manually annotated cases and the shared
-  benchmark methodology are ready.
+  Its deterministic unittest is included in the `benchmark-smoke` lane so fresh
+  PRs keep the scanner contract alive. It does not score agent behavior, publish
+  private text/paths/ids, or claim #279 benchmark quality before manually
+  annotated cases and the shared benchmark methodology are ready.
 - `benchmarks/aippocampus/benchmark_knowledge_pollution.py` runs the #517
   public-safe knowledge pollution and privacy-partition benchmark. It reuses
   the governed knowledge source/claim schema and high-risk answer gate, then
