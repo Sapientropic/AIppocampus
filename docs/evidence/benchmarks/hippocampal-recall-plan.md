@@ -16,6 +16,11 @@ First D/I diagnostic-seed slice:
 `benchmarks/aippocampus/build_hippocampal_fixture.py`,
 `benchmark_corpus/hippocampal_fixtures/hippocampal_synthetic_v1.jsonl`, and
 `docs/evidence/benchmarks/hippocampal-recall-fixture-report.md`.
+First H5 consolidation diagnostic slice: the same
+`benchmark_hippocampal_recall.py` report now exposes `h5_consolidation` with
+frozen H1/H2 labels, no-consolidation/random/simple-summary controls, and a
+fixture-authored AIppocampus consolidation diagnostic arm. This is not live
+Dream worker evidence or user-visible consolidation quality.
 
 AIppocampus already has strong benchmark coverage for recall routing, source
 retrieval, payload fidelity, compaction continuity, and VCS hard-event memory.
@@ -485,6 +490,14 @@ summary-only consolidation before claiming AIppocampus-specific benefit:
   without using semantic, time, or topic relatedness.
 - `simple_summary_consolidation`: generate or use one summary per conversation
   and search over summaries instead of clean source or structured associations.
+
+The first executable #233 slice is a public-safe deterministic control report,
+not a live consolidation benchmark. It keeps labels and source state frozen,
+reports deltas over the H1/H2 scorer, and makes false forgetting,
+overgeneralization, stale-as-current, wrong-twin, new association, and
+cost-per-improvement fields visible. The Dream prospective-validation shape is
+recorded as requiring time-sliced future source evidence; similar vocabulary
+alone is not support.
 
 ## H3/H4 Follow-On Benchmark Design
 

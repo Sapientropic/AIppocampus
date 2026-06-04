@@ -1,7 +1,7 @@
 # Hippocampal Recall Fixture Report
 
-Status: implemented public-safe diagnostic seed for GitHub #229, #230, and
-#231.
+Status: implemented public-safe diagnostic seed for GitHub #229, #230, #231,
+#233, and #237.
 
 This report records the narrow evidence boundary for
 `benchmarks/aippocampus/benchmark_hippocampal_recall.py`. The runner validates a
@@ -24,6 +24,12 @@ private registry.
   `baseline_rag`, `closed_book`, `overactive_all_evidence`, and
   `random_retrieval`, each with per-arm D/I, calibration, source-reopen, and
   cost/latency report views.
+- H5 before/after diagnostic controls for #233: frozen H1/H2 labels and source
+  state, `keyword_only` as the before arm, and `no_consolidation`,
+  `aippocampus_dream_consolidation`, `random_consolidation`, and
+  `simple_summary_consolidation` as after arms. The report exposes score
+  deltas, false forgetting, overgeneralization, stale-as-current deltas,
+  wrong-twin deltas, new association discovery, and cost per improvement.
 - External adapter candidates for Mem0, Zep/Graphiti, Letta, and LangMem are
   reported as opt-in diagnostics when dependency/configuration is missing; the
   default public benchmark does not require external credentials or paid
@@ -67,6 +73,12 @@ hide scoring-only truth labels such as expected decisions, expected source
 refs, distractor refs, forbidden claims, truth source, and ambiguity policy, so
 local baseline arms cannot score by reading the answer key.
 
+H5 runs expose `h5_consolidation`. This is a deterministic control slice over
+the same frozen H1/H2 cases, not a live Dream worker measurement. It records the
+prospective-validation shape from the Dream design notes, but it requires later
+time-sliced source evidence before any prospective Dream claim can be treated
+as supported.
+
 ## Canonical Files
 
 - Schema: `benchmarks/aippocampus/hippocampal_fixture_schema.py`
@@ -88,3 +100,6 @@ local baseline arms cannot score by reading the answer key.
 - bucketed calibration error without calibrated confidence bins
 - external memory-system scores or cross-system superiority
 - live provider quality from missing-config diagnostic adapters
+- user-visible Dream benefit or predictive validity from synthetic H5 deltas
+- private real-history consolidation quality
+- AIppocampus-specific consolidation lift without live controls

@@ -207,6 +207,63 @@ class HippocampalRecallP1BenchmarkTests(unittest.TestCase):
             self.assertNotIn(field, adapter_case)
             self.assertNotIn(field, serialized)
 
+    def test_h5_consolidation_report_uses_frozen_h1_h2_labels_and_controls(self) -> None:
+        payload = benchmark.run_benchmark()
+        h5 = payload["h5_consolidation"]
+
+        self.assertEqual(
+            h5["version"],
+            "aippocampus.h5_consolidation_delta_report.v1",
+        )
+        self.assertEqual(h5["before_arm"], "keyword_only")
+        self.assertEqual(
+            h5["arms"],
+            [
+                "no_consolidation",
+                "aippocampus_dream_consolidation",
+                "random_consolidation",
+                "simple_summary_consolidation",
+            ],
+        )
+        self.assertTrue(h5["truth_boundary"]["labels_frozen_before_after"])
+        self.assertTrue(h5["truth_boundary"]["reruns_same_case_ids"])
+        self.assertFalse(h5["truth_boundary"]["allows_relabeling_after_consolidation"])
+        self.assertFalse(h5["truth_boundary"]["uses_live_dream_worker"])
+        self.assertIn(
+            "user_visible_dream_benefit",
+            h5["cannot_claim"],
+        )
+
+        no_consolidation = h5["views_by_arm"]["no_consolidation"]["aggregate"]
+        self.assertEqual(no_consolidation["score_delta_total"], 0.0)
+        self.assertEqual(no_consolidation["false_forgetting_count"], 0)
+        self.assertEqual(no_consolidation["overgeneralization_count"], 0)
+
+        dream = h5["views_by_arm"]["aippocampus_dream_consolidation"]["aggregate"]
+        self.assertGreater(dream["improvement_count"], 0)
+        self.assertIn("stale_as_current_delta", dream)
+        self.assertIn("wrong_twin_delta", dream)
+        self.assertIn("cost_per_improvement", dream)
+        self.assertGreaterEqual(dream["new_association_discovery_count"], 1)
+
+    def test_h5_case_deltas_keep_same_cases_and_report_regressions(self) -> None:
+        payload = benchmark.run_benchmark()
+        h5 = payload["h5_consolidation"]
+        case_deltas = h5["case_deltas"]
+
+        self.assertTrue(case_deltas)
+        for delta in case_deltas:
+            self.assertTrue(delta["same_case_id_after_rerun"])
+            self.assertFalse(delta["truth_relabeling_allowed"])
+            self.assertIn("frozen_expected_decision", delta)
+            self.assertIn("frozen_label_sha1", delta)
+            self.assertNotIn("query", delta)
+
+        random_view = h5["views_by_arm"]["random_consolidation"]["aggregate"]
+        summary_view = h5["views_by_arm"]["simple_summary_consolidation"]["aggregate"]
+        self.assertGreater(random_view["false_forgetting_count"], 0)
+        self.assertGreater(summary_view["overgeneralization_count"], 0)
+
     def test_scoring_catches_source_reopen_wrong_twin_overactive_and_skip_failures(self) -> None:
         rows = _by_case(builder.build_fixture_rows())
 
