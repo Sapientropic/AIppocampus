@@ -23,6 +23,10 @@ from typing import Any
 
 from aippocampus_runtime.core import compact_text, deepseek_cache_metrics_from_usage, now_utc
 from aippocampus_runtime.dream import worker as dream_worker
+from aippocampus_runtime.dream.manual_source_review import (
+    load_manual_source_review_rows,
+    manual_source_review_metrics,
+)
 from aippocampus_runtime.dream.working_memory import (
     adjudicated_dream_findings_to_working_memory,
     background_adjudicate_dream_findings,
@@ -67,24 +71,6 @@ USER_VISIBLE_EVALUATION_AXES = [
     "annoyance_noise",
     "stale_superseded_handling",
 ]
-MANUAL_REVIEW_STATUSES = {
-    "supported",
-    "refuted",
-    "unknown",
-    "stale",
-    "superseded",
-    "noisy",
-    "over_personalized",
-}
-WRONG_HINT_OUTCOMES = {
-    "wrong_hint",
-    "irrelevant",
-    "stale",
-    "superseded",
-    "over_personalized",
-    "user_correction",
-}
-HIGH_ANNOYANCE_VALUES = {"high", "annoying", "noisy"}
 CODING_DECISION_SHADOW_SEED_KINDS = {
     "coding_ticket",
     "coding_decision_event",
@@ -847,41 +833,6 @@ def unique_rows(rows: Iterable[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
     return out
 
 
-def manual_source_review_metrics(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
-    status_counts: Counter[str] = Counter()
-    reviewed = 0
-    source_backed = 0
-    wrong_hint_count = 0
-    high_annoyance_count = 0
-    stale_or_superseded_count = 0
-    for row in rows:
-        if not isinstance(row, Mapping):
-            continue
-        status = str(row.get("review_status") or row.get("status") or "unknown").casefold()
-        if status not in MANUAL_REVIEW_STATUSES:
-            status = "unknown"
-        outcome = str(row.get("user_visible_outcome") or row.get("outcome") or "").casefold()
-        annoyance = str(row.get("annoyance_risk") or row.get("noise_risk") or "").casefold()
-        reviewed += 1
-        status_counts[status] += 1
-        if row.get("source_refs"):
-            source_backed += 1
-        if outcome in WRONG_HINT_OUTCOMES:
-            wrong_hint_count += 1
-        if annoyance in HIGH_ANNOYANCE_VALUES:
-            high_annoyance_count += 1
-        if status in {"stale", "superseded"}:
-            stale_or_superseded_count += 1
-    return {
-        "reviewed_count": reviewed,
-        "source_backed_review_count": source_backed,
-        "status_counts": dict(sorted(status_counts.items())),
-        "wrong_hint_count": wrong_hint_count,
-        "high_annoyance_count": high_annoyance_count,
-        "stale_or_superseded_count": stale_or_superseded_count,
-    }
-
-
 def count_model_backed_calls(worker_runs: Iterable[Mapping[str, Any]]) -> int:
     total = 0
     for run in worker_runs:
@@ -1196,6 +1147,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--registry-dir", type=Path)
     parser.add_argument("--jobs", type=Path)
     parser.add_argument("--working-memory", type=Path)
+    parser.add_argument(
+        "--manual-source-review",
+        type=Path,
+        help=(
+            "Optional JSONL of dream_manual_source_review rows. The report only "
+            "keeps aggregate review counts and never emits source refs."
+        ),
+    )
     parser.add_argument("--max-packs", type=int, default=4)
     parser.add_argument("--min-packs", type=int, default=1)
     parser.add_argument(
@@ -1237,6 +1196,7 @@ def main(argv: list[str] | None = None) -> int:
         registry_dir=args.registry_dir,
         jobs_path=args.jobs,
         working_memory_path=args.working_memory,
+        manual_source_review_rows=load_manual_source_review_rows(args.manual_source_review),
         max_packs=args.max_packs,
         min_packs=args.min_packs,
         dream_worker_mode=worker_mode,
