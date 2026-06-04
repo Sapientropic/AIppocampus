@@ -9,6 +9,7 @@ proxy only: exact quotes and final claims still require reopening clean source.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from collections import Counter
 from pathlib import Path
@@ -37,6 +38,11 @@ PORTRAIT_FINDING_KINDS = {
     "theme_candidate",
 }
 DEFAULT_ROWS_PER_PACK = 32
+ANSWER_QUALITY_REVIEW_KIND = "question_aware_answer_quality_review"
+ANSWER_QUALITY_REVIEW_ARMS = (
+    "plain_baseline",
+    "question_aware_source_reopen",
+)
 
 
 def iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
@@ -52,6 +58,11 @@ def iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
                 continue
             if isinstance(item, dict):
                 yield item
+
+
+def public_digest(value: Any, *, prefix: str) -> str:
+    digest = hashlib.sha256(str(value).encode("utf-8")).hexdigest()[:12]
+    return f"{prefix}_{digest}"
 
 
 def finding_kind(row: Mapping[str, Any]) -> str:
@@ -362,6 +373,245 @@ def scaffold_vs_evidence_report(metrics: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def parse_review_bool(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return bool(value)
+    text = str(value).strip().casefold()
+    if text in {"1", "true", "yes", "y", "pass", "passed"}:
+        return True
+    if text in {"0", "false", "no", "n", "fail", "failed"}:
+        return False
+    return None
+
+
+def parse_review_float(value: Any) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def answer_quality_review_kind(row: Mapping[str, Any]) -> str:
+    return str(row.get("kind") or row.get("review_kind") or "").strip()
+
+
+def answer_quality_case_id(row: Mapping[str, Any]) -> str:
+    return str(row.get("case_id") or row.get("prompt_case_id") or row.get("id") or "").strip()
+
+
+def rate_for(
+    case_arms: Sequence[Mapping[str, Mapping[str, Any]]],
+    *,
+    arm: str,
+    field: str,
+) -> float | None:
+    values = [
+        parsed
+        for parsed in (parse_review_bool(case[arm].get(field)) for case in case_arms)
+        if parsed is not None
+    ]
+    if not values:
+        return None
+    return round(sum(1 for value in values if value) / len(values), 4)
+
+
+def mean_delta_for(
+    case_arms: Sequence[Mapping[str, Mapping[str, Any]]],
+    *,
+    field: str,
+) -> float | None:
+    deltas: list[float] = []
+    for case in case_arms:
+        plain = parse_review_float(case["plain_baseline"].get(field))
+        question_aware = parse_review_float(case["question_aware_source_reopen"].get(field))
+        if plain is None or question_aware is None:
+            continue
+        deltas.append(question_aware - plain)
+    if not deltas:
+        return None
+    return round(sum(deltas) / len(deltas), 4)
+
+
+def answer_quality_case_summary(
+    case_id: str,
+    arms: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Any]:
+    arms_present = [arm for arm in ANSWER_QUALITY_REVIEW_ARMS if arm in arms]
+    return {
+        "case_hash": public_digest(case_id, prefix="aqr_case"),
+        "arms_present": arms_present,
+        "complete_comparison": all(arm in arms for arm in ANSWER_QUALITY_REVIEW_ARMS),
+        "source_reopened_by_arm": {
+            arm: parse_review_bool(arms[arm].get("source_reopened"))
+            for arm in arms_present
+        },
+        "answer_useful_by_arm": {
+            arm: parse_review_bool(arms[arm].get("answer_useful"))
+            for arm in arms_present
+        },
+        "answer_supported_by_arm": {
+            arm: parse_review_bool(arms[arm].get("answer_supported"))
+            for arm in arms_present
+        },
+        "citation_correct_by_arm": {
+            arm: parse_review_bool(arms[arm].get("citation_correct"))
+            for arm in arms_present
+        },
+        "wrong_hint_by_arm": {
+            arm: parse_review_bool(arms[arm].get("wrong_hint"))
+            for arm in arms_present
+        },
+    }
+
+
+def answer_quality_review_report(
+    review_rows: Iterable[Mapping[str, Any]] | None,
+) -> dict[str, Any]:
+    raw_rows = list(review_rows or [])
+    cases: dict[str, dict[str, Mapping[str, Any]]] = {}
+    invalid_row_count = 0
+    ignored_row_count = 0
+    duplicate_arm_count = 0
+
+    for row in raw_rows:
+        kind = answer_quality_review_kind(row)
+        if kind and kind != ANSWER_QUALITY_REVIEW_KIND:
+            ignored_row_count += 1
+            continue
+        case_id = answer_quality_case_id(row)
+        arm = str(row.get("arm") or "").strip()
+        if not case_id or arm not in ANSWER_QUALITY_REVIEW_ARMS:
+            invalid_row_count += 1
+            continue
+        case = cases.setdefault(case_id, {})
+        if arm in case:
+            duplicate_arm_count += 1
+            continue
+        case[arm] = row
+
+    case_summaries = [
+        answer_quality_case_summary(case_id, arms)
+        for case_id, arms in sorted(cases.items(), key=lambda item: public_digest(item[0], prefix="aqr_case"))
+    ]
+    complete_case_arms = [
+        arms
+        for arms in cases.values()
+        if all(arm in arms for arm in ANSWER_QUALITY_REVIEW_ARMS)
+    ]
+    plain_useful = rate_for(
+        complete_case_arms,
+        arm="plain_baseline",
+        field="answer_useful",
+    )
+    question_aware_useful = rate_for(
+        complete_case_arms,
+        arm="question_aware_source_reopen",
+        field="answer_useful",
+    )
+    usefulness_delta = (
+        round(question_aware_useful - plain_useful, 4)
+        if plain_useful is not None and question_aware_useful is not None
+        else None
+    )
+    question_aware_source_reopened = rate_for(
+        complete_case_arms,
+        arm="question_aware_source_reopen",
+        field="source_reopened",
+    )
+
+    metrics = {
+        "input_row_count": len(raw_rows),
+        "review_row_count": sum(len(arms) for arms in cases.values()),
+        "ignored_row_count": ignored_row_count,
+        "invalid_review_row_count": invalid_row_count,
+        "duplicate_arm_row_count": duplicate_arm_count,
+        "review_case_count": len(cases),
+        "complete_comparison_case_count": len(complete_case_arms),
+        "plain_baseline_answer_useful_rate": plain_useful,
+        "question_aware_source_reopen_answer_useful_rate": question_aware_useful,
+        "answer_usefulness_delta": usefulness_delta,
+        "plain_baseline_answer_supported_rate": rate_for(
+            complete_case_arms,
+            arm="plain_baseline",
+            field="answer_supported",
+        ),
+        "question_aware_answer_supported_rate": rate_for(
+            complete_case_arms,
+            arm="question_aware_source_reopen",
+            field="answer_supported",
+        ),
+        "plain_baseline_citation_correct_rate": rate_for(
+            complete_case_arms,
+            arm="plain_baseline",
+            field="citation_correct",
+        ),
+        "question_aware_citation_correct_rate": rate_for(
+            complete_case_arms,
+            arm="question_aware_source_reopen",
+            field="citation_correct",
+        ),
+        "question_aware_source_reopened_rate": question_aware_source_reopened,
+        "question_aware_wrong_hint_rate": rate_for(
+            complete_case_arms,
+            arm="question_aware_source_reopen",
+            field="wrong_hint",
+        ),
+        "mean_extra_verification_steps_delta": mean_delta_for(
+            complete_case_arms,
+            field="extra_verification_steps",
+        ),
+    }
+
+    if not cases:
+        status = "answer_quality_review_absent"
+    elif len(complete_case_arms) < len(cases):
+        status = "answer_quality_review_incomplete"
+    elif question_aware_source_reopened != 1.0:
+        status = "answer_quality_review_ready_but_source_reopen_gap"
+    else:
+        status = "selected_source_reopened_answer_quality_review_ready"
+
+    can_claim = ["answer_quality_review_output_is_public_safe"]
+    cannot_claim = [
+        "full_history_answer_quality",
+        "live_model_behavioral_equivalence",
+        "user_visible_recall_improvement_without_release_trial",
+        "default_prefilter_safety",
+    ]
+    if status == "selected_source_reopened_answer_quality_review_ready":
+        can_claim.append("selected_source_reopened_answer_quality_review_recorded")
+    if status == "answer_quality_review_absent":
+        cannot_claim.append("selected_answer_quality_review")
+    if status == "answer_quality_review_incomplete":
+        cannot_claim.append("paired_answer_quality_review_missing")
+    if status == "answer_quality_review_ready_but_source_reopen_gap":
+        cannot_claim.append("question_aware_source_reopen_not_confirmed")
+
+    return {
+        "kind": ANSWER_QUALITY_REVIEW_KIND,
+        "status": status,
+        "measurement": "opt_in_source_reopened_operator_review_v1",
+        "arms": list(ANSWER_QUALITY_REVIEW_ARMS),
+        "metrics": metrics,
+        "case_summaries": case_summaries,
+        "privacy": {
+            "case_identifiers": "sha256_hash_only",
+            "raw_answer_text_emitted": False,
+            "raw_source_text_emitted": False,
+            "raw_source_refs_emitted": False,
+            "local_paths_emitted": False,
+        },
+        "can_claim": can_claim,
+        "cannot_claim": cannot_claim,
+    }
+
+
 def benchmark_status(
     *,
     packs: Sequence[Mapping[str, Any]],
@@ -476,6 +726,8 @@ def known_failure_modes(
 def run_question_aware_real_history_benchmark(
     *,
     job_rows: Iterable[Mapping[str, Any]] | None = None,
+    answer_quality_review_rows: Iterable[Mapping[str, Any]] | None = None,
+    answer_quality_review_path: Path | None = None,
     registry_dir: Path | None = None,
     jobs_path: Path | None = None,
     max_packs: int = 4,
@@ -484,7 +736,18 @@ def run_question_aware_real_history_benchmark(
     include_private_text: bool = False,
 ) -> dict[str, Any]:
     registry_path, _ = registry_paths(registry_dir)
-    rows = list(job_rows) if job_rows is not None else list(iter_jsonl(jobs_path or default_jobs_output_path(registry_path)))
+    rows = (
+        list(job_rows)
+        if job_rows is not None
+        else list(iter_jsonl(jobs_path or default_jobs_output_path(registry_path)))
+    )
+    review_rows = (
+        list(answer_quality_review_rows)
+        if answer_quality_review_rows is not None
+        else list(iter_jsonl(answer_quality_review_path))
+        if answer_quality_review_path
+        else []
+    )
     packs = select_question_aware_packs(
         job_rows=rows,
         max_packs=max_packs,
@@ -506,6 +769,24 @@ def run_question_aware_real_history_benchmark(
         min_packs=min_packs,
     )
     scaffold_report = scaffold_vs_evidence_report(metrics)
+    answer_review = answer_quality_review_report(review_rows)
+    can_claim = [
+        "selected_question_rows_can_form_sanitized_source_backed_structural_packs",
+        "question_aware_portrait_preserves_back_pointers_for_navigation",
+        "known_failure_modes_are_reported_without_private_text",
+    ]
+    for claim in answer_review["can_claim"]:
+        if claim not in can_claim:
+            can_claim.append(claim)
+    cannot_claim = [
+        "private_real_history_answer_quality",
+        "live_model_behavioral_equivalence",
+        "full_history_coverage",
+        "quote_fidelity_without_clean_source_reopen",
+        "user_visible_recall_improvement",
+        "identity_or_personality_profile_validity",
+        "answer_usefulness_beyond_structural_proxy",
+    ]
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": BENCHMARK_KIND,
@@ -518,26 +799,15 @@ def run_question_aware_real_history_benchmark(
         "pack_selection": selection,
         "metrics": metrics,
         "scaffold_vs_evidence": scaffold_report,
+        "answer_quality_review": answer_review,
         "known_failure_modes": known_failure_modes(
             metrics,
             status=status,
             selection=selection,
         ),
         "packs": packs,
-        "can_claim": [
-            "selected_question_rows_can_form_sanitized_source_backed_structural_packs",
-            "question_aware_portrait_preserves_back_pointers_for_navigation",
-            "known_failure_modes_are_reported_without_private_text",
-        ],
-        "cannot_claim": [
-            "private_real_history_answer_quality",
-            "live_model_behavioral_equivalence",
-            "full_history_coverage",
-            "quote_fidelity_without_clean_source_reopen",
-            "user_visible_recall_improvement",
-            "identity_or_personality_profile_validity",
-            "answer_usefulness_beyond_structural_proxy",
-        ],
+        "can_claim": can_claim,
+        "cannot_claim": cannot_claim,
     }
 
 
@@ -550,6 +820,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-packs", type=int, default=4)
     parser.add_argument("--min-packs", type=int, default=1)
     parser.add_argument("--rows-per-pack", type=int, default=DEFAULT_ROWS_PER_PACK)
+    parser.add_argument(
+        "--answer-quality-review",
+        type=Path,
+        help=(
+            "Optional JSONL review rows for plain_baseline vs "
+            "question_aware_source_reopen answer-quality comparisons."
+        ),
+    )
     parser.add_argument("--include-private-text", action="store_true")
     parser.add_argument("--json", action="store_true", help="Emit compact JSON.")
     parser.add_argument("--output", type=Path)
@@ -564,6 +842,7 @@ def main(argv: list[str] | None = None) -> int:
         max_packs=args.max_packs,
         min_packs=args.min_packs,
         rows_per_pack=args.rows_per_pack,
+        answer_quality_review_path=args.answer_quality_review,
         include_private_text=args.include_private_text,
     )
     text = json.dumps(payload, ensure_ascii=False, indent=None if args.json else 2)

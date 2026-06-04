@@ -185,7 +185,9 @@ view across proof lines, use
   question-continuity product surface. The closed #133/#134-#139 queue is
   first-slice evidence; follow-up #248 owns the remaining extraction-gate,
   default-prefilter, answer-quality, broader calibration, and theme-resonance
-  gaps.
+  gaps. The #248 answer-quality review path is now available for selected
+  source-reopened comparisons, but it is not full-history quality proof or
+  default-prefilter safety evidence.
 - Benchmark evidence now includes a deterministic #406 Codex-style
   `host_native_continuous_no_aippocampus` contract arm, but it is not live
   host telemetry and does not prove
@@ -302,6 +304,13 @@ above. The canonical command details live in
   formation and known-failure reporting only; it does not claim token savings,
   answer usefulness, user-visible recall improvement, or quote fidelity without
   reopening clean source.
+- #248 extends that benchmark with optional source-reopened answer-quality
+  review rows for paired `plain_baseline` versus
+  `question_aware_source_reopen` comparisons. Output is limited to case hashes
+  and aggregate support/usefulness/citation/wrong-hint rates. It can record
+  selected review evidence, but it still does not claim full-history answer
+  quality, live model equivalence, user-visible recall lift, or default
+  prefilter safety.
 - #63 adds the first deterministic Journey Tracking P1-P3 core. It defines
   source-backed waypoint/journey structures, append-only waypoint history,
   conservative multi-thread instantiation, status transitions, expiry/TTL
