@@ -36,6 +36,7 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("mcp list-tools", proc.stdout)
         self.assertIn("smoke recall-funnel", proc.stdout)
         self.assertIn("storage gc", proc.stdout)
+        self.assertIn("why-recall", proc.stdout)
         self.assertIn("hooks [kind]        Codex prompt/lifecycle hook status/install/uninstall", proc.stdout)
 
     def test_top_level_script_is_compatibility_shim_for_package_facade(self) -> None:
@@ -103,6 +104,17 @@ class AippocampusCliTests(unittest.TestCase):
         )
         self.assertEqual(storage_invocation.script_name, "storage_governance.py")
         self.assertEqual(storage_invocation.args, ["gc", "--dry-run", "--json"])
+
+        why_invocation = facade.resolve_command(["why-recall", "continue memory", "--json"])
+        self.assertEqual(why_invocation.command, "why-recall")
+        self.assertEqual(why_invocation.module_name, "aippocampus_runtime.recall.why_cli")
+        self.assertEqual(why_invocation.script_name, "why_recall.py")
+        self.assertEqual(why_invocation.args, ["why-recall", "continue memory", "--json"])
+
+        why_not_invocation = facade.resolve_command(["why-not-recall", "continue memory"])
+        self.assertEqual(why_not_invocation.command, "why-not-recall")
+        self.assertEqual(why_not_invocation.module_name, "aippocampus_runtime.recall.why_cli")
+        self.assertEqual(why_not_invocation.args, ["why-not-recall", "continue memory"])
 
         conversation_import = facade.resolve_command(
             [

@@ -151,6 +151,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_recall_navigation_comparison",
         "test_recall_scoring_policy",
         "test_recall_structure_time_features",
+        "test_recall_why_diagnostics",
         "test_reflection_space",
         "test_registry_register_rollout",
         "test_registry_search",
@@ -206,6 +207,7 @@ QUICK_STEMS = frozenset(
         "test_docs_health",
         "test_path_identity",
         "test_question_tracking",
+        "test_recall_why_diagnostics",
         "test_run_tests_tiers",
         "test_semantic_recall_gate",
     }

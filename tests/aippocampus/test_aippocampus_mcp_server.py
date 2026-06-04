@@ -102,6 +102,7 @@ class AippocampusMcpServerTests(unittest.TestCase):
                 "search_memory",
                 "recall_context",
                 "recall_deepen",
+                "recall_diagnostic",
                 "latest_reply",
                 "get_turn_context",
                 "list_threads",
