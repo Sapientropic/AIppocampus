@@ -131,9 +131,9 @@ def is_ambient_handler(
     # so reinstalling upgrades hooks in-place instead of leaving duplicate
     # UserPromptSubmit entries pointing at a renamed script.
     return (
-        module in command
+        bool(module and module in command)
         or any(name in command for name in ("aippocampus_prompt_hook.py", "ambient_recall_hook.py"))
-        or (script_resolved and script_resolved in command)
+        or bool(script_resolved and script_resolved in command)
     )
 
 

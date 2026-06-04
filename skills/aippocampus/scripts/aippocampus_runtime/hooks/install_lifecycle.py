@@ -111,12 +111,12 @@ def is_maintenance_handler(
     # so reinstalling upgrades lifecycle hooks in-place instead of leaving
     # stale Stop/PreCompact/PostCompact commands behind.
     return (
-        module in command
+        bool(module and module in command)
         or any(
             name in command
             for name in ("aippocampus_lifecycle_hook.py", "memory_maintenance_hook.py")
         )
-        or (script_resolved and script_resolved in command)
+        or bool(script_resolved and script_resolved in command)
     )
 
 
