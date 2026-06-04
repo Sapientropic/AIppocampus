@@ -323,6 +323,23 @@ ALLOWED_FRONTIER_TYPES = {
 QUESTION_TEXT_MAX_CHARS = 140
 
 
+def normalize_question_dedupe_text(value: str) -> str:
+    return re.sub(r"[\W_]+", "", str(value or "").casefold(), flags=re.UNICODE)
+
+
+def question_dedupe_keys(finding: dict[str, Any]) -> set[tuple[str, str]]:
+    text = normalize_question_dedupe_text(
+        str(finding.get("question_short") or finding.get("question_text") or "")
+    )
+    if not text:
+        return set()
+    return {
+        (str(ref.get("thread_key") or ""), text)
+        for ref in finding.get("source_refs") or []
+        if isinstance(ref, dict) and str(ref.get("thread_key") or "")
+    }
+
+
 def short_question_fallback(item: dict[str, Any]) -> str:
     for key in ("question_short", "title"):
         value = compact_text(str(item.get(key) or ""), QUESTION_TEXT_MAX_CHARS)
@@ -527,6 +544,7 @@ def validate_findings(
 ) -> list[dict[str, Any]]:
     spec = JOB_SPECS[job]
     out: list[dict[str, Any]] = []
+    seen_question_keys: set[tuple[str, str]] = set()
     for item in parsed.get("findings") or []:
         if not isinstance(item, dict):
             continue
@@ -571,6 +589,11 @@ def validate_findings(
             if not question_fields:
                 continue
             finding.update(question_fields)
+            if finding["kind"] == "question_candidate":
+                dedupe_keys = question_dedupe_keys(finding)
+                if dedupe_keys & seen_question_keys:
+                    continue
+                seen_question_keys.update(dedupe_keys)
             # Question extraction may receive weak or invented labels from the
             # model. Preserve only labels already attached to the selected
             # source turns/messages, so downstream dream work can use life-wide
