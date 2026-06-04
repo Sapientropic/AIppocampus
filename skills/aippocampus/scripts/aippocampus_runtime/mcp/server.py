@@ -20,6 +20,7 @@ from aippocampus_runtime.mcp.recall_navigation import (
 )
 from aippocampus_runtime.mcp.tool_catalog import TOOLS
 from aippocampus_runtime.privacy import LOCAL_PATH_REDACTION, redact_private_paths
+from aippocampus_runtime.recall.why_diagnostics import recall_diagnostic_report
 from aippocampus_runtime.registry import api as registry
 from aippocampus_runtime.registry.store import RegistryWriteBusyError
 from aippocampus_runtime.source import latest_reply as latest_reply_module
@@ -221,6 +222,36 @@ def call_recall_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
         )
     except RecallNavigationError as exc:
         return text_result(public_payload(arguments, navigation_error_payload(exc)), is_error=True)
+    return text_result(public_payload(arguments, payload))
+
+
+def call_recall_diagnostic(arguments: dict[str, Any]) -> dict[str, Any]:
+    cue = str(arguments.get("cue") or arguments.get("intent") or arguments.get("query") or "").strip()
+    if not cue:
+        return tool_error(
+            "missing_cue",
+            "recall_diagnostic requires a non-empty cue, intent, or query.",
+            arguments=arguments,
+        )
+    payload = recall_diagnostic_report(
+        cue=cue,
+        mode=str(arguments.get("mode") or "why-recall"),
+        cwd=cwd_arg(arguments),
+        clean_source_dir=arguments.get("clean_source_dir"),
+        registry_dir=arguments.get("registry_dir"),
+        max_routes=int_range(arguments.get("max"), default=5, minimum=1, maximum=25),
+        handle=arguments.get("handle"),
+        thread_id=arguments.get("thread_id"),
+        topic_epoch=arguments.get("topic_epoch"),
+        lock_id=arguments.get("lock_id"),
+        lock_path=arguments.get("lock_path"),
+        cache_path=arguments.get("cache_path"),
+        run_live_semantic_gate=bool(arguments.get("run_semantic_gate")),
+        semantic_gate_mode=str(arguments.get("semantic_gate_mode") or "off"),
+        semantic_timeout=int_range(
+            arguments.get("semantic_timeout"), default=12, minimum=1, maximum=60
+        ),
+    )
     return text_result(public_payload(arguments, payload))
 
 
@@ -460,6 +491,7 @@ TOOL_CALLS = {
     "search_memory": call_search_memory,
     "recall_context": call_recall_context,
     "recall_deepen": call_recall_deepen,
+    "recall_diagnostic": call_recall_diagnostic,
     "latest_reply": call_latest_reply,
     "get_turn_context": call_get_turn_context,
     "list_threads": call_list_threads,

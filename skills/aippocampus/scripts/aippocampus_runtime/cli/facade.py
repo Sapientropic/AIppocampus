@@ -54,6 +54,16 @@ COMMANDS = {
         "storage_governance.py",
         "aippocampus_runtime.ops.storage_governance",
     ),
+    "why-recall": CommandSpec(
+        "why_recall.py",
+        "aippocampus_runtime.recall.why_cli",
+        prefix=("why-recall",),
+    ),
+    "why-not-recall": CommandSpec(
+        "why_recall.py",
+        "aippocampus_runtime.recall.why_cli",
+        prefix=("why-not-recall",),
+    ),
 }
 
 SCRIPT_MODULES = {
@@ -284,6 +294,8 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  mcp list-tools      List MCP tool schemas", file=target)
     print("  smoke recall-funnel Run a progressive recall funnel diagnostic", file=target)
     print("  storage gc          Plan storage cleanup from existing evidence", file=target)
+    print("  why-recall          Explain why a recall route surfaced or degraded", file=target)
+    print("  why-not-recall      Explain why a recall route stayed silent", file=target)
     print("  sync                Local-folder sync status/push/pull/repair", file=target)
     print("  object-sync         Object-storage sync status/push/pull/repair", file=target)
     print(

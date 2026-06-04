@@ -132,7 +132,7 @@ public answer API, public SDK schema, or source of factual authority.
 
 The CLI contract applies to documented operator commands, especially:
 
-- `aippocampus health|search|onboard|export|import|doctor|mcp|smoke|storage|sync|object-sync|hooks`
+- `aippocampus health|search|onboard|export|import|doctor|mcp|smoke|storage|why-recall|why-not-recall|sync|object-sync|hooks`
 - `aippocampus_health.py`
 - `search_clean_source.py`
 - `latest_reply.py` as a Codex raw-rollout audit compatibility command
@@ -142,6 +142,9 @@ The CLI contract applies to documented operator commands, especially:
   optional external-model route key environment variables
 - `aippocampus smoke recall-funnel "<cue>"` as a no-write progressive recall
   diagnostic over `recall_context` / first reopenable `recall_deepen` route
+- `aippocampus why-recall "<cue>" --json` and `aippocampus why-not-recall
+  "<cue>" --json` as public-safe route diagnostics over `recall_context`,
+  active locks, ambient cache, and semantic-gate state
 - `aippocampus storage gc --dry-run` as the no-mutation storage governance plan
   over capacity data and existing retention JSON
 - `aippocampus storage gc --apply --class rebuildable` as the explicit
@@ -208,6 +211,17 @@ For these commands:
   hashed cache keys, but must not emit raw prompt text, cue text, source
   snippets, or local paths. Treat the report as cache economics and routing
   health only, not as a source-backed memory or downstream API schema.
+- `why-recall` / `why-not-recall` JSON is a low-level explanation packet, not a
+  recall answer. Stable automation fields are `kind`, `schema_version`, `mode`,
+  `cue_hash`, `decision`, `searched_surfaces`, `surface_reports`, `reasons`,
+  `route_ids`, `next_safe_action`, `cannot_claim`, and
+  `privacy_boundary`. The command may inspect existing local artifacts and can
+  run the semantic gate only when `--run-semantic-gate` is explicitly supplied.
+  Default output must not emit the raw cue, raw source text, local paths, source
+  snippets, prompts, tool payloads, or secrets. The Cognitive Observatory
+  tracked in GitHub issue #576 may use this packet as a read-only "why this
+  route" drilldown, but the packet is not a control plane and cannot establish
+  source truth without source reopen.
 - Prompt hook `status --last --json` / `aippocampus hooks prompt status --last --json`
   exposes a public-safe audit projection for the latest prompt hook run. Stable
   automation fields are `status`, `source`, `privacy_boundary`, and
@@ -314,6 +328,7 @@ tool names are:
 - `search_memory`
 - `recall_context`
 - `recall_deepen`
+- `recall_diagnostic`
 - `latest_reply`
 - `get_turn_context`
 - `list_threads`
@@ -355,6 +370,11 @@ claim. `recall_deepen` consumes a route handle or ambient navigation seed and
 opens the next source-backed layer when the handle is still fresh and
 reopenable. Stale, malformed, or non-reopenable handles fail as MCP tool errors
 instead of silently becoming evidence.
+
+`recall_diagnostic` mirrors the CLI why/why-not diagnostic for agent hosts. It
+returns cue hashes, reason codes, route ids, counts, safe next action, and
+`cannot_claim` boundaries. It is a read-only observability tool; it must not
+return raw cue text, raw source text, local paths, or a final memory answer.
 
 `register_thread` is an explicit control-plane operation. It is not a general
 memory-write API. Concurrent local agents may call it against the same registry;
