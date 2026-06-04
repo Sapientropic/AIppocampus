@@ -106,6 +106,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--semantic-triggers")
     parser.add_argument("--semantic-cues")
     parser.add_argument("--semantic-cache")
+    parser.add_argument("--living-cues")
     parser.add_argument("--ambient-cache")
     warm_group = parser.add_mutually_exclusive_group()
     warm_group.add_argument("--warm-background", action="store_true", dest="warm_background", default=None)
@@ -167,6 +168,7 @@ def main(argv: list[str] | None = None) -> int:
             semantic_triggers_path=Path(args.semantic_triggers) if args.semantic_triggers else None,
             semantic_cues_path=Path(args.semantic_cues) if args.semantic_cues else None,
             semantic_cache_path=Path(args.semantic_cache) if args.semantic_cache else None,
+            living_cues_path=Path(args.living_cues) if args.living_cues else None,
             ambient_cache_path=Path(args.ambient_cache) if args.ambient_cache else None,
             semantic_gate_mode="off" if args.no_semantic_gate else args.semantic_gate,
             semantic_timeout=args.semantic_timeout,

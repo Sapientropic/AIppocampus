@@ -14,6 +14,10 @@ from typing import Any, Callable
 
 from aippocampus_runtime.navigation.concept_graph import expand_concepts
 from aippocampus_runtime.recall.ambient_policy import policy_update_for_prompt
+from aippocampus_runtime.recall.living_cue_cache import (
+    default_living_cues_path,
+    load_living_cue_entries,
+)
 from aippocampus_runtime.recall.prompt_cues import (
     CONCEPT_EXPANSION_MAX_TERMS,
     concept_expansion_terms,
@@ -157,6 +161,8 @@ def _decision_reasons(
         reasons.append(
             "registry overlap: " + ", ".join(str(item["title"]) for item in candidates[:2])
         )
+    if any(item.get("hot_path_reason") == "living_cue_cache" for item in candidates[:3]):
+        reasons.append("living cue cache route")
     if any(item.get("probe_score") for item in candidates[:3]):
         reasons.append("clean-source probe rerank")
     if any(item.get("life_wide_timeline_source") for item in candidates[:3]):
@@ -340,6 +346,38 @@ def _should_skip_default_semantic_gate_for_hot_path(
     )
 
 
+def _living_cue_entries_for_hot_path(
+    *,
+    registry_path: Path,
+    living_cues_path: Path | str | None,
+) -> list[dict[str, Any]]:
+    living_cues_file = (
+        Path(living_cues_path).resolve()
+        if living_cues_path
+        else default_living_cues_path(registry_path.parent)
+    )
+    return load_living_cue_entries(living_cues_file) if living_cues_file.exists() else []
+
+
+def _run_local_hot_path(
+    *,
+    prompt: str,
+    registry: dict[str, Any],
+    registry_path: Path,
+    local_seed_terms: list[str],
+    living_cues_path: Path | str | None,
+) -> dict[str, Any]:
+    return run_hot_path_funnel(
+        prompt=prompt,
+        query_terms=local_seed_terms,
+        candidate_indexes=candidate_indexes_from_registry(registry),
+        living_cue_entries=_living_cue_entries_for_hot_path(
+            registry_path=registry_path,
+            living_cues_path=living_cues_path,
+        ),
+    )
+
+
 def _noise_prompt_result(context: Any, start: float) -> dict[str, Any]:
     elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
     return {
@@ -516,6 +554,7 @@ def assess_prompt(
     semantic_cues_path: Path | str | None = None,
     ambient_policy_path: Path | str | None = None,
     semantic_cache_path: Path | str | None = None,
+    living_cues_path: Path | str | None = None,
     semantic_gate_mode: str | None = None,
     semantic_timeout: float = PROMPT_HOOK_SEMANTIC_TIMEOUT,
     use_semantic_gate: bool = True,
@@ -582,10 +621,9 @@ def assess_prompt(
         + working_memory_terms(working_memory_matches),
         limit=36,
     )
-    hot_path_funnel = run_hot_path_funnel(
-        prompt=prompt,
-        query_terms=local_seed_terms,
-        candidate_indexes=candidate_indexes_from_registry(registry),
+    hot_path_funnel = _run_local_hot_path(
+        prompt=prompt, registry=registry, registry_path=path,
+        local_seed_terms=local_seed_terms, living_cues_path=living_cues_path,
     )
     effective_use_semantic_gate = use_semantic_gate
     if _should_skip_default_semantic_gate_for_hot_path(

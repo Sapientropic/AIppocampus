@@ -174,9 +174,12 @@ class PromptHotPathFunnelTests(unittest.TestCase):
 
         self.assertEqual(result["decision"], "scent")
         self.assertEqual(result["evidence"], [])
-        self.assertEqual(result["stages"][1]["stage"], "cue_cache")
-        self.assertEqual(result["stages"][1]["status"], "hit")
-        self.assertEqual(result["stages"][1]["fallback_reason"], "stale_navigation_only")
+        living_stage = next(stage for stage in result["stages"] if stage["stage"] == "living_cue_cache")
+        cue_stage = next(stage for stage in result["stages"] if stage["stage"] == "cue_cache")
+        self.assertEqual(living_stage["status"], "skip")
+        self.assertEqual(living_stage["fallback_reason"], "no_living_cue_match")
+        self.assertEqual(cue_stage["status"], "hit")
+        self.assertEqual(cue_stage["fallback_reason"], "stale_navigation_only")
 
 
 if __name__ == "__main__":

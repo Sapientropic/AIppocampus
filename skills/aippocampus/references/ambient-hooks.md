@@ -545,9 +545,12 @@ foreground selector returns only a compact packet: `scent` or `skip`,
 `source_required` or `suppressed`, cue ids, source handles, and count-only hit /
 miss / stale / temporary / over-personalization diagnostics. It performs no live
 LLM call, does not emit raw cue or prompt text, and still requires clean-source
-reopen before any specific claim. This slice is not yet wired into the default
-prompt hook; use `tools/aippocampus/smoke/smoke_living_cue_cache.py --json` for
-the public-safe fixture smoke.
+reopen before any specific claim. The default prompt hook consumes
+`living_cue_cache.jsonl` from the registry directory, exposes only count-safe
+hot-path diagnostics, and treats hits as scent/navigation only. Use
+`tools/aippocampus/smoke/smoke_living_cue_cache.py --json` for the public-safe
+selector fixture smoke; hook integration does not prove fresh-thread recall
+quality or private-history generalization.
 Active `semantic_cues.jsonl` rows and reviewed `semantic_triggers.jsonl` rows
 also feed the hook's local pre-gate and query seed terms. This is the intended
 replacement path for semantic proxy word lists in
