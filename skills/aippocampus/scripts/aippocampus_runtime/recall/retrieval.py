@@ -17,6 +17,7 @@ import re
 import sqlite3
 from collections import Counter
 from pathlib import Path
+from typing import Any
 
 from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.recall import scoring_policy
@@ -40,7 +41,20 @@ from aippocampus_runtime.recall.query_policy import (
 )
 from aippocampus_runtime.recall.query_policy import match_anchors as match_anchors
 from aippocampus_runtime.recall.query_policy import split_query_terms as split_query_terms
+from aippocampus_runtime.recall.result_diversity import diversify_results as diversify_results
 from aippocampus_runtime.recall.score_fusion import rag_chunk_text_score, retrieval_text_score
+from aippocampus_runtime.recall.structure_time import (
+    load_message_feature,
+    search_structure_time_connection,
+    structure_signals,
+    temporal_signals,
+)
+from aippocampus_runtime.recall.structure_time import (
+    parse_structure_cues as parse_structure_cues,
+)
+from aippocampus_runtime.recall.structure_time import (
+    parse_temporal_cue as parse_temporal_cue,
+)
 
 
 def sqlite_has_table(con: sqlite3.Connection, name: str) -> bool:
@@ -459,97 +473,6 @@ def search_rag_chunks(
         con.close()
 
 
-def _result_bucket(result: dict, anchor_matches: list[dict]) -> str:
-    snippet = str(result.get("snippet") or "").casefold()
-    for anchor in anchor_matches:
-        title = str(anchor.get("title") or "")
-        if title and title.casefold() in snippet:
-            return "anchor:" + title
-        for keyword in anchor.get("keywords") or []:
-            key = str(keyword)
-            if key and key.casefold() in snippet:
-                return "anchor:" + title
-    line = int(result.get("line") or 0)
-    return f"{result.get('role') or 'unknown'}:{line // 200}"
-
-
-def diversify_results(
-    results: list[dict],
-    limit: int,
-    anchor_matches: list[dict] | None = None,
-    *,
-    mode: str = "balanced",
-) -> list[dict]:
-    """Return a source-diverse ordering for recall snippets.
-
-    Long threads often contain later recaps that score higher than the original
-    turn. Diversity keeps the best hit, then makes room for early/source hits
-    and different buckets before filling the rest by score. This should stay a
-    ranking policy, not a filter that hides evidence.
-    """
-
-    if mode == "none" or len(results) <= 2:
-        return results[:limit]
-    anchor_matches = anchor_matches or []
-    pool = list(results)
-    selected: list[dict] = []
-    selected_ids: set[int] = set()
-
-    def add(item: dict | None) -> None:
-        if not item:
-            return
-        item_id = int(item.get("id") or item.get("line") or len(selected_ids) + 1)
-        if item_id in selected_ids:
-            return
-        selected.append(item)
-        selected_ids.add(item_id)
-
-    add(pool[0])
-    literal_hits = [item for item in pool if (item.get("signals") or {}).get("literal_hits", 0) > 0]
-    add(
-        min(
-            (item for item in literal_hits if item.get("role") == "user"),
-            key=lambda item: item.get("line") or 10**12,
-            default=None,
-        )
-    )
-    add(min(literal_hits, key=lambda item: item.get("line") or 10**12, default=None))
-    add(
-        max(
-            (item for item in pool if item.get("role") == "assistant"),
-            key=lambda item: item.get("score") or 0,
-            default=None,
-        )
-    )
-
-    while len(selected) < min(limit, len(pool)):
-        best = None
-        best_value = None
-        policy = scoring_policy.RETRIEVAL_DIVERSITY_POLICY
-        selected_buckets = {_result_bucket(item, anchor_matches) for item in selected}
-        selected_lines = [int(item.get("line") or 0) for item in selected]
-        for item in pool:
-            item_id = int(item.get("id") or item.get("line") or 0)
-            if item_id in selected_ids:
-                continue
-            value = float(item.get("score") or 0)
-            bucket = _result_bucket(item, anchor_matches)
-            if bucket in selected_buckets:
-                value -= policy.bucket_repeat_penalty
-            line = int(item.get("line") or 0)
-            if any(abs(line - other) < policy.nearby_line_window for other in selected_lines):
-                value -= policy.nearby_line_penalty
-            if mode == "early" and (item.get("signals") or {}).get("literal_hits", 0) > 0:
-                value += max(0.0, policy.early_literal_boost - line / policy.early_line_divisor)
-            if best_value is None or value > best_value:
-                best = item
-                best_value = value
-        add(best)
-        if best is None:
-            break
-    return selected[:limit]
-
-
 def search_hybrid_index(
     index: Path,
     query_terms: list[str],
@@ -561,6 +484,8 @@ def search_hybrid_index(
     snippet_chars: int = 700,
     context_radius: int = 0,
     use_rag_chunks: bool = True,
+    structure_cues: dict[str, bool] | None = None,
+    temporal_cue: dict[str, Any] | None = None,
 ) -> list[dict]:
     con = sqlite3.connect(index)
     con.row_factory = sqlite3.Row
@@ -661,6 +586,20 @@ def search_hybrid_index(
                     )
                     item["signals"]["rag_chunk_id"] = chunk["id"]
 
+        if structure_cues or temporal_cue:
+            for row in search_structure_time_connection(
+                con,
+                message_select_columns(con, "m"),
+                structure_cues,
+                temporal_cue,
+                candidate_limit=candidate_limit,
+            ):
+                item = candidates.setdefault(row["id"], {"row": row, "signals": {}})
+                if structure_cues:
+                    item["signals"]["structure_lane_candidate"] = 1.0
+                if temporal_cue:
+                    item["signals"]["temporal_lane_candidate"] = 1.0
+
         results: list[dict] = []
         for row_id, item in candidates.items():
             row = item["row"]
@@ -668,15 +607,23 @@ def search_hybrid_index(
             literal = literal_hit_count(text, query_terms)
             expanded = literal_hit_count(text, expanded_terms)
             anchor_hits = anchor_hit_count(text, anchor_matches)
-            signals = item["signals"]
+            signals = dict(item["signals"])
             weight = phase_weight(row)
-            score = retrieval_text_score(
+            text_score = retrieval_text_score(
                 signals,
                 literal_hits=literal,
                 expanded_hits=expanded,
                 anchor_hits=anchor_hits,
                 phase_weight=weight,
             )
+            score = text_score
+            if structure_cues or temporal_cue:
+                feature = load_message_feature(con, row_id)
+                signals.update(structure_signals(feature, structure_cues))
+                signals.update(temporal_signals(row, feature, temporal_cue))
+                score += float(signals.get("structure_match_score") or 0.0)
+                score += float(signals.get("temporal_affinity_score") or 0.0)
+                signals["text_score"] = round(text_score, 3)
             result = {
                 "id": row["id"],
                 "line": row["line"],

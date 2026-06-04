@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -31,6 +32,89 @@ from aippocampus_runtime.recall.retrieval import build_rag_chunks
 from aippocampus_runtime.safety import project_clean_source_row
 from conversation_sources import create_conversation_provider
 
+CODE_FENCE_RE = re.compile(r"^\s*```([A-Za-z0-9_.+-]*)?", re.MULTILINE)
+HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+", re.MULTILINE)
+LIST_RE = re.compile(r"^\s*(?:[-*+]\s+|\d+[.)]\s+)", re.MULTILINE)
+TABLE_SEPARATOR_RE = re.compile(
+    r"^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$"
+)
+WARNING_RE = re.compile(
+    r"(\bwarning\b|\bcaution\b|\bwarn\b|⚠|注意|警告|重要)",
+    re.IGNORECASE,
+)
+
+
+def unique_preserve(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for value in values:
+        key = value.casefold()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(value)
+    return out
+
+
+def has_markdown_table(text: str) -> bool:
+    lines = text.splitlines()
+    for idx, line in enumerate(lines[:-1]):
+        if "|" not in line:
+            continue
+        if TABLE_SEPARATOR_RE.match(lines[idx + 1] or ""):
+            return True
+    return False
+
+
+def message_feature_row(
+    message_id: int,
+    message: dict[str, Any],
+    *,
+    source_created_at: str | None = None,
+    source_updated_at: str | None = None,
+    last_active_at: str | None = None,
+) -> tuple[Any, ...]:
+    """Project hot deterministic recall cues into a scalar sidecar row.
+
+    D5/D6 structure and time recall should stay source-backed: these fields are
+    only searchable projections of the raw message, never replacement evidence.
+    Keep common filters scalar/indexed here; reserve metadata_json for cold
+    debugging attributes so recall does not drift into JSON scans on the hot path.
+    """
+
+    text = str(message.get("text") or "")
+    code_languages = unique_preserve(
+        [(match.group(1) or "").strip().casefold() for match in CODE_FENCE_RE.finditer(text)]
+    )
+    message_timestamp = message.get("timestamp")
+    active_timestamp = message_timestamp or last_active_at or source_updated_at or source_created_at
+    sha1 = str(message.get("sha1") or "")
+    source_ref = f"message_sha1:{sha1[:16]}" if sha1 else f"message_id:{message_id}"
+    metadata = {
+        "feature_version": 1,
+        "source_projection": "deterministic_message_features",
+    }
+    return (
+        message_id,
+        message.get("line"),
+        source_ref,
+        message.get("role") or "",
+        message.get("phase") or "",
+        1 if message.get("is_final") else 0,
+        1 if CODE_FENCE_RE.search(text) else 0,
+        json.dumps(code_languages, ensure_ascii=False),
+        1 if WARNING_RE.search(text) else 0,
+        1 if LIST_RE.search(text) else 0,
+        1 if has_markdown_table(text) else 0,
+        len(HEADING_RE.findall(text)),
+        len(text.splitlines()) if text else 0,
+        message_timestamp,
+        source_created_at,
+        source_updated_at,
+        active_timestamp,
+        json.dumps(metadata, ensure_ascii=False),
+    )
+
 
 def make_sqlite(
     index_path: Path,
@@ -42,6 +126,9 @@ def make_sqlite(
     rag_chunk_chars: int = 2800,
     publish_lock: bool = True,
     sqlite_busy_timeout_ms: int = DEFAULT_SQLITE_BUSY_TIMEOUT_MS,
+    source_created_at: str | None = None,
+    source_updated_at: str | None = None,
+    last_active_at: str | None = None,
 ) -> dict:
     tmp_path = unique_temp_sqlite_path(index_path)
     remove_sqlite_artifact(tmp_path)
@@ -79,6 +166,57 @@ def make_sqlite(
                 )
                 for idx, m in enumerate(messages, start=1)
             ],
+        )
+        con.execute(
+            "CREATE TABLE message_features ("
+            "message_id INTEGER PRIMARY KEY REFERENCES messages(id), "
+            "line INTEGER, source_ref TEXT, role TEXT, phase TEXT, is_final INTEGER, "
+            "has_code_block INTEGER, code_languages_json TEXT, has_warning INTEGER, "
+            "has_list INTEGER, has_table INTEGER, heading_count INTEGER, line_count INTEGER, "
+            "message_timestamp TEXT, thread_created_at TEXT, thread_updated_at TEXT, "
+            "active_timestamp TEXT, metadata_json TEXT)"
+        )
+        con.executemany(
+            "INSERT INTO message_features "
+            "(message_id, line, source_ref, role, phase, is_final, has_code_block, "
+            "code_languages_json, has_warning, has_list, has_table, heading_count, "
+            "line_count, message_timestamp, thread_created_at, thread_updated_at, "
+            "active_timestamp, metadata_json) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                message_feature_row(
+                    idx,
+                    m,
+                    source_created_at=source_created_at,
+                    source_updated_at=source_updated_at,
+                    last_active_at=last_active_at,
+                )
+                for idx, m in enumerate(messages, start=1)
+            ],
+        )
+        con.execute(
+            "CREATE INDEX idx_message_features_code_block "
+            "ON message_features(has_code_block) WHERE has_code_block = 1"
+        )
+        con.execute(
+            "CREATE INDEX idx_message_features_warning "
+            "ON message_features(has_warning) WHERE has_warning = 1"
+        )
+        con.execute(
+            "CREATE INDEX idx_message_features_list "
+            "ON message_features(has_list) WHERE has_list = 1"
+        )
+        con.execute(
+            "CREATE INDEX idx_message_features_table "
+            "ON message_features(has_table) WHERE has_table = 1"
+        )
+        con.execute(
+            "CREATE INDEX idx_message_features_role_phase_final "
+            "ON message_features(role, phase, is_final)"
+        )
+        con.execute(
+            "CREATE INDEX idx_message_features_active_timestamp "
+            "ON message_features(active_timestamp)"
         )
         con.execute(
             "CREATE TABLE turns ("
@@ -273,6 +411,9 @@ def main(argv: list[str] | None = None) -> int:
             rag_chunk_chars=args.rag_chunk_chars,
             publish_lock=False,
             sqlite_busy_timeout_ms=args.sqlite_busy_timeout_ms,
+            source_created_at=meta.get("created_at") or meta.get("createdAt"),
+            source_updated_at=meta.get("updated_at") or meta.get("updatedAt"),
+            last_active_at=meta.get("last_active_at") or meta.get("lastActiveAt"),
         )
         sqlite_publish = sqlite_status.get("publish") or {}
         sqlite_current = sqlite_publish.get("current")

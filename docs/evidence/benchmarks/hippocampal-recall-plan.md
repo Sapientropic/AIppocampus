@@ -170,6 +170,21 @@ Recommended implementation:
 - Combine text, structure, and time lanes with a simple reciprocal-rank or
   weighted-prior fusion, then require source reopen before evidence.
 
+Current first implementation slice for #239:
+
+- `index_builder.make_sqlite` writes a deterministic `message_features`
+  sidecar keyed by `message_id` plus `source_ref`.
+- The sidecar stores hot scalar structure fields, message/thread/active
+  timestamps, and partial/normal indexes for code block, warning, list, table,
+  role/phase/final-answer, and active timestamp filters.
+- `retrieval.search_hybrid_index` accepts explicit `structure_cues` and
+  `temporal_cue` inputs, adds side-lane candidates, and reports separate
+  `text_score`, `structure_match_score`, `structure_signals`, and
+  `temporal_affinity_score` diagnostics when those lanes are requested.
+- Temporal parsing currently covers ISO-date windows plus a small deterministic
+  set of vague and time-of-day modifiers. It is a ranking prior; vague cues do
+  not hide text/source candidates.
+
 This is preferable to stuffing all metadata into FTS5 columns. FTS remains good
 at text; B-tree/generated/partial indexes are better for structure and time.
 
