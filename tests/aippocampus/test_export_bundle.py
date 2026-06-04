@@ -40,7 +40,7 @@ class ExportBundleTests(unittest.TestCase):
 
             text = handoff.read_text(encoding="utf-8")
             self.assertIn("<extracted>\\index\\source_index.sqlite", text)
-            self.assertIn("resolves the version pointer", text)
+            self.assertIn("resolves the generation pointer", text)
 
     def test_run_build_index_uses_package_api_without_subprocess(self) -> None:
         seen: dict[str, list[str]] = {}
