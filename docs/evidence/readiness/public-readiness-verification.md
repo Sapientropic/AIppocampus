@@ -20,6 +20,39 @@ Stable privacy rules live in `docs/guides/privacy-security-checklist.md`. Do not
 raw command JSON here: local smoke outputs may contain machine-specific
 temporary paths, so this document keeps only summarized evidence.
 
+## 2026-06-05 Issue #307 External Uvx Source-Install Probe
+
+Issue #307 asks for public-readiness evidence that is not merely repository-local.
+This slice ran clone-free `uvx` probes from outside the maintainer checkout with
+`PYTHONPATH` cleared and temporary isolated `AIPPOCAMPUS_HOME`,
+`AIPPOCAMPUS_REGISTRY_DIR`, and `CODEX_HOME` values.
+
+Positive evidence for the current main snapshot:
+
+- `uvx --refresh --from git+https://github.com/Sapientropic/AIppocampus.git
+  aippocampus --help` built and installed commit
+  `f004b2b52c21e168d07c2cb4e0382fce071d3724`, then returned the packaged CLI
+  help in 13.647 seconds.
+- `uvx --refresh --from git+https://github.com/Sapientropic/AIppocampus.git
+  aippocampus mcp list-tools` returned the MCP tool catalog in 2.603 seconds.
+- `uvx --refresh --from git+https://github.com/Sapientropic/AIppocampus.git
+  aippocampus onboard --provider codex --status --format json` returned
+  `ok=true` in 2.639 seconds and kept the status scoped to the Codex provider.
+
+Release-boundary note:
+
+- `uvx --refresh aippocampus onboard --provider codex --status --format json`
+  against the published PyPI package returned successfully in 6.030 seconds, but
+  the output did not include a provider scope and included additional provider
+  status entries. Treat that as a release-refresh gap, not as positive evidence
+  for provider-scoped Codex readiness. Re-run the same PyPI probe after the next
+  package release before claiming the released package has the scoped-provider
+  behavior shown by the GitHub source snapshot.
+
+Cannot claim from this slice: interactive Codex Desktop UI marketplace behavior,
+public marketplace submission, second-user review, macOS/Linux standalone
+binary support, or every client/provider surface.
+
 ## 2026-06-04 Issue #104 Post-Migration R2 Provider Re-Smoke
 
 Issue #104 re-ran the encrypted object-storage provider path after the
@@ -1205,6 +1238,9 @@ be demonstrated without private biography or hard-coded fuzzy phrase expansion.
 ## Remaining Public-Readiness Gaps
 
 - Refresh this evidence after any further code changes.
+- Re-run the PyPI `uvx aippocampus ...` provider-scoped readiness probe after
+  the next package release; the 2026-06-05 GitHub source install probe passed,
+  but the published PyPI package did not yet prove scoped-provider status.
 - Run an interactive Desktop UI marketplace flow or external install review if
   claiming support across every Codex client surface. Current real-host
   evidence is headless Codex app-server, not manual UI coverage.

@@ -204,6 +204,23 @@ view across proof lines, use
   install review if those are claimed. The real Codex app-server plugin manager
   path and package-level installed-plugin MCP path are verified locally.
 
+## Client And Distribution Claim Matrix
+
+This matrix is the compact #307 public-readiness boundary. Detailed command
+evidence stays in `public-readiness-verification.md`; do not mirror full smoke
+logs here.
+
+| Surface | Current status | Claim boundary |
+| --- | --- | --- |
+| GitHub source `uvx --from git+...` | Smoke-tested on 2026-06-05 for CLI help, MCP tool catalog, and Codex-scoped onboard status from an isolated temp home. | Current main snapshot only; not a released PyPI package claim. |
+| PyPI `uvx aippocampus ...` | Public package path exists, but the 2026-06-05 scoped-provider probe did not prove Codex-only status for the released package. | Re-smoke after the next package release before claiming provider-scoped readiness from PyPI. |
+| Codex Desktop headless app-server local marketplace | Smoke-tested through real app-server marketplace/plugin/MCP methods with reversible cleanup. | Headless host path only; not proof of human interactive Desktop UI click-through. |
+| Codex Desktop interactive UI / public marketplace | Not yet verified. | Do not claim marketplace UI readiness or public marketplace submission. |
+| Standalone MCP stdio / Claude Code-style host | Smoke-tested for installed-plugin MCP config and local strict-config tool calls. | Does not prove every Codex wrapper or hosted client surface. |
+| Generic JSONL/source install fallback | Supported as explicit source/register path. | Not a broad personal-history onboarding proof by itself. |
+| Standalone binary | Windows x64 maintainer-built artifact smoke exists. | macOS/Linux binaries, signed installers, updaters, and downloads remain unclaimed. |
+| Third-party/second-user install review | Not yet verified. | Required before broad external-user install claims. |
+
 ## 2026-05-30 Closeout Addendum
 
 The #55/#56 closeout refreshes evidence without changing the claim boundary
