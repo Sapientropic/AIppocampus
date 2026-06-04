@@ -6,22 +6,24 @@ Registry.
 
 ## Current Truth
 
-- `aippocampus==0.1.0` was published to PyPI and fresh `uvx aippocampus ...`
-  smoke passed.
-- `v0.1.0` did not publish to the MCP Registry because the package README marker
-  used `io.github.sapientropic/aippocampus` while the registry OIDC grant uses
+- `aippocampus==0.1.1` is published to PyPI. A fresh isolated
+  `uvx aippocampus ...` smoke on 2026-06-05 passed CLI help, MCP tool catalog,
+  and read-only provider-matrix status.
+- The MCP Registry lists `io.github.Sapientropic/aippocampus` version `0.1.1`
+  matching `server.json`.
+- `v0.1.0` is historical: it published to PyPI, but it did not publish to the
+  MCP Registry because the package README marker used
+  `io.github.sapientropic/aippocampus` while the registry OIDC grant uses
   `io.github.Sapientropic/*`.
-- PyPI release metadata is immutable for this purpose, so the MCP Registry
-  repair must use a new package version whose README includes the corrected
-  marker.
-- `v0.1.1` is the metadata repair release target: same conservative stdio MCP
-  surface, corrected marker, and matching `server.json` package version.
+- The released `onboard --provider codex --status` command still returns the
+  provider matrix rather than a Codex-only scoped status object. Treat that as
+  local readiness evidence, not as provider-scoped Codex-only proof.
 - GitHub `uvx --from git+...` remains a main-branch snapshot fallback, not the
   default public install claim.
 
-## Required Before MCP Registry Publication
+## Repeat For Future Agent-Discovery Publications
 
-1. Publish a new PyPI package version with the corrected README marker.
+1. Publish a new PyPI package version with the current README marker.
 2. Ensure the package README on PyPI includes the exact marker:
 
    ```html
@@ -69,8 +71,9 @@ Run the repeatable readiness probe before and after external publication:
 python tools/aippocampus/release/check_agent_discovery_release.py --json
 ```
 
-Before PyPI/MCP publication it should report local checks as passing and public
-package/registry checks as `pending`. After the release workflow succeeds, run:
+Before the next PyPI/MCP publication it should report local checks as passing
+and public package/registry checks for the current target version as `pending`.
+After the release workflow succeeds, run:
 
 ```sh
 python tools/aippocampus/release/check_agent_discovery_release.py --fail-on-not-ready

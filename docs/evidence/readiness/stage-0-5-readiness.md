@@ -215,9 +215,10 @@ logs here.
 | Surface | Current status | Claim boundary |
 | --- | --- | --- |
 | GitHub source `uvx --from git+...` | Smoke-tested on 2026-06-05 for CLI help, MCP tool catalog, and Codex-scoped onboard status from an isolated temp home. | Current main snapshot only; not a released PyPI package claim. |
-| PyPI `uvx aippocampus ...` | Public package path exists, but the 2026-06-05 scoped-provider probe did not prove Codex-only status for the released package. | Re-smoke after the next package release before claiming provider-scoped readiness from PyPI. |
+| PyPI `uvx aippocampus ...` | Released `0.1.1` smoke-tested on 2026-06-05 for CLI help, MCP tool catalog, and read-only provider-matrix status from an isolated temp home. | Released package and MCP entrypoint smoke only; the status command still returns the provider matrix, not a Codex-only scoped status object. |
+| MCP Registry metadata | Release checker passed on 2026-06-05 and found MCP Registry version `0.1.1` matching `server.json`. | Discovery metadata only; not proof of Codex Desktop interactive marketplace install UX. |
 | Codex Desktop headless app-server local marketplace | Smoke-tested through real app-server marketplace/plugin/MCP methods with reversible cleanup. | Headless host path only; not proof of human interactive Desktop UI click-through. |
-| Codex Desktop interactive UI / public marketplace | Not yet verified. | Do not claim marketplace UI readiness or public marketplace submission. |
+| Codex Desktop interactive UI / public marketplace | Not yet verified. | Do not claim marketplace UI readiness, click-through install, or public marketplace submission from MCP Registry metadata alone. |
 | Standalone MCP stdio / Claude Code-style host | Smoke-tested for installed-plugin MCP config and local strict-config tool calls. | Does not prove every Codex wrapper or hosted client surface. |
 | Generic JSONL/source install fallback | Supported as explicit source/register path. | Not a broad personal-history onboarding proof by itself. |
 | Standalone binary | Windows x64 maintainer-built artifact smoke exists. | macOS/Linux binaries, signed installers, updaters, and downloads remain unclaimed. |
