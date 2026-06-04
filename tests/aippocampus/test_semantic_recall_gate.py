@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import contextlib
-import hashlib
 import io
 import json
 import os
@@ -96,7 +95,7 @@ class SemanticRecallGateTests(unittest.TestCase):
                 os.environ[name] = value
         self.tmp.cleanup()
 
-    def test_semantic_gate_cache_fingerprint_uses_sha256(self) -> None:
+    def test_semantic_gate_cache_fingerprint_uses_stable_namespace(self) -> None:
         key = gate.cache_fingerprint(
             prompt="继续 #144",
             cwd=self.workspace,
@@ -122,7 +121,12 @@ class SemanticRecallGateTests(unittest.TestCase):
 
         self.assertEqual(
             key,
-            "sg_" + hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()[:24],
+            gate.stable_text_fingerprint(
+                "\n".join(parts),
+                namespace="semantic-gate-cache",
+                prefix="sg",
+                length=24,
+            ),
         )
 
     def test_parallel_workers_merge_multilingual_aliases(self) -> None:

@@ -105,6 +105,24 @@ def workspace_fingerprint(workspace: str | Path, *, prefix: str = "workspace") -
     return f"{prefix}_{digest}"
 
 
+def stable_text_fingerprint(
+    value: str,
+    *,
+    namespace: str,
+    length: int = 16,
+    prefix: str | None = None,
+) -> str:
+    """Return a stable non-authentication fingerprint for redacted local metadata."""
+
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        str(value or "").encode("utf-8", errors="replace"),
+        f"aippocampus:{namespace}:fingerprint-v1".encode("utf-8"),
+        8192,
+    ).hex()[:length]
+    return f"{prefix}_{digest}" if prefix else digest
+
+
 def norm_path(path: str | Path) -> str:
     return path_identity_key(path)
 

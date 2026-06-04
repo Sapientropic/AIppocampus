@@ -8,7 +8,6 @@ refs, and diagnostics. Exact claims must reopen clean source by lock id.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 import time
@@ -20,6 +19,7 @@ from aippocampus_runtime.core import (
     compact_text,
     now_utc,
     sanitize_external_model_text,
+    stable_text_fingerprint,
     workspace_fingerprint,
     workspace_identity,
 )
@@ -50,12 +50,17 @@ LOCK_STATES = {"pending", "ready", "expired", "failed"}
 
 
 def _sha(value: str, *, prefix: str) -> str:
-    return f"{prefix}_{hashlib.sha256(value.encode('utf-8')).hexdigest()[:20]}"
+    return stable_text_fingerprint(
+        value,
+        namespace=f"active-recall-lock-{prefix}",
+        prefix=prefix,
+        length=20,
+    )
 
 
 def _prompt_fingerprint(prompt: str, query_aliases: list[str] | None = None) -> str:
-    parts = [str(prompt or "").casefold()]
-    parts.extend(str(alias or "").casefold() for alias in query_aliases or [])
+    parts = [_safe_text(prompt, 480).casefold()]
+    parts.extend(_safe_text(alias, 160).casefold() for alias in query_aliases or [])
     return _sha("\n".join(parts), prefix="prompt")
 
 

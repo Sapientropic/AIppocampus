@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
-import hashlib
 import json
 import os
 import re
@@ -29,6 +28,8 @@ from typing import Any
 from aippocampus_runtime.core import (
     compact_text,
     sanitize_external_model_payload,
+    sanitize_external_model_text,
+    stable_text_fingerprint,
 )
 from aippocampus_runtime.model.routing import (
     DEFAULT_DEEPSEEK_API_KEY_ENV,
@@ -615,6 +616,7 @@ def cache_fingerprint(
     workers: tuple[str, ...] = DEFAULT_WORKERS,
     temperature: float = DEFAULT_TEMPERATURE,
 ) -> str:
+    sanitized_prompt, _ = sanitize_external_model_text(prompt, project_root=cwd)
     parts = [
         PROMPT_VERSION,
         semantic_gate_mode(mode),
@@ -622,7 +624,7 @@ def cache_fingerprint(
         base_url,
         ",".join(workers),
         str(float(temperature)),
-        re.sub(r"\s+", " ", prompt).strip(),
+        re.sub(r"\s+", " ", sanitized_prompt).strip(),
         str(cwd.resolve()).casefold(),
     ]
     for path in [registry_path, semantic_triggers_path, semantic_cues_path]:
@@ -637,7 +639,12 @@ def cache_fingerprint(
                 parts.append(f"{resolved}:missing")
         except OSError:
             parts.append(str(path))
-    return "sg_" + hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()[:24]
+    return stable_text_fingerprint(
+        "\n".join(parts),
+        namespace="semantic-gate-cache",
+        prefix="sg",
+        length=24,
+    )
 
 
 def run_semantic_gate(
