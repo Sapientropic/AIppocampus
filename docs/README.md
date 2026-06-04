@@ -58,6 +58,7 @@ maps.
 - [`rust-deterministic-core.md`](architecture/rust-deterministic-core.md) - contract-replay gate for future Rust infrastructure slices without rewriting cognitive layers.
 - [`project-planning-automation.md`](architecture/project-planning-automation.md) - boundary between issue intake triage and recurring roadmap drift audits.
 - [`provider-entrypoint-inventory.md`](architecture/provider-entrypoint-inventory.md) - classified inventory of remaining Codex-specific and provider-aware runtime entrypoints.
+- [`legacy-alias-inventory.md`](architecture/legacy-alias-inventory.md) - canonical inventory and sunset policy for legacy env/path aliases before the public API freeze.
 - [`architecture-debt-register.md`](architecture/architecture-debt-register.md) - lightweight large runtime/test/benchmark/tool debt register and guard budgets.
 - [`gb-scale-roadmap.md`](architecture/gb-scale-roadmap.md) - long-thread indexing, segmenting, retention, vector-index, and scale planning.
 - [`encrypted-sync-v1.md`](architecture/encrypted-sync-v1.md) - end-to-end encrypted multi-device sync design contract.

@@ -17,6 +17,7 @@ import subprocess
 import sys
 from typing import Any
 
+from aippocampus_runtime.legacy_aliases import env_legacy_alias_diagnostics
 from aippocampus_runtime.model.routing import ModelRoute, resolve_model_route
 from aippocampus_runtime.recall.semantic_recall_gate import semantic_gate_enabled
 from aippocampus_runtime.warm_ambient.scheduler import warm_background_enabled
@@ -162,6 +163,7 @@ def build_provider_doctor_report(
     resolved_provider_env_var = str(provider_env_var or _route_provider_env_var(route) or "").strip()
     public_env_name = _public_token(resolved_provider_env_var, fallback=DEFAULT_PROVIDER_ENV_VAR)
     current_visible = _env_var_is_visible(resolved_provider_env_var)
+    legacy_aliases = env_legacy_alias_diagnostics()
     child_visibility = (
         _child_process_env_visibility(resolved_provider_env_var)
         if check_child_process and resolved_provider_env_var
@@ -193,6 +195,7 @@ def build_provider_doctor_report(
             "value_checked": False,
             "value_printed": False,
         },
+        "legacy_aliases": legacy_aliases,
         "hook_relevance": {
             "prompt_hook_reads_process_env": True,
             "does_not_read_dotenv_or_credential_store": True,
@@ -214,6 +217,7 @@ def build_provider_doctor_report(
             "local_paths_included": False,
             "base_url_value_printed": False,
             "checked_env_var_names": [public_env_name],
+            "legacy_alias_values_printed": False,
         },
         "recommended_actions": _recommended_actions(
             provider_env_var=resolved_provider_env_var,
