@@ -49,6 +49,7 @@ COMMANDS = {
     "export": CommandSpec("export_bundle.py", "aippocampus_runtime.artifacts.export_bundle"),
     "import": CommandSpec("import_bundle.py", "aippocampus_runtime.artifacts.import_bundle"),
     "doctor": CommandSpec("provider_doctor.py", "aippocampus_runtime.ops.provider_doctor"),
+    "update": CommandSpec("update.py", "aippocampus_runtime.update.cli"),
     "smoke": CommandSpec("recall_funnel_smoke.py", "aippocampus_runtime.ops.recall_funnel_smoke"),
     "storage": CommandSpec(
         "storage_governance.py",
@@ -74,6 +75,7 @@ SCRIPT_MODULES = {
     "sync_bundle.py": "aippocampus_runtime.sync.bundle",
     "sync_object_storage.py": "aippocampus_runtime.sync.object_storage.cli",
     "provider_doctor.py": "aippocampus_runtime.ops.provider_doctor",
+    "update.py": "aippocampus_runtime.update.cli",
     "recall_funnel_smoke.py": "aippocampus_runtime.ops.recall_funnel_smoke",
     "storage_governance.py": "aippocampus_runtime.ops.storage_governance",
     "install_aippocampus_prompt_hook.py": "aippocampus_runtime.hooks.install_prompt",
@@ -291,6 +293,7 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  import              Import a portable AIppocampus bundle", file=target)
     print("  import conversation Register an explicit provider transcript", file=target)
     print("  doctor provider     Check live-provider env visibility", file=target)
+    print("  update status       Check local skill/hooks/LLM/MCP/plugin drift", file=target)
     print("  mcp list-tools      List MCP tool schemas", file=target)
     print("  smoke recall-funnel Run a progressive recall funnel diagnostic", file=target)
     print("  storage gc          Plan storage cleanup from existing evidence", file=target)
