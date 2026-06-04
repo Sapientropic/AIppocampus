@@ -29,6 +29,22 @@ REQUIRED_REFERENCES = [
     "subconscious-jobs.md",
 ]
 
+REQUIRED_SKILL_PROACTIVE_TERMS = {
+    "## Proactive Recall Policy": "SKILL.md missing proactive recall policy section",
+    "Do not wait for the user to say \"remember.\"": (
+        "SKILL.md should teach agent-initiated recall decisions"
+    ),
+    "L0 no-op": "SKILL.md missing no-op recall ladder rung",
+    "L1 orientation": "SKILL.md missing cheap orientation recall ladder rung",
+    "L2 context": "SKILL.md missing context recall ladder rung",
+    "L3 source reopen": "SKILL.md missing source reopen recall ladder rung",
+    "L4 ask/defer": "SKILL.md missing ask/defer recall ladder rung",
+    "Do not search every turn.": (
+        "SKILL.md missing proactive-vs-overactive anti-nag boundary"
+    ),
+    "progressive MCP tools": "SKILL.md missing progressive MCP recall preference",
+}
+
 REQUIRED_PROJECT_DOCS = [
     "docs/README.md",
     "docs/roadmap.md",
@@ -1451,6 +1467,11 @@ def check_docs(root: Path) -> dict[str, Any]:
         issues.append(
             f"SKILL.md has {code_fence_count} code-fence markers; move command dumps to references"
         )
+
+    metrics["required_skill_proactive_terms"] = len(REQUIRED_SKILL_PROACTIVE_TERMS)
+    for phrase, message in REQUIRED_SKILL_PROACTIVE_TERMS.items():
+        if phrase not in text:
+            issues.append(message)
 
     references_dir = root / "references"
     for filename in REQUIRED_REFERENCES:

@@ -1,6 +1,6 @@
 ---
 name: aippocampus
-description: Use when recovering source-backed Codex conversation memory, recalling old thread wording, continuing after context compaction, building clean-source memory from raw rollouts, installing ambient recall hooks, searching or registering AIppocampus indexes, or auditing long Desktop session growth.
+description: Use when recovering source-backed Codex conversation memory, recalling old thread wording, continuing after context compaction, or orienting before risky, repeated, high-cost, or continuity-sensitive actions where prior source-backed context could change the next move. Also use for building clean source, ambient recall hooks, indexes, registry, sync, MCP access, and long Desktop session audits.
 ---
 
 # AIppocampus
@@ -8,6 +8,8 @@ description: Use when recovering source-backed Codex conversation memory, recall
 AIppocampus is a source-backed memory layer for Codex conversations. Use it when
 the task depends on old-thread wording, continuity after compaction, clean
 conversation source, ambient recall hooks, or long-session storage/audit work.
+Also consider it before actions where a cheap continuity check could prevent a
+repeated mistake, stale claim, privacy breach, or costly wrong turn.
 
 Keep this file as the stable entrypoint. Do not append changelog-style notes
 here; update the relevant reference doc, script help, or tests instead.
@@ -29,6 +31,43 @@ here; update the relevant reference doc, script help, or tests instead.
   the authority.
 - External-model routes must redact credential-like material and never treat
   model-generated associations as source-backed fact.
+
+## Proactive Recall Policy
+
+Do not wait for the user to say "remember." Before risky, repeated,
+cross-thread, high-cost, or continuity-sensitive work, run a cheap orientation
+check when prior source-backed context could change the next action. Treat the
+result as routing, not truth, until source is reopened.
+
+Consider AIppocampus before acting when the prompt or task includes:
+
+- vague continuity cues such as "last time," "that issue," "continue," or
+  "same as before";
+- repeated rejected routes, known user corrections, or operation facts that
+  could change a patch, command, warning, or claim;
+- compaction, fresh-thread, device, branch, or workspace boundaries where the
+  current context may have lost the active constraint;
+- high-risk memory-backed statements, quotes, privacy-sensitive claims, or
+  decisions where being wrong is expensive;
+- old source that might have been superseded, contradicted, or made local-only.
+
+Use the smallest useful ladder:
+
+- L0 no-op: low-risk one-off work with no continuity cue.
+- L1 orientation: active locks, registry titles, route cache, familiarity cards,
+  ambient scent, or known rejected-route handles.
+- L2 context: `search_memory`, `recall_context`, registry search, or clean-source
+  search to gather candidate source refs.
+- L3 source reopen: required before quoting old wording, warning, blocking,
+  asserting operation facts, or making high-risk claims.
+- L4 ask/defer: source is thin, stale, conflicting, private, regulated, or not
+  safely reopenable.
+
+Prefer progressive MCP tools such as `get_turn_context`, `search_memory`,
+`recall_context`, and `recall_deepen` when an agent client has them; use the
+script commands below as portable fallbacks. Proactive checks are normally
+private: surface them to the user only when they change the next action, prevent
+a likely mistake, or the user asks for continuity. Do not search every turn.
 
 ## First Moves
 
@@ -70,8 +109,9 @@ repair, tool provenance, byte accounting, missing evidence, or audit questions.
 
 ## Workflow
 
-1. If the user asks about previous context, derive a few distinctive terms and
-   search clean source or registry before answering from memory.
+1. If old context might change the next action, derive a few distinctive terms
+   and run the smallest useful orientation or recall step before answering from
+   memory.
 2. When a thread may outgrow the current context, keep anchors and clean source
    fresh; use hooks for routine refreshes and explicit commands for repair.
 3. When the user asks "last reply", use `latest_reply.py`; it should return the
