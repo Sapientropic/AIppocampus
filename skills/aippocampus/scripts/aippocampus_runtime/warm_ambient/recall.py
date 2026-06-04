@@ -63,6 +63,7 @@ from aippocampus_runtime.subconscious.worker import (
     clamp_confidence,
     parse_model_json,
 )
+from aippocampus_runtime.warm_ambient import privacy_policy
 from aippocampus_runtime.warm_ambient.config import (
     DEFAULT_WARM_DETACHED_JOB_CONFIG,
     DEFAULT_WARM_RECALL_CONFIG,
@@ -522,7 +523,9 @@ def parse_scout_output(raw: dict[str, Any], scout: str) -> dict[str, Any]:
             limit=int(profile["max_negative_contexts"]),
             chars=120,
         ),
-        "block": bool(parsed.get("block")) if "block" in allowed_fields else False,
+        **privacy_policy.privacy_fields_from_parsed(
+            parsed, family=family, allowed_fields=allowed_fields
+        ),
         "reason": _safe_text(parsed.get("reason"), 120) if "reason" in allowed_fields else "",
         "usage": usage,
         "candidates": [],
@@ -574,6 +577,7 @@ def _error_row(scout: str, exc: BaseException) -> dict[str, Any]:
         "themes": [],
         "negative_contexts": [],
         "block": False,
+        **privacy_policy.empty_privacy_fields(),
         "reason": reason,
         "error_kind": scout_error_kind(reason),
         "usage": {},
@@ -863,6 +867,7 @@ def merge_scouts(
     current_thread_key: str | None = None,
     allow_current_thread_echo: bool = False,
 ) -> dict[str, Any]:
+    privacy_summary = privacy_policy.privacy_summary(rows)
     blockers = [
         row
         for row in rows
@@ -888,15 +893,10 @@ def merge_scouts(
             current_thread_key=current_thread_key,
             allow_current_thread_echo=allow_current_thread_echo,
         )
-        return {
-            "cards": [],
-            "mode": SILENT_TUNING,
-            "confidence": "low",
-            "negative_contexts": unique_preserve(negative_contexts, limit=8),
-            "query_aliases": unique_preserve(query_aliases, limit=16),
-            "blocked_by": [row.get("scout") for row in privacy_blockers],
-            **calibration,
-        }
+        return privacy_policy.merge_result(
+            [], SILENT_TUNING, "low", negative_contexts, query_aliases,
+            privacy_blockers, privacy_summary, calibration,
+        )
 
     candidates: list[tuple[int, float, dict[str, Any]]] = []
     if not evidence_blockers:
@@ -943,6 +943,7 @@ def merge_scouts(
         current_thread_key=current_thread_key,
         allow_current_thread_echo=allow_current_thread_echo,
     )
+    cards = privacy_policy.apply_privacy_route_policy(cards, privacy_summary)
     cards = cards[: max(0, max_cards)]
     if evidence_blockers and not cards:
         # Evidence sentinels are allowed to veto model-generated cards, but not
@@ -950,25 +951,15 @@ def merge_scouts(
         # closed-book anti-hallucination guard without losing the deterministic
         # current-trace recall path that exists specifically for sparse live
         # scout failures and over-cautious sentinel blocks.
-        return {
-            "cards": [],
-            "mode": SILENT_TUNING,
-            "confidence": "low",
-            "negative_contexts": unique_preserve(negative_contexts, limit=8),
-            "query_aliases": unique_preserve(query_aliases, limit=16),
-            "blocked_by": [row.get("scout") for row in evidence_blockers],
-            **calibration,
-        }
+        return privacy_policy.merge_result(
+            [], SILENT_TUNING, "low", negative_contexts, query_aliases,
+            evidence_blockers, privacy_summary, calibration,
+        )
     max_confidence = max([float(row.get("confidence") or 0.0) for row in rows if row.get("ok")] or [0.0])
-    return {
-        "cards": cards,
-        "mode": _mode_for_cards(cards),
-        "confidence": _confidence_label(max_confidence),
-        "negative_contexts": unique_preserve(negative_contexts, limit=8),
-        "query_aliases": unique_preserve(query_aliases, limit=16),
-        "blocked_by": [row.get("scout") for row in evidence_blockers],
-        **calibration,
-    }
+    return privacy_policy.merge_result(
+        cards, _mode_for_cards(cards), _confidence_label(max_confidence), negative_contexts,
+        query_aliases, evidence_blockers, privacy_summary, calibration,
+    )
 
 
 def resolve_topic_epoch(

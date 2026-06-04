@@ -190,6 +190,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_theme_emergence",
         "test_update_sync",
         "test_vault_dashboard_assets",
+        "test_warm_ambient_privacy_policy",
         "test_warm_ambient_recall",
         "test_warm_ambient_scheduler_policy",
     }
