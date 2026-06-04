@@ -24,7 +24,10 @@ for _path in (
 
 import smoke_semantic_scope_real_history as smoke  # noqa: E402
 
-from build_project_timeline import build_project_timeline, save_project_timeline  # noqa: E402
+from aippocampus_runtime.navigation.project_timeline import (  # noqa: E402
+    build_project_timeline,
+    save_project_timeline,
+)
 
 
 class SemanticScopeRealHistorySmokeTests(unittest.TestCase):

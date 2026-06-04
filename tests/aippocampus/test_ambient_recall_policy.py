@@ -11,7 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-import ambient_recall_policy as policy  # noqa: E402
+from aippocampus_runtime.recall import ambient_policy as policy  # noqa: E402
 
 
 class AmbientRecallPolicyTests(unittest.TestCase):

@@ -20,7 +20,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import diagnose_hooks as diagnose_shim  # noqa: E402
+from aippocampus_runtime.hooks import diagnose as diagnose_shim  # noqa: E402
 from aippocampus_runtime.hooks import diagnose as packaged_diagnose  # noqa: E402
 
 diagnose: Any = diagnose_shim
@@ -352,7 +352,7 @@ class HookDiagnosticsTests(unittest.TestCase):
 
     def test_help_text_explains_safe_run_and_raw_shell_reproduction(self) -> None:
         proc = subprocess.run(
-            [sys.executable, str(SCRIPTS / "diagnose_hooks.py"), "--help"],
+            [sys.executable, "-m", "aippocampus_runtime.hooks.diagnose", "--help"],
             text=True,
             encoding="utf-8",
             errors="replace",

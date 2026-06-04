@@ -14,7 +14,7 @@ TESTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(TESTS))
 sys.path.insert(0, str(SCRIPTS))
 
-import model_client  # noqa: E402
+from aippocampus_runtime.model import client as model_client  # noqa: E402
 from redaction_fixtures import (  # noqa: E402
     FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER,
     FAKE_TEST_OPENAI_API_KEY,

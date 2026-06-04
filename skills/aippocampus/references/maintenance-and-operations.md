@@ -5,7 +5,7 @@ routes.
 
 ## Health
 
-Use `scripts/aippocampus_health.py` at the start of a long follow-up, after
+Use `aippocampus_runtime/health` at the start of a long follow-up, after
 compaction, before closeout, or when the user says a thread should be preserved.
 
 Health checks include:
@@ -19,7 +19,7 @@ Health checks include:
 - Graphify corpus readiness
 - whether the thread is large enough to consider deeper graph work
 
-`aippocampus_maintenance.py` is a threshold-style maintenance command, not a
+`aippocampus_runtime.ops.maintenance` is a threshold-style maintenance command, not a
 daemon. It can rebuild stale source/indexes, prepare graphify corpus, refresh
 segments, and produce checkpoint candidates. It should not append checkpoints
 unless called with `--append-checkpoint`.
@@ -38,7 +38,7 @@ thread titles, raw snippets, or absolute local paths; `--include-paths` is a
 local maintainer diagnostic switch.
 
 Generated artifact writers must coordinate through same-directory leases instead
-of relying on users to run commands serially. `build_index.py` holds
+of relying on users to run commands serially. `aippocampus_runtime.recall.index_builder` holds
 `.index-publish.lock` while publishing `messages.jsonl`, `source_index.sqlite`,
 `graph.json`, and `manifest.json`. `make_sqlite()` builds a unique temporary
 SQLite database, copies it to `versions/source_index-*.sqlite`, updates
@@ -50,10 +50,10 @@ last-known-good, then to the stable file. Do not reintroduce `unlink()` /
 hold that file open, and locked stable refreshes must degrade to the versioned
 pointer path rather than failing the whole index publish.
 
-`aippocampus_maintenance.py`, `aippocampus_lifecycle_hook.py`, and
-`sync_vault.py` should keep delegating SQLite writes to the index builders. If a
+`aippocampus_runtime.ops.maintenance`, `aippocampus_runtime.hooks.lifecycle`, and
+`aippocampus_runtime.vault.sync` should keep delegating SQLite writes to the index builders. If a
 future entrypoint writes generated SQLite directly, it must reuse
-`scripts/artifact_publish.py` rather than creating a parallel lock or retry
+`aippocampus_runtime/artifacts/publish` rather than creating a parallel lock or retry
 scheme.
 
 Registry/control-plane writes have a narrower #590 contract. `register_thread`,
@@ -71,24 +71,24 @@ source for thread discovery.
 
 Writer coordination entrypoints:
 
-- `build_index.py`: owns main index publish; uses `.index-publish.lock`,
+- `aippocampus_runtime.recall.index_builder`: owns main index publish; uses `.index-publish.lock`,
   versioned SQLite pointer, last-known-good fallback, and stable SQLite backup.
-- `build_segments.py`: owns segment shard publish; uses `.rebuild.lock`, staged
+- `aippocampus_runtime.recall.segment_builder`: owns segment shard publish; uses `.rebuild.lock`, staged
   segment dirs, and the shared lease helper.
-- `aippocampus_lifecycle_hook.py`: orchestrates `build_index.py`,
-  `build_segments.py`, and registry commands; it must not write generated
+- `aippocampus_runtime.hooks.lifecycle`: orchestrates `aippocampus_runtime.recall.index_builder`,
+  `aippocampus_runtime.recall.segment_builder`, and registry commands; it must not write generated
   SQLite directly.
-- `aippocampus_maintenance.py`: threshold-style operator command; it delegates
+- `aippocampus_runtime.ops.maintenance`: threshold-style operator command; it delegates
   main and segment SQLite writes to the builders.
-- `sync_vault.py`: runs maintenance first unless `--no-hook`, then reads health,
+- `aippocampus_runtime.vault.sync`: runs maintenance first unless `--no-hook`, then reads health,
   messages JSONL, anchors, and registry metadata for vault/dashboard output.
 - `aippocampus_runtime.sync.bundle`: syncs manifests, graph metadata, and
-  content-addressed clean source by default; `sync_bundle.py` remains the
-  direct-script compatibility shim. Generated SQLite, pointer files, and
+  content-addressed clean source by default; `aippocampus_runtime.sync.bundle` remains the
+  package-owner command. Generated SQLite, pointer files, and
   versioned caches are not portable source files.
 - `aippocampus_runtime.artifacts.export_bundle` /
-  `aippocampus_runtime.artifacts.import_bundle`, with `export_bundle.py` /
-  `import_bundle.py` as compatibility shims: explicit portable bundle path;
+  `aippocampus_runtime.artifacts.import_bundle`, with `aippocampus_runtime.artifacts.export_bundle` /
+  `aippocampus_runtime.artifacts.import_bundle` as package owners: explicit portable bundle path;
   export may include generated index files inside the bundle, and import
   reports both the stable search path and the pointer-resolved current SQLite
   path.
@@ -100,17 +100,17 @@ Writer coordination entrypoints:
 
 ## Checkpoints And Anchors
 
-Use `checkpoint.py` for hippocampus-like consolidation. By default it suggests a
+Use `aippocampus_runtime.artifacts.checkpoint` for hippocampus-like consolidation. By default it suggests a
 candidate anchor from recent messages and records that a check happened. Use
 `--append` only when the candidate is durable enough to preserve.
 
-Use `append_anchor.py` for concise durable anchors. Anchors should be short,
+Use `aippocampus_runtime.source.anchors` for concise durable anchors. Anchors should be short,
 source-searchable, and written for future agents who need to know what to look
 for after compaction or thread switching.
 
 ## Rollout Size Audit
 
-Use `rollout_size_audit.py` when growth itself is the question. It reports byte
+Use `aippocampus_runtime.ops.rollout_size_audit` when growth itself is the question. It reports byte
 buckets by raw JSONL item type, payload class, large lines, deduped visible
 message size, and repeated injected instructions.
 
@@ -122,7 +122,7 @@ and compaction snapshots.
 Audit routes are also where tool/debug provenance belongs. Default recall should
 not rank tool payloads as memory content.
 
-Use `storage_capacity_report.py` when growth is a registry-level or sync-level
+Use `aippocampus_runtime.ops.storage_capacity_report` when growth is a registry-level or sync-level
 question. It stats registry files, clean-source canonical files, generated
 indexes, semantic sidecars, current sync-policy files, and SQLite fanout without
 reading clean-source message bodies or raw rollout bodies. This is the right
@@ -137,7 +137,7 @@ runtime, Windows interrupted rebuild recovery, or physical sync behavior.
 Segmented index rebuilds use the same shared lease helper with a
 same-directory `.rebuild.lock` before building or publishing segment SQLite
 shards. This is the single-writer discipline for segment rebuilds: do not run
-two `build_segments.py` writers against the same output directory. If a process
+two `aippocampus_runtime.recall.segment_builder` writers against the same output directory. If a process
 dies, the next run may recover a stale lease after the configured age, but
 operators should first verify no live writer is still using the directory. New
 segments are staged before publish, and failed publish restores last-known-good
@@ -145,8 +145,8 @@ segments are staged before publish, and failed publish restores last-known-good
 
 Cross-device sync treats SQLite as a rebuildable generated cache, not durable
 truth. `aippocampus_runtime.sync.bundle` syncs registry manifests, graph
-metadata, and content-addressed clean source by default; `sync_bundle.py` is the
-compatibility shim for the same command. It does not require generated SQLite
+metadata, and content-addressed clean source by default; `aippocampus_runtime.sync.bundle` is the
+package owner for the same command. It does not require generated SQLite
 files, pointer files, or versioned SQLite caches to move between devices. Target
 devices repair registry locators to local generated caches only when those
 caches already exist locally; otherwise `paths.sqlite` stays unresolved and the
@@ -163,14 +163,14 @@ classifies files as:
 - `rebuildable_delete_under_disk_pressure`
 - `archive_or_delete_after_human_review`
 
-`cold_archive.py` creates a gzip raw-rollout copy plus manifests, anchors, index
+`aippocampus_runtime.ops.cold_archive` creates a gzip raw-rollout copy plus manifests, anchors, index
 manifests, and reports under the global thread store's `cold-archives/`
 directory by default. Passing `--output-dir .aippocampus/cold-archives` is an
 explicit local audit/export path, not a public commit surface. It must not
 delete or rewrite the live rollout. Verify decompressed SHA-256 before any
 manual cleanup outside the script.
 
-For smaller/private migration, prefer `export_bundle.py --no-raw` when raw
+For smaller/private migration, prefer `aippocampus export --no-raw` when raw
 history is not needed.
 
 Use `aippocampus storage gc --dry-run --json` as the governance bridge after
@@ -216,31 +216,31 @@ and app event envelopes. Measure before advising.
 
 Common health and repair commands:
 
-- `python ...\aippocampus_health.py --cwd "$PWD"`
+- `python -m aippocampus_runtime.health --cwd "$PWD"`
 - `aippocampus health --registry-wide --json`
-- `python ...\aippocampus_maintenance.py --cwd "$PWD"`
-- `python ...\build_clean_source.py --cwd "$PWD"`
-- `python ...\build_index.py --cwd "$PWD"`
-- `python ...\build_segments.py --cwd "$PWD"`
-- `python ...\search_segments.py "query" --cwd "$PWD" --mode hybrid --fanout-budget 8`
-- `python ...\search_segments.py "query" --cwd "$PWD" --mode hybrid --full-fanout`
+- `python -m aippocampus_runtime.ops.maintenance --cwd "$PWD"`
+- `python -m aippocampus_runtime.source.clean_source --cwd "$PWD"`
+- `python -m aippocampus_runtime.recall.index_builder --cwd "$PWD"`
+- `python -m aippocampus_runtime.recall.segment_builder --cwd "$PWD"`
+- `python -m aippocampus_runtime.recall.segment_search "query" --cwd "$PWD" --mode hybrid --fanout-budget 8`
+- `python -m aippocampus_runtime.recall.segment_search "query" --cwd "$PWD" --mode hybrid --full-fanout`
 
 Audit and archive commands:
 
-- `python ...\rollout_size_audit.py --cwd "$PWD"`
-- `python ...\storage_capacity_report.py --json`
+- `python -m aippocampus_runtime.ops.rollout_size_audit --cwd "$PWD"`
+- `python -m aippocampus_runtime.ops.storage_capacity_report --json`
 - `aippocampus storage gc --dry-run --json`
 - `aippocampus storage gc --apply --class rebuildable --retention-report "<retention_report.json>" --json`
 - `python tools\aippocampus\smoke\smoke_synthetic_scale_capacity.py --json`
-- `python ...\retention_report.py --cwd "$PWD" --write`
-- `python ...\cold_archive.py --cwd "$PWD"`
-- `aippocampus export --cwd "$PWD"` or `python ...\export_bundle.py --cwd "$PWD"`
-- `aippocampus import "<bundle.zip>"` or `python ...\import_bundle.py "<bundle.zip>"`
+- `python -m aippocampus_runtime.ops.retention_report --cwd "$PWD" --write`
+- `python -m aippocampus_runtime.ops.cold_archive --cwd "$PWD"`
+- `aippocampus export --cwd "$PWD"` or `python -m aippocampus_runtime.artifacts.export_bundle --cwd "$PWD"`
+- `aippocampus import "<bundle.zip>"` or `python -m aippocampus_runtime.artifacts.import_bundle "<bundle.zip>"`
 
 Graph and vault commands:
 
-- `python ...\prepare_graphify_corpus.py --cwd "$PWD"`
-- `python ...\sync_vault.py --cwd "$PWD" --vault "<vault path>"`
+- `python -m aippocampus_runtime.ops.graphify_corpus --cwd "$PWD"`
+- `python -m aippocampus_runtime.vault.sync --cwd "$PWD" --vault "<vault path>"`
 
 ## Operational Safety
 

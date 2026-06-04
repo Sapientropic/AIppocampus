@@ -2,8 +2,8 @@
 """Optional frontier extraction boundary for Codex onboarding.
 
 This module may call external-model jobs when explicitly requested. Keep it out
-of `onboard_codex.py` so first-install local maintenance stays auditable and can
-run without model credentials.
+of the local Codex onboarding core so first-install maintenance stays auditable
+and can run without model credentials.
 """
 
 from __future__ import annotations

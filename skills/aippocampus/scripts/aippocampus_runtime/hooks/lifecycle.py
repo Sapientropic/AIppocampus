@@ -4,9 +4,9 @@
 This is the "reflex" layer for aippocampus. It moves fixed upkeep
 steps out of SKILL.md reminders while keeping heavy or judgment-heavy work out
 of the foreground hook path. Prompt-time recall stays in
-aippocampus_prompt_hook.py; this file only reacts to turn/session/compaction
+aippocampus_runtime.hooks.prompt; this file only reacts to turn/session/compaction
 lifecycle events. Slow subconscious consolidation is delegated to
-subconscious_scheduler.py, which can start a detached worker after cooldown and
+aippocampus_runtime.subconscious.scheduler, which can start a detached worker after cooldown and
 lock checks instead of blocking the hook.
 """
 
@@ -206,9 +206,13 @@ def run_text(cmd: list[str]) -> str:
     return proc.stdout
 
 
+def module_cmd(module: str, *args: str) -> list[str]:
+    return [sys.executable, "-m", module, *args]
+
+
 def run_health(cwd: Path) -> dict[str, Any]:
     return run_json_timeout(
-        [sys.executable, str(SCRIPT_DIR / "aippocampus_health.py"), "--cwd", str(cwd), "--json"],
+        module_cmd("aippocampus_runtime.health", "--cwd", str(cwd), "--json"),
         timeout=5.0,
     )
 
@@ -245,14 +249,13 @@ def start_detached_json(cmd: list[str], *, log_name: str) -> dict[str, Any]:
 def run_action(cwd: Path, action: str) -> dict[str, Any]:
     if action == "build_index":
         return run_json_timeout(
-            [sys.executable, str(SCRIPT_DIR / "build_index.py"), "--cwd", str(cwd), "--json"],
+            module_cmd("aippocampus_runtime.recall.index_builder", "--cwd", str(cwd), "--json"),
             timeout=ACTION_TIMEOUT_SECONDS[action],
         )
     if action == "build_clean_source":
         return run_json_timeout(
             [
-                sys.executable,
-                str(SCRIPT_DIR / "build_clean_source.py"),
+                *module_cmd("aippocampus_runtime.source.clean_source"),
                 "--cwd",
                 str(cwd),
                 "--json",
@@ -261,14 +264,13 @@ def run_action(cwd: Path, action: str) -> dict[str, Any]:
         )
     if action == "build_segments":
         return run_json_timeout(
-            [sys.executable, str(SCRIPT_DIR / "build_segments.py"), "--cwd", str(cwd), "--json"],
+            module_cmd("aippocampus_runtime.recall.segment_builder", "--cwd", str(cwd), "--json"),
             timeout=ACTION_TIMEOUT_SECONDS[action],
         )
     if action == "register":
         return run_json_timeout(
             [
-                sys.executable,
-                str(SCRIPT_DIR / "registry.py"),
+                *module_cmd("aippocampus_runtime.registry.api"),
                 "register",
                 "--cwd",
                 str(cwd),
@@ -281,7 +283,7 @@ def run_action(cwd: Path, action: str) -> dict[str, Any]:
         # installations this can take longer than the Codex lifecycle hook
         # timeout, so hooks enqueue it detached and rely on atomic output writes.
         return start_detached_json(
-            [sys.executable, str(SCRIPT_DIR / "build_associations.py"), "--json"],
+            module_cmd("aippocampus_runtime.navigation.associations", "--json"),
             log_name="build_associations_hook.log",
         )
     if action == "subconscious_maybe_start":
@@ -293,8 +295,7 @@ def run_action(cwd: Path, action: str) -> dict[str, Any]:
         # in the detached worker.
         return start_detached_json(
             [
-                sys.executable,
-                str(SCRIPT_DIR / "subconscious_scheduler.py"),
+                *module_cmd("aippocampus_runtime.subconscious.scheduler"),
                 "--maybe-start",
                 "--cwd",
                 str(cwd),

@@ -17,7 +17,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import build_cognitive_map as cognitive_map  # noqa: E402
+from aippocampus_runtime.navigation import cognitive_map as cognitive_map  # noqa: E402
 
 
 class BuildCognitiveMapTests(unittest.TestCase):

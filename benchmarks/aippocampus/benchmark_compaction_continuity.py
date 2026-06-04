@@ -22,8 +22,8 @@ import _paths
 
 _paths.ensure_paths()
 
-import correction_reconsolidation as corr
-from aippocampuslib import benchmark_text_is_sensitive
+from aippocampus_runtime.core import benchmark_text_is_sensitive
+from aippocampus_runtime.reflection import reconsolidation as corr
 from benchmark_statistics import binomial_rate_report
 
 SCHEMA_VERSION = corr.SCHEMA_VERSION

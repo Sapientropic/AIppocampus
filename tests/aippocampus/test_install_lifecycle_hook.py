@@ -20,14 +20,14 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import install_aippocampus_lifecycle_hook as installer  # noqa: E402
+from aippocampus_runtime.hooks import install_lifecycle as installer  # noqa: E402
 
 
 class InstallMemoryMaintenanceHookTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.hooks_json = Path(self.tmp.name) / "hooks.json"
-        self.script = SCRIPTS / "aippocampus_lifecycle_hook.py"
+        self.module = installer.DEFAULT_HOOK_MODULE
         self.hooks_json.write_text(
             json.dumps(
                 {
@@ -68,17 +68,19 @@ class InstallMemoryMaintenanceHookTests(unittest.TestCase):
         return json.loads(self.hooks_json.read_text(encoding="utf-8"))
 
     def test_generated_command_is_windows_shell_safe(self) -> None:
-        command = installer.command_for(self.script)
+        command = installer.command_for()
 
         if os.name == "nt":
-            self.assertTrue(command.startswith("& "), command)
+            self.assertIn("; & ", command)
         else:
             self.assertFalse(command.startswith("& "), command)
-        self.assertIn(str(self.script.resolve()), command)
+            self.assertTrue(command.startswith("PYTHONPATH="), command)
+        self.assertIn("-m", command)
+        self.assertIn(self.module, command)
 
     def test_install_preserves_existing_hooks_and_is_idempotent(self) -> None:
-        first = installer.install(self.hooks_json, self.script, timeout=12)
-        second = installer.install(self.hooks_json, self.script, timeout=12)
+        first = installer.install(self.hooks_json, timeout=12)
+        second = installer.install(self.hooks_json, timeout=12)
 
         data = self.read_hooks()["hooks"]
         self.assertTrue(first["changed"])
@@ -89,14 +91,14 @@ class InstallMemoryMaintenanceHookTests(unittest.TestCase):
         self.assertIn("PostCompact", data)
         stop_commands = [handler["command"] for group in data["Stop"] for handler in group["hooks"]]
         self.assertIn("python existing_stop.py", stop_commands)
-        self.assertEqual(sum("aippocampus_lifecycle_hook.py" in cmd for cmd in stop_commands), 1)
+        self.assertEqual(sum(self.module in cmd for cmd in stop_commands), 1)
         prompt_commands = [
             handler["command"] for group in data["UserPromptSubmit"] for handler in group["hooks"]
         ]
         self.assertEqual(prompt_commands, ["python aippocampus_prompt_hook.py"])
 
     def test_status_reports_codex_host_integration_boundary(self) -> None:
-        result = installer.status(self.hooks_json, self.script)
+        result = installer.status(self.hooks_json)
 
         self.assertEqual(
             result["host_integration"],
@@ -109,9 +111,9 @@ class InstallMemoryMaintenanceHookTests(unittest.TestCase):
         )
 
     def test_uninstall_removes_only_maintenance_hooks(self) -> None:
-        installer.install(self.hooks_json, self.script, timeout=12)
+        installer.install(self.hooks_json, timeout=12)
 
-        result = installer.uninstall(self.hooks_json, self.script)
+        result = installer.uninstall(self.hooks_json)
         data = self.read_hooks()["hooks"]
 
         self.assertTrue(result["changed"])
@@ -130,8 +132,6 @@ class InstallMemoryMaintenanceHookTests(unittest.TestCase):
                     "status",
                     "--hooks-json",
                     str(self.hooks_json),
-                    "--script",
-                    str(self.script),
                 ]
             )
 

@@ -15,7 +15,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import retrieval_query_policy as policy  # noqa: E402
+from aippocampus_runtime.recall import query_policy as policy  # noqa: E402
 
 
 class RetrievalQueryPolicyTests(unittest.TestCase):

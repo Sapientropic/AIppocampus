@@ -20,10 +20,10 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import aippocampuslib  # noqa: E402
-import registry  # noqa: E402
 from aippocampus_runtime import anchor_graph, safety  # noqa: E402
+from aippocampus_runtime import core as aippocampuslib  # noqa: E402
 from aippocampus_runtime.cli import errors as cli_errors  # noqa: E402
+from aippocampus_runtime.registry import api as registry  # noqa: E402
 from conversation_sources import (  # noqa: E402
     ClaudeCodeConversationProvider,
     CodexConversationProvider,
@@ -37,7 +37,7 @@ from tests.aippocampus.redaction_fixtures import (  # noqa: E402
     fake_test_email,
 )
 
-LOCATE_ROLLOUT = SCRIPTS / "locate_rollout.py"
+LOCATE_ROLLOUT_CMD = [sys.executable, "-m", "aippocampus_runtime.source.locate_rollout"]
 
 
 def canonical(path: str | Path) -> Path:
@@ -400,8 +400,7 @@ class AippocampusLibTests(unittest.TestCase):
 
             proc = subprocess.run(
                 [
-                    sys.executable,
-                    str(LOCATE_ROLLOUT),
+                    *LOCATE_ROLLOUT_CMD,
                     "--cwd",
                     str(cwd),
                     "--codex-home",
@@ -412,6 +411,7 @@ class AippocampusLibTests(unittest.TestCase):
                 errors="replace",
                 capture_output=True,
                 check=False,
+                cwd=SCRIPTS,
             )
 
             self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)

@@ -15,7 +15,7 @@ ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-import question_confirmation_live as live  # noqa: E402
+from aippocampus_runtime.question import confirmation_live as live  # noqa: E402
 from aippocampus_runtime.question import confirmation_live as live_owner  # noqa: E402
 from aippocampus_runtime.question.confirmation import (  # noqa: E402
     load_confirmation_decisions,

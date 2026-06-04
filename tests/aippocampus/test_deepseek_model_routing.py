@@ -16,7 +16,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import deepseek_model_routing as routing  # noqa: E402
+from aippocampus_runtime.model import routing as routing  # noqa: E402
 
 
 class DeepSeekModelRoutingTests(unittest.TestCase):

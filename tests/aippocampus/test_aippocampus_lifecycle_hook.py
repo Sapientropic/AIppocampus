@@ -16,7 +16,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import aippocampus_lifecycle_hook as hook  # noqa: E402
+from aippocampus_runtime.hooks import lifecycle as hook  # noqa: E402
 
 
 class MemoryMaintenanceHookTests(unittest.TestCase):
@@ -146,7 +146,10 @@ class MemoryMaintenanceHookTests(unittest.TestCase):
             hook.start_detached_json = original
 
         self.assertTrue(result["detached"])
-        self.assertIn("build_associations.py", " ".join(str(item) for item in seen["cmd"]))
+        self.assertIn(
+            "aippocampus_runtime.navigation.associations",
+            " ".join(str(item) for item in seen["cmd"]),
+        )
         self.assertEqual(seen["log_name"], "build_associations_hook.log")
 
     def test_subconscious_scheduler_is_enqueued_detached_without_foreground_timeout(self) -> None:
@@ -166,7 +169,7 @@ class MemoryMaintenanceHookTests(unittest.TestCase):
 
         rendered = " ".join(str(item) for item in seen["cmd"])
         self.assertTrue(result["detached"])
-        self.assertIn("subconscious_scheduler.py", rendered)
+        self.assertIn("aippocampus_runtime.subconscious.scheduler", rendered)
         self.assertIn("--maybe-start", rendered)
         self.assertNotIn("run_json_timeout", rendered)
         self.assertEqual(seen["log_name"], "subconscious_scheduler_hook.log")

@@ -168,9 +168,9 @@ def build_next_hints(*, dry_run: bool, frontier_mode: str) -> list[str]:
         'aippocampus search "recent or last month"',
     ]
     if dry_run:
-        hints.append("python scripts/onboard_codex.py --all --format json")
+        hints.append("aippocampus onboard --provider codex --all --format json")
     if frontier_mode == "off":
-        hints.append("python scripts/onboard_codex.py --frontier-mode smoke --format json")
+        hints.append("aippocampus onboard --provider codex --frontier-mode smoke --format json")
     return hints[:4]
 
 

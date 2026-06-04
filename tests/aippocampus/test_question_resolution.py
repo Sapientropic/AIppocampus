@@ -12,7 +12,7 @@ SCRIPTS = ROOT / "scripts"
 for _path in (SCRIPTS,):
     sys.path.insert(0, str(_path))
 
-import question_resolution as qr  # noqa: E402
+from aippocampus_runtime.subconscious import question_resolution as qr  # noqa: E402
 
 
 def write_jsonl(path: Path, rows: list[dict]) -> None:

@@ -18,8 +18,8 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import build_concept_graph as concept_graph  # noqa: E402
-import theme_emergence as themes  # noqa: E402
+from aippocampus_runtime.navigation import concept_graph as concept_graph  # noqa: E402
+from aippocampus_runtime.subconscious import theme_emergence as themes  # noqa: E402
 
 
 class ThemeEmergenceTests(unittest.TestCase):

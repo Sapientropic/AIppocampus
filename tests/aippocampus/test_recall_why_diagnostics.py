@@ -10,8 +10,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-import aippocampus_mcp_server as mcp  # noqa: E402
 from aippocampus_runtime.cli import facade  # noqa: E402
+from aippocampus_runtime.mcp import server as mcp  # noqa: E402
 from aippocampus_runtime.recall import why_diagnostics as why  # noqa: E402
 
 

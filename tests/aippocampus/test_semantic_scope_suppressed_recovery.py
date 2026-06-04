@@ -18,7 +18,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import semantic_scope_suppressed_recovery as recovery  # noqa: E402
+from aippocampus_runtime.source import semantic_scope_suppressed_recovery as recovery  # noqa: E402
 
 
 class SemanticScopeSuppressedRecoveryTests(unittest.TestCase):

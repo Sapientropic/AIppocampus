@@ -20,8 +20,8 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import aippocampus_mcp_server as mcp  # noqa: E402
 from aippocampus_runtime import core  # noqa: E402
+from aippocampus_runtime.mcp import server as mcp  # noqa: E402
 from aippocampus_runtime.registry import store as registry_store  # noqa: E402
 from aippocampus_runtime.sync import bundle as sync_bundle  # noqa: E402
 from conversation_sources import ConversationSourceRef  # noqa: E402
@@ -952,7 +952,7 @@ class AippocampusMcpServerTests(unittest.TestCase):
         stdin = "\n".join(json.dumps(item, ensure_ascii=False) for item in requests) + "\n"
 
         proc = subprocess.run(
-            [sys.executable, str(SCRIPTS / "aippocampus_mcp_server.py")],
+            [sys.executable, "-m", "aippocampus_runtime.mcp.server"],
             input=stdin,
             text=True,
             encoding="utf-8",

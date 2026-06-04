@@ -234,7 +234,7 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertEqual(manifest["eviction_status"], "applied")
         self.assertEqual(manifest["evicted_paths"][0]["relative_path"], "source_index.sqlite")
         self.assertEqual(manifest["source_preconditions"]["raw_or_archive_source"]["status"], "passed")
-        self.assertIn("build_index.py", manifest["rebuild_command"])
+        self.assertIn("aippocampus_runtime.recall.index_builder", manifest["rebuild_command"])
 
     def test_apply_health_then_documented_rebuild_path_restores_index(self) -> None:
         apply_result = storage_governance.apply_plan(

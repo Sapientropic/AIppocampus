@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -11,16 +12,16 @@ from pathlib import Path
 from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-IMPORT_BUNDLE = REPO_ROOT / "skills" / "aippocampus" / "scripts" / "import_bundle.py"
-SCRIPTS = IMPORT_BUNDLE.parent
+IMPORT_BUNDLE_MODULE = "aippocampus_runtime.artifacts.import_bundle"
+SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-import import_bundle  # noqa: E402
+from aippocampus_runtime.artifacts import import_bundle as import_bundle  # noqa: E402
 from aippocampus_runtime.artifacts import import_bundle as packaged_import_bundle  # noqa: E402
 
 
 class ImportBundleTests(unittest.TestCase):
-    def test_top_level_script_is_compatibility_shim_for_package_owner(self) -> None:
+    def test_package_module_is_the_artifact_import_owner(self) -> None:
         self.assertIs(import_bundle.safe_extract, packaged_import_bundle.safe_extract)
         self.assertIs(import_bundle.append_import_anchor, packaged_import_bundle.append_import_anchor)
         self.assertIs(import_bundle.main, packaged_import_bundle.main)
@@ -54,7 +55,8 @@ class ImportBundleTests(unittest.TestCase):
             proc = subprocess.run(
                 [
                     sys.executable,
-                    str(IMPORT_BUNDLE),
+                    "-m",
+                    IMPORT_BUNDLE_MODULE,
                     str(bundle),
                     "--dest",
                     str(dest),
@@ -67,6 +69,12 @@ class ImportBundleTests(unittest.TestCase):
                 errors="replace",
                 capture_output=True,
                 check=False,
+                env={
+                    **os.environ,
+                    "PYTHONPATH": str(SCRIPTS)
+                    if not os.environ.get("PYTHONPATH")
+                    else str(SCRIPTS) + os.pathsep + os.environ["PYTHONPATH"],
+                },
             )
 
             self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)

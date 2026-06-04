@@ -5,7 +5,7 @@ details here instead of expanding `SKILL.md`.
 
 ## Clean Source
 
-`scripts/build_clean_source.py` creates the daily-use source layer under the
+`aippocampus_runtime/source/clean_source` creates the daily-use source layer under the
 global thread store by default:
 `$CODEX_HOME/aippocampus-registry/threads/<thread>/clean-source/`.
 
@@ -38,7 +38,7 @@ Clean source drops:
 - attachment carrier payloads that are not visible message text
 
 This layer may omit noise, but it must not rewrite expression. Use
-`search_clean_source.py` first for normal recall. Return to raw rollout for
+`aippocampus_runtime.source.search` first for normal recall. Return to raw rollout for
 forensic audit, missing tool output, storage accounting, or source repair.
 
 `events.jsonl` is a behavior lane, not a second message stream. It stores
@@ -109,7 +109,7 @@ filter them with `search_clean_source.py --scope-label <label>`.
 Fuzzy life-wide judgments such as metaphors, pivots, dissatisfaction, or
 excitement should not be solved by endlessly expanding the deterministic phrase
 list. Background semantic jobs stage source-backed `semantic_scope_labels`
-findings in `subconscious_jobs.jsonl`; `build_semantic_scope_labels.py` then
+findings in `subconscious_jobs.jsonl`; `aippocampus_runtime.source.semantic_scope_builder` then
 materializes accepted rows into `semantic-scope-labels.jsonl` beside a
 clean-source directory. Rows are keyed by existing `message_id`s, carry
 canonical `scope_labels`, and must include source refs back to the same
@@ -119,7 +119,7 @@ per-label model evidence and stricter per-label confidence before the
 materializer keeps them; this protects against broad semantic over-labeling
 without falling back to mechanical phrase-list expansion. Single-thread
 clean-source search, registry deep search, and
-`build_project_timeline.py` merge that sidecar as navigation metadata while
+`aippocampus_runtime.navigation.project_timeline` merge that sidecar as navigation metadata while
 leaving `messages.jsonl` unchanged. Treat semantic sidecar labels as
 DeepSeek/subconscious hints, not source truth.
 
@@ -152,7 +152,7 @@ global thread store under `$CODEX_HOME/aippocampus-registry/threads/`.
 
 ## Local Index
 
-`scripts/build_index.py` writes `messages.jsonl`, `source_index.sqlite`,
+`aippocampus_runtime/recall/index_builder` writes `messages.jsonl`, `source_index.sqlite`,
 `graph.json`, RAG-lite chunks, and `manifest.json` under the global thread store
 by default. Passing `--output-dir .aippocampus` preserves the old project-local
 mode when a portable bundle, repo-local audit, or explicit debug run needs it.
@@ -202,12 +202,12 @@ optional adapter for very fuzzy queries or large corpora.
 
 For hundred-MB or GB threads, use segments:
 
-- `build_segments.py` creates sealed `seg-0001/`, `seg-0002/`, etc. under the
+- `aippocampus_runtime.recall.segment_builder` creates sealed `seg-0001/`, `seg-0002/`, etc. under the
   global index directory's `segments/` folder by default.
 - Each segment has its own `messages.jsonl` and `source_index.sqlite`.
 - The segment manifest records source rollout size/mtime, anchor hash, byte
   spans, line spans, message spans, and index paths.
-- `search_segments.py` fans queries out to segments, optionally enforces
+- `aippocampus_runtime.recall.segment_search` fans queries out to segments, optionally enforces
   `--fanout-budget` / `--max-segments` before opening SQLite shards, retrieves
   top candidates per selected segment, and merges global top-k with diversity
   penalties. Missing manifests or shard indexes report structured
@@ -223,7 +223,7 @@ The global thread store is the canonical generated-artifact location. This keeps
 AIppocampus useful when a new project is opened and avoids dropping private
 rollout-derived files into public repositories by default.
 
-`scripts/registry.py` is the machine-wide discovery layer. It stores where
+`aippocampus_runtime/registry/api` is the machine-wide discovery layer. It stores where
 thread memories live; it is not a duplicate of every thread.
 
 Default registry files under `$CODEX_HOME/aippocampus-registry/` include:
@@ -242,13 +242,13 @@ Default registry files under `$CODEX_HOME/aippocampus-registry/` include:
 
 Common commands:
 
-- `python ...\onboard.py --provider codex --all --format json`
-- `python ...\registry.py register --cwd "$PWD" --build-index`
-- `python ...\registry.py register-rollout --rollout "<rollout.jsonl>" --project "<label>"`
-- `python ...\registry.py scan-sessions --dry-run`
-- `python ...\registry.py list`
-- `python ...\registry.py search "terms"`
-- `python ...\registry.py search --metadata-only "terms"`
+- `python -m aippocampus_runtime.onboarding.facade --provider codex --all --format json`
+- `python -m aippocampus_runtime.registry.api register --cwd "$PWD" --build-index`
+- `python -m aippocampus_runtime.registry.api register-rollout --rollout "<rollout.jsonl>" --project "<label>"`
+- `python -m aippocampus_runtime.registry.api scan-sessions --dry-run`
+- `python -m aippocampus_runtime.registry.api list`
+- `python -m aippocampus_runtime.registry.api search "terms"`
+- `python -m aippocampus_runtime.registry.api search --metadata-only "terms"`
 
 In a new thread, check the registry before saying old memory is unavailable.
 
@@ -259,17 +259,17 @@ query terms from these rows through `retrieval_query_policy.semantic_trigger_ter
 instead of growing `ALIASES` or `ASSOCIATIVE_CUES` with semantic proxy phrases.
 `aippocampus_runtime.recall.semantic_trigger_router` writes reviewed seed
 triggers plus source-backed promotion candidates into `semantic_triggers.jsonl`;
-the top-level `semantic_trigger_router.py` remains a compatibility command.
+the top-level `aippocampus_runtime.recall.semantic_trigger_router` remains a compatibility command.
 Reviewed seed rows are allowed only as public, scent-only routing hints: active
 seeds need review metadata plus source refs or an explicit reviewed-seed
 rationale, and the router reports skipped seeds, dropped aliases, and promoted
 candidate counts. Legacy trigger ids are retained in `legacy_trigger_ids` when
 rows are migrated to the longer SHA-256 `st_...` form.
-The provider-aware `onboard.py` wrapper refreshes that sidecar during
+The provider-aware `aippocampus_runtime.onboarding.facade` wrapper refreshes that sidecar during
 onboarding so a fresh registry has the data path before the foreground hook
 needs it.
 
-`build_project_timeline.py` writes `project_timeline.json`. The `projects`
+`aippocampus_runtime.navigation.project_timeline` writes `project_timeline.json`. The `projects`
 section keeps the older project-scoped recent-turn view used by hooks and
 subconscious jobs. The `life_wide` section groups the same bounded recent
 clean-source turns by `scope_labels` across registered threads and projects,
@@ -282,7 +282,7 @@ cue, so ordinary technical or status prompts are not over-personalized by
 global memory.
 
 `onboard.py --provider codex` is the preferred first-install and agent-facing
-wrapper. `onboard_codex.py` remains the Codex-only compatibility wrapper. The
+wrapper. `aippocampus_runtime.onboarding.codex` remains the Codex-only compatibility wrapper. The
 wrapper returns a single JSON envelope with `ok`, `data`, `next`, and `meta`,
 including before/after registry counts, repair actions, cognitive-map status,
 and frontier extraction availability. Use `--dry-run` before large imports when
@@ -326,7 +326,7 @@ behavior is `skip`, not personalized query expansion.
 
 ## MCP Access Layer
 
-`scripts/aippocampus_mcp_server.py` is the local MCP surface for agent clients
+`aippocampus_runtime/mcp/server` is the local MCP surface for agent clients
 that should not shell out through skill instructions for every read. It exposes
 `search_memory`, `recall_context`, `recall_deepen`, `latest_reply`,
 `get_turn_context`, `list_threads`, `register_thread`, `sync_status`, and
@@ -360,7 +360,7 @@ or benchmark-lift claims by themselves.
 
 ## Cognitive Map
 
-`build_cognitive_map.py` materializes `$CODEX_HOME/aippocampus-registry/cognitive_map.json`.
+`aippocampus_runtime.navigation.cognitive_map` materializes `$CODEX_HOME/aippocampus-registry/cognitive_map.json`.
 This is the AIppocampus "mental map" layer: episodes come from registry rows,
 while landmarks, regions, and routes come only from source-backed DeepSeek
 subconscious findings with `job=cognitive_map`.
@@ -393,18 +393,18 @@ source refs.
 
 ## Associations And Concept Graph
 
-`build_associations.py` reads registry rows and indexes to create prompt-hook
+`aippocampus_runtime.navigation.associations` reads registry rows and indexes to create prompt-hook
 associations. Curated anchors and keywords are `verified`; automatically mined
 final-answer terms are `staging`. Trivial utterances, repeated Goal/system text,
 and injection noise should be filtered before they become triggers.
 
-`build_concept_graph.py` creates a bounded concept graph. Depth-1 expansion may
+`aippocampus_runtime.navigation.concept_graph` creates a bounded concept graph. Depth-1 expansion may
 use staging edges; depth-2 expansion is restricted to verified or
 high-confidence edges and remains scent-only.
 
 ## Vault And Dashboard
 
-`sync_vault.py` creates a human-readable memory surface, usually under
+`aippocampus_runtime.vault.sync` creates a human-readable memory surface, usually under
 `AIPPOCAMPUS_VAULT` when set, otherwise `~/AIppocampus Memory`. Optional
 Publish-like shell assets can be supplied with `AIPPOCAMPUS_STYLE_SOURCE`,
 `AIPPOCAMPUS_SCRIPT_SOURCE`, `AIPPOCAMPUS_SITE_MARK`, and
@@ -419,7 +419,7 @@ on a network CDN.
 
 ## Graphify Bridge
 
-`prepare_graphify_corpus.py` exports a prepared corpus under the global index
+`aippocampus_runtime.ops.graphify_corpus` exports a prepared corpus under the global index
 directory's `graphify-corpus/`: anchors, index metadata, anchor graph, and
 chunked transcript Markdown with source provenance.
 
@@ -430,32 +430,32 @@ the corpus folder's `graphify-out/`.
 ## Bundles
 
 `aippocampus_runtime.artifacts.export_bundle` produces portable thread-memory
-bundles, with `export_bundle.py` and `aippocampus export` preserved as operator
+bundles, with `aippocampus_runtime.artifacts.export_bundle` and `aippocampus export` preserved as operator
 entrypoints. Bundles normally include manifest, handoff, index files, graph,
 anchors, and raw rollout unless `--no-raw` is used.
 `aippocampus_runtime.artifacts.import_bundle` extracts the bundle and appends a
-pointer to the current workspace's anchors, with `import_bundle.py` and
+pointer to the current workspace's anchors, with `aippocampus_runtime.artifacts.import_bundle` and
 `aippocampus import` preserved as compatibility/facade entrypoints.
 
 `aippocampus_runtime.sync.bundle` is the first Stage 3 sync backend.
-`sync_bundle.py` remains the direct-script/import compatibility shim. It
+`aippocampus_runtime.sync.bundle` remains the package-owner module. It
 supports explicit local-folder `status`, `push`, `pull`, and `repair` commands
 over clean source, registry rows, manifests, semantic triggers, working memory,
-and cognitive-map sidecars. `encrypted_sync_bundle.py` adds the age-backed
+and cognitive-map sidecars. `aippocampus_runtime.sync.encrypted.bundle` adds the age-backed
 encrypted variant and keeps ciphertext under `encrypted-sync/`.
 
 `aippocampus_runtime.sync.object_storage.cli` reuses that same bundle manifest
-over an HTTP object-storage transport; `sync_object_storage.py` remains the
-compatibility shim. Each manifest file is stored as an object under
+over an HTTP object-storage transport; `aippocampus_runtime.sync.object_storage.cli` remains the
+package owner. Each manifest file is stored as an object under
 `AIPPOCAMPUS_OBJECT_PREFIX`, the manifest object is written last, and
 `status`/`repair` verify object content by sha256 before `pull` imports it.
 `aippocampus_runtime.sync.encrypted.object_storage` uses the same encrypted
 bundle contract over HTTP `PUT`/`GET` and writes the encrypted outer manifest
 last.
-`encrypted_sync_admin.py` owns device-key UX and plaintext-to-encrypted
+`aippocampus_runtime.sync.encrypted.admin` owns device-key UX and plaintext-to-encrypted
 migration/cleanup so the core sync entrypoints stay focused on transport. The
-object-store client boundary is split into the `object_storage_client.py`
-compatibility shim and package-only
+object-store client boundary is split into the `aippocampus_runtime.sync.object_storage.client`
+package owner and package-only
 `aippocampus_runtime.sync.object_storage.providers`; provider mode covers
 generic HTTP bearer-token endpoints, S3-compatible SigV4, Cloudflare R2 region
 `auto`, and Google Cloud Storage XML HMAC signing. Provider-specific setup

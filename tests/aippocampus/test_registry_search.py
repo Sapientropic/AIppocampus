@@ -10,8 +10,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-import registry_search  # noqa: E402
 from aippocampus_runtime.recall import retrieval as retrieval_impl  # noqa: E402
+from aippocampus_runtime.registry import search as registry_search  # noqa: E402
 
 
 class RegistrySearchBudgetTests(unittest.TestCase):

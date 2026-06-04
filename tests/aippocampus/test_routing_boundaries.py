@@ -15,7 +15,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import memory_candidate_router as router  # noqa: E402
+from aippocampus_runtime.subconscious import candidate_router as router  # noqa: E402
 
 
 class RoutingBoundaryTests(unittest.TestCase):

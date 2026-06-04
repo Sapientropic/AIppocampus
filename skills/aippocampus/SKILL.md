@@ -65,43 +65,46 @@ Use the smallest useful ladder:
 
 Prefer progressive MCP tools such as `get_turn_context`, `search_memory`,
 `recall_context`, and `recall_deepen` when an agent client has them; use the
-script commands below as portable fallbacks. Proactive checks are normally
-private: surface them to the user only when they change the next action, prevent
-a likely mistake, or the user asks for continuity. Do not search every turn.
+`aippocampus` facade or package modules below as portable fallbacks. Proactive
+checks are normally private: surface them to the user only when they change the
+next action, prevent a likely mistake, or the user asks for continuity.
+
+Do not search every turn.
 
 ## First Moves
 
-Use `$CODEX_HOME/skills/aippocampus/scripts` as the script root.
+Use `aippocampus` after package install. In a raw skill checkout, run package
+modules from `$CODEX_HOME/skills/aippocampus/scripts` or put that directory on
+`PYTHONPATH`.
 
-- Find the current rollout: `python .../locate_rollout.py --cwd "$PWD"`.
-- Build the daily source layer: `python .../build_clean_source.py --cwd "$PWD"`.
-- Build or refresh the index: `python .../build_index.py --cwd "$PWD"`.
-- Check state before/after long work: `python .../aippocampus_health.py --cwd "$PWD"`.
-- Recover the latest assistant closeout: `python .../latest_reply.py --cwd "$PWD"`.
-- Search clean source first: `python .../search_clean_source.py "query" --cwd "$PWD"`.
+- Find the current rollout: `python -m aippocampus_runtime.source.locate_rollout --cwd "$PWD"`.
+- Build the daily source layer: `python -m aippocampus_runtime.source.clean_source --cwd "$PWD"`.
+- Build or refresh the index: `python -m aippocampus_runtime.recall.index_builder --cwd "$PWD"`.
+- Check state before/after long work: `aippocampus health --cwd "$PWD"`.
+- Recover the latest assistant closeout: `python -m aippocampus_runtime.source.latest_reply --cwd "$PWD"`.
+- Search clean source first: `aippocampus search "query" --cwd "$PWD"`.
 - Search raw/indexed rollout when clean source is insufficient:
-  `python .../search_rollout.py "query" --cwd "$PWD" --build-index --mode hybrid`.
+  `python -m aippocampus_runtime.recall.rollout_search "query" --cwd "$PWD" --build-index --mode hybrid`.
 - Run the deterministic recall gate for vague continuity prompts:
-  `python .../active_recall.py "query" --cwd "$PWD" --search auto`.
+  `python -m aippocampus_runtime.recall.active_recall "query" --cwd "$PWD" --search auto`.
 - Inspect the local MCP tool surface for plugin/agent clients:
-  `python .../aippocampus_mcp_server.py --list-tools`.
+  `aippocampus mcp list-tools`.
 - Check or exchange a local-folder sync bundle:
-  `python .../sync_bundle.py status --sync-dir "<folder>" --json`.
+  `aippocampus sync status --sync-dir "<folder>" --json`.
 - Check an HTTP object-storage sync bundle:
-  `python .../sync_object_storage.py status --object-store-url "<url>" --object-prefix "<prefix>" --json`.
+  `aippocampus object-sync status --object-store-url "<url>" --object-prefix "<prefix>" --json`.
 - Manage encrypted sync device keys or plaintext migration:
-  `python .../encrypted_sync_admin.py key list --registry-dir "<registry>" --json`.
+  `python -m aippocampus_runtime.sync.encrypted.admin key list --registry-dir "<registry>" --json`.
 - First-install / full-machine onboarding:
-  `python .../onboard.py --provider codex --all --format json`. This is the
+  `aippocampus onboard --provider codex --all --format json`. This is the
   preferred provider-aware agent entrypoint for registering local Codex sessions,
   repairing missing indexes, rebuilding project timeline, and refreshing
-  cognitive-map sidecars. `onboard_codex.py` remains the Codex-only compatibility
-  entrypoint.
-- Discover other registered threads: `python .../registry.py list` or
-  `python .../registry.py search "terms"`.
-- Register an old rollout: `python .../registry.py register-rollout --rollout "<rollout.jsonl>" --project "<label>"`.
+  cognitive-map sidecars.
+- Discover other registered threads: `python -m aippocampus_runtime.registry.api list` or
+  `python -m aippocampus_runtime.registry.api search "terms"`.
+- Register an old rollout: `python -m aippocampus_runtime.registry.api register-rollout --rollout "<rollout.jsonl>" --project "<label>"`.
 - Scan local sessions for unregistered threads:
-  `python .../registry.py scan-sessions --dry-run`, then rerun without
+  `python -m aippocampus_runtime.registry.api scan-sessions --dry-run`, then rerun without
   `--dry-run` when the candidates look right.
 
 Prefer clean-source search for normal recall. Drop to raw rollout only for exact
@@ -114,9 +117,9 @@ repair, tool provenance, byte accounting, missing evidence, or audit questions.
    memory.
 2. When a thread may outgrow the current context, keep anchors and clean source
    fresh; use hooks for routine refreshes and explicit commands for repair.
-3. When the user asks "last reply", use `latest_reply.py`; it should return the
-   latest `final_answer`, or clearly mark commentary fallback.
-4. When the user asks why a thread is huge, run `rollout_size_audit.py`; answer
+3. When the user asks "last reply", use `aippocampus_runtime.source.latest_reply`;
+   it should return the latest `final_answer`, or clearly mark commentary fallback.
+4. When the user asks why a thread is huge, run `aippocampus_runtime.ops.rollout_size_audit`; answer
    from byte buckets and largest-line evidence.
 5. When the user asks what can be kept, compressed, or deleted, run
    `retention_report.py --write` before `cold_archive.py`.

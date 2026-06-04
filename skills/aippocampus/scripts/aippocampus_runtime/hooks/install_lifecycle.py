@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import sys
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,7 @@ from aippocampus_runtime.hooks.host_boundary import (
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
+DEFAULT_HOOK_MODULE = "aippocampus_runtime.hooks.lifecycle"
 DEFAULT_TIMEOUT_SECONDS = 20
 EVENTS = ("SessionStart", "Stop", "PreCompact", "PostCompact")
 
@@ -47,9 +49,32 @@ def save_hooks(path: Path, data: dict[str, Any]) -> None:
     tmp.replace(path)
 
 
-def command_for(script: Path, *, log: bool = False) -> str:
-    command = f'"{Path(sys.executable).resolve()}" "{script.resolve()}"'
-    if os.name == "nt":
+def quote_powershell_double(value: str | Path) -> str:
+    text = str(value)
+    escaped = text.replace("`", "``").replace('"', '`"').replace("$", "`$")
+    return f'"{escaped}"'
+
+
+def command_for(
+    script: Path | None = None,
+    *,
+    module: str = DEFAULT_HOOK_MODULE,
+    log: bool = False,
+) -> str:
+    if script is None:
+        if os.name == "nt":
+            command = (
+                f"$env:PYTHONPATH={quote_powershell_double(SCRIPT_DIR)}; "
+                f"& {quote_powershell_double(Path(sys.executable).resolve())} -m {module}"
+            )
+        else:
+            command = (
+                f"PYTHONPATH={shlex.quote(str(SCRIPT_DIR))} "
+                f"{shlex.quote(str(Path(sys.executable).resolve()))} -m {module}"
+            )
+    else:
+        command = f'"{Path(sys.executable).resolve()}" "{script.resolve()}"'
+    if os.name == "nt" and script is not None:
         # Codex Desktop executes hook command strings through PowerShell on
         # Windows. A quoted executable at the start of the line is parsed as a
         # string expression and exits with code 1; the call operator keeps
@@ -60,22 +85,38 @@ def command_for(script: Path, *, log: bool = False) -> str:
     return command
 
 
-def handler_for(script: Path, *, timeout: int, log: bool = False) -> dict[str, Any]:
-    return {"type": "command", "command": command_for(script, log=log), "timeout": timeout}
+def handler_for(
+    script: Path | None = None,
+    *,
+    module: str = DEFAULT_HOOK_MODULE,
+    timeout: int,
+    log: bool = False,
+) -> dict[str, Any]:
+    return {
+        "type": "command",
+        "command": command_for(script, module=module, log=log),
+        "timeout": timeout,
+    }
 
 
-def is_maintenance_handler(handler: dict[str, Any], script: Path) -> bool:
+def is_maintenance_handler(
+    handler: dict[str, Any],
+    script: Path | None = None,
+    *,
+    module: str = DEFAULT_HOOK_MODULE,
+) -> bool:
     command = str(handler.get("command") or "")
-    script_resolved = str(script.resolve())
+    script_resolved = str(script.resolve()) if script is not None else ""
     # Match both the new AIppocampus handler and the old thread-memory handler
     # so reinstalling upgrades lifecycle hooks in-place instead of leaving
     # stale Stop/PreCompact/PostCompact commands behind.
     return (
-        any(
+        module in command
+        or any(
             name in command
             for name in ("aippocampus_lifecycle_hook.py", "memory_maintenance_hook.py")
         )
-        or script_resolved in command
+        or (script_resolved and script_resolved in command)
     )
 
 
@@ -88,7 +129,12 @@ def groups_for(data: dict[str, Any], event: str) -> list[dict[str, Any]]:
     return groups
 
 
-def prune_event(groups: list[dict[str, Any]], script: Path) -> tuple[list[dict[str, Any]], bool]:
+def prune_event(
+    groups: list[dict[str, Any]],
+    script: Path | None = None,
+    *,
+    module: str = DEFAULT_HOOK_MODULE,
+) -> tuple[list[dict[str, Any]], bool]:
     changed = False
     out: list[dict[str, Any]] = []
     for group in groups:
@@ -102,7 +148,10 @@ def prune_event(groups: list[dict[str, Any]], script: Path) -> tuple[list[dict[s
         kept = [
             handler
             for handler in handlers
-            if not (isinstance(handler, dict) and is_maintenance_handler(handler, script))
+            if not (
+                isinstance(handler, dict)
+                and is_maintenance_handler(handler, script, module=module)
+            )
         ]
         if len(kept) != len(handlers):
             changed = True
@@ -114,14 +163,19 @@ def prune_event(groups: list[dict[str, Any]], script: Path) -> tuple[list[dict[s
 
 
 def install(
-    path: Path, script: Path, *, timeout: int = DEFAULT_TIMEOUT_SECONDS, log: bool = False
+    path: Path,
+    script: Path | None = None,
+    *,
+    module: str = DEFAULT_HOOK_MODULE,
+    timeout: int = DEFAULT_TIMEOUT_SECONDS,
+    log: bool = False,
 ) -> dict[str, Any]:
     data = load_hooks(path)
     changed = False
-    target = handler_for(script, timeout=timeout, log=log)
+    target = handler_for(script, module=module, timeout=timeout, log=log)
     for event in EVENTS:
         groups = groups_for(data, event)
-        pruned, did_prune = prune_event(groups, script)
+        pruned, did_prune = prune_event(groups, script, module=module)
         if did_prune:
             changed = True
         event_changed = did_prune or pruned != groups
@@ -146,7 +200,12 @@ def install(
     )
 
 
-def uninstall(path: Path, script: Path) -> dict[str, Any]:
+def uninstall(
+    path: Path,
+    script: Path | None = None,
+    *,
+    module: str = DEFAULT_HOOK_MODULE,
+) -> dict[str, Any]:
     data = load_hooks(path)
     hooks = data.setdefault("hooks", {})
     changed = False
@@ -154,7 +213,7 @@ def uninstall(path: Path, script: Path) -> dict[str, Any]:
         groups = hooks.get(event)
         if not isinstance(groups, list):
             continue
-        pruned, did_prune = prune_event(groups, script)
+        pruned, did_prune = prune_event(groups, script, module=module)
         if did_prune:
             changed = True
             if pruned:
@@ -168,7 +227,12 @@ def uninstall(path: Path, script: Path) -> dict[str, Any]:
     )
 
 
-def status(path: Path, script: Path) -> dict[str, Any]:
+def status(
+    path: Path,
+    script: Path | None = None,
+    *,
+    module: str = DEFAULT_HOOK_MODULE,
+) -> dict[str, Any]:
     data = load_hooks(path)
     installed_events: dict[str, list[str]] = {}
     for event in EVENTS:
@@ -176,7 +240,7 @@ def status(path: Path, script: Path) -> dict[str, Any]:
         commands: list[str] = []
         for group in groups if isinstance(groups, list) else []:
             for handler in group.get("hooks", []) if isinstance(group, dict) else []:
-                if isinstance(handler, dict) and is_maintenance_handler(handler, script):
+                if isinstance(handler, dict) and is_maintenance_handler(handler, script, module=module):
                     commands.append(str(handler.get("command") or ""))
         if commands:
             installed_events[event] = commands
@@ -196,7 +260,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--codex-home", default=os.environ.get("CODEX_HOME") or str(codex_home()))
     parser.add_argument("--hooks-json")
-    parser.add_argument("--script", default=str(SCRIPT_DIR / "aippocampus_lifecycle_hook.py"))
+    parser.add_argument("--script", help="Override hook command with an explicit Python file path.")
+    parser.add_argument("--module", default=DEFAULT_HOOK_MODULE)
     parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT_SECONDS)
     parser.add_argument(
         "--log", action="store_true", help="Ask the hook to write sanitized lifecycle debug events."
@@ -206,13 +271,13 @@ def main(argv: list[str] | None = None) -> int:
 
     root = Path(args.codex_home).resolve()
     path = Path(args.hooks_json).resolve() if args.hooks_json else hooks_json_path(root)
-    script = Path(args.script).resolve()
+    script = Path(args.script).resolve() if args.script else None
     if args.action == "install":
-        result = install(path, script, timeout=args.timeout, log=args.log)
+        result = install(path, script, module=args.module, timeout=args.timeout, log=args.log)
     elif args.action == "uninstall":
-        result = uninstall(path, script)
+        result = uninstall(path, script, module=args.module)
     else:
-        result = status(path, script)
+        result = status(path, script, module=args.module)
 
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))

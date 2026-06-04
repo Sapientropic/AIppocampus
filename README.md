@@ -247,13 +247,14 @@ aippocampus onboard --provider codex --all
 The provider-aware onboarding wrapper scans local sessions, registers missing
 rollouts, builds clean-source and SQLite/RAG-lite indexes, repairs missing
 artifacts, rebuilds the project and life-wide timeline sidecar, and refreshes
-the cognitive map. `onboard_codex.py` remains a compatibility entrypoint for
-existing Codex-only scripts.
+the cognitive map.
 
-Direct `python "${CODEX_HOME}/skills/aippocampus/scripts/*.py"` commands remain
-supported as the script-first fallback. The facade delegates to those scripts
-and preserves their JSON stdout and exit codes. Windows x64 has dated
-PyInstaller artifact smoke evidence, including Claude Code stdio MCP use through
+Runtime ownership lives under `aippocampus_runtime/` package modules. The
+public operator path is the `aippocampus` facade; raw checkout maintenance can
+run `python -m aippocampus_runtime.<module>` with
+`skills/aippocampus/scripts` on `PYTHONPATH`. Flat top-level script shims are
+not part of the supported surface. Windows x64 has dated PyInstaller artifact
+smoke evidence, including Claude Code stdio MCP use through
 `aippocampus.exe mcp`; this is not yet a signed release, installer/update UX, or
 macOS/Linux binary claim.
 
@@ -349,7 +350,7 @@ registry-backed tools such as `search_memory`, `recall_context`,
 `register_thread`, `sync_status`, and `memory_health`:
 
 ```sh
-python ./skills/aippocampus/scripts/aippocampus_mcp_server.py --list-tools
+aippocampus mcp list-tools
 ```
 
 The packaged facade exposes the same tool catalog:
@@ -383,17 +384,17 @@ excluded from plaintext sync; normal raw rollout transfer requires encrypted
 sync.
 
 ```sh
-python ./skills/aippocampus/scripts/sync_bundle.py status --sync-dir <folder> --json
-python ./skills/aippocampus/scripts/sync_bundle.py push --sync-dir <folder> --json
-python ./skills/aippocampus/scripts/sync_bundle.py pull --sync-dir <folder> --json
-python ./skills/aippocampus/scripts/sync_bundle.py repair --sync-dir <folder> --json
+aippocampus sync status --sync-dir <folder> --json
+aippocampus sync push --sync-dir <folder> --json
+aippocampus sync pull --sync-dir <folder> --json
+aippocampus sync repair --sync-dir <folder> --json
 ```
 
 ```sh
-python ./skills/aippocampus/scripts/sync_object_storage.py status --object-store-url <url> --object-prefix <prefix> --json
-python ./skills/aippocampus/scripts/sync_object_storage.py push --object-store-url <url> --object-prefix <prefix> --json
-python ./skills/aippocampus/scripts/sync_object_storage.py pull --object-store-url <url> --object-prefix <prefix> --json
-python ./skills/aippocampus/scripts/sync_object_storage.py repair --object-store-url <url> --object-prefix <prefix> --json
+aippocampus object-sync status --object-store-url <url> --object-prefix <prefix> --json
+aippocampus object-sync push --object-store-url <url> --object-prefix <prefix> --json
+aippocampus object-sync pull --object-store-url <url> --object-prefix <prefix> --json
+aippocampus object-sync repair --object-store-url <url> --object-prefix <prefix> --json
 ```
 
 S3-compatible providers can be configured with `AIPPOCAMPUS_OBJECT_PROVIDER`
@@ -406,10 +407,10 @@ ciphertext objects. Use a new folder or object prefix for the first encrypted
 push:
 
 ```sh
-python ./skills/aippocampus/scripts/sync_bundle.py push --sync-dir <folder> --encrypt --recipient <age-recipient> --json
-python ./skills/aippocampus/scripts/sync_bundle.py pull --sync-dir <folder> --require-encrypted --identity-file <age-identity> --json
-python ./skills/aippocampus/scripts/sync_object_storage.py push --object-store-url <url> --object-prefix <prefix> --encrypt --recipient <age-recipient> --json
-python ./skills/aippocampus/scripts/sync_object_storage.py pull --object-store-url <url> --object-prefix <prefix> --require-encrypted --identity-file <age-identity> --json
+aippocampus sync push --sync-dir <folder> --encrypt --recipient <age-recipient> --json
+aippocampus sync pull --sync-dir <folder> --require-encrypted --identity-file <age-identity> --json
+aippocampus object-sync push --object-store-url <url> --object-prefix <prefix> --encrypt --recipient <age-recipient> --json
+aippocampus object-sync pull --object-store-url <url> --object-prefix <prefix> --require-encrypted --identity-file <age-identity> --json
 ```
 
 Pull preserves local conflicting files and writes incoming copies under

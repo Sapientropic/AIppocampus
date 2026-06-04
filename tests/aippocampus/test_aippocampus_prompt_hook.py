@@ -24,10 +24,10 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import aippocampus_prompt_hook as hook  # noqa: E402
-import ambient_thread_cache as thread_cache  # noqa: E402
-import build_concept_graph as concept_graph  # noqa: E402
-import dream_live_shadow_ab as dream_shadow  # noqa: E402
+from aippocampus_runtime.dream import live_shadow_ab as dream_shadow  # noqa: E402
+from aippocampus_runtime.hooks import prompt as hook  # noqa: E402
+from aippocampus_runtime.navigation import concept_graph as concept_graph  # noqa: E402
+from aippocampus_runtime.recall import ambient_cache as thread_cache  # noqa: E402
 from aippocampus_runtime.recall import prompt_cues as recall_cues  # noqa: E402
 from aippocampus_runtime.recall import semantic_cue_cache as cue_cache  # noqa: E402
 from tests.aippocampus.redaction_fixtures import (  # noqa: E402
@@ -497,7 +497,7 @@ class AmbientRecallHookTests(unittest.TestCase):
         proc = subprocess.run(
             [
                 sys.executable,
-                str(SCRIPTS / "aippocampus_prompt_hook.py"),
+                "-m", "aippocampus_runtime.hooks.prompt",
                 "--prompt",
                 "AIppocampus continuity 这条线下一步怎么收？",
                 "--cwd",
@@ -534,7 +534,7 @@ class AmbientRecallHookTests(unittest.TestCase):
         proc = subprocess.run(
             [
                 sys.executable,
-                str(SCRIPTS / "aippocampus_prompt_hook.py"),
+                "-m", "aippocampus_runtime.hooks.prompt",
                 "--prompt",
                 "AIppocampus continuity 这条线下一步怎么收？",
                 "--cwd",
@@ -565,7 +565,7 @@ class AmbientRecallHookTests(unittest.TestCase):
         proc = subprocess.run(
             [
                 sys.executable,
-                str(SCRIPTS / "aippocampus_prompt_hook.py"),
+                "-m", "aippocampus_runtime.hooks.prompt",
                 "--prompt",
                 f"Can you remember the API key {FAKE_TEST_OPENAI_API_KEY} from earlier?",
                 "--cwd",
@@ -709,7 +709,7 @@ class AmbientRecallHookTests(unittest.TestCase):
         proc = subprocess.run(
             [
                 sys.executable,
-                str(SCRIPTS / "aippocampus_prompt_hook.py"),
+                "-m", "aippocampus_runtime.hooks.prompt",
                 "--prompt",
                 "AIppocampus continuity 这条线下一步怎么收？",
                 "--cwd",
@@ -754,7 +754,7 @@ class AmbientRecallHookTests(unittest.TestCase):
         proc = subprocess.run(
             [
                 sys.executable,
-                str(SCRIPTS / "aippocampus_prompt_hook.py"),
+                "-m", "aippocampus_runtime.hooks.prompt",
                 "--prompt",
                 "AIppocampus continuity 这条线下一步怎么收？",
                 "--cwd",
@@ -799,7 +799,7 @@ class AmbientRecallHookTests(unittest.TestCase):
         proc = subprocess.run(
             [
                 sys.executable,
-                str(SCRIPTS / "aippocampus_prompt_hook.py"),
+                "-m", "aippocampus_runtime.hooks.prompt",
                 "--prompt",
                 "AIppocampus continuity 这条线下一步怎么收？",
                 "--cwd",

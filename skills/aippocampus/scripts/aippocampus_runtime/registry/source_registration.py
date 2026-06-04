@@ -14,7 +14,6 @@ from aippocampus_runtime.core import (
     parse_anchor_file,
 )
 from aippocampus_runtime.registry.common import (
-    SCRIPT_DIR,
     anchor_summary,
     project_fields,
     run_json,
@@ -91,7 +90,7 @@ def register_rollout_thread(
     clean_manifest = run_json(
         [
             sys.executable,
-            str(SCRIPT_DIR / "build_clean_source.py"),
+            "-m", "aippocampus_runtime.source.clean_source",
             "--cwd",
             str(cwd),
             "--provider",
@@ -109,7 +108,7 @@ def register_rollout_thread(
         index_manifest = run_json(
             [
                 sys.executable,
-                str(SCRIPT_DIR / "build_index.py"),
+                "-m", "aippocampus_runtime.recall.index_builder",
                 "--cwd",
                 str(cwd),
                 "--provider",

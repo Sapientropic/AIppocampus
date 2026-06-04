@@ -22,10 +22,10 @@ import _paths
 
 _paths.ensure_paths()
 
-from aippocampus_prompt_hook import assess_prompt  # noqa: E402
+from aippocampus_runtime.core import aippocampus_registry_dir  # noqa: E402
+from aippocampus_runtime.hooks.prompt import assess_prompt  # noqa: E402
 from aippocampus_runtime.recall import active_recall_lock as locks  # noqa: E402
-from aippocampuslib import aippocampus_registry_dir  # noqa: E402
-from registry import load_registry  # noqa: E402
+from aippocampus_runtime.registry.api import load_registry  # noqa: E402
 
 SMOKE_KIND = "aippocampus_fresh_thread_real_history_smoke"
 PRIVACY_BOUNDARY = "aggregate_hash_only_no_prompts_no_source_text_no_paths_no_refs"

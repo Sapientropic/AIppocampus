@@ -21,7 +21,7 @@ import _paths
 
 _paths.ensure_paths()
 
-import question_index_sidecar as sidecar  # noqa: E402
+from aippocampus_runtime.question import index_sidecar as sidecar  # noqa: E402
 from aippocampus_runtime.question.tracking import (  # noqa: E402
     default_jobs_path,
     default_registry_path,

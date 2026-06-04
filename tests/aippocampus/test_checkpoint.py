@@ -8,8 +8,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPT = ROOT / "scripts" / "checkpoint.py"
-SCRIPTS = SCRIPT.parent
+CHECKPOINT_MODULE = "aippocampus_runtime.artifacts.checkpoint"
+SCRIPTS = ROOT / "scripts"
 for _path in (
     SCRIPTS,
     REPO_ROOT / "benchmarks" / "aippocampus",
@@ -18,7 +18,14 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-from aippocampuslib import default_thread_index_dir  # noqa: E402
+from aippocampus_runtime.core import default_thread_index_dir  # noqa: E402
+
+
+def module_env() -> dict[str, str]:
+    env = os.environ.copy()
+    existing = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = str(SCRIPTS) if not existing else str(SCRIPTS) + os.pathsep + existing
+    return env
 
 
 class CheckpointTests(unittest.TestCase):
@@ -39,7 +46,8 @@ class CheckpointTests(unittest.TestCase):
             proc = subprocess.run(
                 [
                     sys.executable,
-                    str(SCRIPT),
+                    "-m",
+                    CHECKPOINT_MODULE,
                     "--cwd",
                     str(cwd),
                     "--no-build",
@@ -55,6 +63,7 @@ class CheckpointTests(unittest.TestCase):
                 errors="replace",
                 capture_output=True,
                 check=False,
+                env=module_env(),
             )
 
             self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
@@ -85,7 +94,8 @@ class CheckpointTests(unittest.TestCase):
                 proc = subprocess.run(
                     [
                         sys.executable,
-                        str(SCRIPT),
+                        "-m",
+                        CHECKPOINT_MODULE,
                         "--cwd",
                         str(cwd),
                         "--no-build",
@@ -97,6 +107,7 @@ class CheckpointTests(unittest.TestCase):
                     errors="replace",
                     capture_output=True,
                     check=False,
+                    env=module_env(),
                 )
 
                 self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)

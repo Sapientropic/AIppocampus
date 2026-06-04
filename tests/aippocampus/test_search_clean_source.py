@@ -20,8 +20,8 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import registry  # noqa: E402
-import search_clean_source as search  # noqa: E402
+from aippocampus_runtime.registry import api as registry  # noqa: E402
+from aippocampus_runtime.source import search as search  # noqa: E402
 
 
 class SearchCleanSourceTests(unittest.TestCase):

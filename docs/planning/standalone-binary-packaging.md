@@ -69,16 +69,16 @@ Each claimed platform needs a fresh artifact built on or for that platform:
 
 Smoke outputs must preserve child command JSON and exit codes. The binary must
 not silently install hooks, scan private host history, or mutate registries
-outside explicit operator commands. Direct script invocation remains the
-fallback until the matrix above passes.
+outside explicit operator commands. Direct script invocation is no longer a
+fallback surface; repo and installed-skill flows should use the `aippocampus`
+facade or package modules.
 
 ## Windows x64 Implementation
 
 `tools/aippocampus/package_windows_binary.py` builds the Windows artifact with
 PyInstaller. It stages `skills/aippocampus/scripts` into a temporary runtime
 copy, generates a small frozen entrypoint for `aippocampus_runtime.cli.facade`
-while keeping the `aippocampus_cli.py` compatibility shim available, and then
-runs the smoke matrix above against the built executable.
+and then runs the smoke matrix above against the built executable.
 The executable can also launch the stdio MCP server through
 `aippocampus.exe mcp`; host-level proof still requires the dedicated Claude
 Code smoke because `mcp list-tools` only proves local catalog generation.

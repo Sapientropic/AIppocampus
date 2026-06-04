@@ -15,7 +15,7 @@ import _paths
 
 _paths.ensure_paths()
 
-from aippocampus_prompt_hook import assess_prompt
+from aippocampus_runtime.hooks.prompt import assess_prompt
 
 DEFAULT_CASES: list[dict[str, Any]] = [
     {

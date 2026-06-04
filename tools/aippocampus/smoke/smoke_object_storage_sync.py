@@ -26,8 +26,8 @@ from urllib.parse import unquote
 
 import smoke_cross_device_sync
 
-import sync_bundle
-import sync_object_storage
+from aippocampus_runtime.sync import bundle as sync_bundle
+from aippocampus_runtime.sync.object_storage import cli as sync_object_storage
 
 
 class LocalObjectStoreHandler(BaseHTTPRequestHandler):

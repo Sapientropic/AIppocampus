@@ -18,7 +18,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import build_clean_source as clean_source  # noqa: E402
+from aippocampus_runtime.source import clean_source as clean_source  # noqa: E402
 from conversation_sources import ConversationSourceRef, GenericConversationProvider  # noqa: E402
 from tests.aippocampus.redaction_fixtures import (  # noqa: E402
     fake_test_database_dsn,

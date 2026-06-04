@@ -16,7 +16,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import journey_tracking as journey  # noqa: E402
+from aippocampus_runtime.journey import tracking as journey  # noqa: E402
 
 
 class JourneyTrackingTests(unittest.TestCase):

@@ -11,7 +11,7 @@ Anthropic documents Claude Code MCP servers through `claude mcp add`,
 `claude mcp list`, and `claude mcp get`. AIppocampus uses a local stdio server:
 
 ```sh
-claude mcp add aippocampus -- python /path/to/AIppocampus/skills/aippocampus/scripts/aippocampus_mcp_server.py
+claude mcp add aippocampus -- aippocampus mcp
 claude mcp list
 claude mcp get aippocampus
 ```

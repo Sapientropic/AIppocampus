@@ -451,6 +451,10 @@ def run_text(cmd: list[str], *, cwd: Path = SCRIPT_DIR, log: Path | None = None)
     return output
 
 
+def module_cmd(module: str, *args: str) -> list[str]:
+    return [sys.executable, "-m", module, *args]
+
+
 def run_project(
     stats: ProjectStats,
     *,
@@ -466,15 +470,13 @@ def run_project(
     # consolidation safely in staging files.
     commands = [
         [
-            sys.executable,
-            str(SCRIPT_DIR / "build_project_timeline.py"),
+            *module_cmd("aippocampus_runtime.navigation.project_timeline"),
             "--registry-dir",
             str(root),
         ],
-        [sys.executable, str(SCRIPT_DIR / "build_concept_graph.py"), "--registry-dir", str(root)],
+        module_cmd("aippocampus_runtime.navigation.concept_graph", "--registry-dir", str(root)),
         [
-            sys.executable,
-            str(SCRIPT_DIR / "subconscious_jobs.py"),
+            *module_cmd("aippocampus_runtime.subconscious.jobs"),
             "--registry-dir",
             str(root),
             "--job",
@@ -491,23 +493,20 @@ def run_project(
             str(samples_per_job),
         ],
         [
-            sys.executable,
-            str(SCRIPT_DIR / "build_semantic_scope_labels.py"),
+            *module_cmd("aippocampus_runtime.source.semantic_scope_builder"),
             "--registry-dir",
             str(root),
             "--project",
             stats.label,
         ],
         [
-            sys.executable,
-            str(SCRIPT_DIR / "build_project_timeline.py"),
+            *module_cmd("aippocampus_runtime.navigation.project_timeline"),
             "--registry-dir",
             str(root),
         ],
-        [sys.executable, str(SCRIPT_DIR / "build_cognitive_map.py"), "--registry-dir", str(root)],
+        module_cmd("aippocampus_runtime.navigation.cognitive_map", "--registry-dir", str(root)),
         [
-            sys.executable,
-            str(SCRIPT_DIR / "subconscious_review.py"),
+            *module_cmd("aippocampus_runtime.subconscious.review"),
             "--registry-dir",
             str(root),
             "--max-findings",
@@ -516,20 +515,17 @@ def run_project(
             focus_for(stats),
         ],
         [
-            sys.executable,
-            str(SCRIPT_DIR / "semantic_trigger_router.py"),
+            *module_cmd("aippocampus_runtime.recall.semantic_trigger_router"),
             "--registry-dir",
             str(root),
         ],
         [
-            sys.executable,
-            str(SCRIPT_DIR / "memory_candidate_router.py"),
+            *module_cmd("aippocampus_runtime.subconscious.candidate_router"),
             "--registry-dir",
             str(root),
         ],
         [
-            sys.executable,
-            str(SCRIPT_DIR / "dream_sleep_cycle.py"),
+            *module_cmd("aippocampus_runtime.dream.sleep_cycle"),
             "--registry-dir",
             str(root),
             "--project",
@@ -542,8 +538,7 @@ def run_project(
             "--json",
         ],
         [
-            sys.executable,
-            str(SCRIPT_DIR / "dream_retrospective_lifecycle.py"),
+            *module_cmd("aippocampus_runtime.dream.retrospective_lifecycle"),
             "--registry-dir",
             str(root),
             "--project",
@@ -551,7 +546,7 @@ def run_project(
             "--summary",
             "--json",
         ],
-        [sys.executable, str(SCRIPT_DIR / "build_concept_graph.py"), "--registry-dir", str(root)],
+        module_cmd("aippocampus_runtime.navigation.concept_graph", "--registry-dir", str(root)),
     ]
     outputs: list[str] = []
     for cmd in commands:
@@ -722,8 +717,7 @@ def maybe_start_locked(args: argparse.Namespace, *, root: Path, state_file: Path
             }
         return {"started": False, "skipped": "enqueue_cooldown", "projects": []}
     cmd = [
-        sys.executable,
-        str(SCRIPT_DIR / "subconscious_scheduler.py"),
+        *module_cmd("aippocampus_runtime.subconscious.scheduler"),
         "--run-due",
         "--registry-dir",
         str(root),

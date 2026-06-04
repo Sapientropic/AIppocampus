@@ -25,10 +25,10 @@ import smoke_cross_device_sync  # noqa: E402
 import smoke_object_storage_sync  # noqa: E402
 import smoke_real_provider_encrypted_sync  # noqa: E402
 
-import encrypted_sync_bundle  # noqa: E402
-import encrypted_sync_migration  # noqa: E402
 from aippocampus_runtime.sync import bundle as sync_bundle  # noqa: E402
 from aippocampus_runtime.sync import contract as sync_contract  # noqa: E402
+from aippocampus_runtime.sync.encrypted import bundle as encrypted_sync_bundle  # noqa: E402
+from aippocampus_runtime.sync.encrypted import migration as encrypted_sync_migration  # noqa: E402
 from aippocampus_runtime.sync.object_storage import cli as sync_object_storage  # noqa: E402
 
 
@@ -436,7 +436,7 @@ output.write_bytes(b"FAKEAGE\\n" + base64.b64encode(data))
         proc = subprocess.run(
             [
                 sys.executable,
-                str(SCRIPTS / "sync_object_storage.py"),
+                "-m", "aippocampus_runtime.sync.object_storage.cli",
                 "push",
                 "--registry-dir",
                 str(device["registry"]),

@@ -16,8 +16,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-import ambient_warm_scheduler as warm_scheduler  # noqa: E402
-import warm_ambient_recall as warm  # noqa: E402
+from aippocampus_runtime.warm_ambient import recall as warm  # noqa: E402
+from aippocampus_runtime.warm_ambient import scheduler as warm_scheduler  # noqa: E402
 from aippocampus_runtime.warm_ambient import source_validation  # noqa: E402
 from aippocampus_runtime.warm_ambient.scout_attribution import merge_scout_origins  # noqa: E402
 

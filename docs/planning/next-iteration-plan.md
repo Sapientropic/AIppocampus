@@ -25,7 +25,7 @@ handoff context.
   `$CODEX_HOME/aippocampus-registry/threads/<thread>/...`.
 - `.aippocampus/` remains explicit compatibility/export/debug output only.
 - The local MCP server exists at
-  `skills/aippocampus/scripts/aippocampus_mcp_server.py` and currently exposes
+  `skills/aippocampus/scripts/aippocampus_runtime/mcp/server.py` and currently exposes
   read-mostly clean-source/registry tools plus explicit `register_thread`.
   Common tool failures return stable JSON error codes/details for client use.
 - The plugin source package exists under `plugins/aippocampus/`; build output
@@ -119,13 +119,13 @@ handoff context.
    - Source: `roadmap.md`, Stage 3.
    - The local-folder `sync status`, `sync push`, `sync pull`, and
      `sync repair` flows now live in `aippocampus_runtime.sync.bundle`, with
-     `sync_bundle.py` kept as the compatibility shim; pushed registry rows use
+     `aippocampus_runtime.sync.bundle` kept as the package owner; pushed registry rows use
      portable bundle-relative locators, and pull repairs generated-artifact
      paths to the target registry. The local cross-device smoke now models two
      device registries, cross-OS-shaped source paths, bidirectional conflicts,
      and raw opt-in. `aippocampus_runtime.sync.object_storage.cli` now exercises
      the same contract over HTTP object `PUT`/`GET`, with
-     `sync_object_storage.py` kept as the compatibility shim.
+     `aippocampus_runtime.sync.object_storage.cli` kept as the package owner.
    - Current P0 evidence now includes a physical Windows-to-MacBook sync smoke
      and a managed Cloudflare R2 encrypted object-storage smoke. Release-oriented
      repair boundaries are documented in `encrypted-sync-v1.md`. Next harden
@@ -152,7 +152,7 @@ handoff context.
    - Source: `question-tracking-subconscious.md`.
    - First deterministic slice is implemented in
      `skills/aippocampus/scripts/aippocampus_runtime/question/tracking.py`, with
-     `question_tracking.py` kept as the compatibility shim: it groups existing
+     `question_tracking.py` kept as the package owner: it groups existing
      `question_candidate` findings, writes `question_link` rows to
      `subconscious_jobs.jsonl`, records auditable ordering edges, skips stale
      refs when registry clean-source resolution is available, and requires
@@ -192,7 +192,7 @@ handoff context.
    - Source: `docs/architecture/wukong-mining-notes.md`, `docs/architecture/gb-scale-roadmap.md`,
      `docs/architecture/question-tracking-subconscious.md`, and `docs/guides/public-api.md`.
    - First internal policy is implemented in
-     `skills/aippocampus/scripts/retrieval_score_fusion.py`: it preserves the
+     `skills/aippocampus/scripts/aippocampus_runtime/recall/score_fusion.py`: it preserves the
      existing text score formula, blends optional vector and graph scores with
      context-dependent weights, and skips candidates that cannot join back to
      stable source ids, message/turn ids, or source refs.
@@ -204,7 +204,7 @@ handoff context.
    - Source: `docs/research/correction-reconsolidation.md` and
      `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`.
    - First runtime helper is implemented in
-     `skills/aippocampus/scripts/correction_reconsolidation.py`: it builds and
+     `skills/aippocampus/scripts/aippocampus_runtime/reflection/reconsolidation.py`: it builds and
      appends source-backed `correction_activation_event` /
      `correction_outcome_event` rows, privacy-scans correction/evidence
      surfaces, emits detached `correction_adjudication_candidate` hypotheses,
@@ -216,7 +216,7 @@ handoff context.
    - Source: `docs/research/agent-coding-context-analysis.md` and
      `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`.
    - First deterministic extractor is implemented in
-     `skills/aippocampus/scripts/coding_decision_events.py`: it reads clean
+     `skills/aippocampus/scripts/aippocampus_runtime/coding/decision_events.py`: it reads clean
      source messages, emits staging `decision_event` candidates with source
      refs, flags accepted decisions / rejected routes / scope narrowing /
      do-not-repeat notes / user corrections, and renders at most one compact
@@ -230,7 +230,7 @@ handoff context.
      `docs/research/agent-coding-context-analysis.md`, and
      `docs/research/correction-reconsolidation.md`.
    - First deterministic selector is implemented in
-     `skills/aippocampus/scripts/agency_affordance.py`: it builds conservative
+     `skills/aippocampus/scripts/aippocampus_runtime/coding/agency_affordance.py`: it builds conservative
      source-backed affordances from cognitive-map-like inputs, correction
      windows, ambient recall cards, dream outputs, coding tickets, unfinished
      tasks, and scheduled revisits; emits at most one foreground ticket per
@@ -245,7 +245,7 @@ handoff context.
      `docs/architecture/question-tracking-subconscious.md`, and
      `docs/architecture/cognitive-runtime-architecture.md`.
    - First deterministic slice is implemented in
-     `skills/aippocampus/scripts/question_tracking.py`: parsed
+     `skills/aippocampus/scripts/aippocampus_runtime/question/tracking.py`: parsed
      `question_candidate` rows receive salience profiles, low-information
      candidates are skipped as link inputs, and pair thresholds adapt from
      compatible or conflicting six-axis evidence.
@@ -296,7 +296,7 @@ handoff context.
      `docs/architecture/question-tracking-subconscious.md`, and the hexagram validation
      study pack.
    - First deterministic core is implemented in
-     `skills/aippocampus/scripts/journey_tracking.py`: it defines source-backed
+     `skills/aippocampus/scripts/aippocampus_runtime/journey/tracking.py`: it defines source-backed
      `Waypoint` / `Journey` / `JourneyFeedback` structures, append-only waypoint
      history, `traveling` / `camped` / `arrived` / `abandoned` transitions,
      expiry/TTL refresh, conservative multi-thread instantiation gates,
@@ -314,7 +314,7 @@ handoff context.
      `docs/research/source-as-world.md`, and
      `docs/architecture/cognitive-runtime-architecture.md`.
    - First deterministic helper is implemented in
-     `skills/aippocampus/scripts/compensatory_dream.py`: it consumes
+     `skills/aippocampus/scripts/aippocampus_runtime/dream/compensatory.py`: it consumes
      source-backed single-thread extraction rows, discards unsourced or prior
      dream rows, suppresses refs from other threads, emits
      `dream_synthesized` compensatory candidates whose bridge claims carry
@@ -335,7 +335,7 @@ handoff context.
      holding-queue plus background-adjudication substrate, not proof of live
      dream quality or user-visible lift.
    - The P3 structural eval is implemented in
-     `skills/aippocampus/scripts/dream_real_history_eval.py`: it selects
+     `skills/aippocampus/scripts/aippocampus_runtime/dream/real_history_eval.py`: it selects
      source-backed real-history packs from materialized question/frontier/link
      and working-memory rows, runs a deterministic compensatory/amplification
      worker, adjudicates dream hypotheses, and compares dream-augmented
@@ -361,7 +361,7 @@ handoff context.
      `docs/research/dream-task-design.md`, and
      `docs/research/affect-side-channel.md`.
    - First deterministic helper is implemented in
-     `skills/aippocampus/scripts/reflection_space.py`: it builds a small
+     `skills/aippocampus/scripts/aippocampus_runtime/reflection/space.py`: it builds a small
      inspectable Journey/Waypoint/current-frontier topology, exposes
      `expand`/`merge`/`revive`/`abandon` actions, and converts recall effects,
      turning points, user corrections, and map feedback into source-ref-carried

@@ -24,8 +24,6 @@ _paths.ensure_paths()
 
 from aippocampus_runtime.recall import semantic_cue_cache as cue_cache  # noqa: E402
 
-PROMPT_HOOK = _paths.SKILL_SCRIPTS / "aippocampus_prompt_hook.py"
-
 CASES: list[dict[str, Any]] = [
     {
         "name": "ru_memory",
@@ -118,7 +116,8 @@ def run_case(
 ) -> dict[str, Any]:
     cmd = [
         sys.executable,
-        str(PROMPT_HOOK),
+        "-m",
+        "aippocampus_runtime.hooks.prompt",
         "--cwd",
         str(cwd),
         "--semantic-gate",
@@ -135,7 +134,13 @@ def run_case(
         cmd.extend(["--semantic-cues", str(semantic_cues_path)])
     start = time.perf_counter()
     proc = subprocess.run(
-        cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False
+        cmd,
+        cwd=_paths.SKILL_SCRIPTS,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        check=False,
     )
     elapsed_ms = round((time.perf_counter() - start) * 1000)
     if proc.returncode != 0:

@@ -17,8 +17,8 @@ sys.path.insert(0, str(BENCHMARKS))
 
 import smoke_memory_pain_prompt_hook as smoke  # noqa: E402
 
-import aippocampus_prompt_hook as hook  # noqa: E402
-from build_index import make_sqlite  # noqa: E402
+from aippocampus_runtime.hooks import prompt as hook  # noqa: E402
+from aippocampus_runtime.recall.index_builder import make_sqlite  # noqa: E402
 
 
 class MemoryPainPromptHookSmokeTests(unittest.TestCase):

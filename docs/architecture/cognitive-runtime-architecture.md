@@ -185,7 +185,7 @@ The full AIppocampus pipeline is the hippocampal system:
 - `subconscious_review.py` reviews provisional candidates.
 - `memory_candidate_router.py` routes accepted working memory.
 - `build_cognitive_map.py` materializes hook-safe sidecars.
-- `aippocampus_prompt_hook.py` reads stable scent and source-backed evidence.
+- `aippocampus_runtime.hooks.prompt` reads stable scent and source-backed evidence.
 
 No single layer should pretend to be the whole system. The foreground hook is
 not the place for fresh deep inference. The LLM worker is not the place for
@@ -348,7 +348,7 @@ not turn salience scores or thresholds into memory truth.
 
 ## Relationship To Dream Tasks
 
-`compensatory_dream.py` is the first implemented integrative worker. It is a
+`aippocampus_runtime.dream.compensatory` is the first implemented integrative worker. It is a
 job-circuit-adjacent helper over already extracted, source-backed single-thread
 rows: deterministic cells validate source refs, suppress unsourced or prior
 dream rows, suppress refs that belong to another thread, and emit only
@@ -367,7 +367,7 @@ in for clean source. The pack advertises background dream functions such as
 compensatory analysis and amplification without claiming those workers have
 already produced validated dream quality.
 
-`dream_real_history_eval.py` adds a selected real-history structural eval over
+`aippocampus_runtime.dream.real_history_eval` adds a selected real-history structural eval over
 the same boundary. It selects cross-thread packs from materialized
 question/frontier/question-link/working-memory rows, runs a tiny deterministic
 compensatory/amplification worker, adjudicates the outputs, and measures the

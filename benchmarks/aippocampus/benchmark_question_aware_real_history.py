@@ -19,8 +19,8 @@ import _paths
 _paths.ensure_paths()
 
 import benchmark_cognitive_portrait as portrait  # noqa: E402
-from registry import registry_paths  # noqa: E402
-from subconscious_jobs_config import default_jobs_output_path  # noqa: E402
+from aippocampus_runtime.registry.api import registry_paths  # noqa: E402
+from aippocampus_runtime.subconscious.jobs_config import default_jobs_output_path  # noqa: E402
 
 SCHEMA_VERSION = 1
 BENCHMARK_KIND = "aippocampus_question_aware_real_history_benchmark"

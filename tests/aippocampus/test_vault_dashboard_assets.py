@@ -17,8 +17,8 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import vault_dashboard  # noqa: E402
 from aippocampus_runtime.vault import dashboard as packaged_dashboard  # noqa: E402
+from aippocampus_runtime.vault import dashboard as vault_dashboard  # noqa: E402
 
 
 class VaultDashboardAssetTests(unittest.TestCase):

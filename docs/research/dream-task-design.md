@@ -11,7 +11,7 @@ Anthropic Managed Agents Dreams are confirmed as an adjacent official Research
 Preview, but this memo's Jung-inspired dream tasks are an AIppocampus-specific
 design proposal.
 Origin: conversation between user and Claude Code, 2026-05-27.
-Implemented slices: `skills/aippocampus/scripts/compensatory_dream.py` emits
+Implemented slices: `skills/aippocampus/scripts/aippocampus_runtime/dream/compensatory.py` emits
 adjudication-only compensatory candidates from source-backed single-thread
 extraction rows; `skills/aippocampus/scripts/aippocampus_runtime/dream/input_pack.py`
 builds cross-thread source packs from question links, Journey rows, and ambient
@@ -22,7 +22,7 @@ runs bounded model-backed
 compensatory/amplification/prospective workers plus active-imagination sandbox
 candidates over ready packs and validates prospective hypotheses
 retrospectively against explicit later evidence; and
-`skills/aippocampus/scripts/dream_real_history_eval.py` runs selected
+`skills/aippocampus/scripts/aippocampus_runtime.dream.real_history_eval` runs selected
 real-history structural and user-visible ablation evals against plain
 question/frontier/Journey/working-memory surfaces with deterministic fallback
 or optional model-backed workers.
@@ -230,7 +230,7 @@ be clearly flagged as dream output, not source-grounded fact.
 ### Implemented Phase 1 Contract
 
 The first implemented slice is intentionally narrower than the full dream
-design. `skills/aippocampus/scripts/compensatory_dream.py` is a deterministic
+design. `skills/aippocampus/scripts/aippocampus_runtime/dream/compensatory.py` is a deterministic
 Phase 1 helper with this concrete contract:
 
 - Input: source-backed extraction rows for a single `thread_key`. Rows may come
@@ -257,7 +257,7 @@ Phase 1 helper with this concrete contract:
   background worker or operator adjudicates them.
 
 The executable contract lives in
-`tests/aippocampus/test_compensatory_dream.py`. Keep changes to this schema
+`tests/aippocampus/test_aippocampus_runtime.dream.compensatory`. Keep changes to this schema
 paired with that test file and the runtime map in `docs/architecture/runtime-script-map.md`.
 
 ### Implemented Phase 2 Source-Pack Contract
@@ -314,15 +314,15 @@ summary (`kind="aippocampus_dream_input_pack_summary"`) that reports aggregate
 readiness and source-count diagnostics without raw `source_refs`, message ids,
 thread ids, questions, or frontier text. Full internal packs require
 `--internal-full` and are not suitable for public logs, docs, or issue comments.
-`skills/aippocampus/scripts/dream_input_pack.py` remains the compatibility shim
+`skills/aippocampus/scripts/aippocampus_runtime/dream/input_pack.py` is the package owner
 for the documented direct-script route.
 
 ### Implemented Phase 2.5 Queue Lifecycle
 
 `skills/aippocampus/scripts/aippocampus_runtime/dream/queue.py` is the
 deterministic handoff layer between ready packs and future detached dream
-workers. `skills/aippocampus/scripts/dream_queue.py` remains the documented
-direct-script compatibility shim. The queue owner does not call a model or
+workers. `skills/aippocampus/scripts/aippocampus_runtime/dream/queue.py` is the
+documented package owner. The queue owner does not call a model or
 promote dream output. It creates `kind="aippocampus_dream_queue_item"` rows only
 for `status="ready_for_dream_worker"` packs, one bounded item per eligible dream
 function.
@@ -359,8 +359,8 @@ The executable contract lives in `tests/aippocampus/test_dream_queue.py`.
 `skills/aippocampus/scripts/aippocampus_runtime/dream/sleep_cycle.py` is the
 narrow execution bridge that consumes ready/due queue items from
 `aippocampus_runtime.dream.queue` and invokes bounded model-backed workers from
-`aippocampus_runtime.dream.worker`. `skills/aippocampus/scripts/dream_worker.py`
-and `skills/aippocampus/scripts/dream_sleep_cycle.py` remain compatibility shims
+`aippocampus_runtime.dream.worker`. `skills/aippocampus/scripts/aippocampus_runtime/dream/worker.py`
+and `skills/aippocampus/scripts/aippocampus_runtime/dream/sleep_cycle.py` are package owners
 for documented direct script routes. It is
 scheduler-only/background work, not a foreground hook route. The runner preserves
 `execution_mode="detached_background"`, refuses foreground-eligible queue
@@ -382,7 +382,7 @@ and the scheduler handoff is covered by
 
 ### Implemented Phase 3 Structural Eval
 
-`skills/aippocampus/scripts/dream_real_history_eval.py` is the first selected
+`skills/aippocampus/scripts/aippocampus_runtime.dream.real_history_eval` is the first selected
 real-history evaluation loop. It is intentionally not a private-history dream
 quality benchmark. It does three narrow things:
 
@@ -453,7 +453,7 @@ source-ref ids before they can become `finding_kind="dream_synthesized"`
 candidates.
 
 The worker keeps the Phase 1/Phase 3 deterministic paths as fallback. In
-`dream_real_history_eval.py`, `run_pack_dream_worker()` only uses the
+`aippocampus_runtime.dream.real_history_eval`, `run_pack_dream_worker()` only uses the
 model-backed path when a `model_client.ChatClientConfig` is supplied; otherwise
 the deterministic compensatory/amplification fixture remains the conservative
 baseline.
@@ -532,7 +532,7 @@ The executable guard has three layers:
   omits an explicit `cache_contract`.
 - `aippocampus_runtime.dream.worker` builds the stable-prefix message order and reports provider
   `usage` plus DeepSeek cache metrics when a model call is used.
-- `dream_real_history_eval.py` returns a `live_worker_contract` block so the
+- `aippocampus_runtime.dream.real_history_eval` returns a `live_worker_contract` block so the
   dream layer carries this boundary even when using the deterministic fallback.
 
 DeepSeek cache telemetry can be reported only from provider `usage` fields. Do
@@ -720,7 +720,7 @@ measure where their proposed probes disagree. High disagreement marks a likely
 uncertainty pocket; deterministic aggregation then ranks the resulting probes.
 
 The implemented runtime shape lives in
-`skills/aippocampus/scripts/dream_precision_policy.py` and is covered by
+`skills/aippocampus/scripts/aippocampus_runtime/dream/precision_policy.py` and is covered by
 `tests/aippocampus/test_dream_precision_policy.py`. It keeps
 `retention_policy`, `activation_policy`, and `retrospective_policy` as separate
 objects with `hard_gate`, `raw_components`, and `aggregate` sections. Aggregate
@@ -754,7 +754,7 @@ be computed.
 
 The implemented deterministic slice lives in
 `skills/aippocampus/scripts/aippocampus_runtime/dream/one_sidedness.py`, with
-`skills/aippocampus/scripts/dream_one_sidedness.py` kept as a compatibility
+`skills/aippocampus/scripts/aippocampus_runtime/dream/one_sidedness.py` kept as a package-owner
 shim. It is covered by `tests/aippocampus/test_dream_one_sidedness.py` and
 separates `compute_opposite_arc()` from `evaluate_one_sidedness_gate()`: an opposite arc
 can be computed without granting permission to generate a probe. Gate-on probes
@@ -788,8 +788,8 @@ claimed to illuminate.
 
 The implemented lifecycle lives in
 `skills/aippocampus/scripts/aippocampus_runtime/dream/retrospective_lifecycle.py`,
-with `skills/aippocampus/scripts/dream_retrospective_lifecycle.py` kept as a
-compatibility shim. It is covered by
+with `skills/aippocampus/scripts/aippocampus_runtime/dream/retrospective_lifecycle.py`
+as the package owner. It is covered by
 `tests/aippocampus/test_dream_retrospective_lifecycle.py`. The detached
 scheduler runs it after the sleep-cycle bridge. It ignores source rows created
 before the probe, ignores rows after the current replay cutoff, and reports

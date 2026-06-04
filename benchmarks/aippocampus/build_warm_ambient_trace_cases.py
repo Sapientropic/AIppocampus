@@ -21,10 +21,10 @@ import _paths
 
 _paths.ensure_paths()
 
+from aippocampus_runtime.core import compact_text, sanitize_external_model_text
+from aippocampus_runtime.recall.retrieval import split_query_terms
+from aippocampus_runtime.registry.api import load_registry, registry_paths
 from aippocampus_runtime.source.search import iter_clean_messages
-from aippocampuslib import compact_text, sanitize_external_model_text
-from registry import load_registry, registry_paths
-from retrieval import split_query_terms
 
 LABEL_POLICIES = {
     "none",

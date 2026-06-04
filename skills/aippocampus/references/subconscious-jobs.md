@@ -25,34 +25,34 @@ but they must not rewrite source, delete source, or directly write formal memory
 
 ## Files
 
-- `subconscious_worker.py`: single-shot timeline-to-concept-edge extractor.
+- `aippocampus_runtime.subconscious.worker`: single-shot timeline-to-concept-edge extractor.
 - `aippocampus_runtime.subconscious.agent`: package-owner minimal read-only
   tool loop for concept edges.
-- `subconscious_jobs.py`: multi-job background cognition runner.
-- `subconscious_staging_maintenance.py`: dry-run maintenance reporter for
+- `aippocampus_runtime.subconscious.jobs`: multi-job background cognition runner.
+- `aippocampus_runtime.subconscious.staging_maintenance`: dry-run maintenance reporter for
   local-private staging queues. It classifies rows and pressure, but does not
   archive, compact, or delete.
-- `subconscious_scheduler.py`: hook-safe scheduler that starts detached
+- `aippocampus_runtime.subconscious.scheduler`: hook-safe scheduler that starts detached
   subconscious runs only after cooldown, new-turn, API-key, and lock checks.
-- `memory_candidate_router.py`: deterministic promotion-candidate router for
+- `aippocampus_runtime.subconscious.candidate_router`: deterministic promotion-candidate router for
   soft working memory. It prevents a human review inbox by assigning
   `use_silently`, `use_with_source`, `confirm_when_relevant`, or `park`.
 - `aippocampus_runtime.recall.semantic_trigger_router` plus the
-  `semantic_trigger_router.py` compatibility command: deterministic router that
+  `aippocampus_runtime.recall.semantic_trigger_router` compatibility command: deterministic router that
   turns source-backed `hook_trigger`/project candidates into
   `semantic_triggers.jsonl`, so the prompt hook can use data-driven semantic
   cues instead of expanding hard-coded phrase lists. It also merges the
   reviewed seed triggers in `references/reviewed-semantic-triggers.seed.jsonl`;
   keep that seed compact, reviewed, source-conscious, and AIppocampus-specific.
-- `build_cognitive_map.py`: deterministic materializer for DeepSeek-proposed
+- `aippocampus_runtime.navigation.cognitive_map`: deterministic materializer for DeepSeek-proposed
   landmarks, regions, and routes. It never creates routes from registry
   keywords alone.
-- `build_semantic_scope_labels.py`: deterministic materializer for
+- `aippocampus_runtime.source.semantic_scope_builder`: deterministic materializer for
   DeepSeek/subconscious `semantic_scope_labels` findings. It only writes
   `semantic-scope-labels.jsonl` rows for existing clean-source message ids with
   exact source refs.
 - `$CODEX_HOME/aippocampus-registry/subconscious_edges.jsonl`: staging concept
-  edges consumed by `build_concept_graph.py`.
+  edges consumed by `aippocampus_runtime.navigation.concept_graph`.
 - `$CODEX_HOME/aippocampus-registry/subconscious_jobs.jsonl`: staging findings
   from non-edge jobs.
 - `$CODEX_HOME/aippocampus-registry/promotion_candidates.jsonl`: second-pass
@@ -95,7 +95,7 @@ Defaults are quality-oriented:
 - `--max-steps 0` means use the hard safety cap.
 - Hard safety cap: 64 steps.
 - `--min-tool-steps 1`.
-- `--concurrency 4` for `subconscious_jobs.py`.
+- `--concurrency 4` for `aippocampus_runtime.subconscious.jobs`.
 - `--samples-per-job 2` by default for fresh DeepSeek-backed work, so the
   foreground hook can enqueue a fast parallel background pass instead of
   waiting on one fragile model call. Lower it explicitly only for cost-focused
@@ -157,7 +157,7 @@ Every accepted finding also gets deterministic metadata before it is written:
 - `quality.score_kind`: current value is `heuristic_routing_signal`.
 - `quality.bucket`: `strong`, `usable`, `weak`, or `noise`.
 
-`subconscious_review.py` includes aggregate `quality_diagnostics` with bucket
+`aippocampus_runtime.subconscious.review` includes aggregate `quality_diagnostics` with bucket
 distribution and review outcomes by bucket. Treat those diagnostics as
 threshold-sensitivity/audit data only: promotion still depends on source refs,
 confidence gates, candidate-type gates, and human/context review where
@@ -165,7 +165,7 @@ applicable.
 
 ## DeepSeek Model Routing
 
-`deepseek_model_routing.py` owns the model split for DeepSeek-compatible
+`aippocampus_runtime.model.routing` owns the model split for DeepSeek-compatible
 background work:
 
 - default, fast, and hook-adjacent work resolves to `deepseek-v4-flash`
@@ -178,7 +178,7 @@ background work:
 
 Keep Pro out of foreground hooks. Hooks enqueue detached workers and read
 stable sidecars; Pro is for slower evidence work where latency is acceptable.
-`semantic_scope_suppressed_recovery.py` uses Pro to re-adjudicate labels that
+`aippocampus_runtime.source.semantic_scope_suppressed_recovery` uses Pro to re-adjudicate labels that
 the strict materializer suppressed. It first inspects the clean-source message
 through a tool, then sends the recovered findings back through the unchanged
 strict materializer. This restores labels only when stronger per-label evidence
@@ -216,7 +216,7 @@ DeepSeek can be used aggressively, but hooks must stay cheap. The split is:
   wait on scheduler imports, registry scans, stale locks, or DeepSeek calls
 - the scheduler uses a short enqueue lock plus per-project lease fields in
   `subconscious_state.json`
-- detached workers run `subconscious_jobs.py` with `--concurrency` and optional
+- detached workers run `aippocampus_runtime.subconscious.jobs` with `--concurrency` and optional
   `--samples-per-job`
 - worker threads call DeepSeek concurrently across distinct jobs/batches, but
   same-prefix diversity samples run in sample waves: sample 1 completes first
@@ -232,33 +232,33 @@ DeepSeek can be used aggressively, but hooks must stay cheap. The split is:
 - dream queue planning is deterministic and detached-only:
   `aippocampus_runtime.dream.queue` turns ready dream input packs into bounded
   queue items with trigger family, priority, dedup key, review/expiry horizon,
-  cost budget, and `deepseek_prefix_v1` prompt-order metadata. `dream_queue.py`
-  remains the direct-script compatibility shim. It does not make model calls
+  cost budget, and `deepseek_prefix_v1` prompt-order metadata. `aippocampus_runtime.dream.queue`
+  remains the package-owner command. It does not make model calls
   and must not be run as a foreground hook worker.
 - queued dream worker samples keep stable prompt-prefix groups together:
   stable worker contract first, source-pack payload second, and variable run
   directive last. This preserves the same-prefix ordering needed for DeepSeek
   KV cache warm-up when a later live worker consumes the queue.
 - `aippocampus_runtime.dream.sleep_cycle` is the detached execution bridge from
-  queue metadata to bounded workers; `dream_sleep_cycle.py` remains the
-  documented direct-script compatibility shim. It selects only due items, unless
+  queue metadata to bounded workers; `aippocampus_runtime.dream.sleep_cycle` remains the
+  documented package-owner command. It selects only due items, unless
   the scheduler explicitly passes `--run-ready` during a detached project pass,
   never widens `foreground_eligible=false`, defaults to `--no-write`, and emits
   sanitized counts/failure/cache summaries instead of raw source handles. When
   `--write` is enabled, it appends queue lifecycle, adjudicated finding, and
   projected working-memory rows under the scheduler's serialized process lock.
-- `dream_precision_policy.py` adds explicit retention, activation, and
+- `aippocampus_runtime.dream.precision_policy` adds explicit retention, activation, and
   retrospective policy shapes. These policies separate hard gate failures from
   soft lifecycle pressure; aggregate scores tune attention/ranking only and do
   not promote model confidence into truth.
-- `dream_retrospective_lifecycle.py` is the periodic retrospective check for
+- `aippocampus_runtime.dream.retrospective_lifecycle` is the periodic retrospective check for
   parked prospective and active-imagination probes. It waits until
   `review_after`, ignores pre-probe and future-leakage rows, and counts only
   later source-backed rows that explicitly target the probe; term overlap alone
   remains diagnostic noise.
 - bounded model-backed dream workers live in
-  `aippocampus_runtime.dream.worker`; `dream_worker.py` is only the direct-script
-  compatibility shim. They consume
+  `aippocampus_runtime.dream.worker`; `aippocampus_runtime.dream.worker` is only the direct-script
+  package owner. They consume
   only `status="ready_for_dream_worker"` packs for compensatory,
   amplification, prospective, and active-imagination functions, require cited
   source-ref ids for every candidate/bridge claim, default to `no_write=True`,
@@ -299,13 +299,13 @@ DeepSeek can be used aggressively, but hooks must stay cheap. The split is:
   and estimated verification tool calls saved; apply mode writes only an
   append-only lifecycle manifest for the owning surface writer, not source or
   truth mutations.
-- `dream_real_history_eval.py` reports dream impact in two layers: structural
+- `aippocampus_runtime.dream.real_history_eval` reports dream impact in two layers: structural
   substrate lift and a sanitized user-visible ablation harness. The latter
   separates recall, reflection, unsupported-claim suppression, source-support,
   manual source-review, and cost/cache metrics; it must not be treated as real
   user-value proof without reviewed samples and live/behavioral evidence.
 - `aippocampus_runtime.dream.input_pack` owns source-pack assembly and
-  `dream_input_pack.py` remains the public-summary CLI compatibility shim. Use
+  `aippocampus_runtime.dream.input_pack` remains the public-summary CLI package owner. Use
   `--internal-full` only for local worker handoff paths that are allowed to
   carry source refs; do not paste full pack output into public logs, docs, or
   GitHub issues.
@@ -357,7 +357,7 @@ DeepSeek cache behavior, order is part of the runtime contract.
 All production `ChatClientConfig(...)` call sites must now pass an explicit
 `cache_contract`: `deepseek_prefix_v1` for DeepSeek-compatible routes and
 `none` for providers where AIppocampus must not claim DeepSeek prefix-cache
-telemetry. `model_client.py` rejects DeepSeek-flavored configs without the
+telemetry. `aippocampus_runtime.model.client` rejects DeepSeek-flavored configs without the
 DeepSeek contract, and docs health scans scripts for missing keywords so newly
 added LLM callers cannot silently bypass this billing guard.
 
@@ -399,8 +399,8 @@ Purpose: group existing source-backed `question_candidate` findings into
 append-only `question_link` findings.
 
 The Phase 2 runner is deterministic and lives in
-`aippocampus_runtime.question.tracking`; `question_tracking.py` is the
-direct-script/import compatibility shim. `subconscious_jobs.py --job
+`aippocampus_runtime.question.tracking`; `aippocampus_runtime.question.tracking` is the
+package-owner module. `subconscious_jobs.py --job
 question_tracking` invokes it after semantic extraction jobs have serialized
 their writes, so tracking reads completed `question_candidate` rows instead of
 racing the concurrent worker pool.
@@ -464,7 +464,7 @@ or over-inferred labels until DeepSeek can defend them with stronger evidence:
 for example `relationship_continuity` is not a generic "memory over time"
 label, `open_question` is not every immediate question, and `reading_notes` is
 not general film/media reaction. The deterministic
-`build_semantic_scope_labels.py` materializer turns those findings into
+`aippocampus_runtime.source.semantic_scope_builder` materializer turns those findings into
 `semantic-scope-labels.jsonl` rows only when the target message exists in clean
 source and at least one source ref points to that same `message_id`. Consumers
 merge these labels for search and timeline navigation, but exact claims still
@@ -485,7 +485,7 @@ clean source and propose source-backed navigation, for example:
 - route cues: `心理地图`, `位置细胞`, `网格细胞`
 - target thread keys backed by source refs
 
-`build_cognitive_map.py` then validates and materializes the result. If no
+`aippocampus_runtime.navigation.cognitive_map` then validates and materializes the result. If no
 `cognitive_map` finding exists, the sidecar may contain episodes but must report
 zero routes and `needs_subconscious`.
 
@@ -530,7 +530,7 @@ cannot both be true under the same scope and time frame.
 Lifecycle hooks should call only the cheap scheduler entrypoint:
 
 ```powershell
-python "$env:CODEX_HOME\skills\aippocampus\scripts\subconscious_scheduler.py" --maybe-start --cwd "$PWD" --json
+$env:PYTHONPATH="$env:CODEX_HOME\skills\aippocampus\scripts"; python -m aippocampus_runtime.subconscious.scheduler --maybe-start --cwd "$PWD" --json
 ```
 
 `--maybe-start` never sends prompt text and should return quickly. When due, it
@@ -542,31 +542,31 @@ DeepSeek.
 Run one focused job:
 
 ```powershell
-python "$env:CODEX_HOME\skills\aippocampus\scripts\subconscious_jobs.py" --job project_drift --project "T-Sense" --json
+$env:PYTHONPATH="$env:CODEX_HOME\skills\aippocampus\scripts"; python -m aippocampus_runtime.subconscious.jobs --job project_drift --project "T-Sense" --json
 ```
 
 Run no-write question/frontier extraction smoke:
 
 ```powershell
-python "$env:CODEX_HOME\skills\aippocampus\scripts\subconscious_jobs.py" --job question_extraction --project "AIppocampus" --no-write --json
+$env:PYTHONPATH="$env:CODEX_HOME\skills\aippocampus\scripts"; python -m aippocampus_runtime.subconscious.jobs --job question_extraction --project "AIppocampus" --no-write --json
 ```
 
 Run deterministic Phase 2 tracking over staged question candidates:
 
 ```powershell
-python "$env:CODEX_HOME\skills\aippocampus\scripts\subconscious_jobs.py" --job question_tracking --json
+$env:PYTHONPATH="$env:CODEX_HOME\skills\aippocampus\scripts"; python -m aippocampus_runtime.subconscious.jobs --job question_tracking --json
 ```
 
 Run extraction and tracking in dependency order:
 
 ```powershell
-python "$env:CODEX_HOME\skills\aippocampus\scripts\subconscious_jobs.py" --job all --project "AIppocampus" --json
+$env:PYTHONPATH="$env:CODEX_HOME\skills\aippocampus\scripts"; python -m aippocampus_runtime.subconscious.jobs --job all --project "AIppocampus" --json
 ```
 
 For the higher-level onboarding wrapper, prefer:
 
 ```powershell
-python "$env:CODEX_HOME\skills\aippocampus\scripts\onboard.py" --provider codex --frontier-mode smoke --format json --cwd "$PWD"
+$env:PYTHONPATH="$env:CODEX_HOME\skills\aippocampus\scripts"; python -m aippocampus_runtime.onboarding.facade --provider codex --frontier-mode smoke --format json --cwd "$PWD"
 ```
 
 That wrapper returns compact `sample_findings` and defaults the frontier scope
@@ -576,50 +576,50 @@ when intentionally inspecting whole-machine frontier quality.
 Run all jobs:
 
 ```powershell
-python "$env:CODEX_HOME\skills\aippocampus\scripts\subconscious_jobs.py" --job all --project "T-Sense" --concurrency 4 --json
+$env:PYTHONPATH="$env:CODEX_HOME\skills\aippocampus\scripts"; python -m aippocampus_runtime.subconscious.jobs --job all --project "T-Sense" --concurrency 4 --json
 ```
 
 Run multiple independent samples per job:
 
 ```powershell
-python "$env:CODEX_HOME\skills\aippocampus\scripts\subconscious_jobs.py" --job cognitive_map --project "AIppocampus" --concurrency 4 --samples-per-job 3 --json
+$env:PYTHONPATH="$env:CODEX_HOME\skills\aippocampus\scripts"; python -m aippocampus_runtime.subconscious.jobs --job cognitive_map --project "AIppocampus" --concurrency 4 --samples-per-job 3 --json
 ```
 
 Rebuild concept graph after `concept_edges`:
 
 ```powershell
-python "$env:CODEX_HOME\skills\aippocampus\scripts\build_concept_graph.py"
+$env:PYTHONPATH="$env:CODEX_HOME\skills\aippocampus\scripts"; python -m aippocampus_runtime.navigation.concept_graph
 ```
 
 Materialize semantic life-wide labels after `semantic_scope_labeling`:
 
 ```powershell
-python "$env:CODEX_HOME\skills\aippocampus\scripts\build_semantic_scope_labels.py" --jobs-output "$env:CODEX_HOME\aippocampus-registry\subconscious_jobs.jsonl" --clean-source-dir "<thread-clean-source-dir>" --json
+$env:PYTHONPATH="$env:CODEX_HOME\skills\aippocampus\scripts"; python -m aippocampus_runtime.source.semantic_scope_builder --jobs-output "$env:CODEX_HOME\aippocampus-registry\subconscious_jobs.jsonl" --clean-source-dir "<thread-clean-source-dir>" --json
 ```
 
 For smoke tests without adding staging noise:
 
 ```powershell
-python "$env:CODEX_HOME\skills\aippocampus\scripts\subconscious_jobs.py" --job all --project "T-Sense" --no-write --json
+$env:PYTHONPATH="$env:CODEX_HOME\skills\aippocampus\scripts"; python -m aippocampus_runtime.subconscious.jobs --job all --project "T-Sense" --no-write --json
 ```
 
 Run second-pass review over staging findings:
 
 ```powershell
-python "$env:CODEX_HOME\skills\aippocampus\scripts\subconscious_review.py" --json
+$env:PYTHONPATH="$env:CODEX_HOME\skills\aippocampus\scripts"; python -m aippocampus_runtime.subconscious.review --json
 ```
 
 Route promotion candidates into soft working memory:
 
 ```powershell
-python "$env:CODEX_HOME\skills\aippocampus\scripts\memory_candidate_router.py" --json
+$env:PYTHONPATH="$env:CODEX_HOME\skills\aippocampus\scripts"; python -m aippocampus_runtime.subconscious.candidate_router --json
 ```
 
 Use `--focus` for lightweight rerank without splitting every job into tiny
 scopes:
 
 ```powershell
-python "$env:CODEX_HOME\skills\aippocampus\scripts\subconscious_review.py" --focus "T-Sense runtime and product strategy" --json
+$env:PYTHONPATH="$env:CODEX_HOME\skills\aippocampus\scripts"; python -m aippocampus_runtime.subconscious.review --focus "T-Sense runtime and product strategy" --json
 ```
 
 Review produces:
@@ -637,7 +637,7 @@ Staging queues are append-only review surfaces. Maintenance defaults to a
 dry-run report:
 
 ```powershell
-python "$env:CODEX_HOME\skills\aippocampus\scripts\subconscious_staging_maintenance.py" --json
+$env:PYTHONPATH="$env:CODEX_HOME\skills\aippocampus\scripts"; python -m aippocampus_runtime.subconscious.staging_maintenance --json
 ```
 
 The report classifies `subconscious_edges.jsonl` and
@@ -649,7 +649,7 @@ proposed action: the command does not rewrite, move, compact, or delete rows.
 Explicit apply mode is an operator maintenance action, not a hook path:
 
 ```powershell
-python "$env:CODEX_HOME\skills\aippocampus\scripts\subconscious_staging_maintenance.py" --apply --json
+$env:PYTHONPATH="$env:CODEX_HOME\skills\aippocampus\scripts"; python -m aippocampus_runtime.subconscious.staging_maintenance --apply --json
 ```
 
 Apply mode archives only rows already classified as `archive_candidate`, writes
@@ -691,6 +691,6 @@ Staging findings can be consumed in several ways:
   candidate or if source signals conflict.
 
 Some candidate generation can happen automatically through
-`subconscious_scheduler.py`, and router output can be used as soft working
+`aippocampus_runtime.subconscious.scheduler`, and router output can be used as soft working
 memory, but formal promotion still does not happen implicitly. The subconscious
 layer is a generator of candidate structure, not a source of truth.

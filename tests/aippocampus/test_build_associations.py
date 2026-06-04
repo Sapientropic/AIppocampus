@@ -18,7 +18,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import build_associations as assoc  # noqa: E402
+from aippocampus_runtime.navigation import associations as assoc  # noqa: E402
 
 
 class BuildAssociationsTests(unittest.TestCase):

@@ -122,7 +122,7 @@ def main(argv: list[str] | None = None) -> int:
 
     health_cmd = [
         sys.executable,
-        str(SCRIPT_DIR / "aippocampus_health.py"),
+        "-m", "aippocampus_runtime.health",
         "--cwd",
         str(cwd),
         "--json",
@@ -140,7 +140,7 @@ def main(argv: list[str] | None = None) -> int:
             action_results.append({"id": "health_initial", "result": health})
 
     if has_action(health, "build_index"):
-        cmd = [sys.executable, str(SCRIPT_DIR / "build_index.py"), "--cwd", str(cwd)]
+        cmd = [sys.executable, "-m", "aippocampus_runtime.recall.index_builder", "--cwd", str(cwd)]
         if args.fail_fast:
             out = run_text(cmd)
             action_results.append({"id": "build_index", "output": out.strip()})
@@ -162,7 +162,7 @@ def main(argv: list[str] | None = None) -> int:
                 action_failures.append(failure_result("build_index", cmd, code, stdout, stderr))
 
     if has_action(health, "checkpoint"):
-        cmd = [sys.executable, str(SCRIPT_DIR / "checkpoint.py"), "--cwd", str(cwd), "--json"]
+        cmd = [sys.executable, "-m", "aippocampus_runtime.artifacts.checkpoint", "--cwd", str(cwd), "--json"]
         if args.append_checkpoint:
             cmd.append("--append")
         if args.fail_fast:
@@ -172,7 +172,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             health = run_json(health_cmd)
             if args.append_checkpoint:
-                run_text([sys.executable, str(SCRIPT_DIR / "build_index.py"), "--cwd", str(cwd)])
+                run_text([sys.executable, "-m", "aippocampus_runtime.recall.index_builder", "--cwd", str(cwd)])
                 health = run_json(health_cmd)
         else:
             code, checkpoint_payload, stdout, stderr = run_json_checked(cmd)
@@ -194,7 +194,7 @@ def main(argv: list[str] | None = None) -> int:
                 if args.append_checkpoint:
                     rebuild_cmd = [
                         sys.executable,
-                        str(SCRIPT_DIR / "build_index.py"),
+                        "-m", "aippocampus_runtime.recall.index_builder",
                         "--cwd",
                         str(cwd),
                     ]
@@ -230,7 +230,7 @@ def main(argv: list[str] | None = None) -> int:
         # Segments are an acceleration layer over the same normalized transcript
         # as the main index. Build them after the main index/checkpoint pass so
         # shard metadata points at the latest anchors and message count.
-        cmd = [sys.executable, str(SCRIPT_DIR / "build_segments.py"), "--cwd", str(cwd)]
+        cmd = [sys.executable, "-m", "aippocampus_runtime.recall.segment_builder", "--cwd", str(cwd)]
         if args.fail_fast:
             out = run_text(cmd)
             action_results.append({"id": "build_segments", "output": out.strip()})
@@ -257,7 +257,7 @@ def main(argv: list[str] | None = None) -> int:
         # exists, keeping this foreground pass model-free and hook-safe.
         cmd = [
             sys.executable,
-            str(SCRIPT_DIR / "build_cognitive_map.py"),
+            "-m", "aippocampus_runtime.navigation.cognitive_map",
             "--json",
         ]
         if args.fail_fast:
@@ -296,7 +296,7 @@ def main(argv: list[str] | None = None) -> int:
     ):
         cmd = [
             sys.executable,
-            str(SCRIPT_DIR / "prepare_graphify_corpus.py"),
+            "-m", "aippocampus_runtime.ops.graphify_corpus",
             "--cwd",
             str(cwd),
             "--json",

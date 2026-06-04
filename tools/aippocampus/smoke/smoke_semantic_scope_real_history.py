@@ -49,8 +49,8 @@ from aippocampus_runtime.subconscious.jobs import (
     run_one_job,
     run_tasks_in_sample_waves,
 )
-from subconscious_runtime import call_chat_json
-from subconscious_worker import (
+from aippocampus_runtime.subconscious.runtime import call_chat_json
+from aippocampus_runtime.subconscious.worker import (
     DEFAULT_BASE_URL,
     DEFAULT_MODEL,
     default_project_timeline_path,

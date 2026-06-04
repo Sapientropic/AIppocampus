@@ -67,7 +67,7 @@ surfaces can be useful, but they are not the 10-minute dependency story.
 | No-clone probe or install smoke | PyPI `uvx aippocampus ...` and documented repository checks | Documented CLI command names, documented flags, return code success/failure, and public-safe `--json` outputs where documented | Unreleased GitHub `uvx --from git+...` snapshots as stable release evidence; unsigned binary paths beyond the dated Windows x64 evidence |
 | Local operator status | `aippocampus health`, `aippocampus onboard --status`, and `memory_health` MCP | Documented status fields, additive JSON fields, and CLI JSON error classes | Human-readable prose, local absolute paths, or private registry internals |
 | Agent-host read tools | MCP `search_memory`, `recall_context`, `recall_deepen`, `latest_reply`, `get_turn_context`, `list_threads`, `register_thread`, `sync_status`, `memory_health` | Tool names, required input fields, additive output fields, JSON tool errors, and public-safe path redaction | Broad memory writes, hook install/uninstall, sync push/pull, or arbitrary file ingest through MCP |
-| Provider-neutral import | `aippocampus import conversation --format generic-jsonl` and `registry.py register-source --provider generic-jsonl` | Generic JSONL required fields, validation diagnostics, canonical source refs, and import manifests | Markdown import as a public claim, role-ambiguous transcripts, or host-private metadata as public identity |
+| Provider-neutral import | `aippocampus import conversation --format generic-jsonl` and `python -m aippocampus_runtime.registry.api register-source --provider generic-jsonl` | Generic JSONL required fields, validation diagnostics, canonical source refs, and import manifests | Markdown import as a public claim, role-ambiguous transcripts, or host-private metadata as public identity |
 | Script or CI integration | CLI `--json`, public schemas, and `aippocampus_runtime.cli.facade.run_command(capture_output=True)` inside a trusted Python process | Same command names, JSON shapes, and return-code policy as the public CLI | A broad Python or TypeScript domain SDK; helper-module internals under `skills/aippocampus/scripts/` |
 | Cross-device transfer | Documented local-folder, object-storage, and encrypted sync commands | Documented command names, flags, sync manifests, privacy refusal rules, and `AIPPOCAMPUS_*` configuration names | Raw plaintext rollout sync, provider credentials in logs, or managed hosted-service behavior |
 | Research or roadmap work | Roadmap, evidence docs, benchmarks, and research notes | Evidence for the current implementation or design direction only | Public API stability for Dream, subconscious jobs, semantic caches, benchmark cache files, or cognitive-map artifacts |
@@ -101,7 +101,7 @@ The supported public surfaces are:
 - The CLI entrypoints documented in `README.md`,
   [install-guide.md](install-guide.md), and `skills/aippocampus/SKILL.md`.
 - The MCP server tool names and input schemas exposed by
-  `skills/aippocampus/scripts/aippocampus_mcp_server.py --list-tools`.
+  `aippocampus mcp list-tools`.
 - The source-event, clean-source chunk, source-ref, and import-manifest schemas
   documented in [public-core-boundary.md](public-core-boundary.md).
 - The knowledge-source manifest and knowledge-claim record schemas documented
@@ -133,10 +133,6 @@ public answer API, public SDK schema, or source of factual authority.
 The CLI contract applies to documented operator commands, especially:
 
 - `aippocampus health|search|onboard|export|import|doctor|mcp|smoke|storage|why-recall|why-not-recall|sync|object-sync|hooks`
-- `aippocampus_health.py`
-- `search_clean_source.py`
-- `latest_reply.py` as a Codex raw-rollout audit compatibility command
-- `onboard.py --provider codex|claude-code|generic-jsonl|auto`
 - `aippocampus import conversation --format generic-jsonl --input <path>`
 - `aippocampus doctor provider` as a no-model-call visibility diagnostic for
   optional external-model route key environment variables
@@ -151,15 +147,11 @@ The CLI contract applies to documented operator commands, especially:
   path-level rebuildable-cache eviction path for retention-report-backed main
   SQLite caches; capacity aggregates and source/review artifacts remain outside
   apply v1
-- `registry.py register-source --provider generic-jsonl --input <path>`
-- `onboard_codex.py`
-- `aippocampus_mcp_server.py --list-tools`
-- `export_bundle.py` / `import_bundle.py`
-- `sync_bundle.py status|push|pull|repair`
-- `sync_object_storage.py status|push|pull|repair`
-- `aippocampus_runtime.sync.encrypted.admin` package owner and the `encrypted_sync_admin.py` direct command: `key|migrate-to-encrypted|cleanup-plaintext|migrate-object-to-encrypted|cleanup-object-plaintext`
-- `install_aippocampus_prompt_hook.py status|install|uninstall`
-- `install_aippocampus_lifecycle_hook.py status|install|uninstall`
+- `python -m aippocampus_runtime.registry.api register-source --provider generic-jsonl --input <path>`
+- `python -m aippocampus_runtime.mcp.server --list-tools`
+- `python -m aippocampus_runtime.sync.encrypted.admin key|migrate-to-encrypted|cleanup-plaintext|migrate-object-to-encrypted|cleanup-object-plaintext`
+- `aippocampus hooks prompt status|install|uninstall`
+- `aippocampus hooks lifecycle status|install|uninstall`
 - `plugins/aippocampus/build_plugin_package.py`
 - documented plugin smoke commands
 
@@ -173,21 +165,10 @@ uvx aippocampus --help
 The GitHub `uvx --from git+...` form remains useful for unreleased main-branch
 snapshots, but it is not the release evidence path.
 
-The hook scripts and installers above are direct-path compatibility shims over
-`aippocampus_runtime.hooks.*` package owners. Keep invoking the documented
-script paths from Codex hook configs; Python/runtime callers should import the
-package owners.
-
-The onboarding scripts are direct-path compatibility shims over
-`aippocampus_runtime.onboarding.*` package owners. Keep invoking documented
-script paths from installs and older automation; Python/runtime callers should
-import the package owners.
-
-The portable bundle scripts are direct-path compatibility shims over
-`aippocampus_runtime.artifacts.export_bundle` and
-`aippocampus_runtime.artifacts.import_bundle`. Python callers should prefer
-those package owners or the `aippocampus export` / `aippocampus import` facade
-commands when they need captureable in-process execution.
+Flat top-level runtime scripts are no longer a supported API layer. Python
+callers should import package owners or use
+`aippocampus_runtime.cli.facade.run_command(capture_output=True)` when they need
+captureable in-process execution.
 
 For these commands:
 
@@ -313,8 +294,8 @@ claude-code`, `aippocampus import conversation --format generic-jsonl`, and MCP
 registry operations prove transcript registration or clean-source access only.
 They do not install, diagnose, or run host hooks.
 
-Codex-only hook installers are exposed through `aippocampus hooks ...`,
-`install_aippocampus_prompt_hook.py`, and `install_aippocampus_lifecycle_hook.py`.
+Codex-only hook installers are exposed through `aippocampus hooks ...` and the
+package owners under `aippocampus_runtime.hooks`.
 Their JSON/status output includes `host_integration.host = "codex"` and
 `host_integration.config_surface = "codex_hooks_json"`. Claude Code hook support
 is not a public AIppocampus claim until a dedicated Claude Code installer,
@@ -413,9 +394,11 @@ contract that does not require callers to parse human prose.
 
 Explicit file or directory import is a separate provider-neutral CLI operation:
 use `aippocampus import conversation --format generic-jsonl --input <path>` or
-`registry.py register-source --provider generic-jsonl --input <path>` for an
-exported transcript. `register_thread` is for attaching/building the selected
-current provider session through the MCP control plane; it is not a generic arbitrary-file ingest endpoint.
+`python -m aippocampus_runtime.registry.api register-source --provider generic-jsonl --input <path>`
+for an exported transcript. `register_thread` is for attaching/building the
+selected current provider session through the MCP control plane; it is not a
+generic arbitrary-file ingest endpoint.
+This is not a generic arbitrary-file ingest endpoint.
 
 MCP JSON output defaults to public-safe local-path redaction for tool results
 that can be forwarded through host agents. Callers that are acting as local
@@ -633,9 +616,8 @@ These are internal, experimental, or best-effort unless promoted elsewhere:
 - Raw rollout envelopes and host-specific JSONL fields.
 - Generated SQLite, FTS, graph, semantic, cognitive-map, and benchmark cache
   files.
-- Internal retrieval helpers under `aippocampus_runtime.recall`, with flat
-  compatibility shims such as `retrieval_score_fusion.py`; their outputs are
-  policy diagnostics and ranking hints, not stable public schemas or source
+- Internal retrieval helpers under `aippocampus_runtime.recall`; their outputs
+  are policy diagnostics and ranking hints, not stable public schemas or source
   truth.
 - Typed capability manifest helpers under
   `aippocampus_runtime.knowledge.capability_types`; their fixture and tests

@@ -28,9 +28,9 @@ import _paths
 
 _paths.ensure_paths()
 
-import warm_ambient_recall as warm
+from aippocampus_runtime.core import compact_text, sanitize_external_model_text
+from aippocampus_runtime.warm_ambient import recall as warm
 from aippocampus_runtime.warm_ambient.scout_profiles import scheduler_lifecycle_status
-from aippocampuslib import compact_text, sanitize_external_model_text
 
 DEFAULT_CASE_WORKERS = 1
 

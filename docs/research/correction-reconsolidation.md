@@ -155,7 +155,7 @@ The deterministic layer should record compact append-only events, not final
 truth.
 
 The first runtime prototype lives in
-`skills/aippocampus/scripts/correction_reconsolidation.py`. It can build and
+`skills/aippocampus/scripts/aippocampus_runtime/reflection/reconsolidation.py`. It can build and
 append source-backed `correction_activation_event` and
 `correction_outcome_event` JSONL rows, sanitize correction surfaces, changed-file
 hints, and verification/tool evidence, and emit detached

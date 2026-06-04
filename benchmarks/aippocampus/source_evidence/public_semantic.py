@@ -11,6 +11,7 @@ from typing import Any
 
 import smoke_source_evidence_recall_eval as source_evidence_eval
 
+from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
 from aippocampus_runtime.source.semantic_scope_labels import (
     SEMANTIC_SCOPE_LABELS_FILENAME,
@@ -19,9 +20,12 @@ from aippocampus_runtime.source.semantic_scope_labels import (
     semantic_scope_label_rows_from_findings,
     write_semantic_scope_label_sidecar,
 )
-from aippocampuslib import compact_text
-from subconscious_runtime import call_chat_json, compact_usage
-from subconscious_worker import DEFAULT_BASE_URL, DEFAULT_MODEL, parse_model_json
+from aippocampus_runtime.subconscious.runtime import call_chat_json, compact_usage
+from aippocampus_runtime.subconscious.worker import (
+    DEFAULT_BASE_URL,
+    DEFAULT_MODEL,
+    parse_model_json,
+)
 
 from .defaults import (
     DEFAULT_PUBLIC_SEMANTIC_CONVERSATIONS,

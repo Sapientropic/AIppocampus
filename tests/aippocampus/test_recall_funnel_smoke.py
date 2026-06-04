@@ -10,7 +10,6 @@ from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-CLI = SCRIPTS / "aippocampus_cli.py"
 sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.ops import recall_funnel_smoke  # noqa: E402
@@ -195,7 +194,8 @@ class RecallFunnelSmokeTests(unittest.TestCase):
         proc = subprocess.run(
             [
                 sys.executable,
-                str(CLI),
+                "-m",
+                "aippocampus_runtime.cli.facade",
                 "smoke",
                 "recall-funnel",
                 "progressive recall evidence",
@@ -203,7 +203,7 @@ class RecallFunnelSmokeTests(unittest.TestCase):
                 str(self.cwd),
                 "--json",
             ],
-            cwd=REPO_ROOT,
+            cwd=SCRIPTS,
             text=True,
             encoding="utf-8",
             errors="replace",

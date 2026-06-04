@@ -6,7 +6,7 @@ boundaries.
 
 ## Prompt Hook
 
-`scripts/aippocampus_prompt_hook.py` is the Codex `UserPromptSubmit` handler.
+`aippocampus_runtime/hooks/prompt` is the Codex `UserPromptSubmit` handler.
 Most prompts should produce no output.
 
 Outcomes:
@@ -43,7 +43,7 @@ candidate ids, source snippets, local paths, or thread ids. These fields explain
 route delivery gaps; they do not promote scent or semantic output into evidence.
 
 Prompt decisions may also include a private `ambient_recall` block built by
-`ambient_recall_cards.py`. This block normalizes existing hook signals into
+`aippocampus_runtime.recall.ambient_cards`. This block normalizes existing hook signals into
 compact cards with `mode`, `confidence`, `cards`, `avoid`, `latency_ms`,
 `cache_status`, `late_update_policy`, and a small `late_warm_handoff` policy.
 Cards are guidance for the agent, not text to paste into the final answer.
@@ -220,7 +220,7 @@ rejected states may live as long as the ambient cache for the current topic
 epoch. This overlay is not a second long-lived cache and must not be promoted to
 formal memory.
 
-`fresh_thread_demo.py` is the #285 public-safe demonstration runner for this
+`aippocampus_runtime.recall.fresh_thread_demo` is the #285 public-safe demonstration runner for this
 contract. It strings together the existing scent packet, action policy, and
 activation state modules over synthetic upstream decision packets across
 `no_memory`, `hook_only`, and `active_recall` arms. The runner is intentionally
@@ -230,7 +230,7 @@ layers. Treat its output as demo proof only; real-history quality, live model
 quality, semantic classification quality, and benchmark claims need their own
 evidence.
 
-When the hook receives a thread/session id, `ambient_thread_cache.py` may store
+When the hook receives a thread/session id, `aippocampus_runtime.recall.ambient_cache` may store
 up to a few compact cards under a hashed `thread_id + workspace + topic_epoch`
 key. The cache is a soft working surface: it expires, records source-ref
 fingerprints, per-card source validation, query aliases, topic-epoch decision
@@ -238,13 +238,13 @@ metadata, and visibility bias while avoiding raw prompt text. Later warm-scout
 work should update this cache through the same serial writer rather than adding
 a second ambient-memory store.
 
-`warm_ambient_recall.py` is the standalone warm-path prototype for that later
+`aippocampus_runtime.warm_ambient.recall` is the standalone warm-path prototype for that later
 work. It defines 10 scout families across 5 candidate-window/query variants:
 5 P0 families for intent/mode, privacy/boundary, deep theme, key-line, and
 evidence/gap checks; plus 5 P1 families for user style, trajectory,
 cross-domain bridge, nudge writing, and semantic expansion. It runs the
 resulting 50 lanes concurrently, isolates malformed scout output, merges at
-most 3 cards, and writes through `ambient_thread_cache.py`. Scout prompts keep
+most 3 cards, and writes through `aippocampus_runtime.recall.ambient_cache`. Scout prompts keep
 the shared payload before the lane-specific `scout_task` suffix, and each lane
 combines a family task with a variant `lens_task` rather than repeating one
 generic prompt. The merger dereferences candidate source refs against
@@ -266,7 +266,7 @@ may add one deterministic fallback card, but it must still pass the same local
 source-ref validation and must not use the current prompt as memory.
 Foreground code schedules background warming by default after non-skip cache
 misses when the hook has a thread id and `DEEPSEEK_API_KEY` is available.
-`ambient_warm_scheduler.py` writes a redacted local job file and starts a
+`aippocampus_runtime.warm_ambient.scheduler` writes a redacted local job file and starts a
 detached `warm_ambient_recall.py --job-file` run. That job uses wait-all by
 default with its own detached timeout (`AIPPOCAMPUS_DETACHED_WARM_TIMEOUT`,
 default 45s) and writes only through the thread-cache writer, so late scout
@@ -423,14 +423,14 @@ are skipped by default.
 
 Useful commands:
 
-- `python ...\aippocampus_prompt_hook.py --prompt "hook 机制像人类联想" --json`
-- `python ...\aippocampus_prompt_hook.py --prompt "ambient recall" --session-id dry-run --json`
-- `python ...\diagnose_hooks.py --events UserPromptSubmit,Stop`
+- `python -m aippocampus_runtime.hooks.prompt --prompt "hook 机制像人类联想" --json`
+- `python -m aippocampus_runtime.hooks.prompt --prompt "ambient recall" --session-id dry-run --json`
+- `python -m aippocampus_runtime.hooks.diagnose --events UserPromptSubmit,Stop`
 - `python ...\simulate_prompt_hook.py --cwd "$PWD" --strict`
 - `python ...\simulate_prompt_hook.py --cwd "$PWD" --compare-concept-graph`
 - `python ...\simulate_multilingual_prompt_hook.py --cwd "$PWD"`
-- `python ...\warm_ambient_recall.py --prompt "继续 ambient recall" --cwd "$PWD" --thread-id dry-run --json`
-- `python ...\warm_ambient_recall.py --job-file <redacted-job.json> --json`
+- `python -m aippocampus_runtime.warm_ambient.recall --prompt "继续 ambient recall" --cwd "$PWD" --thread-id dry-run --json`
+- `python -m aippocampus_runtime.warm_ambient.recall --job-file <redacted-job.json> --json`
 - `python benchmarks\aippocampus\build_warm_ambient_trace_cases.py --out .tmp\warm-traces.jsonl --jsonl --label-template --json`
 - `python benchmarks\aippocampus\build_warm_ambient_trace_cases.py --clean-source-dir benchmark_corpus\output\sharegpt_coding_multiturn --dataset-id sharegpt_coding_multiturn --out .tmp\warm-sharegpt-coding-100-source-ref.jsonl --jsonl --subset-messages-out .tmp\warm-sharegpt-coding-100-pack\clean-source\messages.jsonl --registry-out .tmp\warm-sharegpt-coding-100-pack\threads.json --limit 100 --per-thread 1 --trace-window 6 --min-turn-index 2 --label-template --label-policy source_ref_supported --json`
 - `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --json`
@@ -438,8 +438,8 @@ Useful commands:
 - `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --cases-file traces.jsonl --registry .tmp\warm-sharegpt-coding-pack\threads.json --live --quorum-first --case-offset 0 --case-limit 10 --case-workers 2 --max-workers 50 --prefix-cache-warmup-scouts 2 --prefix-cache-warmup-delay 0.5 --timeout 15 --progress-jsonl .tmp\warm-progress-source-ref-000.jsonl --json`
 - `python benchmarks\aippocampus\benchmark_warm_ambient_recall.py --cases-file .tmp\warm-sharegpt-coding-100-topic-vote.jsonl --registry .tmp\warm-sharegpt-coding-100-pack\threads.json --live --wait-all --case-workers 1 --max-workers 50 --prefix-cache-warmup-scouts 2 --prefix-cache-warmup-delay 0.5 --timeout 30 --min-available-rate 0 --json`
 - `python benchmarks\aippocampus\benchmark_warm_ambient_sweep.py --cases-file traces.jsonl --registry .tmp\warm-sharegpt-coding-pack\threads.json --live --wait-modes quorum_first,wait_all --case-workers 2 --progress-dir .tmp\warm-progress --prefix-cache-warmup-scouts 2 --prefix-cache-warmup-delay 0.5 --max-workers-list 20,50 --timeouts 15,30 --json`
-- `python ...\install_aippocampus_prompt_hook.py install|status|uninstall`
-- `python ...\install_aippocampus_prompt_hook.py status --last --json`
+- `python -m aippocampus_runtime.hooks.install_prompt install|status|uninstall`
+- `python -m aippocampus_runtime.hooks.install_prompt status --last --json`
 - `aippocampus hooks prompt status --last --json`
 
 `warm_ambient_recall.py --json` is an operational summary, not a private
@@ -482,11 +482,11 @@ prompts still complete within budget.
 
 The foreground default is about one second for fresh semantic calls, plus a
 whole-hook fail-open budget below the Codex hook timeout. Treat that as a
-scent/cache pass, not as the full recall budget; explicit `active_recall.py`,
-`runtime recall`, and standalone `semantic_recall_gate.py` compatibility
+scent/cache pass, not as the full recall budget; explicit `aippocampus_runtime.recall.active_recall`,
+`runtime recall`, and standalone `aippocampus_runtime.recall.semantic_recall_gate` compatibility
 commands can spend longer when the user asks for source-backed memory. The
 implementation owner lives under `aippocampus_runtime.recall`; do not add new
-foreground-recall policy to the top-level compatibility shims.
+foreground-recall policy to the top-level package owners.
 
 `prompt_recall_threshold.py` owns the #359 context-aware scent-threshold
 diagnostic. It is a routing policy, not a source or evidence policy. A same
@@ -533,9 +533,8 @@ should not be the first evidence card when better human-facing source exists.
 
 When `DEEPSEEK_API_KEY` is present and `AIPPOCAMPUS_SEMANTIC_GATE` is not `off`,
 the prompt hook may call the packaged semantic gate through
-`aippocampus_runtime.recall.semantic_recall_gate`; the top-level
-`scripts/semantic_recall_gate.py` path remains a direct-script compatibility
-command. The semantic gate runs small parallel workers:
+`aippocampus_runtime.recall.semantic_recall_gate`. The semantic gate runs small
+parallel workers:
 
 - `gate`: choose `skip`, `scent`, or evidence-worthy recall.
 - `alias`: generate multilingual and paraphrase search aliases.
@@ -611,8 +610,8 @@ simple commands such as "好，开干" should not become triggers.
 
 Useful commands:
 
-- `python ...\semantic_recall_gate.py --prompt "那个脑内续接器现在怎么样了？" --cwd "$PWD" --json`
-- `python ...\semantic_trigger_router.py --json`
+- `python -m aippocampus_runtime.recall.semantic_recall_gate --prompt "那个脑内续接器现在怎么样了？" --cwd "$PWD" --json`
+- `python -m aippocampus_runtime.recall.semantic_trigger_router --json`
 - `python tools\aippocampus\smoke\smoke_living_cue_cache.py --json`
 - `python tools\aippocampus\smoke\smoke_prompt_hook_latency.py --runs 5 --json`
 
@@ -657,7 +656,7 @@ even the aggregate file.
 
 ## Lifecycle Hook
 
-`scripts/aippocampus_lifecycle_hook.py` handles deterministic maintenance. It
+`aippocampus_runtime/hooks/lifecycle` handles deterministic maintenance. It
 is separate from prompt recall because lifecycle events can tolerate bounded
 fixed work.
 
@@ -674,11 +673,11 @@ Installed events:
 
 Useful commands:
 
-- `python ...\aippocampus_lifecycle_hook.py --event Stop --cwd "$PWD" --dry-run --json`
-- `python ...\diagnose_hooks.py --events UserPromptSubmit,Stop`
-- `python ...\install_aippocampus_lifecycle_hook.py install|status|uninstall`
+- `python -m aippocampus_runtime.hooks.lifecycle --event Stop --cwd "$PWD" --dry-run --json`
+- `python -m aippocampus_runtime.hooks.diagnose --events UserPromptSubmit,Stop`
+- `python -m aippocampus_runtime.hooks.install_lifecycle install|status|uninstall`
 
-`build_associations.py` scans the global registry and can exceed a lifecycle
+`aippocampus_runtime.navigation.associations` scans the global registry and can exceed a lifecycle
 hook timeout on real archives. Lifecycle hooks enqueue that rebuild detached and
 write its output through the normal atomic association writer. Do not move a
 full association rebuild back into the foreground hook path; prompt hooks should
@@ -686,7 +685,7 @@ consume the latest completed sidecar and fail open when it is stale.
 
 ## Scheduler Boundary
 
-`scripts/subconscious_scheduler.py --maybe-start` is the only subconscious route
+`aippocampus_runtime/subconscious/scheduler --maybe-start` is the only subconscious route
 that lifecycle hooks should call. It must return quickly, check lock/cooldown
 state, require `DEEPSEEK_API_KEY`, and start detached work only when enough new
 clean-source turns exist.
@@ -705,7 +704,7 @@ navigation, or soft-memory artifacts.
 DeepSeek concurrency belongs inside the detached worker, not in the foreground
 hook. Lifecycle hooks enqueue `subconscious_scheduler.py --maybe-start` as a
 detached process, then return; scheduler locks and project leases collapse
-duplicates. `subconscious_jobs.py` defaults to parallel samples, can run
+duplicates. `aippocampus_runtime.subconscious.jobs` defaults to parallel samples, can run
 multiple job/sample calls concurrently, and keeps staging JSONL plus sidecar
 materialization serialized and atomic. A hook budget miss or model delay should
 mean "background semantic work is not ready yet", not "replace it with a
@@ -713,8 +712,8 @@ mechanical semantic judgment".
 
 Useful commands:
 
-- `python ...\subconscious_scheduler.py --maybe-start --cwd "$PWD" --json`
-- `python ...\subconscious_scheduler.py --maybe-start --cwd "$PWD" --dry-run --json`
+- `python -m aippocampus_runtime.subconscious.scheduler --maybe-start --cwd "$PWD" --json`
+- `python -m aippocampus_runtime.subconscious.scheduler --maybe-start --cwd "$PWD" --dry-run --json`
 
 ## Never From Hooks
 

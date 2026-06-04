@@ -19,7 +19,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import aippocampus_health as health  # noqa: E402
+from aippocampus_runtime import health as health  # noqa: E402
 
 
 class AippocampusHealthTests(unittest.TestCase):
@@ -35,7 +35,8 @@ class AippocampusHealthTests(unittest.TestCase):
 
         self.assertEqual(
             command,
-            'python "$CODEX_HOME/skills/aippocampus/scripts/build_index.py" --cwd "/tmp/work space"',
+            'PYTHONPATH="$CODEX_HOME/skills/aippocampus/scripts" '
+            'python -m aippocampus_runtime.recall.index_builder --cwd "/tmp/work space"',
         )
 
     def test_recommended_script_command_keeps_powershell_shape_on_windows(self) -> None:
@@ -45,7 +46,8 @@ class AippocampusHealthTests(unittest.TestCase):
 
         self.assertEqual(
             command,
-            f'python "$env:CODEX_HOME\\skills\\aippocampus\\scripts\\build_index.py" --cwd "{expected_cwd}"',
+            '$env:PYTHONPATH="$env:CODEX_HOME\\skills\\aippocampus\\scripts"; '
+            f'python -m aippocampus_runtime.recall.index_builder --cwd "{expected_cwd}"',
         )
 
     def test_question_stats_are_fail_open_diagnostics(self) -> None:
@@ -215,7 +217,10 @@ class AippocampusHealthTests(unittest.TestCase):
                         "candidate_id": "retention:rebuildable-main-sqlite",
                         "tier": "rebuildable_cache",
                         "evicted_paths": [{"relative_path": "source_index.sqlite"}],
-                        "rebuild_command": "python ...\\build_index.py --cwd <workspace>",
+                        "rebuild_command": (
+                            "python -m aippocampus_runtime.recall.index_builder "
+                            "--cwd <workspace>"
+                        ),
                     }
                 ),
                 encoding="utf-8",
@@ -260,7 +265,10 @@ class AippocampusHealthTests(unittest.TestCase):
             payload["index"]["intentional_eviction"]["manifest"],
             str(eviction_manifest),
         )
-        self.assertIn("build_index.py", payload["index"]["intentional_eviction"]["rebuild_command"])
+        self.assertIn(
+            "aippocampus_runtime.recall.index_builder",
+            payload["index"]["intentional_eviction"]["rebuild_command"],
+        )
         self.assertIn(
             "source_index.sqlite intentionally evicted as rebuildable cache",
             payload["index"]["reasons"],

@@ -11,8 +11,7 @@ Related: [journey-tracking.md](journey-tracking.md) — Journey 数据结构,
 ## Implementation Status
 
 The first MVP lives in
-`skills/aippocampus/scripts/aippocampus_runtime/reflection/space.py`, with
-`reflection_space.py` kept as the direct-script/import compatibility shim.
+`skills/aippocampus/scripts/aippocampus_runtime/reflection/space.py`.
 
 - It builds an inspectable `aippocampus_reflection_topology` from existing
   Journey dictionaries: journey nodes, waypoint nodes, current-frontier nodes,

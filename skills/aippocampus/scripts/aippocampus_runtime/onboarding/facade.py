@@ -171,7 +171,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     known, remaining = parser.parse_known_args(raw_args)
 
     if known.help:
-        print("usage: onboard.py [--status] [--provider auto|codex|claude-code|generic-jsonl] [onboard options]")
+        print("usage: aippocampus onboard [--status] [--provider auto|codex|claude-code|generic-jsonl] [onboard options]")
         print()
         print("Providers:")
         print("  auto         Use the default implemented provider for this install.")
@@ -179,7 +179,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("  claude-code  Onboard local Claude Code JSONL transcripts.")
         print("  generic-jsonl Onboard validated AIppocampus generic JSONL imports.")
         print()
-        print("Run onboard_codex.py --help for the current Codex onboarding options.")
+        print("Run with --provider codex --help for the current Codex onboarding options.")
         return 0
 
     if known.status:

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Inventory top-level runtime compatibility surfaces.
+"""Inventory accidental top-level runtime compatibility surfaces.
 
-This is intentionally a lightweight maintainer report, not a deletion bot.
-AIppocampus still supports direct script paths in installed skills, so a shim
-only becomes deletable after docs, installer paths, and first-party imports have
-moved to the package owner.
+The supported runtime now lives under package owners plus the public
+``aippocampus`` console facade. Any ``skills/aippocampus/scripts/*.py`` file is
+treated as residual shim debt unless a future migration deliberately reopens a
+flat entrypoint.
 """
 
 from __future__ import annotations

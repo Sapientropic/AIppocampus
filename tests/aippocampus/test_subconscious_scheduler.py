@@ -377,19 +377,29 @@ class SubconsciousSchedulerTests(unittest.TestCase):
                 log=self.root / "log.txt",
             )
 
-        scripts = [Path(command[1]).name for command in commands]
-        self.assertIn("build_semantic_scope_labels.py", scripts)
-        self.assertIn("dream_sleep_cycle.py", scripts)
-        self.assertIn("dream_retrospective_lifecycle.py", scripts)
-        semantic_index = scripts.index("build_semantic_scope_labels.py")
-        dream_index = scripts.index("dream_sleep_cycle.py")
-        retrospective_index = scripts.index("dream_retrospective_lifecycle.py")
+        def command_label(command: list[str]) -> str:
+            if len(command) > 2 and command[1] == "-m":
+                return command[2]
+            return Path(command[1]).name
+
+        scripts = [command_label(command) for command in commands]
+        self.assertIn("aippocampus_runtime.source.semantic_scope_builder", scripts)
+        self.assertIn("aippocampus_runtime.dream.sleep_cycle", scripts)
+        self.assertIn("aippocampus_runtime.dream.retrospective_lifecycle", scripts)
+        semantic_index = scripts.index("aippocampus_runtime.source.semantic_scope_builder")
+        dream_index = scripts.index("aippocampus_runtime.dream.sleep_cycle")
+        retrospective_index = scripts.index("aippocampus_runtime.dream.retrospective_lifecycle")
         timeline_indexes = [
-            index for index, name in enumerate(scripts) if name == "build_project_timeline.py"
+            index
+            for index, name in enumerate(scripts)
+            if name == "aippocampus_runtime.navigation.project_timeline"
         ]
-        self.assertLess(scripts.index("subconscious_jobs.py"), semantic_index)
+        self.assertLess(scripts.index("aippocampus_runtime.subconscious.jobs"), semantic_index)
         self.assertTrue(any(index > semantic_index for index in timeline_indexes))
-        self.assertGreater(dream_index, scripts.index("memory_candidate_router.py"))
+        self.assertGreater(
+            dream_index,
+            scripts.index("aippocampus_runtime.subconscious.candidate_router"),
+        )
         self.assertGreater(retrospective_index, dream_index)
         dream_command = commands[dream_index]
         self.assertIn("--project", dream_command)

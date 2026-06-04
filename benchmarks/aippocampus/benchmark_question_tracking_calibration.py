@@ -17,8 +17,8 @@ import _paths
 
 _paths.ensure_paths()
 
+from aippocampus_runtime.core import now_utc  # noqa: E402
 from aippocampus_runtime.question import tracking  # noqa: E402
-from aippocampuslib import now_utc  # noqa: E402
 
 SCHEMA_VERSION = 1
 BENCHMARK_KIND = "aippocampus_question_tracking_calibration"

@@ -17,7 +17,7 @@ import _paths
 
 _paths.ensure_paths()
 
-import aippocampus_prompt_hook as hook
+from aippocampus_runtime.hooks import prompt as hook
 from benchmark_memory_decision_gate import (
     EXPECTED_TO_ACTUAL,
     GateCase,

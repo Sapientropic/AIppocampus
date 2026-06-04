@@ -20,7 +20,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import build_segments  # noqa: E402
+from aippocampus_runtime.recall import segment_builder as build_segments  # noqa: E402
 
 
 class BuildSegmentsTests(unittest.TestCase):

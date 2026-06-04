@@ -60,11 +60,11 @@ def rebuild_command_for_retention_item(item: dict[str, Any]) -> str | None:
     item_id = str(item.get("id") or "")
     kind = str(item.get("kind") or "")
     if item_id == "rebuildable-main-sqlite" or kind == "rebuildable_generated_index":
-        return "python ...\\build_index.py --cwd <workspace>"
+        return "python -m aippocampus_runtime.recall.index_builder --cwd <workspace>"
     if item_id == "rebuildable-segment-sqlite":
-        return "python ...\\build_segments.py --cwd <workspace>"
+        return "python -m aippocampus_runtime.recall.segment_builder --cwd <workspace>"
     if item_id == "rebuildable-graphify-corpus" or kind == "rebuildable_generated_corpus":
-        return "python ...\\prepare_graphify_corpus.py --cwd <workspace>"
+        return "python -m aippocampus_runtime.ops.graphify_corpus --cwd <workspace>"
     return None
 
 

@@ -2,7 +2,7 @@
 """Measure prompt-hook wall time without exposing prompt text.
 
 The hook's own `elapsed_ms` measures recall work after the Python process has
-loaded the runtime. This smoke wraps the compatibility script in a subprocess so
+loaded the runtime. This smoke wraps the package module in a subprocess so
 operators can see the extra startup/import/I/O overhead, especially on Windows
 GUI launches where PATH and cold imports can dominate the foreground budget.
 """
@@ -23,7 +23,7 @@ import _paths
 _paths.ensure_paths()
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-PROMPT_HOOK = REPO_ROOT / "skills" / "aippocampus" / "scripts" / "aippocampus_prompt_hook.py"
+SKILL_SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 DEFAULT_PROMPT = "把 dashboard 的按钮 hover 样式改一下，顺手跑测试"
 
 
@@ -87,7 +87,8 @@ def summarize_latency_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
 def run_probe_once(*, prompt: str, cwd: Path, timeout: float) -> dict[str, Any]:
     cmd = [
         sys.executable,
-        str(PROMPT_HOOK),
+        "-m",
+        "aippocampus_runtime.hooks.prompt",
         "--prompt",
         prompt,
         "--cwd",
@@ -106,6 +107,7 @@ def run_probe_once(*, prompt: str, cwd: Path, timeout: float) -> dict[str, Any]:
         encoding="utf-8",
         errors="replace",
         capture_output=True,
+        cwd=SKILL_SCRIPTS,
         timeout=timeout,
         check=False,
     )

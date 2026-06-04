@@ -8,7 +8,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
-BUILD_INDEX = ROOT / "scripts" / "build_index.py"
+SCRIPTS = ROOT / "scripts"
+BUILD_INDEX_CMD = [sys.executable, "-m", "aippocampus_runtime.recall.index_builder"]
 
 
 class GlobalStorageDefaultTests(unittest.TestCase):
@@ -47,8 +48,7 @@ class GlobalStorageDefaultTests(unittest.TestCase):
 
             proc = subprocess.run(
                 [
-                    sys.executable,
-                    str(BUILD_INDEX),
+                    *BUILD_INDEX_CMD,
                     "--cwd",
                     str(cwd),
                     "--rollout",
@@ -61,6 +61,7 @@ class GlobalStorageDefaultTests(unittest.TestCase):
                 capture_output=True,
                 check=False,
                 env=env,
+                cwd=SCRIPTS,
             )
 
             self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
@@ -83,8 +84,7 @@ class GlobalStorageDefaultTests(unittest.TestCase):
 
             proc = subprocess.run(
                 [
-                    sys.executable,
-                    str(BUILD_INDEX),
+                    *BUILD_INDEX_CMD,
                     "--cwd",
                     str(cwd),
                     "--rollout",
@@ -99,6 +99,7 @@ class GlobalStorageDefaultTests(unittest.TestCase):
                 capture_output=True,
                 check=False,
                 env=env,
+                cwd=SCRIPTS,
             )
 
             self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)

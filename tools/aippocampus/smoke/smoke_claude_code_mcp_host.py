@@ -14,7 +14,16 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_SERVER_SCRIPT = REPO_ROOT / "skills" / "aippocampus" / "scripts" / "aippocampus_mcp_server.py"
+SKILL_SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
+DEFAULT_SERVER_ARGS = [
+    "-c",
+    (
+        "import sys; "
+        f"sys.path.insert(0, {str(SKILL_SCRIPTS)!r}); "
+        "from aippocampus_runtime.mcp.server import main; "
+        "raise SystemExit(main())"
+    ),
+]
 PROJECT_SKILL = REPO_ROOT / ".claude" / "skills" / "aippocampus" / "SKILL.md"
 PROJECT_SKILL_MARKERS = (
     "source-backed continuity",
@@ -84,7 +93,7 @@ def run_claude_mcp_probe(
                 cwd=cwd,
                 max_budget_usd=max_budget_usd,
                 timeout=tool_timeout,
-                server_script=server_script or DEFAULT_SERVER_SCRIPT,
+                server_script=server_script,
                 server_command=server_command,
                 server_args=server_args,
             )
@@ -107,7 +116,13 @@ def strict_mcp_config(
     server_args: list[str] | None = None,
 ) -> dict[str, Any]:
     command = server_command or sys.executable
-    args = list(server_args) if server_args is not None else [str(server_script)]
+    args = (
+        list(server_args)
+        if server_args is not None
+        else [str(server_script)]
+        if server_script is not None
+        else list(DEFAULT_SERVER_ARGS)
+    )
     return {
         "mcpServers": {
             server_name: {
@@ -157,7 +172,7 @@ def run_claude_mcp_tool_call(
     cwd: str | None,
     max_budget_usd: float,
     timeout: int,
-    server_script: Path,
+    server_script: Path | None,
     server_command: str | None = None,
     server_args: list[str] | None = None,
 ) -> dict[str, Any]:
@@ -341,7 +356,7 @@ def main() -> int:
     parser.add_argument("--cwd", help="Workspace cwd to pass to memory_health during --call-tool.")
     parser.add_argument("--max-budget-usd", type=float, default=0.25)
     parser.add_argument("--tool-timeout", type=int, default=120)
-    parser.add_argument("--server-script", type=Path, default=DEFAULT_SERVER_SCRIPT)
+    parser.add_argument("--server-script", type=Path)
     parser.add_argument(
         "--server-command",
         help="Override the strict MCP server command, e.g. a standalone aippocampus.exe.",

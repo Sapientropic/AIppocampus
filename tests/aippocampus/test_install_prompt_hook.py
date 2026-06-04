@@ -21,7 +21,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import install_aippocampus_prompt_hook as installer  # noqa: E402
+from aippocampus_runtime.hooks import install_prompt as installer  # noqa: E402
 from aippocampus_runtime.hooks.debug_log import (  # noqa: E402
     write_debug_log,
     write_prompt_hook_audit_status,
@@ -34,7 +34,7 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         self.codex_home = Path(self.tmp.name) / ".codex"
         self.codex_home.mkdir()
         self.hooks_json = self.codex_home / "hooks.json"
-        self.script = SCRIPTS / "aippocampus_prompt_hook.py"
+        self.module = installer.DEFAULT_HOOK_MODULE
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
@@ -43,13 +43,15 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         return json.loads(self.hooks_json.read_text(encoding="utf-8"))
 
     def test_generated_command_is_windows_shell_safe(self) -> None:
-        command = installer.command_for(self.script)
+        command = installer.command_for()
 
         if os.name == "nt":
-            self.assertTrue(command.startswith("& "), command)
+            self.assertIn("; & ", command)
         else:
             self.assertFalse(command.startswith("& "), command)
-        self.assertIn(str(self.script.resolve()), command)
+            self.assertTrue(command.startswith("PYTHONPATH="), command)
+        self.assertIn("-m", command)
+        self.assertIn(self.module, command)
         self.assertIn("--max-elapsed-ms 4300", command)
         self.assertIn("--semantic-timeout 2.5", command)
 
@@ -76,15 +78,15 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
             encoding="utf-8",
         )
 
-        first = installer.install(self.hooks_json, self.script, timeout=5)
-        second = installer.install(self.hooks_json, self.script, timeout=5)
+        first = installer.install(self.hooks_json, timeout=5)
+        second = installer.install(self.hooks_json, timeout=5)
 
         data = self.read_hooks()
         prompt_hooks = data["hooks"]["UserPromptSubmit"][0]["hooks"]
         self.assertTrue(first["changed"])
         self.assertFalse(second["changed"])
         self.assertEqual(len(prompt_hooks), 1)
-        self.assertIn(str(self.script), prompt_hooks[0]["command"])
+        self.assertIn(self.module, prompt_hooks[0]["command"])
         self.assertIn("--max-elapsed-ms 4300", prompt_hooks[0]["command"])
         self.assertIn("--semantic-timeout 2.5", prompt_hooks[0]["command"])
         self.assertEqual(
@@ -94,7 +96,6 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
     def test_install_allows_explicit_foreground_budget_override(self) -> None:
         result = installer.install(
             self.hooks_json,
-            self.script,
             timeout=7,
             max_elapsed_ms=6200,
             semantic_timeout=1.25,
@@ -108,7 +109,7 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         self.assertIn("--semantic-timeout 1.25", hook["command"])
 
     def test_status_reports_codex_host_integration_boundary(self) -> None:
-        result = installer.status(self.hooks_json, self.script)
+        result = installer.status(self.hooks_json)
 
         self.assertEqual(
             result["host_integration"],
@@ -121,7 +122,7 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         )
 
     def test_uninstall_removes_only_ambient_hook(self) -> None:
-        installer.install(self.hooks_json, self.script, timeout=5)
+        installer.install(self.hooks_json, timeout=5)
         data = self.read_hooks()
         data["hooks"]["UserPromptSubmit"][0]["hooks"].append(
             {
@@ -132,7 +133,7 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         )
         self.hooks_json.write_text(json.dumps(data), encoding="utf-8")
 
-        result = installer.uninstall(self.hooks_json, self.script)
+        result = installer.uninstall(self.hooks_json)
 
         data = self.read_hooks()
         remaining = data["hooks"]["UserPromptSubmit"][0]["hooks"]
@@ -173,12 +174,12 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
             status_path=status_path,
         )
 
-        installer.install(self.hooks_json, self.script, timeout=5)
+        installer.install(self.hooks_json, timeout=5)
         with patch(
             "aippocampus_runtime.hooks.debug_log.default_prompt_hook_status_path",
             return_value=status_path,
         ):
-            result = installer.status(self.hooks_json, self.script, include_last=True)
+            result = installer.status(self.hooks_json, include_last=True)
 
         self.assertEqual(result["last_prompt_hook"]["status"], "found")
         self.assertEqual(result["last_prompt_hook"]["source"], "last_status")
@@ -196,7 +197,7 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         self.assertEqual(result["commands"], ["<redacted:hook-command>"])
         self.assertTrue(result["commands_redacted"])
         self.assertNotIn(str(self.codex_home), public_status)
-        self.assertNotIn(str(self.script.resolve()), public_status)
+        self.assertNotIn(str(SCRIPTS.resolve()), public_status)
 
     def test_status_last_includes_sanitized_prompt_hook_audit_summary(self) -> None:
         log_path = self.codex_home / "prompt_hook_debug.jsonl"
@@ -232,12 +233,7 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
             log_path=log_path,
         )
 
-        result = installer.status(
-            self.hooks_json,
-            self.script,
-            include_last=True,
-            log_path=log_path,
-        )
+        result = installer.status(self.hooks_json, include_last=True, log_path=log_path)
 
         self.assertEqual(result["last_prompt_hook"]["status"], "found")
         self.assertEqual(
@@ -289,8 +285,6 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
                     "status",
                     "--hooks-json",
                     str(self.hooks_json),
-                    "--script",
-                    str(self.script),
                     "--last",
                     "--log-path",
                     str(log_path),
@@ -319,8 +313,6 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
                     "status",
                     "--hooks-json",
                     str(self.hooks_json),
-                    "--script",
-                    str(self.script),
                 ]
             )
 

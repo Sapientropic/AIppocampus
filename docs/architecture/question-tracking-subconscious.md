@@ -42,9 +42,8 @@ theme-emergence slice, plus first question-index scale/sidecar evaluation:
   index adoption, live answer-quality lift, or broader theme-resonance
   calibration.
 - Implemented: `question_tracking` as a deterministic runner in
-  `skills/aippocampus/scripts/aippocampus_runtime/question/tracking.py`;
-  `skills/aippocampus/scripts/question_tracking.py` remains the direct-script
-  compatibility shim. It is registered as a dependency-ordered `JOB_SPECS`
+  `skills/aippocampus/scripts/aippocampus_runtime/question/tracking.py`. It is
+  registered as a dependency-ordered `JOB_SPECS`
   entry and groups existing source-backed
   candidates, writes append-only `question_link` findings back to
   `subconscious_jobs.jsonl`, records auditable ordering edges, skips stale refs
@@ -57,17 +56,17 @@ theme-emergence slice, plus first question-index scale/sidecar evaluation:
   with pair id, source finding ids, model/source, prompt version, and timestamp;
   it does not copy source refs or raw clean-source text into the confirmation
   layer.
-- Implemented first health slice: `skills/aippocampus/scripts/question_health.py`
-  derives source-backed question stats for `aippocampus_health.py`, including
+- Implemented first health slice: `skills/aippocampus/scripts/aippocampus_runtime/question/health.py`
+  derives source-backed question stats for `aippocampus health`, including
   recurring links, neutral dormancy, explicit-resolution signals, frontier
   counts, phase-context patterns, and longest-running open question. This is a
   heuristic reporting layer, not a durable memory fact. Public health output
   exposes aggregate counts only unless local diagnostics explicitly request
-  details; `aippocampus_health.py --question-stats` resolves refs against
+  details; `aippocampus health --question-stats` resolves refs against
   registry clean source by default, and `resolved` requires independent later
   resolution source refs.
 - Implemented first #135 resolution-extraction slice:
-  `skills/aippocampus/scripts/question_resolution.py` can read registry clean
+  `skills/aippocampus/scripts/aippocampus_runtime/subconscious/question_resolution.py` can read registry clean
   source and emit append-only `question_resolution_signal` rows only when a
   later same-thread user turn explicitly says the tracked question was solved,
   understood, or no longer needed. It does not infer resolution from assistant
@@ -87,7 +86,7 @@ theme-emergence slice, plus first question-index scale/sidecar evaluation:
   current adaptive-threshold path and reports non-regression deltas for missed
   positives and merged negatives.
 - Implemented first #134 optional live/model adapter slice:
-  `skills/aippocampus/scripts/question_confirmation_live.py` consumes pending
+  `skills/aippocampus/scripts/aippocampus_runtime/question/confirmation_live.py` consumes pending
   request JSONL and writes explicit confirmation artifacts that the tracking
   `--borderline-confirmations` path can consume. The adapter is
   dry-run by default; a caller must pass `--call-model` and provide an API key
@@ -99,7 +98,7 @@ theme-emergence slice, plus first question-index scale/sidecar evaluation:
   frontiers, 1 pending request, 1 live artifact, and 1 accepted no-write
   round-trip link; it does not claim real-user calibration or recall quality.
 - Implemented first #137 ambient-policy slice:
-  `skills/aippocampus/scripts/ambient_recall_policy.py` gives reviewed
+  `skills/aippocampus/scripts/aippocampus_runtime/recall/ambient_policy.py` gives reviewed
   `question_link` / `theme_candidate` / `frontier_marker` working-memory scent
   a hash-only control overlay. The hook records local surface events for
   ambient cards, caps nearby recurring question/theme hints, keeps frontier
@@ -125,14 +124,14 @@ theme-emergence slice, plus first question-index scale/sidecar evaluation:
   benchmark/report surface only; full clean source remains required for quotes
   and final evidence.
 - Implemented first #136 deterministic theme slice:
-  `skills/aippocampus/scripts/theme_emergence.py` consumes recurring
+  `skills/aippocampus/scripts/aippocampus_runtime/subconscious/theme_emergence.py` consumes recurring
   `question_link` rows, requires shared source-derived concepts plus
   concept-graph neighbor evidence, aggregates related `frontier_marker` rows
   into a boundary map, and writes append-only `theme_candidate` findings back
   to `subconscious_jobs.jsonl`. Theme labels are selected from shared source
   concepts; no LLM discovers or names themes in this slice.
 - Implemented first #138 sidecar evaluation slice:
-  `skills/aippocampus/scripts/question_index_sidecar.py` can build or reuse a
+  `skills/aippocampus/scripts/aippocampus_runtime/question/index_sidecar.py` can build or reuse a
   rebuildable SQLite `question_index.sqlite`, detect missing/stale cache state,
   degrade to the current pair-scan baseline, and report source-ref-key join
   fidelity before any future prefilter is allowed. The sidecar stores compact
@@ -956,7 +955,7 @@ neighbors carry stable source ids, and `question_tracking` must re-open clean
 source before accepting or promoting a link.
 
 The first score-fusion policy now exists in
-`skills/aippocampus/scripts/retrieval_score_fusion.py`. Its `question_tracking`
+`skills/aippocampus/scripts/aippocampus_runtime/recall/score_fusion.py`. Its `question_tracking`
 context is vector-heavy, but only after candidate rows join back to stable
 source ids, message/turn ids, or source refs. Missing-source vector neighbors
 are skipped, not treated as evidence.

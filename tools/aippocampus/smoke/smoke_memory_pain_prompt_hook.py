@@ -20,7 +20,7 @@ import _paths
 
 _paths.ensure_paths()
 
-from aippocampus_prompt_hook import assess_prompt  # noqa: E402
+from aippocampus_runtime.hooks.prompt import assess_prompt  # noqa: E402
 
 DEFAULT_CASES: list[dict[str, Any]] = [
     {

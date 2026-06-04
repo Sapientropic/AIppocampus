@@ -26,7 +26,7 @@ USERSCRIPT = (
     / "browser-memory-companion"
     / "claude-memory-search.user.js"
 )
-REGISTRY = SCRIPTS / "registry.py"
+REGISTRY_CMD = [sys.executable, "-m", "aippocampus_runtime.registry.api"]
 FAKE_TEST_WINDOWS_PATH_JS = fake_test_windows_path("note.txt").replace("\\", "\\\\")
 
 
@@ -284,8 +284,7 @@ class BrowserMemoryCompanionTests(unittest.TestCase):
             registry_dir = root / "registry"
             proc = subprocess.run(
                 [
-                    sys.executable,
-                    str(REGISTRY),
+                    *REGISTRY_CMD,
                     "--registry-dir",
                     str(registry_dir),
                     "register-source",
@@ -303,6 +302,7 @@ class BrowserMemoryCompanionTests(unittest.TestCase):
                 errors="replace",
                 capture_output=True,
                 check=False,
+                cwd=SCRIPTS,
             )
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
@@ -333,8 +333,7 @@ class BrowserMemoryCompanionTests(unittest.TestCase):
             )
             proc = subprocess.run(
                 [
-                    sys.executable,
-                    str(REGISTRY),
+                    *REGISTRY_CMD,
                     "--registry-dir",
                     str(root / "registry"),
                     "register-source",
@@ -349,6 +348,7 @@ class BrowserMemoryCompanionTests(unittest.TestCase):
                 errors="replace",
                 capture_output=True,
                 check=False,
+                cwd=SCRIPTS,
             )
 
         self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)

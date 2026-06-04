@@ -10,7 +10,7 @@ SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-import ambient_recall_cards as cards  # noqa: E402
+from aippocampus_runtime.recall import ambient_cards as cards  # noqa: E402
 from aippocampus_runtime.recall.fresh_thread_action import (  # noqa: E402
     EXAMPLE_ACTION_DECISIONS,
     fresh_thread_action_from_packet,

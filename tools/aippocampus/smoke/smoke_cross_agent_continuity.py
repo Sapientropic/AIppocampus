@@ -26,8 +26,8 @@ def _bootstrap_paths() -> Path:
 
 _bootstrap_paths()
 
-import aippocampus_mcp_server as mcp  # noqa: E402
-import registry  # noqa: E402
+from aippocampus_runtime.mcp import server as mcp  # noqa: E402
+from aippocampus_runtime.registry import api as registry  # noqa: E402
 from conversation_sources import (  # noqa: E402
     ClaudeCodeConversationProvider,
     CodexConversationProvider,

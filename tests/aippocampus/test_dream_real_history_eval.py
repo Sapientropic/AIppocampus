@@ -20,8 +20,11 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
-import dream_real_history_eval as dream_eval  # noqa: E402
-from model_client import DEEPSEEK_PREFIX_CACHE_CONTRACT, ChatClientConfig  # noqa: E402
+from aippocampus_runtime.dream import real_history_eval as dream_eval  # noqa: E402
+from aippocampus_runtime.model.client import (  # noqa: E402
+    DEEPSEEK_PREFIX_CACHE_CONTRACT,
+    ChatClientConfig,
+)
 
 
 def source_ref(thread_key: str, message_id: str, line: int) -> dict[str, object]:
