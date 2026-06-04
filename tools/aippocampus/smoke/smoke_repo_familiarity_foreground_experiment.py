@@ -14,7 +14,7 @@ if str(TOOLS_ROOT) not in sys.path:
 
 from repo_paths import ensure_repo_imports
 
-ensure_repo_imports(Path(__file__))
+PATHS = ensure_repo_imports(Path(__file__))
 
 from aippocampus_runtime.ops import (  # noqa: E402
     repo_familiarity_foreground_experiment,
@@ -28,7 +28,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(argv)
-    report = repo_familiarity_foreground_experiment_fixtures.fixture_foreground_experiment()
+    report = repo_familiarity_foreground_experiment_fixtures.current_checkout_foreground_experiment(
+        repo_root=PATHS.repo_root
+    )
     if args.json_output:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
