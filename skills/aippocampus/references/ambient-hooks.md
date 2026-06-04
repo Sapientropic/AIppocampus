@@ -275,6 +275,32 @@ or `AIPPOCAMPUS_WARM_RECALL_BACKGROUND=0|false|off` to disable this on shared
 machines or during provider-budget debugging; `--warm-background` remains an
 explicit enable override.
 
+Warm scout scheduling is tiered:
+
+- Tier 0 `tier0_foreground`: hard-real-time foreground; no fresh model scout
+  calls, only local hot-path, locks, cache, route handles, and cheap no-go
+  checks.
+- Tier 1 `tier1_foreground_warm_read`: foreground warm-read; consume already
+  materialized cards, aliases, guard status, and prewarm route handles.
+- Tier 2 `tier2_background`: post-turn/background scout subset selected by
+  task profile, such as coding, personal, high-risk, or vague multilingual
+  recall. This is the detached scheduler default when no explicit scout list is
+  supplied.
+- Tier 3 `tier3_diagnostic`: sleep, idle, benchmark, or diagnostic full 50-lane
+  sweep.
+
+`aippocampus_runtime.warm_ambient.scout_profiles` owns this static contract.
+`select_scheduler_scouts()` returns bounded Tier 2 subsets and the full matrix
+only for Tier 3. ROI tables expose `scheduler_lifecycle_status` values such as
+`guard_required`, `foreground_cached_only`, `background_default`,
+`diagnostic_only`, `watch`, and `retire_candidate`; these are advisory routing
+states, not deletion commands. Guard families stay `guard_required` even when
+quiet. High-association families such as `nudge_writer`, `cross_domain_bridge`,
+`deep_theme_matcher`, and `user_style_preference` may write background
+candidates, but foreground-visible use requires resolved privacy guard, clear
+evidence guard, and at least one source ref. Scout outputs remain route,
+candidate, or guard signals; source-backed claims still require source reopen.
+
 Late warm results have only explicit handoff paths: next-turn thread ambient
 cache, active recall lock enrichment, or a foreground agent's later active
 recall pull. They must not silently affect the current turn after the hook has
