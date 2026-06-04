@@ -11,7 +11,6 @@ hook wait.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import subprocess
@@ -24,6 +23,7 @@ from aippocampus_runtime.core import (
     now_utc,
     sanitize_external_model_payload,
     sanitize_external_model_text,
+    stable_text_fingerprint,
 )
 from aippocampus_runtime.recall.active_recall_lock import start_or_update_recall_lock
 from aippocampus_runtime.recall.ambient_cache import default_ambient_cache_path
@@ -85,7 +85,7 @@ def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
 
 def _job_id(*, thread_id: str, workspace: Path, topic_epoch: str | None, prompt: str) -> str:
     seed = f"{time.time_ns()}\n{thread_id}\n{workspace}\n{topic_epoch or ''}\n{prompt}"
-    return "warm_" + hashlib.sha256(seed.encode("utf-8")).hexdigest()[:20]
+    return stable_text_fingerprint(seed, namespace="warm-job", prefix="warm", length=20)
 
 
 def spawn_warm_job(job_path: Path, *, cwd: Path | None = None) -> dict[str, Any]:
@@ -231,7 +231,11 @@ def schedule_warm_ambient_recall(
         "schema_version": JOB_SCHEMA_VERSION,
         "job_id": job_id,
         "created_at": now_utc(),
-        "prompt_hash": hashlib.sha256(str(sanitized_prompt or "").encode("utf-8")).hexdigest()[:16],
+        "prompt_hash": stable_text_fingerprint(
+            sanitized_prompt,
+            namespace="warm-prompt",
+            length=16,
+        ),
         "prompt": sanitized_prompt,
         "secret_policy": secret_policy,
         "privacy_boundary": {

@@ -10,7 +10,6 @@ foreground hooks or promote anything into formal memory.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import re
 from pathlib import Path
@@ -23,6 +22,7 @@ from aippocampus_runtime.core import (
     now_utc,
     safe_path_name,
     sanitize_external_model_text,
+    stable_text_fingerprint,
 )
 from aippocampus_runtime.question.source_refs import compact_source_refs, source_ref_key
 from aippocampus_runtime.registry.api import unique_preserve
@@ -76,13 +76,9 @@ LOCAL_PATH_RE = re.compile(
 )
 
 
-def sha1_text(value: str) -> str:
-    return hashlib.sha1(value.encode("utf-8", errors="replace")).hexdigest()
-
-
 def stable_id(prefix: str, *parts: Any, length: int = 18) -> str:
     raw = "\n".join(json.dumps(part, ensure_ascii=False, sort_keys=True) for part in parts)
-    return f"{prefix}_{sha1_text(raw)[:length]}"
+    return stable_text_fingerprint(raw, namespace="correction-reconsolidation-id", prefix=prefix, length=length)
 
 
 def _sanitize_text(
@@ -128,7 +124,11 @@ def _workspace_fields(workspace: str | None, policies: list[dict[str, Any]]) -> 
     label = safe_path_name(normalized.rsplit("/", 1)[-1] or "workspace", "workspace")
     return {
         "workspace": label,
-        "workspace_sha1": sha1_text(normalized.casefold())[:16],
+        "workspace_sha1": stable_text_fingerprint(
+            normalized.casefold(),
+            namespace="correction-workspace",
+            length=16,
+        ),
         "workspace_privacy": "local_path_redacted_to_label_and_hash",
     }
 
@@ -170,7 +170,11 @@ def sanitize_file_hints(
             _sanitize_text(raw, max_chars=220, policies=policies)
             row = {
                 "path_kind": "redacted_local_path",
-                "path_sha1": sha1_text(raw)[:16],
+                "path_sha1": stable_text_fingerprint(
+                    raw,
+                    namespace="correction-path",
+                    length=16,
+                ),
             }
         key = (str(row.get("path_kind") or ""), str(row.get("path") or row.get("path_sha1") or ""))
         if key in seen:
@@ -705,4 +709,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

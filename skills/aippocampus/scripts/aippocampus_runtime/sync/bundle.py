@@ -84,11 +84,34 @@ def validate_existing_sync_manifest(path: Path) -> dict[str, Any]:
     return manifest
 
 
-def validate_relative_sync_path(value: str | Path) -> Path:
-    path = Path(str(value).replace("\\", "/"))
-    if path.is_absolute() or path.drive or not path.parts or ".." in path.parts:
+def _relative_sync_path_parts(value: str | Path) -> tuple[str, ...]:
+    text = str(value).replace("\\", "/")
+    path = Path(text)
+    parts = path.parts
+    drive_like = bool(parts and len(parts[0]) == 2 and parts[0][1] == ":" and parts[0][0].isalpha())
+    if (
+        "\x00" in text
+        or path.is_absolute()
+        or path.drive
+        or drive_like
+        or not parts
+        or any(part in {"", ".", ".."} for part in parts)
+    ):
         raise ValueError(f"unsafe sync manifest path: {value}")
-    return path
+    return tuple(str(part) for part in parts)
+
+
+def validate_relative_sync_path(value: str | Path) -> Path:
+    return Path(*_relative_sync_path_parts(value))
+
+
+def sync_path_under(root: Path, relative_path: str | Path) -> Path:
+    parts = _relative_sync_path_parts(relative_path)
+    # Sync manifest paths are logical POSIX-like locators. Join only validated
+    # components so object keys and bundle manifests cannot smuggle separators,
+    # drives, or parent traversal into filesystem sinks before containment check.
+    path = root.joinpath(*parts)
+    return ensure_within(root, path)
 
 
 def ensure_within(root: Path, path: Path) -> Path:
@@ -110,7 +133,7 @@ def paths_overlap(left: Path, right: Path) -> bool:
 
 
 def sync_file_entry(sync_root: Path, relative_path: Path) -> dict:
-    path = sync_root / relative_path
+    path = sync_path_under(sync_root, relative_path)
     return {
         "path": relative_path.as_posix(),
         "size": path.stat().st_size,
@@ -284,7 +307,7 @@ def write_clean_source_chunks(source: Path, sync_root: Path, logical_path: Path)
                 break
             chunk_hash = bytes_sha256(data)
             chunk_path = clean_source_chunk_path(chunk_hash)
-            destination = ensure_within(sync_root, sync_root / chunk_path)
+            destination = sync_path_under(sync_root, chunk_path)
             if not destination.is_file() or file_sha256(destination) != chunk_hash:
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 destination.write_bytes(data)
@@ -389,7 +412,7 @@ def push_sync_bundle(
     for source, relative_path in iter_registry_sync_files(registry_root):
         write_sync_file(
             source,
-            sync_root / relative_path,
+            sync_path_under(sync_root, relative_path),
             registry_root=registry_root,
             relative_path=relative_path,
             include_raw=include_raw,
@@ -399,7 +422,7 @@ def push_sync_bundle(
     copied.extend(clean_source_entries)
     if include_raw:
         for source, relative_path in iter_raw_rollout_files(registry_root):
-            copy_file(source, sync_root / relative_path)
+            copy_file(source, sync_path_under(sync_root, relative_path))
             copied.append(sync_file_entry(sync_root, relative_path))
 
     copied.sort(key=lambda item: item["path"])
@@ -462,7 +485,7 @@ def materialize_clean_source_delta_file(
             relative_path = validate_relative_sync_path(str(chunk.get("path") or ""))
             if not is_clean_source_chunk_store_path(relative_path):
                 raise ValueError(f"unexpected clean-source chunk path: {relative_path}")
-            source = ensure_within(sync_root, sync_root / relative_path)
+            source = sync_path_under(sync_root, relative_path)
             data = source.read_bytes()
             expected_hash = str(chunk.get("sha256") or "")
             if bytes_sha256(data) != expected_hash:
@@ -488,7 +511,7 @@ def verify_clean_source_delta_file(sync_root: Path, file_manifest: dict[str, Any
         relative_path = validate_relative_sync_path(str(chunk.get("path") or ""))
         if not is_clean_source_chunk_store_path(relative_path):
             raise ValueError(f"unexpected clean-source chunk path: {relative_path}")
-        source = ensure_within(sync_root, sync_root / relative_path)
+        source = sync_path_under(sync_root, relative_path)
         data = source.read_bytes()
         expected_hash = str(chunk.get("sha256") or "")
         if bytes_sha256(data) != expected_hash:
@@ -608,7 +631,7 @@ def pull_sync_bundle(sync_dir: str | Path, target_registry_dir: str | Path | Non
     conflict_root = target_registry / ".sync-conflicts" / now_utc().replace(":", "")
     for item in manifest.get("files") or []:
         relative_path = validate_relative_sync_path(str(item.get("path") or ""))
-        source = ensure_within(sync_root, sync_root / relative_path)
+        source = sync_path_under(sync_root, relative_path)
         if not source.is_file():
             continue
         if is_clean_source_chunk_store_path(relative_path):
@@ -694,7 +717,7 @@ def repair_sync_bundle(sync_dir: str | Path) -> dict:
                 {"code": "unsafe_path", "path": str(item.get("path") or ""), "message": str(exc)}
             )
             continue
-        path = sync_root / relative_path
+        path = sync_path_under(sync_root, relative_path)
         if not path.exists():
             issues.append({"code": "missing_file", "path": relative_path.as_posix()})
             continue

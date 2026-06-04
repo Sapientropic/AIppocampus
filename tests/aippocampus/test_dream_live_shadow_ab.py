@@ -467,7 +467,7 @@ class DreamLiveShadowABTests(unittest.TestCase):
                 max_threads=10,
                 max_user_messages=10,
                 window_user_turns=3,
-                salt="unit-test",
+                salt="unit-test-0",
             )
             encoded = json.dumps(payload, ensure_ascii=False)
 

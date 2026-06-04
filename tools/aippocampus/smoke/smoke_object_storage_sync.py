@@ -36,13 +36,11 @@ class LocalObjectStoreHandler(BaseHTTPRequestHandler):
     def object_path(self) -> tuple[str, Path] | None:
         key = unquote(self.path).lstrip("/")
         try:
-            relative_path = sync_bundle.validate_relative_sync_path(key)
+            path = sync_bundle.sync_path_under(self.server.bucket_root, key)
         except ValueError:
             self.send_error(400)
             return None
-        return key, sync_bundle.ensure_within(
-            self.server.bucket_root, self.server.bucket_root / relative_path
-        )
+        return key, path
 
     def do_PUT(self) -> None:  # noqa: N802
         resolved = self.object_path()

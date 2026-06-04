@@ -479,7 +479,7 @@ def _from_trigram_lines(
     """从上下卦三爻序列构造 HexArc。"""
     upper_tri = _trigram_from_lines(upper_lines)
     lower_tri = _trigram_from_lines(lower_lines)
-    for seq_num, (name, ut, lt) in HEXAGRAM_SEQUENCE.items():
+    for _seq_num, (name, ut, lt) in HEXAGRAM_SEQUENCE.items():
         if ut == upper_tri and lt == lower_tri:
             return HexArc(name=name)
     raise ValueError(

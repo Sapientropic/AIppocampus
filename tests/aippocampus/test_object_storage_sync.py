@@ -38,11 +38,11 @@ class RecordingObjectHandler(BaseHTTPRequestHandler):
     def object_path(self) -> tuple[str, Path] | None:
         key = unquote(self.path).lstrip("/")
         try:
-            relative = sync_bundle.validate_relative_sync_path(key)
+            path = sync_bundle.sync_path_under(self.server.bucket_root, key)
         except ValueError:
             self.send_error(400)
             return None
-        return key, self.server.bucket_root / relative
+        return key, path
 
     def do_PUT(self) -> None:  # noqa: N802
         resolved = self.object_path()
@@ -123,6 +123,15 @@ class ObjectStorageSyncTests(unittest.TestCase):
         self.server.server_close()
         self.thread.join(timeout=5)
         self.tmp.cleanup()
+
+    def test_sync_path_under_rejects_unsafe_object_keys(self) -> None:
+        safe = sync_bundle.sync_path_under(self.bucket, "prefix/sync-bundle/manifest.json")
+
+        self.assertEqual(safe, (self.bucket / "prefix" / "sync-bundle" / "manifest.json").resolve())
+        for key in ("../escape.json", "prefix/../../escape.json", "C:/escape.json", "bad\x00key"):
+            with self.subTest(key=key):
+                with self.assertRaises(ValueError):
+                    sync_bundle.sync_path_under(self.bucket, key)
 
     def create_registry(self) -> dict[str, object]:
         return smoke_cross_device_sync.create_device_registry(
