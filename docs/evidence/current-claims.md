@@ -4,7 +4,7 @@ This is the current-claims snapshot for benchmark and readiness numbers that
 are easy to over-read when old dated ledgers still say "current" in their local
 context. It is not a command ledger and it does not replace source reports.
 
-Snapshot date: 2026-06-03.
+Snapshot date: 2026-06-04.
 
 Rules:
 
@@ -32,6 +32,7 @@ Rules:
 | `track_b.private_semantic_sidecar_required` | 100 selected private real-history cases; 97/100 top-5 hits; 0.97 hit rate; 3 `rank_below_top_k` failures after the 45-thread / 243-row semantic-sidecar refresh. | 2026-05-29 | [`memory-decision-benchmark-plan.md`, private real-history Track B wrapper](benchmarks/memory-decision-benchmark-plan.md#track-b-source-evidence-retrieval) | `private_bounded_track_b_slice` | Maintainer-only private real-history semantic-sidecar-required source-evidence slice. | Supersedes the sparse-pool blocker for this selected slice only. | Public benchmark score, real-user gate quality, full semantic completeness, or live semantic-model quality. |
 | `fts5.real_history_recall_2026_05_29` | Post-repair 100 selected source-backed cases; FTS5 91/100 top-1, 100/100 top-5, 100/100 top-10; production hybrid 100/100 top-10. | 2026-05-29 | [`public-readiness-verification.md`, FTS5 real-history recall benchmark](readiness/public-readiness-verification.md) and [`memory-decision-benchmark-plan.md`](benchmarks/memory-decision-benchmark-plan.md) | `bounded_real_history_regression_smoke` | Local 949-thread real-history registry slice after stale SQLite index repair. | Superseded only by a newer dated FTS5 real-history run. | Natural-language user-query quality, private text disclosure, or broad product recall quality. |
 | `demo_scenarios.claim_boundaries` | Public-safe demo scenarios show product shape; their `Cannot claim` lines are claim-boundary sources for demos. | 2026-06-03 | [`docs/guides/demo-scenarios.md`](../guides/demo-scenarios.md) | `claim_boundary_source` | Public example bundle, public-safe demo commands, and explicit live/smoke demo flows. | Not a metric row; it routes demo caveats into evidence governance. | Official benchmark proof, readiness metric upgrades, or private real-history performance. |
+| `react_vcs.production_like_source_disambiguation` | 60/60 gold true positives, `current_source_top_k_hit_rate=1.0`, `current_vs_stale_pairwise_win_rate=1.0`, `wrong_source_evidence_rate=0.0`, but `negative_false_positive_rate=0.5263` from 30 lexical near-miss false positives. | 2026-06-04 | [`react-real-vcs-production-like-disambiguation-2026-06-04.md`](benchmarks/react-real-vcs-production-like-disambiguation-2026-06-04.md) | `production_like_non_oracle_fixture_slice` | Local React adversarial V2 fixture with sanitized aggregate report; no live provider/model call. | Supersedes source-window-only interpretation for #254 source-disambiguation evidence; does not supersede the 2026-05-31 oracle/bad-control report. | Live model quality, wild VCS corpus quality, private real-history continuity quality, negative-control pass for lexical near-misses, or license-safe redistribution of the local fixture. |
 
 ## Supersession Notes
 
@@ -43,3 +44,8 @@ Rules:
 - Metric families with multiple valid cohorts must name the cohort and date:
   public corpus, private real-history, selected source-review, aggregate
   registry smoke, and demo scenario caveats are separate evidence layers.
+- The 2026-06-04 React VCS source-disambiguation row is intentionally split
+  from the 2026-05-31 source-window oracle reports. Its current/effective
+  source ranking succeeded on the adversarial source-authority tracks, while
+  lexical near-miss anti-drift failed and must not be hidden by the source-hit
+  metrics.

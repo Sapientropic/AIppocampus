@@ -445,6 +445,217 @@ class VcsFutureEventRecallBenchmarkTests(unittest.TestCase):
         self.assertFalse(by_event["partial-event"]["source_supported"])
         self.assertFalse(by_event["missing-source-event"]["source_supported"])
 
+    def test_production_like_retrieval_disambiguates_current_from_stale_sources(self) -> None:
+        rows = [
+            {
+                "dataset_id": "unit_source_disambiguation",
+                "schema_version": 1,
+                "license": "CC0-1.0",
+                "project_id": "dual-source",
+                "source_family": "unit_adversarial",
+                "past_window": [
+                    {
+                        "source_id": "plain-correct-source",
+                        "kind": "counterfactual_current_source",
+                        "text": "Current local override: this is the active rationale for the route.",
+                    },
+                    {
+                        "source_id": "current-looking-stale-source-id",
+                        "kind": "pull_request_metadata",
+                        "text": "Original public source with stale rationale for the route.",
+                    },
+                ],
+                "future_window": [
+                    {
+                        "event_id": "dual-current-event",
+                        "track": "dual_source_counterfactual",
+                        "family": "rejected_route",
+                        "hard_event_kind": "commit_reverted",
+                        "flag_worthy": True,
+                        "text": "The current local source overrides the original public rationale.",
+                        "required_past_source_ids": ["plain-correct-source"],
+                    }
+                ],
+            },
+            {
+                "dataset_id": "unit_source_disambiguation",
+                "schema_version": 1,
+                "license": "CC0-1.0",
+                "project_id": "temporal-override",
+                "source_family": "unit_adversarial",
+                "past_window": [
+                    {
+                        "source_id": "old-source",
+                        "kind": "old_decision_source",
+                        "text": "Old source: the route looked rejected under the earlier constraint.",
+                    },
+                    {
+                        "source_id": "effective-source",
+                        "kind": "current_decision_source",
+                        "text": "Current source: the earlier constraint was overridden; this is the effective rule.",
+                    },
+                ],
+                "future_window": [
+                    {
+                        "event_id": "temporal-current-event",
+                        "track": "temporal_override_chain",
+                        "family": "reopen_condition",
+                        "hard_event_kind": "pull_request_merged",
+                        "flag_worthy": True,
+                        "text": "The newer source is the current effective rule after the override chain.",
+                        "required_past_source_ids": ["effective-source"],
+                    }
+                ],
+            },
+            {
+                "dataset_id": "unit_source_disambiguation",
+                "schema_version": 1,
+                "license": "CC0-1.0",
+                "project_id": "unsupported-negative",
+                "source_family": "unit_adversarial",
+                "past_window": [
+                    {
+                        "source_id": "weak-related-source",
+                        "kind": "weak_related_source",
+                        "text": "Weak related source: vocabulary overlaps but no hard source-backed condition exists.",
+                    }
+                ],
+                "future_window": [
+                    {
+                        "event_id": "unsupported-event",
+                        "track": "abstention_unsupported",
+                        "family": "rejected_route",
+                        "hard_event_kind": "commit_reverted",
+                        "flag_worthy": False,
+                        "text": "Unsupported abstention case: similar surface form but no source-backed condition.",
+                        "required_past_source_ids": [],
+                    }
+                ],
+            },
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = Path(tmp) / "source-disambiguation.jsonl"
+            fixture.write_text(
+                "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
+                encoding="utf-8",
+            )
+
+            payload = benchmark.run_benchmark(
+                dataset_path=fixture,
+                production_like_retrieval=True,
+                source_disambiguation_top_k=1,
+            )
+
+        self.assertEqual(payload["config"]["prediction_source"], "production_like_retrieval")
+        self.assertTrue(payload["ok"], payload)
+        self.assertEqual(
+            payload["claim_levels"]["source_window_oracle_contract"][
+                "uses_required_past_source_ids_as_prediction_input"
+            ],
+            False,
+        )
+        self.assertTrue(payload["claim_levels"]["production_like_retrieval"]["available"])
+        self.assertFalse(
+            payload["source_disambiguation"]["input_contract"][
+                "uses_required_past_source_ids_for_ranking"
+            ]
+        )
+        self.assertEqual(
+            payload["source_disambiguation"]["metrics"]["current_source_top_k_hit_rate"],
+            1.0,
+        )
+        self.assertEqual(
+            payload["source_disambiguation"]["metrics"][
+                "current_vs_stale_pairwise_win_rate"
+            ],
+            1.0,
+        )
+        self.assertEqual(
+            payload["source_disambiguation"]["metrics"]["stale_source_top_k_rate"],
+            0.0,
+        )
+        self.assertEqual(
+            payload["source_disambiguation"]["metrics"]["wrong_source_evidence_rate"],
+            0.0,
+        )
+        self.assertEqual(
+            payload["source_disambiguation"]["metrics"]["negative_false_positive_rate"],
+            0.0,
+        )
+        self.assertEqual(
+            payload["source_disambiguation"]["by_track"]["dual_source_counterfactual"][
+                "current_source_top_k_hit_rate"
+            ],
+            1.0,
+        )
+        self.assertEqual(
+            payload["source_disambiguation"]["by_track"]["temporal_override_chain"][
+                "current_vs_stale_pairwise_win_rate"
+            ],
+            1.0,
+        )
+        prediction_by_event = {row["event_id"]: row for row in payload["events"]}
+        self.assertEqual(
+            prediction_by_event["dual-current-event"]["predicted_past_source_ids"],
+            ["plain-correct-source"],
+        )
+
+    def test_source_disambiguation_uses_metadata_file_for_track_slices(self) -> None:
+        row = {
+            "dataset_id": "unit_source_disambiguation_metadata",
+            "schema_version": 1,
+            "license": "CC0-1.0",
+            "project_id": "metadata-track",
+            "source_family": "unit_adversarial",
+            "past_window": [
+                {
+                    "source_id": "old-source",
+                    "kind": "old_decision_source",
+                    "text": "Old source: the route looked rejected under the earlier constraint.",
+                },
+                {
+                    "source_id": "effective-source",
+                    "kind": "current_decision_source",
+                    "text": "Current source: the earlier constraint was overridden; this is the effective rule.",
+                },
+            ],
+            "future_window": [
+                {
+                    "event_id": "metadata-temporal-event",
+                    "family": "reopen_condition",
+                    "hard_event_kind": "pull_request_merged",
+                    "flag_worthy": True,
+                    "text": "The newer source is the current effective rule after the override chain.",
+                    "required_past_source_ids": ["effective-source"],
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fixture = root / "source-disambiguation.jsonl"
+            metadata = root / "event-meta.json"
+            fixture.write_text(json.dumps(row, ensure_ascii=False) + "\n", encoding="utf-8")
+            metadata.write_text(
+                json.dumps(
+                    {
+                        "metadata-temporal-event": {
+                            "track": "temporal_override_chain",
+                        }
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            payload = benchmark.run_benchmark(
+                dataset_path=fixture,
+                event_metadata_file=metadata,
+                production_like_retrieval=True,
+            )
+
+        self.assertIn("temporal_override_chain", payload["source_disambiguation"]["by_track"])
+
 
 if __name__ == "__main__":
     unittest.main()
