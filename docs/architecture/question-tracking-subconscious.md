@@ -148,6 +148,13 @@ theme-emergence slice, plus first question-index scale/sidecar evaluation:
   `question_tracking_prefilter` report that says sidecar/vector prefilters are
   not used by the default runtime path. This is observability for the remaining
   #248 gap, not adoption of the SQLite or vector prefilter.
+- Implemented #248 prefilter parity smoke:
+  `tools/aippocampus/smoke/smoke_question_prefilter_parity.py` runs the
+  optional SQLite sidecar against selected/current question rows with a
+  temporary rebuildable index, then emits only structural counts, strong-pair
+  coverage, source-ref-key join status, and default-prefilter boundary labels.
+  It is private-safe parity evidence for evaluating future acceleration, not
+  answer-quality, user-visible recall lift, or default prefilter enablement.
 - Implemented first #139 structural benchmark slice:
   `benchmarks/aippocampus/benchmark_question_aware_real_history.py` selects
   private real-history question/frontier/link/theme rows when available,
@@ -1197,6 +1204,12 @@ noisy ones. Frontier markers must feel like saved trail markers, not guilt.
   `question_tracking` result reports its pair-generation path as `pair_scan`
   and marks sidecar/vector acceleration as disabled. This prevents a sidecar
   evaluation result from being misread as default runtime behavior.
+- Shipped #248 prefilter parity smoke:
+  `smoke_question_prefilter_parity.py` reuses the sidecar evaluator with a
+  temporary index and reports whether sidecar candidates preserve pair-scan
+  strong-pair coverage and source-ref-key joins. Output is counts/boundaries
+  only: no private source text, raw refs, registry paths, or source signatures.
+  Passing this smoke still does not make the sidecar the default prefilter.
 - Deferred: real-user / private real-history calibration beyond selected
   fixtures and the one sanitized no-write external-provider smoke (#134),
   fuzzy/non-explicit resolution inference beyond explicit user follow-up signals
