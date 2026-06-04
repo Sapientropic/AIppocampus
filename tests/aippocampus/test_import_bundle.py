@@ -84,6 +84,75 @@ class ImportBundleTests(unittest.TestCase):
                 (dest / "imported" / "index" / "versions" / "source_index-current.sqlite").resolve(),
             )
 
+    def test_import_reports_generation_pointer_resolved_current_sqlite(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bundle = root / "bundle.zip"
+            dest = root / "workspace"
+            dest.mkdir()
+            generation = "gen_20260605T010203_123_456"
+            with zipfile.ZipFile(bundle, "w") as zf:
+                zf.writestr(
+                    "bundle_manifest.json",
+                    json.dumps({"message_count": 1, "cwd": "source-device"}, ensure_ascii=False),
+                )
+                zf.writestr(f"index/generations/{generation}/source_index.sqlite", b"sqlite cache")
+                zf.writestr(
+                    "index/source_index.pointer.json",
+                    json.dumps(
+                        {
+                            "schema_version": 1,
+                            "kind": "aippocampus_sqlite_index_pointer",
+                            "stable": "source_index.sqlite",
+                            "current": f"generations/{generation}/source_index.sqlite",
+                            "last_known_good": f"generations/{generation}/source_index.sqlite",
+                            "current_generation": generation,
+                            "last_known_good_generation": generation,
+                            "compatibility_path": "source_index.sqlite",
+                        },
+                        ensure_ascii=False,
+                    ),
+                )
+
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    IMPORT_BUNDLE_MODULE,
+                    str(bundle),
+                    "--dest",
+                    str(dest),
+                    "--name",
+                    "imported",
+                    "--no-anchor",
+                ],
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+                env={
+                    **os.environ,
+                    "PYTHONPATH": str(SCRIPTS)
+                    if not os.environ.get("PYTHONPATH")
+                    else str(SCRIPTS) + os.pathsep + os.environ["PYTHONPATH"],
+                },
+            )
+
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+            result = json.loads(proc.stdout)
+            self.assertEqual(
+                Path(result["sqlite_current"]).resolve(),
+                (
+                    dest
+                    / "imported"
+                    / "index"
+                    / "generations"
+                    / generation
+                    / "source_index.sqlite"
+                ).resolve(),
+            )
+
     def test_package_main_imports_bundle_without_spawning_subprocess(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

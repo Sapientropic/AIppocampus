@@ -41,14 +41,21 @@ Generated artifact writers must coordinate through same-directory leases instead
 of relying on users to run commands serially. `aippocampus_runtime.recall.index_builder` holds
 `.index-publish.lock` while publishing `messages.jsonl`, `source_index.sqlite`,
 `graph.json`, and `manifest.json`. `make_sqlite()` builds a unique temporary
-SQLite database, copies it to `versions/source_index-*.sqlite`, updates
-`source_index.pointer.json`, and then tries to refresh the stable
-`source_index.sqlite` compatibility file through SQLite's backup API with WAL
-enabled. New readers should resolve the pointer first, then fall back to
-last-known-good, then to the stable file. Do not reintroduce `unlink()` /
+SQLite database, copies it to
+`generations/gen_*/source_index.sqlite`, updates `source_index.pointer.json`
+with `current_generation` and `last_known_good_generation`, and then tries to
+refresh the stable `source_index.sqlite` compatibility file through SQLite's
+backup API with WAL enabled. New readers should resolve the pointer once per
+query and keep using that generation path, then fall back to last-known-good,
+then to the stable file. Legacy `versions/source_index-*.sqlite` pointers must
+remain readable during migration. Do not reintroduce `unlink()` /
 `Path.replace()` publishing for live `source_index.sqlite`; Windows readers can
-hold that file open, and locked stable refreshes must degrade to the versioned
-pointer path rather than failing the whole index publish.
+hold that file open, and locked stable refreshes must degrade to the pointer
+generation path rather than failing the whole index publish.
+The publish fast path does not delete generation directories until a
+reader-pin/TTL-aware storage-governance contract exists; deleting an old
+generation just because it is not current or last-known-good can break a
+foreground reader that already resolved that generation.
 
 `aippocampus_runtime.ops.maintenance`, `aippocampus_runtime.hooks.lifecycle`, and
 `aippocampus_runtime.vault.sync` should keep delegating SQLite writes to the index builders. If a
@@ -72,7 +79,7 @@ source for thread discovery.
 Writer coordination entrypoints:
 
 - `aippocampus_runtime.recall.index_builder`: owns main index publish; uses `.index-publish.lock`,
-  versioned SQLite pointer, last-known-good fallback, and stable SQLite backup.
+  generation SQLite pointer, last-known-good fallback, and stable SQLite backup.
 - `aippocampus_runtime.recall.segment_builder`: owns segment shard publish; uses `.rebuild.lock`, staged
   segment dirs, and the shared lease helper.
 - `aippocampus_runtime.hooks.lifecycle`: orchestrates `aippocampus_runtime.recall.index_builder`,
@@ -85,7 +92,7 @@ Writer coordination entrypoints:
 - `aippocampus_runtime.sync.bundle`: syncs manifests, graph metadata, and
   content-addressed clean source by default; `aippocampus_runtime.sync.bundle` remains the
   package-owner command. Generated SQLite, pointer files, and
-  versioned caches are not portable source files.
+  generation caches are not portable source files.
 - `aippocampus_runtime.artifacts.export_bundle` /
   `aippocampus_runtime.artifacts.import_bundle`, with `aippocampus_runtime.artifacts.export_bundle` /
   `aippocampus_runtime.artifacts.import_bundle` as package owners: explicit portable bundle path;
@@ -147,11 +154,11 @@ Cross-device sync treats SQLite as a rebuildable generated cache, not durable
 truth. `aippocampus_runtime.sync.bundle` syncs registry manifests, graph
 metadata, and content-addressed clean source by default; `aippocampus_runtime.sync.bundle` is the
 package owner for the same command. It does not require generated SQLite
-files, pointer files, or versioned SQLite caches to move between devices. Target
-devices repair registry locators to local generated caches only when those
-caches already exist locally; otherwise `paths.sqlite` stays unresolved and the
-target should rebuild from clean source or raw rollout rather than trusting a
-stale source-device lock state.
+files, pointer files, generation directories, or legacy versioned SQLite caches
+to move between devices. Target devices repair registry locators to local
+generated caches only when those caches already exist locally; otherwise
+`paths.sqlite` stays unresolved and the target should rebuild from clean source
+or raw rollout rather than trusting a stale source-device lock state.
 
 ## Retention And Cold Archive
 

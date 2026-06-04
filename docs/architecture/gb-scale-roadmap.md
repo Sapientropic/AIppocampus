@@ -15,9 +15,11 @@ agents do not mistake desired layers for finished behavior.
 - `thread-anchors.md` is an optional private/export anchor input, not a public
   repo baseline file. The root file is gitignored.
 - The monolithic stable `source_index.sqlite` remains the compatibility path.
-  Current main indexes are also copied to `versions/source_index-*.sqlite` and
-  selected by `source_index.pointer.json`, which falls back to last-known-good
-  if the current version is missing.
+  Current main indexes are also copied to
+  `generations/gen_*/source_index.sqlite` and selected by
+  `source_index.pointer.json`, which falls back to last-known-good if the
+  current generation is missing. Legacy `versions/source_index-*.sqlite`
+  pointers remain readable for migration.
 - `$CODEX_HOME/aippocampus-registry/threads/<thread>/index/segments/manifest.json`
   can describe sealed segment indexes built by `build_segments.py`.
   Project-local `.aippocampus/segments/` is explicit compatibility/debug
@@ -56,10 +58,10 @@ remaining work is visible instead of hidden behind one broad issue:
 - [#111](https://github.com/Sapientropic/AIppocampus/issues/111): runtime writer
   coordination for multi-session, multi-agent, cross-device, and
   cross-platform operation. Main index publishing now uses a shared
-  same-directory writer lease, versioned index pointer, last-known-good
+  same-directory writer lease, generation index pointer, last-known-good
   fallback, and SQLite backup/WAL stable refresh instead of replacing a live
   `source_index.sqlite` file. Sync/import/export now have explicit generated
-  cache rules: default sync excludes SQLite/pointer/versioned caches, target
+  cache rules: default sync excludes SQLite/pointer/generation caches, target
   repair resolves only target-local generated caches, and portable export/import
   reports pointer-resolved current SQLite when a bundle carries one.
 
@@ -195,10 +197,12 @@ Completed foundation:
      multi-GB threshold smoke is implemented in
      `tools/aippocampus/smoke/smoke_synthetic_scale_capacity.py`; segmented
      index rebuilds now have a single-writer lease and last-known-good recovery.
-     Main indexes now have versioned pointer publishing for Windows locked-file
-     fallback while preserving `source_index.sqlite` compatibility. Default
-     sync keeps generated SQLite and pointer files out of the portable source
-     set while still repairing target-local rebuilt cache locators.
+     Main indexes now have generation pointer publishing for Windows
+     locked-file fallback while preserving `source_index.sqlite`
+     compatibility. Segment generation directories, segment pointers, and
+     generation-aware storage GC remain later #581 slices. Default sync keeps
+     generated SQLite and pointer files out of the portable source set while
+     still repairing target-local rebuilt cache locators.
 
 ## Near-term implementation order
 
@@ -252,11 +256,12 @@ Completed foundation:
    creating large files. Segmented index rebuilds now use `.rebuild.lock`
    single-writer discipline, staged
    publish, and last-known-good restoration. Main indexes now use a
-   `source_index.pointer.json` current/LKG pointer and stable SQLite backup
-   refresh. Default sync excludes generated SQLite caches and pointer files;
-   import/export reports pointer-resolved current SQLite for explicit bundles.
-   Broader physical multi-device stress remains a release-readiness exercise,
-   not a `quick` or `pr` tier claim.
+   `source_index.pointer.json` current/LKG generation pointer and stable SQLite
+   backup refresh. Segment generation directories and generation-aware GC are
+   still later slices. Default sync excludes generated SQLite caches and
+   pointer files; import/export reports pointer-resolved current SQLite for
+   explicit bundles. Broader physical multi-device stress remains a
+   release-readiness exercise, not a `quick` or `pr` tier claim.
 
 ## Cross-references
 

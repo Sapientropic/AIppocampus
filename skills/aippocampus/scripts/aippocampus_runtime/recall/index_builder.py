@@ -436,9 +436,9 @@ def main(argv: list[str] | None = None) -> int:
                 "why": "Indexes are private generated recall artifacts; project-local output is explicit compatibility, not the default.",
             },
             "publish_policy": {
-                "sqlite": "versioned_pointer_with_stable_backup",
+                "sqlite": "generation_pointer_with_stable_backup",
                 "writer_lease": ".index-publish.lock",
-                "why": "Windows readers can hold the legacy SQLite file open; versioned indexes plus a pointer keep new readers moving while SQLite backup updates the stable compatibility file when possible.",
+                "why": "Windows readers can hold the legacy SQLite file open; generation indexes plus a pointer keep new readers moving while SQLite backup updates the stable compatibility file when possible.",
             },
             "source_rollout": str(rollout),
             "source_provider": provider.name,

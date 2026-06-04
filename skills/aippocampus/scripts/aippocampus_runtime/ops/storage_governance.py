@@ -132,7 +132,7 @@ def _retention_preconditions(
     if tier == TIER_REBUILDABLE_CACHE:
         preconditions["last_known_good_pointer"] = status(
             "needs_apply_check",
-            evidence="Dry-run does not mutate versioned pointer or last-known-good state.",
+            evidence="Dry-run does not mutate generation pointer or last-known-good state.",
             requirement="Apply mode must preserve last-known-good/index pointer semantics.",
         )
     if tier == TIER_REVIEW_ARTIFACT:

@@ -156,6 +156,9 @@ global thread store under `$CODEX_HOME/aippocampus-registry/threads/`.
 `graph.json`, RAG-lite chunks, and `manifest.json` under the global thread store
 by default. Passing `--output-dir .aippocampus` preserves the old project-local
 mode when a portable bundle, repo-local audit, or explicit debug run needs it.
+The stable `source_index.sqlite` path is a compatibility anchor; normal readers
+should resolve `source_index.pointer.json` to the current generation before
+opening SQLite, with last-known-good and stable fallbacks.
 
 Default retrieval is local hybrid search:
 
