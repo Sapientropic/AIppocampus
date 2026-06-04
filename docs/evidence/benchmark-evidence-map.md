@@ -253,6 +253,7 @@ pasting raw JSON into multiple docs.
 | Synthetic GB-scale capacity smoke | `tools/aippocampus/smoke/smoke_synthetic_scale_capacity.py` | `docs/architecture/gb-scale-roadmap.md` |
 | Synthetic question-tracking scale smoke | `tools/aippocampus/smoke/smoke_question_tracking_scale.py` | `docs/architecture/question-tracking-subconscious.md`, `docs/architecture/gb-scale-roadmap.md` |
 | Source-backed repo familiarity smoke | `tools/aippocampus/smoke/smoke_repo_familiarity.py` | `docs/architecture/source-backed-familiarity-map.md` |
+| Repo familiarity foreground experiment smoke | `tools/aippocampus/smoke/smoke_repo_familiarity_foreground_experiment.py` | `docs/architecture/source-backed-familiarity-map.md`, #250 |
 | Single-machine cross-device sync smoke | `tools/aippocampus/smoke/smoke_cross_device_sync.py` | `docs/evidence/readiness/public-readiness-verification.md` |
 | HTTP object-storage sync smoke | `tools/aippocampus/smoke/smoke_object_storage_sync.py` | `docs/evidence/readiness/public-readiness-verification.md` |
 | Docker / WSL alternate-runtime sync smoke | `tools/aippocampus/smoke/smoke_alternate_runtime_sync.py` | `docs/evidence/readiness/public-readiness-verification.md` |
