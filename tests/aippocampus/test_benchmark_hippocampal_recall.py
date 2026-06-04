@@ -264,6 +264,57 @@ class HippocampalRecallP1BenchmarkTests(unittest.TestCase):
         self.assertGreater(random_view["false_forgetting_count"], 0)
         self.assertGreater(summary_view["overgeneralization_count"], 0)
 
+    def test_cross_system_comparison_table_reports_claim_levels_and_missing_adapters(self) -> None:
+        payload = benchmark.run_benchmark()
+        comparison = payload["cross_system_comparison"]
+        rows = {row["row_id"]: row for row in comparison["rows"]}
+
+        self.assertEqual(
+            comparison["version"],
+            "aippocampus.hippocampal_cross_system_comparison.v1",
+        )
+        self.assertEqual(
+            comparison["dated_report_path"],
+            "docs/evidence/benchmarks/hippocampal-cross-system-comparison-2026-06-04.md",
+        )
+        for row_id in (
+            "aippocampus_diagnostic",
+            "baseline_rag",
+            "keyword_only",
+            "closed_book",
+            "overactive_all_evidence",
+            "random_retrieval",
+            "semantic_only",
+            "mem0",
+            "zep_graphiti",
+            "letta",
+            "langmem",
+        ):
+            self.assertIn(row_id, rows)
+
+        keyword = rows["keyword_only"]
+        self.assertTrue(keyword["comparable"])
+        self.assertEqual(keyword["claim_level"], "synthetic_public_result")
+        self.assertGreater(keyword["h1_h2_sample_size"], 0)
+        self.assertGreater(keyword["d5_d6_sample_size"], 0)
+        self.assertIn("h1_degraded_drop_from_d0", keyword)
+        self.assertIn("h2_separation_accuracy", keyword)
+        self.assertIn("source_reopen_success", keyword)
+
+        aippocampus = rows["aippocampus_diagnostic"]
+        self.assertEqual(aippocampus["h5_arm"], "aippocampus_dream_consolidation")
+        self.assertGreater(aippocampus["h5_score_delta_total"], 0)
+        self.assertIn("user_visible_dream_benefit", comparison["cannot_claim"])
+
+        mem0 = rows["mem0"]
+        self.assertFalse(mem0["comparable"])
+        self.assertEqual(mem0["claim_level"], "diagnostic_missing_configuration")
+        self.assertIsNone(mem0["h1_degraded_accuracy"])
+
+        semantic = rows["semantic_only"]
+        self.assertFalse(semantic["comparable"])
+        self.assertEqual(semantic["availability"], "adapter_not_implemented")
+
     def test_scoring_catches_source_reopen_wrong_twin_overactive_and_skip_failures(self) -> None:
         rows = _by_case(builder.build_fixture_rows())
 
