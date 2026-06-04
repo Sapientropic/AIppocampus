@@ -117,12 +117,26 @@ helpful/harmful counts, and estimated verification tool calls saved. Those
 metrics are about reducing stale foreground drag, not about deleting older
 source or making memory merely quieter.
 
+The same audit now emits a #582 dead-letter candidate report for activation
+rows that have already been demoted, parked, superseded, retired, or blocked
+and also cross repeated wrong-route or no-source-reopen thresholds. Candidate
+identity is hash-only, reports contain counts and reason codes rather than raw
+payloads or source refs, and protected rows referenced by promotion candidates,
+dream inputs, review artifacts, question links, or source-reopen evidence are
+skipped.
+
 Apply-capable pruning remains bounded. The audit helper can write an
 append-only lifecycle update manifest for activation rows, but that manifest is
 not a clean-source mutator and not a truth-status editor. It records demote,
 park, supersede, or retire actions for the owning surface writer to consume
 later, preserving source refs and provenance while removing noisy rows from
 foreground eligibility.
+
+Dead-letter apply manifests follow the same rule: they are append-only
+activation lifecycle patches for owner-specific writers, not physical source or
+raw-rollout deletion. Physical payload compaction remains owner-specific and
+must pass source, provenance, reference, and rebuild/review checks before any
+stored payload is minimized.
 
 Two positive examples anchor the rule:
 
