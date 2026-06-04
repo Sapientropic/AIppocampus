@@ -42,8 +42,8 @@ smallest dependable AIppocampus surface before learning the research features.
    search a project cue or time cue, but treat that as candidate navigation
    until a source-backed snippet appears.
 
-4. In an installed checkout, inspect the MCP catalog or run health checks when
-   the host needs those surfaces:
+4. Only when an agent host, plugin, or operator check needs those surfaces,
+   inspect the MCP catalog or run health checks:
 
    ```sh
    aippocampus health --cwd "$PWD" --json
@@ -56,9 +56,10 @@ smallest dependable AIppocampus surface before learning the research features.
    repositories should not receive raw rollouts, registry exports, generated
    indexes, sync bundles, or private local paths.
 
-This path intentionally does not require Dream, cognitive-map jobs, semantic
-gates, sync, plugin packaging, benchmark runners, or hook installation. Those
-surfaces can be useful, but they are not the 10-minute dependency story.
+This path intentionally does not require MCP, Dream, cognitive-map jobs,
+semantic gates, sync, plugin packaging, benchmark runners, or hook installation.
+Those surfaces can be useful, but they are not the ordinary 10-minute dependency
+story.
 
 ## Which Layer Should I Depend On?
 
@@ -132,7 +133,9 @@ public answer API, public SDK schema, or source of factual authority.
 
 The CLI contract applies to documented operator commands, especially:
 
-- `aippocampus health|search|onboard|export|import|doctor|mcp|smoke|storage|why-recall|why-not-recall|sync|object-sync|hooks`
+- Personal/default path commands: `aippocampus health|search|onboard|export|import|update`.
+- Advanced/operator commands remain public and discoverable, but they are not
+  first-recall prerequisites: `aippocampus doctor|mcp|smoke|storage|why-recall|why-not-recall|sync|object-sync|hooks`
 - `aippocampus import conversation --format generic-jsonl --input <path>`
 - `aippocampus doctor provider` as a no-model-call visibility diagnostic for
   optional external-model route key environment variables

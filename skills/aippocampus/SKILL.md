@@ -77,17 +77,46 @@ Use `aippocampus` after package install. In a raw skill checkout, run package
 modules from `$CODEX_HOME/skills/aippocampus/scripts` or put that directory on
 `PYTHONPATH`.
 
-- Find the current rollout: `python -m aippocampus_runtime.source.locate_rollout --cwd "$PWD"`.
-- Build the daily source layer: `python -m aippocampus_runtime.source.clean_source --cwd "$PWD"`.
-- Build or refresh the index: `python -m aippocampus_runtime.recall.index_builder --cwd "$PWD"`.
+Orient:
+
 - Check state before/after long work: `aippocampus health --cwd "$PWD"`.
-- Recover the latest assistant closeout: `python -m aippocampus_runtime.source.latest_reply --cwd "$PWD"`.
+- Check the selected provider without writing artifacts:
+  `aippocampus onboard --provider codex --status`.
+- Find the current rollout when you need exact source location:
+  `python -m aippocampus_runtime.source.locate_rollout --cwd "$PWD"`.
+- Recover the latest assistant closeout:
+  `python -m aippocampus_runtime.source.latest_reply --cwd "$PWD"`.
+
+Recall:
+
 - Search clean source first: `aippocampus search "query" --cwd "$PWD"`.
-- Search raw/indexed rollout when clean source is insufficient:
-  `python -m aippocampus_runtime.recall.rollout_search "query" --cwd "$PWD" --build-index --mode hybrid`.
 - Run the deterministic recall gate for vague continuity prompts:
   `python -m aippocampus_runtime.recall.active_recall "query" --cwd "$PWD" --search auto`.
-- Inspect the local MCP tool surface for plugin/agent clients:
+- Search raw/indexed rollout only when clean source is insufficient:
+  `python -m aippocampus_runtime.recall.rollout_search "query" --cwd "$PWD" --build-index --mode hybrid`.
+- Discover other registered threads:
+  `python -m aippocampus_runtime.registry.api list` or
+  `python -m aippocampus_runtime.registry.api search "terms"`.
+
+Guard / repair:
+
+- Build the daily source layer:
+  `python -m aippocampus_runtime.source.clean_source --cwd "$PWD"`.
+- Build or refresh the index:
+  `python -m aippocampus_runtime.recall.index_builder --cwd "$PWD"`.
+- First-install / full-machine onboarding:
+  `aippocampus onboard --provider codex --all --format json`. This registers
+  local Codex sessions, repairs missing indexes, rebuilds project timeline, and
+  refreshes cognitive-map sidecars only because the caller chose setup.
+- Register an old rollout:
+  `python -m aippocampus_runtime.registry.api register-rollout --rollout "<rollout.jsonl>" --project "<label>"`.
+- Scan local sessions for unregistered threads:
+  `python -m aippocampus_runtime.registry.api scan-sessions --dry-run`, then
+  rerun without `--dry-run` when the candidates look right.
+
+Agent-host / operator surfaces:
+
+- Inspect MCP only when a plugin or agent host needs it:
   `aippocampus mcp list-tools`.
 - Check or exchange a local-folder sync bundle:
   `aippocampus sync status --sync-dir "<folder>" --json`.
@@ -95,18 +124,6 @@ modules from `$CODEX_HOME/skills/aippocampus/scripts` or put that directory on
   `aippocampus object-sync status --object-store-url "<url>" --object-prefix "<prefix>" --json`.
 - Manage encrypted sync device keys or plaintext migration:
   `python -m aippocampus_runtime.sync.encrypted.admin key list --registry-dir "<registry>" --json`.
-- First-install / full-machine onboarding:
-  `aippocampus onboard --provider codex --all --format json`. This is the
-  preferred provider-aware agent entrypoint for registering local Codex sessions,
-  repairing missing indexes, rebuilding project timeline, and refreshing
-  cognitive-map sidecars.
-- Discover other registered threads: `python -m aippocampus_runtime.registry.api list` or
-  `python -m aippocampus_runtime.registry.api search "terms"`.
-- Register an old rollout: `python -m aippocampus_runtime.registry.api register-rollout --rollout "<rollout.jsonl>" --project "<label>"`.
-- Scan local sessions for unregistered threads:
-  `python -m aippocampus_runtime.registry.api scan-sessions --dry-run`, then rerun without
-  `--dry-run` when the candidates look right.
-
 Prefer clean-source search for normal recall. Drop to raw rollout only for exact
 repair, tool provenance, byte accounting, missing evidence, or audit questions.
 

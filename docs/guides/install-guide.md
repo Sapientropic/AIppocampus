@@ -64,9 +64,13 @@ aippocampus update plan
 
 The update check is read-only. It reports whether the CLI package, installed
 skill copy, MCP config, plugin package, Codex hooks, and optional LLM provider
-key are current. It also calls out the ordinary-user "magic readiness" path:
-prompt/lifecycle hooks need to be installed, and the selected provider key must
-be visible to the environment that launches Codex or the hook process.
+key are current. Human output leads with profile-aware readiness:
+
+- `core_ready`: the small source-backed CLI/skill path is usable.
+- `magic_ready`: hooks plus the optional LLM route can power the more ambient
+  external-hippocampus feel.
+- optional/plugin and operator surfaces stay visible without making the default
+  personal path look broken.
 
 Apply local package/effect surfaces explicitly:
 
@@ -257,7 +261,7 @@ First recall query modes:
 
 Project/time cues are candidate navigation until a source-backed snippet appears.
 
-## MCP Mode
+## Agent-Host / Operator MCP Mode
 
 Inspect the local MCP tool catalog:
 
@@ -274,6 +278,9 @@ uvx aippocampus mcp list-tools
 The MCP layer is read-mostly. It exposes clean-source and registry tools,
 progressive recall navigation through `recall_context` / `recall_deepen`, plus
 explicit `register_thread` and `sync_status`.
+
+This section is for agent-host wiring and operator verification. It is not a
+prerequisite for the first local recall path above.
 
 For a human-facing progressive recall wiring check without hand-copying MCP
 route handles, run:

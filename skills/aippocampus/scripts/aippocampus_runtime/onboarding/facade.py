@@ -95,16 +95,22 @@ def _provider_capability(provider: str, *, cwd: str | None = None) -> dict:
     }
 
 
-def provider_status_report(cwd: str | None = None) -> dict:
-    providers = [
-        _provider_capability("codex", cwd=cwd),
-        _provider_capability("claude-code", cwd=cwd),
-        _provider_capability("generic-jsonl", cwd=cwd),
-    ]
+def _status_provider_scope(provider: str | None) -> tuple[str, list[str]]:
+    raw = (provider or "auto").strip().replace("_", "-").casefold()
+    if raw == "auto":
+        return "auto", ["codex", "claude-code", "generic-jsonl"]
+    resolved = normalize_provider_name(raw)
+    return resolved, [resolved]
+
+
+def provider_status_report(provider: str | None = "auto", cwd: str | None = None) -> dict:
+    provider_scope, provider_names = _status_provider_scope(provider)
+    providers = [_provider_capability(name, cwd=cwd) for name in provider_names]
     storage = aippocampus_registry_resolution()
     return {
         "ok": True,
         "data": {
+            "provider_scope": provider_scope,
             "providers": providers,
             "state_legend": {
                 "discovery_only": "Provider can list local transcripts but cannot safely build clean source yet.",
@@ -125,6 +131,9 @@ def provider_status_report(cwd: str | None = None) -> dict:
 
 def render_status_text(report: dict) -> str:
     lines = ["AIppocampus provider status"]
+    provider_scope = report.get("data", {}).get("provider_scope")
+    if provider_scope and provider_scope != "auto":
+        lines.append(f"provider scope: {provider_scope}")
     for item in report.get("data", {}).get("providers", []):
         blockers = item.get("blockers") or []
         suffix = f" | blocker: {blockers[0]}" if blockers else ""
@@ -140,11 +149,12 @@ def render_status_text(report: dict) -> str:
             )
         )
     auto = report.get("data", {}).get("auto", {})
-    lines.append(f"auto: {auto.get('default_provider')} - {auto.get('why')}")
+    if provider_scope in {None, "auto"}:
+        lines.append(f"auto: {auto.get('default_provider')} - {auto.get('why')}")
     storage = report.get("data", {}).get("storage") or {}
     if storage:
         legacy = " legacy fallback" if storage.get("legacy_fallback") else ""
-        lines.append(f"registry: {storage.get('path')} ({storage.get('source')}{legacy})")
+        lines.append(f"registry configured ({storage.get('source')}{legacy})")
     lines.append("")
     lines.append("First recall")
     lines.append('- exact phrase: aippocampus search "distinctive old phrase"')
@@ -183,7 +193,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if known.status:
-        report = provider_status_report(cwd=_arg_value(raw_args, "--cwd"))
+        report = provider_status_report(provider=known.provider, cwd=_arg_value(raw_args, "--cwd"))
         wants_json = (
             known.json_output
             or known.format == "json"

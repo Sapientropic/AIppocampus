@@ -58,19 +58,10 @@ Start with the public package path. These commands work without a clone when
 ```sh
 uvx aippocampus --help
 uvx aippocampus onboard --provider codex --status
-uvx aippocampus mcp list-tools
 ```
 
 The status check is read-only. It may report that no local provider history is
 registered yet; that is still a valid result.
-
-In a repository checkout, these public-safe smokes exercise the coding-agent
-lane without private history or writes:
-
-```powershell
-python tools\aippocampus\smoke\smoke_recall_navigation_comparison.py --json
-python tools\aippocampus\smoke\smoke_repo_familiarity.py --json
-```
 
 After explicit user consent to register local Codex history, run the first real
 source-backed recall:
@@ -83,6 +74,23 @@ uvx aippocampus search "a distinctive old phrase"
 Use an exact phrase when possible. If the user only remembers a project cue or
 time cue, treat the first result as candidate navigation until the CLI or MCP
 surface returns a source-backed snippet.
+
+### Agent-Host Wiring Check
+
+Use MCP checks only when you are validating an agent host or plugin integration,
+not as part of the ordinary first-recall moment:
+
+```sh
+uvx aippocampus mcp list-tools
+```
+
+In a repository checkout, the public-safe smokes below exercise the coding-agent
+lane without private history or writes:
+
+```powershell
+python tools\aippocampus\smoke\smoke_recall_navigation_comparison.py --json
+python tools\aippocampus\smoke\smoke_repo_familiarity.py --json
+```
 
 ## Evidence Drawer
 
