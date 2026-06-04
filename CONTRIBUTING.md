@@ -41,20 +41,27 @@ AIppocampus's public Python support floor is Python 3.12. CI and package
 metadata currently prove Python 3.12 and 3.13; Python 3.10 and Python 3.11 are
 unsupported public targets unless package metadata, docs, and workflows are
 widened in the same change. Before claiming the repository is healthy, run the
-fast deterministic path from the repository root:
+deterministic PR path from the repository root:
 
 ```sh
 python tools/aippocampus/docs/check_docs_health.py --json
 python -m ruff check skills plugins tests tools benchmarks benchmark_corpus
 python -m mypy
-python tools/aippocampus/run_tests.py --tier fast
+python tools/aippocampus/run_tests.py --tier quick
+python tools/aippocampus/run_tests.py --tier pr
 python -m compileall -q skills plugins tests tools benchmarks benchmark_corpus
 ```
 
+Test tiers are explicitly classified in `tools/aippocampus/test_tier_manifest.py`.
+`quick` is the small local inner loop; `pr` is the broad deterministic PR lane;
+`fast` remains only as a deprecated compatibility alias for `pr`. New test
+modules must be classified in the manifest before they can enter any tier.
+
 Run `python tools/aippocampus/run_tests.py --tier full` before release,
-public-readiness, or broad refactor claims. The `benchmark` and `slow` tiers are
-explicit: use them when touching benchmark runners, prompt-hook integration,
-onboarding, plugin packaging, smoke tools, or sync behavior.
+public-readiness, or broad refactor claims. The `benchmark`, `slow`, `smoke`,
+and `integration` tiers are explicit: use them when touching benchmark runners,
+prompt-hook integration, onboarding, plugin packaging, smoke tools, provider
+contracts, browser/MCP surfaces, or sync behavior.
 
 For public-readiness changes, also run a secret/local-path scan and inspect any
 hits. Test fixtures with `FAKE_TEST_` markers are acceptable; real credentials
@@ -123,8 +130,10 @@ behavior, or privacy/security boundaries, move it back to the strict PR lane.
 
 ## Test Debt Policy
 
-- A test belongs in the fast tier only if it is deterministic, cheap, and blocks
-  a real user-visible or runtime-contract regression.
+- A test belongs in the `quick` tier only if it is deterministic, cheap, and a
+  useful local inner-loop guard. Broader deterministic coverage belongs in
+  `pr`; expensive, integration-like, provider, install, prompt-hook, smoke, or
+  benchmark tests must live in an explicit manifest tier or smoke lane.
 - Agent guard tests are part of the product process here. Keep cheap
   architecture and docs-health guards when they prevent recurring agent mistakes:
   missing public docs, leaked private artifacts, runtime packages absorbing repo

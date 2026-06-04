@@ -112,7 +112,8 @@ recall:
 python tools/aippocampus/docs/check_docs_health.py --json
 python -m ruff check skills plugins tests tools benchmarks benchmark_corpus
 python -m mypy
-python tools/aippocampus/run_tests.py --tier fast
+python tools/aippocampus/run_tests.py --tier quick
+python tools/aippocampus/run_tests.py --tier pr
 ```
 
 That Ruff command is the staged hard gate from `pyproject.toml`; broader

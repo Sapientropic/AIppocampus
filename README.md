@@ -273,14 +273,19 @@ claims, release metadata, privacy/security wording, runtime behavior, and API
 stability promises stay in the strict PR lane even when the diff looks small.
 
 The default CI path verifies Ubuntu Python 3.12 and 3.13 with docs health, Ruff,
-mypy, compile checks, and the fast deterministic test tier. It also runs a
-single Ubuntu 3.12 deterministic benchmark-smoke lane plus a macOS fast-tier
+mypy, compile checks, and the broad deterministic `pr` test tier. It also runs a
+single Ubuntu 3.12 deterministic benchmark-smoke lane plus a macOS `pr`-tier
 gate on the runner's default TMPDIR as a path-identity guard for the recurring
 `/var` and `/private/var` regression family. Ubuntu green alone is not a
-cross-platform fast-tier claim. The broader identity/display/privacy path
+cross-platform path-identity claim. The broader identity/display/privacy path
 contract lives in [docs/architecture/path-identity.md](docs/architecture/path-identity.md)
 for #404/#589-style macOS, UNC, symlink, and bind-mount regressions. Slower
 benchmark and smoke coverage stays explicit for release and readiness work.
+
+Test tiers are code-owned by `tools/aippocampus/test_tier_manifest.py`. `quick`
+is the small local inner loop; `pr` is the broad deterministic PR lane; `fast`
+is a deprecated compatibility alias for `pr` and should not be used in new docs,
+workflows, or issue acceptance criteria.
 
 From the repository root:
 
@@ -292,9 +297,10 @@ python -m pip install -e ".[dev]"
 python tools/aippocampus/docs/check_docs_health.py --json
 python -m ruff check skills plugins tests tools benchmarks benchmark_corpus
 python -m mypy
-python tools/aippocampus/run_tests.py --tier fast
+python tools/aippocampus/run_tests.py --tier quick
+python tools/aippocampus/run_tests.py --tier pr
 python tools/aippocampus/run_tests.py --tier benchmark-smoke --benchmark-suite-profile public-fast
-python tools/aippocampus/run_coverage.py --tier fast
+python tools/aippocampus/run_coverage.py --tier pr
 ```
 
 Ruff has two intentional profiles: the default hard gate in `pyproject.toml`

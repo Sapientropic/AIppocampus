@@ -100,7 +100,7 @@ root:
 
 ```powershell
 python tools\aippocampus\docs\check_docs_health.py --json
-python tools\aippocampus\run_tests.py --tier fast
+python tools\aippocampus\run_tests.py --tier pr
 ```
 
 Before release, public-readiness, or broad refactor claims, also run

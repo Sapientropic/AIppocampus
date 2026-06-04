@@ -256,7 +256,7 @@ Completed foundation:
    refresh. Default sync excludes generated SQLite caches and pointer files;
    import/export reports pointer-resolved current SQLite for explicit bundles.
    Broader physical multi-device stress remains a release-readiness exercise,
-   not a fast-tier claim.
+   not a `quick` or `pr` tier claim.
 
 ## Cross-references
 

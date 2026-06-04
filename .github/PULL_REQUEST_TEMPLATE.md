@@ -9,7 +9,8 @@
 ## Verification
 
 - [ ] `python tools\aippocampus\docs\check_docs_health.py --json`
-- [ ] `python tools\aippocampus\run_tests.py --tier fast`
+- [ ] `python tools\aippocampus\run_tests.py --tier quick`
+- [ ] `python tools\aippocampus\run_tests.py --tier pr`
 - [ ] Other:
 
 ## Source And Privacy Boundary

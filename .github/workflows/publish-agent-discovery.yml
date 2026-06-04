@@ -75,8 +75,8 @@ jobs:
       - name: Docs health
         run: python tools/aippocampus/docs/check_docs_health.py --json
 
-      - name: Fast tests
-        run: python tools/aippocampus/run_tests.py --tier fast
+      - name: PR tests
+        run: python tools/aippocampus/run_tests.py --tier pr
 
       - name: Validate MCP Registry metadata
         run: check-jsonschema --schemafile https://raw.githubusercontent.com/modelcontextprotocol/registry/main/docs/reference/server-json/draft/server.schema.json server.json

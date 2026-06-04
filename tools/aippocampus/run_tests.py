@@ -10,42 +10,24 @@ import unittest
 from pathlib import Path
 from typing import TypedDict
 
+from test_tier_manifest import (
+    BENCHMARK_MODULES,
+    BENCHMARK_SMOKE_MODULES,
+    PR_PRIMARY_TIERS,
+    SLOW_MODULES,
+    TEST_MODULE_CLASSIFICATIONS,
+    TEST_TIERS,
+    TIER_ALIASES,
+    TIER_DESCRIPTIONS,
+    validate_manifest,
+)
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TEST_ROOT = REPO_ROOT / "tests" / "aippocampus"
 FALLBACK_TEST_TMPDIR = REPO_ROOT / ".aippocampus" / "test-tmp"
 TEMP_ENV_NAMES = ("TMPDIR", "TEMP", "TMP")
 TEMP_PROBE_PREFIX = "aippocampus-test-runner-"
 
-SLOW_MODULES = {
-    "tests.aippocampus.test_aippocampus_prompt_hook",
-    "tests.aippocampus.test_dream_real_history_eval",
-    "tests.aippocampus.test_life_wide_registry_smoke",
-    "tests.aippocampus.test_object_storage_sync",
-    "tests.aippocampus.test_onboard_codex",
-    "tests.aippocampus.test_plugin_distribution",
-    "tests.aippocampus.test_semantic_scope_real_history_smoke",
-    "tests.aippocampus.test_stage_0_5_smoke",
-}
-
-BENCHMARK_SMOKE_MODULES = {
-    # #279 support guard: this validates public-safe candidate seed discovery
-    # only. It must not be used to claim E2E50 behavior benchmark quality.
-    "tests.aippocampus.test_e2e50_seed_candidates",
-    "tests.aippocampus.test_benchmark_field_continuity",
-    "tests.aippocampus.test_benchmark_hippocampal_recall",
-    "tests.aippocampus.test_benchmark_locomo_public_users",
-    "tests.aippocampus.test_benchmark_knowledge_pollution",
-    "tests.aippocampus.test_benchmark_public_longitudinal_users",
-    "tests.aippocampus.test_benchmark_longmemeval_v2_context",
-    "tests.aippocampus.test_benchmark_memoryagentbench",
-    "tests.aippocampus.test_benchmark_published_reports",
-    "tests.aippocampus.test_benchmark_segmented_merge_policy",
-    "tests.aippocampus.test_benchmark_statistics",
-    "tests.aippocampus.test_benchmark_suite",
-    "tests.aippocampus.test_benchmark_vcs_future_event_recall",
-}
-
-TEST_TIERS = ("fast", "slow", "benchmark-smoke", "benchmark", "full")
 TIER_REPORT_TOP_LIMIT = 10
 
 
@@ -64,20 +46,28 @@ def discover_modules() -> list[str]:
 
 def modules_for_tier(tier: str) -> list[str]:
     modules = discover_modules()
-    if tier == "full":
+    validate_manifest(set(modules))
+    normalized_tier = TIER_ALIASES.get(tier, tier)
+    if normalized_tier == "full":
         return modules
-    if tier == "benchmark-smoke":
+    if normalized_tier == "benchmark-smoke":
         discovered = set(modules)
         return [module for module in sorted(BENCHMARK_SMOKE_MODULES) if module in discovered]
-    if tier == "benchmark":
-        return [module for module in modules if ".test_benchmark_" in module]
-    if tier == "slow":
+    if normalized_tier == "benchmark":
+        return [module for module in modules if module in BENCHMARK_MODULES]
+    if normalized_tier == "slow":
         return [module for module in modules if module in SLOW_MODULES]
-    if tier == "fast":
+    if normalized_tier == "pr":
         return [
             module
             for module in modules
-            if ".test_benchmark_" not in module and module not in SLOW_MODULES
+            if TEST_MODULE_CLASSIFICATIONS[module].primary_tier in PR_PRIMARY_TIERS
+        ]
+    if normalized_tier in {"quick", "smoke", "integration"}:
+        return [
+            module
+            for module in modules
+            if TEST_MODULE_CLASSIFICATIONS[module].primary_tier == normalized_tier
         ]
     raise ValueError(f"unknown test tier: {tier}")
 
@@ -122,10 +112,12 @@ def build_tier_report(
     return {
         "kind": "aippocampus_test_tier_report",
         "schema_version": 1,
+        "tier_definitions": TIER_DESCRIPTIONS,
+        "tier_aliases": TIER_ALIASES,
         "tiers": report_tiers,
         "known_limitations": [
-            "fast is still exclusion-based; this report surfaces the current boundary "
-            "without changing tier selection.",
+            "fast remains a deprecated compatibility alias for pr; use quick for "
+            "the small inner loop and pr for the broad deterministic PR lane.",
         ],
     }
 
@@ -220,10 +212,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--tier",
         choices=TEST_TIERS,
-        default="fast",
+        default="pr",
         help=(
-            "Test tier to run. Default is the deterministic fast suite. "
-            "benchmark-smoke is the curated fresh-clone benchmark PR lane."
+            "Test tier to run. Default is the broad deterministic PR lane. "
+            "quick is the small local inner loop; pr is the broad deterministic "
+            "PR lane; fast is a deprecated alias for pr."
         ),
     )
     parser.add_argument(
