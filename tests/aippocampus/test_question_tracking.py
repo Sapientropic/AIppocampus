@@ -147,6 +147,32 @@ class QuestionTrackingTests(unittest.TestCase):
         self.assertIn("compaction", linked_text)
         self.assertNotIn("dashboard", linked_text.casefold())
 
+    def test_default_tracking_reports_pair_scan_prefilter_boundary(self) -> None:
+        self.write_rows(
+            [
+                self.question_row("1"),
+                self.question_row(
+                    "2",
+                    question_text="Why does Codex lose compacted context?",
+                    question_short="Codex compacted context loss",
+                ),
+            ]
+        )
+
+        result = tracking.run_question_tracking(jobs_path=self.jobs_path, no_write=True)
+        prefilter = result["question_tracking_prefilter"]
+
+        self.assertEqual(result["prefilter_mode"], "pair_scan")
+        self.assertEqual(prefilter["mode"], "pair_scan")
+        self.assertEqual(prefilter["candidate_source"], "subconscious_jobs_jsonl")
+        self.assertEqual(prefilter["pair_generation"], "all_trackable_pairs")
+        self.assertEqual(prefilter["accelerated_prefilter"], "disabled")
+        self.assertEqual(prefilter["sidecar_status"], "not_used")
+        self.assertEqual(prefilter["vector_status"], "not_used")
+        self.assertFalse(prefilter["default_prefilter_enabled"])
+        self.assertTrue(prefilter["source_join_required_before_acceleration"])
+        self.assertIn("question_index_sidecar", prefilter["available_prefilter_evaluators"])
+
     def test_borderline_links_require_explicit_confirmation(self) -> None:
         self.write_rows(
             [

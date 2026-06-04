@@ -41,6 +41,7 @@ from aippocampus_runtime.question.feedback_policy import (
     load_question_pair_feedback,
     matching_pair_feedback,
 )
+from aippocampus_runtime.question.prefilter_report import question_tracking_prefilter_fields
 from aippocampus_runtime.question.source_refs import (
     SourceRefIndex,
     build_source_ref_index,
@@ -1114,6 +1115,7 @@ def run_question_tracking(
         "frontier_count": input_diagnostics["frontier_count"],
         "stale_candidate_count": input_diagnostics["stale_candidate_count"],
         "stale_frontier_count": input_diagnostics["stale_frontier_count"],
+        **question_tracking_prefilter_fields(input_diagnostics, link_diagnostics),
         "source_ref_resolution": "registry_clean_source" if source_index else "shape_only",
         "source_ref_index_thread_count": input_diagnostics["source_ref_index_thread_count"],
         "source_ref_index_message_count": input_diagnostics["source_ref_index_message_count"],

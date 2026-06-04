@@ -143,6 +143,11 @@ theme-emergence slice, plus first question-index scale/sidecar evaluation:
   `tools/aippocampus/smoke/smoke_question_tracking_scale.py` smoke reports
   pair-scan growth, sidecar coverage, adoption decision, and privacy/cannot-
   claim boundaries without reading private registry data.
+- Implemented first #248 prefilter-reporting slice:
+  `question_tracking` now emits `prefilter_mode="pair_scan"` plus a compact
+  `question_tracking_prefilter` report that says sidecar/vector prefilters are
+  not used by the default runtime path. This is observability for the remaining
+  #248 gap, not adoption of the SQLite or vector prefilter.
 - Implemented first #139 structural benchmark slice:
   `benchmarks/aippocampus/benchmark_question_aware_real_history.py` selects
   private real-history question/frontier/link/theme rows when available,
@@ -1188,6 +1193,10 @@ noisy ones. Frontier markers must feel like saved trail markers, not guilt.
   smoke substrate, not a default acceleration path: synthetic evidence can show
   the boundary behaves, but real-history parity and wall-clock evidence are
   still required before default prefiltering.
+- Shipped first #248 prefilter-reporting slice: the default
+  `question_tracking` result reports its pair-generation path as `pair_scan`
+  and marks sidecar/vector acceleration as disabled. This prevents a sidecar
+  evaluation result from being misread as default runtime behavior.
 - Deferred: real-user / private real-history calibration beyond selected
   fixtures and the one sanitized no-write external-provider smoke (#134),
   fuzzy/non-explicit resolution inference beyond explicit user follow-up signals

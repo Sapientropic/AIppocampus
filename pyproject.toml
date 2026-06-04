@@ -449,6 +449,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/question/feedback_policy.py",
     "skills/aippocampus/scripts/aippocampus_runtime/question/health.py",
     "skills/aippocampus/scripts/aippocampus_runtime/question/index_sidecar.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/question/prefilter_report.py",
     "skills/aippocampus/scripts/aippocampus_runtime/question/source_refs.py",
     "skills/aippocampus/scripts/aippocampus_runtime/question/tracking.py",
     "skills/aippocampus/scripts/aippocampus_runtime/question/vector_index.py",
