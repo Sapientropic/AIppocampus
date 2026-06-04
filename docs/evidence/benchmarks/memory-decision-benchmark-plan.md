@@ -1776,9 +1776,12 @@ source-backed affordances from cognitive-map-like rows, correction windows,
 ambient recall cards, dream outputs, coding tickets, unfinished tasks, and
 scheduled revisits; selects at most one foreground ticket and a bounded
 backstage set per topic epoch; suppresses repeated, visible, thin, or
-matched-terms-only reminders; and records append-only outcome feedback rows.
-Live host timing, annoyance calibration, multi-host duplicate suppression, and
-any autonomous push-forward behavior remain future work.
+matched-terms-only reminders; and records append-only outcome feedback rows. A
+deterministic replay smoke now exercises show/hold/suppress host-timing policy,
+visible-source suppression, recent negative-feedback suppression, and
+source-backed cross-host duplicate keys. Live host timing, real annoyance
+calibration, live multi-host delivery, and any autonomous push-forward behavior
+remain future work.
 
 P8: local private real-history case generation. Reports must stay sanitized and
 aggregate-only by default.

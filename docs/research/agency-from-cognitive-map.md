@@ -254,12 +254,20 @@ Current tests live in `tests/aippocampus/test_agency_affordance.py` and cover
 the first four evaluation cases: should stay silent, should remind, should
 warn, and should offer next step.
 
+The first replayed host-timing fixture lives in
+`aippocampus_runtime.coding.agency_host_timing`, with a public no-write smoke at
+`tools/aippocampus/smoke/smoke_agency_host_timing.py`. It exercises
+show/hold/suppress decisions for task phase, visible source context,
+cross-host duplicate suppression, and recent negative feedback. This is
+deterministic replay evidence only; it does not prove live host timing or real
+annoyance calibration.
+
 Still not proven:
 
 - live host hook timing
 - whether a host agent uses tickets well
 - annoyance-risk calibration from real dismissals
-- multi-host duplicate suppression
+- live multi-host duplicate suppression
 - any autonomous `push_forward` behavior
 
 ## Open Questions

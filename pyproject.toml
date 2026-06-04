@@ -302,6 +302,7 @@ files = [
     "skills/aippocampus/scripts/coding_ticket_host_contract.py",
     "skills/aippocampus/scripts/aippocampus_runtime/coding/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/coding/agency_affordance.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/coding/agency_host_timing.py",
     "skills/aippocampus/scripts/aippocampus_runtime/coding/decision_events.py",
     "skills/aippocampus/scripts/aippocampus_runtime/coding/host_contract.py",
     "skills/aippocampus/scripts/aippocampus_runtime/coding/rejected_route_probes.py",
