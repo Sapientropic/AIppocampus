@@ -109,6 +109,10 @@ CANNOT_CLAIM = [
     "static_retrieval_covers_conflict_resolution",
 ]
 
+STAGE3_INCREMENTAL_SPLITS = ("Test_Time_Learning", "Conflict_Resolution")
+STAGE3_WRITE_UPDATE_DRY_RUN_MODE = "dry_run_contract"
+STAGE3_MISSING_WRITE_UPDATE_MODE = "unsupported_missing_instrumentation"
+
 
 @dataclass
 class SplitObservation:
@@ -592,6 +596,200 @@ def build_prediction_template(
     ]
 
 
+def stage3_mode_fields(write_update_mode: str) -> dict[str, str]:
+    if write_update_mode == STAGE3_WRITE_UPDATE_DRY_RUN_MODE:
+        return {
+            "ingest_mode": "local_operator_dataset",
+            "write_update_mode": STAGE3_WRITE_UPDATE_DRY_RUN_MODE,
+            "retrieval_mode": "source_ref_hash_probe",
+            "answer_generation_mode": "not_executed",
+            "judging_mode": "not_executed",
+        }
+    return {
+        "ingest_mode": "local_operator_dataset",
+        "write_update_mode": STAGE3_MISSING_WRITE_UPDATE_MODE,
+        "retrieval_mode": "not_executed",
+        "answer_generation_mode": "not_executed",
+        "judging_mode": "not_executed",
+    }
+
+
+def stage3_claim_boundary(write_update_mode: str) -> dict[str, str]:
+    return {
+        "deterministic_contract_evidence": "mode_fields_hashes_counts_only",
+        "local_artifact_policy": "ignored_operator_dataset_only",
+        "official_runner_compatibility": "not_claimed",
+        "live_model_quality": "not_measured",
+        "private_or_local_artifact_evidence": "hashes_counts_only",
+        "write_update_instrumentation": (
+            "dry_run_contract" if write_update_mode == STAGE3_WRITE_UPDATE_DRY_RUN_MODE else "missing"
+        ),
+    }
+
+
+def stage3_incremental_contract(split_id: str) -> str:
+    if split_id == "Test_Time_Learning":
+        return "write_then_update_then_query"
+    if split_id == "Conflict_Resolution":
+        return "stale_then_current_then_query"
+    return "unsupported_split"
+
+
+def stage3_write_interactions(split_id: str) -> list[dict[str, str]]:
+    if split_id == "Test_Time_Learning":
+        return [
+            {"step": "initial_write", "boundary": "write_policy"},
+            {"step": "update_write", "boundary": "update_policy"},
+        ]
+    if split_id == "Conflict_Resolution":
+        return [
+            {"step": "stale_candidate_write", "boundary": "conflict_resolution"},
+            {"step": "current_candidate_write", "boundary": "conflict_resolution"},
+        ]
+    return []
+
+
+def build_stage3_incremental_case(case: dict[str, Any]) -> dict[str, Any]:
+    split_id = str(case["split"])
+    questions = [str(question) for question in case.get("questions") or []]
+    context = str(case.get("context") or "")
+    interactions = stage3_write_interactions(split_id)
+    # Stage 3 dry-run reports must prove the write/update protocol shape without
+    # smuggling benchmark text, gold answers, or local paths into committed logs.
+    # Raw text stays only in the explicit local case-pack path above.
+    return {
+        "case_id": case["case_id"],
+        "split": split_id,
+        "task_families": case["task_families"],
+        "metric_families": case["metric_families"],
+        "incremental_contract": stage3_incremental_contract(split_id),
+        "write_update_interactions": interactions,
+        "interaction_count": len(interactions),
+        "source_ref_status": "hash_only_requires_adapter_mapping",
+        "context_sha1": sha1_short(context) if context else None,
+        "question_sha1s": [sha1_short(question) for question in questions],
+        "question_count": len(questions),
+        "safe_metadata": case["safe_metadata"],
+        "label_boundary": {
+            "answer_text_included": False,
+            "gold_labels_included": False,
+            "score_computed": False,
+        },
+    }
+
+
+def build_stage3_incremental_dry_run(
+    *,
+    dataset_dir: Path | str = DEFAULT_DATASET_DIR,
+    manifest_path: Path | str = DEFAULT_MANIFEST,
+    case_limit: int = DEFAULT_CASE_LIMIT,
+    write_update_mode: str = STAGE3_MISSING_WRITE_UPDATE_MODE,
+) -> dict[str, Any]:
+    started = time.perf_counter()
+    dataset_path = Path(dataset_dir)
+    manifest = load_manifest(manifest_path)
+    split_meta_by_id = manifest_splits(manifest)
+    mode_fields = stage3_mode_fields(write_update_mode)
+
+    if write_update_mode != STAGE3_WRITE_UPDATE_DRY_RUN_MODE:
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "kind": "aippocampus_memoryagentbench_stage3_incremental_dry_run",
+            "generated_at": now_utc(),
+            "status": "unsupported_missing_write_update_instrumentation",
+            "ok": False,
+            "configuration": {
+                "dataset_dir_sha1": sha1_short(str(dataset_path.resolve())),
+                "manifest": safe_path_label(manifest_path),
+                "case_limit": case_limit,
+                "live_llm": False,
+                "downloads_dataset": False,
+            },
+            "mode_fields": mode_fields,
+            "unsupported_reasons": ["write_update_instrumentation_missing"],
+            "metrics": {
+                "stage3_case_count": 0,
+                "sample_count": 0,
+                "test_time_learning_case_count": 0,
+                "conflict_resolution_case_count": 0,
+                "update_conflict_interaction_count": 0,
+            },
+            "cases": [],
+            "claim_boundary": stage3_claim_boundary(write_update_mode),
+            "source_evidence_boundary": {
+                "source_hashes_only": True,
+                "raw_context_emitted": False,
+                "source_refs_are_adapter_handles_not_truth": True,
+            },
+            "false_forgetting_controls": {
+                "current_source_ref_required": True,
+                "stale_source_demoted_not_deleted": True,
+                "gold_answer_not_model_input": True,
+            },
+            "privacy_boundary": {
+                "raw_text_emitted": False,
+                "absolute_paths_emitted": False,
+                "default_report_shape": "mode_fields_hashes_and_counts_only",
+            },
+            "cannot_claim": CANNOT_CLAIM,
+            "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
+        }
+
+    cases: list[dict[str, Any]] = []
+    for split_id in STAGE3_INCREMENTAL_SPLITS:
+        for case in collect_case_rows(
+            dataset_dir=dataset_path,
+            split_id=split_id,
+            split_meta=split_meta_by_id[split_id],
+            case_limit=case_limit,
+        ):
+            cases.append(build_stage3_incremental_case(case))
+
+    split_counts = Counter(str(case["split"]) for case in cases)
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": "aippocampus_memoryagentbench_stage3_incremental_dry_run",
+        "generated_at": now_utc(),
+        "status": "stage3_incremental_dry_run" if cases else "skipped_missing_stage3_cases",
+        "ok": bool(cases),
+        "configuration": {
+            "dataset_dir_sha1": sha1_short(str(dataset_path.resolve())),
+            "manifest": safe_path_label(manifest_path),
+            "case_limit": case_limit,
+            "live_llm": False,
+            "downloads_dataset": False,
+        },
+        "mode_fields": mode_fields,
+        "unsupported_reasons": [],
+        "metrics": {
+            "stage3_case_count": len(cases),
+            "sample_count": len(cases),
+            "test_time_learning_case_count": split_counts.get("Test_Time_Learning", 0),
+            "conflict_resolution_case_count": split_counts.get("Conflict_Resolution", 0),
+            "update_conflict_interaction_count": sum(int(case["interaction_count"]) for case in cases),
+        },
+        "cases": cases,
+        "claim_boundary": stage3_claim_boundary(write_update_mode),
+        "source_evidence_boundary": {
+            "source_hashes_only": True,
+            "raw_context_emitted": False,
+            "source_refs_are_adapter_handles_not_truth": True,
+        },
+        "false_forgetting_controls": {
+            "current_source_ref_required": True,
+            "stale_source_demoted_not_deleted": True,
+            "gold_answer_not_model_input": True,
+        },
+        "privacy_boundary": {
+            "raw_text_emitted": False,
+            "absolute_paths_emitted": False,
+            "default_report_shape": "mode_fields_hashes_and_counts_only",
+        },
+        "cannot_claim": CANNOT_CLAIM,
+        "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
+    }
+
+
 def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -609,6 +807,8 @@ def run_memoryagentbench_smoke(
     prediction_template_output: Path | str | None = None,
     case_pack_split: str = "Accurate_Retrieval",
     compute_sha256: bool = True,
+    stage3_incremental_dry_run: bool = False,
+    stage3_write_update_mode: str = STAGE3_MISSING_WRITE_UPDATE_MODE,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     dataset_path = Path(dataset_dir)
@@ -663,6 +863,15 @@ def run_memoryagentbench_smoke(
             ),
         )
 
+    stage3_payload: dict[str, Any] | None = None
+    if stage3_incremental_dry_run:
+        stage3_payload = build_stage3_incremental_dry_run(
+            dataset_dir=dataset_path,
+            manifest_path=manifest_path,
+            case_limit=case_limit,
+            write_update_mode=stage3_write_update_mode,
+        )
+
     status = "metadata_smoke" if observed_row_count else "skipped_missing_dataset"
     official_expected_total_rows = int(manifest["official_dataset"]["total_examples"])
     official_expected_split_count = len(CANONICAL_SPLITS)
@@ -671,13 +880,15 @@ def run_memoryagentbench_smoke(
         "kind": "aippocampus_memoryagentbench_metadata_smoke",
         "generated_at": now_utc(),
         "status": status,
-        "ok": True,
+        "ok": bool(stage3_payload.get("ok", True)) if stage3_payload else True,
         "configuration": {
             "dataset_dir_sha1": sha1_short(str(dataset_path.resolve())),
             "manifest": safe_path_label(manifest_path),
             "case_limit": case_limit,
             "case_pack_split": case_pack_split,
             "compute_sha256": compute_sha256,
+            "stage3_incremental_dry_run": stage3_incremental_dry_run,
+            "stage3_write_update_mode": stage3_write_update_mode if stage3_incremental_dry_run else None,
             "live_llm": False,
             "downloads_dataset": False,
         },
@@ -737,6 +948,8 @@ def run_memoryagentbench_smoke(
         ),
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
     }
+    if stage3_payload:
+        payload["stage3_incremental_runner"] = stage3_payload
     return payload
 
 
@@ -746,6 +959,10 @@ def print_human_summary(payload: dict[str, Any]) -> None:
     print(f"- observed rows: {payload['metrics']['observed_row_count']}")
     print(f"- observed splits: {payload['metrics']['observed_split_count']}")
     print(f"- local files: {payload['metrics']['local_file_count']}")
+    if "stage3_incremental_runner" in payload:
+        stage3 = payload["stage3_incremental_runner"]
+        print(f"- stage3 incremental: {stage3['status']}")
+        print(f"- stage3 cases: {stage3['metrics']['stage3_case_count']}")
     print("- cannot claim:")
     for item in payload["cannot_claim"]:
         print(f"  - {item}")
@@ -759,6 +976,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--case-pack-output", type=Path)
     parser.add_argument("--prediction-template-output", type=Path)
     parser.add_argument("--case-pack-split", default="Accurate_Retrieval", choices=CANONICAL_SPLITS)
+    parser.add_argument(
+        "--stage3-incremental-dry-run",
+        action="store_true",
+        help="Embed the Stage 3 incremental runner dry-run contract in the sanitized report.",
+    )
+    parser.add_argument(
+        "--stage3-write-update-mode",
+        default=STAGE3_MISSING_WRITE_UPDATE_MODE,
+        choices=(STAGE3_MISSING_WRITE_UPDATE_MODE, STAGE3_WRITE_UPDATE_DRY_RUN_MODE),
+        help="Write/update instrumentation mode for the explicit Stage 3 dry-run.",
+    )
     parser.add_argument("--skip-sha256", action="store_true", help="Skip file sha256 hashing for large local files.")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--json", dest="json_output", action="store_true")
@@ -775,6 +1003,8 @@ def main(argv: list[str] | None = None) -> int:
         prediction_template_output=args.prediction_template_output,
         case_pack_split=args.case_pack_split,
         compute_sha256=not args.skip_sha256,
+        stage3_incremental_dry_run=args.stage3_incremental_dry_run,
+        stage3_write_update_mode=args.stage3_write_update_mode,
     )
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
