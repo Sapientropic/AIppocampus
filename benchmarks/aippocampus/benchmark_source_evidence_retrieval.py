@@ -299,6 +299,7 @@ def cannot_claim(
 def run_source_evidence_retrieval_benchmark(
     *,
     registry_path: Path | None = None,
+    only_standard_public: bool = False,
     fts5_cases: int = DEFAULT_FTS5_CASES,
     fts5_min_cases: int = DEFAULT_FTS5_MIN_CASES,
     fts5_seed: int = fts5_benchmark.DEFAULT_SEED,
@@ -353,6 +354,101 @@ def run_source_evidence_retrieval_benchmark(
     public_semantic_max_tokens: int = DEFAULT_PUBLIC_SEMANTIC_MAX_TOKENS,
 ) -> dict[str, Any]:
     started = time.perf_counter()
+    if only_standard_public:
+        standard_public_payload = run_standard_retrieval_qa_benchmark(
+            dataset=standard_dataset,
+            corpus_path=standard_corpus_path,
+            max_questions=standard_max_questions,
+            min_questions=standard_min_questions,
+            top_k=standard_top_k,
+            candidate_limit=standard_candidate_limit,
+            context_radius=standard_context_radius,
+            min_session_hit_rate=standard_min_session_hit_rate,
+            include_private_text=include_private_text,
+            line_reranker_mode=standard_line_reranker_mode,
+            line_reranker_top_sessions=standard_line_reranker_top_sessions,
+            line_reranker_max_candidates=standard_line_reranker_max_candidates,
+            line_reranker_timeout=standard_line_reranker_timeout,
+            line_reranker_max_tokens=standard_line_reranker_max_tokens,
+            line_reranker_workers=standard_line_reranker_workers,
+        )
+        standard_status = str(standard_public_payload.get("status") or "")
+        standard_ok = bool(standard_public_payload.get("ok")) or standard_status.startswith(
+            "skipped_"
+        )
+        if standard_status.startswith("skipped_"):
+            status = "standard_public_only_skipped"
+        elif standard_public_payload.get("ok"):
+            status = "standard_public_only_sufficient"
+        else:
+            status = "standard_public_only_diagnostic"
+        payload: dict[str, Any] = {
+            "schema_version": SCHEMA_VERSION,
+            "kind": "aippocampus_source_evidence_retrieval_benchmark",
+            "generated_at": now_utc(),
+            "status": status,
+            "ok": standard_ok,
+            "config": {
+                "only_standard_public": True,
+                "include_standard_public": True,
+                "standard_dataset": standard_dataset,
+                "standard_max_questions": int(standard_max_questions),
+                "standard_min_questions": int(standard_min_questions),
+                "standard_top_k": int(standard_top_k),
+                "standard_context_radius": int(standard_context_radius),
+                "standard_line_reranker_mode": standard_line_reranker_mode,
+                "standard_line_reranker_top_sessions": int(
+                    standard_line_reranker_top_sessions
+                ),
+                "standard_line_reranker_max_candidates": int(
+                    standard_line_reranker_max_candidates
+                ),
+                "standard_line_reranker_timeout": int(standard_line_reranker_timeout),
+                "standard_line_reranker_max_tokens": int(
+                    standard_line_reranker_max_tokens
+                ),
+                "standard_line_reranker_workers": int(standard_line_reranker_workers),
+                "include_private_text": bool(include_private_text),
+            },
+            "tracks": {
+                "standard_public_retrieval_qa": summarize_standard_retrieval_payload(
+                    standard_public_payload
+                )
+            },
+            "cases": {
+                "standard_public_retrieval_qa": [
+                    dict(case)
+                    for case in standard_public_payload.get("cases") or []
+                    if isinstance(case, dict)
+                ]
+            },
+            "privacy_boundary": {
+                "raw_text_emitted": bool(include_private_text),
+                "snippets_emitted": bool(include_private_text),
+                "titles_emitted": False,
+                "source_reference_details_emitted": bool(include_private_text),
+                "absolute_paths_emitted": bool(include_private_text),
+                "case_ids_are_hashed": True,
+                "output_shape": "sanitized_standard_public_retrieval_qa_only",
+            },
+            "cannot_claim": sorted(
+                set(
+                    [str(item) for item in standard_public_payload.get("cannot_claim") or []]
+                    + [
+                        "full_mixed_track_b_bundle",
+                        "private_real_history_source_evidence_quality",
+                    ]
+                )
+            ),
+            "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
+        }
+        payload["query_origin_summary"] = query_origin_summary(payload["tracks"])
+        if include_private_text:
+            payload["private_debug_payloads"] = {
+                "standard_public_retrieval_qa": standard_public_payload
+            }
+        return payload
+
     fts5_payload = fts5_benchmark.run_benchmark(
         registry_path=registry_path,
         sample_size=fts5_cases,
@@ -465,6 +561,7 @@ def run_source_evidence_retrieval_benchmark(
         "status": status,
         "ok": ok,
         "config": {
+            "only_standard_public": bool(only_standard_public),
             "fts5_cases": int(fts5_cases),
             "fts5_min_cases": int(fts5_min_cases),
             "fts5_seed": int(fts5_seed),
@@ -590,40 +687,42 @@ def run_source_evidence_retrieval_benchmark(
 
 
 def print_human_summary(payload: dict[str, Any]) -> None:
-    fts5 = payload["tracks"]["fts5_source_line"]
-    source = payload["tracks"]["source_evidence"]
-    fts5_top_k = int(payload["config"]["fts5_top_k"])
-    source_top_k = int(payload["config"]["source_top_k"])
+    fts5 = payload["tracks"].get("fts5_source_line")
+    source = payload["tracks"].get("source_evidence")
+    fts5_top_k = int(payload["config"].get("fts5_top_k") or 0)
+    source_top_k = int(payload["config"].get("source_top_k") or 0)
     print("AIppocampus source-evidence retrieval benchmark")
     print(f"- status: {payload['status']}")
-    print(f"- fts5 cases: {fts5['total_cases']}")
-    print(
-        f"- fts5 top-{fts5_top_k}: "
-        f"{fts5['fts5'].get(f'hit_top{fts5_top_k}', 0)} hit / "
-        f"{fts5['fts5'].get(f'miss_top{fts5_top_k}', 0)} miss "
-        f"({fts5['fts5'].get(f'hit_rate_top{fts5_top_k}', 0.0):.2%})"
-    )
-    hybrid = fts5.get("production_hybrid")
-    if hybrid:
+    if fts5:
+        print(f"- fts5 cases: {fts5['total_cases']}")
         print(
-            f"- production hybrid top-{fts5_top_k}: "
-            f"{hybrid.get(f'hit_top{fts5_top_k}', 0)} hit / "
-            f"{hybrid.get(f'miss_top{fts5_top_k}', 0)} miss "
-            f"({hybrid.get(f'hit_rate_top{fts5_top_k}', 0.0):.2%})"
+            f"- fts5 top-{fts5_top_k}: "
+            f"{fts5['fts5'].get(f'hit_top{fts5_top_k}', 0)} hit / "
+            f"{fts5['fts5'].get(f'miss_top{fts5_top_k}', 0)} miss "
+            f"({fts5['fts5'].get(f'hit_rate_top{fts5_top_k}', 0.0):.2%})"
         )
-    print(
-        f"- selected source evidence top-{source_top_k}: "
-        f"{source['passed_count']} hit / {source['failed_count']} miss "
-        f"({source['top_k_hit_rate']:.2%})"
-    )
-    selection_explanation = source.get("selection_explanation") or {}
-    if selection_explanation:
+        hybrid = fts5.get("production_hybrid")
+        if hybrid:
+            print(
+                f"- production hybrid top-{fts5_top_k}: "
+                f"{hybrid.get(f'hit_top{fts5_top_k}', 0)} hit / "
+                f"{hybrid.get(f'miss_top{fts5_top_k}', 0)} miss "
+                f"({hybrid.get(f'hit_rate_top{fts5_top_k}', 0.0):.2%})"
+            )
+    if source:
         print(
-            "- selected source evidence selection: "
-            f"{selection_explanation.get('mode')} "
-            f"selected={selection_explanation.get('selected_case_count')} "
-            f"min={selection_explanation.get('min_cases')}"
+            f"- selected source evidence top-{source_top_k}: "
+            f"{source['passed_count']} hit / {source['failed_count']} miss "
+            f"({source['top_k_hit_rate']:.2%})"
         )
+        selection_explanation = source.get("selection_explanation") or {}
+        if selection_explanation:
+            print(
+                "- selected source evidence selection: "
+                f"{selection_explanation.get('mode')} "
+                f"selected={selection_explanation.get('selected_case_count')} "
+                f"min={selection_explanation.get('min_cases')}"
+            )
     sharegpt_public = payload["tracks"].get("sharegpt_public_source_evidence")
     if sharegpt_public:
         metrics = sharegpt_public.get("metrics") or {}
@@ -672,6 +771,14 @@ def print_human_summary(payload: dict[str, Any]) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--registry", type=Path, default=None)
+    parser.add_argument(
+        "--only-standard-public",
+        action="store_true",
+        help=(
+            "Run only the standard public retrieval-QA adapter and report its "
+            "status separately from the mixed Track B bundle."
+        ),
+    )
     parser.add_argument("--fts5-cases", type=int, default=DEFAULT_FTS5_CASES)
     parser.add_argument("--fts5-min-cases", type=int, default=DEFAULT_FTS5_MIN_CASES)
     parser.add_argument("--fts5-seed", type=int, default=fts5_benchmark.DEFAULT_SEED)
@@ -838,6 +945,7 @@ def main() -> int:
 
     payload = run_source_evidence_retrieval_benchmark(
         registry_path=args.registry,
+        only_standard_public=args.only_standard_public,
         fts5_cases=args.fts5_cases,
         fts5_min_cases=args.fts5_min_cases,
         fts5_seed=args.fts5_seed,

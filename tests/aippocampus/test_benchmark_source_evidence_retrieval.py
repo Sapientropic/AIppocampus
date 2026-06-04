@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -351,6 +352,7 @@ class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("--allow-deterministic-labels", proc.stdout)
+        self.assertIn("--only-standard-public", proc.stdout)
         normalized_help = " ".join(proc.stdout.split())
         self.assertIn("cannot claim", normalized_help)
         self.assertIn("sidecar sample coverage", normalized_help)
@@ -657,6 +659,43 @@ class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
             non_source["hit_rates"],
         )
         self.assertNotIn("natural_user_query_recall", payload["cannot_claim"])
+
+    def test_standard_public_only_mode_reports_selected_external_track_without_internal_failures(self) -> None:
+        with (
+            patch.object(benchmark.fts5_benchmark, "run_benchmark") as fts5_run,
+            patch.object(benchmark.source_evidence_eval, "run_source_evidence_recall_eval")
+            as source_run,
+            patch.object(
+                benchmark,
+                "run_standard_retrieval_qa_benchmark",
+                return_value=fake_standard_public_payload(),
+            ) as standard_run,
+        ):
+            payload = benchmark.run_source_evidence_retrieval_benchmark(
+                only_standard_public=True,
+                standard_dataset="locomo",
+                standard_max_questions=2,
+                standard_min_questions=1,
+                standard_top_k=5,
+            )
+
+        self.assertTrue(payload["ok"], payload)
+        self.assertEqual(payload["status"], "standard_public_only_sufficient")
+        self.assertTrue(payload["config"]["only_standard_public"])
+        self.assertTrue(payload["config"]["include_standard_public"])
+        self.assertEqual(list(payload["tracks"]), ["standard_public_retrieval_qa"])
+        self.assertEqual(list(payload["cases"]), ["standard_public_retrieval_qa"])
+        metrics = payload["tracks"]["standard_public_retrieval_qa"]["metrics"]
+        self.assertEqual(metrics["session_hit_rate_top5"], 1.0)
+        self.assertIn("full_mixed_track_b_bundle", payload["cannot_claim"])
+        self.assertNotIn("selected_source_evidence_recall", payload["cannot_claim"])
+        with patch("sys.stdout", new_callable=StringIO) as summary:
+            benchmark.print_human_summary(payload)
+        self.assertIn("- status: standard_public_only_sufficient", summary.getvalue())
+        self.assertIn("- locomo retrieval-QA top-5:", summary.getvalue())
+        fts5_run.assert_not_called()
+        source_run.assert_not_called()
+        standard_run.assert_called_once()
 
     def test_skipped_standard_public_arm_does_not_clear_user_query_boundary(self) -> None:
         with (
