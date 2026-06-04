@@ -138,6 +138,15 @@ raw-rollout deletion. Physical payload compaction remains owner-specific and
 must pass source, provenance, reference, and rebuild/review checks before any
 stored payload is minimized.
 
+The first owner-specific compaction slice is the ambient thread cache:
+`aippocampus_runtime.recall.ambient_cache_compaction` can consume a dead-letter apply
+manifest and replace matching `ambient_card` payloads with tombstones that keep
+hash identity, source-ref counts, provenance-pointer hash, reason codes,
+timestamps, and rebuild/review notes. This reduces stale related-cache drag
+without mutating clean source, raw rollout, registry refs, truth status, or
+foreground hook state. Other activation surfaces still need their own owners to
+implement equivalent apply checks before #582 can be treated as fully done.
+
 Two positive examples anchor the rule:
 
 - A prompt-time scent is allowed to say "this old thread may be relevant" before
