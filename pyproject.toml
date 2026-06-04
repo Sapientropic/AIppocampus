@@ -414,6 +414,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/recall/fresh_thread_scent.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/index_builder.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/life_cues.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/living_cue_cache.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_context_render.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_cues.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_ambient.py",

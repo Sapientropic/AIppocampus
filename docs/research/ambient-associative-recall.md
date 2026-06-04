@@ -139,6 +139,7 @@ Recommended cache layers:
 | Layer | Key | Stores | Why it matters |
 |---|---|---|---|
 | Exact prompt cache | Prompt fingerprint plus semantic cue hash. | Prior semantic-gate or scout result. | Fast repeat protection, already close to the existing semantic gate cache. |
+| Living cue cache | Digested cue id plus source-ref fingerprints. | Source-backed user wording, metaphors, aliases, currentness/freshness, sensitivity, decay, and helpful/harmful counters. | Gives the foreground hook a compact learned-phrase bridge without reading the whole registry or calling a live model. |
 | Thread ambient cache | `thread_id + workspace + topic_epoch`. | 3-8 current ambient recall cards, active negative contexts, mode, confidence, source-ref fingerprints, query aliases, topic decision, visibility bias. | Makes continuity immediate after the first warming pass in a multi-turn agent session. |
 | Active recall lock | `prompt/thread/workspace/topic/freshness` route hash. | Navigation-only lock id, candidate refs, query aliases, route reasons, version/generation, freshness-vector fingerprints, consumer timing, and aggregate ROI counters. | Lets the foreground agent pull or reopen a route when useful without treating hook scent, aliases, or model output as facts. |
 | Topic trajectory cache | Rolling topic hash, without raw prompt text. | Current theme, drift markers, likely next search aliases, visibility bias. | Still intentionally folded into the thread cache for now; split it only if real traces prove the metadata needs its own lifecycle. |
@@ -150,6 +151,15 @@ evictions so operators can see whether semantic reuse is actually reducing live
 model calls. Value-aware retention may protect source-backed semantic-cue
 results from low-value churn, but cached aliases remain routing hints until the
 current turn reopens clean source.
+
+The living cue cache is the foreground projection of digested history. Entries
+may store cue text and aliases locally, but selector packets expose only cue ids,
+source handles, support level, and count-only diagnostics. Temporary moods,
+superseded routes, stale entries, harmful-feedback-heavy entries, and high-risk
+sensitivity are suppressed before packet projection so first-turn familiarity
+does not become over-personalization. The #281 slice currently defines the
+schema, deterministic selector, diagnostics, and public-safe smoke only; it does
+not yet wire this cache into the default prompt hook.
 
 Thread ambient cache is a soft working surface, not memory truth. It should be
 small, expiring, source-ref-fingerprinted, and safe to discard. It must not log

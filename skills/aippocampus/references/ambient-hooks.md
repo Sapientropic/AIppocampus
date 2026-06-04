@@ -537,6 +537,17 @@ aliases remain routing hints only. `semantic_recall_gate.py --cache-report
 --json` and `semantic_cue_cache.semantic_cue_cache_report()` expose count-only
 diagnostics; they must not emit raw prompt text, cue text, source snippets, or
 local paths.
+`aippocampus_runtime.recall.living_cue_cache` owns the first #281 living cue
+cache slice. Background or warm digestion can materialize source-backed cue
+entries with `cue`, `aliases`, `source_refs`, `confidence`, `sensitivity`,
+`freshness`, `status/currentness`, `decay`, and helpful/harmful counters. The
+foreground selector returns only a compact packet: `scent` or `skip`,
+`source_required` or `suppressed`, cue ids, source handles, and count-only hit /
+miss / stale / temporary / over-personalization diagnostics. It performs no live
+LLM call, does not emit raw cue or prompt text, and still requires clean-source
+reopen before any specific claim. This slice is not yet wired into the default
+prompt hook; use `tools/aippocampus/smoke/smoke_living_cue_cache.py --json` for
+the public-safe fixture smoke.
 Active `semantic_cues.jsonl` rows and reviewed `semantic_triggers.jsonl` rows
 also feed the hook's local pre-gate and query seed terms. This is the intended
 replacement path for semantic proxy word lists in
@@ -573,6 +584,7 @@ Useful commands:
 
 - `python ...\semantic_recall_gate.py --prompt "那个脑内续接器现在怎么样了？" --cwd "$PWD" --json`
 - `python ...\semantic_trigger_router.py --json`
+- `python tools\aippocampus\smoke\smoke_living_cue_cache.py --json`
 - `python tools\aippocampus\smoke\smoke_prompt_hook_latency.py --runs 5 --json`
 
 The latency smoke wraps the prompt hook in subprocesses and reports only
