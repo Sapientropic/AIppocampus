@@ -1869,6 +1869,52 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertIn("philosophical", theme)
         self.assertIn("visual", key_line)
 
+    def test_privacy_guard_routes_same_user_context_without_weakening_secret_blocks(self) -> None:
+        direct = json.loads(
+            warm.scout_prompt(
+                "privacy_boundary_guard:direct",
+                {"prompt": "继续", "memory_catalog": [], "prompt_trace": []},
+            )
+        )["scout_task"]
+        registry = json.loads(
+            warm.scout_prompt(
+                "privacy_boundary_guard:registry_window",
+                {"prompt": "继续", "memory_catalog": [], "prompt_trace": []},
+            )
+        )["scout_task"]
+        clean_source = json.loads(
+            warm.scout_prompt(
+                "privacy_boundary_guard:clean_source_window",
+                {"prompt": "继续", "memory_catalog": [], "prompt_trace": []},
+            )
+        )["scout_task"]
+        current_trace = json.loads(
+            warm.scout_prompt(
+                "privacy_boundary_guard:current_trace_window",
+                {"prompt": "继续", "memory_catalog": [], "prompt_trace": []},
+            )
+        )["scout_task"]
+        skeptic = json.loads(
+            warm.scout_prompt(
+                "privacy_boundary_guard:skeptic_window",
+                {"prompt": "继续", "memory_catalog": [], "prompt_trace": []},
+            )
+        )["scout_task"]
+
+        family_task = direct["family_task"].casefold()
+        self.assertIn("same-user", family_task)
+        self.assertIn("private", family_task)
+        self.assertIn("block credential", family_task)
+        self.assertIn("external projection", family_task)
+        self.assertNotIn("suppress credential leaks, personal/financial/relationship", family_task)
+
+        self.assertIn("block tokens", direct["lens_task"].casefold())
+        self.assertIn("same-user", registry["lens_task"].casefold())
+        self.assertIn("purpose-scoped", clean_source["lens_task"].casefold())
+        self.assertIn("hard-block secret-like", clean_source["lens_task"].casefold())
+        self.assertIn("same-user scope", current_trace["lens_task"].casefold())
+        self.assertIn("professional secret", skeptic["lens_task"].casefold())
+
     def test_merge_dedupes_similar_themes_and_keeps_diverse_cards(self) -> None:
         rows = [
             warm.parse_scout_output(
