@@ -63,6 +63,12 @@ class RepoFamiliarityForegroundExperimentTests(unittest.TestCase):
         self.assertEqual(selected["stale_route_drag_count"], 0)
         self.assertEqual(stale["selected_card_count"], 0)
         self.assertGreater(stale["fast_reject_count"], 0)
+        encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
+        self.assertNotIn(str(REPO_ROOT), encoded)
+        self.assertNotIn(REPO_ROOT.as_posix(), encoded)
+        encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
+        self.assertNotIn(str(REPO_ROOT), encoded)
+        self.assertNotIn(REPO_ROOT.as_posix(), encoded)
         self.assertEqual(stale["stale_route_drag_count"], 0)
 
     def test_report_keeps_live_and_default_foreground_claims_unclaimed(self) -> None:
@@ -77,6 +83,25 @@ class RepoFamiliarityForegroundExperimentTests(unittest.TestCase):
         self.assertEqual(readout["default_foreground_integration"], "not_implemented")
         self.assertEqual(readout["multi_agent_persistence"], "not_implemented")
         self.assertFalse(readout["closeout_eligible"])
+
+    def test_current_checkout_report_adds_public_repo_case(self) -> None:
+        report = repo_familiarity_foreground_experiment_fixtures.current_checkout_foreground_experiment(
+            repo_root=REPO_ROOT
+        )
+
+        case = report["cases_by_id"]["current_checkout_hook_budget_semantic_gate"]
+        selected = case["arms"]["selected_card"]
+        stale = case["arms"]["stale_or_irrelevant_card"]
+
+        self.assertEqual(
+            case["case_family"],
+            "repo_familiarity_current_checkout_orientation",
+        )
+        self.assertEqual(selected["selected_card_count"], 1)
+        self.assertEqual(selected["selected_landmarks"], ["foreground hook semantic budget"])
+        self.assertEqual(selected["stale_route_drag_count"], 0)
+        self.assertEqual(stale["selected_card_count"], 0)
+        self.assertGreater(stale["fast_reject_count"], 0)
 
     def test_report_does_not_emit_local_paths_or_raw_source_text(self) -> None:
         report = (
@@ -108,6 +133,15 @@ class RepoFamiliarityForegroundExperimentTests(unittest.TestCase):
             repo_familiarity_foreground_experiment.EXPERIMENT_KIND,
         )
         self.assertTrue(payload["ok"])
+        self.assertIn("hook_budget_semantic_gate", payload["cases_by_id"])
+        self.assertIn(
+            "current_checkout_hook_budget_semantic_gate",
+            payload["cases_by_id"],
+        )
+        self.assertEqual(
+            payload["aggregate"]["arms"]["selected_card"]["case_count"],
+            len(payload["cases"]),
+        )
 
 
 if __name__ == "__main__":

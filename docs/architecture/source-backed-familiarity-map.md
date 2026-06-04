@@ -59,13 +59,18 @@ only proves the deterministic contract, not live agent helpfulness.
 
 ## Opt-In Foreground Experiment Evidence
 
-The opt-in foreground experiment smoke compares public-safe fixture arms for
-`no_card`, `selected_card`, and `stale_or_irrelevant_card`. It reports only
-proxy metrics: `route_quality_proxy`, `tool_call_count`, `input_token_proxy`,
-`elapsed_ms_proxy`, fast rejects, and stale-route drag. These fields define the
-evidence envelope for future live runs; they do not prove live answer quality,
-token/tool-call savings, default prompt-hook lift, or multi-agent familiarity
-sharing.
+The opt-in foreground experiment smoke compares public-safe fixture arms plus a
+public current-checkout case for `no_card`, `selected_card`, and
+`stale_or_irrelevant_card`. The current-checkout case reuses the same
+repo-relative source rows and file fingerprints as the packet smoke, so the
+experiment is no longer fixture-only while still serializing no local absolute
+paths or raw source text.
+
+It reports only proxy metrics: `route_quality_proxy`, `tool_call_count`,
+`input_token_proxy`, `elapsed_ms_proxy`, fast rejects, and stale-route drag.
+These fields define the evidence envelope for future live runs; they do not
+prove live answer quality, token/tool-call savings, default prompt-hook lift, or
+multi-agent familiarity sharing.
 
 ## Non-Claims
 
