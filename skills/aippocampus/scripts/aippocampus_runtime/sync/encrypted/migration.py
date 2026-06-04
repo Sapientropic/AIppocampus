@@ -9,13 +9,9 @@ from typing import Any, Iterable
 
 from aippocampus_runtime.sync import bundle as sync_bundle
 from aippocampus_runtime.sync.encrypted import bundle as encrypted_sync_bundle
-from aippocampus_runtime.sync.encrypted import keys as encrypted_sync_keys
+from aippocampus_runtime.sync.encrypted import migration_recipients, migration_recovery
 from aippocampus_runtime.sync.encrypted import object_storage as encrypted_sync_object_storage
-from aippocampus_runtime.sync.encrypted.crypto import (
-    issue,
-    recipients_from_files,
-    validate_recipients,
-)
+from aippocampus_runtime.sync.encrypted.crypto import issue
 from aippocampus_runtime.sync.object_storage import cli as sync_object_storage
 
 
@@ -132,27 +128,6 @@ def target_sync_dir_fresh(source_sync_dir: Path, target_sync_dir: Path) -> dict[
     return None
 
 
-def collect_recipients_for_registry(
-    registry_dir: str | Path,
-    *,
-    recipients: Iterable[str] | None = None,
-    recipient_files: Iterable[str | Path] | None = None,
-) -> tuple[list[str], dict[str, Any] | None]:
-    explicit, explicit_issue = validate_recipients(recipients or [])
-    if explicit_issue and recipients:
-        return [], explicit_issue
-    file_recipients, file_issue = recipients_from_files(recipient_files)
-    if file_issue and recipient_files:
-        return [], file_issue
-    trusted = (
-        encrypted_sync_keys.trusted_recipients_for_registry(registry_dir)
-        if not explicit and not file_recipients
-        else []
-    )
-    collected = explicit + file_recipients + trusted
-    return validate_recipients(collected)
-
-
 def migrate_plaintext_sync_dir_to_encrypted(
     source_sync_dir: str | Path,
     target_sync_dir: str | Path,
@@ -173,7 +148,7 @@ def migrate_plaintext_sync_dir_to_encrypted(
         return failed_local_result(source_root, fresh_issue["code"], fresh_issue["message"], path=fresh_issue.get("path"))
 
     recipient_root = Path(registry_dir).resolve() if registry_dir else source_root
-    resolved_recipients, recipient_issue = collect_recipients_for_registry(
+    resolved_recipients, recipient_issue = migration_recipients.collect_recipients_for_registry(
         recipient_root,
         recipients=recipients,
         recipient_files=recipient_files,
@@ -207,17 +182,32 @@ def migrate_plaintext_sync_dir_to_encrypted(
                 "migration_plaintext_pull_failed",
                 "failed to materialize plaintext source before encryption",
             )
-        push = encrypted_sync_bundle.push_encrypted_sync_bundle(
-            temp_registry,
-            target_root,
-            recipients=resolved_recipients,
-            age_bin=age_bin,
-        )
+        try:
+            push = encrypted_sync_bundle.push_encrypted_sync_bundle(
+                temp_registry,
+                target_root,
+                recipients=resolved_recipients,
+                age_bin=age_bin,
+            )
+        except Exception as exc:
+            push = failed_local_result(
+                target_root,
+                "migration_encrypted_push_failed",
+                f"failed to write encrypted migration target: {exc}",
+            )
     result = dict(base)
     result.update(push)
     result["source_sync_dir"] = str(source_root)
     result["target_sync_dir"] = str(target_root)
     result["would_delete_plaintext"] = False
+    if not result.get("ok"):
+        return migration_recovery.with_partial_migration_recovery(
+            result,
+            source_kind="local_folder",
+            source_label=str(source_root),
+            target_label=str(target_root),
+            partial_encrypted_artifact_count=migration_recovery.local_partial_encrypted_artifact_count(target_root),
+        )
     return result
 
 
@@ -472,7 +462,7 @@ def migrate_plaintext_object_storage_to_encrypted(
             path=fresh_issue.get("path"),
         )
     recipient_root = Path(registry_dir).resolve() if registry_dir else Path.cwd()
-    resolved_recipients, recipient_issue = collect_recipients_for_registry(
+    resolved_recipients, recipient_issue = migration_recipients.collect_recipients_for_registry(
         recipient_root,
         recipients=recipients,
         recipient_files=recipient_files,
@@ -511,18 +501,35 @@ def migrate_plaintext_object_storage_to_encrypted(
                 "migration_plaintext_pull_failed",
                 "failed to materialize plaintext source before encryption",
             )
-        push = sync_object_storage.push_encrypted_object_storage_bundle(
-            temp_registry,
-            object_store_url,
-            prefix=target_prefix,
-            recipients=resolved_recipients,
-            age_bin=age_bin,
-            **provider_kwargs,
-        )
+        try:
+            push = sync_object_storage.push_encrypted_object_storage_bundle(
+                temp_registry,
+                object_store_url,
+                prefix=target_prefix,
+                recipients=resolved_recipients,
+                age_bin=age_bin,
+                **provider_kwargs,
+            )
+        except Exception as exc:
+            push = failed_object_result(
+                client_label,
+                target_prefix,
+                "migration_encrypted_push_failed",
+                f"failed to write encrypted migration target: {exc}",
+            )
     result = dict(base)
     result.update(push)
+    result["object_prefix"] = sync_object_storage.normalize_object_prefix(prefix)
     result["target_object_prefix"] = sync_object_storage.normalize_object_prefix(target_prefix)
     result["would_delete_plaintext"] = False
+    if not result.get("ok"):
+        return migration_recovery.with_partial_migration_recovery(
+            result,
+            source_kind="http_object_store",
+            source_label=sync_object_storage.normalize_object_prefix(prefix),
+            target_label=sync_object_storage.normalize_object_prefix(target_prefix),
+            partial_encrypted_artifact_count=int(result.get("object_count") or 0),
+        )
     return result
 
 

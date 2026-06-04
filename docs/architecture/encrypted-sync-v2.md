@@ -77,6 +77,39 @@ behavior. They are not claimed by this design note.
 | manifest signing | Future test for signed head metadata before any automated multi-writer trust claim. |
 | metadata padding | Optional provider smoke comparing unpadded and padded object-size buckets before claiming traffic-analysis reduction. |
 
+## Current Implementation Notes
+
+As of 2026-06-05, the plaintext-to-encrypted migration helpers have a first
+deterministic recovery diagnostic slice for local folders and the HTTP object
+storage fixture. If an encrypted target write fails after leaving partial
+encrypted artifacts, the migration result preserves the original failure,
+adds `partial_migration_preserved`, and reports `migration_recovery` with
+`plaintext_source_preserved=true`, `target_preserved_for_inspection=true`,
+`cleanup_allowed=false`, and `manual_recovery_required=true`. This proves the
+local deterministic contract only; it does not prove live-provider interruption
+semantics or provider-console cleanup.
+
+## Provider Metadata Evidence
+
+The dated #104 Cloudflare R2-compatible re-smoke in
+[`public-readiness-verification.md`](../evidence/readiness/public-readiness-verification.md#2026-06-04-issue-104-post-migration-r2-provider-re-smoke)
+is the current provider observation for this track. It verified encrypted
+push/status/repair/pull, post-migration plaintext-to-encrypted flow, raw-rollout
+exclusion, and cleanup of the uploaded test objects for one R2-compatible path.
+The smoke also exposed the practical metadata boundary: operators and the
+provider path can observe object counts and object sizes for the encrypted and
+plaintext test prefixes even though synced registry/source contents stay
+encrypted.
+
+Padding decision: keep metadata padding deferred. The current evidence does not
+show that coarse object-size or object-count padding is worth the added cost,
+latency, and partial-guarantee confusion. AIppocampus can claim encrypted
+contents for the dated R2-compatible path, but it cannot claim traffic-analysis
+resistance for object sizes, object counts, upload cadence, or unrelated
+provider prefixes. Revisit padding only after a focused provider smoke records
+unpadded versus padded bucket costs and a concrete user risk that outweighs the
+operational cost.
+
 ## Follow-Up Implementation Issues
 
 Split implementation only after this contract is accepted. Suggested child
