@@ -36,6 +36,9 @@ private registry.
   services.
 - Report views by degradation, by interference, D/I matrix, aggregate metrics,
   and calibration categories.
+- Cross-system comparison rows for #238, exposed in the benchmark JSON as
+  `cross_system_comparison` and summarized in
+  [`hippocampal-cross-system-comparison-2026-06-04.md`](hippocampal-cross-system-comparison-2026-06-04.md).
 
 ## Scoring Contract
 
@@ -79,6 +82,11 @@ prospective-validation shape from the Dream design notes, but it requires later
 time-sliced source evidence before any prospective Dream claim can be treated
 as supported.
 
+Cross-system rows expose `cross_system_comparison`. Local rows use observed
+public-synthetic fixture metrics; semantic-only and external memory-system rows
+stay visible as not-implemented or missing-config diagnostics until runnable
+adapters exist.
+
 ## Canonical Files
 
 - Schema: `benchmarks/aippocampus/hippocampal_fixture_schema.py`
@@ -103,3 +111,5 @@ as supported.
 - user-visible Dream benefit or predictive validity from synthetic H5 deltas
 - private real-history consolidation quality
 - AIppocampus-specific consolidation lift without live controls
+- publication-grade comparison or confidence intervals from the 12-case
+  diagnostic seed

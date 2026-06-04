@@ -99,6 +99,53 @@ H5_OVERGENERALIZATION_OUTCOMES = {
     "confabulation",
 }
 H5_FALSE_FORGETTING_OUTCOMES = {"unsupported_skip"}
+CROSS_SYSTEM_REPORT_PATH = (
+    "docs/evidence/benchmarks/hippocampal-cross-system-comparison-2026-06-04.md"
+)
+CROSS_SYSTEM_LOCAL_ROWS = (
+    {
+        "row_id": "aippocampus_diagnostic",
+        "display_name": "AIppocampus diagnostic",
+        "h1_h2_arm": "full_query",
+        "h5_arm": "aippocampus_dream_consolidation",
+    },
+    {
+        "row_id": "baseline_rag",
+        "display_name": "Baseline RAG",
+        "h1_h2_arm": "baseline_rag",
+        "h5_arm": None,
+    },
+    {
+        "row_id": "keyword_only",
+        "display_name": "Keyword-only",
+        "h1_h2_arm": "keyword_only",
+        "h5_arm": "no_consolidation",
+    },
+    {
+        "row_id": "closed_book",
+        "display_name": "Closed-book",
+        "h1_h2_arm": "closed_book",
+        "h5_arm": None,
+    },
+    {
+        "row_id": "overactive_all_evidence",
+        "display_name": "Overactive all-evidence",
+        "h1_h2_arm": "overactive_all_evidence",
+        "h5_arm": None,
+    },
+    {
+        "row_id": "random_retrieval",
+        "display_name": "Random retrieval",
+        "h1_h2_arm": "random_retrieval",
+        "h5_arm": "random_consolidation",
+    },
+    {
+        "row_id": "simple_summary_consolidation",
+        "display_name": "Simple-summary consolidation",
+        "h1_h2_arm": None,
+        "h5_arm": "simple_summary_consolidation",
+    },
+)
 
 
 def now_utc() -> str:
@@ -1112,6 +1159,214 @@ def _h5_consolidation_report(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any
     }
 
 
+def _comparison_rate_for_levels(
+    by_degradation: Mapping[str, Any],
+    levels: Sequence[str],
+) -> tuple[float | None, int]:
+    scored = 0
+    correct = 0
+    for level in levels:
+        view = _as_mapping(by_degradation.get(level))
+        scored += int(view.get("scored_example_count") or 0)
+        correct += int(view.get("correct_count") or 0)
+    if scored <= 0:
+        return None, 0
+    return _rate(correct, scored), scored
+
+
+def _comparison_separation_accuracy(
+    by_degradation: Mapping[str, Any],
+    levels: Sequence[str],
+) -> float | None:
+    scored = 0
+    failures = 0
+    for level in levels:
+        view = _as_mapping(by_degradation.get(level))
+        scored += int(view.get("scored_example_count") or 0)
+        failures += int(view.get("separation_failure_count") or 0)
+    if scored <= 0:
+        return None
+    return _rate(scored - failures, scored)
+
+
+def _comparison_round_delta(before: float | None, after: float | None) -> float | None:
+    if before is None or after is None:
+        return None
+    return round(before - after, 6)
+
+
+def _comparison_row_from_arm(
+    row_spec: Mapping[str, Any],
+    *,
+    arm_views: Mapping[str, Any],
+    h5_report: Mapping[str, Any],
+    validation: Mapping[str, Any],
+) -> dict[str, Any]:
+    h1_h2_arm = row_spec.get("h1_h2_arm")
+    h5_arm = row_spec.get("h5_arm")
+    h1_h2_view = _as_mapping(arm_views.get(str(h1_h2_arm))) if h1_h2_arm else {}
+    aggregate = _as_mapping(h1_h2_view.get("aggregate"))
+    by_degradation = _as_mapping(h1_h2_view.get("by_degradation"))
+    d0_accuracy, d0_sample_size = _comparison_rate_for_levels(by_degradation, ("D0",))
+    degraded_accuracy, degraded_sample_size = _comparison_rate_for_levels(
+        by_degradation,
+        ("D1", "D2", "D3", "D4", "D5", "D6"),
+    )
+    d5_d6_accuracy, d5_d6_sample_size = _comparison_rate_for_levels(
+        by_degradation,
+        ("D5", "D6"),
+    )
+    h5_aggregate = (
+        _as_mapping(
+            _as_mapping(_as_mapping(h5_report.get("views_by_arm")).get(str(h5_arm))).get(
+                "aggregate"
+            )
+        )
+        if h5_arm
+        else {}
+    )
+    return {
+        "row_id": row_spec["row_id"],
+        "display_name": row_spec["display_name"],
+        "availability": "observed_public_synthetic",
+        "comparable": bool(h1_h2_arm or h5_arm),
+        "claim_level": "synthetic_public_result",
+        "h1_h2_arm": h1_h2_arm,
+        "h5_arm": h5_arm,
+        "h1_h2_sample_size": int(aggregate.get("scored_example_count") or 0),
+        "cell_density_floor": validation.get("density_floor"),
+        "full_p1_matrix_claim": bool(
+            _as_mapping(validation.get("coverage")).get("full_p1_matrix_claim")
+        ),
+        "d0_accuracy": d0_accuracy,
+        "d0_sample_size": d0_sample_size,
+        "h1_degraded_accuracy": degraded_accuracy,
+        "h1_degraded_sample_size": degraded_sample_size,
+        "h1_degraded_drop_from_d0": _comparison_round_delta(
+            d0_accuracy,
+            degraded_accuracy,
+        ),
+        "d5_d6_accuracy": d5_d6_accuracy,
+        "d5_d6_sample_size": d5_d6_sample_size,
+        "d5_d6_drop_from_d0": _comparison_round_delta(d0_accuracy, d5_d6_accuracy),
+        "h2_separation_accuracy": _comparison_separation_accuracy(
+            by_degradation,
+            schema.DEGRADATION_LEVELS,
+        ),
+        "source_reopen_success": aggregate.get("source_reopen_success"),
+        "confabulation_rate": aggregate.get("confabulation_rate"),
+        "overconfidence_rate": aggregate.get("overconfidence_rate"),
+        "underconfidence_rate": aggregate.get("underconfidence_rate"),
+        "h5_score_delta_total": h5_aggregate.get("score_delta_total"),
+        "h5_false_forgetting_count": h5_aggregate.get("false_forgetting_count"),
+        "h5_overgeneralization_count": h5_aggregate.get("overgeneralization_count"),
+        "h5_stale_as_current_delta": h5_aggregate.get("stale_as_current_delta"),
+        "h5_wrong_twin_delta": h5_aggregate.get("wrong_twin_delta"),
+        "h5_cost_per_improvement": h5_aggregate.get("cost_per_improvement"),
+        "comparison_status": (
+            "diagnostic_h5_only"
+            if h5_arm and not h1_h2_arm
+            else "public_synthetic_comparable"
+        ),
+    }
+
+
+def _comparison_missing_row(
+    *,
+    row_id: str,
+    display_name: str,
+    availability: str,
+    claim_level: str,
+) -> dict[str, Any]:
+    return {
+        "row_id": row_id,
+        "display_name": display_name,
+        "availability": availability,
+        "comparable": False,
+        "claim_level": claim_level,
+        "h1_h2_arm": None,
+        "h5_arm": None,
+        "h1_h2_sample_size": 0,
+        "cell_density_floor": None,
+        "full_p1_matrix_claim": False,
+        "d0_accuracy": None,
+        "d0_sample_size": 0,
+        "h1_degraded_accuracy": None,
+        "h1_degraded_sample_size": 0,
+        "h1_degraded_drop_from_d0": None,
+        "d5_d6_accuracy": None,
+        "d5_d6_sample_size": 0,
+        "d5_d6_drop_from_d0": None,
+        "h2_separation_accuracy": None,
+        "source_reopen_success": None,
+        "confabulation_rate": None,
+        "overconfidence_rate": None,
+        "underconfidence_rate": None,
+        "h5_score_delta_total": None,
+        "h5_false_forgetting_count": None,
+        "h5_overgeneralization_count": None,
+        "h5_stale_as_current_delta": None,
+        "h5_wrong_twin_delta": None,
+        "h5_cost_per_improvement": None,
+        "comparison_status": "not_scored",
+    }
+
+
+def _cross_system_comparison_report(
+    *,
+    validation: Mapping[str, Any],
+    arm_views: Mapping[str, Any],
+    h5_report: Mapping[str, Any],
+) -> dict[str, Any]:
+    rows = [
+        _comparison_row_from_arm(
+            row_spec,
+            arm_views=arm_views,
+            h5_report=h5_report,
+            validation=validation,
+        )
+        for row_spec in CROSS_SYSTEM_LOCAL_ROWS
+    ]
+    rows.append(
+        _comparison_missing_row(
+            row_id="semantic_only",
+            display_name="Semantic-only",
+            availability="adapter_not_implemented",
+            claim_level="diagnostic_not_available",
+        )
+    )
+    for adapter_name, adapter in _external_adapter_diagnostics().items():
+        rows.append(
+            _comparison_missing_row(
+                row_id=adapter_name,
+                display_name=adapter_name.replace("_", " / ").title(),
+                availability=str(adapter.get("status") or "diagnostic_missing_configuration"),
+                claim_level="diagnostic_missing_configuration",
+            )
+        )
+    return {
+        "version": "aippocampus.hippocampal_cross_system_comparison.v1",
+        "dated_report_path": CROSS_SYSTEM_REPORT_PATH,
+        "source_issue": "https://github.com/Sapientropic/AIppocampus/issues/238",
+        "parent_issue": "https://github.com/Sapientropic/AIppocampus/issues/228",
+        "comparison_boundary": {
+            "public_synthetic_fixture_only": True,
+            "private_real_history_included": False,
+            "external_adapters_scored": False,
+            "missing_adapters_visible": True,
+            "sparse_cells_visible": True,
+        },
+        "rows": rows,
+        "cannot_claim": [
+            "cross_system_superiority",
+            "external_memory_system_score",
+            "industry_hardest_benchmark",
+            "user_visible_dream_benefit",
+            "publication_grade_comparison",
+        ],
+    }
+
+
 def run_benchmark(
     fixture_path: str | Path = schema.DEFAULT_FIXTURE,
     *,
@@ -1141,6 +1396,11 @@ def run_benchmark(
     views = _views(rows, validation, case_results)
     arm_views = _views_by_arm(rows, validation, case_results)
     h5_consolidation = _h5_consolidation_report(rows)
+    cross_system_comparison = _cross_system_comparison_report(
+        validation=validation,
+        arm_views=arm_views,
+        h5_report=h5_consolidation,
+    )
     quality_gates = _quality_gates(validation, views)
     baseline_captured = bool(validation.get("ok")) and len(case_results) >= (
         len(rows) * len(LOCAL_ADAPTER_ARMS)
@@ -1201,6 +1461,7 @@ def run_benchmark(
         "views": views,
         "views_by_arm": arm_views,
         "h5_consolidation": h5_consolidation,
+        "cross_system_comparison": cross_system_comparison,
         "cases": case_results,
         "privacy_boundary": {
             "public_safe_synthetic_fixture": True,
@@ -1217,6 +1478,7 @@ def run_benchmark(
             "d4_d6_quality_gate_until_dense_reviewed_cells_exist",
             "bucketed_calibration_error_without_calibrated_confidence_bins",
             "user_visible_dream_benefit_from_synthetic_h5_deltas",
+            "cross_system_superiority_from_diagnostic_comparison_table",
         ],
     }
 

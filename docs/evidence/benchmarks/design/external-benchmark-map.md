@@ -8,6 +8,11 @@ quoted as evidence.
 It is not a leaderboard. Do not use this page to claim SOTA, broad competitor
 superiority, official partner support, or product-quality proof.
 
+Current hippocampal H1/H2/H5 diagnostic comparison:
+[`hippocampal-cross-system-comparison-2026-06-04.md`](../hippocampal-cross-system-comparison-2026-06-04.md).
+This table keeps local public-synthetic arms separate from missing-config
+external adapters and does not claim external memory-system scores.
+
 For the #528-specific multimodal source-shape map across HippoCamp, MemLens,
 ATM-Bench, Ego-series episodic memory, UniDoc-Bench, PersonaVLM/Persona-MME,
 Mem-Gallery, and MMRC, use
@@ -70,6 +75,10 @@ Before adding a new external adapter result, document:
 - Mem0 / Zep / Graphiti / Letta / LangMem: keep missing-config diagnostic
   slots separate from scores. Add live adapters only after install/license
   review and a fair source-evidence or pain-fixture adapter exists.
+- Hippocampal H1/H2/H5: keep
+  [`../hippocampal-cross-system-comparison-2026-06-04.md`](../hippocampal-cross-system-comparison-2026-06-04.md)
+  as the dated diagnostic table until live external adapters produce comparable
+  source-backed runs.
 - Host-native compaction: keep separate from bare continuous-context baselines
   and report when the host-native baseline wins. The current #406 contract arm
   names the Codex-style host path; future live runs still need exact host
