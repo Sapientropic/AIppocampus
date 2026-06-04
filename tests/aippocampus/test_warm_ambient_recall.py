@@ -2065,9 +2065,11 @@ class WarmAmbientRecallTests(unittest.TestCase):
 
         result = warm.merge_scouts(rows)
 
+        self.assertEqual(rows[0]["privacy_action"], "hard_block")
         self.assertEqual(result["cards"], [])
         self.assertEqual(result["mode"], warm.SILENT_TUNING)
         self.assertEqual(result["blocked_by"], ["privacy_boundary_guard:direct"])
+        self.assertEqual(result["privacy_actions"], ["hard_block"])
         self.assertEqual(
             warm.suppression_reason_buckets(result),
             ["privacy_blocked", "no_supported_cards"],

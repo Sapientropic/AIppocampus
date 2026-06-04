@@ -220,7 +220,17 @@ SCOUT_OUTPUT_PROFILES = {
         "theme_limit": 0,
     },
     "privacy_boundary_guard": {
-        "allowed_fields": ["decision", "confidence", "block", "negative_contexts", "reason"],
+        "allowed_fields": [
+            "decision",
+            "confidence",
+            "block",
+            "privacy_action",
+            "privacy_reason_code",
+            "privacy_reason_codes",
+            "raw_external_projection_allowed",
+            "negative_contexts",
+            "reason",
+        ],
         "candidate_fields": [],
         "query_alias_limit": 0,
         "negative_context_limit": 2,

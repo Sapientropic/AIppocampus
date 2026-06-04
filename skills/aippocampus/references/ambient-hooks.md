@@ -328,6 +328,14 @@ quiet. High-association families such as `nudge_writer`, `cross_domain_bridge`,
 candidates, but foreground-visible use requires resolved privacy guard, clear
 evidence guard, and at least one source ref. Scout outputs remain route,
 candidate, or guard signals; source-backed claims still require source reopen.
+Privacy guard results distinguish action from sensitivity. Secret-like content,
+unprovided background material, professional secrets, unsafe external
+projection, and genuinely cross-domain sensitive use can still block or defer a
+route. Ordinary same-user conversation context should usually stay a private or
+degraded route handle instead of starving local workers. This does not relax the
+public boundary: debug payloads, benchmark reports, issue comments, cache
+summaries, and user-visible cards must still avoid raw private text, source
+snippets, local paths, private source ids, and thread ids.
 
 Late warm results have only explicit handoff paths: next-turn thread ambient
 cache, active recall lock enrichment, or a foreground agent's later active
