@@ -2,9 +2,9 @@
 
 This is a public-safe deterministic smoke for GitHub #465. It also carries a
 narrow GitHub #201 readout for route actionability, source-reopen
-follow-through, and default foreground route/cache delivery. It compares three
-source-navigation arms on the same synthetic clean-source fixtures, plus one
-two-turn foreground-hook fixture:
+follow-through, default foreground route/cache delivery, and foreground packet
+source-reopen follow-through. It compares three source-navigation arms on the
+same synthetic clean-source fixtures, plus one two-turn foreground-hook fixture:
 
 - direct `search_memory`
 - hook-only scent/card behavior
@@ -50,6 +50,7 @@ The `foreground_lift` fixture also reports:
 
 - first-turn route delivery under `semantic_provider_timeout`;
 - second-turn ambient cache reuse;
+- source reopen after consuming the foreground packet's candidate ref;
 - evidence count and source-boundary preservation.
 
 The aggregate fixture run updated on 2026-06-04 showed:
@@ -64,21 +65,27 @@ The aggregate fixture run updated on 2026-06-04 showed:
   rejection before source use.
 - foreground lift: first turn emitted a navigation-only `scent` route under a
   simulated semantic timeout with `evidence_count=0`; second turn reused the
-  ambient cache with `cache_status=hit` and kept the source boundary intact.
+  ambient cache with `cache_status=hit`; the packet candidate ref reopened the
+  expected fixture source with `manual_query_invention_count=0`; the source
+  boundary stayed intact.
 
 ## #201 Readout
 
-For #201, this smoke now measures four deterministic proxy outcomes:
+For #201, this smoke now measures five deterministic proxy outcomes:
 
 - `route_actionability_rate`
 - `source_reopen_follow_through_rate`
 - `default_foreground_first_turn_lift`
 - `default_foreground_second_turn_lift`
+- `foreground_source_reopen_follow_through`
 
 The foreground fields are narrow fixture readouts. First turn means the prompt
 hook can still deliver a local route when semantic provider work times out.
 Second turn means the next prompt can reuse the temporary ambient cache instead
 of staying purely first-turn cold.
+Foreground source reopen means a simulated agent consumes the foreground
+packet's candidate ref and reopens the fixture source without inventing fresh
+grep/search terms. It does not mean hook scent is source evidence.
 
 The report intentionally keeps this #201 outcome as not measured:
 
@@ -95,6 +102,8 @@ a #201 closeout signal.
   cue cases, and a stale-handle negative case.
 - The foreground fixture exercises semantic-timeout-but-route-available and
   next-turn cache reuse without external model calls.
+- A foreground packet candidate ref can be consumed to reopen the expected
+  fixture source with zero manual query invention.
 - The comparison keeps hook scent, route handles, and report metrics as
   navigation/evidence diagnostics, not factual memory claims.
 

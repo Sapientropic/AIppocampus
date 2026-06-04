@@ -339,6 +339,8 @@ def _issue_readouts(
     progressive = _as_dict(arms.get(ARM_PROGRESSIVE))
     foreground = _as_dict(foreground_lift)
     foreground_measured = bool(foreground.get("measured"))
+    foreground_reopen = _as_dict(foreground.get("source_reopen_after_packet"))
+    foreground_reopen_measured = bool(foreground_reopen.get("measured"))
     return {
         "github_201": {
             "route_actionability_measured": True,
@@ -359,6 +361,15 @@ def _issue_readouts(
             ),
             "source_boundary_preserved": bool(
                 foreground.get("source_boundary_preserved")
+            ),
+            "foreground_source_reopen_follow_through_measured": foreground_reopen_measured,
+            "foreground_source_reopen_follow_through": bool(
+                foreground_reopen.get("source_reopen_follow_through")
+            ),
+            "foreground_manual_query_invention_count": (
+                int(foreground_reopen.get("manual_query_invention_count") or 0)
+                if foreground_reopen_measured
+                else None
             ),
             "live_registry_quality": "not_measured",
             "closeout_eligible": False,
@@ -441,6 +452,11 @@ def build_recall_navigation_comparison(
                 "and whether the next turn reuses the ambient cache; it is not a live "
                 "quality or cost claim."
             ),
+            "foreground_source_reopen_after_packet": (
+                "Fixture-backed follow-through check for whether an agent can consume "
+                "the foreground packet candidate ref to reopen source without inventing "
+                "new grep/search terms. It is not live registry quality evidence."
+            ),
         },
         "comparison_boundary": {
             "deterministic_proxy_only": True,
@@ -491,6 +507,7 @@ def render_text(report: Mapping[str, Any]) -> str:
         )
     foreground = _as_dict(report.get("foreground_lift"))
     if foreground.get("measured"):
+        foreground_reopen = _as_dict(foreground.get("source_reopen_after_packet"))
         lines.append(
             "- foreground_lift: first turn "
             + str(foreground.get("first_turn_lift"))
@@ -498,6 +515,8 @@ def render_text(report: Mapping[str, Any]) -> str:
             + str(foreground.get("second_turn_lift"))
             + "; semantic timeout route available "
             + str(bool(foreground.get("semantic_timeout_but_route_available"))).lower()
+            + "; packet source reopen "
+            + str(bool(foreground_reopen.get("source_reopen_follow_through"))).lower()
         )
     lines.append("- Boundary: deterministic proxy only; source reopen remains required.")
     return "\n".join(lines) + "\n"
