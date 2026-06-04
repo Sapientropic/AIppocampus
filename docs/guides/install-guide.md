@@ -44,6 +44,10 @@ Check local provider status without writing memory artifacts:
 uvx aippocampus onboard --provider codex --status
 ```
 
+The status output is a provider-matrix readiness view. It may include other
+locally detectable providers beside Codex; do not read that as Codex-only
+provider-scoped evidence.
+
 Register local Codex history only after the user explicitly agrees:
 
 ```sh

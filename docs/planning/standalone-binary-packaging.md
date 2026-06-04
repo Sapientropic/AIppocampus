@@ -18,9 +18,9 @@ As of 2026-06-01, the standalone binary claim is intentionally narrow:
 | Platform | Status | Public claim |
 | --- | --- | --- |
 | Windows x64 | Smoke-tested first platform | Maintainer-built PyInstaller path only. |
-| macOS arm64 | Deferred for standalone binary support | Use Python/source or GitHub `uvx --from`. |
-| macOS x64 / Intel Mac | Dropped from initial standalone binary claims | Use Python/source or GitHub `uvx --from`. |
-| Linux x64 | Deferred for standalone binary support | Use Python/source or GitHub `uvx --from`. |
+| macOS arm64 | Deferred for standalone binary support | Use PyPI `uvx aippocampus ...` or source install; use GitHub `uvx --from` only for unreleased snapshots. |
+| macOS x64 / Intel Mac | Dropped from initial standalone binary claims | Use PyPI `uvx aippocampus ...` or source install; use GitHub `uvx --from` only for unreleased snapshots. |
+| Linux x64 | Deferred for standalone binary support | Use PyPI `uvx aippocampus ...` or source install; use GitHub `uvx --from` only for unreleased snapshots. |
 
 Evidence and next gates:
 
@@ -42,7 +42,9 @@ Evidence and next gates:
 
 Public docs should point here for binary status instead of mirroring the full
 matrix. If a platform is not marked smoke-tested above, the fallback is the
-Python/source or `uvx --from` install path, not an implied standalone download.
+PyPI `uvx aippocampus ...` or source install path, not an implied standalone
+download. Use GitHub `uvx --from` only when intentionally testing an unreleased
+main-branch snapshot.
 
 ## Candidate Tooling
 

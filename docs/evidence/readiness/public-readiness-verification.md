@@ -20,6 +20,41 @@ Stable privacy rules live in `docs/guides/privacy-security-checklist.md`. Do not
 raw command JSON here: local smoke outputs may contain machine-specific
 temporary paths, so this document keeps only summarized evidence.
 
+## 2026-06-05 Issue #697 Released PyPI And Client-Matrix Refresh
+
+Issue #697 follows the source-install evidence below by checking the released
+PyPI package and public MCP Registry state separately from GitHub main-branch
+snapshots. The local `uvx` probe used temporary isolated `HOME`,
+`USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `AIPPOCAMPUS_HOME`,
+`AIPPOCAMPUS_REGISTRY_DIR`, `CODEX_HOME`, and `UV_CACHE_DIR` values, with
+`PYTHONPATH` cleared.
+
+Positive evidence:
+
+- `python tools\aippocampus\release\check_agent_discovery_release.py --json`
+  passed all eight release-discovery checks. PyPI latest was `0.1.1`, matching
+  `server.json`, and the MCP Registry listed `0.1.1`.
+- `uvx --refresh aippocampus --help` returned the packaged CLI help in 25.082
+  seconds from the isolated environment.
+- `uvx --refresh aippocampus mcp list-tools` returned the MCP tool catalog in
+  3.573 seconds with nine tools.
+- `uvx --refresh aippocampus onboard --provider codex --status --format json`
+  returned `ok=true` in 17.761 seconds and used the isolated
+  `AIPPOCAMPUS_REGISTRY_DIR`.
+
+Release-boundary note:
+
+- The released package status command still returned the provider matrix
+  (`codex`, `claude-code`, and `generic-jsonl`) rather than a Codex-only status
+  object. Treat this as a valid released package/provider-matrix status probe,
+  not as evidence that the PyPI package has a provider-scoped Codex-only status
+  surface.
+
+Cannot claim from this slice: interactive Codex Desktop UI click-through,
+public marketplace install UX, third-party install review, macOS/Linux
+standalone binaries, signed installers, automatic updaters, or all client
+wrappers.
+
 ## 2026-06-05 Issue #307 External Uvx Source-Install Probe
 
 Issue #307 asks for public-readiness evidence that is not merely repository-local.
@@ -45,9 +80,10 @@ Release-boundary note:
   against the published PyPI package returned successfully in 6.030 seconds, but
   the output did not include a provider scope and included additional provider
   status entries. Treat that as a release-refresh gap, not as positive evidence
-  for provider-scoped Codex readiness. Re-run the same PyPI probe after the next
-  package release before claiming the released package has the scoped-provider
-  behavior shown by the GitHub source snapshot.
+  for provider-scoped Codex readiness. The #697 release refresh above confirms
+  the later PyPI `0.1.1` package and MCP Registry entry, but the released status
+  command still reports the provider matrix rather than a Codex-only status
+  object.
 
 Cannot claim from this slice: interactive Codex Desktop UI marketplace behavior,
 public marketplace submission, second-user review, macOS/Linux standalone
@@ -1238,9 +1274,10 @@ be demonstrated without private biography or hard-coded fuzzy phrase expansion.
 ## Remaining Public-Readiness Gaps
 
 - Refresh this evidence after any further code changes.
-- Re-run the PyPI `uvx aippocampus ...` provider-scoped readiness probe after
-  the next package release; the 2026-06-05 GitHub source install probe passed,
-  but the published PyPI package did not yet prove scoped-provider status.
+- If a future claim needs Codex-only provider-scoped status output, implement
+  and release that status shape explicitly. The 2026-06-05 PyPI `0.1.1`
+  re-smoke passed the released package/MCP path but still returned the provider
+  matrix rather than a Codex-only status object.
 - Run an interactive Desktop UI marketplace flow or external install review if
   claiming support across every Codex client surface. Current real-host
   evidence is headless Codex app-server, not manual UI coverage.
