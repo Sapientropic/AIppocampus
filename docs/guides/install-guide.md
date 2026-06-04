@@ -33,6 +33,11 @@ Start with the PyPI `uvx` path:
 uvx aippocampus --help
 ```
 
+The personal/core default does not require purpose tokens, review queues, or
+compliance policy setup before this first-recall path. Heavier profile
+boundaries are defined in
+[public-core-boundary.md](public-core-boundary.md#product-profile-boundary).
+
 Check local provider status without writing memory artifacts:
 
 ```sh

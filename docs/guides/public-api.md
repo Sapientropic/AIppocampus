@@ -158,6 +158,12 @@ The CLI contract applies to documented operator commands, especially:
 - `plugins/aippocampus/build_plugin_package.py`
 - documented plugin smoke commands
 
+The personal/default path is intentionally not purpose-token gated. Purpose
+tokens, mandatory review queues, policy reports, and other high-risk governance
+controls follow the profile boundary in
+[public-core-boundary.md](public-core-boundary.md#product-profile-boundary)
+instead of becoming baseline CLI ceremony.
+
 The clone-free PyPI `uvx` entrypoint is also a documented agent-facing
 install/probe path:
 

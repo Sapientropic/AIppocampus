@@ -5,6 +5,10 @@ without exposing private rollouts or personal registry data.
 
 Demo `Cannot claim` lines are claim-boundary inputs for
 `docs/evidence/current-claims.md`, not standalone benchmark or readiness proof.
+The profile boundary lives in
+[public-core-boundary.md](public-core-boundary.md#product-profile-boundary):
+personal demos should not require purpose tokens, review inboxes, or enterprise
+policy setup unless the scenario explicitly says it is high-risk/governed.
 
 ## Scenario 1: Exact Quote Recall
 

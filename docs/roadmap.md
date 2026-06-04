@@ -60,6 +60,9 @@ can carry the actual continuity signal.
    - Hooks should avoid over-personalization and avoid dragging private context
      into unrelated tasks.
    - Strong claims require source hits.
+   - The personal/core default stays low-friction; high-risk or enterprise
+     governance belongs behind the product-profile boundary in
+     `docs/guides/public-core-boundary.md`.
 
 5. Portable across machines
    - Mac, Windows, and future devices should share the same clean memory graph.
