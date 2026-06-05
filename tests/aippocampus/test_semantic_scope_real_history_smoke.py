@@ -203,6 +203,17 @@ class SemanticScopeRealHistorySmokeTests(unittest.TestCase):
             result["stage2_semantic_sidecar_status"], "insufficient_dynamic_sidecar_rows"
         )
         self.assertFalse(result["live_model_used"])
+        self.assertFalse(
+            result["semantic_evidence_diagnostics"]["high_risk_label_families"][
+                "per_label_materialized_counts_available"
+            ]
+        )
+        self.assertEqual(
+            result["semantic_evidence_diagnostics"]["high_risk_label_families"][
+                "missing_after_materialization"
+            ],
+            [],
+        )
         self.assertNotIn("private metaphor text", rendered)
         self.assertNotIn("Private Life Title", rendered)
         self.assertNotIn(str(self.root), rendered)
@@ -300,6 +311,83 @@ class SemanticScopeRealHistorySmokeTests(unittest.TestCase):
         self.assertNotIn("first_error", rendered)
         self.assertNotIn("failed_batch_indexes", rendered)
         self.assertNotIn("raw_path", rendered)
+
+    def test_public_json_explains_sparse_semantic_funnel_and_high_risk_zeros(self) -> None:
+        internal_result = {
+            "ok": True,
+            "stage2_semantic_sidecar_status": "sufficient",
+            "claim_level": "dynamic_semantic_sidecar_slice",
+            "cannot_claim": ["semantic_completeness"],
+            "live_model_used": True,
+            "sidecars_written": True,
+            "privacy_boundary": {"output_shape": "aggregate_counts_only"},
+            "before": {"semantic_sidecar_rows": 0, "semantic_sidecar_threads": 0},
+            "after": {"semantic_sidecar_rows": 1, "semantic_sidecar_threads": 1},
+            "job": {
+                "finding_count": 1,
+                "label_evidence": {
+                    "finding_count_with_labels": 1,
+                    "accepted_label_count": 1,
+                    "labels_with_sufficient_evidence": 1,
+                    "weak_or_missing_evidence_label_count": 0,
+                    "label_evidence_complete": True,
+                    "label_coverage": ["open_question"],
+                    "per_label_count": {"open_question": 1},
+                    "per_label_sufficient_evidence_count": {"open_question": 1},
+                    "per_label_weak_or_missing_evidence_count": {},
+                },
+            },
+            "materialization": {
+                "ok": True,
+                "target_count": 1,
+                "row_count": 1,
+                "per_label_row_count": {"open_question": 1},
+            },
+            "candidate_coverage": {
+                "full_candidate_coverage_requested": True,
+                "candidate_turn_count": 4,
+                "evaluated_candidate_turn_count": 4,
+                "unevaluated_candidate_turn_count": 0,
+                "batch_count": 2,
+                "successful_batch_count": 2,
+                "failed_batch_count": 0,
+                "full_candidate_coverage_passed": True,
+            },
+            "semantic_candidate_source": {
+                "candidate_turn_count": 4,
+                "candidate_thread_count": 2,
+                "skipped_without_refs": 1,
+                "skipped_already_semantic": 1,
+            },
+            "thresholds": {"min_sidecar_rows": 1},
+        }
+
+        public = smoke.public_smoke_result(internal_result)
+        diagnostics = public["semantic_evidence_diagnostics"]
+
+        self.assertEqual(diagnostics["funnel"]["selected_candidate_count"], 4)
+        self.assertEqual(diagnostics["funnel"]["evaluated_candidate_turn_count"], 4)
+        self.assertEqual(diagnostics["funnel"]["finding_count"], 1)
+        self.assertEqual(diagnostics["funnel"]["materialized_row_count"], 1)
+        self.assertEqual(diagnostics["funnel"]["materialized_thread_count"], 1)
+        self.assertEqual(
+            diagnostics["materialization_reason_buckets"]["model_abstained_or_no_finding"],
+            3,
+        )
+        self.assertEqual(
+            diagnostics["per_label"]["relationship_continuity"]["finding_label_count"],
+            0,
+        )
+        self.assertEqual(
+            diagnostics["per_label"]["relationship_continuity"]["materialized_label_count"],
+            0,
+        )
+        self.assertEqual(diagnostics["per_label"]["open_question"]["materialized_label_count"], 1)
+        self.assertIn(
+            "relationship_continuity",
+            diagnostics["high_risk_label_families"]["missing_after_materialization"],
+        )
+        self.assertIn("semantic_completeness", public["cannot_claim"])
 
     def test_main_json_uses_public_projection(self) -> None:
         internal_result = {
@@ -666,6 +754,22 @@ class SemanticScopeRealHistorySmokeTests(unittest.TestCase):
         self.assertEqual(result["candidate_coverage"]["unevaluated_candidate_turn_count"], 0)
         self.assertEqual(result["candidate_coverage"]["batch_count"], 3)
         self.assertEqual(result["materialization"]["row_count"], 3)
+        self.assertEqual(
+            result["semantic_evidence_diagnostics"]["funnel"]["selected_candidate_count"],
+            3,
+        )
+        self.assertEqual(
+            result["semantic_evidence_diagnostics"]["per_label"]["idea_seed"][
+                "materialized_label_count"
+            ],
+            3,
+        )
+        self.assertEqual(
+            result["semantic_evidence_diagnostics"]["per_label"]["relationship_continuity"][
+                "materialized_label_count"
+            ],
+            0,
+        )
         self.assertTrue((clean / "semantic-scope-labels.jsonl").exists())
         self.assertNotIn("private life-wide candidate", rendered)
         self.assertNotIn("Private Life Title", rendered)

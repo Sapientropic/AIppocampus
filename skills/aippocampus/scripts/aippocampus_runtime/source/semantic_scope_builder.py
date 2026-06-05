@@ -26,6 +26,16 @@ from aippocampus_runtime.source.semantic_scope_labels import (
 )
 
 
+def per_label_row_count(rows: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        for label in row.get("scope_labels") or []:
+            label_text = str(label or "").strip()
+            if label_text:
+                counts[label_text] = counts.get(label_text, 0) + 1
+    return dict(sorted(counts.items()))
+
+
 def entry_matches_project(entry: dict[str, Any], project: str | None) -> bool:
     if not project:
         return True
@@ -66,6 +76,7 @@ def build_semantic_scope_labels(
         "message_count": len(messages_by_id),
         "finding_count": len(findings),
         "row_count": len(rows),
+        "per_label_row_count": per_label_row_count(rows),
         "wrote": not no_write,
         "boundary": "Semantic scope labels are navigation hints; clean source remains the source of truth.",
     }
@@ -115,6 +126,19 @@ def build_semantic_scope_labels_for_registry(
         "project": project,
         "target_count": len(targets),
         "row_count": sum(int(target.get("row_count") or 0) for target in targets),
+        "per_label_row_count": {
+            label: sum(
+                int((target.get("per_label_row_count") or {}).get(label) or 0)
+                for target in targets
+            )
+            for label in sorted(
+                {
+                    str(label)
+                    for target in targets
+                    for label in (target.get("per_label_row_count") or {}).keys()
+                }
+            )
+        },
         "wrote": not no_write,
         "targets": targets,
         "boundary": "Semantic scope labels are navigation hints; clean source remains the source of truth.",

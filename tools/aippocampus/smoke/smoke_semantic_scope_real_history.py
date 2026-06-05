@@ -39,7 +39,12 @@ from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
 from aippocampus_runtime.source.semantic_scope_builder import (
     build_semantic_scope_labels_for_registry,
 )
-from aippocampus_runtime.source.semantic_scope_labels import label_evidence_is_sufficient
+from aippocampus_runtime.source.semantic_scope_evidence_diagnostics import (
+    compact_label_evidence_metrics,
+    public_semantic_evidence_diagnostics,
+    semantic_evidence_diagnostics,
+    with_semantic_evidence_diagnostics,
+)
 from aippocampus_runtime.subconscious.jobs import (
     DEFAULT_CONCURRENCY,
     DEFAULT_SAMPLES_PER_JOB,
@@ -184,50 +189,6 @@ def compact_job_result(result: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def compact_label_evidence_metrics(result: dict[str, Any]) -> dict[str, Any]:
-    """Report aggregate per-label evidence completeness without leaking source text."""
-
-    label_counts: dict[str, int] = {}
-    label_count = 0
-    sufficient_evidence_count = 0
-    weak_or_missing_count = 0
-    findings_with_labels = 0
-    for job in result.get("jobs") or []:
-        if not isinstance(job, dict):
-            continue
-        for finding in job.get("findings") or []:
-            if not isinstance(finding, dict):
-                continue
-            labels = [
-                str(label) for label in finding.get("scope_labels") or [] if str(label).strip()
-            ]
-            if not labels:
-                continue
-            findings_with_labels += 1
-            evidence_by_label = {
-                str(item.get("label") or ""): item
-                for item in finding.get("label_evidence") or []
-                if isinstance(item, dict) and item.get("label")
-            }
-            for label in labels:
-                label_counts[label] = label_counts.get(label, 0) + 1
-                label_count += 1
-                evidence = evidence_by_label.get(label)
-                if label_evidence_is_sufficient(label, evidence):
-                    sufficient_evidence_count += 1
-                else:
-                    weak_or_missing_count += 1
-    return {
-        "finding_count_with_labels": findings_with_labels,
-        "accepted_label_count": label_count,
-        "labels_with_sufficient_evidence": sufficient_evidence_count,
-        "weak_or_missing_evidence_label_count": weak_or_missing_count,
-        "label_evidence_complete": label_count > 0 and sufficient_evidence_count == label_count,
-        "label_coverage": sorted(label_counts),
-        "per_label_count": {label: label_counts[label] for label in sorted(label_counts)},
-    }
-
-
 def compact_materialize_result(result: dict[str, Any] | None) -> dict[str, Any] | None:
     if not result:
         return None
@@ -235,6 +196,11 @@ def compact_materialize_result(result: dict[str, Any] | None) -> dict[str, Any] 
         "ok": bool(result.get("ok")),
         "target_count": int(result.get("target_count") or 0),
         "row_count": int(result.get("row_count") or 0),
+        "per_label_row_count": {
+            str(label): int(count)
+            for label, count in (result.get("per_label_row_count") or {}).items()
+            if str(label) in PUBLIC_SCOPE_LABELS
+        },
         "wrote": bool(result.get("wrote")),
         "boundary": "Semantic scope labels are navigation hints; clean source remains the source of truth.",
     }
@@ -320,6 +286,12 @@ def public_label_evidence(metrics: Any) -> dict[str, Any]:
         "label_evidence_complete": bool(metrics.get("label_evidence_complete")),
         "label_coverage": public_label_list(metrics.get("label_coverage")),
         "per_label_count": public_label_counts(metrics.get("per_label_count")),
+        "per_label_sufficient_evidence_count": public_label_counts(
+            metrics.get("per_label_sufficient_evidence_count")
+        ),
+        "per_label_weak_or_missing_evidence_count": public_label_counts(
+            metrics.get("per_label_weak_or_missing_evidence_count")
+        ),
     }
 
 
@@ -349,6 +321,7 @@ def public_materialization(result: Any) -> dict[str, Any] | None:
         "ok": bool(result.get("ok")),
         "target_count": public_count(result.get("target_count")),
         "row_count": public_count(result.get("row_count")),
+        "per_label_row_count": public_label_counts(result.get("per_label_row_count")),
         "wrote": bool(result.get("wrote")),
         "boundary": "semantic_scope_labels_are_navigation_hints_clean_source_is_truth",
     }
@@ -494,6 +467,11 @@ def public_smoke_result(result: dict[str, Any]) -> dict[str, Any]:
         "timeline_refresh": public_timeline_refresh(result.get("timeline_refresh")),
         "semantic_candidate_source": public_semantic_candidate_source(
             result.get("semantic_candidate_source")
+        ),
+        "semantic_evidence_diagnostics": public_semantic_evidence_diagnostics(
+            result.get("semantic_evidence_diagnostics")
+            if isinstance(result.get("semantic_evidence_diagnostics"), dict)
+            else semantic_evidence_diagnostics(result)
         ),
         "thresholds": public_thresholds(result.get("thresholds")),
         "output_boundary": "public_cli_json_omits_private_diagnostics",
@@ -935,7 +913,7 @@ def run_semantic_scope_real_history_smoke(
         min_timeline_turns=min_timeline_turns,
     )
     if not live:
-        return {
+        return with_semantic_evidence_diagnostics({
             "ok": status_before == "sufficient" or not require_labels,
             "stage2_semantic_sidecar_status": status_before,
             "claim_level": semantic_claim_level(status_before, live=False),
@@ -958,12 +936,12 @@ def run_semantic_scope_real_history_smoke(
                 "full_candidate_coverage": full_candidate_coverage,
                 "candidate_batch_size": candidate_batch_size,
             },
-        }
+        })
 
     api_key = os.environ.get(api_key_env)
     if not api_key:
         status = "live_model_missing_api_key"
-        return {
+        return with_semantic_evidence_diagnostics({
             "ok": False,
             "stage2_semantic_sidecar_status": status,
             "claim_level": semantic_claim_level(status, live=True),
@@ -986,7 +964,7 @@ def run_semantic_scope_real_history_smoke(
                 "full_candidate_coverage": full_candidate_coverage,
                 "candidate_batch_size": candidate_batch_size,
             },
-        }
+        })
 
     source_turn_cap = max(
         1, int(full_candidate_source_turn_cap if full_candidate_coverage else max_turns)
@@ -1157,7 +1135,7 @@ def run_semantic_scope_real_history_smoke(
     else:
         ok = status_after == "sufficient" or status_after == "live_model_findings_observed"
 
-    return {
+    return with_semantic_evidence_diagnostics({
         "ok": ok,
         "stage2_semantic_sidecar_status": status_after,
         "claim_level": semantic_claim_level(status_after, live=True),
@@ -1189,7 +1167,7 @@ def run_semantic_scope_real_history_smoke(
             or (DEFAULT_CANDIDATE_BATCH_SIZE if full_candidate_coverage else 0),
             "full_candidate_source_turn_cap": source_turn_cap,
         },
-    }
+    })
 
 
 def main() -> int:
