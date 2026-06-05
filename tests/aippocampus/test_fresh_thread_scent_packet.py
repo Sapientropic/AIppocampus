@@ -94,12 +94,62 @@ class FreshThreadScentPacketTests(unittest.TestCase):
         self.assertEqual(payload["support_level"], "source_required")
         self.assertEqual(payload["advisory_action"], "source_reopen")
         self.assertEqual(payload["suggested_action"], "source_reopen")
+        self.assertEqual(
+            payload["reopen_plan"],
+            {
+                "kind": "source_ref_reopen",
+                "status": "ready",
+                "recommended_tool": "get_turn_context",
+                "arguments": {"message_id": "msg-9"},
+                "candidate_ref_count": 1,
+                "reopenable_ref_count": 1,
+                "primary_ref": {
+                    "source_id": "clean:family:msg-9",
+                    "thread_key": "session:family",
+                    "message_id": "msg-9",
+                    "line": 88,
+                },
+                "reason_codes": ["source_required", "candidate_source_ref_reopenable"],
+                "failure_reason_codes": [
+                    "stale_handle",
+                    "source_missing",
+                    "permission_block",
+                    "index_stale_lkg_needed",
+                ],
+                "manual_query_invention_expected": False,
+            },
+        )
         self.assertIn("clean:family:msg-9", serialized)
         self.assertNotIn("帮我妈妈", serialized)
         self.assertNotIn("raw family preference", serialized)
         self.assertNotIn("gift-notes", serialized)
         self.assertNotIn("sk_test", serialized)
         self.assertNotIn("sk-test-secret", serialized)
+
+    def test_source_required_without_reopenable_refs_has_blocked_reopen_plan(self) -> None:
+        packet = fresh_thread_scent_packet_from_decision(
+            {
+                "decision": "evidence",
+                "confidence": "high",
+                "evidence": [
+                    {
+                        "source_id": "clean:orphaned-summary",
+                        "snippet": "raw summary must not leak",
+                    }
+                ],
+            }
+        )
+
+        self.assertEqual(packet["support_level"], "source_required")
+        self.assertEqual(packet["candidate_ref_count"], 1)
+        self.assertEqual(packet["reopenable_ref_count"], 0)
+        self.assertEqual(packet["reopen_plan"]["status"], "blocked")
+        self.assertEqual(packet["reopen_plan"]["recommended_tool"], "source_ref_reopen")
+        self.assertEqual(packet["reopen_plan"]["candidate_ref_count"], 1)
+        self.assertEqual(packet["reopen_plan"]["reopenable_ref_count"], 0)
+        self.assertIn("no_reopenable_source_ref", packet["reopen_plan"]["reason_codes"])
+        self.assertFalse(packet["reopen_plan"]["manual_query_invention_expected"])
+        self.assertNotIn("raw summary", json.dumps(packet, ensure_ascii=False))
 
     def test_suppressed_packet_tells_agent_to_ignore(self) -> None:
         packet = fresh_thread_scent_packet_from_decision(
@@ -117,6 +167,7 @@ class FreshThreadScentPacketTests(unittest.TestCase):
         self.assertEqual(packet["advisory_action"], "ignore")
         self.assertEqual(packet["suggested_action"], "ignore")
         self.assertEqual(packet["candidate_refs"], [])
+        self.assertNotIn("reopen_plan", packet)
         self.assertIn("Do not use suppressed packets", " ".join(packet["when_not_to_use"]))
 
     def test_contract_includes_examples_for_all_support_levels(self) -> None:

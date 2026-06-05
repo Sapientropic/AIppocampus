@@ -278,6 +278,33 @@ class FreshThreadActionPolicyTests(unittest.TestCase):
         self.assertTrue(action["requires_source_reopen"])
         self.assertTrue(action["source_refs_allowed"])
         self.assertFalse(action["should_call_active_recall"])
+        self.assertEqual(action["manual_query_invention_count"], 0)
+        self.assertFalse(action["manual_query_invention_expected"])
+        self.assertEqual(
+            action["reopen_plan"],
+            {
+                "kind": "source_ref_reopen",
+                "status": "ready",
+                "recommended_tool": "get_turn_context",
+                "arguments": {"message_id": "msg-1"},
+                "candidate_ref_count": 1,
+                "reopenable_ref_count": 1,
+                "primary_ref": {
+                    "source_id": "clean:profile:msg-1",
+                    "thread_key": "session:profile",
+                    "message_id": "msg-1",
+                    "line": 9,
+                },
+                "reason_codes": ["source_required", "candidate_source_ref_reopenable"],
+                "failure_reason_codes": [
+                    "stale_handle",
+                    "source_missing",
+                    "permission_block",
+                    "index_stale_lkg_needed",
+                ],
+                "manual_query_invention_expected": False,
+            },
+        )
         self.assertEqual(
             action["candidate_refs"],
             [
@@ -289,6 +316,32 @@ class FreshThreadActionPolicyTests(unittest.TestCase):
                 }
             ],
         )
+
+    def test_source_required_without_reopenable_refs_blocks_manual_query_invention(self) -> None:
+        packet = fresh_thread_scent_packet_from_decision(
+            {
+                "decision": "evidence",
+                "confidence": "high",
+                "evidence": [{"source_id": "clean:orphaned-summary"}],
+            }
+        )
+
+        action = fresh_thread_action_from_packet(
+            packet,
+            task_context={"specific_memory_claim": True},
+        )
+
+        self.assertEqual(action["agent_action"], "ignore")
+        self.assertEqual(action["reason"], "specific_memory_claim_has_no_reopenable_source_ref")
+        self.assertTrue(action["requires_source_reopen"])
+        self.assertFalse(action["source_refs_allowed"])
+        self.assertFalse(action["should_call_active_recall"])
+        self.assertEqual(action["candidate_refs"], [])
+        self.assertEqual(action["manual_query_invention_count"], 0)
+        self.assertFalse(action["manual_query_invention_expected"])
+        self.assertEqual(action["reopen_plan"]["status"], "blocked")
+        self.assertIn("no_reopenable_source_ref", action["reopen_plan"]["reason_codes"])
+        self.assertIn("source_missing", action["reopen_plan"]["failure_reason_codes"])
 
     def test_lock_states_are_route_handles_not_memory_facts(self) -> None:
         packet = fresh_thread_scent_packet_from_decision(

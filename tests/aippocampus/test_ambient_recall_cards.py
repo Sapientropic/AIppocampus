@@ -215,6 +215,9 @@ class AmbientRecallCardTests(unittest.TestCase):
 
         self.assertEqual(packet["support_level"], "source_required")
         self.assertEqual(packet["suggested_action"], "source_reopen")
+        self.assertEqual(packet["reopen_plan"]["status"], "ready")
+        self.assertEqual(packet["reopen_plan"]["recommended_tool"], "get_turn_context")
+        self.assertFalse(packet["reopen_plan"]["manual_query_invention_expected"])
         self.assertEqual(
             packet["candidate_refs"],
             [{"thread_key": "session:old", "message_id": "msg-11", "line": 77}],

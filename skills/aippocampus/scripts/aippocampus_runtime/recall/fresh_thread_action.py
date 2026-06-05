@@ -13,6 +13,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from aippocampus_runtime.recall.fresh_thread_scent import source_reopen_plan_from_refs
+
 ACTION_SCHEMA_VERSION = 1
 MAX_CANDIDATE_REFS = 3
 
@@ -226,10 +228,20 @@ def _base_result(
     requires_source_reopen = action == SOURCE_REOPEN or specific_memory_claim
     expose_refs = action in {ACTIVE_RECALL, SOURCE_REOPEN}
     candidate_refs = _candidate_refs(packet, expose=expose_refs)
+    support_level = _bucket(packet.get("support_level"), SUPPORT_LEVELS, "silent_scent")
+    plan_support_level = (
+        "source_required"
+        if support_level == "source_required" or specific_memory_claim
+        else support_level
+    )
+    reopen_plan = source_reopen_plan_from_refs(
+        support_level=plan_support_level,
+        candidate_refs=_candidate_refs(packet, expose=True),
+    )
     lock_handling, lock_id = _lock_handling(action, active_recall_lock)
     source_refs_allowed = action == SOURCE_REOPEN
     packet_action_hint = _packet_action_hint(packet)
-    return {
+    result = {
         "kind": "aippocampus_fresh_thread_action_policy",
         "schema_version": ACTION_SCHEMA_VERSION,
         "agent_action": action,
@@ -259,6 +271,13 @@ def _base_result(
         "task_context_contract": _task_context_contract(context),
         "when_not_to_use": list(DEFAULT_WHEN_NOT_TO_USE),
     }
+    if reopen_plan is not None:
+        result["reopen_plan"] = reopen_plan
+        result["manual_query_invention_expected"] = bool(
+            reopen_plan.get("manual_query_invention_expected")
+        )
+        result["manual_query_invention_count"] = 0
+    return result
 
 
 def _privacy_rule(action: str) -> str:
@@ -310,6 +329,13 @@ def fresh_thread_action_from_packet(
     sensitivity = _bucket(packet.get("sensitivity"), SENSITIVITY_BUCKETS, "caution")
     freshness = _bucket(packet.get("freshness"), FRESHNESS_BUCKETS, "unknown")
     refs = _candidate_refs(packet, expose=True)
+    source_required_plan = source_reopen_plan_from_refs(
+        support_level="source_required",
+        candidate_refs=refs,
+    )
+    has_reopenable_refs = bool(
+        source_required_plan and int(source_required_plan.get("reopenable_ref_count") or 0) > 0
+    )
 
     specific_memory_claim = _context_flag(context, "specific_memory_claim")
     memory_may_change_answer = _context_flag(context, "memory_may_change_answer")
@@ -352,6 +378,16 @@ def fresh_thread_action_from_packet(
             specific_memory_claim=False,
         )
 
+    if specific_memory_claim and refs and not has_reopenable_refs:
+        return _base_result(
+            action=IGNORE,
+            reason="specific_memory_claim_has_no_reopenable_source_ref",
+            packet=packet,
+            context=context,
+            active_recall_lock=active_recall_lock,
+            specific_memory_claim=True,
+        )
+
     if specific_memory_claim and refs:
         return _base_result(
             action=SOURCE_REOPEN,
@@ -366,6 +402,16 @@ def fresh_thread_action_from_packet(
         return _base_result(
             action=USE_SILENTLY,
             reason="activation_state_holds_prior_scent_internal",
+            packet=packet,
+            context=context,
+            active_recall_lock=active_recall_lock,
+            specific_memory_claim=specific_memory_claim,
+        )
+
+    if support_level == "source_required" and refs and not has_reopenable_refs:
+        return _base_result(
+            action=IGNORE,
+            reason="source_required_packet_has_no_reopenable_source_ref",
             packet=packet,
             context=context,
             active_recall_lock=active_recall_lock,
