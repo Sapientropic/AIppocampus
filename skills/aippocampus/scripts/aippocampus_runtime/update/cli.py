@@ -16,6 +16,7 @@ from typing import Any
 from aippocampus_runtime.core import codex_home
 from aippocampus_runtime.hooks import install_lifecycle, install_prompt
 from aippocampus_runtime.ops.provider_doctor import build_provider_doctor_report
+from aippocampus_runtime.public_output import emit_public_text
 from aippocampus_runtime.update.capability_ladder import build_capability_ladder
 
 SCHEMA_VERSION = 1
@@ -829,27 +830,33 @@ def main(argv: list[str] | None = None) -> int:
         else:
             report = build_status(args, mode=args.action)
     except Exception as exc:
+        # Public CLI output must not echo raw exception text; install/update
+        # failures can include local paths or environment-derived diagnostics.
+        del exc
         if getattr(args, "json_output", False):
-            print(
+            emit_public_text(
                 json.dumps(
                     {
                         "schema_version": SCHEMA_VERSION,
                         "kind": "aippocampus_update_error",
                         "ok": False,
-                        "error": {"code": "update_failed", "message": str(exc)},
+                        "error": {
+                            "code": "update_failed",
+                            "message": "Update failed; rerun from a trusted shell for local diagnostics.",
+                        },
                     },
                     ensure_ascii=False,
                     indent=2,
                 )
             )
         else:
-            print(f"AIppocampus update failed: {exc}", file=sys.stderr)
+            emit_public_text("AIppocampus update failed: update_failed", stream=sys.stderr)
         return 1
 
     if args.json_output:
-        print(json.dumps(report, ensure_ascii=False, indent=2, default=_json_default))
+        emit_public_text(json.dumps(report, ensure_ascii=False, indent=2, default=_json_default))
     else:
-        print(render_text(report), end="")
+        emit_public_text(render_text(report), end="")
     return 0 if report.get("ok", True) else 1
 
 

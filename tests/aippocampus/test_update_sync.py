@@ -10,6 +10,7 @@ from contextlib import contextmanager, redirect_stdout
 from io import StringIO
 from pathlib import Path
 from typing import Iterator
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
@@ -62,6 +63,25 @@ def write_minimal_repo(repo: Path) -> None:
 
 
 class UpdateSyncTests(unittest.TestCase):
+    def test_json_error_output_does_not_echo_raw_exception_text(self) -> None:
+        stdout = StringIO()
+        with (
+            patch.object(
+                update_cli,
+                "build_status",
+                side_effect=RuntimeError(r"private path C:\Users\Name\secret.txt"),
+            ),
+            redirect_stdout(stdout),
+        ):
+            code = update_cli.main(["status", "--json"])
+
+        payload = json.loads(stdout.getvalue())
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(code, 1)
+        self.assertEqual(payload["error"]["code"], "update_failed")
+        self.assertNotIn("C:\\Users\\Name\\secret.txt", encoded)
+        self.assertNotIn("private path", encoded)
+
     def test_status_reports_surfaces_and_does_not_create_hook_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():
             codex_home = Path(tmp) / "codex-home"

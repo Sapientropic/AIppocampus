@@ -114,6 +114,44 @@ class SubconsciousSchedulerTests(unittest.TestCase):
             result = scheduler.maybe_start(self.args())
 
         self.assertEqual(result["skipped"], "missing_api_key")
+        self.assertEqual(
+            result["cognitive_worker"]["status"],
+            "deterministic_only_missing_provider_and_agent",
+        )
+
+    def test_maybe_start_queues_agent_fallback_task_without_provider_key(self) -> None:
+        captured: dict[str, object] = {}
+
+        def fake_start_detached(cmd: list[str], *, root: Path) -> int:
+            captured["cmd"] = cmd
+            captured["root"] = root
+            return 4321
+
+        with (
+            patch.dict(os.environ, {"AIPPOCAMPUS_AGENT_FALLBACK_AVAILABLE": "1"}, clear=True),
+            patch.object(
+                scheduler,
+                "start_detached",
+                side_effect=fake_start_detached,
+            ),
+        ):
+            result = scheduler.maybe_start(self.args())
+
+        queue_path = self.root / "agent_fallback_tasks.jsonl"
+        queued = [json.loads(line) for line in queue_path.read_text(encoding="utf-8").splitlines()]
+
+        self.assertFalse(result["started"])
+        self.assertTrue(result["queued"])
+        self.assertEqual(result["skipped"], "agent_fallback_queued")
+        self.assertEqual(result["agent_fallback_task_count"], 1)
+        self.assertEqual(result["cognitive_worker"]["resolved_mode"], "agent_fallback")
+        self.assertNotIn("cmd", captured)
+        self.assertEqual(queued[0]["kind"], "agent_fallback_subconscious_task")
+        self.assertEqual(queued[0]["provenance"], "agent_fallback")
+        self.assertEqual(queued[0]["project_label"], "T-Sense")
+        self.assertTrue(queued[0]["output_contract"]["source_refs_required"])
+        self.assertFalse(queued[0]["output_contract"]["foreground_sync_wait"])
+        self.assertNotIn(str(self.cwd), json.dumps(queued, ensure_ascii=False))
 
     def test_maybe_start_respects_subconscious_hook_disable_env(self) -> None:
         with patch.dict(

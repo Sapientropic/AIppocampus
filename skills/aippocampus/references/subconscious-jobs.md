@@ -214,6 +214,12 @@ DeepSeek can be used aggressively, but hooks must stay cheap. The split is:
 - hooks call `subconscious_scheduler.py --maybe-start` only
 - lifecycle hooks enqueue that scheduler as a detached process; they do not
   wait on scheduler imports, registry scans, stale locks, or DeepSeek calls
+- `AIPPOCAMPUS_COGNITIVE_WORKER_MODE` resolves the background cognition lane:
+  `external_model` when the configured provider key is visible, `agent_fallback`
+  only when `AIPPOCAMPUS_AGENT_FALLBACK_AVAILABLE=1`, `deterministic_only` when
+  neither is available, and `off` when explicitly disabled. The agent fallback
+  lane writes staging queue rows only; it does not call a host agent from the
+  hook path or promote synthesis into memory.
 - the scheduler uses a short enqueue lock plus per-project lease fields in
   `subconscious_state.json`
 - detached workers run `aippocampus_runtime.subconscious.jobs` with `--concurrency` and optional

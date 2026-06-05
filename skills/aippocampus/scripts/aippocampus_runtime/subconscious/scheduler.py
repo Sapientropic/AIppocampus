@@ -26,9 +26,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.cognitive_worker_mode import resolve_cognitive_worker_mode
 from aippocampus_runtime.core import aippocampus_registry_dir, now_utc
 from aippocampus_runtime.ops import log_retention
-from aippocampus_runtime.subconscious import shell_selection
+from aippocampus_runtime.public_output import emit_public_text
+from aippocampus_runtime.subconscious import agent_fallback_queue, shell_selection
+from aippocampus_runtime.subconscious.scheduler_lock import FileLock
+from aippocampus_runtime.subconscious.scheduler_public import (
+    public_scheduler_payload,
+    public_skip_reason,
+)
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
 STATE_SCHEMA_VERSION = 1
@@ -43,13 +50,6 @@ DEFAULT_MAX_FINDINGS = 220
 DEFAULT_JOB_CONCURRENCY = int(os.environ.get("AIPPOCAMPUS_SUBCONSCIOUS_JOB_CONCURRENCY", "4"))
 DEFAULT_SAMPLES_PER_JOB = int(os.environ.get("AIPPOCAMPUS_SUBCONSCIOUS_SAMPLES_PER_JOB", "2"))
 DEFAULT_API_KEY_ENV = "DEEPSEEK_API_KEY"
-PUBLIC_SKIP_REASONS = {
-    "disabled_by_env",
-    "enqueue_locked",
-    "no_due_projects",
-    "leased_projects",
-    "enqueue_cooldown",
-}
 
 
 @dataclass
@@ -61,69 +61,6 @@ class ProjectStats:
     latest_updated_at: str
     tags: list[str]
     workspaces: list[str]
-
-
-class FileLock:
-    def __init__(self, path: Path, *, stale_seconds: int = DEFAULT_STALE_LOCK_SECONDS) -> None:
-        self.path = path
-        self.stale_seconds = stale_seconds
-        self.fd: int | None = None
-        self.recovered_stale_lock = False
-        self.stale_age_seconds: int | None = None
-
-    def __enter__(self) -> "FileLock":
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        last_exists: FileExistsError | None = None
-        for _attempt in range(2):
-            try:
-                self.fd = os.open(str(self.path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            except FileExistsError as exc:
-                last_exists = exc
-                try:
-                    age = max(0.0, time.time() - self.path.stat().st_mtime)
-                except OSError:
-                    age = 0.0
-                if age <= self.stale_seconds:
-                    raise RuntimeError(
-                        "subconscious scheduler already running: "
-                        f"active local lock {self.path.name} "
-                        f"age={age:.1f}s threshold={self.stale_seconds}s"
-                    ) from exc
-                try:
-                    self.path.unlink()
-                except FileNotFoundError:
-                    pass
-                except OSError as unlink_exc:
-                    raise RuntimeError(
-                        "subconscious scheduler already running: "
-                        f"stale local lock {self.path.name} could not be removed"
-                    ) from unlink_exc
-                self.recovered_stale_lock = True
-                self.stale_age_seconds = int(age)
-                continue
-            payload: dict[str, Any] = {"pid": os.getpid(), "created_at": now_utc()}
-            if self.recovered_stale_lock:
-                payload.update(
-                    {
-                        "recovered_stale_lock": True,
-                        "stale_age_seconds": self.stale_age_seconds,
-                        "stale_threshold_seconds": self.stale_seconds,
-                    }
-                )
-            os.write(self.fd, json.dumps(payload).encode("utf-8"))
-            return self
-        raise RuntimeError(
-            "subconscious scheduler already running: stale local lock recovery raced"
-        ) from last_exists
-
-    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
-        if self.fd is not None:
-            os.close(self.fd)
-            self.fd = None
-        try:
-            self.path.unlink()
-        except OSError:
-            pass
 
 
 def registry_dir(path: Path | None = None) -> Path:
@@ -138,32 +75,15 @@ def state_path(root: Path, override: Path | None = None) -> Path:
     return override or (root / "subconscious_state.json")
 
 
-def public_skip_reason(value: Any) -> str | None:
-    reason = str(value or "").strip()
-    if reason.startswith("missing_"):
-        return "missing_api_key"
-    return reason if reason in PUBLIC_SKIP_REASONS else ("runtime_error" if reason else None)
+def public_json_text(payload: dict[str, Any]) -> str:
+    """Serialize scheduler public projections only.
 
+    The caller must pass `public_scheduler_payload(...)` or an explicit private
+    policy report. Raw scheduler results can contain project labels and local
+    paths, so keeping one output boundary makes CodeQL suppressions auditable.
+    """
 
-def public_scheduler_payload(result: dict[str, Any]) -> dict[str, Any]:
-    payload: dict[str, Any] = {
-        "started": bool(result.get("started")),
-        "ran": bool(result.get("ran")),
-        "dry_run": bool(result.get("dry_run")),
-        "skipped": public_skip_reason(result.get("skipped")),
-        "pid_present": bool(result.get("pid")),
-        "project_count": len(result.get("projects") or [])
-        if isinstance(result.get("projects"), list)
-        else 0,
-        "result_count": len(result.get("results") or [])
-        if isinstance(result.get("results"), list)
-        else 0,
-        "log_private_artifact": bool(result.get("log")),
-        "output_boundary": "scheduler_project_details_are_local_private_artifacts",
-    }
-    if result.get("error"):
-        payload["error"] = {"code": "runtime_error"}
-    return payload
+    return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
 def log_path(root: Path) -> Path:
@@ -643,19 +563,105 @@ def maybe_start(args: argparse.Namespace) -> dict[str, Any]:
         hook_env = os.environ.get("AIIPPOCAMPUS_SUBCONSCIOUS_HOOK", "1")
     if hook_env.lower() in {"0", "false", "off", "no"}:
         return {"started": False, "skipped": "disabled_by_env", "projects": []}
-    if not os.environ.get(args.api_key_env):
-        return {"started": False, "skipped": "missing_api_key", "projects": []}
+    worker_mode = resolve_cognitive_worker_mode(api_key_env=args.api_key_env)
+    resolved_worker_mode = str(worker_mode.get("resolved_mode") or "")
+    if resolved_worker_mode == "off":
+        return {
+            "started": False,
+            "skipped": "cognitive_worker_mode_off",
+            "projects": [],
+            "cognitive_worker": worker_mode,
+        }
+    if resolved_worker_mode == "deterministic_only":
+        skipped = (
+            "deterministic_only_by_env"
+            if worker_mode.get("status") == "deterministic_only_by_env"
+            else "missing_api_key"
+        )
+        return {
+            "started": False,
+            "skipped": skipped,
+            "projects": [],
+            "cognitive_worker": worker_mode,
+        }
 
     try:
         lock = FileLock(
             root / "subconscious_enqueue.lock", stale_seconds=DEFAULT_ENQUEUE_LOCK_STALE_SECONDS
         )
         with lock:
+            if resolved_worker_mode == "agent_fallback":
+                return maybe_enqueue_agent_fallback(args, root=root, state_file=state_file, worker_mode=worker_mode)
             return maybe_start_locked(args, root=root, state_file=state_file)
     except RuntimeError as exc:
         if "already running" in str(exc):
             return {"started": False, "skipped": "enqueue_locked", "projects": []}
         raise
+
+
+def maybe_enqueue_agent_fallback(
+    args: argparse.Namespace, *, root: Path, state_file: Path, worker_mode: dict[str, Any]
+) -> dict[str, Any]:
+    state = load_state(state_file)
+    now_ts = time.time()
+    shell_override = getattr(args, "shell_selection", "auto")
+    due = choose_projects(
+        root=root,
+        cwd=Path(args.cwd).resolve() if args.cwd else None,
+        project=args.project,
+        all_projects=args.all_projects,
+        state=state,
+        now_ts=now_ts,
+        cooldown_seconds=args.cooldown_seconds,
+        min_new_turns=args.min_new_turns,
+    )
+    if not due:
+        save_state(state_file, state)
+        return {
+            "started": False,
+            "skipped": "no_due_projects",
+            "projects": [],
+            "cognitive_worker": worker_mode,
+        }
+    projects = [
+        shell_selection.scheduler_project_report(stats, reason, root=root, override=shell_override)
+        for stats, reason in due
+    ]
+    if args.dry_run:
+        save_state(state_file, state)
+        return {
+            "started": False,
+            "dry_run": True,
+            "queued": False,
+            "skipped": "agent_fallback_queued",
+            "projects": projects,
+            "agent_fallback_task_count": len(projects),
+            "cognitive_worker": worker_mode,
+        }
+
+    queue_result = agent_fallback_queue.enqueue_due_tasks(
+        root=root,
+        state=state,
+        due=due,
+        worker_mode=worker_mode,
+        now_ts=now_ts,
+        enqueue_cooldown_seconds=DEFAULT_ENQUEUE_COOLDOWN_SECONDS,
+    )
+    save_state(state_file, state)
+    if queue_result.get("queued"):
+        result_projects: list[dict[str, Any]] = projects
+    elif queue_result.get("leased_projects"):
+        result_projects = list(queue_result.get("leased_projects") or [])
+    else:
+        result_projects = []
+    return {
+        "started": False,
+        "queued": bool(queue_result.get("queued")),
+        "skipped": queue_result.get("skipped"),
+        "projects": result_projects,
+        "agent_fallback_task_count": int(queue_result.get("agent_fallback_task_count") or 0),
+        "cognitive_worker": worker_mode,
+    }
 
 
 def maybe_start_locked(args: argparse.Namespace, *, root: Path, state_file: Path) -> dict[str, Any]:
@@ -865,20 +871,25 @@ def main() -> int:
             result = maybe_start(args)
         if args.json_output:
             public_payload = public_scheduler_payload(result)
-            payload = shell_selection.private_scheduler_report_payload(result, public_payload) if args.include_private_report else public_payload
-            print(json.dumps(payload, ensure_ascii=False, indent=2))
+            payload = (
+                shell_selection.private_scheduler_report_payload(result, public_payload)
+                if args.include_private_report
+                else public_payload
+            )
+            emit_public_text(public_json_text(payload))
         elif result.get("started"):
-            print(f"subconscious scheduler started: pid {result.get('pid')}")
+            emit_public_text(f"subconscious scheduler started: pid {result.get('pid')}")
         elif result.get("ran"):
-            print("subconscious scheduler ran")
+            emit_public_text("subconscious scheduler ran")
         else:
-            print(f"subconscious scheduler skipped: {public_skip_reason(result.get('skipped'))}")
+            emit_public_text(f"subconscious scheduler skipped: {public_skip_reason(result.get('skipped'))}")
         return 0
     except Exception as exc:
         if args.json_output:
-            print(json.dumps(public_scheduler_payload({"error": str(exc)}), ensure_ascii=False, indent=2))
+            error_payload = public_scheduler_payload({"error": str(exc)})
+            emit_public_text(public_json_text(error_payload))
         else:
-            print("subconscious scheduler error: runtime_error", file=sys.stderr)
+            emit_public_text("subconscious scheduler error: runtime_error", stream=sys.stderr)
         return 1 if args.strict else 0
 
 

@@ -17,8 +17,10 @@ import subprocess
 import sys
 from typing import Any
 
+from aippocampus_runtime.cognitive_worker_mode import resolve_cognitive_worker_mode
 from aippocampus_runtime.legacy_aliases import env_legacy_alias_diagnostics
 from aippocampus_runtime.model.routing import ModelRoute, resolve_model_route
+from aippocampus_runtime.public_output import emit_public_text
 from aippocampus_runtime.recall.semantic_recall_gate import semantic_gate_enabled
 from aippocampus_runtime.warm_ambient.scheduler import warm_background_enabled
 
@@ -164,6 +166,10 @@ def build_provider_doctor_report(
     public_env_name = _public_token(resolved_provider_env_var, fallback=DEFAULT_PROVIDER_ENV_VAR)
     current_visible = _env_var_is_visible(resolved_provider_env_var)
     legacy_aliases = env_legacy_alias_diagnostics()
+    cognitive_worker = resolve_cognitive_worker_mode(
+        api_key_env=resolved_provider_env_var,
+        provider_key_visible=current_visible,
+    )
     child_visibility = (
         _child_process_env_visibility(resolved_provider_env_var)
         if check_child_process and resolved_provider_env_var
@@ -196,6 +202,7 @@ def build_provider_doctor_report(
             "value_printed": False,
         },
         "legacy_aliases": legacy_aliases,
+        "cognitive_worker": cognitive_worker,
         "hook_relevance": {
             "prompt_hook_reads_process_env": True,
             "does_not_read_dotenv_or_credential_store": True,
@@ -246,11 +253,24 @@ def render_text(report: dict[str, Any]) -> str:
         )
     else:
         lines.append("- Key env: not checked because route configuration failed")
+    cognitive_worker = _as_dict(report.get("cognitive_worker"))
+    if cognitive_worker:
+        lines.append(f"- Cognitive worker mode: {cognitive_worker.get('status', 'unknown')}")
     for action in report.get("recommended_actions") or []:
         if isinstance(action, dict) and action.get("message"):
             lines.append(f"- Next: {action['message']}")
     lines.append("")
     return "\n".join(lines)
+
+
+def public_json_text(report: dict[str, Any]) -> str:
+    """Serialize the provider doctor public report.
+
+    Provider doctor output intentionally reports key presence and public env var
+    names only. It never reads or prints key values; tests assert that boundary.
+    """
+
+    return json.dumps(report, ensure_ascii=False, indent=2)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -301,9 +321,9 @@ def main(argv: list[str] | None = None) -> int:
         check_child_process=not args.no_child_check,
     )
     if args.json_output:
-        print(json.dumps(report, ensure_ascii=False, indent=2))
+        emit_public_text(public_json_text(report))
     else:
-        print(render_text(report))
+        emit_public_text(render_text(report), end="")
     return 0 if report["ok"] else 2
 
 
