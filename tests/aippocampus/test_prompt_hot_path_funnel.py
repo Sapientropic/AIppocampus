@@ -122,6 +122,33 @@ class PromptHotPathFunnelTests(unittest.TestCase):
         self.assertEqual(result["candidate_ids"], ["session:phonics"])
         self.assertEqual(result["evidence"], [])
 
+    def test_bounded_trigram_fts_does_not_wake_plain_same_name_work(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            index = Path(tmp) / "source_index.sqlite"
+            write_index(
+                index,
+                [
+                    (1, "user", "Atlas dashboard layout sprint source context"),
+                    (2, "assistant", "Atlas recall gate current-project boundary"),
+                ],
+            )
+            result = run_hot_path_funnel(
+                prompt="把 Atlas 这个模块接一下，先别改别的。",
+                query_terms=["Atlas", "模块接一下"],
+                candidate_indexes=[
+                    {
+                        "thread_key": "session:atlas",
+                        "index_path": index,
+                        "source_refs": [{"thread_key": "session:atlas", "line": 10}],
+                    }
+                ],
+            )
+
+        self.assertEqual(result["decision"], "skip")
+        fts_stage = next(stage for stage in result["stages"] if stage["stage"] == "bounded_trigram_fts")
+        self.assertEqual(fts_stage["status"], "skip")
+        self.assertEqual(fts_stage["fallback_reason"], "prompt_lacks_memory_route_intent")
+
     def test_honest_no_op_skip_when_local_stages_have_no_cue(self) -> None:
         result = run_hot_path_funnel(
             prompt="把按钮 hover 样式调一下",

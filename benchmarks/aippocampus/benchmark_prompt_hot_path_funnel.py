@@ -105,7 +105,7 @@ def run_benchmark() -> dict[str, Any]:
             },
             {
                 "case_id": "fts-fallback",
-                "prompt": "Books 3/4/5 完成了吗",
+                "prompt": "之前说 Books 3/4/5 完成了吗，继续那个",
                 "query_terms": ["Books", "3/4/5", "完成"],
                 "expected_decision": "scent",
                 "candidate_indexes": [
