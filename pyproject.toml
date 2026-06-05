@@ -168,6 +168,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/source/registry_paths.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/search.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/semantic_scope_builder.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/source/semantic_scope_evidence_diagnostics.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/semantic_scope_labels.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/semantic_scope_source_review_core.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/semantic_scope_suppressed_recovery.py",

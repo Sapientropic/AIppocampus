@@ -100,7 +100,12 @@ view across proof lines, use
   partial failure kept the run at `claim_level=diagnostic_only`. The smoke now
   reports per-label selection floors plus accepted / rejected / human-review /
   model-failure buckets so the old 5-row strict-survival evidence cannot be
-  mistaken for global Stage 2 correctness.
+  mistaken for global Stage 2 correctness. The semantic real-history smoke also
+  emits an aggregate-only `semantic_evidence_diagnostics` funnel
+  (`selected_candidate_count -> finding_count -> materialized_row_count`),
+  all-canonical-label zero counts, and observable materialization reason
+  buckets. This explains sparse high-risk labels without exposing raw text,
+  source refs, local paths, or relaxing strict gates.
   These are navigation layers over original text, not summary replacements.
 - Stage 4 now has a first local MCP server at
   `skills/aippocampus/scripts/aippocampus_mcp_server.py`, including a
@@ -175,8 +180,9 @@ view across proof lines, use
   Pro-agent recovery and 96-case source-review smokes prove better selected
   coverage, but high-risk suppressed labels such as
   `relationship_continuity` and `life_context` still need stronger
-  source-backed model findings before being restored; follow-up #320 owns that
-  evidence-improvement track. Current
+  source-backed model findings before being restored; #320 also requires public
+  diagnostics to classify zero or sparse high-risk labels as unsafe to restore
+  until stronger evidence survives the unchanged materializer. Current
   labels, timeline groups, semantic sidecars, real-registry aggregate smoke,
   dynamic semantic sidecar smoke, recall eval prompts, source-review samples,
   and ambient scents are navigation hints only.
