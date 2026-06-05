@@ -223,6 +223,26 @@ class StorageGovernanceTests(unittest.TestCase):
         )
         return pin
 
+    def _assert_no_workspace_absolute_paths(self, payload: object) -> None:
+        root_text = str(self.root)
+        normalized_root = root_text.replace("\\", "/")
+
+        def visit(value: object, trail: str) -> None:
+            if isinstance(value, str):
+                normalized_value = value.replace("\\", "/")
+                self.assertNotIn(root_text, value, trail)
+                self.assertNotIn(normalized_root, normalized_value, trail)
+                return
+            if isinstance(value, dict):
+                for key, child in value.items():
+                    visit(child, f"{trail}.{key}")
+                return
+            if isinstance(value, list):
+                for index, child in enumerate(value):
+                    visit(child, f"{trail}[{index}]")
+
+        visit(payload, "$")
+
     def test_dry_run_uses_existing_reports_without_leaking_private_text_or_paths(self) -> None:
         plan = storage_governance.build_plan(
             self.root,
@@ -236,7 +256,7 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertFalse(plan["privacy"]["reads_clean_source_message_bodies"])
         self.assertTrue(plan["privacy"]["loads_existing_retention_report"])
         self.assertNotIn("private phrase", payload)
-        self.assertNotIn(str(self.root), payload)
+        self._assert_no_workspace_absolute_paths(plan)
 
         self.assertEqual(plan["metrics"]["eviction_candidate_count"], 1)
         candidate = plan["candidates"][0]
@@ -256,7 +276,6 @@ class StorageGovernanceTests(unittest.TestCase):
         plan = storage_governance.build_plan(
             self.root,
             registry_dir=self.registry,
-            include_paths=True,
         )
         payload = json.dumps(plan, ensure_ascii=False)
 
@@ -265,7 +284,7 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertGreaterEqual(plan["metrics"]["eviction_candidate_count"], 1)
         self.assertIn("Path-level retention candidates are unavailable", plan["warnings"][0])
         self.assertNotIn("private phrase", payload)
-        self.assertNotIn(str(self.root), payload)
+        self._assert_no_workspace_absolute_paths(plan)
         self.assertEqual(plan["candidates"][0]["source_report"]["kind"], "storage_capacity_report")
 
     def test_apply_rebuildable_main_sqlite_writes_manifest_and_preserves_sources(self) -> None:
@@ -481,9 +500,7 @@ class StorageGovernanceTests(unittest.TestCase):
         plan = storage_governance.build_plan(
             self.root,
             registry_dir=self.registry,
-            include_paths=True,
         )
-        payload = json.dumps(plan, ensure_ascii=False)
         old_generation_candidates = [
             item
             for item in plan["candidates"]
@@ -504,7 +521,7 @@ class StorageGovernanceTests(unittest.TestCase):
         )
         self.assertEqual(candidate["source_report"].get("cleanup_status"), "blocked_ttl_window")
         self.assertIn("ttl_window_not_elapsed", candidate["evidence"])
-        self.assertNotIn(str(self.root), payload)
+        self._assert_no_workspace_absolute_paths(plan)
 
     def test_dry_run_marks_old_generation_cleanup_passed_after_reader_pin_ttl(self) -> None:
         current = self._write_index_generation("gen_20260605T010000_current", 41)
@@ -760,7 +777,6 @@ class StorageGovernanceTests(unittest.TestCase):
         self._mark_path_old(pointer_path)
 
         plan = storage_governance.build_plan(self.root, registry_dir=self.registry)
-        payload = json.dumps(plan, ensure_ascii=False)
         old_generation_candidates = [
             item
             for item in plan["candidates"]
@@ -784,7 +800,7 @@ class StorageGovernanceTests(unittest.TestCase):
         )
         self.assertEqual(candidate["source_report"].get("cleanup_status"), "eligible")
         self.assertTrue(old.exists())
-        self.assertNotIn(str(self.root), payload)
+        self._assert_no_workspace_absolute_paths(plan)
 
     def test_apply_deletes_old_segment_generation_after_reader_pin_ttl_contract_passes(self) -> None:
         current = self._write_segment_generation("gen_20260605T010000_current", 41)
