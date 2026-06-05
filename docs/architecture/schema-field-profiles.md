@@ -115,6 +115,17 @@ The shared `cannot_claim` markers are:
 - `field_completeness_is_not_product_quality`;
 - `wide_metadata_does_not_replace_source_reopen`.
 
+Keep `cannot_claim` close to the claim it protects:
+
+- runner JSON should carry active run-level or track-local `cannot_claim`
+  entries when a reader could over-read that run;
+- selected profile metadata may include its default `cannot_claim` list because
+  it explains the active report surface;
+- inactive profile ladders, docs maps, and fixture indexes should prefer counts
+  plus a canonical docs pointer instead of mirroring every caveat list;
+- long repeated caveat lists belong in the owning evidence or methodology page,
+  not in every runner, test fixture, and navigation document.
+
 ## Verification
 
 `tests/aippocampus/test_schema_profiles.py` proves the narrow contract:
