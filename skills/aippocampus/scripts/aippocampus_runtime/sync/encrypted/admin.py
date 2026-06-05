@@ -183,12 +183,48 @@ def public_admin_result(result: dict[str, Any]) -> dict[str, Any]:
         public["issues"] = issues
     recovery_state = result.get("recovery_state")
     if isinstance(recovery_state, dict):
-        public["recovery_state"] = {
+        public_recovery_state = {
+            "status": public_token(recovery_state.get("status"), fallback="unknown"),
+            "mode": public_token(recovery_state.get("mode"), fallback="unknown"),
             "configured": bool(recovery_state.get("configured")),
             "recovery_recipient_count": public_count(
                 recovery_state.get("recovery_recipient_count")
             ),
+            "identity_available": bool(recovery_state.get("identity_available")),
+            "identity_location": public_token(
+                recovery_state.get("identity_location"),
+                fallback="unknown",
+            ),
+            "backup_status": public_token(
+                recovery_state.get("backup_status"),
+                fallback="unknown",
+            ),
+            "backup_required": bool(recovery_state.get("backup_required")),
         }
+        recovery_warnings = [
+            public_issue(item) for item in recovery_state.get("warnings") or []
+        ]
+        if recovery_warnings:
+            public_recovery_state["warnings"] = recovery_warnings
+        public["recovery_state"] = public_recovery_state
+    vault_id_state = result.get("vault_id_state")
+    if isinstance(vault_id_state, dict):
+        public_vault_id_state = {
+            "status": public_token(vault_id_state.get("status"), fallback="unknown"),
+            "vault_id_available": bool(vault_id_state.get("vault_id_available")),
+            "backup_status": public_token(
+                vault_id_state.get("backup_status"),
+                fallback="unknown",
+            ),
+            "backup_recommended": bool(vault_id_state.get("backup_recommended")),
+            "restore_required": bool(vault_id_state.get("restore_required")),
+        }
+        vault_id_warnings = [
+            public_issue(item) for item in vault_id_state.get("warnings") or []
+        ]
+        if vault_id_warnings:
+            public_vault_id_state["warnings"] = vault_id_warnings
+        public["vault_id_state"] = public_vault_id_state
     supported = result.get("supported_key_providers")
     if isinstance(supported, list):
         public["supported_key_providers"] = []

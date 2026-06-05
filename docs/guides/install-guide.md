@@ -502,6 +502,14 @@ recovery identity must stay offline and must not be copied into a sync folder,
 object prefix, issue, or demo bundle. If all trusted device identities and all
 recovery identities are lost, encrypted sync data is unrecoverable.
 
+`key list --json` reports the recovery and vault-id backup diagnostics without
+printing the vault id, registry path, private identity, or recovery-kit secret.
+If a local `vault-id.backup` file exists beside the encrypted-sync `vault-id`,
+status reports whether that marker is current, missing, invalid, or mismatched.
+This is only a restore diagnostic: AIppocampus does not silently regenerate a
+missing or corrupt vault id as the same vault, and it does not provide hosted
+escrow or passphrase recovery.
+
 `key revoke --dry-run` reports the re-encryption plan. A revoked recipient is
 removed from future trusted-recipient pushes only after a fresh encrypted bundle
 is pushed for the remaining recipients and repaired or pulled with a remaining

@@ -402,6 +402,145 @@ raise SystemExit(0)
         self.assertIsNone(cleared["reencryption_required"])
         self.assertEqual(fresh_repair["inner_manifest"]["recipient_count"], 2)
 
+    def test_encrypted_sync_admin_cli_key_list_reports_recovery_and_vault_backup_diagnostics(
+        self,
+    ) -> None:
+        init = encrypted_sync_keys.init_device_key(
+            self.registry,
+            device_name="device-a",
+            age_keygen_bin=self.fake_age_keygen,
+        )
+        self.assertTrue(init["ok"], init)
+
+        missing_proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.sync.encrypted.admin",
+                "key",
+                "list",
+                "--registry-dir",
+                str(self.registry),
+                "--json",
+            ],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        self.assertEqual(missing_proc.returncode, 0, missing_proc.stderr)
+        missing = json.loads(missing_proc.stdout)
+        self.assertFalse(missing["recovery_state"]["configured"])
+        self.assertEqual(
+            missing["recovery_state"]["warnings"][0]["code"],
+            "recovery_kit_not_configured",
+        )
+        self.assertEqual(missing["vault_id_state"]["status"], "missing")
+        self.assertEqual(missing["vault_id_state"]["backup_status"], "missing")
+        self.assertTrue(missing["vault_id_state"]["restore_required"])
+        self.assertNotIn(str(self.registry), missing_proc.stdout)
+        self.assertNotIn("AGE-SECRET-KEY", missing_proc.stdout)
+
+        recovery_recipient = "age1recovery00000000000000000000000000000000000000000000"
+        encrypted_sync_keys.trust_recipient(
+            self.registry,
+            recipient=recovery_recipient,
+            device_name="paper-recovery-kit",
+            role=encrypted_sync_keys.RECIPIENT_ROLE_RECOVERY,
+        )
+        push = encrypted_sync_bundle.push_encrypted_sync_bundle(
+            self.registry,
+            self.sync_dir,
+            age_bin=self.fake_age,
+        )
+        self.assertTrue(push["ok"], push)
+        state_dir = self.registry / ".sync-state" / "encrypted"
+        vault_id = (state_dir / "vault-id").read_text(encoding="utf-8")
+        (state_dir / "vault-id.backup").write_text(vault_id, encoding="utf-8")
+
+        ready_proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.sync.encrypted.admin",
+                "key",
+                "list",
+                "--registry-dir",
+                str(self.registry),
+                "--json",
+            ],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        self.assertEqual(ready_proc.returncode, 0, ready_proc.stderr)
+        ready = json.loads(ready_proc.stdout)
+        self.assertTrue(ready["recovery_state"]["configured"])
+        self.assertFalse(ready["recovery_state"]["identity_available"])
+        self.assertEqual(
+            ready["recovery_state"]["warnings"][0]["code"],
+            "recovery_identity_offline_backup_required",
+        )
+        self.assertEqual(ready["vault_id_state"]["status"], "present")
+        self.assertEqual(ready["vault_id_state"]["backup_status"], "current")
+        self.assertFalse(ready["vault_id_state"]["restore_required"])
+        self.assertNotIn(vault_id.strip(), ready_proc.stdout)
+        self.assertNotIn(str(self.registry), ready_proc.stdout)
+        self.assertNotIn("AGE-SECRET-KEY", ready_proc.stdout)
+
+        (state_dir / "vault-id.backup").write_text("different-vault-id\n", encoding="utf-8")
+        mismatch_proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.sync.encrypted.admin",
+                "key",
+                "list",
+                "--registry-dir",
+                str(self.registry),
+                "--json",
+            ],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        self.assertEqual(mismatch_proc.returncode, 0, mismatch_proc.stderr)
+        mismatch = json.loads(mismatch_proc.stdout)
+        self.assertEqual(mismatch["vault_id_state"]["backup_status"], "mismatch")
+        self.assertEqual(
+            mismatch["vault_id_state"]["warnings"][0]["code"],
+            "vault_id_backup_mismatch",
+        )
+        self.assertNotIn("different-vault-id", mismatch_proc.stdout)
+
+        (state_dir / "vault-id").write_text("\n", encoding="utf-8")
+        invalid_proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.sync.encrypted.admin",
+                "key",
+                "list",
+                "--registry-dir",
+                str(self.registry),
+                "--json",
+            ],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        self.assertEqual(invalid_proc.returncode, 0, invalid_proc.stderr)
+        invalid = json.loads(invalid_proc.stdout)
+        self.assertEqual(invalid["vault_id_state"]["status"], "invalid")
+        self.assertTrue(invalid["vault_id_state"]["restore_required"])
+        self.assertEqual(
+            invalid["vault_id_state"]["warnings"][0]["code"],
+            "vault_id_invalid",
+        )
+
     def test_key_provider_contract_fails_closed_for_unavailable_os_providers(self) -> None:
         init = encrypted_sync_keys.init_device_key(
             self.registry,
