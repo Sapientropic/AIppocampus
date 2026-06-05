@@ -370,9 +370,16 @@ handoff context.
      does not mutate clean source, rewrite Journey history, enforce scheduler
      behavior, prove live user behavior change, or provide a polished visual
      interface.
-   - Next hardening: connect reviewed adjustment rows to the actual AAR
-     strategy reader and run a small human/UI review before any star-map or
-     constellation visual upgrade.
+   - The #332/#484 AAR v2 hardening now connects source-backed reviewed
+     correction/postmortem rows to
+     `skills/aippocampus/scripts/aippocampus_runtime/reflection/aar_v2.py` as
+     advisory action-time nudges. Stale, unsupported, and rejected review rows
+     are ignored before they become strategy records; the scripted closeout
+     lives in
+     `docs/evidence/reflection-aar-v2-hardening-2026-06-05.md`.
+   - Next hardening: run live/human review for usefulness, annoyance,
+     calibrated timing, and reflection-mode UI behavior before claiming
+     star-map, constellation, or foreground behavior lift.
 
 ## Do Not Start With
 

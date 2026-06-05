@@ -1,6 +1,7 @@
 # AAR v2 Action-Time Nudges
 
-Status: first deterministic slice for #484.
+Status: first deterministic slice for #484 and #332 strategy-reader
+hardening.
 
 This note defines the narrow AAR v2 runtime surface. It turns source-backed
 corrections or postmortems into action-time advisory nudges for one high-risk
@@ -36,9 +37,16 @@ The report must not serialize raw prompts, raw source snippets, secrets, local
 paths, or unreviewed model text as evidence. It preserves only compact source
 refs and sanitized summaries.
 
+Rows explicitly reviewed as `stale`, `unsupported`, or `rejected` are blocked
+before they can become AAR v2 candidate records. This protects the AAR reader
+from treating old topology/postmortem material as current strategy guidance.
+
 This slice does not install live prompt hooks, does not mutate clean source,
 does not promote formal memory, and does not replace answer-time source gates.
 AAR v2 affects attention and routing only.
+
+The #332 scripted review closeout is recorded in
+[`reflection-aar-v2-hardening-2026-06-05.md`](../evidence/reflection-aar-v2-hardening-2026-06-05.md).
 
 ## Relation To Neighboring Surfaces
 

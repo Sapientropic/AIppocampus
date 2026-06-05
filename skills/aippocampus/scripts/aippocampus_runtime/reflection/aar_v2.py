@@ -40,6 +40,7 @@ SUPPORTED_COUNTERFACTUAL_EVIDENCE_KINDS = {
     "retrospective_outcome",
 }
 FEEDBACK_VALUES = {"useful", "ignored", "false_positive", "prevented_failure", "stale"}
+BLOCKED_REVIEW_STATUSES = {"stale", "unsupported", "rejected"}
 SOURCE_REF_KEYS = (
     "source_id",
     "stable_source_id",
@@ -134,6 +135,9 @@ def _counterfactual_hypothesis(row: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _candidate_from_row(row: Mapping[str, Any]) -> dict[str, Any] | None:
+    review_status = _safe_text(row.get("review_status") or row.get("status"), max_chars=80)
+    if review_status in BLOCKED_REVIEW_STATUSES:
+        return None
     source_refs = _source_refs(row.get("source_refs") or row.get("evidence_refs") or [])
     action_class = _safe_text(row.get("action_class") or row.get("target_action_class"), max_chars=80)
     if action_class != SOURCE_CLAIM_ACTION_CLASS:

@@ -36,6 +36,10 @@ The first MVP lives in
   It provides a no-write report over source-backed corrections/postmortems,
   one deterministic action-time match for specific memory/source claims from
   weak context, and feedback metrics for later pruning.
+- The #332 feedback-to-AAR hardening closeout is recorded in
+  [Reflection AAR V2 Hardening Review](../evidence/reflection-aar-v2-hardening-2026-06-05.md).
+  The AAR v2 reader now blocks stale, unsupported, and rejected review rows
+  before they can become strategy nudges.
 
 Still not claimed: polished visualization, real user behavior change,
 scheduler-wide AAR enforcement, calibrated suggestion timing, live hook
