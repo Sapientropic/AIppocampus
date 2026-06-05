@@ -89,6 +89,14 @@ adds `partial_migration_preserved`, and reports `migration_recovery` with
 local deterministic contract only; it does not prove live-provider interruption
 semantics or provider-console cleanup.
 
+As of 2026-06-05, encrypted key administration also has a first key-provider
+contract/status slice. The implemented provider is `file`. The reserved
+provider names `macos-keychain`, `windows-credential-manager`, and
+`linux-secret-service` can be configured and reported, but until real adapters
+land they return `key_provider_unavailable`, `fallback_attempted=false`, and
+`fallback_to_file_identity=false`. This is a fail-closed diagnostic contract,
+not evidence that OS credential stores are integrated or unlocked.
+
 ## Provider Metadata Evidence
 
 The dated #104 Cloudflare R2-compatible re-smoke in
