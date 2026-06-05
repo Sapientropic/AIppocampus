@@ -19,6 +19,9 @@ from typing import Any
 from aippocampus_runtime.dream.working_memory_compaction import (
     compact_dream_working_memory_payloads_from_dead_letter_manifest,
 )
+from aippocampus_runtime.recall.active_recall_lock_compaction import (
+    compact_active_recall_lock_payloads_from_dead_letter_manifest,
+)
 from aippocampus_runtime.recall.ambient_cache_compaction import (
     compact_ambient_cache_payloads_from_dead_letter_manifest,
 )
@@ -62,6 +65,27 @@ def _write_jsonl_atomic(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
             for row in rows:
                 handle.write(json.dumps(dict(row), ensure_ascii=False, sort_keys=True))
                 handle.write("\n")
+        tmp_path.replace(path)
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise
+
+
+def _write_json_atomic(path: Path, data: Mapping[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle = tempfile.NamedTemporaryFile(
+        "w",
+        encoding="utf-8",
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        delete=False,
+    )
+    tmp_path = Path(handle.name)
+    try:
+        with handle:
+            json.dump(dict(data), handle, ensure_ascii=False, sort_keys=True)
+            handle.write("\n")
         tmp_path.replace(path)
     except Exception:
         tmp_path.unlink(missing_ok=True)
@@ -168,6 +192,28 @@ def _run_semantic_triggers(
     return report
 
 
+def _run_active_recall_locks(
+    path: Path | None,
+    dead_letter_manifest: Mapping[str, Any],
+    *,
+    apply: bool,
+    compacted_at: str | None,
+) -> dict[str, Any]:
+    if path is None:
+        return _not_requested_report("active_recall_locks")
+    if not path.exists():
+        return _missing_owner_report("active_recall_locks")
+    store = _load_json(path)
+    next_store, report = compact_active_recall_lock_payloads_from_dead_letter_manifest(
+        store,
+        dead_letter_manifest,
+        compacted_at=compacted_at,
+    )
+    if apply and _safe_int(_owner_metrics(report).get("payload_compacted_count")) > 0:
+        _write_json_atomic(path, next_store)
+    return report
+
+
 def _total_metric(owner_reports: Mapping[str, Mapping[str, Any]], key: str) -> int:
     return sum(_safe_int(_owner_metrics(report).get(key)) for report in owner_reports.values())
 
@@ -186,6 +232,7 @@ def run_activation_payload_compaction(
     ambient_cache_path: Path | str | None = None,
     working_memory_path: Path | str | None = None,
     semantic_triggers_path: Path | str | None = None,
+    active_recall_locks_path: Path | str | None = None,
     apply: bool = False,
     compacted_at: str | None = None,
 ) -> dict[str, Any]:
@@ -216,6 +263,12 @@ def run_activation_payload_compaction(
             apply=apply,
             compacted_at=compacted_at,
         ),
+        "active_recall_locks": _run_active_recall_locks(
+            Path(active_recall_locks_path) if active_recall_locks_path is not None else None,
+            manifest,
+            apply=apply,
+            compacted_at=compacted_at,
+        ),
     }
     compacted_count = _total_metric(owner_reports, "payload_compacted_count")
     return {
@@ -229,7 +282,12 @@ def run_activation_payload_compaction(
         "metrics": {
             "owner_count_requested": sum(
                 1
-                for value in [ambient_cache_path, working_memory_path, semantic_triggers_path]
+                for value in [
+                    ambient_cache_path,
+                    working_memory_path,
+                    semantic_triggers_path,
+                    active_recall_locks_path,
+                ]
                 if value is not None
             ),
             "owner_count_run": _owner_count_run(owner_reports),
@@ -248,6 +306,7 @@ def run_activation_payload_compaction(
             "truth_status_changed": False,
             "source_refs_preserved": True,
             "row_transform_only_for_jsonl_owners": True,
+            "json_owner_transform_only_for_active_recall_locks": True,
         },
         "privacy_boundary": {
             "raw_prompt_serialized": False,
@@ -260,6 +319,7 @@ def run_activation_payload_compaction(
         "remaining_boundary": {
             "semantic_trigger_seed_files_mutated": False,
             "semantic_trigger_promotion_candidates_mutated": False,
+            "active_recall_lock_lifecycle_fully_closed": False,
             "owner_lifecycle_fully_closed": False,
         },
     }
@@ -271,6 +331,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--ambient-cache")
     parser.add_argument("--working-memory")
     parser.add_argument("--semantic-triggers")
+    parser.add_argument("--active-recall-locks")
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--compacted-at")
     parser.add_argument("--json", action="store_true", dest="json_output")
@@ -281,6 +342,7 @@ def main(argv: list[str] | None = None) -> int:
         ambient_cache_path=args.ambient_cache,
         working_memory_path=args.working_memory,
         semantic_triggers_path=args.semantic_triggers,
+        active_recall_locks_path=args.active_recall_locks,
         apply=args.apply,
         compacted_at=args.compacted_at,
     )

@@ -25,9 +25,12 @@ segments, and produce checkpoint candidates. It should not append checkpoints
 unless called with `--append-checkpoint`.
 Activation payload compaction is available only as an explicit operator
 delegation: pass `--activation-dead-letter-manifest` plus the intended owner
-paths, and add `--apply-activation-payload-compaction` only when owner files
-should be rewritten. Dry-run is the default, and the maintenance report records
-a path-free command shape rather than local manifest or owner paths.
+paths (`--activation-ambient-cache`, `--activation-working-memory`,
+`--activation-semantic-triggers`, and/or
+`--activation-active-recall-locks`), and add
+`--apply-activation-payload-compaction` only when owner files should be
+rewritten. Dry-run is the default, and the maintenance report records a
+path-free command shape rather than local manifest or owner paths.
 
 Maintenance defaults to a degraded-report contract: failed actions are recorded
 in `action_failures`, safe independent actions can still run, `health_final` is

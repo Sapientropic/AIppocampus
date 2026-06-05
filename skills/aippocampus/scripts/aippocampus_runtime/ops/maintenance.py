@@ -85,6 +85,7 @@ def activation_payload_compaction_cmd(args: argparse.Namespace, *, cwd: Path) ->
         ("--ambient-cache", args.activation_ambient_cache),
         ("--working-memory", args.activation_working_memory),
         ("--semantic-triggers", args.activation_semantic_triggers),
+        ("--active-recall-locks", args.activation_active_recall_locks),
     ):
         if value:
             cmd.extend([option, str(_path_arg(value, cwd=cwd))])
@@ -109,7 +110,13 @@ def public_activation_payload_compaction_command(cmd: list[str]) -> list[str]:
         "<omitted>",
         "--json",
     ]
-    for option in ("--ambient-cache", "--working-memory", "--semantic-triggers", "--compacted-at"):
+    for option in (
+        "--ambient-cache",
+        "--working-memory",
+        "--semantic-triggers",
+        "--active-recall-locks",
+        "--compacted-at",
+    ):
         if option in cmd:
             public_cmd.extend([option, "<omitted>"])
     if "--apply" in cmd:
@@ -178,6 +185,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--activation-ambient-cache")
     parser.add_argument("--activation-working-memory")
     parser.add_argument("--activation-semantic-triggers")
+    parser.add_argument("--activation-active-recall-locks")
     parser.add_argument("--activation-compacted-at")
     parser.add_argument(
         "--apply-activation-payload-compaction",
