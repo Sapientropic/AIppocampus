@@ -29,24 +29,24 @@ smaller.
 
 ### Open Issue Cleanup Review
 
-As of 2026-06-05, `gh issue list --state open` showed several issues that could
-look too heavy from their titles alone. A follow-up body/comment review checked
-each candidate below before any remote action. The result: do not close these
-by title. Most already have source pointers, non-goals, acceptance criteria,
-partial PR evidence, or explicit remaining evidence gaps.
+As of the 2026-06-06 cleanup pass, the active open-issue queue is intentionally
+small. The pass reviewed issue bodies and comments before remote closure; do
+not reopen broad parent issues just to preserve a good idea. Preserve those in
+Discussion or `docs/research/seeds/` until they can become a fixture, doc, CLI,
+runtime slice, or verified cleanup in roughly 1-2 weeks.
 
 | Layer | Reviewed issues | Current disposition |
 |---|---|---|
-| Core default | #201, #281, #707 | Keep open. These directly reduce manual query invention, improve source reopen, and make fresh-thread recall less brittle. |
-| Power user | #250, #313, #576 | Keep open as opt-in map, activation, and observability surfaces. Do not promote them into first-use onboarding without new evidence. |
-| Enterprise/high-risk | #679 | Keep open as a governed/high-risk policy capability. The comments already correct that purpose tokens are not personal-default ceremony. |
-| Research garden with executable slices | #703, #701, #663, #575, #574, #299, #163, #158 | Keep open for now. They are heavy, but each has acceptance criteria, child slices, partial evidence, or explicit live-quality gaps. Move only future speculative expansions to Discussion / `docs/research/seeds/`. |
-| Infrastructure | #637, #639, #643, #376, #463 | Keep open where deterministic sync, scale, portability, or Rust-core claim boundaries still need executable proof. |
+| Core default / product usability | #201, #281, #752 | Keep open. These directly reduce manual grep, improve source reopen/fresh-thread recall, or keep no-key installs from silently losing background cognition. #752's first staging-only fallback slice is tracked separately; the broader issue stays open until host-agent execution/materialization is real. |
+| Evidence and quality gates | #163, #279, #742, #747 | Keep open as falsifiable proof owners, not first-use product features. They guard Dream usefulness claims, silent-constraint survival, official AMemGym comparability, and semantic robustness without live judges. |
+| Reliability / infrastructure | #311, #376, #637 | Keep open, but cut the next PR tightly. These own live correction capture, long-thread segment soak, and encrypted sync multi-writer trust/provenance behavior. |
+| Closed or moved out of the foreground | #701, #703, #248, #250, #309, #310, #312, #313, #397, #574, #575, #576, #611, #663, #679 | Treat as Research Garden, power-user, enterprise, or historical context until a smaller executable slice exists. Do not let them re-enter the open queue as broad concept issues. |
+| Completed / superseded umbrellas | #158, #164, #299, #378, #463, #582, #639, #643, #707, #743 | Closed after checking implementation evidence, child owners, or canonical docs. Future work should start from the remaining open issues or a fresh narrow issue, not by reopening these umbrellas. |
 
-Cleanup action from this review is local/documentary, not remote closure:
-sharpen the Core/default language, keep these issues out of the ordinary user
-front door, and prevent future speculative expansions from becoming standalone
-open issues before they have an executable slice.
+Current open queue after the pass: #163, #201, #279, #281, #311, #376, #637,
+#742, #747, and #752. This is the active issue foreground; everything else
+should stay in docs, evidence, Discussion, or Long Garden until it has a small
+next action.
 
 ## Current Baseline To Preserve
 

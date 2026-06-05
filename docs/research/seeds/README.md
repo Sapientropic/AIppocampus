@@ -20,6 +20,8 @@ Examples that belong here until they have small executable slices:
 
 - Situation glyphs, hexagram arcs, and other compact intuition markers.
 - Multidimensional active-path networks and richer cognitive-map topology.
+- Episode/Arc sequence packets for tacit ordered knowledge, until there is a
+  small deterministic builder or source-reopen helper slice.
 - Dream residue, sleep pruning, and active-imagination experiments.
 - Reflection-space and Campus-like map rooms before a concrete opt-in UI slice.
 - Governance concepts that are valuable for high-risk deployments but would
