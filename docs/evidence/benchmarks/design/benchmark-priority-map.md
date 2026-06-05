@@ -142,7 +142,7 @@ them, or when the registry above points to an unresolved live/private gap.
 | Source-evidence retrieval | `smoke_source_evidence_recall_eval.py` | implemented | P1 | private/sanitized smoke | selected_private_diagnostic | Candidate-space and selected-source recall drift | Public benchmark score | #458 |
 | Question tracking | `smoke_question_confirmation_live.py` | implemented | P3 | live/provider optional | diagnostic_proxy | Live confirmation path drift | Deterministic gate | #248 |
 | Question tracking | `smoke_question_prefilter_parity.py` | implemented | P1 | focused smoke | contract_smoke | Prefilter/runtime mismatch | Answer quality | #248 |
-| Agency/host timing | `smoke_agency_host_timing.py` | implemented | P1 | focused replay smoke | contract_smoke | Annoyance/duplicate-suppression policy drift | Live host timing lift | #312 |
+| Agency/host timing | `smoke_agency_host_timing.py` | implemented | P1 | focused replay smoke | contract_smoke | Annoyance/duplicate-suppression policy drift on the Codex Desktop hidden-route surface | Live host timing lift or real annoyance calibration | #312, #763 |
 | Dream/consolidation | `dream_real_history_eval.py` | dated_evidence | P2 | private-only / provider optional | selected_private_diagnostic | Dream structural lift/noise calibration drift | Causal user-visible lift | #163 |
 | Scale/storage | `smoke_synthetic_scale_capacity.py` | implemented | P2 | optional local smoke | diagnostic_proxy | Synthetic capacity/regression drift | Real GB/TB readiness | none |
 | Question tracking | `smoke_question_tracking_scale.py` | implemented | P2 | optional local smoke | diagnostic_proxy | Question-scale policy drift | Real-history quality | none |
