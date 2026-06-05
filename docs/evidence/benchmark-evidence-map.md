@@ -277,6 +277,7 @@ pasting raw JSON into multiple docs.
 | Optional live question-confirmation smoke | `tools/aippocampus/smoke/smoke_question_confirmation_live.py` | `docs/architecture/question-tracking-subconscious.md`, `docs/evidence/readiness/stage-0-5-readiness.md` |
 | Question prefilter parity smoke | `tools/aippocampus/smoke/smoke_question_prefilter_parity.py` | `docs/architecture/question-tracking-subconscious.md`, #248 |
 | Agency host-timing replay smoke | `tools/aippocampus/smoke/smoke_agency_host_timing.py` | `docs/research/agency-from-cognitive-map.md`, `docs/evidence/benchmarks/agency-host-surface-codex-desktop-2026-06-05.md`, #312, #763 |
+| Route-readiness Cognitive Observatory smoke | `tools/aippocampus/smoke/smoke_route_readiness_observatory.py` | `docs/architecture/cognitive-runtime-architecture.md`, `docs/guides/public-api.md`, #574, #576 |
 | Dream real-history structural and user-visible eval | `skills/aippocampus/scripts/dream_real_history_eval.py` | `docs/evidence/dream/dream-real-history-model-backed-eval-2026-05-31.md`, `docs/research/dream-task-design.md`, #163 |
 | Synthetic GB-scale capacity smoke | `tools/aippocampus/smoke/smoke_synthetic_scale_capacity.py` | `docs/architecture/gb-scale-roadmap.md` |
 | Synthetic question-tracking scale smoke | `tools/aippocampus/smoke/smoke_question_tracking_scale.py` | `docs/architecture/question-tracking-subconscious.md`, `docs/architecture/gb-scale-roadmap.md` |

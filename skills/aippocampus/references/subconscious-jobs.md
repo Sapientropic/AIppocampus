@@ -305,6 +305,13 @@ DeepSeek can be used aggressively, but hooks must stay cheap. The split is:
   and estimated verification tool calls saved; apply mode writes only an
   append-only lifecycle manifest for the owning surface writer, not source or
   truth mutations.
+- route-readiness prewarm diagnostics are observable, not authoritative. Use
+  `aippocampus_runtime.ops.route_readiness` and
+  `aippocampus_runtime.ops.cognitive_observatory` when an operator needs a
+  public-safe view of which route handles are worth reopening and which stayed
+  silent because of stale freshness, expired TTL, privacy blocks, missing
+  source refs, or low ROI. These reports are no-write and navigation-only; do
+  not feed them directly into foreground answers or treat them as evidence.
 - `aippocampus_runtime.dream.real_history_eval` reports dream impact in two layers: structural
   substrate lift and a sanitized user-visible ablation harness. The latter
   separates recall, reflection, unsupported-claim suppression, source-support,
