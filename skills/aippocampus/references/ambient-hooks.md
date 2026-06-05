@@ -90,6 +90,11 @@ manual grep/search query. If the packet has no reopenable source ref, the plan i
 should report or defer from that boundary instead of broadening the lookup.
 Successful reopen may produce a separate bounded evidence card/source-backed
 context packet. Do not copy raw source text back into the scent packet.
+The current local projection is
+`aippocampus_bounded_evidence_context`: it consumes a successful
+`recall_deepen` / `get_turn_context`-style clean-source reopen result, emits
+bounded evidence cards, and deliberately does not serialize the raw
+`source_window` payload.
 
 Public-safe first-turn demo cues such as "我觉得压力好大", "帮我妈妈挑个礼物",
 "我想建个网站", and a fresh coding workspace with no `AGENTS.md` may produce

@@ -341,6 +341,12 @@ def _issue_readouts(
     foreground_measured = bool(foreground.get("measured"))
     foreground_reopen = _as_dict(foreground.get("source_reopen_after_packet"))
     foreground_reopen_measured = bool(foreground_reopen.get("measured"))
+    bounded_evidence_measured = bool(foreground_reopen.get("bounded_evidence_context_emitted"))
+    bounded_evidence_card_count = (
+        int(foreground_reopen.get("bounded_evidence_card_count") or 0)
+        if bounded_evidence_measured
+        else 0
+    )
     return {
         "github_201": {
             "route_actionability_measured": True,
@@ -371,7 +377,26 @@ def _issue_readouts(
                 if foreground_reopen_measured
                 else None
             ),
+            "foreground_bounded_evidence_context_measured": bounded_evidence_measured,
+            "foreground_bounded_evidence_card_count": bounded_evidence_card_count,
             "live_registry_quality": "not_measured",
+            "closeout_eligible": False,
+        },
+        "github_707": {
+            "bounded_evidence_context_measured": bounded_evidence_measured,
+            "bounded_evidence_card_count": bounded_evidence_card_count,
+            "source_reopen_follow_through": bool(
+                foreground_reopen.get("source_reopen_follow_through")
+            ),
+            "fresh_thread_packet_contains_raw_source_text": bool(
+                foreground_reopen.get("fresh_thread_packet_contains_raw_source_text")
+            ),
+            "foreground_manual_query_invention_count": (
+                int(foreground_reopen.get("manual_query_invention_count") or 0)
+                if foreground_reopen_measured
+                else None
+            ),
+            "live_source_reopen_quality": "not_measured",
             "closeout_eligible": False,
         }
     }
@@ -457,6 +482,11 @@ def build_recall_navigation_comparison(
                 "the foreground packet candidate ref to reopen source without inventing "
                 "new grep/search terms. It is not live registry quality evidence."
             ),
+            "bounded_evidence_context_after_packet": (
+                "Fixture-backed #707 check that source reopen can produce a separate "
+                "bounded source-backed context/card while the fresh-thread packet remains "
+                "ids-only navigation."
+            ),
         },
         "comparison_boundary": {
             "deterministic_proxy_only": True,
@@ -466,6 +496,7 @@ def build_recall_navigation_comparison(
             "cannot_claim_live_default_foreground_lift": True,
             "source_reopen_required_for_strong_claims": True,
             "hook_scent_is_not_evidence": True,
+            "bounded_evidence_context_separate_from_scent_packet": True,
             "no_external_model_calls": True,
             "no_write": True,
             "no_repo_write": True,
