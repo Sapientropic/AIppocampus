@@ -402,6 +402,98 @@ raise SystemExit(0)
         self.assertIsNone(cleared["reencryption_required"])
         self.assertEqual(fresh_repair["inner_manifest"]["recipient_count"], 2)
 
+    def test_key_provider_contract_fails_closed_for_unavailable_os_providers(self) -> None:
+        init = encrypted_sync_keys.init_device_key(
+            self.registry,
+            device_name="device-a",
+            age_keygen_bin=self.fake_age_keygen,
+        )
+        file_status = encrypted_sync_keys.key_provider_status(self.registry)
+
+        self.assertTrue(init["ok"], init)
+        self.assertTrue(file_status["ok"], file_status)
+        self.assertEqual(file_status["active_key_provider"], "file")
+        self.assertEqual(file_status["status"], "available")
+        self.assertTrue(file_status["identity_available"])
+        self.assertFalse(file_status["fallback_to_file_identity"])
+        self.assertIn("windows-credential-manager", file_status["supported_key_providers"])
+        self.assertNotIn("AGE-SECRET-KEY", json.dumps(file_status, ensure_ascii=False))
+
+        configured = encrypted_sync_keys.configure_key_provider(
+            self.registry,
+            provider="windows-credential-manager",
+        )
+        os_status = encrypted_sync_keys.key_provider_status(self.registry)
+
+        self.assertTrue(configured["ok"], configured)
+        self.assertEqual(configured["active_key_provider"], "windows-credential-manager")
+        self.assertFalse(os_status["ok"], os_status)
+        self.assertEqual(os_status["active_key_provider"], "windows-credential-manager")
+        self.assertEqual(os_status["status"], "unavailable")
+        self.assertEqual(os_status["issues"][0]["code"], "key_provider_unavailable")
+        self.assertEqual(os_status["issues"][0]["reason"], "provider_adapter_not_implemented")
+        self.assertFalse(os_status["identity_available"])
+        self.assertFalse(os_status["fallback_to_file_identity"])
+        self.assertFalse(os_status["fallback_attempted"])
+        self.assertTrue(os_status["local_file_identity_present"])
+        self.assertNotIn("AGE-SECRET-KEY", json.dumps(os_status, ensure_ascii=False))
+        self.assertNotIn(str(self.registry), json.dumps(os_status, ensure_ascii=False))
+
+    def test_encrypted_sync_admin_cli_key_provider_status_redacts_local_identity(self) -> None:
+        encrypted_sync_keys.init_device_key(
+            self.registry,
+            device_name="device-a",
+            age_keygen_bin=self.fake_age_keygen,
+        )
+        configure_proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.sync.encrypted.admin",
+                "key",
+                "provider-configure",
+                "--registry-dir",
+                str(self.registry),
+                "--provider",
+                "windows-credential-manager",
+                "--json",
+            ],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        status_proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.sync.encrypted.admin",
+                "key",
+                "provider-status",
+                "--registry-dir",
+                str(self.registry),
+                "--json",
+            ],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+        self.assertEqual(configure_proc.returncode, 0, configure_proc.stderr)
+        configured = json.loads(configure_proc.stdout)
+        self.assertTrue(configured["ok"], configured)
+        self.assertEqual(configured["active_key_provider"], "windows-credential-manager")
+        self.assertEqual(status_proc.returncode, 1, status_proc.stdout)
+        status = json.loads(status_proc.stdout)
+        self.assertFalse(status["ok"], status)
+        self.assertEqual(status["active_key_provider"], "windows-credential-manager")
+        self.assertEqual(status["status"], "unavailable")
+        self.assertEqual(status["issues"][0]["code"], "key_provider_unavailable")
+        self.assertFalse(status["fallback_to_file_identity"])
+        self.assertNotIn(str(self.registry), status_proc.stdout)
+        self.assertNotIn("AGE-SECRET-KEY", status_proc.stdout)
+
     def test_encrypted_local_push_status_repair_pull_round_trip(self) -> None:
         push = encrypted_sync_bundle.push_encrypted_sync_bundle(
             self.registry,
