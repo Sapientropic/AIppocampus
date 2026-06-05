@@ -30,10 +30,11 @@ from aippocampus_runtime.core import (
     parse_anchor_file,
     resolve_artifact_path,
 )
+from aippocampus_runtime.health_freshness import rollout_visibility_stats
 from aippocampus_runtime.health_registry import registry_health_report
 from aippocampus_runtime.health_render import render_health_text, render_registry_health_text
-from aippocampus_runtime.health_freshness import rollout_visibility_stats
 from aippocampus_runtime.legacy_aliases import legacy_alias_diagnostics
+from aippocampus_runtime.ops import log_retention
 from aippocampus_runtime.ops.storage_eviction import latest_intentional_eviction
 from aippocampus_runtime.question.constants import DEFAULT_DORMANT_AFTER_DAYS
 from aippocampus_runtime.registry.store import registry_paths
@@ -58,6 +59,7 @@ class HealthOptions:
     question_dormant_days: int = DEFAULT_DORMANT_AFTER_DAYS
     max_stale_messages: int = 25
     max_stale_bytes: int = 5 * 1024 * 1024
+    max_log_bytes: int | None = None
     checkpoint_messages: int = 30
     deep_graph_messages: int = 1000
     deep_graph_bytes: int = 100 * 1024 * 1024
@@ -538,13 +540,9 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         )
     if deep_graph_recommended:
         actions.append(
-            action(
-                "consider_graphify",
-                "info",
-                "thread size crossed the deep graph threshold",
-                f'Use $graphify on "{graphify_corpus}" when conceptual navigation is worth the cost.',
-            )
+            action("consider_graphify", "info", "thread size crossed the deep graph threshold", f'Use $graphify on "{graphify_corpus}" when conceptual navigation is worth the cost.')
         )
+    logs = log_retention.add_health_action(actions, registry_path.resolve().parent, max_bytes=options.max_log_bytes)
     question_stats = (
         {"available": False, "reason": "not_requested"}
         if not options.include_question_stats
@@ -682,6 +680,7 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
             "activity_class": segments_activity_class,
         },
         "question_stats": question_stats,
+        "logs": logs,
         "recommended_actions": actions,
     }
 
@@ -766,6 +765,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--max-stale-messages", type=int, default=25)
     parser.add_argument("--max-stale-bytes", type=int, default=5 * 1024 * 1024)
+    parser.add_argument("--max-log-bytes", type=int, default=None)
     parser.add_argument("--checkpoint-messages", type=int, default=30)
     parser.add_argument("--deep-graph-messages", type=int, default=1000)
     parser.add_argument("--deep-graph-bytes", type=int, default=100 * 1024 * 1024)
@@ -794,6 +794,7 @@ def options_from_args(args: argparse.Namespace) -> HealthOptions:
         question_dormant_days=args.question_dormant_days,
         max_stale_messages=args.max_stale_messages,
         max_stale_bytes=args.max_stale_bytes,
+        max_log_bytes=args.max_log_bytes,
         checkpoint_messages=args.checkpoint_messages,
         deep_graph_messages=args.deep_graph_messages,
         deep_graph_bytes=args.deep_graph_bytes,

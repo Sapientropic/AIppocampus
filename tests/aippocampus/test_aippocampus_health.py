@@ -193,6 +193,44 @@ class AippocampusHealthTests(unittest.TestCase):
             any("latest visible" in item["reason"] for item in payload["recommended_actions"])
         )
 
+    def test_health_reports_oversized_logs_without_log_contents(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            rollout = workspace / "rollout.jsonl"
+            self.write_rollout(rollout, workspace)
+            anchors = workspace / "thread-anchors.md"
+            anchors.write_text("# Anchors\n", encoding="utf-8")
+            registry_dir = root / "registry"
+            log = registry_dir / "logs" / "build_associations_hook.log"
+            log.parent.mkdir(parents=True)
+            log.write_text(
+                "private prompt text and source snippet should not appear\n",
+                encoding="utf-8",
+            )
+
+            with mock.patch.object(health, "locate_rollout", return_value=rollout):
+                payload = health.build_health_report(
+                    health.HealthOptions(
+                        cwd=workspace,
+                        anchors=anchors,
+                        registry_dir=registry_dir,
+                        graphify_corpus=root / "graphify-corpus",
+                        segments_dir=root / "segments",
+                        checkpoint_state=root / "checkpoint_state.json",
+                        max_log_bytes=10,
+                    )
+                )
+
+        rendered = json.dumps(payload, ensure_ascii=False)
+        self.assertTrue(payload["logs"]["oversized"])
+        self.assertEqual(payload["logs"]["items"][0]["artifact_name"], log.name)
+        self.assertIn("rotate_logs", [item["id"] for item in payload["recommended_actions"]])
+        self.assertIn("aippocampus logs rotate", rendered)
+        self.assertNotIn("private prompt text", rendered)
+        self.assertNotIn("source snippet", rendered)
+
     def test_health_phase_boundaries_have_separate_registry_and_rendering_owners(self) -> None:
         from aippocampus_runtime import health_registry, health_render  # noqa: PLC0415
 

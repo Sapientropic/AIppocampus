@@ -800,6 +800,32 @@ write its output through the normal atomic association writer. Do not move a
 full association rebuild back into the foreground hook path; prompt hooks should
 consume the latest completed sidecar and fail open when it is stale.
 
+## Hook And Background Log Retention
+
+Hook/background logs are local diagnostics, not memory truth. Default append
+logs are capped by `aippocampus_runtime.ops.log_retention` before or during
+write: current log files rotate to gzip backups, only a small recent backup set
+is kept, and health reports expose artifact names, relative names, byte counts,
+thresholds, and remediation commands without reading or emitting log contents.
+
+Covered default log artifacts include `logs/build_associations_hook.log`,
+`logs/subconscious_scheduler_hook.log`, `subconscious_scheduler.log`,
+`maintenance_hook.jsonl`, and opt-in `aippocampus_prompt_hook.jsonl`. Source
+or staging queues such as `subconscious_jobs.jsonl` are not log-retention
+targets and must not be trimmed by this path.
+
+Operators can inspect and apply retention with:
+
+- `aippocampus logs status --json`
+- `aippocampus logs rotate --json`
+- `python -m aippocampus_runtime.health --json`
+
+Defaults are `AIPPOCAMPUS_LOG_MAX_BYTES=8388608` and
+`AIPPOCAMPUS_LOG_BACKUPS=3`. Lower these only for constrained local storage;
+raise them only when preserving more local debug output is worth the raw log
+hoarding risk. Oversized logs should appear as a `rotate_logs` health action,
+not as a requirement that users manually hunt through the registry directory.
+
 ## Scheduler Boundary
 
 `aippocampus_runtime/subconscious/scheduler --maybe-start` is the only subconscious route

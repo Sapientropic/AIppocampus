@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import aippocampus_registry_dir, now_utc
+from aippocampus_runtime.ops import log_retention
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
 STATE_SCHEMA_VERSION = 1
@@ -272,25 +273,28 @@ def maintenance_log_path(name: str) -> Path:
 def start_detached_json(cmd: list[str], *, log_name: str) -> dict[str, Any]:
     log = maintenance_log_path(log_name)
     log.parent.mkdir(parents=True, exist_ok=True)
-    out = log.open("ab")
     creationflags = 0
     if os.name == "nt":
         creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(
             subprocess, "DETACHED_PROCESS", 0
         )
+    # Background maintenance can be noisy when a provider or registry pass gets
+    # stuck. Route child output through the log-retention runner so no default
+    # hook log can grow without a cap while the foreground lifecycle hook still
+    # returns immediately.
+    wrapped_cmd = log_retention.logged_subprocess_cmd(cmd, log=log, cwd=SCRIPT_DIR)
     proc = subprocess.Popen(
-        cmd,
+        wrapped_cmd,
         cwd=str(SCRIPT_DIR),
         stdin=subprocess.DEVNULL,
-        stdout=out,
-        stderr=subprocess.STDOUT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
         # Keep lifecycle hooks from waiting on descendant handles in the Codex
         # host pipe. On Windows, inherited stdout/stderr handles can make the
         # hook process look alive until the detached maintenance job exits.
         close_fds=True,
         creationflags=creationflags,
     )
-    out.close()
     return {"detached": True, "pid": int(proc.pid), "log": str(log), "command": cmd}
 
 
@@ -411,7 +415,6 @@ def update_workspace_state(
 
 def write_log(result: dict[str, Any], *, log_path: Path | None = None) -> None:
     path = log_path or (aippocampus_registry_dir() / "maintenance_hook.jsonl")
-    path.parent.mkdir(parents=True, exist_ok=True)
     event = {
         "timestamp": now_utc(),
         "event": result.get("event"),
@@ -421,8 +424,7 @@ def write_log(result: dict[str, Any], *, log_path: Path | None = None) -> None:
         "elapsed_ms": result.get("elapsed_ms"),
         "error": result.get("error"),
     }
-    with path.open("a", encoding="utf-8", newline="\n") as fh:
-        fh.write(json.dumps(event, ensure_ascii=False) + "\n")
+    log_retention.append_text_with_rotation(path, json.dumps(event, ensure_ascii=False) + "\n")
 
 
 def run_maintenance(

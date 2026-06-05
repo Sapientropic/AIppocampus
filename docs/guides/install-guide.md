@@ -105,6 +105,9 @@ Trust boundary in plain language:
   AIppocampus is missing, stale, or slow.
 - The lifecycle hook runs on session events and refreshes clean source, indexes,
   registry rows, and hook-safe sidecars within bounded work.
+- Hook/background logs are local diagnostics with retention caps; `aippocampus
+  health --json` reports oversized artifacts and `aippocampus logs rotate`
+  applies the bounded cleanup without reading log contents into the report.
 - Raw rollouts, generated indexes, registry rows, and private artifacts remain
   local unless the user explicitly exports or syncs them.
 - External-model semantic routes are separate opt-in configuration. Local hook

@@ -143,7 +143,7 @@ The CLI contract applies to documented operator commands, especially:
 
 - Personal/default path commands: `aippocampus health|search|onboard|export|import|update`.
 - Advanced/operator commands remain public and discoverable, but they are not
-  first-recall prerequisites: `aippocampus doctor|mcp|smoke|storage|why-recall|why-not-recall|sync|object-sync|hooks`
+  first-recall prerequisites: `aippocampus doctor|mcp|smoke|logs|storage|why-recall|why-not-recall|sync|object-sync|hooks`
 - `aippocampus import conversation --format generic-jsonl --input <path>`
 - `aippocampus doctor provider` as a no-model-call visibility diagnostic for
   optional external-model route key environment variables
@@ -154,6 +154,8 @@ The CLI contract applies to documented operator commands, especially:
   active locks, ambient cache, and semantic-gate state
 - `aippocampus storage gc --dry-run` as the no-mutation storage governance plan
   over capacity data and existing retention JSON
+- `aippocampus logs status|rotate` as public-safe local log retention
+  diagnostics and cleanup over artifact names and byte counts, not log contents
 - `aippocampus storage gc --apply --class rebuildable` as the explicit
   path-level rebuildable-cache eviction path for retention-report-backed main
   SQLite caches and capacity-report-backed old source-index / segment

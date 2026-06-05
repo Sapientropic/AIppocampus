@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
@@ -245,6 +246,27 @@ class MemoryMaintenanceHookTests(unittest.TestCase):
         self.assertIn("--maybe-start", rendered)
         self.assertNotIn("run_json_timeout", rendered)
         self.assertEqual(seen["log_name"], "subconscious_scheduler_hook.log")
+
+    def test_detached_action_output_uses_log_retention_runner(self) -> None:
+        log = self.cwd / "logs" / "build_associations_hook.log"
+        child = [sys.executable, "-c", "print('child output')"]
+        fake_proc = mock.Mock(pid=4242)
+
+        with (
+            mock.patch.object(hook, "maintenance_log_path", return_value=log),
+            mock.patch.object(hook.subprocess, "Popen", return_value=fake_proc) as popen,
+        ):
+            result = hook.start_detached_json(child, log_name=log.name)
+
+        wrapped_cmd = popen.call_args.args[0]
+        kwargs = popen.call_args.kwargs
+        rendered = " ".join(str(item) for item in wrapped_cmd)
+        self.assertEqual(result["pid"], 4242)
+        self.assertIn("aippocampus_runtime.ops.log_retention", rendered)
+        self.assertIn("--", wrapped_cmd)
+        self.assertEqual(wrapped_cmd[-len(child) :], child)
+        self.assertIs(kwargs["stdout"], hook.subprocess.DEVNULL)
+        self.assertIs(kwargs["stderr"], hook.subprocess.DEVNULL)
 
     def test_budget_capped_latest_turn_refresh_returns_dirty_diagnostic_without_marker(
         self,

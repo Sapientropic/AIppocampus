@@ -16,6 +16,7 @@ def render_health_text(result: dict[str, Any]) -> None:
     graphify = result["graphify"]
     storage = result.get("storage") or {}
     question_stats = result.get("question_stats") or {}
+    logs = result.get("logs") or {}
     actions = result["recommended_actions"]
 
     print(f"thread memory health: {status}")
@@ -49,6 +50,11 @@ def render_health_text(result: dict[str, Any]) -> None:
         print("segments: not needed yet")
     print(f"checkpoint: {'due' if checkpoint['due'] else 'not due'}")
     print(f"graphify corpus: {'stale' if graphify['stale'] else 'fresh'}")
+    if logs:
+        if logs.get("oversized"):
+            print(f"logs: {logs.get('oversized_count', 0)} oversized artifact(s)")
+        else:
+            print("logs: within retention budget")
     if question_stats.get("available"):
         print(
             "question health: "
