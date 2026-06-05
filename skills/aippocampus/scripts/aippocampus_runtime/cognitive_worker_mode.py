@@ -116,7 +116,6 @@ def resolve_cognitive_worker_mode(
         "status": status,
         "degraded_from": degraded_from,
         "reason": reason,
-        "provider_key_env": api_key_env,
         "provider_key_visible": key_visible,
         "agent_fallback_available": fallback_available,
         "agent_fallback_capability_env": AGENT_FALLBACK_AVAILABLE_ENV,

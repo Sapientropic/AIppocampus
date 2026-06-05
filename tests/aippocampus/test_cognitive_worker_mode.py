@@ -47,6 +47,7 @@ class CognitiveWorkerModeTests(unittest.TestCase):
         self.assertEqual(report["resolved_mode"], "external_model")
         self.assertEqual(report["status"], "external_model_active")
         self.assertTrue(report["provider_key_visible"])
+        self.assertNotIn("provider_key_env", report)
         self.assertFalse(report["privacy"]["provider_key_value_printed"])
 
     def test_auto_uses_agent_fallback_when_no_key_but_host_capability_present(self) -> None:
