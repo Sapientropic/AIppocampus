@@ -16,6 +16,10 @@ from aippocampus_runtime.artifacts.publish import (
     sqlite_sidecar_paths,
 )
 from aippocampus_runtime.core import file_sha256, now_utc
+from aippocampus_runtime.ops.generation_eviction import (
+    apply_generation_cleanup_candidate,
+    candidate_is_supported_generation_cleanup,
+)
 from aippocampus_runtime.ops.storage_governance_contract import (
     CLASS_REBUILDABLE,
     SCHEMA_VERSION,
@@ -173,6 +177,14 @@ def _block(candidate: dict[str, Any], reason_code: str, message: str, **extra: A
     return blocked
 
 
+def _skip(candidate: dict[str, Any], reason_code: str, message: str) -> dict[str, Any]:
+    return {
+        "candidate_id": candidate.get("id"),
+        "reason_code": reason_code,
+        "message": message,
+    }
+
+
 def _candidate_is_supported(candidate: dict[str, Any]) -> bool:
     return (
         candidate.get("class") == CLASS_REBUILDABLE
@@ -285,11 +297,38 @@ def apply_rebuildable_evictions(
 ) -> dict[str, Any]:
     applied: list[dict[str, Any]] = []
     blocked: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
     reclaimed = 0
+    has_supported_generation_cleanup = any(
+        candidate_is_supported_generation_cleanup(candidate)
+        for candidate in plan.get("candidates") or []
+    )
 
     for candidate in plan.get("candidates") or []:
         source_report = candidate.get("source_report") or {}
+        if candidate_is_supported_generation_cleanup(candidate):
+            result = apply_generation_cleanup_candidate(
+                candidate,
+                include_active=include_active,
+                include_paths=include_paths,
+            )
+            if result.get("applied"):
+                applied.append(result["applied"])
+                reclaimed += int(result.get("reclaimed_bytes") or 0)
+            elif result.get("blocked"):
+                blocked.append(result["blocked"])
+            continue
+
         if source_report.get("kind") != "retention_report":
+            if has_supported_generation_cleanup and source_report.get("kind") == "storage_capacity_report":
+                skipped.append(
+                    _skip(
+                        candidate,
+                        "plan_only_capacity_aggregate",
+                        "Capacity aggregate candidates remain plan-only; generation cleanup candidates were handled separately.",
+                    )
+                )
+                continue
             blocked.append(
                 _block(
                     candidate,
@@ -369,6 +408,7 @@ def apply_rebuildable_evictions(
     return {
         "applied": applied,
         "blocked": blocked,
+        "skipped": skipped,
         "reclaimed_bytes": reclaimed,
         "reclaimed_human": human_bytes(reclaimed),
     }

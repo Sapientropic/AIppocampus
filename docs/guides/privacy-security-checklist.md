@@ -49,6 +49,19 @@ bundle, demo, release, or plugin package.
   It must not include raw prompt text, raw cards, snippets, source titles,
   session or turn ids, secrets, or absolute local paths. Verbose debug JSONL
   remains trusted local material.
+- Activation dead-letter reports may be shared only when they stay no-write and
+  public-safe: hash-only candidate identity, reason codes, counts, and
+  aggregate metrics. They must not include raw prompts, raw activation payloads,
+  source snippets, source refs, local paths, or protected-row reference labels.
+  Dead-letter apply manifests are append-only lifecycle patches, not clean-source
+  deletion, raw-rollout cleanup, or foreground-hook mutation.
+- Owner-specific payload compaction manifests, such as ambient-cache or Dream
+  working-memory tombstones, may be shared only when they keep the same
+  public-safe boundary: hash-only row identity, source-ref counts,
+  provenance-pointer hashes, reason codes, timestamps, and rebuild/review notes.
+  They must not include raw ambient card text, Dream working-memory title /
+  summary / trigger terms, source refs, prompts, snippets, local paths, or
+  protected-row labels.
 
 ## External Models
 

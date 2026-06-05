@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
+from aippocampus_runtime.artifacts.generation_pins import pin_resolved_generation
 from aippocampus_runtime.core import default_thread_segments_dir
 from aippocampus_runtime.recall.retrieval import (
     expanded_terms_from_anchors,
@@ -27,8 +28,16 @@ from aippocampus_runtime.recall.rollout_search import (
     search_index_literal,
 )
 from aippocampus_runtime.recall.scoring_policy import SEGMENT_MERGE_POLICY, SegmentMergePolicy
+from aippocampus_runtime.recall.segment_metadata import (
+    annotate_rag_chunk,
+    annotate_segment_result,
+    cross_boundary_turn_contexts,
+    empty_turn_boundary_diagnostics,
+    turn_boundary_diagnostics,
+)
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
+SEGMENTS_POINTER_NAME = "segments.pointer.json"
 
 
 @dataclass(frozen=True)
@@ -62,6 +71,37 @@ def manifest_path(cwd: Path, segments_dir: str | None, *, prefer_existing: bool 
     if prefer_existing and not global_manifest.exists() and legacy_manifest.exists():
         return legacy_manifest
     return global_manifest
+
+
+def _load_segment_pointer(pointer_path: Path) -> dict:
+    if not pointer_path.exists():
+        return {}
+    try:
+        payload = json.loads(pointer_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _pointer_candidate(pointer_path: Path, value: object) -> Path | None:
+    if not isinstance(value, str) or not value:
+        return None
+    candidate = Path(value)
+    if not candidate.is_absolute():
+        candidate = pointer_path.parent / candidate
+    return candidate
+
+
+def resolve_manifest_path(manifest: Path) -> Path:
+    """Pin a segment generation manifest once for this search query."""
+
+    pointer_path = manifest.with_name(SEGMENTS_POINTER_NAME)
+    pointer = _load_segment_pointer(pointer_path)
+    for key in ("current", "last_known_good", "stable"):
+        candidate = _pointer_candidate(pointer_path, pointer.get(key))
+        if candidate and candidate.is_file():
+            return candidate
+    return manifest
 
 
 def load_manifest(path: Path) -> dict:
@@ -286,29 +326,6 @@ def merge_topk(
     return selected[:limit]
 
 
-def annotate_segment_result(result: dict, segment: dict, ordinal: int) -> dict:
-    item = dict(result)
-    item["segment_id"] = segment["id"]
-    item["segment_ordinal"] = ordinal
-    item["segment_start_line"] = segment.get("start_line")
-    item["segment_end_line"] = segment.get("end_line")
-    item["global_id_range"] = [segment.get("start_global_id"), segment.get("end_global_id")]
-    signals = dict(item.get("signals") or {})
-    signals["segment_id"] = segment["id"]
-    item["signals"] = signals
-    if item.get("context"):
-        for ctx in item["context"]:
-            ctx["segment_id"] = segment["id"]
-    return item
-
-
-def annotate_rag_chunk(chunk: dict, segment: dict, ordinal: int) -> dict:
-    item = dict(chunk)
-    item["segment_id"] = segment["id"]
-    item["segment_ordinal"] = ordinal
-    return item
-
-
 def query_context_payload(options: SegmentSearchOptions, cwd: Path) -> dict:
     patterns = list(options.patterns)
     anchor_path = resolve_anchor_path(str(cwd), str(options.anchors))
@@ -351,6 +368,7 @@ def unavailable_segments_payload(
             "matches": [],
             "segment_errors": [],
             "fanout": _empty_fanout(options),
+            "turn_boundary_diagnostics": empty_turn_boundary_diagnostics(),
             "availability": {
                 "reason": reason,
                 "build_required": True,
@@ -364,101 +382,119 @@ def unavailable_segments_payload(
 def search_segments_payload(options: SegmentSearchOptions) -> dict:
     patterns = list(options.patterns)
     cwd = Path(options.cwd).resolve()
-    manifest = manifest_path(cwd, str(options.segments_dir) if options.segments_dir else None, prefer_existing=not options.build_segments)
+    manifest = manifest_path(
+        cwd,
+        str(options.segments_dir) if options.segments_dir else None,
+        prefer_existing=not options.build_segments,
+    )
     ensure_segments(
         cwd,
         str(options.rollout) if options.rollout else None,
         manifest,
         options.build_segments,
     )
-    data = load_manifest(manifest)
-    if not data:
-        return unavailable_segments_payload(
-            options,
-            cwd,
-            manifest,
-            reason="manifest_missing",
-        )
+    manifest = resolve_manifest_path(manifest)
+    with pin_resolved_generation(manifest, artifact_kind="segments"):
+        data = load_manifest(manifest)
+        if not data:
+            return unavailable_segments_payload(
+                options,
+                cwd,
+                manifest,
+                reason="manifest_missing",
+            )
 
-    query_payload = query_context_payload(options, cwd)
-    query_terms = query_payload["query_terms"]
-    expanded_terms = query_payload["expanded_terms"]
-    anchors = query_payload["matched_anchors"]
+        query_payload = query_context_payload(options, cwd)
+        query_terms = query_payload["query_terms"]
+        expanded_terms = query_payload["expanded_terms"]
+        anchors = query_payload["matched_anchors"]
 
-    raw_results: list[dict] = []
-    rag_context: list[dict] = []
-    segment_errors: list[dict] = []
-    segments = list(data.get("segments") or [])
-    planned_segments, fanout = plan_segments(segments, options)
-    searched_segment_count = 0
-    missing_index_count = 0
-    for ordinal, segment in planned_segments:
-        index = Path(segment["sqlite"])
-        if not index.exists():
-            missing_index_count += 1
-            segment_errors.append({"segment_id": segment.get("id"), "error": "sqlite missing"})
-            continue
-        searched_segment_count += 1
-        try:
-            if options.mode == "literal":
-                hits = search_index_literal(
-                    index, patterns, options.per_segment, options.snippet_chars
-                )
-            else:
-                if options.mode == "hybrid" and options.rag_context > 0:
-                    for chunk in search_rag_chunks(
+        raw_results: list[dict] = []
+        rag_context: list[dict] = []
+        segment_errors: list[dict] = []
+        segments = list(data.get("segments") or [])
+        boundary_contexts = cross_boundary_turn_contexts(segments)
+        boundary_diagnostics = turn_boundary_diagnostics(segments, boundary_contexts)
+        planned_segments, fanout = plan_segments(segments, options)
+        searched_segment_count = 0
+        missing_index_count = 0
+        for ordinal, segment in planned_segments:
+            index = Path(segment["sqlite"])
+            if not index.exists():
+                missing_index_count += 1
+                segment_errors.append({"segment_id": segment.get("id"), "error": "sqlite missing"})
+                continue
+            searched_segment_count += 1
+            try:
+                if options.mode == "literal":
+                    hits = search_index_literal(
+                        index,
+                        patterns,
+                        options.per_segment,
+                        options.snippet_chars,
+                    )
+                else:
+                    if options.mode == "hybrid" and options.rag_context > 0:
+                        for chunk in search_rag_chunks(
+                            index,
+                            query_terms,
+                            expanded_terms,
+                            anchors,
+                            limit=max(1, options.rag_context // 2),
+                            candidate_limit=max(24, options.candidate_max // 2),
+                            snippet_chars=max(options.snippet_chars, 900),
+                        ):
+                            rag_context.append(annotate_rag_chunk(chunk, segment, ordinal))
+                    hits = search_hybrid_index(
                         index,
                         query_terms,
                         expanded_terms,
-                        anchors,
-                        limit=max(1, options.rag_context // 2),
-                        candidate_limit=max(24, options.candidate_max // 2),
-                        snippet_chars=max(options.snippet_chars, 900),
-                    ):
-                        rag_context.append(annotate_rag_chunk(chunk, segment, ordinal))
-                hits = search_hybrid_index(
-                    index,
-                    query_terms,
-                    expanded_terms,
-                    anchors if options.mode == "hybrid" else [],
-                    limit=options.per_segment,
-                    candidate_limit=options.candidate_max,
-                    snippet_chars=options.snippet_chars,
-                    context_radius=options.context,
+                        anchors if options.mode == "hybrid" else [],
+                        limit=options.per_segment,
+                        candidate_limit=options.candidate_max,
+                        snippet_chars=options.snippet_chars,
+                        context_radius=options.context,
+                    )
+                raw_results.extend(
+                    annotate_segment_result(hit, segment, ordinal, boundary_contexts)
+                    for hit in hits
                 )
-            raw_results.extend(annotate_segment_result(hit, segment, ordinal) for hit in hits)
-        except Exception as exc:
-            segment_errors.append({"segment_id": segment.get("id"), "error": str(exc)})
+            except Exception as exc:
+                segment_errors.append({"segment_id": segment.get("id"), "error": str(exc)})
 
-    fanout["searched_segment_count"] = searched_segment_count
-    fanout["missing_index_count"] = missing_index_count
-    results = merge_topk(raw_results, options.max_results)
-    rag_context.sort(
-        key=lambda item: (-float(item.get("score") or 0.0), int(item.get("start_line") or 10**12))
-    )
-    rag_context = rag_context[: options.rag_context]
-    available = searched_segment_count > 0 or not planned_segments
+        fanout["searched_segment_count"] = searched_segment_count
+        fanout["missing_index_count"] = missing_index_count
+        results = merge_topk(raw_results, options.max_results)
+        rag_context.sort(
+            key=lambda item: (
+                -float(item.get("score") or 0.0),
+                int(item.get("start_line") or 10**12),
+            )
+        )
+        rag_context = rag_context[: options.rag_context]
+        available = searched_segment_count > 0 or not planned_segments
 
-    return {
-        "ok": available,
-        "status": "ok" if available else "segments_unavailable",
-        "source": str(manifest),
-        "mode": f"segmented-{options.mode}",
-        "segment_count": int(data.get("segment_count") or len(data.get("segments") or [])),
-        "query_terms": query_terms,
-        "expanded_terms": expanded_terms,
-        "matched_anchors": anchors,
-        "graph_neighbors": query_payload["graph_neighbors"],
-        "rag_context": rag_context,
-        "matches": results,
-        "segment_errors": segment_errors,
-        "fanout": fanout,
-        "availability": {
-            "reason": "available" if available else "sqlite_missing",
-            "build_required": bool(missing_index_count),
-            "build_requested": bool(options.build_segments),
-        },
-    }
+        return {
+            "ok": available,
+            "status": "ok" if available else "segments_unavailable",
+            "source": str(manifest),
+            "mode": f"segmented-{options.mode}",
+            "segment_count": int(data.get("segment_count") or len(data.get("segments") or [])),
+            "query_terms": query_terms,
+            "expanded_terms": expanded_terms,
+            "matched_anchors": anchors,
+            "graph_neighbors": query_payload["graph_neighbors"],
+            "rag_context": rag_context,
+            "matches": results,
+            "segment_errors": segment_errors,
+            "fanout": fanout,
+            "turn_boundary_diagnostics": boundary_diagnostics,
+            "availability": {
+                "reason": "available" if available else "sqlite_missing",
+                "build_required": bool(missing_index_count),
+                "build_requested": bool(options.build_segments),
+            },
+        }
 
 
 def options_from_args(args: argparse.Namespace) -> SegmentSearchOptions:

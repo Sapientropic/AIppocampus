@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
@@ -60,6 +61,7 @@ class MemoryAgentBenchSmokeTests(unittest.TestCase):
         self.assertIn("question_answering", accurate["task_families"])
         self.assertIn("substring_exact_match", accurate["metric_families"])
         self.assertIn("context", accurate["raw_text_fields_present"])
+        self.assertIn("answers", accurate["gold_label_fields_present"])
         self.assertEqual(
             accurate["support_status"]["source_evidence"],
             "diagnostic_requires_source_ref_mapping",
@@ -138,6 +140,276 @@ class MemoryAgentBenchSmokeTests(unittest.TestCase):
         self.assertIn("llm_judge_as_source_truth", payload["cannot_claim"])
         self.assertIn("static_retrieval_covers_test_time_learning", payload["cannot_claim"])
         self.assertIn("static_retrieval_covers_conflict_resolution", payload["cannot_claim"])
+
+    def test_stage3_incremental_dry_run_fails_closed_without_write_update_instrumentation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dataset_dir = Path(tmp) / "memoryagentbench"
+            self._write_fixture(dataset_dir)
+
+            payload = benchmark.build_stage3_incremental_dry_run(dataset_dir=dataset_dir)
+
+        self.assertEqual(payload["kind"], "aippocampus_memoryagentbench_stage3_incremental_dry_run")
+        self.assertFalse(payload["ok"], payload)
+        self.assertEqual(payload["status"], "unsupported_missing_write_update_instrumentation")
+        self.assertEqual(payload["mode_fields"]["ingest_mode"], "local_operator_dataset")
+        self.assertEqual(payload["mode_fields"]["write_update_mode"], "unsupported_missing_instrumentation")
+        self.assertEqual(payload["mode_fields"]["retrieval_mode"], "not_executed")
+        self.assertEqual(payload["mode_fields"]["answer_generation_mode"], "not_executed")
+        self.assertEqual(payload["mode_fields"]["judging_mode"], "not_executed")
+        self.assertIn("write_update_instrumentation_missing", payload["unsupported_reasons"])
+        self.assertEqual(payload["metrics"]["sample_count"], 0)
+        self.assertEqual(payload["claim_boundary"]["write_update_instrumentation"], "missing")
+        self.assertEqual(payload["claim_boundary"]["official_runner_compatibility"], "not_claimed")
+        self.assertIn("official_memoryagentbench_score", payload["cannot_claim"])
+        self.assertFalse(payload["privacy_boundary"]["raw_text_emitted"])
+
+    def test_stage3_incremental_dry_run_reports_update_conflict_contract_without_raw_leaks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dataset_dir = Path(tmp) / "memoryagentbench"
+            self._write_fixture(dataset_dir)
+
+            payload = benchmark.build_stage3_incremental_dry_run(
+                dataset_dir=dataset_dir,
+                write_update_mode="dry_run_contract",
+                case_limit=10,
+            )
+
+        self.assertTrue(payload["ok"], payload)
+        self.assertEqual(payload["status"], "stage3_incremental_dry_run")
+        self.assertEqual(payload["mode_fields"]["ingest_mode"], "local_operator_dataset")
+        self.assertEqual(payload["mode_fields"]["write_update_mode"], "dry_run_contract")
+        self.assertEqual(payload["mode_fields"]["retrieval_mode"], "source_ref_hash_probe")
+        self.assertEqual(payload["mode_fields"]["answer_generation_mode"], "not_executed")
+        self.assertEqual(payload["mode_fields"]["judging_mode"], "not_executed")
+        self.assertEqual(payload["metrics"]["stage3_case_count"], 2)
+        self.assertEqual(payload["metrics"]["sample_count"], 2)
+        self.assertEqual(payload["metrics"]["test_time_learning_case_count"], 1)
+        self.assertEqual(payload["metrics"]["conflict_resolution_case_count"], 1)
+        self.assertEqual(payload["metrics"]["update_conflict_interaction_count"], 4)
+        self.assertEqual(payload["claim_boundary"]["local_artifact_policy"], "ignored_operator_dataset_only")
+        self.assertEqual(payload["claim_boundary"]["official_runner_compatibility"], "not_claimed")
+        self.assertEqual(payload["claim_boundary"]["live_model_quality"], "not_measured")
+        self.assertEqual(payload["claim_boundary"]["write_update_instrumentation"], "dry_run_contract")
+        self.assertEqual(payload["claim_boundary"]["private_or_local_artifact_evidence"], "hashes_counts_only")
+        self.assertTrue(payload["false_forgetting_controls"]["current_source_ref_required"])
+        self.assertTrue(payload["source_evidence_boundary"]["source_hashes_only"])
+        self.assertFalse(payload["privacy_boundary"]["raw_text_emitted"])
+
+        cases_by_split = {case["split"]: case for case in payload["cases"]}
+        self.assertEqual(
+            cases_by_split["Test_Time_Learning"]["incremental_contract"],
+            "write_then_update_then_query",
+        )
+        self.assertEqual(
+            cases_by_split["Conflict_Resolution"]["incremental_contract"],
+            "stale_then_current_then_query",
+        )
+
+        dumped = json.dumps(payload, ensure_ascii=False)
+        for forbidden in (
+            RAW_CONTEXT_AR,
+            RAW_QUESTION_AR,
+            RAW_ANSWER_AR,
+            RAW_CONTEXT_TTL,
+            RAW_ANSWER_TTL,
+            "SECRET CR CONTEXT",
+            "RAW CR QUESTION",
+            "RAW CR ANSWER",
+            LOCAL_PATH_SENTINEL,
+            str(dataset_dir),
+        ):
+            self.assertNotIn(forbidden, dumped)
+
+    def test_parquet_files_without_optional_reader_are_not_reported_as_missing_dataset(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dataset_dir = Path(tmp) / "memoryagentbench"
+            data_dir = dataset_dir / "data"
+            data_dir.mkdir(parents=True)
+            (data_dir / "Accurate_Retrieval-00000-of-00001.parquet").write_bytes(
+                b"parquet placeholder"
+            )
+
+            with (
+                mock.patch.object(
+                    benchmark,
+                    "parquet_metadata",
+                    return_value={
+                        "format_support": benchmark.PARQUET_READER_MISSING_SUPPORT,
+                        "observed_rows": None,
+                        "schema_fields": [],
+                    },
+                ),
+                mock.patch.object(
+                    benchmark,
+                    "read_parquet_rows",
+                    side_effect=benchmark.OptionalParquetReaderMissing("missing"),
+                ),
+            ):
+                payload = benchmark.run_memoryagentbench_smoke(
+                    dataset_dir=dataset_dir,
+                    compute_sha256=False,
+                )
+
+        self.assertTrue(payload["ok"], payload)
+        self.assertEqual(payload["status"], "found_files_missing_optional_reader")
+        self.assertEqual(payload["metrics"]["local_file_count"], 1)
+        self.assertEqual(payload["metrics"]["observed_row_count"], 0)
+        self.assertEqual(payload["metrics"]["optional_reader_missing_file_count"], 1)
+        self.assertEqual(
+            payload["splits"]["Accurate_Retrieval"]["files"][0]["format_support"],
+            "metadata_only_parquet_without_optional_reader",
+        )
+        self.assertIn("parquet_optional_reader_missing", payload["next_step"])
+
+    def test_missing_optional_reader_does_not_mark_empty_artifacts_written(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dataset_dir = root / "memoryagentbench"
+            data_dir = dataset_dir / "data"
+            data_dir.mkdir(parents=True)
+            (data_dir / "Accurate_Retrieval-00000-of-00001.parquet").write_bytes(
+                b"parquet placeholder"
+            )
+            case_pack_path = root / "case-pack.json"
+            template_path = root / "predictions-template.jsonl"
+
+            with (
+                mock.patch.object(
+                    benchmark,
+                    "parquet_metadata",
+                    return_value={
+                        "format_support": benchmark.PARQUET_READER_MISSING_SUPPORT,
+                        "observed_rows": None,
+                        "schema_fields": [],
+                    },
+                ),
+                mock.patch.object(
+                    benchmark,
+                    "read_parquet_rows",
+                    side_effect=benchmark.OptionalParquetReaderMissing("missing"),
+                ),
+            ):
+                payload = benchmark.run_memoryagentbench_smoke(
+                    dataset_dir=dataset_dir,
+                    case_pack_output=case_pack_path,
+                    prediction_template_output=template_path,
+                    compute_sha256=False,
+                )
+
+        self.assertEqual(payload["status"], "found_files_missing_optional_reader")
+        self.assertFalse(payload["artifacts"]["case_pack_written"])
+        self.assertFalse(payload["artifacts"]["prediction_template_written"])
+        self.assertEqual(payload["artifacts"]["case_pack_status"], "skipped_no_rows")
+        self.assertEqual(payload["artifacts"]["prediction_template_status"], "skipped_no_rows")
+        self.assertFalse(case_pack_path.exists())
+        self.assertFalse(template_path.exists())
+
+    def test_parquet_rows_feed_case_pack_and_stage3_when_reader_available(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dataset_dir = root / "memoryagentbench"
+            data_dir = dataset_dir / "data"
+            data_dir.mkdir(parents=True)
+            for split in ("Accurate_Retrieval", "Test_Time_Learning", "Conflict_Resolution"):
+                (data_dir / f"{split}-00000-of-00001.parquet").write_bytes(
+                    b"parquet placeholder"
+                )
+            case_pack_path = root / "case-pack.json"
+            template_path = root / "predictions-template.jsonl"
+
+            with mock.patch.object(
+                benchmark,
+                "read_parquet_rows",
+                create=True,
+                side_effect=self._parquet_rows_for_path,
+            ):
+                payload = benchmark.run_memoryagentbench_smoke(
+                    dataset_dir=dataset_dir,
+                    case_pack_output=case_pack_path,
+                    prediction_template_output=template_path,
+                    stage3_incremental_dry_run=True,
+                    stage3_write_update_mode="dry_run_contract",
+                    compute_sha256=False,
+                )
+
+            case_pack = json.loads(case_pack_path.read_text(encoding="utf-8"))
+            template_rows = [
+                json.loads(line)
+                for line in template_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+
+        self.assertTrue(payload["ok"], payload)
+        self.assertEqual(payload["status"], "metadata_smoke")
+        self.assertEqual(payload["metrics"]["observed_row_count"], 3)
+        self.assertEqual(payload["metrics"]["parquet_row_file_count"], 3)
+        self.assertEqual(len(case_pack["cases"]), 1)
+        self.assertEqual(len(template_rows), 1)
+        self.assertEqual(payload["stage3_incremental_runner"]["metrics"]["stage3_case_count"], 2)
+        self.assertIn(RAW_CONTEXT_AR, json.dumps(case_pack, ensure_ascii=False))
+        self.assertNotIn(RAW_ANSWER_AR, json.dumps(case_pack, ensure_ascii=False))
+        self.assertNotIn("answers", case_pack["cases"][0])
+
+    def test_runner_can_embed_stage3_incremental_dry_run_when_explicitly_requested(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dataset_dir = Path(tmp) / "memoryagentbench"
+            self._write_fixture(dataset_dir)
+
+            payload = benchmark.run_memoryagentbench_smoke(
+                dataset_dir=dataset_dir,
+                stage3_incremental_dry_run=True,
+                stage3_write_update_mode="dry_run_contract",
+            )
+
+        self.assertTrue(payload["ok"], payload)
+        stage3 = payload["stage3_incremental_runner"]
+        self.assertEqual(stage3["status"], "stage3_incremental_dry_run")
+        self.assertEqual(stage3["mode_fields"]["write_update_mode"], "dry_run_contract")
+        self.assertEqual(stage3["metrics"]["stage3_case_count"], 2)
+        self.assertFalse(stage3["privacy_boundary"]["raw_text_emitted"])
+        self.assertFalse(payload["privacy_boundary"]["raw_text_emitted"])
+
+    @staticmethod
+    def _parquet_rows_for_path(path: Path) -> list[dict[str, object]]:
+        name = path.name
+        if name.startswith("Accurate_Retrieval"):
+            return [
+                {
+                    "context": RAW_CONTEXT_AR,
+                    "questions": [RAW_QUESTION_AR],
+                    "answers": [[RAW_ANSWER_AR]],
+                    "metadata": {
+                        "source": LOCAL_PATH_SENTINEL,
+                        "question_types": ["lookup"],
+                        "qa_pair_ids": ["ar-parquet-1"],
+                    },
+                    "metric": "substring_exact_match",
+                    "task_type": "question_answering",
+                }
+            ]
+        if name.startswith("Test_Time_Learning"):
+            return [
+                {
+                    "context": RAW_CONTEXT_TTL,
+                    "questions": ["RAW TTL QUESTION"],
+                    "answers": [[RAW_ANSWER_TTL]],
+                    "metadata": {"source": "ICL_banking", "question_types": ["classification"]},
+                    "metric": "exact_match",
+                    "task_type": "classification",
+                }
+            ]
+        if name.startswith("Conflict_Resolution"):
+            return [
+                {
+                    "context": "SECRET CR CONTEXT",
+                    "questions": ["RAW CR QUESTION"],
+                    "answers": [["RAW CR ANSWER"]],
+                    "metadata": {"source": "fact_sh", "question_types": ["conflict"]},
+                    "metric": "substring_exact_match",
+                    "task_type": "conflict_resolution",
+                }
+            ]
+        return []
 
     @staticmethod
     def _write_fixture(dataset_dir: Path) -> None:

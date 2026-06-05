@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -215,12 +216,102 @@ class AmbientRecallCardTests(unittest.TestCase):
 
         self.assertEqual(packet["support_level"], "source_required")
         self.assertEqual(packet["suggested_action"], "source_reopen")
+        self.assertEqual(packet["reopen_plan"]["status"], "ready")
+        self.assertEqual(packet["reopen_plan"]["recommended_tool"], "get_turn_context")
+        self.assertFalse(packet["reopen_plan"]["manual_query_invention_expected"])
         self.assertEqual(
             packet["candidate_refs"],
             [{"thread_key": "session:old", "message_id": "msg-11", "line": 77}],
         )
         self.assertNotIn("key_line", packet)
         self.assertNotIn("snippet", packet)
+
+    def test_bounded_evidence_context_stays_separate_from_fresh_thread_packet(self) -> None:
+        payload = cards.ambient_recall_from_decision(
+            {
+                "decision": "evidence",
+                "confidence": "high",
+                "elapsed_ms": 1.0,
+                "prompt": "raw prompt must stay out",
+                "evidence": [
+                    {
+                        "thread_key": "session:old",
+                        "message_id": "msg-11",
+                        "line": 77,
+                        "snippet": "private wording should stay off the scent packet",
+                    }
+                ],
+                "working_memory": [],
+                "cognitive_map": [],
+                "candidates": [],
+            }
+        )
+        reopen_payload = {
+            "kind": "aippocampus_recall_deepen",
+            "status": "ok",
+            "support_level": "evidence",
+            "evidence_level": "source_backed",
+            "source_refs": [{"thread_key": "session:old", "message_id": "msg-11", "line": 77}],
+            "source_window": {
+                "messages": [
+                    {
+                        "thread_key": "session:old",
+                        "message_id": "msg-11",
+                        "turn_id": "turn-11",
+                        "source_line": 77,
+                        "phase": "final_answer",
+                        "text": "source-backed bounded wording from clean source",
+                    }
+                ]
+            },
+            "source_boundary": {
+                "clean_source_reopened": True,
+                "handle_material_was_navigation_only": True,
+            },
+        }
+
+        evidence_context = cards.bounded_evidence_context_from_source_reopen(reopen_payload)
+        packet = payload["fresh_thread_packet"]
+        serialized_packet = json.dumps(packet, ensure_ascii=False, sort_keys=True)
+        serialized_context = json.dumps(evidence_context, ensure_ascii=False, sort_keys=True)
+
+        self.assertEqual(packet["support_level"], "source_required")
+        self.assertNotIn("private wording", serialized_packet)
+        self.assertNotIn("source-backed bounded wording", serialized_packet)
+        self.assertEqual(evidence_context["kind"], "aippocampus_bounded_evidence_context")
+        self.assertEqual(evidence_context["support_level"], "evidence")
+        self.assertTrue(evidence_context["source_reopen_success"])
+        self.assertEqual(evidence_context["card_count"], 1)
+        self.assertEqual(evidence_context["cards"][0]["support_level"], "evidence")
+        self.assertEqual(evidence_context["cards"][0]["provenance_class"], "source_backed_reopen")
+        self.assertIn("source-backed bounded wording", evidence_context["cards"][0]["key_line"])
+        self.assertTrue(evidence_context["source_boundary"]["separate_from_fresh_thread_packet"])
+        self.assertTrue(evidence_context["source_boundary"]["fresh_thread_packet_remains_navigation_only"])
+        self.assertFalse(evidence_context["source_boundary"]["raw_prompt_text_serialized"])
+        self.assertNotIn("raw prompt", serialized_context)
+        self.assertNotIn("source_window", evidence_context)
+
+    def test_bounded_evidence_context_accepts_get_turn_context_shape(self) -> None:
+        evidence_context = cards.bounded_evidence_context_from_source_reopen(
+            {
+                "source": "<redacted:local-path>",
+                "turn": {"turn_id": "turn-12", "turn_index": 12},
+                "messages": [
+                    {
+                        "message_id": "msg-12",
+                        "turn_id": "turn-12",
+                        "source_line": 91,
+                        "phase": "final_answer",
+                        "text": "clean-source turn context reopened for a bounded card",
+                    }
+                ],
+            }
+        )
+
+        self.assertTrue(evidence_context["source_reopen_success"])
+        self.assertEqual(evidence_context["support_level"], "evidence")
+        self.assertEqual(evidence_context["cards"][0]["source_refs"][0]["turn_id"], "turn-12")
+        self.assertIn("bounded card", evidence_context["cards"][0]["key_line"])
 
     def test_skip_decision_stays_silent_with_stable_shape(self) -> None:
         payload = cards.ambient_recall_from_decision(

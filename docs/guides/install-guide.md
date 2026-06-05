@@ -37,11 +37,20 @@ Start with the PyPI `uvx` path:
 uvx aippocampus --help
 ```
 
+The personal/core default does not require purpose tokens, review queues, or
+compliance policy setup before this first-recall path. Heavier profile
+boundaries are defined in
+[public-core-boundary.md](public-core-boundary.md#product-profile-boundary).
+
 Check local provider status without writing memory artifacts:
 
 ```sh
 uvx aippocampus onboard --provider codex --status
 ```
+
+The status output is a provider-matrix readiness view. It may include other
+locally detectable providers beside Codex; do not read that as Codex-only
+provider-scoped evidence.
 
 Register local Codex history only after the user explicitly agrees:
 
@@ -465,6 +474,22 @@ PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.encry
 PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.encrypted.admin key list --registry-dir <registry> --json
 PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.encrypted.admin key revoke --registry-dir <registry> --recipient <old-recipient> --dry-run --json
 ```
+
+The key-provider status surface is explicit and fail-closed:
+
+```sh
+PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.encrypted.admin key provider-status --registry-dir <registry> --json
+PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.encrypted.admin key provider-configure --registry-dir <registry> --provider file --json
+PYTHONPATH=./skills/aippocampus/scripts python -m aippocampus_runtime.sync.encrypted.admin key provider-configure --registry-dir <registry> --provider windows-credential-manager --json
+```
+
+Current public output reports the active provider, availability, and whether a
+file-identity fallback was attempted. `file` is the implemented provider.
+`macos-keychain`, `windows-credential-manager`, and `linux-secret-service` are
+reserved provider names with deterministic diagnostics; until adapters land,
+configuring one returns `key_provider_unavailable` and does not fall back to the
+local file identity even when that file exists. The JSON output omits local
+identity paths and private key material.
 
 After `key init` or `key trust`, encrypted local-folder pushes can use the
 trusted-recipient list without repeating `--recipient`. `key recipient` prints

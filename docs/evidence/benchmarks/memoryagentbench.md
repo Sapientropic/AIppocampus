@@ -6,9 +6,11 @@ any runner code is added.
 
 Decision: suitable as a staged benchmark family, but not as an immediate
 official-score runner. AIppocampus now has a deterministic, public-safe
-metadata and case-pack smoke for Stage 1/2. Full incremental runner support is
-still deferred until the write/update/forgetting contracts can be measured
-without collapsing the benchmark into static retrieval.
+metadata and case-pack smoke for Stage 1/2, plus an explicit Stage 3 dry-run
+contract harness that separates ingest, write/update, retrieval, generation,
+and judging modes. Full quality/scoring support is still deferred until live
+write/update/forgetting instrumentation and official-runner compatibility can
+be measured without collapsing the benchmark into static retrieval.
 
 ## Official Sources
 
@@ -114,8 +116,12 @@ When the ignored local dataset directory is absent, the runner returns a
 `skipped_missing_dataset` metadata payload with the official split expectations
 and `cannot_claim` boundaries. For local JSON/JSONL exports, it observes row
 and field families. For official parquet files, it reports file metadata and
-can read parquet row/schema metadata only when an optional parquet reader is
-installed; no parquet dependency is required by the deterministic smoke lane.
+can read parquet rows into the same metadata/case-pack/Stage 3 dry-run paths
+when the optional `pyarrow` reader is installed. If parquet files are present
+but the reader is unavailable, the status is
+`found_files_missing_optional_reader` with a `parquet_optional_reader_missing`
+next-step hint instead of pretending the dataset is absent. No parquet
+dependency is required by the deterministic smoke lane.
 
 ### Stage 2: Public-Safe Case-Pack Projection
 
@@ -134,6 +140,14 @@ scoring-only metadata out of the model-facing input. Because it may contain raw
 benchmark text, keep it under `.tmp/` or `benchmark_corpus/reports/`, both of
 which are ignored local artifact locations.
 
+For the official parquet dataset, this path no longer requires a manual JSONL
+export when `pyarrow` is installed. The runner still treats fields such as
+`answers` as both raw/sensitive text and gold-label material, so they remain out
+of the model-facing case pack and default reports.
+If local files are present but the optional parquet reader is missing, requested
+case-pack or prediction-template paths are reported as `skipped_no_rows` rather
+than written; empty artifacts should not be read as a successful adapter path.
+
 Reports should separate:
 
 - memory ingestion/update state;
@@ -144,11 +158,40 @@ Reports should separate:
 
 ### Stage 3: Incremental Runner
 
-Only after Stage 2 proves the boundary, add an incremental evaluation harness
-that can replay insert/query/update interactions. This is where Test-Time
-Learning and Conflict Resolution become meaningful. The harness must report the
-memory write/update mode and whether AIppocampus is being used as retrieval
-only, source-backed memory, or a full agent memory substrate.
+Status: first dry-run contract harness implemented by #614.
+
+The runner can now embed a sanitized Stage 3 dry-run report:
+
+```powershell
+python benchmarks\aippocampus\benchmark_memoryagentbench.py --stage3-incremental-dry-run --stage3-write-update-mode dry_run_contract --json
+```
+
+The Stage 3 report names these modes separately:
+
+- ingest mode;
+- write/update mode;
+- retrieval mode;
+- answer-generation mode;
+- judging/scoring mode.
+
+It reads only local operator-provided MemoryAgentBench files and emits case ids,
+hashes, split counts, mode fields, and update/conflict interaction counts. It
+does not emit raw context, questions, answers, labels, local paths, model calls,
+or scores. When write/update instrumentation is not explicitly selected, the
+Stage 3 report fails closed as `unsupported_missing_write_update_instrumentation`
+instead of pretending that static retrieval measured Test-Time Learning or
+Conflict Resolution.
+
+With `pyarrow` installed, the Stage 3 dry-run can collect its TTL/CR cases
+directly from official parquet files. Without that optional reader, parquet-only
+operator folders still report file presence and reader-missing diagnostics but
+do not synthesize Stage 3 cases.
+
+This is still a dry-run/protocol surface, not an official MemoryAgentBench
+runner. Test-Time Learning and Conflict Resolution become quality evidence only
+after an apply-capable adapter can perform real memory writes, updates,
+retrieval, answer generation, false-forgetting controls, and scoring under a
+documented local artifact policy.
 
 ### Stage 4: Comparative Runs
 
@@ -183,6 +226,12 @@ Can claim now:
   that reports public-safe schema observations, local file hashes, split/row
   expectations, support status by evaluation layer, and `cannot_claim`
   boundaries.
+- The repository has a Stage 3 dry-run contract harness that reports explicit
+  ingest/write-update/retrieve/generate/judge modes and fails closed when
+  write/update instrumentation is missing.
+- Official parquet files can feed metadata, case-pack, and Stage 3 dry-run
+  paths when the optional local `pyarrow` reader is installed; missing reader
+  states are reported separately from missing datasets.
 
 Cannot claim now:
 
@@ -215,3 +264,23 @@ Non-goals for that follow-up:
 - no default CI download of external data;
 - no provider/API-key dependency in deterministic tests;
 - no merged retrieval/generation/judge metric.
+
+Follow-up implementation tracked in #614 adds only the first Stage 3 dry-run
+contract harness:
+
+- added explicit mode fields for ingest, write/update, retrieval, answer
+  generation, and judging;
+- added sanitized update/conflict interaction skeletons for Test-Time Learning
+  and Conflict Resolution rows;
+- kept raw context/question/answer text, local paths, and gold labels out of
+  the default Stage 3 report;
+- made missing write/update instrumentation report `unsupported` instead of
+  producing a misleading score.
+
+Non-goals for #614:
+
+- no official MemoryAgentBench score;
+- no official-runner compatibility claim;
+- no live model or provider dependency;
+- no apply-capable AIppocampus memory writes;
+- no claim that the dry-run harness measures user-visible memory quality.

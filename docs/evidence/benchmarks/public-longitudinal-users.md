@@ -89,6 +89,11 @@ python benchmarks\aippocampus\benchmark_locomo_public_users.py --json
 python benchmarks\aippocampus\benchmark_locomo_public_users.py --predictions .tmp\locomo-evidence-predictions.jsonl --json
 ```
 
+The default no-predictions run is a gold oracle scorer self-check: it supplies
+LoCoMo gold evidence ids as predictions to prove report/scorer semantics. Do
+not read the perfect default score as AIppocampus system retrieval performance;
+use the case pack and `--predictions` path below for that.
+
 For public replication, generate the model-facing local inputs first:
 
 ```powershell
@@ -107,6 +112,12 @@ ids, and question/answer hashes, but no dialogue text, question text, or answer
 text. The current local snapshot has 10 users, 272 sessions, 5,882 dialogue
 turns, 1,986 QA cases, and 1,973 evidence-linked cases.
 
+When the local LoCoMo file is absent, the LoCoMo retrieval and answer-
+usefulness runners return `status=skipped_missing_dataset` with `ok=true` and
+`quality_gate_status=not_scored`. That skip payload means the diagnostic/report
+contract was generated successfully; it is not a retrieval or answer-quality
+score.
+
 #400 adds a separate LoCoMo answer-usefulness prototype on top of that
 retrieval layer:
 
@@ -124,6 +135,13 @@ scoring, but its output is benchmark telemetry, not source truth. Keep this as
 a prototype for product-layer usefulness under fixed answer-model/evaluator
 settings; do not fold it into Track B retrieval-only metrics or use it for
 SOTA, LongMemEval-V2, or external-system superiority claims.
+
+The answer-usefulness runner deliberately keeps report/artifact generation
+separate from the quality gate. A run can write a sanitized answer template and
+report while still returning exit code `1` when `quality_gate_ok=false`. Read
+`report_generation_ok`, `artifact_generation_ok`, and `quality_gate_ok`
+together: successful setup artifacts are not evidence that the fixed answer
+model/evaluator path met the usefulness contract.
 
 Public conversation corpora remain valuable, but they should not be the
 positive coding source:

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
+import time
 import unittest
 from io import StringIO
 from pathlib import Path
@@ -13,7 +15,7 @@ SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime import health  # noqa: E402
-from aippocampus_runtime.ops import storage_governance  # noqa: E402
+from aippocampus_runtime.ops import storage_eviction, storage_governance  # noqa: E402
 from aippocampus_runtime.recall import index_builder, rollout_search  # noqa: E402
 
 
@@ -163,6 +165,84 @@ class StorageGovernanceTests(unittest.TestCase):
             encoding="utf-8",
         )
 
+    def _write_index_generation(self, generation_id: str, size: int) -> Path:
+        generation_dir = self.index / "generations" / generation_id
+        generation_dir.mkdir(parents=True)
+        (generation_dir / "source_index.sqlite").write_bytes(b"g" * size)
+        return generation_dir
+
+    def _write_segment_generation(self, generation_id: str, size: int) -> Path:
+        generation_dir = self.index / "segments" / "generations" / generation_id
+        shard_dir = generation_dir / "seg-000001"
+        shard_dir.mkdir(parents=True)
+        (generation_dir / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "segment_count": 1,
+                    "generation_id": generation_id,
+                    "segments": [
+                        {"id": "seg-000001", "sqlite": str(shard_dir / "source_index.sqlite")}
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (shard_dir / "source_index.sqlite").write_bytes(b"s" * size)
+        return generation_dir
+
+    def _mark_path_old(self, path: Path) -> None:
+        stale_time = time.time() - (7 * 60 * 60)
+        os.utime(path, (stale_time, stale_time))
+
+    def _mark_generation_old(self, generation_dir: Path) -> None:
+        for path in [generation_dir, *generation_dir.rglob("*")]:
+            self._mark_path_old(path)
+
+    def _write_reader_pin(self, pointer_parent: Path, generation_dir: Path) -> Path:
+        pins = pointer_parent / ".reader-pins"
+        pins.mkdir(parents=True, exist_ok=True)
+        pin = pins / f"reader-pin-{generation_dir.name}.json"
+        pin.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "kind": "aippocampus_generation_reader_pin",
+                    "pid": os.getpid(),
+                    "generation": generation_dir.name,
+                    "created_at": "2026-06-05T00:00:00Z",
+                    "ttl_seconds": 21600,
+                    "target_relative_path": (
+                        f"generations/{generation_dir.name}/manifest.json"
+                        if pointer_parent.name == "segments"
+                        else f"generations/{generation_dir.name}/source_index.sqlite"
+                    ),
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        return pin
+
+    def _assert_no_workspace_absolute_paths(self, payload: object) -> None:
+        root_text = str(self.root)
+        normalized_root = root_text.replace("\\", "/")
+
+        def visit(value: object, trail: str) -> None:
+            if isinstance(value, str):
+                normalized_value = value.replace("\\", "/")
+                self.assertNotIn(root_text, value, trail)
+                self.assertNotIn(normalized_root, normalized_value, trail)
+                return
+            if isinstance(value, dict):
+                for key, child in value.items():
+                    visit(child, f"{trail}.{key}")
+                return
+            if isinstance(value, list):
+                for index, child in enumerate(value):
+                    visit(child, f"{trail}[{index}]")
+
+        visit(payload, "$")
+
     def test_dry_run_uses_existing_reports_without_leaking_private_text_or_paths(self) -> None:
         plan = storage_governance.build_plan(
             self.root,
@@ -176,7 +256,7 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertFalse(plan["privacy"]["reads_clean_source_message_bodies"])
         self.assertTrue(plan["privacy"]["loads_existing_retention_report"])
         self.assertNotIn("private phrase", payload)
-        self.assertNotIn(str(self.root), payload)
+        self._assert_no_workspace_absolute_paths(plan)
 
         self.assertEqual(plan["metrics"]["eviction_candidate_count"], 1)
         candidate = plan["candidates"][0]
@@ -193,7 +273,10 @@ class StorageGovernanceTests(unittest.TestCase):
     def test_dry_run_falls_back_to_capacity_aggregate_when_retention_report_is_missing(
         self,
     ) -> None:
-        plan = storage_governance.build_plan(self.root, registry_dir=self.registry)
+        plan = storage_governance.build_plan(
+            self.root,
+            registry_dir=self.registry,
+        )
         payload = json.dumps(plan, ensure_ascii=False)
 
         self.assertFalse(plan["privacy"]["loads_existing_retention_report"])
@@ -201,7 +284,7 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertGreaterEqual(plan["metrics"]["eviction_candidate_count"], 1)
         self.assertIn("Path-level retention candidates are unavailable", plan["warnings"][0])
         self.assertNotIn("private phrase", payload)
-        self.assertNotIn(str(self.root), payload)
+        self._assert_no_workspace_absolute_paths(plan)
         self.assertEqual(plan["candidates"][0]["source_report"]["kind"], "storage_capacity_report")
 
     def test_apply_rebuildable_main_sqlite_writes_manifest_and_preserves_sources(self) -> None:
@@ -392,6 +475,417 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertEqual(result["blocked"][0]["reason_code"], "path_level_retention_required")
         self.assertTrue(self.sqlite.exists())
+
+    def test_dry_run_blocks_old_generation_cleanup_before_reader_pin_ttl_elapsed(self) -> None:
+        current = self._write_index_generation("gen_20260605T010000_current", 41)
+        last_known_good = self._write_index_generation("gen_20260605T005900_lkg", 37)
+        old = self._write_index_generation("gen_20260605T004500_old", 29)
+        pointer_path = self.index / "source_index.pointer.json"
+        pointer_path.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_sqlite_index_pointer",
+                    "current_generation": current.name,
+                    "last_known_good_generation": last_known_good.name,
+                    "current": f"generations/{current.name}/source_index.sqlite",
+                    "last_known_good": f"generations/{last_known_good.name}/source_index.sqlite",
+                    "stable": "source_index.sqlite",
+                    "compatibility_path": "source_index.sqlite",
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        plan = storage_governance.build_plan(
+            self.root,
+            registry_dir=self.registry,
+        )
+        old_generation_candidates = [
+            item
+            for item in plan["candidates"]
+            if item["kind"] == "rebuildable_old_index_generations"
+        ]
+
+        self.assertEqual(len(old_generation_candidates), 1)
+        candidate = old_generation_candidates[0]
+        self.assertEqual(candidate["tier"], "rebuildable_cache")
+        self.assertEqual(candidate["bytes"], 29)
+        self.assertEqual(candidate["source_report"]["section"], "index_generations")
+        self.assertEqual(candidate["source_report"]["current_generation"], current.name)
+        self.assertEqual(candidate["source_report"]["last_known_good_generation"], last_known_good.name)
+        self.assertEqual(candidate["path"]["relative_path"], f"threads/session-one/index/generations/{old.name}")
+        self.assertEqual(
+            candidate["preconditions"]["reader_pin_or_ttl_contract"]["status"],
+            "blocked",
+        )
+        self.assertEqual(candidate["source_report"].get("cleanup_status"), "blocked_ttl_window")
+        self.assertIn("ttl_window_not_elapsed", candidate["evidence"])
+        self._assert_no_workspace_absolute_paths(plan)
+
+    def test_dry_run_marks_old_generation_cleanup_passed_after_reader_pin_ttl(self) -> None:
+        current = self._write_index_generation("gen_20260605T010000_current", 41)
+        last_known_good = self._write_index_generation("gen_20260605T005900_lkg", 37)
+        old = self._write_index_generation("gen_20260605T004500_old", 29)
+        self._mark_generation_old(old)
+        pointer_path = self.index / "source_index.pointer.json"
+        pointer_path.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_sqlite_index_pointer",
+                    "current_generation": current.name,
+                    "last_known_good_generation": last_known_good.name,
+                    "current": f"generations/{current.name}/source_index.sqlite",
+                    "last_known_good": f"generations/{last_known_good.name}/source_index.sqlite",
+                    "stable": "source_index.sqlite",
+                    "compatibility_path": "source_index.sqlite",
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        self._mark_path_old(pointer_path)
+
+        plan = storage_governance.build_plan(
+            self.root,
+            registry_dir=self.registry,
+            include_paths=True,
+        )
+        candidate = next(
+            item
+            for item in plan["candidates"]
+            if item["kind"] == "rebuildable_old_index_generations"
+        )
+
+        self.assertEqual(
+            candidate["preconditions"]["reader_pin_or_ttl_contract"]["status"],
+            "passed",
+        )
+        self.assertEqual(candidate["source_report"].get("cleanup_status"), "eligible")
+        self.assertIn("no_active_reader_pins", candidate["evidence"])
+        self.assertIn("ttl_window_elapsed", candidate["evidence"])
+
+    def test_dry_run_blocks_old_generation_cleanup_with_active_reader_pin(self) -> None:
+        current = self._write_index_generation("gen_20260605T010000_current", 41)
+        last_known_good = self._write_index_generation("gen_20260605T005900_lkg", 37)
+        old = self._write_index_generation("gen_20260605T004500_old", 29)
+        self._mark_generation_old(old)
+        self._write_reader_pin(self.index, old)
+        pointer_path = self.index / "source_index.pointer.json"
+        pointer_path.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_sqlite_index_pointer",
+                    "current_generation": current.name,
+                    "last_known_good_generation": last_known_good.name,
+                    "current": f"generations/{current.name}/source_index.sqlite",
+                    "last_known_good": f"generations/{last_known_good.name}/source_index.sqlite",
+                    "stable": "source_index.sqlite",
+                    "compatibility_path": "source_index.sqlite",
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        self._mark_path_old(pointer_path)
+
+        plan = storage_governance.build_plan(
+            self.root,
+            registry_dir=self.registry,
+            include_paths=True,
+        )
+        candidate = next(
+            item
+            for item in plan["candidates"]
+            if item["kind"] == "rebuildable_old_index_generations"
+        )
+
+        self.assertEqual(
+            candidate["preconditions"]["reader_pin_or_ttl_contract"]["status"],
+            "blocked",
+        )
+        self.assertEqual(candidate["source_report"].get("cleanup_status"), "blocked_active_reader_pin")
+        self.assertIn("active_reader_pin_count=1", candidate["evidence"])
+
+    def test_apply_deletes_old_index_generation_after_reader_pin_ttl_contract_passes(self) -> None:
+        current = self._write_index_generation("gen_20260605T010000_current", 41)
+        last_known_good = self._write_index_generation("gen_20260605T005900_lkg", 37)
+        old = self._write_index_generation("gen_20260605T004500_old", 29)
+        self._mark_generation_old(old)
+        pointer_path = self.index / "source_index.pointer.json"
+        pointer_path.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_sqlite_index_pointer",
+                    "current_generation": current.name,
+                    "last_known_good_generation": last_known_good.name,
+                    "current": f"generations/{current.name}/source_index.sqlite",
+                    "last_known_good": f"generations/{last_known_good.name}/source_index.sqlite",
+                    "stable": "source_index.sqlite",
+                    "compatibility_path": "source_index.sqlite",
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        self._mark_path_old(pointer_path)
+
+        result = storage_governance.apply_plan(
+            self.root,
+            registry_dir=self.registry,
+            class_filter="rebuildable",
+            include_active=True,
+            include_paths=True,
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertFalse(old.exists())
+        self.assertTrue(current.exists())
+        self.assertTrue(last_known_good.exists())
+        self.assertEqual(result["applied"][0]["candidate_id"], f"capacity:session-one:old-index-generation:{old.name}")
+        self.assertTrue(
+            any(item["candidate_id"] == "capacity:session-one:generated-cache" for item in result["skipped"])
+        )
+        manifest = json.loads(Path(result["applied"][0]["manifest"]).read_text(encoding="utf-8"))
+        self.assertEqual(manifest["kind_label"], "rebuildable_old_index_generations")
+        self.assertEqual(manifest["source_preconditions"]["reader_pin_or_ttl_contract"]["status"], "passed")
+
+    def test_apply_blocks_generation_cleanup_when_pointer_disappears_after_planning(self) -> None:
+        current = self._write_index_generation("gen_20260605T010000_current", 41)
+        last_known_good = self._write_index_generation("gen_20260605T005900_lkg", 37)
+        old = self._write_index_generation("gen_20260605T004500_old", 29)
+        self._mark_generation_old(old)
+        pointer_path = self.index / "source_index.pointer.json"
+        pointer_path.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_sqlite_index_pointer",
+                    "current_generation": current.name,
+                    "last_known_good_generation": last_known_good.name,
+                    "current": f"generations/{current.name}/source_index.sqlite",
+                    "last_known_good": f"generations/{last_known_good.name}/source_index.sqlite",
+                    "stable": "source_index.sqlite",
+                    "compatibility_path": "source_index.sqlite",
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        self._mark_path_old(pointer_path)
+        plan = storage_governance.build_plan(
+            self.root,
+            registry_dir=self.registry,
+            include_paths=True,
+        )
+        pointer_path.unlink()
+
+        result = storage_eviction.apply_rebuildable_evictions(
+            plan,
+            include_active=True,
+            include_paths=True,
+        )
+
+        self.assertFalse(result["applied"])
+        self.assertTrue(old.exists())
+        blocked = [
+            item
+            for item in result["blocked"]
+            if item["candidate_id"] == f"capacity:session-one:old-index-generation:{old.name}"
+        ]
+        self.assertEqual(blocked[0]["reason_code"], "precondition_failed")
+        self.assertIn("last_known_good_pointer", blocked[0]["failed_preconditions"])
+
+    def test_apply_blocks_legacy_path_only_pointer_that_now_protects_generation(self) -> None:
+        current = self._write_index_generation("gen_20260605T010000_current", 41)
+        last_known_good = self._write_index_generation("gen_20260605T005900_lkg", 37)
+        old = self._write_index_generation("gen_20260605T004500_old", 29)
+        self._mark_generation_old(old)
+        pointer_path = self.index / "source_index.pointer.json"
+        pointer_path.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_sqlite_index_pointer",
+                    "current_generation": current.name,
+                    "last_known_good_generation": last_known_good.name,
+                    "current": f"generations/{current.name}/source_index.sqlite",
+                    "last_known_good": f"generations/{last_known_good.name}/source_index.sqlite",
+                    "stable": "source_index.sqlite",
+                    "compatibility_path": "source_index.sqlite",
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        self._mark_path_old(pointer_path)
+        plan = storage_governance.build_plan(
+            self.root,
+            registry_dir=self.registry,
+            include_paths=True,
+        )
+        pointer_path.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_sqlite_index_pointer",
+                    "current": f"generations/{old.name}/source_index.sqlite",
+                    "last_known_good": f"generations/{last_known_good.name}/source_index.sqlite",
+                    "stable": "source_index.sqlite",
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        self._mark_path_old(pointer_path)
+
+        result = storage_eviction.apply_rebuildable_evictions(
+            plan,
+            include_active=True,
+            include_paths=True,
+        )
+
+        self.assertFalse(result["applied"])
+        self.assertTrue(old.exists())
+        blocked = [
+            item
+            for item in result["blocked"]
+            if item["candidate_id"] == f"capacity:session-one:old-index-generation:{old.name}"
+        ]
+        self.assertIn("last_known_good_pointer", blocked[0]["failed_preconditions"])
+
+    def test_dry_run_identifies_old_segment_generation_gc_candidates_with_reader_pin_contract(self) -> None:
+        current = self._write_segment_generation("gen_20260605T010000_current", 41)
+        last_known_good = self._write_segment_generation("gen_20260605T005900_lkg", 37)
+        old = self._write_segment_generation("gen_20260605T004500_old", 29)
+        self._mark_generation_old(old)
+        old_bytes = sum(path.stat().st_size for path in old.rglob("*") if path.is_file())
+        segments_dir = self.index / "segments"
+        pointer_path = segments_dir / "segments.pointer.json"
+        pointer_path.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_segments_pointer",
+                    "current_generation": current.name,
+                    "last_known_good_generation": last_known_good.name,
+                    "current": f"generations/{current.name}/manifest.json",
+                    "last_known_good": f"generations/{last_known_good.name}/manifest.json",
+                    "stable": "manifest.json",
+                    "compatibility_path": "manifest.json",
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        self._mark_path_old(pointer_path)
+
+        plan = storage_governance.build_plan(self.root, registry_dir=self.registry)
+        old_generation_candidates = [
+            item
+            for item in plan["candidates"]
+            if item["kind"] == "rebuildable_old_segment_generations"
+        ]
+
+        self.assertEqual(len(old_generation_candidates), 1)
+        candidate = old_generation_candidates[0]
+        self.assertEqual(candidate["tier"], "rebuildable_cache")
+        self.assertEqual(candidate["bytes"], old_bytes)
+        self.assertEqual(candidate["source_report"]["section"], "segment_generations")
+        self.assertEqual(candidate["source_report"]["current_generation"], current.name)
+        self.assertEqual(candidate["source_report"]["last_known_good_generation"], last_known_good.name)
+        self.assertEqual(
+            candidate["path"]["relative_path"],
+            f"threads/session-one/index/segments/generations/{old.name}",
+        )
+        self.assertEqual(
+            candidate["preconditions"]["reader_pin_or_ttl_contract"]["status"],
+            "passed",
+        )
+        self.assertEqual(candidate["source_report"].get("cleanup_status"), "eligible")
+        self.assertTrue(old.exists())
+        self._assert_no_workspace_absolute_paths(plan)
+
+    def test_apply_deletes_old_segment_generation_after_reader_pin_ttl_contract_passes(self) -> None:
+        current = self._write_segment_generation("gen_20260605T010000_current", 41)
+        old = self._write_segment_generation("gen_20260605T004500_old", 29)
+        self._mark_generation_old(old)
+        segments_dir = self.index / "segments"
+        (segments_dir / "manifest.json").write_text(
+            (current / "manifest.json").read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        pointer_path = segments_dir / "segments.pointer.json"
+        pointer_path.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_segments_pointer",
+                    "current_generation": current.name,
+                    "last_known_good_generation": current.name,
+                    "current": f"generations/{current.name}/manifest.json",
+                    "last_known_good": f"generations/{current.name}/manifest.json",
+                    "stable": "manifest.json",
+                    "compatibility_path": "manifest.json",
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        self._mark_path_old(pointer_path)
+
+        result = storage_governance.apply_plan(
+            self.root,
+            registry_dir=self.registry,
+            class_filter="rebuildable",
+            include_active=True,
+            include_paths=True,
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertFalse(old.exists())
+        self.assertTrue(current.exists())
+        self.assertEqual(result["applied"][0]["candidate_id"], f"capacity:session-one:old-segment-generation:{old.name}")
+
+    def test_apply_blocks_old_segment_generation_when_rebuild_lease_is_active(self) -> None:
+        current = self._write_segment_generation("gen_20260605T010000_current", 41)
+        old = self._write_segment_generation("gen_20260605T004500_old", 29)
+        self._mark_generation_old(old)
+        segments_dir = self.index / "segments"
+        (segments_dir / "manifest.json").write_text(
+            (current / "manifest.json").read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        pointer_path = segments_dir / "segments.pointer.json"
+        pointer_path.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_segments_pointer",
+                    "current_generation": current.name,
+                    "last_known_good_generation": current.name,
+                    "current": f"generations/{current.name}/manifest.json",
+                    "last_known_good": f"generations/{current.name}/manifest.json",
+                    "stable": "manifest.json",
+                    "compatibility_path": "manifest.json",
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        self._mark_path_old(pointer_path)
+        (segments_dir / ".rebuild.lock").write_text("active segment writer\n", encoding="utf-8")
+
+        result = storage_governance.apply_plan(
+            self.root,
+            registry_dir=self.registry,
+            class_filter="rebuildable",
+            include_active=True,
+            include_paths=True,
+        )
+
+        self.assertFalse(result["ok"])
+        self.assertTrue(old.exists())
+        blocked = [
+            item
+            for item in result["blocked"]
+            if item["candidate_id"] == f"capacity:session-one:old-segment-generation:{old.name}"
+        ]
+        self.assertEqual(blocked[0]["reason_code"], "active_lease")
 
     def test_apply_cli_returns_json_result(self) -> None:
         with patch("sys.stdout", new=StringIO()) as stdout:

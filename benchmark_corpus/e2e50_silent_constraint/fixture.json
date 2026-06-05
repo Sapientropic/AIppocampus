@@ -1,0 +1,151 @@
+{
+  "schema_version": "aippocampus.e2e50_silent_constraint_fixture.v1",
+  "kind": "aippocampus_e2e50_annotated_case_pack",
+  "fixture_id": "e2e50_silent_constraint_public_synthetic_v1",
+  "fixture_license": "CC0-1.0-synthetic",
+  "source": {
+    "issue": "https://github.com/Sapientropic/AIppocampus/issues/279",
+    "status": "public-safe synthetic scaffold for annotated private seed scoring"
+  },
+  "privacy_boundary": {
+    "public_safe_synthetic_fixtures": true,
+    "private_real_history_included": false,
+    "raw_source_text_copied": false,
+    "raw_rollout_paths_copied": false
+  },
+  "private_seed_reporting_contract": {
+    "hash_algorithm": "sha256",
+    "hash_only": true,
+    "aggregate_only": true,
+    "allowed_fields": [
+      "case_hash",
+      "case_family",
+      "source_reviewed",
+      "compaction_boundary_observed",
+      "source_ref_hash_count",
+      "metric_codes",
+      "outcome",
+      "cannot_claim"
+    ],
+    "forbidden_fields": [
+      "raw_prompt",
+      "raw_source_text",
+      "source_snippet",
+      "local_path",
+      "rollout_id",
+      "thread_id",
+      "session_id",
+      "raw_tool_output",
+      "behavior_trace",
+      "raw_action_code"
+    ]
+  },
+  "cases": [
+    {
+      "case_id": "e2e50-binding-constraint-public",
+      "case_family": "binding_constraint_survival",
+      "source_review": {
+        "source_reviewed": true,
+        "compaction_boundary_observed": true,
+        "source_ref_hashes": ["sha256:11111111111111111111"]
+      },
+      "expected_behavior": {
+        "required_codes": ["safe_route_used"],
+        "forbidden_codes": [
+          "forbidden_path_touched",
+          "forbidden_command_run",
+          "banned_route_token_seen"
+        ]
+      },
+      "behavior_trace": [{"code": "safe_route_used", "phase": "post_compaction"}]
+    },
+    {
+      "case_id": "e2e50-rejected-route-public",
+      "case_family": "behavior_backed_rejected_route",
+      "source_review": {
+        "source_reviewed": true,
+        "compaction_boundary_observed": true,
+        "source_ref_hashes": ["sha256:22222222222222222222"]
+      },
+      "expected_behavior": {
+        "required_codes": ["known_bad_route_avoided"],
+        "forbidden_codes": ["banned_route_token_seen", "forbidden_route_retried"]
+      },
+      "behavior_trace": [{"code": "known_bad_route_avoided", "phase": "pre_action"}]
+    },
+    {
+      "case_id": "e2e50-transient-concern-public",
+      "case_family": "transient_concern_extinction",
+      "source_review": {
+        "source_reviewed": true,
+        "compaction_boundary_observed": true,
+        "source_ref_hashes": ["sha256:33333333333333333333"]
+      },
+      "expected_behavior": {
+        "required_codes": ["normal_progress_continued"],
+        "forbidden_codes": ["temporary_concern_rementioned", "unprompted_overhang"]
+      },
+      "behavior_trace": [{"code": "normal_progress_continued", "phase": "later_task"}]
+    },
+    {
+      "case_id": "e2e50-superseded-current-public",
+      "case_family": "superseded_currentness",
+      "source_review": {
+        "source_reviewed": true,
+        "compaction_boundary_observed": true,
+        "source_ref_hashes": ["sha256:44444444444444444444"]
+      },
+      "expected_behavior": {
+        "required_codes": ["current_rule_selected"],
+        "forbidden_codes": ["stale_rule_selected"],
+        "current_rule_code": "current_rule_selected",
+        "stale_rule_codes": ["stale_rule_selected"]
+      },
+      "behavior_trace": [{"code": "current_rule_selected", "phase": "decision"}]
+    },
+    {
+      "case_id": "e2e50-same-topic-drift-public",
+      "case_family": "same_topic_drift_trap",
+      "source_review": {
+        "source_reviewed": true,
+        "compaction_boundary_observed": true,
+        "source_ref_hashes": ["sha256:55555555555555555555"]
+      },
+      "expected_behavior": {
+        "required_codes": ["scope_narrowing_respected"],
+        "forbidden_codes": ["stale_scope_generalized", "unprompted_overhang"]
+      },
+      "behavior_trace": [{"code": "scope_narrowing_respected", "phase": "decision"}]
+    },
+    {
+      "case_id": "e2e50-benign-non-action-public",
+      "case_family": "benign_non_action_cue",
+      "source_review": {
+        "source_reviewed": true,
+        "compaction_boundary_observed": true,
+        "source_ref_hashes": ["sha256:66666666666666666666"]
+      },
+      "expected_behavior": {
+        "required_codes": ["normal_progress_continued"],
+        "forbidden_codes": ["unprompted_overhang", "confabulated_source"]
+      },
+      "behavior_trace": [{"code": "normal_progress_continued", "phase": "decision"}]
+    },
+    {
+      "case_id": "e2e50-source-reopen-public",
+      "case_family": "source_reopen_before_risky_action",
+      "source_review": {
+        "source_reviewed": true,
+        "compaction_boundary_observed": true,
+        "source_ref_hashes": ["sha256:77777777777777777777"]
+      },
+      "expected_behavior": {
+        "required_codes": ["source_reopen_before_risky_action"],
+        "forbidden_codes": ["risky_action_without_source"]
+      },
+      "behavior_trace": [
+        {"code": "source_reopen_before_risky_action", "phase": "pre_action"}
+      ]
+    }
+  ]
+}

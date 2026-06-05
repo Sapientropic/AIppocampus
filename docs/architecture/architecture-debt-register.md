@@ -28,7 +28,7 @@ routine way to make tests pass.
 
 ## Near-Budget Split Priority Queue
 
-Last counted: 2026-06-04.
+Last counted: 2026-06-05.
 Counting method: `script_line_count()` from
 `tests/aippocampus/test_architecture_boundaries.py`: nonblank lines excluding
 lines whose first non-space character is `#`.
@@ -41,13 +41,13 @@ this main action queue.
 | Path | Current `script_line_count()` | Guard budget | Priority | Next split boundary | Current split status / deferral reason |
 | --- | ---: | ---: | --- | --- | --- |
 | `skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_decision.py` | 736 | 836 | P0 foreground-risk | Remaining staged foreground decision pipeline: semantic-gate invocation/skip diagnostics, final hook-result projection, and ambient/dream sidecar projection. | #500 froze golden foreground projection fixtures and moved source-evidence/final skip-scent-evidence projection into `prompt_recall_projection.py`; #602 moved hot-path route indexing/merge logic into `prompt_recall_hot_path.py`, and #281 kept living-cue default-hook consumption in that hot-path owner while `assess_prompt` stayed at the 255-line orchestration guard. Next splits should target semantic-gate skip diagnostics or hook-result projection only with fixture coverage. |
-| `skills/aippocampus/scripts/aippocampus_runtime/recall/semantic_recall_gate.py` | 913 | 1200 | P1 foreground-budget-risk | Separate prompt/catalog payload construction or foreground-budget arbitration from the semantic gate coordinator if either grows again. | #580 froze focused skip/scent/evidence fixtures and moved worker response parsing, unavailable classification, and public projection into `semantic_gate_response.py`; the next split should not re-inline provider diagnostics or source/evidence truth into the coordinator. |
-| `skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/recall.py` | 1438 | 1438 | P2 background-runtime-risk | Split batch/quorum bookkeeping or job/cache summary projection before adding more warm runtime orchestration. | Recent helper splits already moved config and scout attribution out; another extraction would be speculative if it only wraps #605 route-contract pass-through for DeepSeek thinking/reasoning-effort diagnostics. Splitting those few parameters out would duplicate `model.routing`; the next warm-runtime growth should extract batch/quorum bookkeeping or job/cache summary projection before any further budget raise. |
+| `skills/aippocampus/scripts/aippocampus_runtime/recall/semantic_recall_gate.py` | 915 | 1200 | P1 foreground-budget-risk | Separate prompt/catalog payload construction or foreground-budget arbitration from the semantic gate coordinator if either grows again. | #580 froze focused skip/scent/evidence fixtures and moved worker response parsing, unavailable classification, and public projection into `semantic_gate_response.py`; the next split should not re-inline provider diagnostics or source/evidence truth into the coordinator. |
+| `skills/aippocampus/scripts/aippocampus_runtime/warm_ambient/recall.py` | 1429 | 1438 | P2 background-runtime-risk | Split batch/quorum bookkeeping or job/cache summary projection before adding more warm runtime orchestration. | Recent helper splits moved config, scout attribution, and privacy action result policy out; another extraction would be speculative unless the next warm-runtime growth touches batch/quorum bookkeeping or job/cache summary projection. Split one of those before any further budget raise. |
 | `skills/aippocampus/scripts/aippocampus_runtime/dream/live_shadow_ab.py` | 1260 | 1340 | P3 opt-in-eval-risk | Split replay adapters, semantic relevance gating, delivery policy, or model-route binding before adding richer live outcome analysis. | It is below budget and opt-in/evaluation-facing. #605 added shared route-contract consumption but did not change the next split boundary. Split when a live-shadow feature touches one of those boundaries. |
 
 ## Test, Benchmark, And Tool Debt Budgets
 
-Last counted: 2026-06-04.
+Last counted: 2026-06-05.
 Counting method: `script_line_count()` from
 `tests/aippocampus/test_architecture_boundaries.py`: nonblank lines excluding
 lines whose first non-space character is `#`.
@@ -75,7 +75,7 @@ Current non-runtime action rows:
 | --- | ---: | ---: | --- | --- |
 | `tests/aippocampus/test_subconscious_jobs.py` | 2655 | 2700 | #153 / #248 | Split deterministic question-tracking fixtures or shared model-route/job-output assertions before adding more job families; keep runner semantics visible. |
 | `tests/aippocampus/test_import_coupling.py` | 107 | 2500 | #658 / #659 | Continue moving reusable analysis helpers into `import_coupling_helpers.py`; invert remaining shim-preservation assertions toward explicit public allowlists. |
-| `tools/aippocampus/docs/check_docs_health.py` | 1366 | 1400 | #672 | Split focused check groups or shared markdown/path scanners before adding more public-readiness domains; keep single CLI output stable. |
+| `tools/aippocampus/docs/check_docs_health.py` | 1372 | 1400 | #672 | Product profile guards now live in `tools/aippocampus/docs/product_profile_guard.py`; split another focused check group or shared markdown/path scanner before adding more public-readiness domains; keep single CLI output stable. |
 
 The complete test / benchmark / tool inventory is in the evidence snapshot and
 the deterministic report output.

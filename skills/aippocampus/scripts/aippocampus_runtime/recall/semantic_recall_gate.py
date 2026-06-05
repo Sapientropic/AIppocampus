@@ -388,6 +388,8 @@ def load_semantic_triggers(path: Path | None) -> list[dict[str, Any]]:
         return []
     out: list[dict[str, Any]] = []
     for row in load_jsonl(path):
+        if row.get("payload_compacted"):
+            continue
         if row.get("status") in {"inactive", "parked"}:
             continue
         if row.get("kind") not in {None, "aippocampus_semantic_trigger"}:

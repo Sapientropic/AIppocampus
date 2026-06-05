@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sys
 import unittest
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -211,6 +212,30 @@ class BenchmarkSuiteTests(unittest.TestCase):
         )
         self.assertIn("BenchmarkSuiteConfig", help_text)
         self.assertIn("run_benchmark_suite_with_config", help_text)
+
+    def test_track_b_case_controls_reject_zero_values(self) -> None:
+        parsers = (
+            ("direct", suite.retrieval_benchmark.build_arg_parser),
+            ("suite", suite.build_arg_parser),
+        )
+        for option in (
+            "--fts5-cases",
+            "--fts5-min-cases",
+            "--source-max-cases",
+            "--source-min-cases",
+        ):
+            for parser_name, parser_factory in parsers:
+                with self.subTest(parser=parser_name, option=option):
+                    with patch("sys.stderr", new_callable=StringIO) as stderr:
+                        with self.assertRaises(SystemExit) as raised:
+                            parser_factory().parse_args([option, "0"])
+
+                    self.assertEqual(raised.exception.code, 2)
+                    self.assertIn(
+                        f"{option} must be a positive integer",
+                        stderr.getvalue(),
+                    )
+                    self.assertIn("--only-standard-public", stderr.getvalue())
 
     def test_release_evidence_profile_stays_public_safe_by_default(self) -> None:
         parser = suite.build_arg_parser()

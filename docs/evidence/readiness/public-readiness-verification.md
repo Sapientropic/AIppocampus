@@ -20,6 +20,108 @@ Stable privacy rules live in `docs/guides/privacy-security-checklist.md`. Do not
 raw command JSON here: local smoke outputs may contain machine-specific
 temporary paths, so this document keeps only summarized evidence.
 
+## 2026-06-05 Issue #643 R2 Provider Metadata Evidence Smoke
+
+Issue #643 keeps metadata-padding decisions tied to real provider evidence
+instead of speculative padding. This slice extended
+`smoke_real_provider_encrypted_sync.py` to emit a public-safe
+`provider_metadata` block and then ran it against the existing Cloudflare
+R2-compatible provider configuration. The local run used `age` v1.3.1 installed
+through the Go toolchain and an ephemeral generated age identity.
+
+Positive evidence from the passing retry:
+
+- Encrypted object-storage `push/status/repair/pull` passed with
+  `recipient_match=yes`, `raw_rollout_synced_without_opt_in=false`, and no
+  reported issues.
+- `provider_metadata` observed 13 encrypted objects, 20,022 total ciphertext
+  bytes, min 201 bytes, max 13,866 bytes, and size buckets
+  `le_1KiB=10`, `le_4KiB=2`, `le_16KiB=1`.
+- Path-shape counts were `encrypted_outer_manifest=1`,
+  `encrypted_inner_manifest=1`, and `encrypted_ciphertext_object=11`.
+- Cleanup deleted all 13 uploaded encrypted objects and confirmed none remained
+  through the smoke cleanup path.
+
+An earlier same-day attempt reached push/status/repair, produced the same
+metadata observation shape, and deleted 13/13 uploaded encrypted objects, but
+the final pull hit an `SSL: UNEXPECTED_EOF_WHILE_READING` transport error. Treat
+that as a transient provider/client observation, not as a successful full smoke.
+
+Cannot claim from this slice: metadata padding evaluated, traffic-analysis
+resistance, provider-console cleanup, broad S3-compatible/GCS/cloud-folder
+coverage, or long-duration provider/client stability. Provider account
+identifiers, bucket names, object prefixes, credential values, raw private
+source, and local temporary paths are intentionally omitted.
+
+## 2026-06-05 Issue #697 Released PyPI And Client-Matrix Refresh
+
+Issue #697 follows the source-install evidence below by checking the released
+PyPI package and public MCP Registry state separately from GitHub main-branch
+snapshots. The local `uvx` probe used temporary isolated `HOME`,
+`USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `AIPPOCAMPUS_HOME`,
+`AIPPOCAMPUS_REGISTRY_DIR`, `CODEX_HOME`, and `UV_CACHE_DIR` values, with
+`PYTHONPATH` cleared.
+
+Positive evidence:
+
+- `python tools\aippocampus\release\check_agent_discovery_release.py --json`
+  passed all eight release-discovery checks. PyPI latest was `0.1.1`, matching
+  `server.json`, and the MCP Registry listed `0.1.1`.
+- `uvx --refresh aippocampus --help` returned the packaged CLI help in 25.082
+  seconds from the isolated environment.
+- `uvx --refresh aippocampus mcp list-tools` returned the MCP tool catalog in
+  3.573 seconds with nine tools.
+- `uvx --refresh aippocampus onboard --provider codex --status --format json`
+  returned `ok=true` in 17.761 seconds and used the isolated
+  `AIPPOCAMPUS_REGISTRY_DIR`.
+
+Release-boundary note:
+
+- The released package status command still returned the provider matrix
+  (`codex`, `claude-code`, and `generic-jsonl`) rather than a Codex-only status
+  object. Treat this as a valid released package/provider-matrix status probe,
+  not as evidence that the PyPI package has a provider-scoped Codex-only status
+  surface.
+
+Cannot claim from this slice: interactive Codex Desktop UI click-through,
+public marketplace install UX, third-party install review, macOS/Linux
+standalone binaries, signed installers, automatic updaters, or all client
+wrappers.
+
+## 2026-06-05 Issue #307 External Uvx Source-Install Probe
+
+Issue #307 asks for public-readiness evidence that is not merely repository-local.
+This slice ran clone-free `uvx` probes from outside the maintainer checkout with
+`PYTHONPATH` cleared and temporary isolated `AIPPOCAMPUS_HOME`,
+`AIPPOCAMPUS_REGISTRY_DIR`, and `CODEX_HOME` values.
+
+Positive evidence for the current main snapshot:
+
+- `uvx --refresh --from git+https://github.com/Sapientropic/AIppocampus.git
+  aippocampus --help` built and installed commit
+  `f004b2b52c21e168d07c2cb4e0382fce071d3724`, then returned the packaged CLI
+  help in 13.647 seconds.
+- `uvx --refresh --from git+https://github.com/Sapientropic/AIppocampus.git
+  aippocampus mcp list-tools` returned the MCP tool catalog in 2.603 seconds.
+- `uvx --refresh --from git+https://github.com/Sapientropic/AIppocampus.git
+  aippocampus onboard --provider codex --status --format json` returned
+  `ok=true` in 2.639 seconds and kept the status scoped to the Codex provider.
+
+Release-boundary note:
+
+- `uvx --refresh aippocampus onboard --provider codex --status --format json`
+  against the published PyPI package returned successfully in 6.030 seconds, but
+  the output did not include a provider scope and included additional provider
+  status entries. Treat that as a release-refresh gap, not as positive evidence
+  for provider-scoped Codex readiness. The #697 release refresh above confirms
+  the later PyPI `0.1.1` package and MCP Registry entry, but the released status
+  command still reports the provider matrix rather than a Codex-only status
+  object.
+
+Cannot claim from this slice: interactive Codex Desktop UI marketplace behavior,
+public marketplace submission, second-user review, macOS/Linux standalone
+binary support, or every client/provider surface.
+
 ## 2026-06-04 Issue #104 Post-Migration R2 Provider Re-Smoke
 
 Issue #104 re-ran the encrypted object-storage provider path after the
@@ -1205,6 +1307,10 @@ be demonstrated without private biography or hard-coded fuzzy phrase expansion.
 ## Remaining Public-Readiness Gaps
 
 - Refresh this evidence after any further code changes.
+- If a future claim needs Codex-only provider-scoped status output, implement
+  and release that status shape explicitly. The 2026-06-05 PyPI `0.1.1`
+  re-smoke passed the released package/MCP path but still returned the provider
+  matrix rather than a Codex-only status object.
 - Run an interactive Desktop UI marketplace flow or external install review if
   claiming support across every Codex client surface. Current real-host
   evidence is headless Codex app-server, not manual UI coverage.

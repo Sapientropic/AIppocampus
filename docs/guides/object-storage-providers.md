@@ -59,7 +59,20 @@ the decrypted inner manifest. Cleanup fails if the discovered object count does
 not match the encrypted push `object_count`; this catches cases where only the
 outer manifest is deleted while ciphertext objects remain.
 
+The JSON output includes `provider_metadata`, a public-safe evidence block with
+encrypted object counts, aggregate ciphertext byte sizes, coarse size buckets,
+and path-shape counts. It intentionally omits object keys, credentials,
+endpoint URLs, and decrypted registry contents. Treat this as provider-visible
+metadata leakage evidence for padding/cost discussions; it does not claim that
+metadata padding has been evaluated or that traffic-analysis resistance exists.
+
 Use `--keep-objects` only for debugging a temporary test prefix.
+
+Encrypted sync hides synced registry/source contents from the provider, but it
+does not hide object counts, object sizes, or upload timing. Current provider
+evidence is dated per smoke run; do not generalize one R2-compatible smoke to a
+full S3/GCS/cloud-folder matrix, and do not claim metadata padding unless a
+focused padding smoke records the cost and leakage tradeoff.
 
 Plaintext migration cleanup uses HTTP `DELETE` for objects listed in the
 plaintext sync manifest and deletes the manifest object last. Providers that do

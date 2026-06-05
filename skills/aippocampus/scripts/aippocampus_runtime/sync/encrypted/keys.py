@@ -12,6 +12,7 @@ from typing import Any
 
 from aippocampus_runtime.core import now_utc, safe_path_name
 from aippocampus_runtime.sync import bundle as sync_bundle
+from aippocampus_runtime.sync.encrypted import key_providers
 from aippocampus_runtime.sync.encrypted.crypto import issue, validate_recipients
 
 DEVICE_KEYS_NAME = "device-keys.json"
@@ -21,6 +22,11 @@ LOCAL_IDENTITY_NAME = "device-identity.txt"
 RECIPIENT_ROLE_DEVICE = "device"
 RECIPIENT_ROLE_RECOVERY = "recovery"
 RECIPIENT_ROLES = {RECIPIENT_ROLE_DEVICE, RECIPIENT_ROLE_RECOVERY}
+KEY_PROVIDER_FILE = key_providers.KEY_PROVIDER_FILE
+KEY_PROVIDER_MACOS_KEYCHAIN = key_providers.KEY_PROVIDER_MACOS_KEYCHAIN
+KEY_PROVIDER_WINDOWS_CREDENTIAL_MANAGER = key_providers.KEY_PROVIDER_WINDOWS_CREDENTIAL_MANAGER
+KEY_PROVIDER_LINUX_SECRET_SERVICE = key_providers.KEY_PROVIDER_LINUX_SECRET_SERVICE
+SUPPORTED_KEY_PROVIDERS = key_providers.SUPPORTED_KEY_PROVIDERS
 
 
 def encrypted_state_dir(registry_dir: str | Path) -> Path:
@@ -83,11 +89,24 @@ def save_device_keys(registry_dir: str | Path, data: dict[str, Any]) -> None:
 def public_identity_storage() -> dict[str, Any]:
     return {
         "mode": "local_registry_file",
+        "key_provider": KEY_PROVIDER_FILE,
         "identity_location": "local_registry_state",
         "os_credential_store": "not_configured",
         "secret_material": "local_only_never_synced",
         "permission_model": "owner_only_best_effort",
     }
+
+
+def configure_key_provider(
+    registry_dir: str | Path,
+    *,
+    provider: str,
+) -> dict[str, Any]:
+    return key_providers.configure_key_provider(registry_dir, provider=provider)
+
+
+def key_provider_status(registry_dir: str | Path) -> dict[str, Any]:
+    return key_providers.key_provider_status(registry_dir)
 
 
 def normalize_recipient_role(role: str | None) -> tuple[str, dict[str, Any] | None]:

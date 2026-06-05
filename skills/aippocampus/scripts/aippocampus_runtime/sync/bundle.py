@@ -258,7 +258,7 @@ def portable_registry_for_sync(registry_dir: Path, *, include_raw: bool) -> dict
             if (index_root / "messages.jsonl").is_file()
             else None
         )
-        # Generated SQLite caches, including versioned pointer targets, are not
+        # Generated SQLite caches, including generation pointer targets, are not
         # a portable source surface. Target devices repair this locator only
         # after a local rebuild creates a cache in the target registry.
         paths["sqlite"] = None

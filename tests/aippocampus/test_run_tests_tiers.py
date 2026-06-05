@@ -35,8 +35,10 @@ QUICK_FORBIDDEN_TAGS = {
 
 BENCHMARK_SMOKE_REVIEWED_NON_BENCHMARK_MODULES = {
     # The E2E50 seed scanner is a public-safe deterministic benchmark support
-    # guard, not a completed benchmark mirror. Keep it explicit so benchmark
-    # smoke does not become a catch-all lane for unrelated fast tests.
+    # guard, not a completed benchmark mirror. The case-pack scorer is a real
+    # benchmark mirror module and is therefore covered by the benchmark subset
+    # assertion below instead of this exception list. Keep exceptions explicit
+    # so benchmark smoke does not become a catch-all lane for unrelated tests.
     "tests.aippocampus.test_e2e50_seed_candidates",
 }
 

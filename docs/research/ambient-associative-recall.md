@@ -252,7 +252,7 @@ cover different recall functions:
 | Scout | Purpose |
 |---|---|
 | Intent & mode classifier (P0) | Decide task mode, visibility bias, collaboration posture, and cognitive load. |
-| Privacy & boundary guard (P0) | Suppress credentials, personal/financial/relationship material, professional secrets, and over-personalized associations. |
+| Privacy & boundary guard (P0) | Block credentials, professional secrets, unsafe external projection, and over-personalized associations; route ordinary same-user personal/financial/relationship source privately and cautiously instead of starving recall. |
 | Deep theme matcher (P0) | Match long-running philosophical, product, emotional, obsession-level, and trade-off themes. |
 | Key-line hunter (P0) | Find memorable lines, visual images, metaphors, strong assertions, and unresolved questions. |
 | Evidence & gap sentinel (P0) | Validate source refs and downgrade hallucinated, unsupported, stale, or premise-missing candidates. |

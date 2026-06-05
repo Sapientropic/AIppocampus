@@ -73,7 +73,7 @@ language for future low-friction controls, not a claim of complete CLI coverage.
 
 | Need | Depend on | Stable enough today | Do not depend on |
 | --- | --- | --- | --- |
-| No-clone probe or install smoke | PyPI `uvx aippocampus ...` and documented repository checks | Documented CLI command names, documented flags, return code success/failure, and public-safe `--json` outputs where documented | Unreleased GitHub `uvx --from git+...` snapshots as stable release evidence; unsigned binary paths beyond the dated Windows x64 evidence |
+| No-clone probe or install smoke | PyPI `uvx aippocampus ...` and documented repository checks | Documented CLI command names, documented flags, return code success/failure, MCP tool names, and public-safe `--json` outputs where documented | Unreleased GitHub `uvx --from git+...` snapshots as stable release evidence; Codex-only scoped-provider status from the provider-matrix status command; unsigned binary paths beyond the dated Windows x64 evidence |
 | Local operator status | `aippocampus health`, `aippocampus onboard --status`, and `memory_health` MCP | Documented status fields, additive JSON fields, and CLI JSON error classes | Human-readable prose, local absolute paths, or private registry internals |
 | Agent-host read tools | MCP `search_memory`, `recall_context`, `recall_deepen`, `latest_reply`, `get_turn_context`, `list_threads`, `register_thread`, `sync_status`, `memory_health` | Tool names, required input fields, additive output fields, JSON tool errors, and public-safe path redaction | Broad memory writes, hook install/uninstall, sync push/pull, or arbitrary file ingest through MCP |
 | Provider-neutral import | `aippocampus import conversation --format generic-jsonl` and `python -m aippocampus_runtime.registry.api register-source --provider generic-jsonl` | Generic JSONL required fields, validation diagnostics, canonical source refs, and import manifests | Markdown import as a public claim, role-ambiguous transcripts, or host-private metadata as public identity |
@@ -156,8 +156,10 @@ The CLI contract applies to documented operator commands, especially:
   over capacity data and existing retention JSON
 - `aippocampus storage gc --apply --class rebuildable` as the explicit
   path-level rebuildable-cache eviction path for retention-report-backed main
-  SQLite caches; capacity aggregates and source/review artifacts remain outside
-  apply v1
+  SQLite caches and capacity-report-backed old source-index / segment
+  generation directories whose reader-pin/TTL, current/LKG pointer, source,
+  lease, and active-thread checks pass; capacity aggregates and source/review
+  artifacts remain outside apply v1.
 - `python -m aippocampus_runtime.registry.api register-source --provider generic-jsonl --input <path>`
 - `python -m aippocampus_runtime.mcp.server --list-tools`
 - `python -m aippocampus_runtime.sync.encrypted.admin key|migrate-to-encrypted|cleanup-plaintext|migrate-object-to-encrypted|cleanup-object-plaintext`
@@ -165,6 +167,12 @@ The CLI contract applies to documented operator commands, especially:
 - `aippocampus hooks lifecycle status|install|uninstall`
 - `plugins/aippocampus/build_plugin_package.py`
 - documented plugin smoke commands
+
+The personal/default path is intentionally not purpose-token gated. Purpose
+tokens, mandatory review queues, policy reports, and other high-risk governance
+controls follow the profile boundary in
+[public-core-boundary.md](public-core-boundary.md#product-profile-boundary)
+instead of becoming baseline CLI ceremony.
 
 The clone-free PyPI `uvx` entrypoint is also a documented agent-facing
 install/probe path:

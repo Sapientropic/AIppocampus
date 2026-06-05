@@ -109,6 +109,16 @@ CANNOT_CLAIM = [
     "static_retrieval_covers_conflict_resolution",
 ]
 
+STAGE3_INCREMENTAL_SPLITS = ("Test_Time_Learning", "Conflict_Resolution")
+STAGE3_WRITE_UPDATE_DRY_RUN_MODE = "dry_run_contract"
+STAGE3_MISSING_WRITE_UPDATE_MODE = "unsupported_missing_instrumentation"
+PARQUET_READER_MISSING_SUPPORT = "metadata_only_parquet_without_optional_reader"
+PARQUET_ROW_SUPPORT = "parquet_rows_with_optional_reader"
+
+
+class OptionalParquetReaderMissing(RuntimeError):
+    """Raised when local parquet rows exist but pyarrow is not installed."""
+
 
 @dataclass
 class SplitObservation:
@@ -229,12 +239,21 @@ def read_json_or_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def read_parquet_rows(path: Path) -> list[dict[str, Any]]:
+    try:
+        import pyarrow.parquet as pq  # type: ignore[import-not-found]
+    except Exception as exc:
+        raise OptionalParquetReaderMissing("Install pyarrow to read parquet rows.") from exc
+    table = pq.read_table(str(path))
+    return [dict(row) for row in table.to_pylist() if isinstance(row, dict)]
+
+
 def parquet_metadata(path: Path) -> dict[str, Any]:
     try:
         import pyarrow.parquet as pq  # type: ignore[import-not-found]
     except Exception:
         return {
-            "format_support": "metadata_only_parquet_without_optional_reader",
+            "format_support": PARQUET_READER_MISSING_SUPPORT,
             "observed_rows": None,
             "schema_fields": [],
         }
@@ -270,18 +289,23 @@ def base_field_name(field_name: str) -> str:
 
 
 def field_family(field_name: str) -> str:
+    return sorted(field_families(field_name))[0]
+
+
+def field_families(field_name: str) -> set[str]:
     base = base_field_name(field_name)
+    families: set[str] = set()
     if base in RAW_TEXT_FIELD_NAMES:
-        return "raw_text"
+        families.add("raw_text")
     if base in GOLD_LABEL_FIELD_NAMES:
-        return "gold_label"
+        families.add("gold_label")
     if base in TASK_FIELD_NAMES:
-        return "task"
+        families.add("task")
     if base in METRIC_FIELD_NAMES:
-        return "metric"
+        families.add("metric")
     if field_name.startswith("metadata."):
-        return "metadata"
-    return "other"
+        families.add("metadata")
+    return families or {"other"}
 
 
 def as_string_list(value: Any) -> list[str]:
@@ -377,12 +401,13 @@ def observe_row(
     field_names = sorted(flatten_field_names(row))
     observation.field_counts.update(field_names)
     for field_name in field_names:
-        family = field_family(field_name)
-        observation.field_family_counts[family] += 1
+        families = field_families(field_name)
+        for family in families:
+            observation.field_family_counts[family] += 1
         base = base_field_name(field_name)
-        if family == "raw_text":
+        if "raw_text" in families:
             observation.raw_text_fields.add(base)
-        if family == "gold_label":
+        if "gold_label" in families:
             observation.gold_label_fields.add(base)
     task_families = task_families_for_row(row, split_meta)
     metric_families = metric_families_for_row(row, split_meta)
@@ -400,7 +425,9 @@ def observe_row(
             "split": observation.split_id,
             "row_index": row_index,
             "file_path_sha1": file_payload["path_sha1"],
-            "field_families": sorted(set(field_family(name) for name in field_names)),
+            "field_families": sorted(
+                {family for name in field_names for family in field_families(name)}
+            ),
             "task_families": sorted(task_families),
             "metric_families": sorted(metric_families),
             "question_count": len(questions_for_row(row)),
@@ -425,13 +452,35 @@ def observe_split(
         if path.suffix.lower() == ".parquet":
             metadata = parquet_metadata(path)
             file_payload.update(metadata)
-            row_count = metadata.get("observed_rows")
-            if isinstance(row_count, int):
-                observation.observed_rows += row_count
-            for field_name in metadata.get("schema_fields") or []:
-                observation.field_counts[field_name] += 1
-                observation.field_family_counts[field_family(field_name)] += 1
-            observation.files.append(file_payload)
+            try:
+                rows = read_parquet_rows(path)
+            except OptionalParquetReaderMissing:
+                rows = []
+            except Exception as exc:
+                file_payload["row_read_error_type"] = type(exc).__name__
+                rows = []
+            if rows:
+                file_payload["format_support"] = PARQUET_ROW_SUPPORT
+                file_payload["observed_rows"] = len(rows)
+                observation.files.append(file_payload)
+                for row_index, row in enumerate(rows, start=1):
+                    observe_row(
+                        observation,
+                        split_meta=split_meta,
+                        file_payload=file_payload,
+                        row_index=row_index,
+                        row=row,
+                        case_limit=case_limit,
+                    )
+            else:
+                row_count = metadata.get("observed_rows")
+                if isinstance(row_count, int):
+                    observation.observed_rows += row_count
+                for field_name in metadata.get("schema_fields") or []:
+                    observation.field_counts[field_name] += 1
+                    for family in field_families(field_name):
+                        observation.field_family_counts[family] += 1
+                observation.files.append(file_payload)
             continue
         rows = read_json_or_jsonl(path)
         file_payload["observed_rows"] = len(rows)
@@ -486,10 +535,17 @@ def collect_case_rows(
 ) -> list[dict[str, Any]]:
     rows_out: list[dict[str, Any]] = []
     for path in discover_split_files(dataset_dir, split_id):
-        if path.suffix.lower() not in {".json", ".jsonl"}:
-            continue
         file_payload = file_verification(path, compute_sha256=False)
-        for row_index, row in enumerate(read_json_or_jsonl(path), start=1):
+        if path.suffix.lower() in {".json", ".jsonl"}:
+            rows = read_json_or_jsonl(path)
+        elif path.suffix.lower() == ".parquet":
+            try:
+                rows = read_parquet_rows(path)
+            except Exception:
+                continue
+        else:
+            continue
+        for row_index, row in enumerate(rows, start=1):
             case_id = stable_case_id(split_id, file_payload, row_index, row)
             rows_out.append(
                 {
@@ -592,6 +648,200 @@ def build_prediction_template(
     ]
 
 
+def stage3_mode_fields(write_update_mode: str) -> dict[str, str]:
+    if write_update_mode == STAGE3_WRITE_UPDATE_DRY_RUN_MODE:
+        return {
+            "ingest_mode": "local_operator_dataset",
+            "write_update_mode": STAGE3_WRITE_UPDATE_DRY_RUN_MODE,
+            "retrieval_mode": "source_ref_hash_probe",
+            "answer_generation_mode": "not_executed",
+            "judging_mode": "not_executed",
+        }
+    return {
+        "ingest_mode": "local_operator_dataset",
+        "write_update_mode": STAGE3_MISSING_WRITE_UPDATE_MODE,
+        "retrieval_mode": "not_executed",
+        "answer_generation_mode": "not_executed",
+        "judging_mode": "not_executed",
+    }
+
+
+def stage3_claim_boundary(write_update_mode: str) -> dict[str, str]:
+    return {
+        "deterministic_contract_evidence": "mode_fields_hashes_counts_only",
+        "local_artifact_policy": "ignored_operator_dataset_only",
+        "official_runner_compatibility": "not_claimed",
+        "live_model_quality": "not_measured",
+        "private_or_local_artifact_evidence": "hashes_counts_only",
+        "write_update_instrumentation": (
+            "dry_run_contract" if write_update_mode == STAGE3_WRITE_UPDATE_DRY_RUN_MODE else "missing"
+        ),
+    }
+
+
+def stage3_incremental_contract(split_id: str) -> str:
+    if split_id == "Test_Time_Learning":
+        return "write_then_update_then_query"
+    if split_id == "Conflict_Resolution":
+        return "stale_then_current_then_query"
+    return "unsupported_split"
+
+
+def stage3_write_interactions(split_id: str) -> list[dict[str, str]]:
+    if split_id == "Test_Time_Learning":
+        return [
+            {"step": "initial_write", "boundary": "write_policy"},
+            {"step": "update_write", "boundary": "update_policy"},
+        ]
+    if split_id == "Conflict_Resolution":
+        return [
+            {"step": "stale_candidate_write", "boundary": "conflict_resolution"},
+            {"step": "current_candidate_write", "boundary": "conflict_resolution"},
+        ]
+    return []
+
+
+def build_stage3_incremental_case(case: dict[str, Any]) -> dict[str, Any]:
+    split_id = str(case["split"])
+    questions = [str(question) for question in case.get("questions") or []]
+    context = str(case.get("context") or "")
+    interactions = stage3_write_interactions(split_id)
+    # Stage 3 dry-run reports must prove the write/update protocol shape without
+    # smuggling benchmark text, gold answers, or local paths into committed logs.
+    # Raw text stays only in the explicit local case-pack path above.
+    return {
+        "case_id": case["case_id"],
+        "split": split_id,
+        "task_families": case["task_families"],
+        "metric_families": case["metric_families"],
+        "incremental_contract": stage3_incremental_contract(split_id),
+        "write_update_interactions": interactions,
+        "interaction_count": len(interactions),
+        "source_ref_status": "hash_only_requires_adapter_mapping",
+        "context_sha1": sha1_short(context) if context else None,
+        "question_sha1s": [sha1_short(question) for question in questions],
+        "question_count": len(questions),
+        "safe_metadata": case["safe_metadata"],
+        "label_boundary": {
+            "answer_text_included": False,
+            "gold_labels_included": False,
+            "score_computed": False,
+        },
+    }
+
+
+def build_stage3_incremental_dry_run(
+    *,
+    dataset_dir: Path | str = DEFAULT_DATASET_DIR,
+    manifest_path: Path | str = DEFAULT_MANIFEST,
+    case_limit: int = DEFAULT_CASE_LIMIT,
+    write_update_mode: str = STAGE3_MISSING_WRITE_UPDATE_MODE,
+) -> dict[str, Any]:
+    started = time.perf_counter()
+    dataset_path = Path(dataset_dir)
+    manifest = load_manifest(manifest_path)
+    split_meta_by_id = manifest_splits(manifest)
+    mode_fields = stage3_mode_fields(write_update_mode)
+
+    if write_update_mode != STAGE3_WRITE_UPDATE_DRY_RUN_MODE:
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "kind": "aippocampus_memoryagentbench_stage3_incremental_dry_run",
+            "generated_at": now_utc(),
+            "status": "unsupported_missing_write_update_instrumentation",
+            "ok": False,
+            "configuration": {
+                "dataset_dir_sha1": sha1_short(str(dataset_path.resolve())),
+                "manifest": safe_path_label(manifest_path),
+                "case_limit": case_limit,
+                "live_llm": False,
+                "downloads_dataset": False,
+            },
+            "mode_fields": mode_fields,
+            "unsupported_reasons": ["write_update_instrumentation_missing"],
+            "metrics": {
+                "stage3_case_count": 0,
+                "sample_count": 0,
+                "test_time_learning_case_count": 0,
+                "conflict_resolution_case_count": 0,
+                "update_conflict_interaction_count": 0,
+            },
+            "cases": [],
+            "claim_boundary": stage3_claim_boundary(write_update_mode),
+            "source_evidence_boundary": {
+                "source_hashes_only": True,
+                "raw_context_emitted": False,
+                "source_refs_are_adapter_handles_not_truth": True,
+            },
+            "false_forgetting_controls": {
+                "current_source_ref_required": True,
+                "stale_source_demoted_not_deleted": True,
+                "gold_answer_not_model_input": True,
+            },
+            "privacy_boundary": {
+                "raw_text_emitted": False,
+                "absolute_paths_emitted": False,
+                "default_report_shape": "mode_fields_hashes_and_counts_only",
+            },
+            "cannot_claim": CANNOT_CLAIM,
+            "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
+        }
+
+    cases: list[dict[str, Any]] = []
+    for split_id in STAGE3_INCREMENTAL_SPLITS:
+        for case in collect_case_rows(
+            dataset_dir=dataset_path,
+            split_id=split_id,
+            split_meta=split_meta_by_id[split_id],
+            case_limit=case_limit,
+        ):
+            cases.append(build_stage3_incremental_case(case))
+
+    split_counts = Counter(str(case["split"]) for case in cases)
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": "aippocampus_memoryagentbench_stage3_incremental_dry_run",
+        "generated_at": now_utc(),
+        "status": "stage3_incremental_dry_run" if cases else "skipped_missing_stage3_cases",
+        "ok": bool(cases),
+        "configuration": {
+            "dataset_dir_sha1": sha1_short(str(dataset_path.resolve())),
+            "manifest": safe_path_label(manifest_path),
+            "case_limit": case_limit,
+            "live_llm": False,
+            "downloads_dataset": False,
+        },
+        "mode_fields": mode_fields,
+        "unsupported_reasons": [],
+        "metrics": {
+            "stage3_case_count": len(cases),
+            "sample_count": len(cases),
+            "test_time_learning_case_count": split_counts.get("Test_Time_Learning", 0),
+            "conflict_resolution_case_count": split_counts.get("Conflict_Resolution", 0),
+            "update_conflict_interaction_count": sum(int(case["interaction_count"]) for case in cases),
+        },
+        "cases": cases,
+        "claim_boundary": stage3_claim_boundary(write_update_mode),
+        "source_evidence_boundary": {
+            "source_hashes_only": True,
+            "raw_context_emitted": False,
+            "source_refs_are_adapter_handles_not_truth": True,
+        },
+        "false_forgetting_controls": {
+            "current_source_ref_required": True,
+            "stale_source_demoted_not_deleted": True,
+            "gold_answer_not_model_input": True,
+        },
+        "privacy_boundary": {
+            "raw_text_emitted": False,
+            "absolute_paths_emitted": False,
+            "default_report_shape": "mode_fields_hashes_and_counts_only",
+        },
+        "cannot_claim": CANNOT_CLAIM,
+        "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
+    }
+
+
 def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -609,6 +859,8 @@ def run_memoryagentbench_smoke(
     prediction_template_output: Path | str | None = None,
     case_pack_split: str = "Accurate_Retrieval",
     compute_sha256: bool = True,
+    stage3_incremental_dry_run: bool = False,
+    stage3_write_update_mode: str = STAGE3_MISSING_WRITE_UPDATE_MODE,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     dataset_path = Path(dataset_dir)
@@ -630,54 +882,99 @@ def run_memoryagentbench_smoke(
     }
     observed_split_count = sum(1 for split in splits.values() if split["observed_rows"] > 0)
     observed_row_count = sum(int(split["observed_rows"]) for split in splits.values())
+    local_file_count = sum(len(split["files"]) for split in splits.values())
+    optional_reader_missing_file_count = sum(
+        1
+        for split in splits.values()
+        for file_payload in split["files"]
+        if file_payload.get("format_support") == PARQUET_READER_MISSING_SUPPORT
+    )
+    parquet_row_file_count = sum(
+        1
+        for split in splits.values()
+        for file_payload in split["files"]
+        if file_payload.get("format_support") == PARQUET_ROW_SUPPORT
+    )
 
     case_pack_path: Path | None = None
+    case_pack_status = "not_requested"
     if case_pack_output:
-        case_pack_path = Path(case_pack_output)
-        case_pack_path.parent.mkdir(parents=True, exist_ok=True)
-        case_pack_path.write_text(
-            json.dumps(
-                build_case_pack(
-                    dataset_dir=dataset_path,
-                    manifest=manifest,
-                    split_id=case_pack_split,
-                    case_limit=case_limit,
-                ),
-                ensure_ascii=False,
-                indent=2,
-            )
-            + "\n",
-            encoding="utf-8",
+        case_pack = build_case_pack(
+            dataset_dir=dataset_path,
+            manifest=manifest,
+            split_id=case_pack_split,
+            case_limit=case_limit,
         )
+        if case_pack["cases"]:
+            case_pack_path = Path(case_pack_output)
+            case_pack_path.parent.mkdir(parents=True, exist_ok=True)
+            case_pack_path.write_text(
+                json.dumps(case_pack, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            case_pack_status = "written"
+        else:
+            case_pack_status = "skipped_no_rows"
 
     prediction_template_path: Path | None = None
+    prediction_template_status = "not_requested"
     if prediction_template_output:
-        prediction_template_path = Path(prediction_template_output)
-        write_jsonl(
-            prediction_template_path,
-            build_prediction_template(
-                dataset_dir=dataset_path,
-                manifest=manifest,
-                split_id=case_pack_split,
-                case_limit=case_limit,
-            ),
+        prediction_template = build_prediction_template(
+            dataset_dir=dataset_path,
+            manifest=manifest,
+            split_id=case_pack_split,
+            case_limit=case_limit,
+        )
+        if prediction_template:
+            prediction_template_path = Path(prediction_template_output)
+            write_jsonl(prediction_template_path, prediction_template)
+            prediction_template_status = "written"
+        else:
+            prediction_template_status = "skipped_no_rows"
+
+    stage3_payload: dict[str, Any] | None = None
+    if stage3_incremental_dry_run:
+        stage3_payload = build_stage3_incremental_dry_run(
+            dataset_dir=dataset_path,
+            manifest_path=manifest_path,
+            case_limit=case_limit,
+            write_update_mode=stage3_write_update_mode,
         )
 
-    status = "metadata_smoke" if observed_row_count else "skipped_missing_dataset"
+    if observed_row_count:
+        status = "metadata_smoke"
+    elif local_file_count and optional_reader_missing_file_count:
+        status = "found_files_missing_optional_reader"
+    else:
+        status = "skipped_missing_dataset"
     official_expected_total_rows = int(manifest["official_dataset"]["total_examples"])
     official_expected_split_count = len(CANONICAL_SPLITS)
+    if status == "found_files_missing_optional_reader":
+        next_step = (
+            "parquet_optional_reader_missing: official MemoryAgentBench parquet files were found, "
+            "but row inspection requires installing the optional pyarrow reader. "
+            "Install pyarrow or provide JSON/JSONL exports before writing case packs or Stage 3 dry-run cases."
+        )
+    else:
+        next_step = (
+            "Place operator-downloaded or exported MemoryAgentBench files under "
+            "benchmark_corpus/memoryagentbench/ for local metadata inspection; "
+            "use explicit output paths for local-only case packs or prediction templates."
+        )
     payload = {
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_memoryagentbench_metadata_smoke",
         "generated_at": now_utc(),
         "status": status,
-        "ok": True,
+        "ok": bool(stage3_payload.get("ok", True)) if stage3_payload else True,
         "configuration": {
             "dataset_dir_sha1": sha1_short(str(dataset_path.resolve())),
             "manifest": safe_path_label(manifest_path),
             "case_limit": case_limit,
             "case_pack_split": case_pack_split,
             "compute_sha256": compute_sha256,
+            "stage3_incremental_dry_run": stage3_incremental_dry_run,
+            "stage3_write_update_mode": stage3_write_update_mode if stage3_incremental_dry_run else None,
             "live_llm": False,
             "downloads_dataset": False,
         },
@@ -694,7 +991,9 @@ def run_memoryagentbench_smoke(
             "official_expected_total_rows": official_expected_total_rows,
             "observed_split_count": observed_split_count,
             "observed_row_count": observed_row_count,
-            "local_file_count": sum(len(split["files"]) for split in splits.values()),
+            "local_file_count": local_file_count,
+            "optional_reader_missing_file_count": optional_reader_missing_file_count,
+            "parquet_row_file_count": parquet_row_file_count,
             "task_family_counts": dict(
                 sorted(
                     sum((Counter(split["task_family_counts"]) for split in splits.values()), Counter()).items()
@@ -723,20 +1022,20 @@ def run_memoryagentbench_smoke(
         },
         "artifacts": {
             "case_pack_written": bool(case_pack_path),
+            "case_pack_status": case_pack_status,
             "case_pack_output_sha1": sha1_short(str(case_pack_path.resolve())) if case_pack_path else None,
             "prediction_template_written": bool(prediction_template_path),
+            "prediction_template_status": prediction_template_status,
             "prediction_template_output_sha1": sha1_short(str(prediction_template_path.resolve()))
             if prediction_template_path
             else None,
         },
         "cannot_claim": CANNOT_CLAIM,
-        "next_step": (
-            "Place operator-downloaded or exported MemoryAgentBench files under "
-            "benchmark_corpus/memoryagentbench/ for local metadata inspection; "
-            "use explicit output paths for local-only case packs or prediction templates."
-        ),
+        "next_step": next_step,
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
     }
+    if stage3_payload:
+        payload["stage3_incremental_runner"] = stage3_payload
     return payload
 
 
@@ -746,6 +1045,10 @@ def print_human_summary(payload: dict[str, Any]) -> None:
     print(f"- observed rows: {payload['metrics']['observed_row_count']}")
     print(f"- observed splits: {payload['metrics']['observed_split_count']}")
     print(f"- local files: {payload['metrics']['local_file_count']}")
+    if "stage3_incremental_runner" in payload:
+        stage3 = payload["stage3_incremental_runner"]
+        print(f"- stage3 incremental: {stage3['status']}")
+        print(f"- stage3 cases: {stage3['metrics']['stage3_case_count']}")
     print("- cannot claim:")
     for item in payload["cannot_claim"]:
         print(f"  - {item}")
@@ -759,6 +1062,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--case-pack-output", type=Path)
     parser.add_argument("--prediction-template-output", type=Path)
     parser.add_argument("--case-pack-split", default="Accurate_Retrieval", choices=CANONICAL_SPLITS)
+    parser.add_argument(
+        "--stage3-incremental-dry-run",
+        action="store_true",
+        help="Embed the Stage 3 incremental runner dry-run contract in the sanitized report.",
+    )
+    parser.add_argument(
+        "--stage3-write-update-mode",
+        default=STAGE3_MISSING_WRITE_UPDATE_MODE,
+        choices=(STAGE3_MISSING_WRITE_UPDATE_MODE, STAGE3_WRITE_UPDATE_DRY_RUN_MODE),
+        help="Write/update instrumentation mode for the explicit Stage 3 dry-run.",
+    )
     parser.add_argument("--skip-sha256", action="store_true", help="Skip file sha256 hashing for large local files.")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--json", dest="json_output", action="store_true")
@@ -775,6 +1089,8 @@ def main(argv: list[str] | None = None) -> int:
         prediction_template_output=args.prediction_template_output,
         case_pack_split=args.case_pack_split,
         compute_sha256=not args.skip_sha256,
+        stage3_incremental_dry_run=args.stage3_incremental_dry_run,
+        stage3_write_update_mode=args.stage3_write_update_mode,
     )
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

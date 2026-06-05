@@ -14,6 +14,7 @@ SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.recall import ambient_cache as cache  # noqa: E402
+from aippocampus_runtime.recall import ambient_cache_compaction as compaction  # noqa: E402
 
 
 class AmbientThreadCacheTests(unittest.TestCase):
@@ -410,6 +411,120 @@ class AmbientThreadCacheTests(unittest.TestCase):
 
         self.assertEqual(result["residue_export"]["status"], "skipped_no_source_refs")
         self.assertFalse(residue_path.exists())
+
+    def test_dead_letter_manifest_compacts_matching_ambient_card_payload(self) -> None:
+        cache_path = self.root / "ambient-thread-cache.json"
+        card_id = "arc_dead_lettered"
+        surface_id_hash = hashlib.sha256(card_id.encode("utf-8")).hexdigest()[:16]
+
+        cache.write_thread_cache(
+            cache_path,
+            thread_id="thread-a",
+            workspace="E:/private/workspace",
+            topic_epoch="epoch-dead-letter",
+            cards=[
+                {
+                    "card_id": card_id,
+                    "theme": "raw activation theme should be compacted",
+                    "key_line": "raw activation payload should be compacted",
+                    "support_level": "candidate",
+                    "visibility": "active_gentle_nudge",
+                    "source_refs": [
+                        {"thread_key": "session:old-topic", "line": 42, "message_id": "msg-1"}
+                    ],
+                    "source_validation": {"status": "supported", "checked_ref_count": 1},
+                }
+            ],
+        )
+
+        result = compaction.compact_ambient_cache_payloads_from_dead_letter_manifest(
+            cache_path,
+            {
+                "kind": "aippocampus_activation_dead_letter_apply_manifest",
+                "updates": [
+                    {
+                        "surface_id_hash": surface_id_hash,
+                        "surface_kind": "ambient_card",
+                        "lifecycle_action": "dead_lettered",
+                        "source_ref_count": 1,
+                        "provenance_pointer_hash": "prov123",
+                        "reason_codes": ["wrong_route_drag_threshold"],
+                        "applied_at": "2026-06-05T10:00:00Z",
+                        "source_refs_preserved": True,
+                        "clean_source_mutation": False,
+                        "truth_status_changed": False,
+                        "rebuild_or_review_note": "Rebuild from clean source if this card must be reviewed.",
+                    }
+                ],
+            },
+            compacted_at="2026-06-05T10:05:00Z",
+        )
+        stored = json.loads(cache_path.read_text(encoding="utf-8"))
+        entry = next(iter(stored["entries"].values()))
+        compacted_card = entry["cards"][0]
+        raw = cache_path.read_text(encoding="utf-8")
+
+        self.assertEqual(result["metrics"]["payload_compacted_count"], 1)
+        self.assertEqual(result["compacted"][0]["surface_id_hash"], surface_id_hash)
+        self.assertTrue(compacted_card["payload_compacted"])
+        self.assertEqual(compacted_card["lifecycle_action"], "payload_compacted")
+        self.assertEqual(compacted_card["source_ref_count"], 1)
+        self.assertEqual(compacted_card["provenance_pointer_hash"], "prov123")
+        self.assertEqual(entry["source_ref_fingerprints"], [])
+        self.assertEqual(entry["related_fingerprints"], [])
+        self.assertNotIn("theme", compacted_card)
+        self.assertNotIn("key_line", compacted_card)
+        self.assertNotIn("source_refs", compacted_card)
+        self.assertNotIn(card_id, raw)
+        self.assertNotIn("raw activation", raw)
+        self.assertNotIn("session:old-topic", raw)
+
+    def test_dead_letter_manifest_skips_unsafe_ambient_card_compaction(self) -> None:
+        cache_path = self.root / "ambient-thread-cache.json"
+        card_id = "arc_protected"
+        surface_id_hash = hashlib.sha256(card_id.encode("utf-8")).hexdigest()[:16]
+
+        cache.write_thread_cache(
+            cache_path,
+            thread_id="thread-a",
+            workspace="workspace",
+            topic_epoch="epoch-protected",
+            cards=[
+                {
+                    "card_id": card_id,
+                    "theme": "still needed for review",
+                    "support_level": "candidate",
+                    "source_refs": [{"thread_key": "session:review", "message_id": "msg-2"}],
+                }
+            ],
+        )
+
+        result = compaction.compact_ambient_cache_payloads_from_dead_letter_manifest(
+            cache_path,
+            {
+                "kind": "aippocampus_activation_dead_letter_apply_manifest",
+                "updates": [
+                    {
+                        "surface_id_hash": surface_id_hash,
+                        "surface_kind": "ambient_card",
+                        "lifecycle_action": "dead_lettered",
+                        "source_ref_count": 1,
+                        "reason_codes": ["wrong_route_drag_threshold"],
+                        "protected_reference_count": 1,
+                        "clean_source_mutation": False,
+                        "truth_status_changed": False,
+                    }
+                ],
+            },
+            compacted_at="2026-06-05T10:05:00Z",
+        )
+        stored = json.loads(cache_path.read_text(encoding="utf-8"))
+        entry = next(iter(stored["entries"].values()))
+
+        self.assertEqual(result["metrics"]["payload_compacted_count"], 0)
+        self.assertEqual(result["skipped"][0]["skip_reason"], "unsafe_dead_letter_update")
+        self.assertEqual(entry["cards"][0]["card_id"], card_id)
+        self.assertEqual(entry["cards"][0]["theme"], "still needed for review")
 
 
 if __name__ == "__main__":

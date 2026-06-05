@@ -36,10 +36,13 @@ from aippocampus_runtime.ops.storage_governance_contract import (
     TIER_REBUILDABLE_CACHE,
     TIER_REVIEW_ARTIFACT,
     candidate_class_for_tier,
+    capacity_preconditions,
+    generation_gc_candidates_from_capacity_thread,
     human_bytes,
     matches_class,
     plan_metrics,
     rebuild_command_for_retention_item,
+    segment_generation_gc_candidates_from_capacity_thread,
     status,
 )
 
@@ -132,7 +135,7 @@ def _retention_preconditions(
     if tier == TIER_REBUILDABLE_CACHE:
         preconditions["last_known_good_pointer"] = status(
             "needs_apply_check",
-            evidence="Dry-run does not mutate versioned pointer or last-known-good state.",
+            evidence="Dry-run does not mutate generation pointer or last-known-good state.",
             requirement="Apply mode must preserve last-known-good/index pointer semantics.",
         )
     if tier == TIER_REVIEW_ARTIFACT:
@@ -142,46 +145,6 @@ def _retention_preconditions(
             requirement="Review artifacts are eligible only after human review or inactive export.",
         )
     return preconditions
-
-
-def _capacity_preconditions(thread: dict[str, Any], *, include_active: bool) -> dict[str, Any]:
-    clean_bytes = int(thread.get("canonical_clean_source_bytes") or 0)
-    raw_bytes = int(thread.get("raw_audit_source_bytes") or 0)
-    source_ok = clean_bytes > 0 or raw_bytes > 0
-    return {
-        "raw_or_clean_source": status(
-            "passed" if source_ok else "blocked",
-            evidence=(
-                f"capacity thread clean={clean_bytes} raw={raw_bytes}"
-                if source_ok
-                else "capacity report has no raw or clean-source bytes for this thread"
-            ),
-            requirement="Exact raw or clean source must remain available before cache eviction.",
-        ),
-        "clean_source_manifest": status(
-            "passed" if clean_bytes > 0 else "needs_apply_check",
-            evidence=(
-                f"capacity thread canonical_clean_source_bytes={clean_bytes}"
-                if clean_bytes > 0
-                else "capacity report cannot prove clean-source manifest bytes"
-            ),
-            requirement="Clean-source manifest must exist for caches derived from clean source.",
-        ),
-        "active_thread_exclusion": status(
-            "needs_apply_check" if include_active else "blocked_by_default",
-            evidence=(
-                "--include-active was passed; apply mode must still prove the thread is safe."
-                if include_active
-                else "Active-thread matching requires apply-time thread identity checks."
-            ),
-            requirement="Do not evict the current active thread unless explicitly requested.",
-        ),
-        "writer_or_export_lease": status(
-            "needs_apply_check",
-            evidence="Capacity report does not inspect live leases.",
-            requirement="No active writer/build/export lease may own the target path.",
-        ),
-    }
 
 
 def _candidate_from_retention_item(
@@ -281,7 +244,7 @@ def _capacity_candidates(
                     f"index_amplification_ratio={thread.get('index_amplification_ratio')}",
                     f"query_fanout_indexes={thread.get('query_fanout_indexes')}",
                 ],
-                "preconditions": _capacity_preconditions(
+                "preconditions": capacity_preconditions(
                     thread,
                     include_active=include_active,
                 ),
@@ -291,6 +254,18 @@ def _capacity_candidates(
                 ),
                 "expected_rebuild_cost": {"class": "medium", "seconds": None},
             }
+        )
+        candidates.extend(
+            generation_gc_candidates_from_capacity_thread(
+                thread,
+                include_active=include_active,
+            )
+        )
+        candidates.extend(
+            segment_generation_gc_candidates_from_capacity_thread(
+                thread,
+                include_active=include_active,
+            )
         )
     return candidates
 
@@ -502,8 +477,9 @@ def build_plan(
                     else None
                 ),
                 (
-                    "Apply v1 only evicts path-level retention-report rebuildable main SQLite "
-                    "caches; capacity aggregates and other candidate classes remain plan-only."
+                    "Apply v1 evicts retention-report-backed main SQLite caches and old "
+                    "generation directories whose apply-time reader-pin/TTL and pointer "
+                    "checks pass; capacity aggregates and other candidate classes remain plan-only."
                 ),
             ]
             if item
@@ -551,6 +527,7 @@ def apply_plan(
         {
             "eviction_applied_count": len(outcome["applied"]),
             "eviction_blocked_count": len(outcome["blocked"]),
+            "eviction_skipped_count": len(outcome.get("skipped") or []),
             "reclaimed_bytes": outcome["reclaimed_bytes"],
             "reclaimed_human": outcome["reclaimed_human"],
             "post_eviction_recall_surface_ok": bool(outcome["applied"]) and not outcome["blocked"],
@@ -566,6 +543,8 @@ def apply_plan(
         warnings.append("Apply mode only evicts supported rebuildable cache candidates; other classes are blocked.")
     if outcome["blocked"]:
         warnings.append("One or more candidates were not evicted because apply preconditions failed.")
+    if outcome.get("skipped"):
+        warnings.append("One or more plan-only candidates were explicitly skipped by apply mode.")
     return {
         "schema_version": SCHEMA_VERSION,
         "created_at": now_utc(),
@@ -587,6 +566,7 @@ def apply_plan(
         "metrics": metrics,
         "applied": outcome["applied"],
         "blocked": outcome["blocked"],
+        "skipped": outcome.get("skipped") or [],
         "warnings": warnings,
         "next_steps": [
             "Run health/maintenance after apply; intentional rebuildable eviction should report degraded-but-rebuildable state.",
@@ -648,6 +628,10 @@ def render_apply_text(result: dict[str, Any]) -> str:
     if result["blocked"]:
         lines.extend(["", "Blocked:"])
         for item in result["blocked"]:
+            lines.append(f"- {item['candidate_id']}: {item['reason_code']}")
+    if result.get("skipped"):
+        lines.extend(["", "Skipped:"])
+        for item in result["skipped"]:
             lines.append(f"- {item['candidate_id']}: {item['reason_code']}")
     if result["warnings"]:
         lines.extend(["", "Warnings:"])

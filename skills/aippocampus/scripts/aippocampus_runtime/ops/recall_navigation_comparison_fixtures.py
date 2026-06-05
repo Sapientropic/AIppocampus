@@ -13,6 +13,7 @@ from typing import Any
 from aippocampus_runtime.ops.recall_navigation_comparison import (
     build_recall_navigation_comparison,
 )
+from aippocampus_runtime.recall import ambient_cards
 from aippocampus_runtime.recall.prompt_context_render import context_for_hook
 from aippocampus_runtime.recall.prompt_recall_decision import assess_prompt
 
@@ -261,22 +262,58 @@ def _foreground_source_reopen_after_packet(
     ]
     source_rows_checked = 0
     expected_source_found = False
+    rows: list[tuple[Any, ...]] = []
     if matched_threads:
         sqlite_path = Path(str(_as_dict(matched_threads[0].get("paths")).get("sqlite") or ""))
         if sqlite_path.exists():
             con = sqlite3.connect(sqlite_path)
             try:
                 rows = con.execute(
-                    "SELECT text FROM messages WHERE is_final = 1 ORDER BY id"
+                    "SELECT id, line, phase, turn_index, text FROM messages "
+                    "WHERE is_final = 1 ORDER BY id"
                 ).fetchall()
             finally:
                 con.close()
             source_rows_checked = len(rows)
             expected_source_found = any(
-                "audio and lesson-loop closure" in str(row[0])
-                and "source reopen" in str(row[0])
+                "audio and lesson-loop closure" in str(row[4])
+                and "source reopen" in str(row[4])
                 for row in rows
             )
+    source_messages = [
+        {
+            "thread_key": (selected_ref or {}).get("thread_key"),
+            "message_id": f"sqlite-row-{row[0]}",
+            "source_line": row[1],
+            "phase": row[2],
+            "turn_index": row[3],
+            "text": row[4],
+        }
+        for row in rows
+    ]
+    bounded_context = ambient_cards.bounded_evidence_context_from_source_reopen(
+        {
+            "kind": "aippocampus_recall_deepen",
+            "status": "ok" if expected_source_found else "no_match",
+            "support_level": "evidence" if expected_source_found else "none",
+            "evidence_level": "source_backed" if expected_source_found else "none",
+            "source_refs": [
+                {
+                    "thread_key": (selected_ref or {}).get("thread_key"),
+                    "message_id": source_messages[0]["message_id"],
+                    "line": source_messages[0]["source_line"],
+                }
+            ]
+            if source_messages
+            else [],
+            "source_window": {"messages": source_messages},
+            "source_boundary": {
+                "clean_source_reopened": expected_source_found,
+                "handle_material_was_navigation_only": True,
+            },
+        }
+    )
+    packet_serialized = json.dumps(packet, ensure_ascii=False, sort_keys=True)
     return {
         "measured": True,
         "candidate_ref_count": len(candidate_refs),
@@ -291,6 +328,15 @@ def _foreground_source_reopen_after_packet(
         "source_boundary_preserved": len(result.get("evidence") or []) == 0,
         "raw_source_snippet_serialized": False,
         "local_paths_serialized": False,
+        "bounded_evidence_context_emitted": bool(bounded_context.get("source_reopen_success")),
+        "bounded_evidence_card_count": int(bounded_context.get("card_count") or 0),
+        "bounded_evidence_separate_from_packet": bool(
+            _as_dict(bounded_context.get("source_boundary")).get("separate_from_fresh_thread_packet")
+        ),
+        "fresh_thread_packet_contains_raw_source_text": (
+            "audio and lesson-loop closure" in packet_serialized
+            or "source reopen" in packet_serialized
+        ),
     }
 
 

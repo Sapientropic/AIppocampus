@@ -88,8 +88,8 @@ def write_handoff(path: Path, manifest: dict[str, Any], include_raw: bool) -> No
         'python -m aippocampus_runtime.recall.rollout_search "keyword" --index "<extracted>\\index\\source_index.sqlite"',
         "```",
         "",
-        "`aippocampus_runtime.recall.rollout_search` resolves the version pointer when the bundle carries",
-        "`index/source_index.pointer.json` and `index/versions/source_index-*.sqlite`.",
+        "`aippocampus_runtime.recall.rollout_search` resolves the generation pointer when the bundle carries",
+        "`index/source_index.pointer.json` and `index/generations/gen_*/source_index.sqlite`.",
         "",
     ]
     path.write_text("\n".join(lines), encoding="utf-8")

@@ -203,6 +203,175 @@ class BuildIndexTests(unittest.TestCase):
             finally:
                 reader.close()
 
+    def test_index_pointer_publishes_generation_and_reader_pins_current(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sqlite_path = root / "source_index.sqlite"
+            first_status = build_index.make_sqlite(
+                sqlite_path,
+                [message(sha1="old", text="old generation text")],
+                [],
+                [TURN],
+                rag_cache=False,
+            )
+            first_publish = first_status["publish"]
+            first_current = Path(first_publish["current"])
+            first_generation = first_publish["current_generation"]
+
+            self.assertEqual(first_current.name, "source_index.sqlite")
+            self.assertEqual(first_current.parent.name, first_generation)
+            self.assertEqual(first_current.parent.parent.name, "generations")
+
+            reader = sqlite3.connect(first_current)
+            try:
+                reader.execute("BEGIN")
+                self.assertEqual(
+                    reader.execute("SELECT text FROM messages").fetchone()[0],
+                    "old generation text",
+                )
+
+                second_status = build_index.make_sqlite(
+                    sqlite_path,
+                    [message(sha1="new", text="new generation text")],
+                    [],
+                    [TURN],
+                    rag_cache=False,
+                )
+                second_publish = second_status["publish"]
+                second_current = Path(second_publish["current"])
+                pointer = json.loads((root / "source_index.pointer.json").read_text(encoding="utf-8"))
+
+                self.assertNotEqual(second_current, first_current)
+                self.assertEqual(second_current.parent.parent.name, "generations")
+                self.assertEqual(second_publish["last_known_good_generation"], first_generation)
+                self.assertEqual(pointer["current_generation"], second_publish["current_generation"])
+                self.assertEqual(pointer["last_known_good_generation"], first_generation)
+                self.assertEqual(pointer["compatibility_path"], "source_index.sqlite")
+                self.assertEqual(
+                    artifact_publish.resolve_sqlite_index_path(sqlite_path),
+                    second_current,
+                )
+                self.assertEqual(
+                    reader.execute("SELECT text FROM messages").fetchone()[0],
+                    "old generation text",
+                )
+            finally:
+                reader.close()
+
+    def test_resolve_sqlite_index_path_falls_back_to_last_known_good_generation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sqlite_path = root / "source_index.sqlite"
+            first_status = build_index.make_sqlite(
+                sqlite_path,
+                [message(sha1="old", text="last known good generation")],
+                [],
+                [TURN],
+                rag_cache=False,
+            )
+            first_current = Path(first_status["publish"]["current"])
+
+            second_status = build_index.make_sqlite(
+                sqlite_path,
+                [message(sha1="new", text="dangling current generation")],
+                [],
+                [TURN],
+                rag_cache=False,
+            )
+            second_publish = second_status["publish"]
+            second_current = Path(second_publish["current"])
+            self.assertNotEqual(second_current, first_current)
+
+            second_current.unlink()
+
+            pointer = json.loads((root / "source_index.pointer.json").read_text(encoding="utf-8"))
+            self.assertEqual(pointer["current_generation"], second_publish["current_generation"])
+            self.assertEqual(pointer["last_known_good_generation"], first_current.parent.name)
+            self.assertEqual(
+                artifact_publish.resolve_sqlite_index_path(sqlite_path),
+                first_current,
+            )
+
+    def test_publish_does_not_prune_generations_without_reader_pin_ttl_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sqlite_path = root / "source_index.sqlite"
+            first_status = build_index.make_sqlite(
+                sqlite_path,
+                [message(sha1="first", text="first generation")],
+                [],
+                [TURN],
+                rag_cache=False,
+            )
+            first_current = Path(first_status["publish"]["current"])
+
+            build_index.make_sqlite(
+                sqlite_path,
+                [message(sha1="second", text="second generation")],
+                [],
+                [TURN],
+                rag_cache=False,
+            )
+            build_index.make_sqlite(
+                sqlite_path,
+                [message(sha1="third", text="third generation")],
+                [],
+                [TURN],
+                rag_cache=False,
+            )
+
+            self.assertTrue(first_current.is_file())
+
+    def test_search_payload_pins_resolved_index_generation_for_query_duration(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            index_dir = root / "index"
+            current = index_dir / "generations" / "gen_current"
+            current.mkdir(parents=True)
+            sqlite_path = current / "source_index.sqlite"
+            sqlite_path.write_bytes(b"")
+            (index_dir / "source_index.pointer.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "kind": "aippocampus_sqlite_index_pointer",
+                        "current_generation": "gen_current",
+                        "last_known_good_generation": "gen_current",
+                        "current": "generations/gen_current/source_index.sqlite",
+                        "last_known_good": "generations/gen_current/source_index.sqlite",
+                        "stable": "source_index.sqlite",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            observed_pins: list[dict] = []
+
+            def fake_search(index: Path, *args, **kwargs) -> list[dict]:
+                self.assertEqual(Path(index), sqlite_path)
+                pin_dir = index_dir / ".reader-pins"
+                pins = list(pin_dir.glob("*.json"))
+                self.assertEqual(len(pins), 1)
+                observed_pins.append(json.loads(pins[0].read_text(encoding="utf-8")))
+                return []
+
+            with unittest.mock.patch.object(
+                search_rollout,
+                "search_hybrid_index",
+                side_effect=fake_search,
+            ):
+                payload = search_rollout.search_rollout_payload(
+                    search_rollout.RolloutSearchOptions(
+                        patterns=["memory"],
+                        cwd=root,
+                        index=index_dir / "source_index.sqlite",
+                        mode="ranked",
+                    )
+                )
+
+            self.assertEqual(payload["source"], str(sqlite_path))
+            self.assertEqual(observed_pins[0]["generation"], "gen_current")
+            self.assertFalse(list((index_dir / ".reader-pins").glob("*.json")))
+
     def test_resolve_sqlite_index_path_uses_last_known_good_when_current_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

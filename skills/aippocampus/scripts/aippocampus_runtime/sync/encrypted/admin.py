@@ -90,6 +90,21 @@ def public_token(value: Any, *, fallback: str = "", max_length: int = 96) -> str
     return safe
 
 
+def public_key_provider(value: Any, *, fallback: str = "") -> str:
+    """Project only allowlisted key-provider enum values through public CLI JSON.
+
+    Generic token redaction intentionally rejects strings containing words like
+    "secret". The reserved provider name `linux-secret-service` is a public enum,
+    not credential material, so it needs an explicit allowlist path instead of a
+    broader relaxation of credential-adjacent filtering.
+    """
+
+    text = str(value or "").strip().casefold()
+    if text in encrypted_sync_keys.SUPPORTED_KEY_PROVIDERS:
+        return text
+    return public_token(value, fallback=fallback)
+
+
 def public_recipient(value: Any) -> str:
     text = str(value or "").strip()
     lowered = text.casefold()
@@ -131,8 +146,14 @@ def public_admin_result(result: dict[str, Any]) -> dict[str, Any]:
         "recipient_match",
         "status",
         "reason",
+        "identity_location",
+        "secret_material",
     ):
         value = public_token(result.get(key), fallback="")
+        if value:
+            public[key] = value
+    for key in ("active_key_provider", "os_credential_store"):
+        value = public_key_provider(result.get(key), fallback="")
         if value:
             public[key] = value
     for key in (
@@ -150,6 +171,10 @@ def public_admin_result(result: dict[str, Any]) -> dict[str, Any]:
         "dry_run",
         "requires_reencrypt",
         "recovery_configured",
+        "identity_available",
+        "fallback_to_file_identity",
+        "fallback_attempted",
+        "local_file_identity_present",
     ):
         if key in result:
             public[key] = bool(result.get(key))
@@ -164,6 +189,13 @@ def public_admin_result(result: dict[str, Any]) -> dict[str, Any]:
                 recovery_state.get("recovery_recipient_count")
             ),
         }
+    supported = result.get("supported_key_providers")
+    if isinstance(supported, list):
+        public["supported_key_providers"] = []
+        for item in supported:
+            provider = public_key_provider(item, fallback="")
+            if provider:
+                public["supported_key_providers"].append(provider)
     public["output_boundary"] = "credential-adjacent details omitted from CLI output"
     return public
 
@@ -231,6 +263,15 @@ def build_parser() -> argparse.ArgumentParser:
     key_revoke.add_argument("--dry-run", action="store_true")
     key_revoke.add_argument("--confirm", action="store_true")
     add_json_flag(key_revoke)
+
+    key_provider_configure = key_subcommands.add_parser("provider-configure")
+    key_provider_configure.add_argument("--registry-dir", default=None)
+    key_provider_configure.add_argument("--provider", required=True)
+    add_json_flag(key_provider_configure)
+
+    key_provider_status = key_subcommands.add_parser("provider-status")
+    key_provider_status.add_argument("--registry-dir", default=None)
+    add_json_flag(key_provider_status)
 
     migrate = subcommands.add_parser("migrate-to-encrypted")
     migrate.add_argument("--sync-dir", required=True)
@@ -305,6 +346,15 @@ def main() -> int:
                     role="recovery" if args.recovery else "device",
                 )
                 return emit_result(result, json_output=args.json_output)
+            if args.key_command == "provider-configure":
+                result = encrypted_sync_keys.configure_key_provider(
+                    registry_dir,
+                    provider=args.provider,
+                )
+                return emit_result(result, json_output=args.json_output)
+            if args.key_command == "provider-status":
+                result = encrypted_sync_keys.key_provider_status(registry_dir)
+                return emit_result(result, json_output=args.json_output)
             result = encrypted_sync_keys.revoke_recipient(
                 registry_dir,
                 args.recipient,
@@ -364,4 +414,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 import unittest
@@ -12,8 +13,10 @@ if str(SCRIPTS) not in sys.path:
 
 from aippocampus_runtime.ops.activation_authority_audit import (  # noqa: E402
     AUTHORITY_AUDIT_KIND,
+    activation_dead_letter_candidate_report,
     activation_surface_authority_audit,
     apply_activation_lifecycle_manifest,
+    apply_dead_letter_candidate_manifest,
     fixture_authority_conflict_audit,
 )
 
@@ -284,6 +287,195 @@ class ActivationSurfaceAuthorityTests(unittest.TestCase):
         self.assertNotIn("raw prompt text", serialized)
         self.assertNotIn("private\\thread", serialized)
         self.assertNotIn("source_row", {item["surface_id"] for item in manifest["updates"]})
+
+    def test_dead_letter_report_flags_only_unreferenced_drag_after_lifecycle_pruning(self) -> None:
+        report = activation_dead_letter_candidate_report(
+            [
+                {
+                    "surface_id": "retired_wrong_route",
+                    "surface_kind": "ambient_card",
+                    "conflict_key": "old-route",
+                    "pruning_action": "retire",
+                    "wrong_route_drag_count": 4,
+                    "source_refs": [{"source_id": "clean:1", "message_id": "m1"}],
+                    "provenance_pointer": "manifest:ambient-card-1",
+                },
+                {
+                    "surface_id": "parked_without_reopen",
+                    "surface_kind": "dream_hypothesis",
+                    "conflict_key": "old-dream",
+                    "pruning_action": "park",
+                    "no_source_reopen_count": 3,
+                    "source_refs": [{"source_id": "clean:2", "message_id": "m2"}],
+                },
+                {
+                    "surface_id": "referenced_bad_route",
+                    "surface_kind": "semantic_trigger",
+                    "conflict_key": "protected-route",
+                    "pruning_action": "retire",
+                    "wrong_route_drag_count": 8,
+                    "referenced_by": ["promotion_candidate:semantic-trigger-review"],
+                    "source_refs": [{"source_id": "clean:3", "message_id": "m3"}],
+                },
+                {
+                    "surface_id": "current_helpful_route",
+                    "surface_kind": "active_recall_lock",
+                    "conflict_key": "current-route",
+                    "pruning_action": "keep",
+                    "wrong_route_drag_count": 10,
+                    "recent_helpful_count": 5,
+                },
+                {
+                    "surface_id": "source_row_not_activation",
+                    "surface_kind": "source_reopen_evidence",
+                    "conflict_key": "old-route",
+                    "pruning_action": "retire",
+                    "wrong_route_drag_count": 10,
+                    "source_refs": [{"source_id": "clean:source", "message_id": "m4"}],
+                },
+            ],
+            wrong_route_drag_threshold=3,
+            no_source_reopen_threshold=3,
+        )
+
+        self.assertEqual(report["kind"], "aippocampus_activation_dead_letter_candidate_report")
+        self.assertFalse(report["write_mode"])
+        self.assertEqual(report["metrics"]["dead_letter_candidate_count"], 2)
+        self.assertEqual(report["metrics"]["payload_compacted_count"], 0)
+        self.assertEqual(report["metrics"]["wrong_route_drag_threshold_hits"], 1)
+        self.assertEqual(report["metrics"]["no_source_reopen_threshold_hits"], 1)
+        self.assertEqual(report["metrics"]["referenced_row_protection_count"], 1)
+        self.assertEqual(report["metrics"]["protected_surface_count"], 1)
+
+        reason_sets = [set(candidate["reason_codes"]) for candidate in report["candidates"]]
+        self.assertIn({"wrong_route_drag_threshold", "lifecycle_not_foreground_eligible"}, reason_sets)
+        self.assertIn({"no_source_reopen_threshold", "lifecycle_not_foreground_eligible"}, reason_sets)
+        for candidate in report["candidates"]:
+            self.assertIn("surface_id_hash", candidate)
+            self.assertIn("source_ref_count", candidate)
+            self.assertNotIn("source_refs", candidate)
+            self.assertTrue(candidate["source_refs_preserved"])
+            self.assertEqual(candidate["recommended_action"], "dead_letter_candidate_no_write")
+
+        self.assertTrue(report["contract"]["no_write_report_only"])
+        self.assertTrue(report["contract"]["clean_source_preserved"])
+        self.assertTrue(report["contract"]["foreground_hook_mutation"] is False)
+
+    def test_dead_letter_report_stays_public_safe_and_embeds_in_authority_audit(self) -> None:
+        local_path = "E:" + "\\private\\activation\\surface.json"
+        report = activation_surface_authority_audit(
+            [
+                {
+                    "surface_id": local_path,
+                    "surface_kind": "ambient_card",
+                    "conflict_key": "sk-" + "activation-secret-label",
+                    "pruning_action": "retire",
+                    "wrong_route_drag_count": 5,
+                    "prompt": "raw prompt text should not leak",
+                    "snippet": "raw source snippet should not leak",
+                    "path": local_path,
+                    "source_refs": [
+                        {
+                            "source_id": "clean:private",
+                            "thread_key": local_path,
+                            "message_id": "m1",
+                        }
+                    ],
+                }
+            ]
+        )
+        dead_letter = report["dead_letter_report"]
+        serialized = json.dumps(report, ensure_ascii=False, sort_keys=True)
+
+        self.assertEqual(dead_letter["metrics"]["dead_letter_candidate_count"], 1)
+        self.assertEqual(report["metrics"]["dead_letter_candidate_count"], 1)
+        self.assertEqual(report["metrics"]["payload_compacted_count"], 0)
+        self.assertEqual(report["metrics"]["wrong_route_drag_threshold_hits"], 1)
+        self.assertNotIn("raw prompt text", serialized)
+        self.assertNotIn("raw source snippet", serialized)
+        self.assertNotIn("private\\activation", serialized)
+        self.assertTrue(dead_letter["privacy_boundary"]["raw_prompt_serialized"] is False)
+        self.assertTrue(dead_letter["privacy_boundary"]["raw_source_snippets_serialized"] is False)
+        self.assertTrue(dead_letter["privacy_boundary"]["local_paths_serialized"] is False)
+        self.assertTrue(report["contract"]["foreground_hook_mutation"] is False)
+
+    def test_dead_letter_identity_hashes_use_sha256_prefix(self) -> None:
+        surface_id = "secret-like-surface-id"
+        provenance_pointer = "manifest:private-provenance-pointer"
+        report = activation_dead_letter_candidate_report(
+            [
+                {
+                    "surface_id": surface_id,
+                    "surface_kind": "ambient_card",
+                    "conflict_key": "old-route",
+                    "pruning_action": "retire",
+                    "wrong_route_drag_count": 4,
+                    "source_refs": [{"source_id": "clean:1"}],
+                    "provenance_pointer": provenance_pointer,
+                }
+            ]
+        )
+
+        candidate = report["candidates"][0]
+        self.assertEqual(
+            candidate["surface_id_hash"],
+            hashlib.sha256(surface_id.encode("utf-8")).hexdigest()[:16],
+        )
+        self.assertEqual(
+            candidate["provenance_pointer_hash"],
+            hashlib.sha256(provenance_pointer.encode("utf-8")).hexdigest()[:16],
+        )
+
+    def test_dead_letter_apply_manifest_requires_reference_safety_and_preserves_source(self) -> None:
+        manifest = apply_dead_letter_candidate_manifest(
+            [
+                {
+                    "surface_id": "retired_wrong_route",
+                    "surface_kind": "ambient_card",
+                    "conflict_key": "old-route",
+                    "pruning_action": "retire",
+                    "wrong_route_drag_count": 4,
+                    "source_refs": [{"source_id": "clean:1", "message_id": "m1"}],
+                    "provenance_pointer": "manifest:ambient-card-1",
+                    "prompt": "raw prompt text should not enter dead-letter manifest",
+                    "payload": "raw activation payload should not enter dead-letter manifest",
+                },
+                {
+                    "surface_id": "protected_wrong_route",
+                    "surface_kind": "ambient_card",
+                    "conflict_key": "old-route",
+                    "pruning_action": "retire",
+                    "wrong_route_drag_count": 4,
+                    "referenced_by": ["review_artifact:keep-this-visible"],
+                    "source_refs": [{"source_id": "clean:2", "message_id": "m2"}],
+                    "provenance_pointer": "manifest:ambient-card-2",
+                },
+            ],
+            applied_at="2026-06-04T20:00:00Z",
+        )
+
+        self.assertTrue(manifest["ok"], manifest)
+        self.assertEqual(manifest["kind"], "aippocampus_activation_dead_letter_apply_manifest")
+        self.assertEqual(manifest["update_count"], 1)
+        self.assertEqual(manifest["skipped_count"], 1)
+        self.assertEqual(manifest["metrics"]["dead_lettered_count"], 1)
+        self.assertEqual(manifest["metrics"]["payload_compacted_count"], 0)
+        update = manifest["updates"][0]
+        self.assertEqual(update["lifecycle_action"], "dead_lettered")
+        self.assertEqual(update["source_ref_count"], 1)
+        self.assertTrue(update["source_refs_preserved"])
+        self.assertFalse(update["payload_compacted"])
+        self.assertEqual(update["applied_at"], "2026-06-04T20:00:00Z")
+        self.assertIn("wrong_route_drag_threshold", update["reason_codes"])
+        self.assertIn("rebuild_or_review_note", update)
+        self.assertTrue(manifest["contract"]["append_only_lifecycle_update"])
+        self.assertTrue(manifest["contract"]["clean_source_mutation"] is False)
+        self.assertTrue(manifest["contract"]["foreground_hook_mutation"] is False)
+
+        serialized = json.dumps(manifest, ensure_ascii=False, sort_keys=True)
+        self.assertNotIn("raw prompt text", serialized)
+        self.assertNotIn("raw activation payload", serialized)
+        self.assertNotIn("protected_wrong_route", serialized)
 
 
 if __name__ == "__main__":

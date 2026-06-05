@@ -23,6 +23,11 @@ Health checks include:
 daemon. It can rebuild stale source/indexes, prepare graphify corpus, refresh
 segments, and produce checkpoint candidates. It should not append checkpoints
 unless called with `--append-checkpoint`.
+Activation payload compaction is available only as an explicit operator
+delegation: pass `--activation-dead-letter-manifest` plus the intended owner
+paths, and add `--apply-activation-payload-compaction` only when owner files
+should be rewritten. Dry-run is the default, and the maintenance report records
+a path-free command shape rather than local manifest or owner paths.
 
 Maintenance defaults to a degraded-report contract: failed actions are recorded
 in `action_failures`, safe independent actions can still run, `health_final` is
@@ -41,14 +46,31 @@ Generated artifact writers must coordinate through same-directory leases instead
 of relying on users to run commands serially. `aippocampus_runtime.recall.index_builder` holds
 `.index-publish.lock` while publishing `messages.jsonl`, `source_index.sqlite`,
 `graph.json`, and `manifest.json`. `make_sqlite()` builds a unique temporary
-SQLite database, copies it to `versions/source_index-*.sqlite`, updates
-`source_index.pointer.json`, and then tries to refresh the stable
-`source_index.sqlite` compatibility file through SQLite's backup API with WAL
-enabled. New readers should resolve the pointer first, then fall back to
-last-known-good, then to the stable file. Do not reintroduce `unlink()` /
+SQLite database, copies it to
+`generations/gen_*/source_index.sqlite`, updates `source_index.pointer.json`
+with `current_generation` and `last_known_good_generation`, and then tries to
+refresh the stable `source_index.sqlite` compatibility file through SQLite's
+backup API with WAL enabled. New readers should resolve the pointer once per
+query and keep using that generation path, then fall back to last-known-good,
+then to the stable file. Legacy `versions/source_index-*.sqlite` pointers must
+remain readable during migration. Do not reintroduce `unlink()` /
 `Path.replace()` publishing for live `source_index.sqlite`; Windows readers can
-hold that file open, and locked stable refreshes must degrade to the versioned
-pointer path rather than failing the whole index publish.
+hold that file open, and locked stable refreshes must degrade to the pointer
+generation path rather than failing the whole index publish.
+The publish fast path does not delete generation directories. Foreground
+readers create short-lived `.reader-pins/*.json` files beside the generation
+pointer while a query is using a resolved generation. Storage GC may delete an
+old generation only after apply-time checks prove the target is not current or
+last-known-good, no active reader pin remains, and the conservative TTL window
+has elapsed. This protects foreground readers that resolved an older generation
+before a background publish swung the pointer.
+`aippocampus_runtime.artifacts.publish.index_generation_diagnostics` is the
+shared read-only report helper for this boundary. Health and capacity reports
+use it to expose pointer status, fallback used, current/LKG generation ids,
+old generation bytes, pointer load time, publish latency, active reader-pin
+counts, TTL status, and old generation GC candidates. Those candidates are
+rebuildable-cache evidence; deletion still belongs to storage GC apply's
+source, lease, active-thread, pointer, reader-pin, and TTL checks.
 
 `aippocampus_runtime.ops.maintenance`, `aippocampus_runtime.hooks.lifecycle`, and
 `aippocampus_runtime.vault.sync` should keep delegating SQLite writes to the index builders. If a
@@ -72,9 +94,10 @@ source for thread discovery.
 Writer coordination entrypoints:
 
 - `aippocampus_runtime.recall.index_builder`: owns main index publish; uses `.index-publish.lock`,
-  versioned SQLite pointer, last-known-good fallback, and stable SQLite backup.
+  generation SQLite pointer, last-known-good fallback, and stable SQLite backup.
 - `aippocampus_runtime.recall.segment_builder`: owns segment shard publish; uses `.rebuild.lock`, staged
-  segment dirs, and the shared lease helper.
+  segment dirs, `segments/generations/gen_*`, `segments.pointer.json`, and the
+  shared lease helper.
 - `aippocampus_runtime.hooks.lifecycle`: orchestrates `aippocampus_runtime.recall.index_builder`,
   `aippocampus_runtime.recall.segment_builder`, and registry commands; it must not write generated
   SQLite directly.
@@ -85,7 +108,7 @@ Writer coordination entrypoints:
 - `aippocampus_runtime.sync.bundle`: syncs manifests, graph metadata, and
   content-addressed clean source by default; `aippocampus_runtime.sync.bundle` remains the
   package-owner command. Generated SQLite, pointer files, and
-  versioned caches are not portable source files.
+  generation caches are not portable source files.
 - `aippocampus_runtime.artifacts.export_bundle` /
   `aippocampus_runtime.artifacts.import_bundle`, with `aippocampus_runtime.artifacts.export_bundle` /
   `aippocampus_runtime.artifacts.import_bundle` as package owners: explicit portable bundle path;
@@ -140,18 +163,26 @@ shards. This is the single-writer discipline for segment rebuilds: do not run
 two `aippocampus_runtime.recall.segment_builder` writers against the same output directory. If a process
 dies, the next run may recover a stale lease after the configured age, but
 operators should first verify no live writer is still using the directory. New
-segments are staged before publish, and failed publish restores last-known-good
-`seg-*` dirs and manifest metadata.
+segments are staged into `segments/generations/gen_*`, `segments.pointer.json`
+is updated only after the generation manifest and compatibility
+`segments/manifest.json` are written, and failed publish leaves the previous
+pointer/manifest/generation available. The publish fast path must not delete old
+segment generations or legacy flat `seg-*` dirs. Segment search pins the
+resolved generation manifest for the duration of a query, and storage GC may
+delete old segment generation directories only after the same reader-pin/TTL,
+current/LKG pointer, source, lease, and active-thread checks pass. Health and
+storage-capacity reports may surface old segment generations as GC candidates,
+but deletion remains an explicit apply action.
 
 Cross-device sync treats SQLite as a rebuildable generated cache, not durable
 truth. `aippocampus_runtime.sync.bundle` syncs registry manifests, graph
 metadata, and content-addressed clean source by default; `aippocampus_runtime.sync.bundle` is the
 package owner for the same command. It does not require generated SQLite
-files, pointer files, or versioned SQLite caches to move between devices. Target
-devices repair registry locators to local generated caches only when those
-caches already exist locally; otherwise `paths.sqlite` stays unresolved and the
-target should rebuild from clean source or raw rollout rather than trusting a
-stale source-device lock state.
+files, pointer files, generation directories, or legacy versioned SQLite caches
+to move between devices. Target devices repair registry locators to local
+generated caches only when those caches already exist locally; otherwise
+`paths.sqlite` stays unresolved and the target should rebuild from clean source
+or raw rollout rather than trusting a stale source-device lock state.
 
 ## Retention And Cold Archive
 
@@ -181,12 +212,14 @@ existing `retention_report.json` is found or passed with `--retention-report`,
 the command reports aggregate rebuildable bytes from capacity data and marks
 path-level candidates as unavailable. `aippocampus storage gc --apply --class
 rebuildable` has a narrow v1 apply path for the main `source_index.sqlite`
-cache only when a retention report supplies path-level evidence. It checks
-raw/archive source evidence, anchor or registry refs, live writer/export
-leases, active-thread opt-in, and last-known-good pointer state, then writes an
-eviction manifest under `index/evictions/` with rebuild instructions. Capacity
-aggregate candidates, segment indexes, Graphify corpus caches, review
-artifacts, and source files remain plan-only/manual.
+cache when a retention report supplies path-level evidence, and for old
+main-index / segment generation directories when the capacity report supplies a
+concrete path. It checks source evidence, live writer/export leases,
+active-thread opt-in, last-known-good/current pointer protection, and the
+reader-pin/TTL contract, then writes an eviction manifest under
+`index/evictions/` with rebuild instructions. Capacity aggregates, segment
+indexes, Graphify corpus caches, review artifacts, and source files remain
+plan-only/manual.
 
 Codex Desktop's own thread archive is a different mechanism: the app may move
 raw rollout JSONL files from `$CODEX_HOME/sessions/` into
@@ -219,6 +252,7 @@ Common health and repair commands:
 - `python -m aippocampus_runtime.health --cwd "$PWD"`
 - `aippocampus health --registry-wide --json`
 - `python -m aippocampus_runtime.ops.maintenance --cwd "$PWD"`
+- `python -m aippocampus_runtime.ops.maintenance --cwd "$PWD" --activation-dead-letter-manifest "<manifest.json>" --activation-working-memory "<working_memory.jsonl>" --json`
 - `python -m aippocampus_runtime.source.clean_source --cwd "$PWD"`
 - `python -m aippocampus_runtime.recall.index_builder --cwd "$PWD"`
 - `python -m aippocampus_runtime.recall.segment_builder --cwd "$PWD"`

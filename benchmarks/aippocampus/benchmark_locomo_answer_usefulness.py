@@ -320,13 +320,26 @@ def build_answer_prediction_template(dataset: locomo.LocomoDataset) -> list[dict
     ]
 
 
-def unavailable_payload(dataset_path: Path | str, started: float) -> dict[str, Any]:
+def unavailable_payload(
+    dataset_path: Path | str,
+    started: float,
+    *,
+    answer_template_output: Path | str | None = None,
+) -> dict[str, Any]:
+    template_requested = answer_template_output is not None
+    template_path = Path(answer_template_output) if template_requested else None
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_locomo_answer_usefulness_benchmark",
         "generated_at": locomo.now_utc(),
-        "status": "dataset_unavailable",
-        "ok": False,
+        "status": "skipped_missing_dataset",
+        "ok": True,
+        "quality_gate_status": "not_scored",
+        "report_generation_ok": True,
+        "artifact_generation_ok": not template_requested,
+        "artifact_generation_status": "skipped_missing_dataset"
+        if template_requested
+        else "not_requested",
         "dataset": {
             "dataset_id": "locomo_public_longitudinal_users_v1",
             "fixture": locomo.public_path_label(dataset_path),
@@ -343,6 +356,17 @@ def unavailable_payload(dataset_path: Path | str, started: float) -> dict[str, A
             "source_evidence_retrieval_quality",
             "answer_generation_quality",
         ],
+        "artifacts": {
+            "answer_template_requested": template_requested,
+            "answer_template_written": False,
+            "answer_template_status": "skipped_missing_dataset"
+            if template_requested
+            else "not_requested",
+            "answer_template_row_count": 0,
+            "answer_template_path": locomo.public_path_label(template_path)
+            if template_path
+            else None,
+        },
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
     }
 
@@ -360,7 +384,11 @@ def run_benchmark(
     started = time.perf_counter()
     dataset_path = Path(dataset_path)
     if not dataset_path.exists():
-        return unavailable_payload(dataset_path, started)
+        return unavailable_payload(
+            dataset_path,
+            started,
+            answer_template_output=answer_template_output,
+        )
     dataset = locomo.load_dataset(
         dataset_path,
         max_samples=max_samples,
@@ -377,9 +405,23 @@ def run_benchmark(
         prediction_source = "deterministic_contract_fixture"
 
     template_path: Path | None = None
+    template_requested = answer_template_output is not None
+    template_written = False
+    template_row_count = 0
+    template_status = "not_requested"
     if answer_template_output:
         template_path = Path(answer_template_output)
-        locomo.write_jsonl(template_path, build_answer_prediction_template(dataset))
+        template_rows = build_answer_prediction_template(dataset)
+        template_row_count = len(template_rows)
+        if template_rows:
+            locomo.write_jsonl(template_path, template_rows)
+            template_written = True
+            template_status = "written"
+        else:
+            # Empty templates look like successful setup while giving a model no
+            # cases to fill; keep the requested path in the report but do not
+            # create a misleading zero-row artifact.
+            template_status = "skipped_no_cases"
 
     scored_arms = {
         arm_name: score_arm(arm_name, arm_predictions, dataset)
@@ -393,6 +435,10 @@ def run_benchmark(
         and retrieved_metrics.get("correct_source_citation_rate") == 1.0
         and empty_metrics.get("unsupported_inference_refusal_rate") == 1.0
     )
+    artifact_generation_ok = bool(
+        (not template_requested)
+        or (template_written and template_status == "written")
+    )
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_locomo_answer_usefulness_benchmark",
@@ -400,6 +446,10 @@ def run_benchmark(
         "status": "answer_usefulness_contract_scored",
         "ok": ok,
         "quality_gate_ok": ok,
+        "quality_gate_status": "passed" if ok else "failed",
+        "report_generation_ok": True,
+        "artifact_generation_ok": artifact_generation_ok,
+        "artifact_generation_status": template_status,
         "evaluation": {
             "answer_model": answer_model,
             "judge_model": judge_model,
@@ -444,7 +494,10 @@ def run_benchmark(
             "answer_template_raw_text_emitted": False,
         },
         "artifacts": {
-            "answer_template_written": bool(template_path),
+            "answer_template_requested": template_requested,
+            "answer_template_written": template_written,
+            "answer_template_status": template_status,
+            "answer_template_row_count": template_row_count,
             "answer_template_path": locomo.public_path_label(template_path)
             if template_path
             else None,
@@ -465,6 +518,16 @@ def run_benchmark(
 def print_human_summary(payload: dict[str, Any]) -> None:
     print("AIppocampus LoCoMo answer-usefulness prototype")
     print(f"- status: {payload.get('status')}")
+    if "quality_gate_ok" in payload:
+        print(f"- quality gate: {payload.get('quality_gate_status', 'unknown')}")
+    if "report_generation_ok" in payload:
+        print(
+            "- report generation: "
+            f"{'ok' if payload.get('report_generation_ok') else 'failed'}"
+        )
+    artifacts = payload.get("artifacts") or {}
+    if artifacts.get("answer_template_requested"):
+        print(f"- answer template: {artifacts.get('answer_template_status')}")
     for arm, body in (payload.get("arms") or {}).items():
         metrics = body.get("metrics") or {}
         print(

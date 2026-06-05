@@ -212,7 +212,7 @@ move the operational contract into one reference doc.
   unless the user explicitly asks and the scope is safe.
 - Treat rollouts, bundles, vault notes, and registry rows as local private
   history.
-- Generated artifact writers use the shared lease, versioned SQLite pointer,
+- Generated artifact writers use the shared lease, generation SQLite pointer,
   last-known-good fallback, and SQLite backup publish helpers; do not replace
   live `source_index.sqlite` files directly.
 - For repository docs work, run

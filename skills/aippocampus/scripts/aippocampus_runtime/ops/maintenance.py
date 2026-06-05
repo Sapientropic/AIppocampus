@@ -70,6 +70,65 @@ def failure_result(
     }
 
 
+def activation_payload_compaction_cmd(args: argparse.Namespace, *, cwd: Path) -> list[str] | None:
+    if not args.activation_dead_letter_manifest:
+        return None
+    cmd = [
+        sys.executable,
+        "-m",
+        "aippocampus_runtime.ops.activation_payload_compaction",
+        "--dead-letter-manifest",
+        str(_path_arg(args.activation_dead_letter_manifest, cwd=cwd)),
+        "--json",
+    ]
+    for option, value in (
+        ("--ambient-cache", args.activation_ambient_cache),
+        ("--working-memory", args.activation_working_memory),
+        ("--semantic-triggers", args.activation_semantic_triggers),
+    ):
+        if value:
+            cmd.extend([option, str(_path_arg(value, cwd=cwd))])
+    if args.activation_compacted_at:
+        cmd.extend(["--compacted-at", str(args.activation_compacted_at)])
+    if args.apply_activation_payload_compaction:
+        cmd.append("--apply")
+    return cmd
+
+
+def _path_arg(value: str, *, cwd: Path) -> Path:
+    path = Path(value)
+    return path if path.is_absolute() else cwd / path
+
+
+def public_activation_payload_compaction_command(cmd: list[str]) -> list[str]:
+    public_cmd = [
+        "python",
+        "-m",
+        "aippocampus_runtime.ops.activation_payload_compaction",
+        "--dead-letter-manifest",
+        "<omitted>",
+        "--json",
+    ]
+    for option in ("--ambient-cache", "--working-memory", "--semantic-triggers", "--compacted-at"):
+        if option in cmd:
+            public_cmd.extend([option, "<omitted>"])
+    if "--apply" in cmd:
+        public_cmd.append("--apply")
+    return public_cmd
+
+
+def activation_payload_compaction_failure_result(
+    cmd: list[str], returncode: int, stdout: str = "", stderr: str = ""
+) -> dict:
+    message = (stderr or stdout or "").strip()
+    return {
+        "id": "activation_payload_compaction",
+        "command": public_activation_payload_compaction_command(cmd),
+        "returncode": returncode,
+        "message": message[:1000],
+    }
+
+
 def maintenance_status(
     *, failures: list[dict], skipped: list[dict], health_final: dict | None
 ) -> str:
@@ -111,6 +170,19 @@ def main(argv: list[str] | None = None) -> int:
         "--fail-fast",
         action="store_true",
         help="Preserve legacy strict behavior: stop on the first failed action.",
+    )
+    parser.add_argument(
+        "--activation-dead-letter-manifest",
+        help="Explicit dead-letter apply manifest for activation payload compaction.",
+    )
+    parser.add_argument("--activation-ambient-cache")
+    parser.add_argument("--activation-working-memory")
+    parser.add_argument("--activation-semantic-triggers")
+    parser.add_argument("--activation-compacted-at")
+    parser.add_argument(
+        "--apply-activation-payload-compaction",
+        action="store_true",
+        help="Allow activation owner files to be rewritten; dry-run is the default.",
     )
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(argv)
@@ -342,6 +414,45 @@ def main(argv: list[str] | None = None) -> int:
                 "reason": "depends_on_failed_build_index",
             }
         )
+
+    activation_compaction_cmd = activation_payload_compaction_cmd(args, cwd=cwd)
+    if activation_compaction_cmd:
+        if args.fail_fast:
+            compaction = run_json(activation_compaction_cmd)
+            action_results.append(
+                {
+                    "id": "activation_payload_compaction",
+                    "command": public_activation_payload_compaction_command(
+                        activation_compaction_cmd
+                    ),
+                    "returncode": 0,
+                    "result": compaction,
+                }
+            )
+        else:
+            code, compaction_payload, stdout, stderr = run_json_checked(
+                activation_compaction_cmd
+            )
+            if code == 0 and compaction_payload is not None:
+                action_results.append(
+                    {
+                        "id": "activation_payload_compaction",
+                        "command": public_activation_payload_compaction_command(
+                            activation_compaction_cmd
+                        ),
+                        "returncode": code,
+                        "result": compaction_payload,
+                    }
+                )
+            else:
+                action_failures.append(
+                    activation_payload_compaction_failure_result(
+                        activation_compaction_cmd,
+                        code,
+                        stdout,
+                        stderr,
+                    )
+                )
 
     health_final = None
     if args.fail_fast:

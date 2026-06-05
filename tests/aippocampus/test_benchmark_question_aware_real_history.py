@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
@@ -102,6 +103,62 @@ def fixture_rows() -> list[dict[str, Any]]:
             "question_short": "unsupported private question",
             "question_text": "This unsupported private question should be skipped.",
             "source_refs": [],
+        },
+    ]
+
+
+def answer_quality_review_rows() -> list[dict[str, Any]]:
+    return [
+        {
+            "kind": "question_aware_answer_quality_review",
+            "case_id": "private-case-1",
+            "arm": "plain_baseline",
+            "source_reopened": False,
+            "answer_supported": False,
+            "citation_correct": False,
+            "answer_useful": False,
+            "wrong_hint": True,
+            "extra_verification_steps": 2,
+            "answer_text": "PRIVATE ANSWER TEXT SHOULD NOT BE SERIALIZED",
+            "source_text": "PRIVATE SOURCE TEXT SHOULD NOT BE SERIALIZED",
+            "source_refs": [source_ref("1")],
+            "local_path": str(REPO_ROOT / "private" / "source.md"),
+        },
+        {
+            "kind": "question_aware_answer_quality_review",
+            "case_id": "private-case-1",
+            "arm": "question_aware_source_reopen",
+            "source_reopened": True,
+            "answer_supported": True,
+            "citation_correct": True,
+            "answer_useful": True,
+            "wrong_hint": False,
+            "extra_verification_steps": 0,
+            "answer_text": "PRIVATE QUESTION AWARE ANSWER SHOULD NOT BE SERIALIZED",
+            "source_text": "PRIVATE QUESTION AWARE SOURCE SHOULD NOT BE SERIALIZED",
+            "source_refs": [source_ref("1")],
+        },
+        {
+            "kind": "question_aware_answer_quality_review",
+            "case_id": "private-case-2",
+            "arm": "plain_baseline",
+            "source_reopened": True,
+            "answer_supported": True,
+            "citation_correct": True,
+            "answer_useful": True,
+            "wrong_hint": False,
+            "extra_verification_steps": 1,
+        },
+        {
+            "kind": "question_aware_answer_quality_review",
+            "case_id": "private-case-2",
+            "arm": "question_aware_source_reopen",
+            "source_reopened": True,
+            "answer_supported": True,
+            "citation_correct": True,
+            "answer_useful": True,
+            "wrong_hint": False,
+            "extra_verification_steps": 1,
         },
     ]
 
@@ -213,6 +270,96 @@ class QuestionAwareRealHistoryBenchmarkTests(unittest.TestCase):
         self.assertIn("quote_fidelity_without_clean_source_reopen", payload["cannot_claim"])
         self.assertIn("user_visible_recall_improvement", payload["cannot_claim"])
         self.assertIn("answer_usefulness_beyond_structural_proxy", payload["cannot_claim"])
+
+    def test_answer_quality_review_compares_paired_arms_without_overclaiming(self) -> None:
+        payload = benchmark.run_question_aware_real_history_benchmark(
+            job_rows=fixture_rows(),
+            answer_quality_review_rows=answer_quality_review_rows(),
+        )
+        review = payload["answer_quality_review"]
+        metrics = review["metrics"]
+
+        self.assertEqual(
+            review["status"],
+            "selected_source_reopened_answer_quality_review_ready",
+        )
+        self.assertEqual(metrics["review_case_count"], 2)
+        self.assertEqual(metrics["complete_comparison_case_count"], 2)
+        self.assertEqual(metrics["plain_baseline_answer_useful_rate"], 0.5)
+        self.assertEqual(metrics["question_aware_source_reopen_answer_useful_rate"], 1.0)
+        self.assertEqual(metrics["answer_usefulness_delta"], 0.5)
+        self.assertEqual(metrics["question_aware_source_reopened_rate"], 1.0)
+        self.assertEqual(metrics["question_aware_wrong_hint_rate"], 0.0)
+        self.assertEqual(metrics["mean_extra_verification_steps_delta"], -1.0)
+        self.assertIn(
+            "selected_source_reopened_answer_quality_review_recorded",
+            payload["can_claim"],
+        )
+        self.assertIn("private_real_history_answer_quality", payload["cannot_claim"])
+        self.assertIn("full_history_answer_quality", review["cannot_claim"])
+        self.assertIn("case_hash", review["case_summaries"][0])
+        self.assertNotIn("private-case-1", json.dumps(review, ensure_ascii=False))
+
+    def test_answer_quality_review_output_is_public_safe(self) -> None:
+        payload = benchmark.run_question_aware_real_history_benchmark(
+            job_rows=fixture_rows(),
+            answer_quality_review_rows=answer_quality_review_rows(),
+        )
+        rendered = json.dumps(payload, ensure_ascii=False)
+
+        self.assertFalse(payload["answer_quality_review"]["privacy"]["raw_answer_text_emitted"])
+        self.assertFalse(payload["answer_quality_review"]["privacy"]["raw_source_text_emitted"])
+        self.assertNotIn("PRIVATE ANSWER TEXT", rendered)
+        self.assertNotIn("PRIVATE SOURCE TEXT", rendered)
+        self.assertNotIn("session:private", rendered)
+        self.assertNotIn(str(REPO_ROOT), rendered)
+
+    def test_answer_quality_review_loads_jsonl_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            review_path = Path(tmp) / "answer_quality_review.jsonl"
+            review_path.write_text(
+                "\n".join(
+                    json.dumps(row, ensure_ascii=False)
+                    for row in answer_quality_review_rows()
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            payload = benchmark.run_question_aware_real_history_benchmark(
+                job_rows=fixture_rows(),
+                answer_quality_review_path=review_path,
+            )
+
+        self.assertEqual(
+            payload["answer_quality_review"]["status"],
+            "selected_source_reopened_answer_quality_review_ready",
+        )
+
+    def test_answer_quality_review_reports_missing_pair_boundary(self) -> None:
+        payload = benchmark.run_question_aware_real_history_benchmark(
+            job_rows=fixture_rows(),
+            answer_quality_review_rows=[
+                {
+                    "kind": "question_aware_answer_quality_review",
+                    "case_id": "private-case-1",
+                    "arm": "question_aware_source_reopen",
+                    "source_reopened": True,
+                    "answer_supported": True,
+                    "citation_correct": True,
+                    "answer_useful": True,
+                }
+            ],
+        )
+        review = payload["answer_quality_review"]
+
+        self.assertEqual(review["status"], "answer_quality_review_incomplete")
+        self.assertEqual(review["metrics"]["review_case_count"], 1)
+        self.assertEqual(review["metrics"]["complete_comparison_case_count"], 0)
+        self.assertIn("paired_answer_quality_review_missing", review["cannot_claim"])
+        self.assertNotIn(
+            "selected_source_reopened_answer_quality_review_recorded",
+            payload["can_claim"],
+        )
 
     def test_benchmark_records_known_failure_modes(self) -> None:
         payload = benchmark.run_question_aware_real_history_benchmark(

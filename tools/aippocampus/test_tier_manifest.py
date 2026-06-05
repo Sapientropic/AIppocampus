@@ -11,6 +11,7 @@ class TestModuleClassification(NamedTuple):
 TEST_MODULE_STEMS = frozenset(
     {
         "test_aar_v2_action_time_nudges",
+        "test_activation_payload_compaction",
         "test_activation_surface_authority",
         "test_active_recall",
         "test_active_recall_lock",
@@ -32,7 +33,9 @@ TEST_MODULE_STEMS = frozenset(
         "test_benchmark_cognitive_portrait",
         "test_benchmark_compaction_continuity",
         "test_benchmark_continuous_memory_arms",
+        "test_benchmark_corpus_converter",
         "test_benchmark_conversational_media_ingest_recall",
+        "test_benchmark_e2e50_silent_constraint",
         "test_benchmark_field_continuity",
         "test_benchmark_fresh_thread_recall_demo",
         "test_benchmark_fts5_recall",
@@ -94,6 +97,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_dream_sleep_cycle",
         "test_dream_worker",
         "test_dream_working_memory",
+        "test_dream_working_memory_compaction",
         "test_e2e50_seed_candidates",
         "test_encrypted_sync_bundle",
         "test_export_bundle",
@@ -173,6 +177,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_semantic_scope_real_history_smoke",
         "test_semantic_scope_source_review",
         "test_semantic_scope_suppressed_recovery",
+        "test_semantic_trigger_compaction",
         "test_semantic_trigger_router",
         "test_simulate_prompt_hook",
         "test_source_evidence_recall_eval",
@@ -190,6 +195,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_theme_emergence",
         "test_update_sync",
         "test_vault_dashboard_assets",
+        "test_warm_ambient_privacy_policy",
         "test_warm_ambient_recall",
         "test_warm_ambient_scheduler_policy",
     }
@@ -277,6 +283,7 @@ BENCHMARK_STEMS = frozenset(
         "test_benchmark_compaction_continuity",
         "test_benchmark_continuous_memory_arms",
         "test_benchmark_conversational_media_ingest_recall",
+        "test_benchmark_e2e50_silent_constraint",
         "test_benchmark_field_continuity",
         "test_benchmark_fresh_thread_recall_demo",
         "test_benchmark_fts5_recall",
@@ -312,6 +319,7 @@ BENCHMARK_STEMS = frozenset(
 BENCHMARK_SMOKE_STEMS = frozenset(
     {
         "test_benchmark_field_continuity",
+        "test_benchmark_e2e50_silent_constraint",
         "test_benchmark_hippocampal_recall",
         "test_benchmark_knowledge_pollution",
         "test_benchmark_locomo_public_users",

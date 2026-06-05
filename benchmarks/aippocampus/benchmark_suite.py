@@ -1177,10 +1177,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=live_semantic_benchmark.DEFAULT_CASE_WORKERS,
     )
     parser.add_argument("--live-semantic-cache", type=Path, default=None)
-    parser.add_argument("--fts5-cases", type=int, default=retrieval_benchmark.DEFAULT_FTS5_CASES)
+    parser.add_argument(
+        "--fts5-cases",
+        type=retrieval_benchmark.positive_track_b_case_count("--fts5-cases"),
+        default=retrieval_benchmark.DEFAULT_FTS5_CASES,
+    )
     parser.add_argument(
         "--fts5-min-cases",
-        type=int,
+        type=retrieval_benchmark.positive_track_b_case_count("--fts5-min-cases"),
         default=retrieval_benchmark.DEFAULT_FTS5_MIN_CASES,
     )
     parser.add_argument(
@@ -1200,12 +1204,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--source-max-cases",
-        type=int,
+        type=retrieval_benchmark.positive_track_b_case_count("--source-max-cases"),
         default=retrieval_benchmark.DEFAULT_SOURCE_MAX_CASES,
     )
     parser.add_argument(
         "--source-min-cases",
-        type=int,
+        type=retrieval_benchmark.positive_track_b_case_count("--source-min-cases"),
         default=retrieval_benchmark.DEFAULT_SOURCE_MIN_CASES,
     )
     parser.add_argument("--source-top-k", type=int, default=5)

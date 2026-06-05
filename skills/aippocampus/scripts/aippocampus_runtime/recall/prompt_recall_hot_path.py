@@ -10,11 +10,13 @@ instead of adding another foreground search surface.
 
 from __future__ import annotations
 
+import re
 import time
 from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.artifacts.publish import resolve_sqlite_index_path
+from aippocampus_runtime.recall import prompt_cues
 from aippocampus_runtime.recall.living_cue_cache import select_living_cue_packet
 from aippocampus_runtime.recall.prompt_recall_core import candidate_summary, sort_candidates
 from aippocampus_runtime.recall.retrieval import search_hybrid_index
@@ -276,13 +278,55 @@ def _index_path(candidate: dict[str, Any]) -> Path | None:
     return None
 
 
+def _fts_route_intent(prompt: str) -> bool:
+    """Return whether bounded FTS may wake a navigation scent.
+
+    Trigram FTS is deliberately a hot-path fallback, not a general source
+    search. Without an explicit recall/continuation/semantic-context cue, a
+    plain implementation prompt that shares an entity name with old history can
+    look like useful overlap and create noisy ambient memory. Keep that false
+    positive out of the foreground hook; deeper source search remains available
+    through explicit active recall / MCP paths.
+    """
+
+    text = str(prompt or "").strip()
+    if not text:
+        return False
+    if (
+        prompt_cues.explicit_recall_terms(text)
+        or prompt_cues.natural_evidence_intent(text)
+        or prompt_cues.source_evidence_intent(text)
+        or prompt_cues.semantic_trigger_context_intent(text)
+        or _prior_context_route_intent(text)
+        or prompt_cues.matched_terms(
+            text,
+            prompt_cues.ASSOCIATIVE_CUES | prompt_cues.IMPORTANCE_CUES,
+        )
+    ):
+        return True
+    return False
+
+
+def _prior_context_route_intent(prompt: str) -> bool:
+    if not any(pattern.search(prompt) for pattern in prompt_cues.PRIOR_HISTORY_MARKER_PATTERNS):
+        return False
+    return bool(
+        re.search(
+            r"[?？吗]|(继续|接着|找|查|回忆|想起|remember|recall|continue|resume)",
+            prompt,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
 def _fts_candidates(
     *,
+    prompt: str,
     query_terms: list[str],
     candidate_indexes: list[dict[str, Any]],
     candidate_cap: int,
 ) -> list[dict[str, Any]]:
-    if not query_terms:
+    if not query_terms or not _fts_route_intent(prompt):
         return []
     hits: list[dict[str, Any]] = []
     for candidate in candidate_indexes[: max(1, candidate_cap)]:
@@ -408,6 +452,7 @@ def run_hot_path_funnel(
         )
     else:
         candidates = _fts_candidates(
+            prompt=prompt,
             query_terms=query_terms,
             candidate_indexes=candidate_indexes,
             candidate_cap=candidate_cap,
@@ -417,7 +462,13 @@ def run_hot_path_funnel(
                 stage="bounded_trigram_fts",
                 status="hit" if candidates else "skip",
                 candidate_count=len(candidates),
-                fallback_reason="" if candidates else "no_fts_match",
+                fallback_reason=(
+                    ""
+                    if candidates
+                    else "no_fts_match"
+                    if _fts_route_intent(prompt)
+                    else "prompt_lacks_memory_route_intent"
+                ),
                 start=stage_start,
             )
         )

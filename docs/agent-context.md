@@ -83,6 +83,10 @@ Read-only local status/onboarding check:
 uvx aippocampus onboard --provider codex --status
 ```
 
+This is a provider-matrix readiness view and may list non-Codex providers when
+they are detectable. Treat it as read-only local readiness, not as a
+Codex-only scoped-provider proof.
+
 Register local Codex history, only after user confirmation:
 
 ```sh

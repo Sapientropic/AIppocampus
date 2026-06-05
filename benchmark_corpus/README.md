@@ -30,6 +30,12 @@ records, start with [`docs/evidence/benchmark-evidence-map.md`](../docs/evidence
   #454. It turns Discussion #428 magic-moment field reports into scenario
   families, negative controls, and hash/aggregate-only private seed reporting
   rules without committing raw prompts, raw source snippets, or local paths.
+- `e2e50_silent_constraint/` contains the checked-in synthetic public-safe
+  fixture for the #279 annotated case-pack scorer scaffold. It exercises
+  silent constraint survival, known-bad route avoidance, transient concern
+  extinction, superseded currentness, and source reopen before risky action
+  without committing private clean-source text, local paths, or raw behavior
+  traces.
 - `segmented_merge_policy/` contains the checked-in synthetic public-safe
   fixture for #375. It calibrates segmented-search merge behavior over
   source-ref-shaped hits without committing private thread text.
@@ -74,6 +80,11 @@ Run a public dataset stream:
 ```powershell
 python benchmark_corpus\convert_to_aippocampus.py --source wildchat --max-convs 200 --output .tmp\wildchat-clean-source
 ```
+
+`wildchat` and `sharechat` streaming use Hugging Face `datasets`. If it is not
+installed, the converter exits with a targeted optional-dependency diagnostic
+instead of a Python traceback; local and ShareGPT JSONL sources remain stdlib
+paths.
 
 Regenerate the current ShareGPT clean-source corpora from local public JSONL
 inputs:
@@ -142,6 +153,16 @@ python benchmarks\aippocampus\benchmark_coding_decision_shadow.py --json
 This public-safe runner checks original source refs, rejected-route warnings,
 compaction boundary preservation, relevant decision selection, and anti-nag
 suppression. It is a synthetic contract, not private real-history lift evidence.
+
+Run the public-safe E2E50 silent-constraint case-pack scorer scaffold:
+
+```powershell
+python benchmarks\aippocampus\benchmark_e2e50_silent_constraint.py --json
+```
+
+This #279 scaffold scores hash/count-only annotated behavior-code cases and
+keeps `quality_gate_ok=false` until source-reviewed private gold/calibration
+cases become a representative E2E50 sample under the shared methodology.
 
 Run the public-safe multimodal corpus-style retrieval contract:
 
@@ -373,6 +394,24 @@ Run the optional standard retrieval-QA Track B adapter:
 ```powershell
 python benchmarks\aippocampus\benchmark_source_evidence_retrieval.py --include-standard-public --standard-dataset locomo --standard-questions 100 --standard-min-questions 20 --standard-top-k 10 --output benchmark_corpus\reports\locomo-track-b-standard-100.json
 ```
+
+For a focused external-public adapter check, use the standard-only mode:
+
+```powershell
+python benchmarks\aippocampus\benchmark_source_evidence_retrieval.py --only-standard-public --standard-dataset locomo --standard-questions 100 --standard-min-questions 20 --standard-top-k 10 --output benchmark_corpus\reports\locomo-track-b-standard-only-100.json
+```
+
+`--only-standard-public` reports `standard_public_only_*` status values and
+does not run the private-registry FTS5 or selected source-evidence arms. Use it
+when validating the LoCoMo/LongMemEval adapter itself; use
+`--include-standard-public` when you intentionally want the broader mixed Track
+B bundle status.
+
+The mixed Track B internal case controls such as `--fts5-cases`,
+`--fts5-min-cases`, `--source-max-cases`, and `--source-min-cases` must be
+positive integers. They are floors and limits for internal arms, not disable
+switches; use `--only-standard-public` for the focused external-public
+retrieval-QA path.
 
 The standard adapter reports retrieval-only session/source R@K and MRR. It is
 the current non-source-derived Track B arm because LoCoMo and LongMemEval V1

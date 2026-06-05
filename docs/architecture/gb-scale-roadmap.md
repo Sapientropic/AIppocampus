@@ -15,13 +15,16 @@ agents do not mistake desired layers for finished behavior.
 - `thread-anchors.md` is an optional private/export anchor input, not a public
   repo baseline file. The root file is gitignored.
 - The monolithic stable `source_index.sqlite` remains the compatibility path.
-  Current main indexes are also copied to `versions/source_index-*.sqlite` and
-  selected by `source_index.pointer.json`, which falls back to last-known-good
-  if the current version is missing.
+  Current main indexes are also copied to
+  `generations/gen_*/source_index.sqlite` and selected by
+  `source_index.pointer.json`, which falls back to last-known-good if the
+  current generation is missing. Legacy `versions/source_index-*.sqlite`
+  pointers remain readable for migration.
 - `$CODEX_HOME/aippocampus-registry/threads/<thread>/index/segments/manifest.json`
-  can describe sealed segment indexes built by `build_segments.py`.
-  Project-local `.aippocampus/segments/` is explicit compatibility/debug
-  output only.
+  is the segment compatibility manifest. New segment rebuilds also publish
+  `segments/generations/gen_*/manifest.json` selected by
+  `segments.pointer.json`, with last-known-good fallback. Project-local
+  `.aippocampus/segments/` is explicit compatibility/debug output only.
 - `search_segments.py` fans a query out across segment SQLite indexes, can cap
   executable segment fanout before opening SQLite shards, and reports
   planned/searched/skipped segment counts alongside merged top-k hits.
@@ -29,9 +32,10 @@ agents do not mistake desired layers for finished behavior.
 - The global registry discovers old thread memories from new threads.
 - `storage_capacity_report.py` reports aggregate clean-source bytes, generated
   index bytes, semantic sidecar bytes, current sync-policy bytes, index
-  amplification, worst-case SQLite fanout, and planned registry-metadata query
-  fanout without reading clean-source message bodies. This is the first
-  registry-scale observability layer for issue #4.
+  amplification, worst-case SQLite fanout, planned registry-metadata query
+  fanout, and main/segment generation GC candidates without reading
+  clean-source message bodies. This is the first registry-scale observability
+  layer for issue #4.
 
 ## Active track
 
@@ -56,10 +60,10 @@ remaining work is visible instead of hidden behind one broad issue:
 - [#111](https://github.com/Sapientropic/AIppocampus/issues/111): runtime writer
   coordination for multi-session, multi-agent, cross-device, and
   cross-platform operation. Main index publishing now uses a shared
-  same-directory writer lease, versioned index pointer, last-known-good
+  same-directory writer lease, generation index pointer, last-known-good
   fallback, and SQLite backup/WAL stable refresh instead of replacing a live
   `source_index.sqlite` file. Sync/import/export now have explicit generated
-  cache rules: default sync excludes SQLite/pointer/versioned caches, target
+  cache rules: default sync excludes SQLite/pointer/generation caches, target
   repair resolves only target-local generated caches, and portable export/import
   reports pointer-resolved current SQLite when a bundle carries one.
 
@@ -93,16 +97,26 @@ Completed foundation:
   skipped, and missing-index counts. `--full-fanout` remains the explicit
   diagnostics/benchmark path. Missing manifests or shard indexes now return
   structured `segments_unavailable` / `build_required` status unless
-  `--build-segments` is explicitly requested.
+  `--build-segments` is explicitly requested. Segment manifests now carry turn
+  ranges and partial-turn boundary diagnostics; normal user/final-answer turns
+  can finish inside a bounded overshoot instead of being cut purely by
+  byte/message thresholds. Search payloads also identify adjacent segment ids
+  for cross-boundary partial turns while keeping text stitching as later work.
 - `aippocampus storage gc --dry-run` starts the storage governance bridge: it
   reports protected source bytes, reclaimable rebuildable/review bytes, and
   candidate safety preconditions from capacity data plus existing retention JSON
-  without reading message bodies or deleting files. `--apply --class
-  rebuildable` now has a narrow path-level retention-report v1 for the main
-  `source_index.sqlite` cache, with source/ref/lease/active-thread/pointer
-  checks and an eviction manifest; capacity aggregates and broader cache classes
-  remain plan-only. If this bridge becomes the first Rust deterministic-core
-  slice, it must follow the contract-replay gate in
+  without reading message bodies or deleting files. Capacity and health reports
+  now expose main-index generation pointer status, current/LKG ids, old
+  generation bytes, pointer load time, publish latency, and old-generation GC
+  candidates with reader-pin/TTL preconditions. Segment rebuilds now publish
+  generation manifests, and capacity/health/storage-gc reports expose old
+  segment generations with the same cleanup contract. `--apply --class
+  rebuildable` still has a narrow path-level retention-report v1 for the main
+  `source_index.sqlite` cache, and it can now delete old main-index or segment
+  generation directories only after apply-time source, lease, active-thread,
+  pointer, reader-pin, and TTL checks pass. Capacity aggregates and broader
+  cache classes remain plan-only. If this bridge becomes the first Rust
+  deterministic-core slice, it must follow the contract-replay gate in
   `docs/architecture/rust-deterministic-core.md`.
 
 ## Target architecture
@@ -122,8 +136,11 @@ Completed foundation:
      practical lesson from search engines that shard size should remain small
      enough for fast rebuild and easy replacement.
    - Store a segment manifest with source byte range, line range, message range,
-     anchor digest, and index capabilities.
-   - Status: implemented in `build_segments.py`.
+     turn range, partial-turn boundary diagnostics, anchor digest, and index
+     capabilities.
+   - Status: implemented in `segment_builder.py` and `segment_search.py`; full
+     cross-boundary text stitching or duplicated windows remain later
+     retrieval-quality work.
 
 3. Query fanout and top-k merge
    - Registry chooses candidate threads.
@@ -195,10 +212,19 @@ Completed foundation:
      multi-GB threshold smoke is implemented in
      `tools/aippocampus/smoke/smoke_synthetic_scale_capacity.py`; segmented
      index rebuilds now have a single-writer lease and last-known-good recovery.
-     Main indexes now have versioned pointer publishing for Windows locked-file
-     fallback while preserving `source_index.sqlite` compatibility. Default
-     sync keeps generated SQLite and pointer files out of the portable source
-     set while still repairing target-local rebuilt cache locators.
+     Main indexes now have generation pointer publishing for Windows
+     locked-file fallback while preserving `source_index.sqlite`
+     compatibility. Main-index generation-aware health/capacity reporting and
+     old generation GC candidates are implemented with reader-pin/TTL cleanup
+     preconditions. Segment generation
+     directories and `segments.pointer.json` are implemented for rebuild
+     publishing, and segment generation health/capacity/storage-gc dry-run
+     reporting uses the same contract. Actual deletion is now allowed only
+     through storage GC apply after the reader-pin/TTL contract, current/LKG
+     pointer protection, source proof, active-thread opt-in, and lease checks
+     pass. Default sync
+     keeps generated SQLite and pointer files out of the portable source set while still repairing
+     target-local rebuilt cache locators.
 
 ## Near-term implementation order
 
@@ -252,11 +278,18 @@ Completed foundation:
    creating large files. Segmented index rebuilds now use `.rebuild.lock`
    single-writer discipline, staged
    publish, and last-known-good restoration. Main indexes now use a
-   `source_index.pointer.json` current/LKG pointer and stable SQLite backup
-   refresh. Default sync excludes generated SQLite caches and pointer files;
+   `source_index.pointer.json` current/LKG generation pointer and stable SQLite
+   backup refresh. Segment rebuilds now publish
+   `segments/generations/gen_*/manifest.json` behind `segments.pointer.json`
+   while preserving `segments/manifest.json` as the compatibility manifest.
+   Capacity/health now report main-index and segment generation GC candidates
+   with reader-pin/TTL cleanup diagnostics. Storage GC apply may delete only old
+   generation directories whose active pins are gone and whose TTL window has
+   elapsed; current and last-known-good pointer targets remain protected.
+   Default sync excludes generated SQLite caches and pointer files;
    import/export reports pointer-resolved current SQLite for explicit bundles.
-   Broader physical multi-device stress remains a release-readiness exercise,
-   not a `quick` or `pr` tier claim.
+   Broader physical multi-device stress remains a
+   release-readiness exercise, not a `quick` or `pr` tier claim.
 
 ## Cross-references
 

@@ -44,7 +44,7 @@
     "supported_local_formats": [
       "jsonl",
       "json",
-      "parquet metadata only unless an optional parquet reader is installed"
+      "parquet metadata by default; parquet row/case-pack/stage3 dry-run support when the optional pyarrow reader is installed"
     ]
   },
   "splits": [

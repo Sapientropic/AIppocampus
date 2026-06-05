@@ -13,6 +13,10 @@ import re
 from pathlib import Path
 from typing import Any, Iterable
 
+from aippocampus_runtime.artifacts.publish import (
+    index_generation_diagnostics,
+    segment_generation_diagnostics,
+)
 from aippocampus_runtime.core import aippocampus_registry_dir, now_utc
 from aippocampus_runtime.sync.bundle import iter_clean_source_sync_files, iter_registry_sync_files
 
@@ -121,9 +125,32 @@ def clean_source_bytes(clean_dir: Path) -> tuple[int, int]:
     return canonical, sidecars
 
 
+def _segment_sqlite_paths(index_dir: Path) -> list[Path]:
+    segments_dir = index_dir / "segments"
+    manifest = load_json(segments_dir / "manifest.json")
+    paths: dict[str, Path] = {}
+    for item in manifest.get("segments") or []:
+        if not isinstance(item, dict):
+            continue
+        value = item.get("sqlite")
+        if not isinstance(value, str) or not value:
+            continue
+        path = Path(value)
+        if not path.is_absolute():
+            path = segments_dir / path
+        if path.is_file():
+            try:
+                paths[str(path.resolve())] = path
+            except OSError:
+                paths[str(path)] = path
+    if paths:
+        return list(paths.values())
+    return list(segments_dir.glob("seg-*/source_index.sqlite"))
+
+
 def sqlite_stats(index_dir: Path) -> dict[str, int]:
     main_sqlite = index_dir / MAIN_SQLITE_NAME
-    segment_sqlites = list((index_dir / "segments").glob("seg-*/source_index.sqlite"))
+    segment_sqlites = _segment_sqlite_paths(index_dir)
     return {
         "main_sqlite_count": 1 if main_sqlite.is_file() else 0,
         "main_sqlite_bytes": safe_stat_size(main_sqlite),
@@ -188,6 +215,16 @@ def scan_thread(
     sqlite = sqlite_stats(index_dir)
     raw_bytes = raw_rollout_bytes(entry)
     fanout = sqlite["segment_sqlite_count"] or sqlite["main_sqlite_count"]
+    index_generations = index_generation_diagnostics(
+        index_dir / MAIN_SQLITE_NAME,
+        root=registry_dir,
+        include_paths=include_paths,
+    )
+    segment_generations = segment_generation_diagnostics(
+        index_dir / "segments" / "manifest.json",
+        root=registry_dir,
+        include_paths=include_paths,
+    )
 
     return {
         "thread_key": entry.get("thread_key"),
@@ -204,6 +241,8 @@ def scan_thread(
         "index_amplification_ratio": ratio(generated_index, canonical_clean),
         "segment_count_declared": segment_manifest_count(index_dir),
         "query_fanout_indexes": fanout,
+        "index_generations": index_generations,
+        "segment_generations": segment_generations,
         **sqlite,
     }
 
@@ -328,6 +367,34 @@ def build_report(
         "main_sqlite_bytes": sum(int(item["main_sqlite_bytes"]) for item in scanned),
         "segment_sqlite_count": sum(int(item["segment_sqlite_count"]) for item in scanned),
         "segment_sqlite_bytes": sum(int(item["segment_sqlite_bytes"]) for item in scanned),
+        "old_generation_count": sum(
+            int((item.get("index_generations") or {}).get("old_generation_count") or 0)
+            for item in scanned
+        ),
+        "generation_gc_candidate_count": sum(
+            int((item.get("index_generations") or {}).get("generation_gc_candidate_count") or 0)
+            for item in scanned
+        ),
+        "generation_gc_candidate_bytes": sum(
+            int((item.get("index_generations") or {}).get("generation_gc_candidate_bytes") or 0)
+            for item in scanned
+        ),
+        "segment_old_generation_count": sum(
+            int((item.get("segment_generations") or {}).get("old_generation_count") or 0)
+            for item in scanned
+        ),
+        "segment_generation_gc_candidate_count": sum(
+            int(
+                (item.get("segment_generations") or {}).get("generation_gc_candidate_count") or 0
+            )
+            for item in scanned
+        ),
+        "segment_generation_gc_candidate_bytes": sum(
+            int(
+                (item.get("segment_generations") or {}).get("generation_gc_candidate_bytes") or 0
+            )
+            for item in scanned
+        ),
     }
     totals["index_amplification_ratio"] = ratio(
         int(totals["generated_index_bytes"]), int(totals["canonical_clean_source_bytes"])

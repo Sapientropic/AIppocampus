@@ -156,6 +156,12 @@ global thread store under `$CODEX_HOME/aippocampus-registry/threads/`.
 `graph.json`, RAG-lite chunks, and `manifest.json` under the global thread store
 by default. Passing `--output-dir .aippocampus` preserves the old project-local
 mode when a portable bundle, repo-local audit, or explicit debug run needs it.
+The stable `source_index.sqlite` path is a compatibility anchor; normal readers
+should resolve `source_index.pointer.json` to the current generation before
+opening SQLite, with last-known-good and stable fallbacks. When a reader opens a
+resolved generation path, it creates a short-lived `.reader-pins/*.json` file
+beside the pointer for the duration of the query so storage GC can distinguish
+active readers from expired old generations.
 
 Default retrieval is local hybrid search:
 
@@ -203,16 +209,29 @@ optional adapter for very fuzzy queries or large corpora.
 For hundred-MB or GB threads, use segments:
 
 - `aippocampus_runtime.recall.segment_builder` creates sealed `seg-0001/`, `seg-0002/`, etc. under the
-  global index directory's `segments/` folder by default.
+  global index directory's `segments/` folder by default. New rebuilds publish
+  those shards inside `segments/generations/gen_*/` and update
+  `segments.pointer.json`; `segments/manifest.json` remains the compatibility
+  manifest.
 - Each segment has its own `messages.jsonl` and `source_index.sqlite`.
-- The segment manifest records source rollout size/mtime, anchor hash, byte
-  spans, line spans, message spans, and index paths.
+- The segment manifest records source rollout size/mtime/hash, anchor hash,
+  byte spans, line spans, message spans, turn ranges, partial-turn boundary
+  diagnostics, and index paths. The builder prefers cutting after complete
+  turns when a bounded overshoot is enough; pathological oversized turns are
+  still allowed to split and are marked as partial with a reason code.
 - `aippocampus_runtime.recall.segment_search` fans queries out to segments, optionally enforces
-  `--fanout-budget` / `--max-segments` before opening SQLite shards, retrieves
-  top candidates per selected segment, and merges global top-k with diversity
-  penalties. Missing manifests or shard indexes report structured
-  `segments_unavailable` / `build_required` status unless the caller explicitly
-  asks to build segments.
+  `--fanout-budget` / `--max-segments` before opening SQLite shards, resolves
+  the segment pointer once per query, writes a short-lived reader pin beside the
+  pointer while it searches that resolved generation, identifies partial-turn
+  boundary segments in JSON diagnostics,
+  identifies adjacent segment ids for cross-boundary partial turns without
+  stitching text, and merges global top-k with diversity penalties. Missing
+  manifests or shard indexes report structured `segments_unavailable` /
+  `build_required` status unless the caller explicitly asks to build segments.
+  Old generations are rebuildable cache targets. Health/capacity/storage-gc
+  dry-runs report reader-pin/TTL cleanup status, and storage GC apply may delete
+  only old generation directories whose active pins are gone, TTL has elapsed,
+  and current/LKG pointer protection still passes.
 
 Segment-local ids collide by design. Treat `(segment_id, id, line)` as the hit
 key.

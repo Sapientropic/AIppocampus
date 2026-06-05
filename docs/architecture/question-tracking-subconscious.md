@@ -167,6 +167,13 @@ theme-emergence slice, plus first question-index scale/sidecar evaluation:
   eligible rows, 2 sanitized packs, source-ref fidelity 1.0, no private text
   emitted, token ratio 3.7005, and term-coverage delta -0.4412. It is a
   structural proxy, not answer-quality or user-visible recall proof.
+- Implemented a #248 opt-in answer-quality review slice in the same benchmark:
+  operators can pass source-reopened review rows for paired `plain_baseline`
+  versus `question_aware_source_reopen` arms. The report emits case hashes and
+  aggregate support/usefulness/citation/wrong-hint rates only; it never emits
+  raw answer text, source text, raw refs, message ids, or local paths. This is
+  selected answer-quality review evidence, not full-history quality, live model
+  behavioral equivalence, user-visible recall lift, or default prefilter safety.
 - Closed first-slice queue: umbrella #133 and focused #134 through #139 are
   implementation evidence for the first deterministic/question-health/theme/
   ambient/sidecar/structural slices. Do not route remaining work back there.
@@ -1210,6 +1217,13 @@ noisy ones. Frontier markers must feel like saved trail markers, not guilt.
   strong-pair coverage and source-ref-key joins. Output is counts/boundaries
   only: no private source text, raw refs, registry paths, or source signatures.
   Passing this smoke still does not make the sidecar the default prefilter.
+- Shipped #248 opt-in answer-quality review reporting:
+  `benchmark_question_aware_real_history.py --answer-quality-review` accepts
+  paired review rows for `plain_baseline` and `question_aware_source_reopen`
+  arms, then reports public-safe aggregate support/usefulness/citation and
+  wrong-hint metrics. This is a review evidence path for selected clean-source
+  cases, not a replacement for broader calibration or default prefilter
+  adoption evidence.
 - Deferred: real-user / private real-history calibration beyond selected
   fixtures and the one sanitized no-write external-provider smoke (#134),
   fuzzy/non-explicit resolution inference beyond explicit user follow-up signals

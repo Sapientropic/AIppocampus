@@ -100,7 +100,12 @@ view across proof lines, use
   partial failure kept the run at `claim_level=diagnostic_only`. The smoke now
   reports per-label selection floors plus accepted / rejected / human-review /
   model-failure buckets so the old 5-row strict-survival evidence cannot be
-  mistaken for global Stage 2 correctness.
+  mistaken for global Stage 2 correctness. The semantic real-history smoke also
+  emits an aggregate-only `semantic_evidence_diagnostics` funnel
+  (`selected_candidate_count -> finding_count -> materialized_row_count`),
+  all-canonical-label zero counts, and observable materialization reason
+  buckets. This explains sparse high-risk labels without exposing raw text,
+  source refs, local paths, or relaxing strict gates.
   These are navigation layers over original text, not summary replacements.
 - Stage 4 now has a first local MCP server at
   `skills/aippocampus/scripts/aippocampus_mcp_server.py`, including a
@@ -175,8 +180,9 @@ view across proof lines, use
   Pro-agent recovery and 96-case source-review smokes prove better selected
   coverage, but high-risk suppressed labels such as
   `relationship_continuity` and `life_context` still need stronger
-  source-backed model findings before being restored; follow-up #320 owns that
-  evidence-improvement track. Current
+  source-backed model findings before being restored; #320 also requires public
+  diagnostics to classify zero or sparse high-risk labels as unsafe to restore
+  until stronger evidence survives the unchanged materializer. Current
   labels, timeline groups, semantic sidecars, real-registry aggregate smoke,
   dynamic semantic sidecar smoke, recall eval prompts, source-review samples,
   and ambient scents are navigation hints only.
@@ -185,7 +191,9 @@ view across proof lines, use
   question-continuity product surface. The closed #133/#134-#139 queue is
   first-slice evidence; follow-up #248 owns the remaining extraction-gate,
   default-prefilter, answer-quality, broader calibration, and theme-resonance
-  gaps.
+  gaps. The #248 answer-quality review path is now available for selected
+  source-reopened comparisons, but it is not full-history quality proof or
+  default-prefilter safety evidence.
 - Benchmark evidence now includes a deterministic #406 Codex-style
   `host_native_continuous_no_aippocampus` contract arm, but it is not live
   host telemetry and does not prove
@@ -203,6 +211,24 @@ view across proof lines, use
 - Stage 5 still needs public marketplace submission or independent third-party
   install review if those are claimed. The real Codex app-server plugin manager
   path and package-level installed-plugin MCP path are verified locally.
+
+## Client And Distribution Claim Matrix
+
+This matrix is the compact #307 public-readiness boundary. Detailed command
+evidence stays in `public-readiness-verification.md`; do not mirror full smoke
+logs here.
+
+| Surface | Current status | Claim boundary |
+| --- | --- | --- |
+| GitHub source `uvx --from git+...` | Smoke-tested on 2026-06-05 for CLI help, MCP tool catalog, and Codex-scoped onboard status from an isolated temp home. | Current main snapshot only; not a released PyPI package claim. |
+| PyPI `uvx aippocampus ...` | Released `0.1.1` smoke-tested on 2026-06-05 for CLI help, MCP tool catalog, and read-only provider-matrix status from an isolated temp home. | Released package and MCP entrypoint smoke only; the status command still returns the provider matrix, not a Codex-only scoped status object. |
+| MCP Registry metadata | Release checker passed on 2026-06-05 and found MCP Registry version `0.1.1` matching `server.json`. | Discovery metadata only; not proof of Codex Desktop interactive marketplace install UX. |
+| Codex Desktop headless app-server local marketplace | Smoke-tested through real app-server marketplace/plugin/MCP methods with reversible cleanup. | Headless host path only; not proof of human interactive Desktop UI click-through. |
+| Codex Desktop interactive UI / public marketplace | Not yet verified. | Do not claim marketplace UI readiness, click-through install, or public marketplace submission from MCP Registry metadata alone. |
+| Standalone MCP stdio / Claude Code-style host | Smoke-tested for installed-plugin MCP config and local strict-config tool calls. | Does not prove every Codex wrapper or hosted client surface. |
+| Generic JSONL/source install fallback | Supported as explicit source/register path. | Not a broad personal-history onboarding proof by itself. |
+| Standalone binary | Windows x64 maintainer-built artifact smoke exists. | macOS/Linux binaries, signed installers, updaters, and downloads remain unclaimed. |
+| Third-party/second-user install review | Not yet verified. | Required before broad external-user install claims. |
 
 ## 2026-05-30 Closeout Addendum
 
@@ -285,6 +311,13 @@ above. The canonical command details live in
   formation and known-failure reporting only; it does not claim token savings,
   answer usefulness, user-visible recall improvement, or quote fidelity without
   reopening clean source.
+- #248 extends that benchmark with optional source-reopened answer-quality
+  review rows for paired `plain_baseline` versus
+  `question_aware_source_reopen` comparisons. Output is limited to case hashes
+  and aggregate support/usefulness/citation/wrong-hint rates. It can record
+  selected review evidence, but it still does not claim full-history answer
+  quality, live model equivalence, user-visible recall lift, or default
+  prefilter safety.
 - #63 adds the first deterministic Journey Tracking P1-P3 core. It defines
   source-backed waypoint/journey structures, append-only waypoint history,
   conservative multi-thread instantiation, status transitions, expiry/TTL

@@ -4,6 +4,8 @@ import json
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -75,6 +77,16 @@ class LocomoPublicUsersBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_locomo_public_users_benchmark")
         self.assertEqual(payload["status"], "public_longitudinal_control_scored")
         self.assertTrue(payload["ok"], payload)
+        self.assertEqual(
+            payload["scoring_contract"]["role"],
+            "oracle_scorer_self_check",
+        )
+        self.assertTrue(
+            payload["scoring_contract"]["uses_gold_evidence_ids_as_prediction_input"]
+        )
+        self.assertFalse(payload["scoring_contract"]["system_under_test_required"])
+        self.assertIn("--predictions", payload["scoring_contract"]["claim_boundary"])
+        self.assertFalse(payload["scoring_contract"]["headline_score_allowed"])
         self.assertEqual(payload["dataset"]["track_role"], "public_longitudinal_conversation_control")
         self.assertEqual(payload["metrics"]["longitudinal_public_user_count"], 1)
         self.assertEqual(payload["metrics"]["session_count"], 2)
@@ -144,6 +156,11 @@ class LocomoPublicUsersBenchmarkTests(unittest.TestCase):
                 predictions_file=predictions,
             )
 
+        self.assertEqual(payload["scoring_contract"]["role"], "external_prediction_score")
+        self.assertFalse(
+            payload["scoring_contract"]["uses_gold_evidence_ids_as_prediction_input"]
+        )
+        self.assertTrue(payload["scoring_contract"]["system_under_test_required"])
         by_case = {case["case_id"]: case for case in payload["cases"]}
         self.assertFalse(payload["ok"])
         self.assertEqual(by_case["locomo:conv-test:qa:0001"]["extra_evidence_ids"], ["D2:1"])
@@ -201,15 +218,33 @@ class LocomoPublicUsersBenchmarkTests(unittest.TestCase):
         self.assertNotIn("hidden park meeting", dumped_template)
         self.assertNotIn("D1:1", dumped_template)
 
-    def test_missing_dataset_returns_public_safe_diagnostic(self) -> None:
+    def test_human_summary_marks_gold_baseline_as_scorer_self_check(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dataset = Path(tmp) / "locomo10.json"
+            write_fixture(dataset)
+            payload = benchmark.run_benchmark(dataset_path=dataset)
+
+        output = StringIO()
+        with redirect_stdout(output):
+            benchmark.print_human_summary(payload)
+
+        summary = output.getvalue()
+        self.assertIn("oracle scorer self-check", summary)
+        self.assertIn("--predictions", summary)
+        self.assertIn("not system performance", summary)
+
+    def test_missing_dataset_returns_public_safe_skip_diagnostic(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             missing = Path(tmp) / "missing.json"
 
             payload = benchmark.run_benchmark(dataset_path=missing)
 
-        self.assertEqual(payload["status"], "dataset_unavailable")
-        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["status"], "skipped_missing_dataset")
+        self.assertTrue(payload["ok"], payload)
+        self.assertEqual(payload["quality_gate_status"], "not_scored")
+        self.assertNotIn("quality_gate_ok", payload)
         self.assertEqual(payload["cases"], [])
+        self.assertIn("public_longitudinal_user_score", payload["cannot_claim"])
         dumped = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn(str(REPO_ROOT), dumped)
 

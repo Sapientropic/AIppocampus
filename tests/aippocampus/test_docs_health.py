@@ -376,6 +376,35 @@ class DocsHealthTests(unittest.TestCase):
         self.assertIn("public core schema doc missing metadata privacy boundary", issues)
         self.assertIn("public core schema doc missing runtime clean-source manifest contract", issues)
 
+    def test_public_core_product_profile_boundary_is_guarded(self) -> None:
+        repo_root = docs_health.find_repo_root(ROOT)
+        self.assertIsNotNone(repo_root)
+
+        result = docs_health.public_core_product_profile_issues(repo_root)
+
+        self.assertEqual(result, [])
+
+    def test_public_core_product_profile_reports_missing_terms(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            guides = repo / "docs" / "guides"
+            guides.mkdir(parents=True)
+            (guides / "public-core-boundary.md").write_text(
+                "# Public Core Boundary\n\n"
+                "Personal recall is useful, and enterprise governance exists.\n",
+                encoding="utf-8",
+            )
+
+            issues = docs_health.public_core_product_profile_issues(repo)
+
+        self.assertIn("public core boundary missing Personal/Core default profile", issues)
+        self.assertIn("public core boundary missing Power-user optional profile", issues)
+        self.assertIn("public core boundary missing Enterprise/high-risk governed profile", issues)
+        self.assertIn(
+            "public core boundary missing purpose-token opt-in boundary",
+            issues,
+        )
+
     def test_python_version_contract_covers_metadata_docs_and_ci(self) -> None:
         repo_root = docs_health.find_repo_root(ROOT)
         self.assertIsNotNone(repo_root)
