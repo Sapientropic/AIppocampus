@@ -28,6 +28,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_aippocampuslib",
         "test_ambient_recall_cards",
         "test_ambient_recall_policy",
+        "test_ambient_source_reopen",
         "test_ambient_thread_cache",
         "test_architecture_boundaries",
         "test_benchmark_coding_decision_shadow",
@@ -203,6 +204,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_warm_ambient_privacy_policy",
         "test_warm_ambient_recall",
         "test_warm_ambient_scheduler_policy",
+        "test_warm_ambient_topic_epoch_policy",
     }
 )
 
