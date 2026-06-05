@@ -16,7 +16,7 @@ import argparse
 import json
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import _paths
 
@@ -768,7 +768,26 @@ def print_human_summary(payload: dict[str, Any]) -> None:
         print(f"  portable smoke: {guidance.get('portable_smoke_command')}")
 
 
-def main() -> int:
+def positive_track_b_case_count(option_name: str) -> Callable[[str], int]:
+    def parse(value: str) -> int:
+        try:
+            count = int(value)
+        except ValueError as exc:
+            raise argparse.ArgumentTypeError(
+                f"{option_name} must be a positive integer"
+            ) from exc
+        if count <= 0:
+            raise argparse.ArgumentTypeError(
+                f"{option_name} must be a positive integer; 0 does not disable "
+                "internal Track B arms. Use --only-standard-public for the "
+                "external public retrieval-QA-only path."
+            )
+        return count
+
+    return parse
+
+
+def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--registry", type=Path, default=None)
     parser.add_argument(
@@ -779,8 +798,16 @@ def main() -> int:
             "status separately from the mixed Track B bundle."
         ),
     )
-    parser.add_argument("--fts5-cases", type=int, default=DEFAULT_FTS5_CASES)
-    parser.add_argument("--fts5-min-cases", type=int, default=DEFAULT_FTS5_MIN_CASES)
+    parser.add_argument(
+        "--fts5-cases",
+        type=positive_track_b_case_count("--fts5-cases"),
+        default=DEFAULT_FTS5_CASES,
+    )
+    parser.add_argument(
+        "--fts5-min-cases",
+        type=positive_track_b_case_count("--fts5-min-cases"),
+        default=DEFAULT_FTS5_MIN_CASES,
+    )
     parser.add_argument("--fts5-seed", type=int, default=fts5_benchmark.DEFAULT_SEED)
     parser.add_argument("--fts5-top-k", type=int, default=fts5_benchmark.DEFAULT_TOP_K)
     parser.add_argument(
@@ -788,8 +815,16 @@ def main() -> int:
         type=int,
         default=fts5_benchmark.DEFAULT_CANDIDATE_LIMIT,
     )
-    parser.add_argument("--source-max-cases", type=int, default=DEFAULT_SOURCE_MAX_CASES)
-    parser.add_argument("--source-min-cases", type=int, default=DEFAULT_SOURCE_MIN_CASES)
+    parser.add_argument(
+        "--source-max-cases",
+        type=positive_track_b_case_count("--source-max-cases"),
+        default=DEFAULT_SOURCE_MAX_CASES,
+    )
+    parser.add_argument(
+        "--source-min-cases",
+        type=positive_track_b_case_count("--source-min-cases"),
+        default=DEFAULT_SOURCE_MIN_CASES,
+    )
     parser.add_argument("--source-top-k", type=int, default=5)
     parser.add_argument("--source-min-hit-rate", type=float, default=DEFAULT_SOURCE_MIN_HIT_RATE)
     parser.add_argument(
@@ -941,7 +976,11 @@ def main() -> int:
     parser.add_argument("--include-private-text", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--output", type=Path, default=None)
-    args = parser.parse_args()
+    return parser
+
+
+def main() -> int:
+    args = build_arg_parser().parse_args()
 
     payload = run_source_evidence_retrieval_benchmark(
         registry_path=args.registry,

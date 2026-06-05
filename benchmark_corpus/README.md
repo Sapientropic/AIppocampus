@@ -391,6 +391,12 @@ when validating the LoCoMo/LongMemEval adapter itself; use
 `--include-standard-public` when you intentionally want the broader mixed Track
 B bundle status.
 
+The mixed Track B internal case controls such as `--fts5-cases`,
+`--fts5-min-cases`, `--source-max-cases`, and `--source-min-cases` must be
+positive integers. They are floors and limits for internal arms, not disable
+switches; use `--only-standard-public` for the focused external-public
+retrieval-QA path.
+
 The standard adapter reports retrieval-only session/source R@K and MRR. It is
 the current non-source-derived Track B arm because LoCoMo and LongMemEval V1
 queries come from public dataset questions rather than from the target source
