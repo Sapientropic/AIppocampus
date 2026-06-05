@@ -463,6 +463,22 @@ contain MemoryAgentBench context and question text for a narrow model-facing
 subset, but it excludes answers, gold labels, and scoring-only metadata; keep
 that output under `.tmp/` or `benchmark_corpus/reports/`.
 
+Run the AMemGym public `v1.base` metadata and source-backed overlay smoke:
+
+```powershell
+python benchmarks\aippocampus\benchmark_amemgym.py --json
+python benchmarks\aippocampus\benchmark_amemgym.py --download-official --skip-sha256 --json
+python benchmarks\aippocampus\benchmark_amemgym.py --dataset-path benchmark_corpus\amemgym_fixture\fixture.json --predictions benchmark_corpus\amemgym_fixture\predictions.jsonl --prediction-template-output .tmp\amemgym-predictions-template.jsonl --json
+```
+
+The fresh-clone path reports the missing-dataset boundary without network. The
+download path reads the public Hugging Face `v1.base/data.json` into the
+ignored `benchmark_corpus/amemgym/` directory and emits only schema/count/hash
+observations. The checked-in fixture exercises stale/current, unsupported
+personalization, scent-as-evidence, and local write/read/utilization overlay
+metrics. These reports do not claim an official AMemGym score, official-runner
+compatibility, Native/RAG/AWI/AWE parity, or model/provider cost.
+
 Run the optional semantic second-stage line reranker over the same source
 boundary:
 
