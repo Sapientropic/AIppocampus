@@ -248,6 +248,15 @@ hash-identity tombstone with counts and provenance hash; raw card text,
 source refs, and related-cache fingerprints for that card are removed so the
 dead-lettered cue does not keep reappearing as a related hit.
 
+For Dream working-memory rows, the owner transform lives in
+`aippocampus_runtime.dream.working_memory_compaction`. It is also
+maintenance-only and consumes the same dead-letter apply manifest, but returns
+transformed rows for the `working_memory.jsonl` owner to persist deliberately.
+The tombstone removes title, summary, recommendation, trigger terms,
+activation cues, source refs, and trust-horizon payload while preserving only
+hash identity, source/ref counts, provenance hash, reason codes, timestamps,
+and rebuild/review notes.
+
 `aippocampus_runtime.recall.fresh_thread_demo` is the #285 public-safe demonstration runner for this
 contract. It strings together the existing scent packet, action policy, and
 activation state modules over synthetic upstream decision packets across
