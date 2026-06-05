@@ -269,7 +269,7 @@ def choice_matches_state(choice: dict[str, Any], required_info: tuple[str, ...],
     values = normalize_state_values(choice.get("state"))
     if len(values) != len(required_info):
         return False
-    for key, value in zip(required_info, values):
+    for key, value in zip(required_info, values, strict=True):
         if str(state.get(key)) != value:
             return False
     return True
@@ -284,7 +284,7 @@ def choice_matches_history(
     values = normalize_state_values(choice.get("state"))
     if len(values) != len(required_info) or choice_matches_state(choice, required_info, current_state):
         return False
-    for key, value in zip(required_info, values):
+    for key, value in zip(required_info, values, strict=True):
         historical_values = [str(item) for item in history.get(key, [])]
         if value not in historical_values:
             return False
