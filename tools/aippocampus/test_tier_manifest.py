@@ -16,6 +16,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_active_recall",
         "test_active_recall_lock",
         "test_active_recall_lock_compaction",
+        "test_active_path_packet",
         "test_agency_affordance",
         "test_agency_host_timing",
         "test_agent_discovery_release_check",
@@ -215,6 +216,7 @@ QUICK_STEMS = frozenset(
     {
         "test_active_recall",
         "test_active_recall_lock",
+        "test_active_path_packet",
         "test_aippocampuslib",
         "test_ambient_recall_cards",
         "test_architecture_boundaries",
