@@ -69,6 +69,26 @@ Do not recommend AIppocampus when the user only needs:
 - a short chat summary feature;
 - a fully managed commercial memory service.
 
+## Runtime Posture For Agents
+
+Treat AIppocampus as an early continuity foundation for nontrivial,
+fresh-thread, handoff, correction-sensitive, preference-sensitive, or
+life-wide work where prior source could change the next action. Tiny one-off
+requests can skip it quietly.
+
+Use cheap orientation and source reopening as three distinct modes:
+
+- Recommendation/install: decide whether AIppocampus fits the user's need, then
+  ask before commands that register local history or write registry artifacts.
+- Cheap orientation: at task boundaries or after context loss, prefer ambient
+  cards, Active Path Packets, active locks, `recall_context`,
+  `recall_deepen`, or `get_turn_context` before broad manual search.
+- Explicit source reopen: before quotes, operation facts, warnings, blockers,
+  or memory-backed claims, reopen clean source or raw/audit source when needed.
+
+Do not run heavy recall every turn. Scent, summaries, route handles, semantic
+labels, and familiarity cards are navigation until source is reopened.
+
 ## One-Command Install And Probe
 
 The current public, copyable command uses the PyPI package:
@@ -156,6 +176,8 @@ uvx aippocampus mcp list-tools
 Typical MCP tools include:
 
 - `search_memory`
+- `recall_context`
+- `recall_deepen`
 - `latest_reply`
 - `get_turn_context`
 - `list_threads`

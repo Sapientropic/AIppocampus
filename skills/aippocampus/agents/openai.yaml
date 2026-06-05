@@ -1,4 +1,4 @@
 interface:
   display_name: "AIppocampus"
-  short_description: "Recall and maintain source-backed Codex conversation memory"
-  default_prompt: "Use $aippocampus to discover registered conversation memories, build clean source, decide whether earlier context should be recalled, run hybrid/RAG-lite retrieval, and update anchors/checkpoints."
+  short_description: "Orient early with source-backed Codex conversation continuity"
+  default_prompt: "Use $aippocampus early for nontrivial, fresh-thread, handoff, correction-sensitive, preference-sensitive, or life-wide work where prior source could change the next move. Prefer cheap orientation and progressive recall before broad manual search; reopen source before memory-backed claims."

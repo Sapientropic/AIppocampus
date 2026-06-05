@@ -53,6 +53,23 @@ The important product boundary is that source is evidence. Summaries, semantic
 labels, hook scents, route handles, benchmark metrics, and familiarity cards are
 navigation until an agent reopens durable source.
 
+## Agent Runtime Posture
+
+Use this lane early when a coding agent is starting nontrivial work, resuming a
+handoff, entering a fresh thread, recovering from compaction, or handling old
+decisions, rejected routes, corrections, or preferences that could affect the
+next patch. Skip quietly for tiny one-off commands with no continuity risk.
+
+The normal first move is cheap orientation, not a full memory dig. Prefer
+ambient cards, Active Path Packets, active locks, `recall_context`,
+`recall_deepen`, `get_turn_context`, or clean-source search before broad manual
+search. Deepen only when a candidate route can change the work.
+
+Use explicit source reopen before quoting old wording, asserting an operation
+fact, blocking a change, or turning a memory-backed clue into a public claim.
+Keep MCP tool-list checks for host wiring; MCP/progressive recall itself is the
+ordinary agent-facing route when available.
+
 ## 3-5 Minute Demo Path
 
 Start with the public package path. These commands work without a clone when

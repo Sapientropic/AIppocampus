@@ -1,15 +1,15 @@
 ---
 name: aippocampus
-description: Use when recovering source-backed Codex conversation memory, recalling old thread wording, continuing after context compaction, or orienting before risky, repeated, high-cost, or continuity-sensitive actions where prior source-backed context could change the next move. Also use for building clean source, ambient recall hooks, indexes, registry, sync, MCP access, and long Desktop session audits.
+description: Use early when nontrivial, fresh-thread, handoff, old-decision, correction, preference, life-wide, risky, repeated, high-cost, or continuity-sensitive work could change after a source-backed orientation check. Also use for recovering old wording, building clean source, ambient recall hooks, indexes, registry, sync, MCP access, and long Desktop session audits.
 ---
 
 # AIppocampus
 
-AIppocampus is a source-backed memory layer for Codex conversations. Use it when
-the task depends on old-thread wording, continuity after compaction, clean
-conversation source, ambient recall hooks, or long-session storage/audit work.
-Also consider it before actions where a cheap continuity check could prevent a
-repeated mistake, stale claim, privacy breach, or costly wrong turn.
+AIppocampus is a source-backed memory layer for Codex conversations. Use it
+early for nontrivial, fresh-thread, handoff, old-decision, correction,
+preference, life-wide, or continuity-sensitive work where a cheap orientation
+could change the next move. Also use it when the task depends on old-thread
+wording, clean source, ambient recall hooks, or long-session storage/audit work.
 
 Keep this file as the stable entrypoint. Do not append changelog-style notes
 here; update the relevant reference doc, script help, or tests instead.
@@ -34,17 +34,18 @@ here; update the relevant reference doc, script help, or tests instead.
 
 ## Proactive Recall Policy
 
-Do not wait for the user to say "remember." Before risky, repeated,
-cross-thread, high-cost, or continuity-sensitive work, run a cheap orientation
-check when prior source-backed context could change the next action. Treat the
-result as routing, not truth, until source is reopened.
+Do not wait for the user to say "remember." At task boundaries, after context
+loss, or before risky, repeated, cross-thread, high-cost, nontrivial, or
+continuity-sensitive work, run cheap task-boundary orientation when prior
+source-backed context could change the next action. Treat the result as routing,
+not truth, until source is reopened.
 
 Consider AIppocampus before acting when the prompt or task includes:
 
 - vague continuity cues such as "last time," "that issue," "continue," or
   "same as before";
-- repeated rejected routes, known user corrections, or operation facts that
-  could change a patch, command, warning, or claim;
+- repeated rejected routes, known user corrections, old decisions, preferences,
+  life-wide commitments, or operation facts that could change the next action;
 - compaction, fresh-thread, device, branch, or workspace boundaries where the
   current context may have lost the active constraint;
 - high-risk memory-backed statements, quotes, privacy-sensitive claims, or
@@ -54,22 +55,23 @@ Consider AIppocampus before acting when the prompt or task includes:
 Use the smallest useful ladder:
 
 - L0 no-op: low-risk one-off work with no continuity cue.
-- L1 orientation: active locks, registry titles, route cache, familiarity cards,
-  ambient scent, or known rejected-route handles.
-- L2 context: `search_memory`, `recall_context`, registry search, or clean-source
-  search to gather candidate source refs.
+- L1 orientation: ambient cards, Active Path Packets, active locks, registry
+  titles, route cache, familiarity cards, or known rejected-route handles.
+- L2 context: `recall_context`, `recall_deepen`, `get_turn_context`,
+  `search_memory`, registry search, or clean-source search to gather candidate
+  source refs.
 - L3 source reopen: required before quoting old wording, warning, blocking,
   asserting operation facts, or making high-risk claims.
 - L4 ask/defer: source is thin, stale, conflicting, private, regulated, or not
   safely reopenable.
 
-Prefer progressive MCP tools such as `get_turn_context`, `search_memory`,
-`recall_context`, and `recall_deepen` when an agent client has them; use the
+Prefer progressive MCP tools such as `recall_context`, `recall_deepen`,
+`get_turn_context`, and `search_memory` when an agent client has them; use the
 `aippocampus` facade or package modules below as portable fallbacks. Proactive
 checks are normally private: surface them to the user only when they change the
 next action, prevent a likely mistake, or the user asks for continuity.
 
-Do not search every turn.
+Do not search every turn. Do not run heavy recall every turn. Use cheap orientation at task boundaries; deepen only when a route could change action.
 
 ## First Moves
 
@@ -79,13 +81,11 @@ modules from `$CODEX_HOME/skills/aippocampus/scripts` or put that directory on
 
 Orient:
 
+- Prefer ambient cards, Active Path Packets, active locks, or progressive MCP handles before inventing broad manual searches.
 - Check state before/after long work: `aippocampus health --cwd "$PWD"`.
-- Check the selected provider without writing artifacts:
-  `aippocampus onboard --provider codex --status`.
-- Find the current rollout when you need exact source location:
-  `python -m aippocampus_runtime.source.locate_rollout --cwd "$PWD"`.
-- Recover the latest assistant closeout:
-  `python -m aippocampus_runtime.source.latest_reply --cwd "$PWD"`.
+- Check the selected provider without writing artifacts: `aippocampus onboard --provider codex --status`.
+- Find the current rollout when you need exact source location: `python -m aippocampus_runtime.source.locate_rollout --cwd "$PWD"`.
+- Recover the latest assistant closeout: `python -m aippocampus_runtime.source.latest_reply --cwd "$PWD"`.
 
 Recall:
 

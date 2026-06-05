@@ -48,6 +48,9 @@ REQUIRED_SKILL_PROACTIVE_TERMS = {
     "Do not search every turn.": (
         "SKILL.md missing proactive-vs-overactive anti-nag boundary"
     ),
+    "task-boundary orientation": "SKILL.md missing task-boundary orientation framing",
+    "Active Path Packets": "SKILL.md missing route-first Active Path Packet framing",
+    "Do not run heavy recall every turn.": "SKILL.md missing heavy-recall boundary",
     "progressive MCP tools": "SKILL.md missing progressive MCP recall preference",
 }
 
