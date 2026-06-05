@@ -89,6 +89,11 @@ python benchmarks\aippocampus\benchmark_locomo_public_users.py --json
 python benchmarks\aippocampus\benchmark_locomo_public_users.py --predictions .tmp\locomo-evidence-predictions.jsonl --json
 ```
 
+The default no-predictions run is a gold oracle scorer self-check: it supplies
+LoCoMo gold evidence ids as predictions to prove report/scorer semantics. Do
+not read the perfect default score as AIppocampus system retrieval performance;
+use the case pack and `--predictions` path below for that.
+
 For public replication, generate the model-facing local inputs first:
 
 ```powershell

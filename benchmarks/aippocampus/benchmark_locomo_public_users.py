@@ -348,6 +348,49 @@ def baseline_predictions(dataset: LocomoDataset, mode: str) -> dict[str, Predict
     return predictions
 
 
+def scoring_contract(
+    *,
+    predictions_file: Path | str | None,
+    baseline: str,
+) -> dict[str, Any]:
+    oracle_self_check = predictions_file is None and baseline == "gold"
+    if oracle_self_check:
+        return {
+            "role": "oracle_scorer_self_check",
+            "uses_gold_evidence_ids_as_prediction_input": True,
+            "system_under_test_required": False,
+            "headline_score_allowed": False,
+            "claim_boundary": (
+                "The default gold baseline is an oracle scorer self-check: it "
+                "proves report/scorer semantics only because gold evidence ids "
+                "are supplied as predictions. Use --predictions to evaluate "
+                "system retrieval performance."
+            ),
+        }
+    if predictions_file:
+        return {
+            "role": "external_prediction_score",
+            "uses_gold_evidence_ids_as_prediction_input": False,
+            "system_under_test_required": True,
+            "headline_score_allowed": False,
+            "claim_boundary": (
+                "External predictions are scored against LoCoMo evidence ids, "
+                "but this remains a same-conversation retrieval control rather "
+                "than a broad longitudinal-memory or answer-generation claim."
+            ),
+        }
+    return {
+        "role": f"{baseline}_baseline_control",
+        "uses_gold_evidence_ids_as_prediction_input": False,
+        "system_under_test_required": False,
+        "headline_score_allowed": False,
+        "claim_boundary": (
+            "Deterministic baseline control for scorer behavior; use "
+            "--predictions to evaluate system retrieval performance."
+        ),
+    }
+
+
 def score_case(
     case: LocomoCase,
     prediction: Prediction,
@@ -577,6 +620,10 @@ def run_benchmark(
         "status": "public_longitudinal_control_scored",
         "ok": ok,
         "quality_gate_ok": ok,
+        "scoring_contract": scoring_contract(
+            predictions_file=predictions_file,
+            baseline=baseline,
+        ),
         "config": {
             "dataset": public_path_label(dataset_path),
             "predictions_file_sha1": sha1_text(str(predictions_file))[:16]
@@ -652,6 +699,15 @@ def print_human_summary(payload: dict[str, Any]) -> None:
         print(f"- status: {payload['status']}")
         print(f"- next: {payload['next_step']}")
         return
+    contract = payload.get("scoring_contract") or {}
+    if contract.get("role") == "oracle_scorer_self_check":
+        print(
+            "- baseline: gold oracle scorer self-check; "
+            "use --predictions for system retrieval performance "
+            "(not system performance)"
+        )
+    elif contract.get("role") == "external_prediction_score":
+        print("- baseline: external predictions; gold evidence ids are scoring labels only")
     metrics = payload["metrics"]
     print(
         f"- users: {metrics['longitudinal_public_user_count']} "
