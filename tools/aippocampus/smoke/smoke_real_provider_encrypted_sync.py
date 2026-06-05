@@ -179,6 +179,7 @@ def empty_provider_metadata() -> dict[str, Any]:
         "min_ciphertext_bytes": 0,
         "max_ciphertext_bytes": 0,
         "size_bucket_counts": {label: 0 for _, label in SIZE_BUCKETS} | {OVER_1MIB_BUCKET: 0},
+        "size_bucket_bytes": {label: 0 for _, label in SIZE_BUCKETS} | {OVER_1MIB_BUCKET: 0},
         "path_shape_counts": {key: 0 for key in PATH_SHAPE_KEYS},
         "claims": {
             "provider_can_observe_object_count": False,
@@ -193,6 +194,74 @@ def empty_provider_metadata() -> dict[str, Any]:
             "broader_provider_matrix",
         ],
         "errors": [],
+    }
+
+
+def public_int(value: Any) -> int:
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+def metadata_padding_cost_report(provider_metadata: Mapping[str, Any]) -> dict[str, Any]:
+    """Estimate coarse bucket-padding overhead from public-safe aggregates only."""
+
+    counts = provider_metadata.get("size_bucket_counts") or {}
+    bytes_by_bucket = provider_metadata.get("size_bucket_bytes") or {}
+    total_bytes = public_int(provider_metadata.get("total_ciphertext_bytes"))
+    bucket_estimates: dict[str, dict[str, int | str]] = {}
+    estimated_padded_bytes = 0
+    bounded_object_count = 0
+
+    for ceiling, label in SIZE_BUCKETS:
+        object_count = public_int(counts.get(label))
+        observed_bytes = public_int(bytes_by_bucket.get(label))
+        padded_bytes = object_count * ceiling
+        bounded_object_count += object_count
+        estimated_padded_bytes += padded_bytes
+        bucket_estimates[label] = {
+            "object_count": object_count,
+            "observed_ciphertext_bytes": observed_bytes,
+            "padded_ciphertext_bytes": padded_bytes,
+            "padding_ceiling_bytes": ceiling,
+        }
+
+    unbounded_object_count = public_int(counts.get(OVER_1MIB_BUCKET))
+    unbounded_bytes = public_int(bytes_by_bucket.get(OVER_1MIB_BUCKET))
+    estimated_padded_bytes += unbounded_bytes
+    bucket_estimates[OVER_1MIB_BUCKET] = {
+        "object_count": unbounded_object_count,
+        "observed_ciphertext_bytes": unbounded_bytes,
+        "padded_ciphertext_bytes": unbounded_bytes,
+        "padding_ceiling_bytes": "unbounded",
+    }
+    overhead_bytes = max(0, estimated_padded_bytes - total_bytes)
+    overhead_ratio = round(overhead_bytes / total_bytes, 4) if total_bytes else 0.0
+    return {
+        "schema_version": 1,
+        "source": "provider_metadata_bucket_padding_cost",
+        "strategy": "coarse_size_bucket_ceiling",
+        "input_object_count": public_int(provider_metadata.get("object_count")),
+        "bounded_object_count": bounded_object_count,
+        "unbounded_object_count": unbounded_object_count,
+        "unpadded_ciphertext_bytes": total_bytes,
+        "estimated_padded_ciphertext_bytes": estimated_padded_bytes,
+        "estimated_padding_overhead_bytes": overhead_bytes,
+        "estimated_padding_overhead_ratio": overhead_ratio,
+        "bucket_estimates": bucket_estimates,
+        "decision": "defer_padding_until_user_risk_outweighs_cost",
+        "claims": {
+            "padding_cost_estimated": True,
+            "padding_implemented": False,
+            "traffic_analysis_resistance": False,
+        },
+        "cannot_claim": [
+            "padding_implemented",
+            "traffic_analysis_resistance",
+            "provider_console_cleanup",
+            "broader_provider_matrix",
+        ],
     }
 
 
@@ -249,6 +318,7 @@ def observe_provider_metadata(
         sizes.append(size)
         bucket = size_bucket_label(size)
         metadata["size_bucket_counts"][bucket] += 1
+        metadata["size_bucket_bytes"][bucket] += size
 
     if sizes:
         metadata.update(
@@ -261,6 +331,7 @@ def observe_provider_metadata(
         )
         metadata["claims"]["provider_can_observe_object_count"] = True
         metadata["claims"]["provider_can_observe_ciphertext_object_sizes"] = True
+    metadata["padding_cost_report"] = metadata_padding_cost_report(metadata)
     return metadata
 
 

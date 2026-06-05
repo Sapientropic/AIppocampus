@@ -66,6 +66,13 @@ endpoint URLs, and decrypted registry contents. Treat this as provider-visible
 metadata leakage evidence for padding/cost discussions; it does not claim that
 metadata padding has been evaluated or that traffic-analysis resistance exists.
 
+The same block includes a `padding_cost_report` derived only from those
+public-safe aggregates. It estimates the byte overhead of padding each bounded
+size bucket to its coarse ceiling and leaves the `gt_1MiB` bucket unpadded
+because that bucket has no finite public ceiling. This report is a cost input,
+not an implementation: it cannot claim padding is enabled, provider-console
+cleanup is complete, or traffic-analysis resistance exists.
+
 Use `--keep-objects` only for debugging a temporary test prefix.
 
 Encrypted sync hides synced registry/source contents from the provider, but it

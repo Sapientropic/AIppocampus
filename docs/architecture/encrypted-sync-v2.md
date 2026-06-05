@@ -131,6 +131,13 @@ padding/cost review without publishing object keys, credentials, endpoint URLs,
 or decrypted registry contents. The block is evidence input, not a padding
 implementation claim.
 
+As of 2026-06-05, that block also includes a `padding_cost_report` estimating
+coarse bucket-padding overhead from the same public-safe aggregates. The report
+pads bounded buckets to their published ceilings and leaves `gt_1MiB` as
+observed bytes because it has no finite public ceiling. This is enough to make
+the cost tradeoff reviewable after each provider smoke, but it still does not
+implement padding or claim traffic-analysis resistance.
+
 Padding decision: keep metadata padding deferred. The current evidence does not
 show that coarse object-size or object-count padding is worth the added cost,
 latency, and partial-guarantee confusion. AIppocampus can claim encrypted
