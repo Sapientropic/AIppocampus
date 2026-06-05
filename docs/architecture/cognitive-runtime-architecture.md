@@ -394,6 +394,17 @@ or parked dream candidates remain in a background holding queue and are not
 eligible for foreground hooks. User confirmation is a high-risk escape hatch,
 not the default dream workflow.
 
+The first Cognitive Observatory slice is a read-only diagnostic projection,
+not a live control plane. `aippocampus_runtime.ops.route_readiness` classifies
+prewarm/route handles as navigation-only `ready` or `suppressed` rows using
+TTL, freshness, privacy, source-ref, and ROI gates; stale, privacy-blocked, or
+low-value rows stay silent. `aippocampus_runtime.ops.cognitive_observatory`
+then aggregates that report with activation authority, recall diagnostics, and
+sleep-cycle public summaries so operators can inspect route readiness without
+writing clean source, owner caches, durable memory, or foreground hook state.
+These rows can justify reopening source, but they cannot support factual
+claims by themselves.
+
 ## Anti-Patterns
 
 Avoid these:
