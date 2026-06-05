@@ -546,11 +546,15 @@ class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
         self.assertEqual(guidance["problem"], "semantic_sidecar_selected_cases_absent")
         self.assertEqual(guidance["portable_smoke_mode"], "deterministic_label_fallback")
         self.assertIn("--allow-deterministic-labels", guidance["portable_smoke_command"])
-        self.assertIn("semantic_sidecar_sample_coverage", guidance["cannot_claim"])
-        self.assertIn(
-            "deterministic_label_fallback_is_not_semantic_sidecar_evidence",
-            guidance["cannot_claim"],
+        parent_claims = set(payload["cannot_claim"])
+        self.assertIn("semantic_sidecar_sample_coverage", parent_claims)
+        self.assertIn("selected_semantic_source_evidence", parent_claims)
+        self.assertEqual(guidance["cannot_claim"], ["deterministic_label_fallback_is_not_semantic_sidecar_evidence"])
+        self.assertEqual(
+            guidance["inherited_boundaries"],
+            {"source": "parent report", "count": 2},
         )
+        self.assertIn("memory-decision-benchmark-plan.md#track-b-source-evidence-retrieval", guidance["boundary_ref"])
 
     def test_track_b_wrapper_can_include_sharegpt_public_track(self) -> None:
         with (
