@@ -26,6 +26,19 @@ from aippocampus_runtime.recall import segment_builder as build_segments  # noqa
 
 
 class BuildSegmentsTests(unittest.TestCase):
+    def _message(self, line: int, turn_index: int, role: str = "assistant") -> dict:
+        return {
+            "line": line,
+            "timestamp": f"2026-06-05T00:00:0{line}Z",
+            "role": role,
+            "kind": "user_message" if role == "user" else "agent_message",
+            "phase": "final_answer" if role == "assistant" else "",
+            "turn_index": turn_index,
+            "is_final": role == "assistant",
+            "sha1": f"sha-{line}",
+            "text": f"message {line}",
+        }
+
     def _write_rollout(self, path: Path, cwd: Path, marker: str) -> None:
         path.write_text(
             "\n".join(
@@ -54,6 +67,59 @@ class BuildSegmentsTests(unittest.TestCase):
             + "\n",
             encoding="utf-8",
         )
+
+    def test_segment_groups_allow_bounded_overshoot_to_keep_normal_turn_together(self) -> None:
+        messages = [
+            self._message(1, 1, "user"),
+            self._message(2, 1, "assistant"),
+            self._message(3, 2, "user"),
+        ]
+        offsets = {1: (0, 20), 2: (20, 40), 3: (40, 50)}
+
+        groups = build_segments.segment_groups(
+            messages,
+            offsets,
+            segment_bytes=25,
+            max_messages=1,
+        )
+
+        self.assertEqual(len(groups), 2)
+        self.assertEqual([item["line"] for item in groups[0]["messages"]], [1, 2])
+        self.assertEqual(groups[0]["start_turn_index"], 1)
+        self.assertEqual(groups[0]["end_turn_index"], 1)
+        self.assertFalse(groups[0]["starts_with_partial_turn"])
+        self.assertFalse(groups[0]["ends_with_partial_turn"])
+        self.assertGreater(groups[0]["budget_overshoot_bytes"], 0)
+        self.assertGreater(groups[0]["budget_overshoot_messages"], 0)
+        self.assertEqual(groups[0]["turn_boundary_policy"], "bounded_complete_turn")
+
+    def test_segment_groups_mark_pathological_oversized_turn_partial(self) -> None:
+        messages = [
+            self._message(1, 1, "user"),
+            self._message(2, 1, "assistant"),
+            self._message(3, 1, "assistant"),
+            self._message(4, 2, "user"),
+        ]
+        offsets = {1: (0, 12), 2: (12, 24), 3: (24, 36), 4: (36, 48)}
+
+        groups = build_segments.segment_groups(
+            messages,
+            offsets,
+            segment_bytes=15,
+            max_messages=1,
+        )
+
+        self.assertEqual([[item["line"] for item in group["messages"]] for group in groups], [[1, 2], [3], [4]])
+        self.assertFalse(groups[0]["starts_with_partial_turn"])
+        self.assertTrue(groups[0]["ends_with_partial_turn"])
+        self.assertEqual(groups[0]["partial_turn_indices"], [1])
+        self.assertEqual(groups[0]["turn_boundary_policy"], "forced_partial_turn")
+        self.assertEqual(groups[0]["partial_turn_reason"], "turn_exceeds_bounded_overshoot")
+        self.assertTrue(groups[1]["starts_with_partial_turn"])
+        self.assertFalse(groups[1]["ends_with_partial_turn"])
+        self.assertEqual(groups[1]["partial_turn_indices"], [1])
+        self.assertEqual(groups[1]["turn_boundary_policy"], "forced_partial_turn")
+        self.assertEqual(groups[1]["partial_turn_reason"], "turn_exceeds_bounded_overshoot")
 
     def test_rebuild_lease_rejects_concurrent_writer(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -184,6 +250,11 @@ class BuildSegmentsTests(unittest.TestCase):
             self.assertEqual(first_pointer["last_known_good_generation"], first_generation)
             self.assertEqual(first_pointer["compatibility_path"], "manifest.json")
             self.assertTrue((output_dir / "manifest.json").is_file())
+            self.assertEqual(first_manifest["segments"][0]["start_turn_index"], 1)
+            self.assertEqual(first_manifest["segments"][0]["end_turn_index"], 1)
+            self.assertFalse(first_manifest["segments"][0]["starts_with_partial_turn"])
+            self.assertFalse(first_manifest["segments"][0]["ends_with_partial_turn"])
+            self.assertEqual(first_manifest["segments"][0]["partial_turn_indices"], [])
 
             self._write_rollout(rollout, cwd, "new")
             with (
