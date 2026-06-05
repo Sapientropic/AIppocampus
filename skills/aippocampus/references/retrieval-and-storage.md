@@ -158,7 +158,10 @@ by default. Passing `--output-dir .aippocampus` preserves the old project-local
 mode when a portable bundle, repo-local audit, or explicit debug run needs it.
 The stable `source_index.sqlite` path is a compatibility anchor; normal readers
 should resolve `source_index.pointer.json` to the current generation before
-opening SQLite, with last-known-good and stable fallbacks.
+opening SQLite, with last-known-good and stable fallbacks. When a reader opens a
+resolved generation path, it creates a short-lived `.reader-pins/*.json` file
+beside the pointer for the duration of the query so storage GC can distinguish
+active readers from expired old generations.
 
 Default retrieval is local hybrid search:
 
@@ -218,16 +221,17 @@ For hundred-MB or GB threads, use segments:
   still allowed to split and are marked as partial with a reason code.
 - `aippocampus_runtime.recall.segment_search` fans queries out to segments, optionally enforces
   `--fanout-budget` / `--max-segments` before opening SQLite shards, resolves
-  the segment pointer once per query, retrieves top candidates from that pinned
-  generation, identifies partial-turn boundary segments in JSON diagnostics,
+  the segment pointer once per query, writes a short-lived reader pin beside the
+  pointer while it searches that resolved generation, identifies partial-turn
+  boundary segments in JSON diagnostics,
   identifies adjacent segment ids for cross-boundary partial turns without
   stitching text, and merges global top-k with diversity penalties. Missing
   manifests or shard indexes report structured `segments_unavailable` /
   `build_required` status unless the caller explicitly asks to build segments.
-  Old generations are rebuildable cache targets and must not be deleted until a
-  reader-pin/TTL cleanup contract exists. Health/capacity/storage-gc dry-runs
-  may report those old generations as plan-only candidates, but that does not
-  change the deletion boundary.
+  Old generations are rebuildable cache targets. Health/capacity/storage-gc
+  dry-runs report reader-pin/TTL cleanup status, and storage GC apply may delete
+  only old generation directories whose active pins are gone, TTL has elapsed,
+  and current/LKG pointer protection still passes.
 
 Segment-local ids collide by design. Treat `(segment_id, id, line)` as the hit
 key.

@@ -322,6 +322,56 @@ class BuildIndexTests(unittest.TestCase):
 
             self.assertTrue(first_current.is_file())
 
+    def test_search_payload_pins_resolved_index_generation_for_query_duration(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            index_dir = root / "index"
+            current = index_dir / "generations" / "gen_current"
+            current.mkdir(parents=True)
+            sqlite_path = current / "source_index.sqlite"
+            sqlite_path.write_bytes(b"")
+            (index_dir / "source_index.pointer.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "kind": "aippocampus_sqlite_index_pointer",
+                        "current_generation": "gen_current",
+                        "last_known_good_generation": "gen_current",
+                        "current": "generations/gen_current/source_index.sqlite",
+                        "last_known_good": "generations/gen_current/source_index.sqlite",
+                        "stable": "source_index.sqlite",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            observed_pins: list[dict] = []
+
+            def fake_search(index: Path, *args, **kwargs) -> list[dict]:
+                self.assertEqual(Path(index), sqlite_path)
+                pin_dir = index_dir / ".reader-pins"
+                pins = list(pin_dir.glob("*.json"))
+                self.assertEqual(len(pins), 1)
+                observed_pins.append(json.loads(pins[0].read_text(encoding="utf-8")))
+                return []
+
+            with unittest.mock.patch.object(
+                search_rollout,
+                "search_hybrid_index",
+                side_effect=fake_search,
+            ):
+                payload = search_rollout.search_rollout_payload(
+                    search_rollout.RolloutSearchOptions(
+                        patterns=["memory"],
+                        cwd=root,
+                        index=index_dir / "source_index.sqlite",
+                        mode="ranked",
+                    )
+                )
+
+            self.assertEqual(payload["source"], str(sqlite_path))
+            self.assertEqual(observed_pins[0]["generation"], "gen_current")
+            self.assertFalse(list((index_dir / ".reader-pins").glob("*.json")))
+
     def test_resolve_sqlite_index_path_uses_last_known_good_when_current_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

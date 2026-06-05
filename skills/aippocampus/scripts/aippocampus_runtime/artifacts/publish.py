@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
+from aippocampus_runtime.artifacts.generation_pins import generation_cleanup_contract
+
 DEFAULT_ARTIFACT_LEASE_STALE_SECONDS = 6 * 60 * 60
 DEFAULT_SQLITE_BUSY_TIMEOUT_MS = 30_000
 INDEX_POINTER_NAME = "source_index.pointer.json"
@@ -244,11 +246,26 @@ def index_generation_diagnostics(
         generation_id = generation_dir.name
         sqlite_path = generation_dir / INDEX_SQLITE_NAME
         size = _safe_dir_size(generation_dir)
+        cleanup = generation_cleanup_contract(
+            index_dir,
+            generation_dir,
+            freshness_paths=[pointer_path],
+        )
         row = {
             "generation": generation_id,
             "bytes": size,
             "role": "protected" if generation_id in protected_generations else "old",
             "sqlite_exists": sqlite_path.is_file(),
+            "cleanup_status": (
+                "protected_current_or_last_known_good"
+                if generation_id in protected_generations
+                else cleanup["cleanup_status"]
+            ),
+            "generation_age_seconds": cleanup["generation_age_seconds"],
+            "reader_pin_ttl_seconds": cleanup["ttl_seconds"],
+            "active_reader_pin_count": cleanup["active_reader_pin_count"],
+            "expired_reader_pin_count": cleanup["expired_reader_pin_count"],
+            "cleanup_evidence": list(cleanup["evidence"]),
             **_generation_path_projection(generation_dir, root=root, include_paths=include_paths),
         }
         generation_rows.append(row)
@@ -319,7 +336,7 @@ def index_generation_diagnostics(
         "generation_gc_candidates": gc_candidates,
         "pointer_load_ms": pointer_load_ms,
         "publish_latency_ms": publish_latency_ms,
-        "cleanup_policy": "plan_only_until_reader_pin_or_ttl_contract",
+        "cleanup_policy": "reader_pin_ttl_contract",
     }
 
 
@@ -374,11 +391,26 @@ def segment_generation_diagnostics(
         generation_id = generation_dir.name
         manifest_path = generation_dir / SEGMENTS_MANIFEST_NAME
         size = _safe_dir_size(generation_dir)
+        cleanup = generation_cleanup_contract(
+            segments_dir,
+            generation_dir,
+            freshness_paths=[pointer_path],
+        )
         row = {
             "generation": generation_id,
             "bytes": size,
             "role": "protected" if generation_id in protected_generations else "old",
             "manifest_exists": manifest_path.is_file(),
+            "cleanup_status": (
+                "protected_current_or_last_known_good"
+                if generation_id in protected_generations
+                else cleanup["cleanup_status"]
+            ),
+            "generation_age_seconds": cleanup["generation_age_seconds"],
+            "reader_pin_ttl_seconds": cleanup["ttl_seconds"],
+            "active_reader_pin_count": cleanup["active_reader_pin_count"],
+            "expired_reader_pin_count": cleanup["expired_reader_pin_count"],
+            "cleanup_evidence": list(cleanup["evidence"]),
             **_generation_path_projection(generation_dir, root=root, include_paths=include_paths),
         }
         generation_rows.append(row)
@@ -449,7 +481,7 @@ def segment_generation_diagnostics(
         "generation_gc_candidates": gc_candidates,
         "pointer_load_ms": pointer_load_ms,
         "publish_latency_ms": publish_latency_ms,
-        "cleanup_policy": "plan_only_until_reader_pin_or_ttl_contract",
+        "cleanup_policy": "reader_pin_ttl_contract",
     }
 
 
