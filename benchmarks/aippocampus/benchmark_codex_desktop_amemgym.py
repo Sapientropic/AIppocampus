@@ -17,6 +17,7 @@ import argparse
 import hashlib
 import json
 import re
+import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -719,10 +720,24 @@ def desktop_live_protocol() -> dict[str, Any]:
     }
 
 
-def assert_public_safe(payload: Mapping[str, Any]) -> None:
-    encoded = json.dumps(payload, ensure_ascii=False)
+def assert_public_text(encoded: str) -> None:
     if PRIVATE_TEXT_RE.search(encoded):
         raise ValueError("public report contains private-looking text")
+
+
+def assert_public_safe(payload: Mapping[str, Any]) -> None:
+    assert_public_text(json.dumps(payload, ensure_ascii=False))
+
+
+def encode_public_json(payload: Mapping[str, Any], *, indent: int | None = None) -> str:
+    encoded = json.dumps(payload, ensure_ascii=False, indent=indent)
+    assert_public_text(encoded)
+    return encoded
+
+
+def write_public_stdout(text: str) -> None:
+    assert_public_text(text)
+    sys.stdout.write(text)
 
 
 def run_benchmark(
@@ -811,17 +826,18 @@ def run_benchmark(
 
 
 def print_human_summary(payload: Mapping[str, Any]) -> None:
-    print("AIppocampus Codex Desktop AMemGym-style benchmark")
-    print(f"status: {payload['status']}")
+    lines = ["AIppocampus Codex Desktop AMemGym-style benchmark"]
+    lines.append(f"status: {payload['status']}")
     metrics = payload["metrics"]
-    print(f"cases: {metrics['case_count']} arms: {metrics['arm_count']}")
+    lines.append(f"cases: {metrics['case_count']} arms: {metrics['arm_count']}")
     for arm in ARM_ORDER:
         arm_metrics = metrics["by_arm"][arm]
-        print(
+        lines.append(
             f"- {arm}: accuracy={arm_metrics['accuracy']} "
             f"normalized={arm_metrics['normalized_memory_score']}"
         )
-    print(f"score layer: {payload['claim_boundary']['score_layer']}")
+    lines.append(f"score layer: {payload['claim_boundary']['score_layer']}")
+    write_public_stdout("\n".join(lines) + "\n")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -835,11 +851,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+            encode_public_json(payload, indent=2) + "\n",
             encoding="utf-8",
         )
     if args.json_output:
-        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        write_public_stdout(encode_public_json(payload, indent=2) + "\n")
     else:
         print_human_summary(payload)
     return 0 if payload.get("ok") else 1
