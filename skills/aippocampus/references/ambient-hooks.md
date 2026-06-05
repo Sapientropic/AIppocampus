@@ -293,6 +293,17 @@ must skip payload-compacted tombstones. This does not mutate seed trigger files
 or promotion candidates, so a later semantic-trigger rebuild may recreate a
 trigger until the upstream owner lifecycle is handled separately.
 
+The explicit operator entrypoint for running these owner transforms together is
+`aippocampus_runtime.ops.activation_payload_compaction`. It reads an existing
+`aippocampus_activation_dead_letter_apply_manifest`, accepts explicit owner
+paths for ambient cache, Dream working memory, and reviewed semantic triggers,
+and defaults to a no-write dry run. Operators must pass `--apply` before owner
+files are rewritten. The runner report is path-free and payload-free: it may
+include owner names, hash ids, counts, reason codes, provenance hashes,
+timestamps, and boundary flags, but not raw activation text, source refs, or
+local filesystem paths. This runner is maintenance work, not foreground hook
+work and not a replacement for source reopen.
+
 `aippocampus_runtime.recall.fresh_thread_demo` is the #285 public-safe demonstration runner for this
 contract. It strings together the existing scent packet, action policy, and
 activation state modules over synthetic upstream decision packets across

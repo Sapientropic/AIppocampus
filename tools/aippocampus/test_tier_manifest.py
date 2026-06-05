@@ -11,6 +11,7 @@ class TestModuleClassification(NamedTuple):
 TEST_MODULE_STEMS = frozenset(
     {
         "test_aar_v2_action_time_nudges",
+        "test_activation_payload_compaction",
         "test_activation_surface_authority",
         "test_active_recall",
         "test_active_recall_lock",
