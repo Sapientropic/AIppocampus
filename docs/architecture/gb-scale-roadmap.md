@@ -21,9 +21,10 @@ agents do not mistake desired layers for finished behavior.
   current generation is missing. Legacy `versions/source_index-*.sqlite`
   pointers remain readable for migration.
 - `$CODEX_HOME/aippocampus-registry/threads/<thread>/index/segments/manifest.json`
-  can describe sealed segment indexes built by `build_segments.py`.
-  Project-local `.aippocampus/segments/` is explicit compatibility/debug
-  output only.
+  is the segment compatibility manifest. New segment rebuilds also publish
+  `segments/generations/gen_*/manifest.json` selected by
+  `segments.pointer.json`, with last-known-good fallback. Project-local
+  `.aippocampus/segments/` is explicit compatibility/debug output only.
 - `search_segments.py` fans a query out across segment SQLite indexes, can cap
   executable segment fanout before opening SQLite shards, and reports
   planned/searched/skipped segment counts alongside merged top-k hits.
@@ -102,7 +103,9 @@ Completed foundation:
   without reading message bodies or deleting files. Capacity and health reports
   now expose main-index generation pointer status, current/LKG ids, old
   generation bytes, pointer load time, publish latency, and plan-only old
-  generation GC candidates. `--apply --class rebuildable` still has a narrow
+  generation GC candidates. Segment rebuilds now publish generation manifests
+  and keep old generations plan-only until reporting and reader-pin/TTL cleanup
+  are implemented. `--apply --class rebuildable` still has a narrow
   path-level retention-report v1 for the main `source_index.sqlite` cache, with
   source/ref/lease/active-thread/pointer checks and an eviction manifest;
   capacity aggregates, old generation directories, and broader cache classes
@@ -205,9 +208,11 @@ Completed foundation:
      compatibility. Main-index generation-aware health/capacity reporting and
      plan-only old generation GC candidates are implemented; actual generation
      cleanup still waits for a reader-pin/TTL contract. Segment generation
-     directories and segment pointers remain later #581 slices. Default sync
-     keeps generated SQLite and pointer files out of the portable source set
-     while still repairing target-local rebuilt cache locators.
+     directories and `segments.pointer.json` are implemented for rebuild
+     publishing, while segment generation health/capacity reporting and actual
+     cleanup remain later #581 slices. Default sync keeps generated SQLite and
+     pointer files out of the portable source set while still repairing
+     target-local rebuilt cache locators.
 
 ## Near-term implementation order
 
@@ -262,11 +267,14 @@ Completed foundation:
    single-writer discipline, staged
    publish, and last-known-good restoration. Main indexes now use a
    `source_index.pointer.json` current/LKG generation pointer and stable SQLite
-   backup refresh. Capacity/health now report main-index generation GC
-   candidates without deleting them; actual cleanup still waits for
-   reader-pin/TTL semantics, and segment generation directories remain a later
-   slice. Default sync excludes generated SQLite caches and pointer files;
-   import/export reports pointer-resolved current SQLite for explicit bundles.
+   backup refresh. Segment rebuilds now publish
+   `segments/generations/gen_*/manifest.json` behind `segments.pointer.json`
+   while preserving `segments/manifest.json` as the compatibility manifest.
+   Capacity/health now report main-index generation GC candidates without
+   deleting them; segment generation reporting and actual cleanup still wait for
+   reader-pin/TTL semantics. Default sync excludes generated SQLite caches and
+   pointer files; import/export reports pointer-resolved current SQLite for
+   explicit bundles.
    Broader physical multi-device stress remains a
    release-readiness exercise, not a `quick` or `pr` tier claim.
 

@@ -36,6 +36,8 @@ DEFAULT_SEGMENT_BYTES = 64 * 1024 * 1024
 DEFAULT_MAX_MESSAGES = 1200
 DEFAULT_REBUILD_LEASE_STALE_SECONDS = 6 * 60 * 60
 REBUILD_LEASE_NAME = ".rebuild.lock"
+SEGMENTS_POINTER_NAME = "segments.pointer.json"
+SEGMENTS_GENERATIONS_DIR = "generations"
 
 
 def line_offsets(path: Path) -> tuple[dict[int, tuple[int, int]], int]:
@@ -117,6 +119,19 @@ def new_rebuild_dir(output_dir: Path) -> Path:
     return rebuild_dir
 
 
+def new_generation_dir(output_dir: Path) -> Path:
+    generations_dir = output_dir / SEGMENTS_GENERATIONS_DIR
+    generations_dir.mkdir(parents=True, exist_ok=True)
+    while True:
+        generation_id = f"gen_{time.strftime('%Y%m%dT%H%M%S', time.gmtime())}_{os.getpid()}_{time.time_ns()}"
+        generation_dir = generations_dir / generation_id
+        try:
+            generation_dir.mkdir(parents=True, exist_ok=False)
+        except FileExistsError:
+            continue
+        return generation_dir
+
+
 def remap_staged_sqlite_status(status: dict, staging_dir: Path, final_dir: Path) -> dict:
     remapped = dict(status)
     publish = dict(remapped.get("publish") or {})
@@ -142,6 +157,59 @@ def remap_staged_sqlite_status(status: dict, staging_dir: Path, final_dir: Path)
     return remapped
 
 
+def _write_json_atomic(path: Path, payload: dict) -> None:
+    tmp_path = path.with_name(f".{path.name}.tmp-{os.getpid()}-{time.time_ns()}")
+    tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp_path, path)
+
+
+def _pointer_value(pointer_path: Path, path: Path) -> str:
+    try:
+        return path.relative_to(pointer_path.parent).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def _load_segments_pointer(pointer_path: Path) -> dict:
+    if not pointer_path.exists():
+        return {}
+    try:
+        payload = json.loads(pointer_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _candidate_from_pointer(pointer_path: Path, value: object) -> Path | None:
+    if not isinstance(value, str) or not value:
+        return None
+    candidate = Path(value)
+    if not candidate.is_absolute():
+        candidate = pointer_path.parent / candidate
+    return candidate
+
+
+def _first_existing_manifest_candidate(pointer_path: Path, pointer: dict) -> Path | None:
+    for key in ("current", "last_known_good"):
+        candidate = _candidate_from_pointer(pointer_path, pointer.get(key))
+        if candidate and candidate.is_file():
+            return candidate
+    return None
+
+
+def _generation_id_for_manifest(pointer_path: Path, manifest_path: Path | None) -> str | None:
+    if manifest_path is None:
+        return None
+    try:
+        relative = manifest_path.relative_to(pointer_path.parent)
+    except ValueError:
+        return None
+    parts = relative.parts
+    if len(parts) >= 3 and parts[0] == SEGMENTS_GENERATIONS_DIR and parts[1].startswith("gen_"):
+        return parts[1]
+    return None
+
+
 @contextlib.contextmanager
 def rebuild_lease(
     output_dir: Path, *, stale_after_seconds: int = DEFAULT_REBUILD_LEASE_STALE_SECONDS
@@ -162,21 +230,31 @@ def rebuild_lease(
         yield lease_path
 
 
-def install_staged_segments(staging_dir: Path, output_dir: Path, manifest: dict) -> Path:
-    """Publish a complete segment rebuild without breaking last-known-good data.
+def install_staged_segments(
+    staging_dir: Path,
+    output_dir: Path,
+    generation_dir: Path,
+    manifest: dict,
+) -> Path:
+    """Publish a complete segment generation without breaking last-known-good data.
 
-    Build failures must not delete the segment dirs referenced by the existing
-    manifest. We therefore write into a hidden staging dir first, then move old
-    `seg-*` dirs aside only after every new SQLite shard and the new manifest are
-    ready. If the publish step fails, old dirs are restored before the exception
-    escapes.
+    Build failures must not delete segment dirs referenced by an existing
+    manifest or pointer. We therefore write into a hidden staging dir first,
+    move the new shards into a fresh generation, write the compatibility
+    manifest, and only then atomically swing `segments.pointer.json`.
     """
 
+    started = time.perf_counter()
     output_dir.mkdir(parents=True, exist_ok=True)
-    manifest_path = output_dir / "manifest.json"
-    stamp = f"{os.getpid()}-{int(time.time() * 1000)}"
-    backup_dir = output_dir / f".previous-{stamp}"
-    manifest_tmp = output_dir / f".manifest.json.tmp-{stamp}"
+    generation_dir.mkdir(parents=True, exist_ok=True)
+    compatibility_manifest_path = output_dir / "manifest.json"
+    pointer_path = output_dir / SEGMENTS_POINTER_NAME
+    previous_pointer = _load_segments_pointer(pointer_path)
+    previous_good = _first_existing_manifest_candidate(pointer_path, previous_pointer)
+    had_compatibility_manifest = compatibility_manifest_path.exists()
+    compatibility_manifest_bytes = (
+        compatibility_manifest_path.read_bytes() if had_compatibility_manifest else b""
+    )
     staged_names = [
         child.name
         for child in staging_dir.iterdir()
@@ -184,39 +262,57 @@ def install_staged_segments(staging_dir: Path, output_dir: Path, manifest: dict)
     ]
 
     try:
-        old_segments = [
-            child
-            for child in output_dir.iterdir()
-            if child.is_dir() and child.name.startswith("seg-")
-        ]
-        if old_segments:
-            backup_dir.mkdir(parents=True, exist_ok=False)
-        for child in old_segments:
-            shutil.move(str(child), str(backup_dir / child.name))
-
         for name in staged_names:
-            shutil.move(str(staging_dir / name), str(output_dir / name))
+            shutil.move(str(staging_dir / name), str(generation_dir / name))
 
-        manifest_tmp.write_text(
-            json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
+        generation_manifest_path = generation_dir / "manifest.json"
+        generation_manifest = dict(manifest)
+        generation_manifest["generation_id"] = generation_dir.name
+        generation_manifest["generation_layout"] = (
+            f"{SEGMENTS_GENERATIONS_DIR}/<generation>/seg-*"
         )
-        manifest_tmp.replace(manifest_path)
-    except Exception:
-        for name in staged_names:
-            published = output_dir / name
-            if published.exists():
-                shutil.rmtree(published)
-        if backup_dir.exists():
-            for child in backup_dir.iterdir():
-                shutil.move(str(child), str(output_dir / child.name))
-        raise
-    finally:
-        if manifest_tmp.exists():
-            manifest_tmp.unlink()
-        if backup_dir.exists():
-            shutil.rmtree(backup_dir, ignore_errors=True)
+        _write_json_atomic(generation_manifest_path, generation_manifest)
+        _write_json_atomic(compatibility_manifest_path, generation_manifest)
 
-    return manifest_path
+        last_known_good = previous_good or generation_manifest_path
+        last_known_good_generation = _generation_id_for_manifest(pointer_path, last_known_good)
+        if last_known_good == generation_manifest_path:
+            last_known_good_generation = generation_dir.name
+        pointer = {
+            "schema_version": 1,
+            "kind": "aippocampus_segments_pointer",
+            "created_at": generation_manifest.get("created_at"),
+            "updated_at": now_utc(),
+            "generation_layout": f"{SEGMENTS_GENERATIONS_DIR}/<generation>/manifest.json",
+            "current_generation": generation_dir.name,
+            "last_known_good_generation": last_known_good_generation,
+            "compatibility_path": "manifest.json",
+            "stable": _pointer_value(pointer_path, compatibility_manifest_path),
+            "current": _pointer_value(pointer_path, generation_manifest_path),
+            "last_known_good": _pointer_value(pointer_path, last_known_good),
+            "source_rollout_size": generation_manifest.get("source_rollout_size"),
+            "source_rollout_mtime": generation_manifest.get("source_rollout_mtime"),
+            "source_rollout_sha256": generation_manifest.get("source_rollout_sha256"),
+            "segment_count": generation_manifest.get("segment_count"),
+            "publish_latency_ms": round((time.perf_counter() - started) * 1000, 3),
+            "allowed_volatile_fields": [
+                "created_at",
+                "updated_at",
+                "publish_latency_ms",
+                "source_rollout_mtime",
+            ],
+        }
+        _write_json_atomic(pointer_path, pointer)
+    except Exception:
+        if had_compatibility_manifest:
+            compatibility_manifest_path.write_bytes(compatibility_manifest_bytes)
+        else:
+            with contextlib.suppress(FileNotFoundError):
+                compatibility_manifest_path.unlink()
+        shutil.rmtree(generation_dir, ignore_errors=True)
+        raise
+
+    return generation_manifest_path
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -252,7 +348,9 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("--max-messages must be at least 50")
 
     with rebuild_lease(output_dir):
+        generation_dir = new_generation_dir(output_dir)
         staging_dir = new_rebuild_dir(output_dir)
+        publish_complete = False
         try:
             raw_meta = read_session_meta(rollout) or {}
             meta = public_session_meta(raw_meta)
@@ -271,7 +369,7 @@ def main(argv: list[str] | None = None) -> int:
             for idx, group in enumerate(groups, start=1):
                 segment_id = f"seg-{idx:04d}"
                 build_segment_dir = staging_dir / segment_id
-                final_segment_dir = output_dir / segment_id
+                final_segment_dir = generation_dir / segment_id
                 build_segment_dir.mkdir(parents=True, exist_ok=True)
                 build_messages_path = build_segment_dir / "messages.jsonl"
                 build_sqlite_path = build_segment_dir / "source_index.sqlite"
@@ -332,6 +430,7 @@ def main(argv: list[str] | None = None) -> int:
                 "source_rollout": str(rollout),
                 "source_rollout_size": rollout_stat.st_size,
                 "source_rollout_mtime": rollout_stat.st_mtime,
+                "source_rollout_sha256": file_sha256(rollout),
                 "source_rollout_bytes_scanned": rollout_bytes,
                 "anchor_file": str(anchor_path) if anchor_path.exists() else None,
                 "anchor_mtime": anchor_path.stat().st_mtime if anchor_path.exists() else None,
@@ -347,9 +446,17 @@ def main(argv: list[str] | None = None) -> int:
                 "session_meta": meta,
                 "segments": segment_entries,
             }
-            manifest_path = install_staged_segments(staging_dir, output_dir, manifest)
+            manifest_path = install_staged_segments(
+                staging_dir,
+                output_dir,
+                generation_dir,
+                manifest,
+            )
+            publish_complete = True
         finally:
             shutil.rmtree(staging_dir, ignore_errors=True)
+            if not publish_complete:
+                shutil.rmtree(generation_dir, ignore_errors=True)
 
     if args.json_output:
         print(json.dumps(manifest, ensure_ascii=False, indent=2))

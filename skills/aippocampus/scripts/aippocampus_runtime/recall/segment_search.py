@@ -29,6 +29,7 @@ from aippocampus_runtime.recall.rollout_search import (
 from aippocampus_runtime.recall.scoring_policy import SEGMENT_MERGE_POLICY, SegmentMergePolicy
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
+SEGMENTS_POINTER_NAME = "segments.pointer.json"
 
 
 @dataclass(frozen=True)
@@ -62,6 +63,37 @@ def manifest_path(cwd: Path, segments_dir: str | None, *, prefer_existing: bool 
     if prefer_existing and not global_manifest.exists() and legacy_manifest.exists():
         return legacy_manifest
     return global_manifest
+
+
+def _load_segment_pointer(pointer_path: Path) -> dict:
+    if not pointer_path.exists():
+        return {}
+    try:
+        payload = json.loads(pointer_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _pointer_candidate(pointer_path: Path, value: object) -> Path | None:
+    if not isinstance(value, str) or not value:
+        return None
+    candidate = Path(value)
+    if not candidate.is_absolute():
+        candidate = pointer_path.parent / candidate
+    return candidate
+
+
+def resolve_manifest_path(manifest: Path) -> Path:
+    """Pin a segment generation manifest once for this search query."""
+
+    pointer_path = manifest.with_name(SEGMENTS_POINTER_NAME)
+    pointer = _load_segment_pointer(pointer_path)
+    for key in ("current", "last_known_good", "stable"):
+        candidate = _pointer_candidate(pointer_path, pointer.get(key))
+        if candidate and candidate.is_file():
+            return candidate
+    return manifest
 
 
 def load_manifest(path: Path) -> dict:
@@ -364,13 +396,18 @@ def unavailable_segments_payload(
 def search_segments_payload(options: SegmentSearchOptions) -> dict:
     patterns = list(options.patterns)
     cwd = Path(options.cwd).resolve()
-    manifest = manifest_path(cwd, str(options.segments_dir) if options.segments_dir else None, prefer_existing=not options.build_segments)
+    manifest = manifest_path(
+        cwd,
+        str(options.segments_dir) if options.segments_dir else None,
+        prefer_existing=not options.build_segments,
+    )
     ensure_segments(
         cwd,
         str(options.rollout) if options.rollout else None,
         manifest,
         options.build_segments,
     )
+    manifest = resolve_manifest_path(manifest)
     data = load_manifest(manifest)
     if not data:
         return unavailable_segments_payload(
