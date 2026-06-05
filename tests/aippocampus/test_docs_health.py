@@ -40,6 +40,26 @@ class DocsHealthTests(unittest.TestCase):
         self.assertLessEqual(result["metrics"]["skill_lines"], docs_health.MAX_SKILL_LINES)
         self.assertLessEqual(result["metrics"]["skill_words"], docs_health.MAX_SKILL_WORDS)
 
+    def test_agent_entrypoints_frame_early_route_first_continuity(self) -> None:
+        skill_text = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        agent_context = (REPO_ROOT / "docs" / "agent-context.md").read_text(
+            encoding="utf-8"
+        )
+        coding_lane = (
+            REPO_ROOT / "docs" / "guides" / "coding-agent-memory.md"
+        ).read_text(encoding="utf-8")
+        coding_lane_flat = " ".join(coding_lane.split())
+
+        self.assertIn("nontrivial", skill_text)
+        self.assertIn("task-boundary orientation", skill_text)
+        self.assertIn("Active Path Packets", skill_text)
+        self.assertIn("Do not run heavy recall every turn.", skill_text)
+        self.assertIn("## Runtime Posture For Agents", agent_context)
+        self.assertIn("cheap orientation", agent_context.lower())
+        self.assertIn("explicit source reopen", agent_context.lower())
+        self.assertIn("## Agent Runtime Posture", coding_lane)
+        self.assertIn("before broad manual search", coding_lane_flat)
+
     def test_private_thread_anchor_artifact_is_gitignored(self) -> None:
         repo_root = docs_health.find_repo_root(ROOT)
         self.assertIsNotNone(repo_root)
