@@ -212,11 +212,16 @@ For hundred-MB or GB threads, use segments:
   manifest.
 - Each segment has its own `messages.jsonl` and `source_index.sqlite`.
 - The segment manifest records source rollout size/mtime/hash, anchor hash,
-  byte spans, line spans, message spans, and index paths.
+  byte spans, line spans, message spans, turn ranges, partial-turn boundary
+  diagnostics, and index paths. The builder prefers cutting after complete
+  turns when a bounded overshoot is enough; pathological oversized turns are
+  still allowed to split and are marked as partial with a reason code.
 - `aippocampus_runtime.recall.segment_search` fans queries out to segments, optionally enforces
   `--fanout-budget` / `--max-segments` before opening SQLite shards, resolves
   the segment pointer once per query, retrieves top candidates from that pinned
-  generation, and merges global top-k with diversity penalties. Missing
+  generation, identifies partial-turn boundary segments in JSON diagnostics,
+  identifies adjacent segment ids for cross-boundary partial turns without
+  stitching text, and merges global top-k with diversity penalties. Missing
   manifests or shard indexes report structured `segments_unavailable` /
   `build_required` status unless the caller explicitly asks to build segments.
   Old generations are rebuildable cache targets and must not be deleted until a

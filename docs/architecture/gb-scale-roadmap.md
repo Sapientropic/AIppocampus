@@ -97,7 +97,11 @@ Completed foundation:
   skipped, and missing-index counts. `--full-fanout` remains the explicit
   diagnostics/benchmark path. Missing manifests or shard indexes now return
   structured `segments_unavailable` / `build_required` status unless
-  `--build-segments` is explicitly requested.
+  `--build-segments` is explicitly requested. Segment manifests now carry turn
+  ranges and partial-turn boundary diagnostics; normal user/final-answer turns
+  can finish inside a bounded overshoot instead of being cut purely by
+  byte/message thresholds. Search payloads also identify adjacent segment ids
+  for cross-boundary partial turns while keeping text stitching as later work.
 - `aippocampus storage gc --dry-run` starts the storage governance bridge: it
   reports protected source bytes, reclaimable rebuildable/review bytes, and
   candidate safety preconditions from capacity data plus existing retention JSON
@@ -132,8 +136,11 @@ Completed foundation:
      practical lesson from search engines that shard size should remain small
      enough for fast rebuild and easy replacement.
    - Store a segment manifest with source byte range, line range, message range,
-     anchor digest, and index capabilities.
-   - Status: implemented in `build_segments.py`.
+     turn range, partial-turn boundary diagnostics, anchor digest, and index
+     capabilities.
+   - Status: implemented in `segment_builder.py` and `segment_search.py`; full
+     cross-boundary text stitching or duplicated windows remain later
+     retrieval-quality work.
 
 3. Query fanout and top-k merge
    - Registry chooses candidate threads.

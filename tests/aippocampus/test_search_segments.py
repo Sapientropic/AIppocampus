@@ -245,6 +245,89 @@ class SegmentSearchTests(unittest.TestCase):
         self.assertEqual(current_payload["matches"][0]["segment_id"], "seg-new")
         self.assertEqual(fallback_payload["matches"][0]["segment_id"], "seg-old")
 
+    def test_search_payload_reports_partial_turn_boundary_diagnostics(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            first_sqlite = root / "seg-partial-a.sqlite"
+            second_sqlite = root / "seg-partial-b.sqlite"
+            first_sqlite.write_text("", encoding="utf-8")
+            second_sqlite.write_text("", encoding="utf-8")
+            segments_dir = self._write_manifest(
+                root,
+                [
+                    {
+                        "id": "seg-partial-a",
+                        "sqlite": str(first_sqlite),
+                        "start_line": 1,
+                        "end_line": 9,
+                        "start_global_id": 1,
+                        "end_global_id": 2,
+                        "start_turn_index": 7,
+                        "end_turn_index": 7,
+                        "starts_with_partial_turn": False,
+                        "ends_with_partial_turn": True,
+                        "partial_turn_indices": [7],
+                    },
+                    {
+                        "id": "seg-partial-b",
+                        "sqlite": str(second_sqlite),
+                        "start_line": 10,
+                        "end_line": 20,
+                        "start_global_id": 3,
+                        "end_global_id": 4,
+                        "start_turn_index": 7,
+                        "end_turn_index": 7,
+                        "starts_with_partial_turn": True,
+                        "ends_with_partial_turn": False,
+                        "partial_turn_indices": [7],
+                    }
+                ],
+            )
+
+            def fake_search(index: Path, *args, **kwargs) -> list[dict]:
+                if Path(index) != second_sqlite:
+                    return []
+                return [
+                    {
+                        "id": 1,
+                        "line": 12,
+                        "timestamp": "",
+                        "role": "assistant",
+                        "kind": "message",
+                        "turn_index": 7,
+                        "score": 9.0,
+                        "snippet": "partial turn match",
+                        "signals": {},
+                    }
+                ]
+
+            with mock.patch.object(segment_search, "search_hybrid_index", side_effect=fake_search):
+                payload = segment_search.search_segments_payload(
+                    segment_search.SegmentSearchOptions(
+                        patterns=["memory"],
+                        cwd=root,
+                        segments_dir=segments_dir,
+                        mode="ranked",
+                    )
+                )
+
+        diagnostics = payload["turn_boundary_diagnostics"]
+        self.assertTrue(diagnostics["has_partial_turn_boundaries"])
+        self.assertEqual(diagnostics["partial_segment_count"], 2)
+        self.assertEqual(diagnostics["partial_turn_indices"], [7])
+        self.assertEqual(diagnostics["partial_segments"][0]["segment_id"], "seg-partial-a")
+        self.assertTrue(payload["matches"][0]["segment_starts_with_partial_turn"])
+        self.assertEqual(payload["matches"][0]["segment_turn_range"], [7, 7])
+        self.assertEqual(
+            payload["matches"][0]["cross_boundary_turn_context"],
+            {
+                "status": "identified",
+                "turn_indices": [7],
+                "adjacent_segment_ids": ["seg-partial-a"],
+                "stitched": False,
+            },
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

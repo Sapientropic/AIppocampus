@@ -38,6 +38,10 @@ DEFAULT_REBUILD_LEASE_STALE_SECONDS = 6 * 60 * 60
 REBUILD_LEASE_NAME = ".rebuild.lock"
 SEGMENTS_POINTER_NAME = "segments.pointer.json"
 SEGMENTS_GENERATIONS_DIR = "generations"
+TURN_BOUNDARY_POLICY = "bounded_complete_turn"
+TURN_BOUNDARY_PARTIAL_POLICY = "forced_partial_turn"
+TURN_BOUNDARY_PARTIAL_REASON = "turn_exceeds_bounded_overshoot"
+TURN_BOUNDARY_OVERSHOOT_MULTIPLIER = 2
 
 
 def line_offsets(path: Path) -> tuple[dict[int, tuple[int, int]], int]:
@@ -63,11 +67,43 @@ def segment_groups(
     start_offset = 0
     last_end = 0
     start_global_id = 1
+    max_turn_span = max(1, int(segment_bytes)) * TURN_BOUNDARY_OVERSHOOT_MULTIPLIER
+    max_turn_messages = max(1, int(max_messages)) * TURN_BOUNDARY_OVERSHOOT_MULTIPLIER
+
+    def turn_index(message: dict | None) -> int | None:
+        if not isinstance(message, dict):
+            return None
+        value = message.get("turn_index")
+        return value if isinstance(value, int) else None
+
+    def same_turn(left: dict | None, right: dict | None) -> bool:
+        left_turn = turn_index(left)
+        right_turn = turn_index(right)
+        return left_turn is not None and left_turn == right_turn
 
     def flush() -> None:
         nonlocal current, start_offset, last_end, start_global_id
         if not current:
             return
+        first_global_id = int(current[0]["global_id"])
+        last_global_id = int(current[-1]["global_id"])
+        previous_message = messages[first_global_id - 2] if first_global_id > 1 else None
+        next_message = messages[last_global_id] if last_global_id < len(messages) else None
+        starts_partial = same_turn(previous_message, current[0])
+        ends_partial = same_turn(current[-1], next_message)
+        partial_turn_indices = sorted(
+            {
+                turn
+                for turn in (turn_index(current[0]), turn_index(current[-1]))
+                if turn is not None
+                and (
+                    (starts_partial and turn == turn_index(current[0]))
+                    or (ends_partial and turn == turn_index(current[-1]))
+                )
+            }
+        )
+        raw_span_bytes = max(0, last_end - start_offset)
+        partial_reason = TURN_BOUNDARY_PARTIAL_REASON if partial_turn_indices else None
         groups.append(
             {
                 "start_global_id": start_global_id,
@@ -76,7 +112,18 @@ def segment_groups(
                 "end_line": current[-1]["line"],
                 "start_offset": start_offset,
                 "end_offset": last_end,
-                "raw_span_bytes": max(0, last_end - start_offset),
+                "raw_span_bytes": raw_span_bytes,
+                "start_turn_index": turn_index(current[0]),
+                "end_turn_index": turn_index(current[-1]),
+                "starts_with_partial_turn": starts_partial,
+                "ends_with_partial_turn": ends_partial,
+                "partial_turn_indices": partial_turn_indices,
+                "turn_boundary_policy": (
+                    TURN_BOUNDARY_PARTIAL_POLICY if partial_turn_indices else TURN_BOUNDARY_POLICY
+                ),
+                "partial_turn_reason": partial_reason,
+                "budget_overshoot_bytes": max(0, raw_span_bytes - int(segment_bytes)),
+                "budget_overshoot_messages": max(0, len(current) - int(max_messages)),
                 "messages": current,
             }
         )
@@ -90,7 +137,16 @@ def segment_groups(
         if not current:
             start_offset = msg_start
         proposed_span = max(0, msg_end - start_offset)
-        if current and (proposed_span >= segment_bytes or len(current) >= max_messages):
+        budget_exceeded = current and (
+            proposed_span >= int(segment_bytes) or len(current) >= int(max_messages)
+        )
+        allow_turn_overshoot = (
+            budget_exceeded
+            and same_turn(current[-1], message)
+            and proposed_span <= max_turn_span
+            and len(current) + 1 <= max_turn_messages
+        )
+        if budget_exceeded and not allow_turn_overshoot:
             flush()
             start_offset = msg_start
         record = dict(message)
@@ -415,6 +471,19 @@ def main(argv: list[str] | None = None) -> int:
                         "end_offset": group["end_offset"],
                         "raw_span_bytes": group["raw_span_bytes"],
                         "message_count": len(group["messages"]),
+                        "start_turn_index": group.get("start_turn_index"),
+                        "end_turn_index": group.get("end_turn_index"),
+                        "starts_with_partial_turn": bool(
+                            group.get("starts_with_partial_turn")
+                        ),
+                        "ends_with_partial_turn": bool(group.get("ends_with_partial_turn")),
+                        "partial_turn_indices": list(group.get("partial_turn_indices") or []),
+                        "turn_boundary_policy": group.get("turn_boundary_policy"),
+                        "partial_turn_reason": group.get("partial_turn_reason"),
+                        "budget_overshoot_bytes": int(group.get("budget_overshoot_bytes") or 0),
+                        "budget_overshoot_messages": int(
+                            group.get("budget_overshoot_messages") or 0
+                        ),
                         "sqlite_status": sqlite_status,
                     }
                 )

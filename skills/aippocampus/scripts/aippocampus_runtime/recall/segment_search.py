@@ -27,6 +27,13 @@ from aippocampus_runtime.recall.rollout_search import (
     search_index_literal,
 )
 from aippocampus_runtime.recall.scoring_policy import SEGMENT_MERGE_POLICY, SegmentMergePolicy
+from aippocampus_runtime.recall.segment_metadata import (
+    annotate_rag_chunk,
+    annotate_segment_result,
+    cross_boundary_turn_contexts,
+    empty_turn_boundary_diagnostics,
+    turn_boundary_diagnostics,
+)
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
 SEGMENTS_POINTER_NAME = "segments.pointer.json"
@@ -318,29 +325,6 @@ def merge_topk(
     return selected[:limit]
 
 
-def annotate_segment_result(result: dict, segment: dict, ordinal: int) -> dict:
-    item = dict(result)
-    item["segment_id"] = segment["id"]
-    item["segment_ordinal"] = ordinal
-    item["segment_start_line"] = segment.get("start_line")
-    item["segment_end_line"] = segment.get("end_line")
-    item["global_id_range"] = [segment.get("start_global_id"), segment.get("end_global_id")]
-    signals = dict(item.get("signals") or {})
-    signals["segment_id"] = segment["id"]
-    item["signals"] = signals
-    if item.get("context"):
-        for ctx in item["context"]:
-            ctx["segment_id"] = segment["id"]
-    return item
-
-
-def annotate_rag_chunk(chunk: dict, segment: dict, ordinal: int) -> dict:
-    item = dict(chunk)
-    item["segment_id"] = segment["id"]
-    item["segment_ordinal"] = ordinal
-    return item
-
-
 def query_context_payload(options: SegmentSearchOptions, cwd: Path) -> dict:
     patterns = list(options.patterns)
     anchor_path = resolve_anchor_path(str(cwd), str(options.anchors))
@@ -383,6 +367,7 @@ def unavailable_segments_payload(
             "matches": [],
             "segment_errors": [],
             "fanout": _empty_fanout(options),
+            "turn_boundary_diagnostics": empty_turn_boundary_diagnostics(),
             "availability": {
                 "reason": reason,
                 "build_required": True,
@@ -426,6 +411,8 @@ def search_segments_payload(options: SegmentSearchOptions) -> dict:
     rag_context: list[dict] = []
     segment_errors: list[dict] = []
     segments = list(data.get("segments") or [])
+    boundary_contexts = cross_boundary_turn_contexts(segments)
+    boundary_diagnostics = turn_boundary_diagnostics(segments, boundary_contexts)
     planned_segments, fanout = plan_segments(segments, options)
     searched_segment_count = 0
     missing_index_count = 0
@@ -463,7 +450,10 @@ def search_segments_payload(options: SegmentSearchOptions) -> dict:
                     snippet_chars=options.snippet_chars,
                     context_radius=options.context,
                 )
-            raw_results.extend(annotate_segment_result(hit, segment, ordinal) for hit in hits)
+            raw_results.extend(
+                annotate_segment_result(hit, segment, ordinal, boundary_contexts)
+                for hit in hits
+            )
         except Exception as exc:
             segment_errors.append({"segment_id": segment.get("id"), "error": str(exc)})
 
@@ -490,6 +480,7 @@ def search_segments_payload(options: SegmentSearchOptions) -> dict:
         "matches": results,
         "segment_errors": segment_errors,
         "fanout": fanout,
+        "turn_boundary_diagnostics": boundary_diagnostics,
         "availability": {
             "reason": "available" if available else "sqlite_missing",
             "build_required": bool(missing_index_count),
