@@ -186,6 +186,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_semantic_trigger_compaction",
         "test_semantic_trigger_router",
         "test_simulate_prompt_hook",
+        "test_spend_doctor",
         "test_source_evidence_recall_eval",
         "test_stage_0_5_smoke",
         "test_storage_capacity_report",
