@@ -6,11 +6,26 @@ and what remains out of scope before any official or comparative score can be
 quoted.
 
 Decision: suitable as a staged external benchmark adapter, but not as an
-official AMemGym score runner yet. The repository now has a deterministic,
-public-safe metadata smoke for the public `v1.base` JSON plus a local
-prediction-overlay smoke that keeps native answer accuracy, write/read
-diagnosis, utilization, source-backed fidelity, cost/latency, and public claim
-boundaries separate.
+official full-`v1.base` score claim yet. The repository now has a deterministic,
+public-safe metadata smoke for the public `v1.base` JSON, a local
+prediction-overlay smoke, and an official-runner bridge that can run an
+operator-provided upstream AMemGym checkout from ignored local paths and
+summarize official `Overall`, `UB`, `Random`, and normalized `Memory` outputs.
+
+The official-runner bridge also has AIppocampus `BaseAgent` adapter arms. This
+is useful only when the report keeps the lifecycle boundary visible:
+`act/add_msgs` captures visible messages, `save_state` refreshes generic JSONL,
+clean source, and source index, a pre-score phase materializes worker surfaces,
+and `answer_question` consumes those prepared artifacts without mutating state.
+If the worker/semantic sidecar surfaces are absent, the arm is explicitly a
+clean-source/file-retrieval baseline, not the full AIppocampus system.
+
+For Codex Desktop product evidence, keep the separate Desktop contract. It
+compares native Codex without AIppocampus, AIppocampus clean-source recall
+without semantic sidecars, and AIppocampus with semantic sidecar navigation
+inside the actual Codex Desktop host. Its default output is only a contract
+preview until a clean isolated Desktop run supplies claimable live environment
+evidence.
 
 ## Official Sources
 
@@ -30,12 +45,23 @@ Verified source facts on 2026-06-05:
   evolution periods, two states per question, four changes per period, and seed
   42.
 - The official repository describes four agent arms: Native, RAG, AWI, and AWE.
+- The official `Overall` path evaluates multiple-choice answers through the
+  upstream prompt/parser/metric path, expecting a JSON integer answer rather
+  than free-form generation.
+- The official agent extension surface is `amemgym.assistants.create_agent`
+  plus the `BaseAgent` methods `reset`, `act`, `add_msgs`, `load_state`,
+  `save_state`, and `answer_question`; there is no separate plugin registry.
 - The default official metric list currently enables `accuracy`; `hamming` and
   `jaccard` exist in the metric code but are not in the default metric list.
 - The official diagnosis path writes `write_failure`, `read_failure`, and
   `memory_success`. Utilization is owned by the upper-bound/utilization path,
   so AIppocampus must not pretend `utilization_failure` is a native diagnosis
   output.
+- OpenRouter's OpenAI-compatible API uses the
+  `https://openrouter.ai/api/v1` base URL and organization-prefixed model ids
+  such as `openai/gpt-4.1-mini`; the bridge maps a local `Open_Router`
+  credential alias to the `OPENAI_API_KEY` name expected by the official
+  runner, but never writes the credential value to reports.
 
 Local download smoke on 2026-06-05:
 
@@ -50,8 +76,9 @@ AMemGym score.
 
 ## Runner
 
-The adapter lives at `benchmarks/aippocampus/benchmark_amemgym.py` with source
-metadata in `benchmark_corpus/amemgym_manifest.json`.
+The metadata/overlay adapter lives at
+`benchmarks/aippocampus/benchmark_amemgym.py` with source metadata in
+`benchmark_corpus/amemgym_manifest.json`.
 
 Fresh clones can run the missing-dataset boundary without network:
 
@@ -81,17 +108,130 @@ Downloaded official data belongs under the ignored
 `benchmark_corpus/amemgym/` directory. Generated reports and prediction
 templates belong under `.tmp/` or `benchmark_corpus/reports/`.
 
+The official-runner bridge lives at
+`benchmarks/aippocampus/benchmark_amemgym_official.py`. It assumes the upstream
+AMemGym repository is installed or cloned in an ignored local path, defaulting
+to `.tmp/amemgym-upstream`, and invokes the official modules rather than
+reimplementing their scoring:
+
+```powershell
+git clone https://github.com/AGI-Eval-Official/amemgym.git .tmp\amemgym-upstream
+uv sync --project .tmp\amemgym-upstream
+python benchmarks\aippocampus\benchmark_amemgym_official.py --runner uv --provider openrouter --run random --json
+```
+
+For OpenRouter runs, set `Open_Router` as a local machine/user/process secret.
+The bridge maps it into the official runner's `OPENAI_API_KEY` environment
+variable and sets `OPENAI_BASE_URL` to OpenRouter only inside the subprocess.
+The generated local agent config is written under `.tmp/amemgym-official/` and
+uses `openai/gpt-4.1-mini` by default so OpenRouter receives a supported model
+id. Raw official output directories stay ignored.
+
+Tiny local slices may be useful while debugging provider wiring, path handling,
+or output discovery, but they are not evidence numbers and must not be promoted
+into public reports. Use the full public `v1.base` fixed arm before recording
+`Overall`, `UB`, `Random`, or normalized `Memory` as evidence.
+
+The official bridge supports three arm names:
+
+| Arm | What it measures | Claim boundary |
+| --- | --- | --- |
+| `official_native_full_history` | Upstream Native-style full `msg_history` in model context, using the official evaluator. | Native baseline for the chosen model/provider only after full fixed-arm outputs exist. |
+| `aippocampus_clean_source_no_semantic_sidecar` | AIppocampus visible-message export through generic JSONL, clean source, source index, and source-backed snippet recall. | File/clean-source retrieval baseline; not the full AIppocampus semantic worker system. |
+| `aippocampus_semantic_sidecar` | The same source-backed adapter plus prepared working-memory, semantic trigger, semantic cue, or semantic sidecar navigation surfaces, with source reopen. | Full semantic-worker arm only when `adapter_metadata.json` shows prepared worker surfaces for the scored period states; otherwise it degrades to the clean-source baseline. |
+
+Example official Native baseline plan or run:
+
+```powershell
+python benchmarks\aippocampus\benchmark_amemgym_official.py --runner uv --provider openrouter --arm official_native_full_history --run random --json
+```
+
+Example AIppocampus clean-source official adapter run:
+
+```powershell
+python benchmarks\aippocampus\benchmark_amemgym_official.py --runner uv --provider openrouter --arm aippocampus_clean_source_no_semantic_sidecar --run overall --reset --json
+```
+
+Example semantic-sidecar adapter run shape:
+
+```powershell
+python benchmarks\aippocampus\benchmark_amemgym_official.py --runner uv --provider openrouter --arm aippocampus_semantic_sidecar --run overall --reset --json
+```
+
+Reports include `aippocampus_official_adapter_protocol`,
+`aippocampus_agent_adapter`, and `aippocampus_agent_state` so downstream
+summaries can tell whether a score came from full-history Native,
+clean-source-only retrieval, or a prepared semantic-worker arm. Do not quote a
+semantic-worker result unless `aippocampus_agent_state.semantic_worker_state`
+is `prepared`.
+
+The Codex Desktop AMemGym-style benchmark lives at
+`benchmarks/aippocampus/benchmark_codex_desktop_amemgym.py`. It does not invoke
+the official AMemGym runner and does not implement `BaseAgent`; it reuses the
+AMemGym evaluation idea of state evolution, later multiple-choice questions,
+random baseline, oracle upper bound, and normalized memory score:
+
+```powershell
+python benchmarks\aippocampus\benchmark_codex_desktop_amemgym.py --json
+```
+
+The default command is a public-safe contract preview. Live Desktop scores can
+be claimed only when each arm proves `openai/gpt-4.1-mini`, a disposable clean
+workspace, an isolated Codex home, and no loaded skills/plugins beyond the
+intended surface. The native arm must observe `loaded_skill_names=[]`; the two
+AIppocampus arms must observe only `loaded_skill_names=["aippocampus"]`, with
+semantic sidecar disabled or enabled according to the arm.
+
+The Desktop contract now treats five score-distortion risks as hard gates:
+
+- Scored question turns must not mutate later scored turns. Each question must
+  run through per-question fork/rollback or restart from the same
+  post-compaction checkpoint, with answer writes discarded.
+- Answer choices must be personalized natural-language recommendations. Raw
+  state-key recall, route codes, color/shelf/code slots, or other direct memory
+  recitation questions are not claimable Desktop evidence.
+- Setup state must be exposed through implicit natural sessions. Explicit
+  bullet lists such as "X is now Y", raw state labels, or answer options that
+  reveal state keys invalidate the run.
+- Measured scoring must start from a separate cold Desktop thread with setup
+  context hidden from the model context. Same-thread native context or visible
+  setup history can make the Native baseline unrealistically strong.
+- Temperature must either be request-verified as `0.0`, matching official
+  Native, or the run must be labeled `variance_bounded_not_official_same_param`
+  with at least three repeated runs and reported variance. Unverified
+  temperature is a blocker, not a footnote.
+
+Hook evidence is part of that gate, not an implementation detail. In an
+isolated temporary `CODEX_HOME`, installing `hooks.json` and launching Codex
+with hooks enabled is insufficient by itself: Codex lists those hooks as
+`untrusted` until the matching `hooks.state` entries in `config.toml` trust the
+current hook hashes. A claimable AIppocampus Desktop arm must therefore show
+trusted AIppocampus hooks and observed `sessionStart`, `userPromptSubmit`, and
+`stop` hook notifications. The native arm must show no AIppocampus hooks
+installed, trusted, or observed.
+
+Cache preparation is a separate pre-score phase. Before measured questions, the
+AIppocampus arms must rebuild or refresh clean source, source indexes, and the
+ambient route cache; the semantic arm must also materialize the semantic
+sidecar. Then a non-scored warmup turn must prove `userPromptSubmit` completes
+inside the foreground budget currently used by the hook command
+(`--max-elapsed-ms 4300`). Formal Desktop scores must report cold-start /
+precache cost separately and must not treat a timed-out cold hook as memory
+quality evidence.
+
 ## Metric Layers
 
 Keep these layers separate:
 
 | Layer | Current adapter support | Not the same as |
 | --- | --- | --- |
-| AMemGym native score | Local exact answer-choice match only when an explicit prediction JSONL is supplied. | Official AMemGym leaderboard score or official runner compatibility. |
+| AMemGym native score | The official bridge can summarize official `overall_metrics.json`, `utilization_metrics.json`, and `random_metrics.json`; the metadata adapter still supports only local exact answer-choice match when an explicit prediction JSONL is supplied. | Full public `v1.base` AMemGym leaderboard score unless all official outputs are produced for the full fixed arm. |
 | Official diagnosis | The adapter can carry operator prediction flags for write/read failures, but it does not parse official diagnosis logs yet. | A verified `amemgym.eval.diagnosis` result. |
 | Utilization | `utilization_failure_rate` is an AIppocampus overlay flag in the local prediction JSONL. | Official diagnosis output; utilization belongs to the official upper-bound/utilization path. |
+| Official AIppocampus `BaseAgent` adapter | The official bridge can register ignored local AIppocampus adapter arms by Pythonpath overlay while leaving upstream eval modules, prompts, parser, and metric code unchanged. | Full AIppocampus capability when only clean source is present, or when semantic worker artifacts are missing/degraded. |
 | Source-backed overlay | `source_reopen_success`, `current_state_source_hit`, `stale_state_as_current_rate`, `unsupported_personalization_rate`, `scent_as_evidence_rate`, and `answer_correct_but_unsupported_rate`. | Native accuracy, answer quality, or SOTA. |
-| Cost/latency | `elapsed_ms` for this deterministic local helper only. | Model/provider cost, official AMemGym run cost, or live user latency. |
+| Cost/latency | `elapsed_ms` for deterministic helpers and official subprocess elapsed time for the bridge. | Provider billing unless token/cost metadata is extracted from raw official outputs under an explicit raw-artifact policy. |
+| Codex Desktop AMemGym-style score | A separate contract runner can compare native Codex, AIppocampus without semantic sidecar, and AIppocampus with semantic sidecar under an isolated Desktop-host protocol. It now requires non-mutating scored turns, natural recommendation choices, implicit state exposure, cross-thread cold-start scoring, and temperature parity or variance reporting before a live score is claimable. | Official AMemGym score, same-thread Codex context quality, direct state recall, or live Desktop evidence before every environment and score-distortion gate passes. |
 
 The checked-in fixture deliberately includes one current-vs-stale control, one
 unsupported-personalization control, and one local utilization/read/write
@@ -105,16 +245,53 @@ Can claim now:
   public `v1.base` JSON with the Python standard library.
 - The repository has a public-safe fixture and local prediction-overlay path
   for source-backed AMemGym-style diagnostics.
+- AIppocampus has a narrow official-runner bridge that can call the upstream
+  `amemgym.eval.overall`, `amemgym.eval.upperbound`, and
+  `amemgym.eval.random` modules from an ignored local checkout and summarize
+  official output files into `Overall`, `UB`, `Random`, and normalized
+  `Memory`.
+- The official bridge can register AIppocampus `BaseAgent` arms through an
+  ignored Pythonpath overlay, keep upstream eval modules unchanged, and report
+  whether the arm is Native full-history, clean-source-only retrieval, or a
+  prepared semantic-worker arm.
+- AIppocampus has a separate AMemGym-style Codex Desktop benchmark contract for
+  native/no-sidecar/semantic-sidecar arms, with hard gates for clean workspace,
+  isolated Codex home, expected skill/plugin loading, and AIppocampus hook
+  trust/notification plus precache/warmup proof before live scores can be
+  claimed. The same contract also blocks scoring-turn state pollution, direct
+  state-recall questions, explicit state-bullet setup, same-thread native
+  context visibility, and unverified temperature.
 - Reports separate native answer-choice exact match, source-backed overlay
   fidelity, diagnosis-like flags, utilization overlay flags, cost/latency, and
   public claim boundaries.
 
 Cannot claim now:
 
-- AIppocampus has an official AMemGym score.
-- AIppocampus is compatible with the official AMemGym runner.
+- AIppocampus has a full official AMemGym `v1.base` score.
+- AIppocampus clean-source-only official adapter results are full
+  semantic-worker AIppocampus results.
+- AIppocampus semantic-sidecar official adapter results are claimable when
+  `adapter_metadata.json` is absent or records missing/degraded worker
+  surfaces.
+- A hookless `BaseAgent` wrapper is equivalent to AIppocampus Desktop product
+  behavior; it is only an official-runner surrogate with explicit lifecycle
+  gates.
+- AIppocampus is leaderboard-compatible with the official AMemGym runner beyond
+  the local summary bridge until the full public `v1.base` arm is run and
+  reviewed.
 - AIppocampus has evaluated or beaten Native, RAG, AWI, AWE, Mem0, or any other
   official/external baseline on AMemGym.
+- AIppocampus has beaten Codex Desktop native behavior in live use; the Desktop
+  runner currently defaults to a contract preview unless a clean isolated live
+  run is attached and validated.
+- A Codex Desktop run is comparable to official Native temperature unless the
+  request path proves `temperature=0.0`; otherwise it is only variance-bounded
+  evidence after repeated runs.
+- A Desktop score from answer turns that remain in the thread, natural-session
+  setup that was actually explicit state bullets, same-thread native context,
+  or raw state-key choices is not claimable.
+- Cold-start cache build or hook-timeout behavior is a valid readiness signal,
+  but it is not the same metric as warmed memory recall quality.
 - The local overlay metrics are official AMemGym accuracy.
 - The structured LLM-simulated AMemGym users prove real human life-wide
   continuity.
@@ -122,10 +299,14 @@ Cannot claim now:
 
 ## Deferred Work
 
-Full official-runner compatibility needs a separate issue or follow-up slice
-that installs the official environment, fixes model/provider versions, records
-cost/latency, and runs Native/RAG/AWI/AWE arms without leaking raw rows or
-keys.
+Full official-runner evidence needs a separate issue or follow-up slice that
+runs the full public `v1.base` fixed arms, records model/provider versions,
+extracts cost/latency from raw local official outputs, and then decides whether
+to add Native/RAG/AWI/AWE parity arms without leaking raw rows, model outputs,
+or keys. The semantic-sidecar arm also needs a real pre-score worker materializer
+that writes reviewed working-memory/semantic sidecar artifacts before
+`answer_question`; otherwise the official adapter must continue reporting the
+degraded clean-source boundary.
 
 The commentary/action-summary write-material arm is deliberately deferred to
 the source-backed situation/work-material design work in #701 and #703. That
