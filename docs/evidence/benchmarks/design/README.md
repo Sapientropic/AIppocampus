@@ -15,6 +15,9 @@ Dated command evidence belongs in
 - [`benchmark-design-rationale.md`](benchmark-design-rationale.md) explains why
   AIppocampus evaluates memory as source-backed continuity, not generic
   retrieval QA.
+- [`benchmark-priority-map.md`](benchmark-priority-map.md) explains which
+  benchmark and smoke surfaces are P0/P1/P2/P3, what to run when, and which
+  claim boundaries each surface must not cross.
 - [`external-benchmark-map.md`](external-benchmark-map.md) gives external
   benchmark and memory-system comparison paths, with explicit blockers and
   claim boundaries.
@@ -40,6 +43,7 @@ when the split reduces duplication with the existing runner plans.
 This folder owns:
 
 - benchmark philosophy and rationale;
+- benchmark priority, maturity, and run-profile guidance;
 - track-family design summaries;
 - scoring and claim-boundary explanations;
 - external benchmark analysis maps;

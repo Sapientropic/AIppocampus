@@ -14,6 +14,8 @@ Rules:
   [`docs/evidence/readiness/public-readiness-verification.md`](readiness/public-readiness-verification.md)
   and detailed benchmark methodology remains in
   [`docs/evidence/benchmarks/memory-decision-benchmark-plan.md`](benchmarks/memory-decision-benchmark-plan.md).
+- Benchmark priority, run-profile, and cannot-claim navigation remains in
+  [`docs/evidence/benchmarks/design/benchmark-priority-map.md`](benchmarks/design/benchmark-priority-map.md).
 - Stage-level can-claim / cannot-claim status remains in
   [`docs/evidence/readiness/stage-0-5-readiness.md`](readiness/stage-0-5-readiness.md).
 - Demo caveats in
