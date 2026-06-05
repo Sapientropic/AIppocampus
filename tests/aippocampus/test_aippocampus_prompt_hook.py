@@ -4103,6 +4103,18 @@ class AmbientRecallHookTests(unittest.TestCase):
         self.assertIn("line 190", context)
         self.assertNotIn("line 999", context)
         self.assertIn("final_answer", context)
+        self.assertIn("bounded source-backed evidence", context)
+        self.assertNotIn("search the source thread before relying on exact wording", context)
+        self.assertFalse(result["ambient_recall"]["cards"][0]["source_reopen_required"])
+        self.assertEqual(
+            result["ambient_recall"]["cards"][0]["authority_state"],
+            "bounded_evidence_ready",
+        )
+        ambient_summary = hook.ambient_debug_summary(result)
+        self.assertEqual(ambient_summary["source_reopen_required_count"], 0)
+        self.assertEqual(ambient_summary["authority_counts"]["bounded_evidence_ready"], 1)
+        self.assertEqual(ambient_summary["reopen_required_before_claim_count"], 0)
+        self.assertEqual(ambient_summary["reopen_recommended_for_exact_quote_count"], 1)
 
     def test_original_wording_prompt_uses_deep_archival_recall(self) -> None:
         result = hook.assess_prompt(
