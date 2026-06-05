@@ -22,6 +22,7 @@ collapsing them into one leaderboard.
 | Dated verification ledger | [`../readiness/public-readiness-verification.md`](../readiness/public-readiness-verification.md) | Summarized command evidence; old entries can be historical. |
 | Full runner and smoke map | [`../benchmark-evidence-map.md`](../benchmark-evidence-map.md) | Navigation owner for benchmark and smoke entrypoints. |
 | Benchmark philosophy | [`design/benchmark-design-rationale.md`](design/benchmark-design-rationale.md) | Reader-facing rationale; no raw outputs or current-status upgrades. |
+| Benchmark priority and run profiles | [`design/benchmark-priority-map.md`](design/benchmark-priority-map.md) | P0/P1/P2/P3 priority, maturity, default run profile, claim-level, and cannot-claim guidance. |
 | Detailed track plan | [`memory-decision-benchmark-plan.md`](memory-decision-benchmark-plan.md) | Track A-D runner details, profiles, diagnostics, and implementation notes. |
 | External benchmark comparison home | [`design/external-benchmark-map.md`](design/external-benchmark-map.md) | Analysis map and blockers; not a superiority claim. |
 | Multimodal memory benchmark map | [`design/multimodal-memory-benchmark-map.md`](design/multimodal-memory-benchmark-map.md) | #528 source-shape routing across HippoCamp, MemLens, ATM-Bench, egocentric video, UniDoc, Persona, and conversation-memory benchmarks. |

@@ -120,6 +120,11 @@ Research notes may include calibration context, but they are not claim ledgers.
 Use them for background only until a result is linked back to the readiness
 snapshot or dated verification ledger.
 
+When deciding which benchmark or smoke surface to prioritize, run, or treat as
+diagnostic-only, use
+[`benchmarks/design/benchmark-priority-map.md`](benchmarks/design/benchmark-priority-map.md)
+instead of deriving priority from this directory map.
+
 ## Evidence Ownership
 
 | Evidence type | Canonical owner | What belongs there |
@@ -128,6 +133,7 @@ snapshot or dated verification ledger.
 | Stage readiness boundary | `docs/evidence/readiness/stage-0-5-readiness.md` | Stage-level can-claim / cannot-claim status and missing proof. |
 | Dated command ledger | `docs/evidence/readiness/public-readiness-verification.md` | Summarized commands, dates, pass/fail interpretation, and scope notes. |
 | Benchmark design rationale | `docs/evidence/benchmarks/design/README.md` and `docs/evidence/benchmarks/design/benchmark-design-rationale.md` | Evaluation philosophy, track-family why, evidence-layer separation, and external-comparison boundaries. |
+| Benchmark priority registry | `docs/evidence/benchmarks/design/benchmark-priority-map.md` | Operational priority, maturity, run-profile, claim-level, and cannot-claim guidance for benchmark and smoke surfaces. |
 | Benchmark runner methodology | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md` | Track definitions, report shape, non-goals, and diagnostic interpretation. |
 | External benchmark analysis | `docs/evidence/benchmarks/design/external-benchmark-map.md` | Layer-aware external benchmark and memory-system comparison candidates, blockers, and cannot-claim boundaries. |
 | Multimodal memory benchmark map | `docs/evidence/benchmarks/design/multimodal-memory-benchmark-map.md` | Source-shape routing for #528 across conversation, corpus, personal filesystem, egocentric video, document/knowledge-source, and personalization benchmark families. |
