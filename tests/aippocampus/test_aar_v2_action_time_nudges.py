@@ -156,6 +156,48 @@ class AARV2ActionTimeNudgeTests(unittest.TestCase):
         )
         self.assertTrue(supported["counterfactual_hypothesis"]["still_not_causal_truth"])
 
+    def test_stale_unsupported_or_rejected_review_rows_do_not_become_nudges(self) -> None:
+        report = build_aar_v2_report(
+            [
+                {
+                    "kind": "source_backed_postmortem",
+                    "review_status": "stale",
+                    "pattern_id": "stale-row",
+                    "summary": "Old source claim pattern that no longer applies.",
+                    "action_class": "specific_memory_source_claim",
+                    "source_refs": [{"source_id": "clean:old", "message_id": "m6"}],
+                },
+                {
+                    "kind": "source_backed_postmortem",
+                    "review_status": "unsupported",
+                    "pattern_id": "unsupported-row",
+                    "summary": "Looks plausible but the review did not support it.",
+                    "action_class": "specific_memory_source_claim",
+                    "source_refs": [{"source_id": "clean:unsupported", "message_id": "m7"}],
+                },
+                {
+                    "kind": "source_backed_postmortem",
+                    "review_status": "rejected",
+                    "pattern_id": "rejected-row",
+                    "summary": "Reviewer rejected this adjustment.",
+                    "action_class": "specific_memory_source_claim",
+                    "source_refs": [{"source_id": "clean:rejected", "message_id": "m8"}],
+                },
+                {
+                    "kind": "source_backed_postmortem",
+                    "review_status": "accepted",
+                    "pattern_id": "accepted-row",
+                    "summary": "Accepted adjustment can advise source reopen.",
+                    "action_class": "specific_memory_source_claim",
+                    "source_refs": [{"source_id": "clean:accepted", "message_id": "m9"}],
+                },
+            ]
+        )
+
+        self.assertEqual(report["candidate_count"], 1)
+        self.assertEqual(report["ignored_count"], 3)
+        self.assertEqual(report["candidate_records"][0]["pattern_id"], "accepted-row")
+
     def test_feedback_metrics_feed_later_keep_demote_without_mutating_source(self) -> None:
         metrics = summarize_feedback_metrics(
             [
