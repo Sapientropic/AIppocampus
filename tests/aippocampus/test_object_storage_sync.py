@@ -859,11 +859,35 @@ output.write_bytes(b"FAKEAGE\\n" + base64.b64encode(data))
         self.assertEqual(metadata["errors"], [])
         self.assertEqual(metadata["object_count"], result["steps"]["push"]["object_count"])
         self.assertEqual(metadata["object_count"], sum(metadata["size_bucket_counts"].values()))
+        self.assertEqual(metadata["total_ciphertext_bytes"], sum(metadata["size_bucket_bytes"].values()))
         self.assertGreater(metadata["total_ciphertext_bytes"], 0)
         self.assertGreaterEqual(metadata["max_ciphertext_bytes"], metadata["min_ciphertext_bytes"])
         self.assertEqual(metadata["path_shape_counts"]["encrypted_outer_manifest"], 1)
         self.assertEqual(metadata["path_shape_counts"]["encrypted_inner_manifest"], 1)
         self.assertGreater(metadata["path_shape_counts"]["encrypted_ciphertext_object"], 0)
+        padding = metadata["padding_cost_report"]
+        self.assertEqual(padding["strategy"], "coarse_size_bucket_ceiling")
+        self.assertEqual(padding["input_object_count"], metadata["object_count"])
+        self.assertEqual(
+            padding["unpadded_ciphertext_bytes"],
+            metadata["total_ciphertext_bytes"],
+        )
+        self.assertGreaterEqual(
+            padding["estimated_padded_ciphertext_bytes"],
+            metadata["total_ciphertext_bytes"],
+        )
+        self.assertGreaterEqual(padding["estimated_padding_overhead_bytes"], 0)
+        self.assertEqual(
+            padding["estimated_padding_overhead_bytes"],
+            padding["estimated_padded_ciphertext_bytes"] - metadata["total_ciphertext_bytes"],
+        )
+        self.assertEqual(
+            padding["claims"]["padding_cost_estimated"],
+            True,
+        )
+        self.assertFalse(padding["claims"]["padding_implemented"])
+        self.assertFalse(padding["claims"]["traffic_analysis_resistance"])
+        self.assertIn("padding_implemented", padding["cannot_claim"])
         self.assertTrue(metadata["claims"]["provider_can_observe_object_count"])
         self.assertTrue(metadata["claims"]["provider_can_observe_ciphertext_object_sizes"])
         self.assertFalse(metadata["claims"]["metadata_padding_evaluated"])
