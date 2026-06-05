@@ -365,6 +365,7 @@ def _working_memory_card(item: dict[str, Any]) -> dict[str, Any]:
         "theme": theme,
         "resonance": "medium",
         "support_level": CANDIDATE,
+        "route": item.get("route"),
         "visibility": ACTIVE_GENTLE_NUDGE
         if item.get("route") != "use_silently"
         else SILENT_TUNING,

@@ -64,6 +64,10 @@ planning material:
 - Extract only unfinished commitments, blockers, verification gaps, and
   decisions that need implementation. Preserve source links back to the exact
   doc or issue that motivated the work.
+- Keep open issues as an execution queue, not an idea vault. If a topic cannot
+  plausibly become a fixture, doc, CLI, runtime slice, or verified cleanup
+  within 1-2 weeks, route it to Discussion, a roadmap seed, or
+  `docs/research/seeds/` instead of opening or keeping a standalone issue.
 - Prefer one umbrella issue for a broad track, then create focused child issues
   or checklist items for independently closable slices. Each actionable issue
   should include goal, source, scope, non-goals, acceptance criteria, and

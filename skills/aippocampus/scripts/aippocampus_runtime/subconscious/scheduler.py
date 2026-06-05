@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import aippocampus_registry_dir, now_utc
+from aippocampus_runtime.ops import log_retention
 from aippocampus_runtime.subconscious import shell_selection
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
@@ -443,9 +444,10 @@ def run_text(cmd: list[str], *, cwd: Path = SCRIPT_DIR, log: Path | None = None)
     )
     output = (proc.stdout or "") + (proc.stderr or "")
     if log:
-        with log.open("a", encoding="utf-8", newline="\n") as fh:
-            fh.write(f"\n[{now_utc()}] $ {' '.join(cmd)}\n")
-            fh.write(output)
+        log_retention.append_text_with_rotation(
+            log,
+            f"\n[{now_utc()}] $ {' '.join(cmd)}\n{output}",
+        )
     if proc.returncode != 0:
         raise RuntimeError(output.strip() or f"command failed: {cmd}")
     return output
@@ -561,25 +563,24 @@ def run_project(
 def start_detached(cmd: list[str], *, root: Path) -> int:
     log = log_path(root)
     log.parent.mkdir(parents=True, exist_ok=True)
-    out = log.open("ab")
     creationflags = 0
     if os.name == "nt":
         creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(
             subprocess, "DETACHED_PROCESS", 0
         )
+    wrapped_cmd = log_retention.logged_subprocess_cmd(cmd, log=log, cwd=SCRIPT_DIR)
     proc = subprocess.Popen(
-        cmd,
+        wrapped_cmd,
         cwd=str(SCRIPT_DIR),
         stdin=subprocess.DEVNULL,
-        stdout=out,
-        stderr=subprocess.STDOUT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
         # Hook callers often run with stdout/stderr captured by the host. Do
         # not let detached workers inherit those handles, or the foreground
         # hook may wait until the background DeepSeek pass exits.
         close_fds=True,
         creationflags=creationflags,
     )
-    out.close()
     return int(proc.pid)
 
 

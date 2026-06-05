@@ -1300,8 +1300,9 @@ Validation mode matters for this track:
   registry has eligible `semantic-scope-labels.jsonl` sidecar rows first. If
   this run returns `insufficient_selected_cases`, treat it as a coverage/prep
   diagnostic rather than a Track B refactor regression. The wrapper emits
-  `validation_guidance.track_b_source_evidence` with the portable smoke command
-  and cannot-claim boundary.
+  `validation_guidance.track_b_source_evidence` with the portable smoke command,
+  the guidance-local fallback boundary, and a pointer/count back to the parent
+  report `cannot_claim` field instead of mirroring inherited caveats.
 
 Case labels must identify an expected source message or line range. Query text
 may be exact, normalized, paraphrased, multilingual, or generated from source

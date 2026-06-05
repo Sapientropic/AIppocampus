@@ -353,5 +353,9 @@ PYTHONPATH="${CODEX_HOME}/skills/aippocampus/scripts" python -m aippocampus_runt
 ```
 
 Expected result: raw audit remains an explicit operator action.
+Default stream fallback output is bounded: it returns raw-line refs, payload
+class, short snippets, byte/truncation diagnostics, and hides the raw rollout
+path. Full normalized raw payloads require the local audit override
+`--include-raw-payload` / `--audit-raw`.
 
 Cannot claim: that raw rollout mining is the daily default.

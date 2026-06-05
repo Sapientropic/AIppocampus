@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
@@ -28,12 +29,39 @@ class MemoryMaintenanceHookTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
-    def health(self, action_ids: list[str] | None = None, *, segments_exists: bool = False) -> dict:
+    def health(
+        self,
+        action_ids: list[str] | None = None,
+        *,
+        segments_exists: bool = False,
+        latest_gap: bool = False,
+        rollout_message_count: int = 10,
+        rollout_last_message_line: int = 20,
+        clean_expected_message_count: int = 8,
+        clean_expected_turn_count: int = 4,
+    ) -> dict:
         action_ids = action_ids or []
         return {
             "ok": True,
+            "rollout": {
+                "message_count": rollout_message_count,
+                "last_message_line": rollout_last_message_line,
+            },
             "index": {"exists": True, "stale": "build_index" in action_ids},
+            "clean_source": {
+                "exists": True,
+                "stale": "build_clean_source" in action_ids,
+                "expected_message_count": clean_expected_message_count,
+                "expected_turn_count": clean_expected_turn_count,
+            },
             "segments": {"exists": segments_exists, "stale": "build_segments" in action_ids},
+            "freshness": {
+                "latest_visible_gap": latest_gap,
+                "raw_newer_than_index": latest_gap,
+                "raw_newer_than_clean_source": latest_gap,
+                "expected_clean_source_message_count": clean_expected_message_count,
+                "expected_clean_source_turn_count": clean_expected_turn_count,
+            },
             "recommended_actions": [
                 {"id": action_id, "severity": "suggestion"} for action_id in action_ids
             ],
@@ -77,6 +105,51 @@ class MemoryMaintenanceHookTests(unittest.TestCase):
         )
 
         self.assertEqual(actions, [])
+
+    def test_stop_latest_turn_gap_bypasses_cooldown_once_per_visible_marker(self) -> None:
+        actions = hook.decide_actions(
+            "Stop",
+            self.health(
+                ["build_index", "build_clean_source"],
+                latest_gap=True,
+                rollout_message_count=12,
+                rollout_last_message_line=25,
+                clean_expected_message_count=10,
+                clean_expected_turn_count=5,
+            ),
+            {"last_stop_ts": self.now - 60},
+            now_ts=self.now,
+        )
+
+        self.assertEqual(
+            actions,
+            [
+                "build_index",
+                "build_clean_source",
+                "register",
+                "build_associations",
+                "subconscious_maybe_start",
+            ],
+        )
+
+        repeated = hook.decide_actions(
+            "Stop",
+            self.health(
+                ["build_index", "build_clean_source"],
+                latest_gap=True,
+                rollout_message_count=12,
+                rollout_last_message_line=25,
+                clean_expected_message_count=10,
+                clean_expected_turn_count=5,
+            ),
+            {
+                "last_stop_ts": self.now - 60,
+                "last_latest_turn_refresh_marker": "m12:l25:cm10:ct5",
+            },
+            now_ts=self.now,
+        )
+
+        self.assertEqual(repeated, [])
 
     def test_precompact_forces_index_refresh_even_without_recommendation(self) -> None:
         actions = hook.decide_actions(
@@ -173,6 +246,70 @@ class MemoryMaintenanceHookTests(unittest.TestCase):
         self.assertIn("--maybe-start", rendered)
         self.assertNotIn("run_json_timeout", rendered)
         self.assertEqual(seen["log_name"], "subconscious_scheduler_hook.log")
+
+    def test_detached_action_output_uses_log_retention_runner(self) -> None:
+        log = self.cwd / "logs" / "build_associations_hook.log"
+        child = [sys.executable, "-c", "print('child output')"]
+        fake_proc = mock.Mock(pid=4242)
+
+        with (
+            mock.patch.object(hook, "maintenance_log_path", return_value=log),
+            mock.patch.object(hook.subprocess, "Popen", return_value=fake_proc) as popen,
+        ):
+            result = hook.start_detached_json(child, log_name=log.name)
+
+        wrapped_cmd = popen.call_args.args[0]
+        kwargs = popen.call_args.kwargs
+        rendered = " ".join(str(item) for item in wrapped_cmd)
+        self.assertEqual(result["pid"], 4242)
+        self.assertIn("aippocampus_runtime.ops.log_retention", rendered)
+        self.assertIn("--", wrapped_cmd)
+        self.assertEqual(wrapped_cmd[-len(child) :], child)
+        self.assertIs(kwargs["stdout"], hook.subprocess.DEVNULL)
+        self.assertIs(kwargs["stderr"], hook.subprocess.DEVNULL)
+
+    def test_budget_capped_latest_turn_refresh_returns_dirty_diagnostic_without_marker(
+        self,
+    ) -> None:
+        original_run_health = hook.run_health
+        original_run_action = hook.run_action
+        health_payload = self.health(
+            ["build_index", "build_clean_source"],
+            latest_gap=True,
+            rollout_message_count=12,
+            rollout_last_message_line=25,
+            clean_expected_message_count=10,
+            clean_expected_turn_count=5,
+        )
+        state_file = self.cwd / "state.json"
+
+        def fake_run_health(cwd: Path) -> dict:
+            del cwd
+            return health_payload
+
+        def fake_run_action(cwd: Path, action: str) -> dict:
+            raise AssertionError(f"budget should skip {action} before execution")
+
+        try:
+            hook.run_health = fake_run_health
+            hook.run_action = fake_run_action
+            result = hook.run_maintenance(
+                "Stop",
+                self.cwd,
+                state_file=state_file,
+                now_ts=self.now,
+                max_elapsed_ms=1,
+            )
+        finally:
+            hook.run_health = original_run_health
+            hook.run_action = original_run_action
+
+        state = hook.load_state(state_file)
+        workspace_state = state["workspaces"][hook.state_key(self.cwd)]
+
+        self.assertTrue(result["freshness"]["latest_visible_gap"])
+        self.assertEqual(result["skipped_actions"][0]["reason"], "foreground_budget")
+        self.assertNotIn("last_latest_turn_refresh_marker", workspace_state)
 
 
 if __name__ == "__main__":
