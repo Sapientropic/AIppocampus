@@ -265,7 +265,35 @@ def main(argv: list[str] | None = None) -> int:
     provider_parser.add_argument("--api-key-env", dest="provider_env_var")
     provider_parser.add_argument("--no-child-check", action="store_true")
     provider_parser.add_argument("--json", action="store_true", dest="json_output")
+    spend_parser = subparsers.add_parser(
+        "spend",
+        help="Report private-safe local model spend and foreground yield.",
+    )
+    spend_parser.add_argument("--registry-dir")
+    spend_parser.add_argument("--days", type=int, default=7)
+    spend_parser.add_argument("--warning-effective-tokens", type=int, default=None)
+    spend_parser.add_argument("--warning-min-foreground-value-rate", type=float, default=None)
+    spend_parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(argv)
+
+    if args.command == "spend":
+        from aippocampus_runtime.ops import spend_doctor  # noqa: PLC0415
+
+        kwargs: dict[str, Any] = {}
+        if args.warning_effective_tokens is not None:
+            kwargs["warn_effective_tokens"] = args.warning_effective_tokens
+        if args.warning_min_foreground_value_rate is not None:
+            kwargs["warn_min_foreground_value_rate"] = args.warning_min_foreground_value_rate
+        report = spend_doctor.build_spend_doctor_report(
+            registry_dir=args.registry_dir,
+            days=args.days,
+            **kwargs,
+        )
+        if args.json_output:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(spend_doctor.render_text(report))
+        return 0
 
     report = build_provider_doctor_report(
         model_route=args.model_route,
