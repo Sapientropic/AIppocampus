@@ -146,6 +146,83 @@ class LocomoAnswerUsefulnessBenchmarkTests(unittest.TestCase):
         self.assertFalse(by_case["locomo:conv-test:qa:0002"]["context_sufficient"])
         self.assertFalse(by_case["locomo:conv-test:qa:0002"]["unsupported_inference_refused"])
 
+    def test_template_generation_status_is_separate_from_quality_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dataset = Path(tmp) / "locomo10.json"
+            predictions = Path(tmp) / "answers.jsonl"
+            template = Path(tmp) / "answers-template.jsonl"
+            write_fixture(dataset)
+            predictions.write_text(
+                "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "case_id": "locomo:conv-test:qa:0001",
+                                "arm": "retrieved_context",
+                                "retrieved_evidence_ids": [],
+                                "answer_text": "",
+                                "citation_ids": [],
+                                "refused": False,
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "case_id": "locomo:conv-test:qa:0002",
+                                "arm": "retrieved_context",
+                                "retrieved_evidence_ids": [],
+                                "answer_text": "",
+                                "citation_ids": [],
+                                "refused": False,
+                            }
+                        ),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            payload = benchmark.run_benchmark(
+                dataset_path=dataset,
+                predictions_file=predictions,
+                answer_template_output=template,
+            )
+            self.assertTrue(template.exists())
+            template_line_count = len(template.read_text(encoding="utf-8").splitlines())
+
+        self.assertFalse(payload["ok"], payload)
+        self.assertFalse(payload["quality_gate_ok"], payload)
+        self.assertTrue(payload["report_generation_ok"], payload)
+        self.assertTrue(payload["artifact_generation_ok"], payload)
+        self.assertTrue(payload["artifacts"]["answer_template_written"], payload)
+        self.assertEqual(payload["artifacts"]["answer_template_status"], "written")
+        self.assertEqual(payload["artifacts"]["answer_template_row_count"], 2)
+        self.assertEqual(template_line_count, 2)
+
+    def test_missing_dataset_skips_requested_template_without_quality_gate_score(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dataset = Path(tmp) / "missing-locomo10.json"
+            template = Path(tmp) / "answers-template.jsonl"
+
+            payload = benchmark.run_benchmark(
+                dataset_path=dataset,
+                answer_template_output=template,
+            )
+            template_exists = template.exists()
+
+        self.assertFalse(payload["ok"], payload)
+        self.assertFalse(payload["quality_gate_ok"], payload)
+        self.assertEqual(payload["quality_gate_status"], "not_scored")
+        self.assertFalse(payload["report_generation_ok"], payload)
+        self.assertFalse(payload["artifact_generation_ok"], payload)
+        self.assertEqual(payload["artifact_generation_status"], "skipped_missing_dataset")
+        self.assertFalse(payload["artifacts"]["answer_template_written"], payload)
+        self.assertEqual(
+            payload["artifacts"]["answer_template_status"],
+            "skipped_missing_dataset",
+        )
+        self.assertEqual(payload["artifacts"]["answer_template_row_count"], 0)
+        self.assertFalse(template_exists)
+
     def test_deterministic_answer_quality_reports_token_overlap_and_negation_traps(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             dataset = Path(tmp) / "locomo10.json"

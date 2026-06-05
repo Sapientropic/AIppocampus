@@ -125,6 +125,13 @@ a prototype for product-layer usefulness under fixed answer-model/evaluator
 settings; do not fold it into Track B retrieval-only metrics or use it for
 SOTA, LongMemEval-V2, or external-system superiority claims.
 
+The answer-usefulness runner deliberately keeps report/artifact generation
+separate from the quality gate. A run can write a sanitized answer template and
+report while still returning exit code `1` when `quality_gate_ok=false`. Read
+`report_generation_ok`, `artifact_generation_ok`, and `quality_gate_ok`
+together: successful setup artifacts are not evidence that the fixed answer
+model/evaluator path met the usefulness contract.
+
 Public conversation corpora remain valuable, but they should not be the
 positive coding source:
 
