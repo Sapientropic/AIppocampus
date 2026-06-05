@@ -282,6 +282,17 @@ activation cues, source refs, and trust-horizon payload while preserving only
 hash identity, source/ref counts, provenance hash, reason codes, timestamps,
 and rebuild/review notes.
 
+For reviewed semantic trigger rows, the owner transform lives in
+`aippocampus_runtime.recall.semantic_trigger_compaction`. It consumes the same
+dead-letter apply manifest and returns transformed rows for the
+`semantic_triggers.jsonl` owner to persist during maintenance. The tombstone
+removes trigger id, title, concept, aliases, activation cues, use guidance, and
+source refs while preserving hash identity, source/ref count, provenance hash,
+reason codes, timestamps, and rebuild/review notes. Foreground recall gates
+must skip payload-compacted tombstones. This does not mutate seed trigger files
+or promotion candidates, so a later semantic-trigger rebuild may recreate a
+trigger until the upstream owner lifecycle is handled separately.
+
 `aippocampus_runtime.recall.fresh_thread_demo` is the #285 public-safe demonstration runner for this
 contract. It strings together the existing scent packet, action policy, and
 activation state modules over synthetic upstream decision packets across
