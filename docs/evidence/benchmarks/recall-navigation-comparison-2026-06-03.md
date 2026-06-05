@@ -2,9 +2,10 @@
 
 This is a public-safe deterministic smoke for GitHub #465. It also carries a
 narrow GitHub #201 readout for route actionability, source-reopen
-follow-through, default foreground route/cache delivery, and foreground packet
-source-reopen follow-through. It compares three source-navigation arms on the
-same synthetic clean-source fixtures, plus one two-turn foreground-hook fixture:
+follow-through, default foreground route/cache delivery, foreground packet
+source-reopen follow-through, and a #201/#281/#309/#248 vague-cue candidate
+funnel readout. It compares three source-navigation arms on the same synthetic
+clean-source fixtures, plus one two-turn foreground-hook fixture:
 
 - direct `search_memory`
 - hook-only scent/card behavior
@@ -53,7 +54,20 @@ The `foreground_lift` fixture also reports:
 - source reopen after consuming the foreground packet's candidate ref;
 - evidence count and source-boundary preservation.
 
-The aggregate fixture run updated on 2026-06-04 showed:
+The schema v3 `vague_cue_candidate_funnel` fixture also reports:
+
+- `core_candidate_count`
+- `sentinel_candidate_count`
+- `verifier_pool_size`
+- `source_ref_rejoin_rate`
+- `sentinel_source_ref_coverage_rate`
+- `golden_association_rescued_by_sentinel_count`
+- `sentinel_false_positive_rate`
+- `wrong_route_drag_from_sentinel_count`
+- `frontier_marker_helpfulness_rate`
+- `intersection_bridge_lift`
+
+The aggregate fixture run updated on 2026-06-06 showed:
 
 - direct search: source-backed success on all 4 cases, but with manual query
   invention in the vague cases (`avg_manual_query_invention_count=1.5`);
@@ -68,6 +82,11 @@ The aggregate fixture run updated on 2026-06-04 showed:
   ambient cache with `cache_status=hit`; the packet candidate ref reopened the
   expected fixture source with `manual_query_invention_count=0`; the source
   boundary stayed intact.
+- vague-cue candidate funnel: 4 core candidates plus 2 sentinel candidates
+  formed a 6-item verifier pool; all candidates rejoined to source refs
+  (`source_ref_rejoin_rate=1.0`), sentinel coverage was 1.0, one
+  cross-vocabulary association was rescued by a sentinel candidate, and
+  sentinel wrong-route drag stayed at 0.
 
 ## #201 Readout
 
@@ -78,6 +97,7 @@ For #201, this smoke now measures five deterministic proxy outcomes:
 - `default_foreground_first_turn_lift`
 - `default_foreground_second_turn_lift`
 - `foreground_source_reopen_follow_through`
+- `vague_cue_candidate_funnel_measured`
 
 The foreground fields are narrow fixture readouts. First turn means the prompt
 hook can still deliver a local route when semantic provider work times out.
@@ -94,6 +114,27 @@ The report intentionally keeps this #201 outcome as not measured:
 So this evidence can support a narrow route/cache-delivery slice, but it is not
 a #201 closeout signal.
 
+## #281 / #309 / #248 Readout
+
+For #281, this smoke measures whether fresh-thread multilingual vague cues can
+enter a small source-joined sentinel pool without becoming source-backed facts.
+It does not measure live fresh-thread quality.
+
+For #309, this smoke measures the source-joined core/sentinel verifier-pool
+shape requested for cross-vocabulary and frontier-like cues:
+
+- `core_candidate_count=4`
+- `sentinel_candidate_count=2`
+- `verifier_pool_size=6`
+- `golden_association_rescued_by_sentinel_count=1`
+- `sentinel_false_positive_rate=0.0`
+- `wrong_route_drag_from_sentinel_count=0`
+
+For #248, this smoke measures source-ref rejoin coverage on the same verifier
+pool while keeping `default_prefilter_adoption=not_enabled`. It is not
+answer-quality calibration and does not enable the optional question/vector
+prefilter by default.
+
 ## Can Claim
 
 - The progressive navigation MCP path can be compared against direct search and
@@ -104,6 +145,9 @@ a #201 closeout signal.
   next-turn cache reuse without external model calls.
 - A foreground packet candidate ref can be consumed to reopen the expected
   fixture source with zero manual query invention.
+- A source-joined core/sentinel verifier pool can be reported for vague
+  multilingual cues without promoting candidates to evidence or enabling a
+  default prefilter.
 - The comparison keeps hook scent, route handles, and report metrics as
   navigation/evidence diagnostics, not factual memory claims.
 
@@ -113,6 +157,8 @@ a #201 closeout signal.
 - Live token, tool-call, or wall-clock reduction.
 - Broad default foreground lift on live registries.
 - Production selector superiority over direct search.
+- Default vector or question-prefilter safety.
+- Answer-quality lift from sentinel candidates.
 - Large-sample statistical significance.
 - That hook-only behavior is unsafe in all real settings; the hook-only arm is a
   boundary fixture, not a live-agent study.
