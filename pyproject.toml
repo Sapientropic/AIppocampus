@@ -293,6 +293,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/recall/semantic_cue_cache.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/semantic_gate_response.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/semantic_recall_gate.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/semantic_trigger_compaction.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/semantic_trigger_router.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/segment_builder.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/segment_search.py",

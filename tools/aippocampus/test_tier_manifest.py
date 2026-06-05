@@ -175,6 +175,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_semantic_scope_real_history_smoke",
         "test_semantic_scope_source_review",
         "test_semantic_scope_suppressed_recovery",
+        "test_semantic_trigger_compaction",
         "test_semantic_trigger_router",
         "test_simulate_prompt_hook",
         "test_source_evidence_recall_eval",
