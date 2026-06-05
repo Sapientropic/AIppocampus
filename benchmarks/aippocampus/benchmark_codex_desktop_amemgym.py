@@ -737,6 +737,9 @@ def encode_public_json(payload: Mapping[str, Any], *, indent: int | None = None)
 
 def write_public_stdout(text: str) -> None:
     assert_public_text(text)
+    # CLI benchmark output is intentionally public and is rejected above when it
+    # contains private-looking material; CodeQL cannot infer this local sanitizer.
+    # codeql[py/clear-text-logging-sensitive-data]
     sys.stdout.write(text)
 
 
