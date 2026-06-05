@@ -65,6 +65,44 @@ def _is_timeout_error(row: dict[str, Any]) -> bool:
     return "timeout" in kind or "timeout" in reason or "timed out" in reason
 
 
+def _confidence_bucket(value: Any) -> str:
+    try:
+        confidence = float(value)
+    except (TypeError, ValueError):
+        confidence = 0.0
+    if confidence >= 0.85:
+        return "high"
+    if confidence >= 0.6:
+        return "medium"
+    if confidence > 0:
+        return "low"
+    return "unknown"
+
+
+def topic_epoch_vote_diagnostics(rows: Any) -> dict[str, Any]:
+    counts_by_family: dict[str, dict[str, int]] = {}
+    counts_by_confidence_bucket: dict[str, dict[str, int]] = {}
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        vote = row.get("topic_epoch")
+        if not isinstance(vote, dict):
+            continue
+        action = str(vote.get("action") or "").strip().casefold()
+        if action not in {"reuse", "rotate", "suppress"}:
+            continue
+        family = _row_family(row) or "unknown"
+        family_counts = counts_by_family.setdefault(family, {})
+        family_counts[action] = family_counts.get(action, 0) + 1
+        bucket = _confidence_bucket(vote.get("confidence", row.get("confidence")))
+        bucket_counts = counts_by_confidence_bucket.setdefault(bucket, {})
+        bucket_counts[action] = bucket_counts.get(action, 0) + 1
+    return {
+        "counts_by_family": counts_by_family,
+        "counts_by_confidence_bucket": counts_by_confidence_bucket,
+    }
+
+
 def guard_coverage_status(
     *,
     scouts: tuple[str, ...] | list[str],
@@ -216,4 +254,24 @@ def suppression_diagnostics(result: dict[str, Any]) -> dict[str, Any]:
     topic_epoch_action = str(topic_epoch_decision.get("action") or "").strip().casefold()
     if topic_epoch_action:
         diagnostics["topic_epoch_action"] = topic_epoch_action
+    requested_action = str(topic_epoch_decision.get("requested_action") or "").strip().casefold()
+    if requested_action:
+        diagnostics["topic_epoch_requested_action"] = requested_action
+    if topic_epoch_decision.get("write_policy"):
+        diagnostics["topic_epoch_write_policy"] = topic_epoch_decision.get("write_policy")
+    if topic_epoch_decision.get("source_addressable_card_count") is not None:
+        diagnostics["source_addressable_card_count"] = int(
+            topic_epoch_decision.get("source_addressable_card_count") or 0
+        )
+    vote_diagnostics = topic_epoch_vote_diagnostics(result.get("scouts"))
+    if vote_diagnostics["counts_by_family"]:
+        diagnostics["topic_epoch_vote_counts_by_family"] = vote_diagnostics["counts_by_family"]
+    if vote_diagnostics["counts_by_confidence_bucket"]:
+        diagnostics["topic_epoch_vote_counts_by_confidence_bucket"] = (
+            vote_diagnostics["counts_by_confidence_bucket"]
+        )
+    if "topic_epoch_suppressed" in diagnostics["reason_buckets"]:
+        diagnostics["source_addressable_cards_suppressed_count"] = int(
+            topic_epoch_decision.get("source_addressable_card_count") or 0
+        )
     return diagnostics

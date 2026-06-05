@@ -18,6 +18,11 @@ snippet. MCP, hooks, sync, Dream, benchmark, and release evidence pages are
 agent-host, operator, research, or maintainer surfaces; they are not required
 before ordinary users see value.
 
+The default product language is import, recall, and carry the source forward.
+Use [`roadmap.md#product-layers`](roadmap.md#product-layers) and
+[`guides/public-core-boundary.md#core-complexity-budget`](guides/public-core-boundary.md#core-complexity-budget)
+before promoting a heavier mechanism into the ordinary user path.
+
 ## First Stops
 
 - Product requirements: [`roadmap.md`](roadmap.md).
@@ -141,7 +146,9 @@ drafts. Treat it as useful context, not the final claim boundary.
 ### Research
 
 `research/` is the index and evidence map for speculative research notes. These
-notes are not runtime contracts.
+notes are not runtime contracts. Long-range ideas that should be preserved but
+not treated as active roadmap or open issue work belong in
+[`research/seeds/`](research/seeds/).
 
 ### Archive
 

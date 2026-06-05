@@ -168,6 +168,7 @@ def source_evidence_validation_guidance(
         "--source-max-cases 1 --source-min-cases 1 "
         "--allow-deterministic-labels --json"
     )
+    parent_claims = sorted({str(item) for item in payload.get("cannot_claim") or []})
     return {
         "problem": problem,
         "semantic_sidecar_required": True,
@@ -182,13 +183,14 @@ def source_evidence_validation_guidance(
             "Wiring baseline only; do not read fallback success as semantic-sidecar coverage."
         ),
         "sidecar_next_action": explanation.get("next_action"),
-        "cannot_claim": sorted(
-            set(payload.get("cannot_claim") or [])
-            | {
-                "deterministic_label_fallback_is_not_semantic_sidecar_evidence",
-                "semantic_sidecar_sample_coverage",
-                "selected_semantic_source_evidence",
-            }
+        "cannot_claim": ["deterministic_label_fallback_is_not_semantic_sidecar_evidence"],
+        "inherited_boundaries": {
+            "source": "parent report",
+            "count": len(parent_claims),
+        },
+        "boundary_ref": (
+            "docs/evidence/benchmarks/memory-decision-benchmark-plan.md"
+            "#track-b-source-evidence-retrieval"
         ),
     }
 

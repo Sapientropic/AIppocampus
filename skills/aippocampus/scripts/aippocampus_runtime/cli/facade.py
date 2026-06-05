@@ -51,6 +51,7 @@ COMMANDS = {
     "doctor": CommandSpec("provider_doctor.py", "aippocampus_runtime.ops.provider_doctor"),
     "update": CommandSpec("update.py", "aippocampus_runtime.update.cli"),
     "smoke": CommandSpec("recall_funnel_smoke.py", "aippocampus_runtime.ops.recall_funnel_smoke"),
+    "logs": CommandSpec("log_retention.py", "aippocampus_runtime.ops.log_retention"),
     "storage": CommandSpec(
         "storage_governance.py",
         "aippocampus_runtime.ops.storage_governance",
@@ -301,6 +302,7 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  doctor spend        Report local model spend/yield diagnostics", file=target)
     print("  mcp list-tools      List MCP tool schemas", file=target)
     print("  smoke recall-funnel Run a progressive recall funnel diagnostic", file=target)
+    print("  logs status/rotate  Inspect or apply bounded local log retention", file=target)
     print("  storage gc          Plan storage cleanup from existing evidence", file=target)
     print("  why-recall          Explain why a recall route surfaced or degraded", file=target)
     print("  why-not-recall      Explain why a recall route stayed silent", file=target)

@@ -173,6 +173,15 @@ class AippocampusCliTests(unittest.TestCase):
         )
         self.assertEqual(prompt_hook_status.args, ["status", "--last", "--json"])
 
+        log_rotation = facade.resolve_command(["logs", "rotate", "--json"])
+        self.assertEqual(log_rotation.command, "logs")
+        self.assertEqual(
+            log_rotation.module_name,
+            "aippocampus_runtime.ops.log_retention",
+        )
+        self.assertEqual(log_rotation.script_name, "log_retention.py")
+        self.assertEqual(log_rotation.args, ["rotate", "--json"])
+
     def test_onboard_status_text_points_to_first_recall_modes(self) -> None:
         from aippocampus_runtime.onboarding import facade as onboard_facade
 

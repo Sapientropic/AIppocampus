@@ -124,6 +124,7 @@ from aippocampus_runtime.warm_ambient.source_validation import (  # noqa: F401
     source_index_from_registry,
     validate_card_source_refs,
 )
+from aippocampus_runtime.warm_ambient.topic_epoch_policy import apply_topic_epoch_write_policy
 
 PROMPT_VERSION = "aippocampus-warm-ambient-recall-v0"
 SCHEMA_VERSION = 1
@@ -1378,6 +1379,12 @@ def run_warm_ambient_recall(
     guard_coverage = guard_coverage_status(scouts=scout_names, rows=rows)
     guards_incomplete = guard_coverage_incomplete(guard_coverage)
     quorum_met = bool(useful_signal_quorum_met and not guards_incomplete)
+    topic_epoch_decision = apply_topic_epoch_write_policy(
+        topic_epoch_decision,
+        cards=merged["cards"],
+        useful_signal_quorum_met=useful_signal_quorum_met,
+        guard_coverage=guard_coverage,
+    )
     cache_write = None
     # A single enthusiastic scout should not poison the soft thread cache. Both
     # foreground-style quorum runs and detached wait-all runs must meet the

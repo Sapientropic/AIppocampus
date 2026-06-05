@@ -14,7 +14,7 @@ sys.path.insert(0, str(SCRIPTS))
 from aippocampus_runtime.ops import spend_doctor  # noqa: E402
 from aippocampus_runtime.warm_ambient import recall as warm_recall  # noqa: E402
 
-FAKE_SECRET = "sk-spend-doctor-test-secret"
+FAKE_PRIVATE_MARKER = "spend-doctor-private-marker"
 FAKE_LOCAL_PATH = "C:\\Users\\Private\\AIppocampus\\source.txt"
 
 
@@ -65,7 +65,7 @@ class SpendDoctorTests(unittest.TestCase):
                         "status": "staging",
                         "job": "concept_edges",
                         "finding_kind": "concept_edges",
-                        "title": FAKE_SECRET,
+                        "title": FAKE_PRIVATE_MARKER,
                         "summary": FAKE_LOCAL_PATH,
                         "usage": {"prompt_tokens": 50, "completion_tokens": 20, "total_tokens": 70},
                     }
@@ -168,7 +168,7 @@ class SpendDoctorTests(unittest.TestCase):
         self.assertIn("low_yield_high_spend:warm_ambient", report["warning_codes"])
         self.assertIn("warm_ambient", report["budget_guardrails"]["routes_to_pause_or_inspect"])
         encoded = json.dumps(report, ensure_ascii=False)
-        self.assertNotIn(FAKE_SECRET, encoded)
+        self.assertNotIn(FAKE_PRIVATE_MARKER, encoded)
         self.assertNotIn(FAKE_LOCAL_PATH, encoded)
         self.assertNotIn(str(root), encoded)
 
@@ -181,7 +181,7 @@ class SpendDoctorTests(unittest.TestCase):
                 "status": "written",
                 "scout_count": 1,
                 "scouts": [],
-                "cards": [{"theme": FAKE_SECRET, "source_refs": [{"path": FAKE_LOCAL_PATH}]}],
+                "cards": [{"theme": FAKE_PRIVATE_MARKER, "source_refs": [{"path": FAKE_LOCAL_PATH}]}],
                 "usage": {
                     "prompt_tokens": 10,
                     "completion_tokens": 4,
@@ -196,7 +196,7 @@ class SpendDoctorTests(unittest.TestCase):
         self.assertEqual(summary["usage"]["total_tokens"], 14)
         self.assertEqual(summary["usage"]["prompt_cache_hit_tokens"], 6)
         encoded = json.dumps(summary, ensure_ascii=False)
-        self.assertNotIn(FAKE_SECRET, encoded)
+        self.assertNotIn(FAKE_PRIVATE_MARKER, encoded)
         self.assertNotIn(FAKE_LOCAL_PATH, encoded)
 
     def test_cli_doctor_spend_runs_via_public_facade(self) -> None:

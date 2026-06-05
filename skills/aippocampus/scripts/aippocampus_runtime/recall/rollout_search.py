@@ -56,6 +56,7 @@ class RolloutSearchOptions:
     rag_context: int = 3
     max_results: int = 30
     snippet_chars: int = 700
+    include_raw_payload: bool = False
 
 
 def auto_index_path(cwd: str, rollout: Path | None = None, *, prefer_existing: bool = True) -> Path:
@@ -183,8 +184,44 @@ def search_index_literal(
         con.close()
 
 
+def rollout_payload_class(message: dict) -> str:
+    role = str(message.get("role") or "")
+    kind = str(message.get("kind") or "")
+    phase = str(message.get("phase") or "")
+    if role in {"event", "tool"} or kind in {
+        "function_call",
+        "function_call_output",
+        "web_search_call",
+    }:
+        return "tool_event"
+    if role == "user":
+        return "user_message"
+    if role == "assistant" and message.get("is_final"):
+        return "assistant_final"
+    if role == "assistant" and phase:
+        return f"assistant_{phase}"
+    return kind or role or "message"
+
+
+def bounded_snippet(text: str, snippet_chars: int) -> dict[str, object]:
+    compacted_source = re.sub(r"\s+", " ", text).strip()
+    snippet = compact_text(text, snippet_chars)
+    return {
+        "snippet": snippet,
+        "truncated": len(compacted_source) > snippet_chars,
+        "text_bytes": len(text.encode("utf-8")),
+        "snippet_bytes": len(snippet.encode("utf-8")),
+    }
+
+
 def search_rollout_stream(
-    rollout: Path, patterns: list[str], include_tools: bool, limit: int, snippet_chars: int
+    rollout: Path,
+    patterns: list[str],
+    include_tools: bool,
+    limit: int,
+    snippet_chars: int,
+    *,
+    include_raw_payload: bool = False,
 ) -> list[dict]:
     regexes = [re.compile(p, re.IGNORECASE) for p in patterns]
     results = []
@@ -192,20 +229,24 @@ def search_rollout_stream(
         text = msg["text"]
         if not any(r.search(text) for r in regexes):
             continue
-        results.append(
-            {
-                "line": msg["line"],
-                "timestamp": msg["timestamp"],
-                "role": msg["role"],
-                "kind": msg["kind"],
-                "phase": msg.get("phase") or "",
-                "turn_index": msg.get("turn_index"),
-                "is_final": bool(msg.get("is_final")),
-                "score": None,
-                "signals": {"mode": "stream"},
-                "snippet": compact_text(text, snippet_chars),
-            }
-        )
+        line = msg["line"]
+        hit = {
+            "line": line,
+            "source_ref": f"raw-line:{line}",
+            "timestamp": msg["timestamp"],
+            "role": msg["role"],
+            "kind": msg["kind"],
+            "payload_class": rollout_payload_class(msg),
+            "phase": msg.get("phase") or "",
+            "turn_index": msg.get("turn_index"),
+            "is_final": bool(msg.get("is_final")),
+            "score": None,
+            "signals": {"mode": "stream", "raw_payload_included": include_raw_payload},
+            **bounded_snippet(text, snippet_chars),
+        }
+        if include_raw_payload:
+            hit["raw_payload"] = text
+        results.append(hit)
         if len(results) >= limit:
             break
     return results
@@ -223,6 +264,7 @@ def search_rollout_payload(options: RolloutSearchOptions) -> dict:
     anchor_path = resolve_anchor_path(cwd, str(options.anchors))
 
     source = None
+    source_kind = "sqlite_index"
     results: list[dict]
     query_terms = split_query_terms(patterns)
     anchors = match_anchors(anchor_path, query_terms) if anchor_path.exists() else []
@@ -278,27 +320,33 @@ def search_rollout_payload(options: RolloutSearchOptions) -> dict:
                         )
         else:
             rollout = rollout or locate_rollout(cwd)
-            source = str(rollout)
+            source = "raw_rollout"
+            source_kind = "raw_rollout"
             results = search_rollout_stream(
                 rollout,
                 patterns,
                 options.include_tools,
                 options.max_results,
                 options.snippet_chars,
+                include_raw_payload=options.include_raw_payload,
             )
     else:
         rollout = rollout or locate_rollout(cwd)
-        source = str(rollout)
+        source = "raw_rollout"
+        source_kind = "raw_rollout"
         results = search_rollout_stream(
             rollout,
             patterns,
             options.include_tools,
             options.max_results,
             options.snippet_chars,
+            include_raw_payload=options.include_raw_payload,
         )
 
     return {
         "source": source,
+        "source_kind": source_kind,
+        "raw_source_path_hidden": source_kind == "raw_rollout",
         "mode": options.mode if not options.no_index else "stream",
         "query_terms": query_terms,
         "expanded_terms": expanded_terms,
@@ -326,6 +374,7 @@ def options_from_args(args: argparse.Namespace) -> RolloutSearchOptions:
         rag_context=args.rag_context,
         max_results=args.max,
         snippet_chars=args.snippet_chars,
+        include_raw_payload=args.include_raw_payload,
     )
 
 
@@ -385,6 +434,12 @@ def main() -> int:
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--max", type=int, default=30)
     parser.add_argument("--snippet-chars", type=int, default=700)
+    parser.add_argument(
+        "--include-raw-payload",
+        "--audit-raw",
+        action="store_true",
+        help="Local audit override: include the full normalized raw payload for stream hits.",
+    )
     args = parser.parse_args()
 
     payload = search_rollout_payload(options_from_args(args))

@@ -26,6 +26,7 @@ from aippocampus_runtime.recall.ambient_policy import (
     load_policy_events,
     surface_events_for_cards,
 )
+from aippocampus_runtime.recall.ambient_source_reopen import promote_reopenable_ambient_cards
 from aippocampus_runtime.warm_ambient.scheduler import (
     public_warm_schedule_status,
     schedule_warm_ambient_recall,
@@ -38,7 +39,6 @@ __all__ = [
     "current_thread_key_from_hook_thread_id",
     "warm_prompt_trace",
 ]
-
 
 def attach_ambient_recall(
     result: dict[str, Any],
@@ -122,6 +122,7 @@ def attach_ambient_recall(
             )
             result["ambient_recall"]["cards"] = policy_filter["cards"]
             result["ambient_recall"]["policy_filter"] = policy_filter["diagnostics"]
+        promote_reopenable_ambient_cards(result["ambient_recall"], registry_path=registry_path)
         active_lock: dict[str, Any] | None = None
         try:
             active_lock = _attach_active_recall_lock(

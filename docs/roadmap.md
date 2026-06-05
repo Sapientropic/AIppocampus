@@ -9,6 +9,40 @@ memory.
 The product promise is simple: the archive is still here, so the journey can
 continue.
 
+## Default Product Lane
+
+For an ordinary user, AIppocampus should be legible as one job:
+
+> I help the agent find source evidence, and reopen the source when the source
+> should be reopened.
+
+The first useful path is deliberately small:
+
+1. Register or import local conversation source after consent.
+2. Search or ambiently recall enough to identify the right source.
+3. Reopen, cite, or carry that source-backed context into the next agent,
+   thread, device, or project.
+
+Everything else is a layer behind that lane. A new user should feel "this
+finally found what we already said," not "I need to learn a memory governance
+console."
+
+## Product Layers
+
+- Core default: clean-source registration, search/recall, source reopen,
+  portable source refs, and privacy-safe diagnostics. This layer must stay low
+  friction.
+- Power user: why-recall / why-not-recall, review inboxes, dashboards,
+  Campus/reflection surfaces, configurable partitions, and richer route
+  inspection. These are opt-in control surfaces, not onboarding requirements.
+- Enterprise/high-risk: purpose-bound access, audit, legal/medical or
+  therapy-like gates, human review queues, retention policy, and compliance
+  reports. These belong behind explicit profile boundaries.
+- Research garden: path networks, glyphs, hexagram or intuition markers, Dream
+  / sleep pruning, AAR v2 experiments, activation-efficient portraits, and
+  other exploratory work. Preserve these ideas, but do not let them crowd the
+  core lane until evidence and a small executable slice exist.
+
 ## North Star
 
 AIppocampus preserves source-backed continuity for long-running relationships
@@ -64,16 +98,36 @@ can carry the actual continuity signal.
      governance belongs behind the product-profile boundary in
      `docs/guides/public-core-boundary.md`.
 
-5. Portable across machines
+5. Complexity budget for Core
+   - A new Core mechanism should make first use simpler, reduce manual grep,
+     reduce false source claims, or remove an existing concept from the user.
+   - If it adds a concept ordinary users must understand and does not clearly
+     improve one of those outcomes, keep it in the power-user, enterprise, or
+     research layer.
+   - Default paths should reopen source before inventing new scoring,
+     attribution, governance, or meta-contract layers.
+
+6. Portable across machines
    - Mac, Windows, and future devices should share the same clean memory graph.
    - Local absolute paths are hints, not identity.
    - Content hashes, source ids, turn ids, and manifests are the stable join
      layer.
 
-6. Scales to huge memory
+7. Scales to huge memory
    - Design for GB-scale and eventually larger archives from the start.
    - Segment indexes, manifests, sidecar semantic layers, and optional raw cold
      archives should keep growth manageable without forcing premature summaries.
+
+## Issue And Seed Hygiene
+
+Open issues are the near-term execution queue. A standalone issue should be able
+to become a fixture, doc, CLI, runtime slice, or verified cleanup within roughly
+1-2 weeks. Broader hypotheses should stay as Discussions, roadmap seeds, or
+entries in `docs/research/seeds/` until they can be cut into an executable
+slice.
+
+This is not a vision cut. It keeps the public repo from looking like a control
+tower while preserving the long garden.
 
 ## Roadmap Stages
 

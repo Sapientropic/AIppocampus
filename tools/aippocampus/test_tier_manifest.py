@@ -28,6 +28,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_aippocampuslib",
         "test_ambient_recall_cards",
         "test_ambient_recall_policy",
+        "test_ambient_source_reopen",
         "test_ambient_thread_cache",
         "test_architecture_boundaries",
         "test_benchmark_coding_decision_shadow",
@@ -124,6 +125,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_legacy_aliases",
         "test_life_wide_registry_smoke",
         "test_living_cue_cache",
+        "test_log_retention",
         "test_macos_install_smoke_workflow",
         "test_memory_candidate_router",
         "test_memory_pain_prompt_hook_smoke",
@@ -203,6 +205,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_warm_ambient_privacy_policy",
         "test_warm_ambient_recall",
         "test_warm_ambient_scheduler_policy",
+        "test_warm_ambient_topic_epoch_policy",
     }
 )
 

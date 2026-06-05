@@ -104,6 +104,47 @@ vague cue, search a project cue or a time cue and label the result as candidate
 navigation until a source-backed snippet appears. Add `--format json` only for
 automation.
 
+## Core Continuity Hooks
+
+Without prompt and lifecycle hooks, AIppocampus is still useful as manual,
+source-backed search. That is not the full ambient continuity experience.
+
+After the first source-backed recall works, offer hook setup as a core trusted
+step, never as a silent install:
+
+```sh
+aippocampus update status
+aippocampus update apply --surface hooks
+```
+
+Use rollback commands when the user wants to remove AIppocampus-owned Codex hook
+handlers:
+
+```sh
+aippocampus hooks prompt uninstall
+aippocampus hooks lifecycle uninstall
+```
+
+Keep external-model semantics separate. A local hook install does not require an
+LLM key, and semantic/warm/subconscious/Dream outputs are navigation layers
+until the original source is reopened.
+
+`aippocampus update status` exposes the first-run readiness labels:
+
+- `source_search_ready`: onboarding/search can produce source-backed snippets.
+- `active_recall_ready`: MCP/progressive recall can reopen source for an agent.
+- `ambient_hooks_ready`: prompt/lifecycle hooks are installed and trusted.
+- `semantic_provider_ready`: provider-backed semantic/warm work can run.
+- `hook_provider_ready`: provider visibility has been checked for future hook
+  processes; restart Codex when environment changed after launch.
+- `dream_or_subconscious_ready`: provider-backed background work is available,
+  or explicitly missing-key/disabled.
+- `agent_fallback_ready`: future #752 fallback without external LLM keys.
+
+No key is required for basic source-backed search. A missing provider key means
+semantic/warm/subconscious/Dream routes are not ready; it does not mean local
+clean-source search is broken.
+
 ## MCP Usage
 
 List local MCP tools:
