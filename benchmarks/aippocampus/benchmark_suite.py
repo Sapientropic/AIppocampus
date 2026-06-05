@@ -470,7 +470,30 @@ def profile_metadata(config: BenchmarkSuiteConfig) -> dict[str, Any]:
         "docs": PROFILE_DOCS,
         "selected_profile": dict(selected),
         "effective_surface": effective_profile_surface(config),
-        "profile_ladder": [dict(item) for item in PROFILE_LADDER],
+        "profile_ladder": [profile_ladder_summary(item) for item in PROFILE_LADDER],
+    }
+
+
+def profile_ladder_summary(profile: dict[str, Any]) -> dict[str, Any]:
+    """Return the profile ladder without mirroring every inactive caveat list."""
+
+    default_claims = profile.get("default_cannot_claim") or []
+    summary = {
+        key: value
+        for key, value in profile.items()
+        if key != "default_cannot_claim"
+    }
+    summary["default_cannot_claim_count"] = len(default_claims)
+    summary["claim_boundary_ref"] = PROFILE_DOCS
+    return summary
+
+
+def claim_boundary_policy() -> dict[str, Any]:
+    return {
+        "canonical_rule": "docs/architecture/schema-field-profiles.md#cannot-claim",
+        "runner_json": "emit active run-level and track-local cannot_claim entries",
+        "selected_profile": "may include its default_cannot_claim list",
+        "inactive_profile_ladder": "emit counts plus claim_boundary_ref, not mirrored caveat lists",
     }
 
 
@@ -1075,6 +1098,7 @@ def run_benchmark_suite_with_config(config: BenchmarkSuiteConfig) -> dict[str, A
         "config": config.sanitized_payload_config(),
         "profile_metadata": profile_metadata(config),
         "threshold_metadata": threshold_metadata(config),
+        "claim_boundary_policy": claim_boundary_policy(),
         "claim_surface_warnings": claim_surface_warnings(config),
         "track_statuses": track_statuses,
         "known_gaps": known_gaps,

@@ -302,6 +302,29 @@ class BenchmarkSuiteTests(unittest.TestCase):
             {profile["name"] for profile in profile_metadata["profile_ladder"]},
         )
         self.assertIn("public_fast_profile_track_b_quality", payload["cannot_claim"])
+        ladder_by_name = {
+            profile["name"]: profile for profile in profile_metadata["profile_ladder"]
+        }
+        self.assertNotIn(
+            "default_cannot_claim",
+            ladder_by_name["ci-deterministic"],
+        )
+        self.assertEqual(
+            ladder_by_name["ci-deterministic"]["default_cannot_claim_count"],
+            3,
+        )
+        self.assertEqual(
+            ladder_by_name["ci-deterministic"]["claim_boundary_ref"],
+            profile_metadata["docs"],
+        )
+        self.assertIn(
+            "docs/architecture/schema-field-profiles.md#cannot-claim",
+            payload["claim_boundary_policy"]["canonical_rule"],
+        )
+        self.assertIn(
+            "default_cannot_claim",
+            profile_metadata["selected_profile"],
+        )
 
         threshold_metadata = payload["threshold_metadata"]
         self.assertEqual(
