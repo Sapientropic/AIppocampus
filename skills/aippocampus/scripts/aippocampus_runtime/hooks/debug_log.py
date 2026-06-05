@@ -43,6 +43,13 @@ PUBLIC_WARM_STATUSES = {
     "written",
 }
 PUBLIC_SUPPORT_LEVELS = {"candidate", "evidence", "scent"}
+PUBLIC_AUTHORITY_STATES = {
+    "bounded_evidence_ready",
+    "candidate_with_refs",
+    "high_risk_reopen_required",
+    "navigation_scent",
+    "reopen_required_before_claim",
+}
 PUBLIC_PROVENANCE_CLASSES = {
     "cached_warm_card",
     "cognitive_map_route",
@@ -232,6 +239,12 @@ def _public_ambient_summary(value: Any) -> dict[str, Any]:
         "source_reopen_required_count": _int_value(
             ambient.get("source_reopen_required_count")
         ),
+        "reopen_required_before_claim_count": _int_value(
+            ambient.get("reopen_required_before_claim_count")
+        ),
+        "reopen_recommended_for_exact_quote_count": _int_value(
+            ambient.get("reopen_recommended_for_exact_quote_count")
+        ),
         "cache": _public_cache(ambient.get("cache") or ambient.get("cache_status")),
         "warm_background": _public_warm_background(ambient.get("warm_background")),
         "visibility_counts": _count_map(
@@ -245,6 +258,10 @@ def _public_ambient_summary(value: Any) -> dict[str, Any]:
         "support_level_counts": _count_map(
             ambient.get("support_level_counts"),
             allowed=PUBLIC_SUPPORT_LEVELS,
+        ),
+        "authority_counts": _count_map(
+            ambient.get("authority_counts"),
+            allowed=PUBLIC_AUTHORITY_STATES,
         ),
         "source_validation_statuses": _count_map(
             ambient.get("source_validation_statuses"),
@@ -330,6 +347,12 @@ def _project_last_prompt_hook(event: dict[str, Any]) -> dict[str, Any]:
         "source_reopen_required_count": _int_value(
             ambient.get("source_reopen_required_count")
         ),
+        "reopen_required_before_claim_count": _int_value(
+            ambient.get("reopen_required_before_claim_count")
+        ),
+        "reopen_recommended_for_exact_quote_count": _int_value(
+            ambient.get("reopen_recommended_for_exact_quote_count")
+        ),
         "cache": {
             "status": cache.get("status"),
             "topic_epoch_present": cache.get("topic_epoch_present"),
@@ -345,6 +368,10 @@ def _project_last_prompt_hook(event: dict[str, Any]) -> dict[str, Any]:
         "visibility_counts": visibility_counts,
         "provenance_counts": provenance_counts,
         "support_level_counts": support_counts,
+        "authority_counts": _count_map(
+            ambient.get("authority_counts"),
+            allowed=PUBLIC_AUTHORITY_STATES,
+        ),
         "source_validation_statuses": validation_statuses,
     }
 
@@ -371,6 +398,12 @@ def _project_stored_last_prompt_hook(value: Any) -> dict[str, Any] | None:
         "scent_count": _int_value(value.get("scent_count")),
         "wayfinding_count": _int_value(value.get("wayfinding_count")),
         "source_reopen_required_count": _int_value(value.get("source_reopen_required_count")),
+        "reopen_required_before_claim_count": _int_value(
+            value.get("reopen_required_before_claim_count")
+        ),
+        "reopen_recommended_for_exact_quote_count": _int_value(
+            value.get("reopen_recommended_for_exact_quote_count")
+        ),
         "cache": _public_cache(value.get("cache")),
         "warm_background": warm_background,
         "visibility_counts": _count_map(
@@ -384,6 +417,10 @@ def _project_stored_last_prompt_hook(value: Any) -> dict[str, Any] | None:
         "support_level_counts": _count_map(
             value.get("support_level_counts"),
             allowed=PUBLIC_SUPPORT_LEVELS,
+        ),
+        "authority_counts": _count_map(
+            value.get("authority_counts"),
+            allowed=PUBLIC_AUTHORITY_STATES,
         ),
         "source_validation_statuses": _count_map(
             value.get("source_validation_statuses"),

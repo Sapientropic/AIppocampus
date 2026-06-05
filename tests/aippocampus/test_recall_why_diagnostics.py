@@ -13,6 +13,7 @@ sys.path.insert(0, str(SCRIPTS))
 from aippocampus_runtime.cli import facade  # noqa: E402
 from aippocampus_runtime.mcp import server as mcp  # noqa: E402
 from aippocampus_runtime.recall import why_diagnostics as why  # noqa: E402
+from aippocampus_runtime.recall import why_surfaces as surfaces  # noqa: E402
 
 
 class RecallWhyDiagnosticsTests(unittest.TestCase):
@@ -139,6 +140,29 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
         )
         self.assertEqual(payload["decision"], "suppressed")
         self.assertEqual(payload["reason_code_catalog_version"], 1)
+
+    def test_ambient_cache_surface_distinguishes_bounded_evidence_ready(self) -> None:
+        report = surfaces.ambient_cache_surface_report(
+            {
+                "status": "hit",
+                "cards": [
+                    {
+                        "support_level": "evidence",
+                        "authority_state": "bounded_evidence_ready",
+                        "source_reopen_required": False,
+                        "reopen_required_before_claim": False,
+                        "reopen_recommended_for_exact_quote": True,
+                        "source_refs": [{"thread_key": "session:old", "line": 4}],
+                    }
+                ],
+            }
+        )
+
+        self.assertIn("bounded_evidence_ready", report["reason_codes"])
+        self.assertIn("reopen_recommended_for_exact_quote", report["reason_codes"])
+        self.assertNotIn("source_reopen_required", report["reason_codes"])
+        self.assertTrue(report["details"]["bounded_evidence_ready"])
+        self.assertFalse(report["details"]["source_reopen_required"])
 
     def test_cli_facade_exposes_why_not_recall_json_without_raw_cue(self) -> None:
         result = facade.run_command(
