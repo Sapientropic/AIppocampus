@@ -76,48 +76,50 @@ promotes a public-safe result into the official evidence flow.
    [`benchmarks/react-real-vcs-production-like-disambiguation-2026-06-04.md`](benchmarks/react-real-vcs-production-like-disambiguation-2026-06-04.md).
 17. Need public-safe memory-pain fixture evidence:
    [`benchmarks/memory-pain-fixture-report.md`](benchmarks/memory-pain-fixture-report.md).
-18. Need public-safe multimodal corpus-style retrieval fixture evidence for
+18. Need Track S no-live-judge semantic robustness diagnostics:
+   [`benchmarks/semantic-robustness-track-s.md`](benchmarks/semantic-robustness-track-s.md).
+19. Need public-safe multimodal corpus-style retrieval fixture evidence for
    #531:
    [`benchmarks/multimodal-corpus-fixture-report.md`](benchmarks/multimodal-corpus-fixture-report.md).
-19. Need public-safe conversational media-ingest recall fixture evidence for
+20. Need public-safe conversational media-ingest recall fixture evidence for
    #532:
    [`benchmarks/conversational-media-ingest-fixture-report.md`](benchmarks/conversational-media-ingest-fixture-report.md).
-20. Need public-safe NIAH-style multimodal evidence-pool fixture evidence for
+21. Need public-safe NIAH-style multimodal evidence-pool fixture evidence for
    #533:
    [`benchmarks/multimodal-niah-evidence-pool-report.md`](benchmarks/multimodal-niah-evidence-pool-report.md).
-21. Need public-safe knowledge pollution, privacy partition, and capability
+22. Need public-safe knowledge pollution, privacy partition, and capability
    contract-smoke evidence:
    [`benchmarks/knowledge-pollution-privacy-fixture-report.md`](benchmarks/knowledge-pollution-privacy-fixture-report.md).
-22. Need public-safe fresh-thread recall demo evidence:
+23. Need public-safe fresh-thread recall demo evidence:
    [`benchmarks/fresh-thread-recall-demo-2026-05-31.md`](benchmarks/fresh-thread-recall-demo-2026-05-31.md).
-23. Need sanitized real-history fresh-thread boundary evidence for #302:
+24. Need sanitized real-history fresh-thread boundary evidence for #302:
    [`benchmarks/fresh-thread-real-history-smoke-2026-06-02.md`](benchmarks/fresh-thread-real-history-smoke-2026-06-02.md).
-24. Need expanded fresh-thread demo and multi-ref real-history smoke evidence:
+25. Need expanded fresh-thread demo and multi-ref real-history smoke evidence:
    [`benchmarks/fresh-thread-expanded-coverage-2026-06-03.md`](benchmarks/fresh-thread-expanded-coverage-2026-06-03.md).
-25. Need public-safe H1/H2 hard-negative scoring-contract fixture evidence for
+26. Need public-safe H1/H2 hard-negative scoring-contract fixture evidence for
    #244:
    [`benchmarks/hippocampal-hard-negative-fixture-report.md`](benchmarks/hippocampal-hard-negative-fixture-report.md).
-26. Need public-safe hippocampal recall-discrimination diagnostic seed evidence
+27. Need public-safe hippocampal recall-discrimination diagnostic seed evidence
    for #229/#230/#231:
    [`benchmarks/hippocampal-recall-fixture-report.md`](benchmarks/hippocampal-recall-fixture-report.md).
-27. Need public-safe Field Continuity / magic-moment reproducibility fixture
+28. Need public-safe Field Continuity / magic-moment reproducibility fixture
    evidence for #454:
    [`benchmarks/field-continuity-fixture-report.md`](benchmarks/field-continuity-fixture-report.md).
-28. Need segmented-search merge policy calibration evidence for #375:
+29. Need segmented-search merge policy calibration evidence for #375:
    [`benchmarks/segmented-merge-policy-fixture-report.md`](benchmarks/segmented-merge-policy-fixture-report.md).
-29. Need agency host-surface timing evidence for #763:
+30. Need agency host-surface timing evidence for #763:
    [`benchmarks/agency-host-surface-codex-desktop-2026-06-05.md`](benchmarks/agency-host-surface-codex-desktop-2026-06-05.md).
-30. Need private real-history Dream offline and diagnostic evidence:
+31. Need private real-history Dream offline and diagnostic evidence:
    [`dream/dream-real-history-model-backed-eval-2026-05-31.md`](dream/dream-real-history-model-backed-eval-2026-05-31.md)
    and
    [`dream/dream-private-large-history-diagnostic-2026-06-04.md`](dream/dream-private-large-history-diagnostic-2026-06-04.md).
-31. Need explicit recall-reminder shadow A/B evidence:
+32. Need explicit recall-reminder shadow A/B evidence:
    [`dream/dream-live-shadow-ab-2026-05-30.md`](dream/dream-live-shadow-ab-2026-05-30.md).
-32. Need public-corpus negative-control dream shadow evidence:
+33. Need public-corpus negative-control dream shadow evidence:
    [`dream/dream-live-shadow-benchmark-corpus-2026-05-31.md`](dream/dream-live-shadow-benchmark-corpus-2026-05-31.md).
-33. Need live question-extraction axis-coverage evidence for GitHub #153:
+34. Need live question-extraction axis-coverage evidence for GitHub #153:
    [`question/question-extraction-axis-coverage-2026-05-31.md`](question/question-extraction-axis-coverage-2026-05-31.md).
-34. Need community-submitted runs, demos, known gaps, or field-report intake:
+35. Need community-submitted runs, demos, known gaps, or field-report intake:
    [`community-field-reports.md`](community-field-reports.md) and the public
    [`/evidence/`](https://www.aippocampus.com/evidence/) page.
 
@@ -148,6 +150,7 @@ instead of deriving priority from this directory map.
 | Public longitudinal user evidence | `docs/evidence/benchmarks/public-longitudinal-users.md`, `docs/evidence/benchmarks/public-longitudinal-users-measurement-2026-05-31.md`, `docs/evidence/benchmarks/react-real-vcs-smoke-2026-05-31.md`, `docs/evidence/benchmarks/react-real-vcs-100-gold-2026-05-31.md`, `docs/evidence/benchmarks/react-real-vcs-adversarial-v2-2026-05-31.md`, `docs/evidence/benchmarks/react-real-vcs-production-like-disambiguation-2026-06-04.md`, `benchmark_corpus/public_longitudinal_users/`, and `benchmark_corpus/locomo_manifest.json` | Public synthetic coding implicit-knowledge scoring-contract smoke, LoCoMo same-conversation control users, LoCoMo answer-usefulness prototype, deterministic scorers, VCS future-event recall roadmap, dated measurements, real public VCS hard-event smoke, 100+ gold React VCS measurement with anti-drift/counterfactual controls, sharper React VCS adversarial controls, non-oracle production-like source disambiguation, and external-prediction contracts. |
 | Corpus setup | `benchmark_corpus/README.md` and `benchmark_corpus/sharegpt_manifest.json` | Public corpus conversion commands, ignored local outputs, and corpus-specific claim boundaries. |
 | Demo fixture report | `docs/evidence/benchmarks/memory-pain-fixture-report.md` | Public-safe fixture families and their narrow claim boundary. |
+| Track S semantic robustness diagnostics | `docs/evidence/benchmarks/semantic-robustness-track-s.md` and `benchmarks/aippocampus/benchmark_semantic_robustness.py` | No-live-judge semantic perturbation, equivalent-query retrieval invariance, and hard-negative/negation diagnostics for #747; not human-level semantic understanding or a Track A/B replacement. |
 | Multimodal corpus fixture report | `docs/evidence/benchmarks/multimodal-corpus-fixture-report.md` and `benchmark_corpus/public_multimodal_corpus/fixture.json` | Public-safe ATM-Bench-inspired corpus-style multimodal retrieval contract for #531; not conversational media upload recall, ATM-Bench score, or product privacy proof. |
 | Conversational media-ingest fixture report | `docs/evidence/benchmarks/conversational-media-ingest-fixture-report.md` and `benchmark_corpus/conversational_media_ingest/fixture.json` | Public-safe conversational media-ingest recall contract for #532; media anchors attach to user turns and text hints cannot replace visual source reopen. |
 | Multimodal NIAH evidence-pool fixture report | `docs/evidence/benchmarks/multimodal-niah-evidence-pool-report.md` and `benchmark_corpus/multimodal_niah_evidence_pool/fixture.json` | Public-safe NIAH-style supplied-pool answer-synthesis contract for #533; not retrieval quality, ATM-Bench score, or live vision-model quality. |
@@ -182,6 +185,7 @@ benchmark runner should be added here and linked to its dated evidence owner.
 | Benchmark run-history diff and regression guardrail | `benchmarks/aippocampus/benchmark_run_history_diff.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `.tmp/` or `benchmark_corpus/reports/` |
 | Track A memory decision gate | `benchmarks/aippocampus/benchmark_memory_decision_gate.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `docs/evidence/benchmarks/memory-pain-fixture-report.md` |
 | Track B source-evidence retrieval wrapper | `benchmarks/aippocampus/benchmark_source_evidence_retrieval.py` facade with track-owned helpers in `benchmarks/aippocampus/source_evidence/` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `benchmark_corpus/README.md`; includes #309 diagnostic `semantic_bridge_lift` / wrong-stance source-joined reranker metrics, not default vector behavior |
+| Track S semantic robustness diagnostics | `benchmarks/aippocampus/benchmark_semantic_robustness.py` | `docs/evidence/benchmarks/semantic-robustness-track-s.md`, `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, #747 |
 | Multimodal corpus-style retrieval contract | `benchmarks/aippocampus/benchmark_multimodal_corpus_retrieval.py` | `docs/evidence/benchmarks/multimodal-corpus-fixture-report.md`, `benchmark_corpus/README.md`, `benchmark_corpus/public_multimodal_corpus/fixture.json`, #531 |
 | Conversational media-ingest recall contract | `benchmarks/aippocampus/benchmark_conversational_media_ingest_recall.py` | `docs/evidence/benchmarks/conversational-media-ingest-fixture-report.md`, `benchmark_corpus/README.md`, `benchmark_corpus/conversational_media_ingest/fixture.json`, #532 |
 | Multimodal NIAH evidence-pool contract | `benchmarks/aippocampus/benchmark_multimodal_niah_evidence_pool.py` | `docs/evidence/benchmarks/multimodal-niah-evidence-pool-report.md`, `benchmark_corpus/README.md`, `benchmark_corpus/multimodal_niah_evidence_pool/fixture.json`, `benchmark_corpus/public_multimodal_corpus/fixture.json`, #533 |

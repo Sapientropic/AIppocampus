@@ -1150,10 +1150,32 @@ not depend on answer-generation model choice:
 | Track B: Retrieval | R@K, MRR, message/turn hit rate, context-visible hit rate | Whether the system finds the correct source row | No (retrieval-only, no answer generation) |
 | Track C: Payload Fidelity | source fidelity, privacy breach rate, parked-memory injection count | Whether the final payload is correct and safe | No (synthetic fixtures, mocked semantic gate) |
 | Track D: Compaction Continuity | correction retention, adjudication status, stale-anchor suppression | Whether work-task corrections survive compaction without becoming false memory | Mixed: deterministic event checks plus optional semantic adjudication, scored against source labels |
+| Track S: Semantic Robustness Diagnostics | perturbation stability, retrieval invariance, hard-negative suppression | Whether Track A/B behavior remains stable under semantic rewrites and negative constraints | No by default; optional proxy/vector diagnostics are explicit and diagnostic-only |
 
 The optional live semantic-gate track does exercise an external model, but it
 evaluates the gate decision, not answer quality. The model is part of the tested
 path, not part of the scoring rubric.
+
+### Track S: no-live-judge semantic robustness
+
+`benchmark_semantic_robustness.py` is the Track S facade for #747. It reuses
+Track A prompt-hook fixtures and Track B local source-retrieval helpers, then
+reports the following diagnostics separately:
+
+- S1 gate robustness under paraphrase, register shift, typo, syntax rewrite,
+  and current-task distractor prompts.
+- S2 retrieval invariance for equivalent but lexically distant public-safe
+  query bundles.
+- S3 hard-negative and explicit-negation suppression.
+- S4 offline proxy alignment only when a local reviewed model is explicitly
+  configured.
+- S5 representation-space health only when a local embedding index is supplied.
+
+Track S is diagnostic evidence, not source truth. Do not average it into Track
+A/B/C/D quality scores, do not use proxy-model agreement as ground truth, and
+do not require live LLM calls in the default path. See
+[`semantic-robustness-track-s.md`](semantic-robustness-track-s.md) for the
+current runner boundary.
 
 ### When end-to-end QA benchmarks are appropriate
 
