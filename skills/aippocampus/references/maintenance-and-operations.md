@@ -23,6 +23,11 @@ Health checks include:
 daemon. It can rebuild stale source/indexes, prepare graphify corpus, refresh
 segments, and produce checkpoint candidates. It should not append checkpoints
 unless called with `--append-checkpoint`.
+Activation payload compaction is available only as an explicit operator
+delegation: pass `--activation-dead-letter-manifest` plus the intended owner
+paths, and add `--apply-activation-payload-compaction` only when owner files
+should be rewritten. Dry-run is the default, and the maintenance report records
+a path-free command shape rather than local manifest or owner paths.
 
 Maintenance defaults to a degraded-report contract: failed actions are recorded
 in `action_failures`, safe independent actions can still run, `health_final` is
@@ -247,6 +252,7 @@ Common health and repair commands:
 - `python -m aippocampus_runtime.health --cwd "$PWD"`
 - `aippocampus health --registry-wide --json`
 - `python -m aippocampus_runtime.ops.maintenance --cwd "$PWD"`
+- `python -m aippocampus_runtime.ops.maintenance --cwd "$PWD" --activation-dead-letter-manifest "<manifest.json>" --activation-working-memory "<working_memory.jsonl>" --json`
 - `python -m aippocampus_runtime.source.clean_source --cwd "$PWD"`
 - `python -m aippocampus_runtime.recall.index_builder --cwd "$PWD"`
 - `python -m aippocampus_runtime.recall.segment_builder --cwd "$PWD"`
