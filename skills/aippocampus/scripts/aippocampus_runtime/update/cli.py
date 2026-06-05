@@ -16,6 +16,7 @@ from typing import Any
 from aippocampus_runtime.core import codex_home
 from aippocampus_runtime.hooks import install_lifecycle, install_prompt
 from aippocampus_runtime.ops.provider_doctor import build_provider_doctor_report
+from aippocampus_runtime.update.capability_ladder import build_capability_ladder
 
 SCHEMA_VERSION = 1
 PLUGIN_BUILD_SCRIPT = "build_plugin_package.py"
@@ -538,7 +539,9 @@ def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
     magic_blockers = _unready_surfaces(surfaces, MAGIC_SURFACES)
     optional_surfaces = _unready_surfaces(surfaces, OPTIONAL_SURFACES)
     operator_blockers = _unready_surfaces(surfaces, OPERATOR_SURFACES)
+    core_ready = not core_blockers
     magic_ready = not magic_blockers
+    capability_ladder = build_capability_ladder(surfaces, core_ready=core_ready)
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": f"aippocampus_update_{mode}",
@@ -547,13 +550,14 @@ def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
         "repo_root": str(repo_root),
         "codex_home": str(codex_home_path),
         "summary": {
-            "core_ready": not core_blockers,
+            "core_ready": core_ready,
             "core_blockers": core_blockers,
             "magic_ready": magic_ready,
             "magic_blockers": magic_blockers,
             "optional_surfaces": optional_surfaces,
             "operator_surfaces": list(OPERATOR_SURFACES),
             "operator_blockers": operator_blockers,
+            "capability_ladder": capability_ladder,
             "needs_action": actionable,
             "stale_or_missing_surfaces": actionable,
         },
@@ -763,6 +767,10 @@ def render_text(report: dict[str, Any]) -> str:
         lines.append("- Optional surfaces: " + ", ".join(summary.get("optional_surfaces") or []))
     if summary.get("operator_surfaces"):
         lines.append("- Operator surfaces: " + ", ".join(summary.get("operator_surfaces") or []))
+    if summary.get("capability_ladder"):
+        lines.append("- First-run readiness:")
+        for item in summary.get("capability_ladder") or []:
+            lines.append(f"  {item.get('id')}: {item.get('status')}")
     for name in ("skill", "hooks", "llm", "cli", "mcp", "plugin"):
         item = surfaces.get(name) or {}
         lines.append(f"- {name}: {item.get('status')}")

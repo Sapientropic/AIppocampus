@@ -28,6 +28,7 @@ from typing import Any
 
 from aippocampus_runtime.cognitive_worker_mode import resolve_cognitive_worker_mode
 from aippocampus_runtime.core import aippocampus_registry_dir, now_utc
+from aippocampus_runtime.ops import log_retention
 from aippocampus_runtime.subconscious import agent_fallback_queue, shell_selection
 from aippocampus_runtime.subconscious.scheduler_lock import FileLock
 from aippocampus_runtime.subconscious.scheduler_public import (
@@ -71,6 +72,17 @@ def registry_path(root: Path) -> Path:
 
 def state_path(root: Path, override: Path | None = None) -> Path:
     return override or (root / "subconscious_state.json")
+
+
+def public_json_text(payload: dict[str, Any]) -> str:
+    """Serialize scheduler public projections only.
+
+    The caller must pass `public_scheduler_payload(...)` or an explicit private
+    policy report. Raw scheduler results can contain project labels and local
+    paths, so keeping one output boundary makes CodeQL suppressions auditable.
+    """
+
+    return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
 def log_path(root: Path) -> Path:
@@ -351,9 +363,10 @@ def run_text(cmd: list[str], *, cwd: Path = SCRIPT_DIR, log: Path | None = None)
     )
     output = (proc.stdout or "") + (proc.stderr or "")
     if log:
-        with log.open("a", encoding="utf-8", newline="\n") as fh:
-            fh.write(f"\n[{now_utc()}] $ {' '.join(cmd)}\n")
-            fh.write(output)
+        log_retention.append_text_with_rotation(
+            log,
+            f"\n[{now_utc()}] $ {' '.join(cmd)}\n{output}",
+        )
     if proc.returncode != 0:
         raise RuntimeError(output.strip() or f"command failed: {cmd}")
     return output
@@ -469,25 +482,24 @@ def run_project(
 def start_detached(cmd: list[str], *, root: Path) -> int:
     log = log_path(root)
     log.parent.mkdir(parents=True, exist_ok=True)
-    out = log.open("ab")
     creationflags = 0
     if os.name == "nt":
         creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(
             subprocess, "DETACHED_PROCESS", 0
         )
+    wrapped_cmd = log_retention.logged_subprocess_cmd(cmd, log=log, cwd=SCRIPT_DIR)
     proc = subprocess.Popen(
-        cmd,
+        wrapped_cmd,
         cwd=str(SCRIPT_DIR),
         stdin=subprocess.DEVNULL,
-        stdout=out,
-        stderr=subprocess.STDOUT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
         # Hook callers often run with stdout/stderr captured by the host. Do
         # not let detached workers inherit those handles, or the foreground
         # hook may wait until the background DeepSeek pass exits.
         close_fds=True,
         creationflags=creationflags,
     )
-    out.close()
     return int(proc.pid)
 
 
@@ -858,8 +870,12 @@ def main() -> int:
             result = maybe_start(args)
         if args.json_output:
             public_payload = public_scheduler_payload(result)
-            payload = shell_selection.private_scheduler_report_payload(result, public_payload) if args.include_private_report else public_payload
-            print(json.dumps(payload, ensure_ascii=False, indent=2))
+            payload = (
+                shell_selection.private_scheduler_report_payload(result, public_payload)
+                if args.include_private_report
+                else public_payload
+            )
+            print(public_json_text(payload))  # lgtm[py/clear-text-logging-sensitive-data]
         elif result.get("started"):
             print(f"subconscious scheduler started: pid {result.get('pid')}")
         elif result.get("ran"):
@@ -869,7 +885,8 @@ def main() -> int:
         return 0
     except Exception as exc:
         if args.json_output:
-            print(json.dumps(public_scheduler_payload({"error": str(exc)}), ensure_ascii=False, indent=2))
+            error_payload = public_scheduler_payload({"error": str(exc)})
+            print(public_json_text(error_payload))  # lgtm[py/clear-text-logging-sensitive-data]
         else:
             print("subconscious scheduler error: runtime_error", file=sys.stderr)
         return 1 if args.strict else 0

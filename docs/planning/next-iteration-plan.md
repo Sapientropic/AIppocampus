@@ -14,6 +14,40 @@ tracks the issue slices extracted from this file and related roadmap/readiness
 docs. Use the Project for status/filtering; keep this file as the source-backed
 handoff context.
 
+## Current Product Focus
+
+The next public-facing slice should keep the default lane narrow: import or
+register source, search/recall, reopen source, and carry the source-backed
+context forward. Use `docs/roadmap.md#product-layers` for the layer map and
+`docs/guides/public-core-boundary.md#core-complexity-budget` before promoting a
+heavier mechanism into Core.
+
+Open issues are for executable slices. If a topic cannot plausibly become a
+fixture, doc, CLI, runtime slice, or verified cleanup within 1-2 weeks, park it
+as a Discussion or a seed under `docs/research/seeds/` until it can be cut
+smaller.
+
+### Open Issue Cleanup Review
+
+As of the 2026-06-06 cleanup pass, the active open-issue queue is intentionally
+small. The pass reviewed issue bodies and comments before remote closure; do
+not reopen broad parent issues just to preserve a good idea. Preserve those in
+Discussion or `docs/research/seeds/` until they can become a fixture, doc, CLI,
+runtime slice, or verified cleanup in roughly 1-2 weeks.
+
+| Layer | Reviewed issues | Current disposition |
+|---|---|---|
+| Core default / product usability | #201, #281, #752 | Keep open. These directly reduce manual grep, improve source reopen/fresh-thread recall, or keep no-key installs from silently losing background cognition. #752's first staging-only fallback slice is tracked separately; the broader issue stays open until host-agent execution/materialization is real. |
+| Evidence and quality gates | #163, #279, #742, #747 | Keep open as falsifiable proof owners, not first-use product features. They guard Dream usefulness claims, silent-constraint survival, official AMemGym comparability, and semantic robustness without live judges. |
+| Reliability / infrastructure | #311, #376, #637 | Keep open, but cut the next PR tightly. These own live correction capture, long-thread segment soak, and encrypted sync multi-writer trust/provenance behavior. |
+| Closed or moved out of the foreground | #701, #703, #248, #250, #309, #310, #312, #313, #397, #574, #575, #576, #611, #663, #679 | Treat as Research Garden, power-user, enterprise, or historical context until a smaller executable slice exists. Do not let them re-enter the open queue as broad concept issues. |
+| Completed / superseded umbrellas | #158, #164, #299, #378, #463, #582, #639, #643, #707, #743 | Closed after checking implementation evidence, child owners, or canonical docs. Future work should start from the remaining open issues or a fresh narrow issue, not by reopening these umbrellas. |
+
+Current open queue after the pass: #163, #201, #279, #281, #311, #376, #637,
+#742, #747, and #752. This is the active issue foreground; everything else
+should stay in docs, evidence, Discussion, or Long Garden until it has a small
+next action.
+
 ## Current Baseline To Preserve
 
 - Public repo boundary: no raw rollouts, registry exports, private anchors,
@@ -385,6 +419,10 @@ handoff context.
 
 - A generic vector database rewrite.
 - A cloud service dependency.
+- New default-user concepts before the Core complexity budget says they reduce
+  friction or source-claim risk.
+- Standalone open issues whose main purpose is remembering a beautiful idea.
+  Put those in Discussion or `docs/research/seeds/` first.
 - Predictive replay or richer Phase 3 behavior beyond the deterministic
   `theme_emergence` first slice before Phase 2/3 source-backed signals are
   stable on real history.

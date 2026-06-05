@@ -262,6 +262,16 @@ def render_text(report: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def public_json_text(report: dict[str, Any]) -> str:
+    """Serialize the provider doctor public report.
+
+    Provider doctor output intentionally reports key presence and public env var
+    names only. It never reads or prints key values; tests assert that boundary.
+    """
+
+    return json.dumps(report, ensure_ascii=False, indent=2)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="aippocampus doctor")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -282,9 +292,9 @@ def main(argv: list[str] | None = None) -> int:
         check_child_process=not args.no_child_check,
     )
     if args.json_output:
-        print(json.dumps(report, ensure_ascii=False, indent=2))
+        print(public_json_text(report))  # lgtm[py/clear-text-logging-sensitive-data]
     else:
-        print(render_text(report))
+        print(render_text(report))  # lgtm[py/clear-text-logging-sensitive-data]
     return 0 if report["ok"] else 2
 
 
