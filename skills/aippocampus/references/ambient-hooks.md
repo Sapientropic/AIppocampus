@@ -308,6 +308,9 @@ include owner names, hash ids, counts, reason codes, provenance hashes,
 timestamps, and boundary flags, but not raw activation text, source refs, or
 local filesystem paths. This runner is maintenance work, not foreground hook
 work and not a replacement for source reopen.
+`aippocampus_runtime.ops.maintenance` may delegate to this runner only when an
+operator passes an explicit `--activation-dead-letter-manifest`; dry-run remains
+the default and writes require `--apply-activation-payload-compaction`.
 
 `aippocampus_runtime.recall.fresh_thread_demo` is the #285 public-safe demonstration runner for this
 contract. It strings together the existing scent packet, action policy, and
