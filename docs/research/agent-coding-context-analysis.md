@@ -327,10 +327,13 @@ expectations; the host supplies runtime source visibility and owns timing,
 permission, priority, sequencing, safety, and final visibility. Feedback can
 tune future activation pressure, but it must not rewrite source facts or derived
 assessment rows. The deterministic simulator also suppresses same-topic tickets
-after recent dismissal/ignore/correction feedback or a recent delivery event,
-but live host timing and multi-host duplicate suppression remain validation
-gaps and should align with [Agency From Cognitive Maps](agency-from-cognitive-map.md),
-not duplicate it.
+after recent dismissal/ignore/correction feedback or a recent delivery event.
+The #763 agency host-surface replay names Codex Desktop's hidden-route lifecycle
+as the first host-faithful surface and adds a public-safe feedback ledger
+contract for usefulness, annoyance, dismissal, and later correction signals.
+Live delivered timing, real annoyance calibration, and multi-host production
+duplicate suppression remain validation gaps and should align with
+[Agency From Cognitive Maps](agency-from-cognitive-map.md), not duplicate it.
 
 ## AIppocampus And Codeksei
 

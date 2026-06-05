@@ -1,7 +1,8 @@
 # Agency From Cognitive Maps
 
 Status: first deterministic affordance-map and ticket-selector slice implemented;
-host integration and live timing quality are not yet proven.
+Codex Desktop hidden-route host-surface replay evidence added; live timing
+quality is not yet proven.
 Origin: user/product discussion, 2026-05-28.
 Related: [Ambient Associative Recall](ambient-associative-recall.md),
 [Correction Reconsolidation](correction-reconsolidation.md),
@@ -254,13 +255,17 @@ Current tests live in `tests/aippocampus/test_agency_affordance.py` and cover
 the first four evaluation cases: should stay silent, should remind, should
 warn, and should offer next step.
 
-The first replayed host-timing fixture lives in
+The replayed host-timing fixture lives in
 `aippocampus_runtime.coding.agency_host_timing`, with a public no-write smoke at
 `tools/aippocampus/smoke/smoke_agency_host_timing.py`. It exercises
 show/hold/suppress decisions for task phase, visible source context,
-cross-host duplicate suppression, and recent negative feedback. This is
-deterministic replay evidence only; it does not prove live host timing or real
-annoyance calibration.
+same-surface duplicate suppression, and recent negative feedback. The #763
+slice now names `codex-desktop-hidden-route-lifecycle` as the first host
+surface and records a public-safe feedback ledger contract for usefulness,
+annoyance, dismissal, and later correction signals. See
+[`agency-host-surface-codex-desktop-2026-06-05.md`](../evidence/benchmarks/agency-host-surface-codex-desktop-2026-06-05.md).
+This is host-faithful replay evidence only; it does not prove live host timing
+or real annoyance calibration.
 
 Still not proven:
 

@@ -224,6 +224,13 @@ For these commands:
   tracked in GitHub issue #576 may use this packet as a read-only "why this
   route" drilldown, but the packet is not a control plane and cannot establish
   source truth without source reopen.
+- `observatory --json` emits a public-safe, no-write Cognitive Observatory
+  readout. The first stable slice aggregates route-readiness/prewarm
+  diagnostics, activation-surface authority, optional recall diagnostics, and
+  sleep-cycle public summaries. Route-readiness rows are `navigation_only` and
+  may show TTL, freshness, privacy, source-ref, and ROI suppression reasons;
+  they can justify reopening source but cannot support factual claims, mutate
+  owner surfaces, or control foreground hooks.
 - Prompt hook `status --last --json` / `aippocampus hooks prompt status --last --json`
   exposes a public-safe audit projection for the latest prompt hook run. Stable
   automation fields are `status`, `source`, `privacy_boundary`, and
