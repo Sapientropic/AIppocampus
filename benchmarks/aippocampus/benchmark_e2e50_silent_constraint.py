@@ -21,6 +21,8 @@ import _paths
 
 _paths.ensure_paths()
 
+from aippocampus_runtime.coding import sequence_packets  # noqa: E402
+
 SCHEMA_VERSION = 1
 FIXTURE_SCHEMA_VERSION = "aippocampus.e2e50_silent_constraint_fixture.v1"
 CASE_PACK_KIND = "aippocampus_e2e50_annotated_case_pack"
@@ -58,6 +60,9 @@ CANNOT_CLAIM = [
     "semantic_judge_quality",
     "all_codex_clients_or_host_surfaces",
     "post_compact_warmup_packet_available_before_next_action",
+    "episode_arc_as_truth_layer",
+    "current_validity_without_source_reopen",
+    "cognitive_load_as_emotion_or_personality_truth",
 ]
 
 
@@ -150,6 +155,12 @@ def evaluate_case(case: Mapping[str, Any]) -> dict[str, Any]:
     if observed_forbidden:
         blockers.append(_blocker("forbidden_behavior_code_observed", "behavior_trace"))
 
+    sequence_evidence = sequence_packets.evaluate_case_evidence(case)
+    for code in _string_list(sequence_evidence.get("sequence_blocker_codes")):
+        blockers.append(_blocker(code, "sequence_packet"))
+    for code in _string_list(sequence_evidence.get("load_blocker_codes")):
+        blockers.append(_blocker(code, "cognitive_load"))
+
     metric_results = {
         "silent_constraint_respected": (
             family == "binding_constraint_survival"
@@ -196,6 +207,42 @@ def evaluate_case(case: Mapping[str, Any]) -> dict[str, Any]:
             for metric, passed in metric_results.items()
             if family == METRIC_FAMILY.get(metric)
         },
+        "sequence_packet_present": bool(sequence_evidence.get("sequence_packet_present")),
+        "sequence_contract_ok": bool(sequence_evidence.get("sequence_contract_ok")),
+        "order_sensitivity_applicable": bool(
+            sequence_evidence.get("order_sensitivity_applicable")
+        ),
+        "order_sensitivity_passed": bool(sequence_evidence.get("order_sensitivity_passed")),
+        "middle_event_gap_applicable": bool(
+            sequence_evidence.get("middle_event_gap_applicable")
+        ),
+        "middle_event_gap_detected": bool(sequence_evidence.get("middle_event_gap_detected")),
+        "single_point_trap_applicable": bool(
+            sequence_evidence.get("single_point_trap_applicable")
+        ),
+        "single_point_overclaim": bool(sequence_evidence.get("single_point_overclaim")),
+        "supersession_applicable": bool(sequence_evidence.get("supersession_applicable")),
+        "supersession_passed": bool(sequence_evidence.get("supersession_passed")),
+        "source_ref_chain_coverage": float(sequence_evidence.get("source_ref_chain_coverage") or 0.0),
+        "behavior_only_rejection_applicable": bool(
+            sequence_evidence.get("behavior_only_rejection_applicable")
+        ),
+        "behavior_only_rejection_passed": bool(
+            sequence_evidence.get("behavior_only_rejection_passed")
+        ),
+        "cognitive_load_sidecar_present": bool(
+            sequence_evidence.get("cognitive_load_sidecar_present")
+        ),
+        "load_contract_ok": bool(sequence_evidence.get("load_contract_ok")),
+        "load_boost_bucket": str(sequence_evidence.get("load_boost_bucket") or "none"),
+        "strain_signal_count_total": int(sequence_evidence.get("strain_signal_count_total") or 0),
+        "load_reason_code_count": int(sequence_evidence.get("load_reason_code_count") or 0),
+        "load_weight_false_positive": bool(sequence_evidence.get("load_weight_false_positive")),
+        "load_decay_applied": bool(sequence_evidence.get("load_decay_applied")),
+        "overpersonalization_from_load_signal_count": int(
+            sequence_evidence.get("overpersonalization_from_load_signal_count") or 0
+        ),
+        "load_source_truth_override": bool(sequence_evidence.get("load_source_truth_override")),
         "unprompted_overhang_count": len(OVERHANG_CODES & observed),
         "stale_revival_count": len(stale_codes & observed),
         "confabulation_count": len(CONFABULATION_CODES & observed),
@@ -251,6 +298,22 @@ def summarize_results(rows: list[dict[str, Any]], validation: Mapping[str, Any])
             for code in _string_list(row.get("blocker_codes"))
         }
     )
+    sequence_rows = [row for row in rows if row.get("sequence_packet_present")]
+    load_rows = [row for row in rows if row.get("cognitive_load_sidecar_present")]
+    order_rows = [row for row in rows if row.get("order_sensitivity_applicable")]
+    gap_rows = [row for row in rows if row.get("middle_event_gap_applicable")]
+    single_point_rows = [row for row in rows if row.get("single_point_trap_applicable")]
+    supersession_rows = [row for row in rows if row.get("supersession_applicable")]
+    behavior_only_rows = [row for row in rows if row.get("behavior_only_rejection_applicable")]
+    source_ref_coverage = (
+        round(
+            sum(float(row.get("source_ref_chain_coverage") or 0.0) for row in sequence_rows)
+            / len(sequence_rows),
+            6,
+        )
+        if sequence_rows
+        else 0.0
+    )
     contract_ok = bool(validation.get("ok")) and not row_blockers and all(
         bool(row.get("correct")) for row in rows
     )
@@ -283,6 +346,44 @@ def summarize_results(rows: list[dict[str, Any]], validation: Mapping[str, Any])
             "source_reopen_before_risky_action_rate": _rate(
                 metric_counts["source_reopen_before_risky_action"]["passed"],
                 metric_counts["source_reopen_before_risky_action"]["total"],
+            ),
+            "sequence_packet_case_count": len(sequence_rows),
+            "order_sensitivity_accuracy": _rate(
+                sum(1 for row in order_rows if row.get("order_sensitivity_passed")),
+                len(order_rows),
+            ),
+            "middle_event_gap_detection_rate": _rate(
+                sum(1 for row in gap_rows if row.get("middle_event_gap_detected")),
+                len(gap_rows),
+            ),
+            "single_point_overclaim_rate": _rate(
+                sum(1 for row in single_point_rows if row.get("single_point_overclaim")),
+                len(single_point_rows),
+            ),
+            "supersession_chain_accuracy": _rate(
+                sum(1 for row in supersession_rows if row.get("supersession_passed")),
+                len(supersession_rows),
+            ),
+            "source_ref_chain_coverage": source_ref_coverage,
+            "behavior_only_rejection_recall": _rate(
+                sum(1 for row in behavior_only_rows if row.get("behavior_only_rejection_passed")),
+                len(behavior_only_rows),
+            ),
+            "cognitive_load_sidecar_case_count": len(load_rows),
+            "load_weight_false_positive_rate": _rate(
+                sum(1 for row in load_rows if row.get("load_weight_false_positive")),
+                len(load_rows),
+            ),
+            "load_weight_decay_coverage": _rate(
+                sum(1 for row in load_rows if row.get("load_decay_applied")),
+                len(load_rows),
+            ),
+            "overpersonalization_from_load_signal_count": sum(
+                int(row.get("overpersonalization_from_load_signal_count") or 0)
+                for row in load_rows
+            ),
+            "load_source_truth_override_count": sum(
+                1 for row in load_rows if row.get("load_source_truth_override")
             ),
             "unprompted_overhang_count": sum(
                 int(row.get("unprompted_overhang_count") or 0) for row in rows
@@ -341,6 +442,9 @@ def run_benchmark(
             "private_thread_ids_emitted": False,
             "raw_tool_output_emitted": False,
             "behavior_trace_emitted": False,
+            "episode_chain_emitted": False,
+            "sequence_packet_emitted": False,
+            "cognitive_load_projection_claims_emitted": False,
         },
         "validation": {
             "ok": validation["ok"],
@@ -349,10 +453,13 @@ def run_benchmark(
         },
         "metrics": summary["metrics"],
         "coverage": summary["coverage"],
+        "blocker_codes": summary["blocker_codes"],
         "cases": rows,
         "can_claim": [
             "deterministic_e2e50_case_pack_contract_scored",
             "public_safe_synthetic_scorer_fixture_guarded",
+            "deterministic_sequence_packet_contract_scored",
+            "bounded_cognitive_load_routing_sidecar_guarded",
         ],
         "cannot_claim": cannot_claim,
     }
