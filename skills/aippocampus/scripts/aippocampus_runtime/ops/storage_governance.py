@@ -477,8 +477,9 @@ def build_plan(
                     else None
                 ),
                 (
-                    "Apply v1 only evicts path-level retention-report rebuildable main SQLite "
-                    "caches; capacity aggregates and other candidate classes remain plan-only."
+                    "Apply v1 evicts retention-report-backed main SQLite caches and old "
+                    "generation directories whose apply-time reader-pin/TTL and pointer "
+                    "checks pass; capacity aggregates and other candidate classes remain plan-only."
                 ),
             ]
             if item
@@ -526,6 +527,7 @@ def apply_plan(
         {
             "eviction_applied_count": len(outcome["applied"]),
             "eviction_blocked_count": len(outcome["blocked"]),
+            "eviction_skipped_count": len(outcome.get("skipped") or []),
             "reclaimed_bytes": outcome["reclaimed_bytes"],
             "reclaimed_human": outcome["reclaimed_human"],
             "post_eviction_recall_surface_ok": bool(outcome["applied"]) and not outcome["blocked"],
@@ -541,6 +543,8 @@ def apply_plan(
         warnings.append("Apply mode only evicts supported rebuildable cache candidates; other classes are blocked.")
     if outcome["blocked"]:
         warnings.append("One or more candidates were not evicted because apply preconditions failed.")
+    if outcome.get("skipped"):
+        warnings.append("One or more plan-only candidates were explicitly skipped by apply mode.")
     return {
         "schema_version": SCHEMA_VERSION,
         "created_at": now_utc(),
@@ -562,6 +566,7 @@ def apply_plan(
         "metrics": metrics,
         "applied": outcome["applied"],
         "blocked": outcome["blocked"],
+        "skipped": outcome.get("skipped") or [],
         "warnings": warnings,
         "next_steps": [
             "Run health/maintenance after apply; intentional rebuildable eviction should report degraded-but-rebuildable state.",
@@ -623,6 +628,10 @@ def render_apply_text(result: dict[str, Any]) -> str:
     if result["blocked"]:
         lines.extend(["", "Blocked:"])
         for item in result["blocked"]:
+            lines.append(f"- {item['candidate_id']}: {item['reason_code']}")
+    if result.get("skipped"):
+        lines.extend(["", "Skipped:"])
+        for item in result["skipped"]:
             lines.append(f"- {item['candidate_id']}: {item['reason_code']}")
     if result["warnings"]:
         lines.extend(["", "Warnings:"])

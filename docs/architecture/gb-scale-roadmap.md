@@ -107,16 +107,16 @@ Completed foundation:
   candidate safety preconditions from capacity data plus existing retention JSON
   without reading message bodies or deleting files. Capacity and health reports
   now expose main-index generation pointer status, current/LKG ids, old
-  generation bytes, pointer load time, publish latency, and plan-only old
-  generation GC candidates. Segment rebuilds now publish generation manifests,
-  and capacity/health/storage-gc dry-runs expose old segment generations with
-  the same blocked reader-pin/TTL cleanup precondition. `--apply --class rebuildable`
-  still has a narrow
-  path-level retention-report v1 for the main `source_index.sqlite` cache, with
-  source/ref/lease/active-thread/pointer checks and an eviction manifest;
-  capacity aggregates, old generation directories, and broader cache classes
-  remain plan-only. If this bridge becomes the first Rust deterministic-core
-  slice, it must follow the contract-replay gate in
+  generation bytes, pointer load time, publish latency, and old-generation GC
+  candidates with reader-pin/TTL preconditions. Segment rebuilds now publish
+  generation manifests, and capacity/health/storage-gc reports expose old
+  segment generations with the same cleanup contract. `--apply --class
+  rebuildable` still has a narrow path-level retention-report v1 for the main
+  `source_index.sqlite` cache, and it can now delete old main-index or segment
+  generation directories only after apply-time source, lease, active-thread,
+  pointer, reader-pin, and TTL checks pass. Capacity aggregates and broader
+  cache classes remain plan-only. If this bridge becomes the first Rust
+  deterministic-core slice, it must follow the contract-replay gate in
   `docs/architecture/rust-deterministic-core.md`.
 
 ## Target architecture
@@ -215,12 +215,14 @@ Completed foundation:
      Main indexes now have generation pointer publishing for Windows
      locked-file fallback while preserving `source_index.sqlite`
      compatibility. Main-index generation-aware health/capacity reporting and
-     plan-only old generation GC candidates are implemented; actual generation
-     cleanup still waits for a reader-pin/TTL contract. Segment generation
+     old generation GC candidates are implemented with reader-pin/TTL cleanup
+     preconditions. Segment generation
      directories and `segments.pointer.json` are implemented for rebuild
      publishing, and segment generation health/capacity/storage-gc dry-run
-     reporting is now plan-only with the same blocked cleanup precondition.
-     Actual segment generation deletion remains a later #581 slice. Default sync
+     reporting uses the same contract. Actual deletion is now allowed only
+     through storage GC apply after the reader-pin/TTL contract, current/LKG
+     pointer protection, source proof, active-thread opt-in, and lease checks
+     pass. Default sync
      keeps generated SQLite and pointer files out of the portable source set while still repairing
      target-local rebuilt cache locators.
 
@@ -280,11 +282,12 @@ Completed foundation:
    backup refresh. Segment rebuilds now publish
    `segments/generations/gen_*/manifest.json` behind `segments.pointer.json`
    while preserving `segments/manifest.json` as the compatibility manifest.
-   Capacity/health now report main-index generation GC candidates without
-   deleting them; segment generation reporting and actual cleanup still wait for
-   reader-pin/TTL semantics. Default sync excludes generated SQLite caches and
-   pointer files; import/export reports pointer-resolved current SQLite for
-   explicit bundles.
+   Capacity/health now report main-index and segment generation GC candidates
+   with reader-pin/TTL cleanup diagnostics. Storage GC apply may delete only old
+   generation directories whose active pins are gone and whose TTL window has
+   elapsed; current and last-known-good pointer targets remain protected.
+   Default sync excludes generated SQLite caches and pointer files;
+   import/export reports pointer-resolved current SQLite for explicit bundles.
    Broader physical multi-device stress remains a
    release-readiness exercise, not a `quick` or `pr` tier claim.
 

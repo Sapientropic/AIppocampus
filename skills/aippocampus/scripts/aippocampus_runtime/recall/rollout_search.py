@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
+from aippocampus_runtime.artifacts.generation_pins import pin_resolved_generation
 from aippocampus_runtime.artifacts.publish import (
     index_pointer_path,
     resolve_sqlite_index_path,
@@ -245,35 +246,36 @@ def search_rollout_payload(options: RolloutSearchOptions) -> dict:
         index = resolve_sqlite_index_path(index)
         if index.exists():
             source = str(index)
-            if options.mode == "literal":
-                results = search_index_literal(
-                    index, patterns, options.max_results, options.snippet_chars
-                )
-            else:
-                if options.mode == "hybrid" and options.rag_context > 0:
-                    rag_context = search_rag_chunks(
+            with pin_resolved_generation(index, artifact_kind="source_index"):
+                if options.mode == "literal":
+                    results = search_index_literal(
+                        index, patterns, options.max_results, options.snippet_chars
+                    )
+                else:
+                    if options.mode == "hybrid" and options.rag_context > 0:
+                        rag_context = search_rag_chunks(
+                            index,
+                            query_terms,
+                            expanded_terms,
+                            anchors,
+                            limit=options.rag_context,
+                            candidate_limit=max(40, options.candidate_max // 2),
+                            snippet_chars=max(options.snippet_chars, 900),
+                        )
+                    results = search_hybrid_index(
                         index,
                         query_terms,
                         expanded_terms,
-                        anchors,
-                        limit=options.rag_context,
-                        candidate_limit=max(40, options.candidate_max // 2),
-                        snippet_chars=max(options.snippet_chars, 900),
+                        anchors if options.mode == "hybrid" else [],
+                        limit=options.max_results,
+                        candidate_limit=options.candidate_max,
+                        snippet_chars=options.snippet_chars,
+                        context_radius=options.context,
                     )
-                results = search_hybrid_index(
-                    index,
-                    query_terms,
-                    expanded_terms,
-                    anchors if options.mode == "hybrid" else [],
-                    limit=options.max_results,
-                    candidate_limit=options.candidate_max,
-                    snippet_chars=options.snippet_chars,
-                    context_radius=options.context,
-                )
-                if options.mode == "hybrid":
-                    results = diversify_results(
-                        results, options.max_results, anchors, mode=options.diversity
-                    )
+                    if options.mode == "hybrid":
+                        results = diversify_results(
+                            results, options.max_results, anchors, mode=options.diversity
+                        )
         else:
             rollout = rollout or locate_rollout(cwd)
             source = str(rollout)

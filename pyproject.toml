@@ -240,6 +240,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/ops/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/activation_authority_audit.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/cold_archive.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/ops/generation_eviction.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/graphify_corpus.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/maintenance.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/provider_doctor.py",

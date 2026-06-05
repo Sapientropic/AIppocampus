@@ -96,6 +96,34 @@ def capacity_preconditions(thread: dict[str, Any], *, include_active: bool) -> d
     }
 
 
+def _reader_pin_or_ttl_precondition(item: dict[str, Any], *, label: str) -> dict[str, str]:
+    cleanup_status = str(item.get("cleanup_status") or "unknown")
+    evidence = list(item.get("cleanup_evidence") or [])
+    if cleanup_status == "eligible":
+        return status(
+            "passed",
+            evidence=", ".join(evidence) or f"{label} has no active reader pins and TTL elapsed.",
+            requirement="Do not delete generation directories while foreground readers may pin them.",
+        )
+    if cleanup_status == "blocked_active_reader_pin":
+        return status(
+            "blocked",
+            evidence=", ".join(evidence) or f"{label} still has active reader pins.",
+            requirement="Wait for active reader pins to clear before generation cleanup.",
+        )
+    if cleanup_status == "blocked_ttl_window":
+        return status(
+            "blocked",
+            evidence=", ".join(evidence) or f"{label} is still inside the reader-pin TTL window.",
+            requirement="Wait for the conservative reader-pin TTL window before generation cleanup.",
+        )
+    return status(
+        "blocked",
+        evidence=f"{label} cleanup status is unknown; rerun capacity report with reader-pin diagnostics.",
+        requirement="Generation cleanup must prove reader-pin and TTL safety before deletion.",
+    )
+
+
 def generation_gc_candidates_from_capacity_thread(
     thread: dict[str, Any],
     *,
@@ -106,14 +134,6 @@ def generation_gc_candidates_from_capacity_thread(
         return []
 
     preconditions = capacity_preconditions(thread, include_active=include_active)
-    preconditions["reader_pin_or_ttl_contract"] = status(
-        "blocked",
-        evidence=(
-            "Old source-index generations are only reportable until reader-pin/TTL cleanup "
-            "is implemented."
-        ),
-        requirement="Do not delete generation directories while foreground readers may still pin them.",
-    )
     preconditions["last_known_good_pointer"] = status(
         "passed",
         evidence=(
@@ -131,6 +151,11 @@ def generation_gc_candidates_from_capacity_thread(
         size = int(item.get("bytes") or 0)
         if size <= 0:
             continue
+        generation_preconditions = dict(preconditions)
+        generation_preconditions["reader_pin_or_ttl_contract"] = _reader_pin_or_ttl_precondition(
+            item,
+            label=f"source-index generation {generation_id}",
+        )
         relative_path = item.get("relative_path")
         path: dict[str, Any] = {
             "path_known": bool(relative_path),
@@ -158,17 +183,22 @@ def generation_gc_candidates_from_capacity_thread(
                     "current_generation": generations.get("current_generation"),
                     "last_known_good_generation": generations.get("last_known_good_generation"),
                     "generation": generation_id,
+                    "cleanup_status": item.get("cleanup_status"),
+                    "generation_age_seconds": item.get("generation_age_seconds"),
+                    "reader_pin_ttl_seconds": item.get("reader_pin_ttl_seconds"),
+                    "active_reader_pin_count": item.get("active_reader_pin_count"),
+                    "expired_reader_pin_count": item.get("expired_reader_pin_count"),
                 },
                 "evidence": [
                     f"generation={generation_id}",
                     f"old_generation_bytes={size}",
                     f"pointer_status={generations.get('status')}",
                     "current and last-known-good generations are excluded from this candidate",
+                    *list(item.get("cleanup_evidence") or []),
                 ],
-                "preconditions": dict(preconditions),
+                "preconditions": generation_preconditions,
                 "rebuild_command": (
-                    "Generation GC is plan-only until reader-pin/TTL cleanup lands; rebuild the "
-                    "main index with python -m aippocampus_runtime.recall.index_builder "
+                    "Rebuild the main index with python -m aippocampus_runtime.recall.index_builder "
                     "--cwd <workspace>."
                 ),
                 "expected_rebuild_cost": {"class": "medium", "seconds": None},
@@ -187,14 +217,6 @@ def segment_generation_gc_candidates_from_capacity_thread(
         return []
 
     preconditions = capacity_preconditions(thread, include_active=include_active)
-    preconditions["reader_pin_or_ttl_contract"] = status(
-        "blocked",
-        evidence=(
-            "Old segment generations are only reportable until reader-pin/TTL cleanup "
-            "is implemented."
-        ),
-        requirement="Do not delete segment generation directories while foreground readers may still pin them.",
-    )
     preconditions["last_known_good_pointer"] = status(
         "passed",
         evidence=(
@@ -212,6 +234,11 @@ def segment_generation_gc_candidates_from_capacity_thread(
         size = int(item.get("bytes") or 0)
         if size <= 0:
             continue
+        generation_preconditions = dict(preconditions)
+        generation_preconditions["reader_pin_or_ttl_contract"] = _reader_pin_or_ttl_precondition(
+            item,
+            label=f"segment generation {generation_id}",
+        )
         relative_path = item.get("relative_path")
         path: dict[str, Any] = {
             "path_known": bool(relative_path),
@@ -239,17 +266,22 @@ def segment_generation_gc_candidates_from_capacity_thread(
                     "current_generation": generations.get("current_generation"),
                     "last_known_good_generation": generations.get("last_known_good_generation"),
                     "generation": generation_id,
+                    "cleanup_status": item.get("cleanup_status"),
+                    "generation_age_seconds": item.get("generation_age_seconds"),
+                    "reader_pin_ttl_seconds": item.get("reader_pin_ttl_seconds"),
+                    "active_reader_pin_count": item.get("active_reader_pin_count"),
+                    "expired_reader_pin_count": item.get("expired_reader_pin_count"),
                 },
                 "evidence": [
                     f"generation={generation_id}",
                     f"old_generation_bytes={size}",
                     f"pointer_status={generations.get('status')}",
                     "current and last-known-good segment generations are excluded from this candidate",
+                    *list(item.get("cleanup_evidence") or []),
                 ],
-                "preconditions": dict(preconditions),
+                "preconditions": generation_preconditions,
                 "rebuild_command": (
-                    "Generation GC is plan-only until reader-pin/TTL cleanup lands; rebuild "
-                    "segments with python -m aippocampus_runtime.recall.segment_builder "
+                    "Rebuild segments with python -m aippocampus_runtime.recall.segment_builder "
                     "--cwd <workspace>."
                 ),
                 "expected_rebuild_cost": {"class": "medium", "seconds": None},

@@ -52,16 +52,20 @@ remain readable during migration. Do not reintroduce `unlink()` /
 `Path.replace()` publishing for live `source_index.sqlite`; Windows readers can
 hold that file open, and locked stable refreshes must degrade to the pointer
 generation path rather than failing the whole index publish.
-The publish fast path does not delete generation directories until a
-reader-pin/TTL-aware storage-governance contract exists; deleting an old
-generation just because it is not current or last-known-good can break a
-foreground reader that already resolved that generation.
+The publish fast path does not delete generation directories. Foreground
+readers create short-lived `.reader-pins/*.json` files beside the generation
+pointer while a query is using a resolved generation. Storage GC may delete an
+old generation only after apply-time checks prove the target is not current or
+last-known-good, no active reader pin remains, and the conservative TTL window
+has elapsed. This protects foreground readers that resolved an older generation
+before a background publish swung the pointer.
 `aippocampus_runtime.artifacts.publish.index_generation_diagnostics` is the
 shared read-only report helper for this boundary. Health and capacity reports
 use it to expose pointer status, fallback used, current/LKG generation ids,
-old generation bytes, pointer load time, publish latency, and plan-only old
-generation GC candidates. Those candidates are rebuildable-cache evidence, not
-permission to delete a generation directory.
+old generation bytes, pointer load time, publish latency, active reader-pin
+counts, TTL status, and old generation GC candidates. Those candidates are
+rebuildable-cache evidence; deletion still belongs to storage GC apply's
+source, lease, active-thread, pointer, reader-pin, and TTL checks.
 
 `aippocampus_runtime.ops.maintenance`, `aippocampus_runtime.hooks.lifecycle`, and
 `aippocampus_runtime.vault.sync` should keep delegating SQLite writes to the index builders. If a
@@ -158,10 +162,12 @@ segments are staged into `segments/generations/gen_*`, `segments.pointer.json`
 is updated only after the generation manifest and compatibility
 `segments/manifest.json` are written, and failed publish leaves the previous
 pointer/manifest/generation available. The publish fast path must not delete old
-segment generations or legacy flat `seg-*` dirs until reader-pin/TTL cleanup is
-specified. Health and storage-capacity reports may surface old segment
-generations as plan-only GC candidates; this is observability, not permission to
-delete them.
+segment generations or legacy flat `seg-*` dirs. Segment search pins the
+resolved generation manifest for the duration of a query, and storage GC may
+delete old segment generation directories only after the same reader-pin/TTL,
+current/LKG pointer, source, lease, and active-thread checks pass. Health and
+storage-capacity reports may surface old segment generations as GC candidates,
+but deletion remains an explicit apply action.
 
 Cross-device sync treats SQLite as a rebuildable generated cache, not durable
 truth. `aippocampus_runtime.sync.bundle` syncs registry manifests, graph
@@ -201,15 +207,14 @@ existing `retention_report.json` is found or passed with `--retention-report`,
 the command reports aggregate rebuildable bytes from capacity data and marks
 path-level candidates as unavailable. `aippocampus storage gc --apply --class
 rebuildable` has a narrow v1 apply path for the main `source_index.sqlite`
-cache only when a retention report supplies path-level evidence. It checks
-raw/archive source evidence, anchor or registry refs, live writer/export
-leases, active-thread opt-in, and last-known-good pointer state, then writes an
-eviction manifest under `index/evictions/` with rebuild instructions. Capacity
-aggregate candidates, old source-index generation directories, old segment
-generation directories, segment indexes, Graphify corpus caches, review
-artifacts, and source files remain plan-only/manual. Old generation candidates
-intentionally carry a blocked `reader_pin_or_ttl_contract` precondition until
-cleanup can prove no foreground reader still pins that generation.
+cache when a retention report supplies path-level evidence, and for old
+main-index / segment generation directories when the capacity report supplies a
+concrete path. It checks source evidence, live writer/export leases,
+active-thread opt-in, last-known-good/current pointer protection, and the
+reader-pin/TTL contract, then writes an eviction manifest under
+`index/evictions/` with rebuild instructions. Capacity aggregates, segment
+indexes, Graphify corpus caches, review artifacts, and source files remain
+plan-only/manual.
 
 Codex Desktop's own thread archive is a different mechanism: the app may move
 raw rollout JSONL files from `$CODEX_HOME/sessions/` into

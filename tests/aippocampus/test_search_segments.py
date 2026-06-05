@@ -245,6 +245,67 @@ class SegmentSearchTests(unittest.TestCase):
         self.assertEqual(current_payload["matches"][0]["segment_id"], "seg-new")
         self.assertEqual(fallback_payload["matches"][0]["segment_id"], "seg-old")
 
+    def test_search_pins_resolved_segment_generation_for_query_duration(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            segments_dir = root / "segments"
+            current = segments_dir / "generations" / "gen_current"
+            current.mkdir(parents=True)
+            sqlite_path = current / "seg-current.sqlite"
+            sqlite_path.write_text("", encoding="utf-8")
+            (current / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "segment_count": 1,
+                        "segments": [
+                            {"id": "seg-current", "sqlite": str(sqlite_path), "end_line": 5}
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            segments_dir.mkdir(exist_ok=True)
+            (segments_dir / "manifest.json").write_text(
+                json.dumps({"segment_count": 0, "segments": []}),
+                encoding="utf-8",
+            )
+            (segments_dir / "segments.pointer.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "kind": "aippocampus_segments_pointer",
+                        "current_generation": "gen_current",
+                        "last_known_good_generation": "gen_current",
+                        "current": "generations/gen_current/manifest.json",
+                        "last_known_good": "generations/gen_current/manifest.json",
+                        "stable": "manifest.json",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            observed_pins: list[dict] = []
+
+            def fake_search(index: Path, *args, **kwargs) -> list[dict]:
+                self.assertEqual(Path(index), sqlite_path)
+                pins = list((segments_dir / ".reader-pins").glob("*.json"))
+                self.assertEqual(len(pins), 1)
+                observed_pins.append(json.loads(pins[0].read_text(encoding="utf-8")))
+                return []
+
+            with mock.patch.object(segment_search, "search_hybrid_index", side_effect=fake_search):
+                payload = segment_search.search_segments_payload(
+                    segment_search.SegmentSearchOptions(
+                        patterns=["memory"],
+                        cwd=root,
+                        segments_dir=segments_dir,
+                        mode="ranked",
+                    )
+                )
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual([item.get("generation") for item in observed_pins], ["gen_current"])
+        self.assertFalse(list((segments_dir / ".reader-pins").glob("*.json")))
+
     def test_search_payload_reports_partial_turn_boundary_diagnostics(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
