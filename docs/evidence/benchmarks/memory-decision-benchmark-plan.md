@@ -93,6 +93,11 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
   and not a representative 20/50-case E2E50 sample. Its deterministic unittest
   is included in `benchmark-smoke` to keep the scorer contract alive while the
   private 4 gold + 2 calibration seed pack remains local and source-reviewed.
+  The scaffold now also accepts optional `episode_chain` / `sequence_packet`
+  evidence and bounded `cognitive_load` sidecars through
+  `aippocampus_runtime.coding.sequence_packets`: those rows are scored as
+  ordered read-model contracts and routing/caution metadata only, not as current
+  validity facts, affect labels, or personality claims.
 - `benchmarks/aippocampus/benchmark_knowledge_pollution.py` runs the #517
   public-safe knowledge pollution and privacy-partition benchmark. It reuses
   the governed knowledge source/claim schema and high-risk answer gate, then
