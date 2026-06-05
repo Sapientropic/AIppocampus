@@ -1117,6 +1117,7 @@ def warm_job_result_summary(job: dict[str, Any], result: dict[str, Any]) -> dict
         }
         if isinstance(result.get("active_recall_lock"), dict)
         else None,
+        "usage": compact_usage(result.get("usage") or {}),
         "cache": result.get("cache") or {},
         "model_route": result.get("model_route") or {},
         "elapsed_ms": float(result.get("elapsed_ms") or 0.0),

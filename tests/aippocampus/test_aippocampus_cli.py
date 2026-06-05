@@ -42,6 +42,7 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("mcp list-tools", proc.stdout)
         self.assertIn("smoke recall-funnel", proc.stdout)
         self.assertIn("storage gc", proc.stdout)
+        self.assertIn("doctor spend", proc.stdout)
         self.assertIn("why-recall", proc.stdout)
         self.assertIn("hooks [kind]        Codex prompt/lifecycle hook status/install/uninstall", proc.stdout)
 

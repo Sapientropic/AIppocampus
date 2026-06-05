@@ -253,6 +253,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/ops/repo_familiarity_foreground_experiment_fixtures.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/retention_report.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/rollout_size_audit.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/ops/spend_doctor.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/storage_capacity_report.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/storage_governance_contract.py",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/storage_eviction.py",
