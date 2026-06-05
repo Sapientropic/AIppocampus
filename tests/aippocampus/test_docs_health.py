@@ -135,6 +135,14 @@ class DocsHealthTests(unittest.TestCase):
 
         self.assertEqual(result, [])
 
+    def test_product_profile_contract_covers_current_repo(self) -> None:
+        repo_root = docs_health.find_repo_root(ROOT)
+        self.assertIsNotNone(repo_root)
+
+        result = docs_health.product_profile_contract_issues(repo_root)
+
+        self.assertEqual(result, [])
+
     def test_public_api_contract_reports_missing_env_matrix(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)

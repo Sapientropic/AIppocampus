@@ -14,6 +14,9 @@ lives in [public-api.md](public-api.md), install details live in
 [agent-context.md](../agent-context.md), and dated evidence status lives in
 [current-claims.md](../evidence/current-claims.md) plus the
 [proof-slice maturity board](../evidence/readiness/proof-slice-maturity.md).
+Product profile boundaries live in
+[product-profiles.md](../architecture/product-profiles.md); this lane is the
+`personal_default`/agent-memory path, not the enterprise-governed path.
 
 ## Who This Is For
 

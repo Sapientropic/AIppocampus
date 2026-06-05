@@ -7,6 +7,9 @@ publishing release notes or package metadata.
 
 For supported CLI, MCP, JSON, environment-variable, and Python import stability,
 see [public-api.md](public-api.md).
+For the product profile split between personal defaults, optional diagnostics,
+and governed/enterprise behavior, see
+[product-profiles.md](../architecture/product-profiles.md).
 
 ## Licensing Decision
 
@@ -60,6 +63,11 @@ public core. A future hosted implementation may reuse the same contracts while
 remaining a separate product.
 
 ## Product Profile Boundary
+
+This licensing boundary is separate from product profile friction. The public
+local core can still include high-risk gates or governance helpers, but those
+surfaces should be labeled `enterprise_governed` or explicit opt-in when they
+would make ordinary personal recall feel like a compliance console.
 
 The public core supports multiple product profiles, but the default personal
 experience must stay low-friction. This is the canonical #680 boundary for

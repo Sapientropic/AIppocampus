@@ -41,6 +41,8 @@ before ordinary users see value.
   [`guides/ecosystem-integration-matrix.md`](guides/ecosystem-integration-matrix.md).
 - Architecture overview and metaphor claim boundaries:
   [`architecture/architecture-overview.md`](architecture/architecture-overview.md#metaphor-discipline).
+- Product profile boundary:
+  [`architecture/product-profiles.md`](architecture/product-profiles.md).
 - Exploratory research index: [`research/README.md`](research/README.md).
 
 Keep long rules, status matrices, and command logs in one authoritative place.
@@ -61,6 +63,7 @@ It pairs with the root [`llms.txt`](../llms.txt), [`AGENTS.md`](../AGENTS.md),
 maps.
 
 - [`architecture-overview.md`](architecture/architecture-overview.md) - public map of runtime layers, boundaries, and claim-bounded metaphors.
+- [`product-profiles.md`](architecture/product-profiles.md) - personal default, power-user optional, and enterprise-governed profile boundaries.
 - [`cognitive-runtime-architecture.md`](architecture/cognitive-runtime-architecture.md) - layered runtime architecture and cognitive-map direction.
 - [`runtime-script-map.md`](architecture/runtime-script-map.md) - maintainer map for high-risk runtime scripts, recall flow, entrypoints, callers, and tests.
 - [`schema-field-profiles.md`](architecture/schema-field-profiles.md) - field-budget, profile, sidecar, and projection discipline for keeping minimal/runtime/high-risk/diagnostic surfaces separate.

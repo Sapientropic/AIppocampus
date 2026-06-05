@@ -16,6 +16,10 @@ Safe local configuration starts from
 [safe-environment.md](safe-environment.md).
 The runtime and tooling dependency taxonomy lives in
 [dependency-contract.md](dependency-contract.md).
+The product friction budget lives in
+[product-profiles.md](../architecture/product-profiles.md): first recall should
+stay `personal_default`; hooks, diagnostics, sync, and governance are opt-in or
+operator surfaces unless a user explicitly needs them.
 
 For a new external user or agent host, follow the
 [10-minute public API path](public-api.md#ten-minute-public-path) first:

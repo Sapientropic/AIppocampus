@@ -6,6 +6,15 @@ claim-promotion, and update-lifecycle contracts without turning AIppocampus
 into a doctor, lawyer, therapist, compliance engine, ranking system, or answer
 generator.
 
+## Profile Boundary
+
+High-risk answer gates are `enterprise_governed` behavior in the
+[product profile boundary](product-profiles.md). They are required when a claim
+is used to support medical-like, legal-like, therapy-like, financial-like,
+safety-critical, regulated, team, or similarly high-impact conclusions. They
+are not baseline ceremony for ordinary `personal_default` clean-source search
+or first recall.
+
 ## Decision
 
 High-risk answer formation must pass through
