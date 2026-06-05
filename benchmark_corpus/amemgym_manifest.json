@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "benchmark": "AMemGym",
+  "scope": "deterministic metadata and source-backed overlay smoke for locally provided AMemGym v1.base JSON",
+  "official_sources": {
+    "paper": "https://arxiv.org/abs/2603.01966",
+    "openreview": "https://openreview.net/forum?id=sfrVLzsmlf",
+    "repository": "https://github.com/AGI-Eval-Official/amemgym",
+    "dataset": "https://huggingface.co/datasets/AGI-Eval/AMemGym",
+    "dataset_raw_json": "https://huggingface.co/datasets/AGI-Eval/AMemGym/raw/main/v1.base/data.json",
+    "v1_base_config": "https://raw.githubusercontent.com/AGI-Eval-Official/amemgym/main/configs/env/v1.base.json",
+    "license": "Apache-2.0"
+  },
+  "observed_at": "2026-06-05",
+  "official_dataset": {
+    "hugging_face_id": "AGI-Eval/AMemGym",
+    "subset": "default",
+    "config": "v1.base",
+    "format": "json",
+    "rows": 20,
+    "top_level_fields": [
+      "id",
+      "start_time",
+      "user_profile",
+      "state_schema",
+      "periods",
+      "qas"
+    ],
+    "v1_base_config": {
+      "num_user_profiles": 20,
+      "num_questions": 10,
+      "num_periods": 10,
+      "num_states_per_question": 2,
+      "num_changes_per_period": 4,
+      "num_rounds_init": 1,
+      "num_rounds_update": 2,
+      "seed": 42
+    }
+  },
+  "official_runner_layers": {
+    "agent_arms": [
+      "Native",
+      "RAG",
+      "AWI",
+      "AWE"
+    ],
+    "enabled_metric": [
+      "accuracy"
+    ],
+    "implemented_but_not_default_metrics": [
+      "hamming",
+      "jaccard"
+    ],
+    "evaluation_entrypoints": [
+      "amemgym.eval.overall",
+      "amemgym.eval.upperbound",
+      "amemgym.eval.random",
+      "amemgym.eval.diagnosis",
+      "amemgym.eval.evolution"
+    ],
+    "diagnosis_outputs": [
+      "write_failure",
+      "read_failure",
+      "memory_success"
+    ],
+    "utilization_boundary": "utilization is produced through the upperbound/utilization path, not as a diagnosis_metrics.json field"
+  },
+  "runner": "benchmarks/aippocampus/benchmark_amemgym.py",
+  "evidence_page": "docs/evidence/benchmarks/amemgym.md",
+  "local_file_policy": {
+    "dataset_path": "benchmark_corpus/amemgym/v1.base/data.json",
+    "fixture_path": "benchmark_corpus/amemgym_fixture/fixture.json",
+    "generated_report_dirs": [
+      ".tmp/",
+      "benchmark_corpus/reports/"
+    ],
+    "git_policy": "ignored local download/export only; do not commit full dataset rows, local predictions, generated reports, or machine-specific paths",
+    "supported_local_formats": [
+      "json",
+      "jsonl"
+    ]
+  },
+  "claim_boundary": [
+    "metadata and schema smoke only without local predictions",
+    "local source-backed overlay metrics only with explicit prediction JSONL",
+    "no official AMemGym score",
+    "no official-runner compatibility claim",
+    "no Native/RAG/AWI/AWE baseline parity claim",
+    "no claim that structured simulated users represent real life-wide continuity",
+    "no merged native accuracy, diagnosis, utilization, and source-backed overlay metric"
+  ]
+}

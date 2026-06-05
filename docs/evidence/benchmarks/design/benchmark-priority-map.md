@@ -98,6 +98,7 @@ what future agents can safely generate or compare.
 | Multimodal | `benchmark_multimodal_niah_evidence_pool.py` | supplied-pool answer-synthesis contract | implemented | P2 | full benchmark / direct runner | contract_smoke | Confusing supplied-pool synthesis with retrieval | ATM-Bench retrieval score | #533 |
 | External memory benchmark | `benchmark_longmemeval.py` | LongMemEval V1 retrieval-only source/session evidence | dated_evidence | P1 | optional local with dataset download | public_safe_claim for bounded V1 retrieval | External long-memory retrieval regressions | QA answer quality, V2 quality, SOTA | #259 |
 | External memory benchmark | `benchmark_longmemeval_v2_context.py` | LongMemEval-V2 context-mapping pilot | diagnostic_only | P1 | optional local with dataset files | diagnostic_proxy | Claiming V2 score without evidence labels | R@K/MRR, LAFS, answer accuracy | #259 |
+| External memory benchmark | `benchmark_amemgym.py` | AMemGym metadata and source-backed overlay smoke | scaffold | P1 | benchmark-smoke; optional public JSON download | diagnostic_proxy | Collapsing native accuracy, diagnosis, utilization, and source fidelity into one score | Official AMemGym score or baseline parity | #733 |
 | External memory benchmark | `benchmark_memoryagentbench.py` | MemoryAgentBench metadata, case-pack, Stage 3 dry-run | scaffold | P1 | deterministic smoke; optional local dataset | diagnostic_proxy | Collapsing incremental memory into static retrieval | Official score or compatibility claim | #608, #614, #694 |
 | External memory benchmark | `benchmark_locomo_public_users.py` | LoCoMo same-conversation evidence retrieval control | implemented | P2 | optional local dataset | diagnostic_proxy | Same-conversation evidence-id scorer drift | Cross-thread/life-wide memory proof | none |
 | External memory benchmark | `benchmark_locomo_answer_usefulness.py` | LoCoMo answer-usefulness prototype layers | scaffold | P2 | optional local with fixed answer model | diagnostic_proxy | Blending retrieval, generation, citation, and judge layers | SOTA or broad answer quality | #400 |
@@ -161,7 +162,6 @@ resolved in the owning docs.
 
 | Candidate | Current status | Priority | Boundary |
 | --- | --- | --- | --- |
-| AMemGym | planned_or_blocked | P1 | #733 should add an adapter with separate AMemGym score, source-backed overlay metrics, cost/latency, and public claim boundaries. |
 | Mem0 | planned_or_blocked | P3 | Missing-config diagnostic slot only; no adapter parity or competitor superiority claim. |
 | Zep / Graphiti | planned_or_blocked | P3 | Missing-config graph-memory comparison candidate; live adapters need install/license/fairness review. |
 | Letta | planned_or_blocked | P3 | Missing-config compaction comparison candidate; static retrieval must not stand in for agent-memory behavior. |

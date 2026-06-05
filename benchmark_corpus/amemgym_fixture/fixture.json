@@ -1,0 +1,135 @@
+[
+  {
+    "id": "public-fixture-user-1",
+    "start_time": "2026-01-01T00:00:00Z",
+    "user_profile": "Synthetic AMemGym-style profile for public adapter smoke.",
+    "state_schema": {
+      "workshop_format": [
+        "slides_first",
+        "hands_on"
+      ],
+      "room_size": [
+        "small",
+        "large"
+      ]
+    },
+    "periods": [
+      {
+        "period_id": "p1",
+        "sessions": [
+          {
+            "session_id": "s1",
+            "updates": [
+              {
+                "state": {
+                  "workshop_format": "slides_first",
+                  "room_size": "small"
+                },
+                "text": "Initial preference snapshot."
+              },
+              {
+                "state": {
+                  "workshop_format": "hands_on",
+                  "room_size": "small"
+                },
+                "text": "Current preference update."
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "qas": [
+      {
+        "query": "How should the workshop begin?",
+        "required_info": [
+          "workshop_format"
+        ],
+        "answer_choices": [
+          {
+            "state": [
+              "slides_first"
+            ],
+            "answer": "Begin with a short slide briefing before the exercises.",
+            "type": "preference"
+          },
+          {
+            "state": [
+              "hands_on"
+            ],
+            "answer": "Begin with a hands-on exercise and use slides only as backup.",
+            "type": "preference"
+          }
+        ]
+      },
+      {
+        "query": "Which catering constraint should be honored?",
+        "required_info": [
+          "catering_constraint"
+        ],
+        "answer_choices": [
+          {
+            "state": [
+              "gluten_free"
+            ],
+            "answer": "Provide a gluten-free catering option.",
+            "type": "unsupported_fixture_control"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "public-fixture-user-2",
+    "start_time": "2026-01-02T00:00:00Z",
+    "user_profile": "Second synthetic profile for public adapter smoke.",
+    "state_schema": {
+      "room_size": [
+        "small",
+        "large"
+      ]
+    },
+    "periods": [
+      {
+        "period_id": "p1",
+        "sessions": [
+          {
+            "session_id": "s1",
+            "updates": [
+              {
+                "state": {
+                  "room_size": "large"
+                },
+                "text": "Current room-size snapshot."
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "qas": [
+      {
+        "query": "How large should the room be?",
+        "required_info": [
+          "room_size"
+        ],
+        "answer_choices": [
+          {
+            "state": [
+              "small"
+            ],
+            "answer": "Book a compact room.",
+            "type": "experience"
+          },
+          {
+            "state": [
+              "large"
+            ],
+            "answer": "Book a large room with extra tables.",
+            "type": "experience"
+          }
+        ]
+      }
+    ]
+  }
+]

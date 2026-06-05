@@ -1,0 +1,3 @@
+{"case_id":"public-fixture-user-1:q1","prediction":"Begin with a hands-on exercise and use slides only as backup.","source_refs":["public-fixture-user-1:p1:s1:u2"],"used_current_state":true}
+{"case_id":"public-fixture-user-1:q2","prediction":"Provide a gluten-free catering option.","source_refs":["scent:catering"],"unsupported_personalization":true,"scent_as_evidence":true}
+{"case_id":"public-fixture-user-2:q1","prediction":"Book a compact room.","source_refs":["public-fixture-user-2:p1:s1:u1"],"used_stale_state":true,"write_failure":true,"read_failure":true,"utilization_failure":true}

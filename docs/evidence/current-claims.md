@@ -21,6 +21,11 @@ Rules:
 - Demo caveats in
   [`docs/guides/demo-scenarios.md`](../guides/demo-scenarios.md) are
   claim-boundary inputs, not standalone benchmark proof.
+- AMemGym adapter smoke currently has no Current Claim Snapshot row; its
+  native-score, source-backed overlay, diagnosis, utilization, and cost/latency
+  boundaries stay in
+  [`docs/evidence/benchmarks/amemgym.md`](benchmarks/amemgym.md) until a dated
+  result owner upgrades a claim.
 
 ## Current Claim Snapshot
 

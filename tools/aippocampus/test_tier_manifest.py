@@ -30,6 +30,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_ambient_thread_cache",
         "test_architecture_boundaries",
         "test_benchmark_coding_decision_shadow",
+        "test_benchmark_amemgym",
         "test_benchmark_cognitive_portrait",
         "test_benchmark_compaction_continuity",
         "test_benchmark_continuous_memory_arms",
@@ -279,6 +280,7 @@ SLOW_STEMS = frozenset(
 BENCHMARK_STEMS = frozenset(
     {
         "test_benchmark_coding_decision_shadow",
+        "test_benchmark_amemgym",
         "test_benchmark_cognitive_portrait",
         "test_benchmark_compaction_continuity",
         "test_benchmark_continuous_memory_arms",
@@ -319,6 +321,7 @@ BENCHMARK_STEMS = frozenset(
 BENCHMARK_SMOKE_STEMS = frozenset(
     {
         "test_benchmark_field_continuity",
+        "test_benchmark_amemgym",
         "test_benchmark_e2e50_silent_constraint",
         "test_benchmark_hippocampal_recall",
         "test_benchmark_knowledge_pollution",
