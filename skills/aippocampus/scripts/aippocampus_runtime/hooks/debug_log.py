@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime import core as runtime_core
+from aippocampus_runtime.ops import log_retention
 
 PROMPT_HOOK_LOG_NAME = "aippocampus_prompt_hook.jsonl"
 PROMPT_HOOK_STATUS_NAME = "aippocampus_prompt_hook_last_status.json"
@@ -551,5 +552,4 @@ def write_debug_log(
     event["audit_event_id"] = _new_audit_event_id()
     # Redact only at the write boundary; recall scoring still uses raw terms.
     safe_event = runtime_core.sanitize_external_model_payload(event)
-    with path.open("a", encoding="utf-8", newline="\n") as fh:
-        fh.write(json.dumps(safe_event, ensure_ascii=False) + "\n")
+    log_retention.append_text_with_rotation(path, json.dumps(safe_event, ensure_ascii=False) + "\n")

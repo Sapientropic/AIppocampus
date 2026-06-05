@@ -30,13 +30,14 @@ from aippocampus_runtime.core import (
     parse_anchor_file,
     resolve_artifact_path,
 )
+from aippocampus_runtime.health_freshness import rollout_visibility_stats
 from aippocampus_runtime.health_registry import registry_health_report
 from aippocampus_runtime.health_render import render_health_text, render_registry_health_text
 from aippocampus_runtime.legacy_aliases import legacy_alias_diagnostics
+from aippocampus_runtime.ops import log_retention
 from aippocampus_runtime.ops.storage_eviction import latest_intentional_eviction
 from aippocampus_runtime.question.constants import DEFAULT_DORMANT_AFTER_DAYS
 from aippocampus_runtime.registry.store import registry_paths
-from aippocampus_runtime.source.rollout import iter_messages
 
 DEFAULT_JOBS_OUTPUT_NAME = "subconscious_jobs.jsonl"
 
@@ -58,6 +59,7 @@ class HealthOptions:
     question_dormant_days: int = DEFAULT_DORMANT_AFTER_DAYS
     max_stale_messages: int = 25
     max_stale_bytes: int = 5 * 1024 * 1024
+    max_log_bytes: int | None = None
     checkpoint_messages: int = 30
     deep_graph_messages: int = 1000
     deep_graph_bytes: int = 100 * 1024 * 1024
@@ -159,12 +161,8 @@ def aggregate_question_health_stats(payload: Mapping[str, Any]) -> dict[str, Any
 
 
 def count_messages(rollout: Path) -> tuple[int, int | None]:
-    count = 0
-    last_line = None
-    for msg in iter_messages(rollout):
-        count += 1
-        last_line = msg["line"]
-    return count, last_line
+    stats = rollout_visibility_stats(rollout)
+    return stats.message_count, stats.last_message_line
 
 
 def action(action_id: str, severity: str, reason: str, command: str) -> dict[str, str]:
@@ -293,7 +291,9 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
     )
     now = datetime.now(timezone.utc)
     rollout_stat = rollout.stat()
-    current_message_count, last_line = count_messages(rollout)
+    visibility = rollout_visibility_stats(rollout)
+    current_message_count = visibility.message_count
+    last_line = visibility.last_message_line
     current_anchor_count = len(parse_anchor_file(anchors))
     current_anchor_sha = file_sha256(anchors) if anchors.exists() else None
 
@@ -339,8 +339,10 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
     indexed_last_line = manifest.get("last_message_line")
     message_delta = max(0, current_message_count - indexed_messages)
     byte_delta = max(0, rollout_stat.st_size - indexed_bytes)
-    if manifest and message_delta >= options.max_stale_messages:
-        index_reasons.append(f"{message_delta} new messages since last index")
+    if manifest and message_delta > 0:
+        index_reasons.append(
+            f"{message_delta} latest visible message(s) are newer than the index"
+        )
     if manifest and byte_delta >= options.max_stale_bytes:
         index_reasons.append(f"{byte_delta} new rollout bytes since last index")
     if manifest and current_anchor_sha and manifest.get("anchor_sha256") != current_anchor_sha:
@@ -385,7 +387,22 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
     clean_source_stale = bool(clean_reasons)
     clean_source_stale_age_seconds = age_seconds_since(clean_manifest.get("created_at"), now=now)
     clean_source_message_count = safe_int(clean_manifest.get("message_count")) if clean_manifest else 0
-    clean_source_message_delta = max(0, current_message_count - clean_source_message_count)
+    clean_source_turn_count = safe_int(clean_manifest.get("turn_count")) if clean_manifest else 0
+    expected_clean_source_message_count = visibility.expected_clean_source_message_count
+    expected_clean_source_turn_count = visibility.expected_clean_source_turn_count
+    clean_source_message_delta = max(
+        0, expected_clean_source_message_count - clean_source_message_count
+    )
+    clean_source_turn_delta = max(0, expected_clean_source_turn_count - clean_source_turn_count)
+    if clean_manifest and clean_source_message_delta > 0:
+        clean_reasons.append(
+            f"{clean_source_message_delta} latest visible clean-source message(s) are missing"
+        )
+    if clean_manifest and clean_source_turn_delta > 0:
+        clean_reasons.append(
+            f"{clean_source_turn_delta} latest clean-source turn(s) are missing"
+        )
+    clean_source_stale = bool(clean_reasons)
     clean_source_activity_class = activity_class(
         message_delta=clean_source_message_delta,
         byte_delta=clean_byte_delta,
@@ -523,13 +540,9 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         )
     if deep_graph_recommended:
         actions.append(
-            action(
-                "consider_graphify",
-                "info",
-                "thread size crossed the deep graph threshold",
-                f'Use $graphify on "{graphify_corpus}" when conceptual navigation is worth the cost.',
-            )
+            action("consider_graphify", "info", "thread size crossed the deep graph threshold", f'Use $graphify on "{graphify_corpus}" when conceptual navigation is worth the cost.')
         )
+    logs = log_retention.add_health_action(actions, registry_path.resolve().parent, max_bytes=options.max_log_bytes)
     question_stats = (
         {"available": False, "reason": "not_requested"}
         if not options.include_question_stats
@@ -541,6 +554,21 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
             include_details=options.question_stats_details,
         )
     )
+    raw_newer_than_index = bool(manifest and message_delta > 0)
+    raw_newer_than_clean_source = bool(clean_manifest and clean_source_message_delta > 0)
+    freshness = {
+        "latest_visible_gap": raw_newer_than_index or raw_newer_than_clean_source,
+        "raw_newer_than_index": raw_newer_than_index,
+        "raw_newer_than_clean_source": raw_newer_than_clean_source,
+        "index_message_delta": message_delta,
+        "clean_source_message_delta": clean_source_message_delta,
+        "clean_source_turn_delta": clean_source_turn_delta,
+        "rollout_message_count": current_message_count,
+        "rollout_last_message_line": last_line,
+        "expected_clean_source_message_count": expected_clean_source_message_count,
+        "expected_clean_source_turn_count": expected_clean_source_turn_count,
+        "last_clean_source_line": visibility.last_clean_source_line,
+    }
 
     result: dict[str, Any] = {
         "ok": not any(a["severity"] in {"critical", "warning"} for a in actions),
@@ -591,6 +619,7 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
             "unindexed_message_ratio": ratio(message_delta, current_message_count),
             "unindexed_byte_ratio": ratio(byte_delta, rollout_stat.st_size),
             "activity_class": index_activity_class,
+            "latest_visible_gap": raw_newer_than_index,
             "rag": rag_manifest,
         },
         "clean_source": {
@@ -603,12 +632,20 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
             "stale_age_seconds": clean_source_stale_age_seconds,
             "message_count": clean_source_message_count,
             "message_delta": clean_source_message_delta,
-            "turn_count": safe_int(clean_manifest.get("turn_count")) if clean_manifest else 0,
+            "expected_message_count": expected_clean_source_message_count,
+            "expected_message_delta": clean_source_message_delta,
+            "turn_count": clean_source_turn_count,
+            "expected_turn_count": expected_clean_source_turn_count,
+            "expected_turn_delta": clean_source_turn_delta,
             "byte_delta": clean_byte_delta,
-            "unindexed_message_ratio": ratio(clean_source_message_delta, current_message_count),
+            "unindexed_message_ratio": ratio(
+                clean_source_message_delta, expected_clean_source_message_count
+            ),
             "unindexed_byte_ratio": ratio(clean_byte_delta, rollout_stat.st_size),
             "activity_class": clean_source_activity_class,
+            "latest_visible_gap": raw_newer_than_clean_source,
         },
+        "freshness": freshness,
         "checkpoint": {
             "state": str(checkpoint_state),
             "due": checkpoint_due,
@@ -643,6 +680,7 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
             "activity_class": segments_activity_class,
         },
         "question_stats": question_stats,
+        "logs": logs,
         "recommended_actions": actions,
     }
 
@@ -727,6 +765,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--max-stale-messages", type=int, default=25)
     parser.add_argument("--max-stale-bytes", type=int, default=5 * 1024 * 1024)
+    parser.add_argument("--max-log-bytes", type=int, default=None)
     parser.add_argument("--checkpoint-messages", type=int, default=30)
     parser.add_argument("--deep-graph-messages", type=int, default=1000)
     parser.add_argument("--deep-graph-bytes", type=int, default=100 * 1024 * 1024)
@@ -755,6 +794,7 @@ def options_from_args(args: argparse.Namespace) -> HealthOptions:
         question_dormant_days=args.question_dormant_days,
         max_stale_messages=args.max_stale_messages,
         max_stale_bytes=args.max_stale_bytes,
+        max_log_bytes=args.max_log_bytes,
         checkpoint_messages=args.checkpoint_messages,
         deep_graph_messages=args.deep_graph_messages,
         deep_graph_bytes=args.deep_graph_bytes,

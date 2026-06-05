@@ -1,0 +1,101 @@
+from __future__ import annotations
+
+import gzip
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
+sys.path.insert(0, str(SCRIPTS))
+
+from aippocampus_runtime.ops import log_retention  # noqa: E402
+
+
+class LogRetentionTests(unittest.TestCase):
+    def test_rotate_log_compresses_current_file_and_keeps_recent_backups(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            log = root / "logs" / "build_associations_hook.log"
+            log.parent.mkdir()
+            log.write_bytes(b"old diagnostic bytes" * 8)
+            (log.parent / "build_associations_hook.log.1.gz").write_bytes(b"stale")
+
+            report = log_retention.rotate_log_if_needed(log, max_bytes=20, backups=2)
+
+            self.assertTrue(report["rotated"])
+            self.assertFalse(log.exists())
+            first = log.parent / "build_associations_hook.log.1.gz"
+            second = log.parent / "build_associations_hook.log.2.gz"
+            self.assertTrue(first.exists())
+            self.assertTrue(second.exists())
+            self.assertIn(b"old diagnostic bytes", gzip.decompress(first.read_bytes()))
+            self.assertEqual(second.read_bytes(), b"stale")
+
+    def test_public_log_health_report_does_not_emit_log_contents(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            log = root / "logs" / "subconscious_scheduler_hook.log"
+            log.parent.mkdir()
+            log.write_text(
+                "private prompt text and source snippet should stay local\n",
+                encoding="utf-8",
+            )
+
+            report = log_retention.log_health_report(root, max_bytes=10)
+            rendered = str(report)
+
+            self.assertTrue(report["oversized"])
+            self.assertEqual(report["items"][0]["artifact_name"], log.name)
+            self.assertIn("subconscious_scheduler_hook.log", rendered)
+            self.assertNotIn("private prompt text", rendered)
+            self.assertNotIn("source snippet", rendered)
+
+    def test_streaming_append_keeps_current_file_under_cap(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "subconscious_scheduler.log"
+
+            result = log_retention.append_bytes_with_rotation(
+                log,
+                b"x" * 35,
+                max_bytes=10,
+                backups=3,
+            )
+
+            self.assertEqual(result["written_bytes"], 35)
+            self.assertLessEqual(log.stat().st_size, 10)
+            backups = sorted(log.parent.glob("subconscious_scheduler.log.*.gz"))
+            self.assertLessEqual(len(backups), 3)
+
+    def test_rotate_known_logs_does_not_trim_source_staging_queues(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            queue = root / "subconscious_jobs.jsonl"
+            queue.write_text("source-backed staging row\n" * 20, encoding="utf-8")
+
+            result = log_retention.rotate_known_logs(root, max_bytes=10, backups=2)
+
+            self.assertEqual(result["rotated_count"], 0)
+            self.assertTrue(queue.exists())
+            self.assertFalse((root / "subconscious_jobs.jsonl.1.gz").exists())
+
+    def test_run_command_with_rotating_log_caps_single_child_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "logs" / "build_associations_hook.log"
+
+            code = log_retention.run_command_with_rotating_log(
+                [sys.executable, "-c", "import sys; sys.stdout.write('x' * 35)"],
+                log=log,
+                max_bytes=10,
+                backups=2,
+            )
+
+            self.assertEqual(code, 0)
+            self.assertLessEqual(log.stat().st_size, 10)
+            backups = sorted(log.parent.glob("build_associations_hook.log.*.gz"))
+            self.assertLessEqual(len(backups), 2)
+
+
+if __name__ == "__main__":
+    unittest.main()

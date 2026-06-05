@@ -7,6 +7,11 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from tests.aippocampus.path_assertions import (
+    assert_path_flag_points_to,
+    assert_path_list_contains,
+)
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
 if str(BENCHMARKS) not in sys.path:
@@ -138,9 +143,10 @@ class AMemGymOfficialBridgeTests(unittest.TestCase):
         argv = run_mock.call_args.args[0]
         self.assertIn("-m", argv)
         self.assertIn("amemgym.eval.random", argv)
-        self.assertIn(str(output_file), argv)
+        assert_path_flag_points_to(self, argv, "--env_data", root / "data.json")
+        assert_path_flag_points_to(self, argv, "--output_file", output_file)
         env = run_mock.call_args.kwargs["env"]
-        self.assertIn(str(upstream / "src"), env["PYTHONPATH"])
+        assert_path_list_contains(self, env["PYTHONPATH"], upstream / "src")
 
     def test_openrouter_provider_maps_open_router_alias_for_subprocess_only(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -121,6 +121,9 @@ Keep `cannot_claim` close to the claim it protects:
   entries when a reader could over-read that run;
 - selected profile metadata may include its default `cannot_claim` list because
   it explains the active report surface;
+- nested validation or rerun-guidance blocks should add only their local
+  boundary and point back to the parent report/evidence owner for inherited
+  run-level claims;
 - inactive profile ladders, docs maps, and fixture indexes should prefer counts
   plus a canonical docs pointer instead of mirroring every caveat list;
 - long repeated caveat lists belong in the owning evidence or methodology page,

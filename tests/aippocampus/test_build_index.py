@@ -372,6 +372,106 @@ class BuildIndexTests(unittest.TestCase):
             self.assertEqual(observed_pins[0]["generation"], "gen_current")
             self.assertFalse(list((index_dir / ".reader-pins").glob("*.json")))
 
+    def test_raw_rollout_stream_search_bounds_large_tool_payload_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            rollout = root / "rollout-large-tool.jsonl"
+            huge_output = "needle " + ("tool-output-noise " * 600)
+            rows = [
+                {
+                    "type": "session_meta",
+                    "payload": {"id": "stream-session", "cwd": str(root)},
+                },
+                {
+                    "type": "event_msg",
+                    "timestamp": "2026-06-05T00:00:01Z",
+                    "payload": {"type": "user_message", "message": "normal visible prompt"},
+                },
+                {
+                    "type": "response_item",
+                    "timestamp": "2026-06-05T00:00:02Z",
+                    "payload": {
+                        "type": "function_call_output",
+                        "call_id": "call-large",
+                        "output": huge_output,
+                    },
+                },
+            ]
+            rollout.write_text(
+                "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
+                encoding="utf-8",
+            )
+
+            payload = search_rollout.search_rollout_payload(
+                search_rollout.RolloutSearchOptions(
+                    patterns=["needle"],
+                    cwd=root,
+                    rollout=rollout,
+                    no_index=True,
+                    include_tools=True,
+                    snippet_chars=80,
+                )
+            )
+
+        hit = payload["matches"][0]
+        encoded_hit = json.dumps(hit, ensure_ascii=False)
+
+        self.assertEqual(payload["source"], "raw_rollout")
+        self.assertEqual(payload["source_kind"], "raw_rollout")
+        self.assertEqual(hit["source_ref"], "raw-line:3")
+        self.assertEqual(hit["payload_class"], "tool_event")
+        self.assertTrue(hit["truncated"])
+        self.assertGreater(hit["text_bytes"], hit["snippet_bytes"])
+        self.assertNotIn("raw_payload", hit)
+        self.assertNotIn("tool-output-noise " * 50, encoded_hit)
+
+    def test_raw_rollout_stream_search_requires_audit_flag_for_full_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            rollout = root / "rollout-audit-tool.jsonl"
+            huge_output = "needle " + ("audit-full-payload " * 80)
+            rows = [
+                {
+                    "type": "session_meta",
+                    "payload": {"id": "stream-session", "cwd": str(root)},
+                },
+                {
+                    "type": "event_msg",
+                    "timestamp": "2026-06-05T00:00:01Z",
+                    "payload": {"type": "user_message", "message": "normal visible prompt"},
+                },
+                {
+                    "type": "response_item",
+                    "timestamp": "2026-06-05T00:00:02Z",
+                    "payload": {
+                        "type": "function_call_output",
+                        "call_id": "call-audit",
+                        "output": huge_output,
+                    },
+                },
+            ]
+            rollout.write_text(
+                "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
+                encoding="utf-8",
+            )
+
+            payload = search_rollout.search_rollout_payload(
+                search_rollout.RolloutSearchOptions(
+                    patterns=["needle"],
+                    cwd=root,
+                    rollout=rollout,
+                    no_index=True,
+                    include_tools=True,
+                    include_raw_payload=True,
+                    snippet_chars=80,
+                )
+            )
+
+        hit = payload["matches"][0]
+
+        self.assertIn("raw_payload", hit)
+        self.assertIn("audit-full-payload " * 20, hit["raw_payload"])
+
     def test_resolve_sqlite_index_path_uses_last_known_good_when_current_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
