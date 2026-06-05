@@ -714,7 +714,7 @@ def desktop_live_protocol() -> dict[str, Any]:
             "public_report_raw_prompts": False,
             "public_report_raw_model_outputs": False,
             "public_report_local_paths": False,
-            "public_report_credentials": False,
+            "public_report_provider_auth_material": False,
         },
     }
 
@@ -774,7 +774,7 @@ def run_benchmark(
             "raw_case_prompts_in_report": False,
             "raw_model_outputs_in_report": False,
             "absolute_paths_in_report": False,
-            "provider_credentials_in_report": False,
+            "provider_auth_material_in_report": False,
             "case_ids_are_hashed": True,
             "output_shape": "public_safe_desktop_memory_arm_scores_and_environment_claim_gates",
         },

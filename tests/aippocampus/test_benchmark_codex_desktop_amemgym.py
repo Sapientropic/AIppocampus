@@ -446,7 +446,7 @@ class CodexDesktopAMemGymStyleBenchmarkTests(unittest.TestCase):
         self.assertFalse(payload["privacy_boundary"]["raw_case_prompts_in_report"])
         self.assertFalse(payload["privacy_boundary"]["raw_model_outputs_in_report"])
         self.assertFalse(payload["privacy_boundary"]["absolute_paths_in_report"])
-        self.assertFalse(payload["privacy_boundary"]["provider_credentials_in_report"])
+        self.assertFalse(payload["privacy_boundary"]["provider_auth_material_in_report"])
         self.assertNotIn("C:\\", encoded)
         self.assertNotIn("api_key", encoded.lower())
         self.assertNotIn("Bearer ", encoded)

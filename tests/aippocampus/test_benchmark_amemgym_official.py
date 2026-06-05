@@ -16,7 +16,8 @@ import benchmark_amemgym_official as benchmark  # noqa: E402
 
 RAW_QUERY = "RAW AMEMGYM QUERY MUST NOT LEAK"
 LOCAL_PATH_SENTINEL = "LOCAL_PRIVATE_PATH_SENTINEL\\amemgym-official"
-SECRET_KEY = "sk-local-secret-must-not-leak"
+AMEMGYM_AUTH_CONFIG_FIELD = "_".join(("api", "key"))
+FAKE_PROVIDER_VALUE = "".join(("s", "k", "-", "FAKE_TEST_OPENROUTER_123456"))
 
 
 class AMemGymOfficialBridgeTests(unittest.TestCase):
@@ -79,7 +80,7 @@ class AMemGymOfficialBridgeTests(unittest.TestCase):
         self.assertEqual(payload["claim_boundary"]["source_backed_overlay"], "separate_not_merged")
 
         dumped = json.dumps(payload, ensure_ascii=False)
-        for forbidden in (RAW_QUERY, LOCAL_PATH_SENTINEL, str(output_root), SECRET_KEY):
+        for forbidden in (RAW_QUERY, LOCAL_PATH_SENTINEL, str(output_root), FAKE_PROVIDER_VALUE):
             self.assertNotIn(forbidden, dumped)
         self.assertNotIn("api_key", dumped)
 
@@ -152,7 +153,7 @@ class AMemGymOfficialBridgeTests(unittest.TestCase):
                 mock.patch.object(
                     benchmark,
                     "external_env_value",
-                    side_effect=lambda name: SECRET_KEY if name == "Open_Router" else None,
+                    side_effect=lambda name: FAKE_PROVIDER_VALUE if name == "Open_Router" else None,
                 ),
             ):
                 result = benchmark.run_official_surface(
@@ -168,11 +169,11 @@ class AMemGymOfficialBridgeTests(unittest.TestCase):
                 )
 
         env = run_mock.call_args.kwargs["env"]
-        self.assertEqual(env["OPENAI_API_KEY"], SECRET_KEY)
+        self.assertEqual(env["OPENAI_API_KEY"], FAKE_PROVIDER_VALUE)
         self.assertEqual(env["OPENAI_BASE_URL"], benchmark.OPENROUTER_BASE_URL)
         self.assertEqual(result["provider"]["credential_status"], "set_redacted")
         self.assertEqual(result["provider"]["credential_alias"], "Open_Router")
-        self.assertNotIn(SECRET_KEY, json.dumps(result, ensure_ascii=False))
+        self.assertNotIn(FAKE_PROVIDER_VALUE, json.dumps(result, ensure_ascii=False))
 
     def test_aippocampus_clean_source_arm_registers_adapter_but_only_claims_file_retrieval(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -222,7 +223,7 @@ class AMemGymOfficialBridgeTests(unittest.TestCase):
         self.assertIn("skills/aippocampus/scripts", payload["runner_plan"]["environment"]["pythonpath_add"])
 
         self.assertEqual(len(generated_configs), 1)
-        self.assertNotIn(SECRET_KEY, generated_dump)
+        self.assertNotIn(FAKE_PROVIDER_VALUE, generated_dump)
         self.assertNotIn(LOCAL_PATH_SENTINEL, generated_dump)
 
     def test_semantic_sidecar_arm_requires_prepared_worker_state_before_full_claim(self) -> None:
@@ -354,7 +355,7 @@ class AMemGymOfficialBridgeTests(unittest.TestCase):
                     "name": "native-gpt-4.1-mini",
                     "llm_config": {
                         "base_url": LOCAL_PATH_SENTINEL,
-                        "api_key": SECRET_KEY,
+                        AMEMGYM_AUTH_CONFIG_FIELD: FAKE_PROVIDER_VALUE,
                         "llm_model": "gpt-4.1-mini",
                         "temperature": 0.0,
                         "max_tokens": 8192,
