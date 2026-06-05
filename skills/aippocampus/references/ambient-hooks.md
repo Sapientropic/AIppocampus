@@ -799,8 +799,17 @@ consume the latest completed sidecar and fail open when it is stale.
 
 `aippocampus_runtime/subconscious/scheduler --maybe-start` is the only subconscious route
 that lifecycle hooks should call. It must return quickly, check lock/cooldown
-state, require `DEEPSEEK_API_KEY`, and start detached work only when enough new
-clean-source turns exist.
+state, resolve `AIPPOCAMPUS_COGNITIVE_WORKER_MODE`, and start detached external
+model work only when enough new clean-source turns exist.
+
+When no provider key is visible but `AIPPOCAMPUS_AGENT_FALLBACK_AVAILABLE=1`,
+the scheduler may enqueue `agent_fallback_subconscious_task` rows in
+`agent_fallback_tasks.jsonl`. Those rows are staging-only: they describe a
+clean-source/source-ref source-pack contract for a later host agent, do not
+mutate clean source, and do not make foreground hooks wait. If neither a
+provider key nor an agent fallback capability is visible, `--maybe-start`
+degrades to deterministic-only diagnostics instead of pretending semantic or
+Dream work is active.
 
 Multiple Codex threads may hit lifecycle hooks around the same time. The
 scheduler keeps `--maybe-start` hook-safe by taking a short enqueue lock and by

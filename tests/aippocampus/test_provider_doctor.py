@@ -29,6 +29,8 @@ PROVIDER_ENV_NAMES = [
     "AIPPOCAMPUS_OPENAI_COMPAT_MODEL",
     "AIPPOCAMPUS_OPENAI_COMPAT_BASE_URL",
     "AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV",
+    "AIPPOCAMPUS_COGNITIVE_WORKER_MODE",
+    "AIPPOCAMPUS_AGENT_FALLBACK_AVAILABLE",
     "LOCAL_PROVIDER_TEST_KEY",
 ]
 
@@ -62,6 +64,10 @@ class ProviderDoctorTests(unittest.TestCase):
         self.assertEqual(report["provider_env"]["env_var"], "DEEPSEEK_API_KEY")
         self.assertFalse(report["provider_env"]["visible_in_current_process"])
         self.assertFalse(report["provider_env"]["visible_in_child_process"])
+        self.assertEqual(
+            report["cognitive_worker"]["status"],
+            "deterministic_only_missing_provider_and_agent",
+        )
         self.assertFalse(report["privacy"]["env_var_value_printed"])
         self.assertTrue(report["hook_relevance"]["prompt_hook_reads_process_env"])
         self.assertFalse(report["hook_relevance"]["actual_installed_hook_process_checked"])
@@ -100,8 +106,24 @@ class ProviderDoctorTests(unittest.TestCase):
         self.assertTrue(report["provider_env"]["visible_in_current_process"])
         self.assertTrue(report["provider_env"]["visible_in_child_process"])
         self.assertTrue(report["hook_relevance"]["semantic_gate_enabled_for_route"])
+        self.assertEqual(report["cognitive_worker"]["status"], "external_model_active")
         self.assertFalse(report["hook_relevance"]["actual_installed_hook_process_checked"])
         self.assertNotIn(secret, encoded)
+
+    def test_provider_doctor_reports_agent_fallback_mode_without_key_value(self) -> None:
+        with provider_env({"AIPPOCAMPUS_AGENT_FALLBACK_AVAILABLE": "1"}):
+            report = provider_doctor.build_provider_doctor_report(
+                model_route="default",
+                check_child_process=False,
+            )
+        encoded = json.dumps(report, ensure_ascii=False)
+
+        self.assertFalse(report["ok"])
+        self.assertEqual(report["status"], "missing_provider_env_var")
+        self.assertEqual(report["cognitive_worker"]["resolved_mode"], "agent_fallback")
+        self.assertEqual(report["cognitive_worker"]["status"], "agent_fallback_active")
+        self.assertTrue(report["cognitive_worker"]["agent_fallback_available"])
+        self.assertNotIn("secret", encoded.casefold())
 
     def test_provider_visibility_is_presence_only_and_does_not_read_empty_values(self) -> None:
         with provider_env({"DEEPSEEK_API_KEY": ""}):
