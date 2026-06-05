@@ -298,16 +298,28 @@ must skip payload-compacted tombstones. This does not mutate seed trigger files
 or promotion candidates, so a later semantic-trigger rebuild may recreate a
 trigger until the upstream owner lifecycle is handled separately.
 
+For active recall locks, the owner transform lives in
+`aippocampus_runtime.recall.active_recall_lock_compaction`. It consumes the
+same dead-letter apply manifest and returns a transformed
+`active_recall_locks.json` store for maintenance to persist deliberately. The
+tombstone keeps the existing lock id route handle only so stale consumers get a
+deterministic failed route state; it removes candidate refs, aliases,
+route reasons, prompt/thread/workspace fingerprints, and freshness-vector
+payload while preserving hash identity, source-ref count, provenance hash,
+reason codes, timestamps, and rebuild/review notes. A compacted lock must not
+be reopened as source evidence; source claims still require rebuilding a fresh
+route from clean source.
+
 The explicit operator entrypoint for running these owner transforms together is
 `aippocampus_runtime.ops.activation_payload_compaction`. It reads an existing
 `aippocampus_activation_dead_letter_apply_manifest`, accepts explicit owner
-paths for ambient cache, Dream working memory, and reviewed semantic triggers,
-and defaults to a no-write dry run. Operators must pass `--apply` before owner
-files are rewritten. The runner report is path-free and payload-free: it may
-include owner names, hash ids, counts, reason codes, provenance hashes,
-timestamps, and boundary flags, but not raw activation text, source refs, or
-local filesystem paths. This runner is maintenance work, not foreground hook
-work and not a replacement for source reopen.
+paths for ambient cache, Dream working memory, reviewed semantic triggers, and
+active recall locks, and defaults to a no-write dry run. Operators must pass
+`--apply` before owner files are rewritten. The runner report is path-free and
+payload-free: it may include owner names, hash ids, counts, reason codes,
+provenance hashes, timestamps, and boundary flags, but not raw activation text,
+source refs, or local filesystem paths. This runner is maintenance work, not
+foreground hook work and not a replacement for source reopen.
 `aippocampus_runtime.ops.maintenance` may delegate to this runner only when an
 operator passes an explicit `--activation-dead-letter-manifest`; dry-run remains
 the default and writes require `--apply-activation-payload-compaction`.

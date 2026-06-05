@@ -38,6 +38,7 @@ class AippocampusMaintenanceTests(unittest.TestCase):
                 self.assertIn("--ambient-cache", cmd)
                 self.assertIn("--working-memory", cmd)
                 self.assertIn("--semantic-triggers", cmd)
+                self.assertIn("--active-recall-locks", cmd)
                 self.assertNotIn("--apply", cmd)
                 return (
                     0,
@@ -63,6 +64,7 @@ class AippocampusMaintenanceTests(unittest.TestCase):
             ambient = root / "ambient-cache.json"
             working = root / "working_memory.jsonl"
             semantic = root / "semantic_triggers.jsonl"
+            active_locks = root / "active_recall_locks.json"
             with (
                 mock.patch.object(maintenance, "run_json_checked", side_effect=fake_json),
                 mock.patch("sys.stdout", new=StringIO()) as stdout,
@@ -81,6 +83,8 @@ class AippocampusMaintenanceTests(unittest.TestCase):
                         str(working),
                         "--activation-semantic-triggers",
                         str(semantic),
+                        "--activation-active-recall-locks",
+                        str(active_locks),
                         "--json",
                     ]
                 )

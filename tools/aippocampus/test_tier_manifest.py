@@ -15,6 +15,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_activation_surface_authority",
         "test_active_recall",
         "test_active_recall_lock",
+        "test_active_recall_lock_compaction",
         "test_agency_affordance",
         "test_agency_host_timing",
         "test_agent_discovery_release_check",

@@ -261,6 +261,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/recall/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/active_recall.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/active_recall_lock.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/active_recall_lock_compaction.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/ambient_cache.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/ambient_cards.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/ambient_policy.py",
