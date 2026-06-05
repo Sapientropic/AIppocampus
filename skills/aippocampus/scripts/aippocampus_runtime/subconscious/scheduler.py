@@ -29,6 +29,7 @@ from typing import Any
 from aippocampus_runtime.cognitive_worker_mode import resolve_cognitive_worker_mode
 from aippocampus_runtime.core import aippocampus_registry_dir, now_utc
 from aippocampus_runtime.ops import log_retention
+from aippocampus_runtime.public_output import emit_public_text
 from aippocampus_runtime.subconscious import agent_fallback_queue, shell_selection
 from aippocampus_runtime.subconscious.scheduler_lock import FileLock
 from aippocampus_runtime.subconscious.scheduler_public import (
@@ -875,20 +876,20 @@ def main() -> int:
                 if args.include_private_report
                 else public_payload
             )
-            print(public_json_text(payload))  # lgtm[py/clear-text-logging-sensitive-data]
+            emit_public_text(public_json_text(payload))
         elif result.get("started"):
-            print(f"subconscious scheduler started: pid {result.get('pid')}")
+            emit_public_text(f"subconscious scheduler started: pid {result.get('pid')}")
         elif result.get("ran"):
-            print("subconscious scheduler ran")
+            emit_public_text("subconscious scheduler ran")
         else:
-            print(f"subconscious scheduler skipped: {public_skip_reason(result.get('skipped'))}")
+            emit_public_text(f"subconscious scheduler skipped: {public_skip_reason(result.get('skipped'))}")
         return 0
     except Exception as exc:
         if args.json_output:
             error_payload = public_scheduler_payload({"error": str(exc)})
-            print(public_json_text(error_payload))  # lgtm[py/clear-text-logging-sensitive-data]
+            emit_public_text(public_json_text(error_payload))
         else:
-            print("subconscious scheduler error: runtime_error", file=sys.stderr)
+            emit_public_text("subconscious scheduler error: runtime_error", stream=sys.stderr)
         return 1 if args.strict else 0
 
 

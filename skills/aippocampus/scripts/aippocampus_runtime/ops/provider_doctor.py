@@ -20,6 +20,7 @@ from typing import Any
 from aippocampus_runtime.cognitive_worker_mode import resolve_cognitive_worker_mode
 from aippocampus_runtime.legacy_aliases import env_legacy_alias_diagnostics
 from aippocampus_runtime.model.routing import ModelRoute, resolve_model_route
+from aippocampus_runtime.public_output import emit_public_text
 from aippocampus_runtime.recall.semantic_recall_gate import semantic_gate_enabled
 from aippocampus_runtime.warm_ambient.scheduler import warm_background_enabled
 
@@ -292,9 +293,9 @@ def main(argv: list[str] | None = None) -> int:
         check_child_process=not args.no_child_check,
     )
     if args.json_output:
-        print(public_json_text(report))  # lgtm[py/clear-text-logging-sensitive-data]
+        emit_public_text(public_json_text(report))
     else:
-        print(render_text(report))  # lgtm[py/clear-text-logging-sensitive-data]
+        emit_public_text(render_text(report), end="")
     return 0 if report["ok"] else 2
 
 
