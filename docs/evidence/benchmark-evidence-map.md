@@ -105,17 +105,19 @@ promotes a public-safe result into the official evidence flow.
    [`benchmarks/field-continuity-fixture-report.md`](benchmarks/field-continuity-fixture-report.md).
 28. Need segmented-search merge policy calibration evidence for #375:
    [`benchmarks/segmented-merge-policy-fixture-report.md`](benchmarks/segmented-merge-policy-fixture-report.md).
-29. Need private real-history Dream offline and diagnostic evidence:
+29. Need agency host-surface timing evidence for #763:
+   [`benchmarks/agency-host-surface-codex-desktop-2026-06-05.md`](benchmarks/agency-host-surface-codex-desktop-2026-06-05.md).
+30. Need private real-history Dream offline and diagnostic evidence:
    [`dream/dream-real-history-model-backed-eval-2026-05-31.md`](dream/dream-real-history-model-backed-eval-2026-05-31.md)
    and
    [`dream/dream-private-large-history-diagnostic-2026-06-04.md`](dream/dream-private-large-history-diagnostic-2026-06-04.md).
-30. Need explicit recall-reminder shadow A/B evidence:
+31. Need explicit recall-reminder shadow A/B evidence:
    [`dream/dream-live-shadow-ab-2026-05-30.md`](dream/dream-live-shadow-ab-2026-05-30.md).
-31. Need public-corpus negative-control dream shadow evidence:
+32. Need public-corpus negative-control dream shadow evidence:
    [`dream/dream-live-shadow-benchmark-corpus-2026-05-31.md`](dream/dream-live-shadow-benchmark-corpus-2026-05-31.md).
-32. Need live question-extraction axis-coverage evidence for GitHub #153:
+33. Need live question-extraction axis-coverage evidence for GitHub #153:
    [`question/question-extraction-axis-coverage-2026-05-31.md`](question/question-extraction-axis-coverage-2026-05-31.md).
-33. Need community-submitted runs, demos, known gaps, or field-report intake:
+34. Need community-submitted runs, demos, known gaps, or field-report intake:
    [`community-field-reports.md`](community-field-reports.md) and the public
    [`/evidence/`](https://www.aippocampus.com/evidence/) page.
 
@@ -161,6 +163,7 @@ instead of deriving priority from this directory map.
 | Field Continuity fixture report | `docs/evidence/benchmarks/field-continuity-fixture-report.md` and `benchmark_corpus/field_continuity/fixture.json` | Public-safe #454 scenario-family contract for second-user magic-moment reports from Discussion #428; includes two-plus public synthetic families, private seed hash/aggregate rules, and overclaim/wrong-family/stale-route controls without live or private-history quality claims. |
 | Segmented merge policy fixture report | `docs/evidence/benchmarks/segmented-merge-policy-fixture-report.md` and `benchmark_corpus/segmented_merge_policy/fixture.json` | Public-safe #375 calibration fixture for `SEGMENT_MERGE_POLICY` over cross-segment diversity, adjacent-turn pairing, duplicate nearby recap suppression, and stale/superseded currentness; not source-evidence retrieval or real long-thread recall quality. |
 | Dream live shadow A/B reminder evidence | `docs/evidence/dream/dream-live-shadow-ab-2026-05-30.md` | Dated aggregate run for explicit recall-reminder frequency, shadow assignment, nearest-prior exposure attribution, and delivered-vs-shadow claim boundaries. |
+| Agency host-surface replay evidence | `docs/evidence/benchmarks/agency-host-surface-codex-desktop-2026-06-05.md` | Public-safe #763 Codex Desktop hidden-route lifecycle replay for show/hold/suppress timing, source-visible suppression, duplicate suppression, recent negative feedback, and usefulness/annoyance/correction ledger boundaries. |
 | Dream private real-history offline evidence | `docs/evidence/dream/dream-real-history-model-backed-eval-2026-05-31.md` and `docs/evidence/dream/dream-private-large-history-diagnostic-2026-06-04.md` | Sanitized aggregate private-history Dream eval and diagnostic evidence for selected ready-pack structural lift, shadow replay boundaries, coding-probe deferment, E2E50 seed scan/manual annotation boundaries, agency host-timing replay, coding decision-shadow proxy evidence, and live semantic gate worker/availability diagnostics. |
 | Dream benchmark-corpus shadow evidence | `docs/evidence/dream/dream-live-shadow-benchmark-corpus-2026-05-31.md` | Dated public-corpus negative-control run for explicit reminder frequency and potential dream-only over-personalization activation. |
 | Question extraction axis coverage evidence | `docs/evidence/question/question-extraction-axis-coverage-2026-05-31.md` | Dated live no-write aggregate field-presence run for GitHub #153 and its prompt/repair/telemetry fix boundary. |
@@ -273,7 +276,7 @@ pasting raw JSON into multiple docs.
 | Selected source-evidence recall eval and candidate-space diagnostics | `tools/aippocampus/smoke/smoke_source_evidence_recall_eval.py` | `docs/evidence/readiness/stage-0-5-readiness.md`, `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, #458 |
 | Optional live question-confirmation smoke | `tools/aippocampus/smoke/smoke_question_confirmation_live.py` | `docs/architecture/question-tracking-subconscious.md`, `docs/evidence/readiness/stage-0-5-readiness.md` |
 | Question prefilter parity smoke | `tools/aippocampus/smoke/smoke_question_prefilter_parity.py` | `docs/architecture/question-tracking-subconscious.md`, #248 |
-| Agency host-timing replay smoke | `tools/aippocampus/smoke/smoke_agency_host_timing.py` | `docs/research/agency-from-cognitive-map.md`, #312 |
+| Agency host-timing replay smoke | `tools/aippocampus/smoke/smoke_agency_host_timing.py` | `docs/research/agency-from-cognitive-map.md`, `docs/evidence/benchmarks/agency-host-surface-codex-desktop-2026-06-05.md`, #312, #763 |
 | Dream real-history structural and user-visible eval | `skills/aippocampus/scripts/dream_real_history_eval.py` | `docs/evidence/dream/dream-real-history-model-backed-eval-2026-05-31.md`, `docs/research/dream-task-design.md`, #163 |
 | Synthetic GB-scale capacity smoke | `tools/aippocampus/smoke/smoke_synthetic_scale_capacity.py` | `docs/architecture/gb-scale-roadmap.md` |
 | Synthetic question-tracking scale smoke | `tools/aippocampus/smoke/smoke_question_tracking_scale.py` | `docs/architecture/question-tracking-subconscious.md`, `docs/architecture/gb-scale-roadmap.md` |
