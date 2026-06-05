@@ -32,6 +32,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_benchmark_cognitive_portrait",
         "test_benchmark_compaction_continuity",
         "test_benchmark_continuous_memory_arms",
+        "test_benchmark_corpus_converter",
         "test_benchmark_conversational_media_ingest_recall",
         "test_benchmark_field_continuity",
         "test_benchmark_fresh_thread_recall_demo",
