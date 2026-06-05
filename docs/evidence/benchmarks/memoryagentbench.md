@@ -144,6 +144,9 @@ For the official parquet dataset, this path no longer requires a manual JSONL
 export when `pyarrow` is installed. The runner still treats fields such as
 `answers` as both raw/sensitive text and gold-label material, so they remain out
 of the model-facing case pack and default reports.
+If local files are present but the optional parquet reader is missing, requested
+case-pack or prediction-template paths are reported as `skipped_no_rows` rather
+than written; empty artifacts should not be read as a successful adapter path.
 
 Reports should separate:
 
