@@ -20,6 +20,39 @@ Stable privacy rules live in `docs/guides/privacy-security-checklist.md`. Do not
 raw command JSON here: local smoke outputs may contain machine-specific
 temporary paths, so this document keeps only summarized evidence.
 
+## 2026-06-05 Issue #643 R2 Provider Metadata Evidence Smoke
+
+Issue #643 keeps metadata-padding decisions tied to real provider evidence
+instead of speculative padding. This slice extended
+`smoke_real_provider_encrypted_sync.py` to emit a public-safe
+`provider_metadata` block and then ran it against the existing Cloudflare
+R2-compatible provider configuration. The local run used `age` v1.3.1 installed
+through the Go toolchain and an ephemeral generated age identity.
+
+Positive evidence from the passing retry:
+
+- Encrypted object-storage `push/status/repair/pull` passed with
+  `recipient_match=yes`, `raw_rollout_synced_without_opt_in=false`, and no
+  reported issues.
+- `provider_metadata` observed 13 encrypted objects, 20,022 total ciphertext
+  bytes, min 201 bytes, max 13,866 bytes, and size buckets
+  `le_1KiB=10`, `le_4KiB=2`, `le_16KiB=1`.
+- Path-shape counts were `encrypted_outer_manifest=1`,
+  `encrypted_inner_manifest=1`, and `encrypted_ciphertext_object=11`.
+- Cleanup deleted all 13 uploaded encrypted objects and confirmed none remained
+  through the smoke cleanup path.
+
+An earlier same-day attempt reached push/status/repair, produced the same
+metadata observation shape, and deleted 13/13 uploaded encrypted objects, but
+the final pull hit an `SSL: UNEXPECTED_EOF_WHILE_READING` transport error. Treat
+that as a transient provider/client observation, not as a successful full smoke.
+
+Cannot claim from this slice: metadata padding evaluated, traffic-analysis
+resistance, provider-console cleanup, broad S3-compatible/GCS/cloud-folder
+coverage, or long-duration provider/client stability. Provider account
+identifiers, bucket names, object prefixes, credential values, raw private
+source, and local temporary paths are intentionally omitted.
+
 ## 2026-06-05 Issue #697 Released PyPI And Client-Matrix Refresh
 
 Issue #697 follows the source-install evidence below by checking the released

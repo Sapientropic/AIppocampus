@@ -101,6 +101,13 @@ provider path can observe object counts and object sizes for the encrypted and
 plaintext test prefixes even though synced registry/source contents stay
 encrypted.
 
+As of 2026-06-05, the real-provider encrypted sync smoke also emits a
+`provider_metadata` evidence block with aggregate ciphertext byte sizes, coarse
+size buckets, and path-shape counts. This makes future provider runs usable for
+padding/cost review without publishing object keys, credentials, endpoint URLs,
+or decrypted registry contents. The block is evidence input, not a padding
+implementation claim.
+
 Padding decision: keep metadata padding deferred. The current evidence does not
 show that coarse object-size or object-count padding is worth the added cost,
 latency, and partial-guarantee confusion. AIppocampus can claim encrypted
