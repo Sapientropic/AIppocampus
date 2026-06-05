@@ -32,6 +32,7 @@ Usage:
 
 import argparse
 import hashlib
+import importlib
 import json
 import os
 import sys
@@ -54,6 +55,25 @@ def write_jsonl(path: Path, records: list[dict]):
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
 
 
+class OptionalDatasetDependencyError(RuntimeError):
+    def __init__(self, source: str):
+        super().__init__(
+            f"Hugging Face streaming source '{source}' requires the optional "
+            "package `datasets`; install `datasets` for --source wildchat/sharechat "
+            "or use --source local/sharegpt with a local file."
+        )
+
+
+def load_huggingface_dataset_loader(source: str):
+    try:
+        datasets = importlib.import_module("datasets")
+    except ModuleNotFoundError as exc:
+        if exc.name == "datasets":
+            raise OptionalDatasetDependencyError(source) from exc
+        raise
+    return datasets.load_dataset
+
+
 # ---------------------------------------------------------------------------
 # WildChat converter
 # ---------------------------------------------------------------------------
@@ -62,7 +82,7 @@ def convert_wildchat(max_convs: int = 0, lang: str | None = None,
                      min_turns: int = 1, coding_only: bool = False,
                      hf_token: str | None = None):
     """Stream WildChat-4.8M from HuggingFace and convert to AIppocampus format."""
-    from datasets import load_dataset
+    load_dataset = load_huggingface_dataset_loader("wildchat")
 
     token = hf_token or os.environ.get("HF_TOKEN")
     ds = load_dataset("allenai/WildChat-4.8M", split="train", streaming=True,
@@ -201,7 +221,7 @@ def convert_sharechat(subset: str = "chatgpt", max_convs: int = 0,
     ShareChat is stored as CSV (one row per message), grouped by URL into
     conversations.
     """
-    from datasets import load_dataset
+    load_dataset = load_huggingface_dataset_loader("sharechat")
 
     token = hf_token or os.environ.get("HF_TOKEN")
     ds = load_dataset("tucnguyen/ShareChat", subset, split="train",
@@ -587,40 +607,44 @@ def main():
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
 
-    if args.source == "wildchat":
-        messages, turns = convert_wildchat(
-            max_convs=args.max_convs,
-            lang=args.lang,
-            min_turns=args.min_turns,
-            coding_only=args.coding_only,
-        )
-    elif args.source == "sharechat":
-        if not args.subset:
-            print("Error: --subset required for sharechat "
-                  "(chatgpt|claude|gemini|grok|perplexity)", file=sys.stderr)
-            sys.exit(1)
-        messages, turns = convert_sharechat(
-            subset=args.subset,
-            max_convs=args.max_convs,
-            lang=args.lang,
-            min_turns=args.min_turns,
-        )
-    elif args.source == "sharegpt":
-        if not args.input:
-            print("Error: --input required for sharegpt source "
-                  "(path to ShareGPT JSONL file or directory)", file=sys.stderr)
-            sys.exit(1)
-        messages, turns = convert_sharegpt(
-            input_path=args.input,
-            max_convs=args.max_convs,
-            min_turns=args.min_turns,
-            coding_only=args.coding_only,
-        )
-    elif args.source == "local":
-        if not args.input:
-            print("Error: --input required for local source", file=sys.stderr)
-            sys.exit(1)
-        messages, turns = convert_local(args.input)
+    try:
+        if args.source == "wildchat":
+            messages, turns = convert_wildchat(
+                max_convs=args.max_convs,
+                lang=args.lang,
+                min_turns=args.min_turns,
+                coding_only=args.coding_only,
+            )
+        elif args.source == "sharechat":
+            if not args.subset:
+                print("Error: --subset required for sharechat "
+                      "(chatgpt|claude|gemini|grok|perplexity)", file=sys.stderr)
+                sys.exit(1)
+            messages, turns = convert_sharechat(
+                subset=args.subset,
+                max_convs=args.max_convs,
+                lang=args.lang,
+                min_turns=args.min_turns,
+            )
+        elif args.source == "sharegpt":
+            if not args.input:
+                print("Error: --input required for sharegpt source "
+                      "(path to ShareGPT JSONL file or directory)", file=sys.stderr)
+                sys.exit(1)
+            messages, turns = convert_sharegpt(
+                input_path=args.input,
+                max_convs=args.max_convs,
+                min_turns=args.min_turns,
+                coding_only=args.coding_only,
+            )
+        elif args.source == "local":
+            if not args.input:
+                print("Error: --input required for local source", file=sys.stderr)
+                sys.exit(1)
+            messages, turns = convert_local(args.input)
+    except OptionalDatasetDependencyError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(2)
 
     # Optionally strip _meta
     if args.strip_meta:

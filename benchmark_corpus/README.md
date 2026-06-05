@@ -75,6 +75,11 @@ Run a public dataset stream:
 python benchmark_corpus\convert_to_aippocampus.py --source wildchat --max-convs 200 --output .tmp\wildchat-clean-source
 ```
 
+`wildchat` and `sharechat` streaming use Hugging Face `datasets`. If it is not
+installed, the converter exits with a targeted optional-dependency diagnostic
+instead of a Python traceback; local and ShareGPT JSONL sources remain stdlib
+paths.
+
 Regenerate the current ShareGPT clean-source corpora from local public JSONL
 inputs:
 
