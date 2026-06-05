@@ -18,16 +18,18 @@ The runtime and tooling dependency taxonomy lives in
 [dependency-contract.md](dependency-contract.md).
 The product friction budget lives in
 [product-profiles.md](../architecture/product-profiles.md): first recall should
-stay `personal_default`; hooks, diagnostics, sync, and governance are opt-in or
-operator surfaces unless a user explicitly needs them.
+stay `personal_default`; core hook setup is the consented next step for ambient
+continuity, while diagnostics, sync, governance, and research surfaces stay
+operator or opt-in paths unless a user explicitly needs them.
 
 For a new external user or agent host, follow the
 [10-minute public API path](public-api.md#ten-minute-public-path) first:
 package probe, read-only provider status, explicit onboarding only with user
-consent, then clean-source search for a first source-backed snippet. Treat
-plugin packaging, hooks, sync, object storage, Dream, semantic jobs, and
-benchmarks as advanced surfaces unless that path proves the user actually needs
-them.
+consent, then clean-source search for a first source-backed snippet. After that
+first source has been found, offer core hook setup as the normal ambient
+continuity step, still behind explicit trust and rollback. Treat plugin
+packaging, sync, object storage, Dream, semantic jobs, and benchmarks as
+advanced surfaces unless that path proves the user actually needs them.
 
 ## First Recall Path
 
@@ -65,6 +67,59 @@ known period). Those cues are candidate navigation until search returns a
 source-backed snippet with source/date/turn metadata. Use `--format json` only
 for automation. Use the GitHub `uvx --from git+...` form only when intentionally
 testing an unreleased main-branch snapshot.
+
+## Core Hook Setup
+
+Manual onboarding and search prove that local source can be found. Prompt and
+lifecycle hooks are the core trusted setup that keeps AIppocampus from feeling
+like a manual grep tool in the next conversation.
+
+Review local readiness before changing Codex hook state:
+
+```sh
+aippocampus update status
+aippocampus hooks prompt status --last
+aippocampus hooks lifecycle status
+```
+
+Install both AIppocampus-owned Codex hooks only after the user trusts this
+machine and understands the boundary:
+
+```sh
+aippocampus update apply --surface hooks
+```
+
+Or install them separately when you want to inspect each surface:
+
+```sh
+aippocampus hooks prompt install
+aippocampus hooks lifecycle install
+```
+
+Trust boundary in plain language:
+
+- The prompt hook runs on `UserPromptSubmit`. It may read the current prompt and
+  local AIppocampus registry to emit no output, a recall scent, candidate
+  navigation, or source-backed evidence for the agent to reopen.
+- The prompt hook is fail-open and should not block normal chat when
+  AIppocampus is missing, stale, or slow.
+- The lifecycle hook runs on session events and refreshes clean source, indexes,
+  registry rows, and hook-safe sidecars within bounded work.
+- Raw rollouts, generated indexes, registry rows, and private artifacts remain
+  local unless the user explicitly exports or syncs them.
+- External-model semantic routes are separate opt-in configuration. Local hook
+  install does not require an LLM key and must not silently enable external
+  model calls.
+
+Rollback is explicit:
+
+```sh
+aippocampus hooks prompt uninstall
+aippocampus hooks lifecycle uninstall
+```
+
+For the detailed runtime contract, see
+[`../../skills/aippocampus/references/ambient-hooks.md`](../../skills/aippocampus/references/ambient-hooks.md).
 
 ## Updating AIppocampus
 
@@ -424,9 +479,11 @@ afterward. External-model routes are also separate: remove the relevant
 environment configuration if you no longer want any optional model-backed
 background jobs to run.
 
-## Hook Install
+## Hook Reference Commands
 
-Install hooks only after reviewing the privacy boundary:
+The first-run hook path is [Core Hook Setup](#core-hook-setup). Use the
+module-level commands below only when the `aippocampus` facade is not installed
+or you are testing the packaged skill copy directly:
 
 ```sh
 PYTHONPATH="${CODEX_HOME}/skills/aippocampus/scripts" python -m aippocampus_runtime.hooks.install_prompt status --json
@@ -435,12 +492,11 @@ PYTHONPATH="${CODEX_HOME}/skills/aippocampus/scripts" python -m aippocampus_runt
 ```
 
 Use `install` or `uninstall` on those scripts when you intentionally want to
-change hook state. Prompt-time external-model routes remain optional and depend
-on explicit environment configuration. Prompt hook `--last` reads the local
-sanitized last-status projection written by the hook, not the verbose debug
-JSONL, so it can show the latest `no_memory` / `scent` / `candidate` /
-`source_backed_evidence` surface without exposing prompt text, raw cards,
-snippets, session ids, secrets, or local paths.
+change hook state. Prompt hook `--last` reads the local sanitized last-status
+projection written by the hook, not the verbose debug JSONL, so it can show the
+latest `no_memory` / `scent` / `candidate` / `source_backed_evidence` surface
+without exposing prompt text, raw cards, snippets, session ids, secrets, or
+local paths.
 
 ## Local Sync
 

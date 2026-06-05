@@ -104,6 +104,31 @@ vague cue, search a project cue or a time cue and label the result as candidate
 navigation until a source-backed snippet appears. Add `--format json` only for
 automation.
 
+## Core Continuity Hooks
+
+Without prompt and lifecycle hooks, AIppocampus is still useful as manual,
+source-backed search. That is not the full ambient continuity experience.
+
+After the first source-backed recall works, offer hook setup as a core trusted
+step, never as a silent install:
+
+```sh
+aippocampus update status
+aippocampus update apply --surface hooks
+```
+
+Use rollback commands when the user wants to remove AIppocampus-owned Codex hook
+handlers:
+
+```sh
+aippocampus hooks prompt uninstall
+aippocampus hooks lifecycle uninstall
+```
+
+Keep external-model semantics separate. A local hook install does not require an
+LLM key, and semantic/warm/subconscious/Dream outputs are navigation layers
+until the original source is reopened.
+
 ## MCP Usage
 
 List local MCP tools:

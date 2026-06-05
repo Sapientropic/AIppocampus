@@ -40,9 +40,9 @@ The origin essay is [未干的地图](docs/未干的地图.md). English readers 
 
 ## Quick Start
 
-Start with the first source-backed recall moment. This path does not install
-hooks, enable sync, or require MCP; it simply checks what local source exists
-and opens a way back to it.
+Start with the first source-backed recall moment, then decide whether to let
+AIppocampus keep that doorway warm for future sessions. The first check is
+read-only:
 
 ```sh
 uvx aippocampus --help
@@ -58,6 +58,29 @@ uvx aippocampus onboard --provider codex --all
 uvx aippocampus search "a distinctive old phrase"
 ```
 
+Manual search proves the source substrate is there. The core continuity setup is
+the trusted hook step: prompt hooks notice recall scents as a conversation
+starts, and lifecycle hooks refresh clean source and indexes after session
+events. They are never installed silently; review status first, then install
+them only when this machine is allowed to let AIppocampus touch Codex hooks:
+
+```sh
+aippocampus update status
+aippocampus update apply --surface hooks
+```
+
+Rollback stays visible:
+
+```sh
+aippocampus hooks prompt uninstall
+aippocampus hooks lifecycle uninstall
+```
+
+Local hook install does not require an external model key. Optional semantic,
+warm, subconscious, or Dream-style routes remain separate opt-in surfaces and
+must not be treated as source-backed evidence until the original source is
+reopened.
+
 Good first queries are an exact phrase, a project cue, or a time cue such as
 `recent` / `last month`. Exact hits are source-backed snippets. Project/time
 cues are candidate navigation until AIppocampus shows a source-backed snippet.
@@ -69,7 +92,8 @@ use the [10-minute public API path](docs/guides/public-api.md#ten-minute-public-
 If you are deciding whether a feature belongs in the low-friction personal path
 or in governed/high-risk opt-in behavior, use
 [Product Profiles](docs/architecture/product-profiles.md).
-Repository checks for maintainers live in [Maintainer Checks](#maintainer-checks).
+Repository checks for maintainers live in
+[Operator And Maintainer Paths](#operator-and-maintainer-paths).
 
 ## AIppocampus For Coding Agents
 
@@ -141,10 +165,12 @@ honest instead of theatrical:
   project opens. Project-local `.aippocampus/` output is explicit compatibility
   or export mode.
 
-There are deeper doors for people who want them: ambient recall, sync, MCP,
-plugin packaging, diagnostics, review surfaces, semantic workers, and research
-experiments. They matter, but they are not the first handshake. The first
-handshake is source found, source reopened, continuity resumed.
+Ambient hooks are close to the front door because they keep continuity from
+collapsing back into manual search. There are still deeper doors for people who
+want them: MCP wiring, sync, plugin packaging, diagnostics, review surfaces,
+semantic workers, and research experiments. They matter, but they should not
+stand in front of the first handshake: source found, source reopened,
+continuity resumed.
 
 ## First Stops
 
@@ -202,227 +228,37 @@ frames, not runtime contracts, but they explain the taste behind the machinery:
 - [Long Garden](docs/research/seeds/README.md) keeps far-future seeds without
   turning them into default product promises or open-issue clutter.
 
-## Install As A Codex Skill
+## Operator And Maintainer Paths
 
-AIppocampus supports Python 3.12 and newer. On macOS, the system Python is often
-too old and may not provide a `python` command. Homebrew Python 3.12 is a safe
-starting point:
+The README stays close to the product path. Operator commands, source-checkout
+setup, plugin packaging, sync, release checks, and benchmark notes live in the
+guides that own those contracts:
 
-```sh
-brew install python@3.12
-export PATH="/opt/homebrew/opt/python@3.12/libexec/bin:/opt/homebrew/bin:$PATH"
-export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
-```
+AIppocampus supports Python 3.12 and newer. On macOS, Homebrew Python 3.12 is
+the documented baseline before running source-checkout verification.
 
-Copy or link the installable skill folder into your Codex skills directory:
+- Install paths and hook setup: [Install Guide](docs/guides/install-guide.md).
+- Supported CLI, MCP, JSON, environment variables, and import policy:
+  [Public API](docs/guides/public-api.md).
+- Safe configuration: [.env.example](.env.example) and
+  [Safe Environment](docs/guides/safe-environment.md).
+- Dependency ownership:
+  [Dependency Contract](docs/guides/dependency-contract.md).
+- MCP, plugin, sync, and object-storage details:
+  [docs/README.md](docs/README.md).
 
-```sh
-mkdir -p "${CODEX_HOME}/skills"
-cp -R ./skills/aippocampus "${CODEX_HOME}/skills/aippocampus"
-```
-
-Then restart Codex or reload skills if your runtime requires it.
-
-The skill entrypoint is [skills/aippocampus/SKILL.md](skills/aippocampus/SKILL.md).
-The public API and stability boundary is
-[docs/guides/public-api.md](docs/guides/public-api.md).
-Safe local configuration starts from
-[.env.example](.env.example) and
-[docs/guides/safe-environment.md](docs/guides/safe-environment.md).
-The runtime and tooling dependency taxonomy lives in
-[docs/guides/dependency-contract.md](docs/guides/dependency-contract.md).
-
-## Use Inside A Codex Workspace
-
-For normal agent-facing use, start with the unified Python facade when the
-package is installed:
+For repository contributors, the dev extra install path is:
 
 ```sh
-aippocampus health --cwd "$PWD"
-aippocampus search "distinctive old phrase or project cue" --cwd "$PWD"
-```
-
-To onboard an existing Codex install so old threads become discoverable in new
-projects:
-
-```sh
-aippocampus onboard --provider codex --all
-```
-
-The provider-aware onboarding wrapper scans local sessions, registers missing
-rollouts, builds clean-source and SQLite/RAG-lite indexes, repairs missing
-artifacts, rebuilds the project and life-wide timeline sidecar, and refreshes
-the cognitive map.
-
-Runtime ownership lives under `aippocampus_runtime/` package modules. The
-public operator path is the `aippocampus` facade; raw checkout maintenance can
-run `python -m aippocampus_runtime.<module>` with
-`skills/aippocampus/scripts` on `PYTHONPATH`. Flat top-level script shims are
-not part of the supported surface. Windows x64 has dated PyInstaller artifact
-smoke evidence, including Claude Code stdio MCP use through
-`aippocampus.exe mcp`; this is not yet a signed release, installer/update UX, or
-macOS/Linux binary claim.
-
-External DeepSeek frontier extraction is explicit:
-
-- `--frontier-mode smoke` tests the route without writing.
-- `--frontier-mode write` adds staging findings when `DEEPSEEK_API_KEY` is
-  available.
-- Smoke/write default to the current `--cwd` project. Pass
-  `--frontier-project *` only for an intentional whole-machine frontier pass.
-
-## Maintainer Checks
-
-For tiny maintainer changes, first classify the work through
-[Maintainer Shipping Lanes](CONTRIBUTING.md#maintainer-shipping-lanes). Public
-claims, release metadata, privacy/security wording, runtime behavior, and API
-stability promises stay in the strict PR lane even when the diff looks small.
-
-The default CI path verifies Ubuntu Python 3.12 and 3.13 with docs health, Ruff,
-mypy, compile checks, and the broad deterministic `pr` test tier. It also runs a
-single Ubuntu 3.12 deterministic benchmark-smoke lane plus a macOS `pr`-tier
-gate on the runner's default TMPDIR as a path-identity guard for the recurring
-`/var` and `/private/var` regression family. Ubuntu green alone is not a
-cross-platform path-identity claim. The broader identity/display/privacy path
-contract lives in [docs/architecture/path-identity.md](docs/architecture/path-identity.md)
-for #404/#589-style macOS, UNC, symlink, and bind-mount regressions. Slower
-benchmark and smoke coverage stays explicit for release and readiness work.
-
-Test tiers are code-owned by `tools/aippocampus/test_tier_manifest.py`. `quick`
-is the small local inner loop; `pr` is the broad deterministic PR lane; `fast`
-is a deprecated compatibility alias for `pr` and should not be used in new docs,
-workflows, or issue acceptance criteria.
-
-From the repository root:
-
-```sh
-python -m venv .venv
-. .venv/bin/activate
-python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
-python tools/aippocampus/docs/check_docs_health.py --json
-python -m ruff check skills plugins tests tools benchmarks benchmark_corpus
-python -m mypy
-python tools/aippocampus/run_tests.py --tier quick
-python tools/aippocampus/run_tests.py --tier pr
-python tools/aippocampus/run_tests.py --tier benchmark-smoke --benchmark-suite-profile public-fast
-python tools/aippocampus/run_coverage.py --tier pr
 ```
 
-Ruff has two intentional profiles: the default hard gate in `pyproject.toml`
-(`E9/F/I/B`) for high-signal syntax, import, Pyflakes, and Bugbear checks; and
-an advisory debt report for broader rule discovery:
-
-```sh
-python -m ruff check skills plugins tests tools benchmarks benchmark_corpus --select ALL --statistics
-```
-
-The advisory report is for trend tracking and rule selection, not a release
-failure by itself.
-
-Use the full tier before making a repository-health or public-readiness claim:
-
-```sh
-python tools/aippocampus/run_tests.py --tier full
-```
-
-Use `python -m pip install -e ".[benchmark]"` as the stable fresh-clone
-benchmark install target. The extra is intentionally empty while deterministic
-benchmark smoke needs only stdlib plus checked-in fixtures; optional live
-provider tracks remain explicit operator setup, not normal contributor deps.
-
-Use `--tier benchmark-smoke --benchmark-suite-profile public-fast` for the
-fresh-clone suite-level smoke plus curated deterministic benchmark mirror PR
-lane, `--tier benchmark` for all benchmark mirror tests, and `--tier slow` when
-touching smoke tools, plugin packaging, onboarding, object sync, or prompt-hook
-integration behavior.
-
-Runtime/package-owner or path-identity release slices should still run the
-manual macOS install smoke from the release checklist before making public
-readiness claims; the PR macOS gate is a regression guard, not a full
-install/distribution proof.
-
-The Stage 0-5 public-readiness smoke is broader than a fresh-clone install
-check. Some gates inspect the local AIppocampus registry under `$CODEX_HOME`; on
-a new machine without enough registered clean source, those gates may report
-diagnostic-only coverage rather than a readiness pass.
-
-## Agent-Host And Plugin Preview
-
-The local MCP server is read-mostly by default. It exposes clean-source and
-registry-backed tools such as `search_memory`, `recall_context`,
-`recall_deepen`, `latest_reply`, `get_turn_context`, `list_threads`,
-`register_thread`, `sync_status`, and `memory_health`:
-
-This is for agent-host wiring and plugin/operator checks. It is not required
-before the Quick Start first-recall path returns value.
-
-```sh
-aippocampus mcp list-tools
-```
-
-The packaged facade exposes the same tool catalog:
-
-```sh
-uvx aippocampus mcp list-tools
-```
-
-The repo also carries an Apache-2.0 Codex plugin source package under
-`plugins/aippocampus/`. Build a local distributable directory with:
-
-```sh
-python ./plugins/aippocampus/build_plugin_package.py --repo-root . --json
-```
-
-The plugin bundles the skill and MCP config. It does not silently enable prompt
-or lifecycle hooks; run hook installers explicitly after reviewing the privacy
-and external-model boundary.
-
-The root [server.json](server.json) is the conservative MCP Registry metadata
-for the local stdio server. Treat registry availability as claimable only after
-`tools/aippocampus/release/check_agent_discovery_release.py --fail-on-not-ready`
-passes against the public package and registry.
-
-## Sync Bundles
-
-The first sync backend is an explicit local folder. The HTTP object-storage
-adapter reuses the same manifest over object `PUT`/`GET`. Both copy clean
-source, manifests, registry rows, and hook-safe sidecars. Raw rollouts stay
-excluded from plaintext sync; normal raw rollout transfer requires encrypted
-sync.
-
-```sh
-aippocampus sync status --sync-dir <folder> --json
-aippocampus sync push --sync-dir <folder> --json
-aippocampus sync pull --sync-dir <folder> --json
-aippocampus sync repair --sync-dir <folder> --json
-```
-
-```sh
-aippocampus object-sync status --object-store-url <url> --object-prefix <prefix> --json
-aippocampus object-sync push --object-store-url <url> --object-prefix <prefix> --json
-aippocampus object-sync pull --object-store-url <url> --object-prefix <prefix> --json
-aippocampus object-sync repair --object-store-url <url> --object-prefix <prefix> --json
-```
-
-S3-compatible providers can be configured with `AIPPOCAMPUS_OBJECT_PROVIDER`
-(`s3`, `r2`, or `gcs-xml`) plus bucket, region/account id, and HMAC credentials.
-See [object-storage-providers.md](docs/guides/object-storage-providers.md) for
-provider-specific setup notes.
-
-Encrypted sync uses the external `age` CLI and writes `encrypted-sync/`
-ciphertext objects. Use a new folder or object prefix for the first encrypted
-push:
-
-```sh
-aippocampus sync push --sync-dir <folder> --encrypt --recipient <age-recipient> --json
-aippocampus sync pull --sync-dir <folder> --require-encrypted --identity-file <age-identity> --json
-aippocampus object-sync push --object-store-url <url> --object-prefix <prefix> --encrypt --recipient <age-recipient> --json
-aippocampus object-sync pull --object-store-url <url> --object-prefix <prefix> --require-encrypted --identity-file <age-identity> --json
-```
-
-Pull preserves local conflicting files and writes incoming copies under
-`.sync-conflicts/` instead of overwriting.
+Public claims still need the maintainer lanes in
+[CONTRIBUTING.md](CONTRIBUTING.md#maintainer-shipping-lanes). The default CI
+checks Ubuntu Python lanes and a macOS default TMPDIR path-identity gate in the
+`pr` tier; Ubuntu green alone is not a cross-platform path-identity claim. The
+broader boundary lives in
+[docs/architecture/path-identity.md](docs/architecture/path-identity.md).
 
 ## Privacy Boundary
 
