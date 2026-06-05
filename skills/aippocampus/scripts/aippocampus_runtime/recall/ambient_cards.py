@@ -13,6 +13,7 @@ from typing import Any
 
 from aippocampus_runtime.core import compact_text, sanitize_external_model_text
 from aippocampus_runtime.recall.ambient_policy import policy_payload_for_working_memory
+from aippocampus_runtime.recall.authority import with_authority_fields
 from aippocampus_runtime.recall.fresh_thread_scent import fresh_thread_scent_packet_from_decision
 from aippocampus_runtime.recall.nudge_policy import safe_nudge_topic
 
@@ -183,27 +184,35 @@ def _evidence_card(item: dict[str, Any], *, deep_archival: bool = False) -> dict
     key_line = _safe_text(item.get("snippet"), 220)
     ref = _clean_source_ref(item)
     visibility = DEEP_ARCHIVAL_RECALL if deep_archival and ref else SOURCE_BACKED_RECALL_CARD
-    return with_card_provenance({
-        "card_id": _stable_id([EVIDENCE, theme, ref.get("thread_key"), ref.get("line"), key_line]),
-        "theme": theme,
-        "resonance": "high",
-        "support_level": EVIDENCE,
-        "visibility": visibility,
-        "suggested_use": (
-            "Open clean source before using exact wording; raw audit is only for disputed or missing clean-source details."
-            if visibility == DEEP_ARCHIVAL_RECALL
-            else "Use this only when the prior source changes the current answer or needs grounding."
-        ),
-        "nudge": "",
-        "key_line": key_line,
-        "matched_terms": _clean_terms(item.get("matched_terms") or []),
-        "source_refs": [ref] if ref else [],
-        "expand_if": (
-            "Open clean source for the exact line; use raw audit only if clean source cannot settle the detail."
-            if visibility == DEEP_ARCHIVAL_RECALL
-            else "User asks for original wording, source details, or a disputed memory."
-        ),
-    }, SOURCE_BACKED_REOPEN)
+    return with_authority_fields(
+        with_card_provenance(
+            {
+                "card_id": _stable_id(
+                    [EVIDENCE, theme, ref.get("thread_key"), ref.get("line"), key_line]
+                ),
+                "theme": theme,
+                "resonance": "high",
+                "support_level": EVIDENCE,
+                "visibility": visibility,
+                "suggested_use": (
+                    "Use this bounded source-backed evidence when relevant; reopen clean source only for disputed exact wording or wider context."
+                    if visibility == DEEP_ARCHIVAL_RECALL
+                    else "Use this bounded source-backed evidence when it changes the current answer or needs grounding."
+                ),
+                "nudge": "",
+                "key_line": key_line,
+                "matched_terms": _clean_terms(item.get("matched_terms") or []),
+                "source_refs": [ref] if ref else [],
+                "expand_if": (
+                    "Reopen clean source for disputed exact wording or missing wider context."
+                    if visibility == DEEP_ARCHIVAL_RECALL
+                    else "User asks for original wording, source details, or a disputed memory."
+                ),
+            },
+            SOURCE_BACKED_REOPEN,
+            source_reopen_required=False,
+        )
+    )
 
 
 def _source_reopen_messages(payload: dict[str, Any]) -> list[dict[str, Any]]:

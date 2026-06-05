@@ -188,16 +188,26 @@ def ambient_debug_summary(result: dict[str, Any]) -> dict[str, Any] | None:
     cards = [card for card in ambient.get("cards", []) if isinstance(card, dict)]
     validation_statuses: dict[str, int] = {}
     visibility_counts: dict[str, int] = {}
+    authority_counts: dict[str, int] = {}
     source_reopen_required_count = 0
+    reopen_required_before_claim_count = 0
+    reopen_recommended_for_exact_quote_count = 0
     for card in cards[:8]:
         visibility = str(card.get("visibility") or "")
         if visibility:
             visibility_counts[visibility] = visibility_counts.get(visibility, 0) + 1
+        authority_state = str(card.get("authority_state") or "")
+        if authority_state:
+            authority_counts[authority_state] = authority_counts.get(authority_state, 0) + 1
         status = str((card.get("source_validation") or {}).get("status") or "")
         if status:
             validation_statuses[status] = validation_statuses.get(status, 0) + 1
         if card.get("source_reopen_required"):
             source_reopen_required_count += 1
+        if card.get("reopen_required_before_claim"):
+            reopen_required_before_claim_count += 1
+        if card.get("reopen_recommended_for_exact_quote"):
+            reopen_recommended_for_exact_quote_count += 1
     raw_cache_status = ambient.get("cache_status")
     cache_status: dict[str, Any] = raw_cache_status if isinstance(raw_cache_status, dict) else {}
     raw_warm_background = ambient.get("warm_background")
@@ -223,6 +233,9 @@ def ambient_debug_summary(result: dict[str, Any]) -> dict[str, Any] | None:
         "visibility_counts": visibility_counts,
         "source_validation_statuses": validation_statuses,
         "source_reopen_required_count": source_reopen_required_count,
+        "reopen_required_before_claim_count": reopen_required_before_claim_count,
+        "reopen_recommended_for_exact_quote_count": reopen_recommended_for_exact_quote_count,
+        "authority_counts": authority_counts,
         "provenance_counts": count_cards_by_field(cards, "provenance_class"),
         "support_level_counts": count_cards_by_field(cards, "support_level"),
     }
@@ -410,7 +423,7 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
     lines: list[str] = []
     if decision == "evidence":
         lines.append(
-            "Ambient recall evidence (aippocampus). Treat as retrieved hints, not automatic truth:"
+            "Ambient recall evidence (aippocampus). Use bounded source-backed evidence when relevant; reopen only for disputed exact wording or wider context:"
         )
         for item in result.get("evidence") or []:
             phase = f", {item.get('phase')}" if item.get("phase") else ""
@@ -419,9 +432,7 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
                 f"- {item.get('title')} line {item.get('line')}{phase}{turn}: "
                 f"{compact_text(str(item.get('snippet') or ''), 240)}"
             )
-        lines.append(
-            "Use these only when relevant; search the source thread before relying on exact wording."
-        )
+        lines.append("Do not paste snippets verbatim; exact quotes or broader claims should reopen source.")
     else:
         lines.append(
             "Ambient recall scent (aippocampus). Possible related old-thread memory, not evidence:"
