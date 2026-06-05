@@ -233,15 +233,18 @@ class LocomoPublicUsersBenchmarkTests(unittest.TestCase):
         self.assertIn("--predictions", summary)
         self.assertIn("not system performance", summary)
 
-    def test_missing_dataset_returns_public_safe_diagnostic(self) -> None:
+    def test_missing_dataset_returns_public_safe_skip_diagnostic(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             missing = Path(tmp) / "missing.json"
 
             payload = benchmark.run_benchmark(dataset_path=missing)
 
-        self.assertEqual(payload["status"], "dataset_unavailable")
-        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["status"], "skipped_missing_dataset")
+        self.assertTrue(payload["ok"], payload)
+        self.assertEqual(payload["quality_gate_status"], "not_scored")
+        self.assertNotIn("quality_gate_ok", payload)
         self.assertEqual(payload["cases"], [])
+        self.assertIn("public_longitudinal_user_score", payload["cannot_claim"])
         dumped = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn(str(REPO_ROOT), dumped)
 

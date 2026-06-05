@@ -332,11 +332,10 @@ def unavailable_payload(
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_locomo_answer_usefulness_benchmark",
         "generated_at": locomo.now_utc(),
-        "status": "dataset_unavailable",
-        "ok": False,
-        "quality_gate_ok": False,
+        "status": "skipped_missing_dataset",
+        "ok": True,
         "quality_gate_status": "not_scored",
-        "report_generation_ok": False,
+        "report_generation_ok": True,
         "artifact_generation_ok": not template_requested,
         "artifact_generation_status": "skipped_missing_dataset"
         if template_requested

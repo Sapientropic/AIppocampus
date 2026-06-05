@@ -530,9 +530,9 @@ def unavailable_payload(dataset_path: Path | str, started: float) -> dict[str, A
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_locomo_public_users_benchmark",
         "generated_at": now_utc(),
-        "status": "dataset_unavailable",
-        "ok": False,
-        "quality_gate_ok": False,
+        "status": "skipped_missing_dataset",
+        "ok": True,
+        "quality_gate_status": "not_scored",
         "config": {
             "dataset": public_path_label(dataset_path),
             "live_llm": False,
@@ -695,7 +695,7 @@ def run_benchmark(
 
 def print_human_summary(payload: dict[str, Any]) -> None:
     print("AIppocampus LoCoMo public longitudinal-users control")
-    if payload.get("status") == "dataset_unavailable":
+    if payload.get("status") == "skipped_missing_dataset":
         print(f"- status: {payload['status']}")
         print(f"- next: {payload['next_step']}")
         return
