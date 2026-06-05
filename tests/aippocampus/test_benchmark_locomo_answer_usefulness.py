@@ -198,7 +198,7 @@ class LocomoAnswerUsefulnessBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["artifacts"]["answer_template_row_count"], 2)
         self.assertEqual(template_line_count, 2)
 
-    def test_missing_dataset_skips_requested_template_without_quality_gate_score(self) -> None:
+    def test_missing_dataset_returns_skip_payload_without_writing_template(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             dataset = Path(tmp) / "missing-locomo10.json"
             template = Path(tmp) / "answers-template.jsonl"
@@ -209,10 +209,11 @@ class LocomoAnswerUsefulnessBenchmarkTests(unittest.TestCase):
             )
             template_exists = template.exists()
 
-        self.assertFalse(payload["ok"], payload)
-        self.assertFalse(payload["quality_gate_ok"], payload)
+        self.assertEqual(payload["status"], "skipped_missing_dataset")
+        self.assertTrue(payload["ok"], payload)
         self.assertEqual(payload["quality_gate_status"], "not_scored")
-        self.assertFalse(payload["report_generation_ok"], payload)
+        self.assertNotIn("quality_gate_ok", payload)
+        self.assertTrue(payload["report_generation_ok"], payload)
         self.assertFalse(payload["artifact_generation_ok"], payload)
         self.assertEqual(payload["artifact_generation_status"], "skipped_missing_dataset")
         self.assertFalse(payload["artifacts"]["answer_template_written"], payload)

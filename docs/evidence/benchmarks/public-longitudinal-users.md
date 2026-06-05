@@ -112,6 +112,12 @@ ids, and question/answer hashes, but no dialogue text, question text, or answer
 text. The current local snapshot has 10 users, 272 sessions, 5,882 dialogue
 turns, 1,986 QA cases, and 1,973 evidence-linked cases.
 
+When the local LoCoMo file is absent, the LoCoMo retrieval and answer-
+usefulness runners return `status=skipped_missing_dataset` with `ok=true` and
+`quality_gate_status=not_scored`. That skip payload means the diagnostic/report
+contract was generated successfully; it is not a retrieval or answer-quality
+score.
+
 #400 adds a separate LoCoMo answer-usefulness prototype on top of that
 retrieval layer:
 
