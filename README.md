@@ -81,6 +81,18 @@ warm, subconscious, or Dream-style routes remain separate opt-in surfaces and
 must not be treated as source-backed evidence until the original source is
 reopened.
 
+The short readiness ladder is:
+
+- Source search ready: onboarding and `search` can find source-backed snippets.
+- Ambient hooks ready: prompt/lifecycle hooks can notice and refresh continuity.
+- Active recall ready: MCP/progressive recall is wired for agent source reopen.
+- Semantic/Dream ready: provider-backed background work is configured and
+  visible to the process that will run it.
+
+`aippocampus update status` prints those first-run readiness labels so users can
+see whether they are in manual source-search mode, ambient continuity mode, or a
+deeper opt-in route.
+
 Good first queries are an exact phrase, a project cue, or a time cue such as
 `recent` / `last month`. Exact hits are source-backed snippets. Project/time
 cues are candidate navigation until AIppocampus shows a source-backed snippet.

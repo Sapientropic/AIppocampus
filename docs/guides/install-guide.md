@@ -121,6 +121,31 @@ aippocampus hooks lifecycle uninstall
 For the detailed runtime contract, see
 [`../../skills/aippocampus/references/ambient-hooks.md`](../../skills/aippocampus/references/ambient-hooks.md).
 
+## First-Run Capability Ladder
+
+Use `aippocampus update status` as the canonical readiness card. It is not a
+second source of truth; it projects existing CLI, hook, MCP, and provider checks
+into labels a new user can understand. This avoids the
+[#201](https://github.com/Sapientropic/AIppocampus/issues/201)-style failure
+mode where source exists and manual search works, but foreground continuity
+still feels like grep because hooks or provider visibility are not ready.
+
+| Label | What works | What does not work yet | Next check |
+| --- | --- | --- | --- |
+| `source_search_ready` | Onboarding plus clean-source search after consent. | Automatic prompt-time recall is not implied. | `aippocampus onboard --provider codex --all` |
+| `active_recall_ready` | MCP/progressive recall can let an agent reopen source. | It does not install prompt/lifecycle hooks. | `aippocampus mcp list-tools` |
+| `ambient_hooks_ready` | Prompt/lifecycle hooks can emit recall scents and refresh clean source/indexes. | Semantic lift still needs provider visibility. | `aippocampus hooks prompt status --last` |
+| `semantic_provider_ready` | Semantic lift, warm scouts, and provider-backed jobs can call the configured route. | It does not prove a previously started hook process can see the key. | `aippocampus doctor provider --json` |
+| `hook_provider_ready` | A restarted/future hook process is expected to inherit the provider environment. | A key visible in one shell is not proof for an already-running Codex Desktop process. | restart Codex, then rerun `aippocampus doctor provider --json` |
+| `dream_or_subconscious_ready` | Provider-backed background semantic, subconscious, and Dream-style work can run. | No provider means these routes stay disabled or diagnostic-only today. | `aippocampus doctor provider --json` |
+| `agent_fallback_ready` | Future fallback mode can operate without an external LLM key. | This is planned in #752, not current default behavior. | track #752 |
+
+No key is required for basic source-backed search. Missing, disabled, or
+invisible provider state should be shown as a capability label, not as a claim
+that source search is broken. The doctor reports variable names and visibility
+booleans only; it must not print key values, raw prompts, local paths, source
+snippets, or registry rows.
+
 ## Updating AIppocampus
 
 Run update status when AIppocampus feels installed but not alive yet:

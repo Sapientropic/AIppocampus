@@ -124,6 +124,88 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertNotIn("plugin", summary["magic_blockers"])
         self.assertNotIn("llm", summary["optional_surfaces"])
 
+    def test_status_reports_first_run_capability_ladder(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            codex_home = root / "codex-home"
+            hooks_json = codex_home / "hooks.json"
+            update_cli.install_prompt.install(hooks_json)
+            update_cli.install_lifecycle.install(hooks_json)
+
+            code, payload = run_update(
+                "status",
+                "--repo-root",
+                str(REPO_ROOT),
+                "--codex-home",
+                str(codex_home),
+                "--skill-target",
+                str(REPO_ROOT / "skills" / "aippocampus"),
+                "--hooks-json",
+                str(hooks_json),
+                "--no-child-check",
+            )
+
+        self.assertEqual(code, 0)
+        ladder = payload["summary"]["capability_ladder"]
+        by_id = {item["id"]: item for item in ladder}
+
+        self.assertEqual(
+            list(by_id),
+            [
+                "source_search_ready",
+                "active_recall_ready",
+                "ambient_hooks_ready",
+                "semantic_provider_ready",
+                "hook_provider_ready",
+                "dream_or_subconscious_ready",
+                "agent_fallback_ready",
+            ],
+        )
+        self.assertEqual(by_id["source_search_ready"]["status"], "ready")
+        self.assertEqual(by_id["active_recall_ready"]["status"], "ready")
+        self.assertEqual(by_id["ambient_hooks_ready"]["status"], "ready")
+        self.assertEqual(
+            by_id["semantic_provider_ready"]["status"], "missing_provider_env_var"
+        )
+        self.assertEqual(
+            by_id["hook_provider_ready"]["status"], "missing_provider_env_var"
+        )
+        self.assertEqual(
+            by_id["dream_or_subconscious_ready"]["status"], "needs_semantic_provider"
+        )
+        self.assertEqual(by_id["agent_fallback_ready"]["status"], "planned_issue_752")
+
+    def test_status_does_not_claim_hook_provider_visibility_when_child_check_skipped(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env({"DEEPSEEK_API_KEY": "test"}):
+            root = Path(tmp)
+            codex_home = root / "codex-home"
+            hooks_json = codex_home / "hooks.json"
+            update_cli.install_prompt.install(hooks_json)
+            update_cli.install_lifecycle.install(hooks_json)
+
+            code, payload = run_update(
+                "status",
+                "--repo-root",
+                str(REPO_ROOT),
+                "--codex-home",
+                str(codex_home),
+                "--skill-target",
+                str(REPO_ROOT / "skills" / "aippocampus"),
+                "--hooks-json",
+                str(hooks_json),
+                "--no-child-check",
+            )
+
+        self.assertEqual(code, 0)
+        by_id = {item["id"]: item for item in payload["summary"]["capability_ladder"]}
+        self.assertEqual(by_id["semantic_provider_ready"]["status"], "ready")
+        self.assertEqual(
+            by_id["hook_provider_ready"]["status"], "child_process_not_checked"
+        )
+        self.assertFalse(by_id["hook_provider_ready"]["ready"])
+
     def test_status_text_leads_with_core_and_magic_not_generic_needs_action(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():
             root = Path(tmp)
@@ -157,6 +239,11 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertIn("Magic ready: false", output)
         self.assertIn("Magic blockers: llm", output)
         self.assertIn("Optional surfaces: plugin", output)
+        self.assertIn("First-run readiness:", output)
+        self.assertIn("source_search_ready: ready", output)
+        self.assertIn("ambient_hooks_ready: ready", output)
+        self.assertIn("semantic_provider_ready: missing_provider_env_var", output)
+        self.assertIn("agent_fallback_ready: planned_issue_752", output)
         self.assertNotIn("Still needs action: plugin, llm", output)
 
     def test_skill_apply_updates_stale_copy_and_excludes_distribution_noise(self) -> None:
