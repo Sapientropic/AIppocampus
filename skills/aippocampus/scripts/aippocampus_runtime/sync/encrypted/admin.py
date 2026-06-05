@@ -90,6 +90,21 @@ def public_token(value: Any, *, fallback: str = "", max_length: int = 96) -> str
     return safe
 
 
+def public_key_provider(value: Any, *, fallback: str = "") -> str:
+    """Project only allowlisted key-provider enum values through public CLI JSON.
+
+    Generic token redaction intentionally rejects strings containing words like
+    "secret". The reserved provider name `linux-secret-service` is a public enum,
+    not credential material, so it needs an explicit allowlist path instead of a
+    broader relaxation of credential-adjacent filtering.
+    """
+
+    text = str(value or "").strip().casefold()
+    if text in encrypted_sync_keys.SUPPORTED_KEY_PROVIDERS:
+        return text
+    return public_token(value, fallback=fallback)
+
+
 def public_recipient(value: Any) -> str:
     text = str(value or "").strip()
     lowered = text.casefold()
@@ -131,12 +146,14 @@ def public_admin_result(result: dict[str, Any]) -> dict[str, Any]:
         "recipient_match",
         "status",
         "reason",
-        "active_key_provider",
         "identity_location",
-        "os_credential_store",
         "secret_material",
     ):
         value = public_token(result.get(key), fallback="")
+        if value:
+            public[key] = value
+    for key in ("active_key_provider", "os_credential_store"):
+        value = public_key_provider(result.get(key), fallback="")
         if value:
             public[key] = value
     for key in (
@@ -174,9 +191,11 @@ def public_admin_result(result: dict[str, Any]) -> dict[str, Any]:
         }
     supported = result.get("supported_key_providers")
     if isinstance(supported, list):
-        public["supported_key_providers"] = [
-            public_token(item, fallback="") for item in supported if public_token(item, fallback="")
-        ]
+        public["supported_key_providers"] = []
+        for item in supported:
+            provider = public_key_provider(item, fallback="")
+            if provider:
+                public["supported_key_providers"].append(provider)
     public["output_boundary"] = "credential-adjacent details omitted from CLI output"
     return public
 

@@ -494,6 +494,64 @@ raise SystemExit(0)
         self.assertNotIn(str(self.registry), status_proc.stdout)
         self.assertNotIn("AGE-SECRET-KEY", status_proc.stdout)
 
+    def test_encrypted_sync_admin_cli_preserves_allowlisted_secret_service_provider_enum(
+        self,
+    ) -> None:
+        configure_proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.sync.encrypted.admin",
+                "key",
+                "provider-configure",
+                "--registry-dir",
+                str(self.registry),
+                "--provider",
+                "linux-secret-service",
+                "--json",
+            ],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        status_proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.sync.encrypted.admin",
+                "key",
+                "provider-status",
+                "--registry-dir",
+                str(self.registry),
+                "--json",
+            ],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+        self.assertEqual(configure_proc.returncode, 0, configure_proc.stderr)
+        configured = json.loads(configure_proc.stdout)
+        self.assertIn("active_key_provider", configured)
+        self.assertEqual(configured["active_key_provider"], "linux-secret-service")
+        self.assertIn("linux-secret-service", configured["supported_key_providers"])
+        self.assertEqual(status_proc.returncode, 1, status_proc.stdout)
+        status = json.loads(status_proc.stdout)
+        self.assertIn("active_key_provider", status)
+        self.assertEqual(status["active_key_provider"], "linux-secret-service")
+        self.assertIn("os_credential_store", status)
+        self.assertEqual(status["os_credential_store"], "linux-secret-service")
+        self.assertIn("linux-secret-service", status["supported_key_providers"])
+        self.assertEqual(status["issues"][0]["code"], "key_provider_unavailable")
+        self.assertFalse(status["fallback_to_file_identity"])
+        self.assertFalse(status["fallback_attempted"])
+        self.assertNotIn("secret_material", configured)
+        self.assertNotIn("secret_material", status)
+        self.assertNotIn(str(self.registry), configure_proc.stdout)
+        self.assertNotIn(str(self.registry), status_proc.stdout)
+
     def test_encrypted_local_push_status_repair_pull_round_trip(self) -> None:
         push = encrypted_sync_bundle.push_encrypted_sync_bundle(
             self.registry,

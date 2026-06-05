@@ -95,7 +95,10 @@ provider names `macos-keychain`, `windows-credential-manager`, and
 `linux-secret-service` can be configured and reported, but until real adapters
 land they return `key_provider_unavailable`, `fallback_attempted=false`, and
 `fallback_to_file_identity=false`. This is a fail-closed diagnostic contract,
-not evidence that OS credential stores are integrated or unlocked.
+not evidence that OS credential stores are integrated or unlocked. Public CLI
+JSON may report these allowlisted provider enum values, including
+`linux-secret-service`, but still omits identity paths, private keys, and
+provider secret material.
 
 ## Provider Metadata Evidence
 
