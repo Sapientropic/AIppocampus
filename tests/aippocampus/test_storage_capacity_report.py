@@ -95,6 +95,12 @@ class StorageCapacityReportTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
+    def _write_index_generation(self, generation_id: str, size: int) -> Path:
+        generation_dir = self.index / "generations" / generation_id
+        generation_dir.mkdir(parents=True)
+        (generation_dir / "source_index.sqlite").write_bytes(b"g" * size)
+        return generation_dir
+
     def test_report_counts_clean_source_generated_indexes_and_fanout(self) -> None:
         report = storage_capacity_report.build_report(self.registry, top=5)
 
@@ -168,6 +174,48 @@ class StorageCapacityReportTests(unittest.TestCase):
         self.assertNotIn("private phrase that must not leak", payload)
         self.assertNotIn(str(self.root), payload)
         self.assertIn("session-one", payload)
+
+    def test_report_exposes_generation_gc_metrics_without_absolute_paths(self) -> None:
+        current = self._write_index_generation("gen_20260605T010000_current", 41)
+        last_known_good = self._write_index_generation("gen_20260605T005900_lkg", 37)
+        old = self._write_index_generation("gen_20260605T004500_old", 29)
+        (self.index / "source_index.pointer.json").write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_sqlite_index_pointer",
+                    "current_generation": current.name,
+                    "last_known_good_generation": last_known_good.name,
+                    "current": f"generations/{current.name}/source_index.sqlite",
+                    "last_known_good": f"generations/{last_known_good.name}/source_index.sqlite",
+                    "stable": "source_index.sqlite",
+                    "compatibility_path": "source_index.sqlite",
+                    "publish_latency_ms": 12.25,
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        report = storage_capacity_report.build_report(self.registry, top=5)
+        payload = json.dumps(report, ensure_ascii=False)
+        generations = report["top_threads"][0]["index_generations"]
+
+        self.assertTrue(generations["pointer_exists"])
+        self.assertEqual(generations["status"], "ok")
+        self.assertEqual(generations["current_generation"], current.name)
+        self.assertEqual(generations["last_known_good_generation"], last_known_good.name)
+        self.assertEqual(generations["generation_count"], 3)
+        self.assertEqual(generations["old_generation_count"], 1)
+        self.assertEqual(generations["old_generation_bytes"], 29)
+        self.assertEqual(generations["generation_gc_candidate_count"], 1)
+        self.assertEqual(generations["generation_gc_candidate_bytes"], 29)
+        self.assertEqual(generations["publish_latency_ms"], 12.25)
+        self.assertGreaterEqual(generations["pointer_load_ms"], 0.0)
+        self.assertEqual(
+            generations["generation_gc_candidates"][0]["relative_path"],
+            f"threads/session-one/index/generations/{old.name}",
+        )
+        self.assertNotIn(str(self.root), payload)
 
 
 if __name__ == "__main__":

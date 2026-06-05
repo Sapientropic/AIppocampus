@@ -99,10 +99,13 @@ Completed foundation:
 - `aippocampus storage gc --dry-run` starts the storage governance bridge: it
   reports protected source bytes, reclaimable rebuildable/review bytes, and
   candidate safety preconditions from capacity data plus existing retention JSON
-  without reading message bodies or deleting files. `--apply --class
-  rebuildable` now has a narrow path-level retention-report v1 for the main
-  `source_index.sqlite` cache, with source/ref/lease/active-thread/pointer
-  checks and an eviction manifest; capacity aggregates and broader cache classes
+  without reading message bodies or deleting files. Capacity and health reports
+  now expose main-index generation pointer status, current/LKG ids, old
+  generation bytes, pointer load time, publish latency, and plan-only old
+  generation GC candidates. `--apply --class rebuildable` still has a narrow
+  path-level retention-report v1 for the main `source_index.sqlite` cache, with
+  source/ref/lease/active-thread/pointer checks and an eviction manifest;
+  capacity aggregates, old generation directories, and broader cache classes
   remain plan-only. If this bridge becomes the first Rust deterministic-core
   slice, it must follow the contract-replay gate in
   `docs/architecture/rust-deterministic-core.md`.
@@ -199,10 +202,12 @@ Completed foundation:
      index rebuilds now have a single-writer lease and last-known-good recovery.
      Main indexes now have generation pointer publishing for Windows
      locked-file fallback while preserving `source_index.sqlite`
-     compatibility. Segment generation directories, segment pointers, and
-     generation-aware storage GC remain later #581 slices. Default sync keeps
-     generated SQLite and pointer files out of the portable source set while
-     still repairing target-local rebuilt cache locators.
+     compatibility. Main-index generation-aware health/capacity reporting and
+     plan-only old generation GC candidates are implemented; actual generation
+     cleanup still waits for a reader-pin/TTL contract. Segment generation
+     directories and segment pointers remain later #581 slices. Default sync
+     keeps generated SQLite and pointer files out of the portable source set
+     while still repairing target-local rebuilt cache locators.
 
 ## Near-term implementation order
 
@@ -257,10 +262,12 @@ Completed foundation:
    single-writer discipline, staged
    publish, and last-known-good restoration. Main indexes now use a
    `source_index.pointer.json` current/LKG generation pointer and stable SQLite
-   backup refresh. Segment generation directories and generation-aware GC are
-   still later slices. Default sync excludes generated SQLite caches and
-   pointer files; import/export reports pointer-resolved current SQLite for
-   explicit bundles. Broader physical multi-device stress remains a
+   backup refresh. Capacity/health now report main-index generation GC
+   candidates without deleting them; actual cleanup still waits for
+   reader-pin/TTL semantics, and segment generation directories remain a later
+   slice. Default sync excludes generated SQLite caches and pointer files;
+   import/export reports pointer-resolved current SQLite for explicit bundles.
+   Broader physical multi-device stress remains a
    release-readiness exercise, not a `quick` or `pr` tier claim.
 
 ## Cross-references

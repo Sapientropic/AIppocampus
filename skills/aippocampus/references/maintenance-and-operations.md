@@ -56,6 +56,12 @@ The publish fast path does not delete generation directories until a
 reader-pin/TTL-aware storage-governance contract exists; deleting an old
 generation just because it is not current or last-known-good can break a
 foreground reader that already resolved that generation.
+`aippocampus_runtime.artifacts.publish.index_generation_diagnostics` is the
+shared read-only report helper for this boundary. Health and capacity reports
+use it to expose pointer status, fallback used, current/LKG generation ids,
+old generation bytes, pointer load time, publish latency, and plan-only old
+generation GC candidates. Those candidates are rebuildable-cache evidence, not
+permission to delete a generation directory.
 
 `aippocampus_runtime.ops.maintenance`, `aippocampus_runtime.hooks.lifecycle`, and
 `aippocampus_runtime.vault.sync` should keep delegating SQLite writes to the index builders. If a
@@ -192,8 +198,11 @@ cache only when a retention report supplies path-level evidence. It checks
 raw/archive source evidence, anchor or registry refs, live writer/export
 leases, active-thread opt-in, and last-known-good pointer state, then writes an
 eviction manifest under `index/evictions/` with rebuild instructions. Capacity
-aggregate candidates, segment indexes, Graphify corpus caches, review
-artifacts, and source files remain plan-only/manual.
+aggregate candidates, old source-index generation directories, segment indexes,
+Graphify corpus caches, review artifacts, and source files remain plan-only/manual.
+Old generation candidates intentionally carry a blocked
+`reader_pin_or_ttl_contract` precondition until cleanup can prove no foreground
+reader still pins that generation.
 
 Codex Desktop's own thread archive is a different mechanism: the app may move
 raw rollout JSONL files from `$CODEX_HOME/sessions/` into

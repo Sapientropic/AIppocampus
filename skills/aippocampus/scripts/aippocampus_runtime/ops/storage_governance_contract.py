@@ -56,6 +56,127 @@ def status(status_name: str, *, evidence: str, requirement: str) -> dict[str, st
     }
 
 
+def capacity_preconditions(thread: dict[str, Any], *, include_active: bool) -> dict[str, Any]:
+    clean_bytes = int(thread.get("canonical_clean_source_bytes") or 0)
+    raw_bytes = int(thread.get("raw_audit_source_bytes") or 0)
+    source_ok = clean_bytes > 0 or raw_bytes > 0
+    return {
+        "raw_or_clean_source": status(
+            "passed" if source_ok else "blocked",
+            evidence=(
+                f"capacity thread clean={clean_bytes} raw={raw_bytes}"
+                if source_ok
+                else "capacity report has no raw or clean-source bytes for this thread"
+            ),
+            requirement="Exact raw or clean source must remain available before cache eviction.",
+        ),
+        "clean_source_manifest": status(
+            "passed" if clean_bytes > 0 else "needs_apply_check",
+            evidence=(
+                f"capacity thread canonical_clean_source_bytes={clean_bytes}"
+                if clean_bytes > 0
+                else "capacity report cannot prove clean-source manifest bytes"
+            ),
+            requirement="Clean-source manifest must exist for caches derived from clean source.",
+        ),
+        "active_thread_exclusion": status(
+            "needs_apply_check" if include_active else "blocked_by_default",
+            evidence=(
+                "--include-active was passed; apply mode must still prove the thread is safe."
+                if include_active
+                else "Active-thread matching requires apply-time thread identity checks."
+            ),
+            requirement="Do not evict the current active thread unless explicitly requested.",
+        ),
+        "writer_or_export_lease": status(
+            "needs_apply_check",
+            evidence="Capacity report does not inspect live leases.",
+            requirement="No active writer/build/export lease may own the target path.",
+        ),
+    }
+
+
+def generation_gc_candidates_from_capacity_thread(
+    thread: dict[str, Any],
+    *,
+    include_active: bool,
+) -> list[dict[str, Any]]:
+    generations = thread.get("index_generations") or {}
+    if not isinstance(generations, dict):
+        return []
+
+    preconditions = capacity_preconditions(thread, include_active=include_active)
+    preconditions["reader_pin_or_ttl_contract"] = status(
+        "blocked",
+        evidence=(
+            "Old source-index generations are only reportable until reader-pin/TTL cleanup "
+            "is implemented."
+        ),
+        requirement="Do not delete generation directories while foreground readers may still pin them.",
+    )
+    preconditions["last_known_good_pointer"] = status(
+        "passed",
+        evidence=(
+            "Candidate excludes current_generation and last_known_good_generation from "
+            "source_index.pointer.json."
+        ),
+        requirement="Generation cleanup must preserve current and last-known-good pointer targets.",
+    )
+
+    candidates: list[dict[str, Any]] = []
+    for item in generations.get("generation_gc_candidates") or []:
+        if not isinstance(item, dict):
+            continue
+        generation_id = str(item.get("generation") or "generation")
+        size = int(item.get("bytes") or 0)
+        if size <= 0:
+            continue
+        relative_path = item.get("relative_path")
+        path: dict[str, Any] = {
+            "path_known": bool(relative_path),
+            "relative_path": relative_path,
+            "relative_to": "registry",
+        }
+        if item.get("path"):
+            path["path"] = item["path"]
+        candidates.append(
+            {
+                "id": f"capacity:{thread.get('thread_dir')}:old-index-generation:{generation_id}",
+                "class": CLASS_REBUILDABLE,
+                "tier": TIER_REBUILDABLE_CACHE,
+                "label": f"Old source-index generation {generation_id}",
+                "kind": "rebuildable_old_index_generations",
+                "bytes": size,
+                "human_bytes": human_bytes(size),
+                "path": path,
+                "source_report": {
+                    "kind": "storage_capacity_report",
+                    "schema_version": SCHEMA_VERSION,
+                    "section": "index_generations",
+                    "thread_key": thread.get("thread_key"),
+                    "thread_dir": thread.get("thread_dir"),
+                    "current_generation": generations.get("current_generation"),
+                    "last_known_good_generation": generations.get("last_known_good_generation"),
+                    "generation": generation_id,
+                },
+                "evidence": [
+                    f"generation={generation_id}",
+                    f"old_generation_bytes={size}",
+                    f"pointer_status={generations.get('status')}",
+                    "current and last-known-good generations are excluded from this candidate",
+                ],
+                "preconditions": dict(preconditions),
+                "rebuild_command": (
+                    "Generation GC is plan-only until reader-pin/TTL cleanup lands; rebuild the "
+                    "main index with python -m aippocampus_runtime.recall.index_builder "
+                    "--cwd <workspace>."
+                ),
+                "expected_rebuild_cost": {"class": "medium", "seconds": None},
+            }
+        )
+    return candidates
+
+
 def rebuild_command_for_retention_item(item: dict[str, Any]) -> str | None:
     item_id = str(item.get("id") or "")
     kind = str(item.get("kind") or "")
