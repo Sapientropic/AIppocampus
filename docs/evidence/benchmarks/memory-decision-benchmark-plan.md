@@ -309,15 +309,22 @@ Profiles are presets plus safety boundaries. Maintainers may still use explicit
 flags for narrow experiments, but those runs should be treated as mixed claim
 surfaces unless the report metadata says otherwise.
 
-| Profile | Intended use | Default included surface | Default exclusions / claim boundary |
+| Profile | Intended use | Default included surface | Default exclusions / boundary pointer |
 | --- | --- | --- | --- |
-| `public-fast` | Fresh-clone public smoke and quick local confidence. | Track A gate decision, Track C payload fidelity, Track D compaction continuity. | Forcibly excludes private text, live semantic calls, Track B, and optional public-corpus adapters; cannot claim Track B, live-model, private-history, or large external-dataset quality. |
+| `public-fast` | Fresh-clone public smoke and quick local confidence. | Track A gate decision, Track C payload fidelity, Track D compaction continuity. | Excludes private text, live semantic calls, Track B, and optional public-corpus adapters. |
 | `ci-deterministic` | Deterministic CI-oriented baseline where Track B diagnostics are allowed. | Tracks A/C/D, Track B source-evidence retrieval, deterministic source-label diagnostic slice. | Excludes private text, live semantic calls, and optional public-corpus adapters. |
 | `local-calibration` | Maintainer local calibration with deterministic Track B enabled. | Tracks A/C/D and deterministic Track B surfaces. | Excludes private text and live semantic calls by default; registry/data availability affects interpretation. |
-| `live-semantic` | Explicit provider-backed semantic calibration. | Tracks A/C/D, Track B, and `live_semantic_gate`. | Uses live model/provider behavior, so results are provider-, prompt-, and date-dependent; still excludes private text by default. |
-| `private-full` | Maintainer-only private-history regression. | Tracks A/C/D and Track B with private text allowed. | Not public-release evidence until rerun or summarized through sanitized outputs. |
-| `release-evidence` | Public-safe release evidence with stable metadata. | Tracks A/C/D and deterministic Track B surfaces. | Excludes private text, live semantic calls, and optional public-corpus adapters by default; those need explicit opt-in and dated evidence notes. |
-| `baseline` | Backward-compatible default baseline capture. | Current default suite surface. | Useful for continuity, but prefer a named non-legacy profile for new evidence comparison. |
+| `live-semantic` | Explicit provider-backed semantic calibration. | Tracks A/C/D, Track B, and `live_semantic_gate`. | Live/provider-dependent surface; excludes private text by default. |
+| `private-full` | Maintainer-only private-history regression. | Tracks A/C/D and Track B with private text allowed. | Private-history maintainer surface; public-release claims need sanitized dated evidence. |
+| `release-evidence` | Public-safe release evidence with stable metadata. | Tracks A/C/D and deterministic Track B surfaces. | Excludes private text, live semantic calls, and optional public-corpus adapters unless explicitly opted in and documented. |
+| `baseline` | Backward-compatible default baseline capture. | Current default suite surface. | Legacy continuity surface; prefer a named non-legacy profile for new evidence comparison. |
+
+This table is a profile navigation map, not the active run claim boundary. It
+names excluded surfaces so readers can choose the right profile, but it should
+not mirror every profile's `default_cannot_claim` list. The selected profile in
+the JSON report carries the active `cannot_claim` list, while inactive ladders
+and docs maps should follow the count/pointer rule in
+[`schema-field-profiles.md#cannot-claim`](../../architecture/schema-field-profiles.md#cannot-claim).
 
 Run `public-fast` from a fresh clone when you need the deterministic public
 benchmark surface without private registry data, live model calls, or external
