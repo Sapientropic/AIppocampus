@@ -87,7 +87,8 @@ Writer coordination entrypoints:
 - `aippocampus_runtime.recall.index_builder`: owns main index publish; uses `.index-publish.lock`,
   generation SQLite pointer, last-known-good fallback, and stable SQLite backup.
 - `aippocampus_runtime.recall.segment_builder`: owns segment shard publish; uses `.rebuild.lock`, staged
-  segment dirs, and the shared lease helper.
+  segment dirs, `segments/generations/gen_*`, `segments.pointer.json`, and the
+  shared lease helper.
 - `aippocampus_runtime.hooks.lifecycle`: orchestrates `aippocampus_runtime.recall.index_builder`,
   `aippocampus_runtime.recall.segment_builder`, and registry commands; it must not write generated
   SQLite directly.
@@ -153,8 +154,12 @@ shards. This is the single-writer discipline for segment rebuilds: do not run
 two `aippocampus_runtime.recall.segment_builder` writers against the same output directory. If a process
 dies, the next run may recover a stale lease after the configured age, but
 operators should first verify no live writer is still using the directory. New
-segments are staged before publish, and failed publish restores last-known-good
-`seg-*` dirs and manifest metadata.
+segments are staged into `segments/generations/gen_*`, `segments.pointer.json`
+is updated only after the generation manifest and compatibility
+`segments/manifest.json` are written, and failed publish leaves the previous
+pointer/manifest/generation available. The publish fast path must not delete old
+segment generations or legacy flat `seg-*` dirs until reader-pin/TTL cleanup is
+specified.
 
 Cross-device sync treats SQLite as a rebuildable generated cache, not durable
 truth. `aippocampus_runtime.sync.bundle` syncs registry manifests, graph

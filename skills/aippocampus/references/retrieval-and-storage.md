@@ -206,16 +206,21 @@ optional adapter for very fuzzy queries or large corpora.
 For hundred-MB or GB threads, use segments:
 
 - `aippocampus_runtime.recall.segment_builder` creates sealed `seg-0001/`, `seg-0002/`, etc. under the
-  global index directory's `segments/` folder by default.
+  global index directory's `segments/` folder by default. New rebuilds publish
+  those shards inside `segments/generations/gen_*/` and update
+  `segments.pointer.json`; `segments/manifest.json` remains the compatibility
+  manifest.
 - Each segment has its own `messages.jsonl` and `source_index.sqlite`.
-- The segment manifest records source rollout size/mtime, anchor hash, byte
-  spans, line spans, message spans, and index paths.
+- The segment manifest records source rollout size/mtime/hash, anchor hash,
+  byte spans, line spans, message spans, and index paths.
 - `aippocampus_runtime.recall.segment_search` fans queries out to segments, optionally enforces
-  `--fanout-budget` / `--max-segments` before opening SQLite shards, retrieves
-  top candidates per selected segment, and merges global top-k with diversity
-  penalties. Missing manifests or shard indexes report structured
-  `segments_unavailable` / `build_required` status unless the caller explicitly
-  asks to build segments.
+  `--fanout-budget` / `--max-segments` before opening SQLite shards, resolves
+  the segment pointer once per query, retrieves top candidates from that pinned
+  generation, and merges global top-k with diversity penalties. Missing
+  manifests or shard indexes report structured `segments_unavailable` /
+  `build_required` status unless the caller explicitly asks to build segments.
+  Old generations are rebuildable cache targets and must not be deleted until a
+  reader-pin/TTL cleanup contract exists.
 
 Segment-local ids collide by design. Treat `(segment_id, id, line)` as the hit
 key.

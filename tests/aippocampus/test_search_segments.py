@@ -151,6 +151,100 @@ class SegmentSearchTests(unittest.TestCase):
         self.assertEqual(payload["fanout"]["planned_segment_count"], 3)
         self.assertEqual(payload["fanout"]["skipped_segment_count"], 0)
 
+    def test_search_resolves_segment_generation_pointer_with_lkg_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            segments_dir = root / "segments"
+            old_gen = segments_dir / "generations" / "gen_old"
+            new_gen = segments_dir / "generations" / "gen_new"
+            old_gen.mkdir(parents=True)
+            new_gen.mkdir(parents=True)
+            old_sqlite = old_gen / "seg-old.sqlite"
+            new_sqlite = new_gen / "seg-new.sqlite"
+            old_sqlite.write_text("", encoding="utf-8")
+            new_sqlite.write_text("", encoding="utf-8")
+            (old_gen / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "segment_count": 1,
+                        "segments": [
+                            {"id": "seg-old", "sqlite": str(old_sqlite), "end_line": 10}
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (new_gen / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "segment_count": 1,
+                        "segments": [
+                            {"id": "seg-new", "sqlite": str(new_sqlite), "end_line": 20}
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (segments_dir / "manifest.json").write_text(
+                json.dumps({"segment_count": 0, "segments": []}),
+                encoding="utf-8",
+            )
+            (segments_dir / "segments.pointer.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "kind": "aippocampus_segments_pointer",
+                        "current_generation": "gen_new",
+                        "last_known_good_generation": "gen_old",
+                        "current": "generations/gen_new/manifest.json",
+                        "last_known_good": "generations/gen_old/manifest.json",
+                        "stable": "manifest.json",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            opened: list[Path] = []
+
+            def fake_search(index: Path, *args, **kwargs) -> list[dict]:
+                opened.append(Path(index))
+                return [
+                    {
+                        "id": 1,
+                        "line": 20,
+                        "timestamp": "",
+                        "role": "assistant",
+                        "kind": "message",
+                        "score": 9.0,
+                        "snippet": "match",
+                        "signals": {},
+                    }
+                ]
+
+            with mock.patch.object(segment_search, "search_hybrid_index", side_effect=fake_search):
+                current_payload = segment_search.search_segments_payload(
+                    segment_search.SegmentSearchOptions(
+                        patterns=["memory"],
+                        cwd=root,
+                        segments_dir=segments_dir,
+                        mode="ranked",
+                    )
+                )
+                (new_gen / "manifest.json").unlink()
+                fallback_payload = segment_search.search_segments_payload(
+                    segment_search.SegmentSearchOptions(
+                        patterns=["memory"],
+                        cwd=root,
+                        segments_dir=segments_dir,
+                        mode="ranked",
+                    )
+                )
+
+        self.assertEqual(opened, [new_sqlite, old_sqlite])
+        self.assertEqual(Path(current_payload["source"]), new_gen / "manifest.json")
+        self.assertEqual(Path(fallback_payload["source"]), old_gen / "manifest.json")
+        self.assertEqual(current_payload["matches"][0]["segment_id"], "seg-new")
+        self.assertEqual(fallback_payload["matches"][0]["segment_id"], "seg-old")
+
 
 if __name__ == "__main__":
     unittest.main()
