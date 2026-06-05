@@ -15,6 +15,7 @@ from typing import Any, Mapping
 from aippocampus_runtime.artifacts.publish import (
     index_generation_diagnostics,
     resolve_sqlite_index_path,
+    segment_generation_diagnostics,
 )
 from aippocampus_runtime.core import (
     aippocampus_registry_resolution,
@@ -412,6 +413,11 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
 
     segments_manifest_path = segments_dir / "manifest.json"
     segments_manifest = load_json(segments_manifest_path)
+    segment_generations = segment_generation_diagnostics(
+        segments_manifest_path,
+        root=segments_dir,
+        include_paths=False,
+    )
     segments_reasons: list[str] = []
     segments_needed = rollout_stat.st_size >= options.segment_threshold_bytes
     segments_message_delta = 0
@@ -620,6 +626,7 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         "segments": {
             "dir": str(segments_dir),
             "manifest": str(segments_manifest_path),
+            "generations": segment_generations,
             "needed": segments_needed,
             "exists": bool(segments_manifest),
             "stale": segments_stale,

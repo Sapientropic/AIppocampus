@@ -101,6 +101,25 @@ class StorageCapacityReportTests(unittest.TestCase):
         (generation_dir / "source_index.sqlite").write_bytes(b"g" * size)
         return generation_dir
 
+    def _write_segment_generation(self, generation_id: str, size: int) -> Path:
+        generation_dir = self.index / "segments" / "generations" / generation_id
+        shard_dir = generation_dir / "seg-000001"
+        shard_dir.mkdir(parents=True)
+        (generation_dir / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "segment_count": 1,
+                    "generation_id": generation_id,
+                    "segments": [
+                        {"id": "seg-000001", "sqlite": str(shard_dir / "source_index.sqlite")}
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (shard_dir / "source_index.sqlite").write_bytes(b"s" * size)
+        return generation_dir
+
     def test_report_counts_clean_source_generated_indexes_and_fanout(self) -> None:
         report = storage_capacity_report.build_report(self.registry, top=5)
 
@@ -215,6 +234,59 @@ class StorageCapacityReportTests(unittest.TestCase):
             generations["generation_gc_candidates"][0]["relative_path"],
             f"threads/session-one/index/generations/{old.name}",
         )
+        self.assertNotIn(str(self.root), payload)
+
+    def test_report_exposes_segment_generation_gc_metrics_without_absolute_paths(self) -> None:
+        current = self._write_segment_generation("gen_20260605T010000_current", 41)
+        last_known_good = self._write_segment_generation("gen_20260605T005900_lkg", 37)
+        old = self._write_segment_generation("gen_20260605T004500_old", 29)
+        old_bytes = storage_capacity_report.dir_size(old)
+        segments_dir = self.index / "segments"
+        (segments_dir / "segments.pointer.json").write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_segments_pointer",
+                    "current_generation": current.name,
+                    "last_known_good_generation": last_known_good.name,
+                    "current": f"generations/{current.name}/manifest.json",
+                    "last_known_good": f"generations/{last_known_good.name}/manifest.json",
+                    "stable": "manifest.json",
+                    "compatibility_path": "manifest.json",
+                    "publish_latency_ms": 9.5,
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        (segments_dir / "manifest.json").write_text(
+            (current / "manifest.json").read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+
+        report = storage_capacity_report.build_report(self.registry, top=5)
+        payload = json.dumps(report, ensure_ascii=False)
+        generations = report["top_threads"][0]["segment_generations"]
+
+        self.assertTrue(generations["pointer_exists"])
+        self.assertEqual(generations["status"], "ok")
+        self.assertEqual(generations["current_generation"], current.name)
+        self.assertEqual(generations["last_known_good_generation"], last_known_good.name)
+        self.assertEqual(generations["generation_count"], 3)
+        self.assertEqual(generations["old_generation_count"], 1)
+        self.assertEqual(generations["old_generation_bytes"], old_bytes)
+        self.assertEqual(generations["generation_gc_candidate_count"], 1)
+        self.assertEqual(generations["generation_gc_candidate_bytes"], old_bytes)
+        self.assertEqual(generations["publish_latency_ms"], 9.5)
+        self.assertGreaterEqual(generations["pointer_load_ms"], 0.0)
+        self.assertEqual(
+            generations["generation_gc_candidates"][0]["relative_path"],
+            f"threads/session-one/index/segments/generations/{old.name}",
+        )
+        self.assertEqual(report["totals"]["segment_old_generation_count"], 1)
+        self.assertEqual(report["totals"]["segment_generation_gc_candidate_count"], 1)
+        self.assertEqual(report["totals"]["segment_generation_gc_candidate_bytes"], old_bytes)
+        self.assertEqual(report["top_threads"][0]["segment_sqlite_count"], 1)
+        self.assertEqual(report["top_threads"][0]["segment_sqlite_bytes"], 41)
         self.assertNotIn(str(self.root), payload)
 
 

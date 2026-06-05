@@ -169,6 +169,25 @@ class StorageGovernanceTests(unittest.TestCase):
         (generation_dir / "source_index.sqlite").write_bytes(b"g" * size)
         return generation_dir
 
+    def _write_segment_generation(self, generation_id: str, size: int) -> Path:
+        generation_dir = self.index / "segments" / "generations" / generation_id
+        shard_dir = generation_dir / "seg-000001"
+        shard_dir.mkdir(parents=True)
+        (generation_dir / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "segment_count": 1,
+                    "generation_id": generation_id,
+                    "segments": [
+                        {"id": "seg-000001", "sqlite": str(shard_dir / "source_index.sqlite")}
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (shard_dir / "source_index.sqlite").write_bytes(b"s" * size)
+        return generation_dir
+
     def test_dry_run_uses_existing_reports_without_leaking_private_text_or_paths(self) -> None:
         plan = storage_governance.build_plan(
             self.root,
@@ -441,6 +460,96 @@ class StorageGovernanceTests(unittest.TestCase):
         )
         self.assertIn("plan-only", candidate["rebuild_command"])
         self.assertNotIn(str(self.root), payload)
+
+    def test_dry_run_identifies_old_segment_generation_gc_candidates_as_plan_only(self) -> None:
+        current = self._write_segment_generation("gen_20260605T010000_current", 41)
+        last_known_good = self._write_segment_generation("gen_20260605T005900_lkg", 37)
+        old = self._write_segment_generation("gen_20260605T004500_old", 29)
+        old_bytes = sum(path.stat().st_size for path in old.rglob("*") if path.is_file())
+        segments_dir = self.index / "segments"
+        (segments_dir / "segments.pointer.json").write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_segments_pointer",
+                    "current_generation": current.name,
+                    "last_known_good_generation": last_known_good.name,
+                    "current": f"generations/{current.name}/manifest.json",
+                    "last_known_good": f"generations/{last_known_good.name}/manifest.json",
+                    "stable": "manifest.json",
+                    "compatibility_path": "manifest.json",
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        plan = storage_governance.build_plan(self.root, registry_dir=self.registry)
+        payload = json.dumps(plan, ensure_ascii=False)
+        old_generation_candidates = [
+            item
+            for item in plan["candidates"]
+            if item["kind"] == "rebuildable_old_segment_generations"
+        ]
+
+        self.assertEqual(len(old_generation_candidates), 1)
+        candidate = old_generation_candidates[0]
+        self.assertEqual(candidate["tier"], "rebuildable_cache")
+        self.assertEqual(candidate["bytes"], old_bytes)
+        self.assertEqual(candidate["source_report"]["section"], "segment_generations")
+        self.assertEqual(candidate["source_report"]["current_generation"], current.name)
+        self.assertEqual(candidate["source_report"]["last_known_good_generation"], last_known_good.name)
+        self.assertEqual(
+            candidate["path"]["relative_path"],
+            f"threads/session-one/index/segments/generations/{old.name}",
+        )
+        self.assertEqual(
+            candidate["preconditions"]["reader_pin_or_ttl_contract"]["status"],
+            "blocked",
+        )
+        self.assertIn("plan-only", candidate["rebuild_command"])
+        self.assertTrue(old.exists())
+        self.assertNotIn(str(self.root), payload)
+
+    def test_apply_keeps_old_segment_generation_candidates_plan_only(self) -> None:
+        current = self._write_segment_generation("gen_20260605T010000_current", 41)
+        old = self._write_segment_generation("gen_20260605T004500_old", 29)
+        segments_dir = self.index / "segments"
+        (segments_dir / "manifest.json").write_text(
+            (current / "manifest.json").read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        (segments_dir / "segments.pointer.json").write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_segments_pointer",
+                    "current_generation": current.name,
+                    "last_known_good_generation": current.name,
+                    "current": f"generations/{current.name}/manifest.json",
+                    "last_known_good": f"generations/{current.name}/manifest.json",
+                    "stable": "manifest.json",
+                    "compatibility_path": "manifest.json",
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        result = storage_governance.apply_plan(
+            self.root,
+            registry_dir=self.registry,
+            class_filter="rebuildable",
+            include_active=True,
+        )
+
+        self.assertFalse(result["ok"])
+        self.assertTrue(old.exists())
+        self.assertTrue(
+            any(
+                "old-segment-generation" in str(item.get("candidate_id") or "")
+                and item.get("reason_code") == "path_level_retention_required"
+                for item in result["blocked"]
+            )
+        )
 
     def test_apply_cli_returns_json_result(self) -> None:
         with patch("sys.stdout", new=StringIO()) as stdout:

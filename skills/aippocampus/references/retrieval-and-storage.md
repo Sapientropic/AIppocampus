@@ -220,7 +220,9 @@ For hundred-MB or GB threads, use segments:
   manifests or shard indexes report structured `segments_unavailable` /
   `build_required` status unless the caller explicitly asks to build segments.
   Old generations are rebuildable cache targets and must not be deleted until a
-  reader-pin/TTL cleanup contract exists.
+  reader-pin/TTL cleanup contract exists. Health/capacity/storage-gc dry-runs
+  may report those old generations as plan-only candidates, but that does not
+  change the deletion boundary.
 
 Segment-local ids collide by design. Treat `(segment_id, id, line)` as the hit
 key.

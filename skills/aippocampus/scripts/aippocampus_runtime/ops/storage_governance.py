@@ -42,6 +42,7 @@ from aippocampus_runtime.ops.storage_governance_contract import (
     matches_class,
     plan_metrics,
     rebuild_command_for_retention_item,
+    segment_generation_gc_candidates_from_capacity_thread,
     status,
 )
 
@@ -256,6 +257,12 @@ def _capacity_candidates(
         )
         candidates.extend(
             generation_gc_candidates_from_capacity_thread(
+                thread,
+                include_active=include_active,
+            )
+        )
+        candidates.extend(
+            segment_generation_gc_candidates_from_capacity_thread(
                 thread,
                 include_active=include_active,
             )

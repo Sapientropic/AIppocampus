@@ -32,9 +32,10 @@ agents do not mistake desired layers for finished behavior.
 - The global registry discovers old thread memories from new threads.
 - `storage_capacity_report.py` reports aggregate clean-source bytes, generated
   index bytes, semantic sidecar bytes, current sync-policy bytes, index
-  amplification, worst-case SQLite fanout, and planned registry-metadata query
-  fanout without reading clean-source message bodies. This is the first
-  registry-scale observability layer for issue #4.
+  amplification, worst-case SQLite fanout, planned registry-metadata query
+  fanout, and main/segment generation GC candidates without reading
+  clean-source message bodies. This is the first registry-scale observability
+  layer for issue #4.
 
 ## Active track
 
@@ -103,9 +104,10 @@ Completed foundation:
   without reading message bodies or deleting files. Capacity and health reports
   now expose main-index generation pointer status, current/LKG ids, old
   generation bytes, pointer load time, publish latency, and plan-only old
-  generation GC candidates. Segment rebuilds now publish generation manifests
-  and keep old generations plan-only until reporting and reader-pin/TTL cleanup
-  are implemented. `--apply --class rebuildable` still has a narrow
+  generation GC candidates. Segment rebuilds now publish generation manifests,
+  and capacity/health/storage-gc dry-runs expose old segment generations with
+  the same blocked reader-pin/TTL cleanup precondition. `--apply --class rebuildable`
+  still has a narrow
   path-level retention-report v1 for the main `source_index.sqlite` cache, with
   source/ref/lease/active-thread/pointer checks and an eviction manifest;
   capacity aggregates, old generation directories, and broader cache classes
@@ -209,9 +211,10 @@ Completed foundation:
      plan-only old generation GC candidates are implemented; actual generation
      cleanup still waits for a reader-pin/TTL contract. Segment generation
      directories and `segments.pointer.json` are implemented for rebuild
-     publishing, while segment generation health/capacity reporting and actual
-     cleanup remain later #581 slices. Default sync keeps generated SQLite and
-     pointer files out of the portable source set while still repairing
+     publishing, and segment generation health/capacity/storage-gc dry-run
+     reporting is now plan-only with the same blocked cleanup precondition.
+     Actual segment generation deletion remains a later #581 slice. Default sync
+     keeps generated SQLite and pointer files out of the portable source set while still repairing
      target-local rebuilt cache locators.
 
 ## Near-term implementation order

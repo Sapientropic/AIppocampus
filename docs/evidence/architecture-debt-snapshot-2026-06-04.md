@@ -33,6 +33,7 @@ python tools\aippocampus\docs\debt_report.py --json
 
 | Path | Guard budget | Owner issue | Owner-boundary note |
 | --- | ---: | --- | --- |
+| `skills/aippocampus/scripts/aippocampus_runtime/artifacts/publish.py` | 700 | #581 | Shared generated-artifact publish helpers, SQLite/index pointer resolution, segment/index generation diagnostics, and same-directory leases. Split pointer diagnostics into a sibling module before adding more artifact families or storage-governance projections. |
 | `skills/aippocampus/scripts/aippocampus_runtime/health.py` | 760 | #248 | Single-thread runtime health contract, stale age/ratio/activity diagnostics, question-health aggregation, and CLI argument handling. Keep registry-wide aggregation and text rendering out of `health.py`. |
 | `skills/aippocampus/scripts/aippocampus_runtime/knowledge/schema.py` | 860 | #397 | Governed knowledge-source manifest, claim-promotion, and append-only update-lifecycle validation reports. Split update-event lifecycle evaluation into `knowledge/lifecycle.py` before adding live watcher behavior. |
 | `skills/aippocampus/scripts/aippocampus_runtime/knowledge/capability_types.py` | 760 | #518 | Typed capability-manifest validation and public-safe sanitized case/smoke evaluation. Split sanitized case evaluation or smoke projection before adding more evaluation protocols. |
