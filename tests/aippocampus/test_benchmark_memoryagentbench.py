@@ -261,6 +261,49 @@ class MemoryAgentBenchSmokeTests(unittest.TestCase):
         )
         self.assertIn("parquet_optional_reader_missing", payload["next_step"])
 
+    def test_missing_optional_reader_does_not_mark_empty_artifacts_written(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dataset_dir = root / "memoryagentbench"
+            data_dir = dataset_dir / "data"
+            data_dir.mkdir(parents=True)
+            (data_dir / "Accurate_Retrieval-00000-of-00001.parquet").write_bytes(
+                b"parquet placeholder"
+            )
+            case_pack_path = root / "case-pack.json"
+            template_path = root / "predictions-template.jsonl"
+
+            with (
+                mock.patch.object(
+                    benchmark,
+                    "parquet_metadata",
+                    return_value={
+                        "format_support": benchmark.PARQUET_READER_MISSING_SUPPORT,
+                        "observed_rows": None,
+                        "schema_fields": [],
+                    },
+                ),
+                mock.patch.object(
+                    benchmark,
+                    "read_parquet_rows",
+                    side_effect=benchmark.OptionalParquetReaderMissing("missing"),
+                ),
+            ):
+                payload = benchmark.run_memoryagentbench_smoke(
+                    dataset_dir=dataset_dir,
+                    case_pack_output=case_pack_path,
+                    prediction_template_output=template_path,
+                    compute_sha256=False,
+                )
+
+        self.assertEqual(payload["status"], "found_files_missing_optional_reader")
+        self.assertFalse(payload["artifacts"]["case_pack_written"])
+        self.assertFalse(payload["artifacts"]["prediction_template_written"])
+        self.assertEqual(payload["artifacts"]["case_pack_status"], "skipped_no_rows")
+        self.assertEqual(payload["artifacts"]["prediction_template_status"], "skipped_no_rows")
+        self.assertFalse(case_pack_path.exists())
+        self.assertFalse(template_path.exists())
+
     def test_parquet_rows_feed_case_pack_and_stage3_when_reader_available(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

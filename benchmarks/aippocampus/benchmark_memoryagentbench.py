@@ -897,36 +897,40 @@ def run_memoryagentbench_smoke(
     )
 
     case_pack_path: Path | None = None
+    case_pack_status = "not_requested"
     if case_pack_output:
-        case_pack_path = Path(case_pack_output)
-        case_pack_path.parent.mkdir(parents=True, exist_ok=True)
-        case_pack_path.write_text(
-            json.dumps(
-                build_case_pack(
-                    dataset_dir=dataset_path,
-                    manifest=manifest,
-                    split_id=case_pack_split,
-                    case_limit=case_limit,
-                ),
-                ensure_ascii=False,
-                indent=2,
-            )
-            + "\n",
-            encoding="utf-8",
+        case_pack = build_case_pack(
+            dataset_dir=dataset_path,
+            manifest=manifest,
+            split_id=case_pack_split,
+            case_limit=case_limit,
         )
+        if case_pack["cases"]:
+            case_pack_path = Path(case_pack_output)
+            case_pack_path.parent.mkdir(parents=True, exist_ok=True)
+            case_pack_path.write_text(
+                json.dumps(case_pack, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            case_pack_status = "written"
+        else:
+            case_pack_status = "skipped_no_rows"
 
     prediction_template_path: Path | None = None
+    prediction_template_status = "not_requested"
     if prediction_template_output:
-        prediction_template_path = Path(prediction_template_output)
-        write_jsonl(
-            prediction_template_path,
-            build_prediction_template(
-                dataset_dir=dataset_path,
-                manifest=manifest,
-                split_id=case_pack_split,
-                case_limit=case_limit,
-            ),
+        prediction_template = build_prediction_template(
+            dataset_dir=dataset_path,
+            manifest=manifest,
+            split_id=case_pack_split,
+            case_limit=case_limit,
         )
+        if prediction_template:
+            prediction_template_path = Path(prediction_template_output)
+            write_jsonl(prediction_template_path, prediction_template)
+            prediction_template_status = "written"
+        else:
+            prediction_template_status = "skipped_no_rows"
 
     stage3_payload: dict[str, Any] | None = None
     if stage3_incremental_dry_run:
@@ -1018,8 +1022,10 @@ def run_memoryagentbench_smoke(
         },
         "artifacts": {
             "case_pack_written": bool(case_pack_path),
+            "case_pack_status": case_pack_status,
             "case_pack_output_sha1": sha1_short(str(case_pack_path.resolve())) if case_pack_path else None,
             "prediction_template_written": bool(prediction_template_path),
+            "prediction_template_status": prediction_template_status,
             "prediction_template_output_sha1": sha1_short(str(prediction_template_path.resolve()))
             if prediction_template_path
             else None,
