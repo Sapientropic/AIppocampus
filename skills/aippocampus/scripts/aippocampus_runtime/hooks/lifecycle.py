@@ -95,6 +95,48 @@ def recommended_action_ids(health: dict[str, Any]) -> set[str]:
     return {str(item.get("id")) for item in health.get("recommended_actions", []) if item.get("id")}
 
 
+def latest_turn_refresh_marker(health: dict[str, Any]) -> str | None:
+    freshness = health.get("freshness") or {}
+    rollout = health.get("rollout") or {}
+    message_count = freshness.get("rollout_message_count", rollout.get("message_count"))
+    last_line = freshness.get("rollout_last_message_line", rollout.get("last_message_line"))
+    clean_message_count = freshness.get(
+        "expected_clean_source_message_count",
+        (health.get("clean_source") or {}).get("expected_message_count"),
+    )
+    clean_turn_count = freshness.get(
+        "expected_clean_source_turn_count",
+        (health.get("clean_source") or {}).get("expected_turn_count"),
+    )
+    if message_count is None and last_line is None and clean_message_count is None:
+        return None
+    return f"m{message_count}:l{last_line}:cm{clean_message_count}:ct{clean_turn_count}"
+
+
+def latest_turn_refresh_required_actions(health: dict[str, Any]) -> list[str]:
+    freshness = health.get("freshness") or {}
+    if not freshness.get("latest_visible_gap"):
+        return []
+    actions: list[str] = []
+    if freshness.get("raw_newer_than_index"):
+        actions.append("build_index")
+        # Keep clean-source and SQLite freshness together for the current
+        # visible turn. Rebuilding only SQLite can make source reopening land on
+        # a generated index row while the clean-source audit file is still one
+        # final answer behind.
+        actions.append("build_clean_source")
+    elif freshness.get("raw_newer_than_clean_source"):
+        actions.append("build_clean_source")
+    return unique_actions(actions)
+
+
+def latest_turn_refresh_due(health: dict[str, Any], workspace_state: dict[str, Any]) -> bool:
+    if not latest_turn_refresh_required_actions(health):
+        return False
+    marker = latest_turn_refresh_marker(health)
+    return bool(marker and workspace_state.get("last_latest_turn_refresh_marker") != marker)
+
+
 def cooldown_active(state: dict[str, Any], field: str, now_ts: float, cooldown: int) -> bool:
     last = float(state.get(field) or 0.0)
     return last > 0 and now_ts - last < cooldown
@@ -124,9 +166,15 @@ def decide_actions(
         return actions
 
     if event == "Stop":
-        if cooldown_active(workspace_state, "last_stop_ts", now_ts, STOP_COOLDOWN_SECONDS):
+        latest_due = latest_turn_refresh_due(health, workspace_state)
+        if (
+            cooldown_active(workspace_state, "last_stop_ts", now_ts, STOP_COOLDOWN_SECONDS)
+            and not latest_due
+        ):
             return []
-        if "build_index" in action_ids:
+        if latest_due:
+            actions.extend(latest_turn_refresh_required_actions(health))
+        elif "build_index" in action_ids:
             actions.append("build_index")
             actions.append("build_clean_source")
         elif "build_clean_source" in action_ids:
@@ -332,7 +380,12 @@ def remember_detached_action(workspace_state: dict[str, Any], action: str, now_t
 
 
 def update_workspace_state(
-    workspace_state: dict[str, Any], event: str, actions: list[str], *, now_ts: float
+    workspace_state: dict[str, Any],
+    event: str,
+    actions: list[str],
+    *,
+    now_ts: float,
+    health: dict[str, Any] | None = None,
 ) -> None:
     workspace_state["last_event"] = event
     workspace_state["last_event_ts"] = now_ts
@@ -348,6 +401,12 @@ def update_workspace_state(
         workspace_state["last_actions_ts"] = now_ts
         workspace_state["last_actions_at"] = now_utc()
         workspace_state["failure_count"] = 0
+        if health:
+            required = latest_turn_refresh_required_actions(health)
+            marker = latest_turn_refresh_marker(health)
+            if required and marker and all(action in actions for action in required):
+                workspace_state["last_latest_turn_refresh_marker"] = marker
+                workspace_state["last_latest_turn_refresh_at"] = now_utc()
 
 
 def write_log(result: dict[str, Any], *, log_path: Path | None = None) -> None:
@@ -434,7 +493,13 @@ def run_maintenance(
                 error = {"id": action, "error": str(exc)}
                 errors.append(error)
                 results.append(error)
-        update_workspace_state(workspace_state, event, completed_actions, now_ts=now_ts)
+        update_workspace_state(
+            workspace_state,
+            event,
+            completed_actions,
+            now_ts=now_ts,
+            health=health,
+        )
         if errors:
             workspace_state["failure_count"] = int(workspace_state.get("failure_count") or 0) + 1
             workspace_state["last_error"] = "; ".join(str(item.get("error")) for item in errors[:3])
@@ -448,6 +513,7 @@ def run_maintenance(
         "actions": actions,
         "dry_run": dry_run,
         "health_status": health.get("status"),
+        "freshness": health.get("freshness"),
         "results": results,
         "errors": errors,
         "skipped_actions": skipped_actions,

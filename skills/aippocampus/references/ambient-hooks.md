@@ -777,9 +777,14 @@ Installed events:
 - `SessionStart`: refresh the global registry at most once per hour when an
   index already exists; optionally ask the scheduler whether background work is
   due.
-- `Stop`: at most once per 15 minutes per workspace, run health; refresh stale
-  clean source, main index, existing segment indexes, registry rows, and
-  scheduler state.
+- `Stop`: normally at most once per 15 minutes per workspace, run health;
+  refresh stale clean source, main index, existing segment indexes, registry
+  rows, and scheduler state. A latest-visible-turn freshness gap is narrower
+  than ordinary stale maintenance: if raw source already has a new visible user
+  or final-answer message that clean-source / SQLite have not indexed yet, the
+  hook may bypass the Stop cooldown once for that message-count marker. This
+  keeps the next fresh thread from missing the last exchange without moving
+  rebuild work into `UserPromptSubmit`.
 - `PreCompact`: refresh clean source, index, and registry before compaction.
 - `PostCompact`: refresh after compaction unless a compact pass just ran.
 

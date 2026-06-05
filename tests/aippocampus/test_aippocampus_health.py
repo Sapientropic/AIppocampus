@@ -23,6 +23,176 @@ from aippocampus_runtime import health as health  # noqa: E402
 
 
 class AippocampusHealthTests(unittest.TestCase):
+    def write_rollout(
+        self,
+        path: Path,
+        cwd: Path,
+        *,
+        session_id: str = "health-session",
+        include_second_turn: bool = False,
+    ) -> None:
+        rows = [
+            {
+                "type": "session_meta",
+                "payload": {
+                    "id": session_id,
+                    "timestamp": "2026-06-05T00:00:00Z",
+                    "cwd": str(cwd),
+                },
+            },
+            {
+                "type": "event_msg",
+                "timestamp": "2026-06-05T00:00:01Z",
+                "payload": {
+                    "type": "user_message",
+                    "message": "first source-backed freshness question",
+                },
+            },
+            {
+                "type": "event_msg",
+                "timestamp": "2026-06-05T00:00:02Z",
+                "payload": {
+                    "type": "agent_message",
+                    "phase": "commentary",
+                    "message": "checking local source",
+                },
+            },
+            {
+                "type": "event_msg",
+                "timestamp": "2026-06-05T00:00:03Z",
+                "payload": {
+                    "type": "agent_message",
+                    "phase": "final_answer",
+                    "message": "first final source-backed answer",
+                },
+            },
+        ]
+        if include_second_turn:
+            rows.extend(
+                [
+                    {
+                        "type": "event_msg",
+                        "timestamp": "2026-06-05T00:01:01Z",
+                        "payload": {
+                            "type": "user_message",
+                            "message": "latest source-backed freshness marker",
+                        },
+                    },
+                    {
+                        "type": "event_msg",
+                        "timestamp": "2026-06-05T00:01:02Z",
+                        "payload": {
+                            "type": "agent_message",
+                            "phase": "final_answer",
+                            "message": "latest final answer must be searchable",
+                        },
+                    },
+                ]
+            )
+        path.write_text(
+            "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
+            encoding="utf-8",
+        )
+
+    def test_health_flags_single_latest_turn_gap_before_bulk_stale_threshold(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            rollout = workspace / "rollout.jsonl"
+            self.write_rollout(rollout, workspace, include_second_turn=False)
+            current_size = rollout.stat().st_size
+            rollout.write_text(
+                rollout.read_text(encoding="utf-8")
+                + "\n".join(
+                    json.dumps(row, ensure_ascii=False)
+                    for row in [
+                        {
+                            "type": "event_msg",
+                            "timestamp": "2026-06-05T00:01:01Z",
+                            "payload": {
+                                "type": "user_message",
+                                "message": "latest source-backed freshness marker",
+                            },
+                        },
+                        {
+                            "type": "event_msg",
+                            "timestamp": "2026-06-05T00:01:02Z",
+                            "payload": {
+                                "type": "agent_message",
+                                "phase": "final_answer",
+                                "message": "latest final answer must be searchable",
+                            },
+                        },
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            anchors = workspace / "thread-anchors.md"
+            anchors.write_text("# Anchors\n", encoding="utf-8")
+            index_dir = root / "index"
+            index_dir.mkdir()
+            (index_dir / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "created_at": "2026-06-05T00:00:03Z",
+                        "message_count": 3,
+                        "source_rollout_size": current_size,
+                        "last_message_line": 4,
+                        "rag": {"enabled": True},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (index_dir / "messages.jsonl").write_text("{}\n", encoding="utf-8")
+            (index_dir / "source_index.sqlite").write_bytes(b"index")
+            clean = root / "clean-source"
+            clean.mkdir()
+            (clean / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 2,
+                        "upgrade_contract": {"source_backed": True},
+                        "source_rollout_size": current_size,
+                        "message_count": 2,
+                        "turn_count": 1,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (clean / "messages.jsonl").write_text("{}\n", encoding="utf-8")
+            (clean / "turns.jsonl").write_text("{}\n", encoding="utf-8")
+
+            with mock.patch.object(health, "locate_rollout", return_value=rollout):
+                payload = health.build_health_report(
+                    health.HealthOptions(
+                        cwd=workspace,
+                        index_dir=index_dir,
+                        clean_source_dir=clean,
+                        graphify_corpus=root / "graphify-corpus",
+                        segments_dir=root / "segments",
+                        checkpoint_state=root / "checkpoint_state.json",
+                        anchors=anchors,
+                        max_stale_messages=25,
+                        max_stale_bytes=5 * 1024 * 1024,
+                    )
+                )
+
+        action_ids = [item["id"] for item in payload["recommended_actions"]]
+
+        self.assertFalse(payload["ok"])
+        self.assertTrue(payload["freshness"]["latest_visible_gap"])
+        self.assertTrue(payload["freshness"]["raw_newer_than_index"])
+        self.assertTrue(payload["freshness"]["raw_newer_than_clean_source"])
+        self.assertEqual(payload["index"]["message_delta"], 2)
+        self.assertEqual(payload["clean_source"]["expected_message_delta"], 2)
+        self.assertIn("build_index", action_ids)
+        self.assertIn("build_clean_source", action_ids)
+        self.assertTrue(
+            any("latest visible" in item["reason"] for item in payload["recommended_actions"])
+        )
+
     def test_health_phase_boundaries_have_separate_registry_and_rendering_owners(self) -> None:
         from aippocampus_runtime import health_registry, health_render  # noqa: PLC0415
 
