@@ -66,7 +66,11 @@ fresh-thread product goal with #277-style active recall locks. The packet fields
 `support_level` (`silent_scent | soft_hypothesis | source_required |
 suppressed`), coarse `confidence`, `sensitivity`, `freshness`, `route_reason`,
 source-id-only `candidate_refs`, canonical `advisory_action`, compatibility
-`suggested_action`, `when_not_to_use`, and a `source_boundary` block. The packet
+`suggested_action`, `when_not_to_use`, and a `source_boundary` block. When
+`support_level=source_required`, the packet also carries an ids-only
+`reopen_plan` with `kind`, `status`, `recommended_tool`, compact tool
+`arguments`, candidate/reopenable counts, `reason_codes`,
+`failure_reason_codes`, and `manual_query_invention_expected=false`. The packet
 is navigation material until source is reopened. It must not contain raw
 prompts, raw snippets, secrets, local paths, or user-facing memory narration.
 
@@ -77,12 +81,29 @@ baselines only. They are allowed to be wrong for the current foreground task.
 records the packet hint, whether it was authoritative (`false`), and why the
 final policy aligned with or diverged from it.
 
+`source_required` does not mean "answer from the packet." It means "reopen clean
+source before making a specific memory-backed claim." The happy path uses the
+packet's `reopen_plan` directly, so the foreground agent should not invent a
+manual grep/search query. If the packet has no reopenable source ref, the plan is
+`status=blocked` and carries failure reason codes such as `stale_handle`,
+`source_missing`, `permission_block`, and `index_stale_lkg_needed`; the agent
+should report or defer from that boundary instead of broadening the lookup.
+Successful reopen may produce a separate bounded evidence card/source-backed
+context packet. Do not copy raw source text back into the scent packet.
+
 Public-safe first-turn demo cues such as "我觉得压力好大", "帮我妈妈挑个礼物",
 "我想建个网站", and a fresh coding workspace with no `AGENTS.md` may produce
 `soft_hypothesis` or `silent_scent` packets, depending on confidence and
 candidate refs. They must not become first-turn private-history dumps. Specific
 memory-backed claims require `source_reopen`; broad, sensitive, stale, or
 superseded cues should stay `silent_scent` or `suppressed`.
+
+Over-personalization is primarily an agent tact and action-policy boundary:
+the packet should hard-gate source authority, secrets, genuine risk, and
+superseded material, but it should not suppress ordinary same-user recall merely
+because it is personal. Safe personal continuity can stay private, become a
+gentle hypothesis, or use `source_reopen` depending on task context and source
+refs.
 
 `fresh_thread_action.py` owns the #284 agent-facing action policy for consuming
 that packet. The hook prepares terrain; the foreground agent chooses one of
@@ -121,7 +142,11 @@ Action policy examples:
   `active_recall` with `wait_or_probe_lock`, not present the pending lock as a
   fact.
 - Positive: a profile/resume or other specific memory-backed claim with source
-  refs should choose `source_reopen` before answering concretely.
+  refs should choose `source_reopen` and use the packet `reopen_plan` before
+  answering concretely.
+- Positive: a `source_required` packet with no reopenable source ref should
+  preserve `requires_source_reopen=true` but choose `ignore` with a blocked
+  reopen plan, not invent a manual query.
 - Negative control: a low-confidence, broad, or sensitive first-turn scent can
   stay `use_silently`; support the user or ask normally without exposing an old
   private theme.

@@ -23,6 +23,12 @@ SUGGESTED_ACTIONS = ADVISORY_ACTIONS
 
 PACKET_SCHEMA_VERSION = 1
 MAX_CANDIDATE_REFS = 3
+SOURCE_REOPEN_FAILURE_REASON_CODES = [
+    "stale_handle",
+    "source_missing",
+    "permission_block",
+    "index_stale_lkg_needed",
+]
 
 BASE_WHEN_NOT_TO_USE = [
     "Do not present this packet as source-backed fact.",
@@ -108,6 +114,67 @@ def _reopenable_ref_count(refs: list[dict[str, Any]]) -> int:
     return sum(1 for ref in refs if _is_reopenable_ref(ref))
 
 
+def _primary_reopenable_ref(refs: list[dict[str, Any]]) -> dict[str, Any] | None:
+    for ref in refs:
+        if _is_reopenable_ref(ref):
+            return dict(ref)
+    return None
+
+
+def _reopen_arguments(ref: dict[str, Any]) -> dict[str, Any]:
+    selectors = {
+        key: ref[key]
+        for key in ("message_id", "turn_id", "turn_index")
+        if key in ref
+    }
+    if selectors:
+        return selectors
+    return {key: ref[key] for key in ("thread_key", "line") if key in ref}
+
+
+def _recommended_reopen_tool(ref: dict[str, Any] | None) -> str:
+    if not ref:
+        return "source_ref_reopen"
+    if any(key in ref for key in ("message_id", "turn_id", "turn_index")):
+        return "get_turn_context"
+    return "source_ref_reopen"
+
+
+def source_reopen_plan_from_refs(
+    *,
+    support_level: str,
+    candidate_refs: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Build the ids-only #707 source reopen plan for source-required packets."""
+
+    if support_level != "source_required":
+        return None
+    primary_ref = _primary_reopenable_ref(candidate_refs)
+    reopenable_count = _reopenable_ref_count(candidate_refs)
+    reason_codes = ["source_required"]
+    if primary_ref:
+        reason_codes.append("candidate_source_ref_reopenable")
+    elif candidate_refs:
+        reason_codes.append("no_reopenable_source_ref")
+    else:
+        reason_codes.append("no_candidate_source_ref")
+
+    plan: dict[str, Any] = {
+        "kind": "source_ref_reopen",
+        "status": "ready" if primary_ref else "blocked",
+        "recommended_tool": _recommended_reopen_tool(primary_ref),
+        "arguments": _reopen_arguments(primary_ref) if primary_ref else {},
+        "candidate_ref_count": len(candidate_refs),
+        "reopenable_ref_count": reopenable_count,
+        "reason_codes": reason_codes,
+        "failure_reason_codes": list(SOURCE_REOPEN_FAILURE_REASON_CODES),
+        "manual_query_invention_expected": False,
+    }
+    if primary_ref:
+        plan["primary_ref"] = primary_ref
+    return plan
+
+
 def _support_level(
     result: dict[str, Any],
     *,
@@ -170,7 +237,7 @@ def fresh_thread_scent_packet_from_decision(result: dict[str, Any]) -> dict[str,
     if support_level == "suppressed":
         candidate_refs = []
     advisory_action = _advisory_action(support_level, confidence)
-    return {
+    packet = {
         "kind": "aippocampus_fresh_thread_scent_packet",
         "schema_version": PACKET_SCHEMA_VERSION,
         "support_level": support_level,
@@ -190,10 +257,18 @@ def fresh_thread_scent_packet_from_decision(result: dict[str, Any]) -> dict[str,
             "navigation_only_until_source_reopened": True,
             "route_reason_is_not_source_fact": True,
             "candidate_refs_are_ids_only": True,
+            "reopen_plan_is_navigation_not_evidence": True,
             "advisory_action_is_not_final_agent_action": True,
             "final_action_owned_by_fresh_thread_action_policy": True,
         },
     }
+    reopen_plan = source_reopen_plan_from_refs(
+        support_level=support_level,
+        candidate_refs=candidate_refs,
+    )
+    if reopen_plan is not None:
+        packet["reopen_plan"] = reopen_plan
+    return packet
 
 
 EXAMPLE_PACKETS = [
