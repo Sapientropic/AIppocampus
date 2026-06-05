@@ -84,6 +84,15 @@ The first landing slices cover P0/P1/P2/P3 and a one-command baseline suite:
   PRs keep the scanner contract alive. It does not score agent behavior, publish
   private text/paths/ids, or claim #279 benchmark quality before manually
   annotated cases and the shared benchmark methodology are ready.
+- `benchmarks/aippocampus/benchmark_e2e50_silent_constraint.py` is the #279
+  public-safe annotated case-pack scorer scaffold. It consumes hash/count-only
+  behavior-code cases, reports deterministic rates for silent constraint
+  survival, known-bad route avoidance, transient-concern extinction,
+  superseded-currentness, and source-reopen-before-risky-action, and keeps
+  `quality_gate_ok=false` because the current checked-in fixture is synthetic
+  and not a representative 20/50-case E2E50 sample. Its deterministic unittest
+  is included in `benchmark-smoke` to keep the scorer contract alive while the
+  private 4 gold + 2 calibration seed pack remains local and source-reviewed.
 - `benchmarks/aippocampus/benchmark_knowledge_pollution.py` runs the #517
   public-safe knowledge pollution and privacy-partition benchmark. It reuses
   the governed knowledge source/claim schema and high-risk answer gate, then

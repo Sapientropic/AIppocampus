@@ -30,6 +30,12 @@ records, start with [`docs/evidence/benchmark-evidence-map.md`](../docs/evidence
   #454. It turns Discussion #428 magic-moment field reports into scenario
   families, negative controls, and hash/aggregate-only private seed reporting
   rules without committing raw prompts, raw source snippets, or local paths.
+- `e2e50_silent_constraint/` contains the checked-in synthetic public-safe
+  fixture for the #279 annotated case-pack scorer scaffold. It exercises
+  silent constraint survival, known-bad route avoidance, transient concern
+  extinction, superseded currentness, and source reopen before risky action
+  without committing private clean-source text, local paths, or raw behavior
+  traces.
 - `segmented_merge_policy/` contains the checked-in synthetic public-safe
   fixture for #375. It calibrates segmented-search merge behavior over
   source-ref-shaped hits without committing private thread text.
@@ -147,6 +153,16 @@ python benchmarks\aippocampus\benchmark_coding_decision_shadow.py --json
 This public-safe runner checks original source refs, rejected-route warnings,
 compaction boundary preservation, relevant decision selection, and anti-nag
 suppression. It is a synthetic contract, not private real-history lift evidence.
+
+Run the public-safe E2E50 silent-constraint case-pack scorer scaffold:
+
+```powershell
+python benchmarks\aippocampus\benchmark_e2e50_silent_constraint.py --json
+```
+
+This #279 scaffold scores hash/count-only annotated behavior-code cases and
+keeps `quality_gate_ok=false` until source-reviewed private gold/calibration
+cases become a representative E2E50 sample under the shared methodology.
 
 Run the public-safe multimodal corpus-style retrieval contract:
 

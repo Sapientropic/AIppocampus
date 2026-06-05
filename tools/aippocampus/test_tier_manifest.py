@@ -35,6 +35,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_benchmark_continuous_memory_arms",
         "test_benchmark_corpus_converter",
         "test_benchmark_conversational_media_ingest_recall",
+        "test_benchmark_e2e50_silent_constraint",
         "test_benchmark_field_continuity",
         "test_benchmark_fresh_thread_recall_demo",
         "test_benchmark_fts5_recall",
@@ -282,6 +283,7 @@ BENCHMARK_STEMS = frozenset(
         "test_benchmark_compaction_continuity",
         "test_benchmark_continuous_memory_arms",
         "test_benchmark_conversational_media_ingest_recall",
+        "test_benchmark_e2e50_silent_constraint",
         "test_benchmark_field_continuity",
         "test_benchmark_fresh_thread_recall_demo",
         "test_benchmark_fts5_recall",
@@ -317,6 +319,7 @@ BENCHMARK_STEMS = frozenset(
 BENCHMARK_SMOKE_STEMS = frozenset(
     {
         "test_benchmark_field_continuity",
+        "test_benchmark_e2e50_silent_constraint",
         "test_benchmark_hippocampal_recall",
         "test_benchmark_knowledge_pollution",
         "test_benchmark_locomo_public_users",

@@ -189,6 +189,7 @@ benchmark runner should be added here and linked to its dated evidence owner.
 | FTS5 real-history recall | `benchmarks/aippocampus/benchmark_fts5_recall.py` | `docs/evidence/readiness/public-readiness-verification.md`, `docs/planning/next-iteration-plan.md` |
 | Track C payload fidelity | `benchmarks/aippocampus/benchmark_payload_fidelity.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `docs/evidence/benchmarks/memory-pain-fixture-report.md` |
 | Track D synthetic compaction continuity | `benchmarks/aippocampus/benchmark_compaction_continuity.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `docs/evidence/readiness/public-readiness-verification.md` |
+| E2E50 silent-constraint case-pack scorer scaffold | `benchmarks/aippocampus/benchmark_e2e50_silent_constraint.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `benchmark_corpus/e2e50_silent_constraint/fixture.json`, #279 |
 | Continuous-memory attribution arms, host-native baseline, pre-registration, cost/harm ledger, cost/harm sensitivity, and scenario provenance/holdout controls | `benchmarks/aippocampus/benchmark_continuous_memory_arms.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, #378/#406/#407/#408/#409/#410 |
 | Optional live semantic gate | `benchmarks/aippocampus/benchmark_live_semantic_gate.py` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `benchmark_corpus/README.md` |
 | Prompt hook local hot-path funnel | `benchmarks/aippocampus/benchmark_prompt_hot_path_funnel.py` | `skills/aippocampus/references/ambient-hooks.md`, #602 |
@@ -246,6 +247,7 @@ pasting raw JSON into multiple docs.
 | Living cue cache public-safe smoke | `tools/aippocampus/smoke/smoke_living_cue_cache.py` | `skills/aippocampus/references/ambient-hooks.md`, `docs/research/ambient-associative-recall.md`, #281 |
 | Real Codex long-session continuity smoke | `tools/aippocampus/smoke/smoke_codex_long_session_continuity.py` | `docs/evidence/readiness/public-readiness-verification.md` |
 | E2E50 silent-constraint candidate seed scanner | `tools/aippocampus/smoke/smoke_e2e50_seed_candidates.py`; deterministic unittest included in `benchmark-smoke` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, #279 |
+| E2E50 silent-constraint case-pack scorer scaffold | `benchmarks/aippocampus/benchmark_e2e50_silent_constraint.py`; deterministic unittest included in `benchmark-smoke` | `docs/evidence/benchmarks/memory-decision-benchmark-plan.md`, `benchmark_corpus/e2e50_silent_constraint/fixture.json`, #279 |
 | Claude Code MCP host probe | `tools/aippocampus/smoke/smoke_claude_code_mcp_host.py` | `docs/evidence/readiness/public-readiness-verification.md` |
 | Claude Code local-history parser smoke | `tools/aippocampus/smoke/smoke_claude_code_history.py` | `docs/evidence/readiness/public-readiness-verification.md` |
 | Synthetic cross-agent continuity smoke | `tools/aippocampus/smoke/smoke_cross_agent_continuity.py` | `docs/evidence/readiness/public-readiness-verification.md` |
