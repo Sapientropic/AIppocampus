@@ -13,6 +13,7 @@ import re
 from pathlib import Path
 from typing import Any, Iterable
 
+from aippocampus_runtime.artifacts.publish import index_generation_diagnostics
 from aippocampus_runtime.core import aippocampus_registry_dir, now_utc
 from aippocampus_runtime.sync.bundle import iter_clean_source_sync_files, iter_registry_sync_files
 
@@ -188,6 +189,11 @@ def scan_thread(
     sqlite = sqlite_stats(index_dir)
     raw_bytes = raw_rollout_bytes(entry)
     fanout = sqlite["segment_sqlite_count"] or sqlite["main_sqlite_count"]
+    index_generations = index_generation_diagnostics(
+        index_dir / MAIN_SQLITE_NAME,
+        root=registry_dir,
+        include_paths=include_paths,
+    )
 
     return {
         "thread_key": entry.get("thread_key"),
@@ -204,6 +210,7 @@ def scan_thread(
         "index_amplification_ratio": ratio(generated_index, canonical_clean),
         "segment_count_declared": segment_manifest_count(index_dir),
         "query_fanout_indexes": fanout,
+        "index_generations": index_generations,
         **sqlite,
     }
 
@@ -328,6 +335,18 @@ def build_report(
         "main_sqlite_bytes": sum(int(item["main_sqlite_bytes"]) for item in scanned),
         "segment_sqlite_count": sum(int(item["segment_sqlite_count"]) for item in scanned),
         "segment_sqlite_bytes": sum(int(item["segment_sqlite_bytes"]) for item in scanned),
+        "old_generation_count": sum(
+            int((item.get("index_generations") or {}).get("old_generation_count") or 0)
+            for item in scanned
+        ),
+        "generation_gc_candidate_count": sum(
+            int((item.get("index_generations") or {}).get("generation_gc_candidate_count") or 0)
+            for item in scanned
+        ),
+        "generation_gc_candidate_bytes": sum(
+            int((item.get("index_generations") or {}).get("generation_gc_candidate_bytes") or 0)
+            for item in scanned
+        ),
     }
     totals["index_amplification_ratio"] = ratio(
         int(totals["generated_index_bytes"]), int(totals["canonical_clean_source_bytes"])

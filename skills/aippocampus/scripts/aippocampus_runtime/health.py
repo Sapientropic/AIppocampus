@@ -12,7 +12,10 @@ from datetime import datetime, timezone
 from pathlib import Path, PureWindowsPath
 from typing import Any, Mapping
 
-from aippocampus_runtime.artifacts.publish import resolve_sqlite_index_path
+from aippocampus_runtime.artifacts.publish import (
+    index_generation_diagnostics,
+    resolve_sqlite_index_path,
+)
 from aippocampus_runtime.core import (
     aippocampus_registry_resolution,
     codex_home,
@@ -297,6 +300,11 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
     messages_path = index_dir / "messages.jsonl"
     stable_sqlite_path = index_dir / "source_index.sqlite"
     sqlite_path = resolve_sqlite_index_path(stable_sqlite_path)
+    index_generations = index_generation_diagnostics(
+        stable_sqlite_path,
+        root=index_dir,
+        include_paths=False,
+    )
     manifest = load_json(manifest_path)
     index_intentional_eviction = {"detected": False}
     if not sqlite_path.exists():
@@ -562,6 +570,7 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
             "manifest": str(manifest_path),
             "sqlite": str(sqlite_path),
             "stable_sqlite": str(stable_sqlite_path),
+            "generations": index_generations,
             "intentional_eviction": index_intentional_eviction,
             "exists": bool(manifest),
             "stale": index_stale,

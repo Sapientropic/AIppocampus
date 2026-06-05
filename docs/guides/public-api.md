@@ -149,7 +149,9 @@ The CLI contract applies to documented operator commands, especially:
 - `aippocampus storage gc --apply --class rebuildable` as the explicit
   path-level rebuildable-cache eviction path for retention-report-backed main
   SQLite caches; capacity aggregates and source/review artifacts remain outside
-  apply v1
+  apply v1. Old source-index generation directories may appear as plan-only
+  GC candidates in dry-run JSON, but apply v1 must not delete them until a
+  reader-pin/TTL cleanup contract is implemented.
 - `python -m aippocampus_runtime.registry.api register-source --provider generic-jsonl --input <path>`
 - `python -m aippocampus_runtime.mcp.server --list-tools`
 - `python -m aippocampus_runtime.sync.encrypted.admin key|migrate-to-encrypted|cleanup-plaintext|migrate-object-to-encrypted|cleanup-object-plaintext`

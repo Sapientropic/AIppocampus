@@ -163,6 +163,12 @@ class StorageGovernanceTests(unittest.TestCase):
             encoding="utf-8",
         )
 
+    def _write_index_generation(self, generation_id: str, size: int) -> Path:
+        generation_dir = self.index / "generations" / generation_id
+        generation_dir.mkdir(parents=True)
+        (generation_dir / "source_index.sqlite").write_bytes(b"g" * size)
+        return generation_dir
+
     def test_dry_run_uses_existing_reports_without_leaking_private_text_or_paths(self) -> None:
         plan = storage_governance.build_plan(
             self.root,
@@ -392,6 +398,49 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertEqual(result["blocked"][0]["reason_code"], "path_level_retention_required")
         self.assertTrue(self.sqlite.exists())
+
+    def test_dry_run_identifies_old_generation_gc_candidates_as_plan_only(self) -> None:
+        current = self._write_index_generation("gen_20260605T010000_current", 41)
+        last_known_good = self._write_index_generation("gen_20260605T005900_lkg", 37)
+        old = self._write_index_generation("gen_20260605T004500_old", 29)
+        (self.index / "source_index.pointer.json").write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_sqlite_index_pointer",
+                    "current_generation": current.name,
+                    "last_known_good_generation": last_known_good.name,
+                    "current": f"generations/{current.name}/source_index.sqlite",
+                    "last_known_good": f"generations/{last_known_good.name}/source_index.sqlite",
+                    "stable": "source_index.sqlite",
+                    "compatibility_path": "source_index.sqlite",
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        plan = storage_governance.build_plan(self.root, registry_dir=self.registry)
+        payload = json.dumps(plan, ensure_ascii=False)
+        old_generation_candidates = [
+            item
+            for item in plan["candidates"]
+            if item["kind"] == "rebuildable_old_index_generations"
+        ]
+
+        self.assertEqual(len(old_generation_candidates), 1)
+        candidate = old_generation_candidates[0]
+        self.assertEqual(candidate["tier"], "rebuildable_cache")
+        self.assertEqual(candidate["bytes"], 29)
+        self.assertEqual(candidate["source_report"]["section"], "index_generations")
+        self.assertEqual(candidate["source_report"]["current_generation"], current.name)
+        self.assertEqual(candidate["source_report"]["last_known_good_generation"], last_known_good.name)
+        self.assertEqual(candidate["path"]["relative_path"], f"threads/session-one/index/generations/{old.name}")
+        self.assertEqual(
+            candidate["preconditions"]["reader_pin_or_ttl_contract"]["status"],
+            "blocked",
+        )
+        self.assertIn("plan-only", candidate["rebuild_command"])
+        self.assertNotIn(str(self.root), payload)
 
     def test_apply_cli_returns_json_result(self) -> None:
         with patch("sys.stdout", new=StringIO()) as stdout:

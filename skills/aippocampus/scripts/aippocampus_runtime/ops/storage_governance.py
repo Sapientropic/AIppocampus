@@ -36,6 +36,8 @@ from aippocampus_runtime.ops.storage_governance_contract import (
     TIER_REBUILDABLE_CACHE,
     TIER_REVIEW_ARTIFACT,
     candidate_class_for_tier,
+    capacity_preconditions,
+    generation_gc_candidates_from_capacity_thread,
     human_bytes,
     matches_class,
     plan_metrics,
@@ -144,46 +146,6 @@ def _retention_preconditions(
     return preconditions
 
 
-def _capacity_preconditions(thread: dict[str, Any], *, include_active: bool) -> dict[str, Any]:
-    clean_bytes = int(thread.get("canonical_clean_source_bytes") or 0)
-    raw_bytes = int(thread.get("raw_audit_source_bytes") or 0)
-    source_ok = clean_bytes > 0 or raw_bytes > 0
-    return {
-        "raw_or_clean_source": status(
-            "passed" if source_ok else "blocked",
-            evidence=(
-                f"capacity thread clean={clean_bytes} raw={raw_bytes}"
-                if source_ok
-                else "capacity report has no raw or clean-source bytes for this thread"
-            ),
-            requirement="Exact raw or clean source must remain available before cache eviction.",
-        ),
-        "clean_source_manifest": status(
-            "passed" if clean_bytes > 0 else "needs_apply_check",
-            evidence=(
-                f"capacity thread canonical_clean_source_bytes={clean_bytes}"
-                if clean_bytes > 0
-                else "capacity report cannot prove clean-source manifest bytes"
-            ),
-            requirement="Clean-source manifest must exist for caches derived from clean source.",
-        ),
-        "active_thread_exclusion": status(
-            "needs_apply_check" if include_active else "blocked_by_default",
-            evidence=(
-                "--include-active was passed; apply mode must still prove the thread is safe."
-                if include_active
-                else "Active-thread matching requires apply-time thread identity checks."
-            ),
-            requirement="Do not evict the current active thread unless explicitly requested.",
-        ),
-        "writer_or_export_lease": status(
-            "needs_apply_check",
-            evidence="Capacity report does not inspect live leases.",
-            requirement="No active writer/build/export lease may own the target path.",
-        ),
-    }
-
-
 def _candidate_from_retention_item(
     item: dict[str, Any],
     *,
@@ -281,7 +243,7 @@ def _capacity_candidates(
                     f"index_amplification_ratio={thread.get('index_amplification_ratio')}",
                     f"query_fanout_indexes={thread.get('query_fanout_indexes')}",
                 ],
-                "preconditions": _capacity_preconditions(
+                "preconditions": capacity_preconditions(
                     thread,
                     include_active=include_active,
                 ),
@@ -291,6 +253,12 @@ def _capacity_candidates(
                 ),
                 "expected_rebuild_cost": {"class": "medium", "seconds": None},
             }
+        )
+        candidates.extend(
+            generation_gc_candidates_from_capacity_thread(
+                thread,
+                include_active=include_active,
+            )
         )
     return candidates
 

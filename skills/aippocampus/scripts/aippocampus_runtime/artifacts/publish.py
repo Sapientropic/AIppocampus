@@ -10,7 +10,7 @@ import sqlite3
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterator
+from typing import Any, Iterator
 
 DEFAULT_ARTIFACT_LEASE_STALE_SECONDS = 6 * 60 * 60
 DEFAULT_SQLITE_BUSY_TIMEOUT_MS = 30_000
@@ -81,6 +81,18 @@ def _load_pointer(pointer_path: Path) -> dict:
     return data if isinstance(data, dict) else {}
 
 
+def _load_pointer_with_diagnostics(pointer_path: Path) -> tuple[dict[str, Any], str | None]:
+    if not pointer_path.exists():
+        return {}, None
+    try:
+        data = json.loads(pointer_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {}, type(exc).__name__
+    if not isinstance(data, dict):
+        return {}, "pointer_not_object"
+    return data, None
+
+
 def _candidate_from_pointer(pointer_path: Path, value: object) -> Path | None:
     if not isinstance(value, str) or not value.strip():
         return None
@@ -116,6 +128,172 @@ def _generation_id_for_path(pointer_path: Path, path: Path | None) -> str | None
     if len(parts) >= 3 and parts[0] == INDEX_GENERATIONS_DIR and parts[1].startswith("gen_"):
         return parts[1]
     return None
+
+
+def _safe_file_size(path: Path) -> int:
+    try:
+        return path.stat().st_size if path.is_file() else 0
+    except OSError:
+        return 0
+
+
+def _safe_dir_size(path: Path) -> int:
+    total = 0
+    if not path.exists():
+        return 0
+    for item in path.rglob("*"):
+        total += _safe_file_size(item)
+    return total
+
+
+def _diagnostic_relative_path(path: Path, *, root: Path | None) -> str:
+    if root is not None:
+        try:
+            return path.resolve().relative_to(root.resolve()).as_posix()
+        except (OSError, ValueError):
+            pass
+    try:
+        return path.resolve().relative_to(path.parent.parent.parent.resolve()).as_posix()
+    except (OSError, ValueError):
+        return path.name
+
+
+def _generation_path_projection(
+    path: Path,
+    *,
+    root: Path | None,
+    include_paths: bool,
+) -> dict[str, Any]:
+    projected: dict[str, Any] = {"relative_path": _diagnostic_relative_path(path, root=root)}
+    if include_paths:
+        projected["path"] = str(path)
+    return projected
+
+
+def index_generation_diagnostics(
+    sqlite_or_pointer_path: Path,
+    *,
+    root: Path | None = None,
+    include_paths: bool = False,
+) -> dict[str, Any]:
+    """Summarize source-index generations without treating them as source truth.
+
+    Old generation directories are copy-on-write reader targets. This diagnostic
+    reports which generations are safe candidates for future reader-pin/TTL
+    cleanup, but intentionally performs no deletion and exposes no absolute
+    paths unless the caller opts into local maintainer diagnostics.
+    """
+
+    pointer_path = index_pointer_path(Path(sqlite_or_pointer_path))
+    index_dir = pointer_path.parent
+    pointer_started = time.perf_counter()
+    pointer, pointer_error = _load_pointer_with_diagnostics(pointer_path)
+    pointer_load_ms = round((time.perf_counter() - pointer_started) * 1000, 3)
+    generations_dir = index_dir / INDEX_GENERATIONS_DIR
+    generation_dirs = sorted(item for item in generations_dir.glob("gen_*") if item.is_dir())
+    current_path = _candidate_from_pointer(pointer_path, pointer.get("current"))
+    last_known_good_path = _candidate_from_pointer(pointer_path, pointer.get("last_known_good"))
+    stable_path = _candidate_from_pointer(pointer_path, pointer.get("stable")) or index_dir / INDEX_SQLITE_NAME
+
+    current_generation = (
+        str(pointer.get("current_generation"))
+        if pointer.get("current_generation")
+        else _generation_id_for_path(pointer_path, current_path)
+    )
+    last_known_good_generation = (
+        str(pointer.get("last_known_good_generation"))
+        if pointer.get("last_known_good_generation")
+        else _generation_id_for_path(pointer_path, last_known_good_path)
+    )
+    protected_generations = {
+        item
+        for item in (current_generation, last_known_good_generation)
+        if isinstance(item, str) and item
+    }
+
+    generation_rows: list[dict[str, Any]] = []
+    gc_candidates: list[dict[str, Any]] = []
+    for generation_dir in generation_dirs:
+        generation_id = generation_dir.name
+        sqlite_path = generation_dir / INDEX_SQLITE_NAME
+        size = _safe_dir_size(generation_dir)
+        row = {
+            "generation": generation_id,
+            "bytes": size,
+            "role": "protected" if generation_id in protected_generations else "old",
+            "sqlite_exists": sqlite_path.is_file(),
+            **_generation_path_projection(generation_dir, root=root, include_paths=include_paths),
+        }
+        generation_rows.append(row)
+        if generation_id not in protected_generations:
+            gc_candidates.append(row)
+
+    current_exists = bool(current_path and current_path.is_file())
+    last_known_good_exists = bool(last_known_good_path and last_known_good_path.is_file())
+    stable_exists = bool(stable_path and stable_path.is_file())
+    if not pointer_path.exists():
+        status_name = "pointer_missing"
+        fallback_used = "stable" if stable_exists else None
+    elif pointer_error:
+        status_name = "pointer_unreadable"
+        fallback_used = "stable" if stable_exists else None
+    elif current_exists:
+        status_name = "ok"
+        fallback_used = "current"
+    elif last_known_good_exists:
+        status_name = "current_missing_last_known_good_available"
+        fallback_used = "last_known_good"
+    elif stable_exists:
+        status_name = "current_and_last_known_good_missing_stable_available"
+        fallback_used = "stable"
+    else:
+        status_name = "dangling_pointer"
+        fallback_used = None
+
+    current_bytes = (
+        _safe_dir_size(current_path.parent)
+        if current_path is not None
+        and current_path.parent.name == current_generation
+        and current_path.parent.parent.name == INDEX_GENERATIONS_DIR
+        else 0
+    )
+    last_known_good_bytes = (
+        _safe_dir_size(last_known_good_path.parent)
+        if last_known_good_path is not None
+        and last_known_good_path.parent.name == last_known_good_generation
+        and last_known_good_path.parent.parent.name == INDEX_GENERATIONS_DIR
+        else 0
+    )
+    old_generation_bytes = sum(int(item["bytes"]) for item in gc_candidates)
+    publish_latency = pointer.get("publish_latency_ms")
+    try:
+        publish_latency_ms = float(publish_latency) if publish_latency is not None else None
+    except (TypeError, ValueError):
+        publish_latency_ms = None
+
+    return {
+        "pointer_exists": pointer_path.exists(),
+        "pointer_error": pointer_error,
+        "status": status_name,
+        "fallback_used": fallback_used,
+        "current_generation": current_generation,
+        "last_known_good_generation": last_known_good_generation,
+        "current_generation_exists": current_exists,
+        "last_known_good_generation_exists": last_known_good_exists,
+        "stable_compatibility_exists": stable_exists,
+        "compatibility_path": pointer.get("compatibility_path") or pointer.get("stable"),
+        "generation_count": len(generation_rows),
+        "current_generation_bytes": current_bytes,
+        "last_known_good_generation_bytes": last_known_good_bytes,
+        "old_generation_count": len(gc_candidates),
+        "old_generation_bytes": old_generation_bytes,
+        "generation_gc_candidate_count": len(gc_candidates),
+        "generation_gc_candidate_bytes": old_generation_bytes,
+        "generation_gc_candidates": gc_candidates,
+        "pointer_load_ms": pointer_load_ms,
+        "publish_latency_ms": publish_latency_ms,
+        "cleanup_policy": "plan_only_until_reader_pin_or_ttl_contract",
+    }
 
 
 def resolve_sqlite_index_path(sqlite_or_pointer_path: Path) -> Path:
