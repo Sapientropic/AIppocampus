@@ -10,6 +10,16 @@ same boundary as the rest of the project: clean source remains truth, generated
 summaries and symbolic encodings remain navigation or intuition layers, and
 strong claims need source-backed evidence.
 
+## Long Garden
+
+Use [`seeds/`](seeds/) for ideas that should be remembered but should not stand
+in the active roadmap or open-issue foreground yet. A seed can graduate when it
+has source-backed motivation, a clear product layer, and a 1-2 week fixture,
+doc, CLI, runtime, or verification slice.
+
+This keeps the research soul intact while protecting the ordinary user path
+from looking like a control tower.
+
 ## Reading Order
 
 1. [The Pearl of Presence](pearl-of-presence.md)

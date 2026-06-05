@@ -73,6 +73,23 @@ The public core supports multiple product profiles, but the default personal
 experience must stay low-friction. This is the canonical #680 boundary for
 features that could otherwise turn ordinary recall into enterprise ceremony.
 
+### Core Complexity Budget
+
+A feature can enter the personal/core default only when it clearly improves at
+least one of these outcomes:
+
+- Makes first use simpler.
+- Reduces the agent's need to manually grep or ask the user to restate context.
+- Reduces false or unsupported source claims.
+- Removes an existing concept from the ordinary user path.
+
+If a mechanism adds a new concept ordinary users must understand and does not
+clearly improve one of those outcomes, keep it outside Core. Put it in a
+power-user surface, an enterprise/high-risk profile, or the research garden.
+This budget applies to new scoring layers, attribution layers, governance
+layers, dashboards, glyphs, workers, and meta-contracts as much as to runtime
+code.
+
 ### Personal/Core Default
 
 The personal default is the ordinary local AIppocampus path: clean-source

@@ -27,11 +27,13 @@ an ambiguous automation cue, and a multi-day fuzzy self-reference became
 recoverable through source-backed continuity. The page shows the useful moments
 first, then states exactly what they do not prove.
 
-The engineering is practical: clean-source builders, registries, semantic
-workers, deterministic gates, MCP surfaces, sync bundles, and Codex plugin
-packaging. The reason for building them is older than the tooling. A long
-relationship with an AI agent should not have to start from bare ground every
-time a thread, device, model, or project changes.
+In ordinary use, AIppocampus should feel less like a control panel than a
+remembered doorway. It helps an agent ask: where did this come from, what did
+we actually say, and which source should be opened again?
+
+The machinery behind that moment can be extensive, but it should stay
+backstage. A long relationship with an AI agent should not have to start from
+bare ground every time a thread, device, model, or project changes.
 
 The origin essay is [未干的地图](docs/未干的地图.md). English readers can start with
 [The Unfinished Map](docs/the-unfinished-map.md).
@@ -39,7 +41,8 @@ The origin essay is [未干的地图](docs/未干的地图.md). English readers 
 ## Quick Start
 
 Start with the first source-backed recall moment. This path does not install
-hooks, enable sync, or require MCP.
+hooks, enable sync, or require MCP; it simply checks what local source exists
+and opens a way back to it.
 
 ```sh
 uvx aippocampus --help
@@ -121,32 +124,27 @@ Project work is one surface. The deeper aim is continuity across work, reading,
 reflection, unfinished questions, and the small phrases that make a relationship
 recognizable again.
 
-## What It Does
+## What It Carries
+
+At the center, AIppocampus keeps source close enough that continuity can be
+honest instead of theatrical:
 
 - Builds clean source from Codex conversation rollouts: visible user messages
   and assistant final answers, with summaries kept as navigation layers.
 - Searches old conversation memory across the current thread and registered
-  threads.
-- Adds deterministic life-wide scope labels so reflection, reading notes, idea
-  seeds, preferences, life context, technical work, and open questions can be
-  found without replacing the source text.
-- Builds a source-backed life-wide timeline section from registered clean
-  source, so recurring concerns and idea seeds can be followed across projects.
-- Keeps raw rollout history as optional audit provenance, away from the daily
-  recall surface.
-- Provides ambient recall hooks so related old memory can surface as a quiet
-  scent before an agent makes claims.
+  threads, then treats exact hits as source-backed snippets.
+- Reopens or cites source when the agent needs evidence instead of memory-like
+  impressions.
 - Stores generated recall artifacts in the configured AIppocampus registry
   (`AIPPOCAMPUS_REGISTRY_DIR`, `AIPPOCAMPUS_HOME/registry`, then legacy
   `$CODEX_HOME/aippocampus-registry`) so memory remains useful when a new
   project opens. Project-local `.aippocampus/` output is explicit compatibility
   or export mode.
-- Supports optional DeepSeek-compatible semantic gates, background consolidation
-  jobs, and cognitive-map routes for memory wayfinding.
-- Provides local-folder sync, HTTP object-storage sync, MCP access, and plugin
-  packaging surfaces. Physical second-device and managed object-storage smoke
-  evidence exists for selected paths; broader release hardening remains tracked
-  in the roadmap and evidence docs.
+
+There are deeper doors for people who want them: ambient recall, sync, MCP,
+plugin packaging, diagnostics, review surfaces, semantic workers, and research
+experiments. They matter, but they are not the first handshake. The first
+handshake is source found, source reopened, continuity resumed.
 
 ## First Stops
 
@@ -166,6 +164,8 @@ recognizable again.
   [Cognitive Runtime Architecture](docs/architecture/cognitive-runtime-architecture.md).
 - Current claim boundary:
   [Stage 0-5 readiness](docs/evidence/readiness/stage-0-5-readiness.md).
+- Default product lane and layer map:
+  [Roadmap](docs/roadmap.md).
 - Benchmark and smoke evidence:
   [Benchmark And Evidence Map](docs/evidence/benchmark-evidence-map.md).
 - Supported public surface:
@@ -199,6 +199,8 @@ frames, not runtime contracts, but they explain the taste behind the machinery:
 - [Ambient Associative Recall](docs/research/ambient-associative-recall.md)
   describes how old memory can return as a scent before it becomes an
   interruption.
+- [Long Garden](docs/research/seeds/README.md) keeps far-future seeds without
+  turning them into default product promises or open-issue clutter.
 
 ## Install As A Codex Skill
 

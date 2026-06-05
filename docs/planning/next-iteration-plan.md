@@ -14,6 +14,40 @@ tracks the issue slices extracted from this file and related roadmap/readiness
 docs. Use the Project for status/filtering; keep this file as the source-backed
 handoff context.
 
+## Current Product Focus
+
+The next public-facing slice should keep the default lane narrow: import or
+register source, search/recall, reopen source, and carry the source-backed
+context forward. Use `docs/roadmap.md#product-layers` for the layer map and
+`docs/guides/public-core-boundary.md#core-complexity-budget` before promoting a
+heavier mechanism into Core.
+
+Open issues are for executable slices. If a topic cannot plausibly become a
+fixture, doc, CLI, runtime slice, or verified cleanup within 1-2 weeks, park it
+as a Discussion or a seed under `docs/research/seeds/` until it can be cut
+smaller.
+
+### Open Issue Cleanup Review
+
+As of 2026-06-05, `gh issue list --state open` showed several issues that could
+look too heavy from their titles alone. A follow-up body/comment review checked
+each candidate below before any remote action. The result: do not close these
+by title. Most already have source pointers, non-goals, acceptance criteria,
+partial PR evidence, or explicit remaining evidence gaps.
+
+| Layer | Reviewed issues | Current disposition |
+|---|---|---|
+| Core default | #201, #281, #707 | Keep open. These directly reduce manual query invention, improve source reopen, and make fresh-thread recall less brittle. |
+| Power user | #250, #313, #576 | Keep open as opt-in map, activation, and observability surfaces. Do not promote them into first-use onboarding without new evidence. |
+| Enterprise/high-risk | #679 | Keep open as a governed/high-risk policy capability. The comments already correct that purpose tokens are not personal-default ceremony. |
+| Research garden with executable slices | #703, #701, #663, #575, #574, #299, #163, #158 | Keep open for now. They are heavy, but each has acceptance criteria, child slices, partial evidence, or explicit live-quality gaps. Move only future speculative expansions to Discussion / `docs/research/seeds/`. |
+| Infrastructure | #637, #639, #643, #376, #463 | Keep open where deterministic sync, scale, portability, or Rust-core claim boundaries still need executable proof. |
+
+Cleanup action from this review is local/documentary, not remote closure:
+sharpen the Core/default language, keep these issues out of the ordinary user
+front door, and prevent future speculative expansions from becoming standalone
+open issues before they have an executable slice.
+
 ## Current Baseline To Preserve
 
 - Public repo boundary: no raw rollouts, registry exports, private anchors,
@@ -385,6 +419,10 @@ handoff context.
 
 - A generic vector database rewrite.
 - A cloud service dependency.
+- New default-user concepts before the Core complexity budget says they reduce
+  friction or source-claim risk.
+- Standalone open issues whose main purpose is remembering a beautiful idea.
+  Put those in Discussion or `docs/research/seeds/` first.
 - Predictive replay or richer Phase 3 behavior beyond the deterministic
   `theme_emergence` first slice before Phase 2/3 source-backed signals are
   stable on real history.
