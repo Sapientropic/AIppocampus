@@ -842,6 +842,36 @@ output.write_bytes(b"FAKEAGE\\n" + base64.b64encode(data))
         self.assertEqual(list((self.bucket / self.prefix).rglob("*.age")), [])
         self.assertIn("DELETE", {request["method"] for request in self.server.requests})
 
+    def test_real_provider_smoke_reports_public_safe_provider_metadata(self) -> None:
+        result = smoke_real_provider_encrypted_sync.run_real_provider_encrypted_sync_smoke(
+            object_store_url=self.endpoint,
+            prefix=self.prefix,
+            recipient=self.recipient,
+            identity_files=[self.identity],
+            age_bin=self.fake_age,
+            run_id="metadata-unit-test",
+        )
+
+        self.assertTrue(result["ok"], result)
+        metadata = result["provider_metadata"]
+        self.assertEqual(metadata["schema_version"], 1)
+        self.assertEqual(metadata["source"], "encrypted_object_storage_smoke")
+        self.assertEqual(metadata["errors"], [])
+        self.assertEqual(metadata["object_count"], result["steps"]["push"]["object_count"])
+        self.assertEqual(metadata["object_count"], sum(metadata["size_bucket_counts"].values()))
+        self.assertGreater(metadata["total_ciphertext_bytes"], 0)
+        self.assertGreaterEqual(metadata["max_ciphertext_bytes"], metadata["min_ciphertext_bytes"])
+        self.assertEqual(metadata["path_shape_counts"]["encrypted_outer_manifest"], 1)
+        self.assertEqual(metadata["path_shape_counts"]["encrypted_inner_manifest"], 1)
+        self.assertGreater(metadata["path_shape_counts"]["encrypted_ciphertext_object"], 0)
+        self.assertTrue(metadata["claims"]["provider_can_observe_object_count"])
+        self.assertTrue(metadata["claims"]["provider_can_observe_ciphertext_object_sizes"])
+        self.assertFalse(metadata["claims"]["metadata_padding_evaluated"])
+        self.assertFalse(metadata["claims"]["traffic_analysis_resistance"])
+        self.assertIn("traffic_analysis_resistance", metadata["cannot_claim"])
+        self.assertNotIn("object_keys", metadata)
+        self.assertNotIn("credential", json.dumps(metadata, ensure_ascii=False).casefold())
+
     def test_object_storage_repair_reports_invalid_manifest(self) -> None:
         manifest_path = self.bucket / self.prefix / sync_bundle.SYNC_MANIFEST_NAME
         manifest_path.parent.mkdir(parents=True)

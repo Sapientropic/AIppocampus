@@ -27,11 +27,28 @@ _paths.ensure_paths()
 import smoke_cross_device_sync
 
 from aippocampus_runtime.sync import bundle as sync_bundle
+from aippocampus_runtime.sync.encrypted import bundle as encrypted_sync_bundle
 from aippocampus_runtime.sync.encrypted import object_storage as encrypted_sync_object_storage
 from aippocampus_runtime.sync.object_storage import cli as sync_object_storage
 from aippocampus_runtime.sync.object_storage import client as object_storage_client
 
 DEFAULT_SMOKE_PREFIX = "aippocampus/encrypted-sync-smoke"
+PROVIDER_METADATA_SCHEMA_VERSION = 1
+SIZE_BUCKETS: tuple[tuple[int, str], ...] = (
+    (1024, "le_1KiB"),
+    (4096, "le_4KiB"),
+    (16384, "le_16KiB"),
+    (65536, "le_64KiB"),
+    (262144, "le_256KiB"),
+    (1048576, "le_1MiB"),
+)
+OVER_1MIB_BUCKET = "gt_1MiB"
+PATH_SHAPE_KEYS = (
+    "encrypted_outer_manifest",
+    "encrypted_inner_manifest",
+    "encrypted_ciphertext_object",
+    "unknown_encrypted_object",
+)
 
 
 def token_from_env(env: Mapping[str, str], env_name: str | None) -> str | None:
@@ -128,6 +145,123 @@ def cleanup_encrypted_objects(
         "missing_after_delete": missing_after_delete,
         "errors": errors,
     }
+
+
+def size_bucket_label(size: int) -> str:
+    for ceiling, label in SIZE_BUCKETS:
+        if size <= ceiling:
+            return label
+    return OVER_1MIB_BUCKET
+
+
+def metadata_path_shape(path: Path, *, inner_manifest_object: str | None) -> str:
+    normalized = path.as_posix()
+    if normalized == encrypted_sync_object_storage.encrypted_manifest_relative_path().as_posix():
+        return "encrypted_outer_manifest"
+    if inner_manifest_object and normalized == inner_manifest_object:
+        return "encrypted_inner_manifest"
+    if (
+        len(path.parts) == 3
+        and path.parts[0] == encrypted_sync_bundle.ENCRYPTED_SYNC_DIR_NAME
+        and path.parts[1] == encrypted_sync_bundle.ENCRYPTED_OBJECTS_DIR_NAME
+        and path.suffix == ".age"
+    ):
+        return "encrypted_ciphertext_object"
+    return "unknown_encrypted_object"
+
+
+def empty_provider_metadata() -> dict[str, Any]:
+    return {
+        "schema_version": PROVIDER_METADATA_SCHEMA_VERSION,
+        "source": "encrypted_object_storage_smoke",
+        "object_count": 0,
+        "total_ciphertext_bytes": 0,
+        "min_ciphertext_bytes": 0,
+        "max_ciphertext_bytes": 0,
+        "size_bucket_counts": {label: 0 for _, label in SIZE_BUCKETS} | {OVER_1MIB_BUCKET: 0},
+        "path_shape_counts": {key: 0 for key in PATH_SHAPE_KEYS},
+        "claims": {
+            "provider_can_observe_object_count": False,
+            "provider_can_observe_ciphertext_object_sizes": False,
+            "metadata_padding_evaluated": False,
+            "traffic_analysis_resistance": False,
+        },
+        "cannot_claim": [
+            "traffic_analysis_resistance",
+            "metadata_padding_cost_benefit",
+            "provider_console_cleanup",
+            "broader_provider_matrix",
+        ],
+        "errors": [],
+    }
+
+
+def observe_provider_metadata(
+    client: object_storage_client.HttpObjectStoreClient,
+    relative_paths: Iterable[Path],
+    inner_manifest: dict[str, Any],
+) -> dict[str, Any]:
+    """Return public-safe provider-visible metadata evidence for a smoke run.
+
+    The provider and its console can see object keys, counts, sizes, and upload
+    cadence. The smoke keeps the published evidence deliberately aggregated:
+    no object keys, credential material, endpoint URLs, or decrypted registry
+    contents leave this helper.
+    """
+
+    metadata = empty_provider_metadata()
+    paths = sorted({path.as_posix(): path for path in relative_paths}.values())
+    inner_manifest_object = str(
+        ((inner_manifest.get("outer_manifest") or {}).get("encryption") or {}).get(
+            "manifest_object"
+        )
+        or ""
+    )
+    sizes: list[int] = []
+
+    for index, path in enumerate(paths):
+        shape = metadata_path_shape(path, inner_manifest_object=inner_manifest_object)
+        metadata["path_shape_counts"][shape] = metadata["path_shape_counts"].get(shape, 0) + 1
+        try:
+            data = client.get_object(path)
+        except FileNotFoundError:
+            metadata["errors"].append(
+                {
+                    "index": index,
+                    "path_shape": shape,
+                    "code": "missing_file",
+                    "message": "encrypted smoke object was missing during metadata observation",
+                }
+            )
+            continue
+        except RuntimeError as exc:
+            metadata["errors"].append(
+                {
+                    "index": index,
+                    "path_shape": shape,
+                    "code": "request_failed",
+                    "error_type": type(exc).__name__,
+                    "message": "encrypted smoke object could not be read during metadata observation",
+                }
+            )
+            continue
+        size = len(data)
+        sizes.append(size)
+        bucket = size_bucket_label(size)
+        metadata["size_bucket_counts"][bucket] += 1
+
+    if sizes:
+        metadata.update(
+            {
+                "object_count": len(sizes),
+                "total_ciphertext_bytes": sum(sizes),
+                "min_ciphertext_bytes": min(sizes),
+                "max_ciphertext_bytes": max(sizes),
+            }
+        )
+        metadata["claims"]["provider_can_observe_object_count"] = True
+        metadata["claims"]["provider_can_observe_ciphertext_object_sizes"] = True
+    return metadata
 
 
 def issue(code: str, message: str, **extra: Any) -> dict[str, Any]:
@@ -235,6 +369,7 @@ def run_real_provider_encrypted_sync_smoke(
         "errors": [],
         "kept_objects": keep_objects,
     }
+    provider_metadata: dict[str, Any] = empty_provider_metadata()
 
     try:
         identity_paths: list[str | Path] = [Path(path) for path in identity_files or []]
@@ -334,16 +469,29 @@ def run_real_provider_encrypted_sync_smoke(
                         actual=len(cleanup_paths),
                     )
                 )
+            client = object_storage_client.object_storage_client_for(
+                object_store_url,
+                prefix=smoke_prefix,
+                token=token,
+                timeout=timeout,
+                **provider_values,
+            )
+            provider_metadata = observe_provider_metadata(
+                client,
+                cleanup_paths,
+                steps["repair"]["inner_manifest"],
+            )
+            if provider_metadata["errors"]:
+                failures.append(
+                    issue(
+                        "provider_metadata_observation_failed",
+                        "one or more encrypted smoke objects could not be sampled for metadata evidence",
+                        errors=provider_metadata["errors"],
+                    )
+                )
             if keep_objects:
                 cleanup.update({"attempted": len(cleanup_paths), "kept_objects": True})
             else:
-                client = object_storage_client.object_storage_client_for(
-                    object_store_url,
-                    prefix=smoke_prefix,
-                    token=token,
-                    timeout=timeout,
-                    **provider_values,
-                )
                 cleanup.update(cleanup_encrypted_objects(client, cleanup_paths))
                 if cleanup["errors"] or cleanup["missing_after_delete"]:
                     failures.append(
@@ -370,6 +518,7 @@ def run_real_provider_encrypted_sync_smoke(
                 "generated_ephemeral_age_identity": not bool(identity_files),
             },
             "steps": {name: summarize_step(step) for name, step in steps.items()},
+            "provider_metadata": provider_metadata,
             "cleanup": cleanup,
             "observed": {
                 "target_threads_exists": target_threads_exists,
