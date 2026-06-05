@@ -48,17 +48,21 @@ compact cards with `mode`, `confidence`, `cards`, `avoid`, `latency_ms`,
 `cache_status`, `late_update_policy`, and a small `late_warm_handoff` policy.
 Cards are guidance for the agent, not text to paste into the final answer.
 `scent` and `candidate` cards are resonance only; only `evidence` cards may be
-treated as source-backed, and even then exact claims should be checked against
-clean source when they matter.
+treated as source-backed. A bounded evidence card is usable when it matters to
+the current answer; reopen source for disputed exact wording, wider context, or
+high-risk claims.
 
 Cards may include `provenance_class`, `cached_origin`,
-`source_reopen_required`, `reopenable_ref_count`, and per-card `cache_status`.
+`authority_state`, `source_reopen_required`,
+`reopen_required_before_claim`, `reopen_recommended_for_exact_quote`,
+`reopenable_ref_count`, and per-card `cache_status`.
 The allowed provenance classes are small and non-secret:
 `deterministic_cue`, `warm_scout_proposal`, `cached_warm_card`,
 `cognitive_map_route`, `working_memory_source`, `working_memory_model`, and
 `source_backed_reopen`. Provenance complements `support_level`, `visibility`,
-and `source_validation`; it must not be used to upgrade a card into fact or to
-skip clean-source reopen.
+and `source_validation`; authority fields decide whether a card is still a
+handle (`reopen_required_before_claim`) or already bounded evidence
+(`bounded_evidence_ready`).
 
 `ambient_recall` also carries a `fresh_thread_packet` projected by
 `fresh_thread_scent.py`. This is the #282 contract that bridges the #281
@@ -571,8 +575,9 @@ cache status, topic-epoch presence without the epoch value, warm-background
 status, and a redacted event id. It must not emit raw prompt text, raw cards,
 snippets, source titles, session/turn ids, secrets, topic-epoch values, or local
 paths. `scent` and `candidate` remain navigation hints; even
-`source_backed_evidence` still tells the agent to reopen clean source before
-making exact claims. Use `--log`/`--log-path` only for trusted local debugging;
+`source_backed_evidence` remains bounded rather than omniscient: use it when
+relevant, and reopen clean source for disputed exact wording, wider context, or
+high-risk claims. Use `--log`/`--log-path` only for trusted local debugging;
 the audit projection is the surface intended for issue reports and demos.
 
 `deep_archival_recall` is an escalation request, not a license to dump history:

@@ -165,6 +165,12 @@ def ambient_cache_surface_report(cache: Mapping[str, Any] | None) -> dict[str, A
         ref_count = len(refs) if isinstance(refs, list) else 0
         if card.get("source_reopen_required"):
             reason_codes.append("source_reopen_required")
+        if card.get("reopen_required_before_claim"):
+            reason_codes.append("reopen_required_before_claim")
+        if card.get("authority_state") == "bounded_evidence_ready":
+            reason_codes.append("bounded_evidence_ready")
+        if card.get("reopen_recommended_for_exact_quote"):
+            reason_codes.append("reopen_recommended_for_exact_quote")
         if ref_count == 0:
             reason_codes.append("no_source_refs")
         if card.get("source_thickness") == "thin" or safe_int(card.get("reopenable_ref_count")) == 1 or card.get("support_level") in {"candidate", "review_required"}:
@@ -194,6 +200,9 @@ def ambient_cache_surface_report(cache: Mapping[str, Any] | None) -> dict[str, A
         details={
             "topic_epoch_known": bool(cache.get("topic_epoch")),
             "source_reopen_required": any(bool(card.get("source_reopen_required")) for card in cards),
+            "bounded_evidence_ready": any(
+                card.get("authority_state") == "bounded_evidence_ready" for card in cards
+            ),
         },
     )
 
