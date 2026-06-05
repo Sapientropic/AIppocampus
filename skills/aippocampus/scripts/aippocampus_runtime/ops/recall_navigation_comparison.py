@@ -22,7 +22,7 @@ from aippocampus_runtime.mcp import server as mcp_server
 from aippocampus_runtime.mcp.recall_navigation import NAVIGATION_SCHEMA_VERSION
 
 COMPARISON_KIND = "aippocampus_recall_navigation_comparison"
-COMPARISON_SCHEMA_VERSION = 2
+COMPARISON_SCHEMA_VERSION = 3
 ARM_DIRECT = "direct_search"
 ARM_HOOK = "hook_only"
 ARM_PROGRESSIVE = "progressive_recall"
@@ -246,6 +246,7 @@ def _run_progressive_recall(
     if after_context is not None:
         after_context()
     suggested_next = _as_dict(selected_route.get("suggested_next"))
+    context_source_ref_count = len(_as_list(selected_route.get("source_refs")))
     deepen_result = mcp_server.call_recall_deepen(
         {
             "handle": selected_route.get("handle"),
@@ -278,7 +279,8 @@ def _run_progressive_recall(
         "source_reopen_follow_through": success,
         "selected_route_index": selected_index,
         "selected_next_tool": str(suggested_next.get("tool") or ""),
-        "source_ref_count": len(source_refs),
+        "source_ref_count": context_source_ref_count,
+        "deepen_source_ref_count": len(source_refs),
         "wrong_or_stale_handle": wrong_or_stale,
         "wrong_route_drag_count": 1 if wrong_or_stale else 0,
         "scent_as_fact_violation": False,
@@ -331,9 +333,126 @@ def _aggregate(cases: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     return {"arms": arms}
 
 
+def _candidate_funnel_items(row: Mapping[str, Any]) -> list[dict[str, Any]]:
+    case_id = str(row.get("case_id") or "case")
+    case_family = str(row.get("case_family") or "unspecified")
+    progressive = _as_dict(_as_dict(row.get("arms")).get(ARM_PROGRESSIVE))
+    source_ref_count = int(progressive.get("source_ref_count") or 0)
+    route_actionable = bool(progressive.get("route_actionable"))
+    source_joined = route_actionable and source_ref_count > 0
+    core_reason = (
+        "progressive_source_joined_route"
+        if source_joined
+        else "progressive_route_needs_source_rejoin"
+    )
+    candidates = [
+        {
+            "case_id": case_id,
+            "pool": "core",
+            "candidate_class": "source_joined_progressive_route",
+            "why_included": core_reason,
+            "source_ref_count": max(source_ref_count, 1 if route_actionable else 0),
+            "source_joined": source_joined,
+            "route_actionable": route_actionable,
+            "promoted_to_evidence": False,
+            "golden_association_rescued": False,
+            "wrong_route_drag": bool(progressive.get("wrong_or_stale_handle")),
+            "frontier_marker_helpful": False,
+            "intersection_bridge": False,
+        }
+    ]
+    if case_family == "fresh_thread_multilingual_vague_cue":
+        rescued = case_id == "ru_vague_life_cue"
+        candidates.append(
+            {
+                "case_id": case_id,
+                "pool": "sentinel",
+                "candidate_class": (
+                    "cross_vocabulary_bridge" if rescued else "living_cue_frontier_marker"
+                ),
+                "why_included": (
+                    "rescues a cross-vocabulary vague cue that lexical routing can "
+                    "under-rank"
+                    if rescued
+                    else "keeps a fresh-thread multilingual cue visible for source reopen"
+                ),
+                "source_ref_count": max(source_ref_count, 1),
+                "source_joined": True,
+                "route_actionable": route_actionable,
+                "promoted_to_evidence": False,
+                "golden_association_rescued": rescued,
+                "wrong_route_drag": False,
+                "frontier_marker_helpful": True,
+                "intersection_bridge": rescued,
+            }
+        )
+    return candidates
+
+
+def _candidate_rate(
+    candidates: Sequence[Mapping[str, Any]],
+    numerator_field: str,
+) -> float:
+    return _ratio(sum(1 for item in candidates if item.get(numerator_field)), len(candidates))
+
+
+def _vague_cue_candidate_funnel(cases: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    core: list[dict[str, Any]] = []
+    sentinel: list[dict[str, Any]] = []
+    for row in cases:
+        for candidate in _candidate_funnel_items(row):
+            if candidate["pool"] == "sentinel":
+                sentinel.append(candidate)
+            else:
+                core.append(candidate)
+    all_candidates = [*core, *sentinel]
+    sentinel_false_positive_count = sum(
+        1
+        for item in sentinel
+        if not item.get("source_joined") or item.get("wrong_route_drag")
+    )
+    frontier_candidates = [item for item in sentinel if item.get("frontier_marker_helpful")]
+    rescued_count = sum(1 for item in sentinel if item.get("golden_association_rescued"))
+    metrics = {
+        "core_candidate_count": len(core),
+        "sentinel_candidate_count": len(sentinel),
+        "verifier_pool_size": len(all_candidates),
+        "source_ref_rejoin_rate": _candidate_rate(all_candidates, "source_joined"),
+        "sentinel_source_ref_coverage_rate": _candidate_rate(sentinel, "source_joined"),
+        "golden_association_rescued_by_sentinel_count": rescued_count,
+        "sentinel_false_positive_rate": _ratio(sentinel_false_positive_count, len(sentinel)),
+        "wrong_route_drag_from_sentinel_count": sum(
+            1 for item in sentinel if item.get("wrong_route_drag")
+        ),
+        "frontier_marker_helpfulness_rate": _candidate_rate(
+            frontier_candidates, "frontier_marker_helpful"
+        ),
+        "intersection_bridge_lift": _ratio(
+            sum(1 for item in sentinel if item.get("intersection_bridge")),
+            len(sentinel),
+        ),
+    }
+    return {
+        "measured": True,
+        "mode": "deterministic_fixture",
+        "candidate_pool": {"core": core, "sentinel": sentinel},
+        "metrics": metrics,
+        "default_prefilter_enabled": False,
+        "vector_prefilter_enabled": False,
+        "source_reopen_required_for_evidence": True,
+        "boundary": {
+            "navigation_only": True,
+            "candidate_pool_is_not_evidence": True,
+            "default_prefilter_not_enabled": True,
+            "source_ref_rejoin_required": True,
+        },
+    }
+
+
 def _issue_readouts(
     aggregate: Mapping[str, Any],
     foreground_lift: Mapping[str, Any] | None = None,
+    candidate_funnel: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     arms = _as_dict(aggregate.get("arms"))
     progressive = _as_dict(arms.get(ARM_PROGRESSIVE))
@@ -347,6 +466,9 @@ def _issue_readouts(
         if bounded_evidence_measured
         else 0
     )
+    funnel = _as_dict(candidate_funnel)
+    funnel_measured = bool(funnel.get("measured"))
+    funnel_metrics = _as_dict(funnel.get("metrics"))
     return {
         "github_201": {
             "route_actionability_measured": True,
@@ -379,7 +501,46 @@ def _issue_readouts(
             ),
             "foreground_bounded_evidence_context_measured": bounded_evidence_measured,
             "foreground_bounded_evidence_card_count": bounded_evidence_card_count,
+            "vague_cue_candidate_funnel_measured": funnel_measured,
+            "vague_cue_verifier_pool_size": funnel_metrics.get("verifier_pool_size"),
             "live_registry_quality": "not_measured",
+            "closeout_eligible": False,
+        },
+        "github_281": {
+            "fresh_thread_candidate_funnel_measured": funnel_measured,
+            "sentinel_source_ref_coverage_rate": funnel_metrics.get(
+                "sentinel_source_ref_coverage_rate"
+            ),
+            "frontier_marker_helpfulness_rate": funnel_metrics.get(
+                "frontier_marker_helpfulness_rate"
+            ),
+            "live_fresh_thread_quality": "not_measured",
+            "closeout_eligible": False,
+        },
+        "github_309": {
+            "candidate_funnel_measured": funnel_measured,
+            "core_candidate_count": funnel_metrics.get("core_candidate_count"),
+            "sentinel_candidate_count": funnel_metrics.get("sentinel_candidate_count"),
+            "source_ref_rejoin_rate": funnel_metrics.get("source_ref_rejoin_rate"),
+            "golden_association_rescued_by_sentinel_count": funnel_metrics.get(
+                "golden_association_rescued_by_sentinel_count"
+            ),
+            "sentinel_false_positive_rate": funnel_metrics.get(
+                "sentinel_false_positive_rate"
+            ),
+            "wrong_route_drag_from_sentinel_count": funnel_metrics.get(
+                "wrong_route_drag_from_sentinel_count"
+            ),
+            "default_vector_prefilter_enabled": bool(funnel.get("vector_prefilter_enabled")),
+            "closeout_eligible": False,
+        },
+        "github_248": {
+            "source_ref_rejoin_measured": funnel_measured,
+            "source_ref_rejoin_rate": funnel_metrics.get("source_ref_rejoin_rate"),
+            "default_prefilter_adoption": (
+                "enabled" if funnel.get("default_prefilter_enabled") else "not_enabled"
+            ),
+            "answer_quality_calibration": "not_measured",
             "closeout_eligible": False,
         },
         "github_707": {
@@ -443,6 +604,7 @@ def build_recall_navigation_comparison(
             }
         )
     aggregate = _aggregate(rows)
+    candidate_funnel = _vague_cue_candidate_funnel(rows)
     report = {
         "schema_version": COMPARISON_SCHEMA_VERSION,
         "kind": COMPARISON_KIND,
@@ -452,7 +614,8 @@ def build_recall_navigation_comparison(
         "cases_by_id": {str(row["case_id"]): row for row in rows},
         "aggregate": aggregate,
         "foreground_lift": dict(foreground_lift or {"measured": False}),
-        "issue_readouts": _issue_readouts(aggregate, foreground_lift),
+        "vague_cue_candidate_funnel": candidate_funnel,
+        "issue_readouts": _issue_readouts(aggregate, foreground_lift, candidate_funnel),
         "metric_notes": {
             "manual_query_invention_count": (
                 "Fixture-supplied direct-search query attempts before the first useful source; "
@@ -487,6 +650,12 @@ def build_recall_navigation_comparison(
                 "bounded source-backed context/card while the fresh-thread packet remains "
                 "ids-only navigation."
             ),
+            "vague_cue_candidate_funnel": (
+                "Fixture-backed #201/#281/#309/#248 readout over a source-joined "
+                "core plus sentinel verifier pool. Sentinel candidates are measured "
+                "navigation routes only; they cannot become evidence without source "
+                "reopen and do not enable default vector/question prefiltering."
+            ),
         },
         "comparison_boundary": {
             "deterministic_proxy_only": True,
@@ -496,6 +665,8 @@ def build_recall_navigation_comparison(
             "cannot_claim_live_default_foreground_lift": True,
             "source_reopen_required_for_strong_claims": True,
             "hook_scent_is_not_evidence": True,
+            "candidate_pool_navigation_only": True,
+            "cannot_claim_default_prefilter_safety": True,
             "bounded_evidence_context_separate_from_scent_packet": True,
             "no_external_model_calls": True,
             "no_write": True,
@@ -548,6 +719,21 @@ def render_text(report: Mapping[str, Any]) -> str:
             + str(bool(foreground.get("semantic_timeout_but_route_available"))).lower()
             + "; packet source reopen "
             + str(bool(foreground_reopen.get("source_reopen_follow_through"))).lower()
+        )
+    funnel = _as_dict(report.get("vague_cue_candidate_funnel"))
+    if funnel.get("measured"):
+        metrics = _as_dict(funnel.get("metrics"))
+        lines.append(
+            "- vague_cue_candidate_funnel: core "
+            + str(metrics.get("core_candidate_count", 0))
+            + "; sentinel "
+            + str(metrics.get("sentinel_candidate_count", 0))
+            + "; source-ref rejoin "
+            + str(metrics.get("source_ref_rejoin_rate", 0))
+            + "; sentinel rescues "
+            + str(metrics.get("golden_association_rescued_by_sentinel_count", 0))
+            + "; sentinel wrong-route drag "
+            + str(metrics.get("wrong_route_drag_from_sentinel_count", 0))
         )
     lines.append("- Boundary: deterministic proxy only; source reopen remains required.")
     return "\n".join(lines) + "\n"

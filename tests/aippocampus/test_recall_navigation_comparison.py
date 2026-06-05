@@ -25,7 +25,7 @@ class RecallNavigationComparisonTests(unittest.TestCase):
         positive = report["cases_by_id"]["vague_magic_moment"]
 
         self.assertEqual(report["kind"], recall_navigation_comparison.COMPARISON_KIND)
-        self.assertEqual(report["schema_version"], 2)
+        self.assertEqual(report["schema_version"], 3)
         self.assertEqual(set(arms), {"direct_search", "hook_only", "progressive_recall"})
         self.assertGreaterEqual(len(report["cases"]), 2)
         self.assertTrue(report["comparison_boundary"]["deterministic_proxy_only"])
@@ -134,6 +134,56 @@ class RecallNavigationComparisonTests(unittest.TestCase):
         self.assertIn("bounded_evidence_context_after_packet", report["metric_notes"])
         self.assertTrue(report["comparison_boundary"]["cannot_claim_live_default_foreground_lift"])
         self.assertFalse(readout["closeout_eligible"])
+
+    def test_vague_cue_candidate_funnel_tracks_sentinel_source_rejoin_boundaries(self) -> None:
+        report = recall_navigation_comparison_fixtures.fixture_recall_navigation_comparison()
+        funnel = report["vague_cue_candidate_funnel"]
+        metrics = funnel["metrics"]
+        candidate_pool = funnel["candidate_pool"]
+        encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
+
+        self.assertTrue(funnel["measured"])
+        self.assertEqual(funnel["mode"], "deterministic_fixture")
+        self.assertFalse(funnel["default_prefilter_enabled"])
+        self.assertFalse(funnel["vector_prefilter_enabled"])
+        self.assertTrue(funnel["source_reopen_required_for_evidence"])
+        self.assertGreaterEqual(metrics["core_candidate_count"], 3)
+        self.assertGreaterEqual(metrics["sentinel_candidate_count"], 2)
+        self.assertGreater(metrics["verifier_pool_size"], metrics["core_candidate_count"])
+        self.assertEqual(metrics["source_ref_rejoin_rate"], 1.0)
+        self.assertEqual(metrics["sentinel_source_ref_coverage_rate"], 1.0)
+        self.assertEqual(metrics["golden_association_rescued_by_sentinel_count"], 1)
+        self.assertEqual(metrics["wrong_route_drag_from_sentinel_count"], 0)
+        self.assertGreater(metrics["frontier_marker_helpfulness_rate"], 0)
+        self.assertGreater(metrics["intersection_bridge_lift"], 0)
+        self.assertGreaterEqual(len(candidate_pool["core"]), 3)
+        self.assertGreaterEqual(len(candidate_pool["sentinel"]), 2)
+        for candidate in candidate_pool["sentinel"]:
+            self.assertTrue(candidate["why_included"])
+            self.assertGreaterEqual(candidate["source_ref_count"], 1)
+            self.assertTrue(candidate["source_joined"])
+            self.assertFalse(candidate["promoted_to_evidence"])
+
+        readout_201 = report["issue_readouts"]["github_201"]
+        readout_281 = report["issue_readouts"]["github_281"]
+        readout_309 = report["issue_readouts"]["github_309"]
+        readout_248 = report["issue_readouts"]["github_248"]
+        self.assertTrue(readout_201["vague_cue_candidate_funnel_measured"])
+        self.assertTrue(readout_281["fresh_thread_candidate_funnel_measured"])
+        self.assertEqual(readout_281["live_fresh_thread_quality"], "not_measured")
+        self.assertTrue(readout_309["candidate_funnel_measured"])
+        self.assertEqual(readout_309["golden_association_rescued_by_sentinel_count"], 1)
+        self.assertEqual(readout_309["wrong_route_drag_from_sentinel_count"], 0)
+        self.assertFalse(readout_309["default_vector_prefilter_enabled"])
+        self.assertTrue(readout_248["source_ref_rejoin_measured"])
+        self.assertEqual(readout_248["default_prefilter_adoption"], "not_enabled")
+        self.assertEqual(readout_248["answer_quality_calibration"], "not_measured")
+        self.assertFalse(readout_248["closeout_eligible"])
+        self.assertTrue(report["comparison_boundary"]["candidate_pool_navigation_only"])
+        self.assertTrue(report["comparison_boundary"]["cannot_claim_default_prefilter_safety"])
+        self.assertIn("vague_cue_candidate_funnel", report["metric_notes"])
+        self.assertNotIn("PRIVATE_OVERCLAIM_CASE", encoded)
+        self.assertNotIn("C:\\", encoded)
 
     def test_cli_smoke_emits_json_report(self) -> None:
         proc = subprocess.run(
