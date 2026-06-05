@@ -12,7 +12,7 @@ from typing import Any
 
 from aippocampus_runtime.core import now_utc, safe_path_name
 from aippocampus_runtime.sync import bundle as sync_bundle
-from aippocampus_runtime.sync.encrypted import key_providers
+from aippocampus_runtime.sync.encrypted import key_providers, recovery_diagnostics
 from aippocampus_runtime.sync.encrypted.crypto import issue, validate_recipients
 
 DEVICE_KEYS_NAME = "device-keys.json"
@@ -250,15 +250,11 @@ def public_local_device(local_device: dict[str, Any] | None) -> dict[str, Any] |
 
 
 def recovery_state_for(trusted: list[dict[str, Any]]) -> dict[str, Any]:
-    recovery_count = sum(1 for item in trusted if item.get("role") == RECIPIENT_ROLE_RECOVERY)
-    return {
-        "mode": "offline_recovery_recipient" if recovery_count else "none",
-        "configured": recovery_count > 0,
-        "recovery_recipient_count": recovery_count,
-        "warning": None
-        if recovery_count
-        else "losing all trusted device identities means encrypted sync data is unrecoverable",
-    }
+    return recovery_diagnostics.recovery_state_for(trusted)
+
+
+def vault_id_state_for(registry_dir: str | Path) -> dict[str, Any]:
+    return recovery_diagnostics.vault_id_state_for(registry_dir)
 
 
 def re_encryption_plan_for(record: dict[str, Any], remaining: list[dict[str, Any]]) -> dict[str, Any]:
@@ -412,6 +408,7 @@ def list_device_keys(registry_dir: str | Path) -> dict[str, Any]:
         "revoked_recipient_count": len(revoked),
         "recovery_state": recovery_state,
         "recovery_configured": recovery_state["configured"],
+        "vault_id_state": vault_id_state_for(registry_dir),
         "reencryption_required": data.get("reencryption_required") or None,
         "key_epoch": int(data.get("key_epoch") or 1),
     }

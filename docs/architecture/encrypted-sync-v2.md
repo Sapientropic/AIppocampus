@@ -100,6 +100,18 @@ JSON may report these allowlisted provider enum values, including
 `linux-secret-service`, but still omits identity paths, private keys, and
 provider secret material.
 
+As of 2026-06-05, `key list --json` also reports a public-safe recovery and
+vault-id diagnostic slice. `recovery_state` distinguishes no configured
+recovery recipient from a configured offline recovery recipient whose matching
+private identity remains operator-controlled and unavailable to the CLI.
+`vault_id_state` reports only presence, validity, restore-required status, and
+backup marker freshness for a local `vault-id.backup`; it never prints the
+vault id, local registry path, private identity, or recovery-kit material. This
+is a backup/restore diagnostic surface, not a recovery service: losing all
+trusted identities plus all recovery identities still means encrypted sync data
+is unrecoverable, and a missing or corrupt vault id must be restored or
+explicitly re-enrolled rather than silently treated as the same vault.
+
 ## Provider Metadata Evidence
 
 The dated #104 Cloudflare R2-compatible re-smoke in
