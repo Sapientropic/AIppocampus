@@ -260,7 +260,7 @@ class AIppocampusAMemGymAgent(BaseAgent):
         self.transcript_path.parent.mkdir(parents=True, exist_ok=True)
         rows: list[dict[str, Any]] = []
         current_turn = 0
-        for line_no, msg in enumerate(self.msg_history, start=1):
+        for msg in self.msg_history:
             role = msg["role"]
             if role == "user":
                 current_turn += 1
