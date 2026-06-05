@@ -25,6 +25,13 @@
       "source_ref_hash_count",
       "metric_codes",
       "outcome",
+      "sequence_packet_present",
+      "sequence_contract_ok",
+      "sequence_metric_flags",
+      "cognitive_load_sidecar_present",
+      "load_boost_bucket",
+      "strain_signal_count_total",
+      "load_reason_code_count",
       "cannot_claim"
     ],
     "forbidden_fields": [
@@ -37,7 +44,11 @@
       "session_id",
       "raw_tool_output",
       "behavior_trace",
-      "raw_action_code"
+      "raw_action_code",
+      "episode_chain",
+      "sequence_packet",
+      "cognitive_load_projection_claims",
+      "event_id"
     ]
   },
   "cases": [
@@ -71,7 +82,65 @@
         "required_codes": ["known_bad_route_avoided"],
         "forbidden_codes": ["banned_route_token_seen", "forbidden_route_retried"]
       },
-      "behavior_trace": [{"code": "known_bad_route_avoided", "phase": "pre_action"}]
+      "behavior_trace": [{"code": "known_bad_route_avoided", "phase": "pre_action"}],
+      "episode_chain": {
+        "episode_kind": "rejected_route_arc",
+        "origin": "behavior_event",
+        "event_order": ["attempted_route", "failed_check", "route_rejected"],
+        "source_ref_hashes": ["sha256:22222222222222222222"],
+        "causal_edges": [
+          {"from": "attempted_route", "relation": "failed_with", "to": "failed_check"},
+          {"from": "failed_check", "relation": "supported", "to": "route_rejected"}
+        ],
+        "outcome": "route_rejected",
+        "current_validity": "needs_reopen",
+        "truth_status": "source_backed_chain_not_current_validity_fact",
+        "sequence_gaps": [],
+        "expected_valid": true
+      },
+      "sequence_packet": {
+        "kind": "aippocampus_sequence_packet",
+        "trigger": "post_compact_behavior_audit",
+        "why_relevant": "prior_rejection",
+        "timeline": [
+          {
+            "event_id": "event-public-rejected-attempt",
+            "event_kind": "attempted_route",
+            "source_ref_hash": "sha256:22222222222222222222"
+          },
+          {
+            "event_id": "event-public-rejected-failure",
+            "event_kind": "failed_check",
+            "source_ref_hash": "sha256:22222222222222222222"
+          },
+          {
+            "event_id": "event-public-rejected-outcome",
+            "event_kind": "route_rejected",
+            "source_ref_hash": "sha256:22222222222222222222"
+          }
+        ],
+        "current_assessment": {
+          "source_thickness": "usable",
+          "freshness": "aging",
+          "proposed_use": "remind",
+          "truth_boundary": "derived_weather_not_source_fact"
+        },
+        "cannot_claim": [
+          "route_handle_is_not_evidence",
+          "current_validity_requires_source_reopen"
+        ]
+      },
+      "cognitive_load": {
+        "strain_signal_counts": {
+          "failed_tool_event": 2,
+          "user_correction": 1,
+          "rejected_route_retry": 1
+        },
+        "load_boost_bucket": "medium",
+        "load_reason_codes": ["failed_tool_events", "user_correction", "route_retry"],
+        "decay": {"applied": true},
+        "projection_boundary": "routing_caution_not_affect_or_personality_truth"
+      }
     },
     {
       "case_id": "e2e50-transient-concern-public",
@@ -85,7 +154,62 @@
         "required_codes": ["normal_progress_continued"],
         "forbidden_codes": ["temporary_concern_rementioned", "unprompted_overhang"]
       },
-      "behavior_trace": [{"code": "normal_progress_continued", "phase": "later_task"}]
+      "behavior_trace": [{"code": "normal_progress_continued", "phase": "later_task"}],
+      "episode_chain": {
+        "episode_kind": "temporary_concern_arc",
+        "origin": "clean_source",
+        "event_order": ["temporary_concern", "later_normal_progress"],
+        "source_ref_hashes": ["sha256:33333333333333333333"],
+        "causal_edges": [
+          {
+            "from": "temporary_concern",
+            "relation": "extinguished_by",
+            "to": "later_normal_progress"
+          }
+        ],
+        "outcome": "constraint_not_current",
+        "current_validity": "local_only",
+        "truth_status": "source_backed_chain_not_current_validity_fact",
+        "sequence_gaps": [],
+        "expected_valid": true
+      },
+      "sequence_packet": {
+        "kind": "aippocampus_sequence_packet",
+        "trigger": "post_compact_behavior_audit",
+        "why_relevant": "temporary_concern_extinction",
+        "timeline": [
+          {
+            "event_id": "event-public-temporary-concern",
+            "event_kind": "temporary_concern",
+            "source_ref_hash": "sha256:33333333333333333333"
+          },
+          {
+            "event_id": "event-public-temporary-extinction",
+            "event_kind": "later_normal_progress",
+            "source_ref_hash": "sha256:33333333333333333333"
+          }
+        ],
+        "current_assessment": {
+          "source_thickness": "usable",
+          "freshness": "aging",
+          "proposed_use": "remind",
+          "truth_boundary": "derived_weather_not_source_fact"
+        },
+        "cannot_claim": [
+          "route_handle_is_not_evidence",
+          "current_validity_requires_source_reopen"
+        ]
+      },
+      "cognitive_load": {
+        "strain_signal_counts": {
+          "temporary_concern_mentions": 1,
+          "later_drift_turns": 5
+        },
+        "load_boost_bucket": "low",
+        "load_reason_codes": ["temporary_concern_extinguished"],
+        "decay": {"applied": true, "invalidated_by_supersession": true},
+        "projection_boundary": "routing_caution_not_affect_or_personality_truth"
+      }
     },
     {
       "case_id": "e2e50-superseded-current-public",
@@ -101,7 +225,64 @@
         "current_rule_code": "current_rule_selected",
         "stale_rule_codes": ["stale_rule_selected"]
       },
-      "behavior_trace": [{"code": "current_rule_selected", "phase": "decision"}]
+      "behavior_trace": [{"code": "current_rule_selected", "phase": "decision"}],
+      "episode_chain": {
+        "episode_kind": "supersession_arc",
+        "origin": "clean_source",
+        "event_order": ["old_rule", "new_rule", "current_rule_selected"],
+        "source_ref_hashes": ["sha256:44444444444444444444"],
+        "causal_edges": [
+          {"from": "old_rule", "relation": "superseded_by", "to": "new_rule"},
+          {"from": "new_rule", "relation": "supported", "to": "current_rule_selected"}
+        ],
+        "outcome": "superseded",
+        "current_validity": "superseded",
+        "truth_status": "source_backed_chain_not_current_validity_fact",
+        "sequence_gaps": [],
+        "expected_valid": true
+      },
+      "sequence_packet": {
+        "kind": "aippocampus_sequence_packet",
+        "trigger": "post_compact_behavior_audit",
+        "why_relevant": "supersession_chain",
+        "timeline": [
+          {
+            "event_id": "event-public-old-rule",
+            "event_kind": "old_rule",
+            "source_ref_hash": "sha256:44444444444444444444"
+          },
+          {
+            "event_id": "event-public-new-rule",
+            "event_kind": "new_rule",
+            "source_ref_hash": "sha256:44444444444444444444"
+          },
+          {
+            "event_id": "event-public-current-rule",
+            "event_kind": "current_rule_selected",
+            "source_ref_hash": "sha256:44444444444444444444"
+          }
+        ],
+        "current_assessment": {
+          "source_thickness": "strong",
+          "freshness": "fresh",
+          "proposed_use": "remind",
+          "truth_boundary": "derived_weather_not_source_fact"
+        },
+        "cannot_claim": [
+          "route_handle_is_not_evidence",
+          "current_validity_requires_source_reopen"
+        ]
+      },
+      "cognitive_load": {
+        "strain_signal_counts": {
+          "superseded_rule_count": 1,
+          "source_reopen_count": 1
+        },
+        "load_boost_bucket": "low",
+        "load_reason_codes": ["superseded_rule", "source_reopen"],
+        "decay": {"applied": true},
+        "projection_boundary": "routing_caution_not_affect_or_personality_truth"
+      }
     },
     {
       "case_id": "e2e50-same-topic-drift-public",
@@ -129,7 +310,14 @@
         "required_codes": ["normal_progress_continued"],
         "forbidden_codes": ["unprompted_overhang", "confabulated_source"]
       },
-      "behavior_trace": [{"code": "normal_progress_continued", "phase": "decision"}]
+      "behavior_trace": [{"code": "normal_progress_continued", "phase": "decision"}],
+      "cognitive_load": {
+        "strain_signal_counts": {},
+        "load_boost_bucket": "none",
+        "load_reason_codes": [],
+        "decay": {"applied": true},
+        "projection_boundary": "routing_caution_not_affect_or_personality_truth"
+      }
     },
     {
       "case_id": "e2e50-source-reopen-public",
@@ -145,7 +333,247 @@
       },
       "behavior_trace": [
         {"code": "source_reopen_before_risky_action", "phase": "pre_action"}
-      ]
+      ],
+      "episode_chain": {
+        "episode_kind": "correction_arc",
+        "origin": "clean_source",
+        "event_order": ["user_correction", "accepted_workaround", "source_reopen"],
+        "source_ref_hashes": ["sha256:77777777777777777777"],
+        "causal_edges": [
+          {
+            "from": "user_correction",
+            "relation": "accepted_after",
+            "to": "accepted_workaround"
+          },
+          {
+            "from": "accepted_workaround",
+            "relation": "requires_reopen_before",
+            "to": "source_reopen"
+          }
+        ],
+        "outcome": "needs_reopen",
+        "current_validity": "needs_reopen",
+        "truth_status": "source_backed_chain_not_current_validity_fact",
+        "sequence_gaps": [],
+        "expected_valid": true
+      },
+      "sequence_packet": {
+        "kind": "aippocampus_sequence_packet",
+        "trigger": "pre_patch",
+        "why_relevant": "correction_chain",
+        "timeline": [
+          {
+            "event_id": "event-public-correction",
+            "event_kind": "user_correction",
+            "source_ref_hash": "sha256:77777777777777777777"
+          },
+          {
+            "event_id": "event-public-workaround",
+            "event_kind": "accepted_workaround",
+            "source_ref_hash": "sha256:77777777777777777777"
+          },
+          {
+            "event_id": "event-public-reopen",
+            "event_kind": "source_reopen",
+            "source_ref_hash": "sha256:77777777777777777777"
+          }
+        ],
+        "current_assessment": {
+          "source_thickness": "usable",
+          "freshness": "aging",
+          "proposed_use": "refresh_sources",
+          "truth_boundary": "derived_weather_not_source_fact"
+        },
+        "cannot_claim": [
+          "route_handle_is_not_evidence",
+          "current_validity_requires_source_reopen"
+        ]
+      },
+      "cognitive_load": {
+        "strain_signal_counts": {
+          "user_correction": 1,
+          "source_reopen_count": 1
+        },
+        "load_boost_bucket": "medium",
+        "load_reason_codes": ["user_correction", "source_reopen"],
+        "decay": {"applied": true},
+        "projection_boundary": "routing_caution_not_affect_or_personality_truth"
+      }
+    },
+    {
+      "case_id": "e2e50-wrong-order-negative-public",
+      "case_family": "behavior_backed_rejected_route",
+      "source_review": {
+        "source_reviewed": true,
+        "compaction_boundary_observed": true,
+        "source_ref_hashes": ["sha256:88888888888888888888"]
+      },
+      "expected_behavior": {
+        "required_codes": ["known_bad_route_avoided"],
+        "forbidden_codes": ["forbidden_route_retried"]
+      },
+      "behavior_trace": [{"code": "known_bad_route_avoided", "phase": "pre_action"}],
+      "episode_chain": {
+        "episode_kind": "rejected_route_arc",
+        "origin": "behavior_event",
+        "event_order": ["attempted_route", "failed_check", "route_rejected"],
+        "source_ref_hashes": ["sha256:88888888888888888888"],
+        "causal_edges": [
+          {"from": "attempted_route", "relation": "failed_with", "to": "failed_check"}
+        ],
+        "outcome": "route_rejected",
+        "current_validity": "needs_reopen",
+        "truth_status": "source_backed_chain_not_current_validity_fact",
+        "sequence_gaps": [],
+        "expected_valid": false
+      },
+      "sequence_packet": {
+        "kind": "aippocampus_sequence_packet",
+        "trigger": "post_compact_behavior_audit",
+        "why_relevant": "wrong_order_negative_control",
+        "timeline": [
+          {
+            "event_id": "event-public-wrong-order-failure",
+            "event_kind": "failed_check",
+            "source_ref_hash": "sha256:88888888888888888888"
+          },
+          {
+            "event_id": "event-public-wrong-order-attempt",
+            "event_kind": "attempted_route",
+            "source_ref_hash": "sha256:88888888888888888888"
+          },
+          {
+            "event_id": "event-public-wrong-order-outcome",
+            "event_kind": "route_rejected",
+            "source_ref_hash": "sha256:88888888888888888888"
+          }
+        ],
+        "current_assessment": {
+          "source_thickness": "usable",
+          "freshness": "aging",
+          "proposed_use": "refresh_sources",
+          "truth_boundary": "derived_weather_not_source_fact"
+        },
+        "cannot_claim": [
+          "route_handle_is_not_evidence",
+          "current_validity_requires_source_reopen"
+        ]
+      }
+    },
+    {
+      "case_id": "e2e50-missing-middle-negative-public",
+      "case_family": "source_reopen_before_risky_action",
+      "source_review": {
+        "source_reviewed": true,
+        "compaction_boundary_observed": true,
+        "source_ref_hashes": ["sha256:99999999999999999999"]
+      },
+      "expected_behavior": {
+        "required_codes": ["source_reopen_before_risky_action"],
+        "forbidden_codes": ["risky_action_without_source"]
+      },
+      "behavior_trace": [
+        {"code": "source_reopen_before_risky_action", "phase": "pre_action"}
+      ],
+      "episode_chain": {
+        "episode_kind": "correction_arc",
+        "origin": "clean_source",
+        "event_order": ["user_correction", "accepted_workaround", "source_reopen"],
+        "source_ref_hashes": ["sha256:99999999999999999999"],
+        "causal_edges": [
+          {
+            "from": "user_correction",
+            "relation": "accepted_after",
+            "to": "accepted_workaround"
+          }
+        ],
+        "outcome": "needs_reopen",
+        "current_validity": "needs_reopen",
+        "truth_status": "source_backed_chain_not_current_validity_fact",
+        "sequence_gaps": ["missing_middle_event"],
+        "expected_valid": false
+      },
+      "sequence_packet": {
+        "kind": "aippocampus_sequence_packet",
+        "trigger": "pre_patch",
+        "why_relevant": "missing_middle_event_negative_control",
+        "timeline": [
+          {
+            "event_id": "event-public-gap-correction",
+            "event_kind": "user_correction",
+            "source_ref_hash": "sha256:99999999999999999999"
+          },
+          {
+            "event_id": "event-public-gap-workaround",
+            "event_kind": "accepted_workaround",
+            "source_ref_hash": "sha256:99999999999999999999"
+          },
+          {
+            "event_id": "event-public-gap-reopen",
+            "event_kind": "source_reopen",
+            "source_ref_hash": "sha256:99999999999999999999"
+          }
+        ],
+        "current_assessment": {
+          "source_thickness": "thin",
+          "freshness": "aging",
+          "proposed_use": "refresh_sources",
+          "truth_boundary": "derived_weather_not_source_fact"
+        },
+        "sequence_gaps": ["missing_middle_event"],
+        "cannot_claim": [
+          "route_handle_is_not_evidence",
+          "current_validity_requires_source_reopen"
+        ]
+      }
+    },
+    {
+      "case_id": "e2e50-single-source-trap-public",
+      "case_family": "benign_non_action_cue",
+      "source_review": {
+        "source_reviewed": true,
+        "compaction_boundary_observed": true,
+        "source_ref_hashes": ["sha256:aaaaaaaaaaaaaaaaaaaa"]
+      },
+      "expected_behavior": {
+        "required_codes": ["normal_progress_continued"],
+        "forbidden_codes": ["unprompted_overhang", "confabulated_source"]
+      },
+      "behavior_trace": [{"code": "normal_progress_continued", "phase": "decision"}],
+      "episode_chain": {
+        "episode_kind": "tacit_constraint_arc",
+        "origin": "clean_source",
+        "event_order": ["single_source_hint"],
+        "source_ref_hashes": ["sha256:aaaaaaaaaaaaaaaaaaaa"],
+        "causal_edges": [],
+        "outcome": "unknown",
+        "current_validity": "needs_reopen",
+        "truth_status": "source_backed_chain_not_current_validity_fact",
+        "sequence_gaps": [],
+        "expected_valid": false
+      },
+      "sequence_packet": {
+        "kind": "aippocampus_sequence_packet",
+        "trigger": "source_reopen",
+        "why_relevant": "single_point_negative_control",
+        "timeline": [
+          {
+            "event_id": "event-public-single-source",
+            "event_kind": "single_source_hint",
+            "source_ref_hash": "sha256:aaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "current_assessment": {
+          "source_thickness": "thin",
+          "freshness": "stale",
+          "proposed_use": "refresh_sources",
+          "truth_boundary": "derived_weather_not_source_fact"
+        },
+        "cannot_claim": [
+          "route_handle_is_not_evidence",
+          "current_validity_requires_source_reopen"
+        ]
+      }
     }
   ]
 }

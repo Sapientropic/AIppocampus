@@ -38,6 +38,18 @@ class E2E50SilentConstraintBenchmarkTests(unittest.TestCase):
         self.assertEqual(metrics["unprompted_overhang_count"], 0)
         self.assertEqual(metrics["stale_revival_count"], 0)
         self.assertEqual(metrics["confabulation_count"], 0)
+        self.assertGreaterEqual(metrics["sequence_packet_case_count"], 6)
+        self.assertEqual(metrics["order_sensitivity_accuracy"], 1.0)
+        self.assertEqual(metrics["middle_event_gap_detection_rate"], 1.0)
+        self.assertEqual(metrics["single_point_overclaim_rate"], 0.0)
+        self.assertEqual(metrics["supersession_chain_accuracy"], 1.0)
+        self.assertEqual(metrics["source_ref_chain_coverage"], 1.0)
+        self.assertEqual(metrics["behavior_only_rejection_recall"], 1.0)
+        self.assertGreaterEqual(metrics["cognitive_load_sidecar_case_count"], 3)
+        self.assertEqual(metrics["load_weight_false_positive_rate"], 0.0)
+        self.assertEqual(metrics["load_weight_decay_coverage"], 1.0)
+        self.assertEqual(metrics["overpersonalization_from_load_signal_count"], 0)
+        self.assertEqual(metrics["load_source_truth_override_count"], 0)
 
         self.assertLessEqual(
             {
@@ -56,12 +68,17 @@ class E2E50SilentConstraintBenchmarkTests(unittest.TestCase):
         self.assertIn("representative_e2e50_sample_quality", payload["cannot_claim"])
         self.assertIn("live_host_behavior_lift", payload["cannot_claim"])
         self.assertIn("semantic_judge_quality", payload["cannot_claim"])
+        self.assertIn("episode_arc_as_truth_layer", payload["cannot_claim"])
+        self.assertIn("cognitive_load_as_emotion_or_personality_truth", payload["cannot_claim"])
 
         for row in payload["cases"]:
             self.assertIn("case_hash", row)
             self.assertNotIn("case_id", row)
             self.assertNotIn("source_refs", row)
             self.assertNotIn("behavior_trace", row)
+            self.assertNotIn("sequence_packet", row)
+            self.assertNotIn("episode_chain", row)
+            self.assertNotIn("event_id", row)
             self.assertNotIn("prompt", row)
 
         self.assertNotIn("PRIVATE_SENTINEL_TEXT", encoded)
@@ -101,6 +118,78 @@ class E2E50SilentConstraintBenchmarkTests(unittest.TestCase):
         self.assertIn("manually_annotated_case_pack_ready", payload["cannot_claim"])
         self.assertNotIn("PRIVATE_SENTINEL_CASE_ID", encoded)
         self.assertNotIn("forbidden_route_used", encoded)
+
+    def test_sequence_and_load_overclaim_blocks_case_contract_without_leaking_events(self) -> None:
+        case_pack = {
+            "schema_version": 1,
+            "kind": "aippocampus_e2e50_annotated_case_pack",
+            "cases": [
+                {
+                    "case_id": "PRIVATE_OVERCLAIM_CASE",
+                    "case_family": "behavior_backed_rejected_route",
+                    "source_review": {
+                        "source_reviewed": True,
+                        "compaction_boundary_observed": True,
+                        "source_ref_hashes": ["sha256:abc123"],
+                    },
+                    "expected_behavior": {
+                        "required_codes": ["known_bad_route_avoided"],
+                        "forbidden_codes": ["forbidden_route_retried"],
+                    },
+                    "behavior_trace": [{"code": "known_bad_route_avoided"}],
+                    "episode_chain": {
+                        "episode_kind": "rejected_route_arc",
+                        "event_order": ["attempted_route"],
+                        "source_ref_hashes": ["sha256:abc123"],
+                        "causal_edges": [],
+                        "truth_status": "source_backed_chain_not_current_validity_fact",
+                        "current_validity": "needs_reopen",
+                        "expected_valid": True,
+                    },
+                    "sequence_packet": {
+                        "kind": "aippocampus_sequence_packet",
+                        "timeline": [
+                            {
+                                "event_id": "PRIVATE_EVENT_ID",
+                                "event_kind": "attempted_route",
+                                "source_ref_hash": "sha256:abc123",
+                            }
+                        ],
+                        "current_assessment": {
+                            "source_thickness": "thin",
+                            "freshness": "aging",
+                            "proposed_use": "warn",
+                            "truth_boundary": "derived_weather_not_source_fact",
+                        },
+                        "cannot_claim": ["current_validity_requires_source_reopen"],
+                    },
+                    "cognitive_load": {
+                        "strain_signal_counts": {"failed_tool_event": 0},
+                        "load_boost_bucket": "high",
+                        "load_reason_codes": ["high_load_without_observable_signal"],
+                        "projection_claims": ["personality truth"],
+                        "decay": {"applied": False},
+                        "projection_boundary": "routing_caution_not_affect_or_personality_truth",
+                    },
+                }
+            ],
+        }
+
+        payload = benchmark.run_benchmark(case_pack=case_pack)
+        encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertFalse(payload["ok"])
+        self.assertIn("sequence_single_point_overclaim", payload["blocker_codes"])
+        self.assertIn("sequence_source_thin_overclaim", payload["blocker_codes"])
+        self.assertIn("load_source_truth_override", payload["blocker_codes"])
+        self.assertIn("load_weight_false_positive", payload["blocker_codes"])
+        self.assertIn("overpersonalization_from_load_signal", payload["blocker_codes"])
+        self.assertEqual(payload["metrics"]["single_point_overclaim_rate"], 1.0)
+        self.assertEqual(payload["metrics"]["load_weight_false_positive_rate"], 1.0)
+        self.assertEqual(payload["metrics"]["load_source_truth_override_count"], 1)
+        self.assertEqual(payload["metrics"]["overpersonalization_from_load_signal_count"], 1)
+        self.assertNotIn("PRIVATE_OVERCLAIM_CASE", encoded)
+        self.assertNotIn("PRIVATE_EVENT_ID", encoded)
 
 
 if __name__ == "__main__":
