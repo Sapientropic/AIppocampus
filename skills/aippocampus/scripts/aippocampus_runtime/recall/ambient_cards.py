@@ -18,6 +18,7 @@ from aippocampus_runtime.recall.nudge_policy import safe_nudge_topic
 
 CARD_SCHEMA_VERSION = 1
 MAX_CARDS = 3
+MAX_BOUNDED_EVIDENCE_CHARS = 220
 
 SILENT_TUNING = "silent_tuning"
 ACTIVE_GENTLE_NUDGE = "active_gentle_nudge"
@@ -75,9 +76,11 @@ def _clean_terms(values: Any, *, limit: int = 6) -> list[str]:
 def _clean_source_ref(ref: dict[str, Any], *, fallback_thread: str = "", fallback_title: str = "") -> dict[str, Any]:
     clean = {
         "thread_key": ref.get("thread_key") or fallback_thread,
+        "source_id": ref.get("source_id"),
         "title": ref.get("title") or fallback_title,
         "line": ref.get("line"),
         "phase": ref.get("phase") or "",
+        "turn_id": ref.get("turn_id"),
         "turn_index": ref.get("turn_index"),
         "message_id": ref.get("message_id"),
     }
@@ -201,6 +204,123 @@ def _evidence_card(item: dict[str, Any], *, deep_archival: bool = False) -> dict
             else "User asks for original wording, source details, or a disputed memory."
         ),
     }, SOURCE_BACKED_REOPEN)
+
+
+def _source_reopen_messages(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    window = payload.get("source_window") if isinstance(payload.get("source_window"), dict) else {}
+    raw_messages = window.get("messages") if isinstance(window, dict) else None
+    if raw_messages is None:
+        raw_messages = payload.get("messages")
+    if not isinstance(raw_messages, list):
+        return []
+    return [message for message in raw_messages if isinstance(message, dict)]
+
+
+def _source_reopen_refs(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    raw_refs = payload.get("source_refs") or []
+    if isinstance(raw_refs, dict):
+        raw_refs = [raw_refs]
+    if not isinstance(raw_refs, list):
+        return []
+    refs = [_clean_source_ref(ref) for ref in raw_refs if isinstance(ref, dict)]
+    return [ref for ref in refs if ref][:MAX_CARDS]
+
+
+def _message_as_evidence_item(message: dict[str, Any], *, fallback_ref: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "thread_key": message.get("thread_key") or fallback_ref.get("thread_key"),
+        "source_id": message.get("source_id") or fallback_ref.get("source_id"),
+        "message_id": message.get("message_id") or message.get("id") or fallback_ref.get("message_id"),
+        "turn_id": message.get("turn_id") or fallback_ref.get("turn_id"),
+        "turn_index": message.get("turn_index") or fallback_ref.get("turn_index"),
+        "line": message.get("line") or message.get("source_line") or fallback_ref.get("line"),
+        "phase": message.get("phase") or fallback_ref.get("phase") or message.get("role") or "",
+        "title": message.get("title")
+        or fallback_ref.get("title")
+        or message.get("phase")
+        or message.get("role")
+        or "clean-source reopen",
+        "snippet": _safe_text(message.get("text") or message.get("snippet"), MAX_BOUNDED_EVIDENCE_CHARS),
+    }
+
+
+def _source_reopen_was_successful(payload: dict[str, Any]) -> bool:
+    raw_boundary = payload.get("source_boundary")
+    raw_metrics = payload.get("metrics")
+    boundary: dict[str, Any] = raw_boundary if isinstance(raw_boundary, dict) else {}
+    metrics: dict[str, Any] = raw_metrics if isinstance(raw_metrics, dict) else {}
+    get_turn_context_shape = bool(payload.get("turn") and _source_reopen_messages(payload))
+    return bool(
+        not payload.get("error")
+        and (
+            get_turn_context_shape
+            or payload.get("status") == "ok"
+        )
+        and (
+            get_turn_context_shape
+            or payload.get("support_level") == EVIDENCE
+            or payload.get("evidence_level") == "source_backed"
+            or boundary.get("clean_source_reopened")
+            or metrics.get("source_reopen_success")
+        )
+    )
+
+
+def bounded_evidence_context_from_source_reopen(
+    payload: dict[str, Any],
+    *,
+    max_cards: int = MAX_CARDS,
+) -> dict[str, Any]:
+    """Project reopened clean source into a separate bounded evidence context.
+
+    #707 keeps the scent packet ids-only: the packet may point at a route, but
+    this context is the separate source-backed surface after a host has already
+    reopened clean source. It deliberately serializes cards, not the raw
+    `source_window`, so callers cannot accidentally paste an unbounded turn.
+    """
+
+    clean_payload = payload if isinstance(payload, dict) else {}
+    source_refs = _source_reopen_refs(clean_payload)
+    messages = _source_reopen_messages(clean_payload)
+    source_reopen_success = _source_reopen_was_successful(clean_payload)
+    cards: list[dict[str, Any]] = []
+    if source_reopen_success:
+        for index, message in enumerate(messages[: max(0, max_cards)]):
+            fallback_ref = source_refs[min(index, len(source_refs) - 1)] if source_refs else {}
+            item = _message_as_evidence_item(message, fallback_ref=fallback_ref)
+            if not str(item.get("snippet") or "").strip():
+                continue
+            cards.append(_evidence_card(item))
+            if len(cards) >= max(0, max_cards):
+                break
+    success = bool(source_reopen_success and cards)
+    failure_reason_codes: list[str] = []
+    if not source_reopen_success:
+        failure_reason_codes.append("source_reopen_not_successful")
+    if source_reopen_success and not messages:
+        failure_reason_codes.append("source_window_missing")
+    if source_reopen_success and messages and not cards:
+        failure_reason_codes.append("bounded_evidence_empty")
+    return {
+        "kind": "aippocampus_bounded_evidence_context",
+        "schema_version": CARD_SCHEMA_VERSION,
+        "support_level": EVIDENCE if success else "none",
+        "evidence_level": "source_backed" if success else "none",
+        "source_reopen_success": success,
+        "cards": cards,
+        "card_count": len(cards),
+        "source_refs": source_refs,
+        "failure_reason_codes": failure_reason_codes,
+        "source_boundary": {
+            "separate_from_fresh_thread_packet": True,
+            "fresh_thread_packet_remains_navigation_only": True,
+            "clean_source_reopened": success,
+            "cards_are_bounded_source_backed_context": True,
+            "raw_prompt_text_serialized": False,
+            "raw_source_window_serialized": False,
+            "bounded_excerpt_chars": MAX_BOUNDED_EVIDENCE_CHARS,
+        },
+    }
 
 
 def _candidate_card(item: dict[str, Any], *, support_level: str = SCENT) -> dict[str, Any]:
