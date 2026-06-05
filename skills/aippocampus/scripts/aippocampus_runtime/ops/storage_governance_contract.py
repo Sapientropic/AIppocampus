@@ -177,6 +177,87 @@ def generation_gc_candidates_from_capacity_thread(
     return candidates
 
 
+def segment_generation_gc_candidates_from_capacity_thread(
+    thread: dict[str, Any],
+    *,
+    include_active: bool,
+) -> list[dict[str, Any]]:
+    generations = thread.get("segment_generations") or {}
+    if not isinstance(generations, dict):
+        return []
+
+    preconditions = capacity_preconditions(thread, include_active=include_active)
+    preconditions["reader_pin_or_ttl_contract"] = status(
+        "blocked",
+        evidence=(
+            "Old segment generations are only reportable until reader-pin/TTL cleanup "
+            "is implemented."
+        ),
+        requirement="Do not delete segment generation directories while foreground readers may still pin them.",
+    )
+    preconditions["last_known_good_pointer"] = status(
+        "passed",
+        evidence=(
+            "Candidate excludes current_generation and last_known_good_generation from "
+            "segments.pointer.json."
+        ),
+        requirement="Generation cleanup must preserve current and last-known-good segment pointer targets.",
+    )
+
+    candidates: list[dict[str, Any]] = []
+    for item in generations.get("generation_gc_candidates") or []:
+        if not isinstance(item, dict):
+            continue
+        generation_id = str(item.get("generation") or "generation")
+        size = int(item.get("bytes") or 0)
+        if size <= 0:
+            continue
+        relative_path = item.get("relative_path")
+        path: dict[str, Any] = {
+            "path_known": bool(relative_path),
+            "relative_path": relative_path,
+            "relative_to": "registry",
+        }
+        if item.get("path"):
+            path["path"] = item["path"]
+        candidates.append(
+            {
+                "id": f"capacity:{thread.get('thread_dir')}:old-segment-generation:{generation_id}",
+                "class": CLASS_REBUILDABLE,
+                "tier": TIER_REBUILDABLE_CACHE,
+                "label": f"Old segment generation {generation_id}",
+                "kind": "rebuildable_old_segment_generations",
+                "bytes": size,
+                "human_bytes": human_bytes(size),
+                "path": path,
+                "source_report": {
+                    "kind": "storage_capacity_report",
+                    "schema_version": SCHEMA_VERSION,
+                    "section": "segment_generations",
+                    "thread_key": thread.get("thread_key"),
+                    "thread_dir": thread.get("thread_dir"),
+                    "current_generation": generations.get("current_generation"),
+                    "last_known_good_generation": generations.get("last_known_good_generation"),
+                    "generation": generation_id,
+                },
+                "evidence": [
+                    f"generation={generation_id}",
+                    f"old_generation_bytes={size}",
+                    f"pointer_status={generations.get('status')}",
+                    "current and last-known-good segment generations are excluded from this candidate",
+                ],
+                "preconditions": dict(preconditions),
+                "rebuild_command": (
+                    "Generation GC is plan-only until reader-pin/TTL cleanup lands; rebuild "
+                    "segments with python -m aippocampus_runtime.recall.segment_builder "
+                    "--cwd <workspace>."
+                ),
+                "expected_rebuild_cost": {"class": "medium", "seconds": None},
+            }
+        )
+    return candidates
+
+
 def rebuild_command_for_retention_item(item: dict[str, Any]) -> str | None:
     item_id = str(item.get("id") or "")
     kind = str(item.get("kind") or "")

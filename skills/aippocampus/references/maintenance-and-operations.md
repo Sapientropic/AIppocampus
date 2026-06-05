@@ -159,7 +159,9 @@ is updated only after the generation manifest and compatibility
 `segments/manifest.json` are written, and failed publish leaves the previous
 pointer/manifest/generation available. The publish fast path must not delete old
 segment generations or legacy flat `seg-*` dirs until reader-pin/TTL cleanup is
-specified.
+specified. Health and storage-capacity reports may surface old segment
+generations as plan-only GC candidates; this is observability, not permission to
+delete them.
 
 Cross-device sync treats SQLite as a rebuildable generated cache, not durable
 truth. `aippocampus_runtime.sync.bundle` syncs registry manifests, graph
@@ -203,11 +205,11 @@ cache only when a retention report supplies path-level evidence. It checks
 raw/archive source evidence, anchor or registry refs, live writer/export
 leases, active-thread opt-in, and last-known-good pointer state, then writes an
 eviction manifest under `index/evictions/` with rebuild instructions. Capacity
-aggregate candidates, old source-index generation directories, segment indexes,
-Graphify corpus caches, review artifacts, and source files remain plan-only/manual.
-Old generation candidates intentionally carry a blocked
-`reader_pin_or_ttl_contract` precondition until cleanup can prove no foreground
-reader still pins that generation.
+aggregate candidates, old source-index generation directories, old segment
+generation directories, segment indexes, Graphify corpus caches, review
+artifacts, and source files remain plan-only/manual. Old generation candidates
+intentionally carry a blocked `reader_pin_or_ttl_contract` precondition until
+cleanup can prove no foreground reader still pins that generation.
 
 Codex Desktop's own thread archive is a different mechanism: the app may move
 raw rollout JSONL files from `$CODEX_HOME/sessions/` into

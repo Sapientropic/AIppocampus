@@ -405,6 +405,110 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertEqual(generations["publish_latency_ms"], 20.5)
         self.assertNotIn("source_index.sqlite is missing", payload["index"]["reasons"])
 
+    def test_health_reports_segment_generation_pointer_fallback_and_gc_candidates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            rollout = workspace / "rollout.jsonl"
+            rollout.write_text(
+                '{"type":"event_msg","payload":{"type":"user_message","message":"hi"}}\n',
+                encoding="utf-8",
+            )
+            anchors = workspace / "thread-anchors.md"
+            anchors.write_text("# Anchors\n- still present\n", encoding="utf-8")
+            index_dir = root / "index"
+            index_dir.mkdir()
+            (index_dir / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "created_at": "2026-06-03T00:00:00Z",
+                        "message_count": 1,
+                        "source_rollout_size": rollout.stat().st_size,
+                        "last_message_line": 1,
+                        "rag": {"enabled": True},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (index_dir / "messages.jsonl").write_text("{}\n", encoding="utf-8")
+            (index_dir / "source_index.sqlite").write_bytes(b"stable")
+            segments_dir = root / "segments"
+            lkg_dir = segments_dir / "generations" / "gen_20260605T005900_lkg"
+            old_dir = segments_dir / "generations" / "gen_20260605T004500_old"
+            lkg_shard = lkg_dir / "seg-000001"
+            old_shard = old_dir / "seg-000001"
+            lkg_shard.mkdir(parents=True)
+            old_shard.mkdir(parents=True)
+            (lkg_dir / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "created_at": "2026-06-04T00:00:00Z",
+                        "segment_count": 1,
+                        "source_rollout_size": rollout.stat().st_size,
+                        "message_count": 1,
+                        "segments": [
+                            {"id": "seg-000001", "sqlite": str(lkg_shard / "source_index.sqlite")}
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (old_dir / "manifest.json").write_text(
+                json.dumps({"segment_count": 1, "generation_id": old_dir.name}),
+                encoding="utf-8",
+            )
+            (lkg_shard / "source_index.sqlite").write_bytes(b"lkg")
+            (old_shard / "source_index.sqlite").write_bytes(b"old-segment-generation")
+            old_generation_bytes = sum(
+                path.stat().st_size for path in old_dir.rglob("*") if path.is_file()
+            )
+            (segments_dir / "manifest.json").write_text(
+                (lkg_dir / "manifest.json").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            (segments_dir / "segments.pointer.json").write_text(
+                json.dumps(
+                    {
+                        "kind": "aippocampus_segments_pointer",
+                        "current_generation": "gen_20260605T010000_missing",
+                        "last_known_good_generation": lkg_dir.name,
+                        "current": "generations/gen_20260605T010000_missing/manifest.json",
+                        "last_known_good": f"generations/{lkg_dir.name}/manifest.json",
+                        "stable": "manifest.json",
+                        "compatibility_path": "manifest.json",
+                        "publish_latency_ms": 10.75,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with mock.patch.object(health, "locate_rollout", return_value=rollout):
+                payload = health.build_health_report(
+                    health.HealthOptions(
+                        cwd=workspace,
+                        index_dir=index_dir,
+                        clean_source_dir=root / "clean-source",
+                        graphify_corpus=root / "graphify-corpus",
+                        segments_dir=segments_dir,
+                        checkpoint_state=root / "checkpoint_state.json",
+                        anchors=anchors,
+                    )
+                )
+
+        generations = payload["segments"]["generations"]
+        self.assertEqual(generations["status"], "current_missing_last_known_good_available")
+        self.assertEqual(generations["fallback_used"], "last_known_good")
+        self.assertFalse(generations["current_generation_exists"])
+        self.assertTrue(generations["last_known_good_generation_exists"])
+        self.assertEqual(generations["old_generation_count"], 1)
+        self.assertEqual(generations["generation_gc_candidate_count"], 1)
+        self.assertEqual(
+            generations["generation_gc_candidate_bytes"],
+            old_generation_bytes,
+        )
+        self.assertEqual(generations["publish_latency_ms"], 10.75)
+
     def test_health_reports_legacy_alias_names_without_private_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
