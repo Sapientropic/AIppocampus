@@ -148,6 +148,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_object_storage_sync",
         "test_onboard_codex",
         "test_openai_agents_sdk_smoke",
+        "test_operation_claim_gate",
         "test_operation_integrity",
         "test_package_windows_binary",
         "test_path_identity",

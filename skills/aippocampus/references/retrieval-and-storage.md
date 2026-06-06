@@ -116,6 +116,18 @@ material first. Conflict diagnostics must not serialize raw commands, raw
 outputs, full tool arguments, local absolute paths, file contents, or
 secret-shaped strings.
 
+Downstream code that wants to phrase a strong operation fact should call the
+machine-readable gate in
+`aippocampus_runtime.source.operation_claim_gate.evaluate_operation_claim`
+with the integrity report, operation family, intended support level, and any
+available join keys such as `event_id`, `source_ref`, or `call_ref`. The gate
+returns a bounded decision (`allow_source_backed_claim`,
+`downgrade_to_candidate`, `require_source_reopen`, `block_public_claim`, or
+`conflict_requires_review`) plus the existing `support_level`, `trust_level`,
+`action_grammar`, and `trust_contract` fields. The gate applies only to strong
+operation claims; it must not block ordinary clean-source search or
+source-backed recall routing.
+
 Run the diagnostic from an installed package or the script root:
 
 ```powershell
