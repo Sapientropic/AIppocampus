@@ -21,6 +21,22 @@ def stable_worker_contract(
         "cache_contract": DEEPSEEK_PREFIX_CACHE_CONTRACT,
         "execution_mode": "detached_background",
         "allowed_dream_functions": sorted(candidate_kinds_by_function),
+        "worker_stance": {
+            "role": "source_body_dream_worker",
+            "not": [
+                "auditor_only",
+                "user_persona_simulator",
+                "factual_claim_authority",
+            ],
+            "shared_body": "selected clean-source refs, route notes, texture, and source-pack context",
+            "same_source_body_not_same_persistent_self": True,
+            "facing": "future_foreground_agent",
+            "task": (
+                "Surface source-shaped possibilities that help a future agent "
+                "recognize, choose, or reopen source."
+            ),
+            "boundary": "hypothesis_and_navigation_never_source_truth",
+        },
         "output_schema": {
             "findings": [
                 {
@@ -35,6 +51,12 @@ def stable_worker_contract(
                     "bridge_claims": [
                         {"claim": "why these source handles support the bridge", "source_ref_ids": ["sr0"]}
                     ],
+                    "foreground_affordance": "optional: what this helps a future agent notice or do",
+                    "source_body_shape": "optional: compact source-bounded shape of the selected source terrain",
+                    "agent_position": "optional: position the future foreground agent would be facing",
+                    "atmosphere_tags": ["optional direction-only tags, never facts"],
+                    "waking_path": "optional: source_reopen | user_probe | retrospective_support | stay_parked",
+                    "what_not_to_overclaim": "optional compact boundary in plain language",
                 }
             ]
         },
@@ -68,4 +90,3 @@ def variable_run_directive(
         ),
         "truth_boundary": "dream_synthesized_candidate_not_fact",
     }
-
