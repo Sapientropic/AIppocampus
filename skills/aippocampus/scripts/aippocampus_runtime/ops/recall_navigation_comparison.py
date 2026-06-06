@@ -472,7 +472,22 @@ def _issue_readouts(
         if foreground_reopen_measured
         else None
     )
-    taxonomy_documented = len(trust_taxonomy()) >= 6
+    taxonomy_rows = trust_taxonomy()
+    taxonomy_documented = len(taxonomy_rows) >= 6
+    action_grammars = {str(row.get("action_grammar") or "") for row in taxonomy_rows}
+    action_grammar_documented = {
+        "direction_only",
+        "reopenable_route",
+        "bounded_evidence",
+        "source_open",
+        "ignore_or_blocked",
+    }.issubset(action_grammars)
+    action_grammar_fixture_measured = bool(
+        action_grammar_documented
+        and bounded_evidence_measured
+        and foreground_reopen.get("source_reopen_follow_through")
+        and foreground_manual_query_count == 0
+    )
     funnel = _as_dict(candidate_funnel)
     funnel_measured = bool(funnel.get("measured"))
     funnel_metrics = _as_dict(funnel.get("metrics"))
@@ -565,6 +580,8 @@ def _issue_readouts(
         },
         "github_786": {
             "trust_taxonomy_documented": taxonomy_documented,
+            "action_grammar_documented": action_grammar_documented,
+            "action_grammar_fixture_measured": action_grammar_fixture_measured,
             "bounded_evidence_changes_answer_without_manual_query": bool(
                 bounded_evidence_measured
                 and foreground_reopen.get("source_reopen_follow_through")
@@ -577,7 +594,11 @@ def _issue_readouts(
             "bounded_evidence_card_count": bounded_evidence_card_count,
             "foreground_manual_query_invention_count": foreground_manual_query_count,
             "live_semantic_reopen_quality": "not_measured",
-            "same_thread_issue_comment_route_quality": "not_measured",
+            "same_thread_issue_comment_route_quality": (
+                "fixture_measured_action_route"
+                if action_grammar_fixture_measured
+                else "not_measured"
+            ),
             "closeout_eligible": False,
         },
     }
@@ -676,6 +697,12 @@ def build_recall_navigation_comparison(
                 "manual query invention, and bounded evidence may be used within its "
                 "declared scope."
             ),
+            "packet_action_grammar": (
+                "Fixture-backed #786 readout that projects trust levels into foreground "
+                "action grammar: direction_only is not factual, reopenable_route uses "
+                "source refs, bounded_evidence changes the answer within scope, and "
+                "source_open remains reserved for raw source reopen."
+            ),
             "vague_cue_candidate_funnel": (
                 "Fixture-backed #201/#281/#309/#248 readout over a source-joined "
                 "core plus sentinel verifier pool. Sentinel candidates are measured "
@@ -693,6 +720,7 @@ def build_recall_navigation_comparison(
             "hook_scent_is_not_evidence": True,
             "candidate_pool_navigation_only": True,
             "cannot_claim_default_prefilter_safety": True,
+            "cannot_claim_live_same_thread_issue_comment_route_quality": True,
             "bounded_evidence_context_separate_from_scent_packet": True,
             "no_external_model_calls": True,
             "no_write": True,

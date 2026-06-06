@@ -236,6 +236,8 @@ def ambient_debug_summary(result: dict[str, Any]) -> dict[str, Any] | None:
         "reopen_required_before_claim_count": reopen_required_before_claim_count,
         "reopen_recommended_for_exact_quote_count": reopen_recommended_for_exact_quote_count,
         "authority_counts": authority_counts,
+        "trust_level_counts": count_cards_by_field(cards, "trust_level"),
+        "action_grammar_counts": count_cards_by_field(cards, "action_grammar"),
         "provenance_counts": count_cards_by_field(cards, "provenance_class"),
         "support_level_counts": count_cards_by_field(cards, "support_level"),
     }
@@ -498,6 +500,7 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
         for card in ambient_cards[:3]:
             support = str(card.get("support_level") or "scent")
             trust = str(card.get("trust_level") or support)
+            action = str(card.get("action_grammar") or trust)
             visibility = str(card.get("visibility") or ambient.get("mode") or "silent_tuning")
             provenance = str(card.get("provenance_class") or "")
             theme = compact_text(str(card.get("theme") or ""), 120)
@@ -513,21 +516,26 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
             else:
                 provenance_note = "navigation hint"
             source_note = ""
-            if trust == "bounded_evidence":
+            if action == "bounded_evidence":
                 source_note = " source-backed refs available; bounded source-backed evidence"
-            elif trust == "source_required":
+            elif action == "source_open":
+                source_note = " raw source open; exact wording still scope/redaction-bound"
+            elif action == "reopenable_route":
                 source_note = " actionable source-reopen route"
+            elif action == "ignore_or_blocked":
+                source_note = " blocked or unsafe to use"
             if visibility == "deep_archival_recall":
                 source_note += " deep archival requested"
             evidence_line = ""
             if support == "evidence" and card.get("key_line"):
                 evidence_line = f" Evidence: {compact_text(str(card.get('key_line') or ''), 180)}"
             lines.append(
-                f"- {provenance_note} {visibility}/{support}/{trust}: {theme}."
+                f"- {provenance_note} {visibility}/{support}/{trust}/{action}: {theme}."
                 f"{source_note}{evidence_line} Use: {suggested_use}"
             )
         lines.append(
-            "Use bounded_evidence within its scope; all other trust levels are navigation until source reopen."
+            "Use bounded_evidence within scope, source_open for scoped exact wording, "
+            "reopenable_route by reopening source, and direction_only only as attention."
         )
     if result.get("reasons"):
         lines.append("Why: " + "; ".join(str(reason) for reason in result.get("reasons", [])[:3]))

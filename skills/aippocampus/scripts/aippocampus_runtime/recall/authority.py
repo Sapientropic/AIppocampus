@@ -23,34 +23,46 @@ TRUST_SOURCE_REQUIRED = "source_required"
 TRUST_BOUNDED_EVIDENCE = "bounded_evidence"
 TRUST_RAW_SOURCE_REOPENED = "raw_source_reopened"
 
+ACTION_IGNORE_OR_BLOCKED = "ignore_or_blocked"
+ACTION_DIRECTION_ONLY = "direction_only"
+ACTION_REOPENABLE_ROUTE = "reopenable_route"
+ACTION_BOUNDED_EVIDENCE = "bounded_evidence"
+ACTION_SOURCE_OPEN = "source_open"
+
 TRUST_TAXONOMY: tuple[dict[str, Any], ...] = (
     {
         "trust_level": TRUST_IGNORE,
+        "action_grammar": ACTION_IGNORE_OR_BLOCKED,
         "allowed_use": "ignore_or_report_boundary",
         "summary": "Stale, suppressed, superseded, privacy-blocked, or otherwise unsafe.",
     },
     {
         "trust_level": TRUST_SEMANTIC_HINT,
+        "action_grammar": ACTION_DIRECTION_ONLY,
         "allowed_use": "wayfinding_only",
         "summary": "Model, cognitive-map, or semantic route material; navigation only.",
     },
     {
         "trust_level": TRUST_SCENT,
+        "action_grammar": ACTION_DIRECTION_ONLY,
         "allowed_use": "weak_navigation",
         "summary": "A weak association that may decide whether further recall is worth it.",
     },
     {
         "trust_level": TRUST_SOURCE_REQUIRED,
+        "action_grammar": ACTION_REOPENABLE_ROUTE,
         "allowed_use": "reopen_source",
         "summary": "Actionable source-reopen route; not factual evidence yet.",
     },
     {
         "trust_level": TRUST_BOUNDED_EVIDENCE,
+        "action_grammar": ACTION_BOUNDED_EVIDENCE,
         "allowed_use": "use_within_declared_scope",
         "summary": "Clean source has already been reopened into bounded evidence.",
     },
     {
         "trust_level": TRUST_RAW_SOURCE_REOPENED,
+        "action_grammar": ACTION_SOURCE_OPEN,
         "allowed_use": "use_raw_source_with_redaction",
         "summary": "Raw/local source is open to the host; still scope- and redaction-bound.",
     },
@@ -131,13 +143,69 @@ def trust_level(surface: Mapping[str, Any]) -> str:
     return TRUST_SCENT
 
 
+def action_grammar_for_level(
+    level: str,
+    surface: Mapping[str, Any] | None = None,
+) -> str:
+    """Project the trust tier into the foreground agent's next-action grammar."""
+
+    clean_level = str(level or TRUST_SCENT)
+    surface_map = _mapping(surface)
+    plan = _mapping(surface_map.get("reopen_plan"))
+    plan_status = str(plan.get("status") or "").casefold()
+    route = str(surface_map.get("route") or "").casefold()
+    visibility = str(surface_map.get("visibility") or "").casefold()
+    currentness = str(
+        surface_map.get("currentness") or surface_map.get("freshness") or ""
+    ).casefold()
+    support = str(surface_map.get("support_level") or "").casefold()
+
+    if (
+        clean_level == TRUST_IGNORE
+        or route == "ignore"
+        or support == "suppressed"
+        or visibility == "blocked"
+        or currentness in {"stale", "superseded"}
+        or plan_status == "blocked"
+    ):
+        return ACTION_IGNORE_OR_BLOCKED
+    if clean_level == TRUST_RAW_SOURCE_REOPENED:
+        return ACTION_SOURCE_OPEN
+    if clean_level == TRUST_BOUNDED_EVIDENCE:
+        return ACTION_BOUNDED_EVIDENCE
+    if clean_level == TRUST_SOURCE_REQUIRED:
+        if not surface_map:
+            return ACTION_REOPENABLE_ROUTE
+        if (
+            plan_status == "ready"
+            or route == "reopen"
+            or surface_map.get("source_refs")
+            or surface_map.get("candidate_refs")
+        ):
+            return ACTION_REOPENABLE_ROUTE
+        return ACTION_IGNORE_OR_BLOCKED
+    return ACTION_DIRECTION_ONLY
+
+
+def action_grammar(surface: Mapping[str, Any]) -> str:
+    return action_grammar_for_level(trust_level(surface), surface)
+
+
 def trust_contract_for_level(level: str, surface: Mapping[str, Any] | None = None) -> dict[str, Any]:
     clean_level = str(level or TRUST_SCENT)
     surface_map = _mapping(surface)
+    grammar = action_grammar_for_level(clean_level, surface_map)
+    should_ignore = grammar == ACTION_IGNORE_OR_BLOCKED
+    should_reopen = grammar == ACTION_REOPENABLE_ROUTE
+    may_quote = grammar == ACTION_SOURCE_OPEN
     if clean_level == TRUST_IGNORE:
         return {
+            "action_grammar": grammar,
             "allowed_use": "ignore_or_report_boundary",
             "agent_may_answer_within_scope": False,
+            "agent_may_quote_exact_wording": may_quote,
+            "agent_should_ignore": True,
+            "agent_should_reopen_source": False,
             "source_reopen_required_before_claim": False,
             "reopen_recommended_for_exact_quote": False,
             "manual_query_invention_expected": False,
@@ -145,8 +213,12 @@ def trust_contract_for_level(level: str, surface: Mapping[str, Any] | None = Non
         }
     if clean_level == TRUST_SEMANTIC_HINT:
         return {
+            "action_grammar": grammar,
             "allowed_use": "wayfinding_only",
             "agent_may_answer_within_scope": False,
+            "agent_may_quote_exact_wording": may_quote,
+            "agent_should_ignore": should_ignore,
+            "agent_should_reopen_source": should_reopen,
             "source_reopen_required_before_claim": True,
             "reopen_recommended_for_exact_quote": True,
             "manual_query_invention_expected": True,
@@ -155,19 +227,27 @@ def trust_contract_for_level(level: str, surface: Mapping[str, Any] | None = Non
     if clean_level == TRUST_SOURCE_REQUIRED:
         plan = _mapping(surface_map.get("reopen_plan"))
         return {
-            "allowed_use": "reopen_source",
+            "action_grammar": grammar,
+            "allowed_use": "blocked_reopen_boundary" if should_ignore else "reopen_source",
             "agent_may_answer_within_scope": False,
+            "agent_may_quote_exact_wording": may_quote,
+            "agent_should_ignore": should_ignore,
+            "agent_should_reopen_source": should_reopen,
             "source_reopen_required_before_claim": True,
             "reopen_recommended_for_exact_quote": True,
             "manual_query_invention_expected": bool(
-                plan.get("manual_query_invention_expected", False)
+                False if should_ignore else plan.get("manual_query_invention_expected", False)
             ),
             "treat_as_fact": False,
         }
     if clean_level == TRUST_BOUNDED_EVIDENCE:
         return {
+            "action_grammar": grammar,
             "allowed_use": "use_within_declared_scope",
             "agent_may_answer_within_scope": True,
+            "agent_may_quote_exact_wording": may_quote,
+            "agent_should_ignore": should_ignore,
+            "agent_should_reopen_source": should_reopen,
             "source_reopen_required_before_claim": False,
             "reopen_recommended_for_exact_quote": True,
             "manual_query_invention_expected": False,
@@ -175,16 +255,24 @@ def trust_contract_for_level(level: str, surface: Mapping[str, Any] | None = Non
         }
     if clean_level == TRUST_RAW_SOURCE_REOPENED:
         return {
+            "action_grammar": grammar,
             "allowed_use": "use_raw_source_with_redaction",
             "agent_may_answer_within_scope": True,
+            "agent_may_quote_exact_wording": may_quote,
+            "agent_should_ignore": should_ignore,
+            "agent_should_reopen_source": should_reopen,
             "source_reopen_required_before_claim": False,
             "reopen_recommended_for_exact_quote": False,
             "manual_query_invention_expected": False,
             "treat_as_fact": True,
         }
     return {
+        "action_grammar": grammar,
         "allowed_use": "weak_navigation",
         "agent_may_answer_within_scope": False,
+        "agent_may_quote_exact_wording": may_quote,
+        "agent_should_ignore": should_ignore,
+        "agent_should_reopen_source": should_reopen,
         "source_reopen_required_before_claim": True,
         "reopen_recommended_for_exact_quote": True,
         "manual_query_invention_expected": True,
@@ -195,7 +283,9 @@ def trust_contract_for_level(level: str, surface: Mapping[str, Any] | None = Non
 def with_trust_fields(surface: Mapping[str, Any]) -> dict[str, Any]:
     clean = dict(surface)
     level = trust_level(clean)
+    grammar = action_grammar_for_level(level, clean)
     clean["trust_level"] = level
+    clean["action_grammar"] = grammar
     clean["trust_contract"] = trust_contract_for_level(level, clean)
     return clean
 

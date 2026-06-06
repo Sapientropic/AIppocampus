@@ -255,11 +255,26 @@ class ActivePathPacketTests(unittest.TestCase):
                 "raw_source_reopened",
             ],
         )
+        self.assertEqual(
+            [entry["action_grammar"] for entry in packet["trust_taxonomy"]],
+            [
+                "ignore_or_blocked",
+                "direction_only",
+                "direction_only",
+                "reopenable_route",
+                "bounded_evidence",
+                "source_open",
+            ],
+        )
         self.assertGreaterEqual(packet["path_count"], 4)
         self.assertLessEqual(packet["path_count"], 7)
         self.assertTrue(packet["privacy"]["local_first"])
         self.assertFalse(packet["privacy"]["raw_source_text_serialized"])
         self.assertFalse(packet["metrics"]["manual_query_invention_expected"])
+        self.assertGreaterEqual(packet["metrics"]["action_grammar_counts"]["direction_only"], 1)
+        self.assertGreaterEqual(packet["metrics"]["action_grammar_counts"]["reopenable_route"], 2)
+        self.assertEqual(packet["metrics"]["action_grammar_counts"]["bounded_evidence"], 1)
+        self.assertEqual(packet["metrics"]["action_grammar_counts"]["ignore_or_blocked"], 1)
         self.assertGreaterEqual(packet["metrics"]["reopenable_path_count"], 2)
         self.assertGreaterEqual(packet["metrics"]["stale_or_superseded_path_count"], 1)
         self.assertTrue(packet["source_boundary"]["navigation_not_truth"])
@@ -273,24 +288,34 @@ class ActivePathPacketTests(unittest.TestCase):
 
         evidence_path = next(path for path in packet["paths"] if path["route"] == "evidence")
         self.assertEqual(evidence_path["trust_level"], "bounded_evidence")
+        self.assertEqual(evidence_path["action_grammar"], "bounded_evidence")
         self.assertEqual(evidence_path["next_action"], "use_bounded_evidence")
         self.assertTrue(evidence_path["trust_contract"]["agent_may_answer_within_scope"])
+        self.assertFalse(evidence_path["trust_contract"]["agent_may_quote_exact_wording"])
         self.assertFalse(evidence_path["source_boundary"]["source_reopen_required"])
         self.assertTrue(evidence_path["source_boundary"]["bounded_evidence_usable_within_scope"])
         self.assertEqual(evidence_path["source_refs"][0]["message_id"], "msg-1")
 
         reopen_path = next(path for path in packet["paths"] if path["route"] == "reopen")
         self.assertEqual(reopen_path["trust_level"], "source_required")
+        self.assertEqual(reopen_path["action_grammar"], "reopenable_route")
         self.assertIn(reopen_path["next_action"], {"get_turn_context", "source_reopen"})
         self.assertFalse(reopen_path["trust_contract"]["manual_query_invention_expected"])
+        self.assertTrue(reopen_path["trust_contract"]["agent_should_reopen_source"])
         self.assertTrue(reopen_path["source_boundary"]["source_reopen_required"])
         self.assertTrue(reopen_path["source_refs"])
 
+        scent_path = next(path for path in packet["paths"] if path["route"] == "scent")
+        self.assertEqual(scent_path["action_grammar"], "direction_only")
+        self.assertFalse(scent_path["trust_contract"]["treat_as_fact"])
+
         ignored_path = next(path for path in packet["paths"] if path["route"] == "ignore")
         self.assertEqual(ignored_path["trust_level"], "ignore")
+        self.assertEqual(ignored_path["action_grammar"], "ignore_or_blocked")
         self.assertEqual(ignored_path["currentness"], "superseded")
         self.assertTrue(ignored_path["source_boundary"]["unsafe_to_use_as_current_fact"])
         self.assertEqual(ignored_path["next_action"], "ignore")
+        self.assertTrue(ignored_path["trust_contract"]["agent_should_ignore"])
 
         serialized = json.dumps(packet, ensure_ascii=False, sort_keys=True)
         self.assertNotIn("raw source wording", serialized)

@@ -55,12 +55,15 @@ class FreshThreadScentPacketTests(unittest.TestCase):
                 "reopenable_ref_count",
                 "advisory_action",
                 "suggested_action",
+                "action_grammar",
                 "trust_level",
                 "trust_contract",
                 "when_not_to_use",
                 "source_boundary",
             },
         )
+        self.assertEqual(packet["action_grammar"], "direction_only")
+        self.assertEqual(packet["trust_contract"]["action_grammar"], "direction_only")
         self.assertEqual(
             packet["candidate_refs"],
             [{"thread_key": "session:old-thread", "message_id": "msg-7", "line": 42}],
@@ -95,7 +98,10 @@ class FreshThreadScentPacketTests(unittest.TestCase):
 
         self.assertEqual(payload["support_level"], "source_required")
         self.assertEqual(payload["trust_level"], "source_required")
+        self.assertEqual(payload["action_grammar"], "reopenable_route")
+        self.assertEqual(payload["trust_contract"]["action_grammar"], "reopenable_route")
         self.assertFalse(payload["trust_contract"]["agent_may_answer_within_scope"])
+        self.assertTrue(payload["trust_contract"]["agent_should_reopen_source"])
         self.assertFalse(payload["trust_contract"]["manual_query_invention_expected"])
         self.assertEqual(payload["advisory_action"], "source_reopen")
         self.assertEqual(payload["suggested_action"], "source_reopen")
@@ -147,7 +153,11 @@ class FreshThreadScentPacketTests(unittest.TestCase):
 
         self.assertEqual(packet["support_level"], "source_required")
         self.assertEqual(packet["trust_level"], "source_required")
+        self.assertEqual(packet["action_grammar"], "ignore_or_blocked")
+        self.assertEqual(packet["trust_contract"]["action_grammar"], "ignore_or_blocked")
         self.assertFalse(packet["trust_contract"]["agent_may_answer_within_scope"])
+        self.assertTrue(packet["trust_contract"]["agent_should_ignore"])
+        self.assertFalse(packet["trust_contract"]["agent_should_reopen_source"])
         self.assertEqual(packet["candidate_ref_count"], 1)
         self.assertEqual(packet["reopenable_ref_count"], 0)
         self.assertEqual(packet["reopen_plan"]["status"], "blocked")
@@ -173,6 +183,9 @@ class FreshThreadScentPacketTests(unittest.TestCase):
         self.assertEqual(packet["sensitivity"], "suppress")
         self.assertEqual(packet["advisory_action"], "ignore")
         self.assertEqual(packet["suggested_action"], "ignore")
+        self.assertEqual(packet["action_grammar"], "ignore_or_blocked")
+        self.assertEqual(packet["trust_contract"]["action_grammar"], "ignore_or_blocked")
+        self.assertTrue(packet["trust_contract"]["agent_should_ignore"])
         self.assertEqual(packet["candidate_refs"], [])
         self.assertNotIn("reopen_plan", packet)
         self.assertIn("Do not use suppressed packets", " ".join(packet["when_not_to_use"]))
