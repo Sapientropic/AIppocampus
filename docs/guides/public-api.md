@@ -225,7 +225,9 @@ For these commands:
   route" drilldown, but the packet is not a control plane and cannot establish
   source truth without source reopen.
 - `observatory --json` emits a public-safe, no-write Cognitive Observatory
-  readout. The first stable slice aggregates route-readiness/prewarm
+  readout; `observatory --html --output <path>` renders the same sanitized
+  readout as a static, no-script operator view. The first stable slice
+  aggregates route-readiness/prewarm
   diagnostics, activation-surface authority, optional recall diagnostics, and
   sleep-cycle public summaries. Route-readiness rows are `navigation_only` and
   may show TTL, freshness, privacy, source-ref, and ROI suppression reasons;
