@@ -466,10 +466,12 @@ def fresh_packet_reopen_lines(result: dict[str, Any]) -> list[str]:
         and packet.get("action_grammar") == "reopenable_route"
     ):
         return []
-    plan = packet.get("reopen_plan") if isinstance(packet.get("reopen_plan"), dict) else {}
+    raw_plan = packet.get("reopen_plan")
+    plan: dict[str, Any] = raw_plan if isinstance(raw_plan, dict) else {}
     if plan.get("status") != "ready":
         return []
-    arguments = plan.get("arguments") if isinstance(plan.get("arguments"), dict) else {}
+    raw_arguments = plan.get("arguments")
+    arguments: dict[str, Any] = raw_arguments if isinstance(raw_arguments, dict) else {}
     argument_text = ", ".join(f"{key}={value}" for key, value in arguments.items())
     if not argument_text:
         argument_text = "primary_ref"
