@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 """Human-facing live-provider visibility diagnostics.
 
-This command answers one narrow operator question: can the process that runs
+This command answers one narrow operator question by default: can the process that runs
 AIppocampus, and a child process like a Codex hook, see the API-key environment
 variable required by the selected model route? It intentionally does not read
 `.env` files, credential stores, or keychain entries; those can prove a key
 exists somewhere, but not that the hook process inherits it.
+
+The explicit `--discover-credential-sources` mode is onboarding-only. It can
+inspect current-process env and user-specified `.env` files to report redacted
+candidate shape and optional validation status, but it still does not change the
+runtime rule: hooks and model workers read credentials from environment variables.
 """
 
 from __future__ import annotations
@@ -15,11 +20,16 @@ import json
 import os
 import subprocess
 import sys
+from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.cognitive_worker_mode import resolve_cognitive_worker_mode
 from aippocampus_runtime.legacy_aliases import env_legacy_alias_diagnostics
 from aippocampus_runtime.model.routing import ModelRoute, resolve_model_route
+from aippocampus_runtime.ops.provider_credentials import (
+    CredentialValidator,
+    build_credential_discovery_report,
+)
 from aippocampus_runtime.public_output import emit_public_text
 from aippocampus_runtime.recall.semantic_recall_gate import semantic_gate_enabled
 from aippocampus_runtime.warm_ambient.scheduler import warm_background_enabled
@@ -127,6 +137,11 @@ def build_provider_doctor_report(
     model_route: str | None = "default",
     provider_env_var: str | None = None,
     check_child_process: bool = True,
+    discover_credential_sources: bool = False,
+    credential_dotenv_paths: list[Path] | None = None,
+    include_local_paths: bool = False,
+    validate_credentials: bool = False,
+    credential_validator: CredentialValidator | None = None,
 ) -> dict[str, Any]:
     requested_route = str(model_route or "default").strip() or "default"
     try:
@@ -185,7 +200,7 @@ def build_provider_doctor_report(
     else:
         status = "child_process_missing_provider_env_var"
 
-    return {
+    report = {
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_provider_doctor",
         "ok": ok,
@@ -225,6 +240,7 @@ def build_provider_doctor_report(
             "base_url_value_printed": False,
             "checked_env_var_names": [public_env_name],
             "legacy_alias_values_printed": False,
+            "credential_discovery_values_printed": False,
         },
         "recommended_actions": _recommended_actions(
             provider_env_var=resolved_provider_env_var,
@@ -232,6 +248,16 @@ def build_provider_doctor_report(
             child_visible=child_visible,
         ),
     }
+    if discover_credential_sources:
+        report["credential_discovery"] = build_credential_discovery_report(
+            route=route,
+            provider_env_var=resolved_provider_env_var,
+            dotenv_paths=credential_dotenv_paths,
+            include_local_paths=include_local_paths,
+            validate_credentials=validate_credentials,
+            credential_validator=credential_validator,
+        )
+    return report
 
 
 def render_text(report: dict[str, Any]) -> str:
@@ -267,7 +293,9 @@ def public_json_text(report: dict[str, Any]) -> str:
     """Serialize the provider doctor public report.
 
     Provider doctor output intentionally reports key presence and public env var
-    names only. It never reads or prints key values; tests assert that boundary.
+    names only. Explicit credential discovery may read candidate values for
+    shape/probe status, but it never prints those values; tests assert that
+    boundary.
     """
 
     return json.dumps(report, ensure_ascii=False, indent=2)
@@ -284,6 +312,10 @@ def main(argv: list[str] | None = None) -> int:
     provider_parser.add_argument("--provider-env-var", dest="provider_env_var")
     provider_parser.add_argument("--api-key-env", dest="provider_env_var")
     provider_parser.add_argument("--no-child-check", action="store_true")
+    provider_parser.add_argument("--discover-credential-sources", action="store_true")
+    provider_parser.add_argument("--credential-dotenv", action="append", default=[])
+    provider_parser.add_argument("--include-local-paths", action="store_true")
+    provider_parser.add_argument("--validate-credentials", action="store_true")
     provider_parser.add_argument("--json", action="store_true", dest="json_output")
     spend_parser = subparsers.add_parser(
         "spend",
@@ -319,6 +351,10 @@ def main(argv: list[str] | None = None) -> int:
         model_route=args.model_route,
         provider_env_var=args.provider_env_var,
         check_child_process=not args.no_child_check,
+        discover_credential_sources=args.discover_credential_sources,
+        credential_dotenv_paths=[Path(path) for path in args.credential_dotenv],
+        include_local_paths=args.include_local_paths,
+        validate_credentials=args.validate_credentials,
     )
     if args.json_output:
         emit_public_text(public_json_text(report))

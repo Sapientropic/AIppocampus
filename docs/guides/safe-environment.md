@@ -20,6 +20,14 @@ registry paths, local executable paths, and provider account ids in your private
 shell or private `.env`, never in repository docs, issues, PRs, or plugin
 metadata.
 
+Provider-key discovery stays explicit. `aippocampus doctor provider` normally
+checks only whether the selected environment variable is visible to the current
+process and a child process. If you run
+`aippocampus doctor provider --discover-credential-sources --credential-dotenv <path> --json`,
+AIppocampus reads only that specified file and reports redacted candidate
+metadata; it does not scan the repository, print the secret, or install a
+credential bridge.
+
 Use `AIPPOCAMPUS_HOME` or `AIPPOCAMPUS_REGISTRY_DIR` for non-Codex storage.
 `CODEX_HOME` remains a compatibility fallback for Codex installs, not the
 preferred new storage API.

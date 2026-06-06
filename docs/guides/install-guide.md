@@ -408,6 +408,21 @@ starts; it does not prove what a previously started Codex Desktop hook process
 could see. Use `--provider-env-var <NAME>` when you need to test a local route
 override without changing the route configuration.
 
+When a key exists somewhere on the machine but the hook-relevant process still
+reports `missing_provider_env_var`, use explicit credential-source discovery:
+
+```sh
+aippocampus doctor provider --discover-credential-sources --credential-dotenv /path/to/.env --json
+```
+
+Discovery is opt-in. It does not recursively scan the filesystem, read the
+current directory's `.env` by default, or inspect OS credential stores without a
+future explicit adapter. The report redacts secret values and omits local paths
+unless the operator asks for them. Add `--validate-credentials` only when you
+want a lightweight provider probe; validation is skipped for non-HTTPS routes
+except loopback HTTP. This diagnostic does not install a hook wrapper or bridge
+credentials into Codex Desktop by itself.
+
 Package modules remain available when the facade is not installed:
 
 ```sh

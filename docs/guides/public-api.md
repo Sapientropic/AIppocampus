@@ -564,6 +564,14 @@ Common installs should stay small:
   Desktop hook process. JSON output names this surface `provider_env`; use
   `--provider-env-var` to override the selected route variable name for local
   diagnostics.
+- `aippocampus doctor provider --discover-credential-sources --credential-dotenv <path> --json`
+  is an explicit onboarding diagnostic for cases where a key exists outside the
+  current process environment. It reads only user-specified `.env` files and the
+  current process env, reports public candidate shape and optional validation
+  status, omits local paths by default, and never prints secret values. It does
+  not change runtime behavior, install hook wrappers, or bridge secrets into a
+  GUI/Hook environment. `--validate-credentials` may probe the selected route's
+  models endpoint, but only over HTTPS or loopback HTTP.
 - `aippocampus health --json`, `aippocampus doctor provider --json`, and
   `aippocampus onboard --status --json` expose path-free `legacy_aliases`
   diagnostics for compatibility fallbacks. New setup examples should still use
