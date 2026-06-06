@@ -234,6 +234,12 @@ def ambient_debug_summary(result: dict[str, Any]) -> dict[str, Any] | None:
             "broad_context_intrusion_count": int(
                 brief_precision.get("broad_context_intrusion_count") or 0
             ),
+            "partial_issue_ref_broad_context_count": int(
+                brief_precision.get("partial_issue_ref_broad_context_count") or 0
+            ),
+            "same_thread_recentness_mismatch_count": int(
+                brief_precision.get("same_thread_recentness_mismatch_count") or 0
+            ),
         },
         "warm_background": {
             "status": warm_background.get("status"),
