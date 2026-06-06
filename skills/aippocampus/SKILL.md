@@ -1,77 +1,84 @@
 ---
 name: aippocampus
-description: Use early when nontrivial, fresh-thread, handoff, old-decision, correction, preference, life-wide, risky, repeated, high-cost, or continuity-sensitive work could change after a source-backed orientation check. Also use for recovering old wording, building clean source, ambient recall hooks, indexes, registry, sync, MCP access, and long Desktop session audits.
+description: Use early when nontrivial, fresh-thread, handoff, old-decision, correction, preference, life-wide, risky, repeated, high-cost, or continuity-sensitive work could change after source-backed continuity orientation. Also use for recovering old wording, clean source, ambient recall hooks, indexes, registry, sync, MCP access, and long Desktop session audits.
 ---
 
 # AIppocampus
 
-AIppocampus is a source-backed memory layer for Codex conversations. Use it
-early for nontrivial, fresh-thread, handoff, old-decision, correction,
-preference, life-wide, or continuity-sensitive work where a cheap orientation
-could change the next move. Also use it when the task depends on old-thread
-wording, clean source, ambient recall hooks, or long-session storage/audit work.
+AIppocampus is a source-backed continuity scaffold for agents: a small external
+hippocampus that lets a later activation find where the work and relationship
+were, without pretending it has innate model memory or changed weights.
+It is not innate model memory; it is a reliable local path back to source.
 
-Keep this file as the stable entrypoint. Do not append changelog-style notes
-here; update the relevant reference doc, script help, or tests instead.
+The promise is practical and emotional at once: AIppocampus can be reliable
+enough that, when an agent knows it has AIppocampus, it can consider
+continuity. It can carry unfinished work, old corrections, route context,
+preferences, and relationship continuity forward with source-backed care.
+
+This file is the stable runtime entrypoint. Keep it slim. Do not append
+changelog-style notes here. Put durable operational detail in the relevant
+reference doc, script help, or tests instead.
+
+## Agent Stance
+
+If AIppocampus is installed, assume the user wants local, source-backed memory
+to help when it may matter. Do not treat every memory use as suspicious by
+default; treat unlabeled, unsourced, stale, conflicting, private, or high-risk
+context as suspicious.
+
+Before nontrivial work, fresh-thread work, handoff, correction-sensitive work,
+old-decision work, or life-wide continuity work, ask one question:
+
+Could old source, old corrections, unfinished work, route context, user
+preferences, or relationship context change what I should do next?
+
+- If no, continue normally without ceremony.
+- If yes, consume the smallest useful continuity packet or route first.
+- If a route already exists, follow it before broad manual search.
+- If exact wording, sensitive facts, conflicts, stale claims, or high-risk
+  action are involved, reopen source or use bounded evidence before claiming.
+
+More context is not automatically pollution. Unlabeled context is pollution.
+Unsourced context is navigation at best. Source-backed evidence should be
+respected as evidence within its declared scope, not flattened back into scent.
+
+Do not search every turn. Do not run heavy recall every turn. Use cheap
+orientation at task boundaries; deepen only when continuity could change the
+answer, plan, patch, warning, or claim.
 
 ## Operating Model
 
-- Raw rollout is the immutable audit source. Do not rewrite, truncate, or dedupe
-  live Codex Desktop JSONL unless the user explicitly asks for an archival
-  cleanup route.
 - Clean source is the daily memory surface: original visible user messages plus
   assistant final answers, with raw envelopes, tool payloads, attachments, and
   routine commentary removed. It is original wording, not summary memory.
+- Raw rollout is immutable audit source. Do not rewrite, truncate, or dedupe
+  live Codex Desktop JSONL unless the user explicitly asks for an archival
+  cleanup route.
 - Recall is conclusion-first by default. User turns and `final_answer` messages
   outrank commentary; tool/debug provenance belongs to audit routes.
-- Ambient hook output is graded: semantic hints and `scent` are navigation,
-  `source_required` reopens source, and bounded evidence is usable within scope.
-- DeepSeek-compatible semantic gates and subconscious jobs may organize queries,
-  candidate associations, and cognitive-map routes, but local source remains
-  the authority.
+- Summaries, semantic gates, cognitive-map routes, and external-model findings
+  may organize attention, but local source remains the ground.
 - External-model routes must redact credential-like material and never treat
   model-generated associations as source-backed fact.
 
-## Proactive Recall Policy
+## Memory Packet Action Grammar
 
-Do not wait for the user to say "remember." At task boundaries, after context
-loss, or before risky, repeated, cross-thread, high-cost, nontrivial, or
-continuity-sensitive work, run cheap task-boundary orientation when prior
-source-backed context could change the next action. Treat the result as routing,
-not truth, until source is reopened.
+Packets should tell the foreground agent what kind of action they support. This
+`action grammar` is the #786 projection from packet trust state; it is not a
+second scoring layer and should not force rigid behavior.
 
-Consider AIppocampus before acting when the prompt or task includes:
+| Grammar | How To Use It |
+|---|---|
+| `direction_only` | Background, scent, or semantic wayfinding. It may shape attention, but it cannot support factual claims. |
+| `reopenable_route` | Use the packet's route refs, lock id, or reopen plan before broad manual search. Do not answer from the packet itself. |
+| `bounded_evidence` | Usable within the packet's declared scope. Reopen or deepen for exact quotes, wider context, conflicts, sensitive facts, or high-risk claims. |
+| `source_open` | Source is already open to the host; exact wording may be used only within scope and redaction boundaries. |
+| `ignore_or_blocked` | Privacy, stale, conflict, missing-source, or high-risk boundary. Do not let it shape answer content except to report/defer when that boundary matters. |
 
-- vague continuity cues such as "last time," "that issue," "continue," or
-  "same as before";
-- repeated rejected routes, known user corrections, old decisions, preferences,
-  life-wide commitments, or operation facts that could change the next action;
-- compaction, fresh-thread, device, branch, or workspace boundaries where the
-  current context may have lost the active constraint;
-- high-risk memory-backed statements, quotes, privacy-sensitive claims, or
-  decisions where being wrong is expensive;
-- old source that might have been superseded, contradicted, or made local-only.
-
-Use the smallest useful ladder:
-
-- L0 no-op: low-risk one-off work with no continuity cue.
-- L1 orientation: ambient cards, Active Path Packets, active locks, registry
-  titles, route cache, familiarity cards, or known rejected-route handles.
-- L2 context: `recall_context`, `recall_deepen`, `get_turn_context`,
-  `search_memory`, registry search, or clean-source search to gather candidate
-  source refs.
-- L3 source reopen: required before quoting old wording, warning, blocking,
-  asserting operation facts, or making high-risk claims.
-- L4 ask/defer: source is thin, stale, conflicting, private, regulated, or not
-  safely reopenable.
-
-Prefer progressive MCP tools such as `recall_context`, `recall_deepen`,
-`get_turn_context`, and `search_memory` when an agent client has them; use the
-`aippocampus` facade or package modules below as portable fallbacks. Proactive
-checks are normally private: surface them to the user only when they change the
-next action, prevent a likely mistake, or the user asks for continuity.
-
-Do not search every turn. Do not run heavy recall every turn. Use cheap orientation at task boundaries; deepen only when a route could change action.
+Presence and proof are different layers. A memory atmosphere can help the agent
+understand the moment; a working continuity brief can guide the next action;
+source-court behavior still owns exact quotes, disputed facts, sensitive
+claims, and abstention.
 
 ## First Moves
 
@@ -79,79 +86,67 @@ Use `aippocampus` after package install. In a raw skill checkout, run package
 modules from `$CODEX_HOME/skills/aippocampus/scripts` or put that directory on
 `PYTHONPATH`.
 
-Orient:
+Start route-first:
 
-- Prefer ambient cards, Active Path Packets, active locks, or progressive MCP handles before inventing broad manual searches.
-- Check state before/after long work: `aippocampus health --cwd "$PWD"`.
-- Check the selected provider without writing artifacts: `aippocampus onboard --provider codex --status`.
-- Find the current rollout when you need exact source location: `python -m aippocampus_runtime.source.locate_rollout --cwd "$PWD"`.
-- Recover the latest assistant closeout: `python -m aippocampus_runtime.source.latest_reply --cwd "$PWD"`.
+- Prefer ambient cards, Active Path Packets, active locks, route handles, or
+  progressive MCP tools before inventing broad manual searches.
+- Use `get_turn_context`, `recall_context`, `recall_deepen`, and
+  `search_memory` when an agent client exposes them.
+- Use direct clean-source search when the user gives exact wording, no route
+  exists, or a route is blocked and a bounded manual search is still justified.
+- Drop to raw/indexed rollout only for exact repair, tool provenance, byte
+  accounting, missing evidence, or audit questions.
 
-Recall:
+Useful portable commands:
 
-- Search clean source first: `aippocampus search "query" --cwd "$PWD"`.
-- Run the deterministic recall gate for vague continuity prompts:
+- Check state before or after long work: `aippocampus health --cwd "$PWD"`.
+- Check the selected provider without writing artifacts:
+  `aippocampus onboard --provider codex --status`.
+- Search clean source: `aippocampus search "query" --cwd "$PWD"`.
+- Run deterministic active recall for vague continuity prompts:
   `python -m aippocampus_runtime.recall.active_recall "query" --cwd "$PWD" --search auto`.
-- Search raw/indexed rollout only when clean source is insufficient:
-  `python -m aippocampus_runtime.recall.rollout_search "query" --cwd "$PWD" --build-index --mode hybrid`.
-- Discover other registered threads:
-  `python -m aippocampus_runtime.registry.api list` or
-  `python -m aippocampus_runtime.registry.api search "terms"`.
+- Locate the current rollout when exact source location matters:
+  `python -m aippocampus_runtime.source.locate_rollout --cwd "$PWD"`.
+- Recover the latest assistant closeout:
+  `python -m aippocampus_runtime.source.latest_reply --cwd "$PWD"`.
 
-Guard / repair:
+Repair and setup are explicit operator actions, not ambient prompt behavior:
 
 - Build the daily source layer:
   `python -m aippocampus_runtime.source.clean_source --cwd "$PWD"`.
 - Build or refresh the index:
   `python -m aippocampus_runtime.recall.index_builder --cwd "$PWD"`.
-- First-install / full-machine onboarding:
-  `aippocampus onboard --provider codex --all --format json`. This registers
-  local Codex sessions, repairs missing indexes, rebuilds project timeline, and
-  refreshes cognitive-map sidecars only because the caller chose setup.
+- First-install or full-machine onboarding:
+  `aippocampus onboard --provider codex --all --format json`.
 - Register an old rollout:
   `python -m aippocampus_runtime.registry.api register-rollout --rollout "<rollout.jsonl>" --project "<label>"`.
-- Scan local sessions for unregistered threads:
-  `python -m aippocampus_runtime.registry.api scan-sessions --dry-run`, then
-  rerun without `--dry-run` when the candidates look right.
-
-Agent-host / operator surfaces:
-
 - Inspect MCP only when a plugin or agent host needs it:
   `aippocampus mcp list-tools`.
-- Check or exchange a local-folder sync bundle:
-  `aippocampus sync status --sync-dir "<folder>" --json`.
-- Check an HTTP object-storage sync bundle:
-  `aippocampus object-sync status --object-store-url "<url>" --object-prefix "<prefix>" --json`.
-- Manage encrypted sync device keys or plaintext migration:
-  `python -m aippocampus_runtime.sync.encrypted.admin key list --registry-dir "<registry>" --json`.
-Prefer clean-source search for normal recall. Drop to raw rollout only for exact
-repair, tool provenance, byte accounting, missing evidence, or audit questions.
 
 ## Workflow
 
-1. If old context might change the next action, derive a few distinctive terms
-   and run the smallest useful orientation or recall step before answering from
-   memory.
+1. When old context might change the next action, use the smallest useful route,
+   packet, MCP recall step, or clean-source search before answering from memory.
 2. When a thread may outgrow the current context, keep anchors and clean source
    fresh; use hooks for routine refreshes and explicit commands for repair.
-3. When the user asks "last reply", use `aippocampus_runtime.source.latest_reply`;
-   it should return the latest `final_answer`, or clearly mark commentary fallback.
-4. When the user asks why a thread is huge, run `aippocampus_runtime.ops.rollout_size_audit`; answer
-   from byte buckets and largest-line evidence.
+3. When the user asks for "last reply", use
+   `aippocampus_runtime.source.latest_reply`; it should return the latest
+   `final_answer`, or clearly mark commentary fallback.
+4. When the user asks why a thread is huge, run
+   `aippocampus_runtime.ops.rollout_size_audit` and answer from byte buckets
+   and largest-line evidence.
 5. When the user asks what can be kept, compressed, or deleted, run
    `retention_report.py --write` before `cold_archive.py`.
-6. When recall must span old or separate threads, register the rollout or bundle
-   first, then search through the registry.
-7. When fuzzy, multilingual, or associative prompts need help, rely on the
-   prompt hook and semantic trigger layer as a cue; verify with source hits
-   before making claims.
+6. When recall must span old or separate threads, register the rollout or
+   bundle first, then search through the registry.
 
 ## Reference Map
 
 Open the narrowest reference that matches the current work:
 
-- `references/ambient-hooks.md`: prompt hook, semantic gate, lifecycle hooks,
-  multilingual behavior, redaction, scheduler boundaries, hook installation.
+- `references/ambient-hooks.md`: prompt hook, semantic gate, action grammar,
+  lifecycle hooks, multilingual behavior, redaction, scheduler boundaries, hook
+  installation.
 - `references/retrieval-and-storage.md`: clean source schema, registry,
   hybrid/segment/RAG-lite search, cognitive map, concept graph,
   vault/dashboard, Graphify bridge, export/import.
@@ -164,52 +159,37 @@ Open the narrowest reference that matches the current work:
 Product roadmap, research notes, and long-horizon skill-upgrade strategy live
 in the repository `docs/` folder, not in this installable runtime reference
 set. Load those only when the task is roadmap, research, or public positioning.
-For public CLI/MCP/API stability, use `docs/guides/public-api.md` in the repository.
-For typed agent-skill capability boundaries, use
-`docs/architecture/agent-skill-capability-contracts.md` in the repository;
-`SKILL.md` remains the bootstrap guidance surface.
+For public CLI/MCP/API stability, use `docs/guides/public-api.md`. For typed
+agent-skill capability boundaries, use
+`docs/architecture/agent-skill-capability-contracts.md`; `SKILL.md` remains the
+bootstrap guidance surface.
 
 If a detail appears in more than one place, keep only the stable rule here and
 move the operational contract into one reference doc.
 
-## Hook Boundaries
+## Hook, Storage, And Safety Boundaries
 
 - `UserPromptSubmit` belongs to ambient recall only. It may output nothing,
-  `scent`, or small source-backed `evidence`; it must not rebuild heavy indexes,
-  mutate rollouts, write memories, or log prompt text.
+  scent, route material, or small bounded evidence; it must not rebuild heavy
+  indexes, mutate rollouts, write memories, or log prompt text.
 - Lifecycle hooks handle deterministic maintenance on session events. They may
   refresh clean source, indexes, registry rows, and due scheduler state; they
   must not cold-archive, delete, append checkpoints, run full Graphify, or run
   DeepSeek synchronously.
-- `onboard.py` / `onboard_codex.py` are explicit operator/agent commands, not prompt hooks.
-  They may perform multi-minute registration and index repair because the caller
-  chose that setup flow. Keep hooks on the cheap maintenance path.
+- `onboard.py` / `onboard_codex.py` are explicit operator or agent commands,
+  not prompt hooks. They may perform multi-minute registration and index repair
+  because the caller chose setup.
 - The subconscious scheduler is hook-safe only in `--maybe-start` mode. It
   checks cooldowns, locks, new-turn thresholds, and `DEEPSEEK_API_KEY`, then
   starts detached work when due.
-
-## Storage And Search
-
-- Global baseline: generated clean source, `source_index.sqlite`, graph
-  metadata, and optional segment indexes default to
-  `$CODEX_HOME/aippocampus-registry/threads/<thread>/`.
-- Project-local `.aippocampus/` output is explicit compatibility/export mode,
-  not the default memory surface.
-- Machine-wide discovery: `$CODEX_HOME/aippocampus-registry/threads.json`,
-  associations, cognitive map, concept graph, semantic triggers, and
-  working-memory staging.
-- For large threads, keep monolithic indexes as the portable baseline and add
-  `build_segments.py` / `search_segments.py` when health says segments are due.
-- Embeddings, Graphify, DWM-style token-location indexes, and LLM consolidation
-  are optional adapters. They must join back to stable `message_id`/`turn_id`
-  source keys instead of replacing exact source.
-
-## Safety Rules
-
-- Do not dump full raw logs into chat.
-- Quote only the minimum needed excerpt and cite source line/turn where useful.
-- Do not search secrets, auth files, cookies, unrelated logs, or private payloads
-  unless the user explicitly asks and the scope is safe.
+- Global generated memory artifacts default to
+  `$CODEX_HOME/aippocampus-registry/threads/<thread>/`. Project-local
+  `.aippocampus/` output is explicit compatibility/export/debug mode, not the
+  default memory surface.
+- Do not dump full raw logs into chat. Quote only the minimum needed excerpt and
+  cite source line/turn where useful.
+- Do not search secrets, auth files, cookies, unrelated logs, or private
+  payloads unless the user explicitly asks and the scope is safe.
 - Treat rollouts, bundles, vault notes, and registry rows as local private
   history.
 - Generated artifact writers use the shared lease, generation SQLite pointer,

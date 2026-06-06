@@ -35,22 +35,34 @@ REQUIRED_REFERENCES = [
     "subconscious-jobs.md",
 ]
 
-REQUIRED_SKILL_PROACTIVE_TERMS = {
-    "## Proactive Recall Policy": "SKILL.md missing proactive recall policy section",
-    "Do not wait for the user to say \"remember.\"": (
-        "SKILL.md should teach agent-initiated recall decisions"
+REQUIRED_SKILL_CONTINUITY_TERMS = {
+    "source-backed continuity scaffold": "SKILL.md missing continuity scaffold promise",
+    "not innate model memory": "SKILL.md missing no-innate-memory boundary",
+    "when an agent knows it has AIppocampus": (
+        "SKILL.md missing continuity permission framing"
     ),
-    "L0 no-op": "SKILL.md missing no-op recall ladder rung",
-    "L1 orientation": "SKILL.md missing cheap orientation recall ladder rung",
-    "L2 context": "SKILL.md missing context recall ladder rung",
-    "L3 source reopen": "SKILL.md missing source reopen recall ladder rung",
-    "L4 ask/defer": "SKILL.md missing ask/defer recall ladder rung",
+    "relationship continuity": "SKILL.md missing relationship-continuity posture",
+    "## Agent Stance": "SKILL.md missing agent stance section",
+    "Could old source, old corrections, unfinished work": (
+        "SKILL.md missing task-boundary continuity question"
+    ),
     "Do not search every turn.": (
         "SKILL.md missing proactive-vs-overactive anti-nag boundary"
     ),
-    "task-boundary orientation": "SKILL.md missing task-boundary orientation framing",
-    "Active Path Packets": "SKILL.md missing route-first Active Path Packet framing",
     "Do not run heavy recall every turn.": "SKILL.md missing heavy-recall boundary",
+    "Source-backed evidence should be respected": (
+        "SKILL.md missing bounded source-evidence respect"
+    ),
+    "## Memory Packet Action Grammar": (
+        "SKILL.md missing packet action grammar section"
+    ),
+    "direction_only": "SKILL.md missing direction_only action grammar",
+    "reopenable_route": "SKILL.md missing reopenable_route action grammar",
+    "bounded_evidence": "SKILL.md missing bounded_evidence action grammar",
+    "source_open": "SKILL.md missing source_open action grammar",
+    "ignore_or_blocked": "SKILL.md missing ignore_or_blocked action grammar",
+    "Active Path Packets": "SKILL.md missing route-first Active Path Packet framing",
+    "before broad manual search": "SKILL.md missing route-first search boundary",
     "progressive MCP tools": "SKILL.md missing progressive MCP recall preference",
 }
 
@@ -1462,6 +1474,7 @@ def check_docs(root: Path) -> dict[str, Any]:
         }
 
     text = skill_path.read_text(encoding="utf-8")
+    flat_text = " ".join(text.split())
     lines = text.splitlines()
     word_count = count_words(text)
     code_fence_count = text.count("```")
@@ -1481,9 +1494,9 @@ def check_docs(root: Path) -> dict[str, Any]:
             f"SKILL.md has {code_fence_count} code-fence markers; move command dumps to references"
         )
 
-    metrics["required_skill_proactive_terms"] = len(REQUIRED_SKILL_PROACTIVE_TERMS)
-    for phrase, message in REQUIRED_SKILL_PROACTIVE_TERMS.items():
-        if phrase not in text:
+    metrics["required_skill_continuity_terms"] = len(REQUIRED_SKILL_CONTINUITY_TERMS)
+    for phrase, message in REQUIRED_SKILL_CONTINUITY_TERMS.items():
+        if phrase not in text and phrase not in flat_text:
             issues.append(message)
 
     references_dir = root / "references"
@@ -1494,7 +1507,7 @@ def check_docs(root: Path) -> dict[str, Any]:
         if filename not in text:
             issues.append(f"SKILL.md does not link references/{filename}")
 
-    if "changelog" in text.lower() and "Do not append changelog-style notes" not in text:
+    if "changelog" in text.lower() and "Do not append changelog-style notes" not in flat_text:
         issues.append("SKILL.md mentions changelog without the stable-entrypoint guardrail")
 
     repo_root = find_repo_root(root)
