@@ -72,6 +72,42 @@ class DreamOneSidednessTests(unittest.TestCase):
         self.assertEqual(probe, None)
         self.assertIn("one_sidedness_gate_closed", gate["suppression_reasons"])
 
+    def test_atmosphere_arc_can_chronicle_thread_direction_without_open_gate(self) -> None:
+        journey = {
+            "journey_id": "journey-atmosphere",
+            "current_frontier": "The thread feels like source survival learning to move.",
+            "waypoints": [
+                waypoint(1, upper="乾", lower="震"),
+                waypoint(2, upper="离", lower="坎"),
+            ],
+        }
+
+        gate = one_sidedness.evaluate_one_sidedness_gate(journey)
+        probe = one_sidedness.build_opposite_hexagram_probe(journey)
+        arc = one_sidedness.build_hexagram_atmosphere_arc(journey, created_at="2026-06-07T00:00:00Z")
+
+        self.assertFalse(gate["gate_open"])
+        self.assertEqual(probe, None)
+        self.assertEqual(arc["kind"], "hexagram_atmosphere_arc")
+        self.assertEqual(arc["journey_id"], "journey-atmosphere")
+        self.assertEqual(arc["upper_trigram"], "离")
+        self.assertEqual(arc["lower_trigram"], "坎")
+        self.assertEqual(arc["hexagram_key"], "离/坎")
+        self.assertEqual(arc["source_basis"], "source_backed_waypoints")
+        self.assertEqual(arc["authority"], "direction_only")
+        self.assertEqual(arc["action_grammar"], "direction_only")
+        self.assertEqual(arc["use_boundary"], "atmosphere_not_evidence")
+        self.assertEqual(arc["memory_surface"], "memory_atmosphere")
+        self.assertFalse(arc["claims_user_fact"])
+        self.assertFalse(arc["claims_world_fact"])
+        self.assertFalse(arc["claims_source_fact"])
+        self.assertFalse(arc["foreground_eligible"])
+        self.assertFalse(arc["formal_memory_eligible"])
+        self.assertTrue(arc["source_refs"])
+        self.assertIn("not_fact", arc["truth_boundary"])
+        self.assertIn("prediction", arc["cannot_claim"])
+        self.assertNotIn("prediction", arc["arc_summary"].casefold())
+
     def test_repeated_question_and_absent_theme_require_source_refs(self) -> None:
         journey = {
             "journey_id": "journey-question-theme",

@@ -22,6 +22,7 @@ from aippocampus_runtime.core import compact_text, now_utc
 SCHEMA_VERSION = 1
 
 GATE_KIND = "aippocampus_dream_one_sidedness_gate"
+ATMOSPHERE_ARC_KIND = "hexagram_atmosphere_arc"
 DREAM_FINDING_KIND = "dream_synthesized"
 VOICE_ID = "opposite_hexagram_voice"
 
@@ -266,6 +267,88 @@ def evaluate_one_sidedness_gate(
     }
 
 
+def build_hexagram_atmosphere_arc(
+    journey: Mapping[str, Any],
+    *,
+    created_at: str | None = None,
+) -> dict[str, Any] | None:
+    """Build a non-blocking symbolic atmosphere row from source-backed arcs.
+
+    This row answers "what direction did the source-backed journey carry?" It
+    deliberately does not reuse the compensatory gate: atmosphere can be
+    recognized without authorizing an opposite-voice probe. Exact claims still
+    require reopening source.
+    """
+
+    rows = _source_backed_waypoints(journey)
+    if not rows:
+        return None
+    latest = rows[-1]
+    arc = dict(latest["normalized_arc"])
+    refs = merge_refs(*(row["source_refs"] for row in rows))
+    journey_id = str(journey.get("journey_id") or "")
+    upper = arc["upper_trigram"]
+    lower = arc["lower_trigram"]
+    arc_summary = compact_text(
+        str(
+            latest.get("frontier_hint")
+            or journey.get("current_frontier")
+            or "Source-backed journey direction is available as atmosphere."
+        ),
+        240,
+    )
+    arc_id = stable_digest(
+        journey_id,
+        upper,
+        lower,
+        refs,
+        prefix="hexagram_atmosphere",
+        length=20,
+    )
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": ATMOSPHERE_ARC_KIND,
+        "arc_id": arc_id,
+        "fingerprint": arc_id,
+        "created_at": created_at or now_utc(),
+        "journey_id": journey_id,
+        "thread_key": journey.get("thread_key") or journey.get("thread_id"),
+        "source_refs": refs,
+        "source_ref_count": len(refs),
+        "upper_trigram": upper,
+        "lower_trigram": lower,
+        "hexagram_key": f"{upper}/{lower}",
+        "arc_summary": arc_summary,
+        "source_basis": "source_backed_waypoints",
+        "authority": "direction_only",
+        "action_grammar": "direction_only",
+        "memory_surface": "memory_atmosphere",
+        "use_boundary": "atmosphere_not_evidence",
+        "foreground_eligible": False,
+        "formal_memory_eligible": False,
+        "clean_source_mutation": False,
+        "claims_user_fact": False,
+        "claims_world_fact": False,
+        "claims_source_fact": False,
+        "source_reopen_required_before_claim": True,
+        "truth_boundary": "hexagram_atmosphere_not_fact",
+        "atmosphere_boundary": {
+            "symbolic_direction_only": True,
+            "not_prediction": True,
+            "not_user_diagnosis": True,
+            "not_hard_instruction": True,
+            "source_reopen_required_for_exact_claims": True,
+        },
+        "cannot_claim": [
+            "factual_user_profile",
+            "world_or_project_fact",
+            "prediction",
+            "hard_instruction",
+            "source_quote_without_reopen",
+        ],
+    }
+
+
 def build_opposite_hexagram_probe(
     journey: Mapping[str, Any],
     *,
@@ -340,7 +423,11 @@ def main() -> int:
 
     payload = json.loads(Path(args.journey).read_text(encoding="utf-8"))
     probe = build_opposite_hexagram_probe(payload)
-    output = {"gate": evaluate_one_sidedness_gate(payload), "probe": probe}
+    output = {
+        "gate": evaluate_one_sidedness_gate(payload),
+        "probe": probe,
+        "atmosphere_arc": build_hexagram_atmosphere_arc(payload),
+    }
     print(json.dumps(output, ensure_ascii=False, indent=2))
     return 0
 

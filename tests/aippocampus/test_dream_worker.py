@@ -116,6 +116,14 @@ class DreamWorkerTests(unittest.TestCase):
         self.assertIn("stable_dream_worker_contract", messages[0]["content"])
         self.assertIn("source_pack_payload", messages[1]["content"])
         self.assertIn("variable_run_directive", messages[2]["content"])
+        contract = json.loads(messages[0]["content"])
+        self.assertEqual(contract["worker_stance"]["role"], "source_body_dream_worker")
+        self.assertEqual(contract["worker_stance"]["facing"], "future_foreground_agent")
+        self.assertTrue(contract["worker_stance"]["same_source_body_not_same_persistent_self"])
+        self.assertEqual(
+            contract["worker_stance"]["boundary"],
+            "hypothesis_and_navigation_never_source_truth",
+        )
         self.assertEqual(payload["usage"]["prompt_cache_hit_tokens"], 30)
         self.assertEqual(payload["cache"]["kind"], "deepseek_prefix")
         self.assertEqual(payload["cache"]["hit_rate"], 0.75)
@@ -314,6 +322,65 @@ class DreamWorkerTests(unittest.TestCase):
         self.assertTrue(finding["expires_at"].endswith("Z"))
         self.assertEqual(payload["adjudicated_findings"][0]["adjudication_result"]["status"], "accepted")
         self.assertEqual(len(payload["dream_working_memory_rows"]), 1)
+
+    def test_worker_preserves_foreground_useful_stance_fields_without_evidence_upgrade(self) -> None:
+        def fake_model_call(messages: list[dict[str, str]], call_config: ChatClientConfig) -> dict[str, object]:
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "findings": [
+                                        {
+                                            "candidate_kind": "cross_thread_resonance",
+                                            "title": "Continuity needs a source-body route",
+                                            "summary": "The selected source handles can help a future agent recognize the route.",
+                                            "foreground_affordance": "Helps the future agent choose a source reopen path before claiming.",
+                                            "source_body_shape": "Two source handles circle continuity and source refs.",
+                                            "agent_position": "arriving after the thread with source refs but no raw memory",
+                                            "atmosphere_tags": ["source-body", "route-before-claim"],
+                                            "waking_path": "source_reopen",
+                                            "what_not_to_overclaim": "Do not treat this as proof of the user's stable preference.",
+                                            "activation_cues": ["source body continuity route", "future agent source reopen"],
+                                            "confidence": 0.63,
+                                            "source_ref_ids": ["sr0", "sr1"],
+                                            "bridge_claims": [
+                                                {
+                                                    "claim": "The stance is grounded only in selected source handles.",
+                                                    "source_ref_ids": ["sr0", "sr1"],
+                                                }
+                                            ],
+                                        }
+                                    ]
+                                }
+                            )
+                        }
+                    }
+                ],
+                "usage": {},
+            }
+
+        payload = dream_worker.run_model_backed_dream_worker(
+            ready_pack(),
+            dream_function="amplification",
+            config=config(),
+            model_call=fake_model_call,
+            no_write=True,
+        )
+
+        finding = payload["findings"][0]
+        self.assertEqual(payload["status"], "candidate_emitted")
+        self.assertEqual(finding["foreground_affordance"], "Helps the future agent choose a source reopen path before claiming.")
+        self.assertEqual(finding["source_body_shape"], "Two source handles circle continuity and source refs.")
+        self.assertEqual(finding["agent_position"], "arriving after the thread with source refs but no raw memory")
+        self.assertEqual(finding["atmosphere_tags"], ["source-body", "route-before-claim"])
+        self.assertEqual(finding["waking_path"], "source_reopen")
+        self.assertIn("stable preference", finding["what_not_to_overclaim"])
+        self.assertEqual(finding["support_level"], "candidate")
+        self.assertFalse(finding["foreground_eligible"])
+        self.assertEqual(finding["truth_boundary"], "dream_synthesized_candidate_not_fact")
+        self.assertEqual(finding["worker_validation"]["status"], "passed")
 
     def test_active_imagination_sandbox_accepts_audited_bridge_concept_without_writing(self) -> None:
         def fake_model_call(messages: list[dict[str, str]], call_config: ChatClientConfig) -> dict[str, object]:
