@@ -714,6 +714,122 @@ class BuildCleanSourceTests(unittest.TestCase):
         self.assertNotIn("Traceback from", serialized)
         self.assertNotIn("python tests", serialized)
 
+    def test_clean_source_writes_source_texture_sidecar_without_weakening_source(self) -> None:
+        self._append(
+            {
+                "type": "event_msg",
+                "timestamp": "2026-05-26T02:10:00Z",
+                "payload": {
+                    "type": "user_message",
+                    "message": "不是这个意思，我有点卡住，不确定怎么验证，先不要走 OAuth 路线。",
+                },
+            }
+        )
+        self._append(
+            {
+                "type": "event_msg",
+                "timestamp": "2026-05-26T02:10:01Z",
+                "payload": {
+                    "type": "agent_message",
+                    "phase": "commentary",
+                    "message": "失败了，这条路线先放弃，下一步换成 source texture sidecar。",
+                },
+            }
+        )
+        self._append(
+            {
+                "type": "response_item",
+                "timestamp": "2026-05-26T02:10:02Z",
+                "payload": {
+                    "type": "function_call",
+                    "name": "functions.shell_command",
+                    "call_id": "call-texture-fail",
+                    "arguments": json.dumps(
+                        {
+                            "command": (
+                                "python tests\\aippocampus\\test_secret.py "
+                                "C:\\Users\\Administrator\\secret\\tests\\test_token.py "
+                                "API_KEY=super-secret"
+                            )
+                        },
+                        ensure_ascii=False,
+                    ),
+                },
+            }
+        )
+        self._append(
+            {
+                "type": "response_item",
+                "timestamp": "2026-05-26T02:10:03Z",
+                "payload": {
+                    "type": "function_call_output",
+                    "call_id": "call-texture-fail",
+                    "output": (
+                        "Exit code: 1\nWall time: 0.1s\n"
+                        "Traceback from C:\\Users\\Administrator\\secret\\tests\\test_token.py\n"
+                        "SECRET_PATH\\test_secret.py failed with API_KEY=super-secret"
+                    ),
+                },
+            }
+        )
+        self._append(
+            {
+                "type": "event_msg",
+                "timestamp": "2026-05-26T02:10:04Z",
+                "payload": {
+                    "type": "agent_message",
+                    "phase": "final_answer",
+                    "message": "我改为用 source-texture sidecar，不把工具输出放进 clean source。",
+                },
+            }
+        )
+
+        result = clean_source.build_clean_source(
+            self.cwd,
+            rollout=self.rollout,
+            redaction_profiles=["public-export"],
+        )
+
+        texture_path = Path(result["outputs"]["source_texture_jsonl"])
+        self.assertTrue(texture_path.exists())
+        rows = [
+            json.loads(line) for line in texture_path.read_text(encoding="utf-8").splitlines()
+        ]
+        kinds = {row["signal_kind"] for row in rows}
+        self.assertIn("self_correction_signal", kinds)
+        self.assertIn("abandoned_direction", kinds)
+        self.assertIn("process_route_note", kinds)
+        self.assertIn("tool_failure_texture", kinds)
+        self.assertEqual(result["source_texture_count"], len(rows))
+        self.assertEqual(
+            result["source_texture_policy"]["boundary"],
+            "source texture rows are rebuildable interpretation inputs, not source truth.",
+        )
+        self.assertTrue(all(row["truth_boundary"] == "texture_signal_not_source_fact" for row in rows))
+        self.assertTrue(all(row.get("source_refs") or row.get("event_refs") for row in rows))
+
+        serialized = json.dumps(rows, ensure_ascii=False)
+        for raw in (
+            "不是这个意思",
+            "OAuth 路线",
+            "失败了，这条路线",
+            "Traceback from",
+            "C:\\Users",
+            "API_KEY",
+            "python tests",
+        ):
+            self.assertNotIn(raw, serialized)
+
+        public_profile = result["redaction_profiles"]["public-export"]
+        self.assertEqual(
+            public_profile["source_texture_policy"],
+            {
+                "projection": "omitted",
+                "reason": "private_interpretation_sidecar",
+                "canonical_source_replaced": False,
+            },
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -18,6 +18,7 @@ Clean source keeps:
 - assistant `final_answer` messages
 - the last assistant commentary only when a turn has no final answer
 - structured tool/test behavior events in `events.jsonl`
+- source-texture interpretation input in `source-texture.jsonl`
 - source session id, line spans, turn index, phase, timestamps, and hashes
 - stable join keys such as `source_id`, `turn_id`, `message_id`, and
   `content_sha256`
@@ -31,6 +32,8 @@ Clean source drops:
 - raw tool calls and raw tool outputs from `messages.jsonl`
 - raw stdout, full shell commands, full tool arguments, local paths, and secret-
   shaped payloads from `events.jsonl`
+- raw prompt, commentary, tool payload, stack trace, or local-path text from
+  `source-texture.jsonl`
 - app/event envelopes
 - injected instructions
 - duplicate visible messages
@@ -362,6 +365,28 @@ Route notes are process evidence for navigation. They can explain why an agent
 should reopen a source or avoid a rejected route, but they never override user
 turns, final answers, tool output, or reopened clean source. Specific
 memory-backed claims still require source reopen.
+
+## Source Texture Lane
+
+`source-texture.jsonl` is a rebuildable interpretation sidecar beside clean
+source. It joins clean-source messages, `events.jsonl`, and `route-notes.jsonl`
+into typed process signals for Dream, Journey, and correction layers without
+mutating `messages.jsonl`.
+
+Rows carry `signal_kind`, `signal_detail`, `source_refs` or `event_refs`,
+bounded fingerprints, `privacy_profile=raw-private`, and
+`truth_boundary=texture_signal_not_source_fact`. They may distinguish texture
+such as `self_correction_signal`, `uncertainty_or_frontier_signal`,
+`affect_marker`, `abandoned_direction`, `process_route_note`, and
+`tool_failure_texture`, but they must not serialize raw source text, raw
+commentary, commands, stdout/stderr, stack traces, local paths, or secrets.
+
+This lane is useful routing weather, not source truth. A consumer may use it to
+choose which source or event to reopen, but exact claims still require
+following the row refs back to clean source, route notes, behavior events, or
+raw audit when clean source is insufficient. Public/export projections omit
+this private sidecar unless a future explicit redacted texture projection is
+implemented with the same source-ref reopen boundary.
 
 ## MCP Access Layer
 

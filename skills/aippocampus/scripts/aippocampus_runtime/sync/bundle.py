@@ -28,7 +28,14 @@ CLEAN_SOURCE_CHUNKED_FILES = (
     "messages.jsonl",
     "turns.jsonl",
     "events.jsonl",
+    "source-texture.jsonl",
     "semantic-scope-labels.jsonl",
+)
+CLEAN_SOURCE_PATH_KEYS = (
+    ("messages.jsonl", "clean_source_messages_jsonl"),
+    ("turns.jsonl", "clean_source_turns_jsonl"),
+    ("events.jsonl", "clean_source_events_jsonl"),
+    ("source-texture.jsonl", "clean_source_texture_jsonl"),
 )
 ROOT_SIDECARS = (
     "threads.json",
@@ -205,6 +212,21 @@ def thread_dir_name(thread_key: str, fallback: str = "thread") -> str:
     return safe_path_name(thread_key, fallback)
 
 
+def clean_source_path_fields(
+    clean_root: Path,
+    locator_root: Path,
+    *,
+    portable: bool,
+) -> dict[str, str | None]:
+    fields: dict[str, str | None] = {}
+    for filename, key in CLEAN_SOURCE_PATH_KEYS:
+        locator = locator_root / filename
+        fields[key] = (
+            locator.as_posix() if portable else str(locator)
+        ) if (clean_root / filename).is_file() else None
+    return fields
+
+
 def portable_registry_for_sync(registry_dir: Path, *, include_raw: bool) -> dict[str, Any]:
     registry = load_json(registry_dir / "threads.json")
     portable = dict(registry)
@@ -231,21 +253,7 @@ def portable_registry_for_sync(registry_dir: Path, *, include_raw: bool) -> dict
         paths["clean_source_dir"] = (
             (thread_root / "clean-source").as_posix() if clean_root.exists() else None
         )
-        paths["clean_source_messages_jsonl"] = (
-            (thread_root / "clean-source" / "messages.jsonl").as_posix()
-            if (clean_root / "messages.jsonl").is_file()
-            else None
-        )
-        paths["clean_source_turns_jsonl"] = (
-            (thread_root / "clean-source" / "turns.jsonl").as_posix()
-            if (clean_root / "turns.jsonl").is_file()
-            else None
-        )
-        paths["clean_source_events_jsonl"] = (
-            (thread_root / "clean-source" / "events.jsonl").as_posix()
-            if (clean_root / "events.jsonl").is_file()
-            else None
-        )
+        paths.update(clean_source_path_fields(clean_root, thread_root / "clean-source", portable=True))
         index_root = local_thread_root / "index"
         paths["index_dir"] = (thread_root / "index").as_posix() if index_root.exists() else None
         paths["graph_json"] = (
@@ -551,19 +559,7 @@ def repair_registry_locators(target_registry: Path) -> dict[str, Any]:
             paths["registry_thread_store"] = str(thread_root)
             clean_root = thread_root / "clean-source"
             paths["clean_source_dir"] = str(clean_root) if clean_root.exists() else None
-            paths["clean_source_messages_jsonl"] = (
-                str(clean_root / "messages.jsonl")
-                if (clean_root / "messages.jsonl").is_file()
-                else None
-            )
-            paths["clean_source_turns_jsonl"] = (
-                str(clean_root / "turns.jsonl") if (clean_root / "turns.jsonl").is_file() else None
-            )
-            paths["clean_source_events_jsonl"] = (
-                str(clean_root / "events.jsonl")
-                if (clean_root / "events.jsonl").is_file()
-                else None
-            )
+            paths.update(clean_source_path_fields(clean_root, clean_root, portable=False))
             index_root = thread_root / "index"
             paths["index_dir"] = str(index_root) if index_root.exists() else None
             paths["graph_json"] = (
