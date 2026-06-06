@@ -151,6 +151,113 @@ class SegmentSearchTests(unittest.TestCase):
         self.assertEqual(payload["fanout"]["planned_segment_count"], 3)
         self.assertEqual(payload["fanout"]["skipped_segment_count"], 0)
 
+    def test_merge_topk_dedupes_stable_source_join_keys_across_segments(self) -> None:
+        results = [
+            {
+                "segment_id": "seg-overlap-a",
+                "id": 10,
+                "line": 100,
+                "role": "assistant",
+                "kind": "message",
+                "score": 100.0,
+                "stable_source_id": "clean:thread:msg-1",
+                "source_ref": "source:target",
+                "snippet": "overlap winner",
+                "signals": {},
+            },
+            {
+                "segment_id": "seg-overlap-b",
+                "id": 3,
+                "line": 102,
+                "role": "assistant",
+                "kind": "message",
+                "score": 99.0,
+                "stable_source_id": "clean:thread:msg-1",
+                "source_ref": "source:duplicate-loser",
+                "snippet": "overlap duplicate",
+                "signals": {},
+            },
+            {
+                "segment_id": "seg-context",
+                "id": 4,
+                "line": 500,
+                "role": "assistant",
+                "kind": "message",
+                "score": 90.0,
+                "stable_source_id": "clean:thread:msg-2",
+                "source_ref": "source:support",
+                "snippet": "different source",
+                "signals": {},
+            },
+        ]
+
+        selected = segment_search.merge_topk(results, limit=2)
+
+        self.assertEqual(
+            [item["source_ref"] for item in selected],
+            ["source:target", "source:support"],
+        )
+
+    def test_merge_topk_reports_source_key_dedupe_count_without_old_shard_regression(self) -> None:
+        results = [
+            {
+                "segment_id": "seg-legacy-a",
+                "id": 1,
+                "line": 10,
+                "role": "assistant",
+                "kind": "message",
+                "score": 100.0,
+                "source_ref": "source:legacy-a",
+                "snippet": "legacy hit a",
+                "signals": {},
+            },
+            {
+                "segment_id": "seg-legacy-b",
+                "id": 1,
+                "line": 10,
+                "role": "assistant",
+                "kind": "message",
+                "score": 99.0,
+                "source_ref": "source:legacy-b",
+                "snippet": "legacy hit b",
+                "signals": {},
+            },
+            {
+                "segment_id": "seg-stable-a",
+                "id": 5,
+                "line": 40,
+                "role": "assistant",
+                "kind": "message",
+                "score": 98.0,
+                "thread_key": "session:one",
+                "message_id": "msg-stable",
+                "source_ref": "source:stable-winner",
+                "snippet": "stable winner",
+                "signals": {},
+            },
+            {
+                "segment_id": "seg-stable-b",
+                "id": 2,
+                "line": 42,
+                "role": "assistant",
+                "kind": "message",
+                "score": 97.0,
+                "thread_key": "session:one",
+                "message_id": "msg-stable",
+                "source_ref": "source:stable-loser",
+                "snippet": "stable duplicate",
+                "signals": {},
+            },
+        ]
+
+        selected, diagnostics = segment_search.merge_topk_with_diagnostics(results, limit=3)
+
+        self.assertEqual(diagnostics["source_key_dedupe_count"], 1)
+        self.assertIn("source:legacy-a", [item["source_ref"] for item in selected])
+        self.assertIn("source:legacy-b", [item["source_ref"] for item in selected])
+        self.assertIn("source:stable-winner", [item["source_ref"] for item in selected])
+        self.assertNotIn("source:stable-loser", [item["source_ref"] for item in selected])
+
     def test_search_resolves_segment_generation_pointer_with_lkg_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

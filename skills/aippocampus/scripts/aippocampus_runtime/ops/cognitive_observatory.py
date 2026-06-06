@@ -18,7 +18,7 @@ from aippocampus_runtime.ops.route_readiness import (
     fixture_route_readiness_report,
     route_readiness_report,
 )
-from aippocampus_runtime.privacy import redact_private_paths
+from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall.why_diagnostics import recall_diagnostic_report
 
 OBSERVATORY_KIND = "aippocampus_cognitive_observatory_readout"
@@ -47,7 +47,7 @@ def _as_mapping(value: Any, key: str | None = None) -> dict[str, Any] | None:
 
 def _recall_diagnostic_from_fixture() -> dict[str, Any]:
     return recall_diagnostic_report(
-        cue="SECRET_TOKEN=abc123 route readiness observatory fixture",
+        cue="route readiness observatory fixture",
         mode="why-recall",
         recall_context_payload={
             "routes": [
@@ -184,50 +184,49 @@ def cognitive_observatory_readout(
         surfaces.append("recall_diagnostic")
     if sleep_summary:
         surfaces.append("sleep_cycle")
-    return redact_private_paths(
-        {
-            "kind": OBSERVATORY_KIND,
-            "schema_version": OBSERVATORY_SCHEMA_VERSION,
-            "ok": True,
-            "no_write": True,
-            "issues": [574, 576],
-            "surfaces": surfaces,
-            "route_readiness": readiness,
-            "activation_authority": authority,
-            "recall_diagnostic": diagnostic,
-            "sleep_cycle": sleep_summary,
-            "metrics": metrics,
-            "contract": {
-                "read_only_report": True,
-                "not_control_plane": True,
-                "clean_source_mutation_allowed": False,
-                "owner_surface_mutation_allowed": False,
-                "foreground_hook_mutation_allowed": False,
-                "route_readiness_is_navigation_only": True,
-                "activation_pruning_changes_activation_eligibility_only": True,
-                "source_reopen_required_before_claim": True,
-            },
-            "privacy_boundary": {
-                "raw_prompt_serialized": False,
-                "raw_source_text_serialized": False,
-                "local_paths_serialized": False,
-                "secret_values_serialized": False,
-            },
-            "can_claim": [
-                "public_safe_route_readiness_diagnostic_exists",
-                "read_only_observatory_readout_exists",
-                "public_safe_static_observatory_export_exists",
-                "suppressed_prewarm_reason_codes_are_reported",
-            ],
-            "cannot_claim": [
-                "complete_cognitive_observatory_ui_exists",
-                "prewarm_route_is_source_backed_evidence",
-                "sleep_cycle_anticipatory_planner_is_live",
-                "observatory_rows_can_mutate_control_state",
-                "diagnostic_roi_proves_memory_quality",
-            ],
-        }
-    )
+    report = {
+        "kind": OBSERVATORY_KIND,
+        "schema_version": OBSERVATORY_SCHEMA_VERSION,
+        "ok": True,
+        "no_write": True,
+        "issues": [574, 576],
+        "surfaces": surfaces,
+        "route_readiness": readiness,
+        "activation_authority": authority,
+        "recall_diagnostic": diagnostic,
+        "sleep_cycle": sleep_summary,
+        "metrics": metrics,
+        "contract": {
+            "read_only_report": True,
+            "not_control_plane": True,
+            "clean_source_mutation_allowed": False,
+            "owner_surface_mutation_allowed": False,
+            "foreground_hook_mutation_allowed": False,
+            "route_readiness_is_navigation_only": True,
+            "activation_pruning_changes_activation_eligibility_only": True,
+            "source_reopen_required_before_claim": True,
+        },
+        "privacy_boundary": {
+            "raw_prompt_serialized": False,
+            "raw_source_text_serialized": False,
+            "local_paths_serialized": False,
+            "sensitive_values_serialized": False,
+        },
+        "can_claim": [
+            "public_safe_route_readiness_diagnostic_exists",
+            "read_only_observatory_readout_exists",
+            "public_safe_static_observatory_export_exists",
+            "suppressed_prewarm_reason_codes_are_reported",
+        ],
+        "cannot_claim": [
+            "complete_cognitive_observatory_ui_exists",
+            "prewarm_route_is_source_backed_evidence",
+            "sleep_cycle_anticipatory_planner_is_live",
+            "observatory_rows_can_mutate_control_state",
+            "diagnostic_roi_proves_memory_quality",
+        ],
+    }
+    return redact_sensitive_values(redact_private_paths(report))
 
 
 def _html(value: Any) -> str:

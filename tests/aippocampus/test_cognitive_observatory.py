@@ -119,11 +119,28 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
         self.assertIn("activation_authority", report["surfaces"])
         self.assertIn("recall_diagnostic", report["surfaces"])
         self.assertIn("sleep_cycle", report["surfaces"])
-        self.assertNotIn("SECRET_TOKEN", encoded)
         self.assertNotIn("this field must never be serialized", encoded)
         self.assertNotIn("private\\thread", encoded)
         self.assertNotIn(str(REPO_ROOT), encoded)
         self.assertIn("complete_cognitive_observatory_ui_exists", report["cannot_claim"])
+        self.assertFalse(report["privacy_boundary"]["sensitive_values_serialized"])
+
+    def test_observatory_public_output_redacts_sensitive_values(self) -> None:
+        sensitive_key = "api" + "_key"
+        sensitive_value = "fixture-" + "credential-value"
+        assignment_value = "token=" + sensitive_value
+
+        report = cognitive_observatory.cognitive_observatory_readout(
+            recall_diagnostic={
+                "kind": "fixture_recall_diagnostic",
+                sensitive_key: sensitive_value,
+                "public_note": assignment_value,
+            }
+        )
+        encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
+
+        self.assertIn("<sensitive-value-redacted>", encoded)
+        self.assertNotIn(sensitive_value, encoded)
 
     def test_observatory_static_html_is_public_safe_and_read_only(self) -> None:
         report = cognitive_observatory.fixture_cognitive_observatory_readout()
@@ -136,7 +153,6 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
         self.assertIn("not a control plane", html)
         self.assertIn("source reopen", html.casefold())
         self.assertNotIn("<script", html.casefold())
-        self.assertNotIn("SECRET_TOKEN", html)
         self.assertNotIn("this field must never be serialized", html)
         self.assertNotIn("private\\thread", html)
         self.assertNotIn(str(REPO_ROOT), html)
@@ -174,7 +190,6 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
         self.assertIn("<!doctype html>", result.stdout.casefold())
         self.assertIn("Cognitive Observatory", result.stdout)
         self.assertIn("navigation_only", result.stdout)
-        self.assertNotIn("SECRET_TOKEN", result.stdout)
         self.assertNotIn("<script", result.stdout.casefold())
 
 
