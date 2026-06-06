@@ -43,12 +43,12 @@ PR tightly.
 | Core default / product usability | #201, #281, #752 | Keep open. These directly reduce manual grep, improve source reopen/fresh-thread recall, or keep no-key installs from silently losing background cognition. #752's first staging-only fallback slice is tracked separately; the broader issue stays open until host-agent execution/materialization is real. |
 | Evidence and quality gates | #163, #378, #742 | Keep open as falsifiable proof owners, not first-use product features. They guard Dream usefulness claims, continuous-memory-vs-fresh-context comparison, and official AMemGym comparability without live judges. |
 | Reliability / infrastructure | #311 | Keep open, but cut the next PR tightly. This owns live correction capture and private real-history adjudication. |
-| Maintainer-reopened navigation/activation owners | #248, #309, #310, #313 | Keep open because the latest issue comments explicitly ask for sliced execution. Cut each into one concrete fixture/report path before changing runtime defaults: question prefilter/adoption, source-joined retrieval funnel, Journey instantiation/timing, or no-leakage portrait/story packets. |
+| Maintainer-reopened navigation/activation owners | #248, #309, #313 | Keep open because the latest issue comments explicitly ask for sliced execution. Cut each into one concrete fixture/report path before changing runtime defaults: question prefilter/adoption, source-joined retrieval funnel, or no-leakage portrait/story packets. |
 | Closed or moved out of the foreground | #701, #703, #250, #312, #397, #574, #576, #611, #663, #679 | Treat as Research Garden, power-user, enterprise, or historical context until a smaller executable slice exists. Do not let them re-enter the open queue as broad concept issues. |
-| Completed / superseded issues | #158, #164, #279, #299, #376, #463, #575, #582, #637, #639, #643, #707, #743, #747 | Closed after checking implementation evidence, child owners, or canonical docs. #376 now has the explicit long-thread segment build/search soak; #575 now has the first deterministic cognitive-load sidecar slice. Future live calibration should start from a fresh narrow issue rather than reopening the broad concept. |
+| Completed / superseded issues | #158, #164, #279, #299, #310, #376, #463, #575, #582, #637, #639, #643, #707, #743, #747 | Closed after checking implementation evidence, child owners, or canonical docs. #310 now has the first live Journey instantiation and foreground hint timing replay fixture; #376 now has the explicit long-thread segment build/search soak; #575 now has the first deterministic cognitive-load sidecar slice. Future live calibration should start from a fresh narrow issue rather than reopening the broad concept. |
 
-Current open queue after the pass: #163, #201, #248, #281, #309, #310, #311,
-#313, #378, #742, and #752. This is the active issue foreground;
+Current open queue after the pass: #163, #201, #248, #281, #309, #311, #313,
+#378, #742, and #752. This is the active issue foreground;
 everything else should stay in docs, evidence, Discussion, or Long Garden until
 it has a small next action.
 
@@ -340,12 +340,16 @@ it has a small next action.
      expiry/TTL refresh, conservative multi-thread instantiation gates,
      deterministic `current_frontier`, and explicit feedback actions.
    - The fixture smoke compares Journey frontier/state against a plain summary
-     baseline for later-continuation terms. It is a fixture-backed equivalent,
-     not proof of user-calibrated `theme_emergence`, Journey integration with
-     live `theme_candidate` rows, predictive replay, or foreground hook timing.
-   - Next hardening: connect only source-backed `theme_candidate` /
-     `journey_waypoint` outputs when the job circuit exists, then evaluate on
-     time-sliced private history before surfacing Journey hints in AAR.
+     baseline for later-continuation terms. `journey/live.py` adds the first
+     no-write, time-sliced fixture that converts source-backed
+     `theme_candidate`, `question_candidate`, and `frontier_marker` rows into a
+     Journey candidate and exercises foreground hint timing with positive and
+     negative controls.
+   - This is still not proof of user-calibrated `theme_emergence`, production
+     AAR foreground hook quality, predictive replay, or private real-history
+     Journey quality. Next hardening should connect only source-backed live
+     outputs when the job circuit exists, then evaluate on time-sliced private
+     history before surfacing Journey hints by default.
 
 17. Dream runtime substrate plus bounded sleep-cycle path
    - Source: `docs/research/dream-task-design.md`,

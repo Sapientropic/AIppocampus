@@ -16,6 +16,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
+from aippocampus_runtime.journey import live as journey_live  # noqa: E402
 from aippocampus_runtime.journey import tracking as journey  # noqa: E402
 
 
@@ -173,6 +174,43 @@ class JourneyTrackingTests(unittest.TestCase):
         )
         self.assertEqual(payload["journey"]["current_frontier_kind"], "journey_current_frontier")
         self.assertIn("live_model_behavioral_equivalence", payload["cannot_claim"])
+
+    def test_live_theme_and_question_rows_create_journey_without_future_leakage(self) -> None:
+        payload = journey_live.run_live_journey_time_sliced_replay_fixture(
+            as_of="2026-06-03T23:59:00Z"
+        )
+
+        self.assertTrue(payload["ok"], json.dumps(payload, ensure_ascii=False, indent=2))
+        self.assertEqual(payload["kind"], "aippocampus_live_journey_time_sliced_replay")
+        self.assertEqual(payload["status"], "journey_candidate_created")
+        self.assertEqual(payload["metrics"]["included_live_row_count"], 3)
+        self.assertEqual(payload["metrics"]["future_row_excluded_count"], 1)
+        self.assertFalse(payload["metrics"]["future_leakage_detected"])
+        self.assertEqual(payload["journey"]["path_label"], "continuity after change")
+        self.assertEqual(len(payload["journey"]["waypoints"]), 3)
+        self.assertTrue(payload["journey"]["source_refs"])
+        dumped = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        self.assertNotIn("FUTURE_LEAK_SENTINEL", dumped)
+        self.assertNotIn("PRIVATE_SENTINEL_ROUTE_HANDLE", dumped)
+
+    def test_foreground_journey_hint_timing_has_positive_and_negative_controls(self) -> None:
+        replay = journey_live.run_live_journey_time_sliced_replay_fixture(
+            as_of="2026-06-03T23:59:00Z"
+        )
+        live = replay["foreground_hint_replay"]
+
+        self.assertEqual(live["positive"]["decision"], "agent_visible_hint")
+        self.assertEqual(live["positive"]["agent_visible"]["visibility"], "gentle_nudge")
+        self.assertIn("Journey hints are navigation", live["positive"]["agent_visible"]["truth_boundary"])
+        self.assertNotIn("source_refs", live["positive"]["agent_visible"])
+        self.assertTrue(live["positive"]["private_route_handle"].startswith("journey_route:"))
+
+        self.assertEqual(live["source_visible_negative"]["decision"], "silent")
+        self.assertEqual(live["unrelated_negative"]["decision"], "backstage_only")
+        self.assertEqual(live["high_risk_negative"]["decision"], "source_reopen_required")
+        encoded = json.dumps(live, ensure_ascii=False, sort_keys=True)
+        self.assertNotIn("PRIVATE_SENTINEL_ROUTE_HANDLE", encoded)
+        self.assertNotIn("msg-live-a", live["positive"]["agent_visible"].get("frontier", ""))
 
     def test_content_light_cross_project_resonance_outputs_hypothesis_without_private_payload(self) -> None:
         current = journey.create_journey(

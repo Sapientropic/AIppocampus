@@ -1,6 +1,6 @@
 # Journey Tracking: AIppocampus 的旅程追踪
 
-Status: research memo plus first deterministic P1-P3 core implementation.
+Status: research memo plus deterministic P1-P3 core and first live-row replay fixture.
 Origin: user observation + Claude research, 2026-05-28.
 Related: [dream-task-design.md](dream-task-design.md) — 不 impose 叙事结构，但 recognize 旅程模式,
 [affect-side-channel.md](affect-side-channel.md) — hexagram arc 作为直觉编码,
@@ -29,14 +29,21 @@ Current code implements the source-backed P1-P3 Journey core in
   feedback actions, source-ref preservation, and a replay fixture smoke where
   Journey frontier/state beats a plain-summary baseline on expected continuation
   terms.
+- #310 first live-row slice:
+  `skills/aippocampus/scripts/aippocampus_runtime/journey/live.py` converts
+  source-backed `theme_candidate`, `question_candidate`, and `frontier_marker`
+  rows into Journey candidates in a no-write, time-sliced replay fixture. The
+  same helper exercises foreground hint timing with positive and negative
+  controls while keeping source refs and private route handles out of the
+  agent-visible hint.
 
-Still designed/deferred: Journey instantiation from live `theme_candidate` rows,
-foreground hook journey hints, question-tracking P4 integration, HexArc
-structural matching, graph random walks, predictive replay, and private
-real-history journey quality claims. The first reflection-space consumer now exists in
-`skills/aippocampus/scripts/aippocampus_runtime/reflection/space.py`, but it is an inspectable
-topology/feedback helper only, not a polished UI or foreground Journey hint
-runtime.
+Still designed/deferred: production Journey instantiation hooks over real
+private history, default AAR foreground projection, question-tracking P4
+integration, HexArc structural matching, graph random walks, predictive replay,
+and private real-history journey quality claims. The first reflection-space
+consumer now exists in
+`skills/aippocampus/scripts/aippocampus_runtime/reflection/space.py`, but it is
+an inspectable topology/feedback helper only, not a polished UI.
 
 ## TL;DR
 
@@ -194,6 +201,15 @@ agent 读到这个，通过 waypoints 的 hexagram 序列**感觉**到这段旅�
 
 AAR 的 visibility level 决定这个 hint 是 silent tuning、active gentle nudge、
 还是 source-backed recall。
+
+Current timing boundary: `journey/live.py` only lets a Journey hint become an
+agent-visible gentle nudge when the current prompt overlaps a traveling/camped
+Journey and the equivalent source context is not already visible. If sources
+are visible it stays silent; if the prompt is unrelated or the Journey is
+terminal it stays backstage; if the user-facing answer would make an exact or
+high-risk claim it requires source reopen. The visible hint carries compact
+path/frontier/status text and an explicit truth boundary; source refs and the
+hashed private route handle remain backstage.
 
 呈现时的 don't-decode 规则：waypoints 的 hexagram 序列是背景音乐，
 不是要解读的密码。遵循 affect-side-channel.md 的验证结论。
