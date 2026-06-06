@@ -472,6 +472,7 @@ def status_llm(
         "provider_env_var": provider_env.get("env_var"),
         "visible_in_current_process": provider_env.get("visible_in_current_process"),
         "visible_in_child_process": provider_env.get("visible_in_child_process"),
+        "cognitive_worker": report.get("cognitive_worker") or {},
         "recommended_actions": report.get("recommended_actions") or [],
         "privacy": report.get("privacy") or {},
         "safety_notes": [

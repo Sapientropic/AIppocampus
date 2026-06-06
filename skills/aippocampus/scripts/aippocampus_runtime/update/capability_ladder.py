@@ -21,6 +21,47 @@ def _ready_or_status(item: dict[str, Any]) -> str:
     return "ready" if _surface_ready(item) else _status_or_unknown(item)
 
 
+def _as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _agent_fallback_entry(llm: dict[str, Any]) -> dict[str, Any]:
+    worker = _as_dict(llm.get("cognitive_worker"))
+    resolved = str(worker.get("resolved_mode") or "").strip()
+    diagnostic_status = str(worker.get("status") or "unknown").strip() or "unknown"
+    ready = resolved == "agent_fallback" and bool(worker.get("agent_fallback_available"))
+    if ready:
+        status = "agent_fallback_staging_only"
+        what_works = (
+            "staging-only agent fallback queue plus source-joined fallback "
+            "result materialization for no-key background preparation"
+        )
+        next_command = "aippocampus doctor provider --json"
+    elif resolved == "external_model":
+        status = "not_selected_external_model_active"
+        what_works = "external-model background cognition is selected; agent fallback is not active"
+        next_command = "aippocampus doctor provider --json"
+    else:
+        status = diagnostic_status
+        what_works = "deterministic/source-backed routes remain visible; no agent fallback task is queued"
+        next_command = (
+            "set AIPPOCAMPUS_AGENT_FALLBACK_AVAILABLE=1 only when the host can run detached fallback tasks"
+        )
+    return {
+        "id": "agent_fallback_ready",
+        "ready": ready,
+        "status": status,
+        "diagnostic_status": diagnostic_status,
+        "what_works": what_works,
+        "next_command": next_command,
+        "claim_boundary": (
+            "staging-only fallback readiness is not a host-agent executor, "
+            "Dream quality claim, or promotion/adjudication path; materialized "
+            "fallback results still require existing source-backed finding joins"
+        ),
+    }
+
+
 def build_capability_ladder(
     surfaces: dict[str, dict[str, Any]], *, core_ready: bool
 ) -> list[dict[str, Any]]:
@@ -85,11 +126,5 @@ def build_capability_ladder(
             "what_works": "background semantic, subconscious, and Dream-style work",
             "next_command": "aippocampus doctor provider --json",
         },
-        {
-            "id": "agent_fallback_ready",
-            "ready": False,
-            "status": "planned_issue_752",
-            "what_works": "future agent-backed fallback without external LLM keys",
-            "next_command": "track GitHub issue #752",
-        },
+        _agent_fallback_entry(llm),
     ]

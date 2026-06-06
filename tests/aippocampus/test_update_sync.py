@@ -25,6 +25,8 @@ PROVIDER_ENV_NAMES = [
     "AIPPOCAMPUS_OPENAI_COMPAT_MODEL",
     "AIPPOCAMPUS_OPENAI_COMPAT_BASE_URL",
     "AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV",
+    "AIPPOCAMPUS_COGNITIVE_WORKER_MODE",
+    "AIPPOCAMPUS_AGENT_FALLBACK_AVAILABLE",
 ]
 
 
@@ -193,7 +195,42 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(
             by_id["dream_or_subconscious_ready"]["status"], "needs_semantic_provider"
         )
-        self.assertEqual(by_id["agent_fallback_ready"]["status"], "planned_issue_752")
+        self.assertFalse(by_id["agent_fallback_ready"]["ready"])
+        self.assertEqual(
+            by_id["agent_fallback_ready"]["status"],
+            "deterministic_only_missing_provider_and_agent",
+        )
+
+    def test_status_reports_staging_only_agent_fallback_when_host_capability_exists(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env({"AIPPOCAMPUS_AGENT_FALLBACK_AVAILABLE": "1"}):
+            root = Path(tmp)
+            codex_home = root / "codex-home"
+            hooks_json = codex_home / "hooks.json"
+            update_cli.install_prompt.install(hooks_json)
+            update_cli.install_lifecycle.install(hooks_json)
+
+            code, payload = run_update(
+                "status",
+                "--repo-root",
+                str(REPO_ROOT),
+                "--codex-home",
+                str(codex_home),
+                "--skill-target",
+                str(REPO_ROOT / "skills" / "aippocampus"),
+                "--hooks-json",
+                str(hooks_json),
+                "--no-child-check",
+            )
+
+        self.assertEqual(code, 0)
+        by_id = {item["id"]: item for item in payload["summary"]["capability_ladder"]}
+        fallback = by_id["agent_fallback_ready"]
+        self.assertTrue(fallback["ready"])
+        self.assertEqual(fallback["status"], "agent_fallback_staging_only")
+        self.assertEqual(fallback["diagnostic_status"], "agent_fallback_active")
+        self.assertIn("staging-only", fallback["claim_boundary"])
 
     def test_status_does_not_claim_hook_provider_visibility_when_child_check_skipped(
         self,
@@ -263,7 +300,10 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertIn("source_search_ready: ready", output)
         self.assertIn("ambient_hooks_ready: ready", output)
         self.assertIn("semantic_provider_ready: missing_provider_env_var", output)
-        self.assertIn("agent_fallback_ready: planned_issue_752", output)
+        self.assertIn(
+            "agent_fallback_ready: deterministic_only_missing_provider_and_agent",
+            output,
+        )
         self.assertNotIn("Still needs action: plugin, llm", output)
 
     def test_skill_apply_updates_stale_copy_and_excludes_distribution_noise(self) -> None:

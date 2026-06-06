@@ -141,7 +141,7 @@ still feels like grep because hooks or provider visibility are not ready.
 | `semantic_provider_ready` | Semantic lift, warm scouts, and provider-backed jobs can call the configured route. | It does not prove a previously started hook process can see the key. | `aippocampus doctor provider --json` |
 | `hook_provider_ready` | A restarted/future hook process is expected to inherit the provider environment. | A key visible in one shell is not proof for an already-running Codex Desktop process. | restart Codex, then rerun `aippocampus doctor provider --json` |
 | `dream_or_subconscious_ready` | Provider-backed background semantic, subconscious, and Dream-style work can run. | No provider means these routes stay disabled or diagnostic-only today. | `aippocampus doctor provider --json` |
-| `agent_fallback_ready` | Future fallback mode can operate without an external LLM key. | This is planned in #752, not current default behavior. | track #752 |
+| `agent_fallback_ready` | Staging-only fallback queue can operate without an external LLM key when the host exposes `AIPPOCAMPUS_AGENT_FALLBACK_AVAILABLE=1`; fallback results can only materialize through source-backed finding joins. | This does not execute a host agent, promote candidates, bypass source gates, or prove Dream/semantic quality. | `aippocampus doctor provider --json` |
 
 No key is required for basic source-backed search. Missing, disabled, or
 invisible provider state should be shown as a capability label, not as a claim

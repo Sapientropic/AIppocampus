@@ -220,6 +220,16 @@ DeepSeek can be used aggressively, but hooks must stay cheap. The split is:
   neither is available, and `off` when explicitly disabled. The agent fallback
   lane writes staging queue rows only; it does not call a host agent from the
   hook path or promote synthesis into memory.
+- future host-agent executors may write `agent_fallback_results.jsonl`, but
+  `aippocampus_runtime.subconscious.agent_fallback_materializer` can materialize
+  only candidates that join back to existing source-backed findings. Candidates
+  without `source_finding_ids`, or with ids that do not resolve to
+  `subconscious_jobs.jsonl` findings that carry `source_refs`, remain
+  diagnostic-only. For this #752 slice the materializer is a module-level
+  staging boundary, not a top-level end-user command; host-agent execution still
+  has to produce the result file intentionally. The materializer writes the same
+  public-safe `promotion_candidates.jsonl` staging rows used by the review path;
+  it is not promotion, adjudication, or a Dream quality claim.
 - the scheduler uses a short enqueue lock plus per-project lease fields in
   `subconscious_state.json`
 - detached workers run `aippocampus_runtime.subconscious.jobs` with `--concurrency` and optional

@@ -159,7 +159,10 @@ until the original source is reopened.
   processes; restart Codex when environment changed after launch.
 - `dream_or_subconscious_ready`: provider-backed background work is available,
   or explicitly missing-key/disabled.
-- `agent_fallback_ready`: future #752 fallback without external LLM keys.
+- `agent_fallback_ready`: staging-only #752 agent fallback is active when the
+  host exposes `AIPPOCAMPUS_AGENT_FALLBACK_AVAILABLE=1`; fallback result
+  materialization still requires source-backed finding joins and remains
+  staging-only. This is not a host-agent executor or Dream quality claim.
 
 No key is required for basic source-backed search. A missing provider key means
 semantic/warm/subconscious/Dream routes are not ready; it does not mean local
