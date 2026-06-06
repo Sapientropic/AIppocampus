@@ -873,8 +873,18 @@ Installed events:
   hook may bypass the Stop cooldown once for that message-count marker. This
   keeps the next fresh thread from missing the last exchange without moving
   rebuild work into `UserPromptSubmit`.
-- `PreCompact`: refresh clean source, index, and registry before compaction.
-- `PostCompact`: refresh after compaction unless a compact pass just ran.
+- `PreCompact`: first attempt a bounded private emergency snapshot of visible
+  user/final-answer tail turns that clean source has not fully represented, then
+  refresh clean source, index, and registry before compaction. Snapshot failure
+  must fail open and cannot block normal health-driven maintenance.
+- `PostCompact`: report the latest emergency snapshot in sanitized diagnostics
+  and refresh after compaction unless a compact pass just ran.
+
+The emergency snapshot lives under the current thread's global private registry
+store, not project docs or `.aippocampus` by default. It drops raw envelopes,
+tool payloads, attachments, and routine commentary; lifecycle diagnostics expose
+only counts, ids, line spans, and artifact names. Treat it as a recovery bridge
+after compaction, not as clean-source evidence or a source-backed claim surface.
 
 Useful commands:
 

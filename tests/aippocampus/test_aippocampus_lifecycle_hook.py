@@ -311,6 +311,155 @@ class MemoryMaintenanceHookTests(unittest.TestCase):
         self.assertEqual(result["skipped_actions"][0]["reason"], "foreground_budget")
         self.assertNotIn("last_latest_turn_refresh_marker", workspace_state)
 
+    def test_precompact_runs_emergency_snapshot_before_health(self) -> None:
+        calls: list[str] = []
+        state_file = self.cwd / "state.json"
+        original_snapshot = hook.run_emergency_thread_snapshot
+        original_run_health = hook.run_health
+        original_run_action = hook.run_action
+
+        def fake_snapshot(cwd: Path) -> dict:
+            del cwd
+            calls.append("snapshot")
+            return {"ok": True, "message_count": 2, "snapshot_id": "snap-1"}
+
+        def fake_run_health(cwd: Path) -> dict:
+            del cwd
+            calls.append("health")
+            return self.health([])
+
+        def fake_run_action(cwd: Path, action: str) -> dict:
+            del cwd
+            calls.append(action)
+            return {"ok": True}
+
+        try:
+            hook.run_emergency_thread_snapshot = fake_snapshot
+            hook.run_health = fake_run_health
+            hook.run_action = fake_run_action
+            result = hook.run_maintenance(
+                "PreCompact",
+                self.cwd,
+                state_file=state_file,
+                now_ts=self.now,
+            )
+        finally:
+            hook.run_emergency_thread_snapshot = original_snapshot
+            hook.run_health = original_run_health
+            hook.run_action = original_run_action
+
+        self.assertEqual(calls[:2], ["snapshot", "health"])
+        self.assertEqual(result["emergency_snapshot"]["snapshot_id"], "snap-1")
+        self.assertIn("build_index", calls)
+
+    def test_precompact_snapshot_failure_fails_open_to_normal_maintenance(self) -> None:
+        calls: list[str] = []
+        state_file = self.cwd / "state.json"
+        original_snapshot = hook.run_emergency_thread_snapshot
+        original_run_health = hook.run_health
+        original_run_action = hook.run_action
+
+        def failing_snapshot(cwd: Path) -> dict:
+            del cwd
+            calls.append("snapshot")
+            raise RuntimeError("snapshot exploded with private tail")
+
+        def fake_run_health(cwd: Path) -> dict:
+            del cwd
+            calls.append("health")
+            return self.health([])
+
+        def fake_run_action(cwd: Path, action: str) -> dict:
+            del cwd
+            calls.append(action)
+            return {"ok": True}
+
+        try:
+            hook.run_emergency_thread_snapshot = failing_snapshot
+            hook.run_health = fake_run_health
+            hook.run_action = fake_run_action
+            result = hook.run_maintenance(
+                "PreCompact",
+                self.cwd,
+                state_file=state_file,
+                now_ts=self.now,
+            )
+        finally:
+            hook.run_emergency_thread_snapshot = original_snapshot
+            hook.run_health = original_run_health
+            hook.run_action = original_run_action
+
+        self.assertEqual(calls[:2], ["snapshot", "health"])
+        self.assertIn("build_index", calls)
+        self.assertFalse(result["emergency_snapshot"]["ok"])
+        self.assertEqual(result["emergency_snapshot"]["error_type"], "RuntimeError")
+        self.assertNotIn("private tail", result["emergency_snapshot"].get("error", ""))
+
+    def test_precompact_health_failure_preserves_snapshot_diagnostic(self) -> None:
+        state_file = self.cwd / "state.json"
+        original_snapshot = hook.run_emergency_thread_snapshot
+        original_run_health = hook.run_health
+
+        def fake_snapshot(cwd: Path) -> dict:
+            del cwd
+            return {"ok": True, "message_count": 2, "snapshot_id": "snap-before-health"}
+
+        def failing_health(cwd: Path) -> dict:
+            del cwd
+            raise RuntimeError("health failed")
+
+        try:
+            hook.run_emergency_thread_snapshot = fake_snapshot
+            hook.run_health = failing_health
+            result = hook.run_maintenance(
+                "PreCompact",
+                self.cwd,
+                state_file=state_file,
+                now_ts=self.now,
+            )
+        finally:
+            hook.run_emergency_thread_snapshot = original_snapshot
+            hook.run_health = original_run_health
+
+        self.assertEqual(result["skipped"], "health_error")
+        self.assertEqual(result["emergency_snapshot"]["snapshot_id"], "snap-before-health")
+
+    def test_postcompact_reports_latest_emergency_snapshot_without_raw_text(self) -> None:
+        state_file = self.cwd / "state.json"
+        original_latest = hook.latest_emergency_thread_snapshot
+        original_run_health = hook.run_health
+
+        def fake_latest(cwd: Path) -> dict:
+            del cwd
+            return {
+                "ok": True,
+                "snapshot_id": "snap-latest",
+                "message_count": 2,
+                "debug_text": "must not leak",
+            }
+
+        def fake_run_health(cwd: Path) -> dict:
+            del cwd
+            return self.health([])
+
+        try:
+            hook.latest_emergency_thread_snapshot = fake_latest
+            hook.run_health = fake_run_health
+            result = hook.run_maintenance(
+                "PostCompact",
+                self.cwd,
+                state_file=state_file,
+                dry_run=True,
+                now_ts=self.now,
+            )
+        finally:
+            hook.latest_emergency_thread_snapshot = original_latest
+            hook.run_health = original_run_health
+
+        rendered = str(result["emergency_snapshot"])
+        self.assertEqual(result["emergency_snapshot"]["snapshot_id"], "snap-latest")
+        self.assertNotIn("must not leak", rendered)
+
 
 if __name__ == "__main__":
     unittest.main()
